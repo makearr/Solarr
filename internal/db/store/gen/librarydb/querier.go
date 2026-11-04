@@ -361,6 +361,8 @@ type Querier interface {
 	// Only a completed sweep moves the watermark and clears the cursor.
 	FinishScan(ctx context.Context, arg FinishScanParams) error
 	GetAcquisition(ctx context.Context, id int64) (Acquisition, error)
+	// The download a placed file came in with, nothing when a person imported it by hand.
+	GetAcquisitionIDOfMediaObject(ctx context.Context, mediaObjectID int64) (sql.NullInt64, error)
 	GetAcquisitionStall(ctx context.Context, acquisitionID int64) (AcquisitionStall, error)
 	// Checked before CreateAcquisition so a caller gets a clean, mapped refusal
 	// rather than the acquisition_one_inflight unique index's own raw
@@ -878,6 +880,8 @@ type Querier interface {
 	ListWorkTitles(ctx context.Context, workID int64) ([]WorkTitle, error)
 	// The facts a library's rules read of each of its works (plan 10-libraries L5).
 	ListWorkTraitsInCategory(ctx context.Context, categoryID int64) ([]ListWorkTraitsInCategoryRow, error)
+	// The hashed videos of one work: an import compares a download's pictures with what the work already holds.
+	ListWorkVideoHashes(ctx context.Context, workID int64) ([]ListWorkVideoHashesRow, error)
 	// Cover art attaches to the work (subject_type='work'), but Cover Art Archive is
 	// queried by release (edition) MBID -- any refined (kind != 'unknown') edition
 	// with one is a usable source. is_default is never set to 1 anywhere in this

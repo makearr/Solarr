@@ -40,3 +40,19 @@ The per-frame bound is a quarter wider (`frameBitsFor`), and two thirds of at le
   bin) or recycle it. A merge across libraries is refused: a merged file would belong to two libraries.
 
 A file linked at several paths (one media object, many paths) is one video in a group with a `path_count`, not several copies; a group needs two different files. Found live on the docu library, where 42 of 238 groups were one file listed repeatedly.
+
+## At import
+
+A downloaded TV episode is hashed (same seven frames) and compared with the hashed files of the series it resolved to,
+at the medium level (`SimilarVideos.MatchInWork`). A match is the episode the held file covers, whatever the release
+named it, so a release labeled S01E02 that shows S01E01 never fills S01E02.
+
+- The held file below its library's cutoff: the download is placed beside it and the cutoff step keeps the strictly better
+  file (a tie keeps the held one), recycling the other.
+- The held file at its cutoff: the unit is skipped with `batch.ReasonDuplicate`.
+- Each placed file keeps its hash, so the check works without the background sweep for files imported later.
+
+Settings (`GET/PUT /settings/import-duplicates`, administrators, Storage > Duplicates): `import.duplicate_check` (on) and
+`import.duplicate_blocklist` (off). Blocklisting covers a download skipped as a duplicate and one the cutoff step recycled
+as no better (reason `REJECTED_WORSE`, 30 days). Off, a duplicate download is only removed from the client; a later search
+can grab the same release again. Music (Chromaprint is not stored for the library yet) and movies are not covered.

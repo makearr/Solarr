@@ -55,6 +55,9 @@ const (
 	UnitFailed = string(model.DecisionFailed)
 )
 
+// UnitReasonDuplicate is the reason of a skipped unit whose pictures the library already holds.
+const UnitReasonDuplicate = "its picture is one the library already holds, and it is no better"
+
 // ImportSessions is ADR-48's own persistence: one row per inspection-and-import
 // run, and one row per unit it found. internal/importing/inspect.Session/Unit are pure and
 // in-memory (deliberately, ADR-23); this is where a caller persists them, so a

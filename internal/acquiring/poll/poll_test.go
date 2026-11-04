@@ -74,14 +74,16 @@ type env struct {
 	clock        *clock.Fake
 	client       *fakeClient
 	removeDone   bool
-	seedRatio    float64
-	seedMinutes  int
-	stall        poll.StallRules
-	imported     []string
-	searched     []int64
-	history      []string
-	speeds       []string
-	logger       *slog.Logger
+	// blockDuplicates is the person's choice to blocklist a release the library holds already.
+	blockDuplicates bool
+	seedRatio       float64
+	seedMinutes     int
+	stall           poll.StallRules
+	imported        []string
+	searched        []int64
+	history         []string
+	speeds          []string
+	logger          *slog.Logger
 }
 
 func newEnv(t *testing.T) *env {
@@ -119,6 +121,7 @@ func newEnv(t *testing.T) *env {
 func (e *env) job() *poll.Job {
 	return poll.NewJob(poll.Config{
 		Acquisitions: e.acquisitions, Sessions: e.sessions, Blocklist: e.blocklist, FS: e.fsys,
+		BlocklistDuplicates: func() bool { return e.blockDuplicates },
 		Clients: func(context.Context) (map[int64]poll.Client, error) {
 			return map[int64]poll.Client{1: {Name: "Home SABnzbd", Client: e.client, RemoveCompleted: e.removeDone, SeedRatio: e.seedRatio, SeedMinutes: e.seedMinutes,
 				LocalPath: func(reported string) string { return reported }, Stall: e.stall}}, nil
@@ -531,6 +534,27 @@ func TestPoll_AnImportThatBroughtNothingUsableFails(t *testing.T) {
 	e.run(t)
 	if got := e.state(t, sent.ID); got.State != poll.StateFailed || len(e.searched) != 1 {
 		t.Errorf("= %s, searched %v; want FAILED and searched again", got.State, e.searched)
+	}
+}
+
+// A release whose every file duplicates one the library holds is failed; only the person's choice blocklists it and
+// searches again, since a search would find the same release.
+func TestPoll_ADuplicateIsBlocklistedOnlyWhenThePersonAsked(t *testing.T) {
+	for _, blocklist := range []bool{false, true} {
+		e := newEnv(t)
+		e.blockDuplicates = blocklist
+		sent := e.send(t, "nzo-1")
+		sessionID, unitID := e.finishImport(t, sent, false, library.UnitSkip)
+		if err := e.sessions.SetUnitDecisions(t.Context(), sessionID, []library.UnitDecision{{UnitID: unitID, Decision: library.UnitSkip, Reason: library.UnitReasonDuplicate}}); err != nil {
+			t.Fatal(err)
+		}
+		e.run(t)
+		indexerID := int64(3)
+		blocked, err := e.blocklist.IsBlocked(t.Context(), &indexerID, "guid-nzo-1", "", e.clock.Now().Unix())
+		if got := e.state(t, sent.ID); got.State != poll.StateFailed || err != nil || blocked != blocklist || (len(e.searched) == 1) != blocklist ||
+			!slices.Equal(e.client.removed, []string{"nzo-1+files"}) {
+			t.Errorf("blocklist %v: = %s, blocked %v (%v), searched %v, removed %v", blocklist, got.State, blocked, err, e.searched, e.client.removed)
+		}
 	}
 }
 

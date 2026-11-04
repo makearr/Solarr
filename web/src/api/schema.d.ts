@@ -3971,6 +3971,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/import-duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How an import treats a download whose picture the library already holds. */
+        get: operations["getImportDuplicates"];
+        /** Set the import's duplicate check and whether such releases are blocklisted. Administrator only. */
+        put: operations["setImportDuplicates"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/duplicates/resolve": {
         parameters: {
             query?: never;
@@ -8952,6 +8970,13 @@ export interface components {
         VideoHashing: {
             /** @description Off, no new video is hashed; hashes already stored still serve the finder. */
             enabled: boolean;
+        };
+        /** @description The import's duplicate check (import.duplicate_check, import.duplicate_blocklist). */
+        ImportDuplicates: {
+            /** @description Compare a downloaded video's pictures with the series' files: a copy is the episode it shows, and replaces that file only if better. */
+            check: boolean;
+            /** @description Blocklist a release found to duplicate a file the library holds without being better. */
+            blocklist: boolean;
         };
         DuplicateResolveRequest: {
             /** Format: int64 */
@@ -16118,6 +16143,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VideoHashing"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getImportDuplicates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportDuplicates"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    setImportDuplicates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportDuplicates"];
+            };
+        };
+        responses: {
+            /** @description The settings now in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportDuplicates"];
                 };
             };
             400: components["responses"]["Problem"];

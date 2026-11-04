@@ -2799,6 +2799,15 @@ type ImportDecisionRecordOutcome string
 // ImportDecisionRecordWinner defines model for ImportDecisionRecord.Winner.
 type ImportDecisionRecordWinner string
 
+// ImportDuplicates The import's duplicate check (import.duplicate_check, import.duplicate_blocklist).
+type ImportDuplicates struct {
+	// Blocklist Blocklist a release found to duplicate a file the library holds without being better.
+	Blocklist bool `json:"blocklist"`
+
+	// Check Compare a downloaded video's pictures with the series' files: a copy is the episode it shows, and replaces that file only if better.
+	Check bool `json:"check"`
+}
+
 // ImportEvidence Every GROUP signal that shaped this unit's boundary (ADR-10 shape).
 type ImportEvidence struct {
 	// Ambiguous True when grouping had to infer a boundary from a weaker signal rather than a decisive one.
@@ -7047,6 +7056,9 @@ type SetAuthPolicyJSONRequestBody SetAuthPolicyJSONBody
 // SetBackupRetentionJSONRequestBody defines body for SetBackupRetention for application/json ContentType.
 type SetBackupRetentionJSONRequestBody = BackupRetention
 
+// SetImportDuplicatesJSONRequestBody defines body for SetImportDuplicates for application/json ContentType.
+type SetImportDuplicatesJSONRequestBody = ImportDuplicates
+
 // SetUserDefaultsJSONRequestBody defines body for SetUserDefaults for application/json ContentType.
 type SetUserDefaultsJSONRequestBody = UserDefaults
 
@@ -7880,6 +7892,12 @@ type ServerInterface interface {
 	// Apply a configuration document, entirely or not at all.
 	// (POST /settings/import)
 	ImportSettings(w http.ResponseWriter, r *http.Request)
+	// How an import treats a download whose picture the library already holds.
+	// (GET /settings/import-duplicates)
+	GetImportDuplicates(w http.ResponseWriter, r *http.Request)
+	// Set the import's duplicate check and whether such releases are blocklisted. Administrator only.
+	// (PUT /settings/import-duplicates)
+	SetImportDuplicates(w http.ResponseWriter, r *http.Request)
 	// Every registered scalar setting (ADR-26) -- its tier, kind, default and help text.
 	// (GET /settings/registry)
 	ListSettingDefinitions(w http.ResponseWriter, r *http.Request)
@@ -9581,6 +9599,18 @@ func (_ Unimplemented) ExportSettings(w http.ResponseWriter, r *http.Request) {
 // Apply a configuration document, entirely or not at all.
 // (POST /settings/import)
 func (_ Unimplemented) ImportSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// How an import treats a download whose picture the library already holds.
+// (GET /settings/import-duplicates)
+func (_ Unimplemented) GetImportDuplicates(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Set the import's duplicate check and whether such releases are blocklisted. Administrator only.
+// (PUT /settings/import-duplicates)
+func (_ Unimplemented) SetImportDuplicates(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -18048,6 +18078,50 @@ func (siw *ServerInterfaceWrapper) ImportSettings(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetImportDuplicates operation middleware
+func (siw *ServerInterfaceWrapper) GetImportDuplicates(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetImportDuplicates(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetImportDuplicates operation middleware
+func (siw *ServerInterfaceWrapper) SetImportDuplicates(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetImportDuplicates(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListSettingDefinitions operation middleware
 func (siw *ServerInterfaceWrapper) ListSettingDefinitions(w http.ResponseWriter, r *http.Request) {
 
@@ -21219,6 +21293,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/settings/import", wrapper.ImportSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/settings/import-duplicates", wrapper.GetImportDuplicates)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/settings/import-duplicates", wrapper.SetImportDuplicates)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/settings/registry", wrapper.ListSettingDefinitions)

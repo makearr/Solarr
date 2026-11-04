@@ -341,3 +341,22 @@ JOIN video_frame_hash f ON f.media_object_id = o.id
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE o.phash IS NOT NULL AND o.kind = 'video'
 ORDER BY o.id;
+
+-- The hashed videos of one work: an import compares a download's pictures with what the work already holds.
+-- name: ListWorkVideoHashes :many
+SELECT o.id, o.phash, o.duration_ms, f.frames
+FROM work_file wf
+JOIN media_object o ON o.id = wf.media_object_id
+JOIN video_frame_hash f ON f.media_object_id = o.id
+WHERE wf.work_id = ? AND o.phash IS NOT NULL AND o.kind = 'video'
+ORDER BY o.id;
+
+-- The download a placed file came in with, nothing when a person imported it by hand.
+-- name: GetAcquisitionIDOfMediaObject :one
+SELECT s.acquisition_id
+FROM import_unit_file iuf
+JOIN import_unit u ON u.id = iuf.unit_id
+JOIN import_session s ON s.id = u.session_id
+WHERE iuf.media_object_id = ? AND s.acquisition_id IS NOT NULL
+ORDER BY s.id DESC
+LIMIT 1;

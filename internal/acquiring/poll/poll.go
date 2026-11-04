@@ -94,6 +94,8 @@ type Config struct {
 	Clients func(ctx context.Context) (map[int64]Client, error)
 	// DownloadFolders are the folders a reported path must lie in (ADR-14, section 10.9).
 	DownloadFolders func(ctx context.Context) ([]string, error)
+	// BlocklistDuplicates says a release found to duplicate a file the library holds is blocklisted; nil never does.
+	BlocklistDuplicates func() bool
 	// Import starts a targeted import of one download's folder (Invariant 17); only, when set, limits it to those
 	// files, relative to the folder.
 	Import func(ctx context.Context, acquisition library.Acquisition, localPath string, only []string) error
@@ -543,9 +545,11 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 		return err
 	}
 	// Placed, not merely decided: a committed unit with no work is one its library could not take (no root, no room).
-	placed, waiting, noRoom := 0, 0, 0
+	placed, waiting, noRoom, duplicates := 0, 0, 0, 0
 	for _, unit := range units {
 		switch {
+		case unit.Decision == library.UnitSkip && unit.Reason == library.UnitReasonDuplicate:
+			duplicates++
 		case unit.Decision == library.UnitCommit && unit.WorkID != nil:
 			placed++
 		case unit.Decision == library.UnitCommit:
@@ -583,9 +587,25 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 	case session.Error != "":
 		// The library failed to place it (permissions, I/O), which says nothing about the release: kept, not blocklisted.
 		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, "the library could not place it: "+session.Error, now)
+	case duplicates > 0:
+		return j.duplicate(ctx, client, acquisition)
 	default:
 		return j.failed(ctx, client, acquisition, library.BlocklistImportFailed, "the import found nothing it could use")
 	}
+}
+
+// duplicate ends a download whose files the library holds already: blocklisted and searched again only when the person
+// asked for that, otherwise just removed, since a search would find the same release.
+func (j *Job) duplicate(ctx context.Context, client Client, acquisition library.Acquisition) error {
+	const detail = "its picture is one the library already holds, and it is no better"
+	if j.config.BlocklistDuplicates != nil && j.config.BlocklistDuplicates() {
+		return j.failed(ctx, client, acquisition, library.BlocklistRejectedWorse, detail)
+	}
+	if err := client.Client.Remove(ctx, acquisition.DownloadClientRef, true); err != nil {
+		j.config.Logger.Warn("duplicate download could not be removed from the client",
+			slog.Int64("acquisition_id", acquisition.ID), slog.Any("error", err))
+	}
+	return j.setFailed(ctx, acquisition, detail)
 }
 
 // finishedImported ends a stalled download whose finished files are in the library: recorded as imported, blocklisted

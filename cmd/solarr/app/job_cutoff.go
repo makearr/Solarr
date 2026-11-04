@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/cutoff"
@@ -58,7 +59,31 @@ func (p *process) recycleSuperseded(ctx context.Context, mediaObjectID, category
 		reason = library.ReasonReplaced
 	}
 	recycling := adapters.RecyclingFor(adapters.Categories{Cache: p.cache}, []int64{categoryID})
+	if !replaced && p.cache.Snapshot().ImportDuplicateBlocklist() {
+		p.blocklistRelease(ctx, mediaObjectID)
+	}
 	return p.fileRemover().RecycleFor(ctx, mediaObjectID, recycling, reason)
+}
+
+// blocklistRelease keeps out the release a file came in with, for a download that measured no better than what the
+// library held; a file nobody downloaded has none.
+func (p *process) blocklistRelease(ctx context.Context, mediaObjectID int64) {
+	acquisition, found, err := library.NewAcquisitions(p.library).OfMediaObject(ctx, mediaObjectID)
+	if err != nil || !found || (acquisition.CandidateGUID == "" && acquisition.ContentHash == "") {
+		if err != nil {
+			p.logger.Warn("duplicate blocklist: release not found", slog.Int64("media_object_id", mediaObjectID), slog.Any("error", err))
+		}
+		return
+	}
+	now := clock.NewSystem().Now()
+	expires := now.Add(30 * 24 * time.Hour).Unix()
+	if _, err := library.NewBlocklistStore(p.library).Create(ctx, library.NewBlocklistEntry{
+		IndexerID: acquisition.IndexerID, GUID: acquisition.CandidateGUID, ContentHash: acquisition.ContentHash,
+		Title: acquisition.CandidateTitle, DesiredItemID: acquisition.DesiredItemID, Reason: library.BlocklistRejectedWorse,
+		Source: library.BlocklistSourceAuto, ExpiresAt: &expires, CreatedAt: now.Unix(),
+	}); err != nil {
+		p.logger.Warn("duplicate blocklist: not stored", slog.Int64("acquisition_id", acquisition.ID), slog.Any("error", err))
+	}
 }
 
 // afterDownloadImported measures a download's files now and then settles its album: an upgrade

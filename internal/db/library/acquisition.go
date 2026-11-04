@@ -118,6 +118,19 @@ func (a Acquisitions) Get(ctx context.Context, id int64) (Acquisition, error) {
 	return acquisitionFromRow(row), nil
 }
 
+// OfMediaObject is the download a placed file came in with; found is false for a file a person imported by hand.
+func (a Acquisitions) OfMediaObject(ctx context.Context, mediaObjectID int64) (acquisition Acquisition, found bool, err error) {
+	id, err := librarydb.New(a.store.Read()).GetAcquisitionIDOfMediaObject(ctx, mediaObjectID)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && !id.Valid) {
+		return Acquisition{}, false, nil
+	}
+	if err != nil {
+		return Acquisition{}, false, fmt.Errorf("library: acquisition of media object %d: %w", mediaObjectID, err)
+	}
+	acquisition, err = a.Get(ctx, id.Int64)
+	return acquisition, err == nil, err
+}
+
 // InFlightBytes is what a library's downloads on their way will take when they land (ADR-12's gate).
 func (a Acquisitions) InFlightBytes(ctx context.Context, categoryID int64) (int64, error) {
 	total, err := librarydb.New(a.store.Read()).InFlightBytesForCategory(ctx, categoryID)

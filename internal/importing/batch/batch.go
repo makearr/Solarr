@@ -20,6 +20,10 @@ const ReasonPreview = "held for review"
 // blocklisted (user, 2026-10-24), as Sonarr's "not an upgrade" release.
 const ReasonNothingNew = "nothing in it is missing from the library or better than what it holds"
 
+// ReasonDuplicate skips a unit whose pictures a file of the library already shows and that is no upgrade of it. Whether
+// its release is blocklisted is the person's choice (settings import.duplicate_blocklist), unlike ReasonNothingNew.
+const ReasonDuplicate = library.UnitReasonDuplicate
+
 // StrategyResolved is the candidate a unit was resolved to before its library could not take it.
 const StrategyResolved = "resolved"
 

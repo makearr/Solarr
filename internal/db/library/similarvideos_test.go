@@ -231,3 +231,25 @@ func TestCollectVideosCountsAFileLinkedAtManyPathsOnce(t *testing.T) {
 		t.Fatalf("videos = %v with path counts %v, want [a/one.mkv c/two.mkv] with [2 1]", paths, counts)
 	}
 }
+
+func TestMatchesHash_NeedsNearMeanSameLengthAndAlikeFrames(t *testing.T) {
+	base := uint64(0x0123456789ABCDEF)
+	otherFrames := []FrameHash{{0, 0xFFFFFFFF00000000}, {1, 0xFFFFFFFF00000000}, {2, 0xFFFFFFFF00000000}, {3, 0xFFFFFFFF00000000}, {4, 0xFFFFFFFF00000000}, {5, 0xFFFFFFFF00000000}, {6, 0xFFFFFFFF00000000}}
+	cases := []struct {
+		name   string
+		mean   uint64
+		held   []FrameHash
+		heldMs int64
+		want   bool
+	}{
+		{"same cut re-encoded", base ^ 0b101, sameFrames, 1_500_000, true},
+		{"mean too far", ^base, sameFrames, 1_500_000, false},
+		{"another episode of one show", base, otherFrames, 1_500_000, false},
+		{"another length", base, sameFrames, 1_200_000, false},
+	}
+	for _, c := range cases {
+		if got := matchesHash(c.mean, c.held, c.heldMs, base, sameFrames, 1_500_000, mediumBits); got != c.want {
+			t.Errorf("%s: matched %v, want %v", c.name, got, c.want)
+		}
+	}
+}

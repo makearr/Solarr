@@ -6273,6 +6273,37 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /settings/import-duplicates:
+    get:
+      operationId: getImportDuplicates
+      tags: [settings]
+      summary: How an import treats a download whose picture the library already holds.
+      responses:
+        "200":
+          description: The settings in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportDuplicates" }
+        "401": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setImportDuplicates
+      tags: [settings]
+      summary: Set the import's duplicate check and whether such releases are blocklisted. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportDuplicates" }
+      responses:
+        "200":
+          description: The settings now in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportDuplicates" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/duplicates/resolve:
     parameters:
       - name: id
@@ -12714,6 +12745,14 @@ components:
       required: [enabled]
       properties:
         enabled: { type: boolean, description: "Off, no new video is hashed; hashes already stored still serve the finder." }
+
+    ImportDuplicates:
+      type: object
+      description: The import's duplicate check (import.duplicate_check, import.duplicate_blocklist).
+      required: [check, blocklist]
+      properties:
+        check: { type: boolean, description: "Compare a downloaded video's pictures with the series' files: a copy is the episode it shows, and replaces that file only if better." }
+        blocklist: { type: boolean, description: "Blocklist a release found to duplicate a file the library holds without being better." }
 
     DuplicateResolveRequest:
       type: object

@@ -33,7 +33,7 @@ func (p *process) pollJob() *poll.Job {
 		Blocklist: library.NewBlocklistStore(p.library), FS: p.fsys,
 		Clients: p.pollClients, DownloadFolders: p.pollDownloadFolders,
 		Import: p.importAcquisition, Search: p.searchAgain, History: p.recordDownloadHistory,
-		SendHeld: p.sendHeld, Imported: p.afterDownloadImported, Speed: p.recordDownloadSpeed, Clock: clock.NewSystem(), Logger: p.logger,
+		SendHeld: p.sendHeld, BlocklistDuplicates: func() bool { return p.cache.Snapshot().ImportDuplicateBlocklist() }, Imported: p.afterDownloadImported, Speed: p.recordDownloadSpeed, Clock: clock.NewSystem(), Logger: p.logger,
 	})
 }
 

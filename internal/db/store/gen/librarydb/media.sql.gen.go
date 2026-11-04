@@ -314,6 +314,24 @@ func (q *Queries) FindMediaObjectsByQuickHash(ctx context.Context, quickHash str
 	return items, nil
 }
 
+const getAcquisitionIDOfMediaObject = `-- name: GetAcquisitionIDOfMediaObject :one
+SELECT s.acquisition_id
+FROM import_unit_file iuf
+JOIN import_unit u ON u.id = iuf.unit_id
+JOIN import_session s ON s.id = u.session_id
+WHERE iuf.media_object_id = ? AND s.acquisition_id IS NOT NULL
+ORDER BY s.id DESC
+LIMIT 1
+`
+
+// The download a placed file came in with, nothing when a person imported it by hand.
+func (q *Queries) GetAcquisitionIDOfMediaObject(ctx context.Context, mediaObjectID int64) (sql.NullInt64, error) {
+	row := q.db.QueryRowContext(ctx, getAcquisitionIDOfMediaObject, mediaObjectID)
+	var acquisition_id sql.NullInt64
+	err := row.Scan(&acquisition_id)
+	return acquisition_id, err
+}
+
 const getAttributes = `-- name: GetAttributes :one
 SELECT id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
        audio_channels, bit_depth, languages, subtitles, edition_tokens,
@@ -1281,6 +1299,51 @@ func (q *Queries) ListWorkPathsOnRoot(ctx context.Context, arg ListWorkPathsOnRo
 	for rows.Next() {
 		var i ListWorkPathsOnRootRow
 		if err := rows.Scan(&i.MediaObjectID, &i.RelPath, &i.SizeBytes); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkVideoHashes = `-- name: ListWorkVideoHashes :many
+SELECT o.id, o.phash, o.duration_ms, f.frames
+FROM work_file wf
+JOIN media_object o ON o.id = wf.media_object_id
+JOIN video_frame_hash f ON f.media_object_id = o.id
+WHERE wf.work_id = ? AND o.phash IS NOT NULL AND o.kind = 'video'
+ORDER BY o.id
+`
+
+type ListWorkVideoHashesRow struct {
+	ID         int64
+	Phash      sql.NullInt64
+	DurationMs sql.NullInt64
+	Frames     []byte
+}
+
+// The hashed videos of one work: an import compares a download's pictures with what the work already holds.
+func (q *Queries) ListWorkVideoHashes(ctx context.Context, workID int64) ([]ListWorkVideoHashesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkVideoHashes, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkVideoHashesRow{}
+	for rows.Next() {
+		var i ListWorkVideoHashesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Phash,
+			&i.DurationMs,
+			&i.Frames,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

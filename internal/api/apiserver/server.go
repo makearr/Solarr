@@ -749,6 +749,8 @@ func New(config Config) (*Server, error) {
 			secured.Post("/duplicates/similar-videos/resolve", server.ResolveSimilarVideos)
 			secured.Get("/settings/video-hashing", server.GetVideoHashing)
 			secured.Put("/settings/video-hashing", server.SetVideoHashing)
+			secured.Get("/settings/import-duplicates", server.GetImportDuplicates)
+			secured.Put("/settings/import-duplicates", server.SetImportDuplicates)
 			secured.Get("/categories/{id}/links", server.routeGetCategoryLinks)
 			secured.Post("/categories/{id}/links", server.routeLinkCategoryCopies)
 			secured.Get("/discover/incomplete", server.routeListIncompleteDiscographies)

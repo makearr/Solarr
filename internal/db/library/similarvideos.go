@@ -149,6 +149,30 @@ func (s SimilarVideos) Groups(ctx context.Context, rootFolderIDs []int64, level 
 	return groupSimilar(videos, level.MaxBits(), limit), nil
 }
 
+// MatchInWork answers the videos of one work that show the same pictures as the given hash, by the finder's own test
+// at level (ADR-35): the import's way to tell a download is a file the work already holds.
+func (s SimilarVideos) MatchInWork(ctx context.Context, workID int64, mean uint64, frames []FrameHash, durationMs int64, level SimilarityLevel) ([]int64, error) {
+	rows, err := librarydb.New(s.store.Read()).ListWorkVideoHashes(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: list hashed videos of work %d: %w", workID, err)
+	}
+	var matches []int64
+	for _, row := range rows {
+		held, err := decodeFrameHashes(row.Frames)
+		if err != nil {
+			return nil, err
+		}
+		if matchesHash(uint64(row.Phash.Int64), held, row.DurationMs.Int64, mean, frames, durationMs, level.MaxBits()) {
+			matches = append(matches, row.ID)
+		}
+	}
+	return matches, nil
+}
+
+func matchesHash(heldMean uint64, held []FrameHash, heldMs int64, mean uint64, frames []FrameHash, durationMs int64, maxBits int) bool {
+	return bits.OnesCount64(heldMean^mean) <= maxBits && sameLength(heldMs, durationMs) && framesAlike(held, frames, frameBitsFor(maxBits))
+}
+
 // collectVideos keeps the hashed videos on the given roots, a file linked at several paths once.
 func collectVideos(rows []librarydb.ListHashedVideosRow, rootFolderIDs []int64) ([]hashedVideo, error) {
 	inRoots := make(map[int64]bool, len(rootFolderIDs))

@@ -207,3 +207,26 @@ func (s *Server) SetVideoHashing(w http.ResponseWriter, r *http.Request) {
 	}
 	s.GetVideoHashing(w, r)
 }
+
+// GetImportDuplicates answers how an import treats a download the library already holds.
+func (s *Server) GetImportDuplicates(w http.ResponseWriter, _ *http.Request) {
+	snapshot := s.auth.Settings.Snapshot()
+	writeJSON(w, s.logger, http.StatusOK, gen.ImportDuplicates{Check: snapshot.ImportDuplicateCheck(), Blocklist: snapshot.ImportDuplicateBlocklist()})
+}
+
+// SetImportDuplicates stores the import's duplicate check and whether such releases are blocklisted.
+func (s *Server) SetImportDuplicates(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	var request gen.ImportDuplicates
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&request); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a JSON object with check and blocklist")
+		return
+	}
+	if err := s.auth.Settings.SetImportDuplicates(r.Context(), s.auth.Clock, request.Check, request.Blocklist); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	s.GetImportDuplicates(w, r)
+}

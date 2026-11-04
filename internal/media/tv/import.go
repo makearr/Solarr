@@ -73,6 +73,13 @@ type ImporterConfig struct {
 	// Probe measures a downloaded video file for the sample and audio checks; ok is false when it cannot be read. nil
 	// skips those two checks.
 	Probe func(ctx context.Context, absolutePath string) (measured mediatool.Measured, ok bool)
+	// Fingerprint hashes a downloaded video's pictures and reads its length for the duplicate check; ok is false when it
+	// cannot. nil skips the check.
+	Fingerprint func(ctx context.Context, absolutePath string) (hash mediatool.VideoHash, durationMs int64, ok bool)
+	// SameVideos are the files of a series that show the same pictures as a hash.
+	SameVideos func(ctx context.Context, workID int64, hash mediatool.VideoHash, durationMs int64) ([]int64, error)
+	// DuplicateCheck says whether the check is on; nil leaves it on.
+	DuplicateCheck func() bool
 	// AfterPlacing is told of each series an import placed episodes of; nil is told nothing.
 	AfterPlacing func(ctx context.Context, categoryID, workID int64)
 	// SharedFiles asks for the shared-broadcast pass after an imported episode turned out linked; nil never asks.
@@ -145,6 +152,9 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 		case errors.Is(err, errNothingToPlace):
 			decision.Decision, decision.Reason = library.UnitSkip, batch.ReasonNothingNew
 			result.Decisions[index] = decision
+		case errors.Is(err, errDuplicate):
+			decision.Decision, decision.Reason = library.UnitSkip, batch.ReasonDuplicate
+			result.Decisions[index] = decision
 		case errors.As(err, &refused):
 			// Held for a person with the rule that refused it, as Sonarr leaves such a file in the download folder.
 			decision.WorkID = &workID
@@ -209,7 +219,7 @@ func (i Importer) CommitHeld(ctx context.Context, request batch.HeldRequest) (li
 	placed, err := i.placeUnit(ctx, batch.Request{
 		SessionID: request.SessionID, CategoryID: request.CategoryID, SourcePath: request.SourcePath,
 	}, request.Unit, workID, upgrade)
-	if errors.Is(err, errNothingToPlace) {
+	if errors.Is(err, errNothingToPlace) || errors.Is(err, errDuplicate) {
 		return library.Placement{}, batch.ErrNothingToPlace
 	}
 	if err != nil {
@@ -282,6 +292,9 @@ const defaultEpisodeMinutes = 45
 
 var errNothingToPlace = errors.New("tv: no file of the unit covers an episode that is wanted")
 
+// errDuplicate is a unit whose files all show pictures the series holds already, in a file that needs no replacing.
+var errDuplicate = errors.New("tv: every file of the unit is a copy of one the series holds")
+
 // fileEpisodes is one video file and the episodes it covers.
 type fileEpisodes struct {
 	media inspect.File
@@ -289,6 +302,8 @@ type fileEpisodes struct {
 	parts []library.ResolvedPart
 	// replacing says the file is for an episode that already has one.
 	replacing bool
+	// hash is the file's pictures when the duplicate check read them, kept with the placed file for the next download.
+	hash *mediatool.VideoHash
 }
 
 func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit inspect.Unit, workID int64, upgrade bool) (*library.Placement, error) {
@@ -315,6 +330,7 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 	var files []fileEpisodes
 	var rejections []model.Rejection
 	var totalBytes int64
+	duplicates := 0
 	for _, media := range unit.Media {
 		info, ok := parsetv.ParsePath(media.RelPath, now)
 		if !ok {
@@ -324,23 +340,45 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		if err != nil {
 			return nil, err
 		}
+		// The picture says which episode a file is, whatever its release named it.
+		sourceAbs := path.Join(request.SourcePath, media.RelPath)
+		replaceableHere := replaceable
+		hash, copied, err := i.heldCopy(ctx, request.CategoryID, workID, sourceAbs, detail.Episodes)
+		if err != nil {
+			return nil, err
+		}
+		if copied != nil {
+			i.logger.Info("tv import: file is a copy of an episode the series holds", slog.String("file", media.RelPath), slog.Any("episodes", copied.refs))
+			if !copied.replaceable {
+				duplicates++
+				continue
+			}
+			parts = copied.parts
+			replaceableHere = map[string]bool{}
+			for _, part := range parts {
+				replaceableHere[part.MediaRef] = true
+			}
+		}
 		// An upgrade brings a second file for an episode below the cutoff; the cutoff check keeps the better one once both
 		// are measured.
-		fresh := slices.DeleteFunc(slices.Clone(parts), func(part library.ResolvedPart) bool { return present[part.MediaRef] && !replaceable[part.MediaRef] })
+		fresh := slices.DeleteFunc(slices.Clone(parts), func(part library.ResolvedPart) bool { return present[part.MediaRef] && !replaceableHere[part.MediaRef] })
 		if len(fresh) == 0 {
 			continue
 		}
 		replacing := slices.ContainsFunc(fresh, func(part library.ResolvedPart) bool { return present[part.MediaRef] })
-		if rejection := i.screen(ctx, path.Join(request.SourcePath, media.RelPath), info, fresh, runtimes); rejection != nil {
+		if rejection := i.screen(ctx, sourceAbs, info, fresh, runtimes); rejection != nil {
 			rejections = append(rejections, *rejection)
 			continue
 		}
-		files = append(files, fileEpisodes{media: media, info: info, parts: fresh, replacing: replacing})
+		files = append(files, fileEpisodes{media: media, info: info, parts: fresh, replacing: replacing, hash: hash})
 		totalBytes += media.SizeBytes
 	}
 	if len(files) == 0 {
 		if len(rejections) > 0 {
 			return nil, &batch.RejectedError{MediaType: "tv", Rejections: rejections}
+		}
+		if duplicates > 0 {
+			return nil, errDuplicate
 		}
 		return nil, errNothingToPlace
 	}
@@ -397,6 +435,11 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 	if err != nil {
 		return undo(fmt.Errorf("register placed files: %w", err))
 	}
+	for index, p := range placed {
+		if p.file.hash != nil {
+			i.keepHash(ctx, registered[index].MediaObjectID, *p.file.hash)
+		}
+	}
 	links := make([]library.SeriesFileLink, len(placed))
 	for index, p := range placed {
 		keys := make([]library.PartKey, len(p.file.parts))
@@ -422,6 +465,64 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		placement.TransferMethods = append(placement.TransferMethods, string(p.Method))
 	}
 	return placement, nil
+}
+
+// keepHash stores a placed file's pictures so the next download is compared with it; a failure only costs that.
+func (i Importer) keepHash(ctx context.Context, mediaObjectID int64, hash mediatool.VideoHash) {
+	frames := make([]library.FrameHash, len(hash.Frames))
+	for k, frame := range hash.Frames {
+		frames[k] = library.FrameHash{Slot: frame.Slot, Hash: frame.Hash}
+	}
+	if err := i.config.Physical.SetPerceptualHash(ctx, mediaObjectID, hash.Mean, frames); err != nil {
+		i.logger.Warn("tv import: could not keep a file's pictures", slog.Int64("media_object_id", mediaObjectID), slog.Any("error", err))
+	}
+}
+
+// copyOf is the episodes of the series a downloaded file turned out to be, and whether it may replace the file that holds them.
+type copyOf struct {
+	refs        []string
+	parts       []library.ResolvedPart
+	replaceable bool
+}
+
+// heldCopy reads a downloaded file's pictures and finds the file of the series that shows the same; nil when the check
+// is off, cannot read the file or finds none. hash is the file's pictures whenever they were read.
+func (i Importer) heldCopy(ctx context.Context, categoryID, workID int64, sourceAbs string, episodes []library.SeriesEpisode) (*mediatool.VideoHash, *copyOf, error) {
+	if i.config.Fingerprint == nil || i.config.SameVideos == nil || (i.config.DuplicateCheck != nil && !i.config.DuplicateCheck()) {
+		return nil, nil, nil
+	}
+	hash, durationMs, ok := i.config.Fingerprint(ctx, sourceAbs)
+	if !ok {
+		return nil, nil, nil
+	}
+	same, err := i.config.SameVideos(ctx, workID, hash, durationMs)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, held := range same {
+		var refs []string
+		var file *library.EpisodeFile
+		for _, episode := range episodes {
+			if episode.File != nil && episode.File.MediaObjectID == held {
+				refs = append(refs, MediaRef(episode.Season, episode.Number))
+				file = episode.File
+			}
+		}
+		if file == nil {
+			continue
+		}
+		keys := make([]library.PartKey, len(refs))
+		for k, ref := range refs {
+			keys[k] = library.PartKey{MediaRef: ref}
+		}
+		parts, _, err := i.config.Series.ResolveParts(ctx, workID, keys)
+		if err != nil {
+			return nil, nil, err
+		}
+		below := i.config.BelowCutoff == nil || i.config.BelowCutoff(categoryID, *file)
+		return &hash, &copyOf{refs: refs, parts: parts, replaceable: below}, nil
+	}
+	return &hash, nil, nil
 }
 
 // placeExtras brings along the unit's other files that are named after a placed episode file (package placer).
