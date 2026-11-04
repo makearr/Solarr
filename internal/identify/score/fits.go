@@ -15,7 +15,8 @@ func Fits(profile Profile, facts Facts) (bool, string) {
 		return false, "its rules refuse it"
 	}
 	for _, tier := range decision.Quality.Tiers {
-		if _, listed := profile.Tiers[tier.Dimension]; listed && tier.Rank > 0 {
+		// A fact the probe cannot measure (a file has no source) is not held against the file; the release claimed it.
+		if _, listed := profile.Tiers[tier.Dimension]; listed && tier.Rank > 0 && tier.Label != "unmeasured" {
 			return false, fmt.Sprintf("it prefers another %s to %s", strings.ReplaceAll(tier.Dimension, "_", " "), tier.Label)
 		}
 	}

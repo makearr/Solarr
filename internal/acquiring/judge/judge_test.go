@@ -261,3 +261,14 @@ func TestStrictlyBetterRefusesATieInTheTiersAndInTheScore(t *testing.T) {
 		t.Error("equal tiers: only the higher score should win")
 	}
 }
+
+// One indexer listing a release twice (two posts, same name and size) is one row.
+func TestDuplicatesFromOneIndexerKeepTheFirst(t *testing.T) {
+	find := func(guid string) judge.Find {
+		return judge.Find{Conn: judge.Conn{ID: 1}, Raw: indexer.RawItem{GUID: guid, Title: "Show.S01E01.1080p", SizeBytes: 1000}}
+	}
+	kept := judge.WithoutCrossIndexerDuplicates([]judge.Find{find("a"), find("b")})
+	if len(kept) != 1 || kept[0].Raw.GUID != "a" {
+		t.Errorf("kept = %+v", kept)
+	}
+}

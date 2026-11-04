@@ -64,3 +64,27 @@ func TestAccepts(t *testing.T) {
 		}
 	}
 }
+
+// A probed file has no source, so a profile that tiers source must not call a file below its cutoff for lacking one.
+func TestFitsIgnoresAnUnmeasuredTier(t *testing.T) {
+	const web1080p = `{"quality_profile":"WEB 1080p","require":{"resolution":{"min":"720p","max":"1080p"}},` +
+		`"compare":["resolution","source","video_codec","score"],` +
+		`"tiers":{"resolution":[["1080p"],["720p"]],"source":[["webdl"],["webrip"]],"video_codec":[["h264"],["h265"]]}}`
+	profile, err := score.Parse([]byte(web1080p))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name  string
+		facts score.Facts
+		fits  bool
+	}{
+		{"1080p h264 without a source", score.Facts{File: score.FileFacts{Resolution: "1080p", VideoCodec: "h264"}}, true},
+		{"720p stays below", score.Facts{File: score.FileFacts{Resolution: "720p", VideoCodec: "h264"}}, false},
+		{"a known worse source stays below", score.Facts{File: score.FileFacts{Resolution: "1080p", VideoCodec: "h264", Source: "webrip"}}, false},
+	} {
+		if fits, _ := score.Fits(profile, tc.facts); fits != tc.fits {
+			t.Errorf("%s: Fits = %v, want %v", tc.name, fits, tc.fits)
+		}
+	}
+}

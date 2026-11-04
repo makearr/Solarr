@@ -57,13 +57,13 @@ func SortBestFirst(finds []Find) {
 // duplicateSizeTolerance is how far two indexers' sizes for one release may differ (within 1%).
 const duplicateSizeTolerance = 0.01
 
-// WithoutCrossIndexerDuplicates keeps one row for a release two indexers both list: same title once case and
+// WithoutCrossIndexerDuplicates keeps one row for a release listed twice, by two indexers or twice by one: same title once case and
 // punctuation are ignored, size within 1%. Indexers are searched in priority order, so the first find is kept.
 func WithoutCrossIndexerDuplicates(finds []Find) []Find {
 	kept := finds[:0:0]
 	for _, find := range finds {
 		duplicate := slices.ContainsFunc(kept, func(earlier Find) bool {
-			return earlier.Conn.ID != find.Conn.ID && cleanTitle(earlier.Raw.Title) == cleanTitle(find.Raw.Title) &&
+			return cleanTitle(earlier.Raw.Title) == cleanTitle(find.Raw.Title) &&
 				sameSize(earlier.Raw.SizeBytes, find.Raw.SizeBytes)
 		})
 		if !duplicate {

@@ -2,6 +2,7 @@ package apiserver_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -15,6 +16,7 @@ type downloadFolderBody struct {
 	CategoryID     *int64 `json:"category_id"`
 	Readable       bool   `json:"readable"`
 	ReadableReason string `json:"readable_reason"`
+	Watch          bool   `json:"watch"`
 }
 
 func TestAddDownloadFolder_ProbesReadabilityAndPersists(t *testing.T) {
@@ -188,5 +190,29 @@ func TestListDownloadFolderContents_UnknownIDAnswers404(t *testing.T) {
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/downloadfolders/999/contents"))
 	if recorder.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404 for an unknown download folder", recorder.Code)
+	}
+}
+
+// A client's folder often holds other libraries' files, so naming a library must not start imports by itself.
+func TestAddDownloadFolder_IsNotWatchedUnlessAskedTo(t *testing.T) {
+	fixture := newWorksFixture(t)
+	if err := fixture.fsys.MkdirAll("/downloads/sabnzbd", 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	library, _ := fixture.createCategoryWithRoot(t, "Music", "/library/music")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/downloadfolders",
+		fmt.Sprintf(`{"path":"/downloads/sabnzbd","category_id":%d}`, library.ID)))
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	var created downloadFolderBody
+	if err := json.Unmarshal(recorder.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if created.Watch {
+		t.Errorf("created = %+v, want watch off by default", created)
 	}
 }
