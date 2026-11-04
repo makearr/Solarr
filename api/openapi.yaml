@@ -961,7 +961,7 @@ paths:
                   description: The library what lands in the folder is imported into; a watched folder must name one.
                 watch:
                   type: boolean
-                  description: Absent means watched when a library is named, and not watched otherwise.
+                  description: Absent means not watched; a folder is only imported from once someone says so, because a client's folder often holds other libraries' files.
                 transfer_ladder:
                   type: array
                   description: This folder's own transfer order; absent means the Import screen's.
@@ -1569,6 +1569,29 @@ paths:
               schema: { $ref: "#/components/schemas/HuntBudget" }
         "401": { $ref: "#/components/responses/Problem" }
         "503": { $ref: "#/components/responses/Problem" }
+
+  /priority/request:
+    get:
+      operationId: getRequestPriority
+      tags: [settings]
+      summary: How urgently an item a person adds to a library would be searched for, against the automatic searches.
+      description: >-
+        The composite priority (ADR-36) of a user request in the library, and the best an automatic search of
+        the same library can reach, so a screen can say whether the request goes first.
+      parameters:
+        - name: category_id
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: The two priorities.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RequestPriority" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
 
   /downloaders/speeds:
     get:
@@ -10593,6 +10616,15 @@ components:
         specials: { type: boolean, default: false, description: Also monitor the specials group. }
         quality_profile_id: { type: integer, format: int64, description: The library's default when absent. }
         search: { type: boolean, default: false, description: Start looking for what was added. }
+        root_folder_id: { type: integer, format: int64, description: The library root the files should go under; types that place by affinity record it. }
+        tags:
+          type: array
+          items: { type: string }
+          description: Tags to give the new work, by name, on top of what it has.
+        fields:
+          type: object
+          additionalProperties: { type: string }
+          description: The type's editable facets to set at once, by facet key (a series' type, season folders).
 
     AddWorkResult:
       type: object
@@ -10616,15 +10648,6 @@ components:
         title: { type: string }
         date: { type: string }
         available_at: { type: string, format: date-time }
-        root_folder_id: { type: integer, format: int64, description: The library root the files should go under; types that place by affinity record it. }
-        tags:
-          type: array
-          items: { type: string }
-          description: Tags to give the new work, by name, on top of what it has.
-        fields:
-          type: object
-          additionalProperties: { type: string }
-          description: The type's editable facets to set at once, by facet key (a series' type, season folders).
         file: { $ref: "#/components/schemas/PartFile" }
 
     WantedPartPage:
@@ -11645,6 +11668,13 @@ components:
         new_release: { type: integer, description: Searches spent on recent releases. }
         gap: { type: integer, description: Searches spent on missing older items. }
         upgrade: { type: integer, description: Searches spent on upgrades. }
+
+    RequestPriority:
+      type: object
+      required: [request, best_automatic]
+      properties:
+        request: { type: integer, format: int64, description: The priority a user request in the library gets. }
+        best_automatic: { type: integer, format: int64, description: The highest priority an automatic search in the library can get. }
 
     DownloaderSpeed:
       type: object

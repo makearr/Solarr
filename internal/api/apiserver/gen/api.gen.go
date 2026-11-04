@@ -4742,6 +4742,15 @@ type ReplacementSide struct {
 	Tiers         []TierValue `json:"tiers"`
 }
 
+// RequestPriority defines model for RequestPriority.
+type RequestPriority struct {
+	// BestAutomatic The highest priority an automatic search in the library can get.
+	BestAutomatic int64 `json:"best_automatic"`
+
+	// Request The priority a user request in the library gets.
+	Request int64 `json:"request"`
+}
+
 // Role defines model for Role.
 type Role string
 
@@ -5938,7 +5947,7 @@ type AddDownloadFolderJSONBody struct {
 	// TransferLadder This folder's own transfer order; absent means the Import screen's.
 	TransferLadder *[]string `json:"transfer_ladder,omitempty"`
 
-	// Watch Absent means watched when a library is named, and not watched otherwise.
+	// Watch Absent means not watched; a folder is only imported from once someone says so, because a client's folder often holds other libraries' files.
 	Watch *bool `json:"watch,omitempty"`
 }
 
@@ -6342,6 +6351,11 @@ type ListPersonKnownForParams struct {
 // MergePersonJSONBody defines parameters for MergePerson.
 type MergePersonJSONBody struct {
 	IntoId int64 `json:"into_id"`
+}
+
+// GetRequestPriorityParams defines parameters for GetRequestPriority.
+type GetRequestPriorityParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
 }
 
 // ListQueueParams defines parameters for ListQueue.
@@ -7837,6 +7851,9 @@ type ServerInterface interface {
 	// Change the weights or the freshness window. Administrator only.
 	// (PATCH /priority)
 	UpdatePrioritySettings(w http.ResponseWriter, r *http.Request)
+	// How urgently an item a person adds to a library would be searched for, against the automatic searches.
+	// (GET /priority/request)
+	GetRequestPriority(w http.ResponseWriter, r *http.Request, params GetRequestPriorityParams)
 	// Every quality profile (ADR-40).
 	// (GET /qualityprofiles)
 	ListQualityProfiles(w http.ResponseWriter, r *http.Request)
@@ -9451,6 +9468,12 @@ func (_ Unimplemented) GetPrioritySettings(w http.ResponseWriter, r *http.Reques
 // Change the weights or the freshness window. Administrator only.
 // (PATCH /priority)
 func (_ Unimplemented) UpdatePrioritySettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// How urgently an item a person adds to a library would be searched for, against the automatic searches.
+// (GET /priority/request)
+func (_ Unimplemented) GetRequestPriority(w http.ResponseWriter, r *http.Request, params GetRequestPriorityParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -17259,6 +17282,48 @@ func (siw *ServerInterfaceWrapper) UpdatePrioritySettings(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// GetRequestPriority operation middleware
+func (siw *ServerInterfaceWrapper) GetRequestPriority(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRequestPriorityParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRequestPriority(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListQualityProfiles operation middleware
 func (siw *ServerInterfaceWrapper) ListQualityProfiles(w http.ResponseWriter, r *http.Request) {
 
@@ -21423,6 +21488,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/priority", wrapper.UpdatePrioritySettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/priority/request", wrapper.GetRequestPriority)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/qualityprofiles", wrapper.ListQualityProfiles)

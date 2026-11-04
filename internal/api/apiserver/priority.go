@@ -8,6 +8,7 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/priority"
 	"github.com/makearr/Solarr/internal/platform/config"
 )
 
@@ -159,4 +160,33 @@ func (s *Server) ListDownloaderSpeeds(w http.ResponseWriter, r *http.Request) {
 		out[i] = gen.DownloaderSpeed{DownloaderId: view.DownloaderID, Downloads: view.Downloads, SizeBytes: view.SizeBytes, BytesPerSecond: view.BytesPerSecond}
 	}
 	writeJSON(w, s.logger, http.StatusOK, out)
+}
+
+// GetRequestPriority answers what a user request in a library would rank at, against the best an automatic search reaches.
+func (s *Server) GetRequestPriority(w http.ResponseWriter, r *http.Request, params gen.GetRequestPriorityParams) {
+	if _, err := authz.FromContext(r.Context()); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	snapshot := s.auth.Settings.Snapshot()
+	category, found := snapshot.Category(params.CategoryId)
+	if !found {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such library")
+		return
+	}
+	stored := snapshot.PrioritySettings()
+	weights := priority.Weights{
+		UserRequest: stored.UserRequestWeight, RSS: priority.DefaultWeights().RSS, NewRelease: stored.NewReleaseWeight,
+		Gap: stored.GapWeight, Upgrade: stored.UpgradeWeight,
+	}
+	now := s.auth.Clock.Now()
+	asking := priority.Input{CategoryRank: category.PriorityRank, QueuedSince: now}
+	asking.Trigger = priority.TriggerUserRequest
+	request := priority.Compute(weights, asking, now)
+	asking.Trigger = priority.TriggerRSS
+	automatic := priority.Compute(weights, asking, now)
+	if newRelease := priority.Compute(weights, priority.Input{Trigger: priority.TriggerNewRelease, CategoryRank: category.PriorityRank, QueuedSince: now}, now); newRelease > automatic {
+		automatic = newRelease
+	}
+	writeJSON(w, s.logger, http.StatusOK, gen.RequestPriority{Request: request, BestAutomatic: automatic})
 }

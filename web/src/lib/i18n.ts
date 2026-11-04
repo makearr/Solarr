@@ -15,6 +15,8 @@ const catalogue = {
   "action.cancel": "Cancel",
   "action.close": "Close",
   "action.searchAll": "Search all {works}",
+  "add.priorityFirst": "Searched ahead of every automatic search (urgency {request}, the best automatic search reaches {automatic}).",
+  "add.priorityShared": "Searched alongside the automatic searches (urgency {request}, the best automatic search reaches {automatic}).",
   "tab.overview": "Overview",
   "tab.files": "Files",
   "tab.history": "History",

@@ -852,6 +852,14 @@ func New(config Config) (*Server, error) {
 			secured.Get("/priority", server.GetPrioritySettings)
 			secured.Patch("/priority", server.UpdatePrioritySettings)
 			secured.Get("/hunt/budget", server.GetHuntBudget)
+			secured.Get("/priority/request", func(w http.ResponseWriter, r *http.Request) {
+				id, err := strconv.ParseInt(r.URL.Query().Get("category_id"), 10, 64)
+				if err != nil {
+					writeProblem(w, server.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "category_id must be a number")
+					return
+				}
+				server.GetRequestPriority(w, r, gen.GetRequestPriorityParams{CategoryId: id})
+			})
 			secured.Get("/downloaders/speeds", server.ListDownloaderSpeeds)
 			secured.Get("/metadata/providers", server.ListMetadataProviders)
 			secured.Put("/metadata/providers/{key}/apikey", func(w http.ResponseWriter, r *http.Request) {

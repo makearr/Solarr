@@ -1076,6 +1076,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/priority/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How urgently an item a person adds to a library would be searched for, against the automatic searches.
+         * @description The composite priority (ADR-36) of a user request in the library, and the best an automatic search of the same library can reach, so a screen can say whether the request goes first.
+         */
+        get: operations["getRequestPriority"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/downloaders/speeds": {
         parameters: {
             query?: never;
@@ -7305,6 +7325,17 @@ export interface components {
              * @default false
              */
             search: boolean;
+            /**
+             * Format: int64
+             * @description The library root the files should go under; types that place by affinity record it.
+             */
+            root_folder_id?: number;
+            /** @description Tags to give the new work, by name, on top of what it has. */
+            tags?: string[];
+            /** @description The type's editable facets to set at once, by facet key (a series' type, season folders). */
+            fields?: {
+                [key: string]: string;
+            };
         };
         AddWorkResult: {
             kind: string;
@@ -7325,17 +7356,6 @@ export interface components {
             work_id: number;
             work_title: string;
             /** @description The group the part is wanted through */
-            /**
-             * Format: int64
-             * @description The library root the files should go under; types that place by affinity record it.
-             */
-            root_folder_id?: number;
-            /** @description Tags to give the new work, by name, on top of what it has. */
-            tags?: string[];
-            /** @description The type's editable facets to set at once, by facet key (a series' type, season folders). */
-            fields?: {
-                [key: string]: string;
-            };
             group_ref: string;
             group_label: string;
             number: string;
@@ -8157,6 +8177,18 @@ export interface components {
             gap: number;
             /** @description Searches spent on upgrades. */
             upgrade: number;
+        };
+        RequestPriority: {
+            /**
+             * Format: int64
+             * @description The priority a user request in the library gets.
+             */
+            request: number;
+            /**
+             * Format: int64
+             * @description The highest priority an automatic search in the library can get.
+             */
+            best_automatic: number;
         };
         DownloaderSpeed: {
             /** Format: int64 */
@@ -10340,7 +10372,7 @@ export interface operations {
                      * @description The library what lands in the folder is imported into; a watched folder must name one.
                      */
                     category_id?: number;
-                    /** @description Absent means watched when a library is named, and not watched otherwise. */
+                    /** @description Absent means not watched; a folder is only imported from once someone says so, because a client's folder often holds other libraries' files. */
                     watch?: boolean;
                     /** @description This folder's own transfer order; absent means the Import screen's. */
                     transfer_ladder?: string[];
@@ -11083,6 +11115,31 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
+        };
+    };
+    getRequestPriority: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The two priorities. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestPriority"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     listDownloaderSpeeds: {
