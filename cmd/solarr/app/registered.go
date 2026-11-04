@@ -175,7 +175,7 @@ func (p *process) tvModule() tv.Module {
 		},
 		CutoffJob: tv.CutoffJob{
 			Desired: library.NewDesired(p.library), Series: library.NewSeriesReader(p.library), Settings: p.cache,
-			Recycle: p.recycleSuperseded, Logger: p.logger,
+			Recycle: p.recycleSuperseded, HandOver: p.handOverSidecars, Logger: p.logger,
 		},
 		ServerFiles: &tv.ServerFilesJob{
 			Writer: tv.ServerFiles{

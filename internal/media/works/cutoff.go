@@ -43,6 +43,8 @@ type Cutoff struct {
 	// Recycle moves a file to the recycle bin; replaced is true for an owned file an upgrade superseded, false for a
 	// download that measured no better. Nil leaves every file in place.
 	Recycle func(ctx context.Context, mediaObjectID, categoryID int64, replaced bool) error
+	// HandOver runs before an owned file is recycled as replaced, so what sits beside it (subtitles) can follow the file that replaces it.
+	HandOver func(ctx context.Context, fromMediaObjectID, toMediaObjectID int64) error
 	// Versions says a part's files are versions of it (a film's cuts, a book's formats): two held on purpose are no
 	// contest, and one at the cutoff completes the item. Otherwise every file must reach it, as every episode must.
 	Versions bool
@@ -177,6 +179,11 @@ func (c Cutoff) settle(ctx context.Context, snapshot *settings.Snapshot, item li
 			judge.EvaluateInOrder(rules, arrived.Facts, language), judge.EvaluateInOrder(rules, incumbent.Facts, language), arrived.Facts)
 		if err := c.Desired.RecordImportDecision(ctx, decision); err != nil {
 			return recycled, err
+		}
+		if replaced && c.HandOver != nil {
+			if err := c.HandOver(ctx, loser.file.MediaObjectID, loser.keeper.MediaObjectID); err != nil {
+				return recycled, err
+			}
 		}
 		if err := c.Recycle(ctx, loser.file.MediaObjectID, item.CategoryID, replaced); err != nil {
 			return recycled, err

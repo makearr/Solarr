@@ -182,7 +182,8 @@ func TestCutoffJobKeepsTheBetterOfTwoFilesForAnEpisode(t *testing.T) {
 	if len(recycled) != 1 || !recycled[better.owned] {
 		t.Errorf("recycled %v, want only the owned 720p, as replaced", recycled)
 	}
-	better.wantDecision(t, library.ImportDecisionImport, better.owned, "resolution")
+	// The 1080p file now fits the profile (no source is not held against it); the 720p does not, so the profile decides.
+	better.wantDecision(t, library.ImportDecisionImport, better.owned, "profile_priority")
 
 	same := upgradeSeries(t, "1080p", "1080p")
 	recycled = map[int64]bool{}

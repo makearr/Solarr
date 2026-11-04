@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"path"
 	"time"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
@@ -15,6 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/moving/sidecar"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -128,4 +130,23 @@ func (p *process) recordCutoffTally(ctx context.Context, source string, tallies 
 		})
 	}
 	return statistics.NewRollup(p.statistics).Set(ctx, figures, clock.NewSystem().Now().Unix())
+}
+
+// handOverSidecars moves the subtitles beside a replaced episode file to the file replacing it.
+func (p *process) handOverSidecars(ctx context.Context, fromMediaObjectID, toMediaObjectID int64) error {
+	physical := library.NewPhysical(p.library)
+	absolute := func(mediaObjectID int64) (string, bool) {
+		paths, err := physical.PathsForObject(ctx, mediaObjectID)
+		if err != nil || len(paths) == 0 {
+			return "", false
+		}
+		root, found := adapters.RootFolderPath(p.cache)(paths[0].RootFolderID)
+		return path.Join(root, paths[0].RelPath), found
+	}
+	from, fromFound := absolute(fromMediaObjectID)
+	to, toFound := absolute(toMediaObjectID)
+	if !fromFound || !toFound {
+		return nil
+	}
+	return sidecar.HandOverSidecars(p.fsys, from, to)
 }

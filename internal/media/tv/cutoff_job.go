@@ -27,12 +27,14 @@ type CutoffJob struct {
 	// Recycle moves a file to the recycle bin; replaced is true for an owned file an upgrade superseded, false for a
 	// download that measured no better. Nil leaves every file in place.
 	Recycle func(ctx context.Context, mediaObjectID, categoryID int64, replaced bool) error
-	Logger  *slog.Logger
+	// HandOver moves what sits beside a replaced file (subtitles) to the file that replaces it.
+	HandOver func(ctx context.Context, fromMediaObjectID, toMediaObjectID int64) error
+	Logger   *slog.Logger
 }
 
 func (j CutoffJob) shared() works.Cutoff {
 	return works.Cutoff{
-		Desired: j.Desired, Recycle: j.Recycle, Page: j.Desired.TVCutoffPage,
+		Desired: j.Desired, Recycle: j.Recycle, Page: j.Desired.TVCutoffPage, HandOver: j.HandOver,
 		Files: func(ctx context.Context, itemID int64) ([]works.File, error) {
 			return seasonFiles(ctx, j.Series, itemID)
 		},

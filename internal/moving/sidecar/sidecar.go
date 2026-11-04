@@ -109,3 +109,32 @@ func (w Writer) WritePicture(ctx context.Context, folder, name, address string) 
 	}
 	return made
 }
+
+var subtitleExtensions = map[string]bool{".srt": true, ".ass": true, ".ssa": true, ".sub": true, ".idx": true, ".vtt": true}
+
+// HandOverSidecars renames the subtitles named after the file at from (".en.srt") to follow the file at to, keeping
+// what the new file already has.
+func HandOverSidecars(fsys fsx.FS, from, to string) error {
+	entries, err := fsys.ReadDir(path.Dir(from))
+	if err != nil {
+		return err
+	}
+	fromStem := strings.TrimSuffix(path.Base(from), path.Ext(from))
+	toStem := path.Join(path.Dir(to), strings.TrimSuffix(path.Base(to), path.Ext(to)))
+	for _, entry := range entries {
+		if entry.IsDir || !strings.HasPrefix(entry.Name, fromStem+".") || !subtitleExtensions[strings.ToLower(path.Ext(entry.Name))] {
+			continue
+		}
+		destination := toStem + strings.TrimPrefix(entry.Name, fromStem)
+		if _, err := fsys.Stat(destination); err == nil {
+			continue
+		}
+		if err := fsys.MkdirAll(path.Dir(destination), 0o755); err != nil {
+			return err
+		}
+		if err := fsys.Rename(path.Join(path.Dir(from), entry.Name), destination); err != nil {
+			return err
+		}
+	}
+	return nil
+}
