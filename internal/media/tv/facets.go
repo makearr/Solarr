@@ -25,6 +25,12 @@ var facets = []media.Facet{
 		Column:  true, Filterable: true, Editable: true,
 	},
 	{
+		Key: "season_folder", Label: "Season folders", Entity: model.LevelEntityWork, Kind: media.FacetEnum,
+		Source:   media.FacetSource{Kind: media.SourceField, Name: FieldSeasonFolder},
+		Choices:  []media.Choice{{Key: SeasonFoldersOn, Label: "Season folders"}, {Key: SeasonFoldersOff, Label: "No season folders"}},
+		Editable: true,
+	},
+	{
 		Key: "air_time_zone", Label: "Air time zone", Entity: model.LevelEntityWork, Kind: media.FacetEnum,
 		Source:  media.FacetSource{Kind: media.SourceField, Name: FieldAirTimeZone},
 		Choices: zoneChoices(), Editable: true, RefreshesWork: true,

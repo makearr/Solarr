@@ -82,7 +82,7 @@ func (a WorkAdding) Add(ctx context.Context, request apiserver.AddWorkRequest) (
 	}
 	result, err := adding.AddWork(ctx, media.AddRequest{
 		CategoryID: request.CategoryID, UserID: request.UserID, Kind: kind, Provider: request.Provider, ExternalID: request.ExternalID,
-		Monitored: request.Monitored, Option: request.MonitorOption, Specials: request.Specials, ProfileID: request.ProfileID, Search: request.Search,
+		Monitored: request.Monitored, Option: request.MonitorOption, Specials: request.Specials, ProfileID: request.ProfileID, Search: request.Search, RootFolderID: request.RootFolderID,
 	})
 	if err != nil {
 		return apiserver.AddWorkResult{}, notWired(err)

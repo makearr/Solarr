@@ -7325,6 +7325,17 @@ export interface components {
             work_id: number;
             work_title: string;
             /** @description The group the part is wanted through */
+            /**
+             * Format: int64
+             * @description The library root the files should go under; types that place by affinity record it.
+             */
+            root_folder_id?: number;
+            /** @description Tags to give the new work, by name, on top of what it has. */
+            tags?: string[];
+            /** @description The type's editable facets to set at once, by facet key (a series' type, season folders). */
+            fields?: {
+                [key: string]: string;
+            };
             group_ref: string;
             group_label: string;
             number: string;

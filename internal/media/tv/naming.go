@@ -227,6 +227,13 @@ const (
 	SeriesAnime    SeriesType = "anime"
 )
 
+// FieldSeasonFolder is the series' own choice of putting episodes straight in the series folder; empty follows the library.
+const (
+	FieldSeasonFolder = "season_folder"
+	SeasonFoldersOn   = "yes"
+	SeasonFoldersOff  = "no"
+)
+
 // EpisodeNumbering is one episode a file covers.
 type EpisodeNumbering struct {
 	Number   int
@@ -237,6 +244,7 @@ type EpisodeNumbering struct {
 // EpisodeNaming is every fact an episode file's name can draw on; a zero field renders as absent.
 type EpisodeNaming struct {
 	SeriesType       SeriesType
+	NoSeasonFolder   bool
 	SeriesTitle      string
 	SeriesYear       int
 	IDs              IDs
@@ -272,7 +280,11 @@ func (n Naming) RenderEpisode(episode EpisodeNaming, originalRelPath string) (st
 		folder = SlotSpecialsFolder
 	}
 	fileFormat := n.expandSeasonEpisode(n.Formats[slot], episode)
-	segments, err := naming.Compile(n.Formats[SlotSeriesFolder] + "/" + n.Formats[folder] + "/" + fileFormat)
+	layout := n.Formats[SlotSeriesFolder] + "/" + n.Formats[folder] + "/" + fileFormat
+	if episode.NoSeasonFolder {
+		layout = n.Formats[SlotSeriesFolder] + "/" + fileFormat
+	}
+	segments, err := naming.Compile(layout)
 	if err != nil {
 		return "", nil, fmt.Errorf("tv: naming %s: %w", slot, err)
 	}

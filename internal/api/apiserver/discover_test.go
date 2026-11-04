@@ -116,3 +116,28 @@ func TestAddWork_PassesTheChoicesAndReportsOnlyItsOwnIDs(t *testing.T) {
 		t.Errorf("without external_id: %d, want 400", recorder.Code)
 	}
 }
+
+// The add form's root, tags and facets reach the adder and, for tags and facets, the work's Edit save beside what it had.
+func TestAddWork_AppliesTagsFieldsAndRootAfterTheAdd(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, _ := fixture.createCategoryWithRoot(t, "TV", "/media/tv")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.workAdder.result = apiserver.AddWorkResult{Kind: "series", WorkID: 5}
+	fixture.workEditor.row = apiserver.WorkEditRow{Monitored: true, Tags: []string{"Comedy"}, Fields: map[string]string{"air_time_zone": "UTC"}}
+
+	body := fmt.Sprintf(`{"category_id":%d,"provider":"tvdb","external_id":"1","root_folder_id":7,"tags":["Comedy","Kids"],"fields":{"series_type":"anime","season_folder":"no"}}`, category.ID)
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works", body)); recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	if got := fixture.workAdder.adds[0].RootFolderID; got == nil || *got != 7 {
+		t.Errorf("root folder = %v, want 7", got)
+	}
+	want := apiserver.WorkEditRow{
+		Monitored: true, Tags: []string{"Comedy", "Kids"},
+		Fields: map[string]string{"air_time_zone": "UTC", "series_type": "anime", "season_folder": "no"},
+	}
+	if saved := fixture.workEditor.saved; saved == nil || !reflect.DeepEqual(*saved, want) {
+		t.Errorf("saved edit = %+v, want %+v", saved, want)
+	}
+}

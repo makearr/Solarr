@@ -22,7 +22,10 @@ disk (the default, so nothing is hunted that you did not ask for), every episode
 ## Add a series (🟢)
 
 **Add series** searches TheTVDB (through Sonarr's free proxy) and, with a key, TMDB. Choose what to monitor
-(Sonarr's nine options), the quality profile, and whether to search for missing episodes at once.
+(Sonarr's nine options), the quality profile, the root folder it goes under (with several roots; the first
+file lands there), the series type, whether it uses season folders, tags, and whether to search for missing
+episodes at once. Edit changes the type and the season folders later; **No season folders** puts episodes
+straight in the series folder.
 
 Free metadata is enough to start. For cast, crew and guest stars, networks with logos, artwork and alternative
 titles, add your own **TMDB key** under **Settings → Metadata → TV series** (a free account at themoviedb.org:

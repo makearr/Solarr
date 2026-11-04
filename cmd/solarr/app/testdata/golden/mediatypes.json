@@ -353,6 +353,26 @@
       {
         "choices": [
           {
+            "key": "yes",
+            "label": "Season folders"
+          },
+          {
+            "key": "no",
+            "label": "No season folders"
+          }
+        ],
+        "column": false,
+        "editable": true,
+        "entity": "work",
+        "filterable": false,
+        "key": "season_folder",
+        "kind": "enum",
+        "label": "Season folders",
+        "sortable": false
+      },
+      {
+        "choices": [
+          {
             "key": "America/Mexico_City",
             "label": "America/Mexico City"
           },

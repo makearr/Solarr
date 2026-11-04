@@ -141,3 +141,20 @@ func TestNamingExamplesRenderEverySlot(t *testing.T) {
 		t.Errorf("multi example = %q, want %q", examples[1].Path, want)
 	}
 }
+
+// A series that opts out of season folders keeps its episodes straight under the series folder, specials included.
+func TestNoSeasonFolderPutsEpisodesInTheSeriesFolder(t *testing.T) {
+	n := tv.NamingFor(nil)
+	for _, c := range []struct {
+		season int
+		want   string
+	}{
+		{3, "Example Show/Example Show - S03E07 - Part A.mkv"},
+		{0, "Example Show/Example Show - S00E07 - Part A.mkv"},
+	} {
+		got := render(t, n, tv.EpisodeNaming{SeriesTitle: "Example Show", Season: c.season, NoSeasonFolder: true, Episodes: episodes(7)}, "x.mkv")
+		if got != c.want {
+			t.Errorf("season %d: %q, want %q", c.season, got, c.want)
+		}
+	}
+}

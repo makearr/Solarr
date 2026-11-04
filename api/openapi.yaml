@@ -10616,6 +10616,15 @@ components:
         title: { type: string }
         date: { type: string }
         available_at: { type: string, format: date-time }
+        root_folder_id: { type: integer, format: int64, description: The library root the files should go under; types that place by affinity record it. }
+        tags:
+          type: array
+          items: { type: string }
+          description: Tags to give the new work, by name, on top of what it has.
+        fields:
+          type: object
+          additionalProperties: { type: string }
+          description: The type's editable facets to set at once, by facet key (a series' type, season folders).
         file: { $ref: "#/components/schemas/PartFile" }
 
     WantedPartPage:

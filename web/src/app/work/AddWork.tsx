@@ -7,7 +7,7 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t, vocabularyOf } from "@/lib/i18n";
 import { remoteImage } from "@/lib/remoteImage";
-import { invalidatePeopleLists, invalidateWorkLists, useLibraries, useQualityProfiles } from "@/lib/resources";
+import { invalidatePeopleLists, invalidateWorkLists, useLibraries, useQualityProfiles, useRootFolders } from "@/lib/resources";
 import { useLibraryLabel } from "@/lib/libraryLabel";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaTypes, type MediaTypeInfo } from "@/lib/useMediaTypes";
@@ -18,6 +18,8 @@ import { EmptyState } from "@/ui/EmptyState";
 import { Image } from "@/ui/Image";
 
 import { useDebouncedValue } from "../useDebouncedValue";
+import { TagPicker } from "../TagChips";
+import { AddPriority } from "./AddPriority";
 import { IncompleteDiscographies } from "./IncompleteDiscographies";
 
 type Candidate = components["schemas"]["AddCandidate"];
@@ -237,6 +239,12 @@ function AddPanel({
   // Lidarr's and Sonarr's "Start search for missing", remembered per person (D13).
   const [search, setSearch] = usePreference("discover.search_on_add", true);
   const profiles = useQualityProfiles();
+  const [rootFolderId, setRootFolderId] = useState(0);
+  const [tags, setTags] = useState<string[]>([]);
+  const editable = info.facets.filter((facet) => facet.editable && facet.kind === "enum" && facet.key !== "air_time_zone");
+  const [fields, setFields] = useState<Record<string, string>>({});
+  // Only TV places a series by the root chosen here; the others pick a root when their first file arrives.
+  const libraryRoots = (useRootFolders().data ?? []).filter((root) => (root.categories ?? []).some((category) => category.id === Number(categoryId)));
   const add = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/works", {
@@ -244,6 +252,9 @@ function AddPanel({
           category_id: Number(categoryId), kind: candidate.kind, provider: candidate.provider, external_id: candidate.external_id,
           monitored: options.length > 0 ? option !== "none" : monitored, monitor_option: options.length > 0 ? option : undefined,
           specials, quality_profile_id: profileId || undefined, search,
+          root_folder_id: rootFolderId || undefined,
+          tags: tags.length > 0 ? tags : undefined,
+          fields: Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== "")),
         },
       });
       if (error) throw error;
@@ -315,6 +326,35 @@ function AddPanel({
           </select>
         </label>
       )}
+      {!person && info.key === "tv" && libraryRoots.length > 1 && (
+        <label className="flex flex-wrap items-center gap-2">
+          <span className="w-24 text-xs text-ink-muted">Root folder</span>
+          <select value={rootFolderId} onChange={(event) => setRootFolderId(Number(event.target.value))} className={field}>
+            <option value={0}>Automatic: the one with most free space</option>
+            {libraryRoots.map((root) => (
+              <option key={root.id} value={root.id}>
+                {root.path}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {!person &&
+        editable.map((facet) => (
+          <label key={facet.key} className="flex flex-wrap items-center gap-2">
+            <span className="w-24 text-xs text-ink-muted">{facet.label}</span>
+            <select value={fields[facet.key] ?? ""} onChange={(event) => setFields({ ...fields, [facet.key]: event.target.value })} className={field}>
+              <option value="">Automatic</option>
+              {(facet.choices ?? []).map((choice) => (
+                <option key={choice.key} value={choice.key}>
+                  {choice.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+      {!person && <TagPicker label="Tags" genreTree={info.genre_tree.key} names={tags} onChange={setTags} />}
+      {search && !person && <AddPriority categoryId={Number(categoryId)} />}
       <label className="flex items-center gap-2 text-xs text-ink-muted">
         <span className="w-24" />
         <input type="checkbox" checked={search} onChange={(event) => setSearch(event.target.checked)} /> Start search for missing {words.parts === "parts" ? words.works : words.parts}

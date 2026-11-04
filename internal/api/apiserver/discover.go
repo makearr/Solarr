@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
+	"slices"
 	"strconv"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
@@ -35,6 +37,7 @@ type AddWorkRequest struct {
 	Specials                   bool
 	ProfileID                  *int64
 	Search                     bool
+	RootFolderID               *int64
 }
 
 // AddWorkResult is what an add stored; Searching says the type started looking for it.
@@ -147,9 +150,14 @@ func (s *Server) AddWork(w http.ResponseWriter, r *http.Request) {
 		CategoryID: body.CategoryId, UserID: access.UserID(), Kind: derefOr(body.Kind, ""), Provider: body.Provider,
 		ExternalID: body.ExternalId, Monitored: derefOr(body.Monitored, true), MonitorOption: derefOr(body.MonitorOption, ""),
 		Specials: derefOr(body.Specials, false), ProfileID: body.QualityProfileId, Search: derefOr(body.Search, false),
+		RootFolderID: body.RootFolderId,
 	})
 	if err != nil {
 		writeError(w, s.logger, err)
+		return
+	}
+	if err := s.applyAddExtras(r.Context(), result.WorkID, body); err != nil {
+		s.writeWorkEditError(w, err)
 		return
 	}
 	view := gen.AddWorkResult{Kind: result.Kind, Searching: result.Searching}
@@ -160,4 +168,27 @@ func (s *Server) AddWork(w http.ResponseWriter, r *http.Request) {
 		view.PersonId = &result.PersonID
 	}
 	writeJSON(w, s.logger, http.StatusOK, view)
+}
+
+// applyAddExtras gives a work just added the tags and editable facets the add form carried, through the Edit dialog's own save.
+func (s *Server) applyAddExtras(ctx context.Context, workID int64, body gen.AddWorkRequest) error {
+	fields := derefOr(body.Fields, nil)
+	if workID == 0 || s.workEditor == nil || (len(fields) == 0 && (body.Tags == nil || len(*body.Tags) == 0)) {
+		return nil
+	}
+	edit, err := s.workEditor.GetWorkEdit(ctx, workID)
+	if err != nil {
+		return err
+	}
+	for _, name := range derefOr(body.Tags, nil) {
+		if !slices.Contains(edit.Tags, name) {
+			edit.Tags = append(edit.Tags, name)
+		}
+	}
+	edit.Fields = maps.Clone(edit.Fields)
+	if edit.Fields == nil {
+		edit.Fields = map[string]string{}
+	}
+	maps.Copy(edit.Fields, fields)
+	return s.workEditor.SaveWorkEdit(ctx, workID, edit)
 }

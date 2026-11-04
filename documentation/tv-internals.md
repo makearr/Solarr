@@ -99,7 +99,7 @@ and `exclude` writes every id the work carries to `work_exclusion`, so a follow 
 episodes, credits and desired items although its files stay; an album with files stays. Adding it by hand lifts the exclusion.
 `POST /works/{id}/refresh` reads a work again through its type's `media.Refreshing` (a series at once, an album in the
 background). `GET /works/{id}/artwork/options` and `PUT /works/{id}/artwork` choose a work's picture through its type's
-`media.Picturing`: a series lists the posters its sources gave and keeps the pick first in its `__manual__` `images` field. **Series type** (`series_type`
+`media.Picturing`: a series lists the posters its sources gave and keeps the pick first in its `__manual__` `images` field. The add form sends `root_folder_id` (recorded as the placement affinity of the series title), `tags` and `fields` (the editable facets: series type, `season_folder` = `no` for a flat series folder) with `POST /works`; the API applies tags and fields through the Edit save. **Series type** (`series_type`
 field) is detected on every add and refresh (anime: Japanese and listed by AniList, AniDB or MyAnimeList; daily: a talk, news, soap
 or game show) and the user's own choice (`__manual__`, set as the editable `series_type` facet through `PUT /works/{id}/edit`'s `fields`) wins; naming reads it, and an anime season is also searched by absolute
 number ("Title 062", up to five missing episodes) with absolute-only releases matched to their episode. Provider pictures are
@@ -167,6 +167,8 @@ the named resolution/codec/HDR the best tier of their dimension and puts them fi
 ## Upgrades
 
 A monitored season whose episodes are all present is judged by `tv.cutoff_check` (nightly and after every import of that series) against the library's target or cutoff, using what the probe measured: any monitored episode file below it makes the season UPGRADABLE, the state the planner already hunts as an upgrade (24 h minimum file age for automatic searches; a person's own search or grab ignores it, three imports a week by default, from the profile's `upgrade` block). A season that still has gaps stays PARTIAL and hunts its gaps first.
+
+A download grabbed for a season the cutoff check has not marked yet (a person's Send from Cutoff unmet) still replaces the episodes below the cutoff: the importer treats a COMPLETE seed season as replaceable per episode.
 
 The search of an UPGRADABLE season wants only the episodes below the cutoff and rejects a release that does not beat the file it replaces on the quality tiers (a tie keeps the owned file). Source, release group and repack are left out of that comparison: a release name states them and a measured file does not, so they would make every release look better. The importer places an upgrade next to the owned file (suffix ` [upgrade]` when both are named alike) and the cutoff check, once both files are measured, keeps the better one and moves the other to the recycle bin (reason `replaced`, or `rejected_worse` for a download that was no better).
 

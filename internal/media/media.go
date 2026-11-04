@@ -257,6 +257,8 @@ type AddRequest struct {
 	Specials  bool
 	ProfileID *int64
 	Search    bool
+	// RootFolderID is the root the person wants the work's files under; types that place by affinity record it.
+	RootFolderID *int64
 	// Choices are the type's own add-form answers by key ("minimum_availability" for a movie); unknown keys are ignored.
 	Choices map[string]string
 	// Fallback is what the caller already knows of the work, stored when no metadata source answers; nil refuses then.

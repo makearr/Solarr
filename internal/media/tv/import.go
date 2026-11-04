@@ -253,7 +253,8 @@ func (i Importer) seedSeries(ctx context.Context, acquisitionID int64) (workID i
 	if err != nil {
 		return 0, false
 	}
-	return item.WorkID, item.State == ItemStateUpgradable || item.State == "PARTIAL"
+	// A season the cutoff job has not marked yet is still COMPLETE; its below-cutoff episodes stay replaceable by the per-episode check.
+	return item.WorkID, item.State == ItemStateUpgradable || item.State == "PARTIAL" || (item.State == ItemStateComplete && i.config.BelowCutoff != nil)
 }
 
 // screen holds one downloaded file against the checks Sonarr makes before it imports: still being unpacked, a whole
@@ -547,6 +548,9 @@ func placedFiles(placed []placedEpisode) []placer.Placed {
 	return out
 }
 
+// PlacementKey is the affinity key a series' title places under, for a root chosen before its first file.
+func PlacementKey(title string) string { return affinityKey(title) }
+
 func affinityKey(title string) string {
 	if key := "series:" + parsetv.CleanTitle(title); key != "series:" {
 		return key
@@ -590,7 +594,7 @@ func episodeNaming(detail library.SeriesDetailRow, file fileEpisodes) EpisodeNam
 		seriesType = SeriesStandard
 	}
 	naming := EpisodeNaming{
-		SeriesType: seriesType, SeriesTitle: summary.Title, SeriesYear: int(summary.Year),
+		SeriesType: seriesType, NoSeasonFolder: summary.Fields[FieldSeasonFolder] == SeasonFoldersOff, SeriesTitle: summary.Title, SeriesYear: int(summary.Year),
 		IDs:          idsOf(detail.IDs),
 		QualityTitle: releasefacts.QualityTitle(file.info.Claims), Proper: file.info.Claims.Version > 1, Version: file.info.Claims.Version,
 		VideoCodec: strings.ToUpper(file.info.Claims.VideoCodec), DynamicRange: file.info.Claims.HDR,

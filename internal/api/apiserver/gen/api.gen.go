@@ -1247,6 +1247,9 @@ type AddWorkRequest struct {
 	CategoryId int64  `json:"category_id"`
 	ExternalId string `json:"external_id"`
 
+	// Fields The type's editable facets to set at once, by facet key (a series' type, season folders).
+	Fields *map[string]string `json:"fields,omitempty"`
+
 	// Kind One of the type's add_kinds; the first when absent.
 	Kind *string `json:"kind,omitempty"`
 
@@ -1258,11 +1261,17 @@ type AddWorkRequest struct {
 	// QualityProfileId The library's default when absent.
 	QualityProfileId *int64 `json:"quality_profile_id,omitempty"`
 
+	// RootFolderId The library root the files should go under; types that place by affinity record it.
+	RootFolderId *int64 `json:"root_folder_id,omitempty"`
+
 	// Search Start looking for what was added.
 	Search *bool `json:"search,omitempty"`
 
 	// Specials Also monitor the specials group.
 	Specials *bool `json:"specials,omitempty"`
+
+	// Tags Tags to give the new work, by name, on top of what it has.
+	Tags *[]string `json:"tags,omitempty"`
 }
 
 // AddWorkResult defines model for AddWorkResult.
