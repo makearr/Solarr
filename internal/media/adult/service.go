@@ -67,7 +67,7 @@ type Service struct {
 	Clock       clock.Clock
 	Logger      *slog.Logger
 	// Memo keeps searches a while, the empty ones too; nil asks every time.
-	Memo *searchMemo
+	Memo *SearchMemo
 }
 
 func (s Service) warn(source, what string, err error) {

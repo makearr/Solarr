@@ -14,9 +14,9 @@ const searchMemoTTL = time.Hour
 // searchMemoEntries bounds the memory a long scan holds; at the bound what has expired goes, or everything.
 const searchMemoEntries = 4096
 
-// searchMemo remembers provider searches, the empty answers too: a scene's lookup asks each provider the same words
+// SearchMemo remembers provider searches, the empty answers too: a scene's lookup asks each provider the same words
 // several times, and at about 12 requests per file a provider's rate is what limits an adult scan (2026-11-01).
-type searchMemo struct {
+type SearchMemo struct {
 	clock clock.Clock
 
 	mu      sync.Mutex
@@ -29,11 +29,11 @@ type memoAnswer struct {
 }
 
 // NewSearchMemo builds an empty memo.
-func NewSearchMemo(cl clock.Clock) *searchMemo {
-	return &searchMemo{clock: cl, answers: map[string]memoAnswer{}}
+func NewSearchMemo(cl clock.Clock) *SearchMemo {
+	return &SearchMemo{clock: cl, answers: map[string]memoAnswer{}}
 }
 
-func (m *searchMemo) get(key string) (any, bool) {
+func (m *SearchMemo) get(key string) (any, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	answer, found := m.answers[key]
@@ -43,7 +43,7 @@ func (m *searchMemo) get(key string) (any, bool) {
 	return answer.value, true
 }
 
-func (m *searchMemo) put(key string, value any) {
+func (m *SearchMemo) put(key string, value any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	now := m.clock.Now()
@@ -61,7 +61,7 @@ func (m *searchMemo) put(key string, value any) {
 }
 
 // memoized answers ask, or what it answered within the hour; a failure is not kept. A nil memo always asks.
-func memoized[T any](ctx context.Context, memo *searchMemo, provider, term string, ask func() (T, error)) (T, error) {
+func memoized[T any](ctx context.Context, memo *SearchMemo, provider, term string, ask func() (T, error)) (T, error) {
 	if memo == nil {
 		return ask()
 	}
