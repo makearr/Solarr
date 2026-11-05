@@ -2172,6 +2172,9 @@ type DownloaderOptions struct {
 	// MaxQueued How many of Solarr's downloads this client may hold at once before further automatic sends are held (ADR-57). Absent means 10.
 	MaxQueued *int `json:"max_queued,omitempty"`
 
+	// MaxSeedMinutes Torrent clients: hard stop; the torrent is removed after this many minutes of seeding whatever the ratio. 0 or absent is none.
+	MaxSeedMinutes *int `json:"max_seed_minutes,omitempty"`
+
 	// RemotePath Where the client says its downloads are (remote path mapping).
 	RemotePath *string `json:"remote_path,omitempty"`
 
@@ -2180,6 +2183,9 @@ type DownloaderOptions struct {
 
 	// SaveMagnetFiles A torrent blackhole writes a magnet link to a .magnet file; off, such a release is refused.
 	SaveMagnetFiles *bool `json:"save_magnet_files,omitempty"`
+
+	// SeedBoth Torrent clients: wait for seed_ratio and seed_minutes both instead of the first of them. Absent means the first.
+	SeedBoth *bool `json:"seed_both,omitempty"`
 
 	// SeedMinutes Torrent clients: minutes an imported torrent seeds before removal. 0 or absent is no time limit.
 	SeedMinutes *int `json:"seed_minutes,omitempty"`

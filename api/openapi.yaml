@@ -10366,6 +10366,13 @@ components:
           type: integer
           minimum: 0
           description: "Torrent clients: minutes an imported torrent seeds before removal. 0 or absent is no time limit."
+        seed_both:
+          type: boolean
+          description: "Torrent clients: wait for seed_ratio and seed_minutes both instead of the first of them. Absent means the first."
+        max_seed_minutes:
+          type: integer
+          minimum: 0
+          description: "Torrent clients: hard stop; the torrent is removed after this many minutes of seeding whatever the ratio. 0 or absent is none."
         stall_cleanup:
           $ref: "#/components/schemas/StallCleanup"
         url_base:

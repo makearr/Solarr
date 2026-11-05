@@ -282,6 +282,7 @@ func optionsJSON(options *gen.DownloaderOptions) string {
 		RemotePath: derefOr(options.RemotePath, ""), LocalPath: derefOr(options.LocalPath, ""),
 		MaxQueued: options.MaxQueued, AlwaysSendUserGrabs: options.AlwaysSendUserGrabs,
 		AlwaysSendRSSGrabs: options.AlwaysSendRssGrabs, SeedRatio: positiveFloat(options.SeedRatio), SeedMinutes: positiveInt(options.SeedMinutes),
+		SeedBoth: derefOr(options.SeedBoth, false), MaxSeedMinutes: positiveInt(options.MaxSeedMinutes),
 		URLBase: strings.TrimSpace(derefOr(options.UrlBase, "")), DropFolder: strings.TrimSpace(derefOr(options.DropFolder, "")),
 		WatchFolder: strings.TrimSpace(derefOr(options.WatchFolder, "")), SaveMagnetFiles: derefOr(options.SaveMagnetFiles, false),
 	}
@@ -333,6 +334,7 @@ func downloaderOptionsView(options settings.DownloaderOptions) *gen.DownloaderOp
 		MaxQueued: options.MaxQueued, AlwaysSendUserGrabs: options.AlwaysSendUserGrabs,
 		AlwaysSendRssGrabs: options.AlwaysSendRSSGrabs,
 		SeedRatio:          positiveFloat(options.SeedRatio), SeedMinutes: positiveInt(options.SeedMinutes),
+		SeedBoth: boolPtrIf(options.SeedBoth), MaxSeedMinutes: positiveInt(options.MaxSeedMinutes),
 		StallCleanup: stallCleanupView(options.StallRules()),
 		UrlBase:      strPtr(options.URLBase), DropFolder: strPtr(options.DropFolder), WatchFolder: strPtr(options.WatchFolder),
 		SaveMagnetFiles: boolPtrIf(options.SaveMagnetFiles),
@@ -362,9 +364,9 @@ func positiveInt(value *int) *int {
 
 // validOptions refuses a queue depth that would hold everything or nothing (ADR-44: on write).
 func (s *Server) validOptions(w http.ResponseWriter, options *gen.DownloaderOptions) bool {
-	if options != nil && ((options.SeedRatio != nil && *options.SeedRatio < 0) || (options.SeedMinutes != nil && *options.SeedMinutes < 0)) {
+	if options != nil && ((options.SeedRatio != nil && *options.SeedRatio < 0) || (options.SeedMinutes != nil && *options.SeedMinutes < 0) || (options.MaxSeedMinutes != nil && *options.MaxSeedMinutes < 0)) {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "seed_ratio and seed_minutes cannot be negative")
+			"Bad request", "seed_ratio, seed_minutes and max_seed_minutes cannot be negative")
 		return false
 	}
 	if options != nil && options.StallCleanup != nil && !validStallCleanup(*options.StallCleanup) {

@@ -80,7 +80,7 @@ func (p *process) pollClients(ctx context.Context) (map[int64]poll.Client, error
 			Name:            downloader.Name,
 			Client:          client,
 			RemoveCompleted: options.RemovesCompleted(),
-			SeedRatio:       seedRatio, SeedMinutes: seedMinutes,
+			SeedRatio:       seedRatio, SeedMinutes: seedMinutes, SeedBoth: options.SeedBoth, MaxSeedMinutes: options.MaxSeedFor(),
 			LocalPath: options.LocalPathFor,
 			Stall:     pollStallRules(options.StallRules()),
 		}

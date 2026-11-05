@@ -28,6 +28,9 @@ type DownloaderOptions struct {
 	// that long, whichever comes first; both unset removes it at once (2026-10-02, off by default).
 	SeedRatio   *float64 `json:"seed_ratio,omitempty"`
 	SeedMinutes *int     `json:"seed_minutes,omitempty"`
+	// SeedBoth waits for the ratio and the time instead of the first of them; MaxSeedMinutes ends the wait whatever was met (§10.8).
+	SeedBoth       bool `json:"seed_both,omitempty"`
+	MaxSeedMinutes *int `json:"max_seed_minutes,omitempty"`
 	// StallCleanup removes and blocklists Solarr's own downloads that stop making progress (2026-10-15, off by default).
 	StallCleanup *StallCleanup `json:"stall_cleanup,omitempty"`
 	// URLBase is the path of a client's API below its address (Transmission's /transmission/, rTorrent's RPC2).
@@ -100,6 +103,14 @@ func (o DownloaderOptions) SeedGoal() (ratio float64, minutes int) {
 		minutes = *o.SeedMinutes
 	}
 	return ratio, minutes
+}
+
+// MaxSeedFor is the hard stop of seeding in minutes, 0 for none.
+func (o DownloaderOptions) MaxSeedFor() int {
+	if o.MaxSeedMinutes == nil {
+		return 0
+	}
+	return *o.MaxSeedMinutes
 }
 
 // DefaultMaxQueued is ADR-57's default queue depth per client.

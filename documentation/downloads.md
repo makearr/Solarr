@@ -70,6 +70,11 @@ reading a direct release, queue totals, never asking a client to pause nothing. 
 (`cmd/solarr/adapters/downloadclients.go`) lists the kinds; searching, polling and the connection test build every
 client through it.
 
+**Seeding** (torrent clients, per client, with Remove completed on): an imported torrent stays in the client until it has
+shared `seed_ratio` or seeded `seed_minutes`, whichever comes first, or both with `seed_both`; `max_seed_minutes` is a hard
+stop that removes it whatever the ratio, so a tracker that never lets a ratio be met cannot keep it for ever. Then the
+torrent and its files go and the acquisition is CLEANED (`internal/acquiring/poll`, `sweepSeeding`).
+
 What a kind cannot do: aria2 and rTorrent never delete a removed torrent's files themselves (rTorrent's are deleted
 when ruTorrent's erasedata plugin is installed); NZBGet keeps the files of a job it finished; a blackhole and slskd
 cannot pause, and a blackhole forgets a download only by deleting it. A blackhole download counts as finished once its

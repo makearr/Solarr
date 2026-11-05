@@ -267,6 +267,8 @@ function AddDownloader({ kinds, onAdded }: { kinds: DownloaderKind[]; onAdded: (
   const [sendRSS, setSendRSS] = useState(true);
   const [seedRatio, setSeedRatio] = useState("");
   const [seedMinutes, setSeedMinutes] = useState("");
+  const [seedBoth, setSeedBoth] = useState(false);
+  const [maxSeedMinutes, setMaxSeedMinutes] = useState("");
   const [addFolder, setAddFolder] = useState(true);
   const [localFolder, setLocalFolder] = useState("");
   const [addSearcher, setAddSearcher] = useState(false);
@@ -300,6 +302,8 @@ function AddDownloader({ kinds, onAdded }: { kinds: DownloaderKind[]; onAdded: (
         always_send_rss_grabs: sendRSS,
         seed_ratio: Number(seedRatio) > 0 ? Number(seedRatio) : undefined,
         seed_minutes: Number(seedMinutes) > 0 ? Math.round(Number(seedMinutes)) : undefined,
+        seed_both: seedBoth || undefined,
+        max_seed_minutes: Number(maxSeedMinutes) > 0 ? Math.round(Number(maxSeedMinutes)) : undefined,
         remote_path: mapped ? reported : undefined,
         local_path: mapped ? localFolder : undefined,
         ...fieldOptions(kind, fields),
@@ -412,7 +416,7 @@ function AddDownloader({ kinds, onAdded }: { kinds: DownloaderKind[]; onAdded: (
         onSendUser={setSendUser}
         sendRSS={sendRSS}
         onSendRSS={setSendRSS}
-        seed={seeds(kind) ? { ratio: seedRatio, onRatio: setSeedRatio, minutes: seedMinutes, onMinutes: setSeedMinutes } : undefined}
+        seed={seeds(kind) ? { ratio: seedRatio, onRatio: setSeedRatio, minutes: seedMinutes, onMinutes: setSeedMinutes, both: seedBoth, onBoth: setSeedBoth, max: maxSeedMinutes, onMax: setMaxSeedMinutes } : undefined}
       />
       {searcher && (
         <label className="flex items-center gap-2 text-xs text-ink-muted">
@@ -532,7 +536,10 @@ function OptionFields({
   sendRSS: boolean;
   onSendRSS: (value: boolean) => void;
   /** Torrent clients only: how long an imported torrent keeps seeding before it is removed. */
-  seed?: { ratio: string; onRatio: (value: string) => void; minutes: string; onMinutes: (value: string) => void };
+  seed?: {
+    ratio: string; onRatio: (value: string) => void; minutes: string; onMinutes: (value: string) => void;
+    both: boolean; onBoth: (value: boolean) => void; max: string; onMax: (value: string) => void;
+  };
 }) {
   return (
     <div className="flex flex-wrap items-end gap-3 text-xs">
@@ -587,6 +594,14 @@ function OptionFields({
             Seed for (minutes)
             <input className={inputStyle} type="number" min={0} step={10} value={seed.minutes} placeholder="no limit" onChange={(event) => seed.onMinutes(event.target.value)} />
           </label>
+          <label className="flex items-center gap-2 text-ink-muted" title="Off removes the torrent at the first limit reached; on waits for both">
+            <input type="checkbox" checked={seed.both} onChange={(event) => seed.onBoth(event.target.checked)} />
+            Wait for both limits
+          </label>
+          <label className="flex w-40 flex-col gap-1 text-ink-muted" title="Removes the torrent after this long whatever the ratio, so a ratio a tracker never allows cannot keep it for ever">
+            Stop seeding after (minutes)
+            <input className={inputStyle} type="number" min={0} step={60} value={seed.max} placeholder="no limit" onChange={(event) => seed.onMax(event.target.value)} />
+          </label>
         </>
       )}
     </div>
@@ -605,6 +620,8 @@ function ClientOptionsForm({ downloader, kind, onDone }: { downloader: Downloade
   const [sendRSS, setSendRSS] = useState(current.always_send_rss_grabs ?? true);
   const [seedRatio, setSeedRatio] = useState(current.seed_ratio ? String(current.seed_ratio) : "");
   const [seedMinutes, setSeedMinutes] = useState(current.seed_minutes ? String(current.seed_minutes) : "");
+  const [seedBoth, setSeedBoth] = useState(current.seed_both ?? false);
+  const [maxSeedMinutes, setMaxSeedMinutes] = useState(current.max_seed_minutes ? String(current.max_seed_minutes) : "");
   const [stall, setStall] = useState<StallCleanup>(current.stall_cleanup ?? { enabled: false });
   const [fields, setFields] = useState<FieldValues>(fieldValues(current));
   // The stored secret is never shown, so a new one is typed in full or left alone.
@@ -644,6 +661,8 @@ function ClientOptionsForm({ downloader, kind, onDone }: { downloader: Downloade
             always_send_user_grabs: sendUser, always_send_rss_grabs: sendRSS,
             seed_ratio: Number(seedRatio) > 0 ? Number(seedRatio) : undefined,
             seed_minutes: Number(seedMinutes) > 0 ? Math.round(Number(seedMinutes)) : undefined,
+            seed_both: seedBoth || undefined,
+            max_seed_minutes: Number(maxSeedMinutes) > 0 ? Math.round(Number(maxSeedMinutes)) : undefined,
             remote_path: remotePath || undefined, local_path: localPath || undefined,
             stall_cleanup: stall,
             ...fieldOptions(kind, fields),
@@ -668,7 +687,7 @@ function ClientOptionsForm({ downloader, kind, onDone }: { downloader: Downloade
         onSendUser={setSendUser}
         sendRSS={sendRSS}
         onSendRSS={setSendRSS}
-        seed={seeds(kind) ? { ratio: seedRatio, onRatio: setSeedRatio, minutes: seedMinutes, onMinutes: setSeedMinutes } : undefined}
+        seed={seeds(kind) ? { ratio: seedRatio, onRatio: setSeedRatio, minutes: seedMinutes, onMinutes: setSeedMinutes, both: seedBoth, onBoth: setSeedBoth, max: maxSeedMinutes, onMax: setMaxSeedMinutes } : undefined}
       />
       <StallFields stall={stall} onChange={setStall} />
       {kind?.secret_label && (

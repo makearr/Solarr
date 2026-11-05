@@ -7082,6 +7082,10 @@ export interface components {
             seed_ratio?: number;
             /** @description Torrent clients: minutes an imported torrent seeds before removal. 0 or absent is no time limit. */
             seed_minutes?: number;
+            /** @description Torrent clients: wait for seed_ratio and seed_minutes both instead of the first of them. Absent means the first. */
+            seed_both?: boolean;
+            /** @description Torrent clients: hard stop; the torrent is removed after this many minutes of seeding whatever the ratio. 0 or absent is none. */
+            max_seed_minutes?: number;
             stall_cleanup?: components["schemas"]["StallCleanup"];
             /** @description The path of the client's API below its address (Transmission, Vuze, rTorrent, aria2); empty is its default. */
             url_base?: string;

@@ -58,6 +58,10 @@ type Client struct {
 	// long; both zero removes it at once.
 	SeedRatio   float64
 	SeedMinutes int
+	// SeedBoth waits for the ratio and the time rather than the first of them; MaxSeedMinutes ends the wait whatever
+	// was met, so a ratio a private tracker never allows cannot keep a torrent for ever.
+	SeedBoth       bool
+	MaxSeedMinutes int
 	// LocalPath maps a path the client reports to where Solarr sees it.
 	LocalPath func(reported string) string
 	// Stall removes and blocklists downloads that stop making progress; the zero value is off.
@@ -76,12 +80,20 @@ type StallRules struct {
 	IgnoreAboveBytes int64
 }
 
-func (c Client) seeds() bool { return c.SeedRatio > 0 || c.SeedMinutes > 0 }
+func (c Client) seeds() bool { return c.SeedRatio > 0 || c.SeedMinutes > 0 || c.MaxSeedMinutes > 0 }
 
-// seedGoalMet is whether a download has shared enough: the ratio, or the time, whichever comes first.
+// seedGoalMet is whether a download has shared enough: the ratio, or the time, whichever comes first (both with
+// SeedBoth), and always once the hard stop is reached.
 func (c Client) seedGoalMet(found download.Download) bool {
-	return (c.SeedRatio > 0 && found.Ratio >= c.SeedRatio) ||
-		(c.SeedMinutes > 0 && found.SeedingSeconds >= int64(c.SeedMinutes)*60)
+	if c.MaxSeedMinutes > 0 && found.SeedingSeconds >= int64(c.MaxSeedMinutes)*60 {
+		return true
+	}
+	ratioMet := c.SeedRatio > 0 && found.Ratio >= c.SeedRatio
+	timeMet := c.SeedMinutes > 0 && found.SeedingSeconds >= int64(c.SeedMinutes)*60
+	if c.SeedBoth {
+		return (c.SeedRatio <= 0 || ratioMet) && (c.SeedMinutes <= 0 || timeMet) && (c.SeedRatio > 0 || c.SeedMinutes > 0)
+	}
+	return ratioMet || timeMet
 }
 
 // Config is what a Job needs; every function is required.

@@ -78,6 +78,8 @@ type env struct {
 	blockDuplicates bool
 	seedRatio       float64
 	seedMinutes     int
+	seedBoth        bool
+	maxSeedMinutes  int
 	stall           poll.StallRules
 	imported        []string
 	searched        []int64
@@ -123,7 +125,7 @@ func (e *env) job() *poll.Job {
 		Acquisitions: e.acquisitions, Sessions: e.sessions, Blocklist: e.blocklist, FS: e.fsys,
 		BlocklistDuplicates: func() bool { return e.blockDuplicates },
 		Clients: func(context.Context) (map[int64]poll.Client, error) {
-			return map[int64]poll.Client{1: {Name: "Home SABnzbd", Client: e.client, RemoveCompleted: e.removeDone, SeedRatio: e.seedRatio, SeedMinutes: e.seedMinutes,
+			return map[int64]poll.Client{1: {Name: "Home SABnzbd", Client: e.client, RemoveCompleted: e.removeDone, SeedRatio: e.seedRatio, SeedMinutes: e.seedMinutes, SeedBoth: e.seedBoth, MaxSeedMinutes: e.maxSeedMinutes,
 				LocalPath: func(reported string) string { return reported }, Stall: e.stall}}, nil
 		},
 		DownloadFolders: func(context.Context) ([]string, error) { return []string{"/downloads"}, nil },
@@ -419,6 +421,37 @@ func TestPoll_AFinishedImportIsCleanedUp(t *testing.T) {
 }
 
 // With a seed goal the imported torrent stays in the client until it has shared enough, then goes with its files.
+// Both limits wait for the slower one; the hard stop ends the wait whatever was reached.
+func TestPoll_SeedingConditionAndHardStop(t *testing.T) {
+	seeding := func(ratio float64, seconds int64) []download.Download {
+		return []download.Download{{ClientRef: "nzo-1", Name: "Heka-Zanuvode", State: download.StateCompleted, Ratio: ratio, SeedingSeconds: seconds}}
+	}
+	for name, step := range map[string]struct {
+		both      bool
+		max       int
+		downloads []download.Download
+		state     string
+	}{
+		"both: only the ratio":         {true, 0, seeding(1.2, 600), poll.StateImported},
+		"both: only the time":          {true, 0, seeding(0.1, 90*60), poll.StateImported},
+		"both: ratio and time":         {true, 0, seeding(1.2, 90*60), poll.StateCleaned},
+		"both: hard stop before ratio": {true, 120, seeding(0.1, 130*60), poll.StateCleaned},
+		"either: ratio":                {false, 0, seeding(1.2, 600), poll.StateCleaned},
+		"hard stop not yet reached":    {true, 120, seeding(0.1, 90*60), poll.StateImported},
+	} {
+		e := newEnv(t)
+		e.seedRatio, e.seedMinutes, e.seedBoth, e.maxSeedMinutes = 1, 60, step.both, step.max
+		sent := e.send(t, "nzo-1")
+		e.finishImport(t, sent, true, library.UnitCommit)
+		e.run(t)
+		e.client.downloads = step.downloads
+		e.run(t)
+		if got := e.state(t, sent.ID); got.State != step.state {
+			t.Errorf("%s: %s, want %s", name, got.State, step.state)
+		}
+	}
+}
+
 func TestPoll_AnImportedTorrentSeedsUntilItsGoalIsMet(t *testing.T) {
 	seeding := func(ratio float64, seconds int64) []download.Download {
 		return []download.Download{{ClientRef: "nzo-1", Name: "Heka-Zanuvode", State: download.StateCompleted, Ratio: ratio, SeedingSeconds: seconds}}
