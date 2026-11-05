@@ -3,377 +3,106 @@
 <h1 align="center">Solarr</h1>
 
 <p align="center"><b>Your media library, managed properly.</b><br>
-One self-hosted app that finds out what you have, what's missing and what could be better, then goes and gets it.<br>
-Music, TV, anime, movies, books and audiobooks in one engine: a successor to Lidarr, Sonarr, Radarr and Readarr, not a port of them.</p>
+Turn a hard drive full of disorganised files into a library that is beautiful and playable.</p>
 
-<p align="center"><img src="documentation/screenshots/dashboard.png" alt="The dashboard: recently added films, series and albums, and the libraries" width="900"></p>
+## Table of contents
 
----
-
-**Solarr** is a Go-native media management, discovery and acquisition platform, built for speed and for
-people who would rather not read a manual. One static Go binary and four small SQLite databases keep the web
-interface fast whatever the size of the library: a filtered page of a 500,000-file library comes back in
-**under 4 ms** and search-as-you-type in **17 ms** (worst case, measured; [benchmarks](documentation/benchmarks.md)).
-Every database has one writer behind a priority queue in WAL mode, so **your click jumps ahead of a bulk scan**
-and the browser never stalls while Solarr works. Your views, filters and sorts are remembered, settings are shown
-at your own level (normal, advanced or expert), every decision keeps its reasons on the page, and anything
-irreversible is **previewed first and undone in one click**.
-
----
-
-## ⚠️ Early alpha
-
-**Solarr is in early alpha. Use it at your own risk.**
-
-- Features are missing, the interface changes, and the **database schema can still change** between
-  versions. Upgrades migrate your data and take a backup first, but don't bet anything on it yet.
-- Point it at a **copy** of your library, or mount your library **read-only**, until you trust it.
-  Solarr never deletes directly (everything goes to a recycle bin first), but alpha software is alpha
-  software.
-- Running it beside your existing \*Arrs is the safest way to try it: its \*Arr import only ever *reads*.
-
-**Please tell me about problems**, big or small: wrong matches, confusing screens, slow pages, crashes,
-"why did it do that?". Open an [issue](https://github.com/makearr/Solarr/issues) with what you did, what
-you expected and what happened (logs help: *Settings → Logs*). Every report makes it better.
+1. [Introduction](#introduction)
+2. [New to media management?](#new-to-media-management)
+3. [Installation](#installation)
+4. [A quick look](#a-quick-look)
+5. [Coming from the \*Arr stack](#coming-from-the-arr-stack)
+6. [Standout features](#standout-features)
+7. [Privacy](#privacy)
+8. [The Docker image](#the-docker-image)
+9. [Design decisions](#design-decisions)
+10. [Benchmarks and resource use](#benchmarks-and-resource-use)
+11. [Compiling it yourself](#compiling-it-yourself)
+12. [Contributing](#contributing)
+13. [Supporting the project](#supporting-the-project)
+14. [Built with AI](#built-with-ai)
+15. [Changelog](#changelog)
 
 ---
 
-## At a glance
+## Introduction
 
-- **One app, many libraries.** Music, TV, anime, movies, books and audiobooks side by side, each library with its own
-  folders, quality, naming and users. People are shared: an actor who also makes records is one person.
-- **It hunts.** A planner decides what to search for and when, inside a budget you set, plus RSS and
-  upgrade hunting. You don't press *Search all*.
-- **It recognises messy folders.** Any folder, any depth, packs and archives, with a preview before
-  anything moves and a one-click undo.
-- **The file is the evidence.** Quality is judged from what ffprobe measures, not from the release name.
-- **Safe by default.** Everything removed goes to a recycle bin first; your download client's own items
-  are never touched.
-- **Private by default.** No telemetry, no accounts, no phone-home. It talks to what you configure.
-- **One small container.** A Go binary with SQLite inside. No database server, no message broker.
+**Solarr** is a self-hosted media manager. You point it at the folders where your music, shows, films and books
+already live. It works out what every file is, fetches the covers, posters, cast lists and descriptions, renames
+and sorts files into a tidy structure if you want that, and shows the result in a fast web interface where you can
+browse it, play it and keep it complete. It can also go looking for the things you are missing, and for better
+copies of the things you have.
 
-## New since the first release
+Every kind of media gets its own **library**, with its own folders, quality wishes, naming rules and users.
 
-Added after 2026.10.001.515 (2026-10-25), newest areas first. Details are in the
-[documentation](documentation/README.md); the commit log has the rest.
-
-- **Books and audiobooks are real libraries.** Metadata from Open Library, Google Books, Hardcover, FantLab, iTunes
-  and Audible (with Audnexus), covers, one collection per series and the books a series still lacks, **Monitor** on
-  a whole series, **follow an author** as Readarr does, and a **Narrators** level, filter and column for
-  audiobooks. Ebooks are never handed to ffprobe.
-- **An adult library type** (optional), over the stash-box providers, ThePornDB and Whisparr's metadata: scenes and
-  films, performers, and a StashDB favourites import list. See [adult](documentation/adult.md).
-- **Import lists for TV.** An AniList season or user list, a TMDB list or TMDB's trending and popular shows add
-  series for you, **previewed before you enable them**, with *Run now* and a periodic sync.
-  See [import lists](documentation/import-lists.md).
-- **Import from the \*Arrs by choice.** A preview and mapping step first, then pick what to bring across; Whisparr
-  is a source too, and monitoring can be **sent back** to the \*Arr. Still never changes your \*Arr otherwise.
-- **Merge one library into another** of the same media type, previewed like a move.
-- **A preview player in the browser.** A bar, a corner window or full screen, source bitrate shown, a quality menu
-  (original, 1080p, 720p, 480p) and **GPU transcoding** for files a browser cannot play.
-  See [media player](documentation/media-player.md).
-- **Similar videos report.** Perceptual hashes of the frames (plus duration) find the same video in two files;
-  keep one and **link or recycle the others**, offered only when every file names the same episode.
-- **More download clients and indexers.** Every kind of client Lidarr and Sonarr offer on one shared base,
-  **Soulseek through slskd** as a source for any media type, and **Prowlarr's catalog** to choose indexers from.
-- **Per-library music provider order**, like TV and movies already had, and **label, network and organisation
-  logos** from Wikidata and Skyhook.
-- **People and collections editable by hand**, a collection you can Monitor, and *Also known for* on a person
-  (an actor's albums, with *Add to Solarr*). A provider's collection you deleted stays deleted.
-- **TV details**: episode titles in the library's profile languages, *Episode Title Required* with a rename once
-  the title arrives, air moments on the calendar, and a franchise watch task.
-- **Cache and memory page** (*Settings → Cache*): library page cache size, database file sizes, cache use and hit
-  ratios, and a card to size the database memory.
-- **Statistics** count the files **below each library's cutoff**, even in libraries that never upgrade.
-- **Settings by environment variable**: config folder, port, root folders and API keys can be set per variable.
-- **Hardening.** The first-run claim race is closed, cross-site writes are refused, a session cookie is
-  `Secure` behind a trusted TLS proxy, 6to4 and IPv4-compatible addresses are judged by the IPv4 they carry,
-  symlinks in a download are never followed, a torrent whose name is a path never becomes an import path, and
-  a whole download folder is never imported as one download.
-- **Faster.** Bulk edit writes only what changed, album decisions are about 3x faster, release-name parses are
-  remembered, and the queue asks all download clients together, once for every polling page.
-
----
-
-## Screenshots
-
-| | |
+| Library type | What it holds |
 |---|---|
-| [![Album wall](documentation/screenshots/music-albums.png)](documentation/screenshots/music-albums.png) **Music library**: albums as a poster wall, with table and overview views, filters and bulk edit | [![Album page](documentation/screenshots/album.png)](documentation/screenshots/album.png) **An album**: tracks with the measured format and size of every file, and the ones still to come |
-| [![Series wall](documentation/screenshots/tv-series.png)](documentation/screenshots/tv-series.png) **TV library**: series with how much of each is on disk | [![Series page](documentation/screenshots/tv-series-page.png)](documentation/screenshots/tv-series-page.png) **A series**: cast and crew, collections, seasons, and per episode the file on disk |
-| [![Movie wall](documentation/screenshots/movies.png)](documentation/screenshots/movies.png) **Movies**: posters, editions, collections and franchises | [![Book wall](documentation/screenshots/books.png)](documentation/screenshots/books.png) **Books**: authors, series and covers from Open Library; audiobooks add narrators |
-| [![Import list preview](documentation/screenshots/import-lists.png)](documentation/screenshots/import-lists.png) **Import lists**: an AniList season, previewed before you enable it: what would be added, what is already known | [![Series page, light](documentation/screenshots/tv-series-page-light.png)](documentation/screenshots/tv-series-page-light.png) **Light or dark**, following your system |
-| [![Artist page](documentation/screenshots/artist.png)](documentation/screenshots/artist.png) **An artist**: biography, aliases, the albums you have and the ones still missing | [![Import preview](documentation/screenshots/import-preview.png)](documentation/screenshots/import-preview.png) **Import preview**: an untagged two-album pack, both albums recognised from their tracklists |
-| [![Calendar](documentation/screenshots/calendar.png)](documentation/screenshots/calendar.png) **Calendar**: what you have, what's wanted and out, and what isn't out yet | [![Statistics](documentation/screenshots/statistics.png)](documentation/screenshots/statistics.png) **Insights**: completeness, the biggest albums, formats and growth |
+| **Music** | Artists, albums, editions, labels |
+| **TV series** | Series, seasons, episodes, networks, cast |
+| **Anime** | Like TV, with absolute numbering and anime titles and relations |
+| **Movies** | Films, editions, collections and franchises |
+| **Books** | Authors, series, covers |
+| **Audiobooks** | Like books, plus narrators |
+| **Adult** (optional, off by default) | Scenes, films and performers |
 
-<sub>Screenshots are from a demo instance. Its files are silent or blank placeholders, which is why every
-track is the same FLAC and every episode the same 720p H.264. Some pages (artist, calendar, insights, import
-preview) are from an earlier demo.</sub>
+A library can also **mix types** (a "Kids" library with series and films side by side), and documentaries, live
+recordings or concerts are just libraries of the type they resemble.
 
----
+<p align="center"><img src="documentation/screenshots/dashboard.png" alt="The Solarr dashboard: recently added films, series and albums, and the libraries" width="900"></p>
 
-## What Solarr does that the \*Arr stack doesn't
-
-Lidarr, Sonarr and Radarr are good at the tidy case: sorted folders, well-tagged files, one media type
-per app. Solarr is built for the messy case, and for people who run big libraries across several disks
-for years.
-
-### One app, many libraries, every media type
-
-A **library** is a named collection with its own root folders, quality profile, naming template,
-language preferences, rating limit and users. One Solarr runs as many as you like: music, live
-recordings, TV, anime, documentaries, films, kids' films. That is what several Lidarr, Sonarr and Radarr
-instances do today. A library can even **mix types** (a "Kids" library with series and films). People
-(actors, artists, directors) and tags are shared between libraries, and Solarr **suggests the right
-library** when you add something ("an anime: Anime library").
-
-### Hunting: it goes and finds things
-
-A planner works out which wanted items may be searched and how urgently: new releases first, then the
-rest, with a backoff that doubles from 6 hours to a week. A scheduled hunt searches the most urgent ones
-within an hourly budget you set. Alongside it:
-
-- **RSS sync** grabs new releases the moment an indexer lists them.
-- **Upgrade hunting** looks for better copies of what you own with a fifth of the budget, and only
-  replaces a file when the new one *strictly* wins.
-- **Held releases**: when the download client is full, the best releases wait in priority order and are
-  sent as it frees up, so the queue never runs dry.
-- **Free-space gating**: nothing is sent that would not fit, counting what is already downloading.
-- **Failure memory**: failed or fake releases are blocklisted by release *and* by content hash, and the
-  item goes back on the want list.
-- **It explains itself**: a work's page says when it was last searched, when it will be again, or why
-  it won't be (no indexer, no free space, not released yet, above the library's rating limit).
-
-### Better recognition
-
-Point Solarr at **any folder, at any depth**: one album, a whole collection, a messy download
-directory. It identifies by evidence, in order: embedded IDs, **whole-tracklist matching** (durations,
-positions, titles), per-file search, folder names and, optionally, **AcoustID audio fingerprints** for
-files with no tags at all. On a real library of about 200,000 audio files, **99.9% were identified** on
-the first scan.
-
-You get a **preview first**, then commit, and you can **undo the whole import in one click**. Packs and
-box sets (one download that becomes many correctly named albums or seasons) and archives (zip, rar, 7z,
-tar, read in place and **never unpacked into your library**) just work. Music nothing recognises becomes
-a visible *unverified* album instead of sitting in an import screen for ever.
-
-### TV and anime the way Sonarr does it, and more
-
-Sonarr's add dialog, monitor options, naming tokens, Wanted and Cutoff unmet, series types and season
-folders, plus:
-
-- **Other orderings**: number a series by TheTVDB's DVD, absolute or alternate order, previewed first.
-- **Air times**: an episode counts as out only once it has aired in its own time zone.
-- **Crossovers**: events across series in watch order, and one broadcast held once and linked into both
-  series' folders.
-- **Franchises and related series** from Wikidata and AniList (sequels, spin-offs, the whole universe).
-- **Jellyfin and Kodi files** (optional): nfo files with the provider IDs, and artwork, written only where
-  none exists.
-
-### Movies the way Radarr does it, and more
-
-Radarr's naming, editions, quality and search, plus **collections and franchises beyond TMDB's** (a
-universe across several TMDB collections), a per-library **rating limit** (a kids' library never
-searches above its age), and import of your Radarr setup.
-
-### Libraries that span many disks
-
-A library can have any number of root folders. An artist or series stays on one disk, new content goes
-where there's room, and **retiring a disk is one button**: Solarr previews the move, checks the space
-and drains it. A folder can be read-only, or declared offline for good, without anything on it being
-treated as missing and re-downloaded. Every move is one engine: copy, verify, repoint, then delete.
-
-### One copy of the same file
-
-Two libraries (or two series) that want the same file share **one copy**, linked with a **reflink, else
-a hardlink**, after showing you a preview. A separate report lists likely duplicates by metadata and
-recommends the copy closer to your target quality.
-
-### Quality that means it
-
-The **file is the evidence, not the release name.** Solarr measures what it downloaded with ffprobe, so
-fake upgrades are refused, ties keep what you have, and a bigger number doesn't automatically win
-(192 kHz does not beat a clean 48 kHz just for being larger). Profiles cover formats, codecs, bit depth,
-resolution, HDR, audio and subtitle languages, and preferred release groups. **Remove and block**
-recycles a bad file, blocks its exact bytes (renaming it can't sneak it back) and wants the item again.
-
-### Easy to run, easy to use
-
-Everything is done from the browser, and settings come in **normal / advanced / expert** levels so you
-only see what you need. Several users can have different access to different libraries. Every decision
-keeps its reasons, so "why did it do that?" is answered on the page, not in a log file. Filters, sorts
-and views are remembered per user.
-
-### Move over without starting again
-
-Solarr reads your existing **Lidarr**, **Sonarr**, **Radarr** and **Prowlarr** setup (only ever *reads*,
-never changes it). Naming defaults match theirs, so adopting an existing library proposes **no renames**.
-
-### Side by side
-
-| | Lidarr / Sonarr / Radarr | Solarr |
-|---|---|---|
-| Media types | One per app | Music, TV, anime, movies, books and audiobooks in one app |
-| Libraries | One per instance | Any number, each with its own folders, quality, users and rating limit; mixed types allowed |
-| Searching | You press *Search all* | A planner hunts within a budget, plus RSS and upgrade hunting |
-| Full download client | Grabs fail or wait | Held releases, sent in priority order as the client frees up |
-| Import | Sorted folders, one at a time | Any folder, any depth, previewed, fully revertible |
-| Packs and box sets | Weak | One download → many albums or seasons |
-| Archives | Extracted | Read in place |
-| Unrecognised music | Stuck in the import screen | Visible as an unverified album |
-| Fakes | Blocklist by release name | Blocks the exact bytes and wants the item again |
-| Quality | Ordered format list | Gates, tiers and a score, judged from the real file; ties keep yours |
-| Why did it do that? | A rejection string | Structured reasons kept per decision |
-| Metadata | One source per app | Several per library, in an order you choose |
-| Several disks | Root folders | Affinity, read-only / offline / draining, one-button drain |
-| Same file twice | Two copies | One copy, linked (reflink or hardlink) after a preview |
-| Crossover episodes | One series only | Held once, placed in both series |
-| Franchises | TMDB collections (movies) | Collections plus Wikidata franchises for movies and series |
-| Deleting | Optional recycle bin | Always recycled first |
-| Users | One login | Several, with per-library access |
-| Settings | One long list | Normal / advanced / expert |
-| Deployment | .NET app per media type | One Go binary, four small SQLite databases |
-| Notifications | Many connectors | In-app centre only for now |
-| **Maturity** | Years in production | **Early alpha** |
+> ⚠️ **Early alpha.** Solarr is young and the database schema can still change. Point it at a copy of your
+> library, or mount your library **read-only**, until you trust it. Please [report problems](#supporting-the-project):
+> that is how it gets better.
 
 ---
 
-## Metadata providers
+## New to media management?
 
-The \*Arrs each lean on one metadata service. Solarr asks **several providers per library type, in an
-order you choose per library**: the first provider that knows a field supplies it, each later one only
-fills what is still empty, and any provider can be switched off.
+Imagine the hard drive. Ten years of music ripped, bought and downloaded. Shows saved as
+`Show.Name.S02E05.720p.WEB.x264-GRP.mkv`, films in folders called `New folder (3)`, an album that exists as two
+half-copies under different spellings. Everything is *there*, but nothing is *findable*, nothing has a cover, and
+your media server shows half of it under the wrong name.
 
-| Library | Providers |
-|---|---|
-| **Music** | MusicBrainz, BrainzMash (a fast MusicBrainz mirror), Lidarr's metadata service, Cover Art Archive, TheAudioDB, Wikidata and Wikipedia, AcoustID fingerprints |
-| **TV and anime** | Skyhook (Sonarr's service), TheTVDB, TMDB, TVmaze (air times with time zones), AniList (anime titles and relations), Wikidata |
-| **Movies** | TMDB, Radarr's metadata service, Wikidata, TheTVDB, MDBList and OMDb (ratings), fanart.tv (logos and art) |
+A media manager sits between your files and the programs that play them and fixes that:
 
-**Keyless by default.** Every library works out of the box with free, keyless sources; TMDB, fanart.tv,
-MDBList and OMDb are added when you enter your own free key.
+- **It recognises what you have.** Not by trusting the file name, but by reading the tags, the track lists, the
+  durations and what the file really contains.
+- **It names and sorts.** One consistent folder structure that any player understands, chosen by you.
+- **It fills in the picture.** Covers, posters, cast, biographies, ratings, release dates, collections.
+- **It knows what is missing.** The album you own 9 tracks of, the season that stops at episode 6, the sequel you
+  never got.
+- **It keeps what you have in good shape.** It can find a better copy, and refuses a fake one.
+- **It lets you play it.** Browse and preview in the browser; your media server picks up the tidy result.
 
-**Wikidata ties them together.** Wikidata knows the ID every other provider uses for a work, so Solarr
-uses it to bridge providers (a TMDB film to its IMDb and TheTVDB entries), to fix IDs that disagree, and
-for franchises no single provider holds.
+**What Solarr brings to the table** is doing all of this for *every* media type in one program, with one interface
+that is built to be understood without reading a manual: every decision shows its reasons, every irreversible
+step is previewed first, and nearly everything can be undone in one click. Messy folders are the normal case, not the
+exception: Solarr is built for them.
 
-**Fast enrichment.** Enrichment is built to never be the bottleneck:
-
-- **Per-provider rate limits**: each provider has its own pace (its published limit, adjustable live in
-  the interface), so a slow provider never holds up a fast one.
-- **Bulk reads**: Wikidata is asked about 40 works per query instead of one at a time. Importing about
-  4,000 films from Radarr went from a projected **33 hours to 29 minutes** when per-film lookups were
-  replaced by bulk reads.
-- **Parallel workers** per media type, a shared response cache, and refreshes that only re-read what
-  changed.
-- **Artwork arrives in the background**: a library is usable straight after the scan, covers and photos
-  fill in over the next minutes.
-
-The full table, with what each provider carries, is in
-[metadata providers](documentation/metadata-providers.md).
-
----
-
-## Speed and performance on large libraries
-
-Solarr is designed for **250,000+ files** and tested against 500,000. Numbers below are measured on the
-developer's machine, not guarantees.
-
-### How the \*Arrs behave by default, and what Solarr does instead
-
-| Situation | \*Arr default behaviour | Solarr |
-|---|---|---|
-| Opening the library | The whole library is loaded into the browser, then filtered there; big libraries mean long waits and a heavy tab | The server pages and filters; the browser holds one page, lists are virtualised. **Page 1,000 costs the same as page 1** |
-| Counting things (dashboard, sidebar) | Computed from the full list | Counters kept up to date as things change: a number is a lookup, never a `COUNT(*)` |
-| Periodic refresh | A scheduled refresh re-reads metadata and rescans folders item by item | Only what changed is looked at again; providers are read in bulk |
-| Finding what's missing | *Search all* fires a search per item | A planner reads the database (no disk I/O) and hunts the most urgent items within an hourly budget |
-| A big write (scan, import) | Can stall the interface or hit "database is locked" | WAL-mode SQLite, one writer behind a priority queue: **your click jumps ahead of a bulk scan** |
-
-### Measured
-
-**First scan of a real music library.** About 200,000 audio files on an NFS NAS, scanned and identified
-from an empty database: **99.9% identified**, in roughly **1 to 3.5 hours** depending on NAS load. The
-bottleneck is the NAS, not Solarr. An interrupted scan resumes where it stopped.
-
-**Importing from the \*Arrs.** A full Sonarr (about 1,000 series) and Radarr (about 4,000 films) import,
-run side by side: **38 minutes** for the series, **29 minutes** for the films, every item imported.
-
-**The database, on a synthetic 500,000-file library:**
-
-| Operation | Typical (p50) | Worst case (p99) | Target |
-|---|---|---|---|
-| A page of the library list, filtered | 1.7 ms | 3.5 ms | 100 ms |
-| Search-as-you-type over titles | n/a | 17 ms | 150 ms |
-| Import 200 rows | 3.7 ms | 5.7 ms | 50 ms |
-| A user's edit while a bulk write runs | 4.3 ms | 19 ms | 25 ms |
-
-A TV library of about 1,000 series and 85,000 episodes answers every list in under 0.25 s. These
-targets are tests: CI fails if one is missed (`make bench`). Details: [benchmarks](documentation/benchmarks.md).
-
----
-
-## Design decisions behind speed, extensibility and usability
-
-**Speed**
-
-- **One static Go binary**, interface embedded. No .NET runtime, no external database, no broker.
-- **Four small SQLite databases instead of one large one**, each with one writer: `settings.db`
-  (configuration, fully cached in memory), `library.db` (everything that scales with your media),
-  `jobs.db` (the work queue, high churn, kept apart) and `statistics.db` (history and figures; the
-  library stays correct with it empty). Details: [database layout](documentation/database-layout.md).
-- **Short transactions, bounded batches.** No transaction over about 50 ms, bulk work in 200-row
-  chunks, import concurrency of one. Interactive work never waits long behind background work.
-- **A pure planner.** The planner reads state and emits idempotent actions; it does no I/O, so it can run
-  often and cheaply, and running it twice does nothing twice.
-- **Measured, not claimed.** Latency targets are enforced in CI.
-
-**Extensibility**
-
-- **One generic core, media types as declarations.** Music, TV and movies are not three apps glued
-  together: they are one engine (identity, quality, search, import, moves) with each media type plugged
-  in through named extension points. Adding a type means declaring it, not forking the core.
-- **Spec-first API.** The OpenAPI document generates both the Go server interface and the TypeScript
-  client, so every screen is built on the same public API you can script against.
-- **Structured decisions.** Rejections and score components are data, not strings, so the interface,
-  the API and future automations all read the same reasons.
-- **Every periodic job is registered** in one place, visible and runnable on demand from the interface.
-
-**Usability**
-
-- **Everything from the web interface.** `config.yml` only holds bootstrap values; everything else is
-  set in the browser, and a read screen always comes with its write screen.
-- **Previews before anything irreversible** (imports, renames, moves, drains, links), and **undo** after.
-- **Nothing deleted directly**: one move engine (copy, verify, repoint, unlink) and a recycle bin.
-- **It explains itself**: every search, grab, refusal and upgrade keeps its reasons on the page.
-- **Familiar where it should be**: Lidarr's, Sonarr's and Radarr's layouts, naming tokens and add
-  dialogs, so moving over feels like home.
-
----
-
-## Privacy
-
-Solarr is **privacy-first and localhost-first**.
-
-- **No telemetry, no analytics, no crash reporting, no accounts, no update check.**
-- It contacts **only what you configure**: the metadata providers enabled for your libraries, your
-  indexers, your download clients and, if you use the import, your \*Arr instances.
-- The one optional extra, a check of your public IP (to see whether traffic leaves past a VPN), runs
-  **only while you show the address in the status bar** (hidden by default; *Settings → Web UI*), or on
-  a schedule if you turn on `network.public_ip_check` in `config.yml`.
-- Secrets (API keys, passwords) are **encrypted at rest** and never returned by the API.
-- Every outbound request goes through one HTTP client with a destination guard, and can be routed
-  through a proxy.
-
-**Don't take our word for it.** The code is open: point your own AI (or your own eyes) at it and ask
-where it connects to. Everything outbound passes through `internal/platform/httpx`.
+New here? [Getting started](documentation/getting-started.md) takes 15 minutes, and the
+[user guide](documentation/user-guide.md) is the full walk-through.
 
 ---
 
 ## Installation
 
-Solarr ships as one Docker image for **amd64 and arm64**, with everything it needs inside (`ffprobe`,
-`fpcalc`, the tag writer). Images: [`makearr/solarr`](https://hub.docker.com/r/makearr/solarr) on
-Docker Hub and `ghcr.io/makearr/solarr` on GitHub.
+Solarr ships as one Docker image for **amd64 and arm64**:
+[`makearr/solarr`](https://hub.docker.com/r/makearr/solarr) on Docker Hub (also on `ghcr.io/makearr/solarr`).
+
+**Docker command**
+
+```sh
+docker run -d --name solarr \
+  --restart unless-stopped \
+  -e PUID=1000 -e PGID=1000 -e TZ=Europe/Berlin \
+  -p 5454:5454 \
+  -v /srv/solarr/config:/config \
+  -v /srv/media:/media \
+  -v /srv/downloads:/downloads \
+  makearr/solarr:latest
+```
+
+**Docker Compose**
 
 ```yaml
 # docker-compose.yml
@@ -390,120 +119,597 @@ services:
       - "5454:5454"
     volumes:
       - ./config:/config        # settings, databases, backups: local disk, not NFS/SMB
-      - /media:/media           # your library (add :ro while you try it out)
-      - /downloads:/downloads   # the same path your download client reports
+      - /srv/media:/media       # your library (add :ro while you try it out)
+      - /srv/downloads:/downloads   # the same path your download client reports
 ```
 
-Then open **http://localhost:5454**. There's also a ready-made [docker-compose.yml](docker-compose.yml).
+Start it with `docker compose up -d` and open **http://localhost:5454**. A ready-made, commented
+[docker-compose.yml](docker-compose.yml) is in the repository.
 
-Worth knowing:
+### The setup wizard
 
-- **`PUID`/`PGID`** set who Solarr runs as. It takes ownership of its own folders only, never your media.
-  Don't set `user:`.
-- **Keep `/config` on local storage.** SQLite doesn't work reliably over NFS/SMB.
-- **Hardlinks need one filesystem.** Put the library and the completed-downloads folder on the same
-  mount, or Solarr copies instead.
-- Port 5454 can be changed with `SOLARR_SERVER_PORT` or on the Network screen.
+The first visit opens a short wizard. It asks for two things:
 
-### Build from source
+1. **An administrator**: a user name and a password.
+2. **Your first library**: a name, a type (music, TV, movies, ...) and the folder it lives in.
 
-Toolchains run in Docker; no local Go or Node is needed.
+Solarr scans the folder straight away and you can browse while covers and posters arrive over the next few
+minutes. Afterwards the dashboard tells you what is still missing (an indexer, a download client). Connect those
+under *Connections*, or let Solarr [read them from Prowlarr and your \*Arrs](#coming-from-the-arr-stack).
 
-```sh
-make verify        # format, vet, lint, tests
-make web           # build the frontend
-make image-local   # build a local image
-```
-
-Versions are `YYYY.MM.R.BBBB`: year and month of the release, the release number, and a build number
-that advances with every build. See [versioning](documentation/versioning.md).
+For mounts, permissions, GPU access and every setting, see [the Docker image](#the-docker-image) below and
+[getting started](documentation/getting-started.md).
 
 ---
 
-## First steps
-
-New here? [Getting started](documentation/getting-started.md) takes 15 minutes; the full walk-through is the
-[user guide](documentation/user-guide.md). In short:
-
-1. **Setup wizard:** create the administrator and your first library (a name, a type and a folder).
-   Solarr scans it; covers, posters and photos arrive over the next few minutes.
-2. **Connect an indexer and a download client** (SABnzbd or qBittorrent) under *Connections*, or take
-   them from Prowlarr with *Connections → Arr*. The dashboard tells you what's still missing.
-3. **Add music, series or movies** with *Add new*, or import your Lidarr, Sonarr or Radarr setup.
-4. **Let it run.** Solarr checks RSS and searches for what's missing on a schedule.
-5. **Follow along** in *Activity → Queue / History* and on each work's page, which says when it was last
-   searched, when it will be again, or why it won't be.
-
----
-
-## What works today, and what doesn't yet
+## A quick look
 
 | | |
 |---|---|
-| **Libraries** | Music, TV, anime, movie, book and audiobook libraries (adult optional), mixed libraries, merge · import lists for TV · poster, overview and table views · saved filters · bulk edit · tags with a genre tree · rating limits · calendar with a subscribable link |
-| **Music** | Artists, albums and editions · labels · aliases and merges · add with monitoring · Navidrome-friendly tags and covers (optional) |
-| **TV and anime** | Series, seasons, episodes, daily shows, absolute numbering, other orderings · cast, crew, networks, follow · crossovers · franchises · Jellyfin/Kodi files (optional) |
-| **Movies** | Add, scan, search, grab, import, rename · editions · collections and franchises · Radarr import |
-| **Books and audiobooks** | Authors, series, narrators · covers · follow an author · several providers per library · Readarr-style monitoring |
-| **Finding** | Newznab/Torznab indexers (Prowlarr works as-is), in parallel · hunting, RSS, upgrade hunting · manual search with scores and reasons · delay profile |
-| **Downloading** | **SABnzbd**, **qBittorrent**, Soulseek (slskd) and the other clients Lidarr and Sonarr offer · queue, history, held releases, free-space protection · seeding limit per client · failed releases blocklisted and searched again |
-| **Running it** | Web UI · several users · notifications centre · statistics · encrypted secrets · automatic backups · scheduled tasks you can run on demand · YAML settings export · preview player · similar-video report |
+| [![Album wall](documentation/screenshots/music-albums.png)](documentation/screenshots/music-albums.png) **Music**: albums as a poster wall, with table and overview views, filters and bulk edit | [![Series page](documentation/screenshots/tv-series-page.png)](documentation/screenshots/tv-series-page.png) **A series**: cast, collections, seasons and, per episode, the file on disk |
+| [![Movie wall](documentation/screenshots/movies.png)](documentation/screenshots/movies.png) **Movies**: posters, editions, collections and franchises | [![Book wall](documentation/screenshots/books.png)](documentation/screenshots/books.png) **Books and audiobooks**: authors, series, covers and narrators |
+| [![Import list preview](documentation/screenshots/import-lists.png)](documentation/screenshots/import-lists.png) **Import lists**: previewed before you enable them | [![Light theme](documentation/screenshots/tv-series-page-light.png)](documentation/screenshots/tv-series-page-light.png) **Light or dark**, following your system |
 
-**Not there yet:** torrents work end to end but have seen less use than usenet · notifications are
-in-app only (no webhooks or connectors yet) · import lists for movies, music and books, and Trakt · matching the
-same audio across formats for duplicates · comics come later. Not API-compatible
-with the \*Arrs, on purpose: their data model can't express editions, packs or files shared between
-libraries.
+<sub>Screenshots are from a demo instance. Its files are silent or blank placeholders, which is why every track
+is the same FLAC and every episode the same 720p H.264.</sub>
 
 ---
 
-## Built with AI (and a lot of patience)
+## Coming from the \*Arr stack
 
-Let's be honest up front: **Solarr would not exist without AI.** It was written with
-[Claude Code](https://claude.com/claude-code), mostly **Claude Opus on a Pro plan**, by one person with a
-day job, a large media library and strong opinions about how the \*Arrs should have handled box sets.
+Solarr replaces **Lidarr, Sonarr, Radarr, Readarr, Whisparr and Huntarr** with one engine. It is not a port and
+not API-compatible, on purpose: the \*Arrs' data model cannot express editions, packs, or one file shared between
+libraries. What you get instead:
 
-The division of labour, roughly:
+- **Lidarr, Sonarr, Radarr.** Their add dialogs, monitor options, naming tokens, Wanted and *Cutoff unmet* lists
+  and quality profiles are all there, so it feels familiar. Beyond them: any number of libraries per media type, whole-tracklist
+  album matching, a pack or box set that becomes many correctly named albums or seasons, archives read in place
+  instead of unpacked, quality judged from the real file, and one copy of a file shared by two libraries.
+- **Readarr.** Books and audiobooks are real libraries: authors, series (with the books a series still lacks),
+  narrators, *follow an author*, and several providers (Open Library, Google Books, Hardcover, FantLab, iTunes, Audible
+  with Audnexus) in an order you choose per library. Readarr's own metadata service is not needed.
+- **Whisparr.** An optional adult library type over the stash-box providers, ThePornDB and Whisparr's metadata:
+  scenes, films, performers and a StashDB favourites import list. Whisparr is also an import source.
+- **Huntarr.** Hunting is built in, not bolted on: a planner decides what to search for and when, inside an hourly
+  budget you set, with RSS sync, upgrade hunting, held releases when the client is full, free-space gating and a
+  per-item explanation of when it was searched and why it is waiting.
+- **Prowlarr.** Solarr does not replace it: it does not implement indexers itself. Point it at Prowlarr (or any
+  Newznab/Torznab indexer) and it also offers Prowlarr's catalog to choose indexers from.
+- **Moving over.** Solarr reads your Lidarr, Sonarr, Radarr, Whisparr and Prowlarr setup (it only ever *reads*),
+  shows a preview and a mapping step, and lets you pick what to bring across. Its naming defaults match theirs, so
+  adopting an existing library proposes **no renames**. Monitoring can optionally be sent back to the \*Arr. The
+  download client and SABnzbd/qBittorrent stay as they are. See [arr-import](documentation/arr-import.md).
 
-- **The human** wrote the brief, made the decisions, tested everything against a real library, filed the
-  bug reports, and repeatedly asked *"did you actually look at it, or did the tests just pass?"*
-- **Claude** wrote the code (about 270,000 lines of Go, 50,000 of TypeScript, in about two months),
-  the tests, the migrations, the documentation and, at one point, roughly 2,000 lines of comments
-  nobody asked for, which it then also had to delete.
-- **The usage limit** decided when everyone went to bed.
+Running Solarr **beside** your \*Arrs while you decide is the safest way to try it.
 
-A one-person hobby project does not get a generic media engine, eleven planned media types, a
-desired-state planner, four databases, a recognition pipeline and a test suite with latency budgets.
-With AI, it does. The ideas, the taste and the stubbornness are human; the typing is very much not.
+<details>
+<summary><b>Feature comparison table</b></summary>
 
-### Supporting the project
+| | Lidarr / Sonarr / Radarr / Readarr / Whisparr | Solarr |
+|---|---|---|
+| Media types | One per app | Music, TV, anime, movies, books, audiobooks (adult optional) in one app |
+| Libraries | One per instance | Any number, each with its own folders, quality, users and rating limit; mixed types allowed |
+| Searching | You press *Search all* (Huntarr-style tools add a loop) | A planner hunts within a budget, plus RSS and upgrade hunting |
+| Full download client | Grabs fail or wait | Held releases, sent in priority order as the client frees up |
+| Import | Sorted folders, one at a time | Any folder, any depth, previewed, fully revertible |
+| Packs and box sets | Weak | One download becomes many albums or seasons |
+| Archives | Extracted | Read in place, never unpacked into the library |
+| Unrecognised music | Stuck in the import screen | Visible as an unverified album |
+| Fakes | Blocklist by release name | Blocks the exact bytes and wants the item again |
+| Quality | Ordered format list | Gates, tiers and a score, judged from the real file; ties keep yours |
+| Why did it do that? | A rejection string | Structured reasons kept per decision |
+| Metadata | One source per app | Several per library, in an order you choose |
+| Several disks | Root folders | Affinity, read-only / offline / draining, one-button drain |
+| Same file twice | Two copies | One copy, linked (reflink or hardlink) after a preview |
+| Crossover episodes | One series only | Held once, placed in both series |
+| Franchises | TMDB collections (movies) | Collections plus Wikidata franchises for movies and series |
+| Deleting | Optional recycle bin | Always recycled first |
+| Users | One login | Several, with per-library access |
+| Preview player | None | In the browser, with transcoding |
+| Settings | One long list | Normal / advanced / expert |
+| Deployment | One .NET app per media type | One Go binary, four small SQLite databases |
+| Notifications | Many connectors | In-app centre only for now |
+| **Maturity** | Years in production | **Early alpha** |
 
-The most useful thing you can donate is **compute**: a **Claude gift subscription** goes straight into
-building Solarr. Get in touch through [GitHub](https://github.com/makearr) if you'd like to.
-
-Bug reports are just as valuable, and free (see [Early alpha](#️-early-alpha)).
-
-### Contributing
-
-Pull requests are welcome. Solarr does have firm core values (one generic core, nothing deleted directly,
-everything from the web interface, privacy first, the file as evidence), and I reserve the right not to
-merge a change that works against them, however good the code. **If you want to build a feature, please
-open an issue and ask first**, so your time isn't wasted.
-
-Start at [codebase-map.md](documentation/codebase-map.md) and
-[coding-standards.md](documentation/coding-standards.md); `make verify` must pass.
+</details>
 
 ---
 
-## More
+## Standout features
 
-- **Documentation:** [documentation/](documentation/README.md), sorted into beginner, advanced and expert: [getting started](documentation/getting-started.md), [user guide](documentation/user-guide.md),
-  [music identification](documentation/music-identification.md), [TV internals](documentation/tv-internals.md),
-  [naming](documentation/naming.md), [downloads](documentation/downloads.md),
-  [file management](documentation/file-management.md), [container runtime](documentation/container-runtime.md).
-- **Third-party reuse:** [ATTRIBUTION.md](ATTRIBUTION.md). **History:** [CHANGELOG.md](CHANGELOG.md).
+### Preview media player
+
+Press play beside any track, episode or film. The player lives in the page frame, so it keeps playing while you
+browse, as a **bar**, a **corner window** or **full screen**. Files a browser can play are streamed as they are;
+for the rest Solarr converts on the fly (**GPU transcoding** on Intel and AMD when a device is passed in), with a
+quality menu (original, 1080p, 720p, 480p) and the source bitrate shown. See [media player](documentation/media-player.md).
+
+### Several users, access per library
+
+Give each person their own login and decide which libraries they may see or manage. A kids' account sees the kids'
+library; a housemate manages the music. Views, filters, favourites (a heart on works, people and collections) and
+interface level are remembered **per user**. There is also a proxy-header mode for single sign-on set-ups.
+
+### Better recognition
+
+Point Solarr at **any folder, at any depth**. It identifies by evidence, in order: embedded IDs, **whole-tracklist
+matching** (durations, positions, titles), per-file search, folder names and, optionally, **AcoustID audio
+fingerprints** for files with no tags at all. On a real library of about 200,000 audio files **99.9% were
+identified** on the first scan. You see a **preview first**, then commit, and you can **undo the whole import in
+one click**. Music nothing recognises becomes a visible *unverified* album instead of sitting in an import screen for
+ever. See [music identification](documentation/music-identification.md).
+
+### Hunting
+
+A planner works out which wanted items may be searched and how urgently (new releases first, then the rest, with a
+backoff that doubles from 6 hours to a week) and a scheduled hunt searches the most urgent within an hourly budget
+you set. **RSS sync** grabs new releases as they appear, **upgrade hunting** replaces a file only when the new one
+*strictly* wins, and **held releases** wait in priority order when the download client is full. Failed or fake
+releases are blocklisted by release *and* by content hash. See [downloads](documentation/downloads.md).
+
+### Libraries that span many disks
+
+Any number of root folders per library. An artist or series stays on one disk, new content goes where there is room,
+and **retiring a disk is one button**. Details in [storage modes](#storage-modes).
+
+### Quality management
+
+The **file is the evidence, not the release name.** Solarr measures what it downloaded with ffprobe, so fake
+upgrades are refused, ties keep what you have, and a bigger number does not automatically win (192 kHz does not beat
+a clean 48 kHz just for being larger). Profiles cover formats, codecs, bit depth, resolution, HDR, audio and
+subtitle languages and preferred release groups. **Remove and block** recycles a bad file, blocks its exact bytes
+and wants the item again. See [library quality](documentation/library-quality.md).
+
+### And more
+
+- **Similar videos report**: perceptual hashes find the same video in two files; keep one, link or recycle the others.
+- **Import lists** for TV (an AniList season, a TMDB list, trending shows), previewed before you enable them.
+- **Collections and franchises** beyond TMDB's, from Wikidata and AniList.
+- **Everything from the browser**, with settings at *normal*, *advanced* or *expert* level.
+- **Calendar** with a subscribable link, **statistics**, and a **cache and memory page**.
+
+---
+
+## Privacy
+
+Solarr is **privacy-first and localhost-first**.
+
+- **No telemetry, no analytics, no crash reporting, no accounts, no update check.**
+- It contacts **only what you configure**: the metadata providers enabled for your libraries, your indexers, your
+  download clients and, if you use the import, your \*Arr instances.
+- The one optional extra, a check of your public IP (to see whether traffic leaves past a VPN), runs **only while
+  you show the address in the status bar** (hidden by default), or on a schedule if you turn it on.
+- Secrets (API keys, passwords) are **encrypted at rest** and never returned by the API.
+- Every outbound request goes through one HTTP client with a destination guard (SSRF protection) and can be
+  routed through a proxy.
+
+**Don't take our word for it.** The code is open: point your own AI (or your own eyes) at it and ask where it
+connects to. Everything outbound passes through `internal/platform/httpx`.
+
+---
+
+## The Docker image
+
+One image, **amd64 and arm64**, from Docker Hub (`makearr/solarr`) and GitHub (`ghcr.io/makearr/solarr`).
+
+### Size, and keeping it lean
+
+| | Measured |
+|---|---|
+| Download from Docker Hub (compressed, amd64 / arm64) | about **84 MB / 81 MB** (first release) |
+| On disk after pulling (current build) | about **187 MB** |
+| The Solarr binary itself, web interface included | about **36 MB** |
+
+The Go binary is static (`CGO_ENABLED=0`) with the interface embedded: no .NET runtime, no Node, no database
+server, no message broker. The rest is a small Alpine base plus the few tools Solarr needs: `ffprobe`/`ffmpeg`
+(measuring files, the player), `fpcalc` (audio fingerprints) and a tag writer. GPU drivers for Intel and AMD are
+included and cost nothing unless you pass a device in. The image is built to stay lean: each addition is weighed
+against its size (the tag writer, for example, was accepted at +57 MB and is noted as such in the Dockerfile),
+and zoneinfo and certificates are copied rather than installed.
+
+### Memory
+
+| Library | RAM to plan for |
+|---|---|
+| **Small** (a few thousand items) | **256 MB** is comfortable. A fresh instance idles at about **45 MB** resident (measured) |
+| **Large** (250,000+ files) | **1 GB** is a sensible budget. The database page caches have a designed ceiling of about **354 MiB** in total, enforced by a test, and the rest is Go working memory |
+
+The idle figure is measured; the large-library figure is the designed ceiling plus headroom, **not** a
+measurement on a full 250,000-file library yet. Treat it as a budget and tell me what you see.
+*Settings → Cache* shows each database's file size, cache use and hit ratio and has a card to size the cache
+(`database.cache_size_kb`, default 64 MiB). Features that start `ffmpeg` (the player's conversions, video hashing)
+use extra memory and CPU while they run; see [benchmarks and resource use](#benchmarks-and-resource-use).
+
+### Mounts and permissions
+
+- **`PUID`/`PGID`** set who Solarr runs as; it takes ownership of its own folders only, never your media. Don't set `user:`.
+- **Keep `/config` on local storage.** SQLite is not reliable over NFS/SMB.
+- **Hardlinks need one filesystem**: put the library and completed downloads on the same mount, or Solarr copies instead.
+- Mount your library `:ro` while you are trying Solarr out.
+- Port 5454 can be changed with `SOLARR_PORT`.
+
+More in [container runtime](documentation/container-runtime.md).
+
+### Environment variables
+
+**None is required.** A variable that is set wins over `config.yml` and over a value saved in the web interface; an
+unset one changes nothing. Append `_FILE` to any `SOLARR_*` variable to read it from a file (Docker secrets). Any
+other `config.yml` key is `SOLARR_` plus its path in upper case with dots as underscores. Everything, with
+precedence rules: [environment variables](documentation/environment-variables.md).
+
+<details>
+<summary><b>All environment variables</b></summary>
+
+**Container**
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PUID` / `PGID` | `1000` | User and group the process runs as, and the owner of everything it writes. `0` is refused |
+| `TZ` | `UTC` | Time zone for air dates and log timestamps |
+| `SOLARR_HEALTHCHECK_DNS` | unset | A host name the healthcheck must also resolve (instances behind a VPN container) |
+
+**Location and network**
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SOLARR_CONFIG_DIR` | `/config` | Directory holding `config.yml` |
+| `SOLARR_DATA_DIR` | `/config/data` | Parent of the databases and caches |
+| `SOLARR_DB_DIR` | `/config/data/db` | `library.db`, `settings.db`, `jobs.db`, `statistics.db`. Local disk only |
+| `SOLARR_CACHE_DIR` | `/config/data/cache` | Disposable cache (artwork, provider responses) |
+| `SOLARR_BACKUP_DIR` | `/config/data/backups` | Database backups |
+| `SOLARR_PORT` | `5454` | HTTP port |
+| `SOLARR_BIND` | `0.0.0.0` | Address to listen on |
+| `SOLARR_BASE_URL` | `/` | Path prefix behind a reverse proxy under a sub-path, e.g. `/solarr` |
+| `SOLARR_PROXY_URL` | unset | Outbound proxy (`http://`, `https://` or `socks5://`, with a port) |
+
+**Media folders**
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SOLARR_ROOT_FOLDERS` | unset | Comma-separated absolute paths, optionally labelled: `Music=/media/music,TV=/media/tv`. Never removed by dropping a path |
+
+**API keys** (stored encrypted in `settings.db`)
+
+| Variable | Provider | Without a key |
+|---|---|---|
+| `SOLARR_TMDB_API_KEY` | TMDB | TV and movies work on less data |
+| `SOLARR_TVDB_API_KEY` | TheTVDB | A built-in project key is used |
+| `SOLARR_FANART_API_KEY` | fanart.tv | No fanart |
+| `SOLARR_OMDB_API_KEY` | OMDb | No OMDb ratings |
+| `SOLARR_MDBLIST_API_KEY` | MDBList | No MDBList ratings |
+| `SOLARR_ACOUSTID_API_KEY` | AcoustID | No fingerprint step |
+| `SOLARR_THEAUDIODB_API_KEY` | TheAudioDB | The public key is used |
+| `SOLARR_GOOGLEBOOKS_API_KEY` | Google Books | Shared quota |
+| `SOLARR_HARDCOVER_API_KEY` | Hardcover | Provider unavailable |
+| `SOLARR_STASHDB_API_KEY` | StashDB | Provider unavailable |
+| `SOLARR_THEPORNDB_API_KEY` | ThePornDB | Provider unavailable |
+| `SOLARR_FANSDB_API_KEY` | FansDB | Provider unavailable |
+
+**Security**
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SOLARR_ENCRYPTION_KEY` | generated on first run | `base64:` plus 32 random bytes. Encrypts the credentials; keep it if you set it |
+| `SOLARR_AUTH_MODE` | `local` | `local`, `proxy`, `apikey_only` or `none` (`none` serves everyone as administrator) |
+| `SOLARR_SECURITY_TRUSTED_PROXY_HEADER` | `X-Remote-User` | Header carrying the user name in `proxy` mode |
+| `SOLARR_SECURITY_TRUSTED_PROXY_CIDRS` | empty | Proxies allowed to set that header, e.g. `[10.0.0.0/8]` |
+
+**Logging and mode**
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SOLARR_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
+| `SOLARR_LOG_FORMAT` | `json` | `json` or `text` |
+| `SOLARR_MODE` | `normal` | `normal`, `observe` (decide and record, never act) or `shadow` (act except the irreversible steps) |
+
+**Tuning**
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SOLARR_DATABASE_BUSY_TIMEOUT` | `15s` | How long a database waits on a lock |
+| `SOLARR_DATABASE_PAGE_SIZE` | `4096` | SQLite page size (applied only when a database is created) |
+| `SOLARR_DATABASE_CACHE_SIZE_KB` | `65536` | Library database page cache per connection |
+| `SOLARR_DATABASE_WRITE_WARN` | `50ms` | A write transaction longer than this is logged |
+| `SOLARR_DATABASE_WRITE_HARD` | `2s` | A write transaction longer than this is a fault |
+| `SOLARR_BACKUP_SETTINGS_ON_CHANGE` | `true` | Snapshot `settings.db` on every change |
+| `SOLARR_BACKUP_KEEP_SETTINGS` | `20` | Settings snapshots kept |
+| `SOLARR_BACKUP_BEFORE_MIGRATION` | `true` | Back up before a schema migration (cannot be turned off) |
+| `SOLARR_RETENTION_DECISIONS_FULL` | `90d` | How long full decision detail is kept |
+| `SOLARR_RETENTION_CANDIDATES` | `7d` | How long search candidates are kept |
+| `SOLARR_STORAGE_MIN_FREE_BYTES` | `50GB` | Downloads stop below this much free space |
+| `SOLARR_STORAGE_MIN_FREE_PERCENT` | `2` | ...or below this percentage |
+| `SOLARR_WORKERS_SEARCH` | `4` | Concurrent searches |
+| `SOLARR_WORKERS_ACQUIRE` | `2` | Concurrent downloads started |
+| `SOLARR_WORKERS_METADATA` | `4` | Concurrent metadata lookups |
+| `SOLARR_NETWORK_PUBLIC_IP_CHECK_ENABLED` | `false` | Periodically ask a third party which address this host connects from |
+| `SOLARR_NETWORK_PUBLIC_IP_CHECK_ENDPOINT` | `https://api.ipify.org` | Service for that check |
+| `SOLARR_NETWORK_PUBLIC_IP_CHECK_INTERVAL` | `6h` | How often |
+| `SOLARR_METADATA_MUSICBRAINZ_BASE_URL` | `https://musicbrainz.org/ws/2` | Direct MusicBrainz, or a local mirror |
+| `SOLARR_METADATA_MUSICBRAINZ_BRAINZMASH_ENABLED` | `true` | Try the BrainzMash mirror pool first |
+| `SOLARR_METADATA_MUSICBRAINZ_BRAINZMASH_BASE_URL` | `https://api.brainzmash.cc/ws/2` | Its address |
+| `SOLARR_METADATA_MUSICBRAINZ_PROXY_ENABLED` | `true` | Try the Servarr metadata proxy next |
+| `SOLARR_METADATA_MUSICBRAINZ_PROXY_BASE_URL` | `https://api.lidarr.audio/api/v0.4` | Its address |
+| `SOLARR_METADATA_MUSICBRAINZ_REFRESH_AFTER` | `90d` | Age at which a cached answer is fetched again |
+
+`solarr config check` validates the file and the environment without starting the server.
+
+</details>
+
+---
+
+## Design decisions
+
+### Databases
+
+Solarr keeps **four small SQLite databases instead of one large one**, all in **WAL mode**, each with **one
+writer**:
+
+| Database | Holds |
+|---|---|
+| `library.db` | Everything that scales with your media |
+| `settings.db` | Configuration and credentials; fully cached in memory |
+| `jobs.db` | The work queue: high churn, kept apart |
+| `statistics.db` | History and figures; the library stays correct with it empty |
+
+Every write goes through that database's **internal writer queue** with priorities, so **your click jumps ahead of a
+bulk scan** and the browser never stalls while Solarr works. No transaction runs over about 50 ms, and bulk work is
+split into 200-row batches. The planner is a pure read of state that emits idempotent actions, so it can run often
+and cheaply.
+
+Measured on a synthetic **500,000-file library** (`make bench`; CI fails if a target is missed):
+
+| Operation | Typical (p50) | Worst case (p99) | Target |
+|---|---|---|---|
+| A page of the library list, filtered | 1.7 ms | 3.5 ms | 100 ms |
+| Search-as-you-type over titles | n/a | 17 ms | 150 ms |
+| Import 200 rows | 3.7 ms | 5.7 ms | 50 ms |
+| A user's edit while a bulk write runs | 4.3 ms | 19 ms | 25 ms |
+
+A page 1,000 deep costs the same as page 1, and counts are kept as counters, never a live `COUNT(*)`. More in
+[database layout](documentation/database-layout.md) and [benchmarks](documentation/benchmarks.md).
+
+### Metadata providers
+
+Solarr asks **several providers per library type, in an order you choose per library**: the first provider that
+knows a field supplies it, each later one only fills what is still empty, and any provider can be switched off.
+
+| Library | Providers |
+|---|---|
+| **Music** | MusicBrainz, BrainzMash (a fast MusicBrainz mirror), Lidarr's metadata service, Cover Art Archive, TheAudioDB, Wikidata and Wikipedia, AcoustID |
+| **TV and anime** | Skyhook (Sonarr's service), TheTVDB, TMDB, TVmaze, AniList, Wikidata |
+| **Movies** | TMDB, Radarr's metadata service, Wikidata, TheTVDB, MDBList and OMDb, fanart.tv |
+| **Books and audiobooks** | Open Library, Google Books, Hardcover, FantLab, iTunes, Audible with Audnexus |
+
+Every library works out of the box with free, keyless sources; keys for TMDB, fanart.tv and others are added when
+you enter your own. **Wikidata ties them together**: it knows the ID every other provider uses for a work, so it
+bridges providers and finds franchises no single provider holds.
+
+Enrichment is built to never be the bottleneck:
+
+- **Per-provider rate limits**, each at its own published pace and adjustable live, so a slow provider never holds
+  up a fast one.
+- **Parallel requests**, with several workers per media type and a shared response cache.
+- **Bulk reads**: Wikidata is asked about 40 works per query. Importing about 4,000 films went from a projected
+  **33 hours to 29 minutes** once per-film lookups were replaced by bulk reads.
+- **Artwork arrives in the background**: a library is usable straight after the scan.
+
+Measured on 40 random series of a real library, throughput by requests in flight:
+
+| Provider | Median latency | 1 in flight | 4 | 8 | 16 | Errors |
+|---|---|---|---|---|---|---|
+| Skyhook | 0.23 s | 3.3 req/s | 17.4 | 24.4 | 29.1 | none |
+| TMDB | 0.40 s | 3.1 | 15.1 | 25.6 | 36.6 | none |
+| TVmaze | 0.46 s | 2.3 | 7.6 | 13.4 | 17.8 | 404 where it has no show |
+| TheTVDB v4 | 0.52 s | 2.0 | 7.1 | 16.0 | 24.4 | none |
+
+No provider refused at 16 in flight, so the spacing between request starts is the limit (TVmaze stays at its
+published 20 calls per 10 s). Full tables and the field-by-field comparison:
+[TV providers benchmark](documentation/tv-providers-benchmark.md) and [metadata providers](documentation/metadata-providers.md).
+
+### Storage modes
+
+A library can have **any number of root folders**:
+
+- **Multiple roots per library.** An artist or series stays on one disk; new content goes where there is room.
+- **Read-only, offline and draining roots.** A folder can be read-only, or declared offline without anything on it
+  being treated as missing and re-downloaded. **Draining** a root is one button: Solarr previews the move, checks the
+  space, and empties the disk so you can retire it.
+- **One move engine** for every move, rename and drain: copy, verify, repoint, then unlink. Nothing is deleted
+  directly; everything goes to a **recycle bin** first.
+- **Links, never symlinks.** Imports link reflink, then hardlink, then copy, with the capability probed per path pair.
+  Two libraries that want the same file share **one copy**, after a preview.
+- **ZFS and NFS.** Designed for ZFS and tested on NFS: file watching is only an accelerator and stale handles
+  are retried. The databases themselves belong on local disk.
+
+See [file management](documentation/file-management.md) and the [storage guide](documentation/guide/storage.md).
+
+---
+
+## Benchmarks and resource use
+
+Numbers are measured on the developer's machine, not guarantees. Details: [benchmarks](documentation/benchmarks.md).
+
+### What costs the most
+
+Everyday browsing is cheap. These are the operations that are not, so you can plan for them:
+
+| Operation | Cost | Notes |
+|---|---|---|
+| **Video perceptual hashing** (the similar-videos report) | **High: hours on a big library.** About 1.5 s of one CPU core per 1080p video (7 frames, one `ffmpeg` call each) | **Off by default.** Switch it on under *Storage → Duplicates*. Still about 4.7x cheaper than hashing 25 frames |
+| **First scan of a large library** | Hours | About 200,000 audio files on an NFS NAS: roughly 1 to 3.5 hours, identified from an empty database. Resumable |
+| **Probe sweep** (ffprobe on every file) | Moderate, I/O-bound | Reads each file's header once, so it is limited by your storage |
+| **AcoustID fingerprints** | Moderate CPU | Only for files that nothing else could identify, and optional |
+| **Transcoding in the player** | One `ffmpeg` per stream | CPU, or GPU if you pass `/dev/dri`. Only while someone is watching |
+| **Importing from the \*Arrs** | 29 to 38 minutes | About 4,000 films and about 1,000 series; rate-limited by metadata providers |
+| **Artwork** | Network, in the background | Fills in over minutes after a scan |
+
+### Where the bottlenecks are in usual operation
+
+1. **Your storage.** Scanning and probing are bound by disk or NAS speed, not by Solarr. On a shared NAS, parallel
+   reads slow down every client.
+2. **Metadata providers' rate limits.** Enrichment is paced by what each provider allows. Solarr overlaps providers
+   and uses bulk reads where it can, but cannot go faster than TVmaze's 20 calls per 10 s.
+3. **Indexers and the download client.** Searches wait on indexer answers; Solarr asks them in parallel.
+4. **The single writer.** Imports run one at a time on purpose. It keeps the interface responsive; it is also why a
+   very large import is steady rather than fast.
+
+A filtered page of a 500,000-file library comes back in under 4 ms in the worst case, and a TV library of about
+1,000 series and 85,000 episodes answers every list in under 0.25 s, so the interface is rarely the slow part.
+
+---
+
+## Compiling it yourself
+
+The toolchains run in Docker, so nothing needs installing but Docker, `git` and `make`.
+
+```sh
+# 1. Get the code
+git clone https://github.com/makearr/Solarr.git
+cd Solarr
+
+# 2. Check everything: format, vet, lint, tests, generated code, licences
+make verify
+
+# 3. Build the web interface (lints and tests first); it is embedded into the binary
+make web
+
+# 4. Build the static binary (CGO_ENABLED=0) into ./solarr
+make build
+
+# 5. Or build a local Docker image, ghcr.io/makearr/solarr:dev
+make image-local
+```
+
+Run the binary or the image:
+
+```sh
+./solarr serve --config ./config.yml
+
+docker run -d --name solarr-dev -p 5454:5454 -v "$PWD/dev-config:/config" ghcr.io/makearr/solarr:dev
+```
+
+Other targets: `make test` (unit tests), `make race` (race detector), `make bench BENCH_FILES=500000` (the 500k-file
+benchmarks), `make e2e` (a throwaway instance driven by Playwright), `make api` (regenerate the Go server and
+TypeScript client from `api/openapi.yaml`), `make sqlc` (regenerate the database code from `queries/`), and
+`make web-dev` (the Vite dev server on :5173, proxying the API). `make help` lists them all.
+
+Without Docker you need **Go 1.27 or newer** (see `go.mod`) and **Node 22**. Versions are `YYYY.MM.R.BBBB`: year
+and month of the release, the release number, and a build number that advances with every build
+([versioning](documentation/versioning.md)). The code is organised as described in the
+[codebase map](documentation/codebase-map.md).
+
+---
+
+## Contributing
+
+Solarr stays **privacy-first, open access and user-friendly**. A contribution that adds telemetry, an account
+requirement, a paywall or a screen only an expert can read will not be merged, however good the code.
+
+Contributions are very welcome, with two conditions:
+
+- **Keep up.** Solarr moves fast. A pull request has to keep pace with the development speed and meet the project's
+  high coding standards: `make verify` must pass (formatting, vet, strict linting, tests, generated code up to
+  date), new code comes with tests, comments say *why* in one line, and the architecture's rules (one generic core,
+  nothing deleted directly, everything from the web interface) hold.
+- **Ask first for anything bigger than a bug fix.** For a new feature or a larger sub-project, please open an issue
+  first so your time is not spent on something that collides with where the project is going.
+
+Start with the [codebase map](documentation/codebase-map.md) and the
+[coding standards](documentation/coding-standards.md).
+
+---
+
+## Supporting the project
+
+- **Test it on your library, and report what breaks.** This is the most valuable help there is. Solarr has been
+  tested on one person's library, and yours is different. Wrong matches, albums that came out as the wrong edition,
+  a folder it could not read, confusing screens, slow pages: open an
+  [issue](https://github.com/makearr/Solarr/issues) with what you did, what you expected and what happened (logs
+  help: *Settings → Logs*). Import and recognition problems are especially welcome.
+- **Spread the word**, star the repository, and tell a friend with a messy hard drive.
+- **Donate some Claude Code usage.** Solarr is built with AI agents, and agents have opinions. If you have spare
+  usage and would like to point it at Solarr, **please contact me first**: two agents that have never met, each
+  confidently rewriting the same file, make for an entertaining merge conflict and a terrible afternoon. Drop a
+  message through [GitHub](https://github.com/makearr) and I will brief you on what is being worked on, so your agents
+  and mine do not end up in a fight over who owns the import code.
+
+---
+
+## Built with AI
+
+Let's be honest up front: **Solarr would not exist without AI**, and the interesting part is how that works.
+
+**The architecture was designed by a human. The typing was done by AI.** Everything that decides what Solarr *is*
+was a human decision: the overall functionality, the generic core with media types as declarations, the database
+architecture (the four-way split, WAL mode, the internal priority writer queue), the quality model, the safety rules.
+[Claude Code](https://claude.com/claude-code) wrote the code, the tests, the migrations and the documentation
+against that design.
+
+- **Time frame:** about **10 weeks** from the first commit (31 August 2026).
+- **Size:** about **265,000 lines of Go** (of which roughly 105,000 are tests) and about **55,000 lines of
+  TypeScript**, not counting generated code.
+- **A heavy human validation loop.** Every feature was reviewed, argued with, sent back and re-checked. "Did you
+  actually look at it, or did the tests just pass?" is a sentence that gets said a lot in this project.
+- **Automated checks at every step.** Every change is confirmed by a full CI/CD pipeline and rigorous Go static
+  analysis and linting, with latency budgets that fail the build when missed.
+- **Tested on a real library.** Every feature was exercised on the author's own live library of about 250,000 files,
+  **without a backup**. If that does not show that the author trusts it, nothing will. (You should still make
+  one. Do as I say, not as I do.)
+
+The ideas, the taste and the stubbornness are human; the typing is very much not. Read the [coding
+standards](documentation/coding-standards.md) and judge the result yourself.
+
+---
+
+## Changelog
+
+Changes since the first release, **2026.10.001.515** (25 October 2026), newest areas first. The history of earlier
+releases is in [CHANGELOG.md](CHANGELOG.md), and the commit log has every detail.
+
+- **Books and audiobooks are real libraries.** Metadata from Open Library, Google Books, Hardcover, FantLab, iTunes and
+  Audible (with Audnexus), covers, one collection per series and the books a series still lacks, **Monitor** on a
+  whole series, **follow an author**, and a **Narrators** level, filter and column for audiobooks.
+- **An adult library type** (optional) over the stash-box providers, ThePornDB and Whisparr's metadata: scenes and
+  films, performers, and a StashDB favourites import list. See [adult](documentation/adult.md).
+- **Import lists for TV.** An AniList season or user list, a TMDB list or TMDB's trending and popular shows add series
+  for you, **previewed before you enable them**. See [import lists](documentation/import-lists.md).
+- **Import from the \*Arrs by choice.** A preview and mapping step, then pick what to bring across; Whisparr is a
+  source too, and monitoring can be **sent back** to the \*Arr.
+- **Merge one library into another** of the same media type, previewed like a move.
+- **Favourites.** A per-user heart on works, parts, people, organisations and collections, with a Favourites filter.
+- **A preview player in the browser**: bar, corner window or full screen, source bitrate, quality menu and **GPU
+  transcoding**. See [media player](documentation/media-player.md).
+- **Similar videos report** across one library or all: perceptual hashes of the frames plus duration, keep one and
+  link or recycle the others. Hashing is **off by default**. See [duplicate videos](documentation/duplicate-videos.md).
+- **More download clients and indexers**: every client Lidarr and Sonarr offer, **Soulseek through slskd**, and
+  **Prowlarr's catalog** to choose indexers from.
+- **Download queue insight**: the dashboard says when the queue will be empty, a deferred release says what it
+  waits for, each client's average speed is shown, a search-budget view shows what the last hour's searches were spent
+  on, and the Add form shows where a request ranks against the automatic searches.
+- **Libraries choose whether existing files are renamed**: never, on request, or automatic. Replacements are
+  recorded and shown side by side. Move jobs can be paused, resumed and cancelled.
+- **TV**: searches and imports by TheXEM's scene numbers, episode titles in the library's profile languages, air moments on the
+  calendar, subtitles that follow the file that replaces an episode, a richer add form (root folder, series type,
+  season folders, tags) and a franchise watch task.
+- **Per-library music provider order**, label, network and organisation logos, and **people and collections editable
+  by hand**; one human is one person across every source.
+- **Cache and memory page** (*Settings → Cache*), **statistics** per indexer and files below each library's cutoff,
+  and health that names a paused indexer or download client.
+- **Settings by environment variable**: config folder, port, root folders and API keys; `_FILE` variants for Docker
+  secrets. See [environment variables](documentation/environment-variables.md).
+- **Documentation** split into beginner, advanced and expert levels, with a getting-started page.
+- **Hardening.** The first-run claim race is closed, cross-site writes are refused, a session cookie is `Secure`
+  behind a trusted TLS proxy, 6to4 and IPv4-compatible addresses are judged by the IPv4 they carry, symlinks in a
+  download are never followed, a torrent whose name is a path never becomes an import path, and a whole download
+  folder is never imported as one download.
+- **Faster.** Scans read directories ahead of the walk, bulk edit writes only what changed, album decisions are about
+  3x faster, release-name parses are remembered, RSS sync skips a feed that answers 304, and the queue asks all
+  download clients together.
+
+---
 
 ## Licence
 
-[AGPL-3.0-or-later](LICENSE). Free to use, modify and self-host. If you run a modified version as a
-service for others, you must make your changes available to them.
+[AGPL-3.0-or-later](LICENSE). Free to use, modify and self-host. If you run a modified version as a service for
+others, you must make your changes available to them. Third-party reuse: [ATTRIBUTION.md](ATTRIBUTION.md).
+Documentation index: [documentation/](documentation/README.md).
