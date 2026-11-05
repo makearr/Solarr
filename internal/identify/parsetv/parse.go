@@ -63,7 +63,6 @@ var (
 	titleComponentsRe   = compile(`^(?:(?<title>.+?) \((?<title>.+?)\)|(?<title>.+?) \| (?<title>.+?)|(?<title>.+?) AKA (?<title>.+?))$`, regexp2.IgnoreCase)
 	partRe              = compile(`\(\d+\)$`, 0)
 	punctuationRe       = compile(`[^\w\s]`, 0)
-	articleWordRe       = compile(`^(a|an|the)\s`, regexp2.IgnoreCase)
 	duplicateSpacesRe   = compile(`\s{2,}`, 0)
 	seasonFolderRe      = compile(`^(?:S|Season|Saison|Series|Stagione)[-_. ]*(?<season>(?<!\d+)\d{1,4}(?!\d+))(?:[_. ]+(?!\d+)|$)`, regexp2.IgnoreCase)
 	simpleEpisodeNumber = compile(`^[ex]?(?<episode>(?<!\d+)\d{1,3}(?!\d+))(?:[ex-](?<episode>(?<!\d+)\d{1,3}(?!\d+)))?(?:[_. ](?!\d+)(?<remaining>.+)|$)`, regexp2.IgnoreCase)
@@ -659,14 +658,6 @@ func NormalizeEpisodeTitle(title string) string {
 	}
 	title = replace(partRe, title, "")
 	title = replace(punctuationRe, title, " ")
-	title = replace(duplicateSpacesRe, title, " ")
-	return strings.ToLower(strings.TrimSpace(title))
-}
-
-// NormalizeTitle lowers a title for loose comparison: no punctuation, no leading article.
-func NormalizeTitle(title string) string {
-	title = replace(punctuationRe, title, "")
-	title = replace(articleWordRe, title, "")
 	title = replace(duplicateSpacesRe, title, " ")
 	return strings.ToLower(strings.TrimSpace(title))
 }

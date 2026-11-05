@@ -2,7 +2,6 @@ package arrimport
 
 import (
 	"context"
-	"strconv"
 )
 
 // WhisparrItem is GET /api/v3/movie of Whisparr v3 trimmed to what an import maps: a scene or a film, named by the
@@ -146,6 +145,3 @@ func (c WhisparrClient) Indexers(ctx context.Context) ([]Indexer, error) {
 func (c WhisparrClient) SetMonitored(ctx context.Context, path string, id int64, monitored bool) error {
 	return c.inner.SetMonitored(ctx, path, id, monitored)
 }
-
-// ResourcePath is path/id.
-func ResourcePath(path string, id int64) string { return path + "/" + strconv.FormatInt(id, 10) }

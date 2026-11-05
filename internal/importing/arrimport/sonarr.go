@@ -3,8 +3,6 @@ package arrimport
 import (
 	"context"
 	"strconv"
-
-	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // SonarrSeason is one season's monitored flag as Sonarr holds it.
@@ -34,11 +32,6 @@ func (c LidarrClient) Sonarr() SonarrClient { return SonarrClient{inner: c} }
 
 // SonarrClient is the REST client for one Sonarr v3/v4 instance: GET only, API key only (ADR-52).
 type SonarrClient struct{ inner LidarrClient }
-
-// NewSonarrClient builds one over an already-configured httpx.Client.
-func NewSonarrClient(client *httpx.Client, baseURL, apiKey string) SonarrClient {
-	return SonarrClient{inner: NewLidarrClient(client, baseURL, apiKey)}
-}
 
 // SystemStatus is the connection test.
 func (c SonarrClient) SystemStatus(ctx context.Context) (LidarrStatus, error) {

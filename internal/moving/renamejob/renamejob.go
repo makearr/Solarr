@@ -30,9 +30,6 @@ type Target struct {
 	Companions []mover.Companion
 }
 
-// Changed reports whether the proposed path differs from the current one.
-func (t Target) Changed() bool { return t.ProposedRelPath != t.CurrentRelPath }
-
 // Roots resolves one root folder's own policy and filesystem facts.
 type Roots interface {
 	RootFolder(id int64) (settings.RootFolder, bool)

@@ -58,8 +58,6 @@ var (
 
 	releaseTokenPrefixRe = regexp.MustCompile(`(?i)^(\[(TR24|OF)\])*\s*`)
 
-	requestInfoRe = regexp.MustCompile(`\[.+?\]`)
-
 	fileExtensionRe = regexp.MustCompile(`(?i)\.[a-z0-9]{2,4}$`)
 
 	// commonTagCreditRe strips a featuring/production credit, bracket-bounded or
@@ -345,13 +343,6 @@ func RemoveBracketsAndContents(s string) string {
 // RemoveAfterDash ports Parser.RemoveAfterDash.
 func RemoveAfterDash(s string) string {
 	return strings.TrimSpace(afterDashRe.ReplaceAllString(s, ""))
-}
-
-// StripRequestInfo ports Parser.RequestInfoRegex's use in
-// ParseAlbumMatchCollection: a trailing "[...]" note attached to a matched
-// artist/album/version field is never part of the identity.
-func StripRequestInfo(s string) string {
-	return strings.TrimSpace(requestInfoRe.ReplaceAllString(s, ""))
 }
 
 // airDateRe and sixDigitAirDateRe two-pass AirDateRegex and SixDigitAirDateRegex:

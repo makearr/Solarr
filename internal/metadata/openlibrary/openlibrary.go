@@ -49,9 +49,6 @@ type Client struct {
 // New builds a client over an httpx client carrying Open Library's own rate bucket.
 func New(client Getter) Client { return Client{http: client, base: baseURL} }
 
-// IsWorkID says id is an Open Library work id ("OL27482W").
-func IsWorkID(id string) bool { return workPattern.MatchString(id) }
-
 // Doc is one work a search found, with what its editions say together.
 type Doc struct {
 	Key              string   `json:"key"`

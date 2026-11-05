@@ -89,16 +89,6 @@ func IndexerDefinitions() []indexer.Definition {
 	)
 }
 
-// IndexerDefinition answers one catalog entry by its id.
-func IndexerDefinition(id string) (indexer.Definition, bool) {
-	for _, definition := range IndexerDefinitions() {
-		if definition.ID == id {
-			return definition, true
-		}
-	}
-	return indexer.Definition{}, false
-}
-
 // NewIndexer builds one connection; known is false for an implementation Solarr has none of.
 func NewIndexer(impl string, deps IndexerDeps, connection indexer.Connection) (indexer.Driver, bool) {
 	build, known := indexerImplementations()[impl]

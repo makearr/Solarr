@@ -179,15 +179,6 @@ func ValidMethod(method PlaceMethod) bool {
 	}
 }
 
-// ConsumesSource reports whether a rung leaves the source file gone, which is
-// what a still-seeding torrent must never be subjected to (private/notes.md).
-func ConsumesSource(method PlaceMethod) bool { return method == PlaceMove }
-
-// DependsOnSource reports whether a rung leaves the library pointing at the
-// source rather than owning bytes of its own -- Invariant 19's hazard, since
-// a source under a cleanup policy takes the library entry with it.
-func DependsOnSource(method PlaceMethod) bool { return method == PlaceSymlink }
-
 // PlaceOne places one file at destAbs from sourceAbs by walking ladder in
 // order and returns the rung that succeeded, so a caller can report what
 // actually happened rather than what was asked for -- a reflink and a copy

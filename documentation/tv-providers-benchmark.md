@@ -2,7 +2,7 @@
 
 > **Level: 🔴 Expert.** Measured provider speed and richness.
 
-Forty random series of the real library, asked from this host (`scripts/bench-tv-providers.py`). Latency is per request, sequential;
+Forty random series of the real library, asked from this host. Latency is per request, sequential;
 throughput is the whole sample at the given number of requests in flight.
 
 | Provider | Median | p90 | 1 in flight | 4 | 8 | 16 | Errors |
