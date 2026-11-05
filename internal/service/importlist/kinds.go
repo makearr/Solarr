@@ -129,6 +129,11 @@ func (f Field) check(value string) (config.Problem, bool) {
 			return config.Problem{Path: path, Value: value, Expectation: "a year"}, true
 		}
 	case FieldText:
+		if f.Key == mdblistListKey {
+			if _, ok := MDBListRef(value); !ok {
+				return config.Problem{Path: path, Value: value, Expectation: "an MDBList number, user/name or its mdblist.com link"}, true
+			}
+		}
 		if f.Key == tmdbListField {
 			if _, ok := TMDBListID(value); !ok {
 				return config.Problem{Path: path, Value: value, Expectation: "a TMDB list number or its themoviedb.org link"}, true

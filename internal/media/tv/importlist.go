@@ -23,7 +23,7 @@ var _ media.ListResolving = Lists{}
 
 // ImportListTypes implements media.ListResolving.
 func (Lists) ImportListTypes() []media.ListType {
-	return []media.ListType{media.ListAniListSeason, media.ListAniListUser, media.ListTMDBList, media.ListTMDBTrending, media.ListTMDBPopular}
+	return []media.ListType{media.ListAniListSeason, media.ListAniListUser, media.ListTMDBList, media.ListTMDBTrending, media.ListTMDBPopular, media.ListMDBList}
 }
 
 // aniListFilms are AniList's formats that are no series.

@@ -10,6 +10,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
+	"github.com/makearr/Solarr/internal/metadata/mdblist"
 	"github.com/makearr/Solarr/internal/metadata/stashbox"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/platform/config"
@@ -280,5 +281,64 @@ func TestStashFavouritesWithoutAKeyIsAnErrorNotAnEmptyList(t *testing.T) {
 	kind, _ := catalogue.Kind(media.ListStashFavourites)
 	if _, err := kind.Source.Entries(t.Context(), importlist.Options{}); !errors.Is(err, importlist.ErrNeedsStashKey) {
 		t.Errorf("err = %v, want ErrNeedsStashKey", err)
+	}
+}
+
+type fakeMDBList struct {
+	pages [][]mdblist.ListItem
+	err   error
+	asked []int
+}
+
+func (f *fakeMDBList) ListItems(_ context.Context, _ string, offset, _ int) (mdblist.ListPage, error) {
+	f.asked = append(f.asked, offset)
+	if f.err != nil {
+		return mdblist.ListPage{}, f.err
+	}
+	index := offset / 100
+	page := mdblist.ListPage{Shows: f.pages[index]}
+	page.Pagination.HasMore = index+1 < len(f.pages)
+	return page, nil
+}
+
+func TestMDBListRef(t *testing.T) {
+	for in, want := range map[string]string{
+		"2194": "2194", "someone/shows": "someone/shows", "https://mdblist.com/lists/someone/shows/": "someone/shows",
+		"https://mdblist.com/lists/someone/shows?sort=x": "someone/shows",
+	} {
+		if got, ok := importlist.MDBListRef(in); !ok || got != want {
+			t.Errorf("MDBListRef(%q) = %q, %v, want %q", in, got, ok, want)
+		}
+	}
+	for _, in := range []string{"", "nonsense", "https://example.com/lists/a/b", "a/b/c"} {
+		if got, ok := importlist.MDBListRef(in); ok {
+			t.Errorf("MDBListRef(%q) = %q, want a refusal", in, got)
+		}
+	}
+}
+
+func TestMDBListReadsEveryPageAndNamesShowsByTheIDsATVLibraryAddsBy(t *testing.T) {
+	client := &fakeMDBList{pages: [][]mdblist.ListItem{
+		{{Title: "One", Year: 2020, IDs: mdblist.ListIDs{MDBList: "a", TMDB: 5, TVDB: 9}}},
+		{{Title: "Two", IDs: mdblist.ListIDs{MDBList: "b", TMDB: 6}}},
+	}}
+	got, err := importlist.MDBList{Client: client}.Entries(t.Context(), importlist.Options{"mdblist": "someone/shows"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []media.ListEntry{
+		{Title: "One", Year: 2020, Form: "tv", IDs: []media.ProviderID{{Provider: "mdblist", ExternalID: "a"}, {Provider: "tvdb", ExternalID: "9"}, {Provider: "tmdb", ExternalID: "5"}}},
+		{Title: "Two", Form: "tv", IDs: []media.ProviderID{{Provider: "mdblist", ExternalID: "b"}, {Provider: "tmdb", ExternalID: "6"}}},
+	}
+	if !reflect.DeepEqual(got, want) || !reflect.DeepEqual(client.asked, []int{0, 100}) {
+		t.Errorf("entries = %+v asked %v, want %+v asked [0 100]", got, client.asked, want)
+	}
+	_, err = importlist.MDBList{Client: &fakeMDBList{err: mdblist.ErrNoKey}}.Entries(t.Context(), importlist.Options{"mdblist": "7"})
+	if !errors.Is(err, importlist.ErrNeedsMDBListKey) {
+		t.Errorf("without a key = %v, want ErrNeedsMDBListKey", err)
+	}
+	_, err = importlist.MDBList{Client: &fakeMDBList{err: mdblist.ErrNotFound}}.Entries(t.Context(), importlist.Options{"mdblist": "7"})
+	if !errors.Is(err, importlist.ErrListNotFound) {
+		t.Errorf("a missing list = %v, want ErrListNotFound", err)
 	}
 }

@@ -12,6 +12,7 @@ const (
 	ListTMDBList      ListType = "tmdb_list"
 	ListTMDBTrending  ListType = "tmdb_trending_tv"
 	ListTMDBPopular   ListType = "tmdb_popular_tv"
+	ListMDBList       ListType = "mdblist_list"
 	// ListStashFavourites is the newest scenes of an account's favourites at a stash-box server (adult libraries).
 	ListStashFavourites ListType = "stashbox_favourites"
 )

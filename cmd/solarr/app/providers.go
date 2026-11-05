@@ -618,3 +618,8 @@ func (p *process) stashServers() map[string]importlist.StashServer {
 	}
 	return servers
 }
+
+// mdblistLists is MDBList on the bucket the movie ratings use, for import lists.
+func (p *process) mdblistLists() mdblist.Client {
+	return mdblist.New(p.providerClient(providerMDBList, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceMDBList))
+}

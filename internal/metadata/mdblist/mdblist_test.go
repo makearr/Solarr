@@ -57,3 +57,38 @@ func TestAFilmsRatingsAreReadByTMDBIDWithTheOwnersKey(t *testing.T) {
 		t.Errorf("without a key nothing is asked: %v, %d requests", err, len(transport.asked))
 	}
 }
+
+type listAnswer struct{ asked []string }
+
+func (a *listAnswer) RoundTrip(request *http.Request) (*http.Response, error) {
+	a.asked = append(a.asked, request.URL.String())
+	status, body := http.StatusNotFound, `{"error":"List Not found"}`
+	if strings.HasSuffix(request.URL.Path, "/lists/someone/shows/items") || strings.HasSuffix(request.URL.Path, "/lists/42/items") {
+		status, body = http.StatusOK, `{"movies":[],"shows":[{"title":"Example Show","release_year":2021,"ids":{"mdblist":"abc","imdb":"tt1","tmdb":5,"tvdb":null}}],"pagination":{"has_more":true}}`
+	}
+	return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: request}, nil
+}
+
+func TestAListIsReadByNumberOrByUserAndName(t *testing.T) {
+	transport := &listAnswer{}
+	lists := mdblist.New(client(t, transport), func() string { return "owner-key" })
+	for _, ref := range []string{"42", "someone/shows"} {
+		page, err := lists.ListItems(t.Context(), ref, 100, 100)
+		if err != nil {
+			t.Fatalf("%s: %v", ref, err)
+		}
+		want := mdblist.ListItem{Title: "Example Show", Year: 2021, IDs: mdblist.ListIDs{MDBList: "abc", IMDb: "tt1", TMDB: 5}}
+		if len(page.Shows) != 1 || page.Shows[0] != want || !page.Pagination.HasMore {
+			t.Errorf("%s: page = %+v, want one show %+v and more to come", ref, page, want)
+		}
+	}
+	if !strings.Contains(transport.asked[0], "offset=100") || !strings.Contains(transport.asked[0], "limit=100") || !strings.Contains(transport.asked[0], "apikey=owner-key") {
+		t.Errorf("asked %q, want the offset, limit and key", transport.asked[0])
+	}
+	if _, err := lists.ListItems(t.Context(), "nobody/none", 0, 100); !errors.Is(err, mdblist.ErrNotFound) {
+		t.Errorf("a missing list = %v, want ErrNotFound", err)
+	}
+	if _, err := mdblist.New(client(t, transport), func() string { return "" }).ListItems(t.Context(), "42", 0, 100); !errors.Is(err, mdblist.ErrNoKey) {
+		t.Errorf("without a key = %v, want ErrNoKey", err)
+	}
+}

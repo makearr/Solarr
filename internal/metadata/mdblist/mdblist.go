@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
@@ -79,4 +80,52 @@ func (c Client) Movie(ctx context.Context, tmdb int64, imdb string) (Media, erro
 		return Media{}, fmt.Errorf("mdblist: %w", err)
 	}
 	return media, nil
+}
+
+// ErrNoKey means no MDBList key is stored; a list cannot be read without one.
+var ErrNoKey = errors.New("mdblist: no key")
+
+// ListIDs are the ids MDBList holds an item under; an absent one is zero.
+type ListIDs struct {
+	MDBList string `json:"mdblist"`
+	IMDb    string `json:"imdb"`
+	TMDB    int64  `json:"tmdb"`
+	TVDB    int64  `json:"tvdb"`
+}
+
+// ListItem is one show or film of a list.
+type ListItem struct {
+	Title string  `json:"title"`
+	Year  int     `json:"release_year"`
+	IDs   ListIDs `json:"ids"`
+}
+
+// ListPage is one page of a list: its shows and its films, and whether more follows.
+type ListPage struct {
+	Movies     []ListItem `json:"movies"`
+	Shows      []ListItem `json:"shows"`
+	Pagination struct {
+		HasMore bool `json:"has_more"`
+	} `json:"pagination"`
+}
+
+// ListItems reads a page of a list, named by its number or by "user/slug"; ErrNotFound for a list that is not there or private.
+func (c Client) ListItems(ctx context.Context, list string, offset, limit int) (ListPage, error) {
+	if !c.Configured() {
+		return ListPage{}, ErrNoKey
+	}
+	path := "/lists/" + url.PathEscape(list) + "/items"
+	if user, slug, named := strings.Cut(list, "/"); named {
+		path = "/lists/" + url.PathEscape(user) + "/" + url.PathEscape(slug) + "/items"
+	}
+	query := url.Values{"apikey": {c.key()}, "offset": {strconv.Itoa(offset)}, "limit": {strconv.Itoa(limit)}}
+	var page ListPage
+	err := c.http.GetJSON(ctx, c.base+path+"?"+query.Encode(), maxResponseBytes, &page)
+	switch {
+	case errors.Is(err, httpx.ErrNotFound):
+		return ListPage{}, ErrNotFound
+	case err != nil:
+		return ListPage{}, fmt.Errorf("mdblist: %w", err)
+	}
+	return page, nil
 }

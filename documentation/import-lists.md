@@ -28,6 +28,7 @@ turns an entry into the id it adds works by. A type without the capability offer
 | `tmdb_list` | A public TMDB list (v3 `/list/{id}`) | the list's number or its themoviedb.org link | 25 pages |
 | `tmdb_trending_tv` | TMDB's trending shows | today or this week | 5 pages of 20 |
 | `tmdb_popular_tv` | TMDB's popular shows | none | 5 pages of 20 |
+| `mdblist_list` | A public MDBList list (`/lists/{id}/items` or `/lists/{user}/{name}/items`); its shows only | the number, `user/name` or the mdblist.com link | 10 pages of 100 |
 | `stashbox_favourites` | Adult libraries: the newest scenes of the performers and studios the key's account favourited at StashDB or FansDB | server, favourite (performers, studios, either), how many of the newest | 50, 100, 200 or 500 scenes |
 
 AniList needs no key. TMDB's lists use the owner's TMDB key (Settings, Metadata); without one a TMDB list fails with
@@ -110,6 +111,6 @@ first run. Editing only the cadence, monitoring, profile or exclusions keeps an 
 
 ## Not yet
 
-Trakt (watchlist, user lists, trending) and IMDb lists are the next sources: each is one more `media.ListType`, a
+MDBList lists read IMDb and Trakt lists indirectly: MDBList imports them under its own account, and its items carry TheTVDB's id, so a TV library adds without a lookup. It needs the MDBList key (Settings, Metadata) and spends one of its 1,000 daily requests per 100 items. IMDb's own list export answers a browser challenge (HTTP 202, empty) to any client without a browser, so it is not read directly. Trakt (watchlist, user lists, trending) is the next source: each is one more `media.ListType`, a
 `Kind` in the catalogue and its client; nothing else changes. Films from these lists wait for the movie type to
 implement `media.ListResolving`.
