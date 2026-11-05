@@ -362,6 +362,8 @@ type Querier interface {
 	FinishMoveJob(ctx context.Context, arg FinishMoveJobParams) error
 	// Only a completed sweep moves the watermark and clears the cursor.
 	FinishScan(ctx context.Context, arg FinishScanParams) error
+	// A request approved and carried out in one step: the work it created is recorded with the decision.
+	FulfillRequest(ctx context.Context, arg FulfillRequestParams) (int64, error)
 	GetAcquisition(ctx context.Context, id int64) (Acquisition, error)
 	// The download a placed file came in with, nothing when a person imported it by hand.
 	GetAcquisitionIDOfMediaObject(ctx context.Context, mediaObjectID int64) (sql.NullInt64, error)
@@ -762,6 +764,8 @@ type Querier interface {
 	// A rename's files: each primary file on a root still there, with every part of one library it covers, a page of
 	// files at a time (all of one file's rows on one page); work_id narrows to one work, 0 is every work.
 	ListRenameFilesOnRoot(ctx context.Context, arg ListRenameFilesOnRootParams) ([]ListRenameFilesOnRootRow, error)
+	// Newest first, cursor on id (Invariant 32). A zero user_id or an empty state does not filter.
+	ListRequests(ctx context.Context, arg ListRequestsParams) ([]Request, error)
 	ListRootFoldersForWork(ctx context.Context, workID int64) ([]int64, error)
 	// Every same-broadcast link of a media type, once from each side.
 	ListSameContentPairs(ctx context.Context, mediaType string) ([]ListSameContentPairsRow, error)

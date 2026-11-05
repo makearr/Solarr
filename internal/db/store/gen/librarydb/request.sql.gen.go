@@ -93,6 +93,33 @@ func (q *Queries) DecideRequest(ctx context.Context, arg DecideRequestParams) (i
 	return result.RowsAffected()
 }
 
+const fulfillRequest = `-- name: FulfillRequest :execrows
+UPDATE request
+SET state = 'FULFILLED', decided_by = ?, decided_at = ?, work_id = ?
+WHERE id = ? AND state = 'PENDING'
+`
+
+type FulfillRequestParams struct {
+	DecidedBy sql.NullInt64
+	DecidedAt sql.NullInt64
+	WorkID    sql.NullInt64
+	ID        int64
+}
+
+// A request approved and carried out in one step: the work it created is recorded with the decision.
+func (q *Queries) FulfillRequest(ctx context.Context, arg FulfillRequestParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, fulfillRequest,
+		arg.DecidedBy,
+		arg.DecidedAt,
+		arg.WorkID,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getRequest = `-- name: GetRequest :one
 SELECT id, user_id, work_id, external_ref, media_type, category_id, scope_json,
        state, decided_by, decided_at, decline_reason, created_at
@@ -137,6 +164,66 @@ type ListPendingRequestsParams struct {
 // never OFFSET (Invariant 32); created_at is not unique, so id is the tie-break.
 func (q *Queries) ListPendingRequests(ctx context.Context, arg ListPendingRequestsParams) ([]Request, error) {
 	rows, err := q.db.QueryContext(ctx, listPendingRequests, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Request{}
+	for rows.Next() {
+		var i Request
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.WorkID,
+			&i.ExternalRef,
+			&i.MediaType,
+			&i.CategoryID,
+			&i.ScopeJson,
+			&i.State,
+			&i.DecidedBy,
+			&i.DecidedAt,
+			&i.DeclineReason,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRequests = `-- name: ListRequests :many
+SELECT id, user_id, work_id, external_ref, media_type, category_id, scope_json,
+       state, decided_by, decided_at, decline_reason, created_at
+FROM request
+WHERE (?1 = 0 OR user_id = ?1)
+  AND (?2 = '' OR state = ?2)
+  AND (?3 = 0 OR id < ?3)
+ORDER BY id DESC
+LIMIT ?4
+`
+
+type ListRequestsParams struct {
+	UserID   interface{}
+	State    interface{}
+	BeforeID interface{}
+	PageSize int64
+}
+
+// Newest first, cursor on id (Invariant 32). A zero user_id or an empty state does not filter.
+func (q *Queries) ListRequests(ctx context.Context, arg ListRequestsParams) ([]Request, error) {
+	rows, err := q.db.QueryContext(ctx, listRequests,
+		arg.UserID,
+		arg.State,
+		arg.BeforeID,
+		arg.PageSize,
+	)
 	if err != nil {
 		return nil, err
 	}

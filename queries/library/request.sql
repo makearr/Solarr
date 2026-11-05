@@ -34,3 +34,20 @@ WHERE id = ? AND state = 'PENDING';
 
 -- name: MarkRequestFulfilled :execrows
 UPDATE request SET state = 'FULFILLED' WHERE id = ? AND state = 'APPROVED';
+
+-- A request approved and carried out in one step: the work it created is recorded with the decision.
+-- name: FulfillRequest :execrows
+UPDATE request
+SET state = 'FULFILLED', decided_by = ?, decided_at = ?, work_id = ?
+WHERE id = ? AND state = 'PENDING';
+
+-- Newest first, cursor on id (Invariant 32). A zero user_id or an empty state does not filter.
+-- name: ListRequests :many
+SELECT id, user_id, work_id, external_ref, media_type, category_id, scope_json,
+       state, decided_by, decided_at, decline_reason, created_at
+FROM request
+WHERE (sqlc.arg(user_id) = 0 OR user_id = sqlc.arg(user_id))
+  AND (sqlc.arg(state) = '' OR state = sqlc.arg(state))
+  AND (sqlc.arg(before_id) = 0 OR id < sqlc.arg(before_id))
+ORDER BY id DESC
+LIMIT sqlc.arg(page_size);

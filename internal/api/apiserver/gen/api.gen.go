@@ -775,6 +775,14 @@ const (
 	RemoveAndBlockRequestRecycleReasonUserDelete    RemoveAndBlockRequestRecycleReason = "user_delete"
 )
 
+// Defines values for RequestState.
+const (
+	RequestStateAPPROVED  RequestState = "APPROVED"
+	RequestStateDECLINED  RequestState = "DECLINED"
+	RequestStateFULFILLED RequestState = "FULFILLED"
+	RequestStatePENDING   RequestState = "PENDING"
+)
+
 // Defines values for Role.
 const (
 	RoleAdmin    Role = "admin"
@@ -1272,6 +1280,9 @@ type AddWorkRequest struct {
 
 	// Tags Tags to give the new work, by name, on top of what it has.
 	Tags *[]string `json:"tags,omitempty"`
+
+	// Title What the request list shows when the add is only requested.
+	Title *string `json:"title,omitempty"`
 }
 
 // AddWorkResult defines model for AddWorkResult.
@@ -1280,6 +1291,9 @@ type AddWorkResult struct {
 
 	// PersonId The followed person
 	PersonId *int64 `json:"person_id,omitempty"`
+
+	// RequestId Set when the add waits for an administrator to approve it; nothing was added yet.
+	RequestId *int64 `json:"request_id,omitempty"`
 
 	// Searching The type started the search; false leaves POST /works/{id}/grab to the caller.
 	Searching bool   `json:"searching"`
@@ -4751,6 +4765,12 @@ type ReplacementSide struct {
 	Tiers         []TierValue `json:"tiers"`
 }
 
+// RequestPage defines model for RequestPage.
+type RequestPage struct {
+	Items      []RequestView `json:"items"`
+	NextCursor *int64        `json:"next_cursor,omitempty"`
+}
+
 // RequestPriority defines model for RequestPriority.
 type RequestPriority struct {
 	// BestAutomatic The highest priority an automatic search in the library can get.
@@ -4765,6 +4785,31 @@ type RequestShares struct {
 	Background int64 `json:"background"`
 	Fresh      int64 `json:"fresh"`
 	User       int64 `json:"user"`
+}
+
+// RequestState defines model for RequestState.
+type RequestState string
+
+// RequestView defines model for RequestView.
+type RequestView struct {
+	CategoryId *int64     `json:"category_id,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	DecidedAt  *time.Time `json:"decided_at,omitempty"`
+
+	// DecidedBy Username of who decided; empty for an automatic approval.
+	DecidedBy     *string      `json:"decided_by,omitempty"`
+	DeclineReason *string      `json:"decline_reason,omitempty"`
+	ExternalId    *string      `json:"external_id,omitempty"`
+	Id            int64        `json:"id"`
+	MediaType     string       `json:"media_type"`
+	Provider      *string      `json:"provider,omitempty"`
+	State         RequestState `json:"state"`
+	Title         string       `json:"title"`
+	UserId        int64        `json:"user_id"`
+	Username      string       `json:"username"`
+
+	// WorkId The work the approval added.
+	WorkId *int64 `json:"work_id,omitempty"`
 }
 
 // Role defines model for Role.
@@ -5426,6 +5471,9 @@ type UserDefaults struct {
 
 // UserLimits What an administrator decides for an account beyond its role and grants.
 type UserLimits struct {
+	// AutoApprove Requests the account makes are approved at once; without it an administrator decides each.
+	AutoApprove *bool `json:"auto_approve,omitempty"`
+
 	// NewLibraryPermission `none` is never returned: a category a caller cannot read is absent entirely, and reaching it directly is a 404 rather than a 403.
 	NewLibraryPermission Permission `json:"new_library_permission"`
 	TierDefault          Tier       `json:"tier_default"`
@@ -6387,6 +6435,20 @@ type RemoveQueueItemParams struct {
 	Blocklist *bool `form:"blocklist,omitempty" json:"blocklist,omitempty"`
 }
 
+// ListRequestsParams defines parameters for ListRequests.
+type ListRequestsParams struct {
+	State *RequestState `form:"state,omitempty" json:"state,omitempty"`
+
+	// BeforeId The next_cursor of the page before.
+	BeforeId *int64 `form:"before_id,omitempty" json:"before_id,omitempty"`
+	Limit    *int64 `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// DeclineRequestJSONBody defines parameters for DeclineRequest.
+type DeclineRequestJSONBody struct {
+	Reason *string `json:"reason,omitempty"`
+}
+
 // AddRootFolderJSONBody defines parameters for AddRootFolder.
 type AddRootFolderJSONBody struct {
 	Label *string `json:"label,omitempty"`
@@ -7105,6 +7167,9 @@ type UpdateQualityTargetJSONRequestBody = QualityTarget
 
 // UpdateRecycleBinLimitsJSONRequestBody defines body for UpdateRecycleBinLimits for application/json ContentType.
 type UpdateRecycleBinLimitsJSONRequestBody = RecycleBinLimits
+
+// DeclineRequestJSONRequestBody defines body for DeclineRequest for application/json ContentType.
+type DeclineRequestJSONRequestBody DeclineRequestJSONBody
 
 // AddRootFolderJSONRequestBody defines body for AddRootFolder for application/json ContentType.
 type AddRootFolderJSONRequestBody AddRootFolderJSONBody
@@ -7918,6 +7983,15 @@ type ServerInterface interface {
 	// What the recycle bins hold now, newest first.
 	// (GET /recyclebin/entries)
 	ListRecycleBinEntries(w http.ResponseWriter, r *http.Request)
+	// Requests for works, newest first; an administrator sees everyone's, anyone else their own.
+	// (GET /requests)
+	ListRequests(w http.ResponseWriter, r *http.Request, params ListRequestsParams)
+	// Approve a pending request, which adds the work to its library as the requester asked.
+	// (POST /requests/{id}/approve)
+	ApproveRequest(w http.ResponseWriter, r *http.Request, id int64)
+	// Decline a pending request, with a reason the requester sees.
+	// (POST /requests/{id}/decline)
+	DeclineRequest(w http.ResponseWriter, r *http.Request, id int64)
 	// The configured library roots.
 	// (GET /rootfolders)
 	ListRootFolders(w http.ResponseWriter, r *http.Request)
@@ -9586,6 +9660,24 @@ func (_ Unimplemented) EmptyRecycleBin(w http.ResponseWriter, r *http.Request) {
 // What the recycle bins hold now, newest first.
 // (GET /recyclebin/entries)
 func (_ Unimplemented) ListRecycleBinEntries(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Requests for works, newest first; an administrator sees everyone's, anyone else their own.
+// (GET /requests)
+func (_ Unimplemented) ListRequests(w http.ResponseWriter, r *http.Request, params ListRequestsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Approve a pending request, which adds the work to its library as the requester asked.
+// (POST /requests/{id}/approve)
+func (_ Unimplemented) ApproveRequest(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Decline a pending request, with a reason the requester sees.
+// (POST /requests/{id}/decline)
+func (_ Unimplemented) DeclineRequest(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -17783,6 +17875,123 @@ func (siw *ServerInterfaceWrapper) ListRecycleBinEntries(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// ListRequests operation middleware
+func (siw *ServerInterfaceWrapper) ListRequests(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRequestsParams
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "state", r.URL.Query(), &params.State)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "before_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "before_id", r.URL.Query(), &params.BeforeId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "before_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRequests(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApproveRequest operation middleware
+func (siw *ServerInterfaceWrapper) ApproveRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApproveRequest(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeclineRequest operation middleware
+func (siw *ServerInterfaceWrapper) DeclineRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeclineRequest(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRootFolders operation middleware
 func (siw *ServerInterfaceWrapper) ListRootFolders(w http.ResponseWriter, r *http.Request) {
 
@@ -21555,6 +21764,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/recyclebin/entries", wrapper.ListRecycleBinEntries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/requests", wrapper.ListRequests)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/requests/{id}/approve", wrapper.ApproveRequest)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/requests/{id}/decline", wrapper.DeclineRequest)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/rootfolders", wrapper.ListRootFolders)

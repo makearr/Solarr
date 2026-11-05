@@ -219,7 +219,7 @@ func convertUsers(rows []settingsdb.AppUser) []User {
 	for _, row := range rows {
 		// The hash is deliberately not carried into the snapshot: login reads it from the database.
 		users = append(users, userFromRow(row.ID, row.Username, row.PasswordHash, row.Role, row.CreatedAt,
-			row.UiTier, row.UiTierDefault, row.UiTierMax, row.NewLibraryPermission))
+			row.UiTier, row.UiTierDefault, row.UiTierMax, row.NewLibraryPermission, row.AutoApprove))
 	}
 	return users
 }

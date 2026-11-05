@@ -1315,7 +1315,7 @@ func (c *Cache) SetRole(ctx context.Context, id int64, role Role) error {
 		}
 		return queries.SetUserLimits(ctx, settingsdb.SetUserLimitsParams{
 			ID: id, UiTierDefault: string(user.Limits.TierDefault), UiTierMax: string(user.Limits.TierMax),
-			NewLibraryPermission: string(PermissionManage),
+			NewLibraryPermission: string(PermissionManage), AutoApprove: boolToInt(user.Limits.AutoApprove),
 		})
 	})
 }

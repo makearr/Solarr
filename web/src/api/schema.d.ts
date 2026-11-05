@@ -4545,6 +4545,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Requests for works, newest first; an administrator sees everyone's, anyone else their own. */
+        get: operations["listRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requests/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a pending request, which adds the work to its library as the requester asked.
+         * @description Manage on the request's library. A request already decided answers 409.
+         */
+        post: operations["approveRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requests/{id}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decline a pending request, with a reason the requester sees. */
+        post: operations["declineRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/franchises": {
         parameters: {
             query?: never;
@@ -5083,6 +5137,11 @@ export interface components {
             tier_default: components["schemas"]["Tier"];
             tier_max: components["schemas"]["Tier"];
             new_library_permission: components["schemas"]["Permission"];
+            /**
+             * @description Requests the account makes are approved at once; without it an administrator decides each.
+             * @default false
+             */
+            auto_approve: boolean;
         };
         UserDefaults: {
             new_library_permission: components["schemas"]["Permission"];
@@ -7310,6 +7369,8 @@ export interface components {
             kind?: string;
             provider: string;
             external_id: string;
+            /** @description What the request list shows when the add is only requested. */
+            title?: string;
             /** @default true */
             monitored: boolean;
             /** @description One of the type's monitor_options; its default when absent. */
@@ -7341,8 +7402,46 @@ export interface components {
                 [key: string]: string;
             };
         };
+        /** @enum {string} */
+        RequestState: "PENDING" | "APPROVED" | "DECLINED" | "FULFILLED";
+        RequestView: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            user_id: number;
+            username: string;
+            title: string;
+            media_type: string;
+            /** Format: int64 */
+            category_id?: number;
+            provider?: string;
+            external_id?: string;
+            state: components["schemas"]["RequestState"];
+            /**
+             * Format: int64
+             * @description The work the approval added.
+             */
+            work_id?: number;
+            /** @description Username of who decided; empty for an automatic approval. */
+            decided_by?: string;
+            /** Format: date-time */
+            decided_at?: string;
+            decline_reason?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        RequestPage: {
+            items: components["schemas"]["RequestView"][];
+            /** Format: int64 */
+            next_cursor?: number;
+        };
         AddWorkResult: {
             kind: string;
+            /**
+             * Format: int64
+             * @description Set when the add waits for an administrator to approve it; nothing was added yet.
+             */
+            request_id?: number;
             /** Format: int64 */
             work_id?: number;
             /**
@@ -17279,6 +17378,90 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+        };
+    };
+    listRequests: {
+        parameters: {
+            query?: {
+                state?: components["schemas"]["RequestState"];
+                /** @description The next_cursor of the page before. */
+                before_id?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    approveRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request, now fulfilled. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestView"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    declineRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    reason?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The request, now declined. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestView"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     listFranchises: {

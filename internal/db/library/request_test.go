@@ -3,10 +3,13 @@ package library_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 func createRequest(t *testing.T, opened *store.Store, userID int64, mediaType string) librarydb.Request {
@@ -136,5 +139,36 @@ func TestRequest_CannotBeFulfilledWithoutApproval(t *testing.T) {
 	}
 	if found.State != "PENDING" {
 		t.Errorf("state = %q, want PENDING unchanged", found.State)
+	}
+}
+
+// Requests lists newest first with a cursor, filters by user and state, and decides a request once.
+func TestRequests_FileListAndDecideOnce(t *testing.T) {
+	opened, _ := newLibrary(t)
+	requests := library.NewRequests(opened, clock.NewFakeAtEpoch())
+	var ids []int64
+	for _, userID := range []int64{1, 2, 1} {
+		filed, err := requests.File(t.Context(), library.NewRequest{UserID: userID, CategoryID: 3, MediaType: "tv", ExternalRef: "tvdb:1", ScopeJSON: "{}", State: library.RequestPending})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, filed.ID)
+	}
+	page, err := requests.List(t.Context(), 1, "", ids[2], 10)
+	if err != nil || len(page) != 1 || page[0].ID != ids[0] {
+		t.Fatalf("user 1 before the newest = %+v (%v), want only the first request", page, err)
+	}
+	if changed, err := requests.Fulfil(t.Context(), ids[1], 9, 0); err != nil || !changed {
+		t.Fatalf("Fulfil = %v, %v", changed, err)
+	}
+	if changed, _ := requests.Decline(t.Context(), ids[1], 9, "late"); changed {
+		t.Error("a fulfilled request was declined")
+	}
+	got, err := requests.Get(t.Context(), ids[1])
+	if err != nil || got.State != library.RequestFulfilled || got.DecidedBy != 9 || got.DecidedAt.IsZero() {
+		t.Errorf("fulfilled request = %+v (%v)", got, err)
+	}
+	if _, err := requests.Get(t.Context(), 999); !errors.Is(err, library.ErrRequestNotFound) {
+		t.Errorf("Get unknown = %v, want ErrRequestNotFound", err)
 	}
 }

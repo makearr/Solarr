@@ -144,6 +144,8 @@ type Config struct {
 	WorkRefresher WorkRefresher
 	// Favorites keeps each user's hearts. Optional: nil answers 503.
 	Favorites Favorites
+	// Requests keeps the requests of users who may ask but not add. Optional: nil answers 503.
+	Requests Requests
 	// WorkExclusions lists and lifts "do not add it back". Optional: nil answers 503.
 	WorkExclusions WorkExclusions
 	// WantedParts is Wanted at the grain of a part. Optional: nil answers 503.
@@ -349,6 +351,7 @@ type Server struct {
 	workRefresher           WorkRefresher
 	workExclusions          WorkExclusions
 	favorites               Favorites
+	requests                Requests
 	wantedParts             WantedPartsReader
 	arrConnections          ArrConnections
 	blockedContent          BlockedContentLister
@@ -485,6 +488,7 @@ func New(config Config) (*Server, error) {
 		workRefresher:           config.WorkRefresher,
 		workExclusions:          config.WorkExclusions,
 		favorites:               config.Favorites,
+		requests:                config.Requests,
 		wantedParts:             config.WantedParts,
 		arrConnections:          config.ArrConnections,
 		blockedContent:          config.BlockedContent,
@@ -683,6 +687,9 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/refresh", server.routeRefreshWork)
 			secured.Get("/wanted/parts", server.routeListWantedParts)
 			secured.Get("/images/remote", server.routeGetRemoteImage)
+			secured.Get("/requests", server.routeListRequests)
+			secured.Post("/requests/{id}/approve", server.routeRequestDecision(server.ApproveRequest))
+			secured.Post("/requests/{id}/decline", server.routeRequestDecision(server.DeclineRequest))
 			secured.Get("/favorites", server.routeListFavorites)
 			secured.Put("/favorites/{subjectType}/{id}", server.routeFavorite(true))
 			secured.Delete("/favorites/{subjectType}/{id}", server.routeFavorite(false))

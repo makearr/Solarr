@@ -32,7 +32,7 @@ func (c *Cache) UserByAPIKeyHash(ctx context.Context, keyHash string) (Authentic
 
 	return Authenticated{
 		User: userFromRow(row.ID, row.Username, row.PasswordHash, row.Role, row.CreatedAt,
-			row.UiTier, row.UiTierDefault, row.UiTierMax, row.NewLibraryPermission),
+			row.UiTier, row.UiTierDefault, row.UiTierMax, row.NewLibraryPermission, row.AutoApprove),
 		APIKeyID: row.KeyID,
 	}, nil
 }

@@ -26,6 +26,8 @@ type UserLimits struct {
 	TierMax Tier
 	// NewLibraryPermission is granted on every library created later; none grants nothing.
 	NewLibraryPermission Permission
+	// AutoApprove approves the account's requests at once; without it they wait for an administrator.
+	AutoApprove bool
 }
 
 // NewAccount is everything an account is created with, written as one transaction.
@@ -173,6 +175,7 @@ func (c *Cache) createAccount(ctx context.Context, cl clock.Clock, account NewAc
 			UiTierDefault:        string(account.Limits.TierDefault),
 			UiTierMax:            string(account.Limits.TierMax),
 			NewLibraryPermission: string(account.Limits.NewLibraryPermission),
+			AutoApprove:          boolToInt(account.Limits.AutoApprove),
 		})
 		if err != nil {
 			return err
@@ -207,7 +210,7 @@ func (c *Cache) SetUserLimits(ctx context.Context, id int64, limits UserLimits) 
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		if err := queries.SetUserLimits(ctx, settingsdb.SetUserLimitsParams{
 			ID: id, UiTierDefault: string(limits.TierDefault), UiTierMax: string(limits.TierMax),
-			NewLibraryPermission: string(limits.NewLibraryPermission),
+			NewLibraryPermission: string(limits.NewLibraryPermission), AutoApprove: boolToInt(limits.AutoApprove),
 		}); err != nil {
 			return err
 		}
@@ -236,10 +239,10 @@ func (c *Cache) newLibraryGrants() map[int64]Permission {
 // userFromRow builds the snapshot's view of an account; its tier is clamped to its maximum, so
 // lowering the maximum takes effect without touching the stored choice.
 func userFromRow(id int64, username string, hash sql.NullString, role string, createdAt int64,
-	tier, tierDefault, tierMax, newLibrary string,
+	tier, tierDefault, tierMax, newLibrary string, autoApprove int64,
 ) User {
 	limits := UserLimits{
-		TierDefault: Tier(tierDefault), TierMax: Tier(tierMax), NewLibraryPermission: Permission(newLibrary),
+		TierDefault: Tier(tierDefault), TierMax: Tier(tierMax), NewLibraryPermission: Permission(newLibrary), AutoApprove: autoApprove == 1,
 	}
 	effective := Tier(tier)
 	if !limits.TierMax.AtLeast(effective) {

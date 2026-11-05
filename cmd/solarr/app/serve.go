@@ -842,6 +842,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		},
 		WorkExclusions: adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
 		Favorites:      library.NewFavorites(p.library, clock.NewSystem()),
+		Requests:       adapters.Requests{Requests: library.NewRequests(p.library, clock.NewSystem())},
 		WantedParts: adapters.WantedParts{
 			Works: library.NewWorks(p.library), Categories: adapters.Categories{Cache: p.cache}, Clock: clock.NewSystem(),
 			PartPosition: adapters.MediaTypes{Registry: p.media}.PartPosition, GroupLabel: adapters.MediaTypes{Registry: p.media}.GroupLabel,

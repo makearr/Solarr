@@ -93,6 +93,7 @@ type worksFixture struct {
 	scheduler            *fakeScheduler
 	cacheManager         *fakeCacheManager
 	workAdder            *fakeWorkAdder
+	requests             *fakeRequests
 	releaseFilters       *fakeReleaseFilters
 	arrSync              *fakeArrSync
 	indexerTester        *fakeConnectionTester
@@ -264,6 +265,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	scheduler := &fakeScheduler{states: map[string]jobs.ScheduleRun{}}
 	cacheManager := &fakeCacheManager{}
 	workAdder := &fakeWorkAdder{}
+	requests := &fakeRequests{}
 	releaseFilters := &fakeReleaseFilters{}
 	arrSync := &fakeArrSync{}
 	indexerTester := &fakeConnectionTester{}
@@ -316,6 +318,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		Scheduler:            scheduler,
 		CacheManager:         cacheManager,
 		WorkAdder:            workAdder,
+		Requests:             requests,
 		WorkReleaseFilters:   releaseFilters,
 		ArrSync:              arrSync,
 		IndexerTester:        indexerTester,
@@ -357,7 +360,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		drainStarter:       drainStarter, moveJobs: moveJobs, renameStarter: renameStarter, namingSchemes: namingSchemes, calendar: calendar,
 		history:       history,
 		queue:         queue,
-		libraryTracks: libraryTracks, scheduler: scheduler, cacheManager: cacheManager, workAdder: workAdder, releaseFilters: releaseFilters,
+		libraryTracks: libraryTracks, scheduler: scheduler, cacheManager: cacheManager, workAdder: workAdder, requests: requests, releaseFilters: releaseFilters,
 		arrSync: arrSync, indexerTester: indexerTester, downloaderTester: downloaderTester,
 		candidateSearcher: candidateSearcher, fsys: fsys, clock: fake,
 	}

@@ -28,6 +28,7 @@ type AppUser struct {
 	UiTierDefault        string
 	UiTierMax            string
 	NewLibraryPermission string
+	AutoApprove          int64
 }
 
 type ArrInstance struct {

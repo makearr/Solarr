@@ -250,7 +250,7 @@ func (s *Server) userView(user settings.User) gen.UserAccount {
 		Tier:        gen.Tier(user.Tier),
 		Limits: gen.UserLimits{
 			TierDefault: gen.Tier(user.Limits.TierDefault), TierMax: gen.Tier(user.Limits.TierMax),
-			NewLibraryPermission: gen.Permission(user.Limits.NewLibraryPermission),
+			NewLibraryPermission: gen.Permission(user.Limits.NewLibraryPermission), AutoApprove: &user.Limits.AutoApprove,
 		},
 	}
 }
@@ -258,7 +258,7 @@ func (s *Server) userView(user settings.User) gen.UserAccount {
 func limitsFrom(limits gen.UserLimits) settings.UserLimits {
 	return settings.UserLimits{
 		TierDefault: settings.Tier(limits.TierDefault), TierMax: settings.Tier(limits.TierMax),
-		NewLibraryPermission: settings.Permission(limits.NewLibraryPermission),
+		NewLibraryPermission: settings.Permission(limits.NewLibraryPermission), AutoApprove: derefOr(limits.AutoApprove, false),
 	}
 }
 

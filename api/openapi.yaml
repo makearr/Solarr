@@ -7174,6 +7174,67 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /requests:
+    get:
+      operationId: listRequests
+      tags: [library]
+      summary: Requests for works, newest first; an administrator sees everyone's, anyone else their own.
+      parameters:
+        - { name: state, in: query, schema: { $ref: "#/components/schemas/RequestState" } }
+        - { name: before_id, in: query, schema: { type: integer, format: int64 }, description: The next_cursor of the page before. }
+        - { name: limit, in: query, schema: { type: integer, format: int64, default: 100, maximum: 500 } }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RequestPage" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /requests/{id}/approve:
+    post:
+      operationId: approveRequest
+      tags: [library]
+      summary: Approve a pending request, which adds the work to its library as the requester asked.
+      description: Manage on the request's library. A request already decided answers 409.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: The request, now fulfilled.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RequestView" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /requests/{id}/decline:
+    post:
+      operationId: declineRequest
+      tags: [library]
+      summary: Decline a pending request, with a reason the requester sees.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        "200":
+          description: The request, now declined.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RequestView" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
   /franchises:
     get:
       operationId: listFranchises
@@ -8059,6 +8120,7 @@ components:
           $ref: "#/components/schemas/Tier"
         new_library_permission:
           $ref: "#/components/schemas/Permission"
+        auto_approve: { type: boolean, default: false, description: Requests the account makes are approved at once; without it an administrator decides each. }
 
     UserDefaults:
       type: object
@@ -10618,6 +10680,7 @@ components:
         kind: { type: string, description: One of the type's add_kinds; the first when absent. }
         provider: { type: string }
         external_id: { type: string }
+        title: { type: string, description: What the request list shows when the add is only requested. }
         monitored: { type: boolean, default: true }
         monitor_option: { type: string, description: One of the type's monitor_options; its default when absent. }
         specials: { type: boolean, default: false, description: Also monitor the specials group. }
@@ -10633,11 +10696,42 @@ components:
           additionalProperties: { type: string }
           description: The type's editable facets to set at once, by facet key (a series' type, season folders).
 
+    RequestState:
+      type: string
+      enum: [PENDING, APPROVED, DECLINED, FULFILLED]
+
+    RequestView:
+      type: object
+      required: [id, user_id, username, title, media_type, state, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        user_id: { type: integer, format: int64 }
+        username: { type: string }
+        title: { type: string }
+        media_type: { type: string }
+        category_id: { type: integer, format: int64 }
+        provider: { type: string }
+        external_id: { type: string }
+        state: { $ref: "#/components/schemas/RequestState" }
+        work_id: { type: integer, format: int64, description: The work the approval added. }
+        decided_by: { type: string, description: Username of who decided; empty for an automatic approval. }
+        decided_at: { type: string, format: date-time }
+        decline_reason: { type: string }
+        created_at: { type: string, format: date-time }
+
+    RequestPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/RequestView" } }
+        next_cursor: { type: integer, format: int64 }
+
     AddWorkResult:
       type: object
       required: [kind, searching]
       properties:
         kind: { type: string }
+        request_id: { type: integer, format: int64, description: Set when the add waits for an administrator to approve it; nothing was added yet. }
         work_id: { type: integer, format: int64 }
         person_id: { type: integer, format: int64, description: The followed person, for an artist. }
         searching: { type: boolean, description: "The type started the search; false leaves POST /works/{id}/grab to the caller." }

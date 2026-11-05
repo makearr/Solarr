@@ -138,28 +138,56 @@ func (s *Server) AddWork(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "provider and external_id are required")
 		return
 	}
-	if _, err := access.Category(body.CategoryId, settings.PermissionManage); err != nil {
-		writeError(w, s.logger, err)
+	if permission := access.Permission(body.CategoryId); !permission.AtLeast(settings.PermissionManage) {
+		if _, err := access.Category(body.CategoryId, settings.PermissionRequest); err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
+		s.fileRequest(w, r, access, body)
 		return
 	}
 	if s.workAdder == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "adding is not available")
 		return
 	}
-	result, err := s.workAdder.Add(r.Context(), AddWorkRequest{
-		CategoryID: body.CategoryId, UserID: access.UserID(), Kind: derefOr(body.Kind, ""), Provider: body.Provider,
+	result, err := s.performAdd(r.Context(), access.UserID(), body)
+	if err != nil {
+		s.writeAddError(w, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, addWorkView(result))
+}
+
+// addFailure marks an error that came from applying the form's tags and facets, which the Edit dialog's own save words.
+type addFailure struct{ error }
+
+// performAdd adds what the form asked for as the user named, then gives it the tags and facets the form carried.
+func (s *Server) performAdd(ctx context.Context, userID int64, body gen.AddWorkRequest) (AddWorkResult, error) {
+	result, err := s.workAdder.Add(ctx, AddWorkRequest{
+		CategoryID: body.CategoryId, UserID: userID, Kind: derefOr(body.Kind, ""), Provider: body.Provider,
 		ExternalID: body.ExternalId, Monitored: derefOr(body.Monitored, true), MonitorOption: derefOr(body.MonitorOption, ""),
 		Specials: derefOr(body.Specials, false), ProfileID: body.QualityProfileId, Search: derefOr(body.Search, false),
 		RootFolderID: body.RootFolderId,
 	})
 	if err != nil {
-		writeError(w, s.logger, err)
+		return AddWorkResult{}, err
+	}
+	if err := s.applyAddExtras(ctx, result.WorkID, body); err != nil {
+		return AddWorkResult{}, addFailure{err}
+	}
+	return result, nil
+}
+
+func (s *Server) writeAddError(w http.ResponseWriter, err error) {
+	var failure addFailure
+	if errors.As(err, &failure) {
+		s.writeWorkEditError(w, failure.error)
 		return
 	}
-	if err := s.applyAddExtras(r.Context(), result.WorkID, body); err != nil {
-		s.writeWorkEditError(w, err)
-		return
-	}
+	writeError(w, s.logger, err)
+}
+
+func addWorkView(result AddWorkResult) gen.AddWorkResult {
 	view := gen.AddWorkResult{Kind: result.Kind, Searching: result.Searching}
 	if result.WorkID != 0 {
 		view.WorkId = &result.WorkID
@@ -167,7 +195,7 @@ func (s *Server) AddWork(w http.ResponseWriter, r *http.Request) {
 	if result.PersonID != 0 {
 		view.PersonId = &result.PersonID
 	}
-	writeJSON(w, s.logger, http.StatusOK, view)
+	return view
 }
 
 // applyAddExtras gives a work just added the tags and editable facets the add form carried, through the Edit dialog's own save.
