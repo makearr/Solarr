@@ -295,6 +295,15 @@ WHERE p.monitored = 1 AND (r.refreshed_at IS NULL OR r.refreshed_at < sqlc.arg(b
 ORDER BY COALESCE(r.refreshed_at, 0), p.id
 LIMIT sqlc.arg(page_size);
 
+-- The monitored artists credited on a wanted album released within the window.
+-- name: ListArtistsWithFreshRelease :many
+SELECT DISTINCT c.person_id FROM credit c
+JOIN person p ON p.id = c.person_id AND p.monitored = 1
+JOIN work w ON w.id = c.work_id AND w.media_type = 'music'
+JOIN desired_item d ON d.work_id = c.work_id
+JOIN hunt_queue h ON h.desired_item_id = d.id
+WHERE h.release_date BETWEEN sqlc.arg(released_from) AND sqlc.arg(released_until);
+
 -- name: UpdateSubscriptionScope :exec
 UPDATE subscription SET media_types_json = ?, roles_json = ?, category_id = ?, filters_json = ?,
                         monitor_back_catalogue = ?, enabled = 1

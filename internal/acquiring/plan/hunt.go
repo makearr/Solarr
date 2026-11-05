@@ -55,6 +55,8 @@ type HuntConfig struct {
 	Libraries func(ctx context.Context) ([]LibraryShare, error)
 	// Search searches one item and sends what it finds, re-checking first that it is still wanted.
 	Search func(ctx context.Context, itemID int64) (Outcome, error)
+	// Lane marks the context a share's searches run under, so outbound requests queue by what the search is for; nil leaves it.
+	Lane   func(ctx context.Context, share string) context.Context
 	Clock  clock.Clock
 	Logger *slog.Logger
 }
@@ -298,6 +300,9 @@ func (j *HuntJob) huntShare(
 
 // huntOne searches itemID and keeps the hunt off it until it is worth looking again; answers 1 when a search ran.
 func (j *HuntJob) huntOne(ctx context.Context, itemID int64, shareName string) int {
+	if j.config.Lane != nil {
+		ctx = j.config.Lane(ctx, shareName)
+	}
 	outcome, err := j.config.Search(ctx, itemID)
 	now := j.config.Clock.Now()
 	next, spent := now.Add(firstBackoff).Unix(), 1

@@ -112,6 +112,7 @@ func TestNewDefaultRegistry_CoversEveryKnownScalarSetting(t *testing.T) {
 		settings.KeyReadyQueueLimit, settings.KeyVideoPerceptualHash,
 		settings.KeyPriorityUserRequestWeight, settings.KeyPriorityNewReleaseWeight,
 		settings.KeyPriorityGapWeight, settings.KeyPriorityUpgradeWeight, settings.KeySearchesPerHour, settings.KeyHuntMode, settings.KeyPriorityNewReleaseDays, settings.KeyRSSFreshHours,
+		settings.KeyRequestShareUser, settings.KeyRequestShareFresh, settings.KeyRequestShareBackground,
 		settings.KeyBrainzMashUserAgent, settings.KeyMetadataSourceOrder,
 		settings.KeyMetadataCoverSources, settings.KeyMetadataTVSources, settings.KeyMetadataMovieSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID, settings.KeyMetadataDisabledProviders, settings.KeyMetadataProviderPaces, settings.KeyMDBListAPIKey, settings.KeyOMDbAPIKey, settings.KeyFanartAPIKey, settings.KeyGoogleBooksAPIKey, settings.KeyHardcoverAPIKey, settings.KeyStashDBAPIKey, settings.KeyThePornDBAPIKey, settings.KeyFansDBAPIKey,
 		settings.KeyAcoustIDAPIKey, settings.KeyMetadataTheAudioDB, settings.KeyTheAudioDBAPIKey,

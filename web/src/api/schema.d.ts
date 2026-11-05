@@ -8247,6 +8247,16 @@ export interface components {
             hunt_mode?: "oldest_searched" | "newest_searched" | "oldest_release" | "newest_release" | "random_oldest_searched";
             /** @description Each library's share of every automatic search run, weighed against the others' (user, 2026-10-23). Always answered, every library; on a PATCH only the libraries listed change. */
             search_shares?: components["schemas"]["LibrarySearchShare"][];
+            request_shares?: components["schemas"]["RequestShares"];
+        };
+        /** @description Relative weights of the outbound request lanes (user, 2026-11-05): what a person asked for or is viewing, new content (aired in the last 48 hours or due within a week, RSS, new releases) and background fill. When all three wait on a busy provider each is served in proportion; a lane nobody waits in gives its part to the others. Default 70/20/10. Always answered; omitted on a PATCH leaves them alone. */
+        RequestShares: {
+            /** Format: int64 */
+            user: number;
+            /** Format: int64 */
+            fresh: number;
+            /** Format: int64 */
+            background: number;
         };
         LibrarySearchShare: {
             /** Format: int64 */

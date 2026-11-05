@@ -123,11 +123,17 @@ func (p *process) outbound() outbound {
 	p.outboundOnce.Do(func() {
 		wall := clock.NewSystem()
 		p.outboundShared = outbound{
-			limiter: httpx.NewLimiter(wall, httpx.Config{Providers: providerLimits, Prefixes: providerFamilyLimits, LivePace: p.livePace}, nil),
+			limiter: httpx.NewLimiter(wall, httpx.Config{Providers: providerLimits, Prefixes: providerFamilyLimits, LivePace: p.livePace, LaneShares: p.laneShares}, nil),
 			breaker: httpx.NewBreaker(wall, httpx.BreakerConfig{OnRecovered: p.noteProviderRecovered}),
 		}
 	})
 	return p.outboundShared
+}
+
+// laneShares answers the weights a person set for the three request lanes, read at every decision.
+func (p *process) laneShares() httpx.LaneShares {
+	shares := p.cache.Snapshot().RequestShares()
+	return httpx.LaneShares{User: float64(shares.User), Fresh: float64(shares.Fresh), Background: float64(shares.Background)}
 }
 
 // providerClient builds a client on the shared budget. The provider name is its bucket; a nil guard is the default

@@ -11,6 +11,14 @@ import { Card, Field, SaveBar } from "./SettingsCard";
 type PrioritySettings = components["schemas"]["PrioritySettings"];
 type SearchShare = components["schemas"]["LibrarySearchShare"];
 type HuntMode = NonNullable<PrioritySettings["hunt_mode"]>;
+type RequestShares = components["schemas"]["RequestShares"];
+
+const DEFAULT_LANES: RequestShares = { user: 70, fresh: 20, background: 10 };
+const LANES: readonly (readonly [keyof RequestShares, string, string])[] = [
+  ["user", "What I am doing", "Whatever you asked for or are looking at in the interface."],
+  ["fresh", "New content", "Aired in the last 48 hours or due within a week, RSS and new releases."],
+  ["background", "Background fill", "Scans, enrichment and refreshing the rest of the library."],
+];
 
 // The automatic search's run interval choices; each divides the hour, so the runs are evenly spaced.
 const HUNT_MINUTES = [5, 10, 15, 20, 30, 60] as const;
@@ -115,6 +123,7 @@ function PriorityForm({
   const [searchesPerHour, setSearchesPerHour] = useState(priority.searches_per_hour ?? 30);
   const [rssFreshHours, setRssFreshHours] = useState(priority.rss_fresh_hours ?? 48);
   const [huntMode, setHuntMode] = useState<HuntMode>(priority.hunt_mode ?? "oldest_searched");
+  const [lanes, setLanes] = useState<RequestShares>(priority.request_shares ?? DEFAULT_LANES);
 
   const dirty =
     userRequestWeight !== priority.user_request_weight ||
@@ -125,6 +134,7 @@ function PriorityForm({
     searchesPerHour !== priority.searches_per_hour ||
     rssFreshHours !== (priority.rss_fresh_hours ?? 48) ||
     huntMode !== (priority.hunt_mode ?? "oldest_searched") ||
+    LANES.some(([key]) => lanes[key] !== (priority.request_shares ?? DEFAULT_LANES)[key]) ||
     minutes !== storedMinutes ||
     shares.some((share, index) => share.share !== priority.search_shares?.[index]?.share);
   const totalShare = shares.reduce((sum, share) => sum + share.share, 0);
@@ -140,6 +150,7 @@ function PriorityForm({
       searches_per_hour: searchesPerHour,
         rss_fresh_hours: rssFreshHours,
         hunt_mode: huntMode,
+        request_shares: lanes,
         search_shares: shares.map((share) => ({ library_id: share.library_id, share: share.share })),
       },
       minutes,
@@ -273,6 +284,31 @@ function PriorityForm({
             className={`${inputStyle} w-28`}
           />
         </Field>
+      </Card>
+
+      <Card
+        title="Outbound requests"
+        help="When a provider is busy, its waiting requests are served in these proportions; a kind nobody is waiting for gives its part to the others, so none is ever shut out."
+      >
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {LANES.map(([key, label, help]) => (
+            <Field key={key} label={label} help={help}>
+              <span className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={lanes[key]}
+                  aria-label={`${label} request share`}
+                  disabled={busy}
+                  onChange={(event) => setLanes({ ...lanes, [key]: Number(event.target.value) })}
+                  className={`${inputStyle} w-24`}
+                />
+                <span className="w-10 tabular-nums">{Math.round((lanes[key] / (lanes.user + lanes.fresh + lanes.background)) * 100)}%</span>
+              </span>
+            </Field>
+          ))}
+        </div>
       </Card>
 
       <SaveBar dirty={dirty} busy={busy} onSave={submit} />

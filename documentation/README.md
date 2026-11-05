@@ -46,6 +46,7 @@ interface levels *normal / advanced / expert* in Settings → User.
 | [rating-limit.md](rating-limit.md) | A library's maximum rating |
 | [tags.md](tags.md) | Tags and genre trees |
 | [metadata-providers.md](metadata-providers.md) | What each provider carries and which library it serves |
+| [outbound-requests.md](outbound-requests.md) | The user, fresh and background request lanes and their shares |
 | [books.md](books.md) | Books and audiobooks |
 | [adult.md](adult.md) | The adult type |
 | [media-player.md](media-player.md) | The preview player: direct and converted playback, GPU encoding |

@@ -847,6 +847,44 @@ func (q *Queries) ListArtistsDueRefresh(ctx context.Context, arg ListArtistsDueR
 	return items, nil
 }
 
+const listArtistsWithFreshRelease = `-- name: ListArtistsWithFreshRelease :many
+SELECT DISTINCT c.person_id FROM credit c
+JOIN person p ON p.id = c.person_id AND p.monitored = 1
+JOIN work w ON w.id = c.work_id AND w.media_type = 'music'
+JOIN desired_item d ON d.work_id = c.work_id
+JOIN hunt_queue h ON h.desired_item_id = d.id
+WHERE h.release_date BETWEEN ?1 AND ?2
+`
+
+type ListArtistsWithFreshReleaseParams struct {
+	ReleasedFrom  sql.NullInt64
+	ReleasedUntil sql.NullInt64
+}
+
+// The monitored artists credited on a wanted album released within the window.
+func (q *Queries) ListArtistsWithFreshRelease(ctx context.Context, arg ListArtistsWithFreshReleaseParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listArtistsWithFreshRelease, arg.ReleasedFrom, arg.ReleasedUntil)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var person_id int64
+		if err := rows.Scan(&person_id); err != nil {
+			return nil, err
+		}
+		items = append(items, person_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCreditsForEdition = `-- name: ListCreditsForEdition :many
 SELECT person_id, work_id, edition_id, part_id, role, character, ord
 FROM credit WHERE edition_id = ? AND edition_id != 0 ORDER BY role, ord, person_id

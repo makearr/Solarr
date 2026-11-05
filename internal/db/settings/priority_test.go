@@ -20,7 +20,7 @@ func TestPrioritySettings_DefaultsWhenNothingIsStored(t *testing.T) {
 	if got.SearchesPerHour == nil || *got.SearchesPerHour != settings.DefaultSearchesPerHour {
 		t.Errorf("SearchesPerHour = %v, want %d", got.SearchesPerHour, settings.DefaultSearchesPerHour)
 	}
-	got.RSSFreshHours, got.SearchesPerHour = nil, nil
+	got.RSSFreshHours, got.SearchesPerHour, got.RequestShares = nil, nil, nil
 	if got != want {
 		t.Errorf("PrioritySettings = %+v, want the shipped defaults %+v", got, want)
 	}
@@ -84,7 +84,7 @@ func TestSetPrioritySettings_RoundTrips(t *testing.T) {
 		t.Fatalf("SetPrioritySettings: %v", err)
 	}
 	got := cache.Snapshot().PrioritySettings()
-	got.RSSFreshHours, got.SearchesPerHour = nil, nil
+	got.RSSFreshHours, got.SearchesPerHour, got.RequestShares = nil, nil, nil
 	if got != want {
 		t.Errorf("PrioritySettings = %+v, want %+v", got, want)
 	}
@@ -107,5 +107,30 @@ func TestSetPrioritySettings_RejectsNonPositiveNewReleaseDays(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("a zero new_release_days was accepted")
+	}
+}
+
+func TestSetPrioritySettings_TheRequestSharesDefaultKeepAndNeverShutALaneOut(t *testing.T) {
+	cache, cl := newCache(t)
+	if got := cache.Snapshot().RequestShares(); got != settings.DefaultRequestShares {
+		t.Fatalf("RequestShares = %+v, want %+v", got, settings.DefaultRequestShares)
+	}
+	base := settings.PrioritySettings{UserRequestWeight: 40, NewReleaseWeight: 30, GapWeight: 20, UpgradeWeight: 10, NewReleaseDays: 7}
+	withShares := base
+	withShares.RequestShares = &settings.RequestShares{User: 50, Fresh: 30, Background: 20}
+	if err := cache.SetPrioritySettings(t.Context(), cl, withShares); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetPrioritySettings(t.Context(), cl, base); err != nil {
+		t.Fatal(err)
+	}
+	if got := cache.Snapshot().RequestShares(); got != *withShares.RequestShares {
+		t.Errorf("RequestShares = %+v, want %+v kept when left out", got, *withShares.RequestShares)
+	}
+	for _, bad := range []settings.RequestShares{{User: 0, Fresh: 20, Background: 10}, {User: 70, Fresh: 20, Background: 0}, {User: 5000, Fresh: 1, Background: 1}} {
+		withShares.RequestShares = &bad
+		if err := cache.SetPrioritySettings(t.Context(), cl, withShares); err == nil {
+			t.Errorf("SetPrioritySettings accepted %+v", bad)
+		}
 	}
 }

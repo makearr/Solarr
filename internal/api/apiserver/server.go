@@ -22,6 +22,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/events"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 	"github.com/makearr/Solarr/internal/platform/transcode"
 )
 
@@ -542,7 +543,7 @@ func New(config Config) (*Server, error) {
 	}
 
 	router := chi.NewRouter()
-	router.Use(server.recoverPanic, server.logRequest, server.ipAllowlist, server.securityHeaders, server.crossOrigin)
+	router.Use(server.recoverPanic, server.logRequest, server.ipAllowlist, server.securityHeaders, server.crossOrigin, server.userPriority)
 	// chi's defaults answer in plain text; section 13.1 says every error is problem+json with a
 	// stable slug, and "every" includes the ones a client reaches by mistake.
 	router.NotFound(server.handleNotFound)
@@ -989,6 +990,14 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "same-origin")
 		next.ServeHTTP(w, r)
+	})
+}
+
+// userPriority puts every outbound request a person's request causes in the first lane, so what they are looking at
+// never queues behind a scan or a fill.
+func (s *Server) userPriority(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r.WithContext(httpx.WithPriority(r.Context(), httpx.PriorityUser)))
 	})
 }
 

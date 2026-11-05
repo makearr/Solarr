@@ -10,6 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // RefreshArtistJobType is the artist page's "Refresh metadata" (asked for 2026-09-19).
@@ -83,11 +84,20 @@ func (j RefreshArtistsJob) Run(ctx context.Context, _ jobs.Job) error {
 	if err != nil {
 		return err
 	}
+	fresh, err := j.Enrich.people.ArtistsWithFreshRelease(ctx, j.Enrich.clock.Now())
+	if err != nil {
+		return err
+	}
 	for _, personID := range due {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if err := j.Enrich.RefreshArtist(ctx, personID, false); err != nil {
+		artistCtx := ctx
+		// An artist with an album out or coming is new content: read ahead of the background sweep.
+		if fresh[personID] {
+			artistCtx = httpx.WithPriorityAtLeast(ctx, httpx.PriorityFresh)
+		}
+		if err := j.Enrich.RefreshArtist(artistCtx, personID, false); err != nil {
 			j.Enrich.logger.WarnContext(ctx, "scheduled artist refresh failed", slog.Int64("person_id", personID), slog.Any("error", err))
 		}
 	}

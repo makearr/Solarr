@@ -14,6 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // registerPlanJobs wires M1c's planner, hunt and RSS sync: what is missing is found without being asked.
@@ -32,6 +33,12 @@ func (p *process) registerPlanJobs(registry *jobs.Registry, executor *jobs.Execu
 	}))
 	p.hunt = plan.NewHuntJob(plan.HuntConfig{
 		Hunt: hunt, PerHour: p.searchesPerHour, Search: p.huntSearch,
+		Lane: func(ctx context.Context, share string) context.Context {
+			if share == plan.ShareNewRelease {
+				return httpx.WithPriority(ctx, httpx.PriorityFresh)
+			}
+			return ctx
+		},
 		Mode: func(context.Context) (library.HuntMode, error) {
 			return library.HuntMode(p.cache.Snapshot().PrioritySettings().HuntMode), nil
 		},
@@ -52,7 +59,11 @@ func (p *process) registerPlanJobs(registry *jobs.Registry, executor *jobs.Execu
 	if err := registry.Register(rss.Definition); err != nil {
 		return err
 	}
-	executor.Handle(rss.JobType, rss.NewJob(rss.Config{Sources: p.feedSources, Clock: clock.NewSystem(), Logger: p.logger}))
+	feed := rss.NewJob(rss.Config{Sources: p.feedSources, Clock: clock.NewSystem(), Logger: p.logger})
+	// What an indexer just published is new content: its requests queue ahead of background fill.
+	executor.Handle(rss.JobType, jobs.HandlerFunc(func(ctx context.Context, job jobs.Job) error {
+		return feed.Run(httpx.WithPriority(ctx, httpx.PriorityFresh), job)
+	}))
 	return nil
 }
 

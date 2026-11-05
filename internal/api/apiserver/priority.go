@@ -42,6 +42,7 @@ func (s *Server) UpdatePrioritySettings(w http.ResponseWriter, r *http.Request) 
 		settings.KeyPriorityUserRequestWeight, settings.KeyPriorityNewReleaseWeight,
 		settings.KeyPriorityGapWeight, settings.KeyPriorityUpgradeWeight, settings.KeyPriorityNewReleaseDays,
 		settings.KeySearchesPerHour, settings.KeyHuntMode, settings.KeyRSSFreshHours,
+		settings.KeyRequestShareUser, settings.KeyRequestShareFresh, settings.KeyRequestShareBackground,
 	); err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -51,6 +52,9 @@ func (s *Server) UpdatePrioritySettings(w http.ResponseWriter, r *http.Request) 
 		UserRequestWeight: body.UserRequestWeight, NewReleaseWeight: body.NewReleaseWeight,
 		GapWeight: body.GapWeight, UpgradeWeight: body.UpgradeWeight, NewReleaseDays: body.NewReleaseDays,
 		SearchesPerHour: body.SearchesPerHour, RSSFreshHours: body.RssFreshHours, HuntMode: string(derefOr(body.HuntMode, "")),
+	}
+	if shares := body.RequestShares; shares != nil {
+		wanted.RequestShares = &settings.RequestShares{User: shares.User, Fresh: shares.Fresh, Background: shares.Background}
 	}
 	// Checked before the shares are written, so a refused change applies nothing.
 	if err := settings.ValidatePrioritySettings(wanted); err != nil {
@@ -108,7 +112,8 @@ func (s *Server) prioritySettingsView() gen.PrioritySettings {
 		UserRequestWeight: stored.UserRequestWeight, NewReleaseWeight: stored.NewReleaseWeight,
 		GapWeight: stored.GapWeight, UpgradeWeight: stored.UpgradeWeight, NewReleaseDays: stored.NewReleaseDays,
 		SearchesPerHour: stored.SearchesPerHour, RssFreshHours: stored.RSSFreshHours, HuntMode: &huntMode,
-		SearchShares: &shares,
+		SearchShares:  &shares,
+		RequestShares: &gen.RequestShares{User: stored.RequestShares.User, Fresh: stored.RequestShares.Fresh, Background: stored.RequestShares.Background},
 	}
 }
 

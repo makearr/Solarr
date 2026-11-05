@@ -16,7 +16,7 @@ type Limiter struct {
 	jitter func(time.Duration) time.Duration
 	config Config
 
-	global chan struct{} // global concurrency semaphore
+	global *gate // global concurrency, handed to the most urgent waiter
 
 	mu        sync.Mutex
 	providers map[string]*providerBudget
@@ -41,11 +41,12 @@ type providerBudget struct {
 	dailyUsed    int
 	dailyResetAt time.Time
 
-	slots    chan struct{}
+	slots    *gate
 	inFlight int
 
 	// waiting counts callers blocked in Acquire per priority, so a token goes to the most urgent.
 	waiting map[Priority]int
+	turns   laneTurns
 }
 
 // NewLimiter builds the registry. jitter randomises computed backoff; pass nil
@@ -62,37 +63,39 @@ func NewLimiter(c clock.Clock, config Config, jitter func(time.Duration) time.Du
 		clock:     c,
 		jitter:    jitter,
 		config:    config,
-		global:    make(chan struct{}, global),
+		global:    newGate(global, sharesFunc(config.LaneShares)),
 		providers: make(map[string]*providerBudget),
 	}
 }
 
 // Acquire blocks until the provider may be called, then returns a release function the caller
-// must invoke when the request finishes. A due token goes to the most urgent waiter (PriorityFrom).
+// must invoke when the request finishes. A due token goes to the lane whose turn it is, then to the most urgent waiter in it (PriorityFrom).
 func (l *Limiter) Acquire(ctx context.Context, provider string) (release func(), err error) {
 	priority := PriorityFrom(ctx)
 	l.wait(provider, priority, 1)
-	defer l.wait(provider, priority, -1)
 	for {
 		wait, err := l.tryTake(provider, priority)
+		if err == nil && wait > 0 {
+			err = l.clock.Sleep(ctx, wait)
+		}
 		if err != nil {
+			l.wait(provider, priority, -1)
 			return nil, err
 		}
 		if wait == 0 {
 			break
 		}
-		if err := l.clock.Sleep(ctx, wait); err != nil {
-			return nil, err
-		}
 	}
+	// Holding its token, the request no longer keeps its lane's turn from the others while it waits for a slot.
+	l.wait(provider, priority, -1)
 
 	budget := l.budgetFor(provider)
-	if err := acquireSlot(ctx, budget.slots); err != nil {
+	if err := budget.slots.acquire(ctx, priority); err != nil {
 		l.refund(provider)
 		return nil, err
 	}
-	if err := acquireSlot(ctx, l.global); err != nil {
-		releaseSlot(budget.slots)
+	if err := l.global.acquire(ctx, priority); err != nil {
+		budget.slots.release()
 		l.refund(provider)
 		return nil, err
 	}
@@ -107,8 +110,8 @@ func (l *Limiter) Acquire(ctx context.Context, provider string) (release func(),
 			l.mu.Lock()
 			budget.inFlight--
 			l.mu.Unlock()
-			releaseSlot(l.global)
-			releaseSlot(budget.slots)
+			l.global.release()
+			budget.slots.release()
 		})
 	}, nil
 }
@@ -182,11 +185,20 @@ func (l *Limiter) tryTake(provider string, priority Priority) (time.Duration, er
 		return time.Duration(missing / budget.effectivePerSecond * float64(time.Second)), nil
 	}
 
-	for waiting := range budget.waiting {
-		if waiting < priority {
+	mine := laneOf(priority)
+	var waiting [laneCount]bool
+	waiting[mine] = true
+	for queued := range budget.waiting {
+		waiting[laneOf(queued)] = true
+		if laneOf(queued) == mine && queued < priority {
 			return laneRecheck, nil
 		}
 	}
+	shares := sharesFunc(l.config.LaneShares).read()
+	if turn, _ := budget.turns.next(shares, waiting); turn != mine {
+		return laneRecheck, nil
+	}
+	budget.turns.took(shares, waiting, mine)
 
 	budget.tokens--
 	budget.lastRequest = now
@@ -286,7 +298,7 @@ func (l *Limiter) budgetForLocked(provider string) *providerBudget {
 		limits:       limits,
 		lastRefill:   now,
 		dailyResetAt: nextUTCMidnight(now),
-		slots:        make(chan struct{}, concurrent),
+		slots:        newGate(concurrent, sharesFunc(l.config.LaneShares)),
 		waiting:      make(map[Priority]int),
 	}
 	budget.effectivePerSecond = budget.configuredPerSecond()
@@ -349,20 +361,4 @@ func exponential(failures int) time.Duration {
 		return backoffCeiling
 	}
 	return backoff
-}
-
-func acquireSlot(ctx context.Context, slots chan struct{}) error {
-	select {
-	case slots <- struct{}{}:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func releaseSlot(slots chan struct{}) {
-	select {
-	case <-slots:
-	default:
-	}
 }

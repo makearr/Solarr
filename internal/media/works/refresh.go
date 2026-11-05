@@ -9,6 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
@@ -52,6 +53,10 @@ func (j RefreshJob) Run(ctx context.Context, _ jobs.Job) error {
 	outcomes := parallel.Do(ctx, len(due), refreshWorkers, func(ctx context.Context, index int) error {
 		if err := ctx.Err(); err != nil {
 			return err
+		}
+		// A work with something new out or coming is read ahead of the background sweep.
+		if due[index].Fresh {
+			ctx = httpx.WithPriorityAtLeast(ctx, httpx.PriorityFresh)
 		}
 		err := j.Refresh(ctx, due[index])
 		if err != nil {

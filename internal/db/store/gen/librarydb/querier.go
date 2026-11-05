@@ -518,6 +518,8 @@ type Querier interface {
 	ListArrImportsForInstance(ctx context.Context, instanceID int64) ([]ArrImport, error)
 	// The monitored artists to refresh next: never refreshed first, then the stalest.
 	ListArtistsDueRefresh(ctx context.Context, arg ListArtistsDueRefreshParams) ([]int64, error)
+	// The monitored artists credited on a wanted album released within the window.
+	ListArtistsWithFreshRelease(ctx context.Context, arg ListArtistsWithFreshReleaseParams) ([]int64, error)
 	ListArtworkForSubject(ctx context.Context, arg ListArtworkForSubjectParams) ([]Artwork, error)
 	ListBlockedContent(ctx context.Context, arg ListBlockedContentParams) ([]BlockedContent, error)
 	// Invariant 83 (todo 4.15/4.8): "a blocked hash found later by a scan is

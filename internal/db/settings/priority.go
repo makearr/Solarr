@@ -24,7 +24,20 @@ const (
 	KeySearchesPerHour = "search.automatic_per_hour"
 	// KeyHuntMode is the order the automatic search takes wanted items in (section 9.3).
 	KeyHuntMode = "search.hunt_mode"
+	// The weights of the outbound request lanes: what a person is doing, new content, background fill.
+	KeyRequestShareUser       = "network.request_share.user"
+	KeyRequestShareFresh      = "network.request_share.fresh"
+	KeyRequestShareBackground = "network.request_share.background"
 )
+
+// RequestShares are the relative weights of the three outbound request lanes; each is guaranteed its part of a
+// contended provider and an idle lane's part goes to the others (user, 2026-11-05).
+type RequestShares struct{ User, Fresh, Background int64 }
+
+// DefaultRequestShares is 70/20/10; maxRequestShare bounds a typo.
+var DefaultRequestShares = RequestShares{User: 70, Fresh: 20, Background: 10}
+
+const maxRequestShare = 1000
 
 // HuntModes are the orders section 9.3 names; the first is the default.
 var HuntModes = []string{"oldest_searched", "newest_searched", "oldest_release", "newest_release", "random_oldest_searched"}
@@ -66,6 +79,8 @@ type PrioritySettings struct {
 	RSSFreshHours *int64
 	// HuntMode is one of HuntModes; empty on a write leaves it alone.
 	HuntMode string
+	// RequestShares weigh the outbound request lanes; nil on a write leaves them alone.
+	RequestShares *RequestShares
 }
 
 // PrioritySettings reads the configured policy, or the shipped defaults for
@@ -73,7 +88,9 @@ type PrioritySettings struct {
 func (s *Snapshot) PrioritySettings() PrioritySettings {
 	perHour := s.policyInt(KeySearchesPerHour, DefaultSearchesPerHour)
 	rssHours := s.policyInt(KeyRSSFreshHours, DefaultRSSFreshHours)
+	shares := s.RequestShares()
 	return PrioritySettings{
+		RequestShares:     &shares,
 		SearchesPerHour:   &perHour,
 		RSSFreshHours:     &rssHours,
 		HuntMode:          s.huntMode(),
@@ -82,6 +99,15 @@ func (s *Snapshot) PrioritySettings() PrioritySettings {
 		GapWeight:         s.policyInt(KeyPriorityGapWeight, DefaultPriorityGapWeight),
 		UpgradeWeight:     s.policyInt(KeyPriorityUpgradeWeight, DefaultPriorityUpgradeWeight),
 		NewReleaseDays:    s.policyInt(KeyPriorityNewReleaseDays, DefaultPriorityNewReleaseDays),
+	}
+}
+
+// RequestShares reads the lane weights, or the shipped ones for what nothing has stored yet.
+func (s *Snapshot) RequestShares() RequestShares {
+	return RequestShares{
+		User:       s.policyInt(KeyRequestShareUser, DefaultRequestShares.User),
+		Fresh:      s.policyInt(KeyRequestShareFresh, DefaultRequestShares.Fresh),
+		Background: s.policyInt(KeyRequestShareBackground, DefaultRequestShares.Background),
 	}
 }
 
@@ -114,6 +140,11 @@ func (c *Cache) SetPrioritySettings(ctx context.Context, cl clock.Clock, ps Prio
 	}
 	if ps.SearchesPerHour != nil {
 		values[KeySearchesPerHour] = strconv.FormatInt(*ps.SearchesPerHour, 10)
+	}
+	if shares := ps.RequestShares; shares != nil {
+		values[KeyRequestShareUser] = strconv.FormatInt(shares.User, 10)
+		values[KeyRequestShareFresh] = strconv.FormatInt(shares.Fresh, 10)
+		values[KeyRequestShareBackground] = strconv.FormatInt(shares.Background, 10)
 	}
 	return c.setPolicies(ctx, cl, values)
 }
@@ -155,6 +186,15 @@ func validatePrioritySettings(ps PrioritySettings) config.Problems {
 			Path: "searches_per_hour", Value: strconv.FormatInt(*perHour, 10),
 			Expectation: "0 (off) to " + strconv.Itoa(maxSearchesPerHour),
 		})
+	}
+	if shares := ps.RequestShares; shares != nil {
+		for name, share := range map[string]int64{"request_share_user": shares.User, "request_share_fresh": shares.Fresh, "request_share_background": shares.Background} {
+			if share < 1 || share > maxRequestShare {
+				problems = append(problems, config.Problem{
+					Path: name, Value: strconv.FormatInt(share, 10), Expectation: "1 to " + strconv.Itoa(maxRequestShare) + ", so no lane is ever shut out",
+				})
+			}
+		}
 	}
 	if ps.HuntMode != "" && !slices.Contains(HuntModes, ps.HuntMode) {
 		problems = append(problems, config.Problem{

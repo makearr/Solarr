@@ -263,7 +263,7 @@ var allowedInternalImports = map[string][]string{
 	// The cutoff check of every media type: paging, state writes and counting once, each type judging its own.
 	"internal/acquiring/cutoff":   {"internal/db/library", "internal/db/settings", "internal/jobs"},
 	"internal/acquiring/dispatch": {"internal/db/statistics", "internal/acquiring/download", "internal/db/library", "internal/identify/model", "internal/identify/priority"},
-	"internal/media/music": {"internal/importing/arrmap", "internal/importing/arrimport", "internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/acquiring/judge", "internal/platform/parallel",
+	"internal/media/music": {"internal/platform/httpx", "internal/importing/arrmap", "internal/importing/arrimport", "internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/acquiring/judge", "internal/platform/parallel",
 		"internal/media", "internal/acquiring/plan", "internal/acquiring/dispatch",
 		"internal/acquiring/indexer", "internal/acquiring/download", "internal/identify/priority",
 		"internal/platform/artwork", "internal/platform/clock", "internal/platform/fsx",
@@ -421,7 +421,7 @@ var allowedInternalImports = map[string][]string{
 	// What TV, movies, adult and books do alike with their works: search, grab, feeds, cutoff, adding, importing, placing
 	// and refreshing.
 	"internal/media/works": {
-		"internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/indexer", "internal/acquiring/judge",
+		"internal/platform/httpx", "internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/indexer", "internal/acquiring/judge",
 		"internal/acquiring/rss", "internal/db/library", "internal/db/settings", "internal/db/statistics", "internal/db/store/gen/librarydb",
 		"internal/identify/model", "internal/identify/quality", "internal/identify/score", "internal/jobs", "internal/media",
 		"internal/importing/batch", "internal/importing/inspect", "internal/importing/placer", "internal/scanning/scan",

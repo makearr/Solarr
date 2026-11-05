@@ -64,10 +64,12 @@ type ScalarSettingsEntry struct {
 	PriorityUpgradeWeight      int64  `yaml:"priority_upgrade_weight,omitempty"`
 	PriorityNewReleaseDays     int64  `yaml:"priority_new_release_days,omitempty"`
 	// AutomaticSearchesPerHour is the search budget; absent keeps the stored value.
-	AutomaticSearchesPerHour *int64   `yaml:"automatic_searches_per_hour,omitempty"`
-	RSSFreshHours            *int64   `yaml:"rss_fresh_hours,omitempty"`
-	BrainzMashUserAgent      string   `yaml:"brainzmash_user_agent,omitempty"`
-	MetadataSourceOrder      []string `yaml:"metadata_source_order,omitempty"`
+	AutomaticSearchesPerHour *int64 `yaml:"automatic_searches_per_hour,omitempty"`
+	RSSFreshHours            *int64 `yaml:"rss_fresh_hours,omitempty"`
+	// RequestShares weigh the outbound request lanes; absent keeps the stored values.
+	RequestShares       *RequestSharesEntry `yaml:"request_shares,omitempty"`
+	BrainzMashUserAgent string              `yaml:"brainzmash_user_agent,omitempty"`
+	MetadataSourceOrder []string            `yaml:"metadata_source_order,omitempty"`
 	// Pointers, so "all cover sources off" and "switched off" survive a round trip; absent keeps
 	// the stored value.
 	MetadataCoverSources *[]string `yaml:"metadata_cover_sources,omitempty"`
@@ -410,6 +412,13 @@ type ExclusionPatternEntry struct {
 	Enabled   bool   `yaml:"enabled"`
 }
 
+// RequestSharesEntry is the outbound request lanes' weights.
+type RequestSharesEntry struct {
+	User       int64 `yaml:"user"`
+	Fresh      int64 `yaml:"fresh"`
+	Background int64 `yaml:"background"`
+}
+
 // AvailabilityGraceEntry is the wait after a part's time, in hours.
 type AvailabilityGraceEntry struct {
 	High   int64 `yaml:"high"`
@@ -454,6 +463,7 @@ func (c *Cache) Export() Document {
 		PriorityNewReleaseDays:       priority.NewReleaseDays,
 		AutomaticSearchesPerHour:     priority.SearchesPerHour,
 		RSSFreshHours:                priority.RSSFreshHours,
+		RequestShares:                &RequestSharesEntry{User: priority.RequestShares.User, Fresh: priority.RequestShares.Fresh, Background: priority.RequestShares.Background},
 		BrainzMashUserAgent:          snapshot.MetadataSettings().BrainzMashUserAgent,
 		MetadataSourceOrder:          snapshot.MetadataSettings().SourceOrder,
 		MetadataCoverSources:         &metadata.CoverSources,
@@ -679,6 +689,12 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 		if hours := d.Settings.RSSFreshHours; hours != nil {
 			for _, problem := range validatePrioritySettings(PrioritySettings{
 				UserRequestWeight: 0, NewReleaseDays: 1, RSSFreshHours: hours}) {
+				problems = append(problems, prefixed("settings", problem))
+			}
+		}
+		if shares := d.Settings.RequestShares; shares != nil {
+			for _, problem := range validatePrioritySettings(PrioritySettings{
+				UserRequestWeight: 0, NewReleaseDays: 1, RequestShares: &RequestShares{User: shares.User, Fresh: shares.Fresh, Background: shares.Background}}) {
 				problems = append(problems, prefixed("settings", problem))
 			}
 		}
@@ -1370,6 +1386,11 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 	}
 	if entry.RSSFreshHours != nil {
 		values[KeyRSSFreshHours] = strconv.FormatInt(*entry.RSSFreshHours, 10)
+	}
+	if shares := entry.RequestShares; shares != nil {
+		values[KeyRequestShareUser] = strconv.FormatInt(shares.User, 10)
+		values[KeyRequestShareFresh] = strconv.FormatInt(shares.Fresh, 10)
+		values[KeyRequestShareBackground] = strconv.FormatInt(shares.Background, 10)
 	}
 	if entry.AutomaticSearchesPerHour != nil {
 		values[KeySearchesPerHour] = strconv.FormatInt(*entry.AutomaticSearchesPerHour, 10)

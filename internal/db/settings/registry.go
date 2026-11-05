@@ -371,6 +371,19 @@ func NewDefaultRegistry() *Registry {
 		Default:  fmt.Sprintf("%d", DefaultSearchesPerHour),
 	})
 
+	for key, share := range map[string]struct {
+		name  string
+		value int64
+	}{
+		KeyRequestShareUser:       {"Request share: what I am doing", DefaultRequestShares.User},
+		KeyRequestShareFresh:      {"Request share: new content", DefaultRequestShares.Fresh},
+		KeyRequestShareBackground: {"Request share: background fill", DefaultRequestShares.Background},
+	} {
+		registry.MustRegister(SettingDef{
+			Key: key, Kind: KindInt, Tier: TierAdvanced, Name: share.name, Default: fmt.Sprintf("%d", share.value),
+			HelpText: "Outbound requests to a busy provider are served in these proportions when all three kinds are waiting; a kind nobody waits for gives its part to the others.",
+		})
+	}
 	registry.MustRegister(SettingDef{
 		Key: KeyHuntMode, Kind: KindString, Tier: TierAdvanced,
 		Name:     "Automatic search order",

@@ -4408,6 +4408,9 @@ type PrioritySettings struct {
 	// NewReleaseWeight Bigger is more urgent. Default 30.
 	NewReleaseWeight int64 `json:"new_release_weight"`
 
+	// RequestShares Relative weights of the outbound request lanes (user, 2026-11-05): what a person asked for or is viewing, new content (aired in the last 48 hours or due within a week, RSS, new releases) and background fill. When all three wait on a busy provider each is served in proportion; a lane nobody waits in gives its part to the others. Default 70/20/10. Always answered; omitted on a PATCH leaves them alone.
+	RequestShares *RequestShares `json:"request_shares,omitempty"`
+
 	// RssFreshHours Hours after an RSS feed first shows a release for a wanted album that it still counts as new. Default 48. Always answered; omitted on a PATCH leaves it alone.
 	RssFreshHours *int64 `json:"rss_fresh_hours,omitempty"`
 
@@ -4749,6 +4752,13 @@ type RequestPriority struct {
 
 	// Request The priority a user request in the library gets.
 	Request int64 `json:"request"`
+}
+
+// RequestShares Relative weights of the outbound request lanes (user, 2026-11-05): what a person asked for or is viewing, new content (aired in the last 48 hours or due within a week, RSS, new releases) and background fill. When all three wait on a busy provider each is served in proportion; a lane nobody waits in gives its part to the others. Default 70/20/10. Always answered; omitted on a PATCH leaves them alone.
+type RequestShares struct {
+	Background int64 `json:"background"`
+	Fresh      int64 `json:"fresh"`
+	User       int64 `json:"user"`
 }
 
 // Role defines model for Role.

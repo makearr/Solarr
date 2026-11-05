@@ -168,7 +168,7 @@ func New(config Config) Provider {
 func (p Provider) Album(
 	ctx context.Context, priority Priority, releaseGroupMBID, releaseMBID string,
 ) (ReleaseGroup, Release, error) {
-	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
+	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
 	r := routeFor[Source](ctx, p)
 	if rg, release, ok := p.cached(ctx, r, releaseGroupMBID, releaseMBID); ok {
 		return rg, release, nil
@@ -230,7 +230,7 @@ func notFound(err error) bool {
 func (p Provider) Search(
 	ctx context.Context, priority Priority, artist, title string, limit int,
 ) ([]ReleaseGroupMatch, error) {
-	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
+	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
 	r := routeFor[Searcher](ctx, p)
 	key := searchCacheKey(artist, title, limit)
 	if matches, ok := cachedJSON[[]ReleaseGroupMatch](ctx, p, r, cacheKindSearch, key); ok {
@@ -256,7 +256,7 @@ func (p Provider) Search(
 // only sources implementing QuerySearcher are tried, same reasoning as Search
 // itself -- the proxy does not implement it either.
 func (p Provider) SearchByQuery(ctx context.Context, priority Priority, query string, limit int) ([]ReleaseGroupMatch, error) {
-	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
+	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
 	r := routeFor[QuerySearcher](ctx, p)
 	key := queryCacheKey(query, limit)
 	if matches, ok := cachedJSON[[]ReleaseGroupMatch](ctx, p, r, cacheKindSearch, key); ok {
@@ -281,7 +281,7 @@ func (p Provider) SearchByQuery(ctx context.Context, priority Priority, query st
 // Releases answers every release of a release group with its tracklist, cache first, from
 // the first source able to list them. Album identification asks it for every candidate.
 func (p Provider) Releases(ctx context.Context, priority Priority, releaseGroupMBID string) ([]Release, error) {
-	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
+	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
 	r := routeFor[ReleaseLister](ctx, p)
 	if releases, ok := cachedJSON[[]Release](ctx, p, r, cacheKindReleases, releaseGroupMBID); ok {
 		return releases, nil
@@ -306,7 +306,7 @@ func (p Provider) Releases(ctx context.Context, priority Priority, releaseGroupM
 // search at all reads as "found nothing", since that is a wiring gap rather
 // than a failed lookup and the caller cannot act on the difference.
 func (p Provider) SearchArtists(ctx context.Context, priority Priority, query string, limit int) ([]ArtistMatch, error) {
-	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
+	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
 	r := routeFor[ArtistSearcher](ctx, p)
 	key := queryCacheKey(query, limit)
 	if matches, ok := cachedJSON[[]ArtistMatch](ctx, p, r, cacheKindArtistSearch, key); ok {
@@ -329,7 +329,7 @@ func (p Provider) SearchArtists(ctx context.Context, priority Priority, query st
 // SearchRecordings answers recordings matching a track title (and artist, when known),
 // each with the release groups it appears on, cache first. Only RecordingSearcher sources are tried.
 func (p Provider) SearchRecordings(ctx context.Context, priority Priority, artist, title string, limit int) ([]RecordingMatch, error) {
-	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
+	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
 	r := routeFor[RecordingSearcher](ctx, p)
 	key := searchCacheKey(artist, title, limit)
 	if matches, ok := cachedJSON[[]RecordingMatch](ctx, p, r, cacheKindRecordingSearch, key); ok {
@@ -352,7 +352,7 @@ func (p Provider) SearchRecordings(ctx context.Context, priority Priority, artis
 // Recording answers one recording and the release groups it is on, cache first; ErrNotFound when
 // every source that can look recordings up answered 404. Only RecordingLookup sources are tried.
 func (p Provider) Recording(ctx context.Context, priority Priority, mbid string) (RecordingMatch, error) {
-	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
+	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
 	r := routeFor[RecordingLookup](ctx, p)
 	if recording, ok := cachedJSON[RecordingMatch](ctx, p, r, cacheKindRecording, mbid); ok {
 		return recording, nil
@@ -374,7 +374,7 @@ func (p Provider) Recording(ctx context.Context, priority Priority, mbid string)
 // Only sources implementing ArtistLookup are tried -- same reasoning as
 // Search, the proxy's artist shape is unverified live.
 func (p Provider) Artist(ctx context.Context, priority Priority, mbid string) (Artist, error) {
-	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
+	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
 	r := routeFor[ArtistLookup](ctx, p)
 	if artist, ok := cachedJSON[Artist](ctx, p, r, cacheKindArtist, mbid); ok {
 		return artist, nil
@@ -397,7 +397,7 @@ func (p Provider) Artist(ctx context.Context, priority Priority, mbid string) (A
 // sources that implement Discography are tried, same reasoning as Search and
 // Artist.
 func (p Provider) ArtistReleaseGroups(ctx context.Context, priority Priority, artistMBID string) ([]ReleaseGroup, error) {
-	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
+	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
 	r := routeFor[Discography](ctx, p)
 	if groups, ok := cachedJSON[[]ReleaseGroup](ctx, p, r, cacheKindDiscography, artistMBID); ok {
 		return groups, nil
@@ -519,7 +519,7 @@ const (
 
 // Label answers one label's details, cache-first, from the sources that can look one up.
 func (p Provider) Label(ctx context.Context, priority Priority, mbid string) (Label, error) {
-	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
+	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
 	r := routeFor[LabelLookup](ctx, p)
 	if label, ok := cachedJSON[Label](ctx, p, r, cacheKindLabel, mbid); ok {
 		return label, nil
@@ -539,7 +539,7 @@ func (p Provider) Label(ctx context.Context, priority Priority, mbid string) (La
 
 // LabelReleaseGroups answers what a label released, cache-first, from the sources that can browse it.
 func (p Provider) LabelReleaseGroups(ctx context.Context, priority Priority, labelMBID string) ([]ReleaseGroup, error) {
-	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
+	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
 	r := routeFor[LabelCatalogue](ctx, p)
 	if groups, ok := cachedJSON[[]ReleaseGroup](ctx, p, r, cacheKindLabelCatalogue, labelMBID); ok {
 		return groups, nil

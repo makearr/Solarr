@@ -370,7 +370,15 @@ func (r SeriesReader) SeasonMonitoring(ctx context.Context, workID int64) (map[i
 type RefreshCandidate struct {
 	WorkID     int64
 	CategoryID int64
+	// Fresh says an item of the work is wanted and released within the fresh window, so its refresh is new content's.
+	Fresh bool
 }
+
+// The fresh window (user, 2026-11-05): what came out in the last two days or comes out within the next week.
+const (
+	FreshAired = 48 * time.Hour
+	FreshAhead = 7 * 24 * time.Hour
+)
 
 // DueForRefresh lists the series last written longer ago than their status asks: those not known to have ended after
 // continuing, an ended one after endedAfter. The oldest come first.
@@ -382,12 +390,15 @@ func (r SeriesReader) DueForRefresh(ctx context.Context, now time.Time, continui
 // series, a released movie) are read again as often as settled, the rest as often as active.
 func (r SeriesReader) DueForRefreshOf(ctx context.Context, mediaType, settledStatus string, now time.Time, active, settled time.Duration, limit int) ([]RefreshCandidate, error) {
 	rows, err := r.store.Read().QueryContext(ctx,
-		`SELECT w.id, COALESCE((SELECT d.category_id FROM desired_item d WHERE d.work_id = w.id ORDER BY d.id LIMIT 1), 0)
+		`SELECT w.id, COALESCE((SELECT d.category_id FROM desired_item d WHERE d.work_id = w.id ORDER BY d.id LIMIT 1), 0),
+  EXISTS (SELECT 1 FROM desired_item d JOIN hunt_queue h ON h.desired_item_id = d.id
+          WHERE d.work_id = w.id AND h.release_date BETWEEN ? AND ?) AS fresh
 FROM work w
 WHERE w.media_type = ?
   AND w.updated_at < ? - CASE WHEN COALESCE((SELECT f.value FROM work_field f WHERE f.work_id = w.id AND f.field = 'status'
                                              ORDER BY f.provider = '__manual__' DESC LIMIT 1), '') = ? THEN ? ELSE ? END
-ORDER BY w.updated_at, w.id LIMIT ?`, mediaType, now.Unix(), settledStatus, int64(settled.Seconds()), int64(active.Seconds()), limit)
+ORDER BY fresh DESC, w.updated_at, w.id LIMIT ?`,
+		now.Add(-FreshAired).Unix(), now.Add(FreshAhead).Unix(), mediaType, now.Unix(), settledStatus, int64(settled.Seconds()), int64(active.Seconds()), limit)
 	if err != nil {
 		return nil, fmt.Errorf("library: series due for refresh: %w", err)
 	}
@@ -395,7 +406,7 @@ ORDER BY w.updated_at, w.id LIMIT ?`, mediaType, now.Unix(), settledStatus, int6
 	var due []RefreshCandidate
 	for rows.Next() {
 		var candidate RefreshCandidate
-		if err := rows.Scan(&candidate.WorkID, &candidate.CategoryID); err != nil {
+		if err := rows.Scan(&candidate.WorkID, &candidate.CategoryID, &candidate.Fresh); err != nil {
 			return nil, fmt.Errorf("library: scan refresh candidate: %w", err)
 		}
 		due = append(due, candidate)

@@ -447,6 +447,21 @@ func (p People) ArtistsDueRefresh(ctx context.Context, before, limit int64) ([]i
 	return ids, nil
 }
 
+// ArtistsWithFreshRelease answers the monitored artists with a wanted album released within the fresh window of now.
+func (p People) ArtistsWithFreshRelease(ctx context.Context, now time.Time) (map[int64]bool, error) {
+	ids, err := librarydb.New(p.store.Read()).ListArtistsWithFreshRelease(ctx, librarydb.ListArtistsWithFreshReleaseParams{
+		ReleasedFrom: sql.NullInt64{Int64: now.Add(-FreshAired).Unix(), Valid: true}, ReleasedUntil: sql.NullInt64{Int64: now.Add(FreshAhead).Unix(), Valid: true},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: artists with a fresh release: %w", err)
+	}
+	fresh := make(map[int64]bool, len(ids))
+	for _, id := range ids {
+		fresh[id] = true
+	}
+	return fresh, nil
+}
+
 // Person reads one person's own row, without Detail's discography.
 func (p People) Person(ctx context.Context, id int64) (librarydb.Person, error) {
 	person, err := librarydb.New(p.store.Read()).GetPerson(ctx, id)
