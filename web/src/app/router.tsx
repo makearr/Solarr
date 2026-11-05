@@ -312,6 +312,7 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/activity/queue", component: Queue }),
   createRoute({ getParentRoute: () => rootRoute, path: "/activity/history", component: History }),
   createRoute({ getParentRoute: () => rootRoute, path: "/activity/notifications", component: lazyRouteComponent(() => import("./Notifications"), "Notifications") }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/activity/requests", component: lazyRouteComponent(() => import("./Requests"), "Requests") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/activity/jobs", component: Activity }),
   // Settings split into General/User/Scheduler/Cache 2026-09-11 (asked for
   // twice before this) -- /settings itself now just redirects to the first

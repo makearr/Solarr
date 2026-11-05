@@ -589,6 +589,17 @@ function LimitsFields({
           />
         )}
       </span>
+      {!isAdmin && (
+        <label className="flex items-center gap-1.5" title="Requests this account makes are added at once instead of waiting for an administrator">
+          <input
+            type="checkbox"
+            checked={limits.auto_approve ?? false}
+            disabled={disabled}
+            onChange={(event) => onChange({ ...limits, auto_approve: event.target.checked })}
+          />
+          Requests need no approval
+        </label>
+      )}
     </div>
   );
 }
@@ -800,6 +811,7 @@ function AddUser({ libraries, onAdded }: { libraries: readonly Library[]; onAdde
     tier_default: "normal",
     tier_max: "expert",
     new_library_permission: defaults.data?.new_library_permission ?? "none",
+    auto_approve: false,
   };
 
   const create = useMutation({

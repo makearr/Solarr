@@ -227,6 +227,7 @@ function AddPanel({
 }) {
   const queryClient = useQueryClient();
   const libraryLabel = useLibraryLabel();
+  const ownLibrary = useLibrary(firstCategoryId);
   // The libraries' rules suggest where it goes (ADR-56); always shown with its reason, always changeable.
   const suggested = candidate.suggestion && libraries?.some((library) => library.id === candidate.suggestion!.category_id) ? candidate.suggestion : undefined;
   const [categoryId, setCategoryId] = useState(suggested ? String(suggested.category_id) : firstCategoryId);
@@ -244,11 +245,14 @@ function AddPanel({
   const editable = info.facets.filter((facet) => facet.editable && facet.kind === "enum" && facet.key !== "air_time_zone");
   const [fields, setFields] = useState<Record<string, string>>({});
   const libraryRoots = (useRootFolders().data ?? []).filter((root) => (root.categories ?? []).some((category) => category.id === Number(categoryId)));
+  // Request-only access files a request an administrator approves instead of adding (Seerr's model).
+  const requestOnly = (libraries?.find((library) => String(library.id) === categoryId) ?? ownLibrary)?.permission === "request";
   const add = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/works", {
         body: {
           category_id: Number(categoryId), kind: candidate.kind, provider: candidate.provider, external_id: candidate.external_id,
+          title: candidate.title,
           monitored: options.length > 0 ? option !== "none" : monitored, monitor_option: options.length > 0 ? option : undefined,
           specials, quality_profile_id: profileId || undefined, search,
           root_folder_id: rootFolderId || undefined,
@@ -258,7 +262,7 @@ function AddPanel({
       });
       if (error) throw error;
       // A type that does not search on its own is searched as a whole work, season by season for a series.
-      if (search && !data.searching && data.work_id) {
+      if (search && !data.searching && data.work_id && !requestOnly) {
         void api.POST("/works/{id}/grab", { params: { path: { id: data.work_id } } });
       }
       return data;
@@ -360,9 +364,13 @@ function AddPanel({
       </label>
       <div className="flex items-center gap-3">
         <span className="w-24" />
-        <Button variant="primary" busy={add.isPending} busyLabel="Adding…" onClick={() => add.mutate()}>
-          Add {candidate.title}
-        </Button>
+        {add.data?.request_id ? (
+          <span className="text-xs text-ok">Requested: an administrator will look at it. See Activity, Requests.</span>
+        ) : (
+          <Button variant="primary" busy={add.isPending} busyLabel={requestOnly ? "Requesting…" : "Adding…"} onClick={() => add.mutate()}>
+            {requestOnly ? "Request" : "Add"} {candidate.title}
+          </Button>
+        )}
         {add.isError && <span className="text-xs text-danger">{(add.error as { detail?: string }).detail ?? "It could not be added. Try again."}</span>}
       </div>
     </div>

@@ -27,6 +27,7 @@ export const ACTIVITY: Section = {
   tabs: [
     { label: "Queue", path: "/activity/queue", tier: "normal" },
     { label: "History", path: "/activity/history", tier: "normal" },
+    { label: "Requests", path: "/activity/requests", tier: "normal" },
     { label: "Notifications", path: "/activity/notifications", tier: "normal" },
     { label: "Jobs", path: "/activity/jobs", tier: "advanced" },
   ],
