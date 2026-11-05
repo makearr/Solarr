@@ -5,6 +5,7 @@ package releasefacts
 
 import (
 	"math"
+	"path"
 	"strconv"
 	"strings"
 
@@ -86,7 +87,12 @@ func QualityTitle(claims parsetv.Claims) string {
 
 // FromFile is what the probe measured of a library file, as the facts a profile or a target judges.
 func FromFile(file library.EpisodeFile) score.Facts {
+	source := ""
+	if file.RelPath != "" {
+		source = Source(parsetv.ParseClaims(path.Base(file.RelPath)))
+	}
 	return score.Facts{File: score.FileFacts{
+		Source:     source,
 		Resolution: file.Resolution, VideoCodec: file.VideoCodec, HDR: file.HDR, AudioCodec: file.AudioCodec,
 		AudioChannels: file.AudioChannels, Container: file.Container, AudioLanguages: file.Languages, SubtitleLanguages: file.Subtitles,
 		FrameRate: file.FrameRate, VideoBitrate: file.VideoBitrate, AudioBitrate: file.AudioBitrate, CRF: file.CRF,
