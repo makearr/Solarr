@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
+	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/media/music"
 )
 
@@ -28,5 +29,23 @@ func TestSendableFirst_ListsWhatNoClientTakesLast(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("sendableFirst = %+v, want %+v", got, want)
+	}
+}
+
+// A release both a season and an episode query return is listed once, the best-ranked decision kept (2026-11-04).
+func TestDistinctReleases_KeepsTheFirstDecisionOfEachRelease(t *testing.T) {
+	detail := func(decisionID, indexerID int64, guid string) library.DecisionDetail {
+		return library.DecisionDetail{
+			Decision:         library.Decision{ID: decisionID},
+			ReleaseCandidate: library.ReleaseCandidate{IndexerID: indexerID, GUID: guid},
+		}
+	}
+	got := distinctReleases([]library.DecisionDetail{detail(1, 1, "a"), detail(2, 1, "a"), detail(3, 2, "a"), detail(4, 1, "b")})
+	var ids []int64
+	for _, kept := range got {
+		ids = append(ids, kept.Decision.ID)
+	}
+	if want := []int64{1, 3, 4}; !reflect.DeepEqual(ids, want) {
+		t.Errorf("kept decisions = %v, want %v", ids, want)
 	}
 }

@@ -170,7 +170,26 @@ func (c CandidateSearch) ListWorkCandidates(ctx context.Context, workID int64, s
 	if err != nil {
 		return nil, err
 	}
-	return c.decisionViews(ctx, latestRun(details)), nil
+	return c.decisionViews(ctx, distinctReleases(latestRun(details))), nil
+}
+
+// distinctReleases keeps the first (best) decision of each indexer's release: a season and an episode query in one run return it twice.
+func distinctReleases(details []library.DecisionDetail) []library.DecisionDetail {
+	type release struct {
+		indexerID int64
+		guid      string
+	}
+	seen := map[release]bool{}
+	kept := make([]library.DecisionDetail, 0, len(details))
+	for _, detail := range details {
+		key := release{detail.ReleaseCandidate.IndexerID, detail.ReleaseCandidate.GUID}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		kept = append(kept, detail)
+	}
+	return kept
 }
 
 // latestRun keeps the newest search's decisions: every search re-decides the same releases, and
