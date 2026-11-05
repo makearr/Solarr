@@ -257,6 +257,9 @@ func (p placing) namingFor(categoryID int64) (Naming, settings.FileManagement) {
 	return names, fileManagement
 }
 
+// PlacementKey is the affinity key a book of the format places under, for a root chosen before its first file.
+func PlacementKey(format Format, title string) string { return affinityKey(format, title) }
+
 // affinityKey keeps a book's files in one folder on one root.
 func affinityKey(format Format, title string) string {
 	clean := strings.ToLower(strings.TrimSpace(title))

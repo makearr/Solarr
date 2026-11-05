@@ -23,8 +23,6 @@ type SeriesCatalog struct {
 	Clock            clock.Clock
 	// Remover sends a deleted series' files to the recycle bin.
 	Remover FileRemover
-	// Affinity records the root a series was added under, so its first file lands there.
-	Affinity tv.PlacementAffinity
 }
 
 func (c SeriesCatalog) shared() works.Catalog {
@@ -44,20 +42,7 @@ func (c SeriesCatalog) LookupWorks(ctx context.Context, lookup media.AddLookup) 
 // AddWork implements media.Adding for TV: the series with the chosen monitoring, Sonarr's add dialog. It starts no
 // search; the caller searches the series when asked to.
 func (c SeriesCatalog) AddWork(ctx context.Context, request media.AddRequest) (media.AddResult, error) {
-	result, err := c.shared().AddWork(ctx, request)
-	if err != nil || request.RootFolderID == nil || c.Affinity == nil || result.WorkID == 0 {
-		return result, err
-	}
-	detail, err := c.Reader.Get(ctx, request.CategoryID, result.WorkID, c.Clock.Now())
-	if err != nil {
-		return result, translateSeriesError(err)
-	}
-	if key := tv.PlacementKey(detail.Summary.Title); key != "" {
-		if err := c.Affinity.SetPlacementAffinity(ctx, request.CategoryID, key, *request.RootFolderID, c.Clock.Now().Unix()); err != nil {
-			return result, err
-		}
-	}
-	return result, nil
+	return c.shared().AddWork(ctx, request)
 }
 
 // Refresh re-reads one series from the sources; monitoring and season items stay as they are.

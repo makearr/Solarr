@@ -263,6 +263,9 @@ func (p placing) namingFor(categoryID int64) (Naming, settings.FileManagement) {
 	return names, fileManagement
 }
 
+// PlacementKey is the affinity key a scene places under, for a root chosen before its first file.
+func PlacementKey(title string) string { return affinityKey(title) }
+
 // affinityKey keeps a scene's files in one folder on one root.
 func affinityKey(title string) string {
 	clean := strings.ToLower(strings.TrimSpace(title))

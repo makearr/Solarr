@@ -766,8 +766,9 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		WorkAdder: adapters.WorkAdding{
 			Categories: adapters.Categories{Cache: p.cache},
 			Adding:     adapters.MediaTypes{Registry: p.media}.AddingOf, AddKinds: adapters.MediaTypes{Registry: p.media}.AddKinds,
-			AfterAdd: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
-			Suggest:  p.suggester().ForCandidate,
+			AfterAdd:  func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+			Suggest:   p.suggester().ForCandidate,
+			Placement: p.addPlacement(),
 		},
 		ImportLists: adapters.ImportLists{
 			Service: p.importListService(), Forgetter: library.NewImportLists(p.library), Queue: p.queue,

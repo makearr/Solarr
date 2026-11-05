@@ -26,6 +26,7 @@ var directWiredMediaFiles = []string{
 	"cmd/solarr/adapters/unidentified.go",
 	"cmd/solarr/adapters/unidentified_tv.go",
 	"cmd/solarr/adapters/worksmonitor.go",
+	"cmd/solarr/app/addplacement.go",
 	"cmd/solarr/app/artwork_choice.go",
 	"cmd/solarr/app/fingerprint_retry.go",
 	"cmd/solarr/app/job_artwork.go",

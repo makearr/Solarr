@@ -243,7 +243,6 @@ function AddPanel({
   const [tags, setTags] = useState<string[]>([]);
   const editable = info.facets.filter((facet) => facet.editable && facet.kind === "enum" && facet.key !== "air_time_zone");
   const [fields, setFields] = useState<Record<string, string>>({});
-  // Only TV places a series by the root chosen here; the others pick a root when their first file arrives.
   const libraryRoots = (useRootFolders().data ?? []).filter((root) => (root.categories ?? []).some((category) => category.id === Number(categoryId)));
   const add = useMutation({
     mutationFn: async () => {
@@ -326,7 +325,7 @@ function AddPanel({
           </select>
         </label>
       )}
-      {!person && info.key === "tv" && libraryRoots.length > 1 && (
+      {!person && info.key !== "music" && libraryRoots.length > 1 && (
         <label className="flex flex-wrap items-center gap-2">
           <span className="w-24 text-xs text-ink-muted">Root folder</span>
           <select value={rootFolderId} onChange={(event) => setRootFolderId(Number(event.target.value))} className={field}>

@@ -263,6 +263,9 @@ func (p placing) namingFor(categoryID int64) (Naming, settings.FileManagement) {
 	return names, fileManagement
 }
 
+// PlacementKey is the affinity key a film places under, for a root chosen before its first file.
+func PlacementKey(title string, year int64) string { return affinityKey(title, year) }
+
 // affinityKey keeps a film's versions in one folder on one root; two films of a title in different years stay apart.
 func affinityKey(title string, year int64) string {
 	clean := strings.ToLower(strings.TrimSpace(title))

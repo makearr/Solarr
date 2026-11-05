@@ -8,6 +8,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // WorkAdding satisfies apiserver.WorkAdder through the library's type's media.Adding, with the kinds it declares.
@@ -20,6 +21,36 @@ type WorkAdding struct {
 	AfterAdd func(ctx context.Context)
 	// Suggest names the library a candidate belongs in by the libraries' rules; nil suggests none.
 	Suggest func(ctx context.Context, mediaType string, traits media.Traits) (apiserver.LibrarySuggestion, bool, error)
+	// Placement records the root an add chose; nil ignores the choice.
+	Placement *AddPlacement
+}
+
+// AddPlacement turns the root an add dialog chose into the work's placement affinity, so its first file lands there.
+type AddPlacement struct {
+	// Titled reads a stored work's title and year.
+	Titled   func(ctx context.Context, mediaType string, categoryID, workID int64) (title string, year int64, err error)
+	Affinity interface {
+		SetPlacementAffinity(ctx context.Context, categoryID int64, affinityKey string, rootFolderID, updatedAt int64) error
+	}
+	Clock clock.Clock
+	// Keys answers a media type's affinity key for a stored work's title and year; a type missing here ignores the choice.
+	Keys map[string]func(title string, year int64) string
+}
+
+func (p AddPlacement) record(ctx context.Context, mediaType string, categoryID, workID, rootFolderID int64) error {
+	keyOf, ok := p.Keys[mediaType]
+	if !ok {
+		return nil
+	}
+	title, year, err := p.Titled(ctx, mediaType, categoryID, workID)
+	if err != nil {
+		return fmt.Errorf("read added work: %w", err)
+	}
+	key := keyOf(title, year)
+	if key == "" {
+		return nil
+	}
+	return p.Affinity.SetPlacementAffinity(ctx, categoryID, key, rootFolderID, p.Clock.Now().Unix())
 }
 
 // adder resolves a library's type's add and the kind asked for, the type's first when none is.
@@ -86,6 +117,11 @@ func (a WorkAdding) Add(ctx context.Context, request apiserver.AddWorkRequest) (
 	})
 	if err != nil {
 		return apiserver.AddWorkResult{}, notWired(err)
+	}
+	if mediaType, found := a.Categories.MediaTypeOf(request.CategoryID); found && a.Placement != nil && request.RootFolderID != nil && result.WorkID != 0 {
+		if err := a.Placement.record(ctx, mediaType, request.CategoryID, result.WorkID, *request.RootFolderID); err != nil {
+			return apiserver.AddWorkResult{}, err
+		}
 	}
 	if a.AfterAdd != nil {
 		a.AfterAdd(ctx)
