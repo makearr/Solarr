@@ -25,11 +25,8 @@ import (
 // ErrNotSearchable reports a desired item the TV search does not handle on its own (a single episode item).
 var ErrNotSearchable = errors.New("tv: search: only season items are searched on their own")
 
-// searchTVParams are what a structured id query needs the indexer to accept.
-var (
-	idParams      = []string{"tvdbid", "season"}
-	idParamsOneEp = []string{"tvdbid", "season", "ep"}
-)
+// idParamNames are the structured id parameters tried after tvdbid, in order, for the providers a series is known by.
+var idParamNames = []struct{ provider, param string }{{ProviderTVmaze, "tvmazeid"}, {ProviderIMDb, "imdbid"}}
 
 // ItemSearchResult is one season item's search; the shared result under TV's name.
 type ItemSearchResult = judge.Result
@@ -61,6 +58,8 @@ type wanted struct {
 	title    string
 	aliases  []string
 	tvdb     string
+	// otherIDs are the series' ids by query parameter ("tvmazeid", "imdbid") for indexers that lack tvdbid.
+	otherIDs map[string]string
 	year     int64
 	// anime series are also searched by the absolute number releases carry; absolute maps it to the episode number.
 	anime    bool
@@ -95,7 +94,7 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 	}
 	w := wanted{
 		season: season, missing: map[int]library.SeriesEpisode{}, title: detail.Summary.Title, aliases: detail.Aliases,
-		tvdb: detail.IDs[ProviderTVDB], year: detail.Summary.Year, absolute: map[int]int{},
+		tvdb: detail.IDs[ProviderTVDB], otherIDs: otherQueryIDs(detail.IDs), year: detail.Summary.Year, absolute: map[int]int{},
 		anime: SeriesType(detail.Summary.Fields["series_type"]) == SeriesAnime, scene: newSceneNumbers(detail.Episodes),
 	}
 	var runtimeSum, runtimeCount int64
@@ -175,6 +174,17 @@ func seasonFiles(ctx context.Context, reader library.SeriesReader, itemID int64)
 	return out, nil
 }
 
+// otherQueryIDs maps a series' ids to the parameters an indexer takes them by; imdbid goes without its "tt".
+func otherQueryIDs(ids map[string]string) map[string]string {
+	out := map[string]string{}
+	for _, one := range idParamNames {
+		if id := strings.TrimPrefix(ids[one.provider], "tt"); id != "" {
+			out[one.param] = id
+		}
+	}
+	return out
+}
+
 // titles are every name a release may call the series by, cleaned for comparison.
 func (w wanted) titles() map[string]bool {
 	names := map[string]bool{}
@@ -212,14 +222,21 @@ func (w wanted) queries() [][]judge.Query {
 	seasons := w.sceneSeasons()
 
 	var tiers [][]judge.Query
-	if w.tvdb != "" {
+	idQueries := map[string]string{"tvdbid": w.tvdb}
+	for param, id := range w.otherIDs {
+		idQueries[param] = id
+	}
+	for _, param := range []string{"tvdbid", "tvmazeid", "imdbid"} {
+		if idQueries[param] == "" {
+			continue
+		}
 		var byID []judge.Query
 		for _, season := range seasons {
-			extra := map[string]string{"tvdbid": w.tvdb, "season": strconv.Itoa(season)}
-			needs := idParams
+			extra := map[string]string{param: idQueries[param], "season": strconv.Itoa(season)}
+			needs := []string{param, "season"}
 			if oneEpisode {
 				extra["ep"] = strconv.Itoa(episode.Number)
-				needs = idParamsOneEp
+				needs = append(needs, "ep")
 			}
 			byID = append(byID, judge.Query{Function: "tvsearch", Extra: extra, Needs: needs})
 		}

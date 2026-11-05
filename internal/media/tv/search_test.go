@@ -143,10 +143,10 @@ func TestSearchWidensToTextWhenTheIDQueryFindsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.TierUsed == nil || *result.TierUsed != 1 || len(result.Decisions) != 1 {
+	if result.TierUsed == nil || *result.TierUsed != 2 || len(result.Decisions) != 1 {
 		t.Fatalf("tier %v decisions %d", result.TierUsed, len(result.Decisions))
 	}
-	if len(fake.requests) != 2 || fake.requests[1].Query != "Example Show S01" {
+	if len(fake.requests) != 3 || fake.requests[1].Extra["tvmazeid"] != "42" || fake.requests[2].Query != "Example Show S01" {
 		t.Errorf("requests = %+v", fake.requests)
 	}
 }
@@ -298,5 +298,13 @@ func TestSearchHoldsEveryReleaseAgainstTheSeriesOwnFilters(t *testing.T) {
 	}
 	if outcomes["denied"] != "REJECT" || outcomes["fine"] != "ACCEPT" {
 		t.Errorf("outcomes = %v, want the denied group rejected and the other accepted", outcomes)
+	}
+}
+
+func TestSearchQueriesByTVmazeAndIMDbIDWhenThereIsNoTVDBID(t *testing.T) {
+	ids := map[string]string{tv.ProviderTVmaze: "55", tv.ProviderIMDb: "tt0123456"}
+	got := tv.OtherQueryIDs(ids)
+	if len(got) != 2 || got["tvmazeid"] != "55" || got["imdbid"] != "0123456" {
+		t.Errorf("otherQueryIDs = %v, want tvmazeid 55 and imdbid without the tt", got)
 	}
 }
