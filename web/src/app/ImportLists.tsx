@@ -18,8 +18,9 @@ type ImportListTypes = components["schemas"]["ImportListTypes"];
 
 /** ADR-38: one library's import lists, Sonarr's Import Lists screen: each previewed before it is enabled, then synced
  *  on its own cadence. documentation/import-lists.md. */
-export function ImportLists() {
-  const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
+export function ImportLists({ library: chosen }: { library?: string } = {}) {
+  const params = useParams({ strict: false }) as { categoryId?: string };
+  const categoryId = chosen ?? params.categoryId;
   const id = categoryId ? Number(categoryId) : undefined;
   const library = useLibrary(categoryId);
   const words = vocabularyOf(useMediaType(library?.media_type));
