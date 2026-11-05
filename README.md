@@ -17,11 +17,12 @@ Turn a hard drive full of disorganised files into a library that is beautiful an
 8. [The Docker image](#the-docker-image)
 9. [Design decisions](#design-decisions)
 10. [Benchmarks and resource use](#benchmarks-and-resource-use)
-11. [Compiling it yourself](#compiling-it-yourself)
-12. [Contributing](#contributing)
-13. [Supporting the project](#supporting-the-project)
-14. [Built with AI](#built-with-ai)
-15. [Changelog](#changelog)
+11. [Why Go, and how responsiveness works](#why-go-and-how-responsiveness-works)
+12. [Compiling it yourself](#compiling-it-yourself)
+13. [Contributing](#contributing)
+14. [Supporting the project](#supporting-the-project)
+15. [Built with AI](#built-with-ai)
+16. [Changelog](#changelog)
 
 ---
 
@@ -555,6 +556,73 @@ Everyday browsing is cheap. These are the operations that are not, so you can pl
 
 A filtered page of a 500,000-file library comes back in under 4 ms in the worst case, and a TV library of about
 1,000 series and 85,000 episodes answers every list in under 0.25 s, so the interface is rarely the slow part.
+
+---
+
+## Why Go, and how responsiveness works
+
+### The language
+
+Solarr is written in **Go**, and the choice follows from what a media manager does all day: wait on disks, networks
+and databases, many things at once, for years without a restart.
+
+- **Parallel work is cheap and needs no framework.** Go's concurrency is built into the language: a *goroutine* is a
+  function running concurrently, costing a few kilobytes and scheduled by the Go runtime, not an operating-system
+  thread or process. Asking five metadata providers at once, probing files in parallel or serving hundreds of
+  browser connections is ordinary code, with channels and the standard library's `sync` and `context` packages
+  to coordinate. No actor framework, no async runtime, no message broker.
+- **Cancellation is part of the model.** A `context.Context` is passed down through requests, jobs and database
+  writes, so abandoning a request or shutting down stops the work behind it instead of leaving it running.
+- **Type-safe and compiled.** Errors are values the compiler makes you handle, domain values are types rather than
+  loose strings, and a build fails on a mismatch. Strict linting (`golangci-lint`) and Go's race detector run in CI.
+- **One static binary.** `CGO_ENABLED=0` builds a single self-contained executable with the web interface embedded,
+  cross-compiled for amd64 and arm64. That is why the image is small and there is no runtime to install.
+- **A small dependency surface.** The HTTP server is the standard library's `net/http` with the `chi` router;
+  everything stays a plain `http.Handler`. SQLite is a pure-Go driver, so no C toolchain is needed.
+- **Fast to start and light at rest.** A fresh instance idles at about 45 MB of RAM ([measured](#memory)).
+
+### Three kinds of work, kept apart
+
+Responsiveness comes from never letting the three kinds of work share a lane:
+
+| Kind | Example | Where it runs | Rule |
+|---|---|---|---|
+| **The browser** | Rendering a page, typing in search | In your browser; the server only answers small, bounded requests | A request never does a long job inline |
+| **User jobs** | Press *Import*, *Search*, *Drain this disk* | A **job** in the queue, started by your action, with progress you can watch | Gets priority over background work; shown in Activity; cancellable where it makes sense |
+| **Background jobs** | Scans, RSS sync, the hunt, metadata refresh, artwork, backups | Registered **scheduled tasks**, in their own worker pools | Never block the interface; every one is visible and can be run on demand |
+
+### Core concepts
+
+- **A persistent job queue.** Work is a row in `jobs.db`, claimed with a lease. If the process dies mid-job, a reaper
+  returns the abandoned job to the queue (and gives up on one that keeps killing its process). Jobs are for
+  correctness; **events are lossy** and are never used as a work queue.
+- **Bounded worker pools.** Searching, acquiring, importing, metadata, scanning, rescanning, file work, moves and
+  housekeeping each have their own pool with its own concurrency, so a long scan cannot starve a search. **Import
+  runs one at a time, by design.**
+- **A priority queue in front of every database writer.** Each database has one writer. Writes carry a priority
+  (interactive, normal, bulk) and waiting earns aging, so your click jumps ahead of a bulk scan without letting
+  background work starve. Transactions are short and bulk work is cut into 200-row batches.
+- **Reads never wait for writes.** WAL mode lets the web interface read while a scan writes, through a separate read
+  pool.
+- **A pure planner.** What to search for is decided by a function that only reads state and emits idempotent actions
+  (each with a key), so running it twice does nothing twice and it can run often and cheaply.
+- **Live updates without polling storms.** The interface subscribes to a server-sent event stream. Updates are
+  coalesced on a 250 ms tick, so a scan touching thousands of items sends a handful of messages, and each
+  connection only receives what that user may see.
+- **A thin, server-driven frontend.** The server pages, filters and sorts; the browser holds one page of results and
+  virtualises long lists. Server data lives in TanStack Query, and *view* state (filters, sorts, tab) lives in the
+  address bar, so any view is a link and survives a reload.
+- **Spec-first API.** One OpenAPI document generates the Go server interface and the TypeScript client, so frontend
+  and backend cannot drift apart.
+- **Everything outbound is rate-limited and guarded.** All requests go through one client with per-provider pacing,
+  circuit breakers and a destination guard, so a slow or failing provider degrades gracefully instead of stalling a scan.
+- **Time and the filesystem are injected.** Code never calls the clock or the operating system directly; both are
+  passed in, which makes timing-dependent logic testable without sleeping, and a linter enforces it.
+- **Dependencies point one way.** An architecture test holds the allowed package imports as a list, so the layers
+  (interface, jobs, engines, storage) stay separate as the code grows.
+
+More in [database layout](documentation/database-layout.md), the [codebase map](documentation/codebase-map.md) and
+[web interface](documentation/web-interface.md).
 
 ---
 
