@@ -14,7 +14,7 @@ func TestSidecarSubtitleLanguages_ReadsTheLanguageFromTheFileName(t *testing.T) 
 		t.Fatal(err)
 	}
 	for _, name := range []string{
-		"Show - S01E01.mkv", "Show - S01E01.eng.srt", "Show - S01E01.de.forced.srt", "Show - S01E01.srt", "Show - S01E02.eng.srt", "Show - S01E01.nfo",
+		"Show - S01E01.mkv", "Show - S01E01.eng.srt", "Show - S01E01.de.forced.srt", "Show - S01E01.srt", "Show - S01E01.German.sdh.srt", "Show - S01E02.eng.srt", "Show - S01E01.nfo",
 	} {
 		file, err := fsys.Create("/tv/Show/Season 1/" + name)
 		if err != nil {
@@ -24,8 +24,8 @@ func TestSidecarSubtitleLanguages_ReadsTheLanguageFromTheFileName(t *testing.T) 
 	}
 	got := sidecarSubtitleLanguages(fsys, "/tv/Show/Season 1/Show - S01E01.mkv")
 	slices.Sort(got)
-	if !slices.Equal(got, []string{"de", "en", "und"}) {
-		t.Errorf("sidecar languages = %v, want de, en and und (no language in the name)", got)
+	if !slices.Equal(got, []string{"de", "de", "en", "und"}) {
+		t.Errorf("sidecar languages = %v, want de (twice), en and und (no language in the name)", got)
 	}
 }
 

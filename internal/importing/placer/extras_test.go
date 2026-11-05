@@ -15,7 +15,7 @@ import (
 
 func TestExtrasFollowTheirVideoOutOfASubsFolder(t *testing.T) {
 	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
-	for _, rel := range []string{"/in/Rel/Show.S01E01.en.srt", "/in/Rel/Subs/Show.S01E01.German.forced.srt", "/in/Rel/Subs/Other.srt"} {
+	for _, rel := range []string{"/in/Rel/Show.S01E01.eng.srt", "/in/Rel/Subs/Show.S01E01.German.forced.srt", "/in/Rel/Subs/Other.srt"} {
 		if err := fsys.MkdirAll(rel[:len(rel)-len(baseOf(rel))-1], 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -31,7 +31,7 @@ func TestExtrasFollowTheirVideoOutOfASubsFolder(t *testing.T) {
 	}
 	p := placer.New(placer.Config{FS: fsys})
 	others := []inspect.File{
-		{RelPath: "Rel/Show.S01E01.en.srt", SizeBytes: 1},
+		{RelPath: "Rel/Show.S01E01.eng.srt", SizeBytes: 1},
 		{RelPath: "Rel/Subs/Show.S01E01.German.forced.srt", SizeBytes: 1},
 		{RelPath: "Rel/Subs/Other.srt", SizeBytes: 1},
 	}
@@ -39,7 +39,7 @@ func TestExtrasFollowTheirVideoOutOfASubsFolder(t *testing.T) {
 	got := p.Extras([]string{"srt"}, "/in", settings.RootFolder{ID: 7, Path: "/lib"}, others, owners, []mover.PlaceMethod{mover.PlaceCopy})
 	want := []library.UnitExtra{
 		{RootFolderID: 7, RelPath: "Show/Season 1/Show - S01E01.en.srt"},
-		{RootFolderID: 7, RelPath: "Show/Season 1/Show - S01E01.German.forced.srt"},
+		{RootFolderID: 7, RelPath: "Show/Season 1/Show - S01E01.de.forced.srt"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("extras = %+v, want %+v", got, want)

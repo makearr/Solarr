@@ -4,14 +4,11 @@ import (
 	"path"
 	"strings"
 
+	"github.com/makearr/Solarr/internal/identify/parsetv"
 	"github.com/makearr/Solarr/internal/platform/fsx"
-	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 var subtitleSidecarExtensions = map[string]bool{".srt": true, ".ass": true, ".ssa": true, ".sub": true, ".vtt": true, ".sup": true}
-
-// spellings of a subtitle's role in a file name that are not a language.
-var subtitleRoleWords = map[string]bool{"forced": true, "sdh": true, "hi": true, "cc": true, "default": true}
 
 // sidecarSubtitleLanguages lists the languages of the subtitle files that sit beside a video, named like it
 // ("Show - S01E01.eng.srt", "Show - S01E01.srt"): a file with no language in its name counts as "und".
@@ -35,11 +32,9 @@ func sidecarSubtitleLanguages(fsys fsx.FS, videoPath string) []string {
 			middle = withoutExtension[len(base)+1:]
 		}
 		language := "und"
-		for _, token := range strings.Split(strings.ToLower(middle), ".") {
-			if code := mediatool.LanguageCode(token); code != "" && !subtitleRoleWords[token] {
-				language = code
-				break
-			}
+		// "x." stands in for the title, which the parser never reads as a claim.
+		if info, _ := parsetv.ParseSubtitleFile("x." + middle + extension); info.Language != "" {
+			language = info.Language
 		}
 		languages = append(languages, language)
 	}

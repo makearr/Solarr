@@ -56,3 +56,29 @@ func ParseSubtitleFile(name string) (SubtitleInfo, bool) {
 	}
 	return info, true
 }
+
+// CanonicalSubtitleSuffix rewrites what follows a video's name in a subtitle file (".eng.FORCED.srt") with the two-letter
+// language and lower-case flags (".en.forced.srt"); tokens that claim nothing stay as written.
+func CanonicalSubtitleSuffix(suffix string) string {
+	extension := path.Ext(suffix)
+	if !subtitleExtensions[strings.ToLower(extension)] {
+		return suffix
+	}
+	middle := strings.TrimPrefix(strings.TrimSuffix(suffix, extension), ".")
+	if middle == "" {
+		return suffix
+	}
+	tokens := strings.Split(middle, ".")
+	for i, token := range tokens {
+		lower := strings.ToLower(token)
+		switch lower {
+		case "forced", "sdh", "cc", "hi", "default":
+			tokens[i] = lower
+			continue
+		}
+		if code, found := subtitleLanguages[lower]; found {
+			tokens[i] = code
+		}
+	}
+	return "." + strings.Join(tokens, ".") + strings.ToLower(extension)
+}

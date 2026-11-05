@@ -14,6 +14,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/parsetv"
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/moving/placement"
@@ -279,7 +280,7 @@ func (p Placer) Extras(
 		if owner == nil {
 			continue
 		}
-		destRel := strings.TrimSuffix(owner.DestRel, path.Ext(owner.DestRel)) + suffix
+		destRel := strings.TrimSuffix(owner.DestRel, path.Ext(owner.DestRel)) + parsetv.CanonicalSubtitleSuffix(suffix)
 		destAbs := path.Join(destRoot.Path, destRel)
 		if _, err := p.config.FS.Stat(destAbs); err == nil {
 			continue

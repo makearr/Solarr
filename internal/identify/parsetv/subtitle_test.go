@@ -22,3 +22,15 @@ func TestParseSubtitleFile(t *testing.T) {
 		}
 	}
 }
+
+func TestCanonicalSubtitleSuffix(t *testing.T) {
+	cases := map[string]string{
+		".eng.srt": ".en.srt", ".German.FORCED.SRT": ".de.forced.srt", ".srt": ".srt", ".pt-br.ass": ".pt-BR.ass",
+		".en.sdh.srt": ".en.sdh.srt", ".mkv": ".mkv", ".Bonus.srt": ".Bonus.srt",
+	}
+	for in, want := range cases {
+		if got := CanonicalSubtitleSuffix(in); got != want {
+			t.Errorf("CanonicalSubtitleSuffix(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

@@ -292,7 +292,7 @@ var allowedInternalImports = map[string][]string{
 	// no more than scan itself does.
 	"internal/scanning/probe": {
 		"internal/platform/clock", "internal/platform/filekind", "internal/jobs", "internal/db/library", "internal/platform/mediatool",
-		"internal/db/settings", "internal/platform/fsx",
+		"internal/db/settings", "internal/platform/fsx", "internal/identify/parsetv",
 	},
 	// ADR-48's import.inspect job: internal/importing/inspect for WALK/GROUP/SHAPE,
 	// internal/identify/model for the ADR-24 chain's own types (RunChainForFiles,
@@ -377,7 +377,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/service/importlist": {"internal/db/library", "internal/db/settings", "internal/jobs", "internal/media", "internal/metadata/anilist", "internal/metadata/stashbox", "internal/metadata/tmdb", "internal/platform/clock", "internal/platform/config"},
 	"internal/media":              {"internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/acquiring/rss", "internal/moving/renamejob", "internal/acquiring/plan", "internal/db/settings", "internal/identify/model", "internal/jobs", "internal/moving/naming", "internal/scanning/scan"},
 	"internal/moving/sidecar":     {"internal/db/settings", "internal/platform/fsx"},
-	"internal/importing/placer":   {"internal/importing/inspect", "internal/db/library", "internal/db/settings", "internal/moving/mover", "internal/moving/placement", "internal/platform/clock", "internal/platform/fsx"},
+	"internal/importing/placer":   {"internal/identify/parsetv", "internal/importing/inspect", "internal/db/library", "internal/db/settings", "internal/moving/mover", "internal/moving/placement", "internal/platform/clock", "internal/platform/fsx"},
 	"internal/media/knownfor":     {"internal/db/library", "internal/media", "internal/metadata/tmdb"},
 	// File Management a sweep applies alike for every type that wants whole works or their parts.
 	"internal/media/housekeeping": {"internal/db/library", "internal/db/settings", "internal/media", "internal/platform/fsx", "internal/scanning/scan"},
