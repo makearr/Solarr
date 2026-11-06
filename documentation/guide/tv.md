@@ -99,6 +99,11 @@ broadcast listed under two series. On a series page, an episode's link button:
   into the other series' folder too (a second copy or a symbolic link when the two are on different disks, set
   under **File management → Shared episodes across disks**).
 
+An event Solarr found itself stays under detection when you edit it: parts you take out are remembered by the
+event's name and are not put back, parts you add stay, and the parts the providers list that the library lacks
+remain. Renaming an event makes it yours. Adding a series to the library makes the next pass compare the
+providers' episode lists again at once, so the parts it supplies show up.
+
 ## Quality for TV (🟡)
 
 **Quality profiles** (Settings, then Quality profiles) are edited with a form: rank resolution, source, codec,

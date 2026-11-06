@@ -182,3 +182,8 @@ language profile takes that profile; libraries that already had one keep it.
 A library is created with its **target quality chosen in the form**, in the setup wizard (the *Arr step and the library-folder step)
 and on Settings > Libraries: the select lists the family's targets, the preferred ("Space conscious") one is selected, and None leaves the
 library without one. The server already gives a new library that default, so the form only saves a different choice.
+
+A single work can aim for another target than its library's: the **Add to Solarr** dialog and the work's **Edit** dialog
+offer the family's targets, and the choice is stored per item (`desired_target_override`, migration 0111, like the profile
+override); `judge.LibraryProfiles` ranks by it before the library's. The closeness shown on an owned file is still measured
+against the library's target.
