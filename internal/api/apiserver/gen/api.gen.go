@@ -1863,8 +1863,6 @@ type CategorySettingsTvMonitor string
 
 // CategoryStatistics defines model for CategoryStatistics.
 type CategoryStatistics struct {
-	AlbumsByState []StatisticsCount `json:"albums_by_state"`
-
 	// ComputedAt When the rollup last ran; absent before the first run.
 	ComputedAt *time.Time `json:"computed_at,omitempty"`
 
@@ -1908,7 +1906,8 @@ type CategoryStatistics struct {
 	SizePerHour *[]StatisticsPicture `json:"size_per_hour,omitempty"`
 
 	// WindowDays How many days back the download figures reach.
-	WindowDays int `json:"window_days"`
+	WindowDays   int               `json:"window_days"`
+	WorksByState []StatisticsCount `json:"works_by_state"`
 }
 
 // CategoryWrite defines model for CategoryWrite.

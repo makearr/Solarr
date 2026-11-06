@@ -33,7 +33,7 @@ type StatisticsView struct {
 	SeriesGaps         []StatisticsFigure
 	SizePerHour        []StatisticsFigure
 	VideoBitrate       []StatisticsFigure
-	AlbumsByState      []StatisticsFigure
+	WorksByState       []StatisticsFigure
 	DownloadsByState   []StatisticsFigure
 	GrowthByMonth      []StatisticsFigure
 	DecisionsByOutcome []StatisticsFigure
@@ -77,7 +77,7 @@ func (s *Server) GetCategoryStatistics(w http.ResponseWriter, r *http.Request, i
 	out := gen.CategoryStatistics{
 		WindowDays:         view.WindowDays,
 		FilesByCodec:       make([]gen.StatisticsFiles, len(view.FilesByCodec)),
-		AlbumsByState:      counts(view.AlbumsByState),
+		WorksByState:       counts(view.WorksByState),
 		DownloadsByState:   counts(view.DownloadsByState),
 		DecisionsByOutcome: counts(view.DecisionsByOutcome),
 		GrowthByMonth:      make([]gen.StatisticsFiles, len(view.GrowthByMonth)),

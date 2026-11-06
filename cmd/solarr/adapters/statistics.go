@@ -52,7 +52,7 @@ func (s Statistics) CategoryStatistics(ctx context.Context, categoryID int64) (a
 		{library.StatSeriesGaps, &view.SeriesGaps},
 		{library.StatSizePerHour, &view.SizePerHour},
 		{library.StatVideoBitrate, &view.VideoBitrate},
-		{library.StatAlbumsByState, &view.AlbumsByState},
+		{library.StatAlbumsByState, &view.WorksByState},
 		{library.StatDownloadsByState, &view.DownloadsByState},
 		{library.StatGrowthByMonth, &view.GrowthByMonth},
 		{library.StatDecisionsByOutcome, &view.DecisionsByOutcome},

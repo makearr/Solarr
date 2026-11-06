@@ -104,7 +104,7 @@ func TestCopyStatRollup_MovesTheFiguresOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := string(server.get(t, fmt.Sprintf("/categories/%d/statistics", ids.music)))
-	if !strings.Contains(page, `"albums_by_state":[{"count":12,"key":"COMPLETE"}]`) {
+	if !strings.Contains(page, `"works_by_state":[{"count":12,"key":"COMPLETE"}]`) {
 		t.Errorf("statistics = %s, want the copied 12 complete albums, not the later 99", page)
 	}
 }

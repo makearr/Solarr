@@ -9286,7 +9286,7 @@ export interface components {
             series_gaps?: components["schemas"]["StatisticsSeries"][];
             /** @description Video libraries only; bytes per hour of picture and average video bitrate by resolution and codec. */
             size_per_hour?: components["schemas"]["StatisticsPicture"][];
-            albums_by_state: components["schemas"]["StatisticsCount"][];
+            works_by_state: components["schemas"]["StatisticsCount"][];
             downloads_by_state: components["schemas"]["StatisticsCount"][];
             /** @description Files and bytes first seen per month, oldest first; the first scan lands in one month. */
             growth_by_month: components["schemas"]["StatisticsFiles"][];

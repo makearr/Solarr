@@ -126,7 +126,7 @@ export function Statistics() {
   const growth = data?.growth_by_month ?? [];
   const largestMonth = Math.max(1, ...growth.map((row) => row.bytes));
   const decisions = (data?.decisions_by_outcome ?? []).reduce((sum, row) => sum + row.count, 0);
-  const albums = (data?.albums_by_state ?? []).reduce((sum, row) => sum + row.count, 0);
+  const albums = (data?.works_by_state ?? []).reduce((sum, row) => sum + row.count, 0);
 
   return (
     <div className="mx-auto flex h-full max-w-4xl flex-col gap-6 overflow-y-auto p-6">
@@ -149,7 +149,7 @@ export function Statistics() {
               {albums} monitored {items}. Each figure opens those {items}.
             </p>
             <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              {data.albums_by_state.map((row) => {
+              {data.works_by_state.map((row) => {
                 const target = stateLink(categoryId ?? "", worksLevel, row.key);
                 return (
                   <li key={row.key}>
@@ -164,7 +164,7 @@ export function Statistics() {
                   </li>
                 );
               })}
-              {data.albums_by_state.length === 0 && <li className="text-sm text-ink-muted">No monitored {items}.</li>}
+              {data.works_by_state.length === 0 && <li className="text-sm text-ink-muted">No monitored {items}.</li>}
             </ul>
           </section>
 

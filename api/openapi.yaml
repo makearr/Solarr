@@ -13054,7 +13054,7 @@ components:
 
     CategoryStatistics:
       type: object
-      required: [files_by_codec, albums_by_state, downloads_by_state, growth_by_month, decisions_by_outcome, window_days]
+      required: [files_by_codec, works_by_state, downloads_by_state, growth_by_month, decisions_by_outcome, window_days]
       properties:
         computed_at: { type: string, format: date-time, description: When the rollup last ran; absent before the first run. }
         window_days: { type: integer, description: How many days back the download figures reach. }
@@ -13102,7 +13102,7 @@ components:
           type: array
           description: Video libraries only; bytes per hour of picture and average video bitrate by resolution and codec.
           items: { $ref: "#/components/schemas/StatisticsPicture" }
-        albums_by_state:
+        works_by_state:
           type: array
           items: { $ref: "#/components/schemas/StatisticsCount" }
         downloads_by_state:
