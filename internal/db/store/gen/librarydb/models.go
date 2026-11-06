@@ -196,10 +196,29 @@ type Collection struct {
 	NameLocked int64
 }
 
+type CollectionDeclaredKey struct {
+	CollectionID int64
+	Provider     string
+	ExternalID   string
+}
+
 type CollectionExternalID struct {
 	Provider     string
 	ExternalID   string
 	CollectionID int64
+}
+
+type CollectionLinkOrigin struct {
+	LowID     int64
+	HighID    int64
+	Reason    string
+	Detail    string
+	CreatedAt int64
+}
+
+type CollectionLinkRefusal struct {
+	LowKey  string
+	HighKey string
 }
 
 type CollectionMember struct {
@@ -208,6 +227,14 @@ type CollectionMember struct {
 	PartID       int64
 	Ord          sql.NullInt64
 	ByHand       int64
+}
+
+type CollectionMemberOrigin struct {
+	CollectionID int64
+	WorkID       int64
+	Reason       string
+	Detail       string
+	CreatedAt    int64
 }
 
 type CollectionRefusal struct {

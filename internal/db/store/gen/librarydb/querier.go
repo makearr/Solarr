@@ -14,8 +14,12 @@ type Querier interface {
 	AbandonRunningArrImports(ctx context.Context, finishedAt sql.NullInt64) (int64, error)
 	AddAltNumbering(ctx context.Context, arg AddAltNumberingParams) error
 	AddArrImportItem(ctx context.Context, arg AddArrImportItemParams) (ArrImportItem, error)
+	AddCollectionDeclaredKey(ctx context.Context, arg AddCollectionDeclaredKeyParams) error
+	AddCollectionLinkOrigin(ctx context.Context, arg AddCollectionLinkOriginParams) error
+	AddCollectionLinkRefusal(ctx context.Context, arg AddCollectionLinkRefusalParams) error
 	AddCollectionMember(ctx context.Context, arg AddCollectionMemberParams) error
 	AddCollectionMemberByHand(ctx context.Context, arg AddCollectionMemberByHandParams) error
+	AddCollectionMemberOrigin(ctx context.Context, arg AddCollectionMemberOriginParams) error
 	AddCollectionRefusal(ctx context.Context, arg AddCollectionRefusalParams) error
 	// edition_id and part_id are 0 for a credit on the work itself (Appendix E, D2).
 	AddCredit(ctx context.Context, arg AddCreditParams) error
@@ -238,9 +242,13 @@ type Querier interface {
 	// A refresh rewrites the numbers one provider gave a part, so a mapping it dropped goes too.
 	DeleteAltNumberingByProvider(ctx context.Context, arg DeleteAltNumberingByProviderParams) error
 	DeleteCollection(ctx context.Context, id int64) error
+	DeleteCollectionDeclaredKeys(ctx context.Context, arg DeleteCollectionDeclaredKeysParams) error
 	DeleteCollectionLink(ctx context.Context, arg DeleteCollectionLinkParams) error
+	DeleteCollectionLinkOrigin(ctx context.Context, arg DeleteCollectionLinkOriginParams) error
+	DeleteCollectionLinkRefusal(ctx context.Context, arg DeleteCollectionLinkRefusalParams) error
 	// A collection that goes takes its links with it; a link of a collection to itself says nothing.
 	DeleteCollectionLinks(ctx context.Context, id int64) error
+	DeleteCollectionMemberOrigin(ctx context.Context, arg DeleteCollectionMemberOriginParams) error
 	DeleteCollectionMembers(ctx context.Context, collectionID int64) error
 	DeleteCustomCollection(ctx context.Context, id int64) (int64, error)
 	DeleteDecisionsByID(ctx context.Context, ids interface{}) (int64, error)
@@ -511,6 +519,7 @@ type Querier interface {
 	// the work-level listing above deliberately does not.
 	ListAllCreditsUnderWork(ctx context.Context, workID int64) ([]Credit, error)
 	ListAllDecisionRollup(ctx context.Context) ([]DecisionRollup, error)
+	ListAllDeclaredKeys(ctx context.Context) ([]CollectionDeclaredKey, error)
 	// What statistics.db's first start copies over (revision 2, D7); every chart reads statistics.db now.
 	ListAllStatRollup(ctx context.Context) ([]StatRollup, error)
 	// Every other number of a page of parts, one per scheme: the first provider's.
@@ -558,8 +567,11 @@ type Querier interface {
 	ListCharacterCreditsOfType(ctx context.Context, mediaType string) ([]ListCharacterCreditsOfTypeRow, error)
 	// Genres stored before they were tags, a page of works at a time.
 	ListClassificationGenres(ctx context.Context, pageSize int64) ([]ListClassificationGenresRow, error)
+	ListCollectionLinkOrigins(ctx context.Context, id int64) ([]CollectionLinkOrigin, error)
+	ListCollectionLinkRefusals(ctx context.Context) ([]CollectionLinkRefusal, error)
 	// Collections of different libraries a person said are one (Babylon 5: its films and its series), both ways round.
 	ListCollectionLinks(ctx context.Context, id int64) ([]int64, error)
+	ListCollectionMemberOrigins(ctx context.Context, collectionID int64) ([]CollectionMemberOrigin, error)
 	ListCollectionMembers(ctx context.Context, collectionID int64) ([]ListCollectionMembersRow, error)
 	// The works of a library in the collections, monitored as the library's own item says, files counted.
 	ListCollectionMembersInCategory(ctx context.Context, arg ListCollectionMembersInCategoryParams) ([]ListCollectionMembersInCategoryRow, error)
@@ -676,6 +688,9 @@ type Querier interface {
 	// The SET items of works with a monitored part whose time or day is recent or still ahead: what a
 	// season owes may change, or have changed, without anything being written to it.
 	ListItemsWithPartsComingOut(ctx context.Context, arg ListItemsWithPartsComingOutParams) ([]ListItemsWithPartsComingOutRow, error)
+	ListLinkableCollectionIDs(ctx context.Context) ([]ListLinkableCollectionIDsRow, error)
+	// Every franchise collection of every media type with the ids it is known by, for the pass that links collections across libraries.
+	ListLinkableCollections(ctx context.Context) ([]ListLinkableCollectionsRow, error)
 	// Which of a batch's files a person already identified; ids is a JSON array.
 	ListManuallyIdentified(ctx context.Context, mediaObjectIds string) ([]int64, error)
 	// The artists credited on a library's albums, with what a merge needs to rank them. shared is set

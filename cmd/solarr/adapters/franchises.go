@@ -139,6 +139,17 @@ func (a LibraryFranchises) Get(ctx context.Context, categoryID, franchiseID int6
 			}
 		}
 		view := franchiseView(row, missing)
+		origins, err := a.Store.MemberOrigins(ctx, franchiseID)
+		if err != nil {
+			return gen.Franchise{}, err
+		}
+		for index, member := range view.Members {
+			if origin, ok := origins[derefInt64(member.WorkId)]; ok {
+				reason := gen.FranchiseMemberOriginReason(origin.Reason)
+				view.Members[index].OriginReason = &reason
+				setString(&view.Members[index].OriginDetail, origin.Detail)
+			}
+		}
 		links, err := a.linksOf(ctx, franchiseID)
 		if err != nil {
 			return gen.Franchise{}, err
@@ -151,38 +162,63 @@ func (a LibraryFranchises) Get(ctx context.Context, categoryID, franchiseID int6
 	return gen.Franchise{}, apiserver.ErrNoFranchise
 }
 
-// linksOf shows each collection linked with one in every library of its media type that lists it, with the works held there.
+// linksOf shows each collection linked with one in every readable library of its media type that lists it, with the works
+// held there and those that media type lacks, and why they are linked.
 func (a LibraryFranchises) linksOf(ctx context.Context, franchiseID int64) ([]gen.FranchiseLink, error) {
-	others, err := a.Store.LinkedWith(ctx, franchiseID)
+	linked, err := a.Store.Links(ctx, franchiseID)
 	if err != nil {
 		return nil, err
 	}
 	var links []gen.FranchiseLink
-	for _, otherID := range others {
-		place, err := a.Store.PlaceOf(ctx, otherID)
+	for _, one := range linked {
+		place, err := a.Store.PlaceOf(ctx, one.OtherID)
 		if err != nil {
 			continue
 		}
+		shown := false
+		var first *settings.Category
 		for _, category := range a.Cache.Snapshot().Categories() {
-			if category.MediaType != place.MediaType {
+			if category.MediaType != place.MediaType || !apiserver.CanReadLibrary(ctx, category.ID) {
 				continue
+			}
+			if first == nil || category.ID == place.CategoryID {
+				first = &category
 			}
 			rows, err := a.Store.InCategory(ctx, place.MediaType, category.ID)
 			if err != nil {
 				return nil, err
 			}
 			for _, row := range rows {
-				if row.ID != otherID || len(row.Members) == 0 {
-					continue
+				if row.ID == one.OtherID && len(row.Members) > 0 {
+					links = append(links, a.linkView(ctx, one, category, row))
+					shown = true
 				}
-				view := franchiseView(row, nil)
-				link := gen.FranchiseLink{Id: row.ID, CategoryId: category.ID, Name: row.Name, Members: view.Members}
-				setString(&link.LibraryName, category.Name)
-				links = append(links, link)
+			}
+		}
+		if !shown && first != nil {
+			if row, err := a.Store.Get(ctx, one.OtherID); err == nil {
+				links = append(links, a.linkView(ctx, one, *first, row))
 			}
 		}
 	}
 	return links, nil
+}
+
+// linkView maps a linked collection as one library shows it; what its media type lacks is best effort, as a provider may be down.
+func (a LibraryFranchises) linkView(ctx context.Context, link library.CollectionLink, category settings.Category, row library.FranchiseRow) gen.FranchiseLink {
+	var missing []media.FranchiseMember
+	if provider, ok := a.capability(category); ok && row.Kind == library.FranchiseKind {
+		missing, _ = provider.MissingFranchiseMembers(ctx, category.ID, row.ID)
+	}
+	view := franchiseView(row, missing)
+	out := gen.FranchiseLink{Id: row.ID, CategoryId: category.ID, Name: row.Name, Members: view.Members}
+	setString(&out.LibraryName, category.Name)
+	setString(&out.Detail, link.Detail)
+	if link.Reason != "" {
+		reason := gen.FranchiseLinkReason(link.Reason)
+		out.Reason = &reason
+	}
+	return out
 }
 
 // Link implements apiserver.Franchises: both collections must be listed by their libraries.
@@ -418,6 +454,13 @@ func firstPoster(members []library.FranchiseMember) string {
 		}
 	}
 	return ""
+}
+
+func derefInt64(value *int64) int64 {
+	if value == nil {
+		return 0
+	}
+	return *value
 }
 
 func derefOr(value *int, fallback int) int {

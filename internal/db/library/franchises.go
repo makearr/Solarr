@@ -45,6 +45,11 @@ func joinFranchiseTx(
 		return err
 	}
 	found, err := queries.GetCollectionByExternalID(ctx, librarydb.GetCollectionByExternalIDParams{Provider: provider, ExternalID: externalID})
+	if err == nil && found.MediaType != mediaType {
+		// Another media type already holds this franchise id: this one keeps a sibling, linked to it by the same key.
+		provider = SiblingProvider(provider, mediaType)
+		found, err = queries.GetCollectionByExternalID(ctx, librarydb.GetCollectionByExternalIDParams{Provider: provider, ExternalID: externalID})
+	}
 	switch {
 	case err == nil:
 		*id = found.ID
@@ -55,7 +60,7 @@ func joinFranchiseTx(
 		}
 	case errors.Is(err, sql.ErrNoRows):
 		created, err := queries.CreateCollection(ctx, librarydb.CreateCollectionParams{
-			MediaType: mediaType, Name: name, Kind: FranchiseKind, Source: provider, AddedAt: now,
+			MediaType: mediaType, Name: name, Kind: FranchiseKind, Source: baseProvider(provider), AddedAt: now,
 		})
 		if err != nil {
 			return err
@@ -567,6 +572,9 @@ func (f Franchises) Dismiss(ctx context.Context, franchiseID, workID int64) erro
 		if err := refuseCollection(ctx, queries, franchiseID, workID); err != nil {
 			return err
 		}
+		if err := queries.DeleteCollectionMemberOrigin(ctx, librarydb.DeleteCollectionMemberOriginParams{CollectionID: franchiseID, WorkID: workID}); err != nil {
+			return err
+		}
 		return queries.RemoveCollectionMember(ctx, librarydb.RemoveCollectionMemberParams{CollectionID: franchiseID, WorkID: workID})
 	})
 	if err != nil {
@@ -810,7 +818,16 @@ func (f Franchises) LinkCollections(ctx context.Context, a, b int64) error {
 		if err := queries.DeleteCollectionLink(ctx, librarydb.DeleteCollectionLinkParams{A: a, B: b}); err != nil {
 			return err
 		}
-		return queries.AddRelationship(ctx, librarydb.AddRelationshipParams{FromType: "collection", FromID: a, ToType: "collection", ToID: b, Kind: CollectionLinkKind})
+		if err := allowLinkTx(ctx, queries, a, b); err != nil {
+			return err
+		}
+		if err := queries.AddRelationship(ctx, librarydb.AddRelationshipParams{FromType: "collection", FromID: a, ToType: "collection", ToID: b, Kind: CollectionLinkKind}); err != nil {
+			return err
+		}
+		pair := orderedIDs(a, b)
+		return queries.AddCollectionLinkOrigin(ctx, librarydb.AddCollectionLinkOriginParams{
+			LowID: pair[0], HighID: pair[1], Reason: LinkReasonHand, CreatedAt: f.store.Now().Unix(),
+		})
 	})
 	if err != nil {
 		return fmt.Errorf("library: link collections %d and %d: %w", a, b, err)
@@ -818,10 +835,18 @@ func (f Franchises) LinkCollections(ctx context.Context, a, b int64) error {
 	return nil
 }
 
-// UnlinkCollections takes the link between two collections away.
+// UnlinkCollections takes the link between two collections away and remembers it, so no pass links them again.
 func (f Franchises) UnlinkCollections(ctx context.Context, a, b int64) error {
 	err := f.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
-		return librarydb.New(tx).DeleteCollectionLink(ctx, librarydb.DeleteCollectionLinkParams{A: a, B: b})
+		queries := librarydb.New(tx)
+		if err := queries.DeleteCollectionLink(ctx, librarydb.DeleteCollectionLinkParams{A: a, B: b}); err != nil {
+			return err
+		}
+		pair := orderedIDs(a, b)
+		if err := queries.DeleteCollectionLinkOrigin(ctx, librarydb.DeleteCollectionLinkOriginParams{LowID: pair[0], HighID: pair[1]}); err != nil {
+			return err
+		}
+		return refuseLinkTx(ctx, queries, a, b)
 	})
 	if err != nil {
 		return fmt.Errorf("library: unlink collections %d and %d: %w", a, b, err)

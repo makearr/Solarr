@@ -31,6 +31,7 @@ import { inputStyle } from "@/ui/form";
 import { useNavigate } from "@tanstack/react-router";
 
 type Franchise = components["schemas"]["Franchise"];
+type FranchiseMember = components["schemas"]["FranchiseMember"];
 type View = "poster" | "list";
 interface SavedView {
   name: string;
@@ -353,6 +354,11 @@ function CollectionDetail({
                 {member.title}
                 {member.year ? <span className="font-normal text-ink-muted"> ({member.year})</span> : null}
               </span>
+              {member.origin_reason === "crossover" && (
+                <span className="truncate text-[11px] text-ink-muted" title={t("franchise.originCrossover", { detail: member.origin_detail ?? "" })}>
+                  {t("franchise.originCrossover", { detail: member.origin_detail ?? "" })}
+                </span>
+              )}
             </>
           );
           return member.work_id ? (
@@ -501,15 +507,17 @@ function LinkedCollections({ categoryId, franchise, administrator }: { categoryI
               {t("franchise.linked")} {link.library_name}
             </span>
             {administrator && (
-              <button type="button" className="ml-auto text-xs text-ink-muted hover:text-ink" onClick={() => unlink.mutate(link.id)}>
+              <button type="button" className="ml-auto text-xs text-ink-muted hover:text-ink" title={t("franchise.unlinkKept")} onClick={() => unlink.mutate(link.id)}>
                 {t("franchise.unlink")}
               </button>
             )}
           </div>
+          {link.reason && (
+            <p className="text-xs text-ink-muted">{link.reason === "provider" ? t("franchise.linkAuto", { key: link.detail ?? "" }) : t("franchise.linkHand")}</p>
+          )}
           <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-4">
-            {link.members
-              .filter((member) => member.work_id)
-              .map((member) => (
+            {link.members.map((member) =>
+              member.work_id ? (
                 <Link
                   key={member.work_id}
                   to="/library/$categoryId/works/$workId/$tab"
@@ -520,7 +528,7 @@ function LinkedCollections({ categoryId, franchise, administrator }: { categoryI
                     {member.poster_url ? (
                       <img src={remoteImage(member.poster_url, "small")} alt="" loading="lazy" className="size-full object-cover" />
                     ) : (
-                      <CoverArt workId={member.work_id as number} title={member.title} size="small" className="size-full object-cover" />
+                      <CoverArt workId={member.work_id} title={member.title} size="small" className="size-full object-cover" />
                     )}
                   </span>
                   <span className="truncate text-sm font-medium">
@@ -528,7 +536,10 @@ function LinkedCollections({ categoryId, franchise, administrator }: { categoryI
                     {member.year ? <span className="font-normal text-ink-muted"> ({member.year})</span> : null}
                   </span>
                 </Link>
-              ))}
+              ) : (
+                <LinkedMissing key={`${member.provider}:${member.external_id}`} member={member} categoryId={String(link.category_id)} onDone={() => void queryClient.invalidateQueries({ queryKey: ["franchise", categoryId, franchise.id] })} />
+              ),
+            )}
           </div>
         </div>
       ))}
@@ -539,6 +550,39 @@ function LinkedCollections({ categoryId, franchise, administrator }: { categoryI
       )}
       {linking && <LinkDialog categoryId={categoryId} franchise={franchise} onClose={() => setLinking(false)} />}
     </>
+  );
+}
+
+/** A work of a linked collection that its library type lacks, added into that library with the one Add dialog. */
+function LinkedMissing({ member, categoryId, onDone }: { member: FranchiseMember; categoryId: string; onDone: () => void }) {
+  const [adding, setAdding] = useState(false);
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="block aspect-[2/3] overflow-hidden rounded-lg border border-border-subtle bg-canvas">
+        {member.poster_url && <img src={remoteImage(member.poster_url, "small")} alt="" loading="lazy" className="size-full object-cover opacity-60" />}
+      </span>
+      <span className="truncate text-sm font-medium">
+        {member.title}
+        {member.year ? <span className="font-normal text-ink-muted"> ({member.year})</span> : null}
+      </span>
+      {member.provider && member.external_id && (
+        <>
+          <button type="button" aria-expanded={adding} onClick={() => setAdding(!adding)} className="w-fit rounded-md border border-border-subtle px-2 py-0.5 text-xs text-accent hover:border-accent">
+            {t("collection.request")}
+          </button>
+          {adding && (
+            <AddToLibrary
+              candidate={{ provider: member.provider, external_id: member.external_id, title: member.title, poster_url: member.poster_url, year: member.year }}
+              categoryId={categoryId}
+              onDone={() => {
+                setAdding(false);
+                onDone();
+              }}
+            />
+          )}
+        </>
+      )}
+    </div>
   );
 }
 

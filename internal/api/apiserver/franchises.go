@@ -45,6 +45,15 @@ var ErrNoFranchise = errors.New("apiserver: no such franchise")
 // ErrFranchiseNotEditable is a collection a provider names: only hand-made ones are renamed, deleted or filled by hand.
 var ErrFranchiseNotEditable = errors.New("apiserver: a provider's collection cannot be changed by hand")
 
+// CanReadLibrary says whether the caller of ctx may read a library; a context with no caller (an internal call) may read all.
+func CanReadLibrary(ctx context.Context, categoryID int64) bool {
+	access, err := authz.FromContext(ctx)
+	if err != nil {
+		return true
+	}
+	return access.Require(categoryID, settings.PermissionRead) == nil
+}
+
 func (s *Server) writeFranchiseError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNoFranchise):

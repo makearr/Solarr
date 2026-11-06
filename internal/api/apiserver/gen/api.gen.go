@@ -293,6 +293,17 @@ const (
 	FranchiseKindFranchise FranchiseKind = "franchise"
 )
 
+// Defines values for FranchiseLinkReason.
+const (
+	FranchiseLinkReasonHand     FranchiseLinkReason = "hand"
+	FranchiseLinkReasonProvider FranchiseLinkReason = "provider"
+)
+
+// Defines values for FranchiseMemberOriginReason.
+const (
+	FranchiseMemberOriginReasonCrossover FranchiseMemberOriginReason = "crossover"
+)
+
 // Defines values for HealthCheckSeverity.
 const (
 	HealthCheckSeverityError   HealthCheckSeverity = "error"
@@ -2621,19 +2632,36 @@ type FranchiseDuplicateGroup struct {
 // FranchiseLink defines model for FranchiseLink.
 type FranchiseLink struct {
 	// CategoryId The library whose works the members are.
-	CategoryId  int64             `json:"category_id"`
-	Id          int64             `json:"id"`
-	LibraryName *string           `json:"library_name,omitempty"`
-	Members     []FranchiseMember `json:"members"`
-	Name        string            `json:"name"`
+	CategoryId int64 `json:"category_id"`
+
+	// Detail The shared franchise id (provider:id) of a provider link.
+	Detail      *string `json:"detail,omitempty"`
+	Id          int64   `json:"id"`
+	LibraryName *string `json:"library_name,omitempty"`
+
+	// Members The works held there, then the ones that library type lacks (no work_id, add them with provider and external_id into category_id).
+	Members []FranchiseMember `json:"members"`
+	Name    string            `json:"name"`
+
+	// Reason Why the collections are shown as one: a provider puts them in one franchise, or a person linked them. Absent for a link made before reasons were kept.
+	Reason *FranchiseLinkReason `json:"reason,omitempty"`
 }
+
+// FranchiseLinkReason Why the collections are shown as one: a provider puts them in one franchise, or a person linked them. Absent for a link made before reasons were kept.
+type FranchiseLinkReason string
 
 // FranchiseMember defines model for FranchiseMember.
 type FranchiseMember struct {
 	ExternalId *string `json:"external_id,omitempty"`
 	HasFile    bool    `json:"has_file"`
 	Monitored  bool    `json:"monitored"`
-	PosterUrl  *string `json:"poster_url,omitempty"`
+
+	// OriginDetail For a crossover: the shared episode and the series it is shared with.
+	OriginDetail *string `json:"origin_detail,omitempty"`
+
+	// OriginReason Why Solarr put the work in this collection when a provider did not say so.
+	OriginReason *FranchiseMemberOriginReason `json:"origin_reason,omitempty"`
+	PosterUrl    *string                      `json:"poster_url,omitempty"`
 
 	// Provider With external_id
 	Provider *string `json:"provider,omitempty"`
@@ -2643,6 +2671,9 @@ type FranchiseMember struct {
 	WorkId *int64 `json:"work_id,omitempty"`
 	Year   *int   `json:"year,omitempty"`
 }
+
+// FranchiseMemberOriginReason Why Solarr put the work in this collection when a provider did not say so.
+type FranchiseMemberOriginReason string
 
 // GateResult A hard requirement, evaluated before any comparison (ADR-40 stage 1).
 type GateResult struct {

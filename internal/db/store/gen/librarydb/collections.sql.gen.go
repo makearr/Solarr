@@ -11,6 +11,60 @@ import (
 	"strings"
 )
 
+const addCollectionDeclaredKey = `-- name: AddCollectionDeclaredKey :exec
+INSERT INTO collection_declared_key (collection_id, provider, external_id) VALUES (?, ?, ?)
+ON CONFLICT (collection_id, provider, external_id) DO NOTHING
+`
+
+type AddCollectionDeclaredKeyParams struct {
+	CollectionID int64
+	Provider     string
+	ExternalID   string
+}
+
+func (q *Queries) AddCollectionDeclaredKey(ctx context.Context, arg AddCollectionDeclaredKeyParams) error {
+	_, err := q.db.ExecContext(ctx, addCollectionDeclaredKey, arg.CollectionID, arg.Provider, arg.ExternalID)
+	return err
+}
+
+const addCollectionLinkOrigin = `-- name: AddCollectionLinkOrigin :exec
+INSERT INTO collection_link_origin (low_id, high_id, reason, detail, created_at) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (low_id, high_id) DO UPDATE SET reason = excluded.reason, detail = excluded.detail
+`
+
+type AddCollectionLinkOriginParams struct {
+	LowID     int64
+	HighID    int64
+	Reason    string
+	Detail    string
+	CreatedAt int64
+}
+
+func (q *Queries) AddCollectionLinkOrigin(ctx context.Context, arg AddCollectionLinkOriginParams) error {
+	_, err := q.db.ExecContext(ctx, addCollectionLinkOrigin,
+		arg.LowID,
+		arg.HighID,
+		arg.Reason,
+		arg.Detail,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const addCollectionLinkRefusal = `-- name: AddCollectionLinkRefusal :exec
+INSERT INTO collection_link_refusal (low_key, high_key) VALUES (?, ?) ON CONFLICT (low_key, high_key) DO NOTHING
+`
+
+type AddCollectionLinkRefusalParams struct {
+	LowKey  string
+	HighKey string
+}
+
+func (q *Queries) AddCollectionLinkRefusal(ctx context.Context, arg AddCollectionLinkRefusalParams) error {
+	_, err := q.db.ExecContext(ctx, addCollectionLinkRefusal, arg.LowKey, arg.HighKey)
+	return err
+}
+
 const addCollectionMember = `-- name: AddCollectionMember :exec
 INSERT INTO collection_member (collection_id, work_id, part_id, ord)
 VALUES (?, ?, ?, ?)
@@ -46,6 +100,30 @@ type AddCollectionMemberByHandParams struct {
 
 func (q *Queries) AddCollectionMemberByHand(ctx context.Context, arg AddCollectionMemberByHandParams) error {
 	_, err := q.db.ExecContext(ctx, addCollectionMemberByHand, arg.CollectionID, arg.WorkID)
+	return err
+}
+
+const addCollectionMemberOrigin = `-- name: AddCollectionMemberOrigin :exec
+INSERT INTO collection_member_origin (collection_id, work_id, reason, detail, created_at) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (collection_id, work_id) DO UPDATE SET reason = excluded.reason, detail = excluded.detail
+`
+
+type AddCollectionMemberOriginParams struct {
+	CollectionID int64
+	WorkID       int64
+	Reason       string
+	Detail       string
+	CreatedAt    int64
+}
+
+func (q *Queries) AddCollectionMemberOrigin(ctx context.Context, arg AddCollectionMemberOriginParams) error {
+	_, err := q.db.ExecContext(ctx, addCollectionMemberOrigin,
+		arg.CollectionID,
+		arg.WorkID,
+		arg.Reason,
+		arg.Detail,
+		arg.CreatedAt,
+	)
 	return err
 }
 
@@ -262,6 +340,20 @@ func (q *Queries) DeleteCollection(ctx context.Context, id int64) error {
 	return err
 }
 
+const deleteCollectionDeclaredKeys = `-- name: DeleteCollectionDeclaredKeys :exec
+DELETE FROM collection_declared_key WHERE collection_id = ? AND provider = ?
+`
+
+type DeleteCollectionDeclaredKeysParams struct {
+	CollectionID int64
+	Provider     string
+}
+
+func (q *Queries) DeleteCollectionDeclaredKeys(ctx context.Context, arg DeleteCollectionDeclaredKeysParams) error {
+	_, err := q.db.ExecContext(ctx, deleteCollectionDeclaredKeys, arg.CollectionID, arg.Provider)
+	return err
+}
+
 const deleteCollectionLink = `-- name: DeleteCollectionLink :exec
 DELETE FROM relationship
 WHERE kind = 'linked_collection' AND from_type = 'collection' AND to_type = 'collection'
@@ -278,6 +370,34 @@ func (q *Queries) DeleteCollectionLink(ctx context.Context, arg DeleteCollection
 	return err
 }
 
+const deleteCollectionLinkOrigin = `-- name: DeleteCollectionLinkOrigin :exec
+DELETE FROM collection_link_origin WHERE low_id = ?1 AND high_id = ?2
+`
+
+type DeleteCollectionLinkOriginParams struct {
+	LowID  int64
+	HighID int64
+}
+
+func (q *Queries) DeleteCollectionLinkOrigin(ctx context.Context, arg DeleteCollectionLinkOriginParams) error {
+	_, err := q.db.ExecContext(ctx, deleteCollectionLinkOrigin, arg.LowID, arg.HighID)
+	return err
+}
+
+const deleteCollectionLinkRefusal = `-- name: DeleteCollectionLinkRefusal :exec
+DELETE FROM collection_link_refusal WHERE low_key = ?1 AND high_key = ?2
+`
+
+type DeleteCollectionLinkRefusalParams struct {
+	LowKey  string
+	HighKey string
+}
+
+func (q *Queries) DeleteCollectionLinkRefusal(ctx context.Context, arg DeleteCollectionLinkRefusalParams) error {
+	_, err := q.db.ExecContext(ctx, deleteCollectionLinkRefusal, arg.LowKey, arg.HighKey)
+	return err
+}
+
 const deleteCollectionLinks = `-- name: DeleteCollectionLinks :exec
 DELETE FROM relationship
 WHERE kind = 'linked_collection' AND ((from_type = 'collection' AND from_id = ?1) OR (to_type = 'collection' AND to_id = ?1))
@@ -286,6 +406,20 @@ WHERE kind = 'linked_collection' AND ((from_type = 'collection' AND from_id = ?1
 // A collection that goes takes its links with it; a link of a collection to itself says nothing.
 func (q *Queries) DeleteCollectionLinks(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteCollectionLinks, id)
+	return err
+}
+
+const deleteCollectionMemberOrigin = `-- name: DeleteCollectionMemberOrigin :exec
+DELETE FROM collection_member_origin WHERE collection_id = ? AND work_id = ?
+`
+
+type DeleteCollectionMemberOriginParams struct {
+	CollectionID int64
+	WorkID       int64
+}
+
+func (q *Queries) DeleteCollectionMemberOrigin(ctx context.Context, arg DeleteCollectionMemberOriginParams) error {
+	_, err := q.db.ExecContext(ctx, deleteCollectionMemberOrigin, arg.CollectionID, arg.WorkID)
 	return err
 }
 
@@ -533,6 +667,34 @@ func (q *Queries) LinkCollectionExternalID(ctx context.Context, arg LinkCollecti
 	return err
 }
 
+const listAllDeclaredKeys = `-- name: ListAllDeclaredKeys :many
+SELECT k.collection_id, k.provider, k.external_id FROM collection_declared_key k JOIN collection c ON c.id = k.collection_id
+WHERE c.kind = 'franchise' ORDER BY k.collection_id, k.provider, k.external_id
+`
+
+func (q *Queries) ListAllDeclaredKeys(ctx context.Context) ([]CollectionDeclaredKey, error) {
+	rows, err := q.db.QueryContext(ctx, listAllDeclaredKeys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CollectionDeclaredKey{}
+	for rows.Next() {
+		var i CollectionDeclaredKey
+		if err := rows.Scan(&i.CollectionID, &i.Provider, &i.ExternalID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAllStatRollup = `-- name: ListAllStatRollup :many
 SELECT metric, dimension, period, value, count, computed_at
 FROM stat_rollup
@@ -703,6 +865,67 @@ func (q *Queries) ListCharacterCreditsOfType(ctx context.Context, mediaType stri
 	return items, nil
 }
 
+const listCollectionLinkOrigins = `-- name: ListCollectionLinkOrigins :many
+SELECT low_id, high_id, reason, detail, created_at FROM collection_link_origin
+WHERE low_id = ?1 OR high_id = ?1 ORDER BY low_id, high_id
+`
+
+func (q *Queries) ListCollectionLinkOrigins(ctx context.Context, id int64) ([]CollectionLinkOrigin, error) {
+	rows, err := q.db.QueryContext(ctx, listCollectionLinkOrigins, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CollectionLinkOrigin{}
+	for rows.Next() {
+		var i CollectionLinkOrigin
+		if err := rows.Scan(
+			&i.LowID,
+			&i.HighID,
+			&i.Reason,
+			&i.Detail,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCollectionLinkRefusals = `-- name: ListCollectionLinkRefusals :many
+SELECT low_key, high_key FROM collection_link_refusal ORDER BY low_key, high_key
+`
+
+func (q *Queries) ListCollectionLinkRefusals(ctx context.Context) ([]CollectionLinkRefusal, error) {
+	rows, err := q.db.QueryContext(ctx, listCollectionLinkRefusals)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CollectionLinkRefusal{}
+	for rows.Next() {
+		var i CollectionLinkRefusal
+		if err := rows.Scan(&i.LowKey, &i.HighKey); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCollectionLinks = `-- name: ListCollectionLinks :many
 SELECT CAST(CASE WHEN r.from_id = ?1 THEN r.to_id ELSE r.from_id END AS INTEGER) AS other_id
 FROM relationship r
@@ -725,6 +948,40 @@ func (q *Queries) ListCollectionLinks(ctx context.Context, id int64) ([]int64, e
 			return nil, err
 		}
 		items = append(items, other_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCollectionMemberOrigins = `-- name: ListCollectionMemberOrigins :many
+SELECT collection_id, work_id, reason, detail, created_at FROM collection_member_origin
+WHERE collection_id = ? ORDER BY work_id
+`
+
+func (q *Queries) ListCollectionMemberOrigins(ctx context.Context, collectionID int64) ([]CollectionMemberOrigin, error) {
+	rows, err := q.db.QueryContext(ctx, listCollectionMemberOrigins, collectionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CollectionMemberOrigin{}
+	for rows.Next() {
+		var i CollectionMemberOrigin
+		if err := rows.Scan(
+			&i.CollectionID,
+			&i.WorkID,
+			&i.Reason,
+			&i.Detail,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -1394,6 +1651,86 @@ func (q *Queries) ListGroupObservations(ctx context.Context, arg ListGroupObserv
 			&i.Cause,
 			&i.ObservedAt,
 			&i.WasExploration,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLinkableCollectionIDs = `-- name: ListLinkableCollectionIDs :many
+SELECT e.collection_id, e.provider, e.external_id FROM collection_external_id e JOIN collection c ON c.id = e.collection_id
+WHERE c.kind = 'franchise' ORDER BY e.collection_id, e.provider, e.external_id
+`
+
+type ListLinkableCollectionIDsRow struct {
+	CollectionID int64
+	Provider     string
+	ExternalID   string
+}
+
+func (q *Queries) ListLinkableCollectionIDs(ctx context.Context) ([]ListLinkableCollectionIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLinkableCollectionIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLinkableCollectionIDsRow{}
+	for rows.Next() {
+		var i ListLinkableCollectionIDsRow
+		if err := rows.Scan(&i.CollectionID, &i.Provider, &i.ExternalID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLinkableCollections = `-- name: ListLinkableCollections :many
+SELECT c.id, c.media_type, c.name, c.kind, c.source,
+       CAST((SELECT COUNT(*) FROM collection_member m WHERE m.collection_id = c.id AND m.part_id = 0) AS INTEGER) AS members
+FROM collection c WHERE c.kind = 'franchise' ORDER BY c.id
+`
+
+type ListLinkableCollectionsRow struct {
+	ID        int64
+	MediaType string
+	Name      string
+	Kind      string
+	Source    string
+	Members   int64
+}
+
+// Every franchise collection of every media type with the ids it is known by, for the pass that links collections across libraries.
+func (q *Queries) ListLinkableCollections(ctx context.Context) ([]ListLinkableCollectionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLinkableCollections)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLinkableCollectionsRow{}
+	for rows.Next() {
+		var i ListLinkableCollectionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MediaType,
+			&i.Name,
+			&i.Kind,
+			&i.Source,
+			&i.Members,
 		); err != nil {
 			return nil, err
 		}

@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"slices"
 	"strconv"
-	"strings"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -88,6 +87,9 @@ func (p *UniversePass) Run(ctx context.Context, _ jobs.Job) error {
 			}
 		}
 		held = append(held, members)
+		if err := p.Franchises.DeclareKeys(ctx, summary.ID, ProviderWikidata, declaredFranchises(members, direct, parents)); err != nil {
+			return err
+		}
 	}
 	universes := planUniverses(direct, labels, parents, held)
 	kept := map[string]bool{}
@@ -116,9 +118,8 @@ func (p *UniversePass) Run(ctx context.Context, _ jobs.Job) error {
 	}
 	dropped := 0
 	for _, summary := range summaries {
-		if summary.Source != ProviderWikidata || summary.Monitored || slices.ContainsFunc(summary.ExternalIDs, func(id string) bool {
-			qid, ours := strings.CutPrefix(id, ProviderWikidata+":")
-			return ours && kept[qid]
+		if summary.Source != ProviderWikidata || summary.Monitored || slices.ContainsFunc(library.ProviderItems(summary.ExternalIDs, ProviderWikidata), func(qid string) bool {
+			return kept[qid]
 		}) {
 			continue
 		}
@@ -129,6 +130,34 @@ func (p *UniversePass) Run(ctx context.Context, _ jobs.Job) error {
 	}
 	p.Logger.Info("movie universes found", slog.Int("universes", len(universes)), slog.Int("dropped", dropped))
 	return nil
+}
+
+// declaredFranchises are the Wikidata franchises (and the ones they are part of) that most of a collection's films are in,
+// which is what lets the collection be linked with the series and books of the same franchise.
+func declaredFranchises(members []int64, direct map[string][]int64, parents map[string][]string) []string {
+	var declared []string
+	add := func(qid string) {
+		if !slices.Contains(declared, qid) {
+			declared = append(declared, qid)
+		}
+	}
+	for qid, films := range direct {
+		inside := 0
+		for _, film := range members {
+			if slices.Contains(films, film) {
+				inside++
+			}
+		}
+		if inside == 0 || inside*2 <= len(members) {
+			continue
+		}
+		add(qid)
+		for _, parent := range parents[qid] {
+			add(parent)
+		}
+	}
+	slices.Sort(declared)
+	return declared
 }
 
 func without(have, keep []int64) []int64 {

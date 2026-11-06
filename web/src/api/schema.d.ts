@@ -6612,6 +6612,14 @@ export interface components {
             category_id: number;
             library_name?: string;
             name: string;
+            /**
+             * @description Why the collections are shown as one: a provider puts them in one franchise, or a person linked them. Absent for a link made before reasons were kept.
+             * @enum {string}
+             */
+            reason?: "provider" | "hand";
+            /** @description The shared franchise id (provider:id) of a provider link. */
+            detail?: string;
+            /** @description The works held there, then the ones that library type lacks (no work_id, add them with provider and external_id into category_id). */
             members: components["schemas"]["FranchiseMember"][];
         };
         FranchiseDuplicateGroup: {
@@ -6639,6 +6647,13 @@ export interface components {
             year?: number;
             monitored: boolean;
             has_file: boolean;
+            /**
+             * @description Why Solarr put the work in this collection when a provider did not say so.
+             * @enum {string}
+             */
+            origin_reason?: "crossover";
+            /** @description For a crossover: the shared episode and the series it is shared with. */
+            origin_detail?: string;
         };
         Crossover: {
             /** Format: int64 */

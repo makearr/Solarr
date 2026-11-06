@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -59,5 +61,48 @@ func TestMonitoringAHandMadeCollectionMonitorsItsWorksAndThoseAddedWhileMonitore
 	}
 	if row, _ := store.Get(t.Context(), collection); row.Monitored {
 		t.Errorf("the collection is still monitored after Unmonitor")
+	}
+}
+
+func TestAHandLinkShowsWhoMadeItAndUnlinkingIsKept(t *testing.T) {
+	cache := newSweepCache(t)
+	first, err := cache.CreateCategory(t.Context(), "music", "Music", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := cache.CreateCategory(t.Context(), "music", "Soundtracks", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened := newSuggestLibrary(t)
+	store := library.NewFranchises(opened)
+	registry, err := media.NewRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	franchises := adapters.LibraryFranchises{Cache: cache, Registry: registry, Store: store}
+	one, err := store.Create(t.Context(), "music", first.ID, "Film scores")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := store.Create(t.Context(), "music", second.ID, "Film scores, again")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := franchises.Link(t.Context(), first.ID, one, second.ID, other); err != nil {
+		t.Fatal(err)
+	}
+	view, err := franchises.Get(t.Context(), first.ID, one)
+	if err != nil || view.Links == nil || len(*view.Links) != 1 {
+		t.Fatalf("links = %+v, %v; want the one collection", view.Links, err)
+	}
+	if link := (*view.Links)[0]; link.Reason == nil || *link.Reason != gen.FranchiseLinkReasonHand || link.CategoryId != second.ID {
+		t.Errorf("link = %+v, want one made by hand in the second library", link)
+	}
+	if err := franchises.Unlink(t.Context(), first.ID, one, other); err != nil {
+		t.Fatal(err)
+	}
+	if view, err = franchises.Get(t.Context(), first.ID, one); err != nil || view.Links != nil {
+		t.Errorf("links after unlinking = %+v, %v", view.Links, err)
 	}
 }

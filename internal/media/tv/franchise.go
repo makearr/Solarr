@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -411,13 +410,7 @@ func (p FranchisePass) countFamilies(ctx context.Context, known wikidataKnowledg
 
 // wikidataItems are the Wikidata items among a collection's ids.
 func wikidataItems(externalIDs []string) []string {
-	var qids []string
-	for _, id := range externalIDs {
-		if qid, isItem := strings.CutPrefix(id, ProviderWikidata+":"); isItem {
-			qids = append(qids, qid)
-		}
-	}
-	return qids
+	return library.ProviderItems(externalIDs, ProviderWikidata)
 }
 
 // Reconcile gathers everything that says series belong together (providers' franchises, names, AniList, crossover
@@ -517,7 +510,42 @@ func (p FranchisePass) Reconcile(ctx context.Context, known *wikidataKnowledge) 
 		}
 		changed++
 	}
+	if err := p.recordCrossoverOrigins(ctx, works, crossovers, listed); err != nil {
+		return changed, err
+	}
 	return changed, nil
+}
+
+// recordCrossoverOrigins notes, on each series a collection holds only because it shares an episode with another of the
+// collection, which episode that was, so the person sees why it is there and can take it out (which sticks).
+func (p FranchisePass) recordCrossoverOrigins(ctx context.Context, works []library.WorkName, crossovers []library.SameContentPair, listed map[int64][]int64) error {
+	memberships, err := p.Franchises.FranchiseMemberships(ctx, MediaType)
+	if err != nil {
+		return err
+	}
+	inCollection := map[int64]map[int64]bool{}
+	for _, membership := range memberships {
+		if inCollection[membership.CollectionID] == nil {
+			inCollection[membership.CollectionID] = map[int64]bool{}
+		}
+		inCollection[membership.CollectionID][membership.WorkID] = true
+	}
+	titles := map[int64]string{}
+	for _, work := range works {
+		titles[work.WorkID] = work.Title
+	}
+	for collectionID, held := range inCollection {
+		for _, pair := range crossovers {
+			if !held[pair.WorkID] || !held[pair.OtherWorkID] || slices.Contains(listed[collectionID], pair.WorkID) {
+				continue
+			}
+			detail := pair.Title + " (" + titles[pair.OtherWorkID] + ")"
+			if err := p.Franchises.RecordMemberOrigin(ctx, collectionID, pair.WorkID, library.MemberReasonCrossover, detail); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // EnqueueFranchisePass submits one pass; a second while one waits is the same work.

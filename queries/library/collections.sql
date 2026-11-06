@@ -555,3 +555,55 @@ WHERE kind = 'linked_collection' AND ((from_type = 'collection' AND from_id = sq
 
 -- name: DeleteSelfCollectionLinks :exec
 DELETE FROM relationship WHERE kind = 'linked_collection' AND from_type = 'collection' AND to_type = 'collection' AND from_id = to_id;
+
+-- name: AddCollectionLinkOrigin :exec
+INSERT INTO collection_link_origin (low_id, high_id, reason, detail, created_at) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (low_id, high_id) DO UPDATE SET reason = excluded.reason, detail = excluded.detail;
+
+-- name: DeleteCollectionLinkOrigin :exec
+DELETE FROM collection_link_origin WHERE low_id = sqlc.arg(low_id) AND high_id = sqlc.arg(high_id);
+
+-- name: ListCollectionLinkOrigins :many
+SELECT low_id, high_id, reason, detail, created_at FROM collection_link_origin
+WHERE low_id = sqlc.arg(id) OR high_id = sqlc.arg(id) ORDER BY low_id, high_id;
+
+-- name: AddCollectionLinkRefusal :exec
+INSERT INTO collection_link_refusal (low_key, high_key) VALUES (?, ?) ON CONFLICT (low_key, high_key) DO NOTHING;
+
+-- name: DeleteCollectionLinkRefusal :exec
+DELETE FROM collection_link_refusal WHERE low_key = sqlc.arg(low_key) AND high_key = sqlc.arg(high_key);
+
+-- name: ListCollectionLinkRefusals :many
+SELECT low_key, high_key FROM collection_link_refusal ORDER BY low_key, high_key;
+
+-- name: AddCollectionDeclaredKey :exec
+INSERT INTO collection_declared_key (collection_id, provider, external_id) VALUES (?, ?, ?)
+ON CONFLICT (collection_id, provider, external_id) DO NOTHING;
+
+-- name: DeleteCollectionDeclaredKeys :exec
+DELETE FROM collection_declared_key WHERE collection_id = ? AND provider = ?;
+
+-- Every franchise collection of every media type with the ids it is known by, for the pass that links collections across libraries.
+-- name: ListLinkableCollections :many
+SELECT c.id, c.media_type, c.name, c.kind, c.source,
+       CAST((SELECT COUNT(*) FROM collection_member m WHERE m.collection_id = c.id AND m.part_id = 0) AS INTEGER) AS members
+FROM collection c WHERE c.kind = 'franchise' ORDER BY c.id;
+
+-- name: ListLinkableCollectionIDs :many
+SELECT e.collection_id, e.provider, e.external_id FROM collection_external_id e JOIN collection c ON c.id = e.collection_id
+WHERE c.kind = 'franchise' ORDER BY e.collection_id, e.provider, e.external_id;
+
+-- name: ListAllDeclaredKeys :many
+SELECT k.collection_id, k.provider, k.external_id FROM collection_declared_key k JOIN collection c ON c.id = k.collection_id
+WHERE c.kind = 'franchise' ORDER BY k.collection_id, k.provider, k.external_id;
+
+-- name: AddCollectionMemberOrigin :exec
+INSERT INTO collection_member_origin (collection_id, work_id, reason, detail, created_at) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (collection_id, work_id) DO UPDATE SET reason = excluded.reason, detail = excluded.detail;
+
+-- name: ListCollectionMemberOrigins :many
+SELECT collection_id, work_id, reason, detail, created_at FROM collection_member_origin
+WHERE collection_id = ? ORDER BY work_id;
+
+-- name: DeleteCollectionMemberOrigin :exec
+DELETE FROM collection_member_origin WHERE collection_id = ? AND work_id = ?;

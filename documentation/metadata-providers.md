@@ -198,6 +198,18 @@ size, whichever is more, merges too (6 works sharing 4 with a collection of 8 me
 and the monitored flag move to the larger. A collection of one library can be **linked** with one of another (a series' films
 and the series): each then shows the other's works (`relationship` kind `linked_collection`).
 
+**Across libraries.** A collection stays inside one media type, and the task *Link the collections of different libraries*
+(`internal/service/franchiselink`, every six hours) links those of different types that a provider puts in one franchise,
+without being asked: a series' Wikidata franchise and the same Wikidata franchise among a film collection's declared keys
+(`collection_declared_key`: the franchises, and their parents, most of a TMDB collection's films are in, written by the movie
+universe pass), a book series or soundtrack grouping that carries the same id. When two media types name one franchise id, the
+second keeps a sibling collection under `provider@media_type` so each library lists its own. A link shows the other collection's
+works and what its library type lacks (add with the one Add dialog into that library), the reason it was made (a shared
+`provider:id`, or by hand) and **Unlink**, which is remembered under the two collections' own ids (`collection_link_refusal`),
+so no pass links them again; linking by hand forgets it. A work is in as many collections as name it. A series that joins a
+family only by a crossover episode it shares is marked with that episode (`collection_member_origin`); taking it out of the
+collection sticks like any dismissal.
+
 A film the library holds that TMDB lists in a collection, but whose own record does not name it, joins the collection the next
 time the collection is opened (it was listed as missing before).
 

@@ -9840,8 +9840,11 @@ components:
         category_id: { type: integer, format: int64, description: The library whose works the members are. }
         library_name: { type: string }
         name: { type: string }
+        reason: { type: string, enum: [provider, hand], description: "Why the collections are shown as one: a provider puts them in one franchise, or a person linked them. Absent for a link made before reasons were kept." }
+        detail: { type: string, description: "The shared franchise id (provider:id) of a provider link." }
         members:
           type: array
+          description: The works held there, then the ones that library type lacks (no work_id, add them with provider and external_id into category_id).
           items: { $ref: "#/components/schemas/FranchiseMember" }
 
     FranchiseDuplicateGroup:
@@ -9873,6 +9876,8 @@ components:
         year: { type: integer }
         monitored: { type: boolean }
         has_file: { type: boolean }
+        origin_reason: { type: string, enum: [crossover], description: "Why Solarr put the work in this collection when a provider did not say so." }
+        origin_detail: { type: string, description: "For a crossover: the shared episode and the series it is shared with." }
 
     Crossover:
       type: object

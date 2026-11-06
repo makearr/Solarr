@@ -23,7 +23,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/db/store", "internal/platform/clock", "internal/platform/config", "internal/platform/fsx",
 		"migrations",
 	},
-	"cmd/solarr/app": {"internal/service/franchisewatch", "internal/importing/arrmap", "internal/platform/hitcount", "internal/media/adult", "internal/media/book", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/itunes", "internal/metadata/fantlab", "internal/metadata/hardcover", "internal/metadata/stashbox", "internal/metadata/theporndb", "internal/metadata/whisparr", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow", "internal/service/importlist",
+	"cmd/solarr/app": {"internal/service/franchisewatch", "internal/service/franchiselink", "internal/importing/arrmap", "internal/platform/hitcount", "internal/media/adult", "internal/media/book", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/itunes", "internal/metadata/fantlab", "internal/metadata/hardcover", "internal/metadata/stashbox", "internal/metadata/theporndb", "internal/metadata/whisparr", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow", "internal/service/importlist",
 		"internal/media", "internal/platform/remoteimage", "cmd/solarr/adapters", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/plan",
 		"internal/acquiring/poll", "internal/acquiring/qbittorrent", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
@@ -371,6 +371,7 @@ var allowedInternalImports = map[string][]string{
 	// The media-type registry: what core asks instead of naming a type (ADR-23).
 	// Bounded fan-out with panic recovery; no dependencies.
 	"internal/platform/parallel":      {},
+	"internal/service/franchiselink":  {"internal/db/library", "internal/jobs"},
 	"internal/service/franchisewatch": {"internal/db/library", "internal/db/settings", "internal/jobs", "internal/media"},
 	"internal/service/follow":         {"internal/db/library", "internal/db/settings", "internal/jobs", "internal/media", "internal/platform/clock"},
 	// Import lists (ADR-38): AniList and TMDB lists read, previewed and synced through each media type's add.
