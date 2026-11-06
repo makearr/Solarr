@@ -29,9 +29,9 @@ type Client struct {
 	apiKey  string
 }
 
-// NewClient builds one over an already-configured httpx.Client.
+// NewClient builds one over an already-configured httpx.Client; a pasted Torznab URL ending in /api is accepted.
 func NewClient(client *httpx.Client, baseURL, apiKey string) Client {
-	return Client{http: client, baseURL: strings.TrimRight(baseURL, "/"), apiKey: apiKey}
+	return Client{http: client, baseURL: strings.TrimSuffix(strings.TrimRight(baseURL, "/"), "/api"), apiKey: apiKey}
 }
 
 // apiURL builds one t=<function> request URL, adding the API key only when
