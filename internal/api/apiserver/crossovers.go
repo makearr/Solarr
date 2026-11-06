@@ -27,6 +27,7 @@ type Crossovers interface {
 	ForWork(ctx context.Context, workID int64) ([]gen.Crossover, []gen.SameContentLink, error)
 	Link(ctx context.Context, partID, otherPartID int64) error
 	Unlink(ctx context.Context, partID, otherPartID int64) error
+	NotSame(ctx context.Context, partID, otherPartID int64) error
 }
 
 // ErrNoCrossover is an id that is no crossover.
@@ -236,6 +237,23 @@ func (s *Server) UnlinkSameContent(w http.ResponseWriter, r *http.Request, id in
 		return
 	}
 	if err := s.crossovers.Unlink(r.Context(), id, params.PartId); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// MarkNotSameContent records two episodes as not one broadcast. Administrator only.
+func (s *Server) MarkNotSameContent(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) || !s.crossoversAvailable(w) {
+		return
+	}
+	var body gen.MarkNotSameContentJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil || body.PartId == id {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected another episode")
+		return
+	}
+	if err := s.crossovers.NotSame(r.Context(), id, body.PartId); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}

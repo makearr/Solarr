@@ -6,6 +6,7 @@ import { Link2, Trash2 } from "lucide-react";
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t } from "@/lib/i18n";
+import { useLibraries } from "@/lib/resources";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
@@ -14,10 +15,30 @@ import { EmptyState } from "@/ui/EmptyState";
 import { PageHeader } from "@/ui/PageHeader";
 import { inputStyle } from "@/ui/form";
 
+import { AddToLibrary } from "./work/AddToSolarr";
+
 type Crossover = components["schemas"]["Crossover"];
 type Member = Crossover["members"][number];
 type Suggestion = components["schemas"]["SameContentSuggestion"];
 type SameContent = components["schemas"]["SameContentLink"];
+type MissingPart = Crossover["missing"][number];
+
+/** One line of an event in part order: an episode the library holds, one it lacks, or a part nothing is known of. */
+export type EventRow =
+  | { kind: "member"; number: number; member: Member }
+  | { kind: "missing"; number: number; part: MissingPart }
+  | { kind: "gap"; number: number };
+
+/** The parts of an event by part number: held episodes, the ones providers list that the library lacks, and the numbers
+ *  that are still unknown, so a missing part shows where it belongs. */
+export function eventRows(event: Pick<Crossover, "members" | "missing" | "gaps">): EventRow[] {
+  const rows: EventRow[] = [
+    ...event.members.map((member): EventRow => ({ kind: "member", number: member.number, member })),
+    ...event.missing.map((part): EventRow => ({ kind: "missing", number: part.number, part })),
+    ...event.gaps.map((number): EventRow => ({ kind: "gap", number })),
+  ];
+  return rows.sort((a, b) => a.number - b.number);
+}
 
 /** "S01E05" for a part ref "s01:e05"; anything else as it is. */
 export function refLabel(ref: string): string {
@@ -49,6 +70,15 @@ export function CrossoverIndex() {
       void queryClient.invalidateQueries({ queryKey: ["work-crossovers"] });
     },
   });
+  const notSame = useMutation({
+    mutationFn: async (suggestion: Suggestion) => {
+      await ok(api.POST("/parts/{id}/not-same", { params: { path: { id: suggestion.part_id } }, body: { part_id: suggestion.other_part_id } }));
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["crossovers", categoryId] });
+      void queryClient.invalidateQueries({ queryKey: ["work-crossovers"] });
+    },
+  });
   if (list.isLoading) return <p className="p-6 text-sm text-ink-muted">{t("work.loading")}</p>;
   if (!list.data) return <p className="p-6 text-sm text-danger">{t("crossover.failed")}</p>;
   return (
@@ -61,7 +91,8 @@ export function CrossoverIndex() {
             <Link to="/crossovers/$id" params={{ id: String(event.id) }} className="font-medium hover:underline">
               {event.name}
             </Link>
-            <MemberList members={event.members} categoryId={categoryId} />
+            <p className="text-xs text-ink-muted">{t("crossover.parts", { count: event.members.length, of: event.total_parts })}</p>
+            <MemberList event={event} categoryId={categoryId} />
           </section>
         ))}
         {list.data.suggestions.length > 0 && (
@@ -80,9 +111,14 @@ export function CrossoverIndex() {
                     {refLabel(suggestion.other_ref)}
                   </span>
                   {administrator && (
-                    <Button className="ml-auto" busy={link.isPending && link.variables === suggestion} onClick={() => link.mutate(suggestion)}>
-                      {t("crossover.sameBroadcast")}
-                    </Button>
+                    <span className="ml-auto flex gap-2">
+                      <Button busy={link.isPending && link.variables === suggestion} onClick={() => link.mutate(suggestion)}>
+                        {t("crossover.sameBroadcast")}
+                      </Button>
+                      <Button busy={notSame.isPending && notSame.variables === suggestion} onClick={() => notSame.mutate(suggestion)}>
+                        {t("crossover.notSame")}
+                      </Button>
+                    </span>
                   )}
                 </li>
               ))}
@@ -94,27 +130,73 @@ export function CrossoverIndex() {
   );
 }
 
-function MemberList({ members, categoryId, onRemove }: { members: readonly Member[]; categoryId?: string; onRemove?: (member: Member) => void }) {
+function MemberList({ event, categoryId, onRemove }: { event: Pick<Crossover, "members" | "missing" | "gaps">; categoryId?: string; onRemove?: (member: Member) => void }) {
+  const [adding, setAdding] = useState<MissingPart>();
+  const libraries = useLibraries().data ?? [];
+  const addTo = categoryId ?? String(libraries.find((library) => library.media_type === "tv")?.id ?? "");
   return (
-    <ol className="flex flex-col divide-y divide-border-subtle text-sm">
-      {members.map((member, index) => (
-        <li key={member.part_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5">
-          <span className="w-6 text-right tabular-nums text-ink-muted">{index + 1}.</span>
-          <Link {...seriesLink(member, categoryId)} className="hover:underline">{member.work_title}</Link>
-          <span className="font-mono text-xs">{refLabel(member.media_ref)}</span>
-          <span>{member.title}</span>
-          <span className="text-xs text-ink-muted">{member.date}</span>
-          <span className={`ml-auto text-xs ${member.has_file ? "text-ok" : member.monitored ? "text-danger" : "text-ink-muted"}`}>
-            {member.has_file ? t("crossover.onDisk") : member.monitored ? t("crossover.missing") : t("crossover.unmonitored")}
-          </span>
-          {onRemove && (
-            <Button variant="icon" aria-label={t("crossover.removeMember")} title={t("crossover.removeMember")} onClick={() => onRemove(member)}>
-              <Trash2 aria-hidden className="size-3.5" />
-            </Button>
-          )}
-        </li>
-      ))}
-    </ol>
+    <>
+      <ol className="flex flex-col divide-y divide-border-subtle text-sm">
+      {eventRows(event).map((row) => {
+        if (row.kind === "gap") {
+          return (
+            <li key={`gap-${row.number}`} className="flex items-center gap-x-3 py-1.5 text-ink-muted">
+              <span className="w-6 text-right tabular-nums">{row.number}.</span>
+              <span className="text-xs italic">{t("crossover.unknownPart")}</span>
+            </li>
+          );
+        }
+        if (row.kind === "missing") {
+          const { part } = row;
+          return (
+            <li key={`missing-${part.provider}-${part.external_id}-${part.season}-${part.episode}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5">
+              <span className="w-6 text-right tabular-nums text-ink-muted">{part.number}.</span>
+              {part.work_id !== undefined ? (
+                <Link {...seriesLink({ work_id: part.work_id }, categoryId)} className="hover:underline">{part.series_title}</Link>
+              ) : (
+                <span>{part.series_title}</span>
+              )}
+              <span className="font-mono text-xs">{refLabel(`s${String(part.season).padStart(2, "0")}:e${String(part.episode).padStart(2, "0")}`)}</span>
+              <span>{part.title}</span>
+              <span className="text-xs text-ink-muted">{part.date}</span>
+              <span className="ml-auto flex items-center gap-2 text-xs text-danger">
+                {part.work_id === undefined ? t("crossover.seriesNotInLibrary") : t("crossover.missing")}
+                {part.work_id === undefined && addTo !== "" && (
+                  <Button onClick={() => setAdding(part)}>{t("crossover.addSeries")}</Button>
+                )}
+              </span>
+            </li>
+          );
+        }
+        const { member } = row;
+        return (
+          <li key={member.part_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5">
+            <span className="w-6 text-right tabular-nums text-ink-muted">{member.number}.</span>
+            <Link {...seriesLink(member, categoryId)} className="hover:underline">{member.work_title}</Link>
+            <span className="font-mono text-xs">{refLabel(member.media_ref)}</span>
+            <span>{member.title}</span>
+            {member.guessed && <Chip title={t("crossover.guessedHelp")}>{t("crossover.guessed")}</Chip>}
+            <span className="text-xs text-ink-muted">{member.date}</span>
+            <span className={`ml-auto text-xs ${member.has_file ? "text-ok" : member.monitored ? "text-danger" : "text-ink-muted"}`}>
+              {member.has_file ? t("crossover.onDisk") : member.monitored ? t("crossover.missing") : t("crossover.unmonitored")}
+            </span>
+            {onRemove && (
+              <Button variant="icon" aria-label={t("crossover.removeMember")} title={t("crossover.removeMember")} onClick={() => onRemove(member)}>
+                <Trash2 aria-hidden className="size-3.5" />
+              </Button>
+            )}
+          </li>
+        );
+      })}
+      </ol>
+      {adding && (
+        <AddToLibrary
+          candidate={{ provider: adding.provider, external_id: adding.external_id, title: adding.series_title }}
+          categoryId={addTo}
+          onDone={() => setAdding(undefined)}
+        />
+      )}
+    </>
   );
 }
 
@@ -161,7 +243,7 @@ export function CrossoverPage() {
       <div className="mx-auto flex max-w-4xl flex-col gap-4 p-4">
         <PageHeader
           title={crossover.name}
-          subtitle={t("crossover.parts", { count: crossover.members.length })}
+          subtitle={t("crossover.parts", { count: crossover.members.length, of: crossover.total_parts })}
           actions={
             administrator && (
               <>
@@ -176,7 +258,7 @@ export function CrossoverPage() {
           }
         />
         <MemberList
-          members={crossover.members}
+          event={crossover}
           onRemove={administrator ? (gone) => update.mutate(crossover.members.filter((member) => member.part_id !== gone.part_id)) : undefined}
         />
       </div>
@@ -196,8 +278,8 @@ export function useWorkCrossovers(workId: number, enabled: boolean) {
 /** Under an episode's title: "Event, part 2 of 4" for each event, and the other series it is the same broadcast in. */
 export function CrossoverBadges({ partId, events, links, categoryId }: { partId: number; events: readonly Crossover[]; links: readonly SameContent[]; categoryId?: string }) {
   const mine = events.flatMap((event) => {
-    const at = event.members.findIndex((member) => member.part_id === partId);
-    return at < 0 ? [] : [{ event, at }];
+    const found = event.members.find((member) => member.part_id === partId);
+    return found ? [{ event, at: found.number }] : [];
   });
   const same = links.filter((link) => link.part_id === partId);
   if (mine.length === 0 && same.length === 0) return null;
@@ -205,7 +287,7 @@ export function CrossoverBadges({ partId, events, links, categoryId }: { partId:
     <span className="mt-0.5 flex flex-wrap items-center gap-1">
       {mine.map(({ event, at }) => (
         <Link key={event.id} to="/crossovers/$id" params={{ id: String(event.id) }}>
-          <Chip>{t("crossover.badge", { name: event.name, at: at + 1, of: event.members.length })}</Chip>
+          <Chip>{t("crossover.badge", { name: event.name, at, of: event.total_parts })}</Chip>
         </Link>
       ))}
       {same.map((link) => (
@@ -248,7 +330,7 @@ export function CrossoverGuestRows({
   if (rows.length === 0) return null;
   return (
     <>
-      {rows.map(({ member, at, event }) => (
+      {rows.map(({ member, event }) => (
         <tr key={`${event.id}:${member.part_id}`} className="border-b border-border-subtle bg-canvas/60 align-top last:border-0">
           <td className="w-9 px-3 py-1.5">
             <Link2 aria-hidden className="size-3.5 text-ink-muted" />
@@ -258,7 +340,7 @@ export function CrossoverGuestRows({
             <span className="text-ink-muted">{member.title || refLabel(member.media_ref)}</span>
             <span className="mt-0.5 flex flex-wrap items-center gap-1">
               <Link {...seriesLink(member, categoryId)}>
-                <Chip>{t("crossover.guest", { series: member.work_title, ref: refLabel(member.media_ref), at: at + 1, of: event.members.length })}</Chip>
+                <Chip>{t("crossover.guest", { series: member.work_title, ref: refLabel(member.media_ref), at: member.number, of: event.total_parts })}</Chip>
               </Link>
               <Link to="/crossovers/$id" params={{ id: String(event.id) }}>
                 <Chip>{event.name}</Chip>

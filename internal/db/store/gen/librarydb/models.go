@@ -260,6 +260,47 @@ type Credit struct {
 	Ord       sql.NullInt64
 }
 
+type CrossoverEvent struct {
+	CollectionID int64
+	NameKey      string
+	TotalParts   int64
+}
+
+type CrossoverEventDismissed struct {
+	NameKey   string
+	FirstDate string
+}
+
+type CrossoverFamilyChecked struct {
+	FamilyKey string
+	CheckedAt int64
+}
+
+type CrossoverMemberGuess struct {
+	CollectionID int64
+	PartID       int64
+}
+
+type CrossoverMissingPart struct {
+	CollectionID int64
+	Number       int64
+	Provider     string
+	ExternalID   string
+	SeriesTitle  string
+	Season       int64
+	Episode      int64
+	Title        string
+	AirDate      string
+}
+
+type CrossoverNotSame struct {
+	LowWorkID  int64
+	LowRef     string
+	HighWorkID int64
+	HighRef    string
+	CreatedAt  int64
+}
+
 type DecisionRollup struct {
 	DesiredItemID int64
 	Period        int64

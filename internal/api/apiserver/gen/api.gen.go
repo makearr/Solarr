@@ -1993,22 +1993,55 @@ type Credit struct {
 
 // Crossover defines model for Crossover.
 type Crossover struct {
-	Id        int64             `json:"id"`
-	Members   []CrossoverMember `json:"members"`
-	Monitored bool              `json:"monitored"`
-	Name      string            `json:"name"`
+	// Gaps Part numbers nothing is known for.
+	Gaps    []int             `json:"gaps"`
+	Id      int64             `json:"id"`
+	Members []CrossoverMember `json:"members"`
+
+	// Missing Parts a provider lists that the library does not hold, in part order.
+	Missing   []CrossoverMissingPart `json:"missing"`
+	Monitored bool                   `json:"monitored"`
+	Name      string                 `json:"name"`
+
+	// TotalParts How many parts the event has: what a provider states, else the most seen.
+	TotalParts int `json:"total_parts"`
 }
 
 // CrossoverMember defines model for CrossoverMember.
 type CrossoverMember struct {
-	Date      *string `json:"date,omitempty"`
-	HasFile   bool    `json:"has_file"`
-	MediaRef  string  `json:"media_ref"`
-	Monitored bool    `json:"monitored"`
-	PartId    int64   `json:"part_id"`
-	Title     string  `json:"title"`
-	WorkId    int64   `json:"work_id"`
-	WorkTitle string  `json:"work_title"`
+	Date *string `json:"date,omitempty"`
+
+	// Guessed The place was worked out from air dates, because the title carries no part number.
+	Guessed   bool   `json:"guessed"`
+	HasFile   bool   `json:"has_file"`
+	MediaRef  string `json:"media_ref"`
+	Monitored bool   `json:"monitored"`
+
+	// Number The part's place in the event.
+	Number    int    `json:"number"`
+	PartId    int64  `json:"part_id"`
+	Title     string `json:"title"`
+	WorkId    int64  `json:"work_id"`
+	WorkTitle string `json:"work_title"`
+}
+
+// CrossoverMissingPart defines model for CrossoverMissingPart.
+type CrossoverMissingPart struct {
+	Date       *string `json:"date,omitempty"`
+	Episode    int     `json:"episode"`
+	ExternalId string  `json:"external_id"`
+
+	// Number The part's place in the event.
+	Number int `json:"number"`
+
+	// Provider Which provider's id the series has.
+	Provider    string `json:"provider"`
+	Season      int    `json:"season"`
+	SeriesTitle string `json:"series_title"`
+	Title       string `json:"title"`
+
+	// WorkId The series in the library, absent when it would have to be added.
+	WorkId *int64 `json:"work_id,omitempty"`
 }
 
 // CrossoverWrite defines model for CrossoverWrite.
@@ -6622,6 +6655,11 @@ type ListPacksParams struct {
 	Limit   *int   `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// MarkNotSameContentJSONBody defines parameters for MarkNotSameContent.
+type MarkNotSameContentJSONBody struct {
+	PartId int64 `json:"part_id"`
+}
+
 // UnlinkSameContentParams defines parameters for UnlinkSameContent.
 type UnlinkSameContentParams struct {
 	PartId int64 `form:"part_id" json:"part_id"`
@@ -7419,6 +7457,9 @@ type FollowOrganisationJSONRequestBody = FollowRequest
 // PreviewOrganisationFollowJSONRequestBody defines body for PreviewOrganisationFollow for application/json ContentType.
 type PreviewOrganisationFollowJSONRequestBody = FollowRequest
 
+// MarkNotSameContentJSONRequestBody defines body for MarkNotSameContent for application/json ContentType.
+type MarkNotSameContentJSONRequestBody MarkNotSameContentJSONBody
+
 // LinkSameContentJSONRequestBody defines body for LinkSameContent for application/json ContentType.
 type LinkSameContentJSONRequestBody LinkSameContentJSONBody
 
@@ -8192,6 +8233,9 @@ type ServerInterface interface {
 	// One pack and its own members, in the order they were recorded.
 	// (GET /packs/{id})
 	GetPack(w http.ResponseWriter, r *http.Request, id int64)
+	// Say two episodes are not one broadcast; they are not suggested or linked again. Administrator only.
+	// (POST /parts/{id}/not-same)
+	MarkNotSameContent(w http.ResponseWriter, r *http.Request, id int64)
 	// Forget two episodes were one broadcast. Administrator only.
 	// (DELETE /parts/{id}/same-content)
 	UnlinkSameContent(w http.ResponseWriter, r *http.Request, id int64, params UnlinkSameContentParams)
@@ -9824,6 +9868,12 @@ func (_ Unimplemented) ListPacks(w http.ResponseWriter, r *http.Request, params 
 // One pack and its own members, in the order they were recorded.
 // (GET /packs/{id})
 func (_ Unimplemented) GetPack(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Say two episodes are not one broadcast; they are not suggested or linked again. Administrator only.
+// (POST /parts/{id}/not-same)
+func (_ Unimplemented) MarkNotSameContent(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -17269,6 +17319,39 @@ func (siw *ServerInterfaceWrapper) GetPack(w http.ResponseWriter, r *http.Reques
 	handler.ServeHTTP(w, r)
 }
 
+// MarkNotSameContent operation middleware
+func (siw *ServerInterfaceWrapper) MarkNotSameContent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MarkNotSameContent(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // UnlinkSameContent operation middleware
 func (siw *ServerInterfaceWrapper) UnlinkSameContent(w http.ResponseWriter, r *http.Request) {
 
@@ -22495,6 +22578,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/packs/{id}", wrapper.GetPack)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/parts/{id}/not-same", wrapper.MarkNotSameContent)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/parts/{id}/same-content", wrapper.UnlinkSameContent)

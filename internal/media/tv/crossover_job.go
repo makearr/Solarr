@@ -36,6 +36,9 @@ func (j CrossoverJob) Run(ctx context.Context, _ jobs.Job) error {
 			return err
 		}
 		linked += made
+		if _, err := j.Crossovers.MergeSplitEvents(ctx, MediaType); err != nil {
+			return err
+		}
 		found, err := j.Crossovers.DetectEvents(ctx, MediaType, categoryID)
 		if err != nil {
 			return err

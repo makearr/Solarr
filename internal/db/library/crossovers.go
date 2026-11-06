@@ -37,7 +37,12 @@ type Crossover struct {
 	ID        int64
 	Name      string
 	Monitored bool
-	Members   []CrossoverMember
+	// Total is how many parts the event has: what a provider states, else the most seen.
+	Total   int
+	Members []CrossoverMember
+	// Missing are parts of the event the library does not hold; Gaps are part numbers nothing is known for.
+	Missing []MissingPart
+	Gaps    []int
 }
 
 // CrossoverMember is one part of an event, with what a list shows of it.
@@ -47,6 +52,9 @@ type CrossoverMember struct {
 	MediaRef, PartTitle string
 	Date                string
 	Monitored, HasFile  bool
+	// Number is the part's place in the event; Guessed says it was worked out from air dates, not from the title.
+	Number  int
+	Guessed bool
 }
 
 // SameContent is one part listed as the same broadcast as a part of another work.
@@ -89,6 +97,19 @@ func (c Crossovers) Update(ctx context.Context, id int64, name string, partIDs [
 		if err := queries.DeleteCollectionMembers(ctx, id); err != nil {
 			return err
 		}
+		// An event a person edited is theirs: detection no longer adds to it or merges it.
+		if err := queries.SetCollectionSource(ctx, librarydb.SetCollectionSourceParams{Source: "user", ID: id}); err != nil {
+			return err
+		}
+		if err := queries.ClearCrossoverMemberGuesses(ctx, id); err != nil {
+			return err
+		}
+		if err := queries.DeleteCrossoverMissingParts(ctx, id); err != nil {
+			return err
+		}
+		if err := queries.UpsertCrossoverEvent(ctx, librarydb.UpsertCrossoverEventParams{CollectionID: id, NameKey: eventKey(name), TotalParts: int64(len(partIDs))}); err != nil {
+			return err
+		}
 		return setMembersTx(ctx, queries, id, partIDs)
 	})
 	if err != nil {
@@ -108,6 +129,9 @@ func (c Crossovers) Delete(ctx context.Context, id int64) error {
 		if event.Source == AutoCrossoverSource {
 			// A found event a person deletes is not found again: its episodes are ruled out as one broadcast, as unlinking does.
 			if err := ruleOutEventTx(ctx, queries, id); err != nil {
+				return err
+			}
+			if err := dismissEventTx(ctx, queries, event); err != nil {
 				return err
 			}
 		}
@@ -185,18 +209,88 @@ func (c Crossovers) withMembers(ctx context.Context, rows []librarydb.Collection
 	if len(ids) == 0 {
 		return events, nil
 	}
-	members, err := librarydb.New(c.store.Read()).ListPartCollectionMembers(ctx, ids)
+	queries := librarydb.New(c.store.Read())
+	members, err := queries.ListPartCollectionMembers(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("library: crossover members: %w", err)
+	}
+	guesses, err := queries.ListCrossoverMemberGuesses(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("library: crossover guesses: %w", err)
+	}
+	guessed := map[[2]int64]bool{}
+	for _, guess := range guesses {
+		guessed[[2]int64{guess.CollectionID, guess.PartID}] = true
 	}
 	for _, member := range members {
 		at := index[member.CollectionID]
 		events[at].Members = append(events[at].Members, CrossoverMember{
 			PartID: member.PartID, WorkID: member.WorkID, WorkTitle: member.WorkTitle, MediaRef: member.MediaRef,
 			PartTitle: member.PartTitle, Date: member.Date, Monitored: member.Monitored == 1, HasFile: member.HasFile,
+			Number: int(member.Ord.Int64), Guessed: guessed[[2]int64{member.CollectionID, member.PartID}],
 		})
 	}
+	infos, err := queries.ListCrossoverEventInfo(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("library: crossover totals: %w", err)
+	}
+	for _, info := range infos {
+		events[index[info.CollectionID]].Total = int(info.TotalParts)
+	}
+	missing, err := queries.ListCrossoverMissingParts(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("library: crossover missing parts: %w", err)
+	}
+	held := map[seriesKey]int64{}
+	loaded := map[string]bool{}
+	for _, row := range missing {
+		if !loaded[row.Provider] {
+			loaded[row.Provider] = true
+			works, err := queries.ListWorkProviderIDs(ctx, librarydb.ListWorkProviderIDsParams{Provider: row.Provider, MediaType: rows[index[row.CollectionID]].MediaType})
+			if err != nil {
+				return nil, fmt.Errorf("library: crossover series: %w", err)
+			}
+			for _, work := range works {
+				held[seriesKey{row.Provider, work.ExternalID}] = work.WorkID
+			}
+		}
+		at := index[row.CollectionID]
+		events[at].Missing = append(events[at].Missing, MissingPart{
+			Number: int(row.Number), Provider: row.Provider, ExternalID: row.ExternalID, SeriesTitle: row.SeriesTitle,
+			Title: row.Title, Date: row.AirDate, Season: int(row.Season), Episode: int(row.Episode), WorkID: held[seriesKey{row.Provider, row.ExternalID}],
+		})
+	}
+	for i := range events {
+		events[i].Total = max(events[i].Total, len(events[i].Members))
+		known := map[int]bool{}
+		for _, member := range events[i].Members {
+			known[member.Number] = true
+		}
+		for _, part := range events[i].Missing {
+			known[part.Number] = true
+		}
+		for number := 1; number <= events[i].Total; number++ {
+			if !known[number] {
+				events[i].Gaps = append(events[i].Gaps, number)
+			}
+		}
+	}
 	return events, nil
+}
+
+// dismissEventTx remembers a deleted event's name and weeks so the passes do not make it again.
+func dismissEventTx(ctx context.Context, queries *librarydb.Queries, event librarydb.Collection) error {
+	members, err := queries.ListPartCollectionMembers(ctx, []int64{event.ID})
+	if err != nil {
+		return err
+	}
+	first := ""
+	for _, member := range members {
+		if member.Date != "" && (first == "" || member.Date < first) {
+			first = member.Date
+		}
+	}
+	return queries.AddCrossoverEventDismissed(ctx, librarydb.AddCrossoverEventDismissedParams{NameKey: eventKey(event.Name), FirstDate: first})
 }
 
 // SetMonitored monitors or unmonitors every part of the event, each season following, and remembers the choice.
@@ -236,6 +330,9 @@ func (c Crossovers) LinkSameContent(ctx context.Context, partID, otherPartID int
 		if err := queries.AddRelationship(ctx, librarydb.AddRelationshipParams{
 			FromType: partSubject, FromID: partID, ToType: partSubject, ToID: otherPartID, Kind: SameContentKind,
 		}); err != nil {
+			return err
+		}
+		if err := forgetNotSameTx(ctx, queries, partID, otherPartID); err != nil {
 			return err
 		}
 		_, err := coverLinkedTx(ctx, queries, []int64{partID, otherPartID}, c.store.Now())
@@ -343,6 +440,9 @@ var genericTitles = regexp.MustCompile(`^(the )?(pilot|premiere|finale|series pr
 func genericTitle(title string) bool {
 	return genericTitles.MatchString(strings.ToLower(strings.TrimSpace(title)))
 }
+
+// IsGenericEpisodeTitle says a title any series may have, which says nothing about two episodes being one.
+func IsGenericEpisodeTitle(title string) bool { return genericTitle(title) }
 
 // Suggestions answers up to limit plausible same-broadcast pairs in a library not linked or ruled out; nothing is linked.
 func (c Crossovers) Suggestions(ctx context.Context, mediaType string, categoryID int64, limit int64) ([]SameContentSuggestion, error) {
@@ -473,4 +573,20 @@ func ruleOutEventTx(ctx context.Context, queries *librarydb.Queries, id int64) e
 		}
 	}
 	return nil
+}
+
+// forgetNotSameTx drops a person's earlier "not the same" for two parts they now link.
+func forgetNotSameTx(ctx context.Context, queries *librarydb.Queries, partID, otherPartID int64) error {
+	a, err := queries.GetWorkPart(ctx, partID)
+	if err != nil {
+		return err
+	}
+	b, err := queries.GetWorkPart(ctx, otherPartID)
+	if err != nil {
+		return err
+	}
+	if a.WorkID > b.WorkID || a.WorkID == b.WorkID && a.MediaRef > b.MediaRef {
+		a, b = b, a
+	}
+	return queries.DeleteCrossoverNotSame(ctx, librarydb.DeleteCrossoverNotSameParams{LowWorkID: a.WorkID, LowRef: a.MediaRef, HighWorkID: b.WorkID, HighRef: b.MediaRef})
 }

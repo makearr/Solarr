@@ -237,7 +237,23 @@ reflink, then hardlink, else the library's `shared_file_fallback` (copy or symli
 `library_path` of the same `media_object` (Invariant 92). An episode with a file in its own series' folder is left
 alone, an existing name is never replaced, and the Jellyfin/Kodi pass skips a shared file outside the series' folders.
 The crossover pass also makes the events itself (`Crossovers.DetectEvents`, source `auto`): episodes of two or more series of one franchise whose titles are the same bar a part marker (`(2)`, `Part Two`), aired within 60 days, at most twelve; a found event a person deletes rules its episodes out and is not found again.
-Not built yet: suggestions from file hashes or TMDB episode notes, a release named after one series searched for the
+**Events are one per name and weeks.** Slots are the event's part numbers (`collection_member.ord`): a title's marker fixes its number,
+an unmarked episode takes a free number by air date next to the numbered ones aired around it and is flagged a guess
+(`crossover_member_guess`, shown "probably here"). `crossover_event.total_parts` is the count a provider states, else the most seen;
+numbers nothing is known for are `gaps`. `Crossovers.MergeSplitEvents` folds events a pass made apart (same name, within 60 days) and
+`DetectEvents` extends the event of that name instead of making a second; an event a person edits becomes theirs (`source` user) and
+a deleted one is remembered (`crossover_event_dismissed`).
+**Provider detection** (`FranchisePass.findProviderCrossovers`, in the franchise pass): for each family Wikidata ties together (a
+franchise, spin-off and sequel claims; the series the library lacks included) the episode lists are read through the TV service and
+compared (`findCrossoverEvents`): one title in two or more series within 60 days, an episode whose title names another series of the
+family aired within a week of one of its own, and a spin-off's first episode with the parent's episode within two weeks before it that
+names it. `Crossovers.RecordProviderEvent` keeps what the library holds as members and the rest as `crossover_missing_part`, shown on
+the event with "Add the series" (the unified Add dialog). A family is compared once a month (`crossover_family_checked`), at most 40
+series per pass. Events also put their series in one collection (`Crossovers.EventPairs` feed the franchise pass), undoable like any
+crossover-made membership. **Not the same** (`POST /parts/{id}/not-same`, `crossover_not_same`, by series and episode so a rebuilt
+part keeps it) removes a link and keeps the pair out of the suggestions, detection and the events.
+Not built yet: provider candidates from TMDB episode groups, TheTVDB remote ids and TVmaze links (Wikidata is the one source of
+families), suggestions from file hashes or TMDB episode notes, a release named after one series searched for the
 other's want, and a rename moving both paths.
 
 ## Release filters (T2c: `judge.ApplyFilters`, `library.ReleaseFilters`)

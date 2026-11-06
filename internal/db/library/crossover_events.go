@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -55,35 +54,33 @@ func partNumber(text string) int {
 
 type eventEpisode struct {
 	partID, workID int64
+	ref            string
 	number         int
 	title, date    string
 	at             time.Time
+	// missing is set for a part the library lacks, which has no part id.
+	missing *MissingPart
 }
 
-// DetectEvents makes an event of the episodes of two or more series of one franchise that share a title and a part
-// marker and aired within weeks of each other ("Crisis on Earth-X (1)" in Tibidnibc, "(2)" in Arrow); it answers how
-// many it made. Episodes already in an event, and pairs a person ruled out, are left alone.
+// DetectEvents makes an event of a franchise's episodes that share a title within weeks ("Crisis on Earth-X (1)" in one
+// series, "(2)" in another), or extends the event of that name; it answers how many. Ruled-out, edited and deleted ones stay.
 func (c Crossovers) DetectEvents(ctx context.Context, mediaType string, categoryID int64) (int, error) {
 	queries := librarydb.New(c.store.Read())
 	rows, err := queries.ListFranchiseEpisodes(ctx, librarydb.ListFranchiseEpisodesParams{MediaType: mediaType, CategoryID: categoryID})
 	if err != nil {
 		return 0, fmt.Errorf("library: franchise episodes: %w", err)
 	}
-	inEvent, err := queries.ListCrossoverMemberParts(ctx, mediaType)
+	owners, err := queries.ListCrossoverMemberPartOwners(ctx, mediaType)
 	if err != nil {
 		return 0, fmt.Errorf("library: event episodes: %w", err)
 	}
-	ruledOut, err := queries.ListDifferentContentPairs(ctx)
+	apart, err := ruledOutPairs(ctx, queries)
 	if err != nil {
-		return 0, fmt.Errorf("library: ruled out pairs: %w", err)
-	}
-	apart := map[[2]int64]bool{}
-	for _, pair := range ruledOut {
-		apart[[2]int64{min(pair.FromID, pair.ToID), max(pair.FromID, pair.ToID)}] = true
+		return 0, fmt.Errorf("library: %w", err)
 	}
 	taken := map[int64]bool{}
-	for _, id := range inEvent {
-		taken[id] = true
+	for _, owner := range owners {
+		taken[owner.PartID] = true
 	}
 	type key struct {
 		franchise int64
@@ -98,82 +95,74 @@ func (c Crossovers) DetectEvents(ctx context.Context, mediaType string, category
 			continue
 		}
 		k := key{row.FranchiseID, strings.ToLower(base)}
-		groups[k] = append(groups[k], eventEpisode{partID: row.PartID, workID: row.WorkID, number: number, title: row.Title, date: row.Date, at: at})
+		groups[k] = append(groups[k], eventEpisode{partID: row.PartID, workID: row.WorkID, ref: row.MediaRef, number: number, title: row.Title, date: row.Date, at: at})
 		if names[k] == "" {
 			names[k] = base
 		}
 	}
-	created := 0
+	made := 0
 	for k, episodes := range groups {
-		if !isEvent(episodes, apart) {
-			continue
-		}
-		slices.SortFunc(episodes, func(a, b eventEpisode) int {
-			if a.number != b.number && a.number != 0 && b.number != 0 {
-				return a.number - b.number
+		first, last := span(episodes)
+		var extended bool
+		err := c.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			write := librarydb.New(tx)
+			targets, err := matchingEvents(ctx, write, mediaType, k.base, first, last)
+			if err != nil {
+				return err
 			}
-			if byDate := strings.Compare(a.date, b.date); byDate != 0 {
-				return byDate
+			if len(targets) == 0 {
+				if !isEvent(episodes, apart) {
+					return nil
+				}
+				if dismissed, err := dismissedEvent(ctx, write, k.base, first); err != nil || dismissed {
+					return err
+				}
+			} else if separate(episodes, apart) {
+				return nil
 			}
-			return int(a.partID - b.partID)
+			var target int64
+			var absorb []int64
+			if len(targets) > 0 {
+				target, absorb = targets[0], targets[1:]
+			}
+			_, err = storeEvent(ctx, write, mediaType, c.store.Now(), eventInput{name: names[k], episodes: episodes}, target, absorb)
+			extended = err == nil
+			return err
 		})
-		partIDs := make([]int64, len(episodes))
-		for i, episode := range episodes {
-			partIDs[i] = episode.partID
+		if err != nil {
+			return made, fmt.Errorf("library: event %q: %w", names[k], err)
 		}
-		if err := c.createAuto(ctx, mediaType, names[k], partIDs); err != nil {
-			return created, err
+		if extended {
+			made++
 		}
-		created++
 	}
-	return created, nil
+	return made, nil
 }
 
-// isEvent says the episodes are one event: of two or more series, no more than a dozen, close in time, at least one
-// carrying a part marker, and none pair a person said was not one.
+func span(episodes []eventEpisode) (first, last time.Time) {
+	for _, episode := range episodes {
+		first, last = earlier(first, episode.at), later(last, episode.at)
+	}
+	return first, last
+}
+
+// isEvent says the episodes are one event: of two or more series, no more than a dozen, close in time, and either one
+// carrying a part marker or three or more aired on different days, and none pair a person said was not one.
 func isEvent(episodes []eventEpisode, apart map[[2]int64]bool) bool {
 	if len(episodes) < 2 || len(episodes) > eventMaxEpisodes {
 		return false
 	}
 	works := map[int64]bool{}
+	days := map[string]bool{}
 	marked := false
-	first, last := episodes[0].at, episodes[0].at
 	for _, episode := range episodes {
 		works[episode.workID] = true
+		days[episode.date] = true
 		marked = marked || episode.number != 0
-		if episode.at.Before(first) {
-			first = episode.at
-		}
-		if episode.at.After(last) {
-			last = episode.at
-		}
 	}
-	if len(works) < 2 || !marked || last.Sub(first) > eventWindow {
+	first, last := span(episodes)
+	if len(works) < 2 || last.Sub(first) > eventWindow || !marked && (len(episodes) < 3 || len(days) < 2) {
 		return false
 	}
-	for i, a := range episodes {
-		for _, b := range episodes[i+1:] {
-			if apart[[2]int64{min(a.partID, b.partID), max(a.partID, b.partID)}] {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func (c Crossovers) createAuto(ctx context.Context, mediaType, name string, partIDs []int64) error {
-	err := c.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		queries := librarydb.New(tx)
-		created, err := queries.CreateCollection(ctx, librarydb.CreateCollectionParams{
-			MediaType: mediaType, Name: name, Kind: CrossoverKind, Source: AutoCrossoverSource, AddedAt: c.store.Now().Unix(),
-		})
-		if err != nil {
-			return err
-		}
-		return setMembersTx(ctx, queries, created.ID, partIDs)
-	})
-	if err != nil {
-		return fmt.Errorf("library: create event %q: %w", name, err)
-	}
-	return nil
+	return !separate(episodes, apart)
 }

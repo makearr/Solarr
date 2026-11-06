@@ -655,6 +655,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/works/{id}/crossovers", func(w http.ResponseWriter, r *http.Request) { server.routeCrossoverID(w, r, server.GetWorkCrossovers) })
 			secured.Post("/parts/{id}/same-content", func(w http.ResponseWriter, r *http.Request) { server.routeCrossoverID(w, r, server.LinkSameContent) })
 			secured.Delete("/parts/{id}/same-content", server.routeUnlinkSameContent)
+			secured.Post("/parts/{id}/not-same", func(w http.ResponseWriter, r *http.Request) { server.routeCrossoverID(w, r, server.MarkNotSameContent) })
 			secured.Get("/works/{id}/numbering", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.GetWorkNumbering) })
 			secured.Get("/works/{id}/release-filters", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.GetWorkReleaseFilters) })
 			secured.Put("/works/{id}/release-filters", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.SetWorkReleaseFilters) })

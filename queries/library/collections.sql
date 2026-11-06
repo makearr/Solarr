@@ -320,6 +320,8 @@ WHERE a.date IS NOT NULL AND a.title IS NOT NULL AND LENGTH(a.title) > 3 AND wa.
   AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = b.work_id AND d.category_id = sqlc.arg(category_id))
   AND NOT EXISTS (SELECT 1 FROM relationship r WHERE r.kind IN ('same_content', 'different_content')
                   AND ((r.from_id = a.id AND r.to_id = b.id) OR (r.from_id = b.id AND r.to_id = a.id)))
+  AND NOT EXISTS (SELECT 1 FROM crossover_not_same n WHERE n.low_work_id = a.work_id AND n.low_ref = a.media_ref
+                  AND n.high_work_id = b.work_id AND n.high_ref = b.media_ref)
 ORDER BY a.date DESC, a.id
 LIMIT sqlc.arg(page_size);
 

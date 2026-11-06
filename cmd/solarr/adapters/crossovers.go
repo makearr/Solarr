@@ -29,12 +29,31 @@ func crossoverError(err error) error {
 }
 
 func crossoverView(event library.Crossover) gen.Crossover {
-	view := gen.Crossover{Id: event.ID, Name: event.Name, Monitored: event.Monitored}
+	view := gen.Crossover{Id: event.ID, Name: event.Name, Monitored: event.Monitored, TotalParts: event.Total, Gaps: event.Gaps}
+	if view.Gaps == nil {
+		view.Gaps = []int{}
+	}
+	view.Missing = make([]gen.CrossoverMissingPart, len(event.Missing))
+	for i, part := range event.Missing {
+		view.Missing[i] = gen.CrossoverMissingPart{
+			Number: part.Number, Provider: part.Provider, ExternalId: part.ExternalID, SeriesTitle: part.SeriesTitle,
+			Season: part.Season, Episode: part.Episode, Title: part.Title,
+		}
+		if part.Date != "" {
+			date := part.Date
+			view.Missing[i].Date = &date
+		}
+		if part.WorkID != 0 {
+			workID := part.WorkID
+			view.Missing[i].WorkId = &workID
+		}
+	}
 	view.Members = make([]gen.CrossoverMember, len(event.Members))
 	for i, member := range event.Members {
 		view.Members[i].PartId, view.Members[i].WorkId, view.Members[i].WorkTitle = member.PartID, member.WorkID, member.WorkTitle
 		view.Members[i].MediaRef, view.Members[i].Title, view.Members[i].Monitored = member.MediaRef, member.PartTitle, member.Monitored
 		view.Members[i].HasFile = member.HasFile
+		view.Members[i].Number, view.Members[i].Guessed = member.Number, member.Guessed
 		if member.Date != "" {
 			date := member.Date
 			view.Members[i].Date = &date
@@ -143,4 +162,9 @@ func (a Crossovers) Link(ctx context.Context, partID, otherPartID int64) error {
 // Unlink implements apiserver.Crossovers.
 func (a Crossovers) Unlink(ctx context.Context, partID, otherPartID int64) error {
 	return a.Crossovers.UnlinkSameContent(ctx, partID, otherPartID)
+}
+
+// NotSame implements apiserver.Crossovers.
+func (a Crossovers) NotSame(ctx context.Context, partID, otherPartID int64) error {
+	return a.Crossovers.MarkNotSame(ctx, partID, otherPartID)
 }

@@ -7824,6 +7824,28 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /parts/{id}/not-same:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+    post:
+      operationId: markNotSameContent
+      tags: [library]
+      summary: Say two episodes are not one broadcast; they are not suggested or linked again. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [part_id]
+              properties:
+                part_id: { type: integer, format: int64 }
+      responses:
+        "204": { description: Remembered. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /works/{id}/numbering:
     parameters:
       - name: id
@@ -9881,18 +9903,41 @@ components:
 
     Crossover:
       type: object
-      required: [id, name, monitored, members]
+      required: [id, name, monitored, total_parts, members, missing, gaps]
       properties:
         id: { type: integer, format: int64 }
         name: { type: string }
         monitored: { type: boolean }
+        total_parts: { type: integer, description: "How many parts the event has: what a provider states, else the most seen." }
         members:
           type: array
           items: { $ref: "#/components/schemas/CrossoverMember" }
+        missing:
+          type: array
+          description: Parts a provider lists that the library does not hold, in part order.
+          items: { $ref: "#/components/schemas/CrossoverMissingPart" }
+        gaps:
+          type: array
+          description: Part numbers nothing is known for.
+          items: { type: integer }
+
+    CrossoverMissingPart:
+      type: object
+      required: [number, provider, external_id, series_title, season, episode, title]
+      properties:
+        number: { type: integer, description: "The part's place in the event." }
+        provider: { type: string, description: "Which provider's id the series has." }
+        external_id: { type: string }
+        series_title: { type: string }
+        season: { type: integer }
+        episode: { type: integer }
+        title: { type: string }
+        date: { type: string }
+        work_id: { type: integer, format: int64, description: "The series in the library, absent when it would have to be added." }
 
     CrossoverMember:
       type: object
-      required: [part_id, work_id, work_title, media_ref, title, monitored, has_file]
+      required: [part_id, work_id, work_title, media_ref, title, monitored, has_file, number, guessed]
       properties:
         part_id: { type: integer, format: int64 }
         work_id: { type: integer, format: int64 }
@@ -9902,6 +9947,8 @@ components:
         date: { type: string }
         monitored: { type: boolean }
         has_file: { type: boolean }
+        number: { type: integer, description: "The part's place in the event." }
+        guessed: { type: boolean, description: "The place was worked out from air dates, because the title carries no part number." }
 
     SameContentLink:
       type: object

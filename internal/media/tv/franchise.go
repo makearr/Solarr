@@ -18,6 +18,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // ProviderWikidata names the franchise a series is part of by its Wikidata item.
@@ -54,6 +55,9 @@ type FranchisePass struct {
 	Crossovers library.Crossovers
 	Series     library.Series
 	Logger     *slog.Logger
+	// Episodes lists series' episodes to find crossovers in providers' data; nil compares none.
+	Episodes EpisodeLists
+	Clock    clock.Clock
 	// Again asks for another pass soon, when AniList's time ran out with entries still unread; nil asks none.
 	Again func(ctx context.Context)
 }
@@ -85,6 +89,9 @@ func (p FranchisePass) Run(ctx context.Context, _ jobs.Job) error {
 		if err := p.countFamilies(ctx, *known); err != nil {
 			return err
 		}
+	}
+	if err := p.findProviderCrossovers(ctx, known); err != nil {
+		return err
 	}
 	if err := p.readAnime(ctx); err != nil {
 		return err
@@ -463,6 +470,16 @@ func (p FranchisePass) Reconcile(ctx context.Context, known *wikidataKnowledge) 
 			edges = append(edges, pair)
 		}
 	}
+	events, err := p.Crossovers.EventPairs(ctx, MediaType)
+	if err != nil {
+		return 0, err
+	}
+	for _, pair := range events {
+		if pair.WorkID < pair.OtherWorkID {
+			edges = append(edges, [2]int64{pair.WorkID, pair.OtherWorkID})
+		}
+	}
+	crossovers = append(crossovers, events...)
 	unrelated, err := p.Franchises.UnrelatedPairs(ctx, MediaType)
 	if err != nil {
 		return 0, err

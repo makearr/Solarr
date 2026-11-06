@@ -23,6 +23,9 @@ type Querier interface {
 	AddCollectionRefusal(ctx context.Context, arg AddCollectionRefusalParams) error
 	// edition_id and part_id are 0 for a credit on the work itself (Appendix E, D2).
 	AddCredit(ctx context.Context, arg AddCreditParams) error
+	AddCrossoverEventDismissed(ctx context.Context, arg AddCrossoverEventDismissedParams) error
+	AddCrossoverMemberGuess(ctx context.Context, arg AddCrossoverMemberGuessParams) error
+	AddCrossoverNotSame(ctx context.Context, arg AddCrossoverNotSameParams) error
 	// Hearts, per user; a favorite is not a follow. Column lists follow table order.
 	AddFavorite(ctx context.Context, arg AddFavoriteParams) error
 	// The second half of importing a file, and execlastid for the same reason.
@@ -71,6 +74,7 @@ type Querier interface {
 	BlocklistRelease(ctx context.Context, arg BlocklistReleaseParams) (BlocklistedRelease, error)
 	CancelMoveJob(ctx context.Context, arg CancelMoveJobParams) (int64, error)
 	ClearClassificationGenres(ctx context.Context, workID int64) error
+	ClearCrossoverMemberGuesses(ctx context.Context, collectionID int64) error
 	ClearDesiredProfileOverride(ctx context.Context, desiredItemID int64) error
 	// Import revert's own first step for one unit (todo 4.9): work_id/edition_id
 	// going back to NULL is what makes it safe to then delete the work/edition
@@ -250,6 +254,9 @@ type Querier interface {
 	DeleteCollectionLinks(ctx context.Context, id int64) error
 	DeleteCollectionMemberOrigin(ctx context.Context, arg DeleteCollectionMemberOriginParams) error
 	DeleteCollectionMembers(ctx context.Context, collectionID int64) error
+	DeleteCrossoverMissingPart(ctx context.Context, arg DeleteCrossoverMissingPartParams) error
+	DeleteCrossoverMissingParts(ctx context.Context, collectionID int64) error
+	DeleteCrossoverNotSame(ctx context.Context, arg DeleteCrossoverNotSameParams) error
 	DeleteCustomCollection(ctx context.Context, id int64) (int64, error)
 	DeleteDecisionsByID(ctx context.Context, ids interface{}) (int64, error)
 	DeleteDesiredItemsForWork(ctx context.Context, workID int64) error
@@ -397,6 +404,8 @@ type Querier interface {
 	GetCollectionExternalIDOf(ctx context.Context, collectionID int64) (GetCollectionExternalIDOfRow, error)
 	// A dashboard figure is one lookup regardless of library size (ADR-28).
 	GetCounter(ctx context.Context, arg GetCounterParams) (Counter, error)
+	GetCrossoverEvent(ctx context.Context, collectionID int64) (CrossoverEvent, error)
+	GetCrossoverFamilyChecked(ctx context.Context, familyKey string) (int64, error)
 	GetDesiredItem(ctx context.Context, id int64) (DesiredItem, error)
 	GetDesiredProfileOverride(ctx context.Context, desiredItemID int64) (int64, error)
 	GetEdition(ctx context.Context, id int64) (Edition, error)
@@ -536,6 +545,8 @@ type Querier interface {
 	// The monitored artists credited on a wanted album released within the window.
 	ListArtistsWithFreshRelease(ctx context.Context, arg ListArtistsWithFreshReleaseParams) ([]int64, error)
 	ListArtworkForSubject(ctx context.Context, arg ListArtworkForSubjectParams) ([]Artwork, error)
+	// Events a person has not edited, with the dates of their members, to merge halves a pass made apart.
+	ListAutoCrossovers(ctx context.Context, mediaType string) ([]ListAutoCrossoversRow, error)
 	ListBlockedContent(ctx context.Context, arg ListBlockedContentParams) ([]BlockedContent, error)
 	// Invariant 83 (todo 4.15/4.8): "a blocked hash found later by a scan is
 	// reported, never touched" -- driven from blocked_content (small, user-sized)
@@ -595,8 +606,18 @@ type Querier interface {
 	// the person's name, and a second round-trip per credit is not worth saving
 	// a join for.
 	ListCreditsForWorkWithPerson(ctx context.Context, workID int64) ([]ListCreditsForWorkWithPersonRow, error)
+	ListCrossoverEventDismissed(ctx context.Context) ([]CrossoverEventDismissed, error)
+	ListCrossoverEventInfo(ctx context.Context, collectionIds []int64) ([]CrossoverEvent, error)
+	// Every work pair that shares an event, once each, with the event it is in.
+	ListCrossoverEventWorks(ctx context.Context, mediaType string) ([]ListCrossoverEventWorksRow, error)
+	ListCrossoverMemberGuesses(ctx context.Context, collectionIds []int64) ([]CrossoverMemberGuess, error)
+	// The event each episode of an event is in, to keep one episode out of two events.
+	ListCrossoverMemberPartOwners(ctx context.Context, mediaType string) ([]ListCrossoverMemberPartOwnersRow, error)
 	// The episodes already in an event of a media type.
 	ListCrossoverMemberParts(ctx context.Context, mediaType string) ([]int64, error)
+	ListCrossoverMissingParts(ctx context.Context, collectionIds []int64) ([]CrossoverMissingPart, error)
+	// Every pair of episodes a person said are not one broadcast, as the parts they are now.
+	ListCrossoverNotSameParts(ctx context.Context) ([]ListCrossoverNotSamePartsRow, error)
 	ListDecisionRollup(ctx context.Context, desiredItemID int64) ([]DecisionRollup, error)
 	// A decision's library is its item's: the copy stores it so the statistics need no join back.
 	ListDecisionsAfter(ctx context.Context, arg ListDecisionsAfterParams) ([]ListDecisionsAfterRow, error)
@@ -989,6 +1010,7 @@ type Querier interface {
 	MoveCollectionLinksFrom(ctx context.Context, arg MoveCollectionLinksFromParams) error
 	MoveCollectionLinksTo(ctx context.Context, arg MoveCollectionLinksToParams) error
 	MoveCollectionMembers(ctx context.Context, arg MoveCollectionMembersParams) error
+	MoveCrossoverMissingParts(ctx context.Context, arg MoveCrossoverMissingPartsParams) error
 	// An item the kept work has no counterpart for moves over whole, without the dropped work's edition.
 	MoveDesiredItemToWork(ctx context.Context, arg MoveDesiredItemToWorkParams) error
 	// A credit both editions hold stays the twin's own; the leftover goes with DeleteEditionCredits.
@@ -1136,7 +1158,9 @@ type Querier interface {
 	SetCollectionMonitored(ctx context.Context, arg SetCollectionMonitoredParams) error
 	SetCollectionName(ctx context.Context, arg SetCollectionNameParams) error
 	SetCollectionPoster(ctx context.Context, arg SetCollectionPosterParams) error
+	SetCollectionSource(ctx context.Context, arg SetCollectionSourceParams) error
 	SetCounter(ctx context.Context, arg SetCounterParams) error
+	SetCrossoverFamilyChecked(ctx context.Context, arg SetCrossoverFamilyCheckedParams) error
 	SetDesiredItemAvailability(ctx context.Context, arg SetDesiredItemAvailabilityParams) error
 	SetDesiredItemMonitored(ctx context.Context, arg SetDesiredItemMonitoredParams) error
 	// Re-derived after enrichment adds work_part rows, or a per-track monitor
@@ -1251,6 +1275,8 @@ type Querier interface {
 	UpsertArtwork(ctx context.Context, arg UpsertArtworkParams) error
 	// Candidates, decisions and provenance. Column lists follow table order.
 	UpsertCandidate(ctx context.Context, arg UpsertCandidateParams) (Candidate, error)
+	UpsertCrossoverEvent(ctx context.Context, arg UpsertCrossoverEventParams) error
+	UpsertCrossoverMissingPart(ctx context.Context, arg UpsertCrossoverMissingPartParams) error
 	UpsertFileTrackClaim(ctx context.Context, arg UpsertFileTrackClaimParams) error
 	UpsertHuntQueueEntry(ctx context.Context, arg UpsertHuntQueueEntryParams) error
 	// The planner owns every column but the search record, which each search keeps itself.

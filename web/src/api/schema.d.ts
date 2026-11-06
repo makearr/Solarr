@@ -4964,6 +4964,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/parts/{id}/not-same": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Say two episodes are not one broadcast; they are not suggested or linked again. Administrator only. */
+        post: operations["markNotSameContent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/{id}/numbering": {
         parameters: {
             query?: never;
@@ -6660,7 +6679,30 @@ export interface components {
             id: number;
             name: string;
             monitored: boolean;
+            /** @description How many parts the event has: what a provider states, else the most seen. */
+            total_parts: number;
             members: components["schemas"]["CrossoverMember"][];
+            /** @description Parts a provider lists that the library does not hold, in part order. */
+            missing: components["schemas"]["CrossoverMissingPart"][];
+            /** @description Part numbers nothing is known for. */
+            gaps: number[];
+        };
+        CrossoverMissingPart: {
+            /** @description The part's place in the event. */
+            number: number;
+            /** @description Which provider's id the series has. */
+            provider: string;
+            external_id: string;
+            series_title: string;
+            season: number;
+            episode: number;
+            title: string;
+            date?: string;
+            /**
+             * Format: int64
+             * @description The series in the library, absent when it would have to be added.
+             */
+            work_id?: number;
         };
         CrossoverMember: {
             /** Format: int64 */
@@ -6673,6 +6715,10 @@ export interface components {
             date?: string;
             monitored: boolean;
             has_file: boolean;
+            /** @description The part's place in the event. */
+            number: number;
+            /** @description The place was worked out from air dates, because the title carries no part number. */
+            guessed: boolean;
         };
         SameContentLink: {
             /** Format: int64 */
@@ -18715,6 +18761,36 @@ export interface operations {
                 };
                 content?: never;
             };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    markNotSameContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    part_id: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Remembered. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
         };
