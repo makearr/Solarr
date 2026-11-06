@@ -109,3 +109,28 @@ func TestMeetsTarget_AudioSampleRateDepthChannelsAndAFrameRateCap(t *testing.T) 
 		t.Error("a frame rate at or below the cap meets it, above does not")
 	}
 }
+
+func TestDistance_IsAShareOfTheMatchedPartsAndSkipsWhatWasNotMeasured(t *testing.T) {
+	target := settings.QualityTarget{MediaType: "movie", Resolution: "1080p", VideoCodec: "h265", Container: "mp4", CRF: 28, MaxFrameRate: 30}
+	exact := score.FileFacts{Resolution: "1080p", VideoCodec: "h265", Extension: "mp4", CRF: 28, FrameRate: 29.97}
+	if got, ok := quality.Distance(target, exact); !ok || got.Percent != 100 || len(got.Gaps()) != 0 {
+		t.Errorf("an exact file = %+v ok %v, want 100%% and no gaps", got, ok)
+	}
+	// h264 at 720p: the codec part (weight 2) is lost, the resolution part (weight 2) loses 0.4, the rest match: 4.7 of 7.5.
+	worse := score.FileFacts{Resolution: "720p", VideoCodec: "h264", Extension: "mp4", CRF: 28, FrameRate: 29.97}
+	got, _ := quality.Distance(target, worse)
+	if got.Percent != 63 {
+		t.Errorf("a 720p h264 file = %d%%, want 63", got.Percent)
+	}
+	if gaps := got.Gaps(); len(gaps) != 2 || gaps[0].Dimension != "video codec" || gaps[1].Dimension != "resolution" {
+		t.Errorf("gaps = %+v, want the codec then the resolution", gaps)
+	}
+	if _, ok := quality.Distance(target, score.FileFacts{}); ok {
+		t.Error("a file nothing was read from has no closeness")
+	}
+	bitrate := settings.QualityTarget{MediaType: "movie", VideoBitrateKbps: new(int64)}
+	*bitrate.VideoBitrateKbps = 1600
+	if got, _ := quality.Distance(bitrate, score.FileFacts{VideoBitrate: 6_400_000}); got.Percent != 0 {
+		t.Errorf("four times the bitrate = %d%%, want 0", got.Percent)
+	}
+}

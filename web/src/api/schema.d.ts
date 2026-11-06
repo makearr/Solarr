@@ -8015,10 +8015,24 @@ export interface components {
             frame_rate?: number;
             /** @description The constant rate factor the encoder states. */
             crf?: number;
+            /**
+             * Format: int64
+             * @description How near the file is to the library's target quality, 0 to 100, from the parts both name. Absent when it sets none or nothing could be compared.
+             */
+            target_closeness_pct?: number;
+            /** @description The parts of the target the file does not match, the furthest first. */
+            target_gaps?: components["schemas"]["TargetGap"][];
             /** @description Codec, file type and bitrate match the library's target. Absent when it sets none. */
             meets_target?: boolean;
             /** @description Good enough that upgrades stop. Absent when the library sets neither target nor cutoff. */
             meets_cutoff?: boolean;
+        };
+        /** @description One part of a target quality a file does not match. */
+        TargetGap: {
+            /** @description resolution, video codec, CRF, ... */
+            dimension: string;
+            want: string;
+            have: string;
         };
         /** @description One work-level credit (ADR-32) -- the person's own name, so a client never needs a second round-trip just to display it. */
         Credit: {

@@ -4226,9 +4226,15 @@ type PartFile struct {
 	SizeBytes  *int64  `json:"size_bytes,omitempty"`
 
 	// Subtitles Language codes of embedded and sidecar subtitles.
-	Subtitles        *[]string `json:"subtitles,omitempty"`
-	VideoBitrateKbps *int64    `json:"video_bitrate_kbps,omitempty"`
-	VideoCodec       *string   `json:"video_codec,omitempty"`
+	Subtitles *[]string `json:"subtitles,omitempty"`
+
+	// TargetClosenessPct How near the file is to the library's target quality, 0 to 100, from the parts both name. Absent when it sets none or nothing could be compared.
+	TargetClosenessPct *int64 `json:"target_closeness_pct,omitempty"`
+
+	// TargetGaps The parts of the target the file does not match, the furthest first.
+	TargetGaps       *[]TargetGap `json:"target_gaps,omitempty"`
+	VideoBitrateKbps *int64       `json:"video_bitrate_kbps,omitempty"`
+	VideoCodec       *string      `json:"video_codec,omitempty"`
 }
 
 // PathEntry defines model for PathEntry.
@@ -5394,6 +5400,14 @@ type Tagging struct {
 
 	// WriteMetadata Write album, album artist, track title, track and disc number, date and genre.
 	WriteMetadata bool `json:"write_metadata"`
+}
+
+// TargetGap One part of a target quality a file does not match.
+type TargetGap struct {
+	// Dimension resolution, video codec, CRF, ...
+	Dimension string `json:"dimension"`
+	Have      string `json:"have"`
+	Want      string `json:"want"`
 }
 
 // TestDownloaderRequest defines model for TestDownloaderRequest.

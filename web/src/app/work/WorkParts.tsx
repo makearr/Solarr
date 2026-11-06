@@ -13,6 +13,7 @@ import { HeartButton } from "@/ui/HeartButton";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 import { PlayButton } from "../player/PlayButton";
+import { TargetChip } from "./TargetChip";
 import { fileChips, formatDuration, formatMinutes, partState, sceneNumber, type PartState } from "./workFormat";
 
 type Part = components["schemas"]["WorkPart"];
@@ -223,9 +224,7 @@ function PartRow({
             {fileChips(part.file).map((chip) => (
               <Chip key={chip}>{chip}</Chip>
             ))}
-            {part.file.meets_target != null && (
-              <Chip tone={part.file.meets_target ? "ok" : "warn"}>{part.file.meets_target ? "meets the target" : "below the target"}</Chip>
-            )}
+            <TargetChip file={part.file} />
             {part.file.meets_cutoff === false && <Chip tone="warn">below the cutoff</Chip>}
           </span>
         )}

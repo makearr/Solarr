@@ -115,6 +115,7 @@ func (s *Server) ListWantedParts(w http.ResponseWriter, r *http.Request, params 
 				view.File.MeetsTarget = &meetsTarget
 			}
 			view.File.MeetsCutoff = &meetsCutoff
+			setTargetCloseness(view.File, judgement)
 			page.Items = append(page.Items, view)
 		}
 		writeJSON(w, s.logger, http.StatusOK, page)

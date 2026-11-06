@@ -343,9 +343,24 @@ func annotateFiles(access authz.Access, categoryIDs []int64, files []*gen.PartFi
 				file.MeetsTarget = &meetsTarget
 			}
 			file.MeetsCutoff = &meetsCutoff
+			setTargetCloseness(file, judgement)
 		}
 		return
 	}
+}
+
+// setTargetCloseness shows how near the file is to the library's target, and the parts that are not.
+func setTargetCloseness(file *gen.PartFile, judgement quality.File) {
+	if judgement.Target == nil {
+		return
+	}
+	percent := int64(judgement.Target.Percent)
+	file.TargetClosenessPct = &percent
+	gaps := make([]gen.TargetGap, 0)
+	for _, gap := range judgement.Target.Gaps() {
+		gaps = append(gaps, gen.TargetGap{Dimension: gap.Dimension, Want: gap.Want, Have: gap.Have})
+	}
+	file.TargetGaps = &gaps
 }
 
 // partFileFacts is what probing measured of a file, as the facts a profile judges.

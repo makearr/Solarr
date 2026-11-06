@@ -8,6 +8,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/identify/quality"
 	"github.com/makearr/Solarr/internal/identify/score"
 )
 
@@ -18,6 +19,8 @@ var ErrNoQualityProfile = errors.New("judge: quality profile not found")
 type RankedProfile struct {
 	Name  string
 	Rules score.Profile
+	// Target is the library's target quality, which a decision records its closeness to; nil when it has none.
+	Target *settings.QualityTarget
 }
 
 // LibraryProfiles is the profile an item picked for itself, else the library's ordered list, else the item's own; the
@@ -46,10 +49,12 @@ func LibraryProfiles(
 		if err != nil {
 			return nil, fmt.Errorf("quality profile %d: %w", id, err)
 		}
+		var target *settings.QualityTarget
 		if category, found := snapshot.Category(categoryID); found && category.QualityTarget != nil {
 			rules = WithTarget(rules, *category.QualityTarget)
+			target = category.QualityTarget
 		}
-		profiles = append(profiles, RankedProfile{Name: profile.Name, Rules: rules})
+		profiles = append(profiles, RankedProfile{Name: profile.Name, Rules: rules, Target: target})
 	}
 	return profiles, nil
 }
@@ -75,6 +80,28 @@ func LanguagePolicyFor(snapshot *settings.Snapshot, categoryID int64) *score.Lan
 // only a fallback wants; failing that, by the first whose rules merely accept it. A release no profile accepts is
 // judged, and refused, by the first. The profile's position leads the quality vector (ADR-40: tiers, not weights).
 func EvaluateInOrder(profiles []RankedProfile, facts score.Facts, languagePolicy *score.LanguagePolicy) model.Decision {
+	return withTargetCloseness(evaluateInOrder(profiles, facts, languagePolicy), profiles, facts)
+}
+
+// withTargetCloseness records how near the release is to the library's target; it ranks nothing (the target's own
+// tiers and distances already do), it only shows.
+func withTargetCloseness(decision model.Decision, profiles []RankedProfile, facts score.Facts) model.Decision {
+	if len(profiles) == 0 || profiles[0].Target == nil {
+		return decision
+	}
+	closeness, ok := quality.Distance(*profiles[0].Target, facts.File)
+	if !ok {
+		return decision
+	}
+	label := fmt.Sprintf("%d%% of the target %q", closeness.Percent, profiles[0].Target.Name)
+	if gaps := closeness.Gaps(); len(gaps) > 0 {
+		label += ": " + gaps[0].Dimension + " " + gaps[0].Have + " for " + gaps[0].Want
+	}
+	decision.Components = append(decision.Components, model.ScoreComponent{Rule: "target-closeness", Label: label})
+	return decision
+}
+
+func evaluateInOrder(profiles []RankedProfile, facts score.Facts, languagePolicy *score.LanguagePolicy) model.Decision {
 	evaluate := func(rules score.Profile) model.Decision {
 		if languagePolicy != nil {
 			return score.EvaluateWithLanguage(rules, facts, nil, *languagePolicy, facts.File.AudioLanguages, facts.File.SubtitleLanguages)

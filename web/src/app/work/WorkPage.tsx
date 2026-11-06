@@ -34,6 +34,7 @@ import { EditWork } from "./EditWork";
 import { NumberingDialog, useNumberingChoices } from "./NumberingDialog";
 import { ReleaseFiltersDialog } from "./ReleaseFiltersDialog";
 import { grabNote } from "./grabNote";
+import { TargetChip } from "./TargetChip";
 import { externalLinks, fileChips, formatMinutes, isUnverified } from "./workFormat";
 import { GroupSection, MonitorToggle, PartTable, PersonLink, useAllParts, type PartActions } from "./WorkParts";
 import { WorkCollections } from "./WorkCollections";
@@ -717,7 +718,7 @@ function FilesTab({ work, words, info }: { work: Work; words: Vocabulary; info: 
               </span>
             </td>
             <td className="whitespace-nowrap py-1.5 text-right text-xs">
-              {part.file?.meets_target != null && <Chip tone={part.file.meets_target ? "ok" : "warn"}>target</Chip>}{" "}
+              {part.file && <TargetChip file={part.file} short />}{" "}
               {part.file?.meets_cutoff != null && <Chip tone={part.file.meets_cutoff ? "ok" : "warn"}>cutoff</Chip>}
             </td>
           </tr>
@@ -747,7 +748,7 @@ function WholeFiles({ work }: { work: Work }) {
               {fileChips(file).map((chip) => (
                 <Chip key={chip}>{chip}</Chip>
               ))}
-              {file.meets_target != null && <Chip tone={file.meets_target ? "ok" : "warn"}>{file.meets_target ? "meets the target" : "below the target"}</Chip>}
+              <TargetChip file={file} />
               {file.meets_cutoff === false && <Chip tone="warn">below the cutoff</Chip>}
             </span>
           </li>

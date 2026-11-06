@@ -40,6 +40,11 @@ enough: the shipped profiles have no gates, so every release "passes" every one 
   (11 video ones each for movies, series and adult, 9 music, 8 audiobook, 1 book), one labelled "Space conscious" per media
   type; they are ordinary rows, editable and removable. The edit form's **Name from specs** button renames a target after
   what it asks for.
+  A target is also the setting a later transcode will aim for, so every file and every candidate release is judged by **how
+  close** it is, not only whether it meets it (`quality.Distance`): 0 to 100 %, a weighted share of the parts both name
+  (resolution, codec, CRF and video bitrate weigh most; a number loses a quarter per half-octave away; a part the probe or
+  release name does not state is left out). A library file shows "82% of the target" with the gaps on hover; a candidate's
+  decision carries a zero-point `target-closeness` component. The closeness ranks nothing; the tiers below do.
   Two checkboxes shape how a target ranks what is found (`judge.WithTarget`): **Prefer over-quality to under-quality**
   ranks the resolutions above the target (the nearest first) before the ones below it, whatever the profile lists, and makes
   overshooting a bitrate or frame rate cost half what undershooting does (a 1080p target takes 4k over 720p even when 4k's

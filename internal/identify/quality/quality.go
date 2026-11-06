@@ -15,6 +15,8 @@ import (
 type File struct {
 	MeetsTarget bool
 	MeetsCutoff bool
+	// Target is how near the file is to the library's target; nil when it has none or nothing could be compared.
+	Target *Closeness
 }
 
 // Judge judges a file's measured facts against a library's quality; judged is false when the library
@@ -25,6 +27,9 @@ func Judge(snapshot *settings.Snapshot, category settings.Category, facts score.
 	}
 	if category.QualityTarget != nil {
 		file.MeetsTarget = MeetsTarget(*category.QualityTarget, facts.File)
+		if closeness, ok := Distance(*category.QualityTarget, facts.File); ok {
+			file.Target = &closeness
+		}
 	}
 	file.MeetsCutoff = file.MeetsTarget
 	if !file.MeetsCutoff && category.QualityCutoffID != nil {
