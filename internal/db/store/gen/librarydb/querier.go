@@ -831,7 +831,7 @@ type Querier interface {
 	// Every title a library's series answers to, canonical and alias, for matching folder names (ADR-41).
 	ListSeriesTitles(ctx context.Context, arg ListSeriesTitlesParams) ([]ListSeriesTitlesRow, error)
 	// The sessions holding a unit their library could not take yet, for the import retry: only those that finished
-	// and have a library to place into; a reverted or cancelled session places nothing again.
+	// and have a library to place into, their own or the unit's; a reverted or cancelled session places nothing again.
 	ListSessionsWithUnplacedCommits(ctx context.Context, arg ListSessionsWithUnplacedCommitsParams) ([]int64, error)
 	// Every live path of every media object that lives at more than one place; roots are filtered in Go.
 	ListSharedObjectPaths(ctx context.Context) ([]ListSharedObjectPathsRow, error)

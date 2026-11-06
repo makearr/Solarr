@@ -12588,7 +12588,16 @@ components:
         category_id:
           type: integer
           format: int64
-          description: The target category, when known up front. Omitted means "decide per unit".
+          description: >-
+            The target category, when known up front. Omitted means "decide per unit": with
+            `best_match`, each unit goes to the library that fits it; without, every unit waits for one.
+        best_match:
+          type: boolean
+          default: false
+          description: >-
+            Without a `category_id`, route each unit to a library of the media type its files fit best:
+            a library no rule narrows before one that is, then by priority. A unit that fits two types
+            equally waits for a library; one no library's type takes is skipped.
         preview:
           type: boolean
           description: >-
@@ -12794,6 +12803,10 @@ components:
             session has no category_id to place into, or placement has not
             run yet.
         edition_id: { type: integer, format: int64 }
+        category_id:
+          type: integer
+          format: int64
+          description: The library a Best match import routed this unit to; absent places it into the session's.
         evidence: { $ref: "#/components/schemas/ImportEvidence" }
         candidates:
           type: array

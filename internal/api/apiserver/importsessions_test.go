@@ -136,15 +136,16 @@ type fakeImportInspector struct {
 
 	lastSourcePath, lastOrigin string
 	lastCategoryID             *int64
-	lastPreview                bool
+	lastPreview, lastBestMatch bool
 	calls                      int
 }
 
 func (f *fakeImportInspector) InspectImport(
-	_ context.Context, sourcePath, origin string, categoryID *int64, preview, _ bool,
+	_ context.Context, sourcePath, origin string, categoryID *int64, preview, _, bestMatch bool,
 ) error {
 	f.calls++
 	f.lastSourcePath, f.lastOrigin, f.lastCategoryID, f.lastPreview = sourcePath, origin, categoryID, preview
+	f.lastBestMatch = bestMatch
 	return f.err
 }
 
@@ -665,6 +666,30 @@ func TestInspectImport_PassesPreviewThrough(t *testing.T) {
 			}
 			if fixture.importInspector.lastPreview != tc.want {
 				t.Errorf("preview = %v, want %v", fixture.importInspector.lastPreview, tc.want)
+			}
+		})
+	}
+}
+
+func TestInspectImport_PassesBestMatchThrough(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		want       bool
+	}{
+		{"absent", `{"source_path":"/downloads/incoming"}`, false},
+		{"true", `{"source_path":"/downloads/incoming","best_match":true}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := newWorksFixture(t)
+			fixture.createUser(t, "admin", settings.RoleAdmin)
+			cookies := fixture.signIn(t, "admin")
+
+			recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/inspect", tc.body))
+			if recorder.Code != http.StatusAccepted {
+				t.Fatalf("status = %d, want 202 (%s)", recorder.Code, recorder.Body)
+			}
+			if fixture.importInspector.lastBestMatch != tc.want {
+				t.Errorf("best_match = %v, want %v", fixture.importInspector.lastBestMatch, tc.want)
 			}
 		})
 	}

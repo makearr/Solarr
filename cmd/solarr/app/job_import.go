@@ -44,6 +44,7 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 			}
 			return ""
 		},
+		Libraries: p.suggester().ImportLibraries,
 		Workspace: filepath.Join(p.config.Paths.CacheDir, "import-workspace"),
 		Events:    p.bus,
 		// A new edition's tracklist is what lets the placed files count towards the album.

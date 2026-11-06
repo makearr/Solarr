@@ -263,7 +263,7 @@ var allowedInternalImports = map[string][]string{
 	// The cutoff check of every media type: paging, state writes and counting once, each type judging its own.
 	"internal/acquiring/cutoff":   {"internal/db/library", "internal/db/settings", "internal/jobs"},
 	"internal/acquiring/dispatch": {"internal/db/statistics", "internal/acquiring/download", "internal/db/library", "internal/identify/model", "internal/identify/priority"},
-	"internal/media/music": {"internal/platform/httpx", "internal/importing/arrmap", "internal/importing/arrimport", "internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/acquiring/judge", "internal/platform/parallel",
+	"internal/media/music": {"internal/platform/httpx", "internal/platform/filekind", "internal/importing/arrmap", "internal/importing/arrimport", "internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/acquiring/judge", "internal/platform/parallel",
 		"internal/media", "internal/acquiring/plan", "internal/acquiring/dispatch",
 		"internal/acquiring/indexer", "internal/acquiring/download", "internal/identify/priority",
 		"internal/platform/artwork", "internal/platform/clock", "internal/platform/fsx",
@@ -409,7 +409,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/metadata/wikidata", "internal/acquiring/cutoff", "internal/acquiring/indexer", "internal/acquiring/judge", "internal/acquiring/releasefacts", "internal/acquiring/rss",
 		"internal/db/statistics", "internal/db/store/gen/librarydb", "internal/identify/parsetv", "internal/identify/score",
 	},
-	"internal/media/book": {"internal/platform/httpx",
+	"internal/media/book": {"internal/platform/httpx", "internal/platform/filekind",
 		"internal/media/works", "internal/db/store/gen/librarydb", "internal/media/picturesweep", "internal/db/library", "internal/db/settings", "internal/identify/model",
 		"internal/identify/parsebook", "internal/identify/quality", "internal/identify/score", "internal/importing/batch",
 		"internal/importing/inspect", "internal/importing/placer", "internal/importing/rules", "internal/jobs", "internal/media",

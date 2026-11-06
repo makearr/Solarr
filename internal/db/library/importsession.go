@@ -135,6 +135,16 @@ type Unit struct {
 	// finishes) finds this unit belongs to a pack -- nil is the overwhelming
 	// common case (a single-release import).
 	PackID *int64
+	// CategoryID is the library a Best match import routed the unit to; nil places it into the session's.
+	CategoryID *int64
+}
+
+// PlacesInto is the library the unit is placed into: its own, else its session's; nil while neither has one.
+func (u Unit) PlacesInto(session Session) *int64 {
+	if u.CategoryID != nil {
+		return u.CategoryID
+	}
+	return session.CategoryID
 }
 
 // NewUnit is what AddUnits needs for one discovered unit. Confidence, WorkID
@@ -147,6 +157,8 @@ type NewUnit struct {
 	Bytes        int64
 	EvidenceJSON string
 	Reason       string
+	// CategoryID is the library a Best match import routed it to; nil for one routed by its session.
+	CategoryID *int64
 }
 
 // Create starts one session in ImportInspecting, with no units yet.
@@ -190,6 +202,7 @@ func (s ImportSessions) AddUnits(ctx context.Context, sessionID int64, units []N
 				SessionID: sessionID, RelPath: unit.RelPath, Shape: unit.Shape,
 				FileCount: unit.FileCount, Bytes: unit.Bytes, Confidence: 0,
 				Decision: UnitQueue, EvidenceJson: unit.EvidenceJSON, Reason: nullString(unit.Reason),
+				CategoryID: nullInt64(unit.CategoryID),
 			})
 			if err != nil {
 				return fmt.Errorf("insert unit %s: %w", unit.RelPath, err)
@@ -694,7 +707,7 @@ func unitFromRow(row librarydb.ImportUnit) Unit {
 		Decision: row.Decision, WorkID: int64Ptr(row.WorkID), EditionID: int64Ptr(row.EditionID),
 		EvidenceJSON: row.EvidenceJson, CandidatesJSON: row.CandidatesJson.String, Reason: row.Reason.String,
 		WorkCreated: row.WorkCreated != 0, EditionCreated: row.EditionCreated != 0,
-		PackID: int64Ptr(row.PackID),
+		PackID: int64Ptr(row.PackID), CategoryID: int64Ptr(row.CategoryID),
 	}
 }
 

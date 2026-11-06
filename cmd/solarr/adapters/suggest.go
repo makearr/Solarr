@@ -9,6 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/importing/importjob"
 	"github.com/makearr/Solarr/internal/media"
 )
 
@@ -252,4 +253,19 @@ func (s Suggester) hasKind(snapshot *settings.Snapshot, mediaType, kind string) 
 		}
 	}
 	return false
+}
+
+// ImportLibraries are every library a Best match import may route to: general where neither rules nor a rating limit
+// narrow it, so a unit no work is known for yet goes to the library that takes anything of its type.
+func (s Suggester) ImportLibraries() []importjob.Library {
+	snapshot := s.Settings.Snapshot()
+	categories := snapshot.Categories()
+	libraries := make([]importjob.Library, len(categories))
+	for i, category := range categories {
+		libraries[i] = importjob.Library{
+			CategoryID: category.ID, MediaType: category.MediaType, Rank: s.rank(snapshot, snapshot.LibraryOf(category.ID)),
+			General: len(s.rulesOf(snapshot, category)) == 0 && category.MaxAge == nil,
+		}
+	}
+	return libraries
 }

@@ -259,7 +259,7 @@ func (q *Queries) GetImportSession(ctx context.Context, id int64) (ImportSession
 const getImportUnit = `-- name: GetImportUnit :one
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-       edition_created, pack_id
+       edition_created, pack_id, category_id
 FROM import_unit WHERE id = ?
 `
 
@@ -283,6 +283,7 @@ func (q *Queries) GetImportUnit(ctx context.Context, id int64) (ImportUnit, erro
 		&i.WorkCreated,
 		&i.EditionCreated,
 		&i.PackID,
+		&i.CategoryID,
 	)
 	return i, err
 }
@@ -326,14 +327,14 @@ func (q *Queries) GetLatestImportSessionForAcquisition(ctx context.Context, acqu
 const insertImportUnit = `-- name: InsertImportUnit :one
 INSERT INTO import_unit (session_id, rel_path, shape, file_count, bytes, confidence,
                           decision, work_id, edition_id, evidence_json, candidates_json,
-                          reason)
+                          reason, category_id)
 VALUES (?1, ?2, ?3, ?4,
         ?5, ?6, ?7, ?8,
         ?9, ?10, ?11,
-        ?12)
+        ?12, ?13)
 RETURNING id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
           work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-          edition_created, pack_id
+          edition_created, pack_id, category_id
 `
 
 type InsertImportUnitParams struct {
@@ -349,6 +350,7 @@ type InsertImportUnitParams struct {
 	EvidenceJson   string
 	CandidatesJson sql.NullString
 	Reason         sql.NullString
+	CategoryID     sql.NullInt64
 }
 
 func (q *Queries) InsertImportUnit(ctx context.Context, arg InsertImportUnitParams) (ImportUnit, error) {
@@ -365,6 +367,7 @@ func (q *Queries) InsertImportUnit(ctx context.Context, arg InsertImportUnitPara
 		arg.EvidenceJson,
 		arg.CandidatesJson,
 		arg.Reason,
+		arg.CategoryID,
 	)
 	var i ImportUnit
 	err := row.Scan(
@@ -384,6 +387,7 @@ func (q *Queries) InsertImportUnit(ctx context.Context, arg InsertImportUnitPara
 		&i.WorkCreated,
 		&i.EditionCreated,
 		&i.PackID,
+		&i.CategoryID,
 	)
 	return i, err
 }
@@ -575,7 +579,7 @@ func (q *Queries) ListImportUnitFilesForSession(ctx context.Context, sessionID i
 const listImportUnits = `-- name: ListImportUnits :many
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-       edition_created, pack_id
+       edition_created, pack_id, category_id
 FROM import_unit WHERE session_id = ? ORDER BY id
 `
 
@@ -605,6 +609,7 @@ func (q *Queries) ListImportUnits(ctx context.Context, sessionID int64) ([]Impor
 			&i.WorkCreated,
 			&i.EditionCreated,
 			&i.PackID,
+			&i.CategoryID,
 		); err != nil {
 			return nil, err
 		}
@@ -622,7 +627,7 @@ func (q *Queries) ListImportUnits(ctx context.Context, sessionID int64) ([]Impor
 const listImportUnitsPage = `-- name: ListImportUnitsPage :many
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-       edition_created, pack_id
+       edition_created, pack_id, category_id
 FROM import_unit
 WHERE session_id = ?1 AND id > ?2
   AND (?3 = 0 OR decision = ?4)
@@ -676,6 +681,7 @@ func (q *Queries) ListImportUnitsPage(ctx context.Context, arg ListImportUnitsPa
 			&i.WorkCreated,
 			&i.EditionCreated,
 			&i.PackID,
+			&i.CategoryID,
 		); err != nil {
 			return nil, err
 		}
@@ -695,7 +701,7 @@ SELECT DISTINCT u.session_id
 FROM import_unit u
 JOIN import_session s ON s.id = u.session_id
 WHERE u.decision = 'COMMIT' AND u.work_id IS NULL AND u.session_id > ?1
-  AND s.category_id IS NOT NULL AND s.state IN ('DONE', 'FAILED')
+  AND (s.category_id IS NOT NULL OR u.category_id IS NOT NULL) AND s.state IN ('DONE', 'FAILED')
 ORDER BY u.session_id
 LIMIT ?2
 `
@@ -706,7 +712,7 @@ type ListSessionsWithUnplacedCommitsParams struct {
 }
 
 // The sessions holding a unit their library could not take yet, for the import retry: only those that finished
-// and have a library to place into; a reverted or cancelled session places nothing again.
+// and have a library to place into, their own or the unit's; a reverted or cancelled session places nothing again.
 func (q *Queries) ListSessionsWithUnplacedCommits(ctx context.Context, arg ListSessionsWithUnplacedCommitsParams) ([]int64, error) {
 	rows, err := q.db.QueryContext(ctx, listSessionsWithUnplacedCommits, arg.AfterID, arg.PageSize)
 	if err != nil {
@@ -733,7 +739,7 @@ func (q *Queries) ListSessionsWithUnplacedCommits(ctx context.Context, arg ListS
 const listUnplacedCommitUnits = `-- name: ListUnplacedCommitUnits :many
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-       edition_created, pack_id
+       edition_created, pack_id, category_id
 FROM import_unit
 WHERE session_id = ? AND decision = 'COMMIT' AND work_id IS NULL
 ORDER BY id
@@ -770,6 +776,7 @@ func (q *Queries) ListUnplacedCommitUnits(ctx context.Context, sessionID int64) 
 			&i.WorkCreated,
 			&i.EditionCreated,
 			&i.PackID,
+			&i.CategoryID,
 		); err != nil {
 			return nil, err
 		}

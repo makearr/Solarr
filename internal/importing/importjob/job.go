@@ -61,6 +61,8 @@ type Payload struct {
 	NoUnverified bool `json:"no_unverified,omitempty"`
 	// Only limits the import to these files, relative to SourcePath: the finished ones of a download that stalled.
 	Only []string `json:"only,omitempty"`
+	// BestMatch routes each unit of a session without a library to the library that fits it, instead of holding it.
+	BestMatch bool `json:"best_match,omitempty"`
 }
 
 // Policy is what this job needs from settings.db -- asked fresh per run
@@ -93,6 +95,8 @@ type Job struct {
 	importers   map[string]importbatch.Importer
 	mediaTypeOf func(categoryID int64) string
 	unassigned  string
+	// libraries are the ones a Best match import may route to, asked fresh per cluster.
+	libraries func() []Library
 	// events is optional: nil means no progress is published.
 	events *events.Bus
 	// onCommitted is optional: told when a finished session placed anything, so new editions enrich now.
@@ -101,7 +105,7 @@ type Job struct {
 	logger      *slog.Logger
 }
 
-// Config is what a Job needs. Every field is required except MediaTypeOf, Workspace, ArchiveLimits, Events,
+// Config is what a Job needs. Every field is required except MediaTypeOf, Libraries, Workspace, ArchiveLimits, Events,
 // OnCommitted and Logger.
 type Config struct {
 	FS       fsx.FS
@@ -113,6 +117,8 @@ type Config struct {
 	Importers   map[string]importbatch.Importer
 	MediaTypeOf func(categoryID int64) string
 	Unassigned  string
+	// Libraries are the ones a Best match import may route a unit to; nil routes none, so every unit is skipped.
+	Libraries func() []Library
 	// Workspace is where archives are opened (outside every library root); empty leaves archives unopened.
 	Workspace string
 	// ArchiveLimits bounds an expansion; zero is archive.DefaultLimits.
@@ -132,7 +138,7 @@ func NewJob(config Config) *Job {
 	return &Job{
 		fsys: config.FS, sessions: config.Sessions, policy: config.Policy, packs: config.Packs,
 		workspace: config.Workspace, archiveLimits: config.ArchiveLimits,
-		importers: config.Importers, mediaTypeOf: config.MediaTypeOf, unassigned: config.Unassigned,
+		importers: config.Importers, mediaTypeOf: config.MediaTypeOf, unassigned: config.Unassigned, libraries: config.Libraries,
 		events: config.Events, onCommitted: config.OnCommitted, clock: config.Clock, logger: logger,
 	}
 }
@@ -313,10 +319,10 @@ func (j *Job) runSession(ctx context.Context, job jobs.Job, payload Payload) err
 	j.reportProgress(ctx, sessionID, job.Progress)
 
 	result, err := inspect.NewWalker().Walk(ctx, j.fsys, payload.SourcePath, inspect.WalkState{Cursor: cursor},
-		j.walkOptions(payload.CategoryID, payload.Only),
+		j.walkOptions(payload),
 		func(ctx context.Context, batch []inspect.Unit) error {
 			err := j.commitCluster(ctx, sessionID, payload.SourcePath, threshold, payload.Preview,
-				unverifiedWanted(payload), payload.TransferLadder, batch)
+				unverifiedWanted(payload), payload.BestMatch, payload.TransferLadder, batch)
 			j.reportProgress(ctx, sessionID, job.Progress)
 			return err
 		})
@@ -488,30 +494,23 @@ func packItemStateFor(unit library.Unit) string {
 }
 
 // poisonedByExclusion checks every file a unit carries, Media and Other alike (a ".exe" beside audio lands in
-// Other), against ADR-53's refuse action; aligned with batch, "" for a unit not poisoned.
-func (j *Job) poisonedByExclusion(batch []inspect.Unit, mediaType string, categoryID *int64) []string {
-	reasons := make([]string, len(batch))
-	for i, unit := range batch {
-		for _, files := range [][]inspect.File{unit.Media, unit.Other} {
-			for _, f := range files {
-				if pattern, found := j.policy.RefusedByExclusion(path.Base(f.RelPath), mediaType, categoryID); found {
-					reasons[i] = fmt.Sprintf("%s: %q matched %s", model.ReasonBlockedPattern, pattern, f.RelPath)
-					break
-				}
-			}
-			if reasons[i] != "" {
-				break
+// Other), against ADR-53's refuse action; "" for a unit not poisoned.
+func (j *Job) poisonedByExclusion(unit inspect.Unit, mediaType string, categoryID *int64) string {
+	for _, files := range [][]inspect.File{unit.Media, unit.Other} {
+		for _, f := range files {
+			if pattern, found := j.policy.RefusedByExclusion(path.Base(f.RelPath), mediaType, categoryID); found {
+				return fmt.Sprintf("%s: %q matched %s", model.ReasonBlockedPattern, pattern, f.RelPath)
 			}
 		}
 	}
-	return reasons
+	return ""
 }
 
 // commitCluster records one walked cluster's units, refuses those carrying an excluded file, and hands the rest to
 // their media type to identify, decide and place. The session's category is read here rather than taken from the
 // payload: a library assigned while the session walks places every cluster after it.
 func (j *Job) commitCluster(
-	ctx context.Context, sessionID int64, sourcePath string, threshold float64, preview, unverified bool,
+	ctx context.Context, sessionID int64, sourcePath string, threshold float64, preview, unverified, bestMatch bool,
 	ladder []string, batch []inspect.Unit,
 ) error {
 	session, err := j.sessions.Get(ctx, sessionID)
@@ -521,24 +520,29 @@ func (j *Job) commitCluster(
 	if session.State == library.ImportCancelling {
 		return errCancelled
 	}
-	importer, mediaType := j.importerFor(session.CategoryID)
-	if importer == nil {
-		return fmt.Errorf("importjob: %q libraries have no import", mediaType)
+	var routes []routed
+	if bestMatch && session.CategoryID == nil {
+		routes = j.routeByFit(j.routableLibraries(), batch)
+	} else {
+		routes = j.routeBySession(session.CategoryID, batch)
 	}
 
-	newUnits := make([]library.NewUnit, len(batch))
-	for i, unit := range batch {
-		evidenceJSON, err := json.Marshal(unit.Evidence)
+	newUnits := make([]library.NewUnit, len(routes))
+	for i, route := range routes {
+		if route.importer == nil && route.skip == "" {
+			return fmt.Errorf("importjob: %q libraries have no import", route.mediaType)
+		}
+		evidenceJSON, err := json.Marshal(route.unit.Evidence)
 		if err != nil {
-			return fmt.Errorf("importjob: encode evidence for %s: %w", unit.Directory, err)
+			return fmt.Errorf("importjob: encode evidence for %s: %w", route.unit.Directory, err)
 		}
 		var bytes int64
-		for _, f := range unit.Media {
+		for _, f := range route.unit.Media {
 			bytes += f.SizeBytes
 		}
 		newUnits[i] = library.NewUnit{
-			RelPath: unit.Directory, Shape: string(inspect.ShapeOf(unit)),
-			FileCount: int64(len(unit.Media)), Bytes: bytes, EvidenceJSON: string(evidenceJSON),
+			RelPath: route.unit.Directory, Shape: string(inspect.ShapeOf(route.unit)),
+			FileCount: int64(len(route.unit.Media)), Bytes: bytes, EvidenceJSON: string(evidenceJSON), CategoryID: route.own,
 		}
 	}
 	ids, err := j.sessions.AddUnits(ctx, sessionID, newUnits)
@@ -547,29 +551,33 @@ func (j *Job) commitCluster(
 	}
 
 	// A refused file poisons its whole unit however confidently it would have resolved, so it never reaches IDENTIFY.
-	decisions := make([]library.UnitDecision, len(batch))
-	var kept []int
-	for i, reason := range j.poisonedByExclusion(batch, mediaType, session.CategoryID) {
+	decisions := make([]library.UnitDecision, len(routes))
+	var groups []importGroup
+	for i, route := range routes {
+		reason := route.skip
+		if reason == "" {
+			reason = j.poisonedByExclusion(route.unit, route.mediaType, route.category)
+		}
 		if reason != "" {
 			decisions[i] = library.UnitDecision{UnitID: ids[i], Decision: library.UnitSkip, Reason: reason}
 			continue
 		}
-		kept = append(kept, i)
+		groups = addToGroup(groups, route, i)
 	}
-	placements := make([]*library.Placement, len(batch))
-	if len(kept) > 0 {
+	placements := make([]*library.Placement, len(routes))
+	for _, group := range groups {
 		request := importbatch.Request{
 			SessionID: sessionID, AcquisitionID: session.AcquisitionID, SourcePath: sourcePath,
 			Preview: preview, Ladder: ladder, Threshold: threshold, AddUnidentified: unverified,
 		}
-		if session.CategoryID != nil {
-			request.CategoryID = *session.CategoryID
+		if group.category != nil {
+			request.CategoryID = *group.category
 		}
-		for _, i := range kept {
-			request.Units = append(request.Units, batch[i])
+		for _, i := range group.members {
+			request.Units = append(request.Units, routes[i].unit)
 			request.UnitIDs = append(request.UnitIDs, ids[i])
 		}
-		result, err := importer.ImportBatch(ctx, request)
+		result, err := group.importer.ImportBatch(ctx, request)
 		if err != nil {
 			// A retry resumes after the last unit recorded: this cluster's rows go, so it is inspected again.
 			if deleteErr := j.sessions.DeleteUnits(ctx, sessionID, ids); deleteErr != nil {
@@ -577,7 +585,7 @@ func (j *Job) commitCluster(
 			}
 			return fmt.Errorf("importjob: import batch: %w", err)
 		}
-		for k, i := range kept {
+		for k, i := range group.members {
 			decisions[i] = result.Decisions[k]
 			placements[i] = result.Placements[k]
 		}
@@ -595,6 +603,37 @@ func (j *Job) commitCluster(
 	}
 	j.publishProgress(ctx, sessionID, importPhaseWalking, batch[len(batch)-1].Directory)
 	return nil
+}
+
+// importGroup is the units of a cluster one importer places into one library, as positions in the cluster.
+type importGroup struct {
+	mediaType string
+	importer  importbatch.Importer
+	category  *int64
+	members   []int
+}
+
+// addToGroup puts a unit into the group of its type and library, in the order the groups first appear.
+func addToGroup(groups []importGroup, route routed, position int) []importGroup {
+	for k := range groups {
+		if groups[k].mediaType == route.mediaType && sameCategory(groups[k].category, route.category) {
+			groups[k].members = append(groups[k].members, position)
+			return groups
+		}
+	}
+	return append(groups, importGroup{mediaType: route.mediaType, importer: route.importer, category: route.category, members: []int{position}})
+}
+
+func sameCategory(a, b *int64) bool {
+	return a == nil && b == nil || a != nil && b != nil && *a == *b
+}
+
+// routableLibraries are the libraries a Best match import may route to now.
+func (j *Job) routableLibraries() []Library {
+	if j.libraries == nil {
+		return nil
+	}
+	return j.libraries()
 }
 
 // unverifiedWanted is D6's rule: only a run started from the Import screen, not a preview, and not
@@ -688,20 +727,18 @@ func (j *Job) importerFor(categoryID *int64) (importbatch.Importer, string) {
 	return j.importers[mediaType], mediaType
 }
 
-// walkOptions are the inspection options of a category's media type: its own size floor, and the files asked for.
-func (j *Job) walkOptions(categoryID *int64, only []string) inspect.WalkOptions {
+// walkOptions are the inspection options of a category's media type, or the loosest of every library's for a Best
+// match import: the size floor, whether ebooks count, and the files asked for.
+func (j *Job) walkOptions(payload Payload) inspect.WalkOptions {
 	var options inspect.WalkOptions
-	if importer, _ := j.importerFor(categoryID); importer != nil {
-		if floor, ok := importer.(importbatch.SizeFloor); ok {
-			options.MediaSizeFloorBytes = floor.MediaSizeFloorBytes()
-		}
-		if books, ok := importer.(importbatch.BookFiles); ok {
-			options.Books = books.TakesBookFiles()
-		}
+	if payload.BestMatch && payload.CategoryID == nil {
+		options.MediaSizeFloorBytes, options.Books = j.loosestWalk(j.routableLibraries())
+	} else if importer, _ := j.importerFor(payload.CategoryID); importer != nil {
+		options.MediaSizeFloorBytes, options.Books = typeWalk(importer)
 	}
-	if len(only) > 0 {
-		options.Only = make(map[string]bool, len(only))
-		for _, file := range only {
+	if len(payload.Only) > 0 {
+		options.Only = make(map[string]bool, len(payload.Only))
+		for _, file := range payload.Only {
 			options.Only[file] = true
 		}
 	}

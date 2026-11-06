@@ -139,3 +139,26 @@ type BookFiles interface {
 type HeldCommitter interface {
 	CommitHeld(ctx context.Context, request HeldRequest) (library.Placement, error)
 }
+
+// Fitter is an Importer that says how well a walked unit's own files suit its media type, for a Best match import that
+// routes each unit to the library that fits it. 0 is not this type; the highest fit wins, a tie routes nowhere.
+type Fitter interface {
+	Fit(unit inspect.Unit) float64
+}
+
+// ReasonNoLibraryFits skips a unit of a Best match import that no library's media type takes.
+const ReasonNoLibraryFits = "no library holds what this is"
+
+// The fits a Fitter answers, on one scale so that types compare.
+const (
+	// FitDecisive is a name that says outright it is the type's.
+	FitDecisive = 1.0
+	// FitCertain is files of a shape only the type has: an episode's name, an ebook, an audiobook's own file.
+	FitCertain = 0.9
+	// FitLikely is files of the type's kind that nothing says otherwise of.
+	FitLikely = 0.6
+	// FitPossible is files the type could hold although another type usually does.
+	FitPossible = 0.3
+	// FitFallback is files of the type's kind whose names say nothing the type can read.
+	FitFallback = 0.1
+)
