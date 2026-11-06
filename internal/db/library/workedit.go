@@ -45,6 +45,37 @@ func (d Desired) SetProfileOverride(ctx context.Context, itemID int64, profileID
 	return nil
 }
 
+// TargetOverride answers the quality target an item was given of its own; found is false for the library's.
+func (d Desired) TargetOverride(ctx context.Context, itemID int64) (targetID int64, found bool, err error) {
+	targetID, err = librarydb.New(d.store.Read()).GetDesiredTargetOverride(ctx, itemID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("library: target override of item %d: %w", itemID, err)
+	}
+	return targetID, true, nil
+}
+
+// SetTargetOverride gives an item its own quality target; nil returns it to the library's.
+func (d Desired) SetTargetOverride(ctx context.Context, itemID int64, targetID *int64) error {
+	err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		if targetID == nil {
+			if err := queries.ClearDesiredTargetOverride(ctx, itemID); err != nil {
+				return err
+			}
+		} else if err := queries.SetDesiredTargetOverride(ctx, librarydb.SetDesiredTargetOverrideParams{DesiredItemID: itemID, TargetID: *targetID}); err != nil {
+			return err
+		}
+		return queries.MarkDesiredItemDirty(ctx, itemID)
+	})
+	if err != nil {
+		return fmt.Errorf("library: set target override of item %d: %w", itemID, err)
+	}
+	return nil
+}
+
 // TagName is one tag as the edit dialog offers it.
 type TagName struct {
 	ID   int64

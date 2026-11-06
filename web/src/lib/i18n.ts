@@ -131,7 +131,7 @@ const catalogue = {
   "addDialog.target": "Target quality",
   "addDialog.noTarget": "None: the profiles decide",
   "addDialog.autoTarget": "Automatic (from the first profile)",
-  "addDialog.targetChanges": "Changes the library's target.",
+  "addDialog.targetOwn": "For this work only; the library keeps its own.",
   "addDialog.rootFolder": "Root folder",
   "addDialog.rootAutomatic": "Automatic: the one with most free space",
   "addDialog.more": "More options",

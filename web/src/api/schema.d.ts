@@ -7795,6 +7795,11 @@ export interface components {
              */
             quality_profile_id?: number;
             /**
+             * Format: int64
+             * @description The work's own target quality; the library's when absent.
+             */
+            target_id?: number;
+            /**
              * @description Start looking for what was added.
              * @default false
              */
@@ -8334,6 +8339,11 @@ export interface components {
              * @description The album's own quality profile; null is its library's.
              */
             profile_id: number | null;
+            /**
+             * Format: int64
+             * @description The work's own target quality; null or absent is its library's.
+             */
+            target_id?: number | null;
             /** @description Tags the user assigned, by name. */
             tags: string[];
             /** @description The type's editable facets the user set, by facet key (a series' type); empty or absent is the sources' value. Saving names only the facets it changes. */

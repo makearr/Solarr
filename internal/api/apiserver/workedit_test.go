@@ -77,19 +77,20 @@ func (f *fakeWorkEditor) DeleteTag(_ context.Context, id int64) error {
 
 func TestWorkEdit_ReadsAndSavesTheWholeDialog(t *testing.T) {
 	fixture, cookies := visibleWorksFixture(t)
-	profile := int64(4)
-	fixture.workEditor.row = apiserver.WorkEditRow{Monitored: true, ProfileID: &profile, Tags: []string{"Sleep"}, RootFolderIDs: []int64{2}}
+	profile, target := int64(4), int64(8)
+	fixture.workEditor.row = apiserver.WorkEditRow{Monitored: true, ProfileID: &profile, TargetID: &target, Tags: []string{"Sleep"}, RootFolderIDs: []int64{2}}
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works/1/edit"))
-	if recorder.Code != http.StatusOK || recorder.Body.String() != "{\"monitored\":true,\"profile_id\":4,\"root_folder_ids\":[2],\"tags\":[\"Sleep\"]}\n" {
+	if recorder.Code != http.StatusOK || recorder.Body.String() != "{\"monitored\":true,\"profile_id\":4,\"root_folder_ids\":[2],\"tags\":[\"Sleep\"],\"target_id\":8}\n" {
 		t.Fatalf("get: status %d, body %q", recorder.Code, recorder.Body)
 	}
 
-	recorder = fixture.do(authedPut(t, cookies, "/api/v1/works/1/edit", `{"monitored":false,"profile_id":null,"tags":["Rock"]}`))
+	recorder = fixture.do(authedPut(t, cookies, "/api/v1/works/1/edit", `{"monitored":false,"profile_id":null,"target_id":9,"tags":["Rock"]}`))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("put: status %d, body %s", recorder.Code, recorder.Body)
 	}
-	if want := (apiserver.WorkEditRow{Tags: []string{"Rock"}}); !reflect.DeepEqual(*fixture.workEditor.saved, want) {
+	saved := int64(9)
+	if want := (apiserver.WorkEditRow{TargetID: &saved, Tags: []string{"Rock"}}); !reflect.DeepEqual(*fixture.workEditor.saved, want) {
 		t.Fatalf("saved %+v, want %+v", *fixture.workEditor.saved, want)
 	}
 }

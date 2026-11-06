@@ -40,7 +40,9 @@ type TagRow struct {
 type WorkEditRow struct {
 	Monitored bool
 	ProfileID *int64
-	Tags      []string
+	// TargetID is the work's own quality target, nil for its library's.
+	TargetID *int64
+	Tags     []string
 	// Fields are the type's editable facets the user set, by facet key; "" returns one to its sources.
 	Fields map[string]string
 	// RootFolderIDs are the roots holding the work's files; read only.
@@ -127,7 +129,7 @@ func (s *Server) GetWorkEdit(w http.ResponseWriter, r *http.Request, id int64) {
 	if roots == nil {
 		roots = []int64{}
 	}
-	view := gen.WorkEdit{Monitored: row.Monitored, ProfileId: row.ProfileID, Tags: row.Tags, RootFolderIds: &roots}
+	view := gen.WorkEdit{Monitored: row.Monitored, ProfileId: row.ProfileID, TargetId: row.TargetID, Tags: row.Tags, RootFolderIds: &roots}
 	if len(row.Fields) > 0 {
 		view.Fields = &row.Fields
 	}
@@ -153,7 +155,7 @@ func (s *Server) SaveWorkEdit(w http.ResponseWriter, r *http.Request, id int64) 
 	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
 		return
 	}
-	edit := WorkEditRow{Monitored: body.Monitored, ProfileID: body.ProfileId, Tags: body.Tags, Fields: derefOr(body.Fields, nil)}
+	edit := WorkEditRow{Monitored: body.Monitored, ProfileID: body.ProfileId, TargetID: body.TargetId, Tags: body.Tags, Fields: derefOr(body.Fields, nil)}
 	if err := s.workEditor.SaveWorkEdit(r.Context(), id, edit); err != nil {
 		s.writeWorkEditError(w, err)
 		return

@@ -71,12 +71,13 @@ func UpgradeBeats(profiles []RankedProfile, candidate, incumbent model.Decision,
 var rateDimensions = map[string]bool{"video_bitrate": true, "audio_bitrate": true, "overall_bitrate": true}
 
 // LibraryProfiles is the profile an item picked for itself, else the library's ordered list, else the item's own; the
-// library's target quality, when it has one, leads each profile's ranking, whatever the media type.
+// item's own target quality or else the library's, when there is one, leads each profile's ranking, whatever the media type.
 func LibraryProfiles(
 	ctx context.Context, desired library.Desired, snapshot *settings.Snapshot, itemID, categoryID, itemProfileID int64,
 ) ([]RankedProfile, error) {
 	ids := []int64{itemProfileID}
-	if category, found := snapshot.Category(categoryID); found && len(category.QualityProfileIDs) > 0 {
+	category, categoryFound := snapshot.Category(categoryID)
+	if categoryFound && len(category.QualityProfileIDs) > 0 {
 		ids = category.QualityProfileIDs
 	}
 	override, overridden, err := desired.ProfileOverride(ctx, itemID)
@@ -86,8 +87,16 @@ func LibraryProfiles(
 	if overridden {
 		ids = []int64{override}
 	}
-	if category, found := snapshot.Category(categoryID); found && !overridden && len(category.QualityProfileIDs) == 0 && category.QualityTarget != nil {
-		return []RankedProfile{TargetOnly(*category.QualityTarget)}, nil
+	chosen := category.QualityTarget
+	if targetID, own, err := desired.TargetOverride(ctx, itemID); err != nil {
+		return nil, err
+	} else if own {
+		if target, found := snapshot.QualityTarget(targetID); found {
+			chosen = &target
+		}
+	}
+	if categoryFound && !overridden && len(category.QualityProfileIDs) == 0 && chosen != nil {
+		return []RankedProfile{TargetOnly(*chosen)}, nil
 	}
 	profiles := make([]RankedProfile, 0, len(ids))
 	for _, id := range ids {
@@ -101,10 +110,10 @@ func LibraryProfiles(
 		}
 		var target *settings.QualityTarget
 		upgrade := rules
-		if category, found := snapshot.Category(categoryID); found && category.QualityTarget != nil {
-			upgrade = WithTarget(rules, *category.QualityTarget)
-			rules = WithFreshTarget(rules, *category.QualityTarget)
-			target = category.QualityTarget
+		if chosen != nil {
+			upgrade = WithTarget(rules, *chosen)
+			rules = WithFreshTarget(rules, *chosen)
+			target = chosen
 		}
 		profiles = append(profiles, RankedProfile{Name: profile.Name, Rules: rules, Target: target, UpgradeRules: upgrade})
 	}

@@ -77,6 +77,7 @@ type Querier interface {
 	ClearClassificationGenres(ctx context.Context, workID int64) error
 	ClearCrossoverMemberGuesses(ctx context.Context, collectionID int64) error
 	ClearDesiredProfileOverride(ctx context.Context, desiredItemID int64) error
+	ClearDesiredTargetOverride(ctx context.Context, desiredItemID int64) error
 	// Import revert's own first step for one unit (todo 4.9): work_id/edition_id
 	// going back to NULL is what makes it safe to then delete the work/edition
 	// row itself (import_unit's own FK to either carries no ON DELETE CASCADE,
@@ -412,6 +413,7 @@ type Querier interface {
 	GetCrossoverFamilyChecked(ctx context.Context, familyKey string) (int64, error)
 	GetDesiredItem(ctx context.Context, id int64) (DesiredItem, error)
 	GetDesiredProfileOverride(ctx context.Context, desiredItemID int64) (int64, error)
+	GetDesiredTargetOverride(ctx context.Context, desiredItemID int64) (int64, error)
 	GetEdition(ctx context.Context, id int64) (Edition, error)
 	GetEditionByExternalID(ctx context.Context, arg GetEditionByExternalIDParams) (Edition, error)
 	GetGenreTreeSeed(ctx context.Context, key string) (int64, error)
@@ -1175,6 +1177,7 @@ type Querier interface {
 	SetDesiredItemRequiredCount(ctx context.Context, arg SetDesiredItemRequiredCountParams) error
 	SetDesiredItemState(ctx context.Context, arg SetDesiredItemStateParams) error
 	SetDesiredProfileOverride(ctx context.Context, arg SetDesiredProfileOverrideParams) error
+	SetDesiredTargetOverride(ctx context.Context, arg SetDesiredTargetOverrideParams) error
 	SetFingerprints(ctx context.Context, arg SetFingerprintsParams) error
 	SetGenreTreeSeed(ctx context.Context, arg SetGenreTreeSeedParams) error
 	SetGroupReputation(ctx context.Context, arg SetGroupReputationParams) error

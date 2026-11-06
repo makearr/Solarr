@@ -30,6 +30,29 @@ func TestProfileOverride_SetReadClear(t *testing.T) {
 	}
 }
 
+func TestTargetOverride_SetReadClear(t *testing.T) {
+	opened, _ := newLibrary(t)
+	desired := library.NewDesired(opened)
+	item := createDesired(t, opened, createWork(t, opened, "music", "Alpha").ID, "SET", 3)
+
+	if _, found, err := desired.TargetOverride(t.Context(), item.ID); err != nil || found {
+		t.Fatalf("fresh item: found=%v err=%v, want no override", found, err)
+	}
+	targetID := int64(9)
+	if err := desired.SetTargetOverride(t.Context(), item.ID, &targetID); err != nil {
+		t.Fatalf("SetTargetOverride: %v", err)
+	}
+	if got, found, err := desired.TargetOverride(t.Context(), item.ID); err != nil || !found || got != 9 {
+		t.Fatalf("after set: got=%d found=%v err=%v, want 9", got, found, err)
+	}
+	if err := desired.SetTargetOverride(t.Context(), item.ID, nil); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	if _, found, err := desired.TargetOverride(t.Context(), item.ID); err != nil || found {
+		t.Fatalf("after clear: found=%v err=%v, want no override", found, err)
+	}
+}
+
 // A person's tags replace only their own; a name the genre tree knows is that genre, any other a free label.
 func TestSetUserTags_ReplacesOnlyTheUsersOwn(t *testing.T) {
 	opened, _ := newLibrary(t)

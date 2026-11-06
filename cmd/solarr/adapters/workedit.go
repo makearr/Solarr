@@ -90,6 +90,13 @@ func (a WorkEdit) GetWorkEdit(ctx context.Context, workID int64) (apiserver.Work
 		if found {
 			row.ProfileID = &profileID
 		}
+		targetID, own, err := a.Desired.TargetOverride(ctx, items[0].ID)
+		if err != nil {
+			return apiserver.WorkEditRow{}, err
+		}
+		if own {
+			row.TargetID = &targetID
+		}
 	}
 	tags, err := a.People.UserTags(ctx, workID)
 	if err != nil {
@@ -111,6 +118,12 @@ func (a WorkEdit) SaveWorkEdit(ctx context.Context, workID int64, edit apiserver
 		profile, found := a.Settings.Snapshot().QualityProfile(*edit.ProfileID)
 		if !found || profile.MediaType != mediaType {
 			return fmt.Errorf("quality profile %d is not a %s profile: %w", *edit.ProfileID, mediaType, apiserver.ErrInvalidWorkEdit)
+		}
+	}
+	if edit.TargetID != nil {
+		target, found := a.Settings.Snapshot().QualityTarget(*edit.TargetID)
+		if !found || target.MediaType != settings.TargetFamily(mediaType) {
+			return fmt.Errorf("quality target %d is not a %s target: %w", *edit.TargetID, mediaType, apiserver.ErrInvalidWorkEdit)
 		}
 	}
 	fields, err := a.fieldWrites(mediaType, edit.Fields)
@@ -151,6 +164,18 @@ func (a WorkEdit) SaveWorkEdit(ctx context.Context, workID int64, edit apiserver
 			continue
 		}
 		if err := a.Desired.SetProfileOverride(ctx, item.ID, edit.ProfileID); err != nil {
+			return err
+		}
+	}
+	for _, item := range items {
+		current, found, err := a.Desired.TargetOverride(ctx, item.ID)
+		if err != nil {
+			return err
+		}
+		if found == (edit.TargetID != nil) && (!found || current == *edit.TargetID) {
+			continue
+		}
+		if err := a.Desired.SetTargetOverride(ctx, item.ID, edit.TargetID); err != nil {
 			return err
 		}
 	}

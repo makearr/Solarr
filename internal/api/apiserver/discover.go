@@ -201,7 +201,7 @@ func addWorkView(result AddWorkResult) gen.AddWorkResult {
 // applyAddExtras gives a work just added the tags and editable facets the add form carried, through the Edit dialog's own save.
 func (s *Server) applyAddExtras(ctx context.Context, workID int64, body gen.AddWorkRequest) error {
 	fields := derefOr(body.Fields, nil)
-	if workID == 0 || s.workEditor == nil || (len(fields) == 0 && (body.Tags == nil || len(*body.Tags) == 0)) {
+	if workID == 0 || s.workEditor == nil || (len(fields) == 0 && body.TargetId == nil && (body.Tags == nil || len(*body.Tags) == 0)) {
 		return nil
 	}
 	edit, err := s.workEditor.GetWorkEdit(ctx, workID)
@@ -212,6 +212,9 @@ func (s *Server) applyAddExtras(ctx context.Context, workID int64, body gen.AddW
 		if !slices.Contains(edit.Tags, name) {
 			edit.Tags = append(edit.Tags, name)
 		}
+	}
+	if body.TargetId != nil {
+		edit.TargetID = body.TargetId
 	}
 	edit.Fields = maps.Clone(edit.Fields)
 	if edit.Fields == nil {

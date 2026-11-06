@@ -1292,6 +1292,9 @@ type AddWorkRequest struct {
 	// Tags Tags to give the new work, by name, on top of what it has.
 	Tags *[]string `json:"tags,omitempty"`
 
+	// TargetId The work's own target quality; the library's when absent.
+	TargetId *int64 `json:"target_id,omitempty"`
+
 	// Title What the request list shows when the add is only requested.
 	Title *string `json:"title,omitempty"`
 }
@@ -5988,6 +5991,9 @@ type WorkEdit struct {
 
 	// Tags Tags the user assigned, by name.
 	Tags []string `json:"tags"`
+
+	// TargetId The work's own target quality; null or absent is its library's.
+	TargetId *int64 `json:"target_id"`
 }
 
 // WorkExclusion defines model for WorkExclusion.

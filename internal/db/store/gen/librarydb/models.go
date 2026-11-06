@@ -350,6 +350,11 @@ type DesiredProfileOverride struct {
 	ProfileID     int64
 }
 
+type DesiredTargetOverride struct {
+	DesiredItemID int64
+	TargetID      int64
+}
+
 type Edition struct {
 	ID              int64
 	WorkID          int64

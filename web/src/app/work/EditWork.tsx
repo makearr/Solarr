@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t, vocabularyOf } from "@/lib/i18n";
+import { targetTitle } from "@/lib/targetDisplay";
 import { invalidateWorkLists, useQualityProfiles, useRootFolders } from "@/lib/resources";
 import type { MediaTypeInfo } from "@/lib/useMediaTypes";
 import { Pencil } from "lucide-react";
@@ -12,6 +13,7 @@ import { useMediaTypes } from "@/lib/useMediaTypes";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
 
+import { useLibraryQuality } from "../LibraryTargetSelect";
 import { TagPicker } from "../TagChips";
 
 type Work = components["schemas"]["WorkDetail"];
@@ -19,6 +21,7 @@ type Work = components["schemas"]["WorkDetail"];
 interface Draft {
   monitored: boolean;
   profileId: number | null;
+  targetId: number | null;
   tags: string[];
   fields: Record<string, string>;
   option: string;
@@ -37,6 +40,7 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
     queryFn: () => ok(api.GET("/works/{id}/edit", { params: { path: { id: work.id } } })),
   });
   const profiles = useQualityProfiles();
+  const { quality } = useLibraryQuality(work.library_ids?.[0] ?? 0);
   const rootFolders = useRootFolders();
   const libraryRoots = (rootFolders.data ?? []).filter((root) =>
     (root.categories ?? []).some((category) => (work.library_ids ?? []).includes(category.id)),
@@ -51,6 +55,7 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
     (edit.data && {
       monitored: edit.data.monitored,
       profileId: edit.data.profile_id,
+      targetId: edit.data.target_id ?? null,
       tags: edit.data.tags,
       fields: Object.fromEntries(editable.map((facet) => [facet.key, edit.data.fields?.[facet.key] ?? ""])),
       option: "",
@@ -77,7 +82,7 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
       }
       await ok(api.PUT("/works/{id}/edit", {
         params: { path: { id: work.id } },
-        body: { monitored: form.monitored, profile_id: form.profileId, tags: form.tags, fields: form.fields },
+        body: { monitored: form.monitored, profile_id: form.profileId, target_id: form.targetId, tags: form.tags, fields: form.fields },
       }));
       if (form.option) {
         const { error: optionError } = await api.POST("/works/{id}/monitor", {
@@ -178,6 +183,19 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
                 ))}
             </select>
           </label>
+          {(quality?.available_targets ?? []).length > 0 && (
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-ink-muted">Target quality</span>
+              <select value={form.targetId ?? 0} onChange={(event) => change({ targetId: Number(event.target.value) || null })} className={field}>
+                <option value={0}>The library&apos;s{quality?.target ? `: ${targetTitle(quality.target)}` : ""}</option>
+                {(quality?.available_targets ?? []).map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {targetTitle(entry)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {editable.map((facet) => (
             <label key={facet.key} className="flex flex-col gap-1">
               <span className="text-xs text-ink-muted">{facet.label}</span>

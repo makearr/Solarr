@@ -11141,6 +11141,7 @@ components:
         monitor_option: { type: string, description: One of the type's monitor_options; its default when absent. }
         specials: { type: boolean, default: false, description: Also monitor the specials group. }
         quality_profile_id: { type: integer, format: int64, description: The library's default when absent. }
+        target_id: { type: integer, format: int64, description: The work's own target quality; the library's when absent. }
         search: { type: boolean, default: false, description: Start looking for what was added. }
         root_folder_id: { type: integer, format: int64, description: The library root the files should go under; types that place by affinity record it. }
         tags:
@@ -11746,6 +11747,11 @@ components:
           format: int64
           nullable: true
           description: The album's own quality profile; null is its library's.
+        target_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: The work's own target quality; null or absent is its library's.
         tags:
           type: array
           items: { type: string }

@@ -18,6 +18,15 @@ func (q *Queries) ClearDesiredProfileOverride(ctx context.Context, desiredItemID
 	return err
 }
 
+const clearDesiredTargetOverride = `-- name: ClearDesiredTargetOverride :exec
+DELETE FROM desired_target_override WHERE desired_item_id = ?
+`
+
+func (q *Queries) ClearDesiredTargetOverride(ctx context.Context, desiredItemID int64) error {
+	_, err := q.db.ExecContext(ctx, clearDesiredTargetOverride, desiredItemID)
+	return err
+}
+
 const getDesiredProfileOverride = `-- name: GetDesiredProfileOverride :one
 SELECT profile_id FROM desired_profile_override WHERE desired_item_id = ?
 `
@@ -27,6 +36,17 @@ func (q *Queries) GetDesiredProfileOverride(ctx context.Context, desiredItemID i
 	var profile_id int64
 	err := row.Scan(&profile_id)
 	return profile_id, err
+}
+
+const getDesiredTargetOverride = `-- name: GetDesiredTargetOverride :one
+SELECT target_id FROM desired_target_override WHERE desired_item_id = ?
+`
+
+func (q *Queries) GetDesiredTargetOverride(ctx context.Context, desiredItemID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getDesiredTargetOverride, desiredItemID)
+	var target_id int64
+	err := row.Scan(&target_id)
+	return target_id, err
 }
 
 const listTagNamesForSubjectBySource = `-- name: ListTagNamesForSubjectBySource :many
@@ -83,5 +103,20 @@ type SetDesiredProfileOverrideParams struct {
 
 func (q *Queries) SetDesiredProfileOverride(ctx context.Context, arg SetDesiredProfileOverrideParams) error {
 	_, err := q.db.ExecContext(ctx, setDesiredProfileOverride, arg.DesiredItemID, arg.ProfileID)
+	return err
+}
+
+const setDesiredTargetOverride = `-- name: SetDesiredTargetOverride :exec
+INSERT INTO desired_target_override (desired_item_id, target_id) VALUES (?, ?)
+ON CONFLICT (desired_item_id) DO UPDATE SET target_id = excluded.target_id
+`
+
+type SetDesiredTargetOverrideParams struct {
+	DesiredItemID int64
+	TargetID      int64
+}
+
+func (q *Queries) SetDesiredTargetOverride(ctx context.Context, arg SetDesiredTargetOverrideParams) error {
+	_, err := q.db.ExecContext(ctx, setDesiredTargetOverride, arg.DesiredItemID, arg.TargetID)
 	return err
 }

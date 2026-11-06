@@ -68,7 +68,7 @@ export function AddToSolarr({
   const [manual, setManual] = useState<AddResult>();
   const finished = useRef(false);
   const profiles = useQualityProfiles();
-  const { quality, save: saveQuality } = useLibraryQuality(Number(categoryId));
+  const { quality } = useLibraryQuality(Number(categoryId));
   const editable = info.facets.filter((facet) => facet.editable && facet.kind === "enum" && facet.key !== "air_time_zone");
   const libraryRoots = (useRootFolders().data ?? []).filter((root) => (root.categories ?? []).some((category) => category.id === Number(categoryId)));
   // Request-only access files a request an administrator approves instead of adding (Seerr's model).
@@ -81,10 +81,8 @@ export function AddToSolarr({
 
   const add = useMutation({
     mutationFn: async (mode: "now" | "manual") => {
-      // The library holds one target, so choosing another here changes the library's.
-      if (!person && target !== libraryTarget) {
-        await saveQuality.mutateAsync({ target_id: target === "" || target === "auto" ? undefined : Number(target), target_auto: target === "auto" });
-      }
+      // Another target than the library's is this work's own.
+      const ownTarget = !person && target !== libraryTarget && target !== "" && target !== "auto" ? Number(target) : undefined;
       const watch = mode === "manual" ? false : monitored;
       const { data, error } = await api.POST("/works", {
         body: {
@@ -92,7 +90,7 @@ export function AddToSolarr({
           title: candidate.title,
           monitored: options.length > 0 ? watch && option !== "none" : watch,
           monitor_option: options.length > 0 ? (watch ? option : "none") : undefined,
-          specials, quality_profile_id: profileId || undefined, search: mode === "now",
+          specials, quality_profile_id: profileId || undefined, target_id: ownTarget, search: mode === "now",
           root_folder_id: rootFolderId || undefined,
           tags: tags.length > 0 ? tags : undefined,
           fields: Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== "")),
@@ -122,7 +120,12 @@ export function AddToSolarr({
     if (!manual || finished.current) return;
     finished.current = true;
     if (monitored && manual.work_id) {
-      await api.POST("/works/{id}/monitor", { params: { path: { id: manual.work_id } }, body: { monitored: true, search: false } });
+      // "Monitor which" (the first season, the future ones) is applied as the Edit dialog applies it; the checkbox alone otherwise.
+      const withOption = options.length > 0 && option !== "none";
+      await api.POST("/works/{id}/monitor", {
+        params: { path: { id: manual.work_id } },
+        body: withOption ? { option, specials } : { monitored: true, search: false },
+      });
       invalidateWorkLists(queryClient);
     }
     onAdded(manual);
@@ -201,15 +204,15 @@ export function AddToSolarr({
           <label className="flex flex-wrap items-center gap-2">
             <span className={LABEL}>{t("addDialog.target")}</span>
             <select value={target} onChange={(event) => setChosenTarget(event.target.value)} className={FIELD}>
-              <option value="">{t("addDialog.noTarget")}</option>
-              <option value="auto" disabled={quality.profiles.length === 0}>{t("addDialog.autoTarget")}</option>
+              {libraryTarget === "" && <option value="">{t("addDialog.noTarget")}</option>}
+              {libraryTarget === "auto" && <option value="auto">{t("addDialog.autoTarget")}</option>}
               {targets.map((entry) => (
                 <option key={entry.id} value={String(entry.id)}>
                   {targetTitle(entry)}
                 </option>
               ))}
             </select>
-            {target !== libraryTarget && <span className="text-xs text-warn">{t("addDialog.targetChanges")}</span>}
+            {target !== libraryTarget && <span className="text-xs text-ink-muted">{t("addDialog.targetOwn")}</span>}
           </label>
         )}
         {!person && info.key !== "music" && libraryRoots.length > 1 && (
