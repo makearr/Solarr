@@ -96,19 +96,19 @@ DELETE FROM import_unit WHERE session_id = sqlc.arg(session_id) AND id IN (sqlc.
 -- name: InsertImportUnit :one
 INSERT INTO import_unit (session_id, rel_path, shape, file_count, bytes, confidence,
                           decision, work_id, edition_id, evidence_json, candidates_json,
-                          reason)
+                          reason, category_id)
 VALUES (sqlc.arg(session_id), sqlc.arg(rel_path), sqlc.arg(shape), sqlc.arg(file_count),
         sqlc.arg(bytes), sqlc.arg(confidence), sqlc.arg(decision), sqlc.arg(work_id),
         sqlc.arg(edition_id), sqlc.arg(evidence_json), sqlc.arg(candidates_json),
-        sqlc.arg(reason))
+        sqlc.arg(reason), sqlc.arg(category_id))
 RETURNING id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
           work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-          edition_created, pack_id;
+          edition_created, pack_id, category_id;
 
 -- name: ListImportUnits :many
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-       edition_created, pack_id
+       edition_created, pack_id, category_id
 FROM import_unit WHERE session_id = ? ORDER BY id;
 
 -- Cursor-paginated, unlike ListImportUnits above: a session's own unit count
@@ -120,7 +120,7 @@ FROM import_unit WHERE session_id = ? ORDER BY id;
 -- name: ListImportUnitsPage :many
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-       edition_created, pack_id
+       edition_created, pack_id, category_id
 FROM import_unit
 WHERE session_id = sqlc.arg(session_id) AND id > sqlc.arg(after_id)
   AND (sqlc.arg(filter_by_decision) = 0 OR decision = sqlc.arg(decision))
@@ -130,7 +130,7 @@ LIMIT sqlc.arg(page_size);
 -- name: GetImportUnit :one
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-       edition_created, pack_id
+       edition_created, pack_id, category_id
 FROM import_unit WHERE id = ?;
 
 -- The only mutation IDENTIFY needs once it exists: a unit starts QUEUE with no
@@ -150,19 +150,19 @@ WHERE id = sqlc.arg(id);
 -- name: ListUnplacedCommitUnits :many
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason, work_created,
-       edition_created, pack_id
+       edition_created, pack_id, category_id
 FROM import_unit
 WHERE session_id = ? AND decision = 'COMMIT' AND work_id IS NULL
 ORDER BY id;
 
 -- The sessions holding a unit their library could not take yet, for the import retry: only those that finished
--- and have a library to place into; a reverted or cancelled session places nothing again.
+-- and have a library to place into, their own or the unit's; a reverted or cancelled session places nothing again.
 -- name: ListSessionsWithUnplacedCommits :many
 SELECT DISTINCT u.session_id
 FROM import_unit u
 JOIN import_session s ON s.id = u.session_id
 WHERE u.decision = 'COMMIT' AND u.work_id IS NULL AND u.session_id > sqlc.arg(after_id)
-  AND s.category_id IS NOT NULL AND s.state IN ('DONE', 'FAILED')
+  AND (s.category_id IS NOT NULL OR u.category_id IS NOT NULL) AND s.state IN ('DONE', 'FAILED')
 ORDER BY u.session_id
 LIMIT sqlc.arg(page_size);
 

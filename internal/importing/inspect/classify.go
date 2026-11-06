@@ -108,3 +108,33 @@ type File struct {
 	ModTime   time.Time
 	Class     Class
 }
+
+// Narrow is unit as a walk with floor and books would have classified its media; a file no longer media moves to Other.
+func Narrow(unit Unit, floor int64, books bool) Unit {
+	if floor <= 0 {
+		floor = DefaultMediaSizeFloorBytes
+	}
+	narrowed := unit
+	narrowed.Media, narrowed.Other = nil, append([]File(nil), unit.Other...)
+	for _, file := range unit.Media {
+		file.Class = classify(file.RelPath, file.SizeBytes, floor, books)
+		if file.Class == ClassMedia {
+			narrowed.Media = append(narrowed.Media, file)
+		} else {
+			narrowed.Other = append(narrowed.Other, file)
+		}
+	}
+	return narrowed
+}
+
+// LargestVideo is a unit's biggest media file when it is a video: the feature of a film's or an episode's folder.
+func LargestVideo(unit Unit) (File, bool) {
+	var largest File
+	found := false
+	for _, file := range unit.Media {
+		if !found || file.SizeBytes > largest.SizeBytes {
+			largest, found = file, true
+		}
+	}
+	return largest, found && filekind.Of(largest.RelPath) == filekind.Video
+}

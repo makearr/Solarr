@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -34,14 +35,25 @@ type ImportSessions struct {
 	CommitsHeld func(mediaType string) bool
 }
 
-// heldCommitBuilt refuses a session whose library's type does not commit held units by hand; one without a library is
-// left to the committer, which asks for one.
-func (a ImportSessions) heldCommitBuilt(ctx context.Context, sessionID int64) error {
+// heldCommitBuilt refuses a unit whose library's type does not commit held units by hand, the session's library when
+// unitID is 0; one without a library is left to the committer, which asks for one.
+func (a ImportSessions) heldCommitBuilt(ctx context.Context, sessionID, unitID int64) error {
 	session, err := a.Sessions.Get(ctx, sessionID)
-	if err != nil || session.CategoryID == nil || a.CommitsHeld == nil {
+	if err != nil || a.CommitsHeld == nil {
 		return err
 	}
-	if category, found := a.Libraries.Category(*session.CategoryID); found && !a.CommitsHeld(category.MediaType) {
+	categoryID := session.CategoryID
+	if unitID != 0 {
+		unit, err := a.Sessions.GetUnit(ctx, unitID)
+		if err != nil {
+			return err
+		}
+		categoryID = unit.PlacesInto(session)
+	}
+	if categoryID == nil {
+		return nil
+	}
+	if category, found := a.Libraries.Category(*categoryID); found && !a.CommitsHeld(category.MediaType) {
 		return apiserver.ErrNotBuiltForMediaType
 	}
 	return nil
@@ -102,9 +114,9 @@ func (a ImportSessions) RevertImportSession(ctx context.Context, id int64, retai
 	if err != nil {
 		return apiserver.ImportRevertResult{}, err
 	}
-	var categoryIDs []int64
-	if session.CategoryID != nil {
-		categoryIDs = []int64{*session.CategoryID}
+	categoryIDs, err := a.sessionLibraries(ctx, session)
+	if err != nil {
+		return apiserver.ImportRevertResult{}, err
 	}
 	recycling := RecyclingFor(a.Libraries, categoryIDs)
 	if retainHours > 0 {
@@ -125,6 +137,24 @@ func (a ImportSessions) RevertImportSession(ctx context.Context, id int64, retai
 		UnitsReverted: int64(result.UnitsReverted), WorksDeleted: int64(result.WorksDeleted),
 		EditionsDeleted: int64(result.EditionsDeleted), RecycledPaths: paths,
 	}, nil
+}
+
+// sessionLibraries are every library a session placed into: its own, and those a Best match import routed units to.
+func (a ImportSessions) sessionLibraries(ctx context.Context, session library.Session) ([]int64, error) {
+	var categoryIDs []int64
+	if session.CategoryID != nil {
+		categoryIDs = append(categoryIDs, *session.CategoryID)
+	}
+	units, err := a.Sessions.ListUnits(ctx, session.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, unit := range units {
+		if unit.CategoryID != nil && !slices.Contains(categoryIDs, *unit.CategoryID) {
+			categoryIDs = append(categoryIDs, *unit.CategoryID)
+		}
+	}
+	return categoryIDs, nil
 }
 
 // AssignImportCategory maps library.ErrSessionCategoryAlreadySet and
@@ -159,7 +189,7 @@ func (a ImportSessions) AssignImportCategory(ctx context.Context, id, categoryID
 func (a ImportSessions) CommitHeldImportUnits(
 	ctx context.Context, sessionID int64, unitIDs []int64,
 ) (apiserver.ImportPlacementResult, error) {
-	if err := a.heldCommitBuilt(ctx, sessionID); err != nil {
+	if err := a.heldCommitBuilt(ctx, sessionID, 0); err != nil {
 		return apiserver.ImportPlacementResult{}, err
 	}
 	committed, commitErrs := a.Manual.CommitAllHeld(ctx, sessionID, unitIDs)
@@ -190,7 +220,7 @@ func (a ImportSessions) CommitImportUnit(
 	if unit.SessionID != sessionID {
 		return apiserver.ImportUnitRow{}, sql.ErrNoRows
 	}
-	if err := a.heldCommitBuilt(ctx, sessionID); err != nil {
+	if err := a.heldCommitBuilt(ctx, sessionID, unitID); err != nil {
 		return apiserver.ImportUnitRow{}, err
 	}
 
@@ -293,7 +323,7 @@ func importUnitRow(u library.Unit) apiserver.ImportUnitRow {
 	row := apiserver.ImportUnitRow{
 		ID: u.ID, SessionID: u.SessionID, RelPath: u.RelPath, Shape: u.Shape,
 		FileCount: u.FileCount, Bytes: u.Bytes, Confidence: u.Confidence, Decision: u.Decision,
-		WorkID: u.WorkID, EditionID: u.EditionID, Reason: u.Reason,
+		WorkID: u.WorkID, EditionID: u.EditionID, Reason: u.Reason, CategoryID: u.CategoryID,
 	}
 	var evidence inspect.Evidence
 	if u.EvidenceJSON != "" && json.Unmarshal([]byte(u.EvidenceJSON), &evidence) == nil {
@@ -337,10 +367,11 @@ type ImportInspector struct {
 }
 
 func (a ImportInspector) InspectImport(
-	ctx context.Context, sourcePath, origin string, categoryID *int64, preview, addUnverified bool,
+	ctx context.Context, sourcePath, origin string, categoryID *int64, preview, addUnverified, bestMatch bool,
 ) error {
 	_, err := importjob.Enqueue(ctx, a.Queue, importjob.Payload{
 		SourcePath: sourcePath, Origin: origin, CategoryID: categoryID, Preview: preview, NoUnverified: !addUnverified,
+		BestMatch: bestMatch,
 	})
 	return err
 }

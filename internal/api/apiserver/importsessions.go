@@ -119,7 +119,7 @@ type ImportPlacementResult struct {
 // want reads without the write (or the reverse).
 type ImportInspector interface {
 	// addUnverified is D6: a folder nothing identified still becomes an unverified album.
-	InspectImport(ctx context.Context, sourcePath, origin string, categoryID *int64, preview, addUnverified bool) error
+	InspectImport(ctx context.Context, sourcePath, origin string, categoryID *int64, preview, addUnverified, bestMatch bool) error
 }
 
 // ImportSessionRow is one import_session row.
@@ -165,9 +165,11 @@ type ImportUnitRow struct {
 	Confidence        float64
 	Decision          string
 	WorkID, EditionID *int64
-	Evidence          ImportEvidence
-	Candidates        []ImportCandidate
-	Reason            string
+	// CategoryID is the library a Best match import routed the unit to; nil for one placed into its session's.
+	CategoryID *int64
+	Evidence   ImportEvidence
+	Candidates []ImportCandidate
+	Reason     string
 	// TransferMethods is how this unit's files were actually placed, empty
 	// until it is committed and for units committed before it was recorded.
 	TransferMethods []TransferMethodCount
@@ -211,7 +213,7 @@ func (s *Server) InspectImport(w http.ResponseWriter, r *http.Request) {
 
 	preview := body.Preview != nil && *body.Preview
 	if err := s.importInspector.InspectImport(r.Context(), body.SourcePath, origin, body.CategoryId, preview,
-		derefOr(body.AddUnverified, false)); err != nil {
+		derefOr(body.AddUnverified, false), derefOr(body.BestMatch, false)); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
@@ -767,6 +769,7 @@ func importUnitView(row ImportUnitRow) gen.ImportUnit {
 	if row.EditionID != nil {
 		view.EditionId = row.EditionID
 	}
+	view.CategoryId = row.CategoryID
 	if len(row.TransferMethods) > 0 {
 		methods := make([]gen.TransferMethodCount, len(row.TransferMethods))
 		for i, m := range row.TransferMethods {

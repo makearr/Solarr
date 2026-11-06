@@ -527,6 +527,7 @@ function InspectForm() {
           source_path: sourcePath,
           origin,
           category_id: categoryId === "" ? undefined : categoryId,
+          best_match: categoryId === "",
           preview,
           add_unverified: addUnverified && !preview,
         },
@@ -573,7 +574,7 @@ function InspectForm() {
         </label>
         <label
           className={labelStyle}
-          title="Only files that fit the library's content are placed in it. Decide later keeps every unit waiting for a library."
+          title="Only files that fit the library's content are placed in it. Best match sends each folder to the library of the kind of media it holds."
         >
           Library
           <select
@@ -581,7 +582,7 @@ function InspectForm() {
             value={categoryId}
             onChange={(event) => setCategoryId(event.target.value === "" ? "" : Number(event.target.value))}
           >
-            <option value="">Decide later</option>
+            <option value="">Best match</option>
             {categories.data?.map((category) => (
               <option key={category.id} value={category.id}>
                 {libraryLabel(category)}
@@ -1029,10 +1030,12 @@ function describeTransfer(methods: { method: TransferMethod; files: number }[]):
   return methods.map((m) => `${m.files} ${TRANSFER_PAST[m.method]}`).join(", ");
 }
 
-function UnitRow({ sessionId, unit, categoryId }: { sessionId: number; unit: ImportUnit; categoryId: number | null }) {
+function UnitRow({ sessionId, unit, categoryId: sessionCategoryId }: { sessionId: number; unit: ImportUnit; categoryId: number | null }) {
   const [expanded, setExpanded] = useState(false);
   const [identifying, setIdentifying] = useState(false);
   const queryClient = useQueryClient();
+  // A Best match import routed the unit to a library of its own; the rest go where the session does.
+  const categoryId = unit.category_id ?? sessionCategoryId;
   const library = useLibrary(categoryId === null ? undefined : String(categoryId));
   // Only a type whose held units are committed by hand offers Commit anyway and Identify as.
   const mediaType = useMediaTypes().find((type) => type.key === library?.media_type);
@@ -1073,6 +1076,7 @@ function UnitRow({ sessionId, unit, categoryId }: { sessionId: number; unit: Imp
           {matchedAlbum(unit) && <span className="text-ink">→ {matchedAlbum(unit)}</span>}
           <ShapeBadge shape={unit.shape} />
           <DecisionBadge decision={unit.decision} />
+          {unit.category_id != null && library && <span className="text-ink-muted">in {library.name}</span>}
           <span className="text-ink-muted">
             {unit.file_count} files, {Math.round(unit.confidence * 100)}% confidence
           </span>

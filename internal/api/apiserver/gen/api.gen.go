@@ -2991,7 +2991,10 @@ type ImportInspectRequest struct {
 	// AddUnverified A folder nothing identified still becomes an album, named by its own tags or folder and marked unverified (D6); not searched for, identified later from the review. Only for a manual, non-preview run.
 	AddUnverified *bool `json:"add_unverified,omitempty"`
 
-	// CategoryId The target category, when known up front. Omitted means "decide per unit".
+	// BestMatch Without a `category_id`, route each unit to a library of the media type its files fit best: a library no rule narrows before one that is, then by priority. A unit that fits two types equally waits for a library; one no library's type takes is skipped.
+	BestMatch *bool `json:"best_match,omitempty"`
+
+	// CategoryId The target category, when known up front. Omitted means "decide per unit": with `best_match`, each unit goes to the library that fits it; without, every unit waits for one.
 	CategoryId *int64 `json:"category_id,omitempty"`
 
 	// Origin Defaults to manual when omitted.
@@ -3187,6 +3190,9 @@ type ImportSettings struct {
 type ImportUnit struct {
 	Bytes      int64              `json:"bytes"`
 	Candidates *[]ImportCandidate `json:"candidates,omitempty"`
+
+	// CategoryId The library a Best match import routed this unit to; absent places it into the session's.
+	CategoryId *int64             `json:"category_id,omitempty"`
 	Confidence float32            `json:"confidence"`
 	Decision   ImportUnitDecision `json:"decision"`
 	EditionId  *int64             `json:"edition_id,omitempty"`

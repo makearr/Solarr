@@ -90,29 +90,27 @@ func (m ManualCommitter) commitHeld(ctx context.Context, unitID int64, named *im
 	if err := checkPlaceable(session); err != nil {
 		return library.Placement{}, err
 	}
+	if unit.PlacesInto(session) == nil {
+		return library.Placement{}, fmt.Errorf("importjob: session %d: %w", session.ID, ErrSessionHasNoCategory)
+	}
 	return m.placeHeld(ctx, session, unit, named)
 }
 
 // minimumGuess keeps a guess of no confidence at all distinguishable from a person's naming.
 const minimumGuess = 0.001
 
-// placeHeld hands one unit to its library's media type, re-walked from its own folder, and records what was placed.
+// placeHeld hands one unit to its library's media type, re-walked from its own folder, and records what was placed. The
+// unit has a library: its own or its session's.
 func (m ManualCommitter) placeHeld(
 	ctx context.Context, session library.Session, unit library.Unit, named *importbatch.Named,
 ) (library.Placement, error) {
-	importer := m.importerFor(*session.CategoryID)
+	categoryID := *unit.PlacesInto(session)
+	importer := m.importerFor(categoryID)
 	committer, ok := importer.(importbatch.HeldCommitter)
 	if !ok {
 		return library.Placement{}, fmt.Errorf("importjob: unit %d: %w", unit.ID, ErrHeldCommitNotBuilt)
 	}
-	var floor int64
-	if sized, ok := importer.(importbatch.SizeFloor); ok {
-		floor = sized.MediaSizeFloorBytes()
-	}
-	books := false
-	if takes, ok := importer.(importbatch.BookFiles); ok {
-		books = takes.TakesBookFiles()
-	}
+	floor, books := typeWalk(importer)
 	reconstructed, err := m.reconstructUnit(ctx, path.Join(session.SourcePath, unit.RelPath), unit, floor, books)
 	if err != nil {
 		return library.Placement{}, err
@@ -125,7 +123,7 @@ func (m ManualCommitter) placeHeld(
 		reconstructed.Other[index].RelPath = path.Join(unit.RelPath, reconstructed.Other[index].RelPath)
 	}
 	request := importbatch.HeldRequest{
-		SessionID: session.ID, CategoryID: *session.CategoryID, AcquisitionID: session.AcquisitionID,
+		SessionID: session.ID, CategoryID: categoryID, AcquisitionID: session.AcquisitionID,
 		SourcePath: session.SourcePath, Unit: reconstructed, As: named,
 	}
 	if top, err := topCandidate(unit); err == nil {
@@ -173,7 +171,8 @@ func (m ManualCommitter) placeHeld(
 }
 
 // PlaceUnplaced places every unit this session decided COMMIT but never placed, which is what a session walked before
-// it had a library holds once it is given one. Best-effort: one bad unit does not stop the rest.
+// it had a library holds once it is given one. Best-effort: one bad unit does not stop the rest, and one with no
+// library yet waits.
 func (m ManualCommitter) PlaceUnplaced(ctx context.Context, sessionID int64) (placed int, errs []error) {
 	session, err := m.sessions.Get(ctx, sessionID)
 	if err != nil {
@@ -185,6 +184,10 @@ func (m ManualCommitter) PlaceUnplaced(ctx context.Context, sessionID int64) (pl
 	units, err := m.sessions.ListUnplacedCommitUnits(ctx, sessionID)
 	if err != nil {
 		return 0, []error{fmt.Errorf("importjob: list unplaced units for session %d: %w", sessionID, err)}
+	}
+	units, err = placeable(session, units)
+	if err != nil {
+		return 0, []error{err}
 	}
 	for _, unit := range units {
 		if _, err := topCandidate(unit); err != nil {
@@ -235,6 +238,10 @@ func (m ManualCommitter) CommitAllHeld(ctx context.Context, sessionID int64, onl
 	if err != nil {
 		return 0, []error{fmt.Errorf("importjob: list units for session %d: %w", sessionID, err)}
 	}
+	units, err = placeable(session, units)
+	if err != nil {
+		return 0, []error{err}
+	}
 	for _, unit := range units {
 		if unit.Decision != library.UnitQueue || (len(only) > 0 && !slices.Contains(only, unit.ID)) {
 			continue
@@ -248,19 +255,31 @@ func (m ManualCommitter) CommitAllHeld(ctx context.Context, sessionID int64, onl
 	return committed, errs
 }
 
-// checkPlaceable guards both entry points against the two states that must
-// never gain a new placement: no destination category yet, and a session
-// whose own placements were already undone (ClearImportUnitPlacement does
-// not touch import_unit.decision, so a reverted session's own COMMIT units
-// would otherwise look "unplaced" again to ListUnplacedCommitUnits).
+// checkPlaceable refuses a session whose placements were already undone: ClearImportUnitPlacement leaves the decision,
+// so a reverted session's COMMIT units would otherwise look unplaced again.
 func checkPlaceable(session library.Session) error {
 	if session.State == library.ImportReverted {
 		return fmt.Errorf("importjob: session %d: %w", session.ID, ErrSessionReverted)
 	}
-	if session.CategoryID == nil {
-		return fmt.Errorf("importjob: session %d: %w", session.ID, ErrSessionHasNoCategory)
-	}
 	return nil
+}
+
+// placeable are the units that have a library, their own or the session's; a session none of whose units has one is
+// refused, so it is given a library first.
+func placeable(session library.Session, units []library.Unit) ([]library.Unit, error) {
+	if session.CategoryID != nil {
+		return units, nil
+	}
+	var routed []library.Unit
+	for _, unit := range units {
+		if unit.CategoryID != nil {
+			routed = append(routed, unit)
+		}
+	}
+	if len(routed) == 0 {
+		return nil, fmt.Errorf("importjob: session %d: %w", session.ID, ErrSessionHasNoCategory)
+	}
+	return routed, nil
 }
 
 // topCandidate decodes a unit's own ranked candidates (IDENTIFY's merged

@@ -11,10 +11,29 @@ out what is in it. Every import can be **reverted** from its session.
 | Option | Effect |
 |---|---|
 | **Preview first** | Places nothing until you commit from the review |
-| **Library** | Limits the import to one library; *Decide later* inspects and places nothing |
+| **Library** | Limits the import to one library; *Best match* sends each folder to the library its files fit (below) |
 | **Add as a root instead of moving** | Makes the folder itself a root of that library, scanned where it is, instead of moving files out of it |
 | **Add unrecognised albums** (off by default) | A folder no metadata source recognises still becomes an album, named by its tags or folder and marked **Unverified**. It is not searched for; commit it from the review with the right candidate and its files move onto the real album |
 | **Import extra files** (each library's **File management → Importing**; on for TV, off for music) | Brings files with the listed extensions along: lyrics, cue sheets and logs beside an album, and in a TV library the subtitles named after an episode (`Show.S01E02.en.srt` becomes `Show - S01E02 - Title.en.srt`). Nothing already there is overwritten |
+
+## Best match (🟡)
+
+With no library chosen, each folder goes to a library of the kind of media its files are, read from the files
+alone before anything is looked up:
+
+| Files | Goes to |
+|---|---|
+| Sound only | Music; Audiobooks when one file is an `.m4b`, or when there is no music library |
+| Ebook files only | Books |
+| A video named as an episode (`S01E02`, an air date) | TV |
+| A video named with a title and a year, or any other video | Movies (TV only when there is no movie library) |
+| A video named `XXX`, or by its day as a scene is | Adult |
+
+Among several libraries of that kind, a library without rules or an age limit (the general one) comes before one
+that has them (Anime, Kids), then the one with the higher priority. A folder whose files fit two kinds equally
+waits for a library, as below; one that no library holds is skipped. Each folder in the review says which library
+it went to, and reverting the session undoes every one of them. **Assign** on the session gives the waiting folders
+a library afterwards.
 
 ## Archives (🟡)
 
@@ -32,7 +51,7 @@ is never touched.
 - **Identify as…**: search for the album or series the files are, pick it, and they are placed as that. This is
   also the way out for a folder nothing could identify.
 
-Both need the session to have a library.
+Both need the folder to have a library: its session's, or the one Best match sent it to.
 
 In a TV library the episodes are read from the file names (`S01E02`, an air date, an absolute number). A series
 the library does not hold yet is added first, and a file for an episode the library already has is left where it

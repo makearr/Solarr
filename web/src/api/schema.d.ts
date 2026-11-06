@@ -8936,9 +8936,14 @@ export interface components {
             origin?: "manual" | "acquisition" | "watched" | "adoption";
             /**
              * Format: int64
-             * @description The target category, when known up front. Omitted means "decide per unit".
+             * @description The target category, when known up front. Omitted means "decide per unit": with `best_match`, each unit goes to the library that fits it; without, every unit waits for one.
              */
             category_id?: number;
+            /**
+             * @description Without a `category_id`, route each unit to a library of the media type its files fit best: a library no rule narrows before one that is, then by priority. A unit that fits two types equally waits for a library; one no library's type takes is skipped.
+             * @default false
+             */
+            best_match: boolean;
             /** @description Hold every unit for review instead of placing the confident ones. The run demands a confidence no candidate can reach, so each unit lands QUEUE with its candidates intact and `POST /import/sessions/{id}/commit` places the ones you pick. Defaults to false. */
             preview?: boolean;
             /**
@@ -9084,6 +9089,11 @@ export interface components {
             work_id?: number;
             /** Format: int64 */
             edition_id?: number;
+            /**
+             * Format: int64
+             * @description The library a Best match import routed this unit to; absent places it into the session's.
+             */
+            category_id?: number;
             evidence?: components["schemas"]["ImportEvidence"];
             candidates?: components["schemas"]["ImportCandidate"][];
             reason?: string;

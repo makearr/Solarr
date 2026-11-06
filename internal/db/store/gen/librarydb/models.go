@@ -518,6 +518,7 @@ type ImportUnit struct {
 	WorkCreated    int64
 	EditionCreated int64
 	PackID         sql.NullInt64
+	CategoryID     sql.NullInt64
 }
 
 type ImportUnitExtra struct {
