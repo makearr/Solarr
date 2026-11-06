@@ -99,11 +99,28 @@ func (e QualityTargetEntry) target() QualityTarget {
 	}
 }
 
+// TargetFamilies are the groups of media types that share their target qualities: the files are alike (a movie, an episode
+// and a scene are all video), so one preset serves them all and each library still picks its own.
+var TargetFamilies = []string{"video", "music", "spoken", "book"}
+
+// TargetFamily is the family a media type's targets belong to; a media type of no family is its own.
+func TargetFamily(mediaType string) string {
+	switch mediaType {
+	case "tv", "movie", "adult", "youtube", "news", "video":
+		return "video"
+	case "audiobook", "podcast", "spoken":
+		return "spoken"
+	case "book", "comic":
+		return "book"
+	}
+	return mediaType
+}
+
 // PreferredTargetLabel tags the shipped target that holds the user's own preferred settings.
 const PreferredTargetLabel = "Space conscious"
 
 // AudioMediaTypes are the media types whose target is an audio codec and file type, whatever channel layout it names.
-var AudioMediaTypes = map[string]bool{"music": true, "audiobook": true, "podcast": true}
+var AudioMediaTypes = map[string]bool{"music": true, "spoken": true, "audiobook": true, "podcast": true}
 
 // DocumentMediaTypes are the media types whose target is a file type alone.
 var DocumentMediaTypes = map[string]bool{"book": true, "comic": true}

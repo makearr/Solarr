@@ -734,8 +734,8 @@ func (c *Cache) SetCategoryQuality(
 	if targetID != nil {
 		if target, found := snapshot.QualityTarget(*targetID); !found {
 			problems = append(problems, config.Problem{Path: "target", Value: strconv.FormatInt(*targetID, 10), Expectation: "an existing quality target"})
-		} else if target.MediaType != category.MediaType {
-			problems = append(problems, config.Problem{Path: "target", Value: target.Name, Expectation: "a " + category.MediaType + " quality target"})
+		} else if target.MediaType != TargetFamily(category.MediaType) {
+			problems = append(problems, config.Problem{Path: "target", Value: target.Name, Expectation: "a " + TargetFamily(category.MediaType) + " quality target"})
 		}
 	}
 	if len(problems) > 0 {
@@ -775,6 +775,7 @@ func (c *Cache) SetCategoryTargetAuto(ctx context.Context, categoryID int64, aut
 
 // CreateQualityTarget adds a named target a library may aim for; every problem is reported at once.
 func (c *Cache) CreateQualityTarget(ctx context.Context, target QualityTarget) (QualityTarget, error) {
+	target.MediaType = TargetFamily(target.MediaType)
 	if problems := c.validateTargetName(target, 0); len(problems) > 0 {
 		return QualityTarget{}, problems
 	}
@@ -838,8 +839,8 @@ func validateQualityTargetNamed(target *QualityTarget) config.Problems {
 	if strings.TrimSpace(target.Name) == "" {
 		problems = append(problems, config.Problem{Path: "target.name", Expectation: "a name"})
 	}
-	if !slices.Contains(MediaTypes, target.MediaType) {
-		problems = append(problems, config.Problem{Path: "target.media_type", Value: target.MediaType, Expectation: "one of " + strings.Join(MediaTypes, ", ")})
+	if !slices.Contains(MediaTypes, target.MediaType) && !slices.Contains(TargetFamilies, target.MediaType) {
+		problems = append(problems, config.Problem{Path: "target.media_type", Value: target.MediaType, Expectation: "one of " + strings.Join(TargetFamilies, ", ") + " or a media type"})
 	}
 	return append(problems, validateQualityTarget(target)...)
 }

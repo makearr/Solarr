@@ -162,8 +162,8 @@ func (s *Server) libraryQualityView(category settings.Category) gen.LibraryQuali
 	}
 	available := []gen.QualityProfileRef{}
 	for _, target := range snapshot.QualityTargets() {
-		if target.MediaType == category.MediaType {
-			available = append(available, gen.QualityProfileRef{Id: target.ID, Name: target.Name})
+		if target.MediaType == settings.TargetFamily(category.MediaType) {
+			available = append(available, gen.QualityProfileRef{Id: target.ID, Name: targetDisplayName(target)})
 		}
 	}
 	view.AvailableTargets = &available
@@ -230,7 +230,7 @@ func suggestTargets(snapshot *settings.Snapshot, category settings.Category, pro
 	}
 	var preferred *settings.QualityTarget
 	for _, candidate := range snapshot.QualityTargets() {
-		if candidate.MediaType == category.MediaType && candidate.Label == settings.PreferredTargetLabel {
+		if candidate.MediaType == settings.TargetFamily(category.MediaType) && candidate.Label == settings.PreferredTargetLabel {
 			preferred = &candidate
 			break
 		}
@@ -244,7 +244,7 @@ func suggestTargets(snapshot *settings.Snapshot, category settings.Category, pro
 	}
 	var fits []fit
 	for _, candidate := range snapshot.QualityTargets() {
-		if candidate.MediaType != category.MediaType || (category.QualityTarget != nil && candidate.ID == category.QualityTarget.ID) {
+		if candidate.MediaType != settings.TargetFamily(category.MediaType) || (category.QualityTarget != nil && candidate.ID == category.QualityTarget.ID) {
 			continue
 		}
 		facts := targetFacts(candidate)
@@ -257,13 +257,21 @@ func suggestTargets(snapshot *settings.Snapshot, category settings.Category, pro
 				near = closeness.Percent
 			}
 		}
-		fits = append(fits, fit{ref: gen.QualityProfileRef{Id: candidate.ID, Name: candidate.Name}, near: near})
+		fits = append(fits, fit{ref: gen.QualityProfileRef{Id: candidate.ID, Name: targetDisplayName(candidate)}, near: near})
 	}
 	sort.SliceStable(fits, func(i, j int) bool { return fits[i].near > fits[j].near })
 	for _, one := range fits[:min(len(fits), suggestedTargetCount)] {
 		suggested = append(suggested, one.ref)
 	}
 	return suggested
+}
+
+// targetDisplayName is what a target is called in a choice: its short name when it has one, else its name.
+func targetDisplayName(target settings.QualityTarget) string {
+	if target.Label != "" {
+		return target.Label
+	}
+	return target.Name
 }
 
 func firstOr(values []int64, fallback int64) int64 {

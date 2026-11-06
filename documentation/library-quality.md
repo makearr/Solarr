@@ -155,3 +155,12 @@ Quality profiles at the expert one. Each library's target is chosen right in Set
 Quality page the target comes first and the profile list below it, "none" by default. A library added as a kind starts with its
 media type's preferred ("Space conscious") target and no profile; a type with no shipped target (comics, ROMs) still starts with the
 kind's profiles.
+
+## Families, names and tiles
+
+Target qualities belong to a **family** of media types, not to one type (migration 0069, `settings.TargetFamily`): **video**
+(movies, series, adult, YouTube, news), **music**, **spoken** (audiobooks, podcasts) and **book** (books, comics). A movie, an
+episode and a scene are the same kind of file, so one preset serves them all and each library still picks its own. A target made
+for `tv` is stored in the video family; content profiles name families too. Under Settings > Quality > Target qualities each family
+is a collapsible group of tiles: the short name (label) is the title and the specification the small line beneath, and a library
+choice lists targets by that short name.

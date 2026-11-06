@@ -31,7 +31,7 @@ func convertTargetProfiles(rows []settingsdb.TargetProfile) []TargetProfile {
 
 // Applies says the profile is meant for a media type.
 func (p TargetProfile) Applies(mediaType string) bool {
-	return slices.Contains(p.MediaTypes, mediaType)
+	return slices.Contains(p.MediaTypes, mediaType) || slices.Contains(p.MediaTypes, TargetFamily(mediaType))
 }
 
 // TargetProfiles returns every content profile, by name.
@@ -61,8 +61,8 @@ func validateTargetProfile(profile TargetProfile, others []TargetProfile) config
 		problems = append(problems, config.Problem{Path: "profile.media_types", Expectation: "at least one media type"})
 	}
 	for _, mediaType := range profile.MediaTypes {
-		if !slices.Contains(MediaTypes, mediaType) {
-			problems = append(problems, config.Problem{Path: "profile.media_types", Value: mediaType, Expectation: "one of " + strings.Join(MediaTypes, ", ")})
+		if !slices.Contains(MediaTypes, mediaType) && !slices.Contains(TargetFamilies, mediaType) {
+			problems = append(problems, config.Problem{Path: "profile.media_types", Value: mediaType, Expectation: "one of " + strings.Join(TargetFamilies, ", ") + " or a media type"})
 		}
 	}
 	if profile.CRF < 0 || profile.CRF > 51 {

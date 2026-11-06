@@ -4,8 +4,7 @@ import { Plus } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
-import { mediaTypeName } from "@/lib/mediaTypeIcon";
-import { useMediaTypes } from "@/lib/useMediaTypes";
+import { TARGET_FAMILIES } from "@/lib/targetDisplay";
 import { Button, RemoveButton } from "@/ui/Button";
 import { inputStyle } from "@/ui/form";
 
@@ -15,11 +14,10 @@ import { Card } from "./SettingsCard";
 type TargetProfile = components["schemas"]["TargetProfile"];
 
 const smallButton = "rounded-md border border-border-subtle px-2.5 py-1 text-xs text-ink-muted hover:text-ink";
-const AUDIO_MEDIA = new Set(["music", "audiobook", "podcast"]);
+const AUDIO_MEDIA = new Set(["music", "spoken"]);
 
 function ProfileForm({ initial, onDone, onCancel }: { initial?: TargetProfile; onDone: () => void; onCancel: () => void }) {
-  const [profile, setProfile] = useState<TargetProfile>(initial ?? { name: "", media_types: ["tv"] });
-  const mediaTypes = useMediaTypes();
+  const [profile, setProfile] = useState<TargetProfile>(initial ?? { name: "", media_types: ["video"] });
   const targets = useQuery({ queryKey: ["qualityTargets"], queryFn: () => ok(api.GET("/qualitytargets")) });
   const set = (change: Partial<TargetProfile>) => setProfile({ ...profile, ...change });
   const audio = profile.media_types.every((type) => AUDIO_MEDIA.has(type));
@@ -42,7 +40,7 @@ function ProfileForm({ initial, onDone, onCancel }: { initial?: TargetProfile; o
         </label>
         <fieldset className="flex flex-wrap gap-3 text-ink-muted">
           <legend className="mb-1">For</legend>
-          {mediaTypes.map((type) => (
+          {TARGET_FAMILIES.map((type) => (
             <label key={type.key} className="flex items-center gap-1">
               <input
                 type="checkbox"
@@ -146,7 +144,7 @@ export function TargetProfilesSection() {
               <span className="min-w-0 flex-1">
                 <span className="flex items-baseline gap-2 text-sm font-medium">
                   {profile.name}
-                  <span className="text-xs font-normal text-ink-muted">{profile.media_types.map(mediaTypeName).join(", ")}</span>
+                  <span className="text-xs font-normal text-ink-muted">{profile.media_types.map((key) => TARGET_FAMILIES.find((family) => family.key === key)?.label ?? key).join(", ")}</span>
                 </span>
                 <span className="block text-xs text-ink-muted">{profile.description}</span>
                 {profile.recommended_target && <span className="block truncate text-xs text-ink-muted">Recommends {profile.recommended_target}</span>}

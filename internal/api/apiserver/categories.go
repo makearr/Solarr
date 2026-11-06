@@ -343,7 +343,7 @@ func (s *Server) applyKind(ctx context.Context, category settings.Category, kind
 	// The goal of a new library is its media type's preferred target, and that is enough: no profile. A type with no
 	// shipped target (comics, ROMs) still starts with the kind's profiles.
 	for _, target := range snapshot.QualityTargets() {
-		if target.MediaType == category.MediaType && target.Label == settings.PreferredTargetLabel {
+		if target.MediaType == settings.TargetFamily(category.MediaType) && target.Label == settings.PreferredTargetLabel {
 			if err := s.auth.Settings.SetCategoryQuality(ctx, category.ID, nil, nil, &target.ID); err != nil {
 				return updated, err
 			}

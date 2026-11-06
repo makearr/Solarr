@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
+import { targetTitle } from "@/lib/targetDisplay";
 
 type LibraryQuality = components["schemas"]["LibraryQuality"];
 
@@ -50,7 +51,7 @@ export function LibraryTargetSelect({ categoryId, name }: { categoryId: number; 
         </option>
         {targets.map((target) => (
           <option key={target.id} value={target.id}>
-            {target.name}
+            {targetTitle(target)}
           </option>
         ))}
       </select>

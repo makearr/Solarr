@@ -628,7 +628,7 @@ func TestCreateCategory_AKindBringsItsDefaults(t *testing.T) {
 	if len(category.QualityProfileIDs) != 0 {
 		t.Errorf("profiles = %v, want none: the target is the goal", category.QualityProfileIDs)
 	}
-	if category.QualityTarget == nil || category.QualityTarget.Label != settings.PreferredTargetLabel || category.QualityTarget.MediaType != "tv" {
+	if category.QualityTarget == nil || category.QualityTarget.Label != settings.PreferredTargetLabel || category.QualityTarget.MediaType != "video" {
 		t.Errorf("target = %+v, want the shipped preferred target of the type", category.QualityTarget)
 	}
 	if category.LanguageProfileID == nil {

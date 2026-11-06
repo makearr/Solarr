@@ -903,6 +903,7 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 		if entry.MediaType == "" {
 			entry.MediaType = UnstatedProfileMediaType
 		}
+		entry.MediaType = TargetFamily(entry.MediaType)
 		key := entry.MediaType + "\x00" + entry.Name
 		for _, problem := range validateQualityTargetNamed(&entry) {
 			problem.Path = where + "." + strings.TrimPrefix(problem.Path, "target.")
@@ -995,7 +996,7 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 					problem.Path = where + ".quality_" + strings.TrimPrefix(problem.Path, "target.")
 					problems = append(problems, problem)
 				}
-			} else if !knownQualityTargets[category.MediaType+"\x00"+target.Name] {
+			} else if !knownQualityTargets[TargetFamily(category.MediaType)+"\x00"+target.Name] {
 				problems = append(problems, config.Problem{
 					Path: where + ".quality_target", Value: target.Name,
 					Expectation: "a name also listed under quality_targets",
@@ -1156,6 +1157,7 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 			if entry.MediaType == "" {
 				entry.MediaType = UnstatedProfileMediaType
 			}
+			entry.MediaType = TargetFamily(entry.MediaType)
 			key := entry.MediaType + "\x00" + entry.Name
 			if _, exists := targetIDByKey[key]; exists {
 				continue
@@ -1274,7 +1276,7 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 				name := target.Name
 				if target.Inline != nil {
 					legacy := target.Inline.target()
-					legacy.Name, legacy.MediaType = category.Name+" target", category.MediaType
+					legacy.Name, legacy.MediaType = category.Name+" target", TargetFamily(category.MediaType)
 					name = legacy.Name
 					if _, exists := targetIDByKey[legacy.MediaType+"\x00"+name]; !exists {
 						created, err := queries.CreateQualityTarget(ctx, legacy.createParams())
@@ -1285,7 +1287,7 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 					}
 				}
 				if err := queries.SetCategoryTarget(ctx, settingsdb.SetCategoryTargetParams{
-					CategoryID: id, TargetID: targetIDByKey[category.MediaType+"\x00"+name],
+					CategoryID: id, TargetID: targetIDByKey[TargetFamily(category.MediaType)+"\x00"+name],
 				}); err != nil {
 					return fmt.Errorf("category %q quality target: %w", key, err)
 				}

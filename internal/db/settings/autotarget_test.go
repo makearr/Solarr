@@ -16,7 +16,7 @@ func TestAutoTarget_IsTheAverageOfWhatTheProfileRanksFirst(t *testing.T) {
 	}
 	rate, audio := int64(4000), int64(384)
 	want := settings.QualityTarget{
-		Name: "Automatic: Mine", MediaType: "movie", Label: "Automatic", Description: got.Description, Resolution: "1080p", VideoCodec: "h265", AudioChannels: "5.1",
+		Name: "Automatic: Mine", MediaType: "video", Label: "Automatic", Description: got.Description, Resolution: "1080p", VideoCodec: "h265", AudioChannels: "5.1",
 		Container: "mkv", VideoBitrateKbps: &rate, AudioBitrateKbps: &audio, FrameRate: 24,
 	}
 	if !reflect.DeepEqual(got, want) {

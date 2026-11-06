@@ -297,7 +297,7 @@ categories:
 	}
 }
 
-func TestShippedTargets_EveryMediaTypeHasOneSpaceConsciousPresetAndAllValidate(t *testing.T) {
+func TestShippedTargets_EveryFamilyHasOneSpaceConsciousPresetAndAllValidate(t *testing.T) {
 	cache, _ := newCache(t)
 	labelled := map[string]int{}
 	for _, target := range cache.Snapshot().QualityTargets() {
@@ -311,7 +311,7 @@ func TestShippedTargets_EveryMediaTypeHasOneSpaceConsciousPresetAndAllValidate(t
 			t.Errorf("shipped target %q does not validate: %v", target.Name, err)
 		}
 	}
-	want := map[string]int{"movie": 1, "tv": 1, "adult": 1, "music": 1, "audiobook": 1, "book": 1}
+	want := map[string]int{"video": 1, "music": 1, "spoken": 1, "book": 1}
 	if !reflect.DeepEqual(labelled, want) {
 		t.Errorf("space conscious presets = %v, want %v", labelled, want)
 	}
@@ -375,5 +375,39 @@ func TestShippedVideoProfiles_CarryNoSizeLimitsUnlessAskedFor(t *testing.T) {
 	}
 	if limited != 0 {
 		t.Errorf("profiles with size limits = %d, want none: they are opt-in", limited)
+	}
+}
+
+func TestTargetFamilies_MovieSeriesAndAdultLibrariesShareOneSetOfPresetsAndEachPicksItsOwn(t *testing.T) {
+	cache, _ := newCache(t)
+	snapshot := cache.Snapshot()
+	names := map[string]int{}
+	for _, target := range snapshot.QualityTargets() {
+		names[target.MediaType+"\x00"+target.Name]++
+	}
+	for key, count := range names {
+		if count != 1 {
+			t.Errorf("%q is stored %d times", key, count)
+		}
+	}
+	var preferred settings.QualityTarget
+	for _, target := range snapshot.QualityTargets() {
+		if target.MediaType == "video" && target.Label == settings.PreferredTargetLabel {
+			preferred = target
+		}
+	}
+	movies, _ := cache.CreateCategory(t.Context(), "movie", "Movies", 10)
+	series, _ := cache.CreateCategory(t.Context(), "tv", "Series", 10)
+	music, _ := cache.CreateCategory(t.Context(), "music", "Music", 10)
+	for _, library := range []settings.Category{movies, series} {
+		if err := cache.SetCategoryQuality(t.Context(), library.ID, nil, nil, &preferred.ID); err != nil {
+			t.Errorf("library of type %s refused a video target: %v", library.MediaType, err)
+		}
+	}
+	if err := cache.SetCategoryQuality(t.Context(), music.ID, nil, nil, &preferred.ID); err == nil {
+		t.Error("a music library accepted a video target")
+	}
+	if created, err := cache.CreateQualityTarget(t.Context(), settings.QualityTarget{Name: "Mine", MediaType: "tv", Resolution: "720p"}); err != nil || created.MediaType != "video" {
+		t.Errorf("a target made for tv = %+v, %v; want it in the video family", created, err)
 	}
 }

@@ -141,8 +141,8 @@ func TestLibraryQuality_SaveAndWarnWhenTheTargetFitsNoProfile(t *testing.T) {
 	if len(outside.Warnings) != 1 || !strings.Contains(outside.Warnings[0], "outside the first profile, Lossy 320") {
 		t.Errorf("aac 192 first in Lossy 320: warnings = %v, want one naming the first profile", outside.Warnings)
 	}
-	if got := names(outside.SuggestedTargets); len(got) == 0 || !slices.Contains(got, "AAC, stereo, 48 kHz, 256 kbit/s, M4A") {
-		t.Errorf("suggested targets = %v, want the shipped AAC 256 among them", got)
+	if got := names(outside.SuggestedTargets); len(got) == 0 || !slices.Contains(got, "AAC high") {
+		t.Errorf("suggested targets = %v, want the shipped AAC high (256 kbit/s) among them", got)
 	}
 	if clean := put("Lossy 320", "Lossless preferred", aac); clean.SuggestedTargets != nil {
 		t.Errorf("a target that fits suggested %v", names(clean.SuggestedTargets))

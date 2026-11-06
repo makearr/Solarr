@@ -4,8 +4,7 @@ import { Plus } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
-import { mediaTypeName } from "@/lib/mediaTypeIcon";
-import { useMediaTypes } from "@/lib/useMediaTypes";
+import { TARGET_FAMILIES, targetSpecs, targetTitle } from "@/lib/targetDisplay";
 import { Button, RemoveButton } from "@/ui/Button";
 import { inputStyle } from "@/ui/form";
 
@@ -18,15 +17,14 @@ type QualityTarget = components["schemas"]["QualityTarget"];
 
 const smallButton = "rounded-md border border-border-subtle px-2.5 py-1 text-xs text-ink-muted hover:text-ink";
 
-const AUDIO_MEDIA = new Set(["music", "audiobook", "podcast"]);
-const MEDIA_TYPES = ["music", "tv", "movie", "audiobook", "podcast", "youtube", "news", "book", "comic", "rom", "adult"];
+const AUDIO_MEDIA = new Set(["music", "spoken"]);
 
 // ffprobe's own codec names, which is what the probe measures files by.
 export const AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac", "alac"] as const;
 const LOSSLESS = new Set(["flac", "alac"]);
 const AUDIO_FILE_TYPES: [string, string][] = [["m4a", ".m4a"], ["m4b", ".m4b"], ["mp3", ".mp3"], ["opus", ".opus"], ["ogg", ".ogg"], ["flac", ".flac"]];
 const DOCUMENT_FILE_TYPES: [string, string][] = [["epub", "EPUB (.epub)"], ["pdf", "PDF (.pdf)"], ["azw3", "Kindle (.azw3)"], ["mobi", "Mobi (.mobi)"], ["cbz", "Comic archive (.cbz)"]];
-const DOCUMENT_MEDIA = new Set(["book", "comic"]);
+const DOCUMENT_MEDIA = new Set(["book"]);
 export const ENCODER_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"] as const;
 export const ENCODER_TUNES = ["animation", "grain", "film", "stillimage", "fastdecode", "zerolatency"] as const;
 const AUDIO_CHANNEL_LAYOUTS = ["1.0", "2.0"] as const;
@@ -228,7 +226,7 @@ function TargetFields({ target, onChange }: { target: QualityTarget; onChange: (
             <Pick label="Bit depth" value={target.bit_depth ? String(target.bit_depth) : ""} options={["16", "24", "32"]} onChange={(depth) => set({ bit_depth: depth === "" ? undefined : Number(depth) })} />
           </>
         )}
-        {target.media_type === "audiobook" && (
+        {target.media_type === "spoken" && (
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={target.chapters ?? false} onChange={(event) => set({ chapters: event.target.checked })} />
             Chapter marks
@@ -269,8 +267,7 @@ function TargetFields({ target, onChange }: { target: QualityTarget; onChange: (
 }
 
 function TargetForm({ initial, onDone, onCancel }: { initial?: QualityTarget; onDone: () => void; onCancel: () => void }) {
-  const [target, setTarget] = useState<QualityTarget>(initial ?? blankTarget("tv"));
-  const mediaTypes = useMediaTypes();
+  const [target, setTarget] = useState<QualityTarget>(initial ?? blankTarget("video"));
   const profiles = useQuery({ queryKey: ["targetProfiles"], queryFn: () => ok(api.GET("/targetprofiles")) });
   const targets = useQuery({ queryKey: ["qualityTargets"], queryFn: () => ok(api.GET("/qualitytargets")) });
   const fitting = (profiles.data ?? []).filter((profile) => profile.media_types.includes(target.media_type ?? ""));
@@ -287,11 +284,11 @@ function TargetForm({ initial, onDone, onCancel }: { initial?: QualityTarget; on
     <div className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-canvas p-3">
       <div className="flex flex-wrap items-end gap-3 text-xs">
         <label className="flex flex-col gap-1 text-ink-muted">
-          Name
+          Specification name
           <input value={target.name ?? ""} onChange={(event) => setTarget({ ...target, name: event.target.value })} className={`${inputStyle} w-56`} />
         </label>
         <label className="flex flex-col gap-1 text-ink-muted">
-          Label
+          Short name (the title in lists)
           <input value={target.label ?? ""} placeholder="e.g. Space conscious" onChange={(event) => setTarget({ ...target, label: event.target.value })} className={`${inputStyle} w-44`} />
         </label>
         <button type="button" onClick={() => setTarget({ ...target, name: nameFromSpecs(target) })} className={smallButton} title="Name it after what it asks for">
@@ -324,8 +321,8 @@ function TargetForm({ initial, onDone, onCancel }: { initial?: QualityTarget; on
           <Pick
             label="For"
             value={target.media_type}
-            options={mediaTypes.map((type): [string, string] => [type.key, type.label])}
-            onChange={(type) => setTarget({ ...blankTarget(type), name: target.name })}
+            options={TARGET_FAMILIES.map((family): [string, string] => [family.key, family.label])}
+            onChange={(type) => setTarget({ ...blankTarget(type), name: target.name, label: target.label })}
             any={null}
           />
         )}
@@ -383,7 +380,7 @@ export function QualityTargetsSection() {
     void queryClient.invalidateQueries({ queryKey: ["qualityTargets"] });
     void queryClient.invalidateQueries({ queryKey: ["libraryQuality"] });
   };
-  const groups = MEDIA_TYPES.map((mediaType) => ({ mediaType, targets: (targets.data ?? []).filter((target) => target.media_type === mediaType) })).filter(
+  const groups = TARGET_FAMILIES.map((family) => ({ family, targets: (targets.data ?? []).filter((target) => target.media_type === family.key) })).filter(
     (group) => group.targets.length > 0,
   );
   return (
@@ -401,28 +398,31 @@ export function QualityTargetsSection() {
       {editing === "new" && <TargetForm onDone={done} onCancel={() => setEditing(null)} />}
       {targets.data && groups.length === 0 && editing !== "new" && <p className="text-xs text-ink-muted">No targets yet.</p>}
       {groups.map((group) => (
-        <div key={group.mediaType} className="flex flex-col gap-2">
-          <h3 className="text-xs font-medium text-ink-muted">{mediaTypeName(group.mediaType)}</h3>
-          <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
+        <details key={group.family.key} open className="group flex flex-col gap-2">
+          <summary className="flex cursor-pointer select-none items-baseline gap-2 text-sm font-medium text-ink focus-visible:outline-2 focus-visible:outline-accent">
+            {group.family.label}
+            <span className="text-xs font-normal text-ink-muted">
+              {group.family.holds} · {group.targets.length}
+            </span>
+          </summary>
+          <ul className="mt-2 grid gap-2 sm:grid-cols-2">
             {group.targets.map((target) =>
               editing === target.id ? (
-                <li key={target.id} className="p-3">
+                <li key={target.id} className="sm:col-span-2">
                   <TargetForm initial={target} onDone={done} onCancel={() => setEditing(null)} />
                 </li>
               ) : (
-                <li key={target.id} className="flex items-center gap-3 px-3 py-2.5">
+                <li key={target.id} className="flex items-start gap-2 rounded-lg border border-border-subtle bg-surface p-3">
                   <span className="min-w-0 flex-1">
-                    <span className="flex items-baseline gap-2 text-sm font-medium">
-                      <span className="truncate">{target.name}</span>
-                      {target.label && <span className="shrink-0 rounded-full bg-canvas px-2 py-0.5 text-xs font-normal text-ink-muted">{target.label}</span>}
-                    </span>
-                    <span className="block truncate text-xs text-ink-muted">{summariseTarget(target)}</span>
+                    <span className="block text-base font-semibold leading-snug">{targetTitle(target)}</span>
+                    <span className="mt-1 block text-[0.6875rem] leading-snug text-ink-muted">{targetSpecs(target, summariseTarget(target))}</span>
+                    {target.description && <span className="mt-1 block text-[0.6875rem] leading-snug text-ink-muted">{target.description}</span>}
                   </span>
                   <button type="button" onClick={() => setEditing(target.id ?? null)} className={smallButton}>
                     Edit
                   </button>
                   <RemoveButton
-                    aria-label={`Remove target ${target.name}`}
+                    aria-label={`Remove target ${targetTitle(target)}`}
                     disabled={remove.isPending}
                     onClick={() => target.id && remove.mutate(target.id)}
                   />
@@ -430,7 +430,7 @@ export function QualityTargetsSection() {
               ),
             )}
           </ul>
-        </div>
+        </details>
       ))}
     </Card>
   );

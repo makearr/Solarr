@@ -39,7 +39,7 @@ func AutoTarget(profile QualityProfile, mediaType string) (target QualityTarget,
 		return ""
 	}
 	target = QualityTarget{
-		Name: AutoTargetLabel + ": " + profile.Name, MediaType: mediaType, Label: AutoTargetLabel,
+		Name: AutoTargetLabel + ": " + profile.Name, MediaType: TargetFamily(mediaType), Label: AutoTargetLabel,
 		Description: "The average of the library's first quality profile, " + profile.Name + ".",
 	}
 	switch {
