@@ -25,16 +25,17 @@ export function useNewLibrary() {
   const typeName = mediaType ? mediaTypeName(mediaType) : "";
   const kinds = mediaTypes.find((type) => type.key === mediaType)?.kinds ?? [];
   const effectiveKind = kind || kinds[0]?.key || "";
-  // Anime is one library for its series and its films, so that is how it starts unless unticked.
-  const [asked, setAlsoMovies] = useState<boolean>();
-  const offersMovies = mediaType === "tv" && effectiveKind === "anime" && mediaTypes.some((type) => type.key === "movie");
-  const alsoMovies = offersMovies && (asked ?? true);
+  // Anime is one library for its series and its films, so movies start ticked for it unless unticked.
+  const [asked, setAsked] = useState<Record<string, boolean>>({});
+  const offeredTypes = mediaTypes.filter((type) => type.key !== mediaType);
+  const isAlso = (key: string) => asked[key] ?? (key === "movie" && mediaType === "tv" && effectiveKind === "anime");
+  const alsoTypes = offeredTypes.filter((type) => isAlso(type.key)).map((type) => type.key);
   const target = useTargetChoice(mediaType);
   return {
-    offersMovies,
-    alsoMovies,
+    offeredTypes,
+    alsoTypes,
     target,
-    setAlsoMovies,
+    toggleAlso: (key: string, on: boolean) => setAsked((current) => ({ ...current, [key]: on })),
     mediaTypes,
     mediaType,
     typeName,
@@ -45,13 +46,14 @@ export function useNewLibrary() {
     setMediaType: (value: MediaType) => {
       setPicked(value);
       setKind("");
+      setAsked({});
     },
     forgetName: () => setName(undefined),
     create: () => {
       if (!mediaType) throw new Error("no media type to create a library of");
       const name = (typedName ?? typeName).trim() || typeName;
       return ok(api.POST("/categories", { body: { name, media_type: mediaType, kind: kind || undefined } })).then(async (created) => {
-        if (alsoMovies) await ok(api.POST("/categories/{id}/types", { params: { path: { id: created.id } }, body: { media_type: "movie" } }));
+        for (const key of alsoTypes) await ok(api.POST("/categories/{id}/types", { params: { path: { id: created.id } }, body: { media_type: key as MediaType } }));
         await target.apply(created.id);
         return created;
       });
@@ -91,11 +93,21 @@ export function NewLibraryFields({ library }: { library: NewLibrary }) {
       </label>
       {library.mediaType && <KindSelect mediaType={library.mediaType} value={library.kind} onChange={library.setKind} />}
       <TargetChoiceField choice={library.target} />
-      {library.offersMovies && (
-        <label className="flex items-center gap-2 text-sm" title="Anime films live beside the series, in the same library">
-          <input type="checkbox" checked={library.alsoMovies} onChange={(event) => library.setAlsoMovies(event.target.checked)} />
-          Also holds movies
-        </label>
+      {library.offeredTypes.length > 0 && (
+        <fieldset className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          <legend className="sr-only">Also holds</legend>
+          <span className="text-ink-muted">Also holds</span>
+          {library.offeredTypes.map((type) => (
+            <label key={type.key} className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={library.alsoTypes.includes(type.key)}
+                onChange={(event) => library.toggleAlso(type.key, event.target.checked)}
+              />
+              {type.work.many}
+            </label>
+          ))}
+        </fieldset>
       )}
     </>
   );
