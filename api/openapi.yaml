@@ -8920,6 +8920,9 @@ components:
           items: { type: integer, format: int64 }
         cutoff_profile_id: { type: integer, format: int64 }
         target_id: { type: integer, format: int64, description: The target the library aims for; absent for none. }
+        target_auto:
+          type: boolean
+          description: Aim for the average of the library's first profile instead of a stored target; target_id is then ignored.
         upgrades_allowed:
           type: boolean
           description: Lidarr's "Upgrades Allowed". Omitted leaves it as it is.
@@ -8964,6 +8967,9 @@ components:
           type: array
           description: Every target of the library's media type, by name.
           items: { $ref: "#/components/schemas/QualityProfileRef" }
+        target_auto:
+          type: boolean
+          description: The target is the average of the first profile, worked out, not a stored one.
         suggested_targets:
           type: array
           description: When the target lies outside the library's profiles, the targets of its media type that the first profile accepts, nearest the preferred settings first.

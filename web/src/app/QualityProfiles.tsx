@@ -90,6 +90,7 @@ function LibraryQualityEditor() {
   const [preferred, setPreferred] = useState<"" | "usenet" | "torrent">("");
   const [delayMinutes, setDelayMinutes] = useState(0);
   const [targetId, setTargetId] = useState<number | undefined>();
+  const [targetAuto, setTargetAuto] = useState(false);
   // What a search looks for: a season where Wanted lists parts, otherwise the work itself.
   const mediaType = useMediaType(useLibrary(categoryId)?.media_type);
   const unit = ((mediaType?.wanted_grain === "part" ? mediaType.group.one : mediaType?.work.one) ?? "work").toLowerCase();
@@ -98,7 +99,8 @@ function LibraryQualityEditor() {
     if (!quality.data) return;
     setOrder(quality.data.profiles.map((profile) => profile.id));
     setCutoff(quality.data.cutoff_profile_id ?? undefined);
-    setTargetId(quality.data.target?.id ?? undefined);
+    setTargetId(quality.data.target_auto ? undefined : (quality.data.target?.id ?? undefined));
+    setTargetAuto(quality.data.target_auto ?? false);
     setUpgrades(quality.data.upgrades_allowed);
     setPreferred(quality.data.preferred_protocol);
     setDelayMinutes(quality.data.protocol_delay_minutes);
@@ -107,7 +109,7 @@ function LibraryQualityEditor() {
   const save = useMutation({
     mutationFn: () => ok(api.PUT("/categories/{id}/quality", {
       params: { path: { id: id! } },
-      body: { profile_ids: order ?? [], cutoff_profile_id: cutoff, target_id: targetId, upgrades_allowed: upgrades, preferred_protocol: preferred, protocol_delay_minutes: delayMinutes },
+      body: { profile_ids: order ?? [], cutoff_profile_id: cutoff, target_id: targetAuto ? undefined : targetId, target_auto: targetAuto, upgrades_allowed: upgrades, preferred_protocol: preferred, protocol_delay_minutes: delayMinutes },
     })),
     onSuccess: (data: LibraryQuality) => {
       queryClient.setQueryData(["libraryQuality", id], data);
@@ -119,11 +121,12 @@ function LibraryQualityEditor() {
   const names = new Map(quality.data.available.map((profile) => [profile.id, profile.name]));
   const unused = quality.data.available.filter((profile) => !order.includes(profile.id));
   const dirty =
-    JSON.stringify([order, cutoff ?? null, targetId ?? null, upgrades, preferred, delayMinutes]) !==
+    JSON.stringify([order, cutoff ?? null, targetId ?? null, targetAuto, upgrades, preferred, delayMinutes]) !==
     JSON.stringify([
       quality.data.profiles.map((profile) => profile.id),
       quality.data.cutoff_profile_id ?? null,
-      quality.data.target?.id ?? null,
+      quality.data.target_auto ? null : (quality.data.target?.id ?? null),
+      quality.data.target_auto ?? false,
       quality.data.upgrades_allowed,
       quality.data.preferred_protocol,
       quality.data.protocol_delay_minutes,
@@ -152,7 +155,7 @@ function LibraryQualityEditor() {
         </p>
         {order.length === 0 ? (
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-ink-muted">None chosen: this library uses the instance default.</span>
+            <span className="text-ink-muted">None chosen: with a target below, the target alone ranks what is found; with none, the instance default profile does.</span>
             <button
               type="button"
               onClick={() => setOrder(quality.data.available.map((profile) => profile.id))}
@@ -284,24 +287,31 @@ function LibraryQualityEditor() {
       <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
         <h2 className="text-sm font-medium">Target quality</h2>
         <p className="text-xs text-ink-muted">
-          The quality you would pick if you could choose freely. Several can be defined; this library aims for one.{" "}
+          The quality you would pick if you could choose freely. Several can be defined; this library aims for one. A library with a
+          target and no profile is ranked by the target alone; Automatic works the target out from the first profile.{" "}
           <Link to="/quality-profiles" className="underline hover:text-ink">
             Create and edit targets
           </Link>
         </p>
         <select
-          value={targetId ?? ""}
-          onChange={(event) => setTargetId(event.target.value === "" ? undefined : Number(event.target.value))}
+          value={targetAuto ? "auto" : (targetId ?? "")}
+          onChange={(event) => {
+            setTargetAuto(event.target.value === "auto");
+            setTargetId(event.target.value === "" || event.target.value === "auto" ? undefined : Number(event.target.value));
+          }}
           className={`${inputStyle} max-w-full self-start`}
         >
           <option value="">Nothing in particular: the first profile decides</option>
+          <option value="auto" disabled={order.length === 0}>
+            Automatic: the average of the first profile{order.length === 0 ? " (needs a profile)" : ""}
+          </option>
           {(quality.data.available_targets ?? []).map((target) => (
             <option key={target.id} value={target.id}>
               {target.name}
             </option>
           ))}
         </select>
-        {quality.data.target && targetId === quality.data.target.id && (
+        {quality.data.target && (targetAuto ? quality.data.target_auto : targetId === quality.data.target.id) && (
           <p className="text-xs text-ink-muted">{summariseTarget(quality.data.target)}</p>
         )}
       </section>
@@ -341,7 +351,8 @@ function LibraryQualityEditor() {
             onClick={() => {
               setOrder(quality.data.profiles.map((profile) => profile.id));
               setCutoff(quality.data.cutoff_profile_id ?? undefined);
-              setTargetId(quality.data.target?.id ?? undefined);
+              setTargetId(quality.data.target_auto ? undefined : (quality.data.target?.id ?? undefined));
+              setTargetAuto(quality.data.target_auto ?? false);
               setUpgrades(quality.data.upgrades_allowed);
               setPreferred(quality.data.preferred_protocol);
               setDelayMinutes(quality.data.protocol_delay_minutes);

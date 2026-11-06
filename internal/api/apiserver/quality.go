@@ -80,7 +80,14 @@ func (s *Server) SetLibraryQuality(w http.ResponseWriter, r *http.Request, id in
 			"The delay profile has problems", delayProblems.Report("the delay profile", "Nothing was changed."))
 		return
 	}
-	err = s.auth.Settings.SetCategoryQuality(r.Context(), id, body.ProfileIds, body.CutoffProfileId, body.TargetId)
+	targetID := body.TargetId
+	if derefOr(body.TargetAuto, false) {
+		targetID = nil
+	}
+	err = s.auth.Settings.SetCategoryQuality(r.Context(), id, body.ProfileIds, body.CutoffProfileId, targetID)
+	if err == nil && derefOr(body.TargetAuto, false) {
+		err = s.auth.Settings.SetCategoryTargetAuto(r.Context(), id, true)
+	}
 	if err != nil {
 		var problems config.Problems
 		if errors.As(err, &problems) {
@@ -120,8 +127,15 @@ func (s *Server) SetLibraryQuality(w http.ResponseWriter, r *http.Request, id in
 	// The request's Access is frozen at its start (ADR-27), so the answer is what was saved.
 	category.QualityProfileIDs = body.ProfileIds
 	category.QualityCutoffID = body.CutoffProfileId
-	category.QualityTarget = nil
-	if body.TargetId != nil {
+	category.QualityTarget, category.QualityTargetAuto = nil, false
+	switch {
+	case derefOr(body.TargetAuto, false):
+		if profile, found := s.auth.Settings.Snapshot().QualityProfile(firstOr(body.ProfileIds, 0)); found {
+			if target, derived := settings.AutoTarget(profile, category.MediaType); derived {
+				category.QualityTarget, category.QualityTargetAuto = &target, true
+			}
+		}
+	case body.TargetId != nil:
 		if target, found := s.auth.Settings.Snapshot().QualityTarget(*body.TargetId); found {
 			category.QualityTarget = &target
 		}
@@ -156,6 +170,7 @@ func (s *Server) libraryQualityView(category settings.Category) gen.LibraryQuali
 	if target := category.QualityTarget; target != nil {
 		shown := qualityTargetView(*target)
 		view.Target = &shown
+		view.TargetAuto = &category.QualityTargetAuto
 		if warning := targetOutsideProfiles(snapshot, view.Profiles, targetFacts(*target)); warning != "" {
 			view.Warnings = append(view.Warnings, warning)
 		}
@@ -249,6 +264,13 @@ func suggestTargets(snapshot *settings.Snapshot, category settings.Category, pro
 		suggested = append(suggested, one.ref)
 	}
 	return suggested
+}
+
+func firstOr(values []int64, fallback int64) int64 {
+	if len(values) == 0 {
+		return fallback
+	}
+	return values[0]
 }
 
 func lowerAll(values []string) []string {

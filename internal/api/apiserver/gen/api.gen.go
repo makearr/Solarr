@@ -3544,6 +3544,9 @@ type LibraryQuality struct {
 	SuggestedTargets *[]QualityProfileRef `json:"suggested_targets,omitempty"`
 	Target           *QualityTarget       `json:"target,omitempty"`
 
+	// TargetAuto The target is the average of the first profile, worked out, not a stored one.
+	TargetAuto *bool `json:"target_auto,omitempty"`
+
 	// UpgradesAllowed Lidarr's "Upgrades Allowed". Off, an album with every track is complete whatever its quality: nothing is upgradable and nothing is searched for an upgrade.
 	UpgradesAllowed bool `json:"upgrades_allowed"`
 
@@ -3566,6 +3569,9 @@ type LibraryQualityWrite struct {
 
 	// ProtocolDelayMinutes How long after a release was posted the other protocol waits; 0 is no delay. Omitted leaves it as it is.
 	ProtocolDelayMinutes *int64 `json:"protocol_delay_minutes,omitempty"`
+
+	// TargetAuto Aim for the average of the library's first profile instead of a stored target; target_id is then ignored.
+	TargetAuto *bool `json:"target_auto,omitempty"`
 
 	// TargetId The target the library aims for; absent for none.
 	TargetId *int64 `json:"target_id,omitempty"`

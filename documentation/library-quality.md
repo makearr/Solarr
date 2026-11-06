@@ -135,3 +135,15 @@ and CRF at or below. Such a file is **on target**: the item is complete, and `ju
 distances against it, so no download replaces it for its size. Against a file that is off target a number must be nearer by half
 an octave to count, and equal tiers keep the incumbent. The shipped presets' "30 fps" is a cap (source fps, max 30).
 Ranges per quality stay opt-in; the shipped profiles carry none (migration 0066 took 0065's back).
+
+## A target without a profile, and the automatic target
+
+A library may list no quality profile and still get good results: with a target and an empty profile list its releases are
+ranked by the target alone (`judge.TargetOnly`: the target's resolution, codec, channels and numbers first, then the source;
+only xvid and divx are refused). With neither a target nor a profile the instance default profile applies as before.
+
+A library may also aim for **Automatic**: the average of its first quality profile (`settings.AutoTarget`, migration 0068).
+For each kind of thing it takes what the profile ranks first (resolution, codec, HDR, channels, file type) and for each number
+the middle of the range (its ideal, else the mean of minimum and maximum); a lossless first codec has no bitrate. It follows the
+profile as it is edited and needs a profile. It is not a stored target, so it is neither listed under Targets nor exported
+as one (the export keeps `quality_target_auto`).

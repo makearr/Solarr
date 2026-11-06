@@ -5,6 +5,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/score"
 )
 
@@ -49,5 +50,34 @@ func TestUpgradeBeats_AFileOffTheTargetNeedsAClearlyNearerNumber(t *testing.T) {
 	far, farFile := facts(300)
 	if !judge.UpgradeBeats(profiles, judge.EvaluateInOrder(profiles, clearly, nil), judge.EvaluateInOrder(profiles, far, nil), farFile, -1) {
 		t.Error("a bitrate five times nearer did not replace a starved file")
+	}
+}
+
+func TestTargetOnly_RanksByTheTargetAndRefusesOnlyOldCodecs(t *testing.T) {
+	bitrate := int64(1600)
+	profiles := []judge.RankedProfile{judge.TargetOnly(settings.QualityTarget{MediaType: "movie", Resolution: "1080p", VideoCodec: "h265", VideoBitrateKbps: &bitrate})}
+	facts := func(resolution, codec, source string, kbps int64) score.Facts {
+		return score.Facts{File: score.FileFacts{Resolution: resolution, VideoCodec: codec, Source: source, VideoBitrate: kbps * 1000}}
+	}
+	best := judge.EvaluateInOrder(profiles, facts("1080p", "h265", "webdl", 1600), nil)
+	if best.Outcome != model.OutcomeAccept {
+		t.Fatalf("a release matching the target was %v", best.Outcome)
+	}
+	for name, worse := range map[string]score.Facts{
+		"another codec":    facts("1080p", "h264", "webdl", 1600),
+		"a lower picture":  facts("720p", "h265", "webdl", 1600),
+		"a worse source":   facts("1080p", "h265", "hdtv", 1600),
+		"a far-off number": facts("1080p", "h265", "webdl", 300),
+	} {
+		decision := judge.EvaluateInOrder(profiles, worse, nil)
+		if decision.Outcome != model.OutcomeAccept {
+			t.Errorf("%s was refused; only old codecs are", name)
+		}
+		if winner, _ := model.Compare(best.Quality, decision.Quality); winner != -1 {
+			t.Errorf("%s ranked with or above the release that matches the target", name)
+		}
+	}
+	if old := judge.EvaluateInOrder(profiles, facts("1080p", "xvid", "webdl", 1600), nil); old.Outcome != model.OutcomeReject {
+		t.Errorf("xvid = %v, want rejected", old.Outcome)
 	}
 }

@@ -119,6 +119,8 @@ type Category struct {
 	QualityCutoffID *int64
 	// QualityTarget is the one exact quality the library aims for; nil when none is set.
 	QualityTarget *QualityTarget
+	// QualityTargetAuto says QualityTarget is worked out from the first profile (AutoTarget), not a stored one.
+	QualityTargetAuto bool
 	// QualityUpgrades is Lidarr's "Upgrades Allowed": off, an album with every track is complete.
 	QualityUpgrades bool
 	// PreferredProtocol and ProtocolDelayMinutes are the delay profile (D16): the other protocol's releases wait this long

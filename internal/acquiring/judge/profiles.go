@@ -86,6 +86,9 @@ func LibraryProfiles(
 	if overridden {
 		ids = []int64{override}
 	}
+	if category, found := snapshot.Category(categoryID); found && !overridden && len(category.QualityProfileIDs) == 0 && category.QualityTarget != nil {
+		return []RankedProfile{TargetOnly(*category.QualityTarget)}, nil
+	}
 	profiles := make([]RankedProfile, 0, len(ids))
 	for _, id := range ids {
 		profile, found := snapshot.QualityProfile(id)
@@ -122,6 +125,21 @@ func LanguagePolicyFor(snapshot *settings.Snapshot, categoryID int64) *score.Lan
 		AudioRequired: profile.AudioRequired, AudioPreferred: profile.AudioPreferred,
 		SubtitleRequired: profile.SubtitleRequired, SubtitlePreferred: profile.SubtitlePreferred,
 		PreferOriginalAudio: profile.PreferOriginalAudio, RejectDubbed: profile.RejectDubbed,
+	}
+}
+
+// TargetOnly is the profile of a library that has a target and no quality profile: nothing is refused but the old
+// codecs nobody wants, and the target ranks what is found, then the source (a disc or a web download over a broadcast
+// capture or a DVD).
+func TargetOnly(target settings.QualityTarget) RankedProfile {
+	base := score.Profile{Name: "Target only", Compare: []string{"score"}}
+	if target.IsVideo() {
+		base.Require.RejectCodecs = []string{"xvid", "divx"}
+		base.Tiers = map[string][][]string{"source": {{"bluray", "webdl"}, {"remux"}, {"webrip"}, {"hdtv"}, {"dvd"}}}
+		base.Compare = []string{"source", "score"}
+	}
+	return RankedProfile{
+		Name: base.Name, Rules: WithFreshTarget(base, target), UpgradeRules: WithTarget(base, target), Target: &target,
 	}
 }
 

@@ -199,6 +199,8 @@ type CategoryEntry struct {
 	QualityProfiles []string          `yaml:"quality_profiles,omitempty"`
 	QualityCutoff   string            `yaml:"quality_cutoff,omitempty"`
 	QualityTarget   *QualityTargetRef `yaml:"quality_target,omitempty"`
+	// QualityTargetAuto aims for the average of the first quality profile; QualityTarget is then absent.
+	QualityTargetAuto bool `yaml:"quality_target_auto,omitempty"`
 	// QualityUpgrades is written only when off, so documents from before it read as on.
 	QualityUpgrades *bool `yaml:"quality_upgrades,omitempty"`
 	// PreferredProtocol and ProtocolDelayMinutes are the delay profile; both are omitted at their defaults.
@@ -619,7 +621,9 @@ func (c *Cache) Export() Document {
 		if category.QualityCutoffID != nil {
 			entry.QualityCutoff = qualityNameByID[*category.QualityCutoffID]
 		}
-		if target := category.QualityTarget; target != nil {
+		if category.QualityTargetAuto {
+			entry.QualityTargetAuto = true
+		} else if target := category.QualityTarget; target != nil {
 			entry.QualityTarget = &QualityTargetRef{Name: target.Name}
 		}
 		if !category.QualityUpgrades {
@@ -1284,6 +1288,11 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 					CategoryID: id, TargetID: targetIDByKey[category.MediaType+"\x00"+name],
 				}); err != nil {
 					return fmt.Errorf("category %q quality target: %w", key, err)
+				}
+			}
+			if category.QualityTargetAuto {
+				if err := queries.SetCategoryTargetAuto(ctx, id); err != nil {
+					return fmt.Errorf("category %q automatic quality target: %w", key, err)
 				}
 			}
 			if category.QualityUpgrades != nil && !*category.QualityUpgrades {

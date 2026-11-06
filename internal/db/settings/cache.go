@@ -158,6 +158,10 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("settings: list target profiles: %w", err)
 	}
+	automaticTargets, err := c.queries.ListCategoryTargetAuto(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list automatic category targets: %w", err)
+	}
 	categoryTargets, err := c.queries.ListCategoryTargets(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("settings: list category quality targets: %w", err)
@@ -206,7 +210,7 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 	snapshot := newSnapshot(
 		convertUsers(users),
 		withMetadataSources(withFileManagement(withQuality(convertCategories(categories, convertNamingProfiles(namingProfiles, namingFormats)),
-			qualityLists, convertQualityTargets(qualityTargets), categoryTargets), fileManagement), metadataSources),
+			qualityLists, convertQualityTargets(qualityTargets), categoryTargets, automaticTargets, convertQualityProfiles(qualityProfiles)), fileManagement), metadataSources),
 		convertRootFolders(rootFolders),
 		convertAttachments(attachments),
 		access,
@@ -241,6 +245,7 @@ func convertQualityTargets(rows []settingsdb.QualityTarget) []QualityTarget {
 // withQuality attaches each library's ordered profile list and the target it picked.
 func withQuality(
 	categories []Category, lists []settingsdb.CategoryQualityProfile, targets []QualityTarget, picks []settingsdb.CategoryTarget,
+	automatic []int64, profiles []QualityProfile,
 ) []Category {
 	index := make(map[int64]int, len(categories))
 	for i, category := range categories {
@@ -258,6 +263,20 @@ func withQuality(
 	for _, pick := range picks {
 		target, found := byID[pick.TargetID]
 		if i, ok := index[pick.CategoryID]; ok && found {
+			categories[i].QualityTarget = &target
+		}
+	}
+	profileByID := make(map[int64]QualityProfile, len(profiles))
+	for _, profile := range profiles {
+		profileByID[profile.ID] = profile
+	}
+	for _, id := range automatic {
+		i, ok := index[id]
+		if !ok || len(categories[i].QualityProfileIDs) == 0 {
+			continue
+		}
+		categories[i].QualityTargetAuto = true
+		if target, derived := AutoTarget(profileByID[categories[i].QualityProfileIDs[0]], categories[i].MediaType); derived {
 			categories[i].QualityTarget = &target
 		}
 	}

@@ -746,10 +746,30 @@ func (c *Cache) SetCategoryQuality(
 		if err := writeQualityList(ctx, queries, categoryID, profileIDs, cutoffID); err != nil {
 			return err
 		}
+		if err := queries.ClearCategoryTargetAuto(ctx, categoryID); err != nil {
+			return err
+		}
 		if targetID == nil {
 			return queries.ClearCategoryTarget(ctx, categoryID)
 		}
 		return queries.SetCategoryTarget(ctx, settingsdb.SetCategoryTargetParams{CategoryID: categoryID, TargetID: *targetID})
+	})
+}
+
+// SetCategoryTargetAuto makes a library aim for the average of its first quality profile (or stops it); a stored target
+// the library picked is dropped when it does.
+func (c *Cache) SetCategoryTargetAuto(ctx context.Context, categoryID int64, auto bool) error {
+	if _, found := c.Snapshot().Category(categoryID); !found {
+		return fmt.Errorf("%w: category %d", ErrNotFound, categoryID)
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		if !auto {
+			return queries.ClearCategoryTargetAuto(ctx, categoryID)
+		}
+		if err := queries.ClearCategoryTarget(ctx, categoryID); err != nil {
+			return err
+		}
+		return queries.SetCategoryTargetAuto(ctx, categoryID)
 	})
 }
 

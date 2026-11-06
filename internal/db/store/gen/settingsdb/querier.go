@@ -12,6 +12,7 @@ import (
 type Querier interface {
 	AttachRootFolderToCategory(ctx context.Context, arg AttachRootFolderToCategoryParams) error
 	ClearCategoryTarget(ctx context.Context, categoryID int64) error
+	ClearCategoryTargetAuto(ctx context.Context, categoryID int64) error
 	CountCategoriesUsingLanguageProfile(ctx context.Context, languageProfileID sql.NullInt64) (int64, error)
 	// Invariant 41: deleting an entity in use is refused with a count of what
 	// references it, so the user gets a reason rather than a constraint violation.
@@ -95,6 +96,7 @@ type Querier interface {
 	ListCategoryMetadataSources(ctx context.Context) ([]CategoryMetadataSource, error)
 	ListCategoryQualityProfiles(ctx context.Context) ([]CategoryQualityProfile, error)
 	ListCategoryRootFolders(ctx context.Context) ([]CategoryRootFolder, error)
+	ListCategoryTargetAuto(ctx context.Context) ([]int64, error)
 	ListCategoryTargets(ctx context.Context) ([]CategoryTarget, error)
 	ListDownloadFolders(ctx context.Context) ([]DownloadFolder, error)
 	ListDownloaders(ctx context.Context) ([]Downloader, error)
@@ -143,6 +145,7 @@ type Querier interface {
 	SetCategorySearchShare(ctx context.Context, arg SetCategorySearchShareParams) error
 	SetCategoryTVMonitor(ctx context.Context, arg SetCategoryTVMonitorParams) error
 	SetCategoryTarget(ctx context.Context, arg SetCategoryTargetParams) error
+	SetCategoryTargetAuto(ctx context.Context, categoryID int64) error
 	// The enable transition on its own: this is the "preview before enabling" gate, a
 	// deliberate act distinct from editing a job's policy.
 	SetDiscoveryJobEnabled(ctx context.Context, arg SetDiscoveryJobEnabledParams) error

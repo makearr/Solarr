@@ -19,6 +19,15 @@ func (q *Queries) ClearCategoryTarget(ctx context.Context, categoryID int64) err
 	return err
 }
 
+const clearCategoryTargetAuto = `-- name: ClearCategoryTargetAuto :exec
+DELETE FROM category_target_auto WHERE category_id = ?
+`
+
+func (q *Queries) ClearCategoryTargetAuto(ctx context.Context, categoryID int64) error {
+	_, err := q.db.ExecContext(ctx, clearCategoryTargetAuto, categoryID)
+	return err
+}
+
 const countCategoriesUsingLanguageProfile = `-- name: CountCategoriesUsingLanguageProfile :one
 SELECT count(*) FROM category WHERE language_profile_id = ?
 `
@@ -320,6 +329,33 @@ func (q *Queries) ListCategoryQualityProfiles(ctx context.Context) ([]CategoryQu
 	return items, nil
 }
 
+const listCategoryTargetAuto = `-- name: ListCategoryTargetAuto :many
+SELECT category_id FROM category_target_auto
+`
+
+func (q *Queries) ListCategoryTargetAuto(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listCategoryTargetAuto)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var category_id int64
+		if err := rows.Scan(&category_id); err != nil {
+			return nil, err
+		}
+		items = append(items, category_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCategoryTargets = `-- name: ListCategoryTargets :many
 SELECT category_id, target_id FROM category_target
 `
@@ -567,6 +603,15 @@ type SetCategoryTargetParams struct {
 
 func (q *Queries) SetCategoryTarget(ctx context.Context, arg SetCategoryTargetParams) error {
 	_, err := q.db.ExecContext(ctx, setCategoryTarget, arg.CategoryID, arg.TargetID)
+	return err
+}
+
+const setCategoryTargetAuto = `-- name: SetCategoryTargetAuto :exec
+INSERT OR IGNORE INTO category_target_auto (category_id) VALUES (?)
+`
+
+func (q *Queries) SetCategoryTargetAuto(ctx context.Context, categoryID int64) error {
+	_, err := q.db.ExecContext(ctx, setCategoryTargetAuto, categoryID)
 	return err
 }
 

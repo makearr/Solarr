@@ -109,3 +109,12 @@ DELETE FROM category_metadata_source WHERE category_id = ?;
 
 -- name: InsertCategoryMetadataSource :exec
 INSERT INTO category_metadata_source (category_id, source, ord) VALUES (?, ?, ?);
+
+-- name: ListCategoryTargetAuto :many
+SELECT category_id FROM category_target_auto;
+
+-- name: SetCategoryTargetAuto :exec
+INSERT OR IGNORE INTO category_target_auto (category_id) VALUES (?);
+
+-- name: ClearCategoryTargetAuto :exec
+DELETE FROM category_target_auto WHERE category_id = ?;

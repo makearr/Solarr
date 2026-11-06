@@ -128,6 +128,10 @@ type CategoryTarget struct {
 	TargetID   int64
 }
 
+type CategoryTargetAuto struct {
+	CategoryID int64
+}
+
 type DiscoveryJob struct {
 	ID          int64
 	Name        string

@@ -5886,6 +5886,8 @@ export interface components {
              * @description The target the library aims for; absent for none.
              */
             target_id?: number;
+            /** @description Aim for the average of the library's first profile instead of a stored target; target_id is then ignored. */
+            target_auto?: boolean;
             /** @description Lidarr's "Upgrades Allowed". Omitted leaves it as it is. */
             upgrades_allowed?: boolean;
             /**
@@ -5920,6 +5922,8 @@ export interface components {
             target?: components["schemas"]["QualityTarget"];
             /** @description Every target of the library's media type, by name. */
             available_targets?: components["schemas"]["QualityProfileRef"][];
+            /** @description The target is the average of the first profile, worked out, not a stored one. */
+            target_auto?: boolean;
             /** @description When the target lies outside the library's profiles, the targets of its media type that the first profile accepts, nearest the preferred settings first. */
             suggested_targets?: components["schemas"]["QualityProfileRef"][];
             /** @description Plain-language notices, e.g. a target the first profile would refuse. */
