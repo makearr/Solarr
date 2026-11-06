@@ -183,8 +183,14 @@ func NewDefaultRegistry() *Registry {
 	registry.MustRegister(SettingDef{
 		Key: KeyVideoPerceptualHash, Kind: KindBool, Tier: TierNormal,
 		Name:     "Find duplicate videos",
-		HelpText: "Hashes what each video looks like in the background so the duplicate finder can match re-encodes. It reads seven frames per file with ffmpeg; off, nothing new is hashed and hashes already stored keep working.",
+		HelpText: "Hashes what each video looks like in the background so the duplicate finder can match re-encodes. It reads a short run of frames at seven moments per file with ffmpeg; off, nothing new is hashed and hashes already stored keep working.",
 		Default:  "false",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyVideoPhashFrameBits, Kind: KindInt, Tier: TierNormal,
+		Name:     "Duplicate video tolerance",
+		HelpText: "How many of 64 bits may differ between two frames of the same moment before they count as different pictures (2 to 20). Higher finds more re-encodes and more false matches.",
+		Default:  strconv.Itoa(DefaultVideoPhashFrameBits),
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeyHuntGaps, Kind: KindBool, Tier: TierNormal,

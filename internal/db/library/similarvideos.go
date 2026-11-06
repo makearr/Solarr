@@ -11,12 +11,36 @@ import (
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
+// VideoHashVersion is the perceptual-hash algorithm the stored hashes come from (mediatool.PerceptualVersion); a video
+// hashed by another version is hashed again.
+const VideoHashVersion = 2
+
+// DefaultFrameBits is the per-frame distance, in bits, at the medium level; the setting scan.video_phash_frame_bits tunes it.
+const DefaultFrameBits = 10
+
 // SimilarVideos finds videos that look like one another by perceptual hash (ADR-35): the same cut in another
 // encode, size or container. It only reads.
-type SimilarVideos struct{ store *store.Store }
+type SimilarVideos struct {
+	store     *store.Store
+	frameBits func() int
+}
 
 // NewSimilarVideos builds it over an open library store.
 func NewSimilarVideos(opened *store.Store) SimilarVideos { return SimilarVideos{store: opened} }
+
+// WithFrameBits reads the medium-level per-frame distance from the setting each time it compares.
+func (s SimilarVideos) WithFrameBits(read func() int) SimilarVideos {
+	s.frameBits = read
+	return s
+}
+
+func (s SimilarVideos) frameBitsAt(level SimilarityLevel) int {
+	base := DefaultFrameBits
+	if s.frameBits != nil {
+		base = s.frameBits()
+	}
+	return level.FrameBits(base)
+}
 
 // SimilarVideo is one hashed file.
 type SimilarVideo struct {
@@ -64,10 +88,17 @@ func (l SimilarityLevel) MaxBits() int {
 	return 8
 }
 
+// FrameBits is the per-frame distance at this level when the medium level allows medium bits: the default 10 gives 0, 5,
+// 10 and 13 for exact, high, medium and low.
+func (l SimilarityLevel) FrameBits(medium int) int {
+	return (frameBitsFor(l.MaxBits())*medium + DefaultFrameBits/2) / DefaultFrameBits
+}
+
 // frameBitsFor is the per-frame bound that goes with a mean-hash bound: a quarter wider, so 8 allows 10.
 func frameBitsFor(maxBits int) int { return (maxBits*5 + 3) / 4 }
 
-// FrameHash is one sampled frame's perceptual hash; Slot is the moment of the video it was taken at, in order.
+// FrameHash is one frame's perceptual hash; Slot is the moment of the video it was taken at, in order, and a slot holds
+// the hashes of a few frames close in time.
 type FrameHash struct {
 	Slot int
 	Hash uint64
@@ -77,7 +108,9 @@ type FrameHash struct {
 const minSharedFrames = 4
 
 // framesAlike is whether two videos show the same pictures at the same moments: at least two thirds of the slots
-// both sampled match. One show's episodes share a look, so the mean frame alone joins them (found 2026-11-02).
+// both sampled match. A slot holds a few hashes of frames close in time, and it matches when any two are within the
+// distance, so a copy cut a few frames earlier or later still lines up. One show's episodes share a look, so the mean
+// frame alone joins them (found 2026-11-02).
 func framesAlike(first, second []FrameHash, frameMaxBits int) bool {
 	shared, matched := 0, 0
 	for i, j := 0, 0; i < len(first) && j < len(second); {
@@ -87,15 +120,33 @@ func framesAlike(first, second []FrameHash, frameMaxBits int) bool {
 		case first[i].Slot > second[j].Slot:
 			j++
 		default:
+			slot := first[i].Slot
+			endFirst, endSecond := i, j
+			for endFirst < len(first) && first[endFirst].Slot == slot {
+				endFirst++
+			}
+			for endSecond < len(second) && second[endSecond].Slot == slot {
+				endSecond++
+			}
 			shared++
-			if bits.OnesCount64(first[i].Hash^second[j].Hash) <= frameMaxBits {
+			if closest(first[i:endFirst], second[j:endSecond]) <= frameMaxBits {
 				matched++
 			}
-			i++
-			j++
+			i, j = endFirst, endSecond
 		}
 	}
 	return shared >= minSharedFrames && matched*3 >= shared*2
+}
+
+// closest is the smallest distance in bits between any hash of one slot and any of the other.
+func closest(first, second []FrameHash) int {
+	best := 64
+	for _, a := range first {
+		for _, b := range second {
+			best = min(best, bits.OnesCount64(a.Hash^b.Hash))
+		}
+	}
+	return best
 }
 
 // frameRecordBytes is one stored frame: its slot, then the hash big-endian.
@@ -138,7 +189,7 @@ func sameLength(first, second int64) bool {
 
 // Groups answers the groups of similar videos among those with a path in rootFolderIDs, most files first.
 func (s SimilarVideos) Groups(ctx context.Context, rootFolderIDs []int64, level SimilarityLevel, limit int) ([]SimilarGroup, error) {
-	rows, err := librarydb.New(s.store.Read()).ListHashedVideos(ctx)
+	rows, err := librarydb.New(s.store.Read()).ListHashedVideos(ctx, VideoHashVersion)
 	if err != nil {
 		return nil, fmt.Errorf("library: list hashed videos: %w", err)
 	}
@@ -146,13 +197,13 @@ func (s SimilarVideos) Groups(ctx context.Context, rootFolderIDs []int64, level 
 	if err != nil {
 		return nil, err
 	}
-	return groupSimilar(videos, level.MaxBits(), limit), nil
+	return groupSimilar(videos, level.MaxBits(), s.frameBitsAt(level), limit), nil
 }
 
 // MatchInWork answers the videos of one work that show the same pictures as the given hash, by the finder's own test
 // at level (ADR-35): the import's way to tell a download is a file the work already holds.
 func (s SimilarVideos) MatchInWork(ctx context.Context, workID int64, mean uint64, frames []FrameHash, durationMs int64, level SimilarityLevel) ([]int64, error) {
-	rows, err := librarydb.New(s.store.Read()).ListWorkVideoHashes(ctx, workID)
+	rows, err := librarydb.New(s.store.Read()).ListWorkVideoHashes(ctx, librarydb.ListWorkVideoHashesParams{WorkID: workID, Version: VideoHashVersion})
 	if err != nil {
 		return nil, fmt.Errorf("library: list hashed videos of work %d: %w", workID, err)
 	}
@@ -162,15 +213,15 @@ func (s SimilarVideos) MatchInWork(ctx context.Context, workID int64, mean uint6
 		if err != nil {
 			return nil, err
 		}
-		if matchesHash(uint64(row.Phash.Int64), held, row.DurationMs.Int64, mean, frames, durationMs, level.MaxBits()) {
+		if matchesHash(uint64(row.Phash.Int64), held, row.DurationMs.Int64, mean, frames, durationMs, level.MaxBits(), s.frameBitsAt(level)) {
 			matches = append(matches, row.ID)
 		}
 	}
 	return matches, nil
 }
 
-func matchesHash(heldMean uint64, held []FrameHash, heldMs int64, mean uint64, frames []FrameHash, durationMs int64, maxBits int) bool {
-	return bits.OnesCount64(heldMean^mean) <= maxBits && sameLength(heldMs, durationMs) && framesAlike(held, frames, frameBitsFor(maxBits))
+func matchesHash(heldMean uint64, held []FrameHash, heldMs int64, mean uint64, frames []FrameHash, durationMs int64, maxBits, frameBits int) bool {
+	return bits.OnesCount64(heldMean^mean) <= maxBits && sameLength(heldMs, durationMs) && framesAlike(held, frames, frameBits)
 }
 
 // collectVideos keeps the hashed videos on the given roots, a file linked at several paths once.
@@ -205,8 +256,8 @@ func collectVideos(rows []librarydb.ListHashedVideosRow, rootFolderIDs []int64) 
 
 // groupSimilar joins videos whose mean hashes are within maxBits, lengths agree and frames match into groups of two or
 // more. Two hashes within maxBits bits agree on at least one of maxBits+1 bands, so only files sharing a band are compared.
-func groupSimilar(videos []hashedVideo, maxBits, limit int) []SimilarGroup {
-	bands, frameBits := maxBits+1, frameBitsFor(maxBits)
+func groupSimilar(videos []hashedVideo, maxBits, frameBits, limit int) []SimilarGroup {
+	bands := maxBits + 1
 	parent := make([]int, len(videos))
 	for index := range parent {
 		parent[index] = index

@@ -14,8 +14,21 @@ import (
 // phashSide is the width and height of the grey thumbnail each sampled frame is reduced to.
 const phashSide = 32
 
-// phashSamples is how many frames across a video's length are hashed.
-const phashSamples = 7
+// FrameSide is the width and height ffmpeg delivers each frame at, stretched to a square so aspect ratio and pixel shape
+// drop out; the black bars are cropped from it before the reduction to phashSide.
+const FrameSide = 128
+
+// PerceptualVersion stamps the algorithm in the stored hashes; bump it when hashes stop being comparable.
+const PerceptualVersion = 2
+
+const (
+	// phashSamples is how many moments across a video's length are hashed, at stable fractions of its duration.
+	phashSamples = 7
+	// windowFrames frames, windowStep apart, are read at each moment, so a shift of a few frames still lands on one of them.
+	windowFrames = 5
+	windowRate   = 8
+	windowStep   = time.Second / windowRate
+)
 
 // ErrNoFrames means the video gave too few frames to hash: a file ffmpeg cannot decode, or one with no video stream.
 var ErrNoFrames = errors.New("mediatool: no usable video frames")
@@ -30,7 +43,8 @@ var dctBasis = func() [phashSide][phashSide]float64 {
 	return basis
 }()
 
-// FrameHash is one sampled frame's perceptual hash; Slot is which of the phashSamples moments it was taken at.
+// FrameHash is one frame's perceptual hash; Slot is which of the phashSamples moments it was taken at, and a moment
+// holds the hashes of a few neighbouring frames.
 type FrameHash struct {
 	Slot int
 	Hash uint64
@@ -45,6 +59,165 @@ type VideoHash struct {
 
 // flatSpread is the grey-level standard deviation under which a frame carries no picture worth comparing.
 const flatSpread = 5.0
+
+// A row or column is a black bar when barShare of it is at most barLevel grey, so a line of subtitles set in a bar
+// leaves it a bar; barLimit is the share of a side a bar may take, so a dark scene is never cropped away.
+const (
+	barLevel = 40
+	barShare = 0.55
+	barLimit = FrameSide * 35 / 100
+)
+
+// cutJump is the mean grey change between two neighbouring frames of a window over which a scene changed.
+const cutJump = 28.0
+
+type bars struct{ top, bottom, left, right int }
+
+// lineIsBar is whether the FrameSide values at offset + i*step are mostly black.
+func lineIsBar(frame []byte, offset, step int) bool {
+	dark := 0
+	for i := range FrameSide {
+		if frame[offset+i*step] <= barLevel {
+			dark++
+		}
+	}
+	return float64(dark) >= barShare*FrameSide
+}
+
+func barsOf(frame []byte) bars {
+	var found bars
+	for found.top < barLimit && lineIsBar(frame, found.top*FrameSide, 1) {
+		found.top++
+	}
+	for found.bottom < barLimit && lineIsBar(frame, (FrameSide-1-found.bottom)*FrameSide, 1) {
+		found.bottom++
+	}
+	for found.left < barLimit && lineIsBar(frame, found.left, FrameSide) {
+		found.left++
+	}
+	for found.right < barLimit && lineIsBar(frame, FrameSide-1-found.right, FrameSide) {
+		found.right++
+	}
+	return found
+}
+
+// commonBars is the bars most of the video's frames show: the lower quartile per side, so a subtitle set in a bar or a
+// dark scene on a few frames neither shrinks nor grows the crop.
+func commonBars(frames [][]byte) bars {
+	var tops, bottoms, lefts, rights []int
+	for _, frame := range frames {
+		if _, informative := frameSpread(frame); !informative {
+			continue
+		}
+		found := barsOf(frame)
+		tops, bottoms = append(tops, found.top), append(bottoms, found.bottom)
+		lefts, rights = append(lefts, found.left), append(rights, found.right)
+	}
+	quartile := func(values []int) int {
+		if len(values) == 0 {
+			return 0
+		}
+		slices.Sort(values)
+		if bar := values[len(values)/4]; bar > 0 {
+			return bar + 1
+		}
+		return 0
+	}
+	return bars{top: quartile(tops), bottom: quartile(bottoms), left: quartile(lefts), right: quartile(rights)}
+}
+
+// thumbnail crops the bars off a FrameSide frame and reduces what is left to phashSide x phashSide by area average.
+func thumbnail(frame []byte, crop bars) []byte {
+	left, right := crop.left, FrameSide-crop.right
+	top, bottom := crop.top, FrameSide-crop.bottom
+	out := make([]byte, phashSide*phashSide)
+	for y := range phashSide {
+		y0, y1 := top+y*(bottom-top)/phashSide, top+(y+1)*(bottom-top)/phashSide
+		for x := range phashSide {
+			x0, x1 := left+x*(right-left)/phashSide, left+(x+1)*(right-left)/phashSide
+			sum, count := 0, 0
+			for row := y0; row < max(y1, y0+1); row++ {
+				for column := x0; column < max(x1, x0+1); column++ {
+					sum += int(frame[row*FrameSide+column])
+					count++
+				}
+			}
+			out[y*phashSide+x] = byte(sum / count)
+		}
+	}
+	return out
+}
+
+// longestRun is the longest stretch of a window with no scene change inside it, the earliest on a tie.
+func longestRun(thumbnails [][]byte) [][]byte {
+	bestStart, bestLength, start := 0, 0, 0
+	for i := 1; i <= len(thumbnails); i++ {
+		if i < len(thumbnails) && meanChange(thumbnails[i-1], thumbnails[i]) <= cutJump {
+			continue
+		}
+		if i-start > bestLength {
+			bestStart, bestLength = start, i-start
+		}
+		start = i
+	}
+	return thumbnails[bestStart : bestStart+bestLength]
+}
+
+func meanChange(a, b []byte) float64 {
+	total := 0
+	for index := range a {
+		total += max(int(a[index])-int(b[index]), int(b[index])-int(a[index]))
+	}
+	return float64(total) / float64(len(a))
+}
+
+// HashOfWindows hashes what was read at each sampled moment: windows[slot] holds FrameSide frames in time order, empty
+// for a moment that could not be read. Black bars are cropped by what the whole video shows, each frame is reduced to
+// 32x32 grey, a window keeps only its longest run without a scene change, and each kept frame gets a DCT hash.
+func HashOfWindows(windows [][][]byte) (VideoHash, error) {
+	var all [][]byte
+	for _, window := range windows {
+		for _, frame := range window {
+			if len(frame) != FrameSide*FrameSide {
+				return VideoHash{}, fmt.Errorf("mediatool: frame of %d bytes, want %d", len(frame), FrameSide*FrameSide)
+			}
+			all = append(all, frame)
+		}
+	}
+	if len(all) == 0 {
+		return VideoHash{}, ErrNoFrames
+	}
+	crop := commonBars(all)
+	var frames []FrameHash
+	var kept [][]byte
+	for slot, window := range windows {
+		thumbnails := make([][]byte, len(window))
+		for index, frame := range window {
+			thumbnails[index] = thumbnail(frame, crop)
+		}
+		var previous uint64
+		for index, picture := range longestRun(thumbnails) {
+			hash, informative := frameHash(picture)
+			if !informative {
+				continue
+			}
+			kept = append(kept, picture)
+			if index > 0 && hash == previous {
+				continue
+			}
+			previous = hash
+			frames = append(frames, FrameHash{Slot: slot, Hash: hash})
+		}
+	}
+	if len(kept) == 0 {
+		return VideoHash{}, ErrNoFrames
+	}
+	mean, err := PerceptualHashOfFrames(kept)
+	if err != nil {
+		return VideoHash{}, err
+	}
+	return VideoHash{Mean: mean, Frames: frames}, nil
+}
 
 // PerceptualHashOfFrames hashes grey phashSide x phashSide frames: their mean image, a 2-D DCT, and one bit per
 // low-frequency coefficient against the median. The same cut re-encoded, rescaled or re-graded lands within a few bits.
@@ -64,39 +237,27 @@ func PerceptualHashOfFrames(frames [][]byte) (uint64, error) {
 	return dctHash(&mean), nil
 }
 
-// HashOfFrames hashes sampled frames, nil for a slot whose frame could not be read, into a VideoHash.
-func HashOfFrames(slots [][]byte) (VideoHash, error) {
-	var read [][]byte
-	var frames []FrameHash
-	for slot, frame := range slots {
-		if frame == nil {
-			continue
-		}
-		read = append(read, frame)
-		if hash, informative := frameHash(frame); informative {
-			frames = append(frames, FrameHash{Slot: slot, Hash: hash})
-		}
-	}
-	mean, err := PerceptualHashOfFrames(read)
-	if err != nil {
-		return VideoHash{}, err
-	}
-	return VideoHash{Mean: mean, Frames: frames}, nil
-}
-
-// frameHash is one frame's hash, and false when the frame is too flat to tell one video from another.
-func frameHash(frame []byte) (uint64, bool) {
-	var image [phashSide][phashSide]float64
+// frameSpread is a frame's grey standard deviation, and false when it is too flat to tell one video from another.
+func frameSpread(frame []byte) (float64, bool) {
 	sum, squares := 0.0, 0.0
-	for index, value := range frame {
+	for _, value := range frame {
 		grey := float64(value)
-		image[index/phashSide][index%phashSide] = grey
 		sum += grey
 		squares += grey * grey
 	}
 	count := float64(len(frame))
 	spread := math.Sqrt(max(0, squares/count-(sum/count)*(sum/count)))
-	return dctHash(&image), spread >= flatSpread
+	return spread, spread >= flatSpread
+}
+
+// frameHash is one thumbnail's hash, and false when the frame is too flat to tell one video from another.
+func frameHash(frame []byte) (uint64, bool) {
+	var image [phashSide][phashSide]float64
+	for index, value := range frame {
+		image[index/phashSide][index%phashSide] = float64(value)
+	}
+	_, informative := frameSpread(frame)
+	return dctHash(&image), informative
 }
 
 func dctHash(image *[phashSide][phashSide]float64) uint64 {
@@ -134,7 +295,8 @@ func dctHash(image *[phashSide][phashSide]float64) uint64 {
 // PerceptualDistance is the number of bits two perceptual hashes differ in; under about 10 of 64 is the same video.
 func PerceptualDistance(a, b uint64) int { return bits.OnesCount64(a ^ b) }
 
-// PerceptualHash samples the video at phashSamples evenly spaced moments and hashes the frames (ADR-35).
+// PerceptualHash reads a short window at phashSamples stable fractions of the video's duration, so another frame rate,
+// codec, size or aspect ratio gives the same pictures, and hashes them (ADR-35, documentation/duplicate-videos.md).
 func (s *Subprocess) PerceptualHash(ctx context.Context, path string) (VideoHash, error) {
 	probe := s.probeOne(ctx, path)
 	if probe.Err != nil {
@@ -144,40 +306,45 @@ func (s *Subprocess) PerceptualHash(ctx context.Context, path string) (VideoHash
 	if length <= 0 {
 		return VideoHash{}, ErrNoFrames
 	}
-	slots := make([][]byte, phashSamples)
+	windows := make([][][]byte, phashSamples)
 	read := 0
 	for sample := range phashSamples {
 		at := length * time.Duration(sample+1) / (phashSamples + 1)
-		frame, err := s.frameAt(ctx, path, at)
+		window, err := s.windowAt(ctx, path, at)
 		if err != nil {
 			if ctx.Err() != nil {
 				return VideoHash{}, ctx.Err()
 			}
 			continue
 		}
-		slots[sample] = frame
+		windows[sample] = window
 		read++
 	}
 	if read <= phashSamples/2 {
 		return VideoHash{}, ErrNoFrames
 	}
-	return HashOfFrames(slots)
+	return HashOfWindows(windows)
 }
 
-func (s *Subprocess) frameAt(ctx context.Context, path string, at time.Duration) ([]byte, error) {
+// windowAt reads windowFrames frames windowStep apart, centred on at, at FrameSide square and grey; the fps filter
+// makes the spacing the same whatever the source's frame rate, and the sample aspect ratio is applied before stretching.
+func (s *Subprocess) windowAt(ctx context.Context, path string, at time.Duration) ([][]byte, error) {
 	bounded, cancel := context.WithTimeout(ctx, perFileTimeout)
 	defer cancel()
 
+	start := max(0, at-windowStep*windowFrames/2)
 	args := []string{"-v", "error", "-protocol_whitelist", "file"}
-	rest := []string{"-ss", strconv.FormatFloat(at.Seconds(), 'f', 3, 64), "-i", path,
-		"-an", "-sn", "-frames:v", "1", "-vf", fmt.Sprintf("scale=%d:%d:flags=area,format=gray", phashSide, phashSide),
+	rest := []string{"-ss", strconv.FormatFloat(start.Seconds(), 'f', 3, 64), "-i", path,
+		"-an", "-sn", "-frames:v", strconv.Itoa(windowFrames),
+		"-vf", fmt.Sprintf("fps=%d,scale=trunc(iw*sar):ih,setsar=1,scale=%d:%d:flags=area,format=gray", windowRate, FrameSide, FrameSide),
 		"-f", "rawvideo", "pipe:1"}
+	valid := func(output []byte) bool { return len(output) > 0 && len(output)%(FrameSide*FrameSide) == 0 }
 	var output []byte
 	var err error
 	if s.decodeArgs != nil {
 		if hardware := s.decodeArgs(); len(hardware) > 0 {
 			output, err = s.runner.Run(bounded, ffmpegBinary, slices.Concat(args, hardware, rest)...)
-			if err != nil || len(output) != phashSide*phashSide {
+			if err != nil || !valid(output) {
 				output, err = nil, errors.New("hardware decode failed")
 			}
 		}
@@ -186,10 +353,14 @@ func (s *Subprocess) frameAt(ctx context.Context, path string, at time.Duration)
 		output, err = s.runner.Run(bounded, ffmpegBinary, slices.Concat(args, rest)...)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("mediatool: frame %s: %w", path, err)
+		return nil, fmt.Errorf("mediatool: window %s: %w", path, err)
 	}
-	if len(output) != phashSide*phashSide {
-		return nil, fmt.Errorf("mediatool: frame %s: %d bytes", path, len(output))
+	if !valid(output) {
+		return nil, fmt.Errorf("mediatool: window %s: %d bytes", path, len(output))
 	}
-	return output, nil
+	frames := make([][]byte, 0, len(output)/(FrameSide*FrameSide))
+	for offset := 0; offset < len(output); offset += FrameSide * FrameSide {
+		frames = append(frames, output[offset:offset+FrameSide*FrameSide])
+	}
+	return frames, nil
 }

@@ -635,7 +635,7 @@ type Querier interface {
 	ListGenresOfType(ctx context.Context, mediaType string) ([]ListGenresOfTypeRow, error)
 	ListGroupObservations(ctx context.Context, arg ListGroupObservationsParams) ([]GroupObservation, error)
 	// Every video with frame hashes and its primary path; the similar-video report brute-forces Hamming distance in Go (ADR-35).
-	ListHashedVideos(ctx context.Context) ([]ListHashedVideosRow, error)
+	ListHashedVideos(ctx context.Context, version int64) ([]ListHashedVideosRow, error)
 	// The artists with something held in a library, and the release groups they hold there: what a discography is
 	// compared against. A held work without a release-group id yields an empty id.
 	ListHeldReleaseGroupsByArtist(ctx context.Context, categoryID int64) ([]ListHeldReleaseGroupsByArtistRow, error)
@@ -896,7 +896,7 @@ type Querier interface {
 	// The facts a library's rules read of each of its works (plan 10-libraries L5).
 	ListWorkTraitsInCategory(ctx context.Context, categoryID int64) ([]ListWorkTraitsInCategoryRow, error)
 	// The hashed videos of one work: an import compares a download's pictures with what the work already holds.
-	ListWorkVideoHashes(ctx context.Context, workID int64) ([]ListWorkVideoHashesRow, error)
+	ListWorkVideoHashes(ctx context.Context, arg ListWorkVideoHashesParams) ([]ListWorkVideoHashesRow, error)
 	// Cover art attaches to the work (subject_type='work'), but Cover Art Archive is
 	// queried by release (edition) MBID -- any refined (kind != 'unknown') edition
 	// with one is a usable source. is_default is never set to 1 anywhere in this

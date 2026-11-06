@@ -4,13 +4,40 @@ Finding the same video stored more than once, in another encode, size or contain
 
 ## Hashing
 
-The probe sweep's last pass hashes every video: seven frames evenly across its length, one ffmpeg call each, each frame
-reduced to 32x32 grey and hashed by a DCT into 64 bits. The mean image's hash only finds candidates; the per-frame
-hashes decide (`database-layout.md`, `video_frame_hash`).
+The probe sweep's last pass hashes every video (`mediatool.PerceptualHash`, algorithm version 2, stored beside each hash).
+It is built so the same footage at another resolution, frame rate, codec, aspect ratio or a few frames' offset still matches:
+
+1. **Moments by time.** Seven moments at 1/8 to 7/8 of the duration, so a re-encode with another frame rate or frame
+   index lands on the same picture. One ffmpeg call per moment reads a window of five frames 0.125 s apart (`fps=8`, so the
+   spacing is the same whatever the source's rate), applies the sample aspect ratio, stretches to 128x128 and converts to grey.
+2. **Black bars off.** Per video, the rows and columns at each edge that are mostly (55%) at most 40 grey are bars, up to
+   35% of a side. The crop is the lower quartile across all frames, so a logo, subtitles or a dark scene on a few frames
+   neither shrinks nor grows it. Letterboxed, pillarboxed and stretched copies reduce to the same picture.
+3. **Scene cuts.** A window is split where neighbouring frames change by more than 28 grey on average; only the longest
+   shot is kept, so a cut that falls inside one copy's window and outside the other's cannot mix two shots.
+4. **Reduce and hash.** The cropped picture is area-averaged to 32x32 and hashed by a 2-D DCT: the 8x8 lowest
+   frequencies, one bit each against the median (64 bits). Flat frames (black, fades) are left out. The mean hash is the
+   same over the average of every kept frame and only finds candidates (banded index); the frame hashes decide.
+5. **Compare.** A moment holds up to five hashes. Two videos match at a moment when any hash of one is within the frame
+   distance of any of the other's, so an offset of up to about a quarter second still lines up. Two thirds of at least four
+   shared moments must match, the durations must agree (2% or 5 s) and the mean hashes be within the level.
+
+Stash-box compatibility: Solarr's hash is **not** Stash's and is local only. Solarr submits no fingerprints to StashDB
+today (`stashbox` only looks scenes up by a file's hashes). If a Stash-compatible pHash is ever needed it must be stored as
+its own value beside this one; `media_object.phash` is the local mean hash.
+
+Algorithm version: `video_frame_hash.algorithm_version` (`library.VideoHashVersion`, equal to
+`mediatool.PerceptualVersion`; a test pins that). A video with no hash of the current version is hashed again by the next
+sweep, so changing the algorithm means bumping the number. Migration 0107 dropped every version-1 hash (and
+`media_object.phash` of videos) for that reason.
 
 The pass is a setting, `scan.video_phash` (default off), edited by an administrator under Storage > Duplicates
 (`GET/PUT /settings/video-hashing`). Off, nothing new is hashed; hashes already stored still serve the finder, and the
-report says so (`hashing_enabled`).
+report says so (`hashing_enabled`). The tolerance is `scan.video_phash_frame_bits` (default 10, 2 to 20): the frame
+distance at the medium level; exact, high and low scale it to 0, one half and 1.3 times.
+
+Limits: fast action can exceed the cut threshold between neighbouring frames, which leaves a window with one frame (the
+offset tolerance is then gone for that moment); hard-coded subtitles that cover more than half a bar row crop the bar away.
 
 ## Why not Stash's method
 
@@ -29,7 +56,7 @@ stays. Stash's levels are kept: the finder takes the same four.
 ## Levels
 
 `level` on the report: `exact` (0 bits between the mean hashes), `high` (4), `medium` (8, the default), `low` (10).
-The per-frame bound is a quarter wider (`frameBitsFor`), and two thirds of at least four shared frames must still match.
+The per-frame bound is a quarter wider (`frameBitsFor`, scaled by the tolerance setting), and two thirds of at least four shared moments must still match.
 
 ## Finding and resolving
 
@@ -43,7 +70,7 @@ A file linked at several paths (one media object, many paths) is one video in a 
 
 ## At import
 
-A downloaded TV episode is hashed (same seven frames) and compared with the hashed files of the series it resolved to,
+A downloaded TV episode is hashed (same seven moments) and compared with the hashed files of the series it resolved to,
 at the medium level (`SimilarVideos.MatchInWork`). A match is the episode the held file covers, whatever the release
 named it, so a release labeled S01E02 that shows S01E01 never fills S01E02.
 

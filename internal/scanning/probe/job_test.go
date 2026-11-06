@@ -367,7 +367,7 @@ func hashVideos(t *testing.T, hashing func() bool) (*store.Store, []librarydb.Li
 	if err := job.Run(t.Context(), jobs.Job{}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	rows, err := librarydb.New(opened.Read()).ListHashedVideos(t.Context())
+	rows, err := librarydb.New(opened.Read()).ListHashedVideos(t.Context(), library.VideoHashVersion)
 	if err != nil {
 		t.Fatalf("ListHashedVideos: %v", err)
 	}

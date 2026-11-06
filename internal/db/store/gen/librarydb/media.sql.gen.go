@@ -597,7 +597,7 @@ SELECT o.id, o.size_bytes, o.phash, o.duration_ms, o.width, o.height, lp.root_fo
 FROM media_object o
 JOIN video_frame_hash f ON f.media_object_id = o.id
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
-WHERE o.phash IS NOT NULL AND o.kind = 'video'
+WHERE o.phash IS NOT NULL AND o.kind = 'video' AND f.algorithm_version = ?1
 ORDER BY o.id
 `
 
@@ -614,8 +614,8 @@ type ListHashedVideosRow struct {
 }
 
 // Every video with frame hashes and its primary path; the similar-video report brute-forces Hamming distance in Go (ADR-35).
-func (q *Queries) ListHashedVideos(ctx context.Context) ([]ListHashedVideosRow, error) {
-	rows, err := q.db.QueryContext(ctx, listHashedVideos)
+func (q *Queries) ListHashedVideos(ctx context.Context, version int64) ([]ListHashedVideosRow, error) {
+	rows, err := q.db.QueryContext(ctx, listHashedVideos, version)
 	if err != nil {
 		return nil, err
 	}
@@ -1143,13 +1143,14 @@ SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_object o
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE o.kind = 'video' AND o.id > ?1
-  AND NOT EXISTS (SELECT 1 FROM video_frame_hash f WHERE f.media_object_id = o.id)
+  AND NOT EXISTS (SELECT 1 FROM video_frame_hash f WHERE f.media_object_id = o.id AND f.algorithm_version = ?2)
 ORDER BY o.id
-LIMIT ?2
+LIMIT ?3
 `
 
 type ListVideoWithoutFrameHashesParams struct {
 	AfterID  int64
+	Version  int64
 	PageSize int64
 }
 
@@ -1162,7 +1163,7 @@ type ListVideoWithoutFrameHashesRow struct {
 
 // Video files with no per-frame hash yet, those hashed before it included: the lowest-priority pass of the probe sweep (ADR-35).
 func (q *Queries) ListVideoWithoutFrameHashes(ctx context.Context, arg ListVideoWithoutFrameHashesParams) ([]ListVideoWithoutFrameHashesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listVideoWithoutFrameHashes, arg.AfterID, arg.PageSize)
+	rows, err := q.db.QueryContext(ctx, listVideoWithoutFrameHashes, arg.AfterID, arg.Version, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -1317,9 +1318,14 @@ SELECT o.id, o.phash, o.duration_ms, f.frames
 FROM work_file wf
 JOIN media_object o ON o.id = wf.media_object_id
 JOIN video_frame_hash f ON f.media_object_id = o.id
-WHERE wf.work_id = ? AND o.phash IS NOT NULL AND o.kind = 'video'
+WHERE wf.work_id = ?1 AND o.phash IS NOT NULL AND o.kind = 'video' AND f.algorithm_version = ?2
 ORDER BY o.id
 `
+
+type ListWorkVideoHashesParams struct {
+	WorkID  int64
+	Version int64
+}
 
 type ListWorkVideoHashesRow struct {
 	ID         int64
@@ -1329,8 +1335,8 @@ type ListWorkVideoHashesRow struct {
 }
 
 // The hashed videos of one work: an import compares a download's pictures with what the work already holds.
-func (q *Queries) ListWorkVideoHashes(ctx context.Context, workID int64) ([]ListWorkVideoHashesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listWorkVideoHashes, workID)
+func (q *Queries) ListWorkVideoHashes(ctx context.Context, arg ListWorkVideoHashesParams) ([]ListWorkVideoHashesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkVideoHashes, arg.WorkID, arg.Version)
 	if err != nil {
 		return nil, err
 	}
@@ -1626,17 +1632,18 @@ func (q *Queries) SetPhash(ctx context.Context, arg SetPhashParams) error {
 }
 
 const setVideoFrameHashes = `-- name: SetVideoFrameHashes :exec
-INSERT INTO video_frame_hash (media_object_id, frames) VALUES (?, ?)
-ON CONFLICT (media_object_id) DO UPDATE SET frames = excluded.frames
+INSERT INTO video_frame_hash (media_object_id, frames, algorithm_version) VALUES (?, ?, ?)
+ON CONFLICT (media_object_id) DO UPDATE SET frames = excluded.frames, algorithm_version = excluded.algorithm_version
 `
 
 type SetVideoFrameHashesParams struct {
-	MediaObjectID int64
-	Frames        []byte
+	MediaObjectID    int64
+	Frames           []byte
+	AlgorithmVersion int64
 }
 
 func (q *Queries) SetVideoFrameHashes(ctx context.Context, arg SetVideoFrameHashesParams) error {
-	_, err := q.db.ExecContext(ctx, setVideoFrameHashes, arg.MediaObjectID, arg.Frames)
+	_, err := q.db.ExecContext(ctx, setVideoFrameHashes, arg.MediaObjectID, arg.Frames, arg.AlgorithmVersion)
 	return err
 }
 

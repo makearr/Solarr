@@ -262,9 +262,9 @@ func (p Physical) SetOshash(ctx context.Context, mediaObjectID int64, oshash str
 	return nil
 }
 
-// ListVideoWithoutFrameHashes pages through the video files with no per-frame hash yet, oldest id first.
+// ListVideoWithoutFrameHashes pages through the video files with no per-frame hash of the current algorithm yet, oldest id first.
 func (p Physical) ListVideoWithoutFrameHashes(ctx context.Context, afterID int64, pageSize int64) ([]UnmeasuredFile, error) {
-	rows, err := librarydb.New(p.store.Read()).ListVideoWithoutFrameHashes(ctx, librarydb.ListVideoWithoutFrameHashesParams{AfterID: afterID, PageSize: pageSize})
+	rows, err := librarydb.New(p.store.Read()).ListVideoWithoutFrameHashes(ctx, librarydb.ListVideoWithoutFrameHashesParams{AfterID: afterID, Version: VideoHashVersion, PageSize: pageSize})
 	if err != nil {
 		return nil, fmt.Errorf("library: list video without frame hashes: %w", err)
 	}
@@ -283,7 +283,7 @@ func (p Physical) SetPerceptualHash(ctx context.Context, mediaObjectID int64, me
 		if err := queries.SetPhash(ctx, librarydb.SetPhashParams{Phash: sql.NullInt64{Int64: int64(mean), Valid: true}, ID: mediaObjectID}); err != nil {
 			return err
 		}
-		return queries.SetVideoFrameHashes(ctx, librarydb.SetVideoFrameHashesParams{MediaObjectID: mediaObjectID, Frames: encodeFrameHashes(frames)})
+		return queries.SetVideoFrameHashes(ctx, librarydb.SetVideoFrameHashesParams{MediaObjectID: mediaObjectID, Frames: encodeFrameHashes(frames), AlgorithmVersion: VideoHashVersion})
 	})
 	if err != nil {
 		return fmt.Errorf("library: set perceptual hash %d: %w", mediaObjectID, err)

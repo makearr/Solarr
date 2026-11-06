@@ -89,7 +89,8 @@ before what the probe reads now is found by number (`probe_version < 2` for any 
 once more by the background probe. `media_object.probe_json` is no longer written and goes in a later migration.
 
 `video_frame_hash` keeps a video's perceptual hash per sampled frame (ADR-35): `frames` is 9 bytes per frame, its
-sample slot (0 to 6) then the 64-bit hash big-endian, in slot order, with flat frames left out. `media_object.phash`
+sample slot (0 to 6) then the 64-bit hash big-endian, in slot order, up to five frames per slot, with flat frames left out;
+`algorithm_version` says which hashing made it (`duplicate-videos.md`), and other versions count as unhashed. `media_object.phash`
 is the hash of the averaged frames and only finds candidates for `library.SimilarVideos`; the frames decide, since the
 average of one show's episodes is near-identical. A video with no row is hashed by the probe sweep's last pass.
 

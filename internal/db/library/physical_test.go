@@ -488,3 +488,42 @@ func TestListUnmeasured_NeverListsAnEbookAndStillFillsThePage(t *testing.T) {
 		t.Errorf("ListUnmeasured = %+v, %v; want the two flac files although two ebooks come first", files, err)
 	}
 }
+
+// A hash stamped with another algorithm version is as good as none: the sweep lists the file again, and the new hash replaces it.
+func TestListVideoWithoutFrameHashes_ListsAnOldVersionAgain(t *testing.T) {
+	opened, _ := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	registered, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "Show/S01E01.mkv", SizeBytes: 10, QuickHash: "video", FirstSeenAt: time.Unix(1, 0)},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	id := registered[0].MediaObjectID
+	want := fmt.Sprint([]library.UnmeasuredFile{{MediaObjectID: id, RootFolderID: 1, RelPath: "Show/S01E01.mkv"}})
+	listed := func() string {
+		files, err := physical.ListVideoWithoutFrameHashes(t.Context(), 0, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fmt.Sprint(files)
+	}
+	if got := listed(); got != want {
+		t.Fatalf("unhashed: listed %s, want %s", got, want)
+	}
+	err = opened.Write(t.Context(), store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetVideoFrameHashes(ctx, librarydb.SetVideoFrameHashesParams{MediaObjectID: id, Frames: []byte{}, AlgorithmVersion: library.VideoHashVersion - 1})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := listed(); got != want {
+		t.Errorf("old version: listed %s, want %s", got, want)
+	}
+	if err := physical.SetPerceptualHash(t.Context(), id, 5, []library.FrameHash{{Slot: 0, Hash: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := listed(); got != "[]" {
+		t.Errorf("current version: listed %s, want none", got)
+	}
+}

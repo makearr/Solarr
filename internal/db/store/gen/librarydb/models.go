@@ -807,8 +807,9 @@ type TitleSearch struct {
 }
 
 type VideoFrameHash struct {
-	MediaObjectID int64
-	Frames        []byte
+	MediaObjectID    int64
+	Frames           []byte
+	AlgorithmVersion int64
 }
 
 type Work struct {

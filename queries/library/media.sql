@@ -157,7 +157,7 @@ SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_object o
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE o.kind = 'video' AND o.id > sqlc.arg(after_id)
-  AND NOT EXISTS (SELECT 1 FROM video_frame_hash f WHERE f.media_object_id = o.id)
+  AND NOT EXISTS (SELECT 1 FROM video_frame_hash f WHERE f.media_object_id = o.id AND f.algorithm_version = sqlc.arg(version))
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
 
@@ -165,8 +165,8 @@ LIMIT sqlc.arg(page_size);
 UPDATE media_object SET phash = ? WHERE id = ?;
 
 -- name: SetVideoFrameHashes :exec
-INSERT INTO video_frame_hash (media_object_id, frames) VALUES (?, ?)
-ON CONFLICT (media_object_id) DO UPDATE SET frames = excluded.frames;
+INSERT INTO video_frame_hash (media_object_id, frames, algorithm_version) VALUES (?, ?, ?)
+ON CONFLICT (media_object_id) DO UPDATE SET frames = excluded.frames, algorithm_version = excluded.algorithm_version;
 
 -- Probe coverage, the same per-root shape CountLibraryPathsByRootFolder already
 -- answers for the denominator (library.CategoryCounters' own precedent) --
@@ -339,7 +339,7 @@ SELECT o.id, o.size_bytes, o.phash, o.duration_ms, o.width, o.height, lp.root_fo
 FROM media_object o
 JOIN video_frame_hash f ON f.media_object_id = o.id
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
-WHERE o.phash IS NOT NULL AND o.kind = 'video'
+WHERE o.phash IS NOT NULL AND o.kind = 'video' AND f.algorithm_version = sqlc.arg(version)
 ORDER BY o.id;
 
 -- The hashed videos of one work: an import compares a download's pictures with what the work already holds.
@@ -348,7 +348,7 @@ SELECT o.id, o.phash, o.duration_ms, f.frames
 FROM work_file wf
 JOIN media_object o ON o.id = wf.media_object_id
 JOIN video_frame_hash f ON f.media_object_id = o.id
-WHERE wf.work_id = ? AND o.phash IS NOT NULL AND o.kind = 'video'
+WHERE wf.work_id = sqlc.arg(work_id) AND o.phash IS NOT NULL AND o.kind = 'video' AND f.algorithm_version = sqlc.arg(version)
 ORDER BY o.id;
 
 -- The download a placed file came in with, nothing when a person imported it by hand.

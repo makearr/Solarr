@@ -296,13 +296,18 @@ func (p *process) fingerprintVideo(ctx context.Context, absolutePath string) (me
 	return hash, measured.Duration.Milliseconds(), true
 }
 
+// similarVideos compares by the tolerance setting as it stands at each comparison.
+func (p *process) similarVideos() library.SimilarVideos {
+	return library.NewSimilarVideos(p.library).WithFrameBits(func() int { return p.cache.Snapshot().VideoPhashFrameBits() })
+}
+
 // sameVideos are the files of a series that show the same pictures as a hash, at the finder's default level.
 func (p *process) sameVideos(ctx context.Context, workID int64, hash mediatool.VideoHash, durationMs int64) ([]int64, error) {
 	frames := make([]library.FrameHash, len(hash.Frames))
 	for k, frame := range hash.Frames {
 		frames[k] = library.FrameHash{Slot: frame.Slot, Hash: frame.Hash}
 	}
-	return library.NewSimilarVideos(p.library).MatchInWork(ctx, workID, hash.Mean, frames, durationMs, library.SimilarityMedium)
+	return p.similarVideos().MatchInWork(ctx, workID, hash.Mean, frames, durationMs, library.SimilarityMedium)
 }
 
 // adultImporter is the adult module's batch importer, placing through the same steps as a movie's.
