@@ -97,8 +97,8 @@ export function QualityProfilesPage() {
 
   const profileCard = (
       <Card
-        title="Profiles"
-        help="What each kind of file is worth. A library lists the profiles it accepts, in order, under its own Quality page; the same profile can serve several libraries."
+        title="Quality profiles"
+        help="For experts and people coming from the *Arrs: what each kind of file is worth, as rules, tiers and ranges. A library does not need one; its target quality is enough. A library lists the profiles it accepts, in order, under its own Quality page; the same profile can serve several libraries."
         toggle={
           <button
             type="button"
@@ -152,12 +152,16 @@ export function QualityProfilesPage() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
-      <h1 className="text-lg font-semibold">Quality profiles</h1>
+      <h1 className="text-lg font-semibold">Quality</h1>
+      <p className="text-sm text-ink-muted">
+        A library's goal is a <strong className="font-medium text-ink">target quality</strong>: pick one per library and that is all it needs.
+        Quality profiles, further down, are an expert tool for fine rules and for people coming from the *Arrs.
+      </p>
       <SubTabs
         tabs={[
-          { key: "targets", label: "Targets", content: <QualityTargetsSection /> },
-          { key: "content", label: "Content profiles", content: <TargetProfilesSection /> },
-          { key: "profiles", label: "Profiles", hidden: !isTierVisible(tier, "expert"), content: profileCard },
+          { key: "targets", label: "Target qualities", content: <QualityTargetsSection /> },
+          { key: "content", label: "Content profiles", hidden: !isTierVisible(tier, "advanced"), content: <TargetProfilesSection /> },
+          { key: "profiles", label: "Quality profiles", hidden: !isTierVisible(tier, "expert"), content: profileCard },
           { key: "languages", label: "Languages", content: <LanguageProfiles /> },
         ]}
       />

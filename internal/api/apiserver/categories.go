@@ -340,6 +340,16 @@ func (s *Server) applyKind(ctx context.Context, category settings.Category, kind
 		return category, err
 	}
 	snapshot := s.auth.Settings.Snapshot()
+	// The goal of a new library is its media type's preferred target, and that is enough: no profile. A type with no
+	// shipped target (comics, ROMs) still starts with the kind's profiles.
+	for _, target := range snapshot.QualityTargets() {
+		if target.MediaType == category.MediaType && target.Label == settings.PreferredTargetLabel {
+			if err := s.auth.Settings.SetCategoryQuality(ctx, category.ID, nil, nil, &target.ID); err != nil {
+				return updated, err
+			}
+			return s.applyKindLanguage(ctx, updated, kind)
+		}
+	}
 	var profileIDs []int64
 	for _, name := range kind.QualityProfiles {
 		for _, profile := range snapshot.QualityProfiles() {
@@ -353,6 +363,12 @@ func (s *Server) applyKind(ctx context.Context, category settings.Category, kind
 			return updated, err
 		}
 	}
+	return s.applyKindLanguage(ctx, updated, kind)
+}
+
+// applyKindLanguage gives a library the kind's language profile, found by name or created.
+func (s *Server) applyKindLanguage(ctx context.Context, updated settings.Category, kind LibraryKind) (settings.Category, error) {
+	snapshot, category := s.auth.Settings.Snapshot(), updated
 	if kind.Language != nil {
 		languageID := int64(0)
 		for _, profile := range snapshot.LanguageProfiles() {

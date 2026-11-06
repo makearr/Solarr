@@ -389,7 +389,7 @@ export function QualityTargetsSection() {
   return (
     <Card
       title="Target qualities"
-      help="The one quality you would pick if you could choose freely. A library picks one of these under its own Quality page; a file meets it when every part named matches what the probe measured."
+      help="The goal of a library, and the one setting it needs: the quality you would pick if you could choose freely, and what a later transcode aims for. Pick one per library under Settings > Libraries or its own Quality page. Shipped presets are here to use or change; a file or release is judged by how near it is."
       toggle={
         <button type="button" onClick={() => setEditing("new")} className="flex shrink-0 items-center gap-1 rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted hover:text-ink">
           <Plus aria-hidden className="size-4" />

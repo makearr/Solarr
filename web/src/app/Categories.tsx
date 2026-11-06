@@ -13,6 +13,7 @@ import { inputStyle, labelStyle } from "@/ui/form";
 import { Card } from "./SettingsCard";
 import { AddLibraryForm } from "./NewLibrary";
 import { KindSelect } from "./LibraryKindSelect";
+import { LibraryTargetSelect } from "./LibraryTargetSelect";
 
 type Category = components["schemas"]["LibraryCategory"];
 type CategorySettings = components["schemas"]["CategorySettings"];
@@ -243,6 +244,7 @@ function Row({
                        text-ink-muted">
         {mediaTypeName(category.media_type)}
       </span>
+      <LibraryTargetSelect categoryId={category.id} name={category.name} />
       {category.works != null && (
         <span className="ml-auto shrink-0 text-xs text-ink-muted">
           {category.works} {mediaType?.work.many.toLowerCase() ?? "works"}

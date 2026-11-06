@@ -147,3 +147,11 @@ For each kind of thing it takes what the profile ranks first (resolution, codec,
 the middle of the range (its ideal, else the mean of minimum and maximum); a lossless first codec has no bitrate. It follows the
 profile as it is edited and needs a profile. It is not a stored target, so it is neither listed under Targets nor exported
 as one (the export keeps `quality_target_auto`).
+
+## The target is the goal; profiles are for experts
+
+Settings > **Quality** (was Quality profiles) opens on **Target qualities**; Content profiles show at the advanced tier and
+Quality profiles at the expert one. Each library's target is chosen right in Settings > Libraries, and on the library's own
+Quality page the target comes first and the profile list below it, "none" by default. A library added as a kind starts with its
+media type's preferred ("Space conscious") target and no profile; a type with no shipped target (comics, ROMs) still starts with the
+kind's profiles.

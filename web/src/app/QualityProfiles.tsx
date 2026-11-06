@@ -22,7 +22,7 @@ export function QualityProfiles() {
       <div className="flex items-baseline gap-3">
         <h1 className="text-lg font-semibold">Quality</h1>
         <Link to="/quality-profiles" className="ml-auto text-xs text-ink-muted hover:text-ink hover:underline">
-          Create and edit profiles
+          Create and edit targets
         </Link>
       </div>
       <LibraryQualityEditor />
@@ -146,16 +146,49 @@ function LibraryQualityEditor() {
 
   return (
     <div className="flex flex-col gap-4">
+      <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
+        <h2 className="text-sm font-medium">Target quality: the goal</h2>
+        <p className="text-xs text-ink-muted">
+          What you want this library to hold. Pick one and that is enough: a target with no quality profile ranks every
+          release by how near it is, and Solarr aims a little over rather than under. Automatic works the target out from
+          the first quality profile.{" "}
+          <Link to="/quality-profiles" className="underline hover:text-ink">
+            Create and edit targets
+          </Link>
+        </p>
+        <select
+          value={targetAuto ? "auto" : (targetId ?? "")}
+          onChange={(event) => {
+            setTargetAuto(event.target.value === "auto");
+            setTargetId(event.target.value === "" || event.target.value === "auto" ? undefined : Number(event.target.value));
+          }}
+          className={`${inputStyle} max-w-full self-start`}
+        >
+          <option value="">Nothing in particular: the first profile decides</option>
+          <option value="auto" disabled={order.length === 0}>
+            Automatic: the average of the first profile{order.length === 0 ? " (needs a profile)" : ""}
+          </option>
+          {(quality.data.available_targets ?? []).map((target) => (
+            <option key={target.id} value={target.id}>
+              {target.name}
+            </option>
+          ))}
+        </select>
+        {quality.data.target && (targetAuto ? quality.data.target_auto : targetId === quality.data.target.id) && (
+          <p className="text-xs text-ink-muted">{summariseTarget(quality.data.target)}</p>
+        )}
+      </section>
+
       {isTierVisible(tier, "expert") && (
       <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
-        <h2 className="text-sm font-medium">Profiles, in order of preference</h2>
+        <h2 className="text-sm font-medium">Quality profiles (expert)</h2>
         <p className="text-xs text-ink-muted">
-          A release the first profile wants is preferred; later ones are fallbacks when nothing better
-          is found. A profile not listed is never taken.
+          Optional, for experts and anyone coming from the *Arrs. With none the target alone decides. A release the first
+          profile wants is preferred; later ones are fallbacks when nothing better is found; a profile not listed is never taken.
         </p>
         {order.length === 0 ? (
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-ink-muted">None chosen: with a target below, the target alone ranks what is found; with none, the instance default profile does.</span>
+            <span className="text-ink-muted">None chosen: the target above ranks what is found on its own; with no target either, the instance default profile does.</span>
             <button
               type="button"
               onClick={() => setOrder(quality.data.available.map((profile) => profile.id))}
@@ -283,39 +316,6 @@ function LibraryQualityEditor() {
         </div>
       </section>
 
-      {isTierVisible(tier, "advanced") && (
-      <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
-        <h2 className="text-sm font-medium">Target quality</h2>
-        <p className="text-xs text-ink-muted">
-          The quality you would pick if you could choose freely. Several can be defined; this library aims for one. A library with a
-          target and no profile is ranked by the target alone; Automatic works the target out from the first profile.{" "}
-          <Link to="/quality-profiles" className="underline hover:text-ink">
-            Create and edit targets
-          </Link>
-        </p>
-        <select
-          value={targetAuto ? "auto" : (targetId ?? "")}
-          onChange={(event) => {
-            setTargetAuto(event.target.value === "auto");
-            setTargetId(event.target.value === "" || event.target.value === "auto" ? undefined : Number(event.target.value));
-          }}
-          className={`${inputStyle} max-w-full self-start`}
-        >
-          <option value="">Nothing in particular: the first profile decides</option>
-          <option value="auto" disabled={order.length === 0}>
-            Automatic: the average of the first profile{order.length === 0 ? " (needs a profile)" : ""}
-          </option>
-          {(quality.data.available_targets ?? []).map((target) => (
-            <option key={target.id} value={target.id}>
-              {target.name}
-            </option>
-          ))}
-        </select>
-        {quality.data.target && (targetAuto ? quality.data.target_auto : targetId === quality.data.target.id) && (
-          <p className="text-xs text-ink-muted">{summariseTarget(quality.data.target)}</p>
-        )}
-      </section>
-      )}
 
       {quality.data.warnings.map((warning) => (
         <p key={warning} className="rounded-md border border-warn/50 bg-warn/10 px-3 py-2 text-xs">

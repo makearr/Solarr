@@ -606,7 +606,7 @@ func TestDetachRootFolderFromCategory_RemovesTheAttachment(t *testing.T) {
 	}
 }
 
-// A library added as a kind starts with the kind's profiles and language, and one of no kind its type has is refused.
+// A library added as a kind starts with its type's preferred target (and no profile) and the kind's language, and one of no kind its type has is refused.
 func TestCreateCategory_AKindBringsItsDefaults(t *testing.T) {
 	fixture := newWorksFixture(t)
 	fixture.createUser(t, "admin", settings.RoleAdmin)
@@ -625,13 +625,11 @@ func TestCreateCategory_AKindBringsItsDefaults(t *testing.T) {
 	}
 	snapshot := fixture.cache.Snapshot()
 	category, _ := snapshot.Category(created.ID)
-	var names []string
-	for _, id := range category.QualityProfileIDs {
-		profile, _ := snapshot.QualityProfile(id)
-		names = append(names, profile.Name)
+	if len(category.QualityProfileIDs) != 0 {
+		t.Errorf("profiles = %v, want none: the target is the goal", category.QualityProfileIDs)
 	}
-	if !reflect.DeepEqual(names, []string{"Anime 1080p", "WEB 1080p"}) {
-		t.Errorf("profiles = %v, want the kind's, best first, the unknown one left out", names)
+	if category.QualityTarget == nil || category.QualityTarget.Label != settings.PreferredTargetLabel || category.QualityTarget.MediaType != "tv" {
+		t.Errorf("target = %+v, want the shipped preferred target of the type", category.QualityTarget)
 	}
 	if category.LanguageProfileID == nil {
 		t.Fatalf("no language profile, want the kind's")
