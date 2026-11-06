@@ -284,6 +284,9 @@ type QualityTarget struct {
 	MaxFrameRate      sql.NullFloat64
 	Chapters          int64
 	Builtin           int64
+	ProfileID         sql.NullInt64
+	EncoderTune       string
+	Deinterlace       int64
 }
 
 type RootFolder struct {
@@ -306,6 +309,29 @@ type RootFolder struct {
 	OfflineAuto       int64
 	OfflineReason     sql.NullString
 	SeenEntries       int64
+}
+
+type TargetProfile struct {
+	ID                int64
+	Name              string
+	MediaTypes        string
+	Description       string
+	Resolution        string
+	VideoCodec        string
+	FrameRate         sql.NullFloat64
+	MaxFrameRate      sql.NullFloat64
+	Crf               sql.NullFloat64
+	EncoderPreset     string
+	EncoderTune       string
+	Deinterlace       int64
+	AudioCodec        string
+	AudioChannels     string
+	AudioBitrateKbps  sql.NullInt64
+	SampleRateHz      sql.NullInt64
+	BitDepth          sql.NullInt64
+	BitrateKbps       sql.NullInt64
+	RecommendedTarget string
+	Builtin           int64
 }
 
 type UserCategoryAccess struct {

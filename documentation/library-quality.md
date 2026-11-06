@@ -45,6 +45,12 @@ enough: the shipped profiles have no gates, so every release "passes" every one 
   (resolution, codec, CRF and video bitrate weigh most; a number loses a quarter per half-octave away; a part the probe or
   release name does not state is left out). A library file shows "82% of the target" with the gaps on hover; a candidate's
   decision carries a zero-point `target-closeness` component. The closeness ranks nothing; the tiers below do.
+  **Content profiles** (migration 0064; Quality profiles > Content profiles) are what kind of material a target is for:
+  video 4K, Sports, Anime, Old movies, TV series, Cartoon, CRT / VHS; audio Radio, CD, Lossless, Spoken, Spoken (mono).
+  A profile carries suggested settings (resolution, CRF, encoder tune such as animation or grain, deinterlace, channels, rates)
+  and the shipped target that fits it and is nearest the preferred "Space conscious" settings. A target picks one and
+  "Apply its recommended settings" fills the form; every number stays editable. Encoder tune is stored for the transcode;
+  a deinterlace target counts an interlaced file as short of it. 480p, 576p and CD-quality presets were added for them.
   Two checkboxes shape how a target ranks what is found (`judge.WithTarget`): **Prefer over** (transcoding brings quality
   down, never up) ranks the resolutions above the target (the nearest first) before the ones below it, whatever the profile
   lists, and ranks a bitrate, frame rate or similar number above its ideal before any below it, however near the lower one is

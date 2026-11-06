@@ -46,6 +46,7 @@ type Querier interface {
 	CreateQualityProfile(ctx context.Context, arg CreateQualityProfileParams) (QualityProfile, error)
 	CreateQualityTarget(ctx context.Context, arg CreateQualityTargetParams) (int64, error)
 	CreateRootFolder(ctx context.Context, arg CreateRootFolderParams) (RootFolder, error)
+	CreateTargetProfile(ctx context.Context, arg CreateTargetProfileParams) (int64, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (AppUser, error)
 	DeleteAPIKey(ctx context.Context, id int64) error
 	DeleteArrInstance(ctx context.Context, id int64) error
@@ -64,6 +65,7 @@ type Querier interface {
 	DeleteQualityProfile(ctx context.Context, id int64) error
 	DeleteQualityTarget(ctx context.Context, id int64) error
 	DeleteRootFolder(ctx context.Context, id int64) error
+	DeleteTargetProfile(ctx context.Context, id int64) error
 	DeleteUser(ctx context.Context, id int64) error
 	DetachRootFolderFromCategory(ctx context.Context, arg DetachRootFolderFromCategoryParams) error
 	GetArrInstance(ctx context.Context, id int64) (ArrInstance, error)
@@ -113,6 +115,7 @@ type Querier interface {
 	ListQualityProfiles(ctx context.Context) ([]QualityProfile, error)
 	ListQualityTargets(ctx context.Context) ([]QualityTarget, error)
 	ListRootFolders(ctx context.Context) ([]RootFolder, error)
+	ListTargetProfiles(ctx context.Context) ([]TargetProfile, error)
 	ListUsers(ctx context.Context) ([]AppUser, error)
 	RecordDiscoveryJobRun(ctx context.Context, arg RecordDiscoveryJobRunParams) error
 	RevokeCategoryAccess(ctx context.Context, arg RevokeCategoryAccessParams) error
@@ -186,6 +189,7 @@ type Querier interface {
 	UpdateNamingProfile(ctx context.Context, arg UpdateNamingProfileParams) error
 	UpdateQualityProfile(ctx context.Context, arg UpdateQualityProfileParams) error
 	UpdateQualityTarget(ctx context.Context, arg UpdateQualityTargetParams) error
+	UpdateTargetProfile(ctx context.Context, arg UpdateTargetProfileParams) error
 	UpsertCalendarFeed(ctx context.Context, arg UpsertCalendarFeedParams) error
 	UpsertCategoryFileManagement(ctx context.Context, arg UpsertCategoryFileManagementParams) error
 }

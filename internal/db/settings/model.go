@@ -171,6 +171,38 @@ type QualityTarget struct {
 	Chapters      bool
 	// Builtin marks a preset Solarr shipped; it is editable like any other.
 	Builtin bool
+	// ProfileID is the content profile the target is tuned for; EncoderTune ("animation", "grain") and Deinterlace
+	// are what an encode of it would use, and a deinterlace target counts an interlaced file as short of it.
+	ProfileID   *int64
+	EncoderTune string
+	Deinterlace bool
+}
+
+// TargetProfile is a kind of material (anime, sports, CD) with the settings that suit it, and the shipped target
+// that fits it best; a target is made from one, or tuned for it, and stays editable afterwards.
+type TargetProfile struct {
+	ID          int64
+	Name        string
+	MediaTypes  []string
+	Description string
+	// The suggested settings; a part left empty is not suggested.
+	Resolution       string
+	VideoCodec       string
+	FrameRate        float64
+	MaxFrameRate     float64
+	CRF              float64
+	EncoderPreset    string
+	EncoderTune      string
+	Deinterlace      bool
+	AudioCodec       string
+	AudioChannels    string
+	AudioBitrateKbps *int64
+	SampleRateHz     int64
+	BitDepth         int64
+	BitrateKbps      *int64
+	// RecommendedTarget is the name of the target, among each media type's, that fits the profile and is nearest the preferred settings.
+	RecommendedTarget string
+	Builtin           bool
 }
 
 // NamingProfile is one library's naming, Lidarr's shape: a template per slot the media type

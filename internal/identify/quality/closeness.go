@@ -149,6 +149,13 @@ func Distance(target settings.QualityTarget, file score.FileFacts) (closeness Cl
 		}
 		add("CRF", formatNumber(target.CRF), formatNumber(file.CRF), 1.5, value)
 	}
+	if target.Deinterlace && file.ScanType != "" {
+		value := 0.0
+		if !strings.EqualFold(file.ScanType, "interlaced") {
+			value = 1
+		}
+		add("scan type", "progressive", file.ScanType, 1, value)
+	}
 	if len(target.AudioLanguages) > 0 && len(file.AudioLanguages) > 0 {
 		value := 0.0
 		if shares(target.AudioLanguages, file.AudioLanguages) {

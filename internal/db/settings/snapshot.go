@@ -22,6 +22,7 @@ type Snapshot struct {
 	accessByUser         map[int64]map[int64]Permission
 	qualityProfileByID   map[int64]QualityProfile
 	qualityTargets       []QualityTarget
+	targetProfiles       []TargetProfile
 	languageProfileByID  map[int64]LanguageProfile
 	exclusionPatternByID map[int64]ExclusionPattern
 }

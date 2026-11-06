@@ -4586,11 +4586,17 @@ type QualityTarget struct {
 	// Crf The constant rate factor a file's encoder settings state; a file at or below it meets it, one that states none is not held against it. 0 or absent when it does not care.
 	Crf *float32 `json:"crf,omitempty"`
 
+	// Deinterlace An encode of this quality deinterlaces; an interlaced file counts as short of it.
+	Deinterlace *bool `json:"deinterlace,omitempty"`
+
 	// Description Free text about what the target is for.
 	Description *string `json:"description,omitempty"`
 
 	// EncoderPreset The encoder speed preset an encode of this quality uses, e.g. slower; empty when none.
 	EncoderPreset *string `json:"encoder_preset,omitempty"`
+
+	// EncoderTune The encoder tune an encode of this quality uses, e.g. animation or grain; empty when none.
+	EncoderTune *string `json:"encoder_tune,omitempty"`
 
 	// FrameRate Frames a second, within 2 %; 24 meets 23.976. 0 or absent when it does not care.
 	FrameRate *float32 `json:"frame_rate,omitempty"`
@@ -4618,6 +4624,9 @@ type QualityTarget struct {
 
 	// PreferOver More quality beats less: a release above the target ranks before one below it, and overshooting a number costs less than undershooting it.
 	PreferOver *bool `json:"prefer_over,omitempty"`
+
+	// ProfileId The content profile the target is tuned for; absent when none.
+	ProfileId *int64 `json:"profile_id,omitempty"`
 
 	// Resolution A video library's target resolution, e.g. 1080p; empty when it does not care.
 	Resolution *string `json:"resolution,omitempty"`
@@ -5408,6 +5417,38 @@ type TargetGap struct {
 	Dimension string `json:"dimension"`
 	Have      string `json:"have"`
 	Want      string `json:"want"`
+}
+
+// TargetProfile A kind of material with the settings that suit it, and the shipped target that fits it best.
+type TargetProfile struct {
+	AudioBitrateKbps *int64  `json:"audio_bitrate_kbps,omitempty"`
+	AudioChannels    *string `json:"audio_channels,omitempty"`
+	AudioCodec       *string `json:"audio_codec,omitempty"`
+	BitDepth         *int64  `json:"bit_depth,omitempty"`
+
+	// BitrateKbps An audio library's bitrate.
+	BitrateKbps   *int64   `json:"bitrate_kbps,omitempty"`
+	Builtin       *bool    `json:"builtin,omitempty"`
+	Crf           *float32 `json:"crf,omitempty"`
+	Deinterlace   *bool    `json:"deinterlace,omitempty"`
+	Description   *string  `json:"description,omitempty"`
+	EncoderPreset *string  `json:"encoder_preset,omitempty"`
+	EncoderTune   *string  `json:"encoder_tune,omitempty"`
+	FrameRate     *float32 `json:"frame_rate,omitempty"`
+
+	// Id Absent when creating.
+	Id           *int64   `json:"id,omitempty"`
+	MaxFrameRate *float32 `json:"max_frame_rate,omitempty"`
+
+	// MediaTypes The media types it is meant for.
+	MediaTypes []string `json:"media_types"`
+	Name       string   `json:"name"`
+
+	// RecommendedTarget The name of the target, among each media type's, that fits the profile and is nearest the preferred settings.
+	RecommendedTarget *string `json:"recommended_target,omitempty"`
+	Resolution        *string `json:"resolution,omitempty"`
+	SampleRateHz      *int64  `json:"sample_rate_hz,omitempty"`
+	VideoCodec        *string `json:"video_codec,omitempty"`
 }
 
 // TestDownloaderRequest defines model for TestDownloaderRequest.
@@ -7346,6 +7387,12 @@ type EditTagJSONRequestBody EditTagJSONBody
 // MergeTagJSONRequestBody defines body for MergeTag for application/json ContentType.
 type MergeTagJSONRequestBody MergeTagJSONBody
 
+// CreateTargetProfileJSONRequestBody defines body for CreateTargetProfile for application/json ContentType.
+type CreateTargetProfileJSONRequestBody = TargetProfile
+
+// UpdateTargetProfileJSONRequestBody defines body for UpdateTargetProfile for application/json ContentType.
+type UpdateTargetProfileJSONRequestBody = TargetProfile
+
 // CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
 type CreateUserJSONRequestBody CreateUserJSONBody
 
@@ -8269,6 +8316,18 @@ type ServerInterface interface {
 	// Fold this tag into another of its genre tree: works, aliases and children move over, its name becomes an alias. Administrator only.
 	// (POST /tags/{id}/merge)
 	MergeTag(w http.ResponseWriter, r *http.Request, id int64)
+	// Every content profile (anime, sports, CD ...) with its recommended settings.
+	// (GET /targetprofiles)
+	ListTargetProfiles(w http.ResponseWriter, r *http.Request)
+	// Add a content profile. Administrator only.
+	// (POST /targetprofiles)
+	CreateTargetProfile(w http.ResponseWriter, r *http.Request)
+	// Remove a content profile; the targets tuned for it lose the link only. Administrator only.
+	// (DELETE /targetprofiles/{id})
+	DeleteTargetProfile(w http.ResponseWriter, r *http.Request, id int64)
+	// Replace a content profile; the targets tuned for it keep their own settings. Administrator only.
+	// (PUT /targetprofiles/{id})
+	UpdateTargetProfile(w http.ResponseWriter, r *http.Request, id int64)
 	// Every account, with its role and category grants.
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request)
@@ -10126,6 +10185,30 @@ func (_ Unimplemented) EditTag(w http.ResponseWriter, r *http.Request, id int64)
 // Fold this tag into another of its genre tree: works, aliases and children move over, its name becomes an alias. Administrator only.
 // (POST /tags/{id}/merge)
 func (_ Unimplemented) MergeTag(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every content profile (anime, sports, CD ...) with its recommended settings.
+// (GET /targetprofiles)
+func (_ Unimplemented) ListTargetProfiles(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add a content profile. Administrator only.
+// (POST /targetprofiles)
+func (_ Unimplemented) CreateTargetProfile(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a content profile; the targets tuned for it lose the link only. Administrator only.
+// (DELETE /targetprofiles/{id})
+func (_ Unimplemented) DeleteTargetProfile(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace a content profile; the targets tuned for it keep their own settings. Administrator only.
+// (PUT /targetprofiles/{id})
+func (_ Unimplemented) UpdateTargetProfile(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -19565,6 +19648,116 @@ func (siw *ServerInterfaceWrapper) MergeTag(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// ListTargetProfiles operation middleware
+func (siw *ServerInterfaceWrapper) ListTargetProfiles(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTargetProfiles(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateTargetProfile operation middleware
+func (siw *ServerInterfaceWrapper) CreateTargetProfile(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateTargetProfile(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteTargetProfile operation middleware
+func (siw *ServerInterfaceWrapper) DeleteTargetProfile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteTargetProfile(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateTargetProfile operation middleware
+func (siw *ServerInterfaceWrapper) UpdateTargetProfile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateTargetProfile(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -22291,6 +22484,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/tags/{id}/merge", wrapper.MergeTag)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/targetprofiles", wrapper.ListTargetProfiles)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/targetprofiles", wrapper.CreateTargetProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/targetprofiles/{id}", wrapper.DeleteTargetProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/targetprofiles/{id}", wrapper.UpdateTargetProfile)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/users", wrapper.ListUsers)

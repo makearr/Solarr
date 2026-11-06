@@ -4715,6 +4715,74 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
 
+  /targetprofiles:
+    get:
+      operationId: listTargetProfiles
+      tags: [settings]
+      summary: Every content profile (anime, sports, CD ...) with its recommended settings.
+      responses:
+        "200":
+          description: The profiles, by name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TargetProfile" }
+        "401": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createTargetProfile
+      tags: [settings]
+      summary: Add a content profile. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TargetProfile" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TargetProfile" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /targetprofiles/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      operationId: updateTargetProfile
+      tags: [settings]
+      summary: Replace a content profile; the targets tuned for it keep their own settings. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TargetProfile" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TargetProfile" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteTargetProfile
+      tags: [settings]
+      summary: Remove a content profile; the targets tuned for it lose the link only. Administrator only.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /languageprofiles:
     get:
       operationId: listLanguageProfiles
@@ -8719,6 +8787,35 @@ components:
         max_frame_rate: { type: number, description: 'A cap on the frame rate when it follows the source, e.g. 60; 0 or absent when none.' }
         chapters: { type: boolean, description: Chapter marks are wanted. }
         builtin: { type: boolean, readOnly: true, description: A preset Solarr shipped; it can be edited like any other. }
+        profile_id: { type: integer, format: int64, description: The content profile the target is tuned for; absent when none. }
+        encoder_tune: { type: string, description: 'The encoder tune an encode of this quality uses, e.g. animation or grain; empty when none.' }
+        deinterlace: { type: boolean, description: An encode of this quality deinterlaces; an interlaced file counts as short of it. }
+
+    TargetProfile:
+      type: object
+      required: [name, media_types]
+      description: A kind of material with the settings that suit it, and the shipped target that fits it best.
+      properties:
+        id: { type: integer, format: int64, description: Absent when creating. }
+        name: { type: string }
+        media_types: { type: array, items: { type: string }, description: The media types it is meant for. }
+        description: { type: string }
+        resolution: { type: string }
+        video_codec: { type: string }
+        frame_rate: { type: number }
+        max_frame_rate: { type: number }
+        crf: { type: number }
+        encoder_preset: { type: string }
+        encoder_tune: { type: string }
+        deinterlace: { type: boolean }
+        audio_codec: { type: string }
+        audio_channels: { type: string }
+        audio_bitrate_kbps: { type: integer, format: int64 }
+        sample_rate_hz: { type: integer, format: int64 }
+        bit_depth: { type: integer, format: int64 }
+        bitrate_kbps: { type: integer, format: int64, description: An audio library's bitrate. }
+        recommended_target: { type: string, description: 'The name of the target, among each media type''s, that fits the profile and is nearest the preferred settings.' }
+        builtin: { type: boolean, readOnly: true }
 
     RecycleBinContents:
       type: object

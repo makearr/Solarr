@@ -3010,6 +3010,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/targetprofiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every content profile (anime, sports, CD ...) with its recommended settings. */
+        get: operations["listTargetProfiles"];
+        put?: never;
+        /** Add a content profile. Administrator only. */
+        post: operations["createTargetProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/targetprofiles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace a content profile; the targets tuned for it keep their own settings. Administrator only. */
+        put: operations["updateTargetProfile"];
+        post?: never;
+        /** Remove a content profile; the targets tuned for it lose the link only. Administrator only. */
+        delete: operations["deleteTargetProfile"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/languageprofiles": {
         parameters: {
             query?: never;
@@ -5661,6 +5699,51 @@ export interface components {
             /** @description Chapter marks are wanted. */
             chapters?: boolean;
             /** @description A preset Solarr shipped; it can be edited like any other. */
+            readonly builtin?: boolean;
+            /**
+             * Format: int64
+             * @description The content profile the target is tuned for; absent when none.
+             */
+            profile_id?: number;
+            /** @description The encoder tune an encode of this quality uses, e.g. animation or grain; empty when none. */
+            encoder_tune?: string;
+            /** @description An encode of this quality deinterlaces; an interlaced file counts as short of it. */
+            deinterlace?: boolean;
+        };
+        /** @description A kind of material with the settings that suit it, and the shipped target that fits it best. */
+        TargetProfile: {
+            /**
+             * Format: int64
+             * @description Absent when creating.
+             */
+            id?: number;
+            name: string;
+            /** @description The media types it is meant for. */
+            media_types: string[];
+            description?: string;
+            resolution?: string;
+            video_codec?: string;
+            frame_rate?: number;
+            max_frame_rate?: number;
+            crf?: number;
+            encoder_preset?: string;
+            encoder_tune?: string;
+            deinterlace?: boolean;
+            audio_codec?: string;
+            audio_channels?: string;
+            /** Format: int64 */
+            audio_bitrate_kbps?: number;
+            /** Format: int64 */
+            sample_rate_hz?: number;
+            /** Format: int64 */
+            bit_depth?: number;
+            /**
+             * Format: int64
+             * @description An audio library's bitrate.
+             */
+            bitrate_kbps?: number;
+            /** @description The name of the target, among each media type's, that fits the profile and is nearest the preferred settings. */
+            recommended_target?: string;
             readonly builtin?: boolean;
         };
         RecycleBinContents: {
@@ -14864,6 +14947,107 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    listTargetProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The profiles, by name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TargetProfile"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    createTargetProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TargetProfile"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TargetProfile"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    updateTargetProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TargetProfile"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TargetProfile"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteTargetProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     listLanguageProfiles: {

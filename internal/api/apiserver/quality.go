@@ -237,6 +237,7 @@ func qualityTargetView(target settings.QualityTarget) gen.QualityTarget {
 	}
 	view.PreferOver, view.IgnoreBelow = &target.PreferOver, &target.IgnoreBelow
 	view.Label, view.Description, view.EncoderPreset = &target.Label, &target.Description, &target.EncoderPreset
+	view.ProfileId, view.EncoderTune, view.Deinterlace = target.ProfileID, &target.EncoderTune, &target.Deinterlace
 	view.Chapters, view.Builtin = &target.Chapters, &target.Builtin
 	if target.SampleRateHz > 0 {
 		view.SampleRateHz = &target.SampleRateHz
@@ -271,6 +272,7 @@ func qualityTargetFromBody(body gen.QualityTarget) settings.QualityTarget {
 		SampleRateHz: derefOr(body.SampleRateHz, 0), BitDepth: derefOr(body.BitDepth, 0),
 		EncoderPreset: strings.ToLower(strings.TrimSpace(derefOr(body.EncoderPreset, ""))),
 		MaxFrameRate:  float64(derefOr(body.MaxFrameRate, 0)), Chapters: derefOr(body.Chapters, false),
+		ProfileID: body.ProfileId, EncoderTune: strings.ToLower(strings.TrimSpace(derefOr(body.EncoderTune, ""))), Deinterlace: derefOr(body.Deinterlace, false),
 	}
 }
 

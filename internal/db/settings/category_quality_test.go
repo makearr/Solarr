@@ -315,3 +315,47 @@ func TestShippedTargets_EveryMediaTypeHasOneSpaceConsciousPresetAndAllValidate(t
 		t.Errorf("space conscious presets = %v, want %v", labelled, want)
 	}
 }
+
+func TestShippedTargetProfiles_EachRecommendsATargetOfEveryMediaTypeItServes(t *testing.T) {
+	cache, _ := newCache(t)
+	snapshot := cache.Snapshot()
+	if got := len(snapshot.TargetProfiles()); got != 12 {
+		t.Fatalf("shipped content profiles = %d, want 12", got)
+	}
+	named := map[string]bool{}
+	for _, target := range snapshot.QualityTargets() {
+		named[target.MediaType+"\x00"+target.Name] = true
+	}
+	for _, profile := range snapshot.TargetProfiles() {
+		for _, mediaType := range profile.MediaTypes {
+			if !named[mediaType+"\x00"+profile.RecommendedTarget] {
+				t.Errorf("profile %q recommends %q, which %s has not", profile.Name, profile.RecommendedTarget, mediaType)
+			}
+		}
+	}
+}
+
+func TestTargetProfile_CreateUpdateAndDeleteKeepTheTargetsTunedForIt(t *testing.T) {
+	cache, _ := newCache(t)
+	created, err := cache.CreateTargetProfile(t.Context(), settings.TargetProfile{Name: "Documentary", MediaTypes: []string{"tv"}, Resolution: "1080p", CRF: 25})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cache.CreateTargetProfile(t.Context(), settings.TargetProfile{Name: "documentary", MediaTypes: []string{"tv"}}); err == nil {
+		t.Error("a second profile with the same name was accepted")
+	}
+	if _, err := cache.CreateTargetProfile(t.Context(), settings.TargetProfile{Name: "Empty"}); err == nil {
+		t.Error("a profile for no media type was accepted")
+	}
+	target, err := cache.CreateQualityTarget(t.Context(), settings.QualityTarget{Name: "Doc target", MediaType: "tv", Resolution: "1080p", ProfileID: &created.ID, EncoderTune: "film", Deinterlace: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.DeleteTargetProfile(t.Context(), created.ID); err != nil {
+		t.Fatal(err)
+	}
+	kept, found := cache.Snapshot().QualityTarget(target.ID)
+	if !found || kept.ProfileID != nil || kept.EncoderTune != "film" || !kept.Deinterlace {
+		t.Errorf("target after its profile was deleted = %+v, want it kept without the link", kept)
+	}
+}

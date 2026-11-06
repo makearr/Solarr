@@ -9,6 +9,8 @@ import { useMediaTypes } from "@/lib/useMediaTypes";
 import { Button, RemoveButton } from "@/ui/Button";
 import { inputStyle } from "@/ui/form";
 
+import { applyProfile } from "@/lib/targetProfile";
+
 import { LanguagePicker } from "./LanguagePicker";
 import { Card } from "./SettingsCard";
 
@@ -20,12 +22,13 @@ const AUDIO_MEDIA = new Set(["music", "audiobook", "podcast"]);
 const MEDIA_TYPES = ["music", "tv", "movie", "audiobook", "podcast", "youtube", "news", "book", "comic", "rom", "adult"];
 
 // ffprobe's own codec names, which is what the probe measures files by.
-const AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac", "alac"] as const;
+export const AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac", "alac"] as const;
 const LOSSLESS = new Set(["flac", "alac"]);
 const AUDIO_FILE_TYPES: [string, string][] = [["m4a", ".m4a"], ["m4b", ".m4b"], ["mp3", ".mp3"], ["opus", ".opus"], ["ogg", ".ogg"], ["flac", ".flac"]];
 const DOCUMENT_FILE_TYPES: [string, string][] = [["epub", "EPUB (.epub)"], ["pdf", "PDF (.pdf)"], ["azw3", "Kindle (.azw3)"], ["mobi", "Mobi (.mobi)"], ["cbz", "Comic archive (.cbz)"]];
 const DOCUMENT_MEDIA = new Set(["book", "comic"]);
-const ENCODER_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"] as const;
+export const ENCODER_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"] as const;
+export const ENCODER_TUNES = ["animation", "grain", "film", "stillimage", "fastdecode", "zerolatency"] as const;
 const AUDIO_CHANNEL_LAYOUTS = ["1.0", "2.0"] as const;
 const SAMPLE_RATES: [number, string][] = [[44100, "44.1 kHz"], [48000, "48 kHz"], [88200, "88.2 kHz"], [96000, "96 kHz"], [192000, "192 kHz"]];
 
@@ -57,10 +60,10 @@ const VIDEO_FILE_TYPES: [string, string][] = [
   ["mkv", "Matroska (.mkv)"], ["mp4", "MP4 (.mp4, .m4v)"], ["avi", "AVI (.avi)"], ["wmv", "Windows Media (.wmv)"], ["mpeg", "MPEG (.mpg, .mpeg)"],
   ["mov", "QuickTime (.mov)"], ["ts", "Transport stream (.ts, .m2ts)"], ["webm", "WebM (.webm)"], ["flv", "Flash video (.flv)"], ["ogm", "Ogg media (.ogm)"],
 ];
-const RESOLUTIONS = ["2160p", "1080p", "720p", "576p", "480p"] as const;
-const VIDEO_CODECS = ["h265", "h264", "av1", "vp9", "mpeg2"] as const;
+export const RESOLUTIONS = ["2160p", "1080p", "720p", "576p", "480p"] as const;
+export const VIDEO_CODECS = ["h265", "h264", "av1", "vp9", "mpeg2"] as const;
 const HDR_FORMATS = ["sdr", "hdr10", "hdr10plus", "dolby-vision", "hlg"] as const;
-const VIDEO_AUDIO = ["aac", "eac3", "ac3", "dts", "truehd", "flac", "opus"] as const;
+export const VIDEO_AUDIO = ["aac", "eac3", "ac3", "dts", "truehd", "flac", "opus"] as const;
 const CHANNEL_LAYOUTS = ["1.0", "2.0", "2.1", "5.1", "7.1"] as const;
 const FRAME_RATES: [number, string][] = [[24, "24 (23.976)"], [25, "25"], [30, "30 (29.97)"], [50, "50"], [60, "60 (59.94)"]];
 
@@ -72,7 +75,7 @@ function blankTarget(mediaType: string): QualityTarget {
     : { name: "", media_type: mediaType, audio_codec: "", container: "", tolerance_pct: 0, resolution: "1080p", video_codec: "h265" };
 }
 
-function Pick({
+export function Pick({
   label, value, options, onChange, any = "any",
 }: {
   label: string;
@@ -99,7 +102,7 @@ function Pick({
   );
 }
 
-function Num({
+export function Num({
   label, value, onChange, hint, width = "w-28", step,
 }: {
   label: string;
@@ -180,6 +183,11 @@ function TargetFields({ target, onChange }: { target: QualityTarget; onChange: (
           <Num label="Frame rate cap" value={target.max_frame_rate || undefined} width="w-24" onChange={(max_frame_rate) => set({ max_frame_rate })} hint="When the frame rate follows the source, never above this" />
           <Pick label="Colour depth" value={target.bit_depth ? String(target.bit_depth) : ""} options={["8", "10"]} onChange={(depth) => set({ bit_depth: depth === "" ? undefined : Number(depth) })} />
           <Pick label="Encoder preset" value={target.encoder_preset} options={ENCODER_PRESETS} onChange={(encoder_preset) => set({ encoder_preset })} />
+          <Pick label="Encoder tune" value={target.encoder_tune} options={ENCODER_TUNES} onChange={(encoder_tune) => set({ encoder_tune })} />
+          <label className="flex items-center gap-2 text-sm" title="An encode of this quality deinterlaces; an interlaced file counts as short of it">
+            <input type="checkbox" checked={target.deinterlace ?? false} onChange={(event) => set({ deinterlace: event.target.checked })} />
+            Deinterlace
+          </label>
           <Num label="Video bitrate (kbit/s)" value={target.video_bitrate_kbps} onChange={(video_bitrate_kbps) => set({ video_bitrate_kbps })} hint="A release's size over its length stands in before download" />
           <Num
             label="CRF"
@@ -263,6 +271,9 @@ function TargetFields({ target, onChange }: { target: QualityTarget; onChange: (
 function TargetForm({ initial, onDone, onCancel }: { initial?: QualityTarget; onDone: () => void; onCancel: () => void }) {
   const [target, setTarget] = useState<QualityTarget>(initial ?? blankTarget("tv"));
   const mediaTypes = useMediaTypes();
+  const profiles = useQuery({ queryKey: ["targetProfiles"], queryFn: () => ok(api.GET("/targetprofiles")) });
+  const targets = useQuery({ queryKey: ["qualityTargets"], queryFn: () => ok(api.GET("/qualitytargets")) });
+  const fitting = (profiles.data ?? []).filter((profile) => profile.media_types.includes(target.media_type ?? ""));
   const save = useMutation({
     mutationFn: async () => {
       const { error } = initial?.id
@@ -286,6 +297,29 @@ function TargetForm({ initial, onDone, onCancel }: { initial?: QualityTarget; on
         <button type="button" onClick={() => setTarget({ ...target, name: nameFromSpecs(target) })} className={smallButton} title="Name it after what it asks for">
           Name from specs
         </button>
+        {fitting.length > 0 && (
+          <>
+            <Pick
+              label="Content profile"
+              value={target.profile_id === undefined ? "" : String(target.profile_id)}
+              options={fitting.map((profile): [string, string] => [String(profile.id), profile.name])}
+              onChange={(id) => setTarget({ ...target, profile_id: id === "" ? undefined : Number(id) })}
+              any="none"
+            />
+            <button
+              type="button"
+              disabled={target.profile_id === undefined}
+              onClick={() => {
+                const profile = fitting.find((candidate) => candidate.id === target.profile_id);
+                if (profile) setTarget(applyProfile(target, profile, targets.data ?? []));
+              }}
+              className={smallButton}
+              title="Fill in the settings that suit the profile; you can change every one afterwards"
+            >
+              Apply its recommended settings
+            </button>
+          </>
+        )}
         {!initial && (
           <Pick
             label="For"

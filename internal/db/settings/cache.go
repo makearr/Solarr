@@ -154,6 +154,10 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("settings: list quality targets: %w", err)
 	}
+	targetProfiles, err := c.queries.ListTargetProfiles(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list target profiles: %w", err)
+	}
 	categoryTargets, err := c.queries.ListCategoryTargets(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("settings: list category quality targets: %w", err)
@@ -199,7 +203,7 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 		return nil, err
 	}
 
-	return newSnapshot(
+	snapshot := newSnapshot(
 		convertUsers(users),
 		withMetadataSources(withFileManagement(withQuality(convertCategories(categories, convertNamingProfiles(namingProfiles, namingFormats)),
 			qualityLists, convertQualityTargets(qualityTargets), categoryTargets), fileManagement), metadataSources),
@@ -211,7 +215,9 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 		convertedLanguageProfiles,
 		convertExclusionPatterns(exclusionPatterns),
 		policy,
-	), nil
+	)
+	snapshot.targetProfiles = convertTargetProfiles(targetProfiles)
+	return snapshot, nil
 }
 
 func convertUsers(rows []settingsdb.AppUser) []User {

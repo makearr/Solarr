@@ -27,6 +27,7 @@ type Document struct {
 	Roots             []RootEntry             `yaml:"root_folders,omitempty"`
 	QualityProfiles   []QualityProfileEntry   `yaml:"quality_profiles,omitempty"`
 	QualityTargets    []QualityTargetEntry    `yaml:"quality_targets,omitempty"`
+	TargetProfiles    []TargetProfileEntry    `yaml:"target_profiles,omitempty"`
 	LanguageProfiles  []LanguageProfileEntry  `yaml:"language_profiles,omitempty"`
 	ExclusionPatterns []ExclusionPatternEntry `yaml:"exclusion_patterns,omitempty"`
 	// Schedules holds each task's stored overrides by task key; a task absent here runs on its defaults.
@@ -352,6 +353,50 @@ type QualityTargetEntry struct {
 	EncoderPreset     string   `yaml:"encoder_preset,omitempty"`
 	MaxFrameRate      float64  `yaml:"max_frame_rate,omitempty"`
 	Chapters          bool     `yaml:"chapters,omitempty"`
+	EncoderTune       string   `yaml:"encoder_tune,omitempty"`
+	Deinterlace       bool     `yaml:"deinterlace,omitempty"`
+	// Profile is the name of the content profile the target is tuned for.
+	Profile string `yaml:"profile,omitempty"`
+}
+
+// TargetProfileEntry is one content profile, matched on its name.
+type TargetProfileEntry struct {
+	Name              string   `yaml:"name"`
+	MediaTypes        []string `yaml:"media_types"`
+	Description       string   `yaml:"description,omitempty"`
+	Resolution        string   `yaml:"resolution,omitempty"`
+	VideoCodec        string   `yaml:"video_codec,omitempty"`
+	FrameRate         float64  `yaml:"frame_rate,omitempty"`
+	MaxFrameRate      float64  `yaml:"max_frame_rate,omitempty"`
+	CRF               float64  `yaml:"crf,omitempty"`
+	EncoderPreset     string   `yaml:"encoder_preset,omitempty"`
+	EncoderTune       string   `yaml:"encoder_tune,omitempty"`
+	Deinterlace       bool     `yaml:"deinterlace,omitempty"`
+	AudioCodec        string   `yaml:"audio_codec,omitempty"`
+	AudioChannels     string   `yaml:"audio_channels,omitempty"`
+	AudioBitrateKbps  *int64   `yaml:"audio_bitrate_kbps,omitempty"`
+	SampleRateHz      int64    `yaml:"sample_rate_hz,omitempty"`
+	BitDepth          int64    `yaml:"bit_depth,omitempty"`
+	BitrateKbps       *int64   `yaml:"bitrate_kbps,omitempty"`
+	RecommendedTarget string   `yaml:"recommended_target,omitempty"`
+}
+
+func (p TargetProfile) entry() TargetProfileEntry {
+	return TargetProfileEntry{
+		Name: p.Name, MediaTypes: p.MediaTypes, Description: p.Description, Resolution: p.Resolution, VideoCodec: p.VideoCodec,
+		FrameRate: p.FrameRate, MaxFrameRate: p.MaxFrameRate, CRF: p.CRF, EncoderPreset: p.EncoderPreset, EncoderTune: p.EncoderTune,
+		Deinterlace: p.Deinterlace, AudioCodec: p.AudioCodec, AudioChannels: p.AudioChannels, AudioBitrateKbps: p.AudioBitrateKbps,
+		SampleRateHz: p.SampleRateHz, BitDepth: p.BitDepth, BitrateKbps: p.BitrateKbps, RecommendedTarget: p.RecommendedTarget,
+	}
+}
+
+func (e TargetProfileEntry) profile() TargetProfile {
+	return TargetProfile{
+		Name: e.Name, MediaTypes: e.MediaTypes, Description: e.Description, Resolution: e.Resolution, VideoCodec: e.VideoCodec,
+		FrameRate: e.FrameRate, MaxFrameRate: e.MaxFrameRate, CRF: e.CRF, EncoderPreset: e.EncoderPreset, EncoderTune: e.EncoderTune,
+		Deinterlace: e.Deinterlace, AudioCodec: e.AudioCodec, AudioChannels: e.AudioChannels, AudioBitrateKbps: e.AudioBitrateKbps,
+		SampleRateHz: e.SampleRateHz, BitDepth: e.BitDepth, BitrateKbps: e.BitrateKbps, RecommendedTarget: e.RecommendedTarget,
+	}
 }
 
 // qualityProfileNames is the library's list, reading an older document's single profile as one.
@@ -526,8 +571,17 @@ func (c *Cache) Export() Document {
 		return document.QualityProfiles[i].Name < document.QualityProfiles[j].Name
 	})
 
+	profileNameByID := map[int64]string{}
+	for _, profile := range snapshot.TargetProfiles() {
+		profileNameByID[profile.ID] = profile.Name
+		document.TargetProfiles = append(document.TargetProfiles, profile.entry())
+	}
 	for _, target := range snapshot.QualityTargets() {
-		document.QualityTargets = append(document.QualityTargets, target.entry())
+		entry := target.entry()
+		if target.ProfileID != nil {
+			entry.Profile = profileNameByID[*target.ProfileID]
+		}
+		document.QualityTargets = append(document.QualityTargets, entry)
 	}
 
 	languageNameByID := make(map[int64]string, len(snapshot.LanguageProfiles()))
@@ -825,6 +879,19 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 		knownQualityProfiles[profile.Name] = true
 	}
 
+	knownTargetProfiles := map[string]bool{}
+	for index, profile := range d.TargetProfiles {
+		where := fmt.Sprintf("target_profiles[%d]", index)
+		for _, problem := range validateTargetProfile(profile.profile(), nil) {
+			problem.Path = where + "." + strings.TrimPrefix(problem.Path, "profile.")
+			problems = append(problems, problem)
+		}
+		if knownTargetProfiles[profile.Name] {
+			problems = append(problems, config.Problem{Path: where, Value: profile.Name, Expectation: "a content profile listed once"})
+		}
+		knownTargetProfiles[profile.Name] = true
+	}
+
 	knownQualityTargets := map[string]bool{}
 	for index, target := range d.QualityTargets {
 		where := fmt.Sprintf("quality_targets[%d]", index)
@@ -1026,6 +1093,10 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 	for _, profile := range snapshot.QualityProfiles() {
 		qualityIDByName[profile.Name] = profile.ID
 	}
+	profileIDByName := make(map[string]int64)
+	for _, profile := range snapshot.TargetProfiles() {
+		profileIDByName[profile.Name] = profile.ID
+	}
 	targetIDByKey := make(map[string]int64)
 	for _, target := range snapshot.QualityTargets() {
 		targetIDByKey[target.MediaType+"\x00"+target.Name] = target.ID
@@ -1065,6 +1136,17 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 			qualityIDByName[profile.Name] = created.ID
 		}
 
+		for _, profile := range document.TargetProfiles {
+			if _, exists := profileIDByName[profile.Name]; exists {
+				continue
+			}
+			id, err := queries.CreateTargetProfile(ctx, profile.profile().createParams())
+			if err != nil {
+				return fmt.Errorf("content profile %q: %w", profile.Name, err)
+			}
+			profileIDByName[profile.Name] = id
+		}
+
 		for _, target := range document.QualityTargets {
 			entry := target.target()
 			if entry.MediaType == "" {
@@ -1073,6 +1155,9 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 			key := entry.MediaType + "\x00" + entry.Name
 			if _, exists := targetIDByKey[key]; exists {
 				continue
+			}
+			if id, named := profileIDByName[target.Profile]; named {
+				entry.ProfileID = &id
 			}
 			id, err := queries.CreateQualityTarget(ctx, entry.createParams())
 			if err != nil {

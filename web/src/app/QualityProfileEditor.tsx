@@ -7,6 +7,7 @@ import { api, ok } from "@/api/client";
 import { LanguageProfiles } from "./LanguageProfiles";
 import { Card } from "./SettingsCard";
 import { QualityTargetsSection } from "./QualityTargets";
+import { TargetProfilesSection } from "./TargetProfiles";
 import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import { useMediaTypes } from "@/lib/useMediaTypes";
@@ -70,6 +71,7 @@ const SAMPLE_RATE_FALLBACK = { min: "44100", ideal: "48000", max: "96000" };
 
 export function QualityProfilesPage() {
   const queryClient = useQueryClient();
+  const tier = useTier();
   const [editing, setEditing] = useState<number | "new" | null>(null);
   const profiles = useQualityProfiles();
   const remove = useMutation({
@@ -154,7 +156,8 @@ export function QualityProfilesPage() {
       <SubTabs
         tabs={[
           { key: "targets", label: "Targets", content: <QualityTargetsSection /> },
-          { key: "profiles", label: "Profiles", content: profileCard },
+          { key: "content", label: "Content profiles", content: <TargetProfilesSection /> },
+          { key: "profiles", label: "Profiles", hidden: !isTierVisible(tier, "expert"), content: profileCard },
           { key: "languages", label: "Languages", content: <LanguageProfiles /> },
         ]}
       />

@@ -39,6 +39,7 @@ func targetFromRow(row settingsdb.QualityTarget) QualityTarget {
 		CRF: row.Crf.Float64, PreferOver: row.PreferOver == 1, IgnoreBelow: row.IgnoreBelow == 1,
 		Label: row.Label, Description: row.Description, SampleRateHz: row.SampleRateHz.Int64, BitDepth: row.BitDepth.Int64,
 		EncoderPreset: row.EncoderPreset, MaxFrameRate: row.MaxFrameRate.Float64, Chapters: row.Chapters == 1, Builtin: row.Builtin == 1,
+		ProfileID: nullInt64Ptr(row.ProfileID), EncoderTune: row.EncoderTune, Deinterlace: row.Deinterlace == 1,
 	}
 }
 
@@ -53,6 +54,7 @@ func (t QualityTarget) createParams() settingsdb.CreateQualityTargetParams {
 		PreferOver: boolToInt(t.PreferOver), IgnoreBelow: boolToInt(t.IgnoreBelow),
 		Label: t.Label, Description: t.Description, SampleRateHz: positiveToNull(t.SampleRateHz), BitDepth: positiveToNull(t.BitDepth),
 		EncoderPreset: t.EncoderPreset, MaxFrameRate: floatToNull(t.MaxFrameRate), Chapters: boolToInt(t.Chapters),
+		ProfileID: int64PtrToNull(t.ProfileID), EncoderTune: t.EncoderTune, Deinterlace: boolToInt(t.Deinterlace),
 	}
 }
 
@@ -67,6 +69,7 @@ func (t QualityTarget) updateParams() settingsdb.UpdateQualityTargetParams {
 		PreferOver: boolToInt(t.PreferOver), IgnoreBelow: boolToInt(t.IgnoreBelow),
 		Label: t.Label, Description: t.Description, SampleRateHz: positiveToNull(t.SampleRateHz), BitDepth: positiveToNull(t.BitDepth),
 		EncoderPreset: t.EncoderPreset, MaxFrameRate: floatToNull(t.MaxFrameRate), Chapters: boolToInt(t.Chapters),
+		ProfileID: int64PtrToNull(t.ProfileID), EncoderTune: t.EncoderTune, Deinterlace: boolToInt(t.Deinterlace),
 	}
 }
 
@@ -79,7 +82,7 @@ func (t QualityTarget) entry() QualityTargetEntry {
 		AudioLanguages: t.AudioLanguages, SubtitleLanguages: t.SubtitleLanguages,
 		AudioBitrateKbps: t.AudioBitrateKbps, VideoBitrateKbps: t.VideoBitrateKbps, FrameRate: t.FrameRate, CRF: t.CRF, PreferOver: t.PreferOver, IgnoreBelow: t.IgnoreBelow,
 		Label: t.Label, Description: t.Description, SampleRateHz: t.SampleRateHz, BitDepth: t.BitDepth, EncoderPreset: t.EncoderPreset,
-		MaxFrameRate: t.MaxFrameRate, Chapters: t.Chapters,
+		MaxFrameRate: t.MaxFrameRate, Chapters: t.Chapters, EncoderTune: t.EncoderTune, Deinterlace: t.Deinterlace,
 	}
 }
 
@@ -92,7 +95,7 @@ func (e QualityTargetEntry) target() QualityTarget {
 		AudioLanguages: e.AudioLanguages, SubtitleLanguages: e.SubtitleLanguages,
 		AudioBitrateKbps: e.AudioBitrateKbps, VideoBitrateKbps: e.VideoBitrateKbps, FrameRate: e.FrameRate, CRF: e.CRF, PreferOver: e.PreferOver, IgnoreBelow: e.IgnoreBelow,
 		Label: e.Label, Description: e.Description, SampleRateHz: e.SampleRateHz, BitDepth: e.BitDepth, EncoderPreset: e.EncoderPreset,
-		MaxFrameRate: e.MaxFrameRate, Chapters: e.Chapters,
+		MaxFrameRate: e.MaxFrameRate, Chapters: e.Chapters, EncoderTune: e.EncoderTune, Deinterlace: e.Deinterlace,
 	}
 }
 
