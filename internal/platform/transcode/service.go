@@ -85,6 +85,15 @@ func (s *Service) Capabilities() []Capability {
 	return append([]Capability(nil), s.found...)
 }
 
+// FrameDecodeArgs is the hwaccel input options for a one-frame decode under the hardware policy; nil decodes on the processor.
+func (s *Service) FrameDecodeArgs(hardware, device string) []string {
+	resolution := s.Resolve(hardware, device)
+	if resolution.Accel == Software {
+		return nil
+	}
+	return DecodeArgs(Capability{Accel: resolution.Accel, Device: resolution.Device}, true)
+}
+
 // Available reports whether ffmpeg is there at all.
 func (s *Service) Available() bool { return s.runner.Lookup(ffmpeg) == nil }
 

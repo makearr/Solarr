@@ -40,6 +40,14 @@ type Subprocess struct {
 	runner Runner
 	// slots bound the processes running at once, shared by concurrent calls: storage pays per file.
 	slots chan struct{}
+	// decodeArgs gives the GPU decode input options for a frame read, nil for the processor; set once before use.
+	decodeArgs func() []string
+}
+
+// WithHardwareDecode lets frame reads decode on a GPU, falling back to the processor when that fails.
+func (s *Subprocess) WithHardwareDecode(args func() []string) *Subprocess {
+	s.decodeArgs = args
+	return s
 }
 
 // New builds it. A nil runner takes the real one; parallelism at or below zero takes

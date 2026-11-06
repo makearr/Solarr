@@ -207,6 +207,7 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 		transcoder: transcode.NewService(mediatool.ExecRunner{}, transcode.ExecPiper{}, fsys),
 	}
 	defer running.close()
+	running.tool = mediatool.New(nil, 0).WithHardwareDecode(running.frameDecodeArgs)
 
 	if err := running.openDatabases(ctx); err != nil {
 		return err
@@ -1081,4 +1082,10 @@ func (p *process) detectTranscodeHardware(ctx context.Context) {
 		p.logger.Info("transcode encoder", slog.String("accel", string(found.Accel)), slog.String("device", found.Device),
 			slog.String("name", found.Name), slog.Bool("working", found.Working), slog.String("detail", found.Detail))
 	}
+}
+
+// frameDecodeArgs is the GPU decode option for reading one video frame, under the player's hardware setting.
+func (p *process) frameDecodeArgs() []string {
+	policy := p.cache.Snapshot().StreamingSettings()
+	return p.transcoder.FrameDecodeArgs(policy.Hardware, policy.Device)
 }

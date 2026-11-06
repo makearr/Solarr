@@ -168,10 +168,23 @@ func (s *Subprocess) frameAt(ctx context.Context, path string, at time.Duration)
 	bounded, cancel := context.WithTimeout(ctx, perFileTimeout)
 	defer cancel()
 
-	output, err := s.runner.Run(bounded, ffmpegBinary,
-		"-v", "error", "-protocol_whitelist", "file", "-ss", strconv.FormatFloat(at.Seconds(), 'f', 3, 64), "-i", path,
+	args := []string{"-v", "error", "-protocol_whitelist", "file"}
+	rest := []string{"-ss", strconv.FormatFloat(at.Seconds(), 'f', 3, 64), "-i", path,
 		"-an", "-sn", "-frames:v", "1", "-vf", fmt.Sprintf("scale=%d:%d:flags=area,format=gray", phashSide, phashSide),
-		"-f", "rawvideo", "pipe:1")
+		"-f", "rawvideo", "pipe:1"}
+	var output []byte
+	var err error
+	if s.decodeArgs != nil {
+		if hardware := s.decodeArgs(); len(hardware) > 0 {
+			output, err = s.runner.Run(bounded, ffmpegBinary, slices.Concat(args, hardware, rest)...)
+			if err != nil || len(output) != phashSide*phashSide {
+				output, err = nil, errors.New("hardware decode failed")
+			}
+		}
+	}
+	if output == nil {
+		output, err = s.runner.Run(bounded, ffmpegBinary, slices.Concat(args, rest)...)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("mediatool: frame %s: %w", path, err)
 	}

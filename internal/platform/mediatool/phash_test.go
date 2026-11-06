@@ -1,10 +1,13 @@
 package mediatool
 
 import (
+	"context"
 	"errors"
 	"math/rand"
 	"reflect"
+	"slices"
 	"testing"
+	"time"
 )
 
 func syntheticFrame(seed int64, blobs int) []byte {
@@ -101,5 +104,38 @@ func TestHashOfFrames_ReorderedScenesShareTheMeanButNotTheFrames(t *testing.T) {
 		if got := PerceptualDistance(a.Frames[index].Hash, b.Frames[index].Hash); got < 16 {
 			t.Errorf("slot %d: %d bits apart, want >= 16", index, got)
 		}
+	}
+}
+
+type frameRunner struct {
+	hardwareFails bool
+	calls         [][]string
+}
+
+func (*frameRunner) Lookup(string) error { return nil }
+
+func (r *frameRunner) Run(_ context.Context, _ string, args ...string) ([]byte, error) {
+	r.calls = append(r.calls, args)
+	if r.hardwareFails && slices.Contains(args, "-hwaccel") {
+		return nil, errors.New("vaapi failed")
+	}
+	return make([]byte, phashSide*phashSide), nil
+}
+
+func TestFrameAt_DecodesOnTheGPUAndFallsBackToTheProcessor(t *testing.T) {
+	hardware := func() []string { return []string{"-hwaccel", "vaapi", "-hwaccel_device", "/dev/dri/renderD128"} }
+	good := &frameRunner{}
+	if _, err := New(good, 1).WithHardwareDecode(hardware).frameAt(t.Context(), "/m/a.mkv", time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if len(good.calls) != 1 || !slices.Contains(good.calls[0], "-hwaccel") {
+		t.Fatalf("calls = %v; want one call with -hwaccel", good.calls)
+	}
+	bad := &frameRunner{hardwareFails: true}
+	if _, err := New(bad, 1).WithHardwareDecode(hardware).frameAt(t.Context(), "/m/a.mkv", time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if len(bad.calls) != 2 || slices.Contains(bad.calls[1], "-hwaccel") {
+		t.Fatalf("calls = %v; want the hardware try, then a processor call", bad.calls)
 	}
 }

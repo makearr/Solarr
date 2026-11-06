@@ -288,7 +288,7 @@ func (p *process) probeMeasured(ctx context.Context, absolutePath string) (media
 
 // fingerprintVideo hashes a downloaded video's pictures and reads its length, for the import's duplicate check.
 func (p *process) fingerprintVideo(ctx context.Context, absolutePath string) (mediatool.VideoHash, int64, bool) {
-	hash, err := mediatool.New(nil, 0).PerceptualHash(ctx, absolutePath)
+	hash, err := mediatool.New(nil, 0).WithHardwareDecode(p.frameDecodeArgs).PerceptualHash(ctx, absolutePath)
 	if err != nil {
 		return mediatool.VideoHash{}, 0, false
 	}

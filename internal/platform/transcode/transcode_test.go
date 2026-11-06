@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/transcode"
 )
 
@@ -199,4 +201,82 @@ func TestProbeSource(t *testing.T) {
 	if err != nil || got != want {
 		t.Fatalf("ProbeSource = %+v, %v; want %+v", got, err, want)
 	}
+}
+
+type scriptedRunner struct {
+	hwaccels string
+	fails    map[string]string
+}
+
+func (scriptedRunner) Lookup(string) error { return nil }
+
+func (r scriptedRunner) Run(_ context.Context, _ string, args ...string) ([]byte, error) {
+	if slices.Contains(args, "-hwaccels") {
+		return []byte(r.hwaccels), nil
+	}
+	for _, arg := range args {
+		if message, ok := r.fails[arg]; ok {
+			return nil, errors.New(message)
+		}
+	}
+	return nil, nil
+}
+
+func TestDetect_WithoutRenderDeviceSaysHowToPassOne(t *testing.T) {
+	found := transcode.Detect(context.Background(), scriptedRunner{}, memWithNode(t, false))
+	if len(found) != 1 || found[0].Working || !strings.Contains(found[0].Detail, "--device /dev/dri") {
+		t.Fatalf("Detect = %+v; want one failed entry naming --device /dev/dri", found)
+	}
+}
+
+func TestDetect_FfmpegWithoutVAAPIFailsBeforeTrying(t *testing.T) {
+	fsys := memWithNode(t, true)
+	found := transcode.Detect(context.Background(), scriptedRunner{hwaccels: "Hardware acceleration methods:\ncuda\n"}, fsys)
+	if len(found) == 0 || found[0].Working || found[0].Detail != "this ffmpeg was built without vaapi" {
+		t.Fatalf("Detect = %+v; want the missing-vaapi reason", found)
+	}
+}
+
+func TestDetect_WorkingNodeIsFoundAndFailureGetsPermissionHint(t *testing.T) {
+	fsys := memWithNode(t, true)
+	found := transcode.Detect(context.Background(), scriptedRunner{hwaccels: "Hardware acceleration methods:\nvaapi\nqsv\n"}, fsys)
+	best, ok := transcode.Best(found)
+	if !ok || best.Accel != transcode.VAAPI || best.Device != "/dev/dri/renderD128" {
+		t.Fatalf("Best = %+v, %v; want the working VAAPI node", best, ok)
+	}
+	failing := scriptedRunner{fails: map[string]string{"h264_vaapi": "x\nfailed: Permission denied"}}
+	found = transcode.Detect(context.Background(), failing, fsys)
+	if found[0].Working || !strings.Contains(found[0].Detail, "render group") {
+		t.Fatalf("Detect = %+v; want the render-group hint", found[0])
+	}
+}
+
+func TestFrameDecodeArgs_FollowsThePolicyAndTheBestEncoder(t *testing.T) {
+	fsys := memWithNode(t, true)
+	service := transcode.NewService(scriptedRunner{}, nil, fsys)
+	service.Detect(context.Background())
+	want := []string{"-hwaccel", "vaapi", "-hwaccel_device", "/dev/dri/renderD128"}
+	if got := service.FrameDecodeArgs("auto", ""); !slices.Equal(got, want) {
+		t.Fatalf("auto = %v; want %v", got, want)
+	}
+	if got := service.FrameDecodeArgs("software", ""); got != nil {
+		t.Fatalf("software = %v; want none", got)
+	}
+}
+
+func memWithNode(t *testing.T, present bool) *fsx.Mem {
+	t.Helper()
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	if !present {
+		return fsys
+	}
+	if err := fsys.MkdirAll("/dev/dri", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writer, err := fsys.Create("/dev/dri/renderD128")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = writer.Close()
+	return fsys
 }

@@ -4,8 +4,11 @@ package transcode
 
 import (
 	"context"
+	"errors"
 	"io"
+	"io/fs"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 
@@ -61,24 +64,74 @@ func Detect(ctx context.Context, runner Runner, fsys fsx.FS) []Capability {
 		return nil
 	}
 	var found []Capability
+	methods := hwaccelMethods(ctx, runner)
 
 	if _, err := fsys.Stat(nvidiaNode); err == nil {
-		found = append(found, try(ctx, runner, Capability{Accel: NVENC, Name: "NVIDIA"}))
+		found = append(found, try(ctx, runner, lacking(methods, "cuda", Capability{Accel: NVENC, Name: "NVIDIA"})))
 	}
-	for _, node := range renderNodes(fsys) {
+	nodes := renderNodes(fsys)
+	if len(nodes) == 0 {
+		found = append(found, Capability{Accel: VAAPI, Name: "GPU", Detail: "no render device: start the container with --device /dev/dri (compose: devices: /dev/dri:/dev/dri)"})
+	}
+	for _, node := range nodes {
 		name := vendorName(fsys, node)
 		device := path.Join(renderDir, node)
 		if name == "NVIDIA" {
 			continue
 		}
+		unreadable := openError(fsys, device)
 		found = append(found,
-			try(ctx, runner, Capability{Accel: VAAPI, Device: device, Name: name}),
+			try(ctx, runner, withAccess(unreadable, lacking(methods, "vaapi", Capability{Accel: VAAPI, Device: device, Name: name}))),
 		)
-		if name == "Intel" {
-			found = append(found, try(ctx, runner, Capability{Accel: QSV, Device: device, Name: name}))
+		if name == "Intel" || name == "GPU" {
+			found = append(found, try(ctx, runner, withAccess(unreadable, lacking(methods, "qsv", Capability{Accel: QSV, Device: device, Name: name}))))
 		}
 	}
 	return found
+}
+
+// hwaccelMethods is what this ffmpeg was built with; nil when it cannot say.
+func hwaccelMethods(ctx context.Context, runner Runner) []string {
+	output, err := runner.Run(ctx, ffmpeg, "-hide_banner", "-hwaccels")
+	if err != nil {
+		return nil
+	}
+	var methods []string
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasSuffix(line, ":") {
+			methods = append(methods, line)
+		}
+	}
+	return methods
+}
+
+// lacking marks a candidate failed up front when ffmpeg names its methods and the one it needs is not among them.
+func lacking(methods []string, method string, capability Capability) Capability {
+	if len(methods) > 0 && !slices.Contains(methods, method) {
+		capability.Detail = "this ffmpeg was built without " + method
+	}
+	return capability
+}
+
+// openError is why a render node cannot be opened by this process, empty when it can.
+func openError(fsys fsx.FS, device string) string {
+	file, err := fsys.Open(device)
+	if err == nil {
+		_ = file.Close()
+		return ""
+	}
+	if errors.Is(err, fs.ErrPermission) {
+		return "no permission on " + device + ": add the container to the host's render group (group_add: the id from getent group render)"
+	}
+	return err.Error()
+}
+
+func withAccess(problem string, capability Capability) Capability {
+	if problem != "" && capability.Detail == "" {
+		capability.Detail = problem
+	}
+	return capability
 }
 
 // Best is the encoder auto takes: the first working one, NVENC then VAAPI then QSV.
@@ -94,9 +147,12 @@ func Best(found []Capability) (Capability, bool) {
 }
 
 func try(ctx context.Context, runner Runner, capability Capability) Capability {
+	if capability.Detail != "" {
+		return capability
+	}
 	_, err := runner.Run(ctx, ffmpeg, probeArgs(capability)...)
 	if err != nil {
-		capability.Detail = lastLine(err.Error())
+		capability.Detail = hint(lastLine(err.Error()))
 		return capability
 	}
 	capability.Working = true
@@ -158,4 +214,29 @@ func vendorName(fsys fsx.FS, node string) string {
 func lastLine(message string) string {
 	lines := strings.Split(strings.TrimSpace(message), "\n")
 	return strings.TrimSpace(lines[len(lines)-1])
+}
+
+// hint appends the usual fix to the two failures a container produces most.
+func hint(line string) string {
+	switch {
+	case strings.Contains(line, "Permission denied"):
+		return line + " (add the container to the host's render group)"
+	case strings.Contains(line, "No such file"):
+		return line + " (pass --device /dev/dri into the container)"
+	}
+	return line
+}
+
+// DecodeArgs are the input options that put frame decoding on the best working GPU; nil means decode on the processor.
+func DecodeArgs(capability Capability, ok bool) []string {
+	if !ok {
+		return nil
+	}
+	switch capability.Accel {
+	case VAAPI, QSV:
+		return []string{"-hwaccel", "vaapi", "-hwaccel_device", capability.Device}
+	case NVENC:
+		return []string{"-hwaccel", "cuda"}
+	}
+	return nil
 }

@@ -60,7 +60,15 @@ the render group fails the try and the reason is shown on Settings → Player.
 `auto` takes the first working one in that order. Settings → Player can force an encoder, name the render device
 or turn hardware off; a forced encoder that never worked falls back to the processor and says so. 
 
+Frame reads for perceptual hashing (import and the video probe) decode on the same GPU (`-hwaccel`, same hardware
+setting) and retry on the processor if that fails. Detection also reports why nothing was found: no `/dev/dri` in the
+container, no permission on the render node, or an ffmpeg built without the method. Settings → Player shows the reason
+per encoder and has Detect again.
+
 ### Giving the container a GPU
+
+The container needs the device and a group that may open it: `docker run --device /dev/dri --group-add $(getent group render | cut -d: -f3)`.
+The image carries `intel-media-driver`, `onevpl-intel-gpu` (x86), `mesa-va-gallium` and `libva-utils` (`vainfo`).
 
 ```yaml
 services:
