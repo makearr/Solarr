@@ -12,7 +12,7 @@ import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 import {
-  buildAudioRules, buildVideoRules, containerOf, parseAudioRules, parseVideoRules, summarise, type AudioRules, type Range, type VideoRules,
+  buildAudioRules, buildVideoRules, containerOf, parseAudioRules, parseVideoRules, summarise, SUGGESTED_SIZES, type AudioRules, type Range, type SizeRange, type VideoRules,
 } from "@/lib/qualityRules";
 import { useQualityProfiles } from "@/lib/resources";
 import { isTierVisible, useTier } from "@/lib/useTier";
@@ -361,6 +361,7 @@ function VideoRulesForm({ rules, onChange }: { rules: VideoRules; onChange: (rul
           A release shows no bitrate before download, so its size over the episode's length stands in for it; the probe measures the real one afterwards.
         </p>
       </fieldset>
+      <SizeRanges rules={rules} onChange={(patch) => set(patch)} />
       <LanguagePicker
         label="Prefer files with these audio languages"
         help="A tie-breaker between equal releases, never a gate."
@@ -509,6 +510,68 @@ function AudioRulesForm({ rules, onChange }: { rules: AudioRules; onChange: (rul
 }
 
 /** Release groups a profile favours, as chips; typing several separated by commas adds them all. */
+/** Radarr's size limits per quality: MB a minute, refused below the minimum or above the maximum. */
+function SizeRanges({ rules, onChange }: { rules: VideoRules; onChange: (patch: Partial<VideoRules>) => void }) {
+  const used = new Set(rules.sizes.map((size) => size.resolution));
+  const change = (index: number, patch: Partial<SizeRange>) => onChange({ sizes: rules.sizes.map((size, at) => (at === index ? { ...size, ...patch } : size)) });
+  const cell = `${input} w-20`;
+  return (
+    <fieldset className="flex flex-col gap-2 text-xs">
+      <legend className="mb-1 font-medium">Size limits per quality (MB a minute)</legend>
+      {rules.sizes.length > 0 && (
+        <table className="w-full max-w-md text-left">
+          <thead className="text-ink-muted">
+            <tr>
+              <th className="pb-1 font-normal">Quality</th>
+              <th className="pb-1 font-normal">Minimum</th>
+              <th className="pb-1 font-normal">Preferred</th>
+              <th className="pb-1 font-normal">Maximum</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rules.sizes.map((size, index) => (
+              <tr key={size.resolution}>
+                <td className="pr-2">{RESOLUTIONS[size.resolution] ?? size.resolution}</td>
+                {(["min", "preferred", "max"] as const).map((field) => (
+                  <td key={field} className="pr-2 pb-1">
+                    <input aria-label={`${size.resolution} ${field}`} type="number" min={0} value={size[field]} placeholder="none" onChange={(event) => change(index, { [field]: event.target.value })} className={cell} />
+                  </td>
+                ))}
+                <td>
+                  <RemoveButton aria-label={`Remove the ${size.resolution} size limits`} onClick={() => onChange({ sizes: rules.sizes.filter((_, at) => at !== index) })} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <select value="" aria-label="Add a quality" onChange={(event) => event.target.value && onChange({ sizes: [...rules.sizes, { resolution: event.target.value, min: "", preferred: "", max: "" }] })} className={input}>
+          <option value="">Add a quality…</option>
+          {Object.keys(RESOLUTIONS).filter((name) => !used.has(name) && name !== "1080i" && name !== "360p").map((name) => (
+            <option key={name} value={name}>
+              {RESOLUTIONS[name]}
+            </option>
+          ))}
+        </select>
+        <button type="button" className={smallButton} onClick={() => onChange({ sizes: SUGGESTED_SIZES.map((size) => ({ ...size })) })}>
+          Use the suggested limits
+        </button>
+        {rules.sizes.length > 0 && (
+          <label className="flex items-center gap-1 text-ink-muted">
+            <input type="checkbox" checked={rules.rankBySize} onChange={(event) => onChange({ rankBySize: event.target.checked })} />
+            Rank nearer the preferred size first
+          </label>
+        )}
+      </div>
+      <p className="text-ink-muted">
+        A release shows its size over the episode's or film's length, so a release smaller than the minimum (starved) or larger than the maximum (bloated) is refused. One whose length is not known is not refused.
+      </p>
+    </fieldset>
+  );
+}
+
 function PreferredGroups({ value, onChange }: { value: string[]; onChange: (groups: string[]) => void }) {
   const [typed, setTyped] = useState("");
   const addGroups = () => {

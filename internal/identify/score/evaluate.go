@@ -8,7 +8,7 @@ func Evaluate(profile Profile, facts Facts, preferred []string) model.Decision {
 	distances := resolveTargets(profile.Targets, facts)
 	bitrate := distances["bitrate"]
 
-	gates, rejections, deferrals, outcome := evaluateGates(profile.Require, profile.Tiers, bitrate.target, bitrate.hasTarget, facts)
+	gates, rejections, deferrals, outcome := evaluateGates(profile.Require, profile.Tiers, bitrate.target, bitrate.hasTarget, distances["overall_bitrate"], facts)
 	vector := buildQualityVector(profile.Compare, profile.Tiers, facts, distances)
 	components := evaluateScoring(profile.Scoring, facts, preferred)
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
@@ -158,6 +159,13 @@ func (s *Server) libraryQualityView(category settings.Category) gen.LibraryQuali
 		if warning := targetOutsideProfiles(snapshot, view.Profiles, targetFacts(*target)); warning != "" {
 			view.Warnings = append(view.Warnings, warning)
 		}
+		if warning := targetOutsideFirstProfile(snapshot, view.Profiles, targetFacts(*target)); warning != "" {
+			view.Warnings = append(view.Warnings, warning)
+		}
+		if len(view.Warnings) > 0 {
+			suggested := suggestTargets(snapshot, category, view.Profiles)
+			view.SuggestedTargets = &suggested
+		}
 	}
 	return view
 }
@@ -182,6 +190,67 @@ func targetOutsideProfiles(snapshot *settings.Snapshot, profiles []gen.QualityPr
 	return fmt.Sprintf("The target falls in none of this library's quality profiles (%s).", strings.Join(reasons, "; "))
 }
 
+// targetOutsideFirstProfile warns when the library's first profile, the one it wants most, would not take the target
+// although a later one does; the target should sit inside the profile the library leads with.
+func targetOutsideFirstProfile(snapshot *settings.Snapshot, profiles []gen.QualityProfileRef, facts score.Facts) string {
+	if len(profiles) < 2 {
+		return ""
+	}
+	accepts, known, reason := quality.ProfileAccepts(snapshot, profiles[0].Id, facts)
+	if !known || accepts {
+		return ""
+	}
+	return fmt.Sprintf("The target is outside the first profile, %s (%s), so downloads aimed at it are judged by a later one.", profiles[0].Name, reason)
+}
+
+// suggestedTargetCount is how many replacement targets a warning offers.
+const suggestedTargetCount = 3
+
+// suggestTargets are the library's media type's targets the first profile accepts, the nearest the preferred
+// ("Space conscious", else the library's own) settings first; empty when the library has no profile to fit.
+func suggestTargets(snapshot *settings.Snapshot, category settings.Category, profiles []gen.QualityProfileRef) []gen.QualityProfileRef {
+	suggested := []gen.QualityProfileRef{}
+	if len(profiles) == 0 {
+		return suggested
+	}
+	var preferred *settings.QualityTarget
+	for _, candidate := range snapshot.QualityTargets() {
+		if candidate.MediaType == category.MediaType && candidate.Label == settings.PreferredTargetLabel {
+			preferred = &candidate
+			break
+		}
+	}
+	if preferred == nil {
+		preferred = category.QualityTarget
+	}
+	type fit struct {
+		ref  gen.QualityProfileRef
+		near int
+	}
+	var fits []fit
+	for _, candidate := range snapshot.QualityTargets() {
+		if candidate.MediaType != category.MediaType || (category.QualityTarget != nil && candidate.ID == category.QualityTarget.ID) {
+			continue
+		}
+		facts := targetFacts(candidate)
+		if accepts, known, _ := quality.ProfileAccepts(snapshot, profiles[0].Id, facts); !known || !accepts {
+			continue
+		}
+		near := 0
+		if preferred != nil {
+			if closeness, ok := quality.Distance(*preferred, facts.File); ok {
+				near = closeness.Percent
+			}
+		}
+		fits = append(fits, fit{ref: gen.QualityProfileRef{Id: candidate.ID, Name: candidate.Name}, near: near})
+	}
+	sort.SliceStable(fits, func(i, j int) bool { return fits[i].near > fits[j].near })
+	for _, one := range fits[:min(len(fits), suggestedTargetCount)] {
+		suggested = append(suggested, one.ref)
+	}
+	return suggested
+}
+
 func lowerAll(values []string) []string {
 	var out []string
 	for _, value := range values {
@@ -195,9 +264,18 @@ func lowerAll(values []string) []string {
 // targetFacts is the target as the file facts a profile judges.
 func targetFacts(target settings.QualityTarget) score.Facts {
 	facts := score.Facts{File: score.FileFacts{
-		AudioCodec: target.AudioCodec, Extension: target.Container, Lossless: target.BitrateKbps == nil && target.AudioCodec != "",
+		AudioCodec: target.AudioCodec, Extension: target.Container, Lossless: target.BitrateKbps == nil && target.AudioCodec != "" && !target.IsVideo(),
 		Resolution: target.Resolution, VideoCodec: target.VideoCodec, HDR: target.HDR, AudioChannels: target.AudioChannels,
+		FrameRate: target.FrameRate, CRF: target.CRF, SampleRate: int(target.SampleRateHz), BitDepth: int(target.BitDepth),
 	}}
+	if target.VideoBitrateKbps != nil {
+		facts.File.VideoBitrate = *target.VideoBitrateKbps * 1000
+		facts.File.OverallBitrate = facts.File.VideoBitrate
+	}
+	if target.AudioBitrateKbps != nil && target.IsVideo() {
+		facts.File.AudioBitrate = *target.AudioBitrateKbps * 1000
+		facts.File.OverallBitrate += facts.File.AudioBitrate
+	}
 	if target.BitrateKbps != nil {
 		facts.File.AudioBitrate = *target.BitrateKbps * 1000
 		facts.File.OverallBitrate = facts.File.AudioBitrate

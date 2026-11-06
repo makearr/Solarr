@@ -8964,6 +8964,10 @@ components:
           type: array
           description: Every target of the library's media type, by name.
           items: { $ref: "#/components/schemas/QualityProfileRef" }
+        suggested_targets:
+          type: array
+          description: When the target lies outside the library's profiles, the targets of its media type that the first profile accepts, nearest the preferred settings first.
+          items: { $ref: "#/components/schemas/QualityProfileRef" }
         warnings:
           type: array
           description: Plain-language notices, e.g. a target the first profile would refuse.

@@ -57,6 +57,19 @@ enough: the shipped profiles have no gates, so every release "passes" every one 
   (a 1080p target takes 4k over 720p; a 1,600 kbit/s target takes 6,000 over 1,500); closeness counts above as met;
   **Ignore everything below the target while anything at or above exists** leaves the
   resolutions below the target unranked, so they win only when nothing at or above is found.
+- **Size limits per quality** (Radarr's quality definitions): a video profile may carry, per resolution, a minimum,
+  preferred and maximum in MB a minute (`targets.overall_bitrate` with `when.resolution`, gate `require.size =
+  "reject_outside_range"`). A release below the minimum (starved) or above the maximum (bloated) is refused; one whose length
+  is not known is not. "Rank nearer the preferred size first" adds `overall_bitrate_distance` to the comparison (off by
+  default: it ranks within equal tiers, so it can make a replacement count as an upgrade). Migration 0065 gives the shipped
+  video profiles (not the Any ones) suggested limits, so a release smaller than a profile's minimum is now refused; the
+  profile form's "Use the suggested limits" fills the same numbers. Music and audiobook ranges are the bitrate ranges the audio form already has.
+- **Quality profiles are an expert setting and target qualities and content profiles advanced ones**, both administrator
+  only: a library's own Quality page shows the profile order at expert and the target choice at advanced.
+- **The target must sit inside the library's profiles.** The Quality screen warns when no profile takes the target, and when the
+  first profile (the one it leads with) does not though a later one does; either way it offers the shipped targets of the media
+  type that the first profile takes, the nearest the preferred "Space conscious" settings first, as one-click choices. A video
+  target's overall bitrate (video plus audio) is checked against the size limits.
 - **The warning** on the Quality screen fires when the target does not fit the first profile.
 
 Files the probe has not measured yet are not judged either way.

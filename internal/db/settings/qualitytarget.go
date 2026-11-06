@@ -99,6 +99,9 @@ func (e QualityTargetEntry) target() QualityTarget {
 	}
 }
 
+// PreferredTargetLabel tags the shipped target that holds the user's own preferred settings.
+const PreferredTargetLabel = "Space conscious"
+
 // AudioMediaTypes are the media types whose target is an audio codec and file type, whatever channel layout it names.
 var AudioMediaTypes = map[string]bool{"music": true, "audiobook": true, "podcast": true}
 

@@ -29,7 +29,10 @@ type Requirements struct {
 	Resolution    *ResolutionRange `json:"resolution,omitempty"`
 	AudioLanguage *AnyOfClause     `json:"audio_language,omitempty"`
 	Bitrate       string           `json:"bitrate,omitempty"` // "reject_below_tier_min"
-	RejectCodecs  []string         `json:"reject_codecs,omitempty"`
+	// Size is "reject_outside_range": the overall bitrate (a size over its length) must lie within the min and max of
+	// the matching "overall_bitrate" target, Radarr's size limits per quality.
+	Size         string   `json:"size,omitempty"`
+	RejectCodecs []string `json:"reject_codecs,omitempty"`
 }
 
 // ResolutionRange bounds are resolved against tiers["resolution"], not a numeric

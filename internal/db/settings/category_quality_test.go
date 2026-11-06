@@ -9,6 +9,7 @@ import (
 	"github.com/goccy/go-yaml"
 
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/score"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
 )
@@ -357,5 +358,22 @@ func TestTargetProfile_CreateUpdateAndDeleteKeepTheTargetsTunedForIt(t *testing.
 	kept, found := cache.Snapshot().QualityTarget(target.ID)
 	if !found || kept.ProfileID != nil || kept.EncoderTune != "film" || !kept.Deinterlace {
 		t.Errorf("target after its profile was deleted = %+v, want it kept without the link", kept)
+	}
+}
+
+func TestShippedVideoProfiles_CarrySizeLimitsThatStillParse(t *testing.T) {
+	cache, _ := newCache(t)
+	limited := 0
+	for _, profile := range cache.Snapshot().QualityProfiles() {
+		rules, err := score.Parse([]byte(profile.RulesJSON))
+		if err != nil {
+			t.Fatalf("profile %q no longer parses: %v", profile.Name, err)
+		}
+		if rules.Require.Size == "reject_outside_range" && len(rules.Targets["overall_bitrate"]) > 0 {
+			limited++
+		}
+	}
+	if limited != 12 {
+		t.Errorf("profiles with size limits = %d, want 12", limited)
 	}
 }

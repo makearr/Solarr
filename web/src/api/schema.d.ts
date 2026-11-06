@@ -5920,6 +5920,8 @@ export interface components {
             target?: components["schemas"]["QualityTarget"];
             /** @description Every target of the library's media type, by name. */
             available_targets?: components["schemas"]["QualityProfileRef"][];
+            /** @description When the target lies outside the library's profiles, the targets of its media type that the first profile accepts, nearest the preferred settings first. */
+            suggested_targets?: components["schemas"]["QualityProfileRef"][];
             /** @description Plain-language notices, e.g. a target the first profile would refuse. */
             warnings: string[];
         };

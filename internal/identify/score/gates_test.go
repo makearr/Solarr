@@ -29,7 +29,7 @@ func TestEvaluateGates_EvaluatesEveryGateNotJustTheFirstFailure(t *testing.T) {
 		AudioLanguages: []string{"ru"}, // fails any_of
 		OverallBitrate: 100,            // fails bitrate_min once a target is picked -- none matches here, so this one passes
 	}}
-	gates, rejections, _, outcome := evaluateGates(seriesRequire(), seriesTiers, Target{}, false, facts)
+	gates, rejections, _, outcome := evaluateGates(seriesRequire(), seriesTiers, Target{}, false, targetResult{}, facts)
 
 	if len(gates) != 4 {
 		t.Fatalf("len(gates) = %d, want 4 (every configured requirement evaluated)", len(gates))
@@ -50,7 +50,7 @@ func TestEvaluateGates_AllPassAccepts(t *testing.T) {
 		OverallBitrate: 8_000_000,
 	}}
 	target := Target{Min: "6Mbps"}
-	gates, rejections, deferrals, outcome := evaluateGates(seriesRequire(), seriesTiers, target, true, facts)
+	gates, rejections, deferrals, outcome := evaluateGates(seriesRequire(), seriesTiers, target, true, targetResult{}, facts)
 
 	if len(gates) != 4 {
 		t.Fatalf("len(gates) = %d, want 4", len(gates))
@@ -78,7 +78,7 @@ func TestEvaluateGates_UnmeasuredFieldDefersRatherThanRejects(t *testing.T) {
 		OverallBitrate: 8_000_000,
 	}}
 	target := Target{Min: "6Mbps"}
-	gates, rejections, deferrals, outcome := evaluateGates(seriesRequire(), seriesTiers, target, true, facts)
+	gates, rejections, deferrals, outcome := evaluateGates(seriesRequire(), seriesTiers, target, true, targetResult{}, facts)
 
 	if len(rejections) != 0 {
 		t.Errorf("rejections = %v, want none (nothing actively failed)", rejections)
@@ -111,7 +111,7 @@ func TestEvaluateGates_FailedBeatsMissingInOutcome(t *testing.T) {
 		OverallBitrate: 8_000_000,
 	}}
 	target := Target{Min: "6Mbps"}
-	_, rejections, deferrals, outcome := evaluateGates(seriesRequire(), seriesTiers, target, true, facts)
+	_, rejections, deferrals, outcome := evaluateGates(seriesRequire(), seriesTiers, target, true, targetResult{}, facts)
 
 	if outcome != model.OutcomeReject {
 		t.Errorf("outcome = %v, want REJECT (an active failure outranks a missing field)", outcome)
@@ -141,5 +141,31 @@ func TestRejectCodecsGate_CaseInsensitive(t *testing.T) {
 	outcome := rejectCodecsGate([]string{"xvid", "divx"}, "XVID", "")
 	if outcome.status != gateFailed {
 		t.Errorf("status = %v, want gateFailed for a case-different match", outcome.status)
+	}
+}
+
+func TestSizeRange_RejectsBelowTheMinimumAndAboveTheMaximumPerQuality(t *testing.T) {
+	profile, err := Parse([]byte(`{"quality_profile":"p","require":{"size":"reject_outside_range"},"compare":["score"],
+		"targets":{"overall_bitrate":[{"when":{"resolution":"1080p"},"min":"15MB/min","ideal":"60MB/min","max":"260MB/min"}]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mbPerMin := func(size float64) int64 { return int64(size * 1_000_000 * 8 / 60) }
+	for _, test := range []struct {
+		name       string
+		resolution string
+		bitrate    int64
+		want       model.Outcome
+	}{
+		{"inside", "1080p", mbPerMin(60), model.OutcomeAccept},
+		{"starved", "1080p", mbPerMin(5), model.OutcomeReject},
+		{"bloated", "1080p", mbPerMin(400), model.OutcomeReject},
+		{"no runtime, so no size", "1080p", 0, model.OutcomeAccept},
+		{"a quality with no range", "720p", mbPerMin(1), model.OutcomeAccept},
+	} {
+		decision := Evaluate(profile, Facts{File: FileFacts{Resolution: test.resolution, OverallBitrate: test.bitrate}}, nil)
+		if decision.Outcome != test.want {
+			t.Errorf("%s: outcome %v, want %v", test.name, decision.Outcome, test.want)
+		}
 	}
 }

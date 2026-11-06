@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -29,6 +30,9 @@ type qualityBody struct {
 	AvailableTargets []struct {
 		Name string `json:"name"`
 	} `json:"available_targets"`
+	SuggestedTargets []struct {
+		Name string `json:"name"`
+	} `json:"suggested_targets"`
 }
 
 func profileIDs(t *testing.T, cache *settings.Cache) map[string]int64 {
@@ -129,6 +133,19 @@ func TestLibraryQuality_SaveAndWarnWhenTheTargetFitsNoProfile(t *testing.T) {
 	}
 	if reread.CutoffProfileID == nil || *reread.CutoffProfileID != ids["Lossy 320"] || len(reread.Warnings) != 1 {
 		t.Errorf("read back: cutoff = %v warnings = %v", reread.CutoffProfileID, reread.Warnings)
+	}
+
+	// Outside the first profile but inside a later one: still a warning, with shipped targets the first profile takes.
+	aac192 := `"target":{"audio_codec":"aac","container":"m4a","bitrate_kbps":192,"tolerance_pct":10}`
+	outside := put("Lossy 320", "Lossless preferred", aac192)
+	if len(outside.Warnings) != 1 || !strings.Contains(outside.Warnings[0], "outside the first profile, Lossy 320") {
+		t.Errorf("aac 192 first in Lossy 320: warnings = %v, want one naming the first profile", outside.Warnings)
+	}
+	if got := names(outside.SuggestedTargets); len(got) == 0 || !slices.Contains(got, "AAC, stereo, 48 kHz, 256 kbit/s, M4A") {
+		t.Errorf("suggested targets = %v, want the shipped AAC 256 among them", got)
+	}
+	if clean := put("Lossy 320", "Lossless preferred", aac); clean.SuggestedTargets != nil {
+		t.Errorf("a target that fits suggested %v", names(clean.SuggestedTargets))
 	}
 }
 

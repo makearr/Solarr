@@ -3539,7 +3539,10 @@ type LibraryQuality struct {
 	// Profiles The library's own list, earlier preferred. Empty means the instance default.
 	Profiles             []QualityProfileRef `json:"profiles"`
 	ProtocolDelayMinutes int64               `json:"protocol_delay_minutes"`
-	Target               *QualityTarget      `json:"target,omitempty"`
+
+	// SuggestedTargets When the target lies outside the library's profiles, the targets of its media type that the first profile accepts, nearest the preferred settings first.
+	SuggestedTargets *[]QualityProfileRef `json:"suggested_targets,omitempty"`
+	Target           *QualityTarget       `json:"target,omitempty"`
 
 	// UpgradesAllowed Lidarr's "Upgrades Allowed". Off, an album with every track is complete whatever its quality: nothing is upgradable and nothing is searched for an upgrade.
 	UpgradesAllowed bool `json:"upgrades_allowed"`

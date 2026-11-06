@@ -163,3 +163,34 @@ describe("video quality rules", () => {
     expect(rebuilt.scoring).toEqual([{ name: "Own rule", score: 3, specs: [] }]);
   });
 });
+
+describe("size limits per quality", () => {
+  const video = '{"quality_profile":"v","compare":["resolution","score"],"tiers":{"resolution":[["1080p"],["720p"]]}}';
+
+  it("writes MB a minute limits as a gate and per-resolution targets, and reads them back", () => {
+    const rules = parseVideoRules(video);
+    rules.sizes = [{ resolution: "1080p", min: "15", preferred: "60", max: "260" }, { resolution: "720p", min: "", preferred: "", max: "130" }];
+    const doc = JSON.parse(buildVideoRules(video, "v", rules));
+    expect(doc.require.size).toBe("reject_outside_range");
+    expect(doc.targets.overall_bitrate).toEqual([
+      { when: { resolution: "1080p" }, min: "15MB/min", ideal: "60MB/min", max: "260MB/min" },
+      { when: { resolution: "720p" }, ideal: "130MB/min", max: "130MB/min" },
+    ]);
+    expect(doc.compare).toEqual(["resolution", "score"]);
+    expect(parseVideoRules(JSON.stringify(doc)).sizes[0]).toEqual({ resolution: "1080p", min: "15", preferred: "60", max: "260" });
+  });
+
+  it("ranks by the preferred size only when asked, and removes everything when the limits go", () => {
+    const rules = parseVideoRules(video);
+    rules.sizes = [{ resolution: "1080p", min: "15", preferred: "60", max: "260" }];
+    rules.rankBySize = true;
+    const ranked = buildVideoRules(video, "v", rules);
+    expect(JSON.parse(ranked).compare).toEqual(["resolution", "overall_bitrate_distance", "score"]);
+    const cleared = parseVideoRules(ranked);
+    cleared.sizes = [];
+    const doc = JSON.parse(buildVideoRules(ranked, "v", cleared));
+    expect(doc.require).toBeUndefined();
+    expect(doc.targets).toBeUndefined();
+    expect(doc.compare).toEqual(["resolution", "score"]);
+  });
+});

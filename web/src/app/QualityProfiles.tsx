@@ -7,6 +7,7 @@ import { api, ok } from "@/api/client";
 import { parseAudioRules } from "@/lib/qualityRules";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaType } from "@/lib/useMediaTypes";
+import { isTierVisible, useTier } from "@/lib/useTier";
 
 import { summariseTarget } from "./QualityTargets";
 import type { components } from "@/api/schema";
@@ -72,6 +73,7 @@ export function videoTargetFromProfile(rulesJSON: string | undefined): QualityTa
 /** A library's quality (2026-09-19, answered 2026-09-24): the profiles it accepts in order of
  *  preference, the cutoff where upgrades stop, and the one target it aims for. */
 function LibraryQualityEditor() {
+  const tier = useTier();
   const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
   const id = categoryId === undefined ? undefined : Number(categoryId);
   const queryClient = useQueryClient();
@@ -141,6 +143,7 @@ function LibraryQualityEditor() {
 
   return (
     <div className="flex flex-col gap-4">
+      {isTierVisible(tier, "expert") && (
       <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
         <h2 className="text-sm font-medium">Profiles, in order of preference</h2>
         <p className="text-xs text-ink-muted">
@@ -212,6 +215,7 @@ function LibraryQualityEditor() {
           </select>
         )}
       </section>
+      )}
 
       <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
         <h2 className="text-sm font-medium">Upgrades</h2>
@@ -276,6 +280,7 @@ function LibraryQualityEditor() {
         </div>
       </section>
 
+      {isTierVisible(tier, "advanced") && (
       <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
         <h2 className="text-sm font-medium">Target quality</h2>
         <p className="text-xs text-ink-muted">
@@ -300,6 +305,7 @@ function LibraryQualityEditor() {
           <p className="text-xs text-ink-muted">{summariseTarget(quality.data.target)}</p>
         )}
       </section>
+      )}
 
       {quality.data.warnings.map((warning) => (
         <p key={warning} className="rounded-md border border-warn/50 bg-warn/10 px-3 py-2 text-xs">
@@ -309,6 +315,16 @@ function LibraryQualityEditor() {
           </Link>
         </p>
       ))}
+      {isTierVisible(tier, "advanced") && (quality.data.suggested_targets ?? []).length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-ink-muted">Targets this library's first profile accepts:</span>
+          {(quality.data.suggested_targets ?? []).map((target) => (
+            <button key={target.id} type="button" onClick={() => setTargetId(target.id)} className="rounded-md border border-border-subtle px-2 py-1 hover:border-accent">
+              {target.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <Button

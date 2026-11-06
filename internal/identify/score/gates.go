@@ -28,7 +28,7 @@ const unmeasuredFact = "unmeasured"
 
 // evaluateGates runs every configured requirement -- never stops at the first
 // failure, so a rejected candidate's UI can show everything wrong at once (ADR-40).
-func evaluateGates(require Requirements, tiers map[string][][]string, target Target, hasTarget bool, facts Facts) (gates []model.GateResult, rejections []model.Rejection, deferrals []model.Deferral, outcome model.Outcome) {
+func evaluateGates(require Requirements, tiers map[string][][]string, target Target, hasTarget bool, size targetResult, facts Facts) (gates []model.GateResult, rejections []model.Rejection, deferrals []model.Deferral, outcome model.Outcome) {
 	var outcomes []gateOutcome
 
 	if require.Resolution != nil {
@@ -39,6 +39,9 @@ func evaluateGates(require Requirements, tiers map[string][][]string, target Tar
 	}
 	if require.Bitrate == "reject_below_tier_min" {
 		outcomes = append(outcomes, bitrateMinimumGate(target, hasTarget, facts.File.OverallBitrate))
+	}
+	if require.Size == "reject_outside_range" {
+		outcomes = append(outcomes, sizeRangeGate(size.target, size.hasTarget, facts.File.OverallBitrate))
 	}
 	if len(require.RejectCodecs) > 0 {
 		outcomes = append(outcomes, rejectCodecsGate(require.RejectCodecs, facts.File.VideoCodec, facts.File.AudioCodec))
@@ -124,6 +127,25 @@ func bitrateMinimumGate(target Target, hasTarget bool, overallBitsPerSecond int6
 		return gateOutcome{result, gatePassed}
 	}
 	return gateOutcome{result, gateFailed}
+}
+
+// sizeRangeGate refuses a size per minute below the matching quality's minimum or above its maximum. A size that could
+// not be worked out (no runtime) or a quality with no range is not held against the release.
+func sizeRangeGate(target Target, hasTarget bool, overallBitsPerSecond int64) gateOutcome {
+	wanted := target.Min + ".." + target.Max
+	if !hasTarget || overallBitsPerSecond <= 0 {
+		return gateOutcome{model.GateResult{Gate: "size_range", Passed: true, Wanted: wanted, Got: "not measured"}, gatePassed}
+	}
+	got := float64(overallBitsPerSecond)
+	result := model.GateResult{Gate: "size_range", Wanted: wanted, Got: fmt.Sprintf("%.1f MB/min", got*60/8/1_000_000)}
+	if minimum, err := parseBitRate(target.Min); target.Min != "" && err == nil && got < minimum {
+		return gateOutcome{result, gateFailed}
+	}
+	if maximum, err := parseBitRate(target.Max); target.Max != "" && err == nil && got > maximum {
+		return gateOutcome{result, gateFailed}
+	}
+	result.Passed = true
+	return gateOutcome{result, gatePassed}
 }
 
 // rejectCodecsGate checks both video and audio codec fields, since "codec" means

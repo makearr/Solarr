@@ -256,6 +256,45 @@ export interface VideoRules {
   frameRate: Range | null;
   /** Languages preferred (a tie-breaker, never a gate) among the audio and the subtitles. */
   languages: LanguagePreferences;
+  /** Radarr's size limits per quality, MB a minute: a release outside min..max is refused. */
+  sizes: SizeRange[];
+  /** Rank the releases of one quality nearer the preferred size first. */
+  rankBySize: boolean;
+}
+
+/** One quality's size limits, in MB a minute; empty min or max is no limit on that side. */
+export interface SizeRange {
+  resolution: string;
+  min: string;
+  preferred: string;
+  max: string;
+}
+
+/** Starting points for each resolution, MB a minute of a whole file (picture and sound). */
+export const SUGGESTED_SIZES: readonly SizeRange[] = [
+  { resolution: "2160p", min: "60", preferred: "200", max: "800" },
+  { resolution: "1080p", min: "15", preferred: "60", max: "260" },
+  { resolution: "720p", min: "8", preferred: "30", max: "130" },
+  { resolution: "576p", min: "4", preferred: "15", max: "80" },
+  { resolution: "480p", min: "3", preferred: "12", max: "60" },
+];
+
+const MB_PER_MIN = /^(\d+(?:\.\d+)?)\s*mb\/min$/i;
+const perMinute = (value: string | undefined): string => MB_PER_MIN.exec(value ?? "")?.[1] ?? "";
+
+function parseSizes(doc: Document): SizeRange[] {
+  return (doc.targets?.overall_bitrate ?? [])
+    .filter((target) => target.when?.resolution)
+    .map((target) => ({ resolution: target.when!.resolution!, min: perMinute(target.min), preferred: perMinute(target.ideal), max: perMinute(target.max) }));
+}
+
+function sizeTargets(sizes: SizeRange[]): Target[] {
+  return sizes.map((size) => ({
+    when: { resolution: size.resolution },
+    ...(size.min ? { min: `${size.min}MB/min` } : {}),
+    ideal: `${size.preferred || size.max || size.min}MB/min`,
+    ...(size.max ? { max: `${size.max}MB/min` } : {}),
+  }));
 }
 
 const VIDEO_TIERS: readonly [keyof VideoRules, string][] = [
@@ -298,6 +337,8 @@ export function parseVideoRules(json: string): VideoRules {
     audioBitrate: range(doc.targets?.audio_bitrate?.[0], "kbps"),
     frameRate: range(doc.targets?.frame_rate?.[0]),
     languages: parseLanguages(doc),
+    sizes: parseSizes(doc),
+    rankBySize: (doc.compare ?? []).includes("overall_bitrate_distance"),
   };
 }
 
@@ -320,9 +361,13 @@ export function buildVideoRules(json: string, name: string, rules: VideoRules): 
     if (value) targets[dimension] = [toTarget(value, unit, targets[dimension]?.[0])];
     else delete targets[dimension];
   }
+  if (rules.sizes.length > 0) targets.overall_bitrate = sizeTargets(rules.sizes);
+  else delete targets.overall_bitrate;
   setOrDrop(doc, "targets", targets);
 
   const require = { ...(doc.require ?? {}) };
+  if (rules.sizes.length > 0) require.size = "reject_outside_range";
+  else delete require.size;
   if (rules.rejectCodecs.length > 0) require.reject_codecs = rules.rejectCodecs;
   else delete require.reject_codecs;
   if (rules.minResolution && rules.maxResolution) require.resolution = { min: rules.minResolution, max: rules.maxResolution };
@@ -334,6 +379,7 @@ export function buildVideoRules(json: string, name: string, rules: VideoRules): 
   let compare = (doc.compare ?? []).filter((entry) => {
     const owner = VIDEO_TIERS.find(([, owned]) => owned === entry);
     const target = VIDEO_TARGETS.find(([, dimension]) => `${dimension}_distance` === entry);
+    if (entry === "overall_bitrate_distance") return rules.rankBySize && rules.sizes.length > 0;
     if (target) return rules[target[0]] !== null;
     return !owner || (rules[owner[0]] as string[][]).length > 0;
   });
@@ -346,6 +392,9 @@ export function buildVideoRules(json: string, name: string, rules: VideoRules): 
     if (rules[key] !== null && !compare.includes(`${dimension}_distance`)) {
       compare = compare.filter((existing) => existing !== "score").concat(`${dimension}_distance`);
     }
+  }
+  if (rules.rankBySize && rules.sizes.length > 0 && !compare.includes("overall_bitrate_distance")) {
+    compare = compare.filter((existing) => existing !== "score").concat("overall_bitrate_distance");
   }
   doc.compare = compare.filter((entry) => entry !== "score").concat("score");
 
