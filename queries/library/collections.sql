@@ -609,3 +609,17 @@ WHERE collection_id = ? ORDER BY work_id;
 
 -- name: DeleteCollectionMemberOrigin :exec
 DELETE FROM collection_member_origin WHERE collection_id = ? AND work_id = ?;
+
+-- What the collection on the other end of every link holds, once from each side, so a list can add linked works up.
+-- name: ListLinkedCollectionCounts :many
+SELECT CAST(x.id AS INTEGER) AS id,
+       CAST((SELECT COUNT(*) FROM collection_member m WHERE m.collection_id = x.other_id AND m.part_id = 0) AS INTEGER) AS other_held,
+       CAST(COALESCE(o.complete_at, 0) AS INTEGER) AS other_total
+FROM (
+  SELECT from_id AS id, to_id AS other_id FROM relationship
+  WHERE kind = 'linked_collection' AND from_type = 'collection' AND to_type = 'collection'
+  UNION ALL
+  SELECT to_id AS id, from_id AS other_id FROM relationship
+  WHERE kind = 'linked_collection' AND from_type = 'collection' AND to_type = 'collection'
+) x JOIN collection o ON o.id = x.other_id
+ORDER BY x.id, x.other_id;

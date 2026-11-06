@@ -55,13 +55,14 @@ function sortOf(franchises: Franchise[], sort: Sort): Franchise[] {
 /** How many works of a collection the library lacks, as far as the providers say. */
 function missingOf(franchise: Franchise): number {
   const held = franchise.members.filter((member) => member.work_id).length;
-  return Math.max((franchise.total ?? held) - held, 0);
+  return Math.max((franchise.total ?? held) - held, 0) + Math.max((franchise.linked_total ?? 0) - (franchise.linked_held ?? 0), 0);
 }
 
 /** "3 / 7 in your library": what the library holds of the works that exist, as far as the providers say (held / held when they say nothing). */
 export function heldLabel(franchise: Franchise): string {
-  const held = franchise.members.filter((member) => member.work_id).length;
-  return t("franchise.held", { held, total: Math.max(franchise.total ?? 0, held) });
+  const own = franchise.members.filter((member) => member.work_id).length;
+  const held = own + (franchise.linked_held ?? 0);
+  return t("franchise.held", { held, total: Math.max(franchise.total ?? 0, own) + Math.max(franchise.linked_total ?? 0, franchise.linked_held ?? 0) });
 }
 
 /** The artists' bar for a collection: the works with a file against the works that exist. */

@@ -328,6 +328,25 @@ func (f Franchises) Links(ctx context.Context, id int64) ([]CollectionLink, erro
 	return out, nil
 }
 
+// LinkedCounts are the works the collections linked with one hold, and the total their providers say they have.
+type LinkedCounts struct{ Held, Total int }
+
+// LinkedCountsByCollection adds up, per collection, what the collections linked with it hold.
+func (f Franchises) LinkedCountsByCollection(ctx context.Context) (map[int64]LinkedCounts, error) {
+	rows, err := librarydb.New(f.store.Read()).ListLinkedCollectionCounts(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("library: linked collection counts: %w", err)
+	}
+	out := make(map[int64]LinkedCounts)
+	for _, row := range rows {
+		sum := out[row.ID]
+		sum.Held += int(row.OtherHeld)
+		sum.Total += int(max(row.OtherTotal, row.OtherHeld))
+		out[row.ID] = sum
+	}
+	return out, nil
+}
+
 // MemberOrigin is why Solarr put a work in a collection.
 type MemberOrigin struct{ Reason, Detail string }
 

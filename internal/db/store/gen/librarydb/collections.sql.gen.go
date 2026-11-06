@@ -1745,6 +1745,50 @@ func (q *Queries) ListLinkableCollections(ctx context.Context) ([]ListLinkableCo
 	return items, nil
 }
 
+const listLinkedCollectionCounts = `-- name: ListLinkedCollectionCounts :many
+SELECT CAST(x.id AS INTEGER) AS id,
+       CAST((SELECT COUNT(*) FROM collection_member m WHERE m.collection_id = x.other_id AND m.part_id = 0) AS INTEGER) AS other_held,
+       CAST(COALESCE(o.complete_at, 0) AS INTEGER) AS other_total
+FROM (
+  SELECT from_id AS id, to_id AS other_id FROM relationship
+  WHERE kind = 'linked_collection' AND from_type = 'collection' AND to_type = 'collection'
+  UNION ALL
+  SELECT to_id AS id, from_id AS other_id FROM relationship
+  WHERE kind = 'linked_collection' AND from_type = 'collection' AND to_type = 'collection'
+) x JOIN collection o ON o.id = x.other_id
+ORDER BY x.id, x.other_id
+`
+
+type ListLinkedCollectionCountsRow struct {
+	ID         int64
+	OtherHeld  int64
+	OtherTotal int64
+}
+
+// What the collection on the other end of every link holds, once from each side, so a list can add linked works up.
+func (q *Queries) ListLinkedCollectionCounts(ctx context.Context) ([]ListLinkedCollectionCountsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLinkedCollectionCounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLinkedCollectionCountsRow{}
+	for rows.Next() {
+		var i ListLinkedCollectionCountsRow
+		if err := rows.Scan(&i.ID, &i.OtherHeld, &i.OtherTotal); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrganisationLinksOfType = `-- name: ListOrganisationLinksOfType :many
 SELECT wo.work_id, wo.organisation_id FROM work_organisation wo JOIN work w ON w.id = wo.work_id WHERE w.media_type = ?
 `

@@ -203,3 +203,32 @@ func TestDismissingAWorkForgetsWhyItJoined(t *testing.T) {
 		t.Errorf("origins after dismissing = %+v", origins)
 	}
 }
+
+func TestLinkedCountsAddUpWhatTheOtherEndHoldsFromBothSides(t *testing.T) {
+	opened, _ := newLibrary(t)
+	series := library.NewSeries(opened)
+	franchises := library.NewFranchises(opened)
+	result, err := series.Upsert(t.Context(), seriesAt, sampleSeries())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tv, err := franchises.Join(t.Context(), "tv", "wikidata", "Q42", "MacGyver", result.WorkID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	films, err := franchises.Join(t.Context(), "movie", "wikidata", "Q42", "MacGyver", result.WorkID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := franchises.LinkCollections(t.Context(), tv, films); err != nil {
+		t.Fatal(err)
+	}
+	got, err := franchises.LinkedCountsByCollection(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[int64]library.LinkedCounts{tv: {Held: 1, Total: 1}, films: {Held: 1, Total: 1}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("counts = %+v, want %+v", got, want)
+	}
+}

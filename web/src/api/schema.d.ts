@@ -6618,6 +6618,10 @@ export interface components {
             /** @description The year of the newest work of it the library holds. */
             newest_year?: number;
             members: components["schemas"]["FranchiseMember"][];
+            /** @description The works the collections linked with this one hold in their libraries. */
+            linked_held?: number;
+            /** @description The works those linked collections have in all */
+            linked_total?: number;
             /** @description The collections of other libraries linked with this one, each with the works it holds there (one collection shown across libraries). */
             links?: components["schemas"]["FranchiseLink"][];
         };

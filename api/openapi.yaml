@@ -9849,6 +9849,8 @@ components:
         members:
           type: array
           items: { $ref: "#/components/schemas/FranchiseMember" }
+        linked_held: { type: integer, description: The works the collections linked with this one hold in their libraries. }
+        linked_total: { type: integer, description: The works those linked collections have in all, as far as their providers say. }
         links:
           type: array
           description: The collections of other libraries linked with this one, each with the works it holds there (one collection shown across libraries).

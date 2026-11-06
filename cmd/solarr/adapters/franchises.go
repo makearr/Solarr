@@ -79,12 +79,19 @@ func (a LibraryFranchises) List(ctx context.Context, categoryID int64) ([]gen.Fr
 			}
 		}
 	}
+	linked, err := a.Store.LinkedCountsByCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
 	views := make([]gen.Franchise, len(rows))
 	for index, row := range rows {
 		if row.PosterURL == "" {
 			row.PosterURL = firstPoster(row.Members)
 		}
 		views[index] = franchiseView(row, nil)
+		if counts, ok := linked[row.ID]; ok {
+			views[index].LinkedHeld, views[index].LinkedTotal = &counts.Held, &counts.Total
+		}
 	}
 	return views, nil
 }
@@ -156,6 +163,13 @@ func (a LibraryFranchises) Get(ctx context.Context, categoryID, franchiseID int6
 		}
 		if len(links) > 0 {
 			view.Links = &links
+			var held, total int
+			for _, link := range links {
+				linkHeld := len(slices.DeleteFunc(slices.Clone(link.Members), func(member gen.FranchiseMember) bool { return member.WorkId == nil }))
+				held += linkHeld
+				total += len(link.Members)
+			}
+			view.LinkedHeld, view.LinkedTotal = &held, &total
 		}
 		return view, nil
 	}

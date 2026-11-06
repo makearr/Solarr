@@ -2628,6 +2628,12 @@ type Franchise struct {
 	// Kind franchise is a provider's, custom was made by hand.
 	Kind FranchiseKind `json:"kind"`
 
+	// LinkedHeld The works the collections linked with this one hold in their libraries.
+	LinkedHeld *int `json:"linked_held,omitempty"`
+
+	// LinkedTotal The works those linked collections have in all
+	LinkedTotal *int `json:"linked_total,omitempty"`
+
 	// Links The collections of other libraries linked with this one, each with the works it holds there (one collection shown across libraries).
 	Links     *[]FranchiseLink  `json:"links,omitempty"`
 	Members   []FranchiseMember `json:"members"`
