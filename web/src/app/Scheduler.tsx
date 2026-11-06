@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Play, Plus, X } from "lucide-react";
 
@@ -7,7 +8,7 @@ import type { components } from "@/api/schema";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import { SubTabs } from "@/ui/SubTabs";
 
-import { taskLoad, WEEK_HOURS } from "./schedulerLoad";
+import { heatColor, parseSortKey, sortTasks, taskLoad, WEEK_HOURS, type SortDirection, type SortKey } from "./schedulerLoad";
 
 type Schedule = components["schemas"]["Schedule"];
 type BackupRetention = components["schemas"]["BackupRetention"];
@@ -122,16 +123,22 @@ export function SchedulerPage() {
 
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
-/** What runs when: a week of hours, darker where more runs fall, from the cadences of every enabled task. */
+/** What runs when: a week of hours, white when idle, green to red by how many tasks share the hour. */
 function Heatmap({ schedules }: { schedules: readonly Schedule[] }) {
+  const [active, setActive] = useState<number | null>(null);
   const tasks = schedules.filter((schedule) => schedule.enabled).map((schedule) => ({ name: schedule.name, load: taskLoad(schedule.cadences) }));
-  const sums = new Array<number>(WEEK_HOURS).fill(0);
-  for (const task of tasks) task.load.forEach((runs, slot) => (sums[slot]! += runs));
-  const busiest = Math.max(1, ...sums);
+  const names = (slot: number) => tasks.filter((task) => task.load[slot]! > 0).map((task) => task.name);
+  const counts = Array.from({ length: WEEK_HOURS }, (_, slot) => names(slot).length);
+  const busiest = Math.max(1, ...counts);
+  const describe = (slot: number) => {
+    const here = names(slot);
+    const label = `${WEEKDAYS[Math.floor(slot / 24)]} ${String(slot % 24).padStart(2, "0")}:00`;
+    return here.length === 0 ? `${label}: nothing runs` : `${label}: ${here.length} ${here.length === 1 ? "task" : "tasks"}, ${here.join(", ")}`;
+  };
   return (
     <section className="flex flex-col gap-2" aria-label="Schedule heatmap">
       <p className="text-xs text-ink-muted">
-        Runs per hour across a week, all enabled tasks together. Darker is busier (up to {Math.round(busiest)} runs in the busiest hour); hover an hour for the tasks in it.
+        Tasks running per hour across a week, all enabled tasks together. Hover or focus an hour to list its tasks.
       </p>
       <div className="overflow-x-auto">
         <table className="border-separate border-spacing-0.5 text-[10px] text-ink-muted">
@@ -151,14 +158,17 @@ function Heatmap({ schedules }: { schedules: readonly Schedule[] }) {
                 <th className="pr-2 text-right font-normal">{WEEKDAYS[weekday]!.slice(0, 3)}</th>
                 {Array.from({ length: 24 }, (_, hour) => {
                   const slot = weekday * 24 + hour;
-                  const runs = sums[slot]!;
-                  const here = tasks.filter((task) => task.load[slot]! > 0).map((task) => task.name);
                   return (
                     <td
                       key={hour}
-                      title={`${WEEKDAYS[weekday]} ${String(hour).padStart(2, "0")}:00, ${Math.round(runs * 10) / 10} runs${here.length ? `: ${here.join(", ")}` : ""}`}
-                      className="h-5 w-6 rounded-sm bg-border-subtle"
-                      style={runs > 0 ? { background: `color-mix(in srgb, var(--color-accent, #3b82f6) ${Math.round(15 + (85 * runs) / busiest)}%, transparent)` } : undefined}
+                      tabIndex={0}
+                      aria-label={describe(slot)}
+                      onMouseEnter={() => setActive(slot)}
+                      onMouseLeave={() => setActive(null)}
+                      onFocus={() => setActive(slot)}
+                      onBlur={() => setActive(null)}
+                      className="h-5 w-6 rounded-sm border border-border-subtle focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+                      style={{ background: heatColor(counts[slot]!, busiest) }}
                     />
                   );
                 })}
@@ -167,13 +177,63 @@ function Heatmap({ schedules }: { schedules: readonly Schedule[] }) {
           </tbody>
         </table>
       </div>
+      <p role="status" className="min-h-8 rounded-md border border-border-subtle bg-surface px-2 py-1 text-xs text-ink">
+        {active === null ? "Hover or focus an hour to see its tasks." : describe(active)}
+      </p>
+      <div className="flex items-center gap-2 text-xs text-ink-muted" role="group" aria-label="Legend">
+        <span className="size-3 rounded-sm border border-border-subtle bg-white" aria-hidden />
+        <span>Nothing runs</span>
+        <span className="ml-2">1 task</span>
+        <span
+          aria-hidden
+          className="h-3 w-24 rounded-sm border border-border-subtle"
+          style={{ background: "linear-gradient(to right, hsl(120 75% 50%), hsl(60 75% 50%), hsl(0 75% 50%))" }}
+        />
+        <span>{busiest} {busiest === 1 ? "task" : "tasks"} (busiest hour)</span>
+      </div>
     </section>
+  );
+}
+
+const SORT_LABELS: readonly { key: SortKey; label: string }[] = [
+  { key: "next", label: "Next run" },
+  { key: "last", label: "Last run" },
+  { key: "duration", label: "Last duration" },
+];
+
+/** Sort control for a task list; the choice lives in the address (`?sort=&dir=`). */
+function SortBar({ sort, direction }: { sort: SortKey | undefined; direction: SortDirection }) {
+  const navigate = useNavigate();
+  const choose = (key: SortKey) => {
+    const next: SortDirection = sort === key && direction === "asc" ? "desc" : "asc";
+    void navigate({ to: ".", replace: true, search: (previous: Record<string, unknown>) => ({ ...previous, sort: key, dir: next }) });
+  };
+  return (
+    <div role="group" aria-label="Sort tasks" className="flex flex-wrap items-center gap-1.5 text-xs text-ink-muted">
+      Sort by
+      {SORT_LABELS.map(({ key, label }) => (
+        <button
+          key={key}
+          type="button"
+          aria-pressed={sort === key}
+          aria-label={sort === key ? `${label}, ${direction === "asc" ? "ascending" : "descending"}` : label}
+          onClick={() => choose(key)}
+          className={`rounded-md border px-2 py-0.5 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+            sort === key ? "border-accent text-ink" : "border-border-subtle"
+          }`}
+        >
+          {label}
+          {sort === key && (direction === "asc" ? " \u2191" : " \u2193")}
+        </button>
+      ))}
+    </div>
   );
 }
 
 export function Scheduler() {
   const queryClient = useQueryClient();
   const tier = useTier();
+  const search = useSearch({ strict: false }) as { sort?: string; dir?: string };
   const schedules = useQuery({
     queryKey: ["schedules"],
     queryFn: () => ok(api.GET("/schedules")),
@@ -204,56 +264,50 @@ export function Scheduler() {
   if (schedules.error !== null) return null;
   const visible = (schedules.data ?? []).filter((schedule) => isTierVisible(tier, schedule.tier));
 
-  const tasks = (
-    <section className="flex flex-col gap-4">
-      <p className="text-xs text-ink-muted">
-        Every periodic action Solarr runs. A task can run at several times; Run now fires at once and
-        is refused, not queued twice, while it is already running.
-      </p>
+  const sort = parseSortKey(search.sort);
+  const direction: SortDirection = search.dir === "desc" ? "desc" : "asc";
 
-      {visible.length === 0 && (
-        <p className="rounded-lg border border-border-subtle bg-surface p-3 text-xs text-ink-muted">
-          No task is registered.
+  const categoryTab = (category: (typeof CATEGORIES)[number]) => {
+    const tasks = sortTasks(
+      visible.filter((schedule) => schedule.category === category.id),
+      sort,
+      direction,
+    );
+    return (
+      <section className="flex flex-col gap-3">
+        <p className="text-xs text-ink-muted">
+          A task can run at several times; Run now fires at once and is refused, not queued twice, while it is already running.
         </p>
-      )}
-
-      {CATEGORIES.map((category) => {
-        const tasks = visible.filter((schedule) => schedule.category === category.id);
-        if (tasks.length === 0) return null;
-        return (
-          <div key={category.id} className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold text-ink">{category.label}</h2>
-            <ul className="flex flex-col gap-2">
-              {tasks.map((schedule) => (
-                <ScheduleRow
-                  key={`${schedule.key}:${schedule.cadences.join("|")}`}
-                  schedule={schedule}
-                  onSaveCadences={(cadences) => update.mutate({ key: schedule.key, cadences })}
-                  onToggleEnabled={() => update.mutate({ key: schedule.key, enabled: !schedule.enabled })}
-                  onToggleStartup={() =>
-                    update.mutate({ key: schedule.key, runAtStartup: !schedule.run_at_startup })
-                  }
-                  onRunNow={() => run.mutate({ key: schedule.key })}
-                  onRunFull={() => run.mutate({ key: schedule.key, full: true })}
-                  busy={update.isPending || run.isPending}
-                />
-              ))}
-            </ul>
-          </div>
-        );
-      })}
-
-      {(update.isError || run.isError) && (
-        <p className="text-xs text-danger">That change was refused.</p>
-      )}
-    </section>
-  );
+        <SortBar sort={sort} direction={direction} />
+        <ul className="flex flex-col gap-2">
+          {tasks.map((schedule) => (
+            <ScheduleRow
+              key={`${schedule.key}:${schedule.cadences.join("|")}`}
+              schedule={schedule}
+              onSaveCadences={(cadences) => update.mutate({ key: schedule.key, cadences })}
+              onToggleEnabled={() => update.mutate({ key: schedule.key, enabled: !schedule.enabled })}
+              onToggleStartup={() => update.mutate({ key: schedule.key, runAtStartup: !schedule.run_at_startup })}
+              onRunNow={() => run.mutate({ key: schedule.key })}
+              onRunFull={() => run.mutate({ key: schedule.key, full: true })}
+              busy={update.isPending || run.isPending}
+            />
+          ))}
+        </ul>
+        {(update.isError || run.isError) && <p className="text-xs text-danger">That change was refused.</p>}
+      </section>
+    );
+  };
 
   return (
     <SubTabs
       tabs={[
         { key: "overview", label: "Overview", content: <Heatmap schedules={visible} /> },
-        { key: "tasks", label: "Tasks", content: tasks },
+        ...CATEGORIES.map((category) => ({
+          key: category.id,
+          label: category.label,
+          hidden: !visible.some((schedule) => schedule.category === category.id),
+          content: categoryTab(category),
+        })),
       ]}
     />
   );

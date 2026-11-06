@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { taskLoad, weekLoad, WEEK_HOURS } from "./schedulerLoad";
+import { heatColor, parseSortKey, sortTasks, taskLoad, weekLoad, WEEK_HOURS } from "./schedulerLoad";
 
 const total = (load: number[]) => load.reduce((sum, runs) => sum + runs, 0);
 
@@ -36,4 +36,37 @@ test("nonsense counts for nothing, and a task adds its cadences", () => {
   expect(total(weekLoad("99 * * * *"))).toBe(0);
   expect(total(taskLoad(["0 1 * * *", "0 2 * * *"]))).toBe(14);
   expect(taskLoad([]).length).toBe(WEEK_HOURS);
+});
+
+test("heat colour: white when idle, green for one task, red at the busiest, yellow between", () => {
+  expect(heatColor(0, 5)).toBe("#ffffff");
+  expect(heatColor(1, 5)).toBe("hsl(120 75% 50%)");
+  expect(heatColor(3, 5)).toBe("hsl(60 75% 50%)");
+  expect(heatColor(5, 5)).toBe("hsl(0 75% 50%)");
+  expect(heatColor(1, 1)).toBe("hsl(120 75% 50%)");
+});
+
+test("tasks sort by next run both ways, missing values last, ties by name", () => {
+  const tasks = [
+    { name: "c", next_run_at: "2026-01-02T00:00:00Z" },
+    { name: "b" },
+    { name: "a", next_run_at: "2026-01-01T00:00:00Z" },
+  ];
+  expect(sortTasks(tasks, "next", "asc").map((t) => t.name)).toEqual(["a", "c", "b"]);
+  expect(sortTasks(tasks, "next", "desc").map((t) => t.name)).toEqual(["c", "a", "b"]);
+  expect(sortTasks(tasks, undefined, "asc").map((t) => t.name)).toEqual(["a", "b", "c"]);
+});
+
+test("tasks sort by last run and by last duration", () => {
+  const tasks = [
+    { name: "x", last_run_at: "2026-01-01T00:00:00Z", last_duration_ms: 50 },
+    { name: "y", last_run_at: "2026-02-01T00:00:00Z", last_duration_ms: 10 },
+  ];
+  expect(sortTasks(tasks, "last", "desc").map((t) => t.name)).toEqual(["y", "x"]);
+  expect(sortTasks(tasks, "duration", "asc").map((t) => t.name)).toEqual(["y", "x"]);
+});
+
+test("sort keys parse strictly", () => {
+  expect(parseSortKey("next")).toBe("next");
+  expect(parseSortKey("bogus")).toBeUndefined();
 });

@@ -45,3 +45,51 @@ export function taskLoad(cadences: readonly string[]): number[] {
   for (const cadence of cadences) weekLoad(cadence).forEach((runs, slot) => (total[slot]! += runs));
   return total;
 }
+
+/** Nothing running is white; one task is green, the busiest slot red, with yellow between. */
+export function heatColor(tasksRunning: number, busiest: number): string {
+  if (tasksRunning <= 0) return "#ffffff";
+  const share = busiest <= 1 ? 0 : Math.min(1, (tasksRunning - 1) / (busiest - 1));
+  return `hsl(${Math.round(120 * (1 - share))} 75% 50%)`;
+}
+
+export type SortKey = "next" | "last" | "duration";
+export type SortDirection = "asc" | "desc";
+
+export const SORT_KEYS: readonly SortKey[] = ["next", "last", "duration"];
+
+export function parseSortKey(value: unknown): SortKey | undefined {
+  return SORT_KEYS.find((key) => key === value);
+}
+
+interface Sortable {
+  name: string;
+  next_run_at?: string | null;
+  last_run_at?: string | null;
+  last_duration_ms?: number | null;
+}
+
+function sortValue(task: Sortable, key: SortKey): number | undefined {
+  const raw = key === "next" ? task.next_run_at : key === "last" ? task.last_run_at : task.last_duration_ms;
+  if (raw === undefined || raw === null || raw === "") return undefined;
+  const value = typeof raw === "number" ? raw : Date.parse(raw);
+  return Number.isNaN(value) ? undefined : value;
+}
+
+/** Sorted copy; tasks without a value (never run, not scheduled) go last in either direction, ties by name. */
+export function sortTasks<T extends Sortable>(tasks: readonly T[], key: SortKey | undefined, direction: SortDirection): T[] {
+  const sorted = [...tasks];
+  sorted.sort((a, b) => {
+    if (key !== undefined) {
+      const left = sortValue(a, key);
+      const right = sortValue(b, key);
+      if (left !== right) {
+        if (left === undefined) return 1;
+        if (right === undefined) return -1;
+        return direction === "asc" ? left - right : right - left;
+      }
+    }
+    return a.name.localeCompare(b.name);
+  });
+  return sorted;
+}
