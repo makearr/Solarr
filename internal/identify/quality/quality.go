@@ -110,8 +110,9 @@ func MeetsTarget(target settings.QualityTarget, file score.FileFacts) bool {
 // frameRateMargin is how far a frame rate may be from the target's: 23.976 is 24 and 29.97 is 30.
 const frameRateMargin = 0.02
 
-// crfMargin is how far above a target CRF a file may be and still meet it: a rounding of the encoder's own setting.
-const crfMargin = 0.5
+// crfMargin is how far above a target CRF a file may be and still meet it: transcodes of one library land at CRF 26 to 30
+// by content and tool, and two points is hardly visible, so a file within it is the quality the target asks for.
+const crfMargin = 2.0
 
 // sampleRateFloor is the share of a target's sample rate below which a file is short of it.
 const sampleRateFloor = 0.9

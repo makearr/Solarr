@@ -32,7 +32,7 @@ enough: the shipped profiles have no gates, so every release "passes" every one 
   picture (resolution, codec, HDR, frame rate, video bitrate and **CRF**), the sound (codec, channels, bitrate, languages)
   and subtitle languages; a part left on "any" is free, and a part the probe could not read is not held against a file.
   **CRF** is read from the encoder settings an x264 or x265 encode writes into the file's first frame (the probe reads the first
-  512 KiB of a video file once); a file at or below the target's CRF meets it, a file that states none is not held against it.
+  512 KiB of a video file once); a file at or below the target's CRF, or up to 2 above it, meets it; a file that states none is not held against it.
   Audio targets keep codec, file type and a bitrate within a tolerance, plus channels (mono or stereo), **sample rate** and
   **bit depth** (music), and **chapter marks** (audiobooks, stored, not yet judged). A video target also stores an **encoder
   preset** (x265 "slower"), a **frame-rate cap** for "source frame rate (max 60)" and a colour depth (stored, not judged).
@@ -131,7 +131,7 @@ A library is full of files already transcoded to the target, in Solarr or by Tda
 encode lands near the target bitrate, not on it (a real library: 1080p at 24 fps from 130 to 7,900 kbit/s, all H.265 AAC MP4).
 So `quality.MeetsTarget` takes the structure (container, codecs, resolution, frame rate, channels, languages) as the
 judgement: a bitrate meets the target from 40 % of it (video, 70 % audio) up, a sample rate from 90 %, a bit depth from the target,
-and CRF at or below. Such a file is **on target**: the item is complete, and `judge.UpgradeBeats` ignores the bitrate
+and a CRF at or below the target or up to 2 above it (a real library encoded at CRF 26 to 30). Such a file is **on target**: the item is complete, and `judge.UpgradeBeats` ignores the bitrate
 distances against it, so no download replaces it for its size. Against a file that is off target a number must be nearer by half
 an octave to count, and equal tiers keep the incumbent. The shipped presets' "30 fps" is a cap (source fps, max 30).
 Ranges per quality stay opt-in; the shipped profiles carry none (migration 0066 took 0065's back).

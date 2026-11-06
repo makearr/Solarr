@@ -63,7 +63,7 @@ func TestMeetsTarget_ChannelsLanguagesBitratesFrameRateAndSeveralFileTypes(t *te
 	}
 }
 
-// A file at or below the target's CRF (the same quality or better) meets it; one that states no CRF is not held against it.
+// A file at or below the target's CRF (the same quality or better), or within two points above it, meets it; one that states no CRF is not held against it.
 func TestMeetsTarget_CRFIsAtOrBelowAndUnknownIsFree(t *testing.T) {
 	target := settings.QualityTarget{CRF: 20}
 	cases := []struct {
@@ -73,8 +73,9 @@ func TestMeetsTarget_CRFIsAtOrBelowAndUnknownIsFree(t *testing.T) {
 	}{
 		{"better than the target", 18, true},
 		{"exactly the target", 20, true},
-		{"within the rounding margin", 20.4, true},
-		{"worse than the target", 23, false},
+		{"within the tolerance", 22, true},
+		{"just past the tolerance", 22.5, false},
+		{"worse than the target", 26, false},
 		{"states none", 0, true},
 	}
 	for _, c := range cases {
