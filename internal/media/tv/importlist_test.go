@@ -50,7 +50,7 @@ func TestListEntriesResolveToTheIDTheSeriesIsAddedBy(t *testing.T) {
 			media.ListMatch{Foreign: true}},
 		{"anilist unknown to skyhook", media.ListEntry{Title: "Nothing Matches", Form: "ONA", IDs: []media.ProviderID{{Provider: "anilist", ExternalID: "13"}}},
 			media.ListMatch{}},
-		{"no id the type knows", media.ListEntry{Title: "X", IDs: []media.ProviderID{{Provider: "trakt", ExternalID: "1"}}}, media.ListMatch{}},
+		{"no id the type knows", media.ListEntry{Title: "X", IDs: []media.ProviderID{{Provider: "letterboxd", ExternalID: "1"}}}, media.ListMatch{}},
 	}
 	for _, c := range cases {
 		got, err := lists.ResolveListEntry(t.Context(), c.entry)

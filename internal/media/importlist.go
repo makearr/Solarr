@@ -5,7 +5,7 @@ import "context"
 // ListType names one kind of import list source (ADR-38); documentation/import-lists.md lists them.
 type ListType string
 
-// The import list sources this build reads; Trakt and IMDb lists are a later source behind the same seam.
+// The import list sources this build reads; IMDb lists are reached through MDBList.
 const (
 	ListAniListSeason ListType = "anilist_season"
 	ListAniListUser   ListType = "anilist_user"

@@ -111,6 +111,6 @@ first run. Editing only the cadence, monitoring, profile or exclusions keeps an 
 
 ## Not yet
 
-MDBList lists read IMDb and Trakt lists indirectly: MDBList imports them under its own account, and its items carry TheTVDB's id, so a TV library adds without a lookup. It needs the MDBList key (Settings, Metadata) and spends one of its 1,000 daily requests per 100 items. IMDb's own list export answers a browser challenge (HTTP 202, empty) to any client without a browser, so it is not read directly. Trakt (watchlist, user lists, trending) is the next source: each is one more `media.ListType`, a
+MDBList lists read IMDb lists indirectly: MDBList imports them under its own account, and its items carry TheTVDB's id, so a TV library adds without a lookup. It needs the MDBList key (Settings, Metadata) and spends one of its 1,000 daily requests per 100 items. IMDb's own list export answers a browser challenge (HTTP 202, empty) to any client without a browser, so it is not read directly. Trakt (watchlist, user lists, trending) is the next source: each is one more `media.ListType`, a
 `Kind` in the catalogue and its client; nothing else changes. Films from these lists wait for the movie type to
 implement `media.ListResolving`.

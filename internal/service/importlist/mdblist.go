@@ -23,7 +23,7 @@ const (
 )
 
 var mdblistFields = []Field{{Key: mdblistListKey, Label: "List", Kind: FieldText, Required: true,
-	Help: "A public MDBList: its number, user/name, or its link https://mdblist.com/lists/... Import an IMDb or Trakt list into MDBList to read it here."}}
+	Help: "A public MDBList: its number, user/name, or its link https://mdblist.com/lists/... Import an IMDb list into MDBList to read it here."}}
 
 // MDBListLists is the MDBList client as its lists need it.
 type MDBListLists interface {
@@ -95,7 +95,7 @@ func (c Catalogue) WithMDBList(client MDBListLists) Catalogue {
 	kinds := append([]Kind(nil), c.kinds...)
 	kinds = append(kinds, Kind{
 		Type: media.ListMDBList, Label: "MDBList list", Fields: mdblistFields, Source: MDBList{Client: client},
-		Help: "A public MDBList list, such as one you imported from IMDb or Trakt there; its films are left out of a TV library.",
+		Help: "A public MDBList list, such as one you imported from IMDb there; its films are left out of a TV library.",
 	})
 	return Catalogue{kinds: kinds}
 }

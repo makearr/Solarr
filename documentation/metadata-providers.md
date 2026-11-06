@@ -57,7 +57,7 @@ then asks nothing; an add or a manual refresh reads its one work and keeps it to
 
 | Project | Source of metadata | Notes |
 |---|---|---|
-| Radarr | its own service (api.radarr.video) over TMDB, with IMDb, Rotten Tomatoes, Metacritic and Trakt ratings | one source, no per-library choice; lists come from TMDB, Trakt, IMDb, Plex |
+| Radarr | its own service (api.radarr.video) over TMDB, with IMDb, Rotten Tomatoes and Metacritic ratings | one source, no per-library choice; lists come from TMDB, IMDb, Plex |
 | Sonarr | SkyHook, its own service over TheTVDB | one source; TVmaze and TMDB are only used for lists |
 | Lidarr | its own service (a MusicBrainz mirror with Wikipedia, Fanart and TheAudioDB data folded in) | one source; Cover Art Archive for covers |
 | Jellyfin | built in: TMDB, OMDb, MusicBrainz, TheAudioDB, local nfo; plugins: TheTVDB, fanart.tv, AniDB, AniList, AniSearch, TVmaze | **a downloader list per library, in order**; Jellyfin documents TMDB, OMDb and local nfo as built in and TheTVDB, fanart.tv and AniDB as catalogue plugins |
@@ -92,7 +92,6 @@ documentation states is from memory and should be checked before relying on it.
 | Wikidata | the ids every other provider knows a series by, franchises (part of the series, media franchise, spin-off, follows) | yes | first by default; collections of series |
 | TheXEM | scene numbering (TheTVDB's episode to the scene's), scene names | yes | no key; switched on or off, no place in the order ([tv-internals.md](tv-internals.md)) |
 | AniDB, Kitsu, MyAnimeList | anime titles, episodes, relations, ratings | no | AniDB bans heavy clients |
-| Trakt | lists, ratings, calendars, related shows | no | a key; popular lists |
 | IMDb datasets | ratings, episode lists, crew | no | files, not an API |
 | fanart.tv | clear logos, banners, HD art, season posters | no | a free key |
 | OMDb | ratings (IMDb, Rotten Tomatoes), English plots | no | a key |
@@ -102,14 +101,13 @@ documentation states is from memory and should be checked before relying on it.
 | Provider | Carries | Built | Notes |
 |---|---|---|---|
 | TMDB | overview, cast and crew, releases and certification by country, studios, keywords, translations, **collections**, artwork | yes | a free key |
-| Radarr's metadata service | TMDB's films with IMDb, Rotten Tomatoes, Metacritic and Trakt ratings, release dates, collections | yes | no key; the fallback behind TMDB |
+| Radarr's metadata service | TMDB's films with IMDb, Rotten Tomatoes and Metacritic ratings, release dates, collections | yes | no key; the fallback behind TMDB |
 | Wikidata | the ids TMDB and IMDb know a film by | yes | first by default; no key |
 | MDBList | ratings of IMDb, TMDB, Trakt, Letterboxd, Rotten Tomatoes, Metacritic in one call | yes | a free key, 1,000 requests a day |
-| Trakt | ratings, related films, lists | no | a free key |
 | TheTVDB (movies) | English overview, genres, runtime, posters, backgrounds, banners, clear logos, remote ids | yes | Solarr's own key; found by IMDb id, else TMDB's |
 | OMDb | IMDb, Rotten Tomatoes and Metacritic ratings, the full English plot | yes | a free key, 1,000 requests a day |
 | fanart.tv | clear logos, clear art, disc art, banners, backgrounds (best liked, English first) | yes | a free personal key |
-| Trakt, Letterboxd, IMDb lists | lists to import from, not metadata | no | import lists, not built yet; AniList and TMDB lists are ([import-lists.md](import-lists.md)) |
+| Letterboxd, IMDb lists | lists to import from, not metadata | no | import lists, not built yet; AniList and TMDB lists are ([import-lists.md](import-lists.md)) |
 
 ## Books and audiobooks
 

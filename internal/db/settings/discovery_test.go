@@ -60,7 +60,7 @@ func createDiscoveryJob(t *testing.T, opened *store.Store, name string) settings
 	var job settingsdb.DiscoveryJob
 	writeSettings(t, opened, func(ctx context.Context, q *settingsdb.Queries) error {
 		row, err := q.CreateDiscoveryJob(ctx, settingsdb.CreateDiscoveryJobParams{
-			Name: name, SourceJson: `{"kind":"list","provider":"trakt","list":"trending"}`,
+			Name: name, SourceJson: `{"kind":"list","provider":"tmdb","list":"trending"}`,
 			FiltersJson: `{}`, LimitPerRun: 10, Action: "request",
 		})
 		job = row
