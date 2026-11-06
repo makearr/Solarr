@@ -35,7 +35,7 @@ test("an image without a source shows the title's initial in its shape", () => {
   expect([placeholder.textContent, placeholder.className.includes("rounded-full")]).toEqual(["A", true]);
 });
 
-test("the toolbar search hands on what was typed once, trimmed, after the typing pauses", () => {
+test("the toolbar search hands on what was typed once, keeping a trailing space, after the typing pauses", () => {
   vi.useFakeTimers();
   const change = vi.fn();
   render(<ToolbarSearch value="" onChange={change} placeholder="Name starts with…" label="Filter by name" />);
@@ -45,7 +45,7 @@ test("the toolbar search hands on what was typed once, trimmed, after the typing
   expect(change).not.toHaveBeenCalled();
   act(() => void vi.advanceTimersByTime(250));
   vi.useRealTimers();
-  expect(change.mock.calls).toEqual([["blue"]]);
+  expect(change.mock.calls).toEqual([["blue "]]);
 });
 
 test("the toolbar sort names its direction and turns it round", () => {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -87,21 +88,27 @@ func (s Search) Works(
 	return results, nil
 }
 
-// buildMatchQuery turns raw user input into a safe FTS5 MATCH expression. The whole
-// input becomes one quoted phrase, so none of FTS5's own query syntax -- AND/OR/NOT,
-// "-token" negation, column filters -- reaches a title that happens to contain those
-// characters; only a literal double quote needs escaping. The trailing "*" makes the
-// last, possibly still-being-typed, word a prefix match, matching the incremental
-// search the 250ms debounce implies. ok is false for input below FTS5's own workable
-// minimum, which an empty MATCH would otherwise fail on as a syntax error rather than
-// answer with no results.
+// buildMatchQuery turns raw input into a safe FTS5 MATCH expression: every word is its own quoted
+// phrase (so FTS5 syntax never reaches a title) and all must match, in any order. The last word is a
+// prefix unless the input ends in a space, which means that word is finished ("Kat " is not "Kate").
 func buildMatchQuery(raw string) (query string, ok bool) {
-	trimmed := strings.TrimSpace(raw)
-	if utf8.RuneCountInString(trimmed) < 2 {
+	if utf8.RuneCountInString(strings.TrimSpace(raw)) < 2 {
 		return "", false
 	}
-	escaped := strings.ReplaceAll(trimmed, `"`, `""`)
-	return `"` + escaped + `"*`, true
+	var words []string
+	for _, field := range strings.Fields(raw) {
+		if strings.IndexFunc(field, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }) < 0 {
+			continue
+		}
+		words = append(words, `"`+strings.ReplaceAll(field, `"`, `""`)+`"`)
+	}
+	if len(words) == 0 {
+		return "", false
+	}
+	if !strings.HasSuffix(raw, " ") {
+		words[len(words)-1] += "*"
+	}
+	return strings.Join(words, " "), true
 }
 
 func boolToInt(value bool) int64 {

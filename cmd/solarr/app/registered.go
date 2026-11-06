@@ -674,6 +674,7 @@ func (p *process) adultModule() adult.Module {
 			Service: service, Catalog: catalog, People: library.NewPeople(p.library), Studios: library.NewSubscriptions(p.library),
 			Now: func() time.Time { return clock.NewSystem().Now() },
 		},
+		Scenes:  &adult.PerformerScenes{Service: service, People: library.NewPeople(p.library)},
 		Service: service,
 		Hunt: func(ctx context.Context, itemID int64) (plan.Outcome, error) {
 			found, err := conns(ctx)

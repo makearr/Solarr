@@ -62,6 +62,7 @@ function Dock({ item }: { item: PlayerItem }) {
   const [clock, setClock] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [muted, setMuted] = useState(false);
+  const [volume, setVolume] = useState(storedVolume);
   const [failed, setFailed] = useState(false);
   const [quality, setQuality] = useState<Quality>("original");
   // Where a direct file resumes after a switch back from a converted stream, which restarts it at zero.
@@ -73,6 +74,23 @@ function Dock({ item }: { item: PlayerItem }) {
   const route = quality !== "original" && isVideo ? "transcode" : (chosenRoute ?? (facts ? firstRoute(facts) : null));
   const position = route === "transcode" ? offset + clock : clock;
   const length = lengthOf(facts, item, media.current);
+
+  // React sets `muted` only when the element is created, and the element is re-keyed on every source change.
+  const chosenSource = sourceUrl(route, item.mediaObjectId, offset, quality);
+  useEffect(() => {
+    if (!media.current) return;
+    media.current.muted = muted;
+    media.current.volume = volume;
+  }, [muted, volume, chosenSource]);
+  const changeVolume = (next: number) => {
+    setVolume(next);
+    setMuted(next === 0);
+    try {
+      localStorage.setItem(VOLUME_KEY, String(next));
+    } catch {
+      // storage unavailable: the volume lasts for this player only
+    }
+  };
 
   // Escape leaves the full screen for the bar rather than closing the player.
   useEffect(() => {
@@ -111,7 +129,7 @@ function Dock({ item }: { item: PlayerItem }) {
     }
   };
 
-  const src = route === null ? undefined : route === "direct" ? streamUrl(item.mediaObjectId) : transcodeUrl(item.mediaObjectId, offset, quality);
+  const src = chosenSource;
   const unplayable = info.isError || failed;
 
   return (
@@ -187,13 +205,41 @@ function Dock({ item }: { item: PlayerItem }) {
             ))}
           </select>
         )}
-        <Button variant="icon" aria-label={muted ? t("player.unmute") : t("player.mute")} onClick={() => setMuted(!muted)}>
-          {muted ? <VolumeX aria-hidden className="size-4" /> : <Volume2 aria-hidden className="size-4" />}
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button variant="icon" aria-label={muted ? t("player.unmute") : t("player.mute")} onClick={() => setMuted(!muted)}>
+            {muted ? <VolumeX aria-hidden className="size-4" /> : <Volume2 aria-hidden className="size-4" />}
+          </Button>
+          <input
+            type="range"
+            aria-label={t("player.volume")}
+            className="w-20 accent-accent"
+            min={0}
+            max={1}
+            step={0.05}
+            value={muted ? 0 : volume}
+            onChange={(event) => changeVolume(Number(event.target.value))}
+          />
+        </div>
       </div>
       {mode === "bar" && <Modes mode={mode} onClose={player.close} />}
     </section>
   );
+}
+
+function sourceUrl(route: PlaybackRoute | null, mediaObjectId: number, offset: number, quality: Quality): string | undefined {
+  if (route === null) return undefined;
+  return route === "direct" ? streamUrl(mediaObjectId) : transcodeUrl(mediaObjectId, offset, quality);
+}
+
+const VOLUME_KEY = "solarr.player.volume";
+
+function storedVolume(): number {
+  try {
+    const stored = Number(localStorage.getItem(VOLUME_KEY));
+    return Number.isFinite(stored) && stored > 0 && stored <= 1 ? stored : 1;
+  } catch {
+    return 1;
+  }
 }
 
 function lengthOf(facts: FilePlayback | undefined, item: PlayerItem, element: HTMLVideoElement | null): number {

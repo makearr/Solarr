@@ -64,6 +64,9 @@ The add dialog takes **Scenes** (looked up by title, "[Studio] Title" narrowing 
 performer searches the servers in the library's order, makes the person with everything the server says of them and, when
 monitored, follows them back to their first scene (Whisparr's "Add performer"). Studios are followed from a studio's own page.
 
+A performer's page lists, under *Also known for*, their newest scenes (up to 60) at the first server that knows them which the
+library lacks, each with *Add to Solarr* (`adult.PerformerScenes`, the adult type's `media.Profiling`; ThePornDB cannot list them).
+
 ## Following
 
 Following a performer or a studio (Whisparr's monitored performers and studios) adds the scenes a server lists for them: those

@@ -668,7 +668,7 @@ export function CreditTile({ credit, label }: { credit: Credit; label: string })
   );
 }
 
-const KIND_LABEL: Record<string, string> = { tv: "Series", movie: "Movies", album: "Albums", book: "Books", audiobook: "Audiobooks" };
+const KIND_LABEL: Record<string, string> = { tv: "Series", movie: "Movies", album: "Albums", book: "Books", audiobook: "Audiobooks", adult: "Scenes" };
 
 /** What the providers know the person for beyond the library, asked once per media type the person appears in and
  * shown once: the TV and film types both answer TMDB's whole list. */
@@ -753,7 +753,9 @@ function KnownForTile({ title, adding, onAdd }: { title: KnownFor; adding: boole
         ? `https://openlibrary.org/works/${title.external_id}`
         : title.kind === "album"
           ? `https://musicbrainz.org/release-group/${title.external_id}`
-          : `https://www.themoviedb.org/${title.kind}/${title.external_id}`;
+          : title.kind === "adult"
+            ? `https://stashdb.org/scenes/${title.external_id}`
+            : `https://www.themoviedb.org/${title.kind}/${title.external_id}`;
     return (
       <a href={outbound} target="_blank" rel="noreferrer" className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent">
         {caption}

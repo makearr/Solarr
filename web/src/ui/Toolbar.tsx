@@ -68,11 +68,11 @@ export function ToolbarSearch({
   label: string;
 }) {
   const [typed, setTyped] = useState(value);
-  // A change from outside replaces what is typed; the trimmed echo of the typing itself must not.
-  useEffect(() => setTyped((now) => (now.trim() === value ? now : value)), [value]);
+  // A change from outside replaces what is typed; the echo of the typing itself must not.
+  useEffect(() => setTyped((now) => (now.trimStart() === value ? now : value)), [value]);
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (typed.trim() !== value) onChange(typed.trim());
+      if (typed.trimStart() !== value) onChange(typed.trimStart());
     }, 250);
     return () => clearTimeout(timer);
   }, [typed, value, onChange]);

@@ -100,9 +100,10 @@ func (c Condition) SQL(kind Kind, expression string) (string, []any) {
 		value := asciiLower(c.Value)
 		switch c.Op {
 		case "contains":
-			return lower + " LIKE ? ESCAPE '\\'", []any{"%" + escapeLike(value) + "%"}
+			return containsWords(lower, value)
 		case "not_contains":
-			return lower + " NOT LIKE ? ESCAPE '\\'", []any{"%" + escapeLike(value) + "%"}
+			sql, args := containsWords(lower, value)
+			return "NOT (" + sql + ")", args
 		case "starts_with":
 			return lower + " LIKE ? ESCAPE '\\'", []any{escapeLike(value) + "%"}
 		case "is":
@@ -125,6 +126,32 @@ func (c Condition) SQL(kind Kind, expression string) (string, []any) {
 		}
 		return "(" + expression + ") = ?", []any{c.Value}
 	}
+}
+
+// containsWords needs every word somewhere in the text, in any order; a trailing space means the last word is finished
+// ("kat " is not "kate").
+func containsWords(lower, value string) (string, []any) {
+	words := strings.Fields(value)
+	finished := strings.HasSuffix(value, " ")
+	if len(words) <= 1 && !finished {
+		return lower + " LIKE ? ESCAPE '\\'", []any{"%" + escapeLike(value) + "%"}
+	}
+	var parts []string
+	var args []any
+	for index, word := range words {
+		escaped := escapeLike(word)
+		if finished && index == len(words)-1 {
+			parts = append(parts, "("+lower+" LIKE ? ESCAPE '\\' OR "+lower+" LIKE ? ESCAPE '\\')")
+			args = append(args, "%"+escaped+" %", "%"+escaped)
+			continue
+		}
+		parts = append(parts, lower+" LIKE ? ESCAPE '\\'")
+		args = append(args, "%"+escaped+"%")
+	}
+	if len(parts) == 0 {
+		return "1 = 1", nil
+	}
+	return strings.Join(parts, " AND "), args
 }
 
 func escapeLike(text string) string {

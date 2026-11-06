@@ -582,3 +582,23 @@ func TestFetchForAsksAProviderAgainOnlyWithSomethingNew(t *testing.T) {
 		t.Errorf("asked = %v, want one round", server.asked)
 	}
 }
+
+func TestPerformerScenesListsOnlyScenesTheLibraryLacks(t *testing.T) {
+	held, missing := stashScene(), stashScene()
+	held.ID, missing.ID, missing.ReleaseDate, missing.Title = "held", "missing", "2020-05-06", "Gone"
+	scenes := PerformerScenes{
+		Service: Service{Servers: map[string]Server{ProviderStashDB: &fakeServer{scenes: []stashbox.Scene{held, missing}}}},
+		People:  fakeIDs{ids: map[string]string{"stashdb:performer": "p-1"}},
+		Held: func(_ context.Context, ids IDs) (int64, bool) {
+			return 7, ids.StashDB == "held"
+		},
+	}
+	got, err := scenes.KnownFor(t.Context(), 1, 2)
+	want := []media.KnownFor{{Provider: ProviderStashDB, ExternalID: "missing", Kind: MediaType, Title: "Gone", Year: 2020, Role: RolePerformer}}
+	if len(got) == 1 {
+		got[0].PosterURL = ""
+	}
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("KnownFor = %+v, %v; want %+v", got, err, want)
+	}
+}

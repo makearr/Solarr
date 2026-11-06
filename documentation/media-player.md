@@ -83,3 +83,5 @@ services:
 | `streaming.max_sessions` | 2 | conversions at once; a further one gets 429 |
 
 Not yet in the portable settings export.
+
+The player has a mute button and a volume slider; the volume is remembered in the browser.

@@ -42,6 +42,9 @@ func TestCondition_SQL(t *testing.T) {
 		args      []any
 	}{
 		{listfilter.Condition{Field: "name", Op: "contains", Value: "50%_Cent"}, listfilter.Text, `LOWER(p.name) LIKE ? ESCAPE '\'`, []any{`%50\%\_cent%`}},
+		{listfilter.Condition{Field: "name", Op: "contains", Value: "Kat Kiss"}, listfilter.Text, `LOWER(p.name) LIKE ? ESCAPE '\' AND LOWER(p.name) LIKE ? ESCAPE '\'`, []any{"%kat%", "%kiss%"}},
+		{listfilter.Condition{Field: "name", Op: "contains", Value: "Kat "}, listfilter.Text, `(LOWER(p.name) LIKE ? ESCAPE '\' OR LOWER(p.name) LIKE ? ESCAPE '\')`, []any{"%kat %", "%kat"}},
+		{listfilter.Condition{Field: "name", Op: "not_contains", Value: "Kat Kiss"}, listfilter.Text, `NOT (LOWER(p.name) LIKE ? ESCAPE '\' AND LOWER(p.name) LIKE ? ESCAPE '\')`, []any{"%kat%", "%kiss%"}},
 		{listfilter.Condition{Field: "name", Op: "is_not", Value: "Bob"}, listfilter.Text, `LOWER(p.name) <> ?`, []any{"bob"}},
 		{listfilter.Condition{Field: "series", Op: "ge", Value: "3"}, listfilter.Number, `(p.n) >= ?`, []any{3.0}},
 		{listfilter.Condition{Field: "monitored", Op: "is", Value: "false"}, listfilter.Bool, `NOT (p.m)`, nil},

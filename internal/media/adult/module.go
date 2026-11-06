@@ -43,6 +43,16 @@ type Module struct {
 	Rename *RenameConfig
 	// Follow adds a performer's or studio's scenes to a library that follows them; nil leaves them unfollowable.
 	Follow *Following
+	// Scenes lists a performer's scenes the library lacks; nil leaves the page without them.
+	Scenes *PerformerScenes
+}
+
+// KnownFor implements media.Profiling.
+func (m Module) KnownFor(ctx context.Context, personID, categoryID int64) ([]media.KnownFor, error) {
+	if m.Scenes == nil {
+		return nil, nil
+	}
+	return m.Scenes.KnownFor(ctx, personID, categoryID)
 }
 
 // NameFiles implements media.Renaming.

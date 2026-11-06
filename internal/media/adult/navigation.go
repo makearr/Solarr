@@ -10,12 +10,14 @@ const (
 	LevelScenes     = "scenes"
 	LevelPerformers = "performers"
 	LevelStudios    = "studios"
+	LevelCollections = "collections"
 )
 
 // Levels are the ADR-54 declaration, as Whisparr lays a library out: the scenes, their performers and their studios.
 func Levels() []model.Level {
 	return []model.Level{
 		{Key: LevelScenes, Label: "Scenes", Entity: model.LevelEntityWork, DefaultSort: "title"},
+		{Key: LevelCollections, Label: "Collections", Entity: model.LevelEntityFranchise, DefaultSort: "name"},
 		{Key: LevelPerformers, Label: "Performers", Entity: model.LevelEntityPerson, DefaultSort: "name", Role: RolePerformer},
 		{Key: LevelStudios, Label: "Studios", Entity: model.LevelEntityOrganisation, DefaultSort: "name"},
 	}

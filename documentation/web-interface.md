@@ -169,3 +169,5 @@ until it existed, and both mutations are caught by it.
 `npm run build` runs eslint and vitest before compiling. The rules of hooks are invisible to
 `tsc`: a hook called after an early return type-checks perfectly and fails at runtime with
 "rendered fewer hooks than expected". That has already happened here once.
+
+**Search words.** The global search (FTS5) and the list filters match every word in any order; the last word is a prefix unless the text ends in a space ("Kat " is not "Kate"). The box keeps a trailing space.

@@ -49,10 +49,10 @@ function missingOf(franchise: Franchise): number {
   return Math.max((franchise.total ?? held) - held, 0);
 }
 
-/** "3 / 7 in your library": what the library holds of the works that exist, as far as the providers say. */
+/** "3 / 7 in your library": what the library holds of the works that exist, as far as the providers say (held / held when they say nothing). */
 export function heldLabel(franchise: Franchise): string {
   const held = franchise.members.filter((member) => member.work_id).length;
-  return franchise.total ? t("franchise.held", { held, total: Math.max(franchise.total, held) }) : t("franchise.heldUnknown", { held });
+  return t("franchise.held", { held, total: Math.max(franchise.total ?? 0, held) });
 }
 
 /** The letter a name is listed under: its first letter or digit, "#" for the rest. */

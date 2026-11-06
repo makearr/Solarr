@@ -23,7 +23,7 @@ func (f Format) Levels() []model.Level {
 	levels := []model.Level{
 		{Key: LevelBooks, Label: f.Many, Entity: model.LevelEntityWork, DefaultSort: "title"},
 		{Key: LevelAuthors, Label: "Authors", Entity: model.LevelEntityPerson, DefaultSort: "name"},
-		{Key: LevelSeries, Label: "Series", Entity: model.LevelEntityFranchise, DefaultSort: "name"},
+		{Key: LevelSeries, Label: "Collections", Entity: model.LevelEntityFranchise, DefaultSort: "name"},
 		{Key: LevelPublishers, Label: "Publishers", Entity: model.LevelEntityOrganisation, DefaultSort: "name"},
 	}
 	if f.ByFolder {

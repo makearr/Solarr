@@ -342,3 +342,43 @@ func TestSearch_EmptyNonNilRootFolderFilterMatchesNothing(t *testing.T) {
 		t.Errorf("empty non-nil rootFolderIDs = %+v, want nothing visible to mean nothing returned", emptyFiltered)
 	}
 }
+
+func TestBuildMatchQuery(t *testing.T) {
+	for _, tc := range []struct {
+		raw, want string
+		ok        bool
+	}{
+		{"Kat Kiss", `"Kat" "Kiss"*`, true},
+		{"Kat ", `"Kat"`, true},
+		{"Kat", `"Kat"*`, true},
+		{`a "b" - c`, `"a" """b""" "c"*`, true},
+		{"k", "", false},
+		{" - - ", "", false},
+	} {
+		got, ok := library.BuildMatchQueryForTest(tc.raw)
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("%q = %q,%v want %q,%v", tc.raw, got, ok, tc.want, tc.ok)
+		}
+	}
+}
+
+func TestSearch_WordsMatchInAnyOrderAndTrailingSpaceEndsPrefix(t *testing.T) {
+	opened, _ := newLibrary(t)
+	long := createWork(t, opened, "adult", "Kat Dennings Kiss")
+	createWork(t, opened, "adult", "Kate Winslet")
+
+	results, err := library.NewSearch(opened).Works(t.Context(), "Kat Kiss", "", nil, nil, 10)
+	if err != nil {
+		t.Fatalf("Works: %v", err)
+	}
+	if found := searchOne(t, results); found.ID != long.ID {
+		t.Errorf("matched %d, want %d", found.ID, long.ID)
+	}
+	results, err = library.NewSearch(opened).Works(t.Context(), "Kat ", "", nil, nil, 10)
+	if err != nil {
+		t.Fatalf("Works: %v", err)
+	}
+	if found := searchOne(t, results); found.ID != long.ID {
+		t.Errorf("matched %d, want only %d", found.ID, long.ID)
+	}
+}

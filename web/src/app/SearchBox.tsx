@@ -48,8 +48,8 @@ export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [hero]);
-  const debounced = useDebouncedValue(query.trim(), DEBOUNCE_MS);
-  const searchable = debounced.length >= MINIMUM_QUERY_LENGTH;
+  const debounced = useDebouncedValue(query.trimStart(), DEBOUNCE_MS);
+  const searchable = debounced.trim().length >= MINIMUM_QUERY_LENGTH;
 
   const results = useQuery({
     queryKey: ["search", debounced],
