@@ -12,8 +12,9 @@ import (
 // targetLanguageScore is heard as a tie-breaker between releases of equal quality, as the language preferences are.
 const targetLanguageScore = 5
 
-// overshootWeight makes a number above its ideal cost half what the same number below it does, for a target that prefers more.
-const overshootWeight = 0.5
+// shortfallWeight makes a number below its ideal cost far more than any number above it, for a target that prefers more:
+// transcoding brings quality down, never up, so a release above the target beats one below it however near that one is.
+const shortfallWeight = 1000
 
 // resolutionLadder is the resolutions in order from the highest, by the position of each in the list.
 var resolutionNames = []string{"2160p", "1440p", "1080p", "720p", "576p", "480p"}
@@ -108,11 +109,11 @@ func WithTarget(rules score.Profile, target settings.QualityTarget) score.Profil
 		if _, tiered := rules.Tiers[entry.dimension]; tiered {
 			continue
 		}
-		over := 1.0
+		under := 1.0
 		if target.PreferOver {
-			over = overshootWeight
+			under = shortfallWeight
 		}
-		targets[entry.dimension] = []score.Target{{Ideal: entry.ideal, Weights: score.TargetWeights{Over: over, Under: 1}}}
+		targets[entry.dimension] = []score.Target{{Ideal: entry.ideal, Weights: score.TargetWeights{Over: 1, Under: under}}}
 		leading = append(leading, entry.dimension+"_distance")
 	}
 	scoring := slices.Clone(rules.Scoring)

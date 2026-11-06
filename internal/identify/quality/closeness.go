@@ -47,8 +47,6 @@ const (
 	resolutionStepCost = 0.4
 	// octavesToZero is how far a number may be from the target, as a factor of two, before it counts for nothing.
 	octavesToZero = 2.0
-	// overshootDiscount makes a number above the target of a prefer-more target cost half.
-	overshootDiscount = 0.5
 	// crfSlope is how much each CRF point above the target takes off.
 	crfSlope = 0.1
 )
@@ -76,11 +74,10 @@ func Distance(target settings.QualityTarget, file score.FileFacts) (closeness Cl
 		}
 		value := 1.0
 		if math.Abs(have-want) > want*tolerance/100 {
-			octaves := math.Abs(math.Log2(have / want))
+			value = 1 - math.Abs(math.Log2(have/want))/octavesToZero
 			if target.PreferOver && have > want {
-				octaves *= overshootDiscount
+				value = 1
 			}
-			value = 1 - octaves/octavesToZero
 		}
 		add(dimension, formatNumber(want)+unit, formatNumber(have)+unit, weight, value)
 	}
@@ -104,7 +101,11 @@ func Distance(target settings.QualityTarget, file score.FileFacts) (closeness Cl
 		add("container", target.Container, name, 1, value)
 	}
 	if want, have := rung(target.Resolution), rung(file.Resolution); want >= 0 && have >= 0 {
-		add("resolution", target.Resolution, file.Resolution, 2, 1-resolutionStepCost*math.Abs(float64(want-have)))
+		value := 1 - resolutionStepCost*math.Abs(float64(want-have))
+		if target.PreferOver && have < want {
+			value = 1
+		}
+		add("resolution", target.Resolution, file.Resolution, 2, value)
 	}
 	exact("video codec", target.VideoCodec, file.VideoCodec, 2)
 	if target.HDR != "" {

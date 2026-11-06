@@ -93,8 +93,8 @@ func TestWithTarget_PreferOverRanksAboveBeforeBelowAndIgnoreBelowLeavesBelowUnra
 	if got := preferred.Tiers["resolution"]; !slices.EqualFunc(got, want, slices.Equal[[]string]) {
 		t.Errorf("resolution tiers = %v, want %v", got, want)
 	}
-	if got := preferred.Targets["video_bitrate"][0].Weights; got.Over != 0.5 || got.Under != 1 {
-		t.Errorf("bitrate weights = %+v, want over 0.5 under 1", got)
+	if got := preferred.Targets["video_bitrate"][0].Weights; got.Over != 1 || got.Under != 1000 {
+		t.Errorf("bitrate weights = %+v, want over 1 under 1000", got)
 	}
 	ignoring := judge.WithTarget(rules, settings.QualityTarget{Resolution: "1080p", IgnoreBelow: true})
 	if got := ignoring.Tiers["resolution"]; len(got) != 3 || !slices.Equal(got[2], []string{"2160p"}) {
@@ -103,5 +103,15 @@ func TestWithTarget_PreferOverRanksAboveBeforeBelowAndIgnoreBelowLeavesBelowUnra
 	plain := judge.WithTarget(rules, settings.QualityTarget{Resolution: "1080p", VideoBitrateKbps: &bitrate})
 	if got := plain.Targets["video_bitrate"][0].Weights; got.Over != 1 {
 		t.Errorf("without the preference the weights stay symmetric: %+v", got)
+	}
+}
+
+func TestWithTarget_PreferOverRanksAnyReleaseAboveTheIdealBeforeOneJustBelowIt(t *testing.T) {
+	bitrate := int64(1600)
+	rules := judge.WithTarget(score.Profile{Compare: []string{"score"}}, settings.QualityTarget{VideoBitrateKbps: &bitrate, PreferOver: true})
+	above := score.Evaluate(rules, score.Facts{File: score.FileFacts{VideoBitrate: 6_400_000}}, nil)
+	justBelow := score.Evaluate(rules, score.Facts{File: score.FileFacts{VideoBitrate: 1_500_000}}, nil)
+	if winner, _ := model.Compare(above.Quality, justBelow.Quality); winner != -1 {
+		t.Errorf("four times the target did not outrank a release just under it (winner %d)", winner)
 	}
 }

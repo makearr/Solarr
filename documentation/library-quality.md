@@ -45,10 +45,11 @@ enough: the shipped profiles have no gates, so every release "passes" every one 
   (resolution, codec, CRF and video bitrate weigh most; a number loses a quarter per half-octave away; a part the probe or
   release name does not state is left out). A library file shows "82% of the target" with the gaps on hover; a candidate's
   decision carries a zero-point `target-closeness` component. The closeness ranks nothing; the tiers below do.
-  Two checkboxes shape how a target ranks what is found (`judge.WithTarget`): **Prefer over-quality to under-quality**
-  ranks the resolutions above the target (the nearest first) before the ones below it, whatever the profile lists, and makes
-  overshooting a bitrate or frame rate cost half what undershooting does (a 1080p target takes 4k over 720p even when 4k's
-  bitrate is further from the ideal); **Ignore everything below the target while anything at or above exists** leaves the
+  Two checkboxes shape how a target ranks what is found (`judge.WithTarget`): **Prefer over** (transcoding brings quality
+  down, never up) ranks the resolutions above the target (the nearest first) before the ones below it, whatever the profile
+  lists, and ranks a bitrate, frame rate or similar number above its ideal before any below it, however near the lower one is
+  (a 1080p target takes 4k over 720p; a 1,600 kbit/s target takes 6,000 over 1,500); closeness counts above as met;
+  **Ignore everything below the target while anything at or above exists** leaves the
   resolutions below the target unranked, so they win only when nothing at or above is found.
 - **The warning** on the Quality screen fires when the target does not fit the first profile.
 

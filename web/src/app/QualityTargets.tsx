@@ -151,11 +151,11 @@ function TargetFields({ target, onChange }: { target: QualityTarget; onChange: (
         />
       </Group>
       <Group title="Over and under the target">
-        <label className="flex items-start gap-2 text-sm" title="A release above the target ranks before one below it, and overshooting a number costs less than undershooting it">
+        <label className="flex items-start gap-2 text-sm" title="A release above the target ranks before one below it, however near the lower one is">
           <input type="checkbox" className="mt-1" checked={target.prefer_over ?? false} onChange={(event) => set({ prefer_over: event.target.checked })} />
           <span>
-            Prefer over-quality to under-quality
-            <span className="block text-xs text-ink-muted">With a 1080p target, 4k beats 720p even when its bitrate is further from the ideal.</span>
+            Prefer over
+            <span className="block text-xs text-ink-muted">A download above the target beats one below it, because transcoding can bring quality down, never up. 4k beats 720p for a 1080p target, and a 6 Mbit/s release beats a 1.5 Mbit/s one for 1.6.</span>
           </span>
         </label>
         <label className="flex items-start gap-2 text-sm" title="Everything below the target only wins when nothing at or above it exists">
