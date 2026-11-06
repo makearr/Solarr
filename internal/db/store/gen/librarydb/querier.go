@@ -24,6 +24,7 @@ type Querier interface {
 	// edition_id and part_id are 0 for a credit on the work itself (Appendix E, D2).
 	AddCredit(ctx context.Context, arg AddCreditParams) error
 	AddCrossoverEventDismissed(ctx context.Context, arg AddCrossoverEventDismissedParams) error
+	AddCrossoverExcluded(ctx context.Context, arg AddCrossoverExcludedParams) error
 	AddCrossoverMemberGuess(ctx context.Context, arg AddCrossoverMemberGuessParams) error
 	AddCrossoverNotSame(ctx context.Context, arg AddCrossoverNotSameParams) error
 	// Hearts, per user; a favorite is not a follow. Column lists follow table order.
@@ -112,6 +113,7 @@ type Querier interface {
 	CountCalendarDates(ctx context.Context, arg CountCalendarDatesParams) ([]CountCalendarDatesRow, error)
 	CountCalendarEpisodeDates(ctx context.Context, arg CountCalendarEpisodeDatesParams) ([]CountCalendarEpisodeDatesRow, error)
 	CountCollectionRefusals(ctx context.Context, arg CountCollectionRefusalsParams) (int64, error)
+	CountCrossoverMissingParts(ctx context.Context, collectionID int64) (int64, error)
 	// library.db references settings.db by id with no foreign key (ADR-25), so only the
 	// application can find a reference a restore has orphaned. The count is what makes
 	// the report worth reading.
@@ -254,6 +256,8 @@ type Querier interface {
 	DeleteCollectionLinks(ctx context.Context, id int64) error
 	DeleteCollectionMemberOrigin(ctx context.Context, arg DeleteCollectionMemberOriginParams) error
 	DeleteCollectionMembers(ctx context.Context, collectionID int64) error
+	DeleteCrossoverExcluded(ctx context.Context, arg DeleteCrossoverExcludedParams) error
+	DeleteCrossoverFamilyChecks(ctx context.Context) error
 	DeleteCrossoverMissingPart(ctx context.Context, arg DeleteCrossoverMissingPartParams) error
 	DeleteCrossoverMissingParts(ctx context.Context, collectionID int64) error
 	DeleteCrossoverNotSame(ctx context.Context, arg DeleteCrossoverNotSameParams) error
@@ -610,6 +614,7 @@ type Querier interface {
 	ListCrossoverEventInfo(ctx context.Context, collectionIds []int64) ([]CrossoverEvent, error)
 	// Every work pair that shares an event, once each, with the event it is in.
 	ListCrossoverEventWorks(ctx context.Context, mediaType string) ([]ListCrossoverEventWorksRow, error)
+	ListCrossoverExcluded(ctx context.Context, nameKey string) ([]string, error)
 	ListCrossoverMemberGuesses(ctx context.Context, collectionIds []int64) ([]CrossoverMemberGuess, error)
 	// The event each episode of an event is in, to keep one episode out of two events.
 	ListCrossoverMemberPartOwners(ctx context.Context, mediaType string) ([]ListCrossoverMemberPartOwnersRow, error)
@@ -712,6 +717,8 @@ type Querier interface {
 	ListLinkableCollectionIDs(ctx context.Context) ([]ListLinkableCollectionIDsRow, error)
 	// Every franchise collection of every media type with the ids it is known by, for the pass that links collections across libraries.
 	ListLinkableCollections(ctx context.Context) ([]ListLinkableCollectionsRow, error)
+	// What the collection on the other end of every link holds, once from each side, so a list can add linked works up.
+	ListLinkedCollectionCounts(ctx context.Context) ([]ListLinkedCollectionCountsRow, error)
 	// Which of a batch's files a person already identified; ids is a JSON array.
 	ListManuallyIdentified(ctx context.Context, mediaObjectIds string) ([]int64, error)
 	// The artists credited on a library's albums, with what a merge needs to rank them. shared is set

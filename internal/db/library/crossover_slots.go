@@ -28,6 +28,31 @@ type MissingPart struct {
 // seriesKey names a series by the id a provider gives it.
 type seriesKey struct{ provider, externalID string }
 
+// heldPartKey and missingPartKey name an episode in the exclusions a person's edit leaves, whichever way detection finds it.
+func heldPartKey(workID int64, ref string) string { return fmt.Sprintf("w%d:%s", workID, ref) }
+
+func missingPartKey(missing MissingPart) string {
+	return fmt.Sprintf("%s:%s:%s", missing.Provider, missing.ExternalID, episodeRef(missing.Season, missing.Episode))
+}
+
+// withoutExcluded drops the episodes a person took out of the event of this name.
+func withoutExcluded(ctx context.Context, queries *librarydb.Queries, key string, episodes []eventEpisode) ([]eventEpisode, error) {
+	rows, err := queries.ListCrossoverExcluded(ctx, key)
+	if err != nil || len(rows) == 0 {
+		return episodes, err
+	}
+	excluded := map[string]bool{}
+	for _, row := range rows {
+		excluded[row] = true
+	}
+	return slices.DeleteFunc(slices.Clone(episodes), func(episode eventEpisode) bool {
+		if episode.missing != nil {
+			return excluded[missingPartKey(*episode.missing)]
+		}
+		return excluded[heldPartKey(episode.workID, episode.ref)]
+	}), nil
+}
+
 // eventKey is what the halves of one event share: its name without a part marker, case folded.
 func eventKey(name string) string {
 	base, _ := eventBase(name)
@@ -148,7 +173,10 @@ func storeEvent(ctx context.Context, queries *librarydb.Queries, mediaType strin
 			}
 		}
 	}
-	episodes = distinctEpisodes(episodes, in.series)
+	episodes, err := withoutExcluded(ctx, queries, eventKey(name), distinctEpisodes(episodes, in.series))
+	if err != nil {
+		return 0, err
+	}
 	slots, total := slotEpisodes(episodes, floor)
 	if target == 0 {
 		created, err := queries.CreateCollection(ctx, librarydb.CreateCollectionParams{
@@ -591,6 +619,17 @@ func (c Crossovers) FamilyCheckedAt(ctx context.Context, familyKey string) (time
 		return time.Time{}, false, fmt.Errorf("library: family checked: %w", err)
 	}
 	return time.Unix(at, 0), true, nil
+}
+
+// ForgetFamilyChecks makes the next pass compare every family again, as when a series was just added that one of them lacked.
+func (c Crossovers) ForgetFamilyChecks(ctx context.Context) error {
+	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).DeleteCrossoverFamilyChecks(ctx)
+	})
+	if err != nil {
+		return fmt.Errorf("library: forget family checks: %w", err)
+	}
+	return nil
 }
 
 // MarkFamilyChecked remembers a family had its episode lists compared now.

@@ -88,3 +88,18 @@ ORDER BY m.collection_id, m.work_id;
 SELECT m.part_id, m.collection_id
 FROM collection_member m JOIN collection c ON c.id = m.collection_id
 WHERE c.kind = 'crossover' AND c.media_type = ? AND m.part_id != 0;
+
+-- name: AddCrossoverExcluded :exec
+INSERT OR IGNORE INTO crossover_excluded (name_key, part_key) VALUES (?, ?);
+
+-- name: DeleteCrossoverExcluded :exec
+DELETE FROM crossover_excluded WHERE name_key = ? AND part_key = ?;
+
+-- name: ListCrossoverExcluded :many
+SELECT part_key FROM crossover_excluded WHERE name_key = ?;
+
+-- name: CountCrossoverMissingParts :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM crossover_missing_part WHERE collection_id = ?;
+
+-- name: DeleteCrossoverFamilyChecks :exec
+DELETE FROM crossover_family_checked;

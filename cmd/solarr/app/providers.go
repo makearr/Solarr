@@ -428,7 +428,18 @@ func (p *process) seriesCatalog() adapters.SeriesCatalog {
 	return adapters.SeriesCatalog{
 		Service: p.tvService(), Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library),
 		Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(),
-		Remover: p.fileRemover(),
+		Remover: p.fileRemover(), AfterAdd: p.lookForCrossoverPartsAgain,
+	}
+}
+
+// lookForCrossoverPartsAgain has the next franchise pass compare every family of series once more and runs one at once.
+func (p *process) lookForCrossoverPartsAgain(ctx context.Context) {
+	if err := library.NewCrossovers(p.library).ForgetFamilyChecks(ctx); err != nil {
+		p.logger.Warn("crossover families not reset", "error", err)
+		return
+	}
+	if _, err := p.enqueueFranchisePass(ctx); err != nil {
+		p.logger.Warn("franchise pass not queued", "error", err)
 	}
 }
 

@@ -23,6 +23,8 @@ type SeriesCatalog struct {
 	Clock            clock.Clock
 	// Remover sends a deleted series' files to the recycle bin.
 	Remover FileRemover
+	// AfterAdd runs once a series was newly added, so crossover parts it supplies are looked for at once; nil does nothing.
+	AfterAdd func(ctx context.Context)
 }
 
 func (c SeriesCatalog) shared() works.Catalog {
@@ -42,7 +44,11 @@ func (c SeriesCatalog) LookupWorks(ctx context.Context, lookup media.AddLookup) 
 // AddWork implements media.Adding for TV: the series with the chosen monitoring, Sonarr's add dialog. It starts no
 // search; the caller searches the series when asked to.
 func (c SeriesCatalog) AddWork(ctx context.Context, request media.AddRequest) (media.AddResult, error) {
-	return c.shared().AddWork(ctx, request)
+	result, err := c.shared().AddWork(ctx, request)
+	if err == nil && result.Created && c.AfterAdd != nil {
+		c.AfterAdd(ctx)
+	}
+	return result, err
 }
 
 // Refresh re-reads one series from the sources; monitoring and season items stay as they are.

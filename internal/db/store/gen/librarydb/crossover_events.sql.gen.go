@@ -24,6 +24,20 @@ func (q *Queries) AddCrossoverEventDismissed(ctx context.Context, arg AddCrossov
 	return err
 }
 
+const addCrossoverExcluded = `-- name: AddCrossoverExcluded :exec
+INSERT OR IGNORE INTO crossover_excluded (name_key, part_key) VALUES (?, ?)
+`
+
+type AddCrossoverExcludedParams struct {
+	NameKey string
+	PartKey string
+}
+
+func (q *Queries) AddCrossoverExcluded(ctx context.Context, arg AddCrossoverExcludedParams) error {
+	_, err := q.db.ExecContext(ctx, addCrossoverExcluded, arg.NameKey, arg.PartKey)
+	return err
+}
+
 const addCrossoverMemberGuess = `-- name: AddCrossoverMemberGuess :exec
 INSERT OR IGNORE INTO crossover_member_guess (collection_id, part_id) VALUES (?, ?)
 `
@@ -67,6 +81,40 @@ DELETE FROM crossover_member_guess WHERE collection_id = ?
 
 func (q *Queries) ClearCrossoverMemberGuesses(ctx context.Context, collectionID int64) error {
 	_, err := q.db.ExecContext(ctx, clearCrossoverMemberGuesses, collectionID)
+	return err
+}
+
+const countCrossoverMissingParts = `-- name: CountCrossoverMissingParts :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM crossover_missing_part WHERE collection_id = ?
+`
+
+func (q *Queries) CountCrossoverMissingParts(ctx context.Context, collectionID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countCrossoverMissingParts, collectionID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const deleteCrossoverExcluded = `-- name: DeleteCrossoverExcluded :exec
+DELETE FROM crossover_excluded WHERE name_key = ? AND part_key = ?
+`
+
+type DeleteCrossoverExcludedParams struct {
+	NameKey string
+	PartKey string
+}
+
+func (q *Queries) DeleteCrossoverExcluded(ctx context.Context, arg DeleteCrossoverExcludedParams) error {
+	_, err := q.db.ExecContext(ctx, deleteCrossoverExcluded, arg.NameKey, arg.PartKey)
+	return err
+}
+
+const deleteCrossoverFamilyChecks = `-- name: DeleteCrossoverFamilyChecks :exec
+DELETE FROM crossover_family_checked
+`
+
+func (q *Queries) DeleteCrossoverFamilyChecks(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteCrossoverFamilyChecks)
 	return err
 }
 
@@ -282,6 +330,33 @@ func (q *Queries) ListCrossoverEventWorks(ctx context.Context, mediaType string)
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCrossoverExcluded = `-- name: ListCrossoverExcluded :many
+SELECT part_key FROM crossover_excluded WHERE name_key = ?
+`
+
+func (q *Queries) ListCrossoverExcluded(ctx context.Context, nameKey string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listCrossoverExcluded, nameKey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var part_key string
+		if err := rows.Scan(&part_key); err != nil {
+			return nil, err
+		}
+		items = append(items, part_key)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

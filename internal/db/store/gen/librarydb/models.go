@@ -271,6 +271,11 @@ type CrossoverEventDismissed struct {
 	FirstDate string
 }
 
+type CrossoverExcluded struct {
+	NameKey string
+	PartKey string
+}
+
 type CrossoverFamilyChecked struct {
 	FamilyKey string
 	CheckedAt int64

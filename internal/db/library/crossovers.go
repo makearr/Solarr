@@ -83,7 +83,8 @@ func (c Crossovers) Create(ctx context.Context, mediaType, name string, partIDs 
 	return id, nil
 }
 
-// Update renames an event and sets its members, in order, all at once.
+// Update renames an event and sets its members, in order, all at once. An event detection found stays under detection:
+// the parts taken out are remembered so they are not put back, and its missing parts stay.
 func (c Crossovers) Update(ctx context.Context, id int64, name string, partIDs []int64) error {
 	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
@@ -91,23 +92,31 @@ func (c Crossovers) Update(ctx context.Context, id int64, name string, partIDs [
 		if err != nil {
 			return err
 		}
+		keepsDetecting := event.Source == AutoCrossoverSource && eventKey(event.Name) == eventKey(name)
+		total := int64(len(partIDs))
+		if keepsDetecting {
+			if total, err = c.rememberRemovedParts(ctx, queries, id, name, partIDs); err != nil {
+				return err
+			}
+		} else {
+			// A renamed event is the person's: detection no longer adds to it or merges it.
+			if err := queries.SetCollectionSource(ctx, librarydb.SetCollectionSourceParams{Source: "user", ID: id}); err != nil {
+				return err
+			}
+			if err := queries.DeleteCrossoverMissingParts(ctx, id); err != nil {
+				return err
+			}
+		}
 		if err := queries.RenameCollection(ctx, librarydb.RenameCollectionParams{Name: name, Monitored: event.Monitored, ID: id}); err != nil {
 			return err
 		}
 		if err := queries.DeleteCollectionMembers(ctx, id); err != nil {
 			return err
 		}
-		// An event a person edited is theirs: detection no longer adds to it or merges it.
-		if err := queries.SetCollectionSource(ctx, librarydb.SetCollectionSourceParams{Source: "user", ID: id}); err != nil {
-			return err
-		}
 		if err := queries.ClearCrossoverMemberGuesses(ctx, id); err != nil {
 			return err
 		}
-		if err := queries.DeleteCrossoverMissingParts(ctx, id); err != nil {
-			return err
-		}
-		if err := queries.UpsertCrossoverEvent(ctx, librarydb.UpsertCrossoverEventParams{CollectionID: id, NameKey: eventKey(name), TotalParts: int64(len(partIDs))}); err != nil {
+		if err := queries.UpsertCrossoverEvent(ctx, librarydb.UpsertCrossoverEventParams{CollectionID: id, NameKey: eventKey(name), TotalParts: total}); err != nil {
 			return err
 		}
 		return setMembersTx(ctx, queries, id, partIDs)
@@ -116,6 +125,43 @@ func (c Crossovers) Update(ctx context.Context, id int64, name string, partIDs [
 		return fmt.Errorf("library: update crossover %d: %w", id, err)
 	}
 	return nil
+}
+
+// rememberRemovedParts excludes the members an edit took out of the event, forgets the exclusion of those it put back,
+// and answers the part count the event now has (its missing parts included).
+func (c Crossovers) rememberRemovedParts(ctx context.Context, queries *librarydb.Queries, id int64, name string, partIDs []int64) (int64, error) {
+	key := eventKey(name)
+	before, err := queries.ListPartCollectionMembers(ctx, []int64{id})
+	if err != nil {
+		return 0, err
+	}
+	kept := map[int64]bool{}
+	for _, partID := range partIDs {
+		part, err := queries.GetWorkPart(ctx, partID)
+		if err != nil {
+			return 0, fmt.Errorf("part %d: %w", partID, err)
+		}
+		kept[partID] = true
+		if err := queries.DeleteCrossoverExcluded(ctx, librarydb.DeleteCrossoverExcludedParams{NameKey: key, PartKey: heldPartKey(part.WorkID, part.MediaRef)}); err != nil {
+			return 0, err
+		}
+	}
+	for _, member := range before {
+		if !kept[member.PartID] {
+			if err := queries.AddCrossoverExcluded(ctx, librarydb.AddCrossoverExcludedParams{NameKey: key, PartKey: heldPartKey(member.WorkID, member.MediaRef)}); err != nil {
+				return 0, err
+			}
+		}
+	}
+	missing, err := queries.CountCrossoverMissingParts(ctx, id)
+	if err != nil {
+		return 0, err
+	}
+	known, err := queries.GetCrossoverEvent(ctx, id)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+	return max(known.TotalParts, int64(len(partIDs))+missing), nil
 }
 
 // Delete removes an event; its parts and their works stay as they are.

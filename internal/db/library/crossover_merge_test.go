@@ -256,3 +256,53 @@ func TestMarkNotSameKeepsAPairOutOfTheSuggestionsAndOfLinking(t *testing.T) {
 		t.Errorf("after the part was rebuilt suggestions = %+v, %v; want none", suggestions, err)
 	}
 }
+
+func TestAnEditedAutoEventStaysUnderDetectionAndKeepsOutWhatWasTakenOut(t *testing.T) {
+	opened, _ := newLibrary(t)
+	crossovers := library.NewCrossovers(opened)
+	franchises := library.NewFranchises(opened)
+	var parts [3]int64
+	for i, title := range []string{"Great Night (1)", "Great Night (2)", "Great Night (3)"} {
+		work := createWork(t, opened, "tv", "Invented Series "+string(rune('A'+i)))
+		createDesiredInCategory(t, opened, work.ID, 7)
+		if _, err := franchises.Join(t.Context(), "tv", "wikidata", "Q1", "Invented Universe", work.ID); err != nil {
+			t.Fatal(err)
+		}
+		parts[i] = createPart(t, opened, work.ID, "s01:e01", "s01:e01", title).ID
+	}
+	dateParts(t, opened, map[int64]string{parts[0]: "2018-12-09", parts[1]: "2018-12-10", parts[2]: "2018-12-11"})
+	id := autoEvent(t, opened, "Great Night", parts[0], parts[1], parts[2])
+	if err := crossovers.Update(t.Context(), id, "Great Night", []int64{parts[0], parts[1]}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := crossovers.DetectEvents(t.Context(), "tv", 7); err != nil {
+		t.Fatal(err)
+	}
+	events, err := crossovers.List(t.Context(), "tv")
+	if err != nil || len(events) != 1 || len(events[0].Members) != 2 {
+		t.Fatalf("events = %+v, %v; want one auto event of two parts", events, err)
+	}
+	if err := crossovers.Update(t.Context(), id, "Great Night", []int64{parts[0], parts[1], parts[2]}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := crossovers.DetectEvents(t.Context(), "tv", 7); err != nil {
+		t.Fatal(err)
+	}
+	if events, err = crossovers.List(t.Context(), "tv"); err != nil || len(events) != 1 || len(events[0].Members) != 3 {
+		t.Fatalf("events = %+v, %v; want the part back once a person added it again", events, err)
+	}
+}
+
+func TestForgetFamilyChecksMakesTheNextPassCompareEveryFamilyAgain(t *testing.T) {
+	opened, _ := newLibrary(t)
+	crossovers := library.NewCrossovers(opened)
+	if err := crossovers.MarkFamilyChecked(t.Context(), "Q1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := crossovers.ForgetFamilyChecks(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := crossovers.FamilyCheckedAt(t.Context(), "Q1"); err != nil || ok {
+		t.Errorf("checked = %v, %v; want forgotten", ok, err)
+	}
+}
