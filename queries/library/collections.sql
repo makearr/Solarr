@@ -526,3 +526,32 @@ ON CONFLICT (provider, external_id, work_id) DO NOTHING;
 -- name: CountCollectionRefusals :one
 SELECT CAST(COUNT(*) AS INTEGER) FROM collection_refusal
 WHERE provider = ? AND external_id = ? AND (work_id = 0 OR work_id = ?);
+
+-- Collections of different libraries a person said are one (Babylon 5: its films and its series), both ways round.
+-- name: ListCollectionLinks :many
+SELECT CAST(CASE WHEN r.from_id = sqlc.arg(id) THEN r.to_id ELSE r.from_id END AS INTEGER) AS other_id
+FROM relationship r
+WHERE r.kind = 'linked_collection' AND r.from_type = 'collection' AND r.to_type = 'collection'
+  AND (r.from_id = sqlc.arg(id) OR r.to_id = sqlc.arg(id))
+ORDER BY other_id;
+
+-- name: DeleteCollectionLink :exec
+DELETE FROM relationship
+WHERE kind = 'linked_collection' AND from_type = 'collection' AND to_type = 'collection'
+  AND ((from_id = sqlc.arg(a) AND to_id = sqlc.arg(b)) OR (from_id = sqlc.arg(b) AND to_id = sqlc.arg(a)));
+
+-- name: MoveCollectionLinksFrom :exec
+UPDATE OR IGNORE relationship SET from_id = sqlc.arg(into_id)
+WHERE kind = 'linked_collection' AND from_type = 'collection' AND from_id = sqlc.arg(from_id);
+
+-- name: MoveCollectionLinksTo :exec
+UPDATE OR IGNORE relationship SET to_id = sqlc.arg(into_id)
+WHERE kind = 'linked_collection' AND to_type = 'collection' AND to_id = sqlc.arg(from_id);
+
+-- A collection that goes takes its links with it; a link of a collection to itself says nothing.
+-- name: DeleteCollectionLinks :exec
+DELETE FROM relationship
+WHERE kind = 'linked_collection' AND ((from_type = 'collection' AND from_id = sqlc.arg(id)) OR (to_type = 'collection' AND to_id = sqlc.arg(id)));
+
+-- name: DeleteSelfCollectionLinks :exec
+DELETE FROM relationship WHERE kind = 'linked_collection' AND from_type = 'collection' AND to_type = 'collection' AND from_id = to_id;

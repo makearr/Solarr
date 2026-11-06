@@ -19,7 +19,15 @@ const recycleBinSweepBatchSize = 200
 type RecycleBinConfig struct {
 	MaxBytes         int64
 	MaxPercentOfRoot float64
+	// MinFreeBytes and MinFreePercent keep a root's free space above a floor, by emptying its bin oldest first (the
+	// larger floor counts); they need Free.
+	MinFreeBytes   int64
+	MinFreePercent float64
+	Free           RootFree
 }
+
+// RootFree answers one root folder's free and total bytes, for the minimum free space guard.
+type RootFree func(rootFolderID int64) (freeBytes, totalBytes int64, ok bool)
 
 // RootCapacity answers one root folder's total size, for the
 // MaxPercentOfRoot guard. A caller that does not want that guard passes nil.
@@ -59,7 +67,53 @@ func (q RecycleBin) Sweep(
 			}
 		}
 	}
+	if (cfg.MinFreeBytes > 0 || cfg.MinFreePercent > 0) && cfg.Free != nil {
+		for _, rootFolderID := range rootFolderIDs {
+			if err := q.sweepRootFloor(ctx, &result, rootFolderID, cfg); err != nil {
+				return result, err
+			}
+		}
+	}
 	return result, nil
+}
+
+// freeFloor is the free space a root must have: the larger of the byte floor and the percentage of the root.
+func freeFloor(minBytes int64, minPercent float64, totalBytes int64) int64 {
+	floor := minBytes
+	if minPercent > 0 && totalBytes > 0 {
+		if byPercent := int64(float64(totalBytes) / 100 * min(minPercent, 100)); byPercent > floor {
+			floor = byPercent
+		}
+	}
+	return floor
+}
+
+// sweepRootFloor empties a root's bin, oldest first, until the root has its minimum free space or the bin is empty.
+func (q RecycleBin) sweepRootFloor(ctx context.Context, result *RecycleBinSweepResult, rootFolderID int64, cfg RecycleBinConfig) error {
+	free, total, ok := cfg.Free(rootFolderID)
+	if !ok {
+		return nil
+	}
+	floor := freeFloor(cfg.MinFreeBytes, cfg.MinFreePercent, total)
+	for free < floor {
+		oldest, err := librarydb.New(q.store.Read()).ListActiveRecycleBinByRootOldestFirst(ctx,
+			librarydb.ListActiveRecycleBinByRootOldestFirstParams{
+				RootFolderID: sql.NullInt64{Int64: rootFolderID, Valid: true}, Limit: 1,
+			})
+		if err != nil {
+			return fmt.Errorf("recycle bin: list oldest for root %d: %w", rootFolderID, err)
+		}
+		if len(oldest) == 0 {
+			return nil
+		}
+		before := result.BytesFreed
+		q.purgeRecycleBinRows(ctx, result, oldest)
+		if result.BytesFreed == before {
+			return nil // this entry failed to purge or held nothing -- stop rather than retry it forever
+		}
+		free += result.BytesFreed - before
+	}
+	return nil
 }
 
 func (q RecycleBin) sweepExpired(ctx context.Context, result *RecycleBinSweepResult) error {

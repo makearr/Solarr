@@ -40,6 +40,7 @@ export const STORAGE: Section = {
     { label: "Folders", path: "/storage/folders", tier: "advanced", administrator: true },
     { label: "Import", path: "/storage/import", tier: "advanced", administrator: true },
     { label: "Duplicates", path: "/storage/duplicates", tier: "advanced", administrator: true },
+    { label: "Rename", path: "/storage/rename", tier: "advanced", administrator: true },
     { label: "Recycle bin", path: "/storage/recycle-bin", tier: "advanced", administrator: true },
     // Every library's waiting files at once; one library's are under its own Files.
     { label: "Unidentified", path: "/unidentified", tier: "advanced" },
@@ -61,6 +62,7 @@ export const SETTINGS: Section = {
   key: "settings",
   label: "Settings",
   tabs: [
+    { label: "General", path: "/settings/general", tier: "normal", administrator: true },
     { label: "Libraries", path: "/settings/libraries", tier: "normal", administrator: true },
     { label: "Tags", path: "/settings/tags", tier: "normal", administrator: true },
     { label: "Blocklists", path: "/settings/blocklists", tier: "expert", administrator: true },

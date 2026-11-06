@@ -34,7 +34,7 @@ scan once the disk is back, or press **Accept as gone** on the root's card.
 ## Recycle bin (🟡, administrators)
 
 **Storage → Recycle bin** lists what the bins hold, newest first, with the day each file is removed for good.
-An administrator can **Empty recycle bin** by hand. Nothing in Solarr is deleted directly; it goes here first.
+An administrator can **Empty recycle bin** by hand. Besides the size limits, **Keep free on a root folder** (GB and/or a share of the root) empties a root's bin, oldest first, while the root has less free space than the larger of the two (`recycle_bin.min_free_*`). Nothing in Solarr is deleted directly; it goes here first.
 Reference: [file-management.md](../file-management.md).
 
 ## Similar videos (🔴)
@@ -77,3 +77,8 @@ caches (counted since the start). Layout of the databases: [database-layout.md](
 ## Moving a configuration (🟡)
 
 Export and import of the settings as YAML: [configuration-export.md](../configuration-export.md).
+
+## Rename files (🟡, administrators)
+
+**Storage → Rename** previews, library by library (or all at once with *Preview every library*), the files whose names differ
+from what the library's naming would give, then renames them with the move engine (`POST /categories/{id}/rename`).

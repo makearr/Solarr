@@ -262,6 +262,33 @@ func (q *Queries) DeleteCollection(ctx context.Context, id int64) error {
 	return err
 }
 
+const deleteCollectionLink = `-- name: DeleteCollectionLink :exec
+DELETE FROM relationship
+WHERE kind = 'linked_collection' AND from_type = 'collection' AND to_type = 'collection'
+  AND ((from_id = ?1 AND to_id = ?2) OR (from_id = ?2 AND to_id = ?1))
+`
+
+type DeleteCollectionLinkParams struct {
+	A int64
+	B int64
+}
+
+func (q *Queries) DeleteCollectionLink(ctx context.Context, arg DeleteCollectionLinkParams) error {
+	_, err := q.db.ExecContext(ctx, deleteCollectionLink, arg.A, arg.B)
+	return err
+}
+
+const deleteCollectionLinks = `-- name: DeleteCollectionLinks :exec
+DELETE FROM relationship
+WHERE kind = 'linked_collection' AND ((from_type = 'collection' AND from_id = ?1) OR (to_type = 'collection' AND to_id = ?1))
+`
+
+// A collection that goes takes its links with it; a link of a collection to itself says nothing.
+func (q *Queries) DeleteCollectionLinks(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteCollectionLinks, id)
+	return err
+}
+
 const deleteCollectionMembers = `-- name: DeleteCollectionMembers :exec
 DELETE FROM collection_member WHERE collection_id = ?
 `
@@ -303,6 +330,15 @@ func (q *Queries) DeleteRelationship(ctx context.Context, arg DeleteRelationship
 		arg.ToID,
 		arg.Kind,
 	)
+	return err
+}
+
+const deleteSelfCollectionLinks = `-- name: DeleteSelfCollectionLinks :exec
+DELETE FROM relationship WHERE kind = 'linked_collection' AND from_type = 'collection' AND to_type = 'collection' AND from_id = to_id
+`
+
+func (q *Queries) DeleteSelfCollectionLinks(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteSelfCollectionLinks)
 	return err
 }
 
@@ -657,6 +693,38 @@ func (q *Queries) ListCharacterCreditsOfType(ctx context.Context, mediaType stri
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCollectionLinks = `-- name: ListCollectionLinks :many
+SELECT CAST(CASE WHEN r.from_id = ?1 THEN r.to_id ELSE r.from_id END AS INTEGER) AS other_id
+FROM relationship r
+WHERE r.kind = 'linked_collection' AND r.from_type = 'collection' AND r.to_type = 'collection'
+  AND (r.from_id = ?1 OR r.to_id = ?1)
+ORDER BY other_id
+`
+
+// Collections of different libraries a person said are one (Babylon 5: its films and its series), both ways round.
+func (q *Queries) ListCollectionLinks(ctx context.Context, id int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listCollectionLinks, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var other_id int64
+		if err := rows.Scan(&other_id); err != nil {
+			return nil, err
+		}
+		items = append(items, other_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -2134,6 +2202,36 @@ type MoveCollectionExternalIDsParams struct {
 
 func (q *Queries) MoveCollectionExternalIDs(ctx context.Context, arg MoveCollectionExternalIDsParams) error {
 	_, err := q.db.ExecContext(ctx, moveCollectionExternalIDs, arg.IntoID, arg.FromID)
+	return err
+}
+
+const moveCollectionLinksFrom = `-- name: MoveCollectionLinksFrom :exec
+UPDATE OR IGNORE relationship SET from_id = ?1
+WHERE kind = 'linked_collection' AND from_type = 'collection' AND from_id = ?2
+`
+
+type MoveCollectionLinksFromParams struct {
+	IntoID int64
+	FromID int64
+}
+
+func (q *Queries) MoveCollectionLinksFrom(ctx context.Context, arg MoveCollectionLinksFromParams) error {
+	_, err := q.db.ExecContext(ctx, moveCollectionLinksFrom, arg.IntoID, arg.FromID)
+	return err
+}
+
+const moveCollectionLinksTo = `-- name: MoveCollectionLinksTo :exec
+UPDATE OR IGNORE relationship SET to_id = ?1
+WHERE kind = 'linked_collection' AND to_type = 'collection' AND to_id = ?2
+`
+
+type MoveCollectionLinksToParams struct {
+	IntoID int64
+	FromID int64
+}
+
+func (q *Queries) MoveCollectionLinksTo(ctx context.Context, arg MoveCollectionLinksToParams) error {
+	_, err := q.db.ExecContext(ctx, moveCollectionLinksTo, arg.IntoID, arg.FromID)
 	return err
 }
 

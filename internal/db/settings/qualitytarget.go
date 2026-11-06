@@ -32,7 +32,7 @@ func targetFromRow(row settingsdb.QualityTarget) QualityTarget {
 		Resolution: row.Resolution, VideoCodec: row.VideoCodec, HDR: row.Hdr,
 		AudioChannels: row.AudioChannels, AudioLanguages: splitList(row.AudioLanguages), SubtitleLanguages: splitList(row.SubtitleLanguages),
 		AudioBitrateKbps: nullInt64Ptr(row.AudioBitrateKbps), VideoBitrateKbps: nullInt64Ptr(row.VideoBitrateKbps), FrameRate: row.FrameRate.Float64,
-		CRF: row.Crf.Float64,
+		CRF: row.Crf.Float64, PreferOver: row.PreferOver == 1, IgnoreBelow: row.IgnoreBelow == 1,
 	}
 }
 
@@ -44,6 +44,7 @@ func (t QualityTarget) createParams() settingsdb.CreateQualityTargetParams {
 		AudioChannels: t.AudioChannels, AudioLanguages: joinList(t.AudioLanguages), SubtitleLanguages: joinList(t.SubtitleLanguages),
 		AudioBitrateKbps: int64PtrToNull(t.AudioBitrateKbps), VideoBitrateKbps: int64PtrToNull(t.VideoBitrateKbps),
 		FrameRate: floatToNull(t.FrameRate), Crf: floatToNull(t.CRF),
+		PreferOver: boolToInt(t.PreferOver), IgnoreBelow: boolToInt(t.IgnoreBelow),
 	}
 }
 
@@ -55,6 +56,7 @@ func (t QualityTarget) updateParams() settingsdb.UpdateQualityTargetParams {
 		AudioChannels: t.AudioChannels, AudioLanguages: joinList(t.AudioLanguages), SubtitleLanguages: joinList(t.SubtitleLanguages),
 		AudioBitrateKbps: int64PtrToNull(t.AudioBitrateKbps), VideoBitrateKbps: int64PtrToNull(t.VideoBitrateKbps),
 		FrameRate: floatToNull(t.FrameRate), Crf: floatToNull(t.CRF),
+		PreferOver: boolToInt(t.PreferOver), IgnoreBelow: boolToInt(t.IgnoreBelow),
 	}
 }
 
@@ -65,7 +67,7 @@ func (t QualityTarget) entry() QualityTargetEntry {
 		AudioCodec: t.AudioCodec, Container: t.Container, BitrateKbps: t.BitrateKbps, TolerancePct: t.TolerancePct,
 		Resolution: t.Resolution, VideoCodec: t.VideoCodec, HDR: t.HDR, AudioChannels: t.AudioChannels,
 		AudioLanguages: t.AudioLanguages, SubtitleLanguages: t.SubtitleLanguages,
-		AudioBitrateKbps: t.AudioBitrateKbps, VideoBitrateKbps: t.VideoBitrateKbps, FrameRate: t.FrameRate, CRF: t.CRF,
+		AudioBitrateKbps: t.AudioBitrateKbps, VideoBitrateKbps: t.VideoBitrateKbps, FrameRate: t.FrameRate, CRF: t.CRF, PreferOver: t.PreferOver, IgnoreBelow: t.IgnoreBelow,
 	}
 }
 
@@ -76,7 +78,7 @@ func (e QualityTargetEntry) target() QualityTarget {
 		AudioCodec: e.AudioCodec, Container: e.Container, BitrateKbps: e.BitrateKbps, TolerancePct: e.TolerancePct,
 		Resolution: e.Resolution, VideoCodec: e.VideoCodec, HDR: e.HDR, AudioChannels: e.AudioChannels,
 		AudioLanguages: e.AudioLanguages, SubtitleLanguages: e.SubtitleLanguages,
-		AudioBitrateKbps: e.AudioBitrateKbps, VideoBitrateKbps: e.VideoBitrateKbps, FrameRate: e.FrameRate, CRF: e.CRF,
+		AudioBitrateKbps: e.AudioBitrateKbps, VideoBitrateKbps: e.VideoBitrateKbps, FrameRate: e.FrameRate, CRF: e.CRF, PreferOver: e.PreferOver, IgnoreBelow: e.IgnoreBelow,
 	}
 }
 

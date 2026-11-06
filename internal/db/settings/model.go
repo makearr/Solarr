@@ -156,6 +156,9 @@ type QualityTarget struct {
 	// CRF is the constant rate factor a file's encoder settings state; a file that states none is not held against it,
 	// and one at or below it (the same quality or better) meets it. 0 when the target does not care.
 	CRF float64
+	// PreferOver ranks above the target before below and makes overshooting cheaper; IgnoreBelow ranks below last.
+	PreferOver  bool
+	IgnoreBelow bool
 }
 
 // NamingProfile is one library's naming, Lidarr's shape: a template per slot the media type

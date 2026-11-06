@@ -26,3 +26,8 @@ categories, so none of them knows about mixing. What makes them one library:
 - The All list is the works list with `whole_library=true` (every member's category) and an optional `media_type`
   (the type chip); bulk selections carry both.
 - `useLibraryLabel()` names a member "Anime · Movies" wherever libraries of every type are listed together.
+
+## Anime
+
+Adding a TV library of the kind *Anime* offers "Also holds movies", ticked: the library is created and the movie member is added
+at once, so anime series and anime films are one library (`useNewLibrary`).

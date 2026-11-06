@@ -12,6 +12,37 @@ import (
 // targetLanguageScore is heard as a tie-breaker between releases of equal quality, as the language preferences are.
 const targetLanguageScore = 5
 
+// overshootWeight makes a number above its ideal cost half what the same number below it does, for a target that prefers more.
+const overshootWeight = 0.5
+
+// resolutionLadder is the resolutions in order from the highest, by the position of each in the list.
+var resolutionNames = []string{"2160p", "1440p", "1080p", "720p", "576p", "480p"}
+
+var resolutionLadder = func() map[string][]string {
+	ladder := make(map[string][]string, len(resolutionNames))
+	for _, name := range resolutionNames {
+		ladder[name] = resolutionNames
+	}
+	return ladder
+}()
+
+// aboveAndBelow ranks the resolutions around a target: the target, then the ones above it (the nearest first), then the
+// ones below it (the nearest first). With IgnoreBelow the ones below are left unranked, which ranks them after all the rest.
+func aboveAndBelow(value string, ladder []string, target settings.QualityTarget) [][]string {
+	at := slices.IndexFunc(ladder, func(name string) bool { return strings.EqualFold(name, value) })
+	groups := [][]string{{value}}
+	for index := at - 1; index >= 0; index-- {
+		groups = append(groups, []string{ladder[index]})
+	}
+	if target.IgnoreBelow {
+		return groups
+	}
+	for index := at + 1; index < len(ladder); index++ {
+		groups = append(groups, []string{ladder[index]})
+	}
+	return groups
+}
+
 func kbps(value *int64) string {
 	if value == nil {
 		return ""
@@ -40,10 +71,14 @@ func WithTarget(rules score.Profile, target settings.QualityTarget) score.Profil
 			continue
 		}
 		groups := [][]string{{entry.value}}
-		for _, group := range rules.Tiers[entry.dimension] {
-			rest := slices.DeleteFunc(slices.Clone(group), func(value string) bool { return strings.EqualFold(value, entry.value) })
-			if len(rest) > 0 {
-				groups = append(groups, rest)
+		if ladder, ranked := resolutionLadder[strings.ToLower(entry.value)]; entry.dimension == "resolution" && ranked && (target.PreferOver || target.IgnoreBelow) {
+			groups = aboveAndBelow(entry.value, ladder, target)
+		} else {
+			for _, group := range rules.Tiers[entry.dimension] {
+				rest := slices.DeleteFunc(slices.Clone(group), func(value string) bool { return strings.EqualFold(value, entry.value) })
+				if len(rest) > 0 {
+					groups = append(groups, rest)
+				}
 			}
 		}
 		tiers[entry.dimension] = groups
@@ -71,7 +106,11 @@ func WithTarget(rules score.Profile, target settings.QualityTarget) score.Profil
 		if _, tiered := rules.Tiers[entry.dimension]; tiered {
 			continue
 		}
-		targets[entry.dimension] = []score.Target{{Ideal: entry.ideal, Weights: score.TargetWeights{Over: 1, Under: 1}}}
+		over := 1.0
+		if target.PreferOver {
+			over = overshootWeight
+		}
+		targets[entry.dimension] = []score.Target{{Ideal: entry.ideal, Weights: score.TargetWeights{Over: over, Under: 1}}}
 		leading = append(leading, entry.dimension+"_distance")
 	}
 	scoring := slices.Clone(rules.Scoring)

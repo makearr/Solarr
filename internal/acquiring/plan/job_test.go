@@ -26,6 +26,8 @@ type env struct {
 	perHour  int
 	outcome  plan.Outcome
 	searched []int64
+	// gapsOff turns the search of old missing items off.
+	gapsOff bool
 }
 
 func newEnv(t *testing.T) *env {
@@ -100,6 +102,7 @@ func (e *env) huntJob() *plan.HuntJob {
 	return plan.NewHuntJob(plan.HuntConfig{
 		Hunt: library.NewHunt(e.store), Clock: e.clock, Logger: slog.New(slog.DiscardHandler),
 		PerHour: func(context.Context) (int, error) { return e.perHour, nil },
+		Gaps:    func() bool { return !e.gapsOff },
 		Search: func(ctx context.Context, itemID int64) (plan.Outcome, error) {
 			e.searched = append(e.searched, itemID)
 			if e.outcome == plan.OutcomeSearched {
@@ -361,5 +364,22 @@ func TestHuntDealsSearchesToLibrariesByShare(t *testing.T) {
 	run(t, hunt)
 	if got, want := count(), map[int64]int{1: 8, 2: 6}; !maps.Equal(got, want) {
 		t.Fatalf("searches by library after the second hour = %v, want %v", got, want)
+	}
+}
+
+func TestHuntSkipsOldMissingItemsWhenGapsAreOff(t *testing.T) {
+	e := newEnv(t)
+	e.album(t, "Zanuvode", true)
+	e.planPass(t)
+	e.gapsOff = true
+
+	run(t, e.huntJob())
+	if len(e.searched) != 0 {
+		t.Fatalf("searched %v with gaps off, want nothing", e.searched)
+	}
+	e.gapsOff = false
+	run(t, e.huntJob())
+	if len(e.searched) != 1 {
+		t.Fatalf("searched %v with gaps on, want the album", e.searched)
 	}
 }

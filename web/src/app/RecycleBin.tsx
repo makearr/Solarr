@@ -19,10 +19,14 @@ export function RecycleBin() {
   });
   const [maxGB, setMaxGB] = useState(0);
   const [percent, setPercent] = useState(0);
+  const [minFreeGB, setMinFreeGB] = useState(0);
+  const [minFreePercent, setMinFreePercent] = useState(0);
   useEffect(() => {
     if (!limits.data) return;
     setMaxGB(Math.round(limits.data.max_bytes / GB));
     setPercent(limits.data.max_percent_of_root);
+    setMinFreeGB(Math.round((limits.data.min_free_bytes ?? 0) / GB));
+    setMinFreePercent(limits.data.min_free_percent ?? 0);
   }, [limits.data]);
 
   const contents = useQuery({
@@ -37,15 +41,21 @@ export function RecycleBin() {
   // The field shows whole GB; a limit set to something finer is kept unless the field itself was changed.
   const storedBytes = limits.data?.max_bytes ?? 0;
   const maxBytes = maxGB === Math.round(storedBytes / GB) ? storedBytes : maxGB * GB;
+  const storedMinFree = limits.data?.min_free_bytes ?? 0;
+  const minFreeBytes = minFreeGB === Math.round(storedMinFree / GB) ? storedMinFree : minFreeGB * GB;
   const save = useMutation({
     mutationFn: () => ok(api.PATCH("/recyclebin", {
-      body: { max_bytes: maxBytes, max_percent_of_root: percent },
+      body: { max_bytes: maxBytes, max_percent_of_root: percent, min_free_bytes: minFreeBytes, min_free_percent: minFreePercent },
     })),
     onSuccess: (data) => queryClient.setQueryData(["recycleBinLimits"], data),
   });
 
   if (!limits.data) return <p className="p-6 text-sm text-ink-muted">{limits.isError ? "The limits could not be read." : "Loading…"}</p>;
-  const dirty = maxBytes !== limits.data.max_bytes || percent !== limits.data.max_percent_of_root;
+  const dirty =
+    maxBytes !== limits.data.max_bytes ||
+    percent !== limits.data.max_percent_of_root ||
+    minFreeBytes !== storedMinFree ||
+    minFreePercent !== (limits.data.min_free_percent ?? 0);
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-3 p-6">
@@ -64,6 +74,14 @@ export function RecycleBin() {
           <span className="w-56 shrink-0">One root folder&apos;s recycle bin</span>
           <input type="number" min={0} max={100} value={percent} onChange={(event) => setPercent(Number(event.target.value))} className={`${inputStyle} w-24`} />
           <span className="text-xs text-ink-muted">% of the root folder; 0 is no limit.</span>
+        </label>
+        <p className="text-xs text-ink-muted">Or by what the root folder has left: its bin is emptied, oldest first, while the root has less free space than the larger of these. 0 is no floor.</p>
+        <label className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="w-56 shrink-0">Keep free on a root folder</span>
+          <input type="number" min={0} value={minFreeGB} onChange={(event) => setMinFreeGB(Math.max(0, Number(event.target.value)))} className={`${inputStyle} w-24`} />
+          <span className="text-xs text-ink-muted">GB</span>
+          <input type="number" min={0} max={100} value={minFreePercent} onChange={(event) => setMinFreePercent(Number(event.target.value))} className={`${inputStyle} w-24`} />
+          <span className="text-xs text-ink-muted">% of the root folder</span>
         </label>
       </section>
       <div className="flex items-center gap-2">

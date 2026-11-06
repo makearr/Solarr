@@ -161,3 +161,37 @@ func TestAProvidersCollectionAPersonDeletedOrTookAWorkOutOfStaysSoOnRefresh(t *t
 		t.Errorf("Join = %d, %v, want 0: the collection was deleted", joined, err)
 	}
 }
+
+func TestLinkedCollectionsSeeEachOtherAndTheLinkFollowsAMergeAndADelete(t *testing.T) {
+	opened, _ := newLibrary(t)
+	franchises := library.NewFranchises(opened)
+	film, _ := franchises.Create(t.Context(), "movie", 1, "Space films")
+	series, _ := franchises.Create(t.Context(), "tv", 2, "Space series")
+	spare, _ := franchises.Create(t.Context(), "tv", 2, "Space series again")
+	if err := franchises.LinkCollections(t.Context(), film, film); err == nil {
+		t.Error("a collection linked to itself")
+	}
+	if err := franchises.LinkCollections(t.Context(), film, series); err != nil {
+		t.Fatal(err)
+	}
+	if err := franchises.LinkCollections(t.Context(), series, film); err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[int64]int64{film: series, series: film} {
+		if got, err := franchises.LinkedWith(t.Context(), id); err != nil || len(got) != 1 || got[0] != want {
+			t.Errorf("links of %d = %v, %v; want [%d]", id, got, err, want)
+		}
+	}
+	if err := franchises.MergeFranchises(t.Context(), spare, []int64{series}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := franchises.LinkedWith(t.Context(), film); len(got) != 1 || got[0] != spare {
+		t.Errorf("after the merge the film collection is linked with %v, want [%d]", got, spare)
+	}
+	if err := franchises.UnlinkCollections(t.Context(), spare, film); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := franchises.LinkedWith(t.Context(), film); len(got) != 0 {
+		t.Errorf("still linked: %v", got)
+	}
+}

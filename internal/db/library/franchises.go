@@ -476,6 +476,9 @@ func (f Franchises) MergeFranchises(ctx context.Context, keep int64, others []in
 			if err := queries.MoveCollectionExternalIDs(ctx, librarydb.MoveCollectionExternalIDsParams{IntoID: keep, FromID: other}); err != nil {
 				return err
 			}
+			if err := moveCollectionLinks(ctx, queries, keep, other); err != nil {
+				return err
+			}
 			if err := queries.DeleteCollection(ctx, other); err != nil {
 				return err
 			}
@@ -591,6 +594,9 @@ func (f Franchises) DeleteFranchise(ctx context.Context, franchiseID int64) erro
 			}
 		}
 		if err := refuseCollection(ctx, queries, franchiseID, 0); err != nil {
+			return err
+		}
+		if err := queries.DeleteCollectionLinks(ctx, franchiseID); err != nil {
 			return err
 		}
 		return queries.DeleteCollection(ctx, franchiseID)
@@ -774,6 +780,117 @@ func (f Franchises) AddToFranchise(ctx context.Context, id int64, workIDs []int6
 	})
 	if err != nil {
 		return fmt.Errorf("library: add to franchise %d: %w", id, err)
+	}
+	return nil
+}
+
+func moveCollectionLinks(ctx context.Context, queries *librarydb.Queries, keep, other int64) error {
+	if err := queries.MoveCollectionLinksFrom(ctx, librarydb.MoveCollectionLinksFromParams{IntoID: keep, FromID: other}); err != nil {
+		return err
+	}
+	if err := queries.MoveCollectionLinksTo(ctx, librarydb.MoveCollectionLinksToParams{IntoID: keep, FromID: other}); err != nil {
+		return err
+	}
+	if err := queries.DeleteCollectionLinks(ctx, other); err != nil {
+		return err
+	}
+	return queries.DeleteSelfCollectionLinks(ctx)
+}
+
+// CollectionLinkKind is the relationship between collections of different libraries that are one collection.
+const CollectionLinkKind = "linked_collection"
+
+// LinkCollections says two collections are one, shown together; linking a collection to itself is refused.
+func (f Franchises) LinkCollections(ctx context.Context, a, b int64) error {
+	if a == b {
+		return errors.New("library: a collection cannot be linked to itself")
+	}
+	err := f.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		if err := queries.DeleteCollectionLink(ctx, librarydb.DeleteCollectionLinkParams{A: a, B: b}); err != nil {
+			return err
+		}
+		return queries.AddRelationship(ctx, librarydb.AddRelationshipParams{FromType: "collection", FromID: a, ToType: "collection", ToID: b, Kind: CollectionLinkKind})
+	})
+	if err != nil {
+		return fmt.Errorf("library: link collections %d and %d: %w", a, b, err)
+	}
+	return nil
+}
+
+// UnlinkCollections takes the link between two collections away.
+func (f Franchises) UnlinkCollections(ctx context.Context, a, b int64) error {
+	err := f.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).DeleteCollectionLink(ctx, librarydb.DeleteCollectionLinkParams{A: a, B: b})
+	})
+	if err != nil {
+		return fmt.Errorf("library: unlink collections %d and %d: %w", a, b, err)
+	}
+	return nil
+}
+
+// LinkedWith lists the collections linked with one, either way round.
+func (f Franchises) LinkedWith(ctx context.Context, id int64) ([]int64, error) {
+	rows, err := librarydb.New(f.store.Read()).ListCollectionLinks(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("library: links of collection %d: %w", id, err)
+	}
+	return rows, nil
+}
+
+// CollectionPlace is where a collection lives: its media type and the library a hand-made one was made in (0 for a
+// provider's).
+type CollectionPlace struct {
+	MediaType  string
+	CategoryID int64
+}
+
+// PlaceOf answers a collection's media type and library; sql.ErrNoRows wrapped when it is none.
+func (f Franchises) PlaceOf(ctx context.Context, id int64) (CollectionPlace, error) {
+	collection, err := librarydb.New(f.store.Read()).GetCollection(ctx, id)
+	if err != nil {
+		return CollectionPlace{}, fmt.Errorf("library: collection %d: %w", id, err)
+	}
+	return CollectionPlace{MediaType: collection.MediaType, CategoryID: collection.CategoryID}, nil
+}
+
+// DuplicateMerges plans the merges of a library's duplicate collections without applying them.
+func (f Franchises) DuplicateMerges(ctx context.Context, mediaType string, categoryID int64) ([]CollectionMerge, error) {
+	rows, err := f.InCategory(ctx, mediaType, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	var candidates []MergeCandidate
+	for _, row := range rows {
+		if row.Kind != FranchiseKind {
+			continue
+		}
+		candidate := MergeCandidate{ID: row.ID, Name: row.Name}
+		for _, member := range row.Members {
+			candidate.Works = append(candidate.Works, member.WorkID)
+		}
+		candidates = append(candidates, candidate)
+	}
+	return PlanCollectionMerges(candidates), nil
+}
+
+// MergeDuplicates applies a plan: each group's collections fold into the larger, which stays monitored when any was.
+func (f Franchises) MergeDuplicates(ctx context.Context, merges []CollectionMerge) error {
+	for _, merge := range merges {
+		monitored := false
+		for _, id := range append([]int64{merge.Keep}, merge.Drop...) {
+			if row, err := f.Get(ctx, id); err == nil && row.Monitored {
+				monitored = true
+			}
+		}
+		if err := f.MergeFranchises(ctx, merge.Keep, merge.Drop); err != nil {
+			return err
+		}
+		if monitored {
+			if err := f.SetMonitored(ctx, merge.Keep, true, 0); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

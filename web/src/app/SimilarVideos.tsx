@@ -1,3 +1,4 @@
+import { usePreference } from "@/lib/usePreference";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -136,7 +137,10 @@ function GroupCard({ group, scope, libraryName }: { group: Group; scope: Similar
 export function SimilarVideos({ scope }: { scope: SimilarScope }) {
   const search = useSearch({ strict: false }) as { level?: string };
   const navigate = useNavigate();
-  const level: Level = LEVELS.some((entry) => entry.id === search.level) ? (search.level as Level) : "medium";
+  // Exact until you choose otherwise; the choice is kept for next time.
+  const [preferred, setPreferred] = usePreference<Level>("similar-videos.level", "exact");
+  const known = (value: string | undefined): value is Level => LEVELS.some((entry) => entry.id === value);
+  const level: Level = known(search.level) ? search.level : known(preferred) ? preferred : "exact";
   const libraries = useLibraries();
   const report = useQuery({
     queryKey: ["similar-videos", scope === "everywhere" ? "everywhere" : scope.categoryId, level],
@@ -158,7 +162,10 @@ export function SimilarVideos({ scope }: { scope: SimilarScope }) {
             aria-label="Similarity"
             className={inputStyle}
             value={level}
-            onChange={(event) => void navigate({ to: ".", search: (previous: object) => ({ ...previous, level: event.target.value }), replace: true })}
+            onChange={(event) => {
+              setPreferred(event.target.value as Level);
+              void navigate({ to: ".", search: (previous: object) => ({ ...previous, level: event.target.value }), replace: true });
+            }}
           >
             {LEVELS.map((entry) => (
               <option key={entry.id} value={entry.id}>{entry.label} — {entry.help}</option>

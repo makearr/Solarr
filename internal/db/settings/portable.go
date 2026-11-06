@@ -54,6 +54,8 @@ type ScalarSettingsEntry struct {
 	// RecycleBinMaxBytes and its share of a root; absent keeps what is stored.
 	RecycleBinMaxBytes         *int64 `yaml:"recycle_bin_max_bytes,omitempty"`
 	RecycleBinMaxPercentOfRoot *int64 `yaml:"recycle_bin_max_percent_of_root,omitempty"`
+	RecycleBinMinFreeBytes     *int64 `yaml:"recycle_bin_min_free_bytes,omitempty"`
+	RecycleBinMinFreePercent   *int64 `yaml:"recycle_bin_min_free_percent,omitempty"`
 	CacheMaxBytes              int64  `yaml:"cache_max_bytes,omitempty"`
 	CacheMaxAgeDays            int64  `yaml:"cache_max_age_days,omitempty"`
 	CacheImagesSharePercent    int64  `yaml:"cache_images_share_percent,omitempty"`
@@ -123,7 +125,7 @@ func (e ScalarSettingsEntry) has(key string) bool { return e.present == nil || e
 
 // recycleBinLimits is the document's recycle bin limits, a missing one at its default; nil when neither is named.
 func (e ScalarSettingsEntry) recycleBinLimits() *RecycleBinLimits {
-	if e.RecycleBinMaxBytes == nil && e.RecycleBinMaxPercentOfRoot == nil {
+	if e.RecycleBinMaxBytes == nil && e.RecycleBinMaxPercentOfRoot == nil && e.RecycleBinMinFreeBytes == nil && e.RecycleBinMinFreePercent == nil {
 		return nil
 	}
 	limits := RecycleBinLimits{MaxPercentOfRoot: DefaultRecycleBinMaxPercentOfRoot}
@@ -132,6 +134,12 @@ func (e ScalarSettingsEntry) recycleBinLimits() *RecycleBinLimits {
 	}
 	if e.RecycleBinMaxPercentOfRoot != nil {
 		limits.MaxPercentOfRoot = *e.RecycleBinMaxPercentOfRoot
+	}
+	if e.RecycleBinMinFreeBytes != nil {
+		limits.MinFreeBytes = *e.RecycleBinMinFreeBytes
+	}
+	if e.RecycleBinMinFreePercent != nil {
+		limits.MinFreePercent = *e.RecycleBinMinFreePercent
 	}
 	return &limits
 }
@@ -335,6 +343,8 @@ type QualityTargetEntry struct {
 	VideoBitrateKbps  *int64   `yaml:"video_bitrate_kbps,omitempty"`
 	FrameRate         float64  `yaml:"frame_rate,omitempty"`
 	CRF               float64  `yaml:"crf,omitempty"`
+	PreferOver        bool     `yaml:"prefer_over,omitempty"`
+	IgnoreBelow       bool     `yaml:"ignore_below,omitempty"`
 }
 
 // qualityProfileNames is the library's list, reading an older document's single profile as one.
@@ -452,6 +462,8 @@ func (c *Cache) Export() Document {
 		NetworkAllowCIDRs:            network.AllowCIDRs,
 		RecycleBinMaxBytes:           &recycleBin.MaxBytes,
 		RecycleBinMaxPercentOfRoot:   &recycleBin.MaxPercentOfRoot,
+		RecycleBinMinFreeBytes:       &recycleBin.MinFreeBytes,
+		RecycleBinMinFreePercent:     &recycleBin.MinFreePercent,
 		CacheMaxBytes:                cacheBudget.MaxBytes,
 		CacheMaxAgeDays:              cacheBudget.MaxAgeDays,
 		CacheImagesSharePercent:      cacheBudget.ImagesSharePercent,
@@ -1408,6 +1420,12 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 	}
 	if entry.RecycleBinMaxPercentOfRoot != nil {
 		values[KeyRecycleBinMaxPercentOfRoot] = strconv.FormatInt(*entry.RecycleBinMaxPercentOfRoot, 10)
+	}
+	if entry.RecycleBinMinFreeBytes != nil {
+		values[KeyRecycleBinMinFreeBytes] = strconv.FormatInt(*entry.RecycleBinMinFreeBytes, 10)
+	}
+	if entry.RecycleBinMinFreePercent != nil {
+		values[KeyRecycleBinMinFreePercent] = strconv.FormatInt(*entry.RecycleBinMinFreePercent, 10)
 	}
 	if entry.BackupRetention != "" {
 		values[KeyBackupRetention] = string(entry.BackupRetention)

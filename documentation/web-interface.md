@@ -171,3 +171,11 @@ until it existed, and both mutations are caught by it.
 "rendered fewer hooks than expected". That has already happened here once.
 
 **Search words.** The global search (FTS5) and the list filters match every word in any order; the last word is a prefix unless the text ends in a space ("Kat " is not "Kate"). The box keeps a trailing space.
+
+**Settings.** Settings opens in the sidebar like a library (its pages listed under it, no tab row above the page). A long
+page is split into sub pages with `SubTabs` (`?page=` in the address): Libraries (Libraries, Priority), Metadata (Providers,
+Air times), Quality profiles (Targets, Profiles, Languages), Scheduler (Overview, Tasks). The Scheduler overview is a heatmap of a
+week: the runs per hour of every enabled task, worked out from the cadences (`schedulerLoad.ts`). Libraries have up/down
+buttons; the order is the sidebar's and `POST /categories/order` ranks them ten apart (a library's further media types follow).
+**General** holds the instance switches that belong to no page: hashing videos (`scan.video_phash`) and the automatic search of
+old missing items (`search.hunt_gaps`; off, the hunt's gap share goes to new releases and upgrades).

@@ -36,7 +36,11 @@ func (s *Server) UpdateRecycleBinLimits(w http.ResponseWriter, r *http.Request) 
 		writeError(w, s.logger, err)
 		return
 	}
-	limits := settings.RecycleBinLimits{MaxBytes: body.MaxBytes, MaxPercentOfRoot: body.MaxPercentOfRoot}
+	stored := s.auth.Settings.Snapshot().RecycleBinLimits()
+	limits := settings.RecycleBinLimits{
+		MaxBytes: body.MaxBytes, MaxPercentOfRoot: body.MaxPercentOfRoot,
+		MinFreeBytes: derefOr(body.MinFreeBytes, stored.MinFreeBytes), MinFreePercent: derefOr(body.MinFreePercent, stored.MinFreePercent),
+	}
 	if err := s.auth.Settings.SetRecycleBinLimits(r.Context(), s.auth.Clock, limits); err != nil {
 		var problems config.Problems
 		if errors.As(err, &problems) {
@@ -51,7 +55,9 @@ func (s *Server) UpdateRecycleBinLimits(w http.ResponseWriter, r *http.Request) 
 }
 
 func recycleBinLimitsView(limits settings.RecycleBinLimits) gen.RecycleBinLimits {
-	return gen.RecycleBinLimits{MaxBytes: limits.MaxBytes, MaxPercentOfRoot: limits.MaxPercentOfRoot}
+	return gen.RecycleBinLimits{
+		MaxBytes: limits.MaxBytes, MaxPercentOfRoot: limits.MaxPercentOfRoot, MinFreeBytes: &limits.MinFreeBytes, MinFreePercent: &limits.MinFreePercent,
+	}
 }
 
 // RecycleBinEntryRow is one recycled file.

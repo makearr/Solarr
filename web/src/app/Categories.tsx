@@ -1,3 +1,4 @@
+import { ArrowDown, ArrowUp } from "lucide-react";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -66,6 +67,16 @@ export function Categories() {
     },
   });
 
+  const order = useMutation({
+    mutationFn: async (ids: number[]) => {
+      await ok(api.POST("/categories/order", { body: { ids } }));
+    },
+    onSuccess: () => {
+      void invalidate();
+      void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+    },
+  });
+
   const [searchMessages, setSearchMessages] = useState<Record<number, string>>({});
   const search = useMutation({
     mutationFn: async (id: number) => {
@@ -110,7 +121,15 @@ export function Categories() {
                 onRemove={() => remove.mutate(category.id)}
                 mergeTargets={(categories.data ?? []).filter((other) => other.id !== category.id && other.media_type === category.media_type && other.library_id == null)}
                 onMerge={(into) => merge.mutate({ id: category.id, into })}
-                busy={remove.isPending || merge.isPending}
+                onMove={(direction) => {
+                  const heads = (categories.data ?? []).filter((other) => other.library_id == null).map((other) => other.id);
+                  const at = heads.indexOf(category.id);
+                  const to = at + direction;
+                  if (to < 0 || to >= heads.length) return;
+                  [heads[at], heads[to]] = [heads[to]!, heads[at]!];
+                  order.mutate(heads);
+                }}
+                busy={remove.isPending || merge.isPending || order.isPending}
                 onSearch={() => search.mutate(category.id)}
                 searchPending={search.isPending && search.variables === category.id}
                 searchMessage={searchMessages[category.id]}
@@ -182,6 +201,7 @@ function Row({
   onRemove,
   mergeTargets,
   onMerge,
+  onMove,
   busy,
   onSearch,
   searchPending,
@@ -193,6 +213,8 @@ function Row({
   onRemove: () => void;
   mergeTargets: readonly Category[];
   onMerge: (into: number) => void;
+  /** Up (-1) or down (+1) one place in the sidebar. */
+  onMove: (direction: -1 | 1) => void;
   busy: boolean;
   onSearch: () => void;
   searchPending: boolean;
@@ -202,7 +224,21 @@ function Row({
   const further = category.library_id != null;
   return (
     <li className={`flex items-center gap-3 py-2.5 pr-3 ${further ? "pl-8" : "pl-3"}`}>
-      {further ? <span className="text-sm text-ink-muted">also holds</span> : <span className="text-sm font-medium">{category.name}</span>}
+      {further ? (
+        <span className="text-sm text-ink-muted">also holds</span>
+      ) : (
+        <>
+          <span className="flex">
+            <button type="button" aria-label={`Move ${category.name} up`} disabled={busy} onClick={() => onMove(-1)} className="rounded p-0.5 text-ink-muted hover:text-ink disabled:opacity-30">
+              <ArrowUp aria-hidden className="size-3.5" />
+            </button>
+            <button type="button" aria-label={`Move ${category.name} down`} disabled={busy} onClick={() => onMove(1)} className="rounded p-0.5 text-ink-muted hover:text-ink disabled:opacity-30">
+              <ArrowDown aria-hidden className="size-3.5" />
+            </button>
+          </span>
+          <span className="text-sm font-medium">{category.name}</span>
+        </>
+      )}
       <span className="rounded-full border border-border-subtle px-1.5 py-px text-[0.6875rem]
                        text-ink-muted">
         {mediaTypeName(category.media_type)}

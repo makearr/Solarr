@@ -29,7 +29,8 @@ export function SectionTabs() {
     if (section && active) rememberTab(section, active);
   }, [section, active]);
 
-  if (!section || tabs.length < 2) return null;
+  // Settings lists its pages in the sidebar, as a library lists its levels.
+  if (!section || tabs.length < 2 || section.key === "settings") return null;
   return (
     <nav
       aria-label={library ? `${library.name}: ${section.label}` : section.label}

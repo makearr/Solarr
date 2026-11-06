@@ -22,7 +22,16 @@ export function useNewLibrary() {
   const [kind, setKind] = useState("");
   const mediaType = picked ?? mediaTypes[0]?.key;
   const typeName = mediaType ? mediaTypeName(mediaType) : "";
+  const kinds = mediaTypes.find((type) => type.key === mediaType)?.kinds ?? [];
+  const effectiveKind = kind || kinds[0]?.key || "";
+  // Anime is one library for its series and its films, so that is how it starts unless unticked.
+  const [asked, setAlsoMovies] = useState<boolean>();
+  const offersMovies = mediaType === "tv" && effectiveKind === "anime" && mediaTypes.some((type) => type.key === "movie");
+  const alsoMovies = offersMovies && (asked ?? true);
   return {
+    offersMovies,
+    alsoMovies,
+    setAlsoMovies,
     mediaTypes,
     mediaType,
     typeName,
@@ -38,7 +47,10 @@ export function useNewLibrary() {
     create: () => {
       if (!mediaType) throw new Error("no media type to create a library of");
       const name = (typedName ?? typeName).trim() || typeName;
-      return ok(api.POST("/categories", { body: { name, media_type: mediaType, kind: kind || undefined } }));
+      return ok(api.POST("/categories", { body: { name, media_type: mediaType, kind: kind || undefined } })).then(async (created) => {
+        if (alsoMovies) await ok(api.POST("/categories/{id}/types", { params: { path: { id: created.id } }, body: { media_type: "movie" } }));
+        return created;
+      });
     },
   };
 }
@@ -74,6 +86,12 @@ export function NewLibraryFields({ library }: { library: NewLibrary }) {
         </select>
       </label>
       {library.mediaType && <KindSelect mediaType={library.mediaType} value={library.kind} onChange={library.setKind} />}
+      {library.offersMovies && (
+        <label className="flex items-center gap-2 text-sm" title="Anime films live beside the series, in the same library">
+          <input type="checkbox" checked={library.alsoMovies} onChange={(event) => library.setAlsoMovies(event.target.checked)} />
+          Also holds movies
+        </label>
+      )}
     </>
   );
 }

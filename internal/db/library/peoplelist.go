@@ -180,7 +180,7 @@ func newPeopleQuery(filter PeopleFilter) peopleQuery {
 	return query
 }
 
-// coverage counts the person's wanted works in scope and the complete ones, from their monitored SET items.
+// coverage counts the person's wanted works in scope and the complete ones, from their monitored items: a set, or a whole-work single (a film, a scene).
 func (q peopleQuery) coverage(complete bool) sqlPart {
 	scope := inScope("di.category_id", q.scope)
 	state := ""
@@ -189,7 +189,7 @@ func (q peopleQuery) coverage(complete bool) sqlPart {
 	}
 	return sqlPart{
 		sql: "CAST((SELECT COUNT(DISTINCT di.work_id) FROM credit c JOIN desired_item di ON di.work_id = c.work_id AND di.monitored = 1" +
-			" AND di.satisfaction_kind = 'SET' AND " + scope.sql + " WHERE c.person_id = p.id" + state + ") AS INTEGER)",
+			" AND (di.satisfaction_kind = 'SET' OR di.media_ref = '') AND " + scope.sql + " WHERE c.person_id = p.id" + state + ") AS INTEGER)",
 		args: scope.args,
 	}
 }

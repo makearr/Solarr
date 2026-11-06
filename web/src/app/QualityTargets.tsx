@@ -118,6 +118,22 @@ function TargetFields({ target, onChange }: { target: QualityTarget; onChange: (
           any={audioOnly ? null : "any"}
         />
       </Group>
+      <Group title="Over and under the target">
+        <label className="flex items-start gap-2 text-sm" title="A release above the target ranks before one below it, and overshooting a number costs less than undershooting it">
+          <input type="checkbox" className="mt-1" checked={target.prefer_over ?? false} onChange={(event) => set({ prefer_over: event.target.checked })} />
+          <span>
+            Prefer over-quality to under-quality
+            <span className="block text-xs text-ink-muted">With a 1080p target, 4k beats 720p even when its bitrate is further from the ideal.</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2 text-sm" title="Everything below the target only wins when nothing at or above it exists">
+          <input type="checkbox" className="mt-1" checked={target.ignore_below ?? false} onChange={(event) => set({ ignore_below: event.target.checked })} />
+          <span>
+            Ignore everything below the target while anything at or above it exists
+            <span className="block text-xs text-ink-muted">A 720p release is chosen only when no 1080p or better one is found.</span>
+          </span>
+        </label>
+      </Group>
       {!audioOnly && (
         <Group title="Video">
           <Pick label="Resolution" value={target.resolution} options={RESOLUTIONS} onChange={(resolution) => set({ resolution })} />

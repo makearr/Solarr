@@ -45,6 +45,9 @@ UPDATE category SET
   search_share  = (SELECT p.search_share FROM category p WHERE p.id = sqlc.arg(head_id))
 WHERE category.library_id = sqlc.arg(head_id);
 
+-- name: SetCategoryRank :exec
+UPDATE category SET priority_rank = ? WHERE id = ?;
+
 -- name: SetCategoryRatingLimit :exec
 UPDATE category SET max_age = ?, allow_unrated = ? WHERE id = ?;
 

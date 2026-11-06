@@ -267,6 +267,29 @@ func (c *Cache) AddLibraryType(ctx context.Context, libraryID int64, mediaType s
 	return updated, nil
 }
 
+// OrderLibraries ranks the libraries in the order given, ten apart; a library's further media types follow its rank.
+func (c *Cache) OrderLibraries(ctx context.Context, ids []int64) error {
+	snapshot := c.Snapshot()
+	seen := map[int64]bool{}
+	for _, id := range ids {
+		if _, found := snapshot.Category(id); !found || snapshot.LibraryOf(id) != id || seen[id] {
+			return config.Problems{{Path: "ids", Value: strconv.FormatInt(id, 10), Expectation: "each library once"}}
+		}
+		seen[id] = true
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		for index, id := range ids {
+			if err := queries.SetCategoryRank(ctx, settingsdb.SetCategoryRankParams{PriorityRank: int64(index+1) * 10, ID: id}); err != nil {
+				return err
+			}
+			if err := queries.SyncLibraryMembers(ctx, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // SyncLibrary makes a library's members follow it again after the library itself changed.
 func (c *Cache) SyncLibrary(ctx context.Context, libraryID int64) error {
 	snapshot := c.Snapshot()

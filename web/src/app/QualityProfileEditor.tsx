@@ -1,3 +1,4 @@
+import { SubTabs } from "@/ui/SubTabs";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
@@ -92,9 +93,7 @@ export function QualityProfilesPage() {
     profiles: (profiles.data ?? []).filter((profile) => profile.media_type === mediaType),
   })).filter((group) => group.profiles.length > 0);
 
-  return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
-      <h1 className="text-lg font-semibold">Quality profiles</h1>
+  const profileCard = (
       <Card
         title="Profiles"
         help="What each kind of file is worth. A library lists the profiles it accepts, in order, under its own Quality page; the same profile can serve several libraries."
@@ -147,8 +146,18 @@ export function QualityProfilesPage() {
         </section>
       ))}
       </Card>
-      <QualityTargetsSection />
-      <LanguageProfiles />
+  );
+
+  return (
+    <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
+      <h1 className="text-lg font-semibold">Quality profiles</h1>
+      <SubTabs
+        tabs={[
+          { key: "targets", label: "Targets", content: <QualityTargetsSection /> },
+          { key: "profiles", label: "Profiles", content: profileCard },
+          { key: "languages", label: "Languages", content: <LanguageProfiles /> },
+        ]}
+      />
     </div>
   );
 }

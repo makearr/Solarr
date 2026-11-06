@@ -5,6 +5,9 @@ import { Play, Plus, X } from "lucide-react";
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { isTierVisible, useTier } from "@/lib/useTier";
+import { SubTabs } from "@/ui/SubTabs";
+
+import { taskLoad, WEEK_HOURS } from "./schedulerLoad";
 
 type Schedule = components["schemas"]["Schedule"];
 type BackupRetention = components["schemas"]["BackupRetention"];
@@ -117,6 +120,57 @@ export function SchedulerPage() {
   );
 }
 
+const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+/** What runs when: a week of hours, darker where more runs fall, from the cadences of every enabled task. */
+function Heatmap({ schedules }: { schedules: readonly Schedule[] }) {
+  const tasks = schedules.filter((schedule) => schedule.enabled).map((schedule) => ({ name: schedule.name, load: taskLoad(schedule.cadences) }));
+  const sums = new Array<number>(WEEK_HOURS).fill(0);
+  for (const task of tasks) task.load.forEach((runs, slot) => (sums[slot]! += runs));
+  const busiest = Math.max(1, ...sums);
+  return (
+    <section className="flex flex-col gap-2" aria-label="Schedule heatmap">
+      <p className="text-xs text-ink-muted">
+        Runs per hour across a week, all enabled tasks together. Darker is busier (up to {Math.round(busiest)} runs in the busiest hour); hover an hour for the tasks in it.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="border-separate border-spacing-0.5 text-[10px] text-ink-muted">
+          <thead>
+            <tr>
+              <th />
+              {Array.from({ length: 24 }, (_, hour) => (
+                <th key={hour} className="w-6 font-normal">
+                  {hour % 3 === 0 ? hour : ""}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {DAY_ORDER.map((weekday) => (
+              <tr key={weekday}>
+                <th className="pr-2 text-right font-normal">{WEEKDAYS[weekday]!.slice(0, 3)}</th>
+                {Array.from({ length: 24 }, (_, hour) => {
+                  const slot = weekday * 24 + hour;
+                  const runs = sums[slot]!;
+                  const here = tasks.filter((task) => task.load[slot]! > 0).map((task) => task.name);
+                  return (
+                    <td
+                      key={hour}
+                      title={`${WEEKDAYS[weekday]} ${String(hour).padStart(2, "0")}:00, ${Math.round(runs * 10) / 10} runs${here.length ? `: ${here.join(", ")}` : ""}`}
+                      className="h-5 w-6 rounded-sm bg-border-subtle"
+                      style={runs > 0 ? { background: `color-mix(in srgb, var(--color-accent, #3b82f6) ${Math.round(15 + (85 * runs) / busiest)}%, transparent)` } : undefined}
+                    />
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 export function Scheduler() {
   const queryClient = useQueryClient();
   const tier = useTier();
@@ -150,7 +204,7 @@ export function Scheduler() {
   if (schedules.error !== null) return null;
   const visible = (schedules.data ?? []).filter((schedule) => isTierVisible(tier, schedule.tier));
 
-  return (
+  const tasks = (
     <section className="flex flex-col gap-4">
       <p className="text-xs text-ink-muted">
         Every periodic action Solarr runs. A task can run at several times; Run now fires at once and
@@ -193,6 +247,15 @@ export function Scheduler() {
         <p className="text-xs text-danger">That change was refused.</p>
       )}
     </section>
+  );
+
+  return (
+    <SubTabs
+      tabs={[
+        { key: "overview", label: "Overview", content: <Heatmap schedules={visible} /> },
+        { key: "tasks", label: "Tasks", content: tasks },
+      ]}
+    />
   );
 }
 

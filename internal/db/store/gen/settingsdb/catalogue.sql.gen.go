@@ -435,6 +435,20 @@ func (q *Queries) SetCategoryMonitorReleaseTypes(ctx context.Context, arg SetCat
 	return err
 }
 
+const setCategoryRank = `-- name: SetCategoryRank :exec
+UPDATE category SET priority_rank = ? WHERE id = ?
+`
+
+type SetCategoryRankParams struct {
+	PriorityRank int64
+	ID           int64
+}
+
+func (q *Queries) SetCategoryRank(ctx context.Context, arg SetCategoryRankParams) error {
+	_, err := q.db.ExecContext(ctx, setCategoryRank, arg.PriorityRank, arg.ID)
+	return err
+}
+
 const setCategoryRatingLimit = `-- name: SetCategoryRatingLimit :exec
 UPDATE category SET max_age = ?, allow_unrated = ? WHERE id = ?
 `

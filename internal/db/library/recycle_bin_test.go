@@ -336,6 +336,42 @@ func TestRecycleBinSweep_EvictsOverPerRootPercentBudget(t *testing.T) {
 	}
 }
 
+func TestRecycleBinSweep_EmptiesARootsBinUntilItHasItsMinimumFreeSpace(t *testing.T) {
+	opened, _ := newLibrary(t)
+	fake := clock.NewFakeAtEpoch()
+	fsys := fsx.NewMem(fake)
+	q := library.NewRecycleBin(opened, fsys, fake)
+	rootID := int64(1)
+	var entries []library.Entry
+	for _, name := range []string{"a", "b", "c"} {
+		putTestFile(t, fsys, "/media/root/"+name+".flac", []byte("0123456789"))
+		entry, err := q.Put(t.Context(), library.PutRequest{
+			RootPath: "/media/root", OriginalPath: "/media/root/" + name + ".flac",
+			RootFolderID: &rootID, Reason: library.ReasonJunk, Retain: 168 * time.Hour,
+		})
+		if err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+		entries = append(entries, entry)
+		fake.Advance(time.Minute)
+	}
+	// 100 bytes free of 1000 and a floor of 5%, 50: freeing the oldest two (20 bytes) is not enough, three (30) is not either; 100 is
+	// already above 50, so nothing goes.
+	free := func(int64) (int64, int64, bool) { return 100, 1000, true }
+	result, err := q.Sweep(t.Context(), library.RecycleBinConfig{MinFreePercent: 5, Free: free}, nil, []int64{rootID})
+	if err != nil || result.Purged != 0 {
+		t.Fatalf("with enough free space: purged %d, %v; want nothing", result.Purged, err)
+	}
+	// A floor of 125 bytes needs 25 more: the oldest three entries (30 bytes) go, oldest first.
+	result, err = q.Sweep(t.Context(), library.RecycleBinConfig{MinFreeBytes: 125, Free: free}, nil, []int64{rootID})
+	if err != nil || result.Purged != 3 || result.BytesFreed != 30 {
+		t.Fatalf("below the floor: purged %d freed %d, %v; want 3 and 30", result.Purged, result.BytesFreed, err)
+	}
+	if _, err := q.Get(t.Context(), entries[0].ID); err == nil {
+		t.Error("the oldest entry survived")
+	}
+}
+
 // A library's "Delete empty folders": the album folder goes, the artist folder that still holds
 // another album stays, and so does the root.
 func TestRecycleBinPut_RemovesTheFoldersItEmptied(t *testing.T) {

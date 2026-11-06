@@ -93,6 +93,7 @@ export function Sidebar() {
   );
   if (openLibrary) activeKeys.push(`library:${openLibrary.id}`);
   if (path === "/unidentified" && search.category_id) activeKeys.push(`library:${search.category_id}`);
+  if (visibleTabs(SETTINGS, viewer).some((entry) => isAt(entry, place)) && !routeParams.categoryId) activeKeys.push("settings");
 
   // Library starts open on a first visit: it is where the collection lives.
   const sections = useOpenSections(activeKeys, ["library"]);
@@ -174,6 +175,31 @@ export function Sidebar() {
         {GLOBAL_ENTRIES.map(({ section, icon: Icon }) => {
           const tab = entryTab(section, viewer);
           if (!tab) return null;
+          // Settings opens into its pages like a library into its levels, instead of a row of tabs above the page.
+          if (section === SETTINGS && !collapsed) {
+            return (
+              <li key={section.key}>
+                <div className="flex items-center">
+                  <Link to={tab.path} className={sectionLinkClass(visibleTabs(section, viewer).some((entry) => isAt(entry, place)) && !routeParams.categoryId, false) + " flex-1"}>
+                    <Icon aria-hidden className="size-4 shrink-0" />
+                    {section.label}
+                  </Link>
+                  <ExpandToggle label={section.label} isOpen={sections.isOpen("settings")} onToggle={() => sections.toggle("settings")} />
+                </div>
+                {sections.isOpen("settings") && (
+                  <ul className="ml-5 flex flex-col gap-0.5 border-l border-border-subtle pl-2">
+                    {visibleTabs(section, viewer).map((entry) => (
+                      <li key={entry.label}>
+                        <Link to={entry.path} className={sectionLinkClass(isAt(entry, place) && !routeParams.categoryId, false)}>
+                          <span className="truncate">{entry.label}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            );
+          }
           const active = visibleTabs(section, viewer).some((entry) => isAt(entry, place)) && !routeParams.categoryId
             && !(path === "/unidentified" && search.category_id);
           return (

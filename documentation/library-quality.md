@@ -34,6 +34,11 @@ enough: the shipped profiles have no gates, so every release "passes" every one 
   **CRF** is read from the encoder settings an x264 or x265 encode writes into the file's first frame (the probe reads the first
   512 KiB of a video file once); a file at or below the target's CRF meets it, a file that states none is not held against it.
   Audio targets keep codec, file type and a bitrate within a tolerance.
+  Two checkboxes shape how a target ranks what is found (`judge.WithTarget`): **Prefer over-quality to under-quality**
+  ranks the resolutions above the target (the nearest first) before the ones below it, whatever the profile lists, and makes
+  overshooting a bitrate or frame rate cost half what undershooting does (a 1080p target takes 4k over 720p even when 4k's
+  bitrate is further from the ideal); **Ignore everything below the target while anything at or above exists** leaves the
+  resolutions below the target unranked, so they win only when nothing at or above is found.
 - **The warning** on the Quality screen fires when the target does not fit the first profile.
 
 Files the probe has not measured yet are not judged either way.

@@ -7,9 +7,9 @@ import (
 
 // Level keys, stable across releases: URLs and last-visited preferences reference them.
 const (
-	LevelScenes     = "scenes"
-	LevelPerformers = "performers"
-	LevelStudios    = "studios"
+	LevelScenes      = "scenes"
+	LevelPerformers  = "performers"
+	LevelStudios     = "studios"
 	LevelCollections = "collections"
 )
 

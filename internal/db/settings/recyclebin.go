@@ -12,6 +12,8 @@ import (
 const (
 	KeyRecycleBinMaxBytes         = "recycle_bin.max_bytes"
 	KeyRecycleBinMaxPercentOfRoot = "recycle_bin.max_percent_of_root"
+	KeyRecycleBinMinFreeBytes     = "recycle_bin.min_free_bytes"
+	KeyRecycleBinMinFreePercent   = "recycle_bin.min_free_percent"
 )
 
 // DefaultRecycleBinMaxPercentOfRoot keeps a root's bin under a tenth of the root; no byte ceiling by default.
@@ -22,6 +24,9 @@ const DefaultRecycleBinMaxPercentOfRoot = 10
 type RecycleBinLimits struct {
 	MaxBytes         int64
 	MaxPercentOfRoot int64
+	// MinFreeBytes and MinFreePercent empty a root's bin, oldest first, while the root has less free space than the larger.
+	MinFreeBytes   int64
+	MinFreePercent int64
 }
 
 // RecycleBinLimits reads the limits, or the defaults for any not stored.
@@ -29,6 +34,8 @@ func (s *Snapshot) RecycleBinLimits() RecycleBinLimits {
 	return RecycleBinLimits{
 		MaxBytes:         s.policyInt(KeyRecycleBinMaxBytes, 0),
 		MaxPercentOfRoot: s.policyInt(KeyRecycleBinMaxPercentOfRoot, DefaultRecycleBinMaxPercentOfRoot),
+		MinFreeBytes:     s.policyInt(KeyRecycleBinMinFreeBytes, 0),
+		MinFreePercent:   s.policyInt(KeyRecycleBinMinFreePercent, 0),
 	}
 }
 
@@ -39,6 +46,7 @@ func (c *Cache) SetRecycleBinLimits(ctx context.Context, cl clock.Clock, limits 
 	}
 	return c.setPolicies(ctx, cl, formatInts(map[string]int64{
 		KeyRecycleBinMaxBytes: limits.MaxBytes, KeyRecycleBinMaxPercentOfRoot: limits.MaxPercentOfRoot,
+		KeyRecycleBinMinFreeBytes: limits.MinFreeBytes, KeyRecycleBinMinFreePercent: limits.MinFreePercent,
 	}))
 }
 
@@ -51,6 +59,14 @@ func validateRecycleBinLimits(limits RecycleBinLimits) config.Problems {
 	if limits.MaxPercentOfRoot < 0 || limits.MaxPercentOfRoot > 100 {
 		problems = append(problems, config.Problem{Path: "max_percent_of_root",
 			Value: strconv.FormatInt(limits.MaxPercentOfRoot, 10), Expectation: "0 (no limit) to 100 percent"})
+	}
+	if limits.MinFreeBytes < 0 {
+		problems = append(problems, config.Problem{Path: "min_free_bytes",
+			Value: strconv.FormatInt(limits.MinFreeBytes, 10), Expectation: "0 (no floor) or a number of bytes"})
+	}
+	if limits.MinFreePercent < 0 || limits.MinFreePercent > 100 {
+		problems = append(problems, config.Problem{Path: "min_free_percent",
+			Value: strconv.FormatInt(limits.MinFreePercent, 10), Expectation: "0 (no floor) to 100 percent"})
 	}
 	return problems
 }

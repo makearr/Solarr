@@ -2570,7 +2570,10 @@ type Franchise struct {
 	Id int64 `json:"id"`
 
 	// Kind franchise is a provider's, custom was made by hand.
-	Kind      FranchiseKind     `json:"kind"`
+	Kind FranchiseKind `json:"kind"`
+
+	// Links The collections of other libraries linked with this one, each with the works it holds there (one collection shown across libraries).
+	Links     *[]FranchiseLink  `json:"links,omitempty"`
 	Members   []FranchiseMember `json:"members"`
 	Monitored bool              `json:"monitored"`
 	Name      string            `json:"name"`
@@ -2587,6 +2590,31 @@ type Franchise struct {
 
 // FranchiseKind franchise is a provider's, custom was made by hand.
 type FranchiseKind string
+
+// FranchiseDuplicate defines model for FranchiseDuplicate.
+type FranchiseDuplicate struct {
+	Id   int64  `json:"id"`
+	Name string `json:"name"`
+
+	// Works The works of it the library holds.
+	Works int `json:"works"`
+}
+
+// FranchiseDuplicateGroup defines model for FranchiseDuplicateGroup.
+type FranchiseDuplicateGroup struct {
+	Keep  FranchiseDuplicate   `json:"keep"`
+	Merge []FranchiseDuplicate `json:"merge"`
+}
+
+// FranchiseLink defines model for FranchiseLink.
+type FranchiseLink struct {
+	// CategoryId The library whose works the members are.
+	CategoryId  int64             `json:"category_id"`
+	Id          int64             `json:"id"`
+	LibraryName *string           `json:"library_name,omitempty"`
+	Members     []FranchiseMember `json:"members"`
+	Name        string            `json:"name"`
+}
 
 // FranchiseMember defines model for FranchiseMember.
 type FranchiseMember struct {
@@ -2610,6 +2638,15 @@ type GateResult struct {
 	Got    string `json:"got"`
 	Passed bool   `json:"passed"`
 	Wanted string `json:"wanted"`
+}
+
+// GeneralSettings Switches that belong to no one page. Always answered in full; a PATCH changes the ones it names.
+type GeneralSettings struct {
+	// HuntOldMissing The automatic search also looks for missing items released before the freshness window (search.hunt_gaps). Default on.
+	HuntOldMissing *bool `json:"hunt_old_missing,omitempty"`
+
+	// VideoHashing Hash videos in the background so the duplicate finder matches re-encodes (scan.video_phash). Default off.
+	VideoHashing *bool `json:"video_hashing,omitempty"`
 }
 
 // GenreTree defines model for GenreTree.
@@ -4543,11 +4580,17 @@ type QualityTarget struct {
 	// Id Absent when creating.
 	Id *int64 `json:"id,omitempty"`
 
+	// IgnoreBelow A release below the target ranks after every one at or above it, so it is only chosen when nothing at or above exists.
+	IgnoreBelow *bool `json:"ignore_below,omitempty"`
+
 	// MediaType The media type it serves; fixed once made.
 	MediaType *string `json:"media_type,omitempty"`
 
 	// Name What the target is called in a library's choice.
 	Name *string `json:"name,omitempty"`
+
+	// PreferOver More quality beats less: a release above the target ranks before one below it, and overshooting a number costs less than undershooting it.
+	PreferOver *bool `json:"prefer_over,omitempty"`
 
 	// Resolution A video library's target resolution, e.g. 1080p; empty when it does not care.
 	Resolution *string `json:"resolution,omitempty"`
@@ -4669,6 +4712,12 @@ type RecycleBinLimits struct {
 
 	// MaxPercentOfRoot A root's recycle bin as a percentage of the root; the oldest go first. 0 is no limit.
 	MaxPercentOfRoot int64 `json:"max_percent_of_root"`
+
+	// MinFreeBytes A root with less free space than this has its recycle bin emptied, oldest first, until it has it. 0 is no floor. Absent on a write keeps it.
+	MinFreeBytes *int64 `json:"min_free_bytes,omitempty"`
+
+	// MinFreePercent The same floor as a percentage of the root; the larger of the two counts. 0 is no floor. Absent on a write keeps it.
+	MinFreePercent *int64 `json:"min_free_percent,omitempty"`
 }
 
 // Rejection One failed gate, as data rather than a formatted string (ADR-10).
@@ -5911,6 +5960,12 @@ type CreateCategoryJSONBody struct {
 	PriorityRank *int64  `json:"priority_rank,omitempty"`
 }
 
+// OrderCategoriesJSONBody defines parameters for OrderCategories.
+type OrderCategoriesJSONBody struct {
+	// Ids Every library (not its further media types) in the new order.
+	Ids []int64 `json:"ids"`
+}
+
 // ResolveCategoryDuplicatesJSONBody defines parameters for ResolveCategoryDuplicates.
 type ResolveCategoryDuplicatesJSONBody struct {
 	Drop []struct {
@@ -6069,6 +6124,13 @@ type CreateFranchiseJSONBody struct {
 	Name       string `json:"name"`
 }
 
+// MergeDuplicateFranchisesJSONBody defines parameters for MergeDuplicateFranchises.
+type MergeDuplicateFranchisesJSONBody struct {
+	// Apply false only lists the groups.
+	Apply      bool  `json:"apply"`
+	CategoryId int64 `json:"category_id"`
+}
+
 // DeleteFranchiseParams defines parameters for DeleteFranchise.
 type DeleteFranchiseParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
@@ -6087,6 +6149,19 @@ type RenameFranchiseJSONBody struct {
 // RenameFranchiseParams defines parameters for RenameFranchise.
 type RenameFranchiseParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// UnlinkFranchiseParams defines parameters for UnlinkFranchise.
+type UnlinkFranchiseParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+	OtherId    int64 `form:"other_id" json:"other_id"`
+}
+
+// LinkFranchiseJSONBody defines parameters for LinkFranchise.
+type LinkFranchiseJSONBody struct {
+	CategoryId      int64 `json:"category_id"`
+	OtherCategoryId int64 `json:"other_category_id"`
+	OtherId         int64 `json:"other_id"`
 }
 
 // RemoveFranchiseMemberParams defines parameters for RemoveFranchiseMember.
@@ -6945,6 +7020,9 @@ type SetDatabaseMemoryJSONRequestBody SetDatabaseMemoryJSONBody
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody CreateCategoryJSONBody
 
+// OrderCategoriesJSONRequestBody defines body for OrderCategories for application/json ContentType.
+type OrderCategoriesJSONRequestBody OrderCategoriesJSONBody
+
 // UpdateCategoryJSONRequestBody defines body for UpdateCategory for application/json ContentType.
 type UpdateCategoryJSONRequestBody = CategoryWrite
 
@@ -7032,8 +7110,14 @@ type RemoveAndBlockFileJSONRequestBody = RemoveAndBlockRequest
 // CreateFranchiseJSONRequestBody defines body for CreateFranchise for application/json ContentType.
 type CreateFranchiseJSONRequestBody CreateFranchiseJSONBody
 
+// MergeDuplicateFranchisesJSONRequestBody defines body for MergeDuplicateFranchises for application/json ContentType.
+type MergeDuplicateFranchisesJSONRequestBody MergeDuplicateFranchisesJSONBody
+
 // RenameFranchiseJSONRequestBody defines body for RenameFranchise for application/json ContentType.
 type RenameFranchiseJSONRequestBody RenameFranchiseJSONBody
+
+// LinkFranchiseJSONRequestBody defines body for LinkFranchise for application/json ContentType.
+type LinkFranchiseJSONRequestBody LinkFranchiseJSONBody
 
 // MonitorFranchiseJSONRequestBody defines body for MonitorFranchise for application/json ContentType.
 type MonitorFranchiseJSONRequestBody MonitorFranchiseJSONBody
@@ -7196,6 +7280,9 @@ type SetAuthPolicyJSONRequestBody SetAuthPolicyJSONBody
 
 // SetBackupRetentionJSONRequestBody defines body for SetBackupRetention for application/json ContentType.
 type SetBackupRetentionJSONRequestBody = BackupRetention
+
+// PatchGeneralSettingsJSONRequestBody defines body for PatchGeneralSettings for application/json ContentType.
+type PatchGeneralSettingsJSONRequestBody = GeneralSettings
 
 // SetImportDuplicatesJSONRequestBody defines body for SetImportDuplicates for application/json ContentType.
 type SetImportDuplicatesJSONRequestBody = ImportDuplicates
@@ -7385,6 +7472,9 @@ type ServerInterface interface {
 	// Add a category. Administrator only.
 	// (POST /categories)
 	CreateCategory(w http.ResponseWriter, r *http.Request)
+	// Put the libraries in the given order (the sidebar's, and the order of equal priority). Administrator only.
+	// (POST /categories/order)
+	OrderCategories(w http.ResponseWriter, r *http.Request)
 	// Remove a category. Administrator only.
 	// (DELETE /categories/{id})
 	DeleteCategory(w http.ResponseWriter, r *http.Request, id int64)
@@ -7598,6 +7688,9 @@ type ServerInterface interface {
 	// Make an empty collection of the library by hand. Needs the library's manage permission.
 	// (POST /franchises)
 	CreateFranchise(w http.ResponseWriter, r *http.Request)
+	// Find a library's duplicate collections (one inside another, or mostly the same works under a similar name) and, when asked, merge each group into its largest. Needs the library's manage permission.
+	// (POST /franchises/duplicates)
+	MergeDuplicateFranchises(w http.ResponseWriter, r *http.Request)
 	// Delete a collection; the works in it stay. One a provider or Solarr made is not made again. Needs the library's manage permission.
 	// (DELETE /franchises/{id})
 	DeleteFranchise(w http.ResponseWriter, r *http.Request, id int64, params DeleteFranchiseParams)
@@ -7607,6 +7700,12 @@ type ServerInterface interface {
 	// Rename a collection made by hand. Needs the library's manage permission.
 	// (PATCH /franchises/{id})
 	RenameFranchise(w http.ResponseWriter, r *http.Request, id int64, params RenameFranchiseParams)
+	// Take the link with another collection away.
+	// (DELETE /franchises/{id}/links)
+	UnlinkFranchise(w http.ResponseWriter, r *http.Request, id int64, params UnlinkFranchiseParams)
+	// Link this collection with one of another library, so each shows the other's works (Babylon 5 as films and as a series). Needs the manage permission of both libraries.
+	// (POST /franchises/{id}/links)
+	LinkFranchise(w http.ResponseWriter, r *http.Request, id int64)
 	// Take a work out of a collection. Out of one a provider or Solarr made it stays out. Needs the library's manage permission.
 	// (DELETE /franchises/{id}/members/{workId})
 	RemoveFranchiseMember(w http.ResponseWriter, r *http.Request, id int64, workId int64, params RemoveFranchiseMemberParams)
@@ -8051,6 +8150,12 @@ type ServerInterface interface {
 	// Configuration as round-tripping YAML (F9).
 	// (GET /settings/export)
 	ExportSettings(w http.ResponseWriter, r *http.Request)
+	// The instance-wide switches of Settings -> General.
+	// (GET /settings/general)
+	GetGeneralSettings(w http.ResponseWriter, r *http.Request)
+	// Change the switches named; the rest stay. Administrator only.
+	// (PATCH /settings/general)
+	PatchGeneralSettings(w http.ResponseWriter, r *http.Request)
 	// Apply a configuration document, entirely or not at all.
 	// (POST /settings/import)
 	ImportSettings(w http.ResponseWriter, r *http.Request)
@@ -8465,6 +8570,12 @@ func (_ Unimplemented) ListCategories(w http.ResponseWriter, r *http.Request) {
 // Add a category. Administrator only.
 // (POST /categories)
 func (_ Unimplemented) CreateCategory(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Put the libraries in the given order (the sidebar's, and the order of equal priority). Administrator only.
+// (POST /categories/order)
+func (_ Unimplemented) OrderCategories(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8894,6 +9005,12 @@ func (_ Unimplemented) CreateFranchise(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Find a library's duplicate collections (one inside another, or mostly the same works under a similar name) and, when asked, merge each group into its largest. Needs the library's manage permission.
+// (POST /franchises/duplicates)
+func (_ Unimplemented) MergeDuplicateFranchises(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Delete a collection; the works in it stay. One a provider or Solarr made is not made again. Needs the library's manage permission.
 // (DELETE /franchises/{id})
 func (_ Unimplemented) DeleteFranchise(w http.ResponseWriter, r *http.Request, id int64, params DeleteFranchiseParams) {
@@ -8909,6 +9026,18 @@ func (_ Unimplemented) GetFranchise(w http.ResponseWriter, r *http.Request, id i
 // Rename a collection made by hand. Needs the library's manage permission.
 // (PATCH /franchises/{id})
 func (_ Unimplemented) RenameFranchise(w http.ResponseWriter, r *http.Request, id int64, params RenameFranchiseParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Take the link with another collection away.
+// (DELETE /franchises/{id}/links)
+func (_ Unimplemented) UnlinkFranchise(w http.ResponseWriter, r *http.Request, id int64, params UnlinkFranchiseParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Link this collection with one of another library, so each shows the other's works (Babylon 5 as films and as a series). Needs the manage permission of both libraries.
+// (POST /franchises/{id}/links)
+func (_ Unimplemented) LinkFranchise(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9797,6 +9926,18 @@ func (_ Unimplemented) SetBackupRetention(w http.ResponseWriter, r *http.Request
 // Configuration as round-tripping YAML (F9).
 // (GET /settings/export)
 func (_ Unimplemented) ExportSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The instance-wide switches of Settings -> General.
+// (GET /settings/general)
+func (_ Unimplemented) GetGeneralSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change the switches named; the rest stay. Administrator only.
+// (PATCH /settings/general)
+func (_ Unimplemented) PatchGeneralSettings(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11246,6 +11387,28 @@ func (siw *ServerInterfaceWrapper) CreateCategory(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateCategory(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// OrderCategories operation middleware
+func (siw *ServerInterfaceWrapper) OrderCategories(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OrderCategories(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13570,6 +13733,28 @@ func (siw *ServerInterfaceWrapper) CreateFranchise(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// MergeDuplicateFranchises operation middleware
+func (siw *ServerInterfaceWrapper) MergeDuplicateFranchises(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MergeDuplicateFranchises(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteFranchise operation middleware
 func (siw *ServerInterfaceWrapper) DeleteFranchise(w http.ResponseWriter, r *http.Request) {
 
@@ -13714,6 +13899,105 @@ func (siw *ServerInterfaceWrapper) RenameFranchise(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RenameFranchise(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UnlinkFranchise operation middleware
+func (siw *ServerInterfaceWrapper) UnlinkFranchise(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UnlinkFranchiseParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "other_id" -------------
+
+	if paramValue := r.URL.Query().Get("other_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "other_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "other_id", r.URL.Query(), &params.OtherId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "other_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnlinkFranchise(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LinkFranchise operation middleware
+func (siw *ServerInterfaceWrapper) LinkFranchise(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LinkFranchise(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -18569,6 +18853,50 @@ func (siw *ServerInterfaceWrapper) ExportSettings(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetGeneralSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetGeneralSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetGeneralSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PatchGeneralSettings operation middleware
+func (siw *ServerInterfaceWrapper) PatchGeneralSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchGeneralSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ImportSettings operation middleware
 func (siw *ServerInterfaceWrapper) ImportSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -21168,6 +21496,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/categories", wrapper.CreateCategory)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/categories/order", wrapper.OrderCategories)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/categories/{id}", wrapper.DeleteCategory)
 	})
 	r.Group(func(r chi.Router) {
@@ -21381,6 +21712,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/franchises", wrapper.CreateFranchise)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/franchises/duplicates", wrapper.MergeDuplicateFranchises)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/franchises/{id}", wrapper.DeleteFranchise)
 	})
 	r.Group(func(r chi.Router) {
@@ -21388,6 +21722,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/franchises/{id}", wrapper.RenameFranchise)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/franchises/{id}/links", wrapper.UnlinkFranchise)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/franchises/{id}/links", wrapper.LinkFranchise)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/franchises/{id}/members/{workId}", wrapper.RemoveFranchiseMember)
@@ -21832,6 +22172,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/settings/export", wrapper.ExportSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/settings/general", wrapper.GetGeneralSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/settings/general", wrapper.PatchGeneralSettings)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/settings/import", wrapper.ImportSettings)

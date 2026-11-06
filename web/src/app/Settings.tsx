@@ -1,4 +1,8 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp } from "lucide-react";
+
+import { api, ok } from "@/api/client";
+import type { components } from "@/api/schema";
 
 import { Blocklist } from "./Blocklist";
 import { Tags } from "./Tags";
@@ -10,6 +14,8 @@ import { Priority } from "./Priority";
 import { UnwantedFiles } from "./UnwantedFiles";
 import { useFooterItems, useShowCalendar, useShowFooter, type FooterItem } from "@/lib/interfacePreferences";
 import { isTierVisible, useTier, type Tier } from "@/lib/useTier";
+
+import { SubTabs } from "@/ui/SubTabs";
 
 import { Card } from "./SettingsCard";
 
@@ -44,12 +50,62 @@ function SettingsPage({
   );
 }
 
+/** Switches that belong to no one page. */
+export function GeneralSettings() {
+  const queryClient = useQueryClient();
+  const general = useQuery({ queryKey: ["general-settings"], queryFn: () => ok(api.GET("/settings/general")) });
+  const change = useMutation({
+    mutationFn: (body: components["schemas"]["GeneralSettings"]) => ok(api.PATCH("/settings/general", { body })),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["general-settings"], data);
+      void queryClient.invalidateQueries({ queryKey: ["video-hashing"] });
+    },
+  });
+  return (
+    <SettingsPage title="General">
+      <Card title="Background work" help="Switches for work Solarr does by itself. A search you start yourself works whatever these say.">
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            disabled={!general.data || change.isPending}
+            checked={general.data?.hunt_old_missing ?? true}
+            onChange={(event) => change.mutate({ hunt_old_missing: event.target.checked })}
+          />
+          <span>
+            Search for old missing items
+            <span className="block text-xs text-ink-muted">The automatic search also looks for missing items released before the freshness window. Off, only new releases and upgrades are searched.</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            disabled={!general.data || change.isPending}
+            checked={general.data?.video_hashing ?? false}
+            onChange={(event) => change.mutate({ video_hashing: event.target.checked })}
+          />
+          <span>
+            Hash videos to find look-alike duplicates (perceptual hash)
+            <span className="block text-xs text-ink-muted">Reads seven frames per video with ffmpeg in the background so Storage, Duplicates can match re-encodes. Off, nothing new is hashed; stored hashes keep working.</span>
+          </span>
+        </label>
+        {change.isError && <p className="text-sm text-danger">That change was refused.</p>}
+      </Card>
+    </SettingsPage>
+  );
+}
+
 /** Every library, and how new content is prioritised across them. */
 export function LibrariesSettings() {
   return (
     <SettingsPage title="Libraries">
-      <Categories />
-      <Priority />
+      <SubTabs
+        tabs={[
+          { key: "libraries", label: "Libraries", content: <Categories /> },
+          { key: "priority", label: "Priority", content: <Priority /> },
+        ]}
+      />
     </SettingsPage>
   );
 }

@@ -32,6 +32,11 @@ type Franchises interface {
 	RemoveMember(ctx context.Context, categoryID, franchiseID, workID int64) error
 	// Monitor answers how many works following the franchise added; ErrNoFranchise for an id that is none.
 	Monitor(ctx context.Context, categoryID, franchiseID int64, monitored bool) (int, error)
+	// Link and Unlink join a collection with one of another library, or part them.
+	Link(ctx context.Context, categoryID, franchiseID, otherCategoryID, otherID int64) error
+	Unlink(ctx context.Context, categoryID, franchiseID, otherID int64) error
+	// Duplicates finds the library's duplicate collections and, when apply, merges them; it answers the groups.
+	Duplicates(ctx context.Context, categoryID int64, apply bool) ([]gen.FranchiseDuplicateGroup, error)
 }
 
 // ErrNoFranchise is an id that is no franchise, or a library whose type has none.
@@ -120,6 +125,15 @@ func (s *Server) GetFranchise(w http.ResponseWriter, r *http.Request, id int64, 
 	if err != nil {
 		s.writeFranchiseError(w, err)
 		return
+	}
+	if access, err := authz.FromContext(r.Context()); err == nil && franchise.Links != nil {
+		readable := (*franchise.Links)[:0]
+		for _, link := range *franchise.Links {
+			if _, err := access.Category(link.CategoryId, settings.PermissionRead); err == nil {
+				readable = append(readable, link)
+			}
+		}
+		franchise.Links = &readable
 	}
 	writeJSON(w, s.logger, http.StatusOK, franchise)
 }
@@ -310,4 +324,91 @@ func (s *Server) routeMonitorFranchise(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.MonitorFranchise(w, r, ids[0])
+}
+
+// LinkFranchise links a collection with one of another library.
+func (s *Server) LinkFranchise(w http.ResponseWriter, r *http.Request, id int64) {
+	var body gen.LinkFranchiseJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected category_id, other_id and other_category_id")
+		return
+	}
+	category, ok := s.franchiseCategory(w, r, body.CategoryId, settings.PermissionManage)
+	if !ok {
+		return
+	}
+	other, ok := s.franchiseCategory(w, r, body.OtherCategoryId, settings.PermissionManage)
+	if !ok {
+		return
+	}
+	if err := s.franchises.Link(r.Context(), category.ID, id, other.ID, body.OtherId); err != nil {
+		s.writeFranchiseError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// UnlinkFranchise takes the link with another collection away.
+func (s *Server) UnlinkFranchise(w http.ResponseWriter, r *http.Request, id int64, params gen.UnlinkFranchiseParams) {
+	category, ok := s.franchiseCategory(w, r, params.CategoryId, settings.PermissionManage)
+	if !ok {
+		return
+	}
+	if err := s.franchises.Unlink(r.Context(), category.ID, id, params.OtherId); err != nil {
+		s.writeFranchiseError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// MergeDuplicateFranchises lists a library's duplicate collections and, when asked, merges each group.
+func (s *Server) MergeDuplicateFranchises(w http.ResponseWriter, r *http.Request) {
+	var body gen.MergeDuplicateFranchisesJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected category_id and apply")
+		return
+	}
+	category, ok := s.franchiseCategory(w, r, body.CategoryId, settings.PermissionManage)
+	if !ok {
+		return
+	}
+	groups, err := s.franchises.Duplicates(r.Context(), category.ID, body.Apply)
+	if err != nil {
+		s.writeFranchiseError(w, err)
+		return
+	}
+	merged := 0
+	if body.Apply {
+		for _, group := range groups {
+			merged += len(group.Merge)
+		}
+	}
+	writeJSON(w, s.logger, http.StatusOK, struct {
+		Groups []gen.FranchiseDuplicateGroup `json:"groups"`
+		Merged int                           `json:"merged"`
+	}{groups, merged})
+}
+
+func (s *Server) routeLinkFranchise(w http.ResponseWriter, r *http.Request) {
+	s.franchiseIDRoute(w, r, s.LinkFranchise)
+}
+
+func (s *Server) routeUnlinkFranchise(w http.ResponseWriter, r *http.Request) {
+	ids, ok := parseFranchiseIDs(r, "id")
+	category, categoryErr := strconv.ParseInt(r.URL.Query().Get("category_id"), 10, 64)
+	other, otherErr := strconv.ParseInt(r.URL.Query().Get("other_id"), 10, 64)
+	if !ok || categoryErr != nil || otherErr != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the id, category_id and other_id must be numbers")
+		return
+	}
+	s.UnlinkFranchise(w, r, ids[0], gen.UnlinkFranchiseParams{CategoryId: category, OtherId: other})
+}
+
+func (s *Server) franchiseIDRoute(w http.ResponseWriter, r *http.Request, handle func(http.ResponseWriter, *http.Request, int64)) {
+	ids, ok := parseFranchiseIDs(r, "id")
+	if !ok {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an id must be a number")
+		return
+	}
+	handle(w, r, ids[0])
 }

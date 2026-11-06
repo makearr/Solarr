@@ -37,7 +37,7 @@ test("a tab is active on its own page and the pages under it", () => {
 });
 
 test("a section's entry leads to the first tab the viewer may see", () => {
-  expect(entryTab(SETTINGS, { tier: "normal", administrator: true })?.label).toBe("Libraries");
+  expect(entryTab(SETTINGS, { tier: "normal", administrator: true })?.label).toBe("General");
   expect(entryTab(SETTINGS, { tier: "normal", administrator: false })?.label).toBe("User");
   expect(entryTab(STORAGE, { tier: "normal", administrator: true })).toBeUndefined();
 });

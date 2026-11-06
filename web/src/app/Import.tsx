@@ -575,7 +575,7 @@ function InspectForm() {
           className={labelStyle}
           title="Only files that fit the library's content are placed in it. Decide later keeps every unit waiting for a library."
         >
-          Only into library
+          Library
           <select
             className={inputStyle}
             value={categoryId}

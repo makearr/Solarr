@@ -579,3 +579,20 @@ func (s *Server) MergeCategory(w http.ResponseWriter, r *http.Request, id int64)
 	}
 	writeJSON(w, s.logger, http.StatusOK, map[string]int64{"moved": moved})
 }
+
+// OrderCategories puts the libraries in the order given. Administrator only.
+func (s *Server) OrderCategories(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	var body gen.OrderCategoriesJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected ids")
+		return
+	}
+	if err := s.auth.Settings.OrderLibraries(r.Context(), body.Ids); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

@@ -3717,6 +3717,23 @@ export interface paths {
         patch: operations["updateCategory"];
         trace?: never;
     };
+    "/categories/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Put the libraries in the given order (the sidebar's, and the order of equal priority). Administrator only. */
+        post: operations["orderCategories"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/merge": {
         parameters: {
             query?: never;
@@ -3971,6 +3988,24 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/settings/general": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The instance-wide switches of Settings -> General. */
+        get: operations["getGeneralSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change the switches named; the rest stay. Administrator only. */
+        patch: operations["patchGeneralSettings"];
         trace?: never;
     };
     "/settings/video-hashing": {
@@ -4658,6 +4693,43 @@ export interface paths {
         post?: never;
         /** Take a work out of a collection. Out of one a provider or Solarr made it stays out. Needs the library's manage permission. */
         delete: operations["removeFranchiseMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/franchises/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Find a library's duplicate collections (one inside another, or mostly the same works under a similar name) and, when asked, merge each group into its largest. Needs the library's manage permission. */
+        post: operations["mergeDuplicateFranchises"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/franchises/{id}/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Link this collection with one of another library, so each shows the other's works (Babylon 5 as films and as a series). Needs the manage permission of both libraries. */
+        post: operations["linkFranchise"];
+        /** Take the link with another collection away. */
+        delete: operations["unlinkFranchise"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5529,6 +5601,10 @@ export interface components {
             media_type?: string;
             /** @description The constant rate factor a file's encoder settings state; a file at or below it meets it, one that states none is not held against it. 0 or absent when it does not care. */
             crf?: number;
+            /** @description More quality beats less: a release above the target ranks before one below it, and overshooting a number costs less than undershooting it. */
+            prefer_over?: boolean;
+            /** @description A release below the target ranks after every one at or above it, so it is only chosen when nothing at or above exists. */
+            ignore_below?: boolean;
             /** @description As ffprobe names it: aac, mp3, flac, opus. May be empty for a video target. */
             audio_codec: string;
             /** @description The file type: m4a, mp3, flac; mkv or mp4 for video. May be empty for a video target. */
@@ -5600,6 +5676,16 @@ export interface components {
             failed: number;
         };
         RecycleBinLimits: {
+            /**
+             * Format: int64
+             * @description A root with less free space than this has its recycle bin emptied, oldest first, until it has it. 0 is no floor. Absent on a write keeps it.
+             */
+            min_free_bytes?: number;
+            /**
+             * Format: int64
+             * @description The same floor as a percentage of the root; the larger of the two counts. 0 is no floor. Absent on a write keeps it.
+             */
+            min_free_percent?: number;
             /**
              * Format: int64
              * @description All recycle bins together, in bytes; the oldest entries go first. 0 is no limit.
@@ -6280,6 +6366,31 @@ export interface components {
             /** @description The year of the newest work of it the library holds. */
             newest_year?: number;
             members: components["schemas"]["FranchiseMember"][];
+            /** @description The collections of other libraries linked with this one, each with the works it holds there (one collection shown across libraries). */
+            links?: components["schemas"]["FranchiseLink"][];
+        };
+        FranchiseLink: {
+            /** Format: int64 */
+            id: number;
+            /**
+             * Format: int64
+             * @description The library whose works the members are.
+             */
+            category_id: number;
+            library_name?: string;
+            name: string;
+            members: components["schemas"]["FranchiseMember"][];
+        };
+        FranchiseDuplicateGroup: {
+            keep: components["schemas"]["FranchiseDuplicate"];
+            merge: components["schemas"]["FranchiseDuplicate"][];
+        };
+        FranchiseDuplicate: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /** @description The works of it the library holds. */
+            works: number;
         };
         FranchiseMember: {
             /**
@@ -9167,6 +9278,13 @@ export interface components {
                     paths: string[];
                 }[];
             }[];
+        };
+        /** @description Switches that belong to no one page. Always answered in full; a PATCH changes the ones it names. */
+        GeneralSettings: {
+            /** @description Hash videos in the background so the duplicate finder matches re-encodes (scan.video_phash). Default off. */
+            video_hashing?: boolean;
+            /** @description The automatic search also looks for missing items released before the freshness window (search.hunt_gaps). Default on. */
+            hunt_old_missing?: boolean;
         };
         /** @description The perceptual hashing switch (scan.video_phash). */
         VideoHashing: {
@@ -15861,6 +15979,34 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
+    orderCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Every library (not its further media types) in the new order. */
+                    ids: number[];
+                };
+            };
+        };
+        responses: {
+            /** @description Ordered. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
     mergeCategory: {
         parameters: {
             query?: never;
@@ -16346,6 +16492,54 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
+        };
+    };
+    getGeneralSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The switches in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneralSettings"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    patchGeneralSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeneralSettings"];
+            };
+        };
+        responses: {
+            /** @description The switches now in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneralSettings"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     getVideoHashing: {
@@ -17652,6 +17846,102 @@ export interface operations {
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    mergeDuplicateFranchises: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    category_id: number;
+                    /** @description false only lists the groups. */
+                    apply: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The groups found, each with the collection that stays. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        groups: components["schemas"]["FranchiseDuplicateGroup"][];
+                        /** @description How many collections were merged away; 0 unless apply. */
+                        merged: number;
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    linkFranchise: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    category_id: number;
+                    /** Format: int64 */
+                    other_id: number;
+                    /** Format: int64 */
+                    other_category_id: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Linked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    unlinkFranchise: {
+        parameters: {
+            query: {
+                category_id: number;
+                other_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unlinked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     monitorFranchise: {

@@ -269,6 +269,7 @@ const routes = [
     },
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/import", component: Import }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/storage/rename", component: lazyRouteComponent(() => import("./RenameAll"), "RenameAll") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/duplicates", component: lazyRouteComponent(() => import("./VideoDuplicates"), "VideoDuplicates") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/recycle-bin", component: lazyRouteComponent(() => import("./RecycleBin"), "RecycleBin") }),
   // Packs moved to each library 2026-09-11; redirected rather than 404ing,
@@ -322,12 +323,11 @@ const routes = [
     getParentRoute: () => rootRoute,
     path: "/settings",
     beforeLoad: () => {
-      throw redirect({ to: "/settings/libraries" });
+      throw redirect({ to: "/settings/general" });
     },
   }),
   // General was split on the 2026-09-19 review; old links land on the part they meant.
   ...[
-    ["/settings/general", "/settings/libraries"],
     ["/settings/blocklist", "/settings/blocklists"],
     ["/settings/arr", "/connections/arr"],
     ["/activity", "/activity/queue"],
@@ -347,6 +347,7 @@ const routes = [
     beforeLoad: () => window.location.replace("/about"),
     component: () => null,
   }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/settings/general", component: lazyRouteComponent(() => import("./Settings"), "GeneralSettings") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/libraries", component: lazyRouteComponent(() => import("./Settings"), "LibrariesSettings") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/blocklists", component: lazyRouteComponent(() => import("./Settings"), "BlocklistsSettings") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/tags", component: lazyRouteComponent(() => import("./Settings"), "TagsSettings") }),

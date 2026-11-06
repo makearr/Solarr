@@ -122,8 +122,16 @@ func (j recycleBinCleanupJob) Run(ctx context.Context, _ jobs.Job) error {
 		}
 		return *root.TotalBytes, true
 	}
+	free := func(rootFolderID int64) (int64, int64, bool) {
+		root, found := snapshot.RootFolder(rootFolderID)
+		if !found || root.TotalBytes == nil || root.FreeBytes == nil {
+			return 0, 0, false
+		}
+		return *root.FreeBytes, *root.TotalBytes, true
+	}
 	result, err := j.recycleBin.Sweep(ctx, library.RecycleBinConfig{
 		MaxBytes: limits.MaxBytes, MaxPercentOfRoot: float64(limits.MaxPercentOfRoot),
+		MinFreeBytes: limits.MinFreeBytes, MinFreePercent: float64(limits.MinFreePercent), Free: free,
 	}, capacity, rootFolderIDs)
 	if err != nil {
 		return err

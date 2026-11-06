@@ -274,6 +274,8 @@ type QualityTarget struct {
 	VideoBitrateKbps  sql.NullInt64
 	FrameRate         sql.NullFloat64
 	Crf               sql.NullFloat64
+	PreferOver        int64
+	IgnoreBelow       int64
 }
 
 type RootFolder struct {

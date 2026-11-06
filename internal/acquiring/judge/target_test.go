@@ -83,3 +83,25 @@ func TestWithTarget_BitrateAndFrameRateRankByDistanceAndLanguagesScore(t *testin
 		t.Errorf("the release near the ideal bitrate did not outrank the one three times over it (winner %d)", winner)
 	}
 }
+
+// Preferring more: a 1080p target ranks 4k before 720p whatever the profile lists, and overshooting a bitrate costs less.
+func TestWithTarget_PreferOverRanksAboveBeforeBelowAndIgnoreBelowLeavesBelowUnranked(t *testing.T) {
+	rules := score.Profile{Compare: []string{"score"}}
+	bitrate := int64(5000)
+	preferred := judge.WithTarget(rules, settings.QualityTarget{Resolution: "1080p", VideoBitrateKbps: &bitrate, PreferOver: true})
+	want := [][]string{{"1080p"}, {"1440p"}, {"2160p"}, {"720p"}, {"576p"}, {"480p"}}
+	if got := preferred.Tiers["resolution"]; !slices.EqualFunc(got, want, slices.Equal[[]string]) {
+		t.Errorf("resolution tiers = %v, want %v", got, want)
+	}
+	if got := preferred.Targets["video_bitrate"][0].Weights; got.Over != 0.5 || got.Under != 1 {
+		t.Errorf("bitrate weights = %+v, want over 0.5 under 1", got)
+	}
+	ignoring := judge.WithTarget(rules, settings.QualityTarget{Resolution: "1080p", IgnoreBelow: true})
+	if got := ignoring.Tiers["resolution"]; len(got) != 3 || !slices.Equal(got[2], []string{"2160p"}) {
+		t.Errorf("resolution tiers = %v, want 1080p, 1440p, 2160p and nothing below", got)
+	}
+	plain := judge.WithTarget(rules, settings.QualityTarget{Resolution: "1080p", VideoBitrateKbps: &bitrate})
+	if got := plain.Targets["video_bitrate"][0].Weights; got.Over != 1 {
+		t.Errorf("without the preference the weights stay symmetric: %+v", got)
+	}
+}

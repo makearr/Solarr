@@ -256,6 +256,13 @@ func (c Catalog) MissingFranchiseMembers(ctx context.Context, categoryID, franch
 		if held[part.ID] || c.Service.IsExcluded(ctx, IDs{TMDB: part.ID}) {
 			continue
 		}
+		// A film the library holds that TMDB lists here but whose own record does not name the collection joins now.
+		if workID, found, err := c.Service.Series.WorkByProviderID(ctx, MediaType, ProviderTMDB, strconv.FormatInt(part.ID, 10)); err == nil && found {
+			if _, err := c.FranchiseStore.Join(ctx, MediaType, ProviderCollection, row.ExternalID, "", workID); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		member := media.FranchiseMember{Title: part.Title, Provider: ProviderTMDB, ExternalID: strconv.FormatInt(part.ID, 10), PosterURL: tmdb.ImageURL(part.PosterPath)}
 		if len(part.ReleaseDate) >= 4 {
 			member.Year, _ = strconv.Atoi(part.ReleaseDate[:4])

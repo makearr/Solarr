@@ -2,6 +2,7 @@ package settings_test
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -63,5 +64,31 @@ func TestAddLibraryType_KeepsTheMemberInStep(t *testing.T) {
 	var inUse *settings.InUseError
 	if err := cache.DeleteCategory(t.Context(), anime.ID); !errors.As(err, &inUse) {
 		t.Errorf("deleting a library with a further type: %v, want in use", err)
+	}
+}
+
+func TestOrderLibraries_RanksTheGivenOrderAndTheMembersFollow(t *testing.T) {
+	cache, _ := newCache(t)
+	music, _ := cache.CreateCategory(t.Context(), "music", "Music", 1)
+	anime, _ := cache.CreateCategory(t.Context(), "tv", "Anime", 2)
+	movies, err := cache.AddLibraryType(t.Context(), anime.ID, "movie")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.OrderLibraries(t.Context(), []int64{anime.ID, music.ID}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := cache.Snapshot()
+	var got []int64
+	for _, id := range []int64{anime.ID, movies.ID, music.ID} {
+		category, _ := snapshot.Category(id)
+		got = append(got, category.PriorityRank)
+	}
+	if want := []int64{10, 10, 20}; !reflect.DeepEqual(got, want) {
+		t.Errorf("ranks = %v, want %v", got, want)
+	}
+	var problems config.Problems
+	if err := cache.OrderLibraries(t.Context(), []int64{movies.ID}); !errors.As(err, &problems) {
+		t.Errorf("a member in the order: %v, want problems", err)
 	}
 }

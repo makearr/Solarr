@@ -68,8 +68,6 @@ export function PeopleIndex() {
   const lead = categoryId ? (roles.find((role) => role.key === levelRole) ?? castFirst ?? roles.find((role) => role.lead) ?? roles[0]) : undefined;
   const view = useRouteView(FILTER_KEYS);
   const chosen = view.query.filters.role || (lead ? lead.key : EVERYONE);
-  // The coverage bar is the lead role's, as Lidarr's artists carry one; a wall of cast carries none.
-  const leadList = Boolean(lead?.lead && chosen === lead.key);
   const role = chosen === EVERYONE ? "" : chosen;
   const scope = categoryId ?? "all";
   const [storedMode, setMode] = usePreference<IndexView>(`people.view.${scope}`, "poster");
@@ -113,7 +111,7 @@ export function PeopleIndex() {
       idOf: (person) => person.id,
       rowHeight:
         mode === "poster"
-          ? posterRowHeight({ ...options, showAvailability: options.showAvailability && leadList }, metrics.cellWidth)
+          ? posterRowHeight({ ...options, showAvailability: options.showAvailability }, metrics.cellWidth)
           : mode === "overview"
             ? OVERVIEW_ROW_HEIGHT / 1.6
             : 44,
@@ -285,7 +283,7 @@ export function PeopleIndex() {
                 link={linkOf(person)}
                 round
                 showTitle={options.showTitle}
-                status={options.showAvailability && leadList ? statusOf(person) : undefined}
+                status={options.showAvailability ? statusOf(person) : undefined}
                 presentCount={person.complete}
                 requiredCount={person.wanted}
                 heart={<HeartButton subject="person" id={person.id} name={person.name} />}

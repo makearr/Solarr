@@ -187,6 +187,12 @@ func NewDefaultRegistry() *Registry {
 		Default:  "false",
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyHuntGaps, Kind: KindBool, Tier: TierNormal,
+		Name:     "Search for old missing items",
+		HelpText: "The automatic search also looks for missing items released before the freshness window. Off, only new releases and upgrades are searched; a search you start yourself works either way.",
+		Default:  "true",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyUsersNewLibraryPermission, Kind: KindString, Tier: TierNormal,
 		Name:     "New libraries",
 		HelpText: "What a new account is granted on libraries created after it: none, read, request or manage.",
@@ -329,6 +335,16 @@ func NewDefaultRegistry() *Registry {
 		Key: KeyRecycleBinMaxPercentOfRoot, Kind: KindInt, Tier: TierAdvanced,
 		Name: "Recycle bin share of a root folder", HelpText: "A root's recycle bin as a percentage of the root; the oldest go first. 0 is no limit.",
 		Default: fmt.Sprintf("%d", DefaultRecycleBinMaxPercentOfRoot),
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyRecycleBinMinFreeBytes, Kind: KindInt, Tier: TierAdvanced,
+		Name: "Recycle bin: minimum free space", HelpText: "A root with less free space than this, in bytes, has its recycle bin emptied oldest first until it has it. 0 is no floor.",
+		Default: "0",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyRecycleBinMinFreePercent, Kind: KindInt, Tier: TierAdvanced,
+		Name: "Recycle bin: minimum free share", HelpText: "The same floor as a percentage of the root; the larger of the two counts. 0 is no floor.",
+		Default: "0",
 	})
 
 	// Priority (ADR-36/ADR-55): scoring rules, advanced per ADR-26's own table.

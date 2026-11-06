@@ -5864,6 +5864,29 @@ paths:
           $ref: "#/components/responses/Problem"
           description: Still referenced; the detail names what by.
 
+  /categories/order:
+    post:
+      operationId: orderCategories
+      tags: [settings]
+      summary: Put the libraries in the given order (the sidebar's, and the order of equal priority). Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  description: Every library (not its further media types) in the new order.
+                  items: { type: integer, format: int64 }
+      responses:
+        "204": { description: Ordered. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/merge:
     parameters:
       - name: id
@@ -6275,6 +6298,37 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "503": { $ref: "#/components/responses/Problem" }
+
+  /settings/general:
+    get:
+      operationId: getGeneralSettings
+      tags: [settings]
+      summary: The instance-wide switches of Settings -> General.
+      responses:
+        "200":
+          description: The switches in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GeneralSettings" }
+        "401": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: patchGeneralSettings
+      tags: [settings]
+      summary: Change the switches named; the rest stay. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GeneralSettings" }
+      responses:
+        "200":
+          description: The switches now in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GeneralSettings" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
 
   /settings/video-hashing:
     get:
@@ -7344,6 +7398,72 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+
+  /franchises/duplicates:
+    post:
+      operationId: mergeDuplicateFranchises
+      tags: [library]
+      summary: Find a library's duplicate collections (one inside another, or mostly the same works under a similar name) and, when asked, merge each group into its largest. Needs the library's manage permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category_id, apply]
+              properties:
+                category_id: { type: integer, format: int64 }
+                apply: { type: boolean, description: "false only lists the groups." }
+      responses:
+        "200":
+          description: The groups found, each with the collection that stays.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [groups, merged]
+                properties:
+                  groups: { type: array, items: { $ref: "#/components/schemas/FranchiseDuplicateGroup" } }
+                  merged: { type: integer, description: How many collections were merged away; 0 unless apply. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /franchises/{id}/links:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+    post:
+      operationId: linkFranchise
+      tags: [library]
+      summary: Link this collection with one of another library, so each shows the other's works (Babylon 5 as films and as a series). Needs the manage permission of both libraries.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category_id, other_id, other_category_id]
+              properties:
+                category_id: { type: integer, format: int64 }
+                other_id: { type: integer, format: int64 }
+                other_category_id: { type: integer, format: int64 }
+      responses:
+        "204": { description: Linked. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: unlinkFranchise
+      tags: [library]
+      summary: Take the link with another collection away.
+      parameters:
+        - { name: category_id, in: query, required: true, schema: { type: integer, format: int64 } }
+        - { name: other_id, in: query, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        "204": { description: Unlinked. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
 
   /franchises/{id}/monitor:
     parameters:
@@ -8573,6 +8693,8 @@ components:
         name: { type: string, description: What the target is called in a library's choice. }
         media_type: { type: string, description: The media type it serves; fixed once made. }
         crf: { type: number, description: 'The constant rate factor a file''s encoder settings state; a file at or below it meets it, one that states none is not held against it. 0 or absent when it does not care.' }
+        prefer_over: { type: boolean, description: 'More quality beats less: a release above the target ranks before one below it, and overshooting a number costs less than undershooting it.' }
+        ignore_below: { type: boolean, description: 'A release below the target ranks after every one at or above it, so it is only chosen when nothing at or above exists.' }
         audio_codec: { type: string, description: 'As ffprobe names it: aac, mp3, flac, opus. May be empty for a video target.' }
         container: { type: string, description: 'The file type: m4a, mp3, flac; mkv or mp4 for video. May be empty for a video target.' }
         resolution: { type: string, description: 'A video library''s target resolution, e.g. 1080p; empty when it does not care.' }
@@ -8620,6 +8742,14 @@ components:
       type: object
       required: [max_bytes, max_percent_of_root]
       properties:
+        min_free_bytes:
+          type: integer
+          format: int64
+          description: A root with less free space than this has its recycle bin emptied, oldest first, until it has it. 0 is no floor. Absent on a write keeps it.
+        min_free_percent:
+          type: integer
+          format: int64
+          description: The same floor as a percentage of the root; the larger of the two counts. 0 is no floor. Absent on a write keeps it.
         max_bytes:
           type: integer
           format: int64
@@ -9458,6 +9588,39 @@ components:
         members:
           type: array
           items: { $ref: "#/components/schemas/FranchiseMember" }
+        links:
+          type: array
+          description: The collections of other libraries linked with this one, each with the works it holds there (one collection shown across libraries).
+          items: { $ref: "#/components/schemas/FranchiseLink" }
+
+    FranchiseLink:
+      type: object
+      required: [id, category_id, name, members]
+      properties:
+        id: { type: integer, format: int64 }
+        category_id: { type: integer, format: int64, description: The library whose works the members are. }
+        library_name: { type: string }
+        name: { type: string }
+        members:
+          type: array
+          items: { $ref: "#/components/schemas/FranchiseMember" }
+
+    FranchiseDuplicateGroup:
+      type: object
+      required: [keep, merge]
+      properties:
+        keep: { $ref: "#/components/schemas/FranchiseDuplicate" }
+        merge:
+          type: array
+          items: { $ref: "#/components/schemas/FranchiseDuplicate" }
+
+    FranchiseDuplicate:
+      type: object
+      required: [id, name, works]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        works: { type: integer, description: The works of it the library holds. }
 
     FranchiseMember:
       type: object
@@ -12967,6 +13130,13 @@ components:
                     lossless: { type: boolean }
                     keep: { type: boolean, description: The copy to keep. }
                     paths: { type: array, items: { type: string } }
+
+    GeneralSettings:
+      type: object
+      description: Switches that belong to no one page. Always answered in full; a PATCH changes the ones it names.
+      properties:
+        video_hashing: { type: boolean, description: "Hash videos in the background so the duplicate finder matches re-encodes (scan.video_phash). Default off." }
+        hunt_old_missing: { type: boolean, description: "The automatic search also looks for missing items released before the freshness window (search.hunt_gaps). Default on." }
 
     VideoHashing:
       type: object

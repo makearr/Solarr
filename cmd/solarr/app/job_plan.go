@@ -42,6 +42,7 @@ func (p *process) registerPlanJobs(registry *jobs.Registry, executor *jobs.Execu
 		Mode: func(context.Context) (library.HuntMode, error) {
 			return library.HuntMode(p.cache.Snapshot().PrioritySettings().HuntMode), nil
 		},
+		Gaps:           func() bool { return p.cache.Snapshot().HuntGaps() },
 		NewReleaseDays: func() int { return int(p.cache.Snapshot().PrioritySettings().NewReleaseDays) }, Clock: clock.NewSystem(), Logger: p.logger,
 		Interval: func() time.Duration {
 			return jobs.CadenceInterval(p.cache.Snapshot().ScheduleCadences(huntTaskKey, huntScheduleCron), huntScheduleCron, wall.Now())

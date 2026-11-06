@@ -53,6 +53,7 @@ merged name keeps leading there when a provider uses it again), adds or deletes 
 
 - One a provider or Solarr made can be renamed, deleted, filled with a work by hand or have a work taken out of
   it. None of that comes back undone on a refresh.
+- **Merge duplicates** (administrators) shows the collections that are one said twice and folds each group into its largest; **Link** joins a collection with one of another library so each shows the other's works. Collection posters carry the same coverage bar as artists, and a view (search, order, favorites) can be saved by name.
 - **Monitor collection** on a provider's collection adds the works of it you lack. The task **Add the new works
   of monitored franchises** (every 12 hours, at most 25 works a run) adds what the provider lists later: films,
   series and books alike.

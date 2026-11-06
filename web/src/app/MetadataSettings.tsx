@@ -1,3 +1,4 @@
+import { SubTabs } from "@/ui/SubTabs";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Info } from "lucide-react";
@@ -92,7 +93,7 @@ export function MetadataSettings() {
   });
   if (metadata.error !== null || !metadata.data || !providers.data) return null;
   const settings = metadata.data;
-  return (
+  const providerList = (
     <section className="flex flex-col gap-4">
       <p className="max-w-2xl text-sm text-ink-muted">
         Every provider Solarr can ask. One switched off is asked by no library; its key stays stored. The order a library asks them in is
@@ -112,8 +113,10 @@ export function MetadataSettings() {
         ))}
       </ul>
       {(switchProvider.isError || patch.isError) && <p className="text-sm text-danger">That change was refused.</p>}
-      {isTierVisible(tier, "advanced") && settings.availability_grace_hours && (
-        <Card
+    </section>
+  );
+  const airTimes = settings.availability_grace_hours ? (
+    <Card
           title="Air times"
           help="How long after an episode airs it is waited for before it counts as missing and is searched for: releases need a while to appear."
         >
@@ -124,8 +127,14 @@ export function MetadataSettings() {
             onSave={(grace) => patch.mutate({ availability_grace_hours: grace })}
           />
         </Card>
-      )}
-    </section>
+  ) : null;
+  return (
+    <SubTabs
+      tabs={[
+        { key: "providers", label: "Providers", content: providerList },
+        { key: "air-times", label: "Air times", hidden: !isTierVisible(tier, "advanced") || !airTimes, content: airTimes },
+      ]}
+    />
   );
 }
 

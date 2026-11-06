@@ -190,6 +190,17 @@ Every pass reads Wikidata for the whole library in a few bulk queries (`TiesOf`,
 and networks, `tmdb:movie` for films, `tmdb:company` for studios, `tmdb:collection` for collections
 (`internal/metadata/tmdb/keys.go`). A lookup by provider id also names the media type it wants.
 
+**Duplicates and links.** Collections made by different providers (or by Solarr and a provider) can be one collection said
+twice. *Merge duplicates* on the Collections page lists the groups (`library.PlanCollectionMerges`, a pure rule) and merges each
+into its largest: a collection whose works are all in another merges into it; one sharing at least two works with another under
+a similar name (the words that are not "collection", "saga", "the" ...) and lacking at most one work, or a third of the larger's
+size, whichever is more, merges too (6 works sharing 4 with a collection of 8 merge). Several fold into one at once; ids, links
+and the monitored flag move to the larger. A collection of one library can be **linked** with one of another (a series' films
+and the series): each then shows the other's works (`relationship` kind `linked_collection`).
+
+A film the library holds that TMDB lists in a collection, but whose own record does not name it, joins the collection the next
+time the collection is opened (it was listed as missing before).
+
 ## When a provider fails
 
 A provider's status is on Settings -> Metadata: **Failing** (five failures in a row, its circuit open), **Key rejected** (401 or

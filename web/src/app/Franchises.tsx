@@ -11,12 +11,14 @@ import { t } from "@/lib/i18n";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
+import { AvailabilityBar } from "@/lib/albumStatus";
 import { EmptyState } from "@/ui/EmptyState";
 import { PageHeader } from "@/ui/PageHeader";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { Dialog } from "@/ui/Dialog";
 import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
 import { useLibrary } from "@/lib/useLibrary";
+import { useLibraries } from "@/lib/resources";
 import { useMediaType } from "@/lib/useMediaTypes";
 import { AddToLibrary } from "./work/AddWork";
 import { CoverArt } from "./CoverArt";
@@ -30,6 +32,12 @@ import { useNavigate } from "@tanstack/react-router";
 
 type Franchise = components["schemas"]["Franchise"];
 type View = "poster" | "list";
+interface SavedView {
+  name: string;
+  filter: string;
+  sort: Sort;
+  onlyFavorites: boolean;
+}
 type Sort = "name" | "items" | "missing" | "newest" | "monitored";
 
 function sortOf(franchises: Franchise[], sort: Sort): Franchise[] {
@@ -55,6 +63,14 @@ export function heldLabel(franchise: Franchise): string {
   return t("franchise.held", { held, total: Math.max(franchise.total ?? 0, held) });
 }
 
+/** The artists' bar for a collection: the works with a file against the works that exist. */
+function CoverageBar({ franchise }: { franchise: Franchise }) {
+  const present = franchise.members.filter((member) => member.has_file).length;
+  const required = Math.max(franchise.total ?? 0, franchise.members.length);
+  if (required === 0) return null;
+  return <AvailabilityBar status={present >= required ? "complete" : "incomplete"} present={present} required={required} />;
+}
+
 /** The letter a name is listed under: its first letter or digit, "#" for the rest. */
 function initialOf(name: string): string {
   const letter = name.trim().charAt(0).toLowerCase();
@@ -76,6 +92,8 @@ export function FranchiseIndex() {
   const frame = useRef<HTMLDivElement>(null);
   const TypeIcon = mediaTypeIcon(useLibrary(categoryId)?.media_type ?? "");
   const [creating, setCreating] = useState(false);
+  const [merging, setMerging] = useState(false);
+  const [views, setViews] = usePreference<SavedView[]>(`franchises.views.${categoryId}`, []);
   const list = useQuery({
     queryKey: ["franchises", categoryId],
     queryFn: () => ok(api.GET("/franchises", { params: { query: { category_id: Number(categoryId) } } })),
@@ -124,7 +142,48 @@ export function FranchiseIndex() {
           <span className="text-xs">
             <ToolbarFavorites active={onlyFavorites} onChange={setOnlyFavorites} />
           </span>
+          <select
+            aria-label={t("franchise.views")}
+            className={inputStyle}
+            value=""
+            onChange={(event) => {
+              const chosen = views.find((entry) => entry.name === event.target.value);
+              if (!chosen) return;
+              setFilter(chosen.filter);
+              setSort(chosen.sort);
+              setOnlyFavorites(chosen.onlyFavorites);
+            }}
+          >
+            <option value="">{t("franchise.views")}</option>
+            {views.map((entry) => (
+              <option key={entry.name} value={entry.name}>
+                {entry.name}
+              </option>
+            ))}
+          </select>
+          <Button
+            onClick={() => {
+              const name = window.prompt(t("franchise.views.name"));
+              if (name?.trim()) setViews([...views.filter((entry) => entry.name !== name.trim()), { name: name.trim(), filter, sort, onlyFavorites }]);
+            }}
+          >
+            {t("franchise.views.save")}
+          </Button>
+          {views.length > 0 && (
+            <Button
+              variant="icon"
+              aria-label={t("franchise.views.forget")}
+              title={t("franchise.views.forget")}
+              onClick={() => {
+                const name = window.prompt(t("franchise.views.forgetName"), views[0]?.name);
+                if (name) setViews(views.filter((entry) => entry.name !== name));
+              }}
+            >
+              <Trash2 aria-hidden className="size-4" />
+            </Button>
+          )}
           <span className="ml-auto flex items-center gap-1">
+            {administrator && <Button onClick={() => setMerging(true)}>{t("franchise.duplicates")}</Button>}
             {administrator && <Button onClick={() => setCreating(true)}>{t("collection.new")}</Button>}
             <Button variant="icon" aria-label={t("franchise.view.poster")} aria-pressed={view === "poster"} onClick={() => setView("poster")}>
               <LayoutGrid aria-hidden className="size-4" />
@@ -135,6 +194,7 @@ export function FranchiseIndex() {
           </span>
         </div>
         {creating && <NewCollection categoryId={categoryId} onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); void navigate({ to: "/library/$categoryId/collections/$franchiseId", params: { categoryId, franchiseId: String(id) } }); }} />}
+        {merging && <DuplicatesDialog categoryId={categoryId} onClose={() => setMerging(false)} />}
         {shown.length === 0 && <EmptyState title={t("franchise.none")} />}
         {view === "poster" ? (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-4">
@@ -158,6 +218,7 @@ export function FranchiseIndex() {
                     <HeartButton subject="collection" id={franchise.id} name={franchise.name} />
                   </span>
                 </span>
+                <CoverageBar franchise={franchise} />
                 <span className="truncate text-sm font-medium">{franchise.name}</span>
                 <span className="truncate text-xs text-ink-muted">{heldLabel(franchise)}</span>
                 {franchise.monitored && <Chip tone="ok">{t("franchise.monitored")}</Chip>}
@@ -339,6 +400,7 @@ function CollectionDetail({
           );
         })}
       </div>
+      <LinkedCollections categoryId={categoryId} franchise={franchise} administrator={administrator} />
       <p className="text-[11px] text-ink-muted">{words}</p>
       {renaming && (
         <Dialog
@@ -368,6 +430,159 @@ function CollectionDetail({
         />
       )}
     </section>
+  );
+}
+
+/** Finds the library's duplicate collections and merges each group into its largest, after showing what would go. */
+function DuplicatesDialog({ categoryId, onClose }: { categoryId: string; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const found = useQuery({
+    queryKey: ["franchise-duplicates", categoryId],
+    queryFn: () => ok(api.POST("/franchises/duplicates", { body: { category_id: Number(categoryId), apply: false } })),
+    gcTime: 0,
+  });
+  const merge = useMutation({
+    mutationFn: () => ok(api.POST("/franchises/duplicates", { body: { category_id: Number(categoryId), apply: true } })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["franchises", categoryId] });
+      onClose();
+    },
+  });
+  const groups = found.data?.groups ?? [];
+  return (
+    <Dialog
+      title={t("franchise.duplicates")}
+      onClose={onClose}
+      actions={
+        <>
+          <Button onClick={onClose}>{t("action.cancel")}</Button>
+          <Button variant="primary" busy={merge.isPending} disabled={groups.length === 0} onClick={() => merge.mutate()}>
+            {t("franchise.duplicates.merge", { count: groups.reduce((total, group) => total + group.merge.length, 0) })}
+          </Button>
+        </>
+      }
+    >
+      {found.isLoading && <p className="text-sm text-ink-muted">{t("work.loading")}</p>}
+      {found.isError && <p className="text-sm text-danger">{t("franchise.failed")}</p>}
+      {found.data && groups.length === 0 && <p className="text-sm text-ink-muted">{t("franchise.duplicates.none")}</p>}
+      <ul className="flex max-h-96 flex-col gap-2 overflow-y-auto text-sm">
+        {groups.map((group) => (
+          <li key={group.keep.id} className="rounded border border-border-subtle p-2">
+            <div className="font-medium">
+              {group.keep.name} <span className="font-normal text-ink-muted">({group.keep.works})</span>
+            </div>
+            <div className="text-xs text-ink-muted">
+              {t("franchise.duplicates.into")} {group.merge.map((one) => `${one.name} (${one.works})`).join(", ")}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Dialog>
+  );
+}
+
+/** The collections of other libraries linked with this one, shown as part of it, and the means to link and unlink. */
+function LinkedCollections({ categoryId, franchise, administrator }: { categoryId: string; franchise: Franchise; administrator: boolean }) {
+  const queryClient = useQueryClient();
+  const [linking, setLinking] = useState(false);
+  const links = franchise.links ?? [];
+  const unlink = useMutation({
+    mutationFn: (otherId: number) =>
+      ok(api.DELETE("/franchises/{id}/links", { params: { path: { id: franchise.id }, query: { category_id: Number(categoryId), other_id: otherId } } })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["franchise", categoryId, franchise.id] }),
+  });
+  return (
+    <>
+      {links.map((link) => (
+        <div key={`${link.category_id}-${link.id}`} className="flex flex-col gap-2 border-t border-border-subtle pt-3">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="font-medium">{link.name}</span>
+            <span className="text-xs text-ink-muted">
+              {t("franchise.linked")} {link.library_name}
+            </span>
+            {administrator && (
+              <button type="button" className="ml-auto text-xs text-ink-muted hover:text-ink" onClick={() => unlink.mutate(link.id)}>
+                {t("franchise.unlink")}
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-4">
+            {link.members
+              .filter((member) => member.work_id)
+              .map((member) => (
+                <Link
+                  key={member.work_id}
+                  to="/library/$categoryId/works/$workId/$tab"
+                  params={{ categoryId: String(link.category_id), workId: String(member.work_id), tab: "overview" }}
+                  className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent"
+                >
+                  <span className="block aspect-[2/3] overflow-hidden rounded-lg border border-border-subtle bg-canvas">
+                    {member.poster_url ? (
+                      <img src={remoteImage(member.poster_url, "small")} alt="" loading="lazy" className="size-full object-cover" />
+                    ) : (
+                      <CoverArt workId={member.work_id as number} title={member.title} size="small" className="size-full object-cover" />
+                    )}
+                  </span>
+                  <span className="truncate text-sm font-medium">
+                    {member.title}
+                    {member.year ? <span className="font-normal text-ink-muted"> ({member.year})</span> : null}
+                  </span>
+                </Link>
+              ))}
+          </div>
+        </div>
+      ))}
+      {administrator && (
+        <div>
+          <Button onClick={() => setLinking(true)}>{t("franchise.link")}</Button>
+        </div>
+      )}
+      {linking && <LinkDialog categoryId={categoryId} franchise={franchise} onClose={() => setLinking(false)} />}
+    </>
+  );
+}
+
+/** Picks a collection of another library to link with. */
+function LinkDialog({ categoryId, franchise, onClose }: { categoryId: string; franchise: Franchise; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const libraries = (useLibraries().data ?? []).filter((library) => library.levels.some((level) => level.entity === "franchise"));
+  const [otherLibrary, setOtherLibrary] = useState("");
+  const others = useQuery({
+    queryKey: ["franchises", otherLibrary],
+    enabled: otherLibrary !== "",
+    queryFn: () => ok(api.GET("/franchises", { params: { query: { category_id: Number(otherLibrary) } } })),
+  });
+  const link = useMutation({
+    mutationFn: (otherId: number) =>
+      ok(api.POST("/franchises/{id}/links", { params: { path: { id: franchise.id } }, body: { category_id: Number(categoryId), other_id: otherId, other_category_id: Number(otherLibrary) } })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["franchise", categoryId, franchise.id] });
+      onClose();
+    },
+  });
+  return (
+    <Dialog title={t("franchise.link")} onClose={onClose} actions={<Button onClick={onClose}>{t("action.cancel")}</Button>}>
+      <p className="text-xs text-ink-muted">{t("franchise.link.help")}</p>
+      <select className={`${inputStyle} w-full`} value={otherLibrary} onChange={(event) => setOtherLibrary(event.target.value)}>
+        <option value="">{t("franchise.link.library")}</option>
+        {libraries
+          .filter((library) => String(library.id) !== categoryId)
+          .map((library) => (
+            <option key={library.id} value={library.id}>
+              {library.name}
+            </option>
+          ))}
+      </select>
+      <ul className="mt-2 flex max-h-72 flex-col overflow-y-auto text-sm">
+        {(others.data?.franchises ?? []).map((one) => (
+          <li key={one.id}>
+            <button type="button" className="w-full truncate rounded px-2 py-1 text-left hover:bg-canvas" disabled={link.isPending} onClick={() => link.mutate(one.id)}>
+              {one.name} <span className="text-xs text-ink-muted">{heldLabel(one)}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Dialog>
   );
 }
 

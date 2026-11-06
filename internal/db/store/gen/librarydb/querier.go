@@ -238,6 +238,9 @@ type Querier interface {
 	// A refresh rewrites the numbers one provider gave a part, so a mapping it dropped goes too.
 	DeleteAltNumberingByProvider(ctx context.Context, arg DeleteAltNumberingByProviderParams) error
 	DeleteCollection(ctx context.Context, id int64) error
+	DeleteCollectionLink(ctx context.Context, arg DeleteCollectionLinkParams) error
+	// A collection that goes takes its links with it; a link of a collection to itself says nothing.
+	DeleteCollectionLinks(ctx context.Context, id int64) error
 	DeleteCollectionMembers(ctx context.Context, collectionID int64) error
 	DeleteCustomCollection(ctx context.Context, id int64) (int64, error)
 	DeleteDecisionsByID(ctx context.Context, ids interface{}) (int64, error)
@@ -269,6 +272,7 @@ type Querier interface {
 	DeleteRelationship(ctx context.Context, arg DeleteRelationshipParams) error
 	// A root that is removed from configuration leaves no progress behind.
 	DeleteScanState(ctx context.Context, rootFolderID int64) error
+	DeleteSelfCollectionLinks(ctx context.Context) error
 	// ADR-51's own RECORD step: media_object never changes (Invariant 70), only
 	// where it lives. Matched by the old (root_folder_id, rel_path) rather than
 	// by id, since that pair is what Apply already has in hand from its own
@@ -554,6 +558,8 @@ type Querier interface {
 	ListCharacterCreditsOfType(ctx context.Context, mediaType string) ([]ListCharacterCreditsOfTypeRow, error)
 	// Genres stored before they were tags, a page of works at a time.
 	ListClassificationGenres(ctx context.Context, pageSize int64) ([]ListClassificationGenresRow, error)
+	// Collections of different libraries a person said are one (Babylon 5: its films and its series), both ways round.
+	ListCollectionLinks(ctx context.Context, id int64) ([]int64, error)
 	ListCollectionMembers(ctx context.Context, collectionID int64) ([]ListCollectionMembersRow, error)
 	// The works of a library in the collections, monitored as the library's own item says, files counted.
 	ListCollectionMembersInCategory(ctx context.Context, arg ListCollectionMembersInCategoryParams) ([]ListCollectionMembersInCategoryRow, error)
@@ -965,6 +971,8 @@ type Querier interface {
 	MergeWorkTags(ctx context.Context, arg MergeWorkTagsParams) error
 	MoveAcquisitionsToItem(ctx context.Context, arg MoveAcquisitionsToItemParams) error
 	MoveCollectionExternalIDs(ctx context.Context, arg MoveCollectionExternalIDsParams) error
+	MoveCollectionLinksFrom(ctx context.Context, arg MoveCollectionLinksFromParams) error
+	MoveCollectionLinksTo(ctx context.Context, arg MoveCollectionLinksToParams) error
 	MoveCollectionMembers(ctx context.Context, arg MoveCollectionMembersParams) error
 	// An item the kept work has no counterpart for moves over whole, without the dropped work's edition.
 	MoveDesiredItemToWork(ctx context.Context, arg MoveDesiredItemToWorkParams) error

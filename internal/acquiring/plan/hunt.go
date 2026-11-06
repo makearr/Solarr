@@ -49,6 +49,8 @@ type HuntConfig struct {
 	Mode func(ctx context.Context) (library.HuntMode, error)
 	// NewReleaseDays is the freshness window that tells a new release from a gap; nil is 7.
 	NewReleaseDays func() int
+	// Gaps says whether missing items released before the freshness window are searched; nil searches them.
+	Gaps func() bool
 	// Interval is how often the hunt runs; each run spends its part of the hourly budget. Nil spends it all at once.
 	Interval func() time.Duration
 	// Libraries are the libraries searched and their shares; nil searches every library as one.
@@ -169,7 +171,11 @@ func (j *HuntJob) Run(ctx context.Context, job jobs.Job) error {
 	// Each share is split over the libraries by their weights (user, 2026-10-23); a library that runs out of a share's
 	// items is left out of that share's later deals.
 	exhausted := make([]map[int64]bool, len(shares))
+	gapsOff := j.config.Gaps != nil && !j.config.Gaps()
 	spend := func(index int, budget int) error {
+		if shares[index].name == ShareGap && gapsOff {
+			return nil
+		}
 		if exhausted[index] == nil {
 			exhausted[index] = map[int64]bool{}
 		}

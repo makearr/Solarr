@@ -235,6 +235,7 @@ func qualityTargetView(target settings.QualityTarget) gen.QualityTarget {
 		crf := float32(target.CRF)
 		view.Crf = &crf
 	}
+	view.PreferOver, view.IgnoreBelow = &target.PreferOver, &target.IgnoreBelow
 	return view
 }
 
@@ -253,6 +254,7 @@ func qualityTargetFromBody(body gen.QualityTarget) settings.QualityTarget {
 		SubtitleLanguages: lowerAll(derefOr(body.SubtitleLanguages, nil)),
 		AudioBitrateKbps:  body.AudioBitrateKbps, VideoBitrateKbps: body.VideoBitrateKbps,
 		FrameRate: float64(derefOr(body.FrameRate, 0)), CRF: float64(derefOr(body.Crf, 0)),
+		PreferOver: derefOr(body.PreferOver, false), IgnoreBelow: derefOr(body.IgnoreBelow, false),
 	}
 }
 

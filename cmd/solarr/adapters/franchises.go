@@ -138,9 +138,105 @@ func (a LibraryFranchises) Get(ctx context.Context, categoryID, franchiseID int6
 				row.Total = known
 			}
 		}
-		return franchiseView(row, missing), nil
+		view := franchiseView(row, missing)
+		links, err := a.linksOf(ctx, franchiseID)
+		if err != nil {
+			return gen.Franchise{}, err
+		}
+		if len(links) > 0 {
+			view.Links = &links
+		}
+		return view, nil
 	}
 	return gen.Franchise{}, apiserver.ErrNoFranchise
+}
+
+// linksOf shows each collection linked with one in every library of its media type that lists it, with the works held there.
+func (a LibraryFranchises) linksOf(ctx context.Context, franchiseID int64) ([]gen.FranchiseLink, error) {
+	others, err := a.Store.LinkedWith(ctx, franchiseID)
+	if err != nil {
+		return nil, err
+	}
+	var links []gen.FranchiseLink
+	for _, otherID := range others {
+		place, err := a.Store.PlaceOf(ctx, otherID)
+		if err != nil {
+			continue
+		}
+		for _, category := range a.Cache.Snapshot().Categories() {
+			if category.MediaType != place.MediaType {
+				continue
+			}
+			rows, err := a.Store.InCategory(ctx, place.MediaType, category.ID)
+			if err != nil {
+				return nil, err
+			}
+			for _, row := range rows {
+				if row.ID != otherID || len(row.Members) == 0 {
+					continue
+				}
+				view := franchiseView(row, nil)
+				link := gen.FranchiseLink{Id: row.ID, CategoryId: category.ID, Name: row.Name, Members: view.Members}
+				setString(&link.LibraryName, category.Name)
+				links = append(links, link)
+			}
+		}
+	}
+	return links, nil
+}
+
+// Link implements apiserver.Franchises: both collections must be listed by their libraries.
+func (a LibraryFranchises) Link(ctx context.Context, categoryID, franchiseID, otherCategoryID, otherID int64) error {
+	if err := a.inLibrary(ctx, categoryID, franchiseID); err != nil {
+		return err
+	}
+	if err := a.inLibrary(ctx, otherCategoryID, otherID); err != nil {
+		return err
+	}
+	return a.Store.LinkCollections(ctx, franchiseID, otherID)
+}
+
+// Unlink implements apiserver.Franchises.
+func (a LibraryFranchises) Unlink(ctx context.Context, categoryID, franchiseID, otherID int64) error {
+	if err := a.inLibrary(ctx, categoryID, franchiseID); err != nil {
+		return err
+	}
+	return a.Store.UnlinkCollections(ctx, franchiseID, otherID)
+}
+
+// Duplicates implements apiserver.Franchises.
+func (a LibraryFranchises) Duplicates(ctx context.Context, categoryID int64, apply bool) ([]gen.FranchiseDuplicateGroup, error) {
+	category, err := a.category(categoryID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := a.Store.InCategory(ctx, category.MediaType, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	merges, err := a.Store.DuplicateMerges(ctx, category.MediaType, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	shown := func(id int64) gen.FranchiseDuplicate {
+		for _, row := range rows {
+			if row.ID == id {
+				return gen.FranchiseDuplicate{Id: id, Name: row.Name, Works: len(row.Members)}
+			}
+		}
+		return gen.FranchiseDuplicate{Id: id}
+	}
+	groups := make([]gen.FranchiseDuplicateGroup, len(merges))
+	for index, merge := range merges {
+		groups[index] = gen.FranchiseDuplicateGroup{Keep: shown(merge.Keep), Merge: make([]gen.FranchiseDuplicate, len(merge.Drop))}
+		for at, id := range merge.Drop {
+			groups[index].Merge[at] = shown(id)
+		}
+	}
+	if apply {
+		return groups, a.Store.MergeDuplicates(ctx, merges)
+	}
+	return groups, nil
 }
 
 // Create implements apiserver.Franchises.
