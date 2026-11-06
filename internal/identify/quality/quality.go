@@ -155,7 +155,10 @@ func meetsVideoTarget(target settings.QualityTarget, file score.FileFacts) bool 
 	if !anyContainer(target.Container, file) || !shares(target.AudioLanguages, file.AudioLanguages) || !shares(target.SubtitleLanguages, file.SubtitleLanguages) {
 		return false
 	}
-	if !atLeastShare(target.VideoBitrateKbps, file.VideoBitrate, videoBitrateFloor) || !atLeastShare(target.AudioBitrateKbps, file.AudioBitrate, audioBitrateFloor) {
+	// A constant-quality encode within the target's CRF is the quality asked for at any picture bitrate: a small or
+	// quiet picture (a low-resolution source) needs far fewer bits, so the bitrate floor does not apply to it.
+	crfVouches := crfWithinTarget(target, file)
+	if !crfVouches && !atLeastShare(target.VideoBitrateKbps, file.VideoBitrate, videoBitrateFloor) || !atLeastShare(target.AudioBitrateKbps, file.AudioBitrate, audioBitrateFloor) {
 		return false
 	}
 	if target.CRF > 0 && file.CRF > 0 && file.CRF > target.CRF+crfMargin {
@@ -168,6 +171,11 @@ func meetsVideoTarget(target settings.QualityTarget, file score.FileFacts) bool 
 		return false
 	}
 	return true
+}
+
+// crfWithinTarget says the file states a CRF and it is at or within the tolerance above the target's.
+func crfWithinTarget(target settings.QualityTarget, file score.FileFacts) bool {
+	return target.CRF > 0 && file.CRF > 0 && file.CRF <= target.CRF+crfMargin
 }
 
 // anyContainer is the file's container among the target's file types (comma separated), or any when none is named.

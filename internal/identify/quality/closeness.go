@@ -125,7 +125,11 @@ func Distance(target settings.QualityTarget, file score.FileFacts) (closeness Cl
 		number("bit depth", float64(target.BitDepth), float64(file.BitDepth), 1, "-bit", 0, true)
 	}
 	if target.VideoBitrateKbps != nil {
-		number("video bitrate", float64(*target.VideoBitrateKbps), float64(file.VideoBitrate)/1000, 2, " kbit/s", tolerance, true)
+		videoTolerance := tolerance
+		if crfWithinTarget(target, file) {
+			videoTolerance = 100 // the CRF vouches for the quality, so a lower bitrate is as near as the target
+		}
+		number("video bitrate", float64(*target.VideoBitrateKbps), float64(file.VideoBitrate)/1000, 2, " kbit/s", videoTolerance, true)
 	}
 	if target.AudioBitrateKbps != nil {
 		number("audio bitrate", float64(*target.AudioBitrateKbps), float64(file.AudioBitrate)/1000, 1, " kbit/s", tolerance, true)

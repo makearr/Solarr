@@ -171,3 +171,23 @@ func TestMeetsTarget_ATranscodedFileNearTheBitrateIsOnTargetWhateverItsSize(t *t
 		t.Error("a different codec is short of the target however good its bitrate")
 	}
 }
+
+func TestMeetsTarget_AVideoBitrateFarUnderIsFineWhenTheCRFIsWithinTheTarget(t *testing.T) {
+	bitrate := int64(1600)
+	target := settings.QualityTarget{MediaType: "movie", Resolution: "480p", VideoCodec: "h265", Container: "mp4", CRF: 28, VideoBitrateKbps: &bitrate}
+	file := score.FileFacts{Resolution: "480p", VideoCodec: "h265", Extension: "mp4", VideoBitrate: 300_000, CRF: 30}
+	if !quality.MeetsTarget(target, file) {
+		t.Error("a 480p file at CRF 30 and 300 kbit/s is the quality a CRF 28 target asks for")
+	}
+	if got, _ := quality.Distance(target, file); got.Percent != 100 {
+		t.Errorf("closeness = %d%%, want 100: the CRF vouches for the low bitrate", got.Percent)
+	}
+	file.CRF = 34
+	if quality.MeetsTarget(target, file) {
+		t.Error("a CRF well past the tolerance must not meet the target, whatever its bitrate")
+	}
+	file.CRF = 0
+	if quality.MeetsTarget(target, file) {
+		t.Error("with no CRF to vouch for it, a quarter of the bitrate is short")
+	}
+}

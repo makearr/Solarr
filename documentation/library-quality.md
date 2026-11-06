@@ -164,3 +164,7 @@ episode and a scene are the same kind of file, so one preset serves them all and
 for `tv` is stored in the video family; content profiles name families too. Under Settings > Quality > Target qualities each family
 is a collapsible group of tiles: the short name (label) is the title and the specification the small line beneath, and a library
 choice lists targets by that short name.
+
+A constant-quality encode whose **CRF is within the target's tolerance** is the quality the target asks for at any picture bitrate: a
+small or quiet picture (a low-resolution source) needs far fewer bits, so the video bitrate floor does not apply to it and its
+closeness counts the bitrate as met (an audio bitrate still has its floor). Without a stated CRF the bitrate floors above apply.
