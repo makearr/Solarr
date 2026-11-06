@@ -13,7 +13,8 @@ import { inputStyle, labelStyle } from "@/ui/form";
 import { Card } from "./SettingsCard";
 import { AddLibraryForm } from "./NewLibrary";
 import { KindSelect } from "./LibraryKindSelect";
-import { LibraryTargetSelect } from "./LibraryTargetSelect";
+import { DefaultLanguagesEditor } from "./DefaultLanguages";
+import { LibraryLanguageSelect, LibraryTargetSelect } from "./LibraryTargetSelect";
 
 type Category = components["schemas"]["LibraryCategory"];
 type CategorySettings = components["schemas"]["CategorySettings"];
@@ -97,6 +98,8 @@ export function Categories() {
   if (categories.error !== null) return null;
 
   return (
+    <>
+    <Card title="Default languages" help="What a library you add prefers to hear. Each library keeps its own language, set in its row below or on its Quality page; no quality profile is needed."><DefaultLanguagesEditor /></Card>
     <Card title="Every library" help="A library holds one or more kinds of media (Anime: series and movies), each kind in its own root folders with its own quality, naming and searching; name, priority, maximum rating and access are the library's.">
       {categories.data && categories.data.length > 0 ? (
         <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
@@ -153,6 +156,7 @@ export function Categories() {
 
       <AddLibraryForm />
     </Card>
+    </>
   );
 }
 
@@ -245,6 +249,7 @@ function Row({
         {mediaTypeName(category.media_type)}
       </span>
       <LibraryTargetSelect categoryId={category.id} name={category.name} />
+      <LibraryLanguageSelect categoryId={category.id} name={category.name} />
       {category.works != null && (
         <span className="ml-auto shrink-0 text-xs text-ink-muted">
           {category.works} {mediaType?.work.many.toLowerCase() ?? "works"}

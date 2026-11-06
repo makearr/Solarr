@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
@@ -93,6 +94,13 @@ func (s *Server) CreateCategory(w http.ResponseWriter, r *http.Request) {
 
 	if kind.Key != "" {
 		if created, err = s.applyKind(r.Context(), created, kind); err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
+	}
+	if kind.Key == "" {
+		// No kind to bring a language: the library still has one, from the defaults.
+		if created, err = s.applyKindLanguage(r.Context(), created, LibraryKind{}); err != nil {
 			writeError(w, s.logger, err)
 			return
 		}
@@ -293,12 +301,17 @@ func (s *Server) AddLibraryType(w http.ResponseWriter, r *http.Request, id int64
 		return
 	}
 	member, err := s.auth.Settings.AddLibraryType(r.Context(), id, body.MediaType)
+	kindApplied := false
 	if categories := s.auth.Settings.Snapshot().LibraryCategories(id); err == nil && len(categories) > 0 && categories[0].Kind != "" {
 		// The further type is the library's kind too when its type has one: Anime's movies are anime films.
 		info, _ := s.mediaTypeInfo(body.MediaType)
 		if kind, known := info.kindOf(categories[0].Kind); known {
 			member, err = s.applyKind(r.Context(), member, kind)
+			kindApplied = true
 		}
+	}
+	if err == nil && !kindApplied {
+		member, err = s.applyKindLanguage(r.Context(), member, LibraryKind{})
 	}
 	if err != nil {
 		var problems config.Problems
@@ -368,24 +381,33 @@ func (s *Server) applyKind(ctx context.Context, category settings.Category, kind
 
 // applyKindLanguage gives a library the kind's language profile, found by name or created.
 func (s *Server) applyKindLanguage(ctx context.Context, updated settings.Category, kind LibraryKind) (settings.Category, error) {
-	snapshot, category := s.auth.Settings.Snapshot(), updated
-	if kind.Language != nil {
-		languageID := int64(0)
-		for _, profile := range snapshot.LanguageProfiles() {
-			if profile.Name == kind.Language.Name {
-				languageID = profile.ID
-			}
+	category := updated
+	snapshot2 := s.auth.Settings.Snapshot()
+	// The wizard's languages decide a library's, so one answer covers every library; a kind with a language of its own
+	// (anime: Japanese) keeps that as its first, and with no answer yet the kind's own profile stands.
+	defaults := snapshot2.DefaultLanguages()
+	var wanted settings.LanguageProfile
+	switch {
+	case len(defaults) > 0 || kind.Language == nil:
+		wanted = settings.LanguageProfileFor(defaults, kind.Language != nil && slices.Contains(kind.Language.AudioPreferred, "ja"))
+	default:
+		wanted = *kind.Language
+	}
+	languageID := int64(0)
+	for _, profile := range snapshot2.LanguageProfiles() {
+		if profile.Name == wanted.Name {
+			languageID = profile.ID
 		}
-		if languageID == 0 {
-			created, err := s.auth.Settings.CreateLanguageProfile(ctx, *kind.Language)
-			if err != nil {
-				return updated, err
-			}
-			languageID = created.ID
-		}
-		if err := s.auth.Settings.SetCategoryLanguageProfile(ctx, category.ID, &languageID); err != nil {
+	}
+	if languageID == 0 {
+		created, err := s.auth.Settings.CreateLanguageProfile(ctx, wanted)
+		if err != nil {
 			return updated, err
 		}
+		languageID = created.ID
+	}
+	if err := s.auth.Settings.SetCategoryLanguageProfile(ctx, category.ID, &languageID); err != nil {
+		return updated, err
 	}
 	return updated, nil
 }

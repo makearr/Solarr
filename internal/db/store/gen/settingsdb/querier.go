@@ -10,9 +10,11 @@ import (
 )
 
 type Querier interface {
+	AddDefaultLanguage(ctx context.Context, arg AddDefaultLanguageParams) error
 	AttachRootFolderToCategory(ctx context.Context, arg AttachRootFolderToCategoryParams) error
 	ClearCategoryTarget(ctx context.Context, categoryID int64) error
 	ClearCategoryTargetAuto(ctx context.Context, categoryID int64) error
+	ClearDefaultLanguages(ctx context.Context) error
 	CountCategoriesUsingLanguageProfile(ctx context.Context, languageProfileID sql.NullInt64) (int64, error)
 	// Invariant 41: deleting an entity in use is refused with a count of what
 	// references it, so the user gets a reason rather than a constraint violation.
@@ -98,6 +100,7 @@ type Querier interface {
 	ListCategoryRootFolders(ctx context.Context) ([]CategoryRootFolder, error)
 	ListCategoryTargetAuto(ctx context.Context) ([]int64, error)
 	ListCategoryTargets(ctx context.Context) ([]CategoryTarget, error)
+	ListDefaultLanguages(ctx context.Context) ([]string, error)
 	ListDownloadFolders(ctx context.Context) ([]DownloadFolder, error)
 	ListDownloaders(ctx context.Context) ([]Downloader, error)
 	// What a scheduler actually runs -- off until previewed (ADR-38).

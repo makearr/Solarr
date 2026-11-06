@@ -168,3 +168,13 @@ choice lists targets by that short name.
 A constant-quality encode whose **CRF is within the target's tolerance** is the quality the target asks for at any picture bitrate: a
 small or quiet picture (a low-resolution source) needs far fewer bits, so the video bitrate floor does not apply to it and its
 closeness counts the bitrate as met (an audio bitrate still has its floor). Without a stated CRF the bitrate floors above apply.
+
+## Languages without a quality profile
+
+A library's **language** is chosen like its target, with no quality profile: Settings > Libraries has a language picker per library
+and the library's Quality page a Language section (`language_profile_id` on `PUT /categories/{id}/quality`). The setup wizard
+asks for the **default languages** (step 2, `GET/PUT /defaultlanguages`, migration 0070); every library made afterwards, of any
+type, gets a language profile worked out from them (`settings.LanguageProfileFor`: "Prefer en, de"), and an anime library puts
+Japanese first with the defaults as subtitles. A kind with a language of its own is used only until defaults are set. Migration
+0070 carries an existing instance over: the first non-anime library's audio languages become the defaults, and a library with no
+language profile takes that profile; libraries that already had one keep it.

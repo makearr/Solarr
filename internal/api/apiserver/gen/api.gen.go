@@ -2060,6 +2060,12 @@ type Decision struct {
 // DecisionOutcome defines model for Decision.Outcome.
 type DecisionOutcome string
 
+// DefaultLanguages defines model for DefaultLanguages.
+type DefaultLanguages struct {
+	// Languages Two-letter codes, best first: ["en", "de"].
+	Languages []string `json:"languages"`
+}
+
 // Deferral A reason this candidate is not actionable yet.
 type Deferral struct {
 	Reason string `json:"reason"`
@@ -3531,9 +3537,15 @@ type LibraryQuality struct {
 	// Available Every profile, in the suggested order.
 	Available []QualityProfileRef `json:"available"`
 
+	// AvailableLanguages Every language profile, by name.
+	AvailableLanguages *[]QualityProfileRef `json:"available_languages,omitempty"`
+
 	// AvailableTargets Every target of the library's media type, by name.
-	AvailableTargets  *[]QualityProfileRef            `json:"available_targets,omitempty"`
-	CutoffProfileId   *int64                          `json:"cutoff_profile_id,omitempty"`
+	AvailableTargets *[]QualityProfileRef `json:"available_targets,omitempty"`
+	CutoffProfileId  *int64               `json:"cutoff_profile_id,omitempty"`
+
+	// LanguageProfileId The library's language profile; absent when none.
+	LanguageProfileId *int64                          `json:"language_profile_id,omitempty"`
 	PreferredProtocol LibraryQualityPreferredProtocol `json:"preferred_protocol"`
 
 	// Profiles The library's own list, earlier preferred. Empty means the instance default.
@@ -3563,6 +3575,9 @@ type LibraryQualityPreferredProtocol string
 // LibraryQualityWrite defines model for LibraryQualityWrite.
 type LibraryQualityWrite struct {
 	CutoffProfileId *int64 `json:"cutoff_profile_id,omitempty"`
+
+	// LanguageProfileId The library's language profile; omitted leaves it as it is, 0 clears it.
+	LanguageProfileId *int64 `json:"language_profile_id,omitempty"`
 
 	// PreferredProtocol The delay profile's preferred protocol; the other's releases wait. Omitted leaves it as it is.
 	PreferredProtocol *LibraryQualityWritePreferredProtocol `json:"preferred_protocol,omitempty"`
@@ -7165,6 +7180,9 @@ type UpdateCrossoverJSONRequestBody = CrossoverWrite
 // MonitorCrossoverJSONRequestBody defines body for MonitorCrossover for application/json ContentType.
 type MonitorCrossoverJSONRequestBody MonitorCrossoverJSONBody
 
+// SetDefaultLanguagesJSONRequestBody defines body for SetDefaultLanguages for application/json ContentType.
+type SetDefaultLanguagesJSONRequestBody = DefaultLanguages
+
 // AddDownloaderJSONRequestBody defines body for AddDownloader for application/json ContentType.
 type AddDownloaderJSONRequestBody = AddDownloaderRequest
 
@@ -7683,6 +7701,12 @@ type ServerInterface interface {
 	// Configured libraries and current state, for the landing page.
 	// (GET /dashboard)
 	GetDashboard(w http.ResponseWriter, r *http.Request)
+	// The audio languages a new library prefers, best first.
+	// (GET /defaultlanguages)
+	GetDefaultLanguages(w http.ResponseWriter, r *http.Request)
+	// Replace the default languages; libraries made afterwards use them. Administrator only.
+	// (PUT /defaultlanguages)
+	SetDefaultLanguages(w http.ResponseWriter, r *http.Request)
 	// Artists in a library whose discography has albums the library does not hold.
 	// (GET /discover/incomplete)
 	ListIncompleteDiscographies(w http.ResponseWriter, r *http.Request, params ListIncompleteDiscographiesParams)
@@ -8907,6 +8931,18 @@ func (_ Unimplemented) MonitorCrossover(w http.ResponseWriter, r *http.Request, 
 // Configured libraries and current state, for the landing page.
 // (GET /dashboard)
 func (_ Unimplemented) GetDashboard(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The audio languages a new library prefers, best first.
+// (GET /defaultlanguages)
+func (_ Unimplemented) GetDefaultLanguages(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace the default languages; libraries made afterwards use them. Administrator only.
+// (PUT /defaultlanguages)
+func (_ Unimplemented) SetDefaultLanguages(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12781,6 +12817,50 @@ func (siw *ServerInterfaceWrapper) GetDashboard(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetDashboard(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetDefaultLanguages operation middleware
+func (siw *ServerInterfaceWrapper) GetDefaultLanguages(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDefaultLanguages(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetDefaultLanguages operation middleware
+func (siw *ServerInterfaceWrapper) SetDefaultLanguages(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetDefaultLanguages(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -21851,6 +21931,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/dashboard", wrapper.GetDashboard)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/defaultlanguages", wrapper.GetDefaultLanguages)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/defaultlanguages", wrapper.SetDefaultLanguages)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/discover/incomplete", wrapper.ListIncompleteDiscographies)

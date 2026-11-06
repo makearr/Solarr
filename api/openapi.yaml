@@ -4783,6 +4783,37 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /defaultlanguages:
+    get:
+      operationId: getDefaultLanguages
+      tags: [settings]
+      summary: The audio languages a new library prefers, best first.
+      responses:
+        "200":
+          description: The languages.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DefaultLanguages" }
+        "401": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setDefaultLanguages
+      tags: [settings]
+      summary: Replace the default languages; libraries made afterwards use them. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DefaultLanguages" }
+      responses:
+        "200":
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DefaultLanguages" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /languageprofiles:
     get:
       operationId: listLanguageProfiles
@@ -8791,6 +8822,12 @@ components:
         encoder_tune: { type: string, description: 'The encoder tune an encode of this quality uses, e.g. animation or grain; empty when none.' }
         deinterlace: { type: boolean, description: An encode of this quality deinterlaces; an interlaced file counts as short of it. }
 
+    DefaultLanguages:
+      type: object
+      required: [languages]
+      properties:
+        languages: { type: array, items: { type: string }, description: 'Two-letter codes, best first: ["en", "de"].' }
+
     TargetProfile:
       type: object
       required: [name, media_types]
@@ -8920,6 +8957,7 @@ components:
           items: { type: integer, format: int64 }
         cutoff_profile_id: { type: integer, format: int64 }
         target_id: { type: integer, format: int64, description: The target the library aims for; absent for none. }
+        language_profile_id: { type: integer, format: int64, description: 'The library''s language profile; omitted leaves it as it is, 0 clears it.' }
         target_auto:
           type: boolean
           description: Aim for the average of the library's first profile instead of a stored target; target_id is then ignored.
@@ -8970,6 +9008,11 @@ components:
         target_auto:
           type: boolean
           description: The target is the average of the first profile, worked out, not a stored one.
+        language_profile_id: { type: integer, format: int64, description: The library's language profile; absent when none. }
+        available_languages:
+          type: array
+          description: Every language profile, by name.
+          items: { $ref: "#/components/schemas/QualityProfileRef" }
         suggested_profiles:
           type: array
           description: The quality profiles the library's kind used to start with (Anime 1080p), offered to add; those already listed are left out.

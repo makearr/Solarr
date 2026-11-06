@@ -663,3 +663,42 @@ func TestCreateCategory_AKindBringsItsDefaults(t *testing.T) {
 		t.Errorf("an unknown kind: status %d, want 400", refused.Code)
 	}
 }
+
+// Every library has a language: the wizard's defaults decide it, and an anime library puts Japanese first.
+func TestCreateCategory_EveryLibraryGetsALanguageFromTheDefaults(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	if put := fixture.do(authedPut(t, cookies, "/api/v1/defaultlanguages", `{"languages":["en","de"]}`)); put.Code != http.StatusOK {
+		t.Fatalf("set defaults: %d %s", put.Code, put.Body)
+	}
+	languageOf := func(body string) settings.LanguageProfile {
+		t.Helper()
+		recorder := fixture.do(authedPost(t, cookies, "/api/v1/categories", body))
+		if recorder.Code != http.StatusCreated {
+			t.Fatalf("create %s: %d %s", body, recorder.Code, recorder.Body)
+		}
+		var created struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &created); err != nil {
+			t.Fatal(err)
+		}
+		snapshot := fixture.cache.Snapshot()
+		category, _ := snapshot.Category(created.ID)
+		if category.LanguageProfileID == nil {
+			t.Fatalf("%s has no language profile", body)
+		}
+		profile, _ := snapshot.LanguageProfile(*category.LanguageProfileID)
+		return profile
+	}
+	if profile := languageOf(`{"media_type":"music","name":"Songs"}`); profile.Name != "Prefer en, de" {
+		t.Errorf("a music library got %q, want the defaults", profile.Name)
+	}
+	if profile := languageOf(`{"media_type":"tv","name":"Anime","kind":"anime"}`); !reflect.DeepEqual(profile.AudioPreferred, []string{"ja", "en", "de"}) {
+		t.Errorf("an anime library prefers %v, want Japanese first, then the defaults", profile.AudioPreferred)
+	}
+	if profile := languageOf(`{"media_type":"tv","name":"Shows","kind":"series"}`); !reflect.DeepEqual(profile.AudioPreferred, []string{"en", "de"}) {
+		t.Errorf("a series library prefers %v, want the defaults", profile.AudioPreferred)
+	}
+}

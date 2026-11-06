@@ -162,6 +162,10 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("settings: list automatic category targets: %w", err)
 	}
+	defaultLanguages, err := c.queries.ListDefaultLanguages(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list default languages: %w", err)
+	}
 	categoryTargets, err := c.queries.ListCategoryTargets(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("settings: list category quality targets: %w", err)
@@ -221,6 +225,7 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 		policy,
 	)
 	snapshot.targetProfiles = convertTargetProfiles(targetProfiles)
+	snapshot.defaultLanguages = defaultLanguages
 	return snapshot, nil
 }
 

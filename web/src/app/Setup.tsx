@@ -1,3 +1,4 @@
+import { DefaultLanguagesEditor } from "./DefaultLanguages";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -27,6 +28,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
   // root folder, since the connection's own root folder paths are what a
   // real user picks their first library folder from.
   const [arrStepDone, setArrStepDone] = useState(false);
+  const [languagesDone, setLanguagesDone] = useState(false);
 
   const status = useQuery({
     queryKey: ["setup"],
@@ -43,12 +45,22 @@ export function Setup({ onDone }: { onDone: () => void }) {
           <img src="/favicon.svg" alt="" className="mb-3 size-16" />
           <h1 className="text-lg font-semibold tracking-tight">Set up Solarr</h1>
           <p className="text-sm text-ink-muted">
-            Three steps. You can skip any of them and change it later.
+            Four steps. You can skip any of them and change it later.
           </p>
         </header>
 
         {status.data.needs_administrator ? (
           <CreateAdministrator />
+        ) : !languagesDone ? (
+          <Panel
+            title="Step 2 — Your languages"
+            description="Which audio languages do you want, best first? Every library you add starts with these; anime also gets Japanese first. You can change a library's language later."
+          >
+            <DefaultLanguagesEditor saveLabel="Continue" onSaved={() => setLanguagesDone(true)} />
+            <button type="button" onClick={() => setLanguagesDone(true)} className="text-xs text-ink-muted underline hover:text-ink">
+              Skip
+            </button>
+          </Panel>
         ) : !arrStepDone ? (
           <ConnectArr
             onSkip={() => setArrStepDone(true)}
@@ -195,7 +207,7 @@ function ConnectArr({
   if (importing) {
     return (
       <Panel
-        title={`Step 2 — Import from ${importing.name}`}
+        title={`Step 3 — Import from ${importing.name}`}
         description="Choose what comes in. Its root folders are already this library's; the import runs in the background."
       >
         {outcome && outcome.rootFolderErrors.length > 0 && (
@@ -223,7 +235,7 @@ function ConnectArr({
 
   return (
     <Panel
-      title="Step 2 — Import from Lidarr, Sonarr, Radarr or Whisparr"
+      title="Step 3 — Import from Lidarr, Sonarr, Radarr or Whisparr"
       description={
         "Already run Lidarr, Sonarr, Radarr or Whisparr? Connect each one: its root folders become a library here, and " +
         "you choose what comes in: its items with their monitoring, only the monitoring status of what is here, its " +
@@ -468,7 +480,7 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
 
   return (
     <Panel
-      title="Step 3 — Add a library folder"
+      title="Step 4 — Add a library folder"
       description="The path as the container sees it, not as your host sees it. It is checked before it is saved."
     >
       <form

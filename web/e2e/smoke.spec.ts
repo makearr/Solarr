@@ -24,6 +24,10 @@ test("a fresh install can be set up, and lands on the dashboard", async ({ page 
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: /create/i }).click();
 
+  // The languages step asks what the user wants; this run keeps the default and goes on.
+  await expect(page.getByRole("heading", { name: /Your languages/ })).toBeVisible();
+  await page.getByRole("button", { name: "Continue" }).click();
+
   // The *Arr step is skippable and this install has no *Arr to connect to.
   await page.getByRole("button", { name: /skip/i }).first().click();
 

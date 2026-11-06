@@ -3048,6 +3048,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/defaultlanguages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The audio languages a new library prefers, best first. */
+        get: operations["getDefaultLanguages"];
+        /** Replace the default languages; libraries made afterwards use them. Administrator only. */
+        put: operations["setDefaultLanguages"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/languageprofiles": {
         parameters: {
             query?: never;
@@ -5710,6 +5728,10 @@ export interface components {
             /** @description An encode of this quality deinterlaces; an interlaced file counts as short of it. */
             deinterlace?: boolean;
         };
+        DefaultLanguages: {
+            /** @description Two-letter codes, best first: ["en", "de"]. */
+            languages: string[];
+        };
         /** @description A kind of material with the settings that suit it, and the shipped target that fits it best. */
         TargetProfile: {
             /**
@@ -5886,6 +5908,11 @@ export interface components {
              * @description The target the library aims for; absent for none.
              */
             target_id?: number;
+            /**
+             * Format: int64
+             * @description The library's language profile; omitted leaves it as it is, 0 clears it.
+             */
+            language_profile_id?: number;
             /** @description Aim for the average of the library's first profile instead of a stored target; target_id is then ignored. */
             target_auto?: boolean;
             /** @description Lidarr's "Upgrades Allowed". Omitted leaves it as it is. */
@@ -5924,6 +5951,13 @@ export interface components {
             available_targets?: components["schemas"]["QualityProfileRef"][];
             /** @description The target is the average of the first profile, worked out, not a stored one. */
             target_auto?: boolean;
+            /**
+             * Format: int64
+             * @description The library's language profile; absent when none.
+             */
+            language_profile_id?: number;
+            /** @description Every language profile, by name. */
+            available_languages?: components["schemas"]["QualityProfileRef"][];
             /** @description The quality profiles the library's kind used to start with (Anime 1080p), offered to add; those already listed are left out. */
             suggested_profiles?: components["schemas"]["QualityProfileRef"][];
             /** @description When the target lies outside the library's profiles, the targets of its media type that the first profile accepts, nearest the preferred settings first. */
@@ -15056,6 +15090,54 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    getDefaultLanguages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The languages. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DefaultLanguages"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    setDefaultLanguages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DefaultLanguages"];
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DefaultLanguages"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     listLanguageProfiles: {

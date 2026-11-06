@@ -91,6 +91,7 @@ function LibraryQualityEditor() {
   const [delayMinutes, setDelayMinutes] = useState(0);
   const [targetId, setTargetId] = useState<number | undefined>();
   const [targetAuto, setTargetAuto] = useState(false);
+  const [languageId, setLanguageId] = useState(0);
   // What a search looks for: a season where Wanted lists parts, otherwise the work itself.
   const mediaType = useMediaType(useLibrary(categoryId)?.media_type);
   const unit = ((mediaType?.wanted_grain === "part" ? mediaType.group.one : mediaType?.work.one) ?? "work").toLowerCase();
@@ -101,6 +102,7 @@ function LibraryQualityEditor() {
     setCutoff(quality.data.cutoff_profile_id ?? undefined);
     setTargetId(quality.data.target_auto ? undefined : (quality.data.target?.id ?? undefined));
     setTargetAuto(quality.data.target_auto ?? false);
+    setLanguageId(quality.data.language_profile_id ?? 0);
     setUpgrades(quality.data.upgrades_allowed);
     setPreferred(quality.data.preferred_protocol);
     setDelayMinutes(quality.data.protocol_delay_minutes);
@@ -109,7 +111,7 @@ function LibraryQualityEditor() {
   const save = useMutation({
     mutationFn: () => ok(api.PUT("/categories/{id}/quality", {
       params: { path: { id: id! } },
-      body: { profile_ids: order ?? [], cutoff_profile_id: cutoff, target_id: targetAuto ? undefined : targetId, target_auto: targetAuto, upgrades_allowed: upgrades, preferred_protocol: preferred, protocol_delay_minutes: delayMinutes },
+      body: { profile_ids: order ?? [], cutoff_profile_id: cutoff, target_id: targetAuto ? undefined : targetId, target_auto: targetAuto, language_profile_id: languageId, upgrades_allowed: upgrades, preferred_protocol: preferred, protocol_delay_minutes: delayMinutes },
     })),
     onSuccess: (data: LibraryQuality) => {
       queryClient.setQueryData(["libraryQuality", id], data);
@@ -121,12 +123,13 @@ function LibraryQualityEditor() {
   const names = new Map(quality.data.available.map((profile) => [profile.id, profile.name]));
   const unused = quality.data.available.filter((profile) => !order.includes(profile.id));
   const dirty =
-    JSON.stringify([order, cutoff ?? null, targetId ?? null, targetAuto, upgrades, preferred, delayMinutes]) !==
+    JSON.stringify([order, cutoff ?? null, targetId ?? null, targetAuto, languageId, upgrades, preferred, delayMinutes]) !==
     JSON.stringify([
       quality.data.profiles.map((profile) => profile.id),
       quality.data.cutoff_profile_id ?? null,
       quality.data.target_auto ? null : (quality.data.target?.id ?? null),
       quality.data.target_auto ?? false,
+      quality.data.language_profile_id ?? 0,
       quality.data.upgrades_allowed,
       quality.data.preferred_protocol,
       quality.data.protocol_delay_minutes,
@@ -177,6 +180,26 @@ function LibraryQualityEditor() {
         {quality.data.target && (targetAuto ? quality.data.target_auto : targetId === quality.data.target.id) && (
           <p className="text-xs text-ink-muted">{summariseTarget(quality.data.target)}</p>
         )}
+      </section>
+
+      <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
+        <h2 className="text-sm font-medium">Language</h2>
+        <p className="text-xs text-ink-muted">
+          Which audio and subtitle languages this library prefers. Like the target, it needs no quality profile; new libraries start with the
+          languages chosen in setup.
+        </p>
+        <select
+          value={languageId || ""}
+          onChange={(event) => setLanguageId(Number(event.target.value) || 0)}
+          className={`${inputStyle} max-w-full self-start`}
+        >
+          <option value="">No preference</option>
+          {(quality.data.available_languages ?? []).map((language) => (
+            <option key={language.id} value={language.id}>
+              {language.name}
+            </option>
+          ))}
+        </select>
       </section>
 
       {isTierVisible(tier, "expert") && (
@@ -365,6 +388,7 @@ function LibraryQualityEditor() {
               setCutoff(quality.data.cutoff_profile_id ?? undefined);
               setTargetId(quality.data.target_auto ? undefined : (quality.data.target?.id ?? undefined));
               setTargetAuto(quality.data.target_auto ?? false);
+              setLanguageId(quality.data.language_profile_id ?? 0);
               setUpgrades(quality.data.upgrades_allowed);
               setPreferred(quality.data.preferred_protocol);
               setDelayMinutes(quality.data.protocol_delay_minutes);

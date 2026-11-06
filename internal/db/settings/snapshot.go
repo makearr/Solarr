@@ -23,6 +23,7 @@ type Snapshot struct {
 	qualityProfileByID   map[int64]QualityProfile
 	qualityTargets       []QualityTarget
 	targetProfiles       []TargetProfile
+	defaultLanguages     []string
 	languageProfileByID  map[int64]LanguageProfile
 	exclusionPatternByID map[int64]ExclusionPattern
 }

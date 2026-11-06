@@ -28,6 +28,7 @@ type Document struct {
 	QualityProfiles   []QualityProfileEntry   `yaml:"quality_profiles,omitempty"`
 	QualityTargets    []QualityTargetEntry    `yaml:"quality_targets,omitempty"`
 	TargetProfiles    []TargetProfileEntry    `yaml:"target_profiles,omitempty"`
+	DefaultLanguages  []string                `yaml:"default_languages,omitempty"`
 	LanguageProfiles  []LanguageProfileEntry  `yaml:"language_profiles,omitempty"`
 	ExclusionPatterns []ExclusionPatternEntry `yaml:"exclusion_patterns,omitempty"`
 	// Schedules holds each task's stored overrides by task key; a task absent here runs on its defaults.
@@ -573,6 +574,7 @@ func (c *Cache) Export() Document {
 		return document.QualityProfiles[i].Name < document.QualityProfiles[j].Name
 	})
 
+	document.DefaultLanguages = snapshot.DefaultLanguages()
 	profileNameByID := map[int64]string{}
 	for _, profile := range snapshot.TargetProfiles() {
 		profileNameByID[profile.ID] = profile.Name
@@ -1139,6 +1141,14 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 				return fmt.Errorf("quality profile %q: %w", profile.Name, err)
 			}
 			qualityIDByName[profile.Name] = created.ID
+		}
+
+		if len(document.DefaultLanguages) > 0 && len(snapshot.DefaultLanguages()) == 0 {
+			for order, code := range document.DefaultLanguages {
+				if err := queries.AddDefaultLanguage(ctx, settingsdb.AddDefaultLanguageParams{Code: code, Ord: int64(order)}); err != nil {
+					return fmt.Errorf("default language %q: %w", code, err)
+				}
+			}
 		}
 
 		for _, profile := range document.TargetProfiles {

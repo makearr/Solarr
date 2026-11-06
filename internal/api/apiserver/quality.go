@@ -98,6 +98,17 @@ func (s *Server) SetLibraryQuality(w http.ResponseWriter, r *http.Request, id in
 		writeError(w, s.logger, err)
 		return
 	}
+	if body.LanguageProfileId != nil {
+		var languageID *int64
+		if *body.LanguageProfileId != 0 {
+			languageID = body.LanguageProfileId
+		}
+		if err := s.auth.Settings.SetCategoryLanguageProfile(r.Context(), id, languageID); err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
+		category.LanguageProfileID = languageID
+	}
 	if body.UpgradesAllowed != nil && *body.UpgradesAllowed != category.QualityUpgrades {
 		if err := s.auth.Settings.SetCategoryQualityUpgrades(r.Context(), id, *body.UpgradesAllowed); err != nil {
 			writeError(w, s.logger, err)
@@ -160,6 +171,11 @@ func (s *Server) libraryQualityView(category settings.Category) gen.LibraryQuali
 			view.Available = append(view.Available, gen.QualityProfileRef{Id: profile.ID, Name: profile.Name})
 		}
 	}
+	languages := []gen.QualityProfileRef{}
+	for _, profile := range snapshot.LanguageProfiles() {
+		languages = append(languages, gen.QualityProfileRef{Id: profile.ID, Name: profile.Name})
+	}
+	view.AvailableLanguages, view.LanguageProfileId = &languages, category.LanguageProfileID
 	suggestedProfiles := []gen.QualityProfileRef{}
 	if info, found := s.mediaTypeInfo(category.MediaType); found {
 		if kind, known := info.kindOf(category.Kind); known {
