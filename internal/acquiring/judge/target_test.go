@@ -106,12 +106,39 @@ func TestWithTarget_PreferOverRanksAboveBeforeBelowAndIgnoreBelowLeavesBelowUnra
 	}
 }
 
-func TestWithTarget_PreferOverRanksAnyReleaseAboveTheIdealBeforeOneJustBelowIt(t *testing.T) {
+func TestWithTarget_PreferOverRanksARealShortfallAfterAnyOvershootButNotAReleaseJustUnder(t *testing.T) {
 	bitrate := int64(1600)
 	rules := judge.WithTarget(score.Profile{Compare: []string{"score"}}, settings.QualityTarget{VideoBitrateKbps: &bitrate, PreferOver: true})
-	above := score.Evaluate(rules, score.Facts{File: score.FileFacts{VideoBitrate: 6_400_000}}, nil)
-	justBelow := score.Evaluate(rules, score.Facts{File: score.FileFacts{VideoBitrate: 1_500_000}}, nil)
-	if winner, _ := model.Compare(above.Quality, justBelow.Quality); winner != -1 {
-		t.Errorf("four times the target did not outrank a release just under it (winner %d)", winner)
+	at := func(kbps int64) model.QualityVector {
+		return score.Evaluate(rules, score.Facts{File: score.FileFacts{VideoBitrate: kbps * 1000}}, nil).Quality
+	}
+	for _, test := range []struct {
+		name         string
+		better, over int64
+	}{
+		{"1500 is nearer 1600 than 6000 is", 1500, 6000},
+		{"6000 beats a real shortfall of 800", 6000, 800},
+		{"1700 beats 1500", 1700, 1500},
+	} {
+		if winner, _ := model.Compare(at(test.better), at(test.over)); winner != -1 {
+			t.Errorf("%s: winner %d", test.name, winner)
+		}
+	}
+}
+
+func TestWithFreshTarget_PreferOverEvenWhenTheLibraryDidNotAskForIt(t *testing.T) {
+	bitrate := int64(5000)
+	rules := score.Profile{Compare: []string{"score"}}
+	target := settings.QualityTarget{Resolution: "1080p", VideoBitrateKbps: &bitrate}
+	if got := judge.WithTarget(rules, target).Targets["video_bitrate"][0].Weights; got.Under != 1 {
+		t.Errorf("an upgrade without the box ticked weighs under %v, want 1", got.Under)
+	}
+	fresh := judge.WithFreshTarget(rules, target)
+	if got := fresh.Targets["video_bitrate"][0]; got.Weights.Under != 1000 || got.Lenience != 0.25 {
+		t.Errorf("a new item's bitrate target = %+v, want under 1000 with 25%% lenience", got)
+	}
+	want := [][]string{{"1080p"}, {"1440p"}, {"2160p"}, {"720p"}, {"576p"}, {"480p"}}
+	if got := fresh.Tiers["resolution"]; !slices.EqualFunc(got, want, slices.Equal[[]string]) {
+		t.Errorf("resolution tiers = %v, want 4k nearer than 720p", got)
 	}
 }

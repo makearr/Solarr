@@ -52,9 +52,11 @@ enough: the shipped profiles have no gates, so every release "passes" every one 
   "Apply its recommended settings" fills the form; every number stays editable. Encoder tune is stored for the transcode;
   a deinterlace target counts an interlaced file as short of it. 480p, 576p and CD-quality presets were added for them.
   Two checkboxes shape how a target ranks what is found (`judge.WithTarget`): **Prefer over** (transcoding brings quality
-  down, never up) ranks the resolutions above the target (the nearest first) before the ones below it, whatever the profile
-  lists, and ranks a bitrate, frame rate or similar number above its ideal before any below it, however near the lower one is
-  (a 1080p target takes 4k over 720p; a 1,600 kbit/s target takes 6,000 over 1,500); closeness counts above as met;
+  down, never up): an item with **no file yet always** prefers over (`judge.WithFreshTarget`): the resolutions above the target
+  rank, nearest first, before the ones below it (4k is nearer 1080p than 720p is), and a bitrate or sample rate above the ideal
+  before one clearly below it. A number **just under** the ideal still counts as at it (25 % for video bitrates, 15 % for audio,
+  10 % for the sample rate), so 1,500 kbit/s is nearer 1,600 than 6,000 is, while 800 is not. The box makes the same
+  preference apply when **upgrading** a file you already have. Closeness counts at or above as met;
   **Ignore everything below the target while anything at or above exists** leaves the
   resolutions below the target unranked, so they win only when nothing at or above is found.
 - **Size limits per quality** (Radarr's quality definitions): a video profile may carry, per resolution, a minimum,
@@ -122,3 +124,14 @@ of the other protocol is judged as usual, but while it is younger than the delay
 or from now when it states none) an acceptable one is held as a DEFER (`protocol-delay`, with the time it stops waiting),
 then taken like any other. Nothing is ever filtered out, so an album only the other protocol has is still found. Default:
 no preference, no delay; at most a week.
+
+## Hesitant upgrades
+
+A library is full of files already transcoded to the target, in Solarr or by Tdarr or FileFlows, and a constant-quality
+encode lands near the target bitrate, not on it (a real library: 1080p at 24 fps from 130 to 7,900 kbit/s, all H.265 AAC MP4).
+So `quality.MeetsTarget` takes the structure (container, codecs, resolution, frame rate, channels, languages) as the
+judgement: a bitrate meets the target from 40 % of it (video, 70 % audio) up, a sample rate from 90 %, a bit depth from the target,
+and CRF at or below. Such a file is **on target**: the item is complete, and `judge.UpgradeBeats` ignores the bitrate
+distances against it, so no download replaces it for its size. Against a file that is off target a number must be nearer by half
+an octave to count, and equal tiers keep the incumbent. The shipped presets' "30 fps" is a cap (source fps, max 30).
+Ranges per quality stay opt-in; the shipped profiles carry none (migration 0066 took 0065's back).

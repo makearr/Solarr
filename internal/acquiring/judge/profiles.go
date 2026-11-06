@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -21,7 +23,52 @@ type RankedProfile struct {
 	Rules score.Profile
 	// Target is the library's target quality, which a decision records its closeness to; nil when it has none.
 	Target *settings.QualityTarget
+	// UpgradeRules rank for an item that already has files: the target's preference for over-quality applies only
+	// when the library asked for it. Rules, the default, are for an item with nothing yet.
+	UpgradeRules score.Profile
 }
+
+// ForUpgrade is the profiles as they judge an item that already has files.
+func ForUpgrade(profiles []RankedProfile) []RankedProfile {
+	upgrade := make([]RankedProfile, len(profiles))
+	for i, profile := range profiles {
+		profile.Rules = profile.UpgradeRules
+		upgrade[i] = profile
+	}
+	return upgrade
+}
+
+// upgradeSlack is how much nearer to a target's number a release must be, in octaves of the distance, before it
+// counts as better than the file it would replace.
+const upgradeSlack = 0.5
+
+// UpgradeBeats says a candidate beats the file an upgrade replaces. It is hesitant: a file that already has the
+// target's container, codecs, resolution, frame rate or sample rate and channels is taken as on target whatever its
+// bitrate (an earlier transcode, in Solarr or by Tdarr or FileFlows, lands near it, not on it), so a number alone never
+// replaces it; for any other file a number must be clearly nearer, not just nearer. Equal tiers keep the incumbent.
+func UpgradeBeats(profiles []RankedProfile, candidate, incumbent model.Decision, incumbentFile score.FileFacts, minScoreGain float64) bool {
+	ignoreRates := len(profiles) > 0 && profiles[0].Target != nil && quality.MeetsTarget(*profiles[0].Target, incumbentFile)
+	for i := 0; i < min(len(candidate.Quality.Tiers), len(incumbent.Quality.Tiers)); i++ {
+		a, b := candidate.Quality.Tiers[i], incumbent.Quality.Tiers[i]
+		if base, isDistance := strings.CutSuffix(a.Dimension, "_distance"); isDistance {
+			if ignoreRates && rateDimensions[base] {
+				continue
+			}
+			if a.Rank != math.MaxInt32 && b.Rank != math.MaxInt32 && b.Rank-a.Rank <= int(upgradeSlack*1_000_000) && a.Rank-b.Rank <= int(upgradeSlack*1_000_000) {
+				continue
+			}
+		}
+		if a.Rank != b.Rank {
+			return a.Rank < b.Rank
+		}
+	}
+	// Equal in every tier: only a score gain of at least minScoreGain wins (negative: nothing does), as BeatsIncumbent.
+	gain := candidate.Score() - incumbent.Score()
+	return minScoreGain >= 0 && gain > 0 && gain >= minScoreGain
+}
+
+// rateDimensions are the target distances that follow how a file was encoded rather than what it is.
+var rateDimensions = map[string]bool{"video_bitrate": true, "audio_bitrate": true, "overall_bitrate": true}
 
 // LibraryProfiles is the profile an item picked for itself, else the library's ordered list, else the item's own; the
 // library's target quality, when it has one, leads each profile's ranking, whatever the media type.
@@ -50,11 +97,13 @@ func LibraryProfiles(
 			return nil, fmt.Errorf("quality profile %d: %w", id, err)
 		}
 		var target *settings.QualityTarget
+		upgrade := rules
 		if category, found := snapshot.Category(categoryID); found && category.QualityTarget != nil {
-			rules = WithTarget(rules, *category.QualityTarget)
+			upgrade = WithTarget(rules, *category.QualityTarget)
+			rules = WithFreshTarget(rules, *category.QualityTarget)
 			target = category.QualityTarget
 		}
-		profiles = append(profiles, RankedProfile{Name: profile.Name, Rules: rules, Target: target})
+		profiles = append(profiles, RankedProfile{Name: profile.Name, Rules: rules, Target: target, UpgradeRules: upgrade})
 	}
 	return profiles, nil
 }

@@ -59,6 +59,9 @@ type Target struct {
 	Ideal   string            `json:"ideal"`
 	Max     string            `json:"max,omitempty"`
 	Weights TargetWeights     `json:"weights"`
+	// Lenience is the share below the ideal that still counts as at it, so a number just under the ideal is weighed
+	// like one just over it and only a real shortfall pays the under weight.
+	Lenience float64 `json:"lenience,omitempty"`
 }
 
 // TargetWeights scales the over/under asymmetry of a dimension's distance

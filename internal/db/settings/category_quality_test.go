@@ -361,7 +361,7 @@ func TestTargetProfile_CreateUpdateAndDeleteKeepTheTargetsTunedForIt(t *testing.
 	}
 }
 
-func TestShippedVideoProfiles_CarrySizeLimitsThatStillParse(t *testing.T) {
+func TestShippedVideoProfiles_CarryNoSizeLimitsUnlessAskedFor(t *testing.T) {
 	cache, _ := newCache(t)
 	limited := 0
 	for _, profile := range cache.Snapshot().QualityProfiles() {
@@ -373,7 +373,7 @@ func TestShippedVideoProfiles_CarrySizeLimitsThatStillParse(t *testing.T) {
 			limited++
 		}
 	}
-	if limited != 12 {
-		t.Errorf("profiles with size limits = %d, want 12", limited)
+	if limited != 0 {
+		t.Errorf("profiles with size limits = %d, want none: they are opt-in", limited)
 	}
 }

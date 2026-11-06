@@ -89,6 +89,7 @@ func (j CutoffJob) replaceSuperseded(ctx context.Context, snapshot *settings.Sna
 	if err != nil {
 		return 0, err
 	}
+	rules = judge.ForUpgrade(rules)
 	language := judge.LanguagePolicyFor(snapshot, item.CategoryID)
 	byTrack := map[string][]library.MeasuredFile{}
 	for _, file := range files {
@@ -107,8 +108,8 @@ func (j CutoffJob) replaceSuperseded(ctx context.Context, snapshot *settings.Sna
 			}
 		}
 		for _, file := range track {
-			if judge.StrictlyBetter(judge.EvaluateInOrder(rules, measuredFacts(file), language),
-				judge.EvaluateInOrder(rules, measuredFacts(keeper), language)) {
+			if judge.UpgradeBeats(rules, judge.EvaluateInOrder(rules, measuredFacts(file), language),
+				judge.EvaluateInOrder(rules, measuredFacts(keeper), language), measuredFacts(keeper).File, -1) {
 				keeper = file
 			}
 		}

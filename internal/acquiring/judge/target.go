@@ -44,6 +44,23 @@ func aboveAndBelow(value string, ladder []string, target settings.QualityTarget)
 	return groups
 }
 
+// lenienceOf is how far below the ideal a dimension may be and still count as at it.
+func lenienceOf(dimension string, target settings.QualityTarget, audio bool) float64 {
+	switch dimension {
+	case "sample_rate":
+		return sampleRateLenience
+	case "video_bitrate", "audio_bitrate", "overall_bitrate":
+		if target.TolerancePct > 0 {
+			return float64(target.TolerancePct) / 100
+		}
+		if audio {
+			return defaultLenienceAudio
+		}
+		return defaultLenienceVideo
+	}
+	return 0
+}
+
 func kbps(value *int64) string {
 	if value == nil {
 		return ""
@@ -55,6 +72,24 @@ func kbps(value *int64) string {
 // video codec and HDR for video; the audio codec for an audio library) becomes the best tier of its dimension, and
 // those dimensions lead the comparison. The profile's own gates stay: a target never lets through what it refuses.
 func WithTarget(rules score.Profile, target settings.QualityTarget) score.Profile {
+	return withTarget(rules, target, target.PreferOver)
+}
+
+// WithFreshTarget is WithTarget for an item that has no file yet: it always prefers a little over to under, as the
+// transcode that follows can bring quality down and never up.
+func WithFreshTarget(rules score.Profile, target settings.QualityTarget) score.Profile {
+	return withTarget(rules, target, true)
+}
+
+// defaultLenienceVideo and defaultLenienceAudio are how far below its ideal a bitrate may be and still count as at it,
+// when the target names no tolerance; sampleRateLenience covers 44.1 kHz against a 48 kHz target.
+const (
+	defaultLenienceVideo = 0.25
+	defaultLenienceAudio = 0.15
+	sampleRateLenience   = 0.10
+)
+
+func withTarget(rules score.Profile, target settings.QualityTarget, preferOver bool) score.Profile {
 	named := []struct{ dimension, value string }{
 		{"resolution", target.Resolution}, {"video_codec", target.VideoCodec}, {"hdr", target.HDR}, {"audio_channels", target.AudioChannels},
 	}
@@ -72,7 +107,7 @@ func WithTarget(rules score.Profile, target settings.QualityTarget) score.Profil
 			continue
 		}
 		groups := [][]string{{entry.value}}
-		if ladder, ranked := resolutionLadder[strings.ToLower(entry.value)]; entry.dimension == "resolution" && ranked && (target.PreferOver || target.IgnoreBelow) {
+		if ladder, ranked := resolutionLadder[strings.ToLower(entry.value)]; entry.dimension == "resolution" && ranked && (preferOver || target.IgnoreBelow) {
 			groups = aboveAndBelow(entry.value, ladder, target)
 		} else {
 			for _, group := range rules.Tiers[entry.dimension] {
@@ -109,11 +144,11 @@ func WithTarget(rules score.Profile, target settings.QualityTarget) score.Profil
 		if _, tiered := rules.Tiers[entry.dimension]; tiered {
 			continue
 		}
-		under := 1.0
-		if target.PreferOver {
-			under = shortfallWeight
+		under, lenience := 1.0, 0.0
+		if preferOver {
+			under, lenience = shortfallWeight, lenienceOf(entry.dimension, target, audio)
 		}
-		targets[entry.dimension] = []score.Target{{Ideal: entry.ideal, Weights: score.TargetWeights{Over: 1, Under: under}}}
+		targets[entry.dimension] = []score.Target{{Ideal: entry.ideal, Weights: score.TargetWeights{Over: 1, Under: under}, Lenience: lenience}}
 		leading = append(leading, entry.dimension+"_distance")
 	}
 	scoring := slices.Clone(rules.Scoring)

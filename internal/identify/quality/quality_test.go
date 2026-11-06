@@ -91,13 +91,23 @@ func TestMeetsTarget_AudioSampleRateDepthChannelsAndAFrameRateCap(t *testing.T) 
 		t.Error("a 48 kHz 16-bit stereo flac must meet it")
 	}
 	for name, change := range map[string]func(*score.FileFacts){
-		"rate": func(f *score.FileFacts) { f.SampleRate = 96000 }, "depth": func(f *score.FileFacts) { f.BitDepth = 24 },
+		"rate": func(f *score.FileFacts) { f.SampleRate = 22050 }, "depth": func(f *score.FileFacts) { f.BitDepth = 8 },
 		"channels": func(f *score.FileFacts) { f.AudioChannels = "5.1" },
 	} {
 		other := file
 		change(&other)
 		if quality.MeetsTarget(music, other) {
 			t.Errorf("a file with a different %s must not meet it", name)
+		}
+	}
+	for name, change := range map[string]func(*score.FileFacts){
+		"44.1 kHz for a 48 kHz target":    func(f *score.FileFacts) { f.SampleRate = 44100 },
+		"96 kHz 24-bit for 48 kHz 16-bit": func(f *score.FileFacts) { f.SampleRate, f.BitDepth = 96000, 24 },
+	} {
+		other := file
+		change(&other)
+		if !quality.MeetsTarget(music, other) {
+			t.Errorf("%s must meet it: a transcode only lowers the rate", name)
 		}
 	}
 	mono := settings.QualityTarget{MediaType: "audiobook", AudioCodec: "aac", Container: "m4b", AudioChannels: "1.0"}
@@ -130,7 +140,33 @@ func TestDistance_IsAShareOfTheMatchedPartsAndSkipsWhatWasNotMeasured(t *testing
 	}
 	bitrate := settings.QualityTarget{MediaType: "movie", VideoBitrateKbps: new(int64)}
 	*bitrate.VideoBitrateKbps = 1600
-	if got, _ := quality.Distance(bitrate, score.FileFacts{VideoBitrate: 6_400_000}); got.Percent != 0 {
-		t.Errorf("four times the bitrate = %d%%, want 0", got.Percent)
+	if got, _ := quality.Distance(bitrate, score.FileFacts{VideoBitrate: 400_000}); got.Percent != 0 {
+		t.Errorf("a quarter of the bitrate = %d%%, want 0", got.Percent)
+	}
+	for _, kbps := range []int64{1500, 1600, 6400} {
+		if got, _ := quality.Distance(bitrate, score.FileFacts{VideoBitrate: kbps * 1000}); got.Percent != 100 {
+			t.Errorf("%d kbit/s = %d%%, want 100: at, a little under or over the target is on it", kbps, got.Percent)
+		}
+	}
+}
+
+func TestMeetsTarget_ATranscodedFileNearTheBitrateIsOnTargetWhateverItsSize(t *testing.T) {
+	bitrate, audio := int64(1600), int64(128)
+	target := settings.QualityTarget{MediaType: "movie", Resolution: "1080p", VideoCodec: "h265", Container: "mp4", AudioCodec: "aac", AudioChannels: "2.0",
+		FrameRate: 30, VideoBitrateKbps: &bitrate, AudioBitrateKbps: &audio}
+	file := score.FileFacts{Resolution: "1080p", VideoCodec: "h265", Extension: "mp4", AudioCodec: "aac", AudioChannels: "2.0", FrameRate: 29.97}
+	for name, rate := range map[string]int64{"on": 1600, "a bit under": 1100, "a constant-quality encode of a quiet film": 700, "far over, never transcoded": 9000} {
+		file.VideoBitrate, file.AudioBitrate = rate*1000, 128_000
+		if !quality.MeetsTarget(target, file) {
+			t.Errorf("%s (%d kbit/s): a file with the target's container, codecs, resolution, rate and channels must meet it", name, rate)
+		}
+	}
+	file.VideoBitrate = 400_000
+	if quality.MeetsTarget(target, file) {
+		t.Error("a quarter of the bitrate is short of the target")
+	}
+	file.VideoBitrate, file.VideoCodec = 1_600_000, "h264"
+	if quality.MeetsTarget(target, file) {
+		t.Error("a different codec is short of the target however good its bitrate")
 	}
 }

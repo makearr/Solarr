@@ -141,7 +141,7 @@ func targetDistance(dimension string, target Target, hasTarget bool, facts Facts
 	}
 	raw := math.Abs(math.Log2(measured / ideal))
 	weight := target.Weights.Under
-	if measured > ideal {
+	if measured > ideal || measured >= ideal*(1-target.Lenience) {
 		weight = target.Weights.Over
 	}
 	return raw * weight, true

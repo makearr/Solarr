@@ -68,16 +68,17 @@ func Distance(target settings.QualityTarget, file score.FileFacts) (closeness Cl
 		}
 		add(dimension, want, have, weight, value)
 	}
-	number := func(dimension string, want, have, weight float64, unit string, tolerance float64) {
+	// number is closeness of a measured number to its target; with overIsFine a number above the target counts as on it,
+	// and one below it by no more than tolerance percent does too.
+	number := func(dimension string, want, have, weight float64, unit string, tolerance float64, overIsFine bool) {
 		if want <= 0 || have <= 0 {
 			return
 		}
 		value := 1.0
-		if math.Abs(have-want) > want*tolerance/100 {
+		if overIsFine && have >= want*(1-tolerance/100) {
+			value = 1
+		} else if math.Abs(have-want) > want*tolerance/100 {
 			value = 1 - math.Abs(math.Log2(have/want))/octavesToZero
-			if target.PreferOver && have > want {
-				value = 1
-			}
 		}
 		add(dimension, formatNumber(want)+unit, formatNumber(have)+unit, weight, value)
 	}
@@ -118,22 +119,22 @@ func Distance(target settings.QualityTarget, file score.FileFacts) (closeness Cl
 	exact("audio codec", target.AudioCodec, file.AudioCodec, 1.5)
 	exact("channels", target.AudioChannels, file.AudioChannels, 1)
 	if target.SampleRateHz > 0 && file.SampleRate > 0 {
-		number("sample rate", float64(target.SampleRateHz), float64(file.SampleRate), 1, " Hz", 0)
+		number("sample rate", float64(target.SampleRateHz), float64(file.SampleRate), 1, " Hz", 100*(1-sampleRateFloor), true)
 	}
 	if target.BitDepth > 0 && file.BitDepth > 0 && !target.IsVideo() {
-		exact("bit depth", strconv.FormatInt(target.BitDepth, 10), strconv.Itoa(file.BitDepth), 1)
+		number("bit depth", float64(target.BitDepth), float64(file.BitDepth), 1, "-bit", 0, true)
 	}
 	if target.VideoBitrateKbps != nil {
-		number("video bitrate", float64(*target.VideoBitrateKbps), float64(file.VideoBitrate)/1000, 2, " kbit/s", tolerance)
+		number("video bitrate", float64(*target.VideoBitrateKbps), float64(file.VideoBitrate)/1000, 2, " kbit/s", tolerance, true)
 	}
 	if target.AudioBitrateKbps != nil {
-		number("audio bitrate", float64(*target.AudioBitrateKbps), float64(file.AudioBitrate)/1000, 1, " kbit/s", tolerance)
+		number("audio bitrate", float64(*target.AudioBitrateKbps), float64(file.AudioBitrate)/1000, 1, " kbit/s", tolerance, true)
 	}
 	if target.BitrateKbps != nil && !target.IsVideo() {
-		number("bitrate", float64(*target.BitrateKbps), float64(file.AudioBitrate)/1000, 2, " kbit/s", tolerance)
+		number("bitrate", float64(*target.BitrateKbps), float64(file.AudioBitrate)/1000, 2, " kbit/s", tolerance, true)
 	}
 	if target.FrameRate > 0 {
-		number("frame rate", target.FrameRate, file.FrameRate, 1, " fps", frameRateMargin*100)
+		number("frame rate", target.FrameRate, file.FrameRate, 1, " fps", frameRateMargin*100, false)
 	}
 	if target.MaxFrameRate > 0 && file.FrameRate > 0 {
 		value := 1.0

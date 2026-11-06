@@ -89,18 +89,22 @@ func MeetsTarget(target settings.QualityTarget, file score.FileFacts) bool {
 	if target.AudioChannels != "" && file.AudioChannels != "" && target.AudioChannels != file.AudioChannels {
 		return false
 	}
-	if target.SampleRateHz > 0 && file.SampleRate > 0 && int64(file.SampleRate) != target.SampleRateHz {
+	// A file at the sample rate and depth or above meets it, as a transcode only lowers them; 44.1 kHz meets 48 kHz,
+	// which is what a transcode of a CD rip leaves.
+	if target.SampleRateHz > 0 && file.SampleRate > 0 && float64(file.SampleRate) < float64(target.SampleRateHz)*sampleRateFloor {
 		return false
 	}
-	if target.BitDepth > 0 && file.BitDepth > 0 && int64(file.BitDepth) != target.BitDepth {
+	if target.BitDepth > 0 && file.BitDepth > 0 && int64(file.BitDepth) < target.BitDepth {
 		return false
 	}
 	if target.BitrateKbps == nil {
 		return true
 	}
+	// A file at or above the bitrate meets it (a transcode only brings it down), and one a little under it is the
+	// bitrate a variable-rate encode lands near; only a file far under is short of it.
 	want := float64(*target.BitrateKbps)
 	got := float64(file.AudioBitrate) / 1000
-	return math.Abs(got-want) <= want*float64(target.TolerancePct)/100
+	return got >= want*math.Min(audioBitrateFloor, 1-float64(target.TolerancePct)/100)
 }
 
 // frameRateMargin is how far a frame rate may be from the target's: 23.976 is 24 and 29.97 is 30.
@@ -108,6 +112,17 @@ const frameRateMargin = 0.02
 
 // crfMargin is how far above a target CRF a file may be and still meet it: a rounding of the encoder's own setting.
 const crfMargin = 0.5
+
+// sampleRateFloor is the share of a target's sample rate below which a file is short of it.
+const sampleRateFloor = 0.9
+
+// videoBitrateFloor and audioBitrateFloor are the share of a target's bitrate below which a file is short of it: a file
+// already transcoded to the target's container, codecs and frame rate lands near its bitrate, not on it, and a constant
+// quality encode of a quiet film is far under it, so a bitrate alone rarely says a file is not the target.
+const (
+	videoBitrateFloor = 0.4
+	audioBitrateFloor = 0.7
+)
 
 // defaultBitrateTolerancePct is the margin of a video target that names none; pictures vary far more than sound does.
 const defaultBitrateTolerancePct = 25
@@ -139,11 +154,7 @@ func meetsVideoTarget(target settings.QualityTarget, file score.FileFacts) bool 
 	if !anyContainer(target.Container, file) || !shares(target.AudioLanguages, file.AudioLanguages) || !shares(target.SubtitleLanguages, file.SubtitleLanguages) {
 		return false
 	}
-	tolerance := float64(target.TolerancePct)
-	if tolerance <= 0 {
-		tolerance = defaultBitrateTolerancePct
-	}
-	if !withinPct(target.VideoBitrateKbps, file.VideoBitrate, tolerance) || !withinPct(target.AudioBitrateKbps, file.AudioBitrate, tolerance) {
+	if !atLeastShare(target.VideoBitrateKbps, file.VideoBitrate, videoBitrateFloor) || !atLeastShare(target.AudioBitrateKbps, file.AudioBitrate, audioBitrateFloor) {
 		return false
 	}
 	if target.CRF > 0 && file.CRF > 0 && file.CRF > target.CRF+crfMargin {
@@ -190,12 +201,11 @@ func shares(want, have []string) bool {
 	return false
 }
 
-// withinPct is the measured bits per second within tolerance percent of the target kbit/s; true when no target is named
-// or nothing was measured.
-func withinPct(target *int64, measuredBps int64, tolerance float64) bool {
+// atLeastShare is the measured bits per second at least floor of the target kbit/s, above it as much as you like; true when
+// no target is named or nothing was measured.
+func atLeastShare(target *int64, measuredBps int64, floor float64) bool {
 	if target == nil || measuredBps <= 0 {
 		return true
 	}
-	want := float64(*target)
-	return math.Abs(float64(measuredBps)/1000-want) <= want*tolerance/100
+	return float64(measuredBps)/1000 >= float64(*target)*floor
 }

@@ -132,6 +132,7 @@ func (c Cutoff) settle(ctx context.Context, snapshot *settings.Snapshot, item li
 	if err != nil {
 		return 0, err
 	}
+	rules = judge.ForUpgrade(rules)
 	language := judge.LanguagePolicyFor(snapshot, item.CategoryID)
 	// A file holding several parts goes only once it lost every part it holds: beaten on one, it is still another's only file.
 	lost := map[int64]int{}
@@ -153,7 +154,7 @@ func (c Cutoff) settle(ctx context.Context, snapshot *settings.Snapshot, item li
 			}
 		}
 		for _, file := range part {
-			if judge.StrictlyBetter(judge.EvaluateInOrder(rules, file.Facts, language), judge.EvaluateInOrder(rules, keeper.Facts, language)) {
+			if judge.UpgradeBeats(rules, judge.EvaluateInOrder(rules, file.Facts, language), judge.EvaluateInOrder(rules, keeper.Facts, language), keeper.Facts.File, -1) {
 				keeper = file
 			}
 		}

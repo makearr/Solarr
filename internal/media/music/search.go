@@ -209,6 +209,8 @@ type yardstick struct {
 	// incumbent is the worst owned file's decision when the album is below its cutoff: a release must
 	// strictly beat it to be an upgrade (ADR-40). Nil otherwise.
 	incumbent *model.Decision
+	// incumbentFile is the facts of that file, for judging whether it is already on target.
+	incumbentFile score.FileFacts
 	// minUpgradeDelta is the profile's score gain a release needs over the incumbent when the tiers tie.
 	minUpgradeDelta float64
 	// cutoffMet rejects every release, as Lidarr's "existing files meet cutoff": the album wants nothing.
@@ -254,7 +256,8 @@ func (s Search) yardstickFor(ctx context.Context, item librarydb.DesiredItem) (y
 	built.cutoffMet = item.State == ItemStateComplete
 	built.minUpgradeDelta = judge.UpgradePolicyFor(snapshot, item.CategoryID).MinDelta
 	if item.State == ItemStateUpgradable {
-		if built.incumbent, err = s.incumbentFor(ctx, item.WorkID, built); err != nil {
+		built.rules = judge.ForUpgrade(built.rules)
+		if built.incumbent, built.incumbentFile, err = s.incumbentFor(ctx, item.WorkID, built); err != nil {
 			return yardstick{}, err
 		}
 	}
@@ -262,22 +265,24 @@ func (s Search) yardstickFor(ctx context.Context, item librarydb.DesiredItem) (y
 }
 
 // incumbentFor is the worst of the album's measured files, judged by the library's own profiles.
-func (s Search) incumbentFor(ctx context.Context, workID int64, j yardstick) (*model.Decision, error) {
+func (s Search) incumbentFor(ctx context.Context, workID int64, j yardstick) (*model.Decision, score.FileFacts, error) {
 	files, err := s.Desired.MeasuredFiles(ctx, workID)
 	if err != nil {
-		return nil, err
+		return nil, score.FileFacts{}, err
 	}
 	var worst *model.Decision
+	var worstFile score.FileFacts
 	for _, file := range files {
 		if !file.Measured {
 			continue
 		}
-		decision := judge.EvaluateInOrder(j.rules, measuredFacts(file), j.languagePolicy)
+		facts := measuredFacts(file)
+		decision := judge.EvaluateInOrder(j.rules, facts, j.languagePolicy)
 		if worst == nil || judge.StrictlyBetter(*worst, decision) {
-			worst = &decision
+			worst, worstFile = &decision, facts.File
 		}
 	}
-	return worst, nil
+	return worst, worstFile, nil
 }
 
 func (j yardstick) evaluate(raws []indexer.RawItem, conn IndexerConn) []judge.Find {
@@ -300,7 +305,7 @@ func (j yardstick) evaluate(raws []indexer.RawItem, conn IndexerConn) []judge.Fi
 	}
 	for index := range finds {
 		decision := &finds[index].Decision
-		if decision.Outcome == model.OutcomeAccept && !judge.BeatsIncumbent(*decision, *j.incumbent, j.minUpgradeDelta) {
+		if decision.Outcome == model.OutcomeAccept && !judge.UpgradeBeats(j.rules, *decision, *j.incumbent, j.incumbentFile, j.minUpgradeDelta) {
 			decision.Outcome = model.OutcomeReject
 			decision.Rejections = append(decision.Rejections, model.Rejection{
 				Rule: "upgrade", Field: "quality", Wanted: "better than the files you have", Got: "not better",

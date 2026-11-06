@@ -153,6 +153,8 @@ type yardstick[W any] struct {
 	now            time.Time
 	// incumbents are the decisions the files an upgrade replaces would get, by part; empty when it fills a gap.
 	incumbents map[int]model.Decision
+	// ownedFiles are those files' facts, for judging whether each is already on target.
+	ownedFiles map[int]score.FileFacts
 	filters    []judge.ReleaseFilter
 	mediaRef   string
 }
@@ -163,9 +165,13 @@ func (s Search[W]) yardstick(ctx context.Context, item librarydb.DesiredItem, wa
 	if err != nil {
 		return yardstick[W]{}, err
 	}
+	owned := s.Spec.Owned(wanted)
+	if len(owned) > 0 {
+		rules = judge.ForUpgrade(rules)
+	}
 	built := yardstick[W]{
 		spec: s.Spec, wanted: wanted, rules: rules, languagePolicy: judge.LanguagePolicyFor(snapshot, item.CategoryID),
-		preferPropers: true, now: s.Clock.Now(), incumbents: map[int]model.Decision{}, mediaRef: item.MediaRef,
+		preferPropers: true, now: s.Clock.Now(), incumbents: map[int]model.Decision{}, ownedFiles: map[int]score.FileFacts{}, mediaRef: item.MediaRef,
 	}
 	if s.ReleaseFilters != nil {
 		stored, err := s.ReleaseFilters.List(ctx, item.WorkID)
@@ -178,8 +184,9 @@ func (s Search[W]) yardstick(ctx context.Context, item librarydb.DesiredItem, wa
 			})
 		}
 	}
-	for part, facts := range s.Spec.Owned(wanted) {
+	for part, facts := range owned {
 		built.incumbents[part] = judge.EvaluateInOrder(rules, facts, built.languagePolicy)
+		built.ownedFiles[part] = facts.File
 	}
 	if category, found := snapshot.Category(item.CategoryID); found {
 		built.preferPropers = category.FileManagement.PropersRepacks != settings.PropersDoNotPrefer
@@ -242,7 +249,7 @@ func (y yardstick[W]) requireUpgrade(decision *model.Decision, release Release) 
 		if !replacing {
 			continue
 		}
-		if winner, _ := model.Compare(likeForLike.Quality, owned.Quality); winner >= 0 {
+		if !judge.UpgradeBeats(y.rules, likeForLike, owned, y.ownedFiles[part], -1) {
 			decision.Outcome = model.OutcomeReject
 			decision.Rejections = append(decision.Rejections, model.Rejection{Rule: "upgrade", Field: "quality", Wanted: wanted, Got: "not better"})
 			return
