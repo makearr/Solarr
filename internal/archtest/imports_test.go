@@ -424,7 +424,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/media/works": {
 		"internal/platform/httpx", "internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/indexer", "internal/acquiring/judge",
 		"internal/acquiring/rss", "internal/db/library", "internal/db/settings", "internal/db/statistics", "internal/db/store/gen/librarydb",
-		"internal/identify/model", "internal/identify/quality", "internal/identify/score", "internal/jobs", "internal/media",
+		"internal/identify/model", "internal/identify/parsetv", "internal/identify/quality", "internal/identify/score", "internal/jobs", "internal/media",
 		"internal/importing/batch", "internal/importing/inspect", "internal/importing/placer", "internal/scanning/scan",
 		"internal/platform/fsx",
 		"internal/platform/clock", "internal/platform/parallel",

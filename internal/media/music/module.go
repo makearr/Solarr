@@ -8,6 +8,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/parse"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/moving/naming"
 	"github.com/makearr/Solarr/internal/moving/renamejob"
@@ -150,6 +151,37 @@ var fileSettings = []media.FileSetting{
 var scanMonitoring = media.ScanMonitor{Setting: media.ScanMonitorDiscovered, Label: "Monitor discovered", Options: []media.Choice{
 	{Key: "monitored", Label: "Monitored"}, {Key: "unmonitored", Label: "Unmonitored"}, {Key: "none", Label: "None"},
 }}
+
+// RecogniseRelease implements media.RecognisingReleases: the format and bitrate a name states, MP3 for a bare bitrate as the search does.
+func (Module) RecogniseRelease(title string) []media.ReleaseClaim {
+	attributes := parse.Parse(title).Attributes
+	var out []media.ReleaseClaim
+	add := func(key, value string) {
+		if value != "" {
+			out = append(out, media.ReleaseClaim{Key: key, Value: value})
+		}
+	}
+	format := attributes.Format
+	if format == "" && !attributes.Lossless && (attributes.BitrateKbps > 0 || attributes.VBRPreset != "") {
+		format = "mp3"
+	}
+	add("format", format)
+	if attributes.Lossless {
+		add("lossless", "yes")
+	}
+	if attributes.BitrateKbps > 0 {
+		add("bitrate", strconv.Itoa(attributes.BitrateKbps)+" kbps")
+	}
+	add("vbr_preset", attributes.VBRPreset)
+	if attributes.BitDepth > 0 {
+		add("bit_depth", strconv.Itoa(attributes.BitDepth)+"-bit")
+	}
+	if attributes.SampleRate > 0 {
+		add("sample_rate", strconv.FormatFloat(float64(attributes.SampleRate)/1000, 'f', -1, 64)+" kHz")
+	}
+	add("source", attributes.Source)
+	return out
+}
 
 func (Module) Descriptor() media.Descriptor {
 	return media.Descriptor{

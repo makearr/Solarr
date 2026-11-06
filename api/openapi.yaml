@@ -13339,6 +13339,10 @@ components:
             client), so it cannot be sent; such releases are listed after every sendable one.
         guid: { type: string }
         title: { type: string, description: The release's own raw title, unparsed. }
+        recognised:
+          type: array
+          description: What the title says of its own quality (format, bitrate, resolution, codec) as the work's media type reads it; empty when the type reads none or the title says nothing.
+          items: { $ref: "#/components/schemas/ReleaseClaim" }
         size_bytes: { type: integer, format: int64, nullable: true }
         seeders: { type: integer, format: int64, nullable: true }
         leechers: { type: integer, format: int64, nullable: true }
@@ -13346,6 +13350,13 @@ components:
         protocol: { type: string, enum: [usenet, torrent, ddl, feed] }
         source: { type: string, enum: [rss, search] }
         decided_at: { type: string, format: date-time }
+
+    ReleaseClaim:
+      type: object
+      required: [key, value]
+      properties:
+        key: { type: string, description: "The kind of claim (format, bitrate, lossless, resolution, video_codec, ...); the interface words it." }
+        value: { type: string }
 
     IndexerSearchError:
       type: object

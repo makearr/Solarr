@@ -180,6 +180,11 @@ func (m MediaTypes) SearchingOf(mediaType string) (media.Searching, bool) {
 	return media.Capability[media.Searching](m.Registry, media.Key(mediaType))
 }
 
+// RecognisingOf answers how a media type reads a release title.
+func (m MediaTypes) RecognisingOf(mediaType string) (media.RecognisingReleases, bool) {
+	return media.Capability[media.RecognisingReleases](m.Registry, media.Key(mediaType))
+}
+
 // RoleKeys lists every credit role a registered media type declares, once each.
 func (m MediaTypes) RoleKeys() []string {
 	var keys []string

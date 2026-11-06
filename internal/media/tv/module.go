@@ -11,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/screen"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/moving/naming"
 	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/scanning/scan"
@@ -279,6 +280,11 @@ var fileSettings = []media.FileSetting{
 var scanMonitoring = media.ScanMonitor{Setting: media.ScanMonitorParts, Label: "Monitor series found by a scan", Options: []media.Choice{
 	{Key: "existing", Label: "Only the episodes on disk"}, {Key: "all", Label: "Every episode (hunts the gaps)"}, {Key: "none", Label: "None"},
 }}
+
+// RecogniseRelease implements media.RecognisingReleases.
+func (Module) RecogniseRelease(title string) []media.ReleaseClaim {
+	return works.RecogniseVideoRelease(title)
+}
 
 func (Module) Descriptor() media.Descriptor {
 	return media.Descriptor{

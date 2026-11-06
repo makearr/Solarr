@@ -26,11 +26,26 @@ type CandidateSearch struct {
 	Desired library.Desired
 	// Searching answers a media type's search; nil or false leaves a type unsearchable.
 	Searching func(mediaType string) (media.Searching, bool)
+	// Recognising answers how a media type reads a release title; nil or false shows none.
+	Recognising func(mediaType string) (media.RecognisingReleases, bool)
 	// Search carries the stores decision rows and blocklisting read; any type's will do.
 	Search   music.Search
 	Dispatch music.Dispatch
 	Queue    *jobs.Queue
 	Clock    clock.Clock
+}
+
+// recogniser is how the work's media type reads a release title, nil when it reads none.
+func (c CandidateSearch) recogniser(ctx context.Context, workID int64) media.RecognisingReleases {
+	if c.Recognising == nil {
+		return nil
+	}
+	mediaType, err := c.Works.MediaTypeOf(ctx, workID)
+	if err != nil {
+		return nil
+	}
+	recogniser, _ := c.Recognising(mediaType)
+	return recogniser
 }
 
 // target resolves a scope to the wanted item it is searched through and the part ref it narrows to.
@@ -74,7 +89,7 @@ func (c CandidateSearch) SearchWork(
 	if err != nil {
 		return apiserver.SearchItemResult{}, searchError(err)
 	}
-	return c.searchItemResultView(ctx, result), nil
+	return c.searchItemResultView(ctx, result, c.recogniser(ctx, workID)), nil
 }
 
 // GrabWork is the automatic search of the scope: search, then send the best release. A whole work wanted group by
@@ -170,7 +185,7 @@ func (c CandidateSearch) ListWorkCandidates(ctx context.Context, workID int64, s
 	if err != nil {
 		return nil, err
 	}
-	return c.decisionViews(ctx, distinctReleases(latestRun(details))), nil
+	return c.decisionViews(ctx, distinctReleases(latestRun(details)), c.recogniser(ctx, workID)), nil
 }
 
 // distinctReleases keeps the first (best) decision of each indexer's release: a season and an episode query in one run return it twice.
@@ -294,7 +309,7 @@ func (c CandidateSearch) SearchCutoffUnmet(ctx context.Context, categoryID int64
 
 // decisionViews adds what a row shows beyond the decision: its indexer's name, and whether the
 // release has been blocklisted since.
-func (c CandidateSearch) decisionViews(ctx context.Context, details []library.DecisionDetail) []apiserver.CandidateDecision {
+func (c CandidateSearch) decisionViews(ctx context.Context, details []library.DecisionDetail, recogniser media.RecognisingReleases) []apiserver.CandidateDecision {
 	names := map[int64]string{}
 	if c.Search.Settings != nil {
 		if indexers, err := c.Search.Settings.Indexers(ctx); err == nil {
@@ -307,6 +322,11 @@ func (c CandidateSearch) decisionViews(ctx context.Context, details []library.De
 	views := make([]apiserver.CandidateDecision, len(details))
 	for index, detail := range details {
 		views[index] = candidateDecisionView(detail)
+		if recogniser != nil {
+			for _, claim := range recogniser.RecogniseRelease(detail.ReleaseCandidate.Title) {
+				views[index].Recognised = append(views[index].Recognised, apiserver.ReleaseClaim{Key: claim.Key, Value: claim.Value})
+			}
+		}
 		views[index].IndexerName = names[detail.ReleaseCandidate.IndexerID]
 		if c.Search.Blocklist != nil {
 			indexerID := detail.ReleaseCandidate.IndexerID
@@ -347,8 +367,8 @@ func (c CandidateSearch) sendableFirst(ctx context.Context, views []apiserver.Ca
 	return views
 }
 
-func (c CandidateSearch) searchItemResultView(ctx context.Context, result judge.Result) apiserver.SearchItemResult {
-	decisions := c.decisionViews(ctx, result.Decisions)
+func (c CandidateSearch) searchItemResultView(ctx context.Context, result judge.Result, recogniser media.RecognisingReleases) apiserver.SearchItemResult {
+	decisions := c.decisionViews(ctx, result.Decisions, recogniser)
 	indexerErrors := make([]apiserver.IndexerSearchError, len(result.IndexerErrors))
 	for index, indexerError := range result.IndexerErrors {
 		indexerErrors[index] = apiserver.IndexerSearchError{

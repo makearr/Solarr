@@ -235,6 +235,7 @@ func (p *process) searchCategoryJob() media.JobRegistration {
 func (p *process) candidateSearcher() adapters.CandidateSearch {
 	return adapters.CandidateSearch{
 		Works: library.NewWorks(p.library), Desired: library.NewDesired(p.library), Searching: adapters.MediaTypes{Registry: p.media}.SearchingOf,
-		Search: p.musicSearch(), Dispatch: p.musicDispatch(), Queue: p.queue, Clock: clock.NewSystem(),
+		Recognising: adapters.MediaTypes{Registry: p.media}.RecognisingOf,
+		Search:      p.musicSearch(), Dispatch: p.musicDispatch(), Queue: p.queue, Clock: clock.NewSystem(),
 	}
 }

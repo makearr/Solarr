@@ -186,6 +186,11 @@ var scanMonitoring = media.ScanMonitor{Setting: media.ScanMonitorParts, Label: "
 	{Key: "existing", Label: "Monitored"}, {Key: "none", Label: "Not monitored"},
 }}
 
+// RecogniseRelease implements media.RecognisingReleases.
+func (Module) RecogniseRelease(title string) []media.ReleaseClaim {
+	return works.RecogniseVideoRelease(title)
+}
+
 func (Module) Descriptor() media.Descriptor {
 	return media.Descriptor{
 		Key:       media.Key(MediaType),

@@ -160,6 +160,11 @@ func fileSettings() []media.FileSetting {
 }
 
 // Descriptor implements media.Module.
+// RecogniseRelease implements media.RecognisingReleases.
+func (Module) RecogniseRelease(title string) []media.ReleaseClaim {
+	return works.RecogniseVideoRelease(title)
+}
+
 func (Module) Descriptor() media.Descriptor {
 	return media.Descriptor{
 		Key:       MediaType,

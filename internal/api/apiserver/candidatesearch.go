@@ -79,7 +79,12 @@ type CandidateDecision struct {
 	Blocklisted bool
 	// NoClient means no enabled download client takes the release's protocol.
 	NoClient bool
+	// Recognised is what the title says of its own quality, as the work's media type reads it.
+	Recognised []ReleaseClaim
 }
+
+// ReleaseClaim is one thing a release title claims.
+type ReleaseClaim struct{ Key, Value string }
 
 // SearchScope is what of a work a search is for: one group by its ref, one part by its id, or neither for the work's
 // own item.
@@ -519,6 +524,13 @@ func candidateDecisionView(decision CandidateDecision) gen.CandidateDecision {
 	if decision.MatchConfidence != nil {
 		confidence := float32(*decision.MatchConfidence)
 		view.MatchConfidence = &confidence
+	}
+	if len(decision.Recognised) > 0 {
+		claims := make([]gen.ReleaseClaim, len(decision.Recognised))
+		for index, claim := range decision.Recognised {
+			claims[index] = gen.ReleaseClaim{Key: claim.Key, Value: claim.Value}
+		}
+		view.Recognised = &claims
 	}
 	view.SizeBytes = decision.SizeBytes
 	view.Seeders = decision.Seeders

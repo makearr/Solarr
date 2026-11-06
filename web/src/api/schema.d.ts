@@ -9505,6 +9505,8 @@ export interface components {
             guid: string;
             /** @description The release's own raw title */
             title: string;
+            /** @description What the title says of its own quality (format, bitrate, resolution, codec) as the work's media type reads it; empty when the type reads none or the title says nothing. */
+            recognised?: components["schemas"]["ReleaseClaim"][];
             /** Format: int64 */
             size_bytes?: number | null;
             /** Format: int64 */
@@ -9519,6 +9521,11 @@ export interface components {
             source: "rss" | "search";
             /** Format: date-time */
             decided_at: string;
+        };
+        ReleaseClaim: {
+            /** @description The kind of claim (format, bitrate, lossless, resolution, video_codec, ...); the interface words it. */
+            key: string;
+            value: string;
         };
         IndexerSearchError: {
             /** Format: int64 */

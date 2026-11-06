@@ -1792,11 +1792,14 @@ type CandidateDecision struct {
 	Outcome     CandidateDecisionOutcome  `json:"outcome"`
 	Protocol    CandidateDecisionProtocol `json:"protocol"`
 	PublishedAt *time.Time                `json:"published_at"`
-	Rejections  []Rejection               `json:"rejections"`
-	Score       float32                   `json:"score"`
-	Seeders     *int64                    `json:"seeders"`
-	SizeBytes   *int64                    `json:"size_bytes"`
-	Source      CandidateDecisionSource   `json:"source"`
+
+	// Recognised What the title says of its own quality (format, bitrate, resolution, codec) as the work's media type reads it; empty when the type reads none or the title says nothing.
+	Recognised *[]ReleaseClaim         `json:"recognised,omitempty"`
+	Rejections []Rejection             `json:"rejections"`
+	Score      float32                 `json:"score"`
+	Seeders    *int64                  `json:"seeders"`
+	SizeBytes  *int64                  `json:"size_bytes"`
+	Source     CandidateDecisionSource `json:"source"`
 
 	// Title The release's own raw title
 	Title string `json:"title"`
@@ -4926,6 +4929,13 @@ type Rejection struct {
 	Got    string `json:"got"`
 	Rule   string `json:"rule"`
 	Wanted string `json:"wanted"`
+}
+
+// ReleaseClaim defines model for ReleaseClaim.
+type ReleaseClaim struct {
+	// Key The kind of claim (format, bitrate, lossless, resolution, video_codec, ...); the interface words it.
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
 // ReleaseFilter defines model for ReleaseFilter.

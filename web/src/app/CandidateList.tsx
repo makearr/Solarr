@@ -1,6 +1,16 @@
+import { t } from "@/lib/i18n";
 import type { components } from "@/api/schema";
 
 import { candidateSummary, describeDeferral } from "./candidateSummary";
+
+/** The kinds of claim a media type's reader names, worded here. */
+const CLAIM_LABELS: Record<string, () => string> = {
+  format: () => t("release.claim.format"), lossless: () => t("release.claim.lossless"), bitrate: () => t("release.claim.bitrate"),
+  vbr_preset: () => t("release.claim.vbr_preset"), bit_depth: () => t("release.claim.bit_depth"), sample_rate: () => t("release.claim.sample_rate"),
+  source: () => t("release.claim.source"), resolution: () => t("release.claim.resolution"), remux: () => t("release.claim.remux"),
+  video_codec: () => t("release.claim.video_codec"), hdr: () => t("release.claim.hdr"), audio_codec: () => t("release.claim.audio_codec"),
+  channels: () => t("release.claim.channels"), service: () => t("release.claim.service"), languages: () => t("release.claim.languages"),
+};
 
 type CandidateDecision = components["schemas"]["CandidateDecision"];
 
@@ -83,6 +93,16 @@ export function CandidateList({
             <p className="text-xs text-danger">
               {sendErrorDetail ?? "That could not be sent -- check that a matching download client is connected."}
             </p>
+          )}
+          {(decision.recognised ?? []).length > 0 && (
+            <div className="flex flex-wrap items-center gap-1 text-xs" title={t("release.recognisedHelp")}>
+              <span className="text-ink-muted">{t("release.recognised")}</span>
+              {(decision.recognised ?? []).map((claim) => (
+                <span key={claim.key} className="rounded-full border border-border-subtle px-1.5 py-px" title={CLAIM_LABELS[claim.key]?.()}>
+                  {claim.value}
+                </span>
+              ))}
+            </div>
           )}
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted">
             {decision.indexer_name && <span className="text-ink">{decision.indexer_name}</span>}

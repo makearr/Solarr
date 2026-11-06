@@ -304,6 +304,15 @@ type Renumbering interface {
 	ApplyNumbering(ctx context.Context, workID int64, basis string) (NumberingPlan, error)
 }
 
+// ReleaseClaim is one thing a release name says about itself, under a stable key the interface words.
+type ReleaseClaim struct{ Key, Value string }
+
+// RecognisingReleases is the capability of a media type that reads the quality a release name claims, so a search list
+// can show what Solarr recognised before anything is downloaded.
+type RecognisingReleases interface {
+	RecogniseRelease(title string) []ReleaseClaim
+}
+
 // Franchising is the capability of a media type whose provider groups works into franchises (a movie's collection, a
 // series with its spin-offs): what the library lacks of one, its picture, and following it. Hand-made collections need none.
 type Franchising interface {
