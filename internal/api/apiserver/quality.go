@@ -236,6 +236,18 @@ func qualityTargetView(target settings.QualityTarget) gen.QualityTarget {
 		view.Crf = &crf
 	}
 	view.PreferOver, view.IgnoreBelow = &target.PreferOver, &target.IgnoreBelow
+	view.Label, view.Description, view.EncoderPreset = &target.Label, &target.Description, &target.EncoderPreset
+	view.Chapters, view.Builtin = &target.Chapters, &target.Builtin
+	if target.SampleRateHz > 0 {
+		view.SampleRateHz = &target.SampleRateHz
+	}
+	if target.BitDepth > 0 {
+		view.BitDepth = &target.BitDepth
+	}
+	if target.MaxFrameRate > 0 {
+		ceiling := float32(target.MaxFrameRate)
+		view.MaxFrameRate = &ceiling
+	}
 	return view
 }
 
@@ -255,6 +267,10 @@ func qualityTargetFromBody(body gen.QualityTarget) settings.QualityTarget {
 		AudioBitrateKbps:  body.AudioBitrateKbps, VideoBitrateKbps: body.VideoBitrateKbps,
 		FrameRate: float64(derefOr(body.FrameRate, 0)), CRF: float64(derefOr(body.Crf, 0)),
 		PreferOver: derefOr(body.PreferOver, false), IgnoreBelow: derefOr(body.IgnoreBelow, false),
+		Label: strings.TrimSpace(derefOr(body.Label, "")), Description: strings.TrimSpace(derefOr(body.Description, "")),
+		SampleRateHz: derefOr(body.SampleRateHz, 0), BitDepth: derefOr(body.BitDepth, 0),
+		EncoderPreset: strings.ToLower(strings.TrimSpace(derefOr(body.EncoderPreset, ""))),
+		MaxFrameRate:  float64(derefOr(body.MaxFrameRate, 0)), Chapters: derefOr(body.Chapters, false),
 	}
 }
 

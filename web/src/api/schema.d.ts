@@ -5640,6 +5640,28 @@ export interface components {
             bitrate_kbps?: number;
             /** Format: int64 */
             tolerance_pct: number;
+            /** @description A short tag shown beside the name, e.g. "Space conscious". Empty when none. */
+            label?: string;
+            /** @description Free text about what the target is for. */
+            description?: string;
+            /**
+             * Format: int64
+             * @description Audio sample rate in Hz, e.g. 48000; 0 or absent when it does not care.
+             */
+            sample_rate_hz?: number;
+            /**
+             * Format: int64
+             * @description Audio bits per sample; on a video target the colour depth, which is not judged. 0 or absent when it does not care.
+             */
+            bit_depth?: number;
+            /** @description The encoder speed preset an encode of this quality uses, e.g. slower; empty when none. */
+            encoder_preset?: string;
+            /** @description A cap on the frame rate when it follows the source, e.g. 60; 0 or absent when none. */
+            max_frame_rate?: number;
+            /** @description Chapter marks are wanted. */
+            chapters?: boolean;
+            /** @description A preset Solarr shipped; it can be edited like any other. */
+            readonly builtin?: boolean;
         };
         RecycleBinContents: {
             /** Format: int64 */

@@ -110,7 +110,7 @@ func TestCreateQualityTarget_ReportsEveryProblemAndAMissingName(t *testing.T) {
 	for _, problem := range problems {
 		paths = append(paths, problem.Path)
 	}
-	want := []string{"target.name", "target.bitrate_kbps", "target.crf", "target.tolerance_pct"}
+	want := []string{"target.name", "target.audio_codec", "target.bitrate_kbps", "target.crf", "target.tolerance_pct"}
 	if !reflect.DeepEqual(paths, want) {
 		t.Errorf("problems at %v, want %v", paths, want)
 	}
@@ -293,5 +293,25 @@ categories:
 	}
 	if found == nil || found.Name != "Music target" || found.AudioCodec != "flac" {
 		t.Fatalf("category target = %+v, want the library's own target named Music target", found)
+	}
+}
+
+func TestShippedTargets_EveryMediaTypeHasOneSpaceConsciousPresetAndAllValidate(t *testing.T) {
+	cache, _ := newCache(t)
+	labelled := map[string]int{}
+	for _, target := range cache.Snapshot().QualityTargets() {
+		if !target.Builtin {
+			t.Errorf("target %q is not marked built in", target.Name)
+		}
+		if target.Label == "Space conscious" {
+			labelled[target.MediaType]++
+		}
+		if err := cache.UpdateQualityTarget(t.Context(), target); err != nil {
+			t.Errorf("shipped target %q does not validate: %v", target.Name, err)
+		}
+	}
+	want := map[string]int{"movie": 1, "tv": 1, "adult": 1, "music": 1, "audiobook": 1, "book": 1}
+	if !reflect.DeepEqual(labelled, want) {
+		t.Errorf("space conscious presets = %v, want %v", labelled, want)
 	}
 }

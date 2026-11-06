@@ -99,6 +99,8 @@ func WithTarget(rules score.Profile, target settings.QualityTarget) score.Profil
 		{"frame_rate", strconv.FormatFloat(target.FrameRate, 'f', -1, 64), target.FrameRate > 0},
 		// An audio library's one bitrate is the whole file's, which is also what a release name claims.
 		{"overall_bitrate", kbps(target.BitrateKbps), audio && target.BitrateKbps != nil},
+		{"sample_rate", strconv.FormatInt(target.SampleRateHz, 10), audio && target.SampleRateHz > 0},
+		{"bit_depth", strconv.FormatInt(target.BitDepth, 10), audio && target.BitDepth > 0},
 	} {
 		if !entry.set {
 			continue

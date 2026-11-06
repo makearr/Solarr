@@ -118,8 +118,9 @@ func (q *Queries) CreateQualityProfile(ctx context.Context, arg CreateQualityPro
 
 const createQualityTarget = `-- name: CreateQualityTarget :one
 INSERT INTO quality_target (name, media_type, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
-  audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate, crf, prefer_over, ignore_below)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate, crf, prefer_over, ignore_below,
+  label, description, sample_rate_hz, bit_depth, encoder_preset, max_frame_rate, chapters)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id
 `
 
@@ -142,6 +143,13 @@ type CreateQualityTargetParams struct {
 	Crf               sql.NullFloat64
 	PreferOver        int64
 	IgnoreBelow       int64
+	Label             string
+	Description       string
+	SampleRateHz      sql.NullInt64
+	BitDepth          sql.NullInt64
+	EncoderPreset     string
+	MaxFrameRate      sql.NullFloat64
+	Chapters          int64
 }
 
 func (q *Queries) CreateQualityTarget(ctx context.Context, arg CreateQualityTargetParams) (int64, error) {
@@ -164,6 +172,13 @@ func (q *Queries) CreateQualityTarget(ctx context.Context, arg CreateQualityTarg
 		arg.Crf,
 		arg.PreferOver,
 		arg.IgnoreBelow,
+		arg.Label,
+		arg.Description,
+		arg.SampleRateHz,
+		arg.BitDepth,
+		arg.EncoderPreset,
+		arg.MaxFrameRate,
+		arg.Chapters,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -404,7 +419,7 @@ func (q *Queries) ListQualityProfiles(ctx context.Context) ([]QualityProfile, er
 const listQualityTargets = `-- name: ListQualityTargets :many
 SELECT id, name, media_type, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
        audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate, crf,
-       prefer_over, ignore_below
+       prefer_over, ignore_below, label, description, sample_rate_hz, bit_depth, encoder_preset, max_frame_rate, chapters, builtin
 FROM quality_target ORDER BY media_type, name
 `
 
@@ -437,6 +452,14 @@ func (q *Queries) ListQualityTargets(ctx context.Context) ([]QualityTarget, erro
 			&i.Crf,
 			&i.PreferOver,
 			&i.IgnoreBelow,
+			&i.Label,
+			&i.Description,
+			&i.SampleRateHz,
+			&i.BitDepth,
+			&i.EncoderPreset,
+			&i.MaxFrameRate,
+			&i.Chapters,
+			&i.Builtin,
 		); err != nil {
 			return nil, err
 		}
@@ -593,7 +616,8 @@ func (q *Queries) UpdateQualityProfile(ctx context.Context, arg UpdateQualityPro
 const updateQualityTarget = `-- name: UpdateQualityTarget :exec
 UPDATE quality_target SET name = ?, audio_codec = ?, container = ?, bitrate_kbps = ?, tolerance_pct = ?, resolution = ?,
   video_codec = ?, hdr = ?, audio_channels = ?, audio_languages = ?, subtitle_languages = ?, audio_bitrate_kbps = ?,
-  video_bitrate_kbps = ?, frame_rate = ?, crf = ?, prefer_over = ?, ignore_below = ?
+  video_bitrate_kbps = ?, frame_rate = ?, crf = ?, prefer_over = ?, ignore_below = ?, label = ?, description = ?,
+  sample_rate_hz = ?, bit_depth = ?, encoder_preset = ?, max_frame_rate = ?, chapters = ?
 WHERE id = ?
 `
 
@@ -615,6 +639,13 @@ type UpdateQualityTargetParams struct {
 	Crf               sql.NullFloat64
 	PreferOver        int64
 	IgnoreBelow       int64
+	Label             string
+	Description       string
+	SampleRateHz      sql.NullInt64
+	BitDepth          sql.NullInt64
+	EncoderPreset     string
+	MaxFrameRate      sql.NullFloat64
+	Chapters          int64
 	ID                int64
 }
 
@@ -637,6 +668,13 @@ func (q *Queries) UpdateQualityTarget(ctx context.Context, arg UpdateQualityTarg
 		arg.Crf,
 		arg.PreferOver,
 		arg.IgnoreBelow,
+		arg.Label,
+		arg.Description,
+		arg.SampleRateHz,
+		arg.BitDepth,
+		arg.EncoderPreset,
+		arg.MaxFrameRate,
+		arg.Chapters,
 		arg.ID,
 	)
 	return err

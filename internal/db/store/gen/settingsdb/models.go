@@ -276,6 +276,14 @@ type QualityTarget struct {
 	Crf               sql.NullFloat64
 	PreferOver        int64
 	IgnoreBelow       int64
+	Label             string
+	Description       string
+	SampleRateHz      sql.NullInt64
+	BitDepth          sql.NullInt64
+	EncoderPreset     string
+	MaxFrameRate      sql.NullFloat64
+	Chapters          int64
+	Builtin           int64
 }
 
 type RootFolder struct {

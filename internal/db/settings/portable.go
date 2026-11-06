@@ -345,6 +345,13 @@ type QualityTargetEntry struct {
 	CRF               float64  `yaml:"crf,omitempty"`
 	PreferOver        bool     `yaml:"prefer_over,omitempty"`
 	IgnoreBelow       bool     `yaml:"ignore_below,omitempty"`
+	Label             string   `yaml:"label,omitempty"`
+	Description       string   `yaml:"description,omitempty"`
+	SampleRateHz      int64    `yaml:"sample_rate_hz,omitempty"`
+	BitDepth          int64    `yaml:"bit_depth,omitempty"`
+	EncoderPreset     string   `yaml:"encoder_preset,omitempty"`
+	MaxFrameRate      float64  `yaml:"max_frame_rate,omitempty"`
+	Chapters          bool     `yaml:"chapters,omitempty"`
 }
 
 // qualityProfileNames is the library's list, reading an older document's single profile as one.

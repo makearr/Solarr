@@ -67,19 +67,21 @@ UPDATE category SET preferred_protocol = ?, protocol_delay_minutes = ? WHERE id 
 -- name: ListQualityTargets :many
 SELECT id, name, media_type, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
        audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate, crf,
-       prefer_over, ignore_below
+       prefer_over, ignore_below, label, description, sample_rate_hz, bit_depth, encoder_preset, max_frame_rate, chapters, builtin
 FROM quality_target ORDER BY media_type, name;
 
 -- name: CreateQualityTarget :one
 INSERT INTO quality_target (name, media_type, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
-  audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate, crf, prefer_over, ignore_below)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate, crf, prefer_over, ignore_below,
+  label, description, sample_rate_hz, bit_depth, encoder_preset, max_frame_rate, chapters)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id;
 
 -- name: UpdateQualityTarget :exec
 UPDATE quality_target SET name = ?, audio_codec = ?, container = ?, bitrate_kbps = ?, tolerance_pct = ?, resolution = ?,
   video_codec = ?, hdr = ?, audio_channels = ?, audio_languages = ?, subtitle_languages = ?, audio_bitrate_kbps = ?,
-  video_bitrate_kbps = ?, frame_rate = ?, crf = ?, prefer_over = ?, ignore_below = ?
+  video_bitrate_kbps = ?, frame_rate = ?, crf = ?, prefer_over = ?, ignore_below = ?, label = ?, description = ?,
+  sample_rate_hz = ?, bit_depth = ?, encoder_preset = ?, max_frame_rate = ?, chapters = ?
 WHERE id = ?;
 
 -- name: DeleteQualityTarget :exec

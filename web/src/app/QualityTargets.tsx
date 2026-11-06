@@ -22,7 +22,37 @@ const MEDIA_TYPES = ["music", "tv", "movie", "audiobook", "podcast", "youtube", 
 // ffprobe's own codec names, which is what the probe measures files by.
 const AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac", "alac"] as const;
 const LOSSLESS = new Set(["flac", "alac"]);
-const AUDIO_FILE_TYPES: [string, string][] = [["m4a", ".m4a"], ["mp3", ".mp3"], ["opus", ".opus"], ["ogg", ".ogg"], ["flac", ".flac"]];
+const AUDIO_FILE_TYPES: [string, string][] = [["m4a", ".m4a"], ["m4b", ".m4b"], ["mp3", ".mp3"], ["opus", ".opus"], ["ogg", ".ogg"], ["flac", ".flac"]];
+const DOCUMENT_FILE_TYPES: [string, string][] = [["epub", "EPUB (.epub)"], ["pdf", "PDF (.pdf)"], ["azw3", "Kindle (.azw3)"], ["mobi", "Mobi (.mobi)"], ["cbz", "Comic archive (.cbz)"]];
+const DOCUMENT_MEDIA = new Set(["book", "comic"]);
+const ENCODER_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"] as const;
+const AUDIO_CHANNEL_LAYOUTS = ["1.0", "2.0"] as const;
+const SAMPLE_RATES: [number, string][] = [[44100, "44.1 kHz"], [48000, "48 kHz"], [88200, "88.2 kHz"], [96000, "96 kHz"], [192000, "192 kHz"]];
+
+const CODEC_LABEL: Record<string, string> = { aac: "AAC", ac3: "AC3", eac3: "E-AC3", mp3: "MP3", flac: "FLAC", vorbis: "Vorbis", opus: "Opus", alac: "ALAC", dts: "DTS", truehd: "TrueHD" };
+const CHANNEL_WORD: Record<string, string> = { "1.0": "mono", "2.0": "stereo" };
+const VIDEO_CODEC_LABEL: Record<string, string> = { h265: "H.265", h264: "H.264", av1: "AV1", vp9: "VP9", mpeg2: "MPEG-2" };
+
+/** A name from the specs, the way the shipped presets are named, so a changed number can be renamed in one click. */
+export function nameFromSpecs(target: QualityTarget): string {
+  const sound = (): string => {
+    const codec = CODEC_LABEL[target.audio_codec] ?? target.audio_codec.toUpperCase();
+    const channels = target.audio_channels ? (CHANNEL_WORD[target.audio_channels] ?? target.audio_channels) : "";
+    return [codec, channels].filter(Boolean).join(" ");
+  };
+  if (DOCUMENT_MEDIA.has(target.media_type ?? "")) return (target.container ?? "").toUpperCase();
+  if (AUDIO_MEDIA.has(target.media_type ?? "")) {
+    const rate = target.sample_rate_hz ? `${target.sample_rate_hz / 1000} kHz` : "";
+    const depth = target.bit_depth ? `${target.bit_depth}-bit` : "";
+    const rateOfBits = target.bitrate_kbps ? `${target.bitrate_kbps} kbit/s` : "";
+    return [sound(), rate, depth, rateOfBits, (target.container ?? "").toUpperCase(), target.chapters ? "chapters" : ""].filter(Boolean).join(", ");
+  }
+  const fps = target.frame_rate ? `${target.frame_rate} fps` : target.max_frame_rate ? `source fps (max ${target.max_frame_rate})` : "source fps";
+  const codec = [VIDEO_CODEC_LABEL[target.video_codec ?? ""] ?? target.video_codec?.toUpperCase(), target.bit_depth === 10 ? "10-bit" : ""].filter(Boolean).join(" ");
+  const rate = [target.video_bitrate_kbps ? `${target.video_bitrate_kbps.toLocaleString("en-US")} kbit/s` : "", target.crf ? `CRF ${target.crf}` : ""].filter(Boolean).join(" or ");
+  const audio = [sound(), target.audio_bitrate_kbps ? `${target.audio_bitrate_kbps} kbit/s` : ""].filter(Boolean).join(" ");
+  return [target.resolution, fps, codec, (target.container ?? "").toUpperCase(), audio, rate, target.encoder_preset].filter(Boolean).join(", ");
+}
 const VIDEO_FILE_TYPES: [string, string][] = [
   ["mkv", "Matroska (.mkv)"], ["mp4", "MP4 (.mp4, .m4v)"], ["avi", "AVI (.avi)"], ["wmv", "Windows Media (.wmv)"], ["mpeg", "MPEG (.mpg, .mpeg)"],
   ["mov", "QuickTime (.mov)"], ["ts", "Transport stream (.ts, .m2ts)"], ["webm", "WebM (.webm)"], ["flv", "Flash video (.flv)"], ["ogm", "Ogg media (.ogm)"],
@@ -36,6 +66,7 @@ const FRAME_RATES: [number, string][] = [[24, "24 (23.976)"], [25, "25"], [30, "
 
 /** A new target's starting point: lossless audio, or a 1080p h265 picture. */
 function blankTarget(mediaType: string): QualityTarget {
+  if (DOCUMENT_MEDIA.has(mediaType)) return { name: "", media_type: mediaType, audio_codec: "", container: "epub", tolerance_pct: 0 };
   return AUDIO_MEDIA.has(mediaType)
     ? { name: "", media_type: mediaType, audio_codec: "flac", container: "flac", tolerance_pct: 10 }
     : { name: "", media_type: mediaType, audio_codec: "", container: "", tolerance_pct: 0, resolution: "1080p", video_codec: "h265" };
@@ -107,15 +138,16 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 function TargetFields({ target, onChange }: { target: QualityTarget; onChange: (target: QualityTarget) => void }) {
   const set = (change: Partial<QualityTarget>) => onChange({ ...target, ...change });
   const audioOnly = AUDIO_MEDIA.has(target.media_type ?? "");
+  const documentOnly = DOCUMENT_MEDIA.has(target.media_type ?? "");
   return (
     <div className="flex flex-col gap-3">
       <Group title="Container">
         <Pick
           label="File type"
           value={target.container}
-          options={audioOnly ? AUDIO_FILE_TYPES : VIDEO_FILE_TYPES}
+          options={documentOnly ? DOCUMENT_FILE_TYPES : audioOnly ? AUDIO_FILE_TYPES : VIDEO_FILE_TYPES}
           onChange={(container) => set({ container })}
-          any={audioOnly ? null : "any"}
+          any={audioOnly || documentOnly ? null : "any"}
         />
       </Group>
       <Group title="Over and under the target">
@@ -134,7 +166,7 @@ function TargetFields({ target, onChange }: { target: QualityTarget; onChange: (
           </span>
         </label>
       </Group>
-      {!audioOnly && (
+      {!audioOnly && !documentOnly && (
         <Group title="Video">
           <Pick label="Resolution" value={target.resolution} options={RESOLUTIONS} onChange={(resolution) => set({ resolution })} />
           <Pick label="Video codec" value={target.video_codec} options={VIDEO_CODECS} onChange={(video_codec) => set({ video_codec })} />
@@ -145,6 +177,9 @@ function TargetFields({ target, onChange }: { target: QualityTarget; onChange: (
             options={FRAME_RATES.map(([rate, text]): [string, string] => [String(rate), text])}
             onChange={(rate) => set({ frame_rate: rate === "" ? undefined : Number(rate) })}
           />
+          <Num label="Frame rate cap" value={target.max_frame_rate || undefined} width="w-24" onChange={(max_frame_rate) => set({ max_frame_rate })} hint="When the frame rate follows the source, never above this" />
+          <Pick label="Colour depth" value={target.bit_depth ? String(target.bit_depth) : ""} options={["8", "10"]} onChange={(depth) => set({ bit_depth: depth === "" ? undefined : Number(depth) })} />
+          <Pick label="Encoder preset" value={target.encoder_preset} options={ENCODER_PRESETS} onChange={(encoder_preset) => set({ encoder_preset })} />
           <Num label="Video bitrate (kbit/s)" value={target.video_bitrate_kbps} onChange={(video_bitrate_kbps) => set({ video_bitrate_kbps })} hint="A release's size over its length stands in before download" />
           <Num
             label="CRF"
@@ -156,6 +191,7 @@ function TargetFields({ target, onChange }: { target: QualityTarget; onChange: (
           />
         </Group>
       )}
+      {!documentOnly && (
       <Group title="Audio">
         {audioOnly ? (
           <Pick
@@ -171,6 +207,24 @@ function TargetFields({ target, onChange }: { target: QualityTarget; onChange: (
             <Pick label="Channels" value={target.audio_channels} options={CHANNEL_LAYOUTS} onChange={(audio_channels) => set({ audio_channels })} />
             <Num label="Audio bitrate (kbit/s)" value={target.audio_bitrate_kbps} onChange={(audio_bitrate_kbps) => set({ audio_bitrate_kbps })} hint="Within the tolerance of this" />
           </>
+        )}
+        {audioOnly && <Pick label="Channels" value={target.audio_channels} options={AUDIO_CHANNEL_LAYOUTS.map((layout): [string, string] => [layout, CHANNEL_WORD[layout] ?? layout])} onChange={(audio_channels) => set({ audio_channels })} />}
+        {audioOnly && target.media_type === "music" && (
+          <>
+            <Pick
+              label="Sample rate"
+              value={target.sample_rate_hz ? String(target.sample_rate_hz) : ""}
+              options={SAMPLE_RATES.map(([rate, text]): [string, string] => [String(rate), text])}
+              onChange={(rate) => set({ sample_rate_hz: rate === "" ? undefined : Number(rate) })}
+            />
+            <Pick label="Bit depth" value={target.bit_depth ? String(target.bit_depth) : ""} options={["16", "24", "32"]} onChange={(depth) => set({ bit_depth: depth === "" ? undefined : Number(depth) })} />
+          </>
+        )}
+        {target.media_type === "audiobook" && (
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={target.chapters ?? false} onChange={(event) => set({ chapters: event.target.checked })} />
+            Chapter marks
+          </label>
         )}
         {audioOnly && !LOSSLESS.has(target.audio_codec) && (
           <Num label="Bitrate (kbit/s)" value={target.bitrate_kbps} onChange={(bitrate_kbps) => set({ bitrate_kbps })} />
@@ -191,7 +245,8 @@ function TargetFields({ target, onChange }: { target: QualityTarget; onChange: (
           />
         )}
       </Group>
-      {!audioOnly && (
+      )}
+      {!audioOnly && !documentOnly && (
         <Group title="Subtitles">
           <LanguagePicker
             label="Subtitle language (any of)"
@@ -224,6 +279,13 @@ function TargetForm({ initial, onDone, onCancel }: { initial?: QualityTarget; on
           Name
           <input value={target.name ?? ""} onChange={(event) => setTarget({ ...target, name: event.target.value })} className={`${inputStyle} w-56`} />
         </label>
+        <label className="flex flex-col gap-1 text-ink-muted">
+          Label
+          <input value={target.label ?? ""} placeholder="e.g. Space conscious" onChange={(event) => setTarget({ ...target, label: event.target.value })} className={`${inputStyle} w-44`} />
+        </label>
+        <button type="button" onClick={() => setTarget({ ...target, name: nameFromSpecs(target) })} className={smallButton} title="Name it after what it asks for">
+          Name from specs
+        </button>
         {!initial && (
           <Pick
             label="For"
@@ -234,6 +296,10 @@ function TargetForm({ initial, onDone, onCancel }: { initial?: QualityTarget; on
           />
         )}
       </div>
+      <label className="flex flex-col gap-1 text-xs text-ink-muted">
+        Description
+        <input value={target.description ?? ""} onChange={(event) => setTarget({ ...target, description: event.target.value })} className={inputStyle} />
+      </label>
       <TargetFields target={target} onChange={setTarget} />
       <div className="flex items-center gap-2">
         <Button variant="primary" type="button" disabled={save.isPending} onClick={() => save.mutate()}>
@@ -312,7 +378,10 @@ export function QualityTargetsSection() {
               ) : (
                 <li key={target.id} className="flex items-center gap-3 px-3 py-2.5">
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{target.name}</span>
+                    <span className="flex items-baseline gap-2 text-sm font-medium">
+                      <span className="truncate">{target.name}</span>
+                      {target.label && <span className="shrink-0 rounded-full bg-canvas px-2 py-0.5 text-xs font-normal text-ink-muted">{target.label}</span>}
+                    </span>
                     <span className="block truncate text-xs text-ink-muted">{summariseTarget(target)}</span>
                   </span>
                   <button type="button" onClick={() => setEditing(target.id ?? null)} className={smallButton}>

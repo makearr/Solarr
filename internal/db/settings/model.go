@@ -159,6 +159,18 @@ type QualityTarget struct {
 	// PreferOver ranks above the target before below and makes overshooting cheaper; IgnoreBelow ranks below last.
 	PreferOver  bool
 	IgnoreBelow bool
+	// Label is the short tag a library's choice shows beside the spec name ("Space conscious"); Description is free text.
+	Label       string
+	Description string
+	// SampleRateHz and BitDepth are an audio library's aim; 0 means it does not care. BitDepth on a video target is its colour depth, not judged.
+	SampleRateHz int64
+	BitDepth     int64
+	// EncoderPreset (x265 "slower") is what an encode of this quality would use; MaxFrameRate caps "source frame rate"; Chapters wants chapter marks.
+	EncoderPreset string
+	MaxFrameRate  float64
+	Chapters      bool
+	// Builtin marks a preset Solarr shipped; it is editable like any other.
+	Builtin bool
 }
 
 // NamingProfile is one library's naming, Lidarr's shape: a template per slot the media type

@@ -833,7 +833,8 @@ func validateQualityTarget(target *QualityTarget) config.Problems {
 	}
 	var problems config.Problems
 	video := target.IsVideo()
-	if !video && strings.TrimSpace(target.AudioCodec) == "" {
+	document := DocumentMediaTypes[target.MediaType]
+	if !video && !document && strings.TrimSpace(target.AudioCodec) == "" {
 		problems = append(problems, config.Problem{Path: "target.audio_codec", Expectation: "a codec, e.g. aac (or a resolution or video codec for a video library)"})
 	}
 	if !video && strings.TrimSpace(target.Container) == "" {
@@ -847,6 +848,15 @@ func validateQualityTarget(target *QualityTarget) config.Problems {
 		if kbps != nil && *kbps <= 0 {
 			problems = append(problems, config.Problem{Path: path, Value: strconv.FormatInt(*kbps, 10), Expectation: "a bitrate above 0, or none"})
 		}
+	}
+	if target.SampleRateHz < 0 || target.SampleRateHz > 384000 {
+		problems = append(problems, config.Problem{Path: "target.sample_rate_hz", Value: strconv.FormatInt(target.SampleRateHz, 10), Expectation: "a sample rate up to 384000 Hz, or none"})
+	}
+	if target.BitDepth < 0 || target.BitDepth > 32 {
+		problems = append(problems, config.Problem{Path: "target.bit_depth", Value: strconv.FormatInt(target.BitDepth, 10), Expectation: "a bit depth up to 32, or none"})
+	}
+	if target.MaxFrameRate < 0 || target.MaxFrameRate > 240 {
+		problems = append(problems, config.Problem{Path: "target.max_frame_rate", Value: strconv.FormatFloat(target.MaxFrameRate, 'f', -1, 64), Expectation: "frames a second up to 240, or none"})
 	}
 	if target.CRF < 0 || target.CRF > 51 {
 		problems = append(problems, config.Problem{Path: "target.crf", Value: strconv.FormatFloat(target.CRF, 'f', -1, 64), Expectation: "a CRF from 0 to 51, or none"})

@@ -33,7 +33,13 @@ enough: the shipped profiles have no gates, so every release "passes" every one 
   and subtitle languages; a part left on "any" is free, and a part the probe could not read is not held against a file.
   **CRF** is read from the encoder settings an x264 or x265 encode writes into the file's first frame (the probe reads the first
   512 KiB of a video file once); a file at or below the target's CRF meets it, a file that states none is not held against it.
-  Audio targets keep codec, file type and a bitrate within a tolerance.
+  Audio targets keep codec, file type and a bitrate within a tolerance, plus channels (mono or stereo), **sample rate** and
+  **bit depth** (music), and **chapter marks** (audiobooks, stored, not yet judged). A video target also stores an **encoder
+  preset** (x265 "slower"), a **frame-rate cap** for "source frame rate (max 60)" and a colour depth (stored, not judged).
+  Every target has a **label** ("Space conscious") and a description. Migration 0063 ships presets named after their specs
+  (11 video ones each for movies, series and adult, 9 music, 8 audiobook, 1 book), one labelled "Space conscious" per media
+  type; they are ordinary rows, editable and removable. The edit form's **Name from specs** button renames a target after
+  what it asks for.
   Two checkboxes shape how a target ranks what is found (`judge.WithTarget`): **Prefer over-quality to under-quality**
   ranks the resolutions above the target (the nearest first) before the ones below it, whatever the profile lists, and makes
   overshooting a bitrate or frame rate cost half what undershooting does (a 1080p target takes 4k over 720p even when 4k's

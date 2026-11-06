@@ -83,3 +83,29 @@ func TestMeetsTarget_CRFIsAtOrBelowAndUnknownIsFree(t *testing.T) {
 		}
 	}
 }
+
+func TestMeetsTarget_AudioSampleRateDepthChannelsAndAFrameRateCap(t *testing.T) {
+	music := settings.QualityTarget{MediaType: "music", AudioCodec: "flac", Container: "flac", AudioChannels: "2.0", SampleRateHz: 48000, BitDepth: 16}
+	file := score.FileFacts{AudioCodec: "flac", Extension: "flac", AudioChannels: "2.0", SampleRate: 48000, BitDepth: 16}
+	if !quality.MeetsTarget(music, file) {
+		t.Error("a 48 kHz 16-bit stereo flac must meet it")
+	}
+	for name, change := range map[string]func(*score.FileFacts){
+		"rate": func(f *score.FileFacts) { f.SampleRate = 96000 }, "depth": func(f *score.FileFacts) { f.BitDepth = 24 },
+		"channels": func(f *score.FileFacts) { f.AudioChannels = "5.1" },
+	} {
+		other := file
+		change(&other)
+		if quality.MeetsTarget(music, other) {
+			t.Errorf("a file with a different %s must not meet it", name)
+		}
+	}
+	mono := settings.QualityTarget{MediaType: "audiobook", AudioCodec: "aac", Container: "m4b", AudioChannels: "1.0"}
+	if !quality.MeetsTarget(mono, score.FileFacts{AudioCodec: "aac", Extension: "m4b", AudioChannels: "1.0"}) {
+		t.Error("a mono audiobook target is an audio target, not a video one")
+	}
+	capped := settings.QualityTarget{MediaType: "movie", Resolution: "1080p", MaxFrameRate: 60}
+	if !quality.MeetsTarget(capped, score.FileFacts{Resolution: "1080p", FrameRate: 59.94}) || quality.MeetsTarget(capped, score.FileFacts{Resolution: "1080p", FrameRate: 120}) {
+		t.Error("a frame rate at or below the cap meets it, above does not")
+	}
+}

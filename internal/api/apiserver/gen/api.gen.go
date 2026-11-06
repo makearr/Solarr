@@ -4562,14 +4562,29 @@ type QualityTarget struct {
 	// AudioLanguages Language codes of which one is enough; empty when it does not care.
 	AudioLanguages *[]string `json:"audio_languages,omitempty"`
 
+	// BitDepth Audio bits per sample; on a video target the colour depth, which is not judged. 0 or absent when it does not care.
+	BitDepth *int64 `json:"bit_depth,omitempty"`
+
 	// BitrateKbps Absent for a lossless codec.
 	BitrateKbps *int64 `json:"bitrate_kbps,omitempty"`
+
+	// Builtin A preset Solarr shipped; it can be edited like any other.
+	Builtin *bool `json:"builtin,omitempty"`
+
+	// Chapters Chapter marks are wanted.
+	Chapters *bool `json:"chapters,omitempty"`
 
 	// Container The file type: m4a, mp3, flac; mkv or mp4 for video. May be empty for a video target.
 	Container string `json:"container"`
 
 	// Crf The constant rate factor a file's encoder settings state; a file at or below it meets it, one that states none is not held against it. 0 or absent when it does not care.
 	Crf *float32 `json:"crf,omitempty"`
+
+	// Description Free text about what the target is for.
+	Description *string `json:"description,omitempty"`
+
+	// EncoderPreset The encoder speed preset an encode of this quality uses, e.g. slower; empty when none.
+	EncoderPreset *string `json:"encoder_preset,omitempty"`
 
 	// FrameRate Frames a second, within 2 %; 24 meets 23.976. 0 or absent when it does not care.
 	FrameRate *float32 `json:"frame_rate,omitempty"`
@@ -4583,6 +4598,12 @@ type QualityTarget struct {
 	// IgnoreBelow A release below the target ranks after every one at or above it, so it is only chosen when nothing at or above exists.
 	IgnoreBelow *bool `json:"ignore_below,omitempty"`
 
+	// Label A short tag shown beside the name, e.g. "Space conscious". Empty when none.
+	Label *string `json:"label,omitempty"`
+
+	// MaxFrameRate A cap on the frame rate when it follows the source, e.g. 60; 0 or absent when none.
+	MaxFrameRate *float32 `json:"max_frame_rate,omitempty"`
+
 	// MediaType The media type it serves; fixed once made.
 	MediaType *string `json:"media_type,omitempty"`
 
@@ -4594,6 +4615,9 @@ type QualityTarget struct {
 
 	// Resolution A video library's target resolution, e.g. 1080p; empty when it does not care.
 	Resolution *string `json:"resolution,omitempty"`
+
+	// SampleRateHz Audio sample rate in Hz, e.g. 48000; 0 or absent when it does not care.
+	SampleRateHz *int64 `json:"sample_rate_hz,omitempty"`
 
 	// SubtitleLanguages Language codes of which one is enough; empty when it does not care.
 	SubtitleLanguages *[]string `json:"subtitle_languages,omitempty"`

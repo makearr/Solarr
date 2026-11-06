@@ -8711,6 +8711,14 @@ components:
           format: int64
           description: Absent for a lossless codec.
         tolerance_pct: { type: integer, format: int64, minimum: 0, maximum: 50 }
+        label: { type: string, description: 'A short tag shown beside the name, e.g. "Space conscious". Empty when none.' }
+        description: { type: string, description: Free text about what the target is for. }
+        sample_rate_hz: { type: integer, format: int64, description: 'Audio sample rate in Hz, e.g. 48000; 0 or absent when it does not care.' }
+        bit_depth: { type: integer, format: int64, description: 'Audio bits per sample; on a video target the colour depth, which is not judged. 0 or absent when it does not care.' }
+        encoder_preset: { type: string, description: 'The encoder speed preset an encode of this quality uses, e.g. slower; empty when none.' }
+        max_frame_rate: { type: number, description: 'A cap on the frame rate when it follows the source, e.g. 60; 0 or absent when none.' }
+        chapters: { type: boolean, description: Chapter marks are wanted. }
+        builtin: { type: boolean, readOnly: true, description: A preset Solarr shipped; it can be edited like any other. }
 
     RecycleBinContents:
       type: object

@@ -81,6 +81,15 @@ func MeetsTarget(target settings.QualityTarget, file score.FileFacts) bool {
 		score.CanonicalContainer(target.Container) != score.CanonicalContainer(name) {
 		return false
 	}
+	if target.AudioChannels != "" && file.AudioChannels != "" && target.AudioChannels != file.AudioChannels {
+		return false
+	}
+	if target.SampleRateHz > 0 && file.SampleRate > 0 && int64(file.SampleRate) != target.SampleRateHz {
+		return false
+	}
+	if target.BitDepth > 0 && file.BitDepth > 0 && int64(file.BitDepth) != target.BitDepth {
+		return false
+	}
 	if target.BitrateKbps == nil {
 		return true
 	}
@@ -133,6 +142,9 @@ func meetsVideoTarget(target settings.QualityTarget, file score.FileFacts) bool 
 		return false
 	}
 	if target.CRF > 0 && file.CRF > 0 && file.CRF > target.CRF+crfMargin {
+		return false
+	}
+	if target.MaxFrameRate > 0 && file.FrameRate > target.MaxFrameRate*(1+frameRateMargin) {
 		return false
 	}
 	if target.FrameRate > 0 && file.FrameRate > 0 && math.Abs(file.FrameRate-target.FrameRate) > target.FrameRate*frameRateMargin {
