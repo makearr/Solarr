@@ -10,6 +10,7 @@ import { Button } from "@/ui/Button";
 import { inputStyle, labelStyle, addFormStyle } from "@/ui/form";
 
 import { KindSelect } from "./LibraryKindSelect";
+import { TargetChoiceField, useTargetChoice } from "./LibraryTargetChoice";
 
 type MediaType = components["schemas"]["MediaType"];
 
@@ -28,9 +29,11 @@ export function useNewLibrary() {
   const [asked, setAlsoMovies] = useState<boolean>();
   const offersMovies = mediaType === "tv" && effectiveKind === "anime" && mediaTypes.some((type) => type.key === "movie");
   const alsoMovies = offersMovies && (asked ?? true);
+  const target = useTargetChoice(mediaType);
   return {
     offersMovies,
     alsoMovies,
+    target,
     setAlsoMovies,
     mediaTypes,
     mediaType,
@@ -49,6 +52,7 @@ export function useNewLibrary() {
       const name = (typedName ?? typeName).trim() || typeName;
       return ok(api.POST("/categories", { body: { name, media_type: mediaType, kind: kind || undefined } })).then(async (created) => {
         if (alsoMovies) await ok(api.POST("/categories/{id}/types", { params: { path: { id: created.id } }, body: { media_type: "movie" } }));
+        await target.apply(created.id);
         return created;
       });
     },
@@ -86,6 +90,7 @@ export function NewLibraryFields({ library }: { library: NewLibrary }) {
         </select>
       </label>
       {library.mediaType && <KindSelect mediaType={library.mediaType} value={library.kind} onChange={library.setKind} />}
+      <TargetChoiceField choice={library.target} />
       {library.offersMovies && (
         <label className="flex items-center gap-2 text-sm" title="Anime films live beside the series, in the same library">
           <input type="checkbox" checked={library.alsoMovies} onChange={(event) => library.setAlsoMovies(event.target.checked)} />

@@ -1,4 +1,5 @@
 import { DefaultLanguagesEditor } from "./DefaultLanguages";
+import { TargetChoiceField, useTargetChoice } from "./LibraryTargetChoice";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -112,6 +113,7 @@ function ConnectArr({
   const mediaTypes = useMediaTypes();
   const [mediaTypeTouched, setMediaTypeTouched] = useState(false);
   const [connectKind, setConnectKind] = useState("");
+  const targetChoice = useTargetChoice(mediaType);
   const [importRootFolders, setImportRootFolders] = useState(true);
   const [pushMonitoring, setPushMonitoring] = useState(false);
   const [outcome, setOutcome] = useState<ConnectOutcome | null>(null);
@@ -138,6 +140,7 @@ function ConnectArr({
         });
         if (categoryError) throw categoryError;
         category = created!;
+        await targetChoice.apply(category.id);
         setMadeLibrary({ name: libraryName, mediaType, id: category.id });
       }
 
@@ -331,6 +334,7 @@ function ConnectArr({
           </Field>
         </div>
         <KindSelect mediaType={mediaType} value={connectKind} onChange={setConnectKind} />
+        <TargetChoiceField choice={targetChoice} />
 
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -539,6 +543,7 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
               </select>
             </Field>
             {library.mediaType && <KindSelect mediaType={library.mediaType} value={library.kind} onChange={library.setKind} />}
+            <TargetChoiceField choice={library.target} />
             <Field label="Library name">
               <input
                 className={inputStyle}
