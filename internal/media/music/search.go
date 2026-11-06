@@ -543,6 +543,10 @@ func factsFromRelease(parsed parse.Result, raw indexer.RawItem, impl string) sco
 	if parsed.Attributes.BitrateKbps > 0 {
 		facts.File.OverallBitrate = int64(parsed.Attributes.BitrateKbps) * 1000
 	}
+	// A bare "320" or "V0" with no codec word is LAME MP3; left blank it fits every profile and outranks a stated AAC.
+	if facts.File.AudioCodec == "" && !facts.File.Lossless && (parsed.Attributes.BitrateKbps > 0 || parsed.Attributes.VBRPreset != "") {
+		facts.File.AudioCodec = "mp3"
+	}
 	if parsed.Attributes.Edition != "" {
 		facts.File.EditionTokens = []string{parsed.Attributes.Edition}
 	}
