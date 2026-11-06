@@ -3540,6 +3540,9 @@ type LibraryQuality struct {
 	Profiles             []QualityProfileRef `json:"profiles"`
 	ProtocolDelayMinutes int64               `json:"protocol_delay_minutes"`
 
+	// SuggestedProfiles The quality profiles the library's kind used to start with (Anime 1080p), offered to add; those already listed are left out.
+	SuggestedProfiles *[]QualityProfileRef `json:"suggested_profiles,omitempty"`
+
 	// SuggestedTargets When the target lies outside the library's profiles, the targets of its media type that the first profile accepts, nearest the preferred settings first.
 	SuggestedTargets *[]QualityProfileRef `json:"suggested_targets,omitempty"`
 	Target           *QualityTarget       `json:"target,omitempty"`

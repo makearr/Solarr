@@ -5924,6 +5924,8 @@ export interface components {
             available_targets?: components["schemas"]["QualityProfileRef"][];
             /** @description The target is the average of the first profile, worked out, not a stored one. */
             target_auto?: boolean;
+            /** @description The quality profiles the library's kind used to start with (Anime 1080p), offered to add; those already listed are left out. */
+            suggested_profiles?: components["schemas"]["QualityProfileRef"][];
             /** @description When the target lies outside the library's profiles, the targets of its media type that the first profile accepts, nearest the preferred settings first. */
             suggested_targets?: components["schemas"]["QualityProfileRef"][];
             /** @description Plain-language notices, e.g. a target the first profile would refuse. */

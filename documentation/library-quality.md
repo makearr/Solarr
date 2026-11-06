@@ -154,7 +154,7 @@ Settings > **Quality** (was Quality profiles) opens on **Target qualities**; Con
 Quality profiles at the expert one. Each library's target is chosen right in Settings > Libraries, and on the library's own
 Quality page the target comes first and the profile list below it, "none" by default. A library added as a kind starts with its
 media type's preferred ("Space conscious") target and no profile; a type with no shipped target (comics, ROMs) still starts with the
-kind's profiles.
+kind's profiles. For the others the kind's profiles (Anime 1080p) are offered as one-click "Suggested for this kind of library" buttons in the expert profile section of the library's Quality page.
 
 ## Families, names and tiles
 

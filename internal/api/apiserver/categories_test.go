@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -630,6 +631,21 @@ func TestCreateCategory_AKindBringsItsDefaults(t *testing.T) {
 	}
 	if category.QualityTarget == nil || category.QualityTarget.Label != settings.PreferredTargetLabel || category.QualityTarget.MediaType != "video" {
 		t.Errorf("target = %+v, want the shipped preferred target of the type", category.QualityTarget)
+	}
+	var quality struct {
+		SuggestedProfiles []struct {
+			Name string `json:"name"`
+		} `json:"suggested_profiles"`
+	}
+	if err := json.Unmarshal(fixture.do(authedGet(t, cookies, fmt.Sprintf("/api/v1/categories/%d/quality", created.ID))).Body.Bytes(), &quality); err != nil {
+		t.Fatal(err)
+	}
+	var suggested []string
+	for _, profile := range quality.SuggestedProfiles {
+		suggested = append(suggested, profile.Name)
+	}
+	if !reflect.DeepEqual(suggested, []string{"Anime 1080p", "WEB 1080p"}) {
+		t.Errorf("suggested profiles = %v, want the kind's, offered not applied", suggested)
 	}
 	if category.LanguageProfileID == nil {
 		t.Fatalf("no language profile, want the kind's")

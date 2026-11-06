@@ -236,6 +236,18 @@ function LibraryQualityEditor() {
             ))}
           </ol>
         )}
+        {(quality.data.suggested_profiles ?? []).filter((profile) => !order.includes(profile.id)).length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-ink-muted">Suggested for this kind of library:</span>
+            {(quality.data.suggested_profiles ?? [])
+              .filter((profile) => !order.includes(profile.id))
+              .map((profile) => (
+                <button key={profile.id} type="button" onClick={() => setOrder([...order, profile.id])} className="rounded-md border border-border-subtle px-2 py-1 hover:border-accent">
+                  Add {profile.name}
+                </button>
+              ))}
+          </div>
+        )}
         {unused.length > 0 && (
           <select
             value=""

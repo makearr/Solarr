@@ -160,6 +160,23 @@ func (s *Server) libraryQualityView(category settings.Category) gen.LibraryQuali
 			view.Available = append(view.Available, gen.QualityProfileRef{Id: profile.ID, Name: profile.Name})
 		}
 	}
+	suggestedProfiles := []gen.QualityProfileRef{}
+	if info, found := s.mediaTypeInfo(category.MediaType); found {
+		if kind, known := info.kindOf(category.Kind); known {
+			listed := map[int64]bool{}
+			for _, ref := range view.Profiles {
+				listed[ref.Id] = true
+			}
+			for _, name := range kind.QualityProfiles {
+				for _, profile := range snapshot.QualityProfiles() {
+					if profile.Name == name && profile.MediaType == category.MediaType && !listed[profile.ID] {
+						suggestedProfiles = append(suggestedProfiles, gen.QualityProfileRef{Id: profile.ID, Name: profile.Name})
+					}
+				}
+			}
+		}
+	}
+	view.SuggestedProfiles = &suggestedProfiles
 	available := []gen.QualityProfileRef{}
 	for _, target := range snapshot.QualityTargets() {
 		if target.MediaType == settings.TargetFamily(category.MediaType) {

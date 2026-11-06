@@ -8970,6 +8970,10 @@ components:
         target_auto:
           type: boolean
           description: The target is the average of the first profile, worked out, not a stored one.
+        suggested_profiles:
+          type: array
+          description: The quality profiles the library's kind used to start with (Anime 1080p), offered to add; those already listed are left out.
+          items: { $ref: "#/components/schemas/QualityProfileRef" }
         suggested_targets:
           type: array
           description: When the target lies outside the library's profiles, the targets of its media type that the first profile accepts, nearest the preferred settings first.
