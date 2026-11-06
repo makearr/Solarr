@@ -8,7 +8,7 @@ type LibraryQuality = components["schemas"]["LibraryQuality"];
 type QualityWrite = components["schemas"]["LibraryQualityWrite"];
 
 /** The library's quality as it stands, which the PUT replaces whole: a change to one part resends the others. */
-function useLibraryQuality(categoryId: number) {
+export function useLibraryQuality(categoryId: number) {
   const queryClient = useQueryClient();
   const quality = useQuery({
     queryKey: ["libraryQuality", categoryId],

@@ -14,7 +14,8 @@ import { useIsAdministrator } from "@/lib/useAdministrator";
 import { useMediaTypes, type MediaTypeInfo } from "@/lib/useMediaTypes";
 import { workLink } from "@/lib/workLink";
 
-import { AddToLibrary } from "./work/AddWork";
+import { t } from "@/lib/i18n";
+import { AddToLibrary } from "./work/AddToSolarr";
 import { ChooseImage } from "./ChooseImage";
 import { useAllParts } from "./work/WorkParts";
 import { CoverArt } from "./CoverArt";
@@ -715,27 +716,26 @@ function KnownForSection({ personId, categoryIds }: { personId: number; category
                 <KnownForTile
                   key={keyOf(title)}
                   title={title}
-                  adding={adding !== undefined && keyOf(adding) === keyOf(title)}
-                  onAdd={() => setAdding(adding && keyOf(adding) === keyOf(title) ? undefined : title)}
+                  onAdd={() => setAdding(title)}
                 />
               ))}
           </div>
-          {adding?.kind === kind && adding.add_library_id && (
-            <AddToLibrary
-              key={keyOf(adding)}
-              candidate={{ provider: adding.provider, external_id: adding.external_id, title: adding.title, kind: adding.kind }}
-              categoryId={String(adding.add_library_id)}
-              onDone={() => setAdding(undefined)}
-            />
-          )}
         </div>
       ))}
+      {adding?.add_library_id && (
+        <AddToLibrary
+          key={keyOf(adding)}
+          candidate={{ provider: adding.provider, external_id: adding.external_id, title: adding.title, kind: adding.kind, poster_url: adding.poster_url, year: adding.year }}
+          categoryId={String(adding.add_library_id)}
+          onDone={() => setAdding(undefined)}
+        />
+      )}
     </section>
   );
 }
 
 /** A title the library lacks is added from here to the library that holds its kind; with none, it links out. */
-function KnownForTile({ title, adding, onAdd }: { title: KnownFor; adding: boolean; onAdd: () => void }) {
+function KnownForTile({ title, onAdd }: { title: KnownFor; onAdd: () => void }) {
   const mediaType = title.kind === "album" ? "music" : title.kind;
   const caption = (
     <>
@@ -768,11 +768,11 @@ function KnownForTile({ title, adding, onAdd }: { title: KnownFor; adding: boole
       {caption}
       <button
         type="button"
-        aria-expanded={adding}
+        aria-haspopup="dialog"
         onClick={onAdd}
         className="w-fit rounded-md border border-border-subtle px-2 py-0.5 text-xs text-accent hover:border-accent"
       >
-        Add to Solarr
+        {t("collection.request")}
       </button>
     </div>
   );

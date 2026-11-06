@@ -1,25 +1,22 @@
 import { useState } from "react";
 import { Link, useParams, useSearch } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Check, Plus, Search } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
-import { t, vocabularyOf } from "@/lib/i18n";
+import { t } from "@/lib/i18n";
 import { remoteImage } from "@/lib/remoteImage";
-import { invalidatePeopleLists, invalidateWorkLists, useLibraries, useQualityProfiles, useRootFolders } from "@/lib/resources";
-import { useLibraryLabel } from "@/lib/libraryLabel";
+import { useLibraries } from "@/lib/resources";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaTypes, type MediaTypeInfo } from "@/lib/useMediaTypes";
-import { usePreference } from "@/lib/usePreference";
 import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
 import { EmptyState } from "@/ui/EmptyState";
 import { Image } from "@/ui/Image";
 
 import { useDebouncedValue } from "../useDebouncedValue";
-import { TagPicker } from "../TagChips";
-import { AddPriority } from "./AddPriority";
+import { AddToSolarr } from "./AddToSolarr";
 import { IncompleteDiscographies } from "./IncompleteDiscographies";
 
 type Candidate = components["schemas"]["AddCandidate"];
@@ -203,200 +200,8 @@ export function CandidateCard({
         </div>
       </div>
       {open && held === undefined && (
-        <AddPanel candidate={candidate} categoryId={categoryId} libraries={libraries} info={info} person={person} onAdded={setAdded} />
+        <AddToSolarr candidate={candidate} categoryId={categoryId} libraries={libraries} info={info} person={person} onAdded={setAdded} onClose={onToggle} />
       )}
     </li>
-  );
-}
-
-/** The add dialog's choices: monitoring (a monitor option where the type has them), the quality profile, the search. */
-function AddPanel({
-  candidate,
-  categoryId: firstCategoryId,
-  libraries,
-  info,
-  person,
-  onAdded,
-}: {
-  candidate: Candidate;
-  categoryId: string;
-  libraries?: readonly LibraryEntry[];
-  info: MediaTypeInfo;
-  person: boolean;
-  onAdded: (result: components["schemas"]["AddWorkResult"]) => void;
-}) {
-  const queryClient = useQueryClient();
-  const libraryLabel = useLibraryLabel();
-  const ownLibrary = useLibrary(firstCategoryId);
-  // The libraries' rules suggest where it goes (ADR-56); always shown with its reason, always changeable.
-  const suggested = candidate.suggestion && libraries?.some((library) => library.id === candidate.suggestion!.category_id) ? candidate.suggestion : undefined;
-  const [categoryId, setCategoryId] = useState(suggested ? String(suggested.category_id) : firstCategoryId);
-  const words = vocabularyOf(info);
-  const options = info.monitor_options;
-  const [monitored, setMonitored] = useState(true);
-  const [option, setOption] = usePreference<string>(`add.monitor.${info.key}`, options[0]?.key ?? "");
-  const [specials, setSpecials] = useState(false);
-  const [profileId, setProfileId] = useState(0);
-  // Lidarr's and Sonarr's "Start search for missing", remembered per person (D13).
-  const [search, setSearch] = usePreference("discover.search_on_add", true);
-  const profiles = useQualityProfiles();
-  const [rootFolderId, setRootFolderId] = useState(0);
-  const [tags, setTags] = useState<string[]>([]);
-  const editable = info.facets.filter((facet) => facet.editable && facet.kind === "enum" && facet.key !== "air_time_zone");
-  const [fields, setFields] = useState<Record<string, string>>({});
-  const libraryRoots = (useRootFolders().data ?? []).filter((root) => (root.categories ?? []).some((category) => category.id === Number(categoryId)));
-  // Request-only access files a request an administrator approves instead of adding (Seerr's model).
-  const requestOnly = (libraries?.find((library) => String(library.id) === categoryId) ?? ownLibrary)?.permission === "request";
-  const add = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/works", {
-        body: {
-          category_id: Number(categoryId), kind: candidate.kind, provider: candidate.provider, external_id: candidate.external_id,
-          title: candidate.title,
-          monitored: options.length > 0 ? option !== "none" : monitored, monitor_option: options.length > 0 ? option : undefined,
-          specials, quality_profile_id: profileId || undefined, search,
-          root_folder_id: rootFolderId || undefined,
-          tags: tags.length > 0 ? tags : undefined,
-          fields: Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== "")),
-        },
-      });
-      if (error) throw error;
-      // A type that does not search on its own is searched as a whole work, season by season for a series.
-      if (search && !data.searching && data.work_id && !requestOnly) {
-        void api.POST("/works/{id}/grab", { params: { path: { id: data.work_id } } });
-      }
-      return data;
-    },
-    onSuccess: (data) => {
-      invalidateWorkLists(queryClient);
-      invalidatePeopleLists(queryClient);
-      onAdded(data);
-    },
-  });
-  const field = "rounded-md border border-border-subtle bg-canvas px-2 py-1 text-sm";
-  return (
-    <div className="mt-3 flex flex-col gap-2 rounded-md border border-border-subtle bg-canvas p-3 text-sm">
-      {libraries && libraries.length > 1 && (
-        <label className="flex flex-wrap items-center gap-2">
-          <span className="w-24 text-xs text-ink-muted">Library</span>
-          <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className={field}>
-            {libraries.map((library) => (
-              <option key={library.id} value={String(library.id)}>
-                {libraryLabel(library)}
-              </option>
-            ))}
-          </select>
-          {suggested && (
-            <span className="text-xs text-ink-muted">
-              {String(suggested.category_id) === categoryId ? "Suggested" : `${suggested.name} suggested`}: {suggested.reason}
-            </span>
-          )}
-        </label>
-      )}
-      {options.length > 0 ? (
-        <label className="flex flex-wrap items-center gap-2">
-          <span className="w-24 text-xs text-ink-muted">Monitor</span>
-          <select value={option} onChange={(event) => setOption(event.target.value)} className={field}>
-            {options.map((entry) => (
-              <option key={entry.key} value={entry.key}>
-                {entry.label}
-              </option>
-            ))}
-          </select>
-          <label className="flex items-center gap-1 text-xs text-ink-muted">
-            <input type="checkbox" checked={specials} onChange={(event) => setSpecials(event.target.checked)} /> also the specials
-          </label>
-        </label>
-      ) : (
-        <label className="flex items-center gap-2 text-xs text-ink-muted">
-          <span className="w-24" />
-          <input type="checkbox" checked={monitored} onChange={(event) => setMonitored(event.target.checked)} />
-          {person ? `Monitor: add their ${words.works} and follow new ones` : t("action.monitor")}
-        </label>
-      )}
-      {!person && (
-        <label className="flex flex-wrap items-center gap-2">
-          <span className="w-24 text-xs text-ink-muted">Quality profile</span>
-          <select value={profileId} onChange={(event) => setProfileId(Number(event.target.value))} className={field}>
-            <option value={0}>The library&apos;s default</option>
-            {(profiles.data ?? [])
-              .filter((profile) => profile.media_type === info.key)
-              .map((profile) => (
-                <option key={profile.id} value={profile.id}>
-                  {profile.name}
-                </option>
-              ))}
-          </select>
-        </label>
-      )}
-      {!person && info.key !== "music" && libraryRoots.length > 1 && (
-        <label className="flex flex-wrap items-center gap-2">
-          <span className="w-24 text-xs text-ink-muted">Root folder</span>
-          <select value={rootFolderId} onChange={(event) => setRootFolderId(Number(event.target.value))} className={field}>
-            <option value={0}>Automatic: the one with most free space</option>
-            {libraryRoots.map((root) => (
-              <option key={root.id} value={root.id}>
-                {root.path}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      {!person &&
-        editable.map((facet) => (
-          <label key={facet.key} className="flex flex-wrap items-center gap-2">
-            <span className="w-24 text-xs text-ink-muted">{facet.label}</span>
-            <select value={fields[facet.key] ?? ""} onChange={(event) => setFields({ ...fields, [facet.key]: event.target.value })} className={field}>
-              <option value="">Automatic</option>
-              {(facet.choices ?? []).map((choice) => (
-                <option key={choice.key} value={choice.key}>
-                  {choice.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        ))}
-      {!person && <TagPicker label="Tags" genreTree={info.genre_tree.key} names={tags} onChange={setTags} />}
-      {search && !person && <AddPriority categoryId={Number(categoryId)} />}
-      <label className="flex items-center gap-2 text-xs text-ink-muted">
-        <span className="w-24" />
-        <input type="checkbox" checked={search} onChange={(event) => setSearch(event.target.checked)} /> Start search for missing {words.parts === "parts" ? words.works : words.parts}
-      </label>
-      <div className="flex items-center gap-3">
-        <span className="w-24" />
-        {add.data?.request_id ? (
-          <span className="text-xs text-ok">Requested: an administrator will look at it. See Activity, Requests.</span>
-        ) : (
-          <Button variant="primary" busy={add.isPending} busyLabel={requestOnly ? "Requesting…" : "Adding…"} onClick={() => add.mutate()}>
-            {requestOnly ? "Request" : "Add"} {candidate.title}
-          </Button>
-        )}
-        {add.isError && <span className="text-xs text-danger">{(add.error as { detail?: string }).detail ?? "It could not be added. Try again."}</span>}
-      </div>
-    </div>
-  );
-}
-
-/** The add panel for a candidate found elsewhere (a person's "also known for"), in the library it would go to. */
-export function AddToLibrary({
-  candidate,
-  categoryId,
-  onDone,
-}: {
-  candidate: Pick<Candidate, "provider" | "external_id" | "title"> & { kind?: string };
-  categoryId: string;
-  onDone: () => void;
-}) {
-  const library = useLibrary(categoryId);
-  const info = useMediaTypes().find((entry) => entry.key === library?.media_type);
-  if (!info) return null;
-  return (
-    <AddPanel
-      candidate={{ kind: candidate.kind ?? info.add_kinds[0]?.key ?? "", ...candidate }}
-      categoryId={categoryId}
-      info={info}
-      person={false}
-      onAdded={onDone}
-    />
   );
 }

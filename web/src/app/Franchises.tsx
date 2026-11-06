@@ -20,7 +20,7 @@ import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
 import { useLibrary } from "@/lib/useLibrary";
 import { useLibraries } from "@/lib/resources";
 import { useMediaType } from "@/lib/useMediaTypes";
-import { AddToLibrary } from "./work/AddWork";
+import { AddToLibrary } from "./work/AddToSolarr";
 import { CoverArt } from "./CoverArt";
 import { usePreference } from "@/lib/usePreference";
 import { LetterRail } from "@/ui/LetterRail";
@@ -386,7 +386,7 @@ function CollectionDetail({
                   </button>
                   {adding === key && (
                     <AddToLibrary
-                      candidate={{ provider: member.provider, external_id: member.external_id, title: member.title }}
+                      candidate={{ provider: member.provider, external_id: member.external_id, title: member.title, poster_url: member.poster_url, year: member.year }}
                       categoryId={categoryId}
                       onDone={() => {
                         setAdding(undefined);

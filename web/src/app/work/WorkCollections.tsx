@@ -12,7 +12,7 @@ import { Button } from "@/ui/Button";
 
 import { CoverArt } from "../CoverArt";
 import { heldLabel } from "../Franchises";
-import { AddToLibrary } from "./AddWork";
+import { AddToLibrary } from "./AddToSolarr";
 
 type Franchise = components["schemas"]["Franchise"];
 type Member = components["schemas"]["FranchiseMember"];
@@ -81,7 +81,7 @@ function PartOf({ franchise, workId, categoryId }: { franchise: Franchise; workI
       </div>
       {adding?.provider && adding.external_id && (
         <AddToLibrary
-          candidate={{ provider: adding.provider, external_id: adding.external_id, title: adding.title }}
+          candidate={{ provider: adding.provider, external_id: adding.external_id, title: adding.title, poster_url: adding.poster_url, year: adding.year }}
           categoryId={categoryId}
           onDone={() => {
             setAdding(undefined);

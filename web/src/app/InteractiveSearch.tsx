@@ -13,18 +13,8 @@ export interface SearchScope {
   part?: number;
 }
 
-/** Lidarr's and Sonarr's Interactive Search: search now, list what was found best first, the person sends one. */
-export function InteractiveSearch({
-  workId,
-  scope = {},
-  title,
-  onClose,
-}: {
-  workId: number;
-  scope?: SearchScope;
-  title: string;
-  onClose: () => void;
-}) {
+/** The releases an interactive search found, best first, each sendable; also shown inside the Add dialog. */
+export function InteractiveSearchResults({ workId, scope = {}, onSent }: { workId: number; scope?: SearchScope; onSent?: () => void }) {
   const queryClient = useQueryClient();
   const query = { ...(scope.group !== undefined ? { group: scope.group } : {}), ...(scope.part ? { part: scope.part } : {}) };
   // A query, not a mutation: opening the dialog is the search, and reopening reuses it for a minute.
@@ -45,16 +35,11 @@ export function InteractiveSearch({
       void queryClient.invalidateQueries({ queryKey: ["wanted"] });
       void queryClient.invalidateQueries({ queryKey: ["series"] });
       void queryClient.invalidateQueries({ queryKey: ["work", workId] });
+      onSent?.();
     },
   });
-
   return (
-    <Dialog
-      width="wide"
-      title={`${t("action.interactive")}: ${title}`}
-      description="Best first. A release that covers more of what is missing leads at equal quality. Send puts it in the download client's queue."
-      onClose={onClose}
-    >
+    <>
       <IndexerProblems problems={found.data?.indexer_errors} />
       {found.isError ? (
         <p className="text-xs text-danger">{t("search.failed")}</p>
@@ -69,6 +54,30 @@ export function InteractiveSearch({
         />
       )}
       {send.isSuccess && <p className="mt-2 text-xs text-ok">{t("grab.sent")}.</p>}
+    </>
+  );
+}
+
+/** Lidarr's and Sonarr's Interactive Search: search now, list what was found best first, the person sends one. */
+export function InteractiveSearch({
+  workId,
+  scope = {},
+  title,
+  onClose,
+}: {
+  workId: number;
+  scope?: SearchScope;
+  title: string;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog
+      width="wide"
+      title={`${t("action.interactive")}: ${title}`}
+      description="Best first. A release that covers more of what is missing leads at equal quality. Send puts it in the download client's queue."
+      onClose={onClose}
+    >
+      <InteractiveSearchResults workId={workId} scope={scope} />
     </Dialog>
   );
 }
