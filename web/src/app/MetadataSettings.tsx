@@ -10,6 +10,8 @@ import { useMetadataSettings } from "@/lib/resources";
 import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
 import { Card, Toggle } from "./SettingsCard";
+import { MetadataTypeTab, useLibraryTypeDefaults } from "./TypeDefaults";
+import { mediaTypeName } from "@/lib/mediaTypeIcon";
 
 type Settings = components["schemas"]["MetadataSettings"];
 type Provider = components["schemas"]["MetadataProviderInfo"];
@@ -80,6 +82,7 @@ export function MetadataSettings() {
       return data.providers;
     },
   });
+  const typeDefaults = useLibraryTypeDefaults();
   const patch = usePatchMetadataSettings(metadata.data);
   const switchProvider = useMutation({
     mutationFn: async ({ key, enabled }: { key: string; enabled: boolean }) => {
@@ -89,6 +92,7 @@ export function MetadataSettings() {
       void queryClient.invalidateQueries({ queryKey: ["metadata-providers"] });
       void queryClient.invalidateQueries({ queryKey: ["metadata-settings"] });
       void queryClient.invalidateQueries({ queryKey: ["libraryMetadataSources"] });
+      void queryClient.invalidateQueries({ queryKey: ["libraryTypeDefaults"] });
     },
   });
   if (metadata.error !== null || !metadata.data || !providers.data) return null;
@@ -97,7 +101,7 @@ export function MetadataSettings() {
     <section className="flex flex-col gap-4">
       <p className="max-w-2xl text-sm text-ink-muted">
         Every provider Solarr can ask. One switched off is asked by no library; its key stays stored. The order a library asks them in is
-        set under the library itself, Settings, Metadata.
+        set per library type in the tabs beside this one, and a library can keep its own under its Settings, Metadata.
       </p>
       <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
         {providers.data.map((provider) => (
@@ -132,6 +136,9 @@ export function MetadataSettings() {
     <SubTabs
       tabs={[
         { key: "providers", label: "Providers", content: providerList },
+        ...(typeDefaults.data ?? [])
+          .filter((entry) => entry.metadata_available.length > 0)
+          .map((entry) => ({ key: `type-${entry.media_type}`, label: mediaTypeName(entry.media_type), content: <MetadataTypeTab entry={entry} /> })),
         { key: "air-times", label: "Air times", hidden: !isTierVisible(tier, "advanced") || !airTimes, content: airTimes },
       ]}
     />

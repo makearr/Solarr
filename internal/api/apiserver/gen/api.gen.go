@@ -1838,7 +1838,10 @@ type CategorySettings struct {
 	// Kind The library's kind within its media type (MediaTypeInfo.kinds); absent for none.
 	Kind              *string `json:"kind,omitempty"`
 	LanguageProfileId *int64  `json:"language_profile_id,omitempty"`
-	MediaType         string  `json:"media_type"`
+
+	// LanguageProfileInherited The language is the media type's default
+	LanguageProfileInherited *bool  `json:"language_profile_inherited,omitempty"`
+	MediaType                string `json:"media_type"`
 
 	// MonitorDiscovered What a scan does with an album it finds on disk that nobody asked for (section 19.6, todo 4.4).
 	MonitorDiscovered CategorySettingsMonitorDiscovered `json:"monitor_discovered"`
@@ -1847,6 +1850,9 @@ type CategorySettings struct {
 	// PriorityRank Lower is more important (ADR-36's composite acquisition priority).
 	PriorityRank     int64  `json:"priority_rank"`
 	QualityProfileId *int64 `json:"quality_profile_id,omitempty"`
+
+	// QualityProfileInherited The profile is the media type's default
+	QualityProfileInherited *bool `json:"quality_profile_inherited,omitempty"`
 
 	// RatingLimit A library's maximum rating, as the youngest viewer age a work may admit (13 is PG-13); max_age null is no limit. A work over it, or unrated unless allow_unrated, is held: never searched, shown under Above rating.
 	RatingLimit RatingLimit `json:"rating_limit"`
@@ -3544,13 +3550,19 @@ type LibraryQuality struct {
 	AvailableTargets *[]QualityProfileRef `json:"available_targets,omitempty"`
 	CutoffProfileId  *int64               `json:"cutoff_profile_id,omitempty"`
 
+	// LanguageInherited The language is the media type's default
+	LanguageInherited *bool `json:"language_inherited,omitempty"`
+
 	// LanguageProfileId The library's language profile; absent when none.
 	LanguageProfileId *int64                          `json:"language_profile_id,omitempty"`
 	PreferredProtocol LibraryQualityPreferredProtocol `json:"preferred_protocol"`
 
 	// Profiles The library's own list, earlier preferred. Empty means the instance default.
-	Profiles             []QualityProfileRef `json:"profiles"`
-	ProtocolDelayMinutes int64               `json:"protocol_delay_minutes"`
+	Profiles []QualityProfileRef `json:"profiles"`
+
+	// ProfilesInherited The list is the media type's default
+	ProfilesInherited    *bool `json:"profiles_inherited,omitempty"`
+	ProtocolDelayMinutes int64 `json:"protocol_delay_minutes"`
 
 	// SuggestedProfiles The quality profiles the library's kind used to start with (Anime 1080p), offered to add; those already listed are left out.
 	SuggestedProfiles *[]QualityProfileRef `json:"suggested_profiles,omitempty"`
@@ -3561,6 +3573,9 @@ type LibraryQuality struct {
 
 	// TargetAuto The target is the average of the first profile, worked out, not a stored one.
 	TargetAuto *bool `json:"target_auto,omitempty"`
+
+	// TargetInherited The target is the media type's default
+	TargetInherited *bool `json:"target_inherited,omitempty"`
 
 	// UpgradesAllowed Lidarr's "Upgrades Allowed". Off, an album with every track is complete whatever its quality: nothing is upgradable and nothing is searched for an upgrade.
 	UpgradesAllowed bool `json:"upgrades_allowed"`
@@ -3638,6 +3653,52 @@ type LibrarySuggestion struct {
 	CategoryId int64  `json:"category_id"`
 	Name       string `json:"name"`
 	Reason     string `json:"reason"`
+}
+
+// LibraryTypeDefaults defines model for LibraryTypeDefaults.
+type LibraryTypeDefaults struct {
+	AvailableLanguages []QualityProfileRef `json:"available_languages"`
+	AvailableProfiles  []QualityProfileRef `json:"available_profiles"`
+	AvailableTargets   []QualityProfileRef `json:"available_targets"`
+
+	// LanguageProfileId The language profile of the type; absent for none.
+	LanguageProfileId *int64                 `json:"language_profile_id,omitempty"`
+	MediaType         string                 `json:"media_type"`
+	MetadataAvailable []MetadataProviderInfo `json:"metadata_available"`
+
+	// MetadataCustom The type has its own order; false is the shipped one.
+	MetadataCustom bool `json:"metadata_custom"`
+
+	// MetadataDefault The shipped order
+	MetadataDefault *[]string `json:"metadata_default,omitempty"`
+
+	// MetadataSources The providers a library of the type asks
+	MetadataSources []string `json:"metadata_sources"`
+
+	// QualityProfileIds The quality profiles a library of the type accepts until it picks its own; empty for none.
+	QualityProfileIds []int64 `json:"quality_profile_ids"`
+
+	// TargetAuto Libraries aim for the average of their first profile.
+	TargetAuto bool `json:"target_auto"`
+
+	// TargetId The target quality a library of the type aims for; absent for none.
+	TargetId *int64 `json:"target_id,omitempty"`
+}
+
+// LibraryTypeDefaultsWrite defines model for LibraryTypeDefaultsWrite.
+type LibraryTypeDefaultsWrite struct {
+	// LanguageProfileId 0 clears the language.
+	LanguageProfileId *int64 `json:"language_profile_id,omitempty"`
+
+	// MetadataSources The providers and their order; an empty list returns the type to the shipped order.
+	MetadataSources *[]string `json:"metadata_sources,omitempty"`
+
+	// QualityProfileIds An empty list clears them.
+	QualityProfileIds *[]int64 `json:"quality_profile_ids,omitempty"`
+	TargetAuto        *bool    `json:"target_auto,omitempty"`
+
+	// TargetId 0 clears the target.
+	TargetId *int64 `json:"target_id,omitempty"`
 }
 
 // LinkPreview defines model for LinkPreview.
@@ -7279,6 +7340,9 @@ type CreateImportListJSONRequestBody = ImportListWrite
 // SetLibraryLastLevelJSONRequestBody defines body for SetLibraryLastLevel for application/json ContentType.
 type SetLibraryLastLevelJSONRequestBody SetLibraryLastLevelJSONBody
 
+// SetLibraryTypeDefaultsJSONRequestBody defines body for SetLibraryTypeDefaults for application/json ContentType.
+type SetLibraryTypeDefaultsJSONRequestBody = LibraryTypeDefaultsWrite
+
 // ResolveUnidentifiedJSONRequestBody defines body for ResolveUnidentified for application/json ContentType.
 type ResolveUnidentifiedJSONRequestBody ResolveUnidentifiedJSONBody
 
@@ -7962,6 +8026,12 @@ type ServerInterface interface {
 	// One page of one navigation level (ADR-54).
 	// (GET /libraries/{id}/{level})
 	ListLibraryLevel(w http.ResponseWriter, r *http.Request, id int64, level string, params ListLibraryLevelParams)
+	// Per media type, what its libraries start with until they set their own. Administrator only.
+	// (GET /library-type-defaults)
+	ListLibraryTypeDefaults(w http.ResponseWriter, r *http.Request)
+	// Change a media type's defaults; a field left out stays as it is. Administrator only.
+	// (PUT /library-type-defaults/{mediaType})
+	SetLibraryTypeDefaults(w http.ResponseWriter, r *http.Request, mediaType string)
 	// Probe coverage, unmatched files, incomplete works, roots near reserve and blocked hashes still in the library (todo 4.8).
 	// (GET /library/health)
 	GetLibraryHealth(w http.ResponseWriter, r *http.Request)
@@ -9453,6 +9523,18 @@ func (_ Unimplemented) SetLibraryLastLevel(w http.ResponseWriter, r *http.Reques
 // One page of one navigation level (ADR-54).
 // (GET /libraries/{id}/{level})
 func (_ Unimplemented) ListLibraryLevel(w http.ResponseWriter, r *http.Request, id int64, level string, params ListLibraryLevelParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Per media type, what its libraries start with until they set their own. Administrator only.
+// (GET /library-type-defaults)
+func (_ Unimplemented) ListLibraryTypeDefaults(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change a media type's defaults; a field left out stays as it is. Administrator only.
+// (PUT /library-type-defaults/{mediaType})
+func (_ Unimplemented) SetLibraryTypeDefaults(w http.ResponseWriter, r *http.Request, mediaType string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -15774,6 +15856,61 @@ func (siw *ServerInterfaceWrapper) ListLibraryLevel(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListLibraryLevel(w, r, id, level, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListLibraryTypeDefaults operation middleware
+func (siw *ServerInterfaceWrapper) ListLibraryTypeDefaults(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLibraryTypeDefaults(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetLibraryTypeDefaults operation middleware
+func (siw *ServerInterfaceWrapper) SetLibraryTypeDefaults(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "mediaType" -------------
+	var mediaType string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "mediaType", chi.URLParam(r, "mediaType"), &mediaType, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mediaType", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetLibraryTypeDefaults(w, r, mediaType)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -22192,6 +22329,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/libraries/{id}/{level}", wrapper.ListLibraryLevel)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/library-type-defaults", wrapper.ListLibraryTypeDefaults)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/library-type-defaults/{mediaType}", wrapper.SetLibraryTypeDefaults)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/library/health", wrapper.GetLibraryHealth)

@@ -70,12 +70,6 @@ func (c *Cache) CreateCategory(ctx context.Context, mediaType, name string, prio
 			return err
 		}
 		created = row
-		// A library starts with the providers that suit its type, so its order is its own from the first day.
-		for index, source := range DefaultMetadataSources(mediaType, "") {
-			if err := queries.InsertCategoryMetadataSource(ctx, settingsdb.InsertCategoryMetadataSourceParams{CategoryID: row.ID, Source: source, Ord: int64(index)}); err != nil {
-				return err
-			}
-		}
 		for userID, permission := range grants {
 			if err := queries.SetCategoryAccess(ctx, settingsdb.SetCategoryAccessParams{
 				UserID: userID, CategoryID: row.ID, Permission: string(permission),
@@ -149,7 +143,13 @@ func (c *Cache) UpdateCategory(
 		}); err != nil {
 			return err
 		}
-		if err := writeQualityList(ctx, queries, id, withFirst(existing.QualityProfileIDs, qualityProfileID),
+		if existing.QualityProfilesInherited && qualityProfileID != nil && *qualityProfileID == existing.QualityProfileIDs[0] {
+			qualityProfileID = nil
+		}
+		if existing.LanguageProfileInherited && languageProfileID != nil && *languageProfileID == *existing.LanguageProfileID {
+			languageProfileID = nil
+		}
+		if err := writeQualityList(ctx, queries, id, withFirst(ownQualityProfileIDs(existing), qualityProfileID),
 			existing.QualityCutoffID); err != nil {
 			return err
 		}
@@ -217,16 +217,9 @@ func (c *Cache) SetCategoryKind(ctx context.Context, id int64, kind string) (Cat
 		if err := queries.SetCategoryKind(ctx, settingsdb.SetCategoryKindParams{Kind: kind, ID: id}); err != nil {
 			return err
 		}
-		// A library still on its type's starting order moves to the starting order of its new kind: an anime library asks AniList first.
-		if slices.Equal(before.MetadataSources, DefaultMetadataSources(before.MediaType, before.Kind)) {
-			if err := queries.DeleteCategoryMetadataSources(ctx, id); err != nil {
-				return err
-			}
-			for index, source := range DefaultMetadataSources(before.MediaType, kind) {
-				if err := queries.InsertCategoryMetadataSource(ctx, settingsdb.InsertCategoryMetadataSourceParams{CategoryID: id, Source: source, Ord: int64(index)}); err != nil {
-					return err
-				}
-			}
+		// A library still following its type's order keeps following it under the new kind (anime asks AniList first).
+		if len(before.MetadataSources) == 0 {
+			return queries.DeleteCategoryMetadataSources(ctx, id)
 		}
 		return nil
 	})
@@ -654,7 +647,7 @@ func (c *Cache) SetCategoryQualityProfile(ctx context.Context, categoryID int64,
 	}
 	category, _ := snapshot.Category(categoryID)
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
-		return writeQualityList(ctx, queries, categoryID, withFirst(category.QualityProfileIDs, profileID),
+		return writeQualityList(ctx, queries, categoryID, withFirst(ownQualityProfileIDs(category), profileID),
 			category.QualityCutoffID)
 	})
 }

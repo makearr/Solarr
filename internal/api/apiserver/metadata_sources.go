@@ -31,7 +31,7 @@ func (s *Server) routeSetLibraryMetadataSources(w http.ResponseWriter, r *http.R
 func (s *Server) metadataSourcesView(category settings.Category) gen.LibraryMetadataSources {
 	snapshot := s.auth.Settings.Snapshot()
 	current, _ := snapshot.Category(category.ID)
-	defaults := settings.DefaultMetadataSources(category.MediaType, category.Kind)
+	defaults := snapshot.TypeMetadataSources(category.MediaType, category.Kind)
 	view := gen.LibraryMetadataSources{
 		Sources: snapshot.MetadataSourcesFor(current), Custom: boolPtr(len(current.MetadataSources) > 0 && !slices.Equal(current.MetadataSources, defaults)),
 		Default:   defaults,

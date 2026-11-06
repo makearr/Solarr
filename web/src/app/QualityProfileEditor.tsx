@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import { LanguageProfiles } from "./LanguageProfiles";
+import { QualityTypeDefaults } from "./TypeDefaults";
 import { Card } from "./SettingsCard";
 import { QualityTargetsSection } from "./QualityTargets";
 import { TargetProfilesSection } from "./TargetProfiles";
@@ -161,8 +162,9 @@ export function QualityProfilesPage() {
         tabs={[
           { key: "targets", label: "Target qualities", content: <QualityTargetsSection /> },
           { key: "content", label: "Content profiles", hidden: !isTierVisible(tier, "advanced"), content: <TargetProfilesSection /> },
-          { key: "profiles", label: "Quality profiles", hidden: !isTierVisible(tier, "expert"), content: profileCard },
           { key: "languages", label: "Languages", content: <LanguageProfiles /> },
+          { key: "profiles", label: "Quality profiles", hidden: !isTierVisible(tier, "expert"), content: profileCard },
+          { key: "defaults", label: "Defaults by library type", content: <QualityTypeDefaults /> },
         ]}
       />
     </div>

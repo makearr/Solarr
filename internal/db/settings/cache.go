@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -213,8 +214,10 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 
 	snapshot := newSnapshot(
 		convertUsers(users),
-		withMetadataSources(withFileManagement(withQuality(convertCategories(categories, convertNamingProfiles(namingProfiles, namingFormats)),
-			qualityLists, convertQualityTargets(qualityTargets), categoryTargets, automaticTargets, convertQualityProfiles(qualityProfiles)), fileManagement), metadataSources),
+		withTypeDefaults(
+			withMetadataSources(withFileManagement(withQuality(convertCategories(categories, convertNamingProfiles(namingProfiles, namingFormats)),
+				qualityLists, convertQualityTargets(qualityTargets), categoryTargets, automaticTargets, convertQualityProfiles(qualityProfiles)), fileManagement), metadataSources),
+			policy, convertQualityTargets(qualityTargets), convertQualityProfiles(qualityProfiles), convertedLanguageProfiles),
 		convertRootFolders(rootFolders),
 		convertAttachments(attachments),
 		access,
@@ -519,6 +522,12 @@ func withMetadataSources(categories []Category, rows []settingsdb.CategoryMetada
 	for _, row := range rows {
 		if i, ok := index[row.CategoryID]; ok {
 			categories[i].MetadataSources = append(categories[i].MetadataSources, row.Source)
+		}
+	}
+	// An order that is still the shipped one, as every library was seeded with, follows its type's default.
+	for i := range categories {
+		if slices.Equal(categories[i].MetadataSources, DefaultMetadataSources(categories[i].MediaType, categories[i].Kind)) {
+			categories[i].MetadataSources = nil
 		}
 	}
 	return categories

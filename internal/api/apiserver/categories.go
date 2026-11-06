@@ -338,6 +338,7 @@ func categorySettingsView(c settings.Category) gen.CategorySettings {
 	return gen.CategorySettings{
 		Id: c.ID, MediaType: c.MediaType, Name: c.Name, PriorityRank: c.PriorityRank,
 		QualityProfileId: c.QualityProfileID, LanguageProfileId: c.LanguageProfileID,
+		QualityProfileInherited: boolPtrIf(c.QualityProfilesInherited), LanguageProfileInherited: boolPtrIf(c.LanguageProfileInherited),
 		MonitorDiscovered: gen.CategorySettingsMonitorDiscovered(c.MonitorDiscovered),
 		TvMonitor:         tvMonitorView(c.TVMonitor),
 		Kind:              strPtr(c.Kind),
@@ -353,6 +354,11 @@ func (s *Server) applyKind(ctx context.Context, category settings.Category, kind
 		return category, err
 	}
 	snapshot := s.auth.Settings.Snapshot()
+	// What the media type's defaults set, the library inherits rather than being given its own copy.
+	inherited := snapshot.TypeDefaultsFor(category.MediaType)
+	if inherited.TargetID != nil || inherited.TargetAuto || len(inherited.QualityProfileIDs) > 0 {
+		return s.applyKindLanguage(ctx, updated, kind)
+	}
 	// The goal of a new library is its media type's preferred target, and that is enough: no profile. A type with no
 	// shipped target (comics, ROMs) still starts with the kind's profiles.
 	for _, target := range snapshot.QualityTargets() {
@@ -383,6 +389,9 @@ func (s *Server) applyKind(ctx context.Context, category settings.Category, kind
 func (s *Server) applyKindLanguage(ctx context.Context, updated settings.Category, kind LibraryKind) (settings.Category, error) {
 	category := updated
 	snapshot2 := s.auth.Settings.Snapshot()
+	if snapshot2.TypeDefaultsFor(category.MediaType).LanguageProfileID != nil {
+		return updated, nil
+	}
 	// The wizard's languages decide a library's, so one answer covers every library; a kind with a language of its own
 	// (anime: Japanese) keeps that as its first, and with no answer yet the kind's own profile stands.
 	defaults := snapshot2.DefaultLanguages()

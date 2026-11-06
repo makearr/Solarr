@@ -4783,6 +4783,52 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /library-type-defaults:
+    get:
+      operationId: listLibraryTypeDefaults
+      tags: [settings]
+      summary: Per media type, what its libraries start with until they set their own. Administrator only.
+      responses:
+        "200":
+          description: One entry per media type this build has.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [types]
+                properties:
+                  types:
+                    type: array
+                    items: { $ref: "#/components/schemas/LibraryTypeDefaults" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /library-type-defaults/{mediaType}:
+    parameters:
+      - name: mediaType
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: setLibraryTypeDefaults
+      tags: [settings]
+      summary: Change a media type's defaults; a field left out stays as it is. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryTypeDefaultsWrite" }
+      responses:
+        "200":
+          description: The type's defaults as saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryTypeDefaults" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /defaultlanguages:
     get:
       operationId: getDefaultLanguages
@@ -8901,6 +8947,34 @@ components:
           format: int64
           description: A root's recycle bin as a percentage of the root; the oldest go first. 0 is no limit.
 
+    LibraryTypeDefaults:
+      type: object
+      required: [media_type, metadata_sources, metadata_custom, metadata_available, quality_profile_ids, target_auto, available_profiles, available_targets, available_languages]
+      properties:
+        media_type: { type: string }
+        metadata_sources: { type: array, items: { type: string }, description: The providers a library of the type asks, best first; one left out is off for the type. }
+        metadata_default: { type: array, items: { type: string }, description: The shipped order, for resetting. }
+        metadata_custom: { type: boolean, description: The type has its own order; false is the shipped one. }
+        metadata_available:
+          type: array
+          items: { $ref: "#/components/schemas/MetadataProviderInfo" }
+        quality_profile_ids: { type: array, items: { type: integer, format: int64 }, description: The quality profiles a library of the type accepts until it picks its own; empty for none. }
+        target_id: { type: integer, format: int64, description: The target quality a library of the type aims for; absent for none. }
+        target_auto: { type: boolean, description: Libraries aim for the average of their first profile. }
+        language_profile_id: { type: integer, format: int64, description: The language profile of the type; absent for none. }
+        available_profiles: { type: array, items: { $ref: "#/components/schemas/QualityProfileRef" } }
+        available_targets: { type: array, items: { $ref: "#/components/schemas/QualityProfileRef" } }
+        available_languages: { type: array, items: { $ref: "#/components/schemas/QualityProfileRef" } }
+
+    LibraryTypeDefaultsWrite:
+      type: object
+      properties:
+        metadata_sources: { type: array, items: { type: string }, description: The providers and their order; an empty list returns the type to the shipped order. }
+        quality_profile_ids: { type: array, items: { type: integer, format: int64 }, description: An empty list clears them. }
+        target_id: { type: integer, format: int64, description: 0 clears the target. }
+        target_auto: { type: boolean }
+        language_profile_id: { type: integer, format: int64, description: 0 clears the language. }
+
     LibraryMetadataSources:
       type: object
       required: [sources, default, available]
@@ -9000,6 +9074,9 @@ components:
           description: Every profile, in the suggested order.
           items: { $ref: "#/components/schemas/QualityProfileRef" }
         cutoff_profile_id: { type: integer, format: int64 }
+        profiles_inherited: { type: boolean, description: The list is the media type's default, not the library's own. }
+        target_inherited: { type: boolean, description: The target is the media type's default, not the library's own. }
+        language_inherited: { type: boolean, description: The language is the media type's default, not the library's own. }
         target: { $ref: "#/components/schemas/QualityTarget" }
         available_targets:
           type: array
@@ -12758,6 +12835,8 @@ components:
           description: Lower is more important (ADR-36's composite acquisition priority).
         quality_profile_id: { type: integer, format: int64 }
         language_profile_id: { type: integer, format: int64 }
+        quality_profile_inherited: { type: boolean, description: The profile is the media type's default, not the library's own. }
+        language_profile_inherited: { type: boolean, description: The language is the media type's default, not the library's own. }
         monitor_discovered:
           type: string
           enum: [monitored, unmonitored, none]

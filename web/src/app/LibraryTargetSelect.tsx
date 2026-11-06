@@ -17,11 +17,14 @@ export function useLibraryQuality(categoryId: number) {
   const save = useMutation({
     mutationFn: (change: Partial<QualityWrite>) => {
       const current = quality.data as LibraryQuality;
+      // What is still the media type's default is not resent, so changing one part does not make the others the library's own.
+      const ownProfiles = current.profiles_inherited ? [] : current.profiles;
+      const ownTarget = !current.target_inherited;
       const keep: QualityWrite = {
-        profile_ids: current.profiles.map((profile) => profile.id),
-        cutoff_profile_id: current.cutoff_profile_id ?? undefined,
-        target_id: current.target_auto ? undefined : current.target?.id,
-        target_auto: current.target_auto ?? false,
+        profile_ids: ownProfiles.map((profile) => profile.id),
+        cutoff_profile_id: ownProfiles.length > 0 ? (current.cutoff_profile_id ?? undefined) : undefined,
+        target_id: ownTarget && !current.target_auto ? current.target?.id : undefined,
+        target_auto: ownTarget && (current.target_auto ?? false),
       };
       return ok(api.PUT("/categories/{id}/quality", { params: { path: { id: categoryId } }, body: { ...keep, ...change } }));
     },
@@ -39,7 +42,7 @@ export function LibraryTargetSelect({ categoryId, name }: { categoryId: number; 
   if (!quality) return null;
   const targets = quality.available_targets ?? [];
   if (targets.length === 0 && !quality.target) return null;
-  const value = quality.target_auto ? "auto" : (quality.target?.id ?? "");
+  const value = quality.target_inherited ? "" : quality.target_auto ? "auto" : (quality.target?.id ?? "");
   return (
     <label className="flex items-center gap-1 text-xs text-ink-muted">
       Target
@@ -53,7 +56,9 @@ export function LibraryTargetSelect({ categoryId, name }: { categoryId: number; 
         }}
         className={selectStyle}
       >
-        <option value="">None: the profiles decide</option>
+        <option value="">
+          {quality.target_inherited && quality.target ? `Type default: ${targetTitle(quality.target)}` : "None, or the type's default"}
+        </option>
         <option value="auto" disabled={quality.profiles.length === 0}>
           Automatic (from the first profile)
         </option>
@@ -78,12 +83,14 @@ export function LibraryLanguageSelect({ categoryId, name }: { categoryId: number
       Language
       <select
         aria-label={`Language of ${name}`}
-        value={String(quality.language_profile_id ?? "")}
+        value={quality.language_inherited ? "" : String(quality.language_profile_id ?? "")}
         disabled={save.isPending}
         onChange={(event) => save.mutate({ language_profile_id: Number(event.target.value) || 0 })}
         className={selectStyle}
       >
-        <option value="">No preference</option>
+        <option value="">
+          {quality.language_inherited ? `Type default: ${languages.find((language) => language.id === quality.language_profile_id)?.name ?? "set"}` : "No preference, or the type's default"}
+        </option>
         {languages.map((language) => (
           <option key={language.id} value={language.id}>
             {language.name}

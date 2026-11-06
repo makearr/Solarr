@@ -135,21 +135,9 @@ func (s *Server) SetLibraryQuality(w http.ResponseWriter, r *http.Request, id in
 		}
 		category.PreferredProtocol, category.ProtocolDelayMinutes = protocol, minutes
 	}
-	// The request's Access is frozen at its start (ADR-27), so the answer is what was saved.
-	category.QualityProfileIDs = body.ProfileIds
-	category.QualityCutoffID = body.CutoffProfileId
-	category.QualityTarget, category.QualityTargetAuto = nil, false
-	switch {
-	case derefOr(body.TargetAuto, false):
-		if profile, found := s.auth.Settings.Snapshot().QualityProfile(firstOr(body.ProfileIds, 0)); found {
-			if target, derived := settings.AutoTarget(profile, category.MediaType); derived {
-				category.QualityTarget, category.QualityTargetAuto = &target, true
-			}
-		}
-	case body.TargetId != nil:
-		if target, found := s.auth.Settings.Snapshot().QualityTarget(*body.TargetId); found {
-			category.QualityTarget = &target
-		}
+	// The request's Access is frozen at its start (ADR-27), so the answer is read back from the live snapshot.
+	if saved, found := s.auth.Settings.CurrentCategory(id); found {
+		category = saved
 	}
 	writeJSON(w, s.logger, http.StatusOK, s.libraryQualityView(category))
 }
@@ -159,6 +147,8 @@ func (s *Server) libraryQualityView(category settings.Category) gen.LibraryQuali
 	view := gen.LibraryQuality{
 		Profiles: []gen.QualityProfileRef{}, Available: []gen.QualityProfileRef{}, Warnings: []string{},
 		CutoffProfileId: category.QualityCutoffID, UpgradesAllowed: category.QualityUpgrades,
+		ProfilesInherited: boolPtrIf(category.QualityProfilesInherited), TargetInherited: boolPtrIf(category.QualityTargetInherited),
+		LanguageInherited: boolPtrIf(category.LanguageProfileInherited),
 		PreferredProtocol: gen.LibraryQualityPreferredProtocol(category.PreferredProtocol), ProtocolDelayMinutes: category.ProtocolDelayMinutes,
 	}
 	for _, id := range category.QualityProfileIDs {
@@ -305,13 +295,6 @@ func targetDisplayName(target settings.QualityTarget) string {
 		return target.Label
 	}
 	return target.Name
-}
-
-func firstOr(values []int64, fallback int64) int64 {
-	if len(values) == 0 {
-		return fallback
-	}
-	return values[0]
 }
 
 func lowerAll(values []string) []string {

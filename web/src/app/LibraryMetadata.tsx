@@ -57,10 +57,10 @@ export function LibraryMetadata() {
         <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold">Order</h2>
-            <Chip>{custom ? "this library's own" : "the default for its kind"}</Chip>
+            <Chip>{custom ? "this library's own" : "following the default of its type"}</Chip>
             {custom && (
               <Button className="ml-auto" busy={save.isPending} onClick={() => save.mutate([])}>
-                Use the default order
+                Use the type's default order
               </Button>
             )}
           </div>
@@ -108,7 +108,7 @@ export function LibraryMetadata() {
         </section>
         {mediaType?.cover_sources && <CoverOrder />}
         <p className="text-xs text-ink-muted">
-          A library starts with the providers that suit its kind, Wikidata first: the ids its item records steer the others to the right
+          A library follows the default of its library type, set under Settings, Metadata, until it keeps an order of its own here; the shipped one asks Wikidata first, since the ids its item records steer the others to the right
           entry. Providers are switched on and off, and their keys given, under Settings, Metadata. Each library is looked up in its own
           order; an album or artist two music libraries hold follows the first one&apos;s.
         </p>

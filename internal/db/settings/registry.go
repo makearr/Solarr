@@ -453,6 +453,12 @@ func NewDefaultRegistry() *Registry {
 		Default:  `["` + BookSourceGoogleBooks + `"]`,
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyLibraryTypeDefaults, Kind: KindString, Tier: TierNormal,
+		Name:     "Library type defaults",
+		HelpText: "Per media type: the metadata providers and their order, the target quality, the language and the quality profiles a library starts with. A library's own choice wins.",
+		Default:  `{}`,
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyMetadataProviderPaces, Kind: KindStringList, Tier: TierAdvanced,
 		Name:     "Metadata provider paces",
 		HelpText: "Requests a minute a person set for a provider, \"provider:pace\" each; the rest keep their shipped pace.",

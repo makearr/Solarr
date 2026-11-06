@@ -290,12 +290,12 @@ func DefaultMetadataSources(mediaType, kind string) []string {
 	return nil
 }
 
-// MetadataSourcesFor is the order a library's providers are consulted in: its own when it has set one, else what suits
-// its type and kind; a provider switched off is left out.
+// MetadataSourcesFor is the order a library's providers are consulted in: its own when it has set one, else its type's
+// default (shipped: what suits its type and kind); a provider switched off is left out.
 func (s *Snapshot) MetadataSourcesFor(category Category) []string {
 	order := category.MetadataSources
 	if len(order) == 0 {
-		order = DefaultMetadataSources(category.MediaType, category.Kind)
+		order = s.TypeMetadataSources(category.MediaType, category.Kind)
 	}
 	return slices.DeleteFunc(slices.Clone(order), func(key string) bool { return !s.ProviderEnabled(key) })
 }

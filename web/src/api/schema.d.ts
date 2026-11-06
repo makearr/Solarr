@@ -3048,6 +3048,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/library-type-defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Per media type, what its libraries start with until they set their own. Administrator only. */
+        get: operations["listLibraryTypeDefaults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library-type-defaults/{mediaType}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaType: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Change a media type's defaults; a field left out stays as it is. Administrator only. */
+        put: operations["setLibraryTypeDefaults"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/defaultlanguages": {
         parameters: {
             query?: never;
@@ -5824,6 +5860,50 @@ export interface components {
              */
             max_percent_of_root: number;
         };
+        LibraryTypeDefaults: {
+            media_type: string;
+            /** @description The providers a library of the type asks */
+            metadata_sources: string[];
+            /** @description The shipped order */
+            metadata_default?: string[];
+            /** @description The type has its own order; false is the shipped one. */
+            metadata_custom: boolean;
+            metadata_available: components["schemas"]["MetadataProviderInfo"][];
+            /** @description The quality profiles a library of the type accepts until it picks its own; empty for none. */
+            quality_profile_ids: number[];
+            /**
+             * Format: int64
+             * @description The target quality a library of the type aims for; absent for none.
+             */
+            target_id?: number;
+            /** @description Libraries aim for the average of their first profile. */
+            target_auto: boolean;
+            /**
+             * Format: int64
+             * @description The language profile of the type; absent for none.
+             */
+            language_profile_id?: number;
+            available_profiles: components["schemas"]["QualityProfileRef"][];
+            available_targets: components["schemas"]["QualityProfileRef"][];
+            available_languages: components["schemas"]["QualityProfileRef"][];
+        };
+        LibraryTypeDefaultsWrite: {
+            /** @description The providers and their order; an empty list returns the type to the shipped order. */
+            metadata_sources?: string[];
+            /** @description An empty list clears them. */
+            quality_profile_ids?: number[];
+            /**
+             * Format: int64
+             * @description 0 clears the target.
+             */
+            target_id?: number;
+            target_auto?: boolean;
+            /**
+             * Format: int64
+             * @description 0 clears the language.
+             */
+            language_profile_id?: number;
+        };
         LibraryMetadataSources: {
             /** @description The providers asked */
             sources: string[];
@@ -5946,6 +6026,12 @@ export interface components {
             available: components["schemas"]["QualityProfileRef"][];
             /** Format: int64 */
             cutoff_profile_id?: number;
+            /** @description The list is the media type's default */
+            profiles_inherited?: boolean;
+            /** @description The target is the media type's default */
+            target_inherited?: boolean;
+            /** @description The language is the media type's default */
+            language_inherited?: boolean;
             target?: components["schemas"]["QualityTarget"];
             /** @description Every target of the library's media type, by name. */
             available_targets?: components["schemas"]["QualityProfileRef"][];
@@ -9012,6 +9098,10 @@ export interface components {
             quality_profile_id?: number;
             /** Format: int64 */
             language_profile_id?: number;
+            /** @description The profile is the media type's default */
+            quality_profile_inherited?: boolean;
+            /** @description The language is the media type's default */
+            language_profile_inherited?: boolean;
             /**
              * @description What a scan does with an album it finds on disk that nobody asked for (section 19.6, todo 4.4).
              * @enum {string}
@@ -15087,6 +15177,60 @@ export interface operations {
                 };
                 content?: never;
             };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listLibraryTypeDefaults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One entry per media type this build has. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        types: components["schemas"]["LibraryTypeDefaults"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    setLibraryTypeDefaults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaType: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryTypeDefaultsWrite"];
+            };
+        };
+        responses: {
+            /** @description The type's defaults as saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryTypeDefaults"];
+                };
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

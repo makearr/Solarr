@@ -114,7 +114,7 @@ func TestNewDefaultRegistry_CoversEveryKnownScalarSetting(t *testing.T) {
 		settings.KeyPriorityGapWeight, settings.KeyPriorityUpgradeWeight, settings.KeySearchesPerHour, settings.KeyHuntMode, settings.KeyPriorityNewReleaseDays, settings.KeyRSSFreshHours,
 		settings.KeyRequestShareUser, settings.KeyRequestShareFresh, settings.KeyRequestShareBackground,
 		settings.KeyBrainzMashUserAgent, settings.KeyMetadataSourceOrder,
-		settings.KeyMetadataCoverSources, settings.KeyMetadataTVSources, settings.KeyMetadataMovieSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID, settings.KeyMetadataDisabledProviders, settings.KeyMetadataProviderPaces, settings.KeyMDBListAPIKey, settings.KeyOMDbAPIKey, settings.KeyFanartAPIKey, settings.KeyGoogleBooksAPIKey, settings.KeyHardcoverAPIKey, settings.KeyStashDBAPIKey, settings.KeyThePornDBAPIKey, settings.KeyFansDBAPIKey,
+		settings.KeyMetadataCoverSources, settings.KeyMetadataTVSources, settings.KeyMetadataMovieSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID, settings.KeyMetadataDisabledProviders, settings.KeyMetadataProviderPaces, settings.KeyLibraryTypeDefaults, settings.KeyMDBListAPIKey, settings.KeyOMDbAPIKey, settings.KeyFanartAPIKey, settings.KeyGoogleBooksAPIKey, settings.KeyHardcoverAPIKey, settings.KeyStashDBAPIKey, settings.KeyThePornDBAPIKey, settings.KeyFansDBAPIKey,
 		settings.KeyAcoustIDAPIKey, settings.KeyMetadataTheAudioDB, settings.KeyTheAudioDBAPIKey,
 		settings.KeyMetadataPeopleBackfillPerRun, settings.KeyTMDBAPIKey, settings.KeyTVDBAPIKey,
 		// The non-scalar audit's own KindEntity additions (2026-09-12): each

@@ -811,6 +811,8 @@ func New(config Config) (*Server, error) {
 			secured.Post("/qualitytargets", server.CreateQualityTarget)
 			secured.Put("/qualitytargets/{id}", server.routeUpdateQualityTarget)
 			secured.Delete("/qualitytargets/{id}", server.routeDeleteQualityTarget)
+			secured.Get("/library-type-defaults", server.ListLibraryTypeDefaults)
+			secured.Put("/library-type-defaults/{mediaType}", server.routeSetLibraryTypeDefaults)
 			secured.Get("/defaultlanguages", server.GetDefaultLanguages)
 			secured.Put("/defaultlanguages", server.SetDefaultLanguages)
 			secured.Get("/targetprofiles", server.ListTargetProfiles)

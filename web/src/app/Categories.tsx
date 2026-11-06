@@ -369,8 +369,9 @@ function EditCategoryFields({
 }) {
   const [name, setName] = useState(initial.name);
   const [priorityRank, setPriorityRank] = useState(initial.priority_rank);
-  const [qualityProfileId, setQualityProfileId] = useState(initial.quality_profile_id ?? 0);
-  const [languageProfileId, setLanguageProfileId] = useState(initial.language_profile_id ?? 0);
+  // A value that is the media type's default shows as "default" (0) and stays unsent, so saving does not make it the library's own.
+  const [qualityProfileId, setQualityProfileId] = useState(initial.quality_profile_inherited ? 0 : (initial.quality_profile_id ?? 0));
+  const [languageProfileId, setLanguageProfileId] = useState(initial.language_profile_inherited ? 0 : (initial.language_profile_id ?? 0));
   const [monitorDiscovered, setMonitorDiscovered] = useState<MonitorDiscovered>(initial.monitor_discovered);
   const [tvMonitor, setTvMonitor] = useState<TVMonitor>(initial.tv_monitor ?? "existing");
   const [kind, setKind] = useState(initial.kind ?? "");
@@ -446,7 +447,7 @@ function EditCategoryFields({
             value={qualityProfileId}
             onChange={(event) => setQualityProfileId(Number(event.target.value))}
           >
-            <option value={0}>None</option>
+            <option value={0}>{initial.quality_profile_inherited ? `Type default: ${qualityProfiles.find((profile) => profile.id === initial.quality_profile_id)?.name ?? "set"}` : "None, or the type's default"}</option>
             {qualityProfiles.map((profile) => (
               <option key={profile.id} value={profile.id}>
                 {profile.name}
@@ -461,7 +462,7 @@ function EditCategoryFields({
             value={languageProfileId}
             onChange={(event) => setLanguageProfileId(Number(event.target.value))}
           >
-            <option value={0}>None</option>
+            <option value={0}>{initial.language_profile_inherited ? `Type default: ${languageProfiles.find((profile) => profile.id === initial.language_profile_id)?.name ?? "set"}` : "None, or the type's default"}</option>
             {languageProfiles.map((profile) => (
               <option key={profile.id} value={profile.id}>
                 {profile.name}

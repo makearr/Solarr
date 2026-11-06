@@ -14,6 +14,16 @@ import type { components } from "@/api/schema";
 import { Button } from "@/ui/Button";
 import { inputStyle } from "@/ui/form";
 
+/** Says a setting follows its media type's default, or offers to return an own choice to it (the choice cleared). */
+function InheritNote({ inherited, onReset }: { inherited: boolean; onReset: () => void }) {
+  if (inherited) return <p className="text-xs text-accent">This is the default of the library type (Settings, Quality, Defaults by library type).</p>;
+  return (
+    <button type="button" onClick={onReset} className="self-start text-xs text-ink-muted underline hover:text-ink">
+      Use the library type&apos;s default, then Save
+    </button>
+  );
+}
+
 /** A library's own quality: which shared profiles it accepts, in order, where upgrades stop, and
  *  the one quality it aims for. The profiles themselves are made under Quality profiles. */
 export function QualityProfiles() {
@@ -109,10 +119,27 @@ function LibraryQualityEditor() {
   }, [quality.data]);
 
   const save = useMutation({
-    mutationFn: () => ok(api.PUT("/categories/{id}/quality", {
-      params: { path: { id: id! } },
-      body: { profile_ids: order ?? [], cutoff_profile_id: cutoff, target_id: targetAuto ? undefined : targetId, target_auto: targetAuto, language_profile_id: languageId, upgrades_allowed: upgrades, preferred_protocol: preferred, protocol_delay_minutes: delayMinutes },
-    })),
+    mutationFn: () => {
+      const stored = quality.data!;
+      // A value still the media type's default is not sent, so saving something else does not make it the library's own.
+      const profilesUntouched = stored.profiles_inherited === true && JSON.stringify(order) === JSON.stringify(stored.profiles.map((profile) => profile.id));
+      const targetUntouched = stored.target_inherited === true && targetAuto === (stored.target_auto ?? false) && (targetAuto || targetId === stored.target?.id);
+      const languageUntouched = stored.language_inherited === true && languageId === (stored.language_profile_id ?? 0);
+      const profileIds = profilesUntouched ? [] : (order ?? []);
+      return ok(api.PUT("/categories/{id}/quality", {
+        params: { path: { id: id! } },
+        body: {
+          profile_ids: profileIds,
+          cutoff_profile_id: profileIds.length > 0 ? cutoff : undefined,
+          target_id: targetUntouched || targetAuto ? undefined : targetId,
+          target_auto: targetUntouched ? false : targetAuto,
+          language_profile_id: languageUntouched ? 0 : languageId,
+          upgrades_allowed: upgrades,
+          preferred_protocol: preferred,
+          protocol_delay_minutes: delayMinutes,
+        },
+      }));
+    },
     onSuccess: (data: LibraryQuality) => {
       queryClient.setQueryData(["libraryQuality", id], data);
       void queryClient.invalidateQueries({ queryKey: ["category", categoryId] });
@@ -180,6 +207,13 @@ function LibraryQualityEditor() {
         {quality.data.target && (targetAuto ? quality.data.target_auto : targetId === quality.data.target.id) && (
           <p className="text-xs text-ink-muted">{summariseTarget(quality.data.target)}</p>
         )}
+        <InheritNote
+          inherited={quality.data.target_inherited === true}
+          onReset={() => {
+            setTargetAuto(false);
+            setTargetId(undefined);
+          }}
+        />
       </section>
 
       <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
@@ -200,6 +234,7 @@ function LibraryQualityEditor() {
             </option>
           ))}
         </select>
+        <InheritNote inherited={quality.data.language_inherited === true} onReset={() => setLanguageId(0)} />
       </section>
 
       {isTierVisible(tier, "expert") && (
@@ -259,6 +294,7 @@ function LibraryQualityEditor() {
             ))}
           </ol>
         )}
+        <InheritNote inherited={quality.data.profiles_inherited === true} onReset={() => setOrder([])} />
         {(quality.data.suggested_profiles ?? []).filter((profile) => !order.includes(profile.id)).length > 0 && (
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="text-ink-muted">Suggested for this kind of library:</span>
