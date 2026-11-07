@@ -205,8 +205,7 @@ type Works struct {
 // NewWorks builds a reader over an open library store.
 func NewWorks(opened *store.Store) Works { return Works{store: opened} }
 
-// PreviewFiles answers, for a page of works, the files that have a single-frame preview; a work of many files (a
-// series) is left out, since a picture per episode is no picture of the series.
+// PreviewFiles answers, for a page of works, the first file of each that has a single-frame preview.
 func (w Works) PreviewFiles(ctx context.Context, workIDs []int64) (map[int64][]int64, error) {
 	if len(workIDs) == 0 {
 		return nil, nil
