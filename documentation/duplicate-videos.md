@@ -40,7 +40,7 @@ video from the frames the hash reads, so a file is read once: a single frame (th
 in the video's own shape, uncropped, JPEG. They live in `<config dir>/previews/<id/1000>/<id>-frame.jpg` and `-sheet.jpg`
 (`internal/platform/previewstore`), belong to the file (`media_object`), and are listed in `video_preview` with the algorithm
 version, so a hash bump makes them again. `GET /files/{id}/preview/{kind}` serves them to whoever may read the file; the work
-list names the previewed files of works of at most four files (`preview_file_ids`). The web interface shows the frame in the
+list names the first previewed file of every work (`preview_file_ids`). The web interface shows the frame in the
 overview and table of a library and the sheet in file details and look-alike duplicates, unless the person switched
 Settings > Web UI > Show thumbnails off. Gap: previews of a deleted file stay on disk.
 

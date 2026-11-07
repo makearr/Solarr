@@ -6177,7 +6177,7 @@ type Work struct {
 	PosterUrl    *string `json:"poster_url,omitempty"`
 	PresentCount *int64  `json:"present_count,omitempty"`
 
-	// PreviewFileIds In a list, the work's files that have a single-frame preview (GET /files/{id}/preview/frame); only for a work of at most four files.
+	// PreviewFileIds In a list, the work's files that have a single-frame preview (GET /files/{id}/preview/frame).
 	PreviewFileIds *[]int64 `json:"preview_file_ids,omitempty"`
 	RequiredCount  *int64   `json:"required_count,omitempty"`
 

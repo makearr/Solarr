@@ -7296,7 +7296,7 @@ export interface components {
             badge_url?: string;
             /** @description The name of the organisation the badge is the logo of. */
             badge_name?: string;
-            /** @description In a list, the work's files that have a single-frame preview (GET /files/{id}/preview/frame); only for a work of at most four files. */
+            /** @description In a list, the work's files that have a single-frame preview (GET /files/{id}/preview/frame). */
             preview_file_ids?: number[];
             /** @description An audiobook's readers, comma-joined; absent on any other work. */
             narrators?: string;

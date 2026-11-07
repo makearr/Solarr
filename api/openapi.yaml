@@ -10509,7 +10509,7 @@ components:
         preview_file_ids:
           type: array
           items: { type: integer, format: int64 }
-          description: In a list, the work's files that have a single-frame preview (GET /files/{id}/preview/frame); only for a work of at most four files.
+          description: In a list, the work's files that have a single-frame preview (GET /files/{id}/preview/frame).
         narrators: { type: string, description: "An audiobook's readers, comma-joined; absent on any other work." }
         lead_id:
           type: integer
