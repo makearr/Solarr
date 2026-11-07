@@ -208,7 +208,7 @@ func NewDefaultRegistry() *Registry {
 		Key: KeySolarrMode, Kind: KindString, Tier: TierNormal,
 		Name: "Solarr mode",
 		HelpText: "normal does everything; read_only never writes into a library; pause_downloads sends nothing to a download client; " +
-			"observe is read_only with no indexer search and no download; arr_companion is observe plus sending monitoring back to the *Arrs.",
+			"observe is read_only with no indexer search and no download; arr_companion is observe plus handing adds to the *Arrs (which search and download) and following their monitoring.",
 		Default: string(ModeNormal),
 	})
 	registry.MustRegister(SettingDef{

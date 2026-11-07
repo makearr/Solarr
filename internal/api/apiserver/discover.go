@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
@@ -45,6 +46,18 @@ type AddWorkResult struct {
 	Kind             string
 	WorkID, PersonID int64
 	Searching        bool
+}
+
+// AddedWork is an item just added here, as an *Arr companion needs to know it.
+type AddedWork struct {
+	WorkID, CategoryID                int64
+	Kind, Provider, ExternalID, Title string
+}
+
+// ArrCompanion tells the connected *Arr about an item just added, when Solarr runs as its companion. Best effort:
+// the add has already happened.
+type ArrCompanion interface {
+	Added(ctx context.Context, added AddedWork) error
 }
 
 // WorkAdder looks works up at a library's type's sources and adds one (ADR-56's per-library half). Defined here and
@@ -175,7 +188,27 @@ func (s *Server) performAdd(ctx context.Context, userID int64, body gen.AddWorkR
 	if err := s.applyAddExtras(ctx, result.WorkID, body); err != nil {
 		return AddWorkResult{}, addFailure{err}
 	}
+	s.tellCompanion(ctx, result, body)
 	return result, nil
+}
+
+// tellCompanion lets the connected *Arr know about an add, out of the request: a failure is logged, never the add's.
+func (s *Server) tellCompanion(ctx context.Context, result AddWorkResult, body gen.AddWorkRequest) {
+	if s.arrCompanion == nil || result.WorkID == 0 {
+		return
+	}
+	added := AddedWork{
+		WorkID: result.WorkID, CategoryID: body.CategoryId, Kind: result.Kind, Provider: body.Provider,
+		ExternalID: body.ExternalId, Title: derefOr(body.Title, ""),
+	}
+	background := context.WithoutCancel(ctx)
+	go func() {
+		withLimit, cancel := context.WithTimeout(background, time.Minute)
+		defer cancel()
+		if err := s.arrCompanion.Added(withLimit, added); err != nil {
+			s.logger.Warn("arr companion: the *Arr was not told about an add", "work_id", added.WorkID, "error", err)
+		}
+	}()
 }
 
 func (s *Server) writeAddError(w http.ResponseWriter, err error) {

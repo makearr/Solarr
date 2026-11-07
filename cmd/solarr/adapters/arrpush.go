@@ -32,8 +32,35 @@ func (a ArrSync) Run(ctx context.Context, _ jobs.Job) error {
 		if _, err := a.PushMonitoring(ctx, instance.ID); err != nil {
 			failures = append(failures, fmt.Errorf("%s: %w", instance.Name, err))
 		}
+		if mode == settings.ModeArrCompanion {
+			if err := a.pullMonitored(ctx, instance); err != nil {
+				failures = append(failures, fmt.Errorf("%s: %w", instance.Name, err))
+			}
+		}
 	}
 	return errors.Join(failures...)
+}
+
+// pullMonitored brings what the *Arr monitors and Solarr lacks into Solarr, as a companion does after sending its own
+// changes. It only follows an import the person ran and finished, so the folders and mappings were chosen by them.
+func (a ArrSync) pullMonitored(ctx context.Context, instance settings.ArrInstance) error {
+	runs, err := a.Imports.ListForInstance(ctx, instance.ID)
+	if err != nil {
+		return err
+	}
+	finished := false
+	for _, run := range runs {
+		if run.State == library.ArrImportDone {
+			finished = true
+		}
+	}
+	if !finished {
+		return nil
+	}
+	if _, err := a.Sync(ctx, instance.ID, apiserver.ArrSyncOptions{Monitored: true, Albums: "all"}); err != nil && !errors.Is(err, apiserver.ErrArrSyncAlreadyRunning) {
+		return err
+	}
+	return nil
 }
 
 // PushMonitoring writes Solarr's monitoring of every item an import matched back to the connection's *Arr, where it

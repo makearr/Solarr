@@ -245,6 +245,8 @@ type Config struct {
 	CacheManager CacheManager
 	// DatabaseAdmin serves the expert Database page. Optional: nil answers 503.
 	DatabaseAdmin DatabaseAdmin
+	// ArrCompanion is told of each add when Solarr runs as an *Arr's companion. Optional.
+	ArrCompanion ArrCompanion
 	// MemoryCopies serves the Cache page's RAM options. Optional: nil answers 503.
 	MemoryCopies MemoryCopies
 	// Playback finds the file the built-in player opens; Transcoder converts it. Both optional: without them the player answers 503.
@@ -398,6 +400,7 @@ type Server struct {
 	scheduler               Scheduler
 	cacheManager            CacheManager
 	databaseAdmin           DatabaseAdmin
+	arrCompanion            ArrCompanion
 	memoryCopies            MemoryCopies
 	playback                PlaybackLocator
 	transcoder              *transcode.Service
@@ -541,6 +544,7 @@ func New(config Config) (*Server, error) {
 		scheduler:               config.Scheduler,
 		cacheManager:            config.CacheManager,
 		databaseAdmin:           config.DatabaseAdmin,
+		arrCompanion:            config.ArrCompanion,
 		memoryCopies:            config.MemoryCopies,
 		playback:                config.Playback,
 		transcoder:              config.Transcoder,

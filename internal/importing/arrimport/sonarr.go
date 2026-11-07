@@ -13,18 +13,19 @@ type SonarrSeason struct {
 
 // SonarrSeries is GET /api/v3/series trimmed to what an import maps: the TVDB id is the identity.
 type SonarrSeries struct {
-	ID               int64          `json:"id"`
-	Title            string         `json:"title"`
-	TVDBID           int64          `json:"tvdbId"`
-	TVMazeID         int64          `json:"tvMazeId"`
-	TMDBID           int64          `json:"tmdbId"`
-	IMDbID           string         `json:"imdbId"`
-	Monitored        bool           `json:"monitored"`
-	SeriesType       string         `json:"seriesType"`
-	RootFolderPath   string         `json:"rootFolderPath"`
-	QualityProfileID int64          `json:"qualityProfileId"`
-	Seasons          []SonarrSeason `json:"seasons"`
-	Tags             []int64        `json:"tags"`
+	ID                int64          `json:"id"`
+	Title             string         `json:"title"`
+	TVDBID            int64          `json:"tvdbId"`
+	TVMazeID          int64          `json:"tvMazeId"`
+	TMDBID            int64          `json:"tmdbId"`
+	IMDbID            string         `json:"imdbId"`
+	Monitored         bool           `json:"monitored"`
+	SeriesType        string         `json:"seriesType"`
+	RootFolderPath    string         `json:"rootFolderPath"`
+	QualityProfileID  int64          `json:"qualityProfileId"`
+	LanguageProfileID int64          `json:"languageProfileId"`
+	Seasons           []SonarrSeason `json:"seasons"`
+	Tags              []int64        `json:"tags"`
 }
 
 // Sonarr reads the same instance as a Sonarr: the transport and key are shared, only the API version differs.
