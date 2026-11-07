@@ -38,6 +38,9 @@ var ErrContentBlocklisted = errors.New("apiserver: the same content failed befor
 // ErrDownloadClientRefused is the client declining the release it was sent; the wrapped text says why.
 var ErrDownloadClientRefused = errors.New("apiserver: the download client refused the release")
 
+// ErrDownloadsPaused is a send refused because the instance's mode keeps downloads paused.
+var ErrDownloadsPaused = errors.New("apiserver: downloads are paused")
+
 // ErrNoDownloaderForProtocol reports no enabled downloader matching a
 // candidate's own protocol.
 var ErrNoDownloaderForProtocol = errors.New("apiserver: no downloader configured for this candidate's protocol")
@@ -438,6 +441,9 @@ func writeCandidateSearchError(w http.ResponseWriter, s *Server, err error) {
 	case errors.Is(err, ErrDecisionNotAccepted):
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
 			"Not accepted", "only an ACCEPT decision can be dispatched")
+	case errors.Is(err, ErrDownloadsPaused):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"Downloads are paused", "Solarr's mode sends nothing to a download client; change it under Settings, General")
 	case errors.Is(err, ErrNoDownloaderForProtocol):
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
 			"No downloader", "no downloader is configured for this candidate's own protocol")

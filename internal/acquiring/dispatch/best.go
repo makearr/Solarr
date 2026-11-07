@@ -84,6 +84,8 @@ func (d Dispatch) SendBest(
 		}
 		sent, err := d.SendRelease(ctx, itemID, detail.ReleaseCandidate, at)
 		switch {
+		case errors.Is(err, ErrDownloadsPaused):
+			return best, nil
 		case errors.Is(err, library.ErrAcquisitionAlreadyInFlight):
 			best.AlreadyInFlight = true
 			return best, nil

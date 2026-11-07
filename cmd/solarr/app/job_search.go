@@ -26,6 +26,9 @@ import (
 // this codebase already follows -- a connection added or disabled between
 // runs takes effect on the very next search with no restart.
 func (p *process) indexerConns(ctx context.Context) ([]music.IndexerConn, error) {
+	if p.solarrMode().SearchesStopped() {
+		return nil, nil
+	}
 	configured, err := p.cache.Indexers(ctx)
 	if err != nil {
 		return nil, err
@@ -85,6 +88,9 @@ func (p *process) adultIndexerConns(ctx context.Context) ([]judge.Conn, error) {
 // searchConns resolves every enabled indexer fresh, as indexerConns does, searched in categories with the parameters
 // the indexer's caps list for capsSearch under function.
 func (p *process) searchConns(ctx context.Context, categories func(settings.Indexer) []int, function, capsSearch string) ([]judge.Conn, error) {
+	if p.solarrMode().SearchesStopped() {
+		return nil, nil
+	}
 	configured, err := p.cache.Indexers(ctx)
 	if err != nil {
 		return nil, err
@@ -194,6 +200,7 @@ func (p *process) dispatchFor(mediaType string) music.Dispatch {
 		Downloaders: func(ctx context.Context) ([]music.DownloaderConn, error) { return p.downloaderConnsFor(ctx, mediaType) },
 		Fetch:       p.fetchRelease, History: p.recordDownloadHistory, Ready: &ready, Blocklist: &blocklist,
 		ReadyLimit: func() int64 { return p.cache.Snapshot().ReadyQueueLimit() }, Admits: p.ratingAdmits,
+		Paused: func() bool { return p.solarrMode().DownloadsPaused() },
 	}
 }
 

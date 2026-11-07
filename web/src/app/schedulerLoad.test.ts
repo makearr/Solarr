@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { heatColor, parseSortKey, sortTasks, taskLoad, weekLoad, WEEK_HOURS } from "./schedulerLoad";
+import { expectedDurations, formatRuntime, heatColor, parseSortKey, sortTasks, taskLoad, weekLoad, WEEK_HOURS } from "./schedulerLoad";
 
 const total = (load: number[]) => load.reduce((sum, runs) => sum + runs, 0);
 
@@ -38,12 +38,20 @@ test("nonsense counts for nothing, and a task adds its cadences", () => {
   expect(taskLoad([]).length).toBe(WEEK_HOURS);
 });
 
-test("heat colour: white when idle, green for one task, red at the busiest, yellow between", () => {
-  expect(heatColor(0, 5)).toBe("#ffffff");
-  expect(heatColor(1, 5)).toBe("hsl(120 75% 50%)");
-  expect(heatColor(3, 5)).toBe("hsl(60 75% 50%)");
-  expect(heatColor(5, 5)).toBe("hsl(0 75% 50%)");
-  expect(heatColor(1, 1)).toBe("hsl(120 75% 50%)");
+test("heat colour: white when idle, red at the busiest slot, green when light, yellow between", () => {
+  expect(heatColor(0, 5000)).toBe("#ffffff");
+  expect(heatColor(5000, 5000)).toBe("hsl(0 75% 50%)");
+  expect(heatColor(2500, 5000)).toBe("hsl(60 75% 50%)");
+  expect(heatColor(50, 5000)).toBe("hsl(119 75% 50%)");
+});
+
+test("a task without a recorded duration is expected to take the mean of the others", () => {
+  expect(expectedDurations([{ last_duration_ms: 100 }, {}, { last_duration_ms: 300 }])).toEqual([100, 200, 300]);
+  expect(expectedDurations([{}])).toEqual([1000]);
+});
+
+test("run times read in the unit that fits", () => {
+  expect([formatRuntime(850), formatRuntime(12_400), formatRuntime(210_000)]).toEqual(["850 ms", "12.4 s", "3.5 min"]);
 });
 
 test("tasks sort by next run both ways, missing values last, ties by name", () => {

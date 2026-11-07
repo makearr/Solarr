@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -319,8 +320,10 @@ func (s *Server) routeTranscodeFile(w http.ResponseWriter, r *http.Request) {
 	}
 	height, kbps := transcodeTarget(quality, policy, file)
 	resolution := s.transcoder.Resolve(policy.Hardware, policy.Device)
+	access, _ := authz.FromContext(r.Context())
 	spec := transcode.Spec{
-		Kind: transcode.Kind(kind), Path: file.AbsolutePath, StartSecond: start,
+		Owner: fmt.Sprintf("%d/%s", access.UserID(), file.AbsolutePath),
+		Kind:  transcode.Kind(kind), Path: file.AbsolutePath, StartSecond: start,
 		Accel: resolution.Accel, Device: resolution.Device, MaxHeight: height, VideoKbps: kbps,
 	}
 

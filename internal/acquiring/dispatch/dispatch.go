@@ -26,6 +26,9 @@ var ErrDecisionNotAccepted = errors.New("dispatch: decision is not ACCEPT")
 // listing (section 10.11); refused before the client sees it, and the next best is tried.
 var ErrContentBlocklisted = errors.New("dispatch: the same content failed before and is blocklisted")
 
+// ErrDownloadsPaused is a send refused because the instance's mode keeps downloads paused.
+var ErrDownloadsPaused = errors.New("dispatch: downloads are paused by the mode")
+
 // ErrNoDownloaderForProtocol reports no enabled downloader matching the
 // candidate's own protocol -- a usenet release with only a torrent client
 // configured, for instance.
@@ -103,6 +106,8 @@ type Dispatch struct {
 	// Admits is optional: whether a library's maximum rating lets in a work admitting age (-1 unrated); an automatic
 	// grab of a work it does not admit is not sent.
 	Admits func(categoryID, age int64) bool
+	// Paused is optional: true while the mode sends nothing to a download client.
+	Paused func() bool
 }
 
 // Send dispatches one decision, previously recorded against itemID by
@@ -126,6 +131,9 @@ func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Ti
 // SendRelease sends one accepted release for the item, needing nothing but the release itself: a held one carries
 // it, so dispatch never reads where it was decided.
 func (d Dispatch) SendRelease(ctx context.Context, itemID int64, release library.ReleaseCandidate, at time.Time) (library.Acquisition, error) {
+	if d.Paused != nil && d.Paused() {
+		return library.Acquisition{}, ErrDownloadsPaused
+	}
 	detail := library.DecisionDetail{ReleaseCandidate: release}
 	if _, err := d.Desired.Get(ctx, itemID); err != nil {
 		return library.Acquisition{}, fmt.Errorf("dispatch: %w", err)

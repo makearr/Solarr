@@ -92,7 +92,7 @@ func (d Dispatch) hasRoom(ctx context.Context, downloader DownloaderConn) (bool,
 // SendHeld sends held releases, highest priority first, while their clients have room. Each is
 // checked again first (section 10.5): still monitored, not blocklisted, nothing already on its way.
 func (d Dispatch) SendHeld(ctx context.Context, at time.Time) (int, error) {
-	if d.Ready == nil {
+	if d.Ready == nil || (d.Paused != nil && d.Paused()) {
 		return 0, nil
 	}
 	if err := d.Ready.PurgeExpired(ctx, at.Unix()); err != nil {

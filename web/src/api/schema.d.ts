@@ -9705,6 +9705,11 @@ export interface components {
             video_hashing?: boolean;
             /** @description The automatic search also looks for missing items released before the freshness window (search.hunt_gaps). Default on. */
             hunt_old_missing?: boolean;
+            /**
+             * @description How much of the outside world Solarr touches (general.solarr_mode): read_only writes nothing into a library, pause_downloads sends nothing to a download client, observe is read_only without indexer searches or downloads, arr_companion is observe plus sending monitoring back to the *Arrs. SOLARR_MODE sets it at every start.
+             * @enum {string}
+             */
+            solarr_mode?: "normal" | "read_only" | "pause_downloads" | "observe" | "arr_companion";
         };
         /** @description The perceptual hashing switch (scan.video_phash). */
         VideoHashing: {

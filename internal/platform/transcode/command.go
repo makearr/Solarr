@@ -16,6 +16,8 @@ const (
 
 // Spec is one conversion.
 type Spec struct {
+	// Owner names one viewer's one file: a newer conversion with the same Owner replaces the older, so a seek never costs a slot.
+	Owner       string
 	Kind        Kind
 	Path        string
 	StartSecond float64

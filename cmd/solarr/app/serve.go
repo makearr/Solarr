@@ -167,7 +167,8 @@ type process struct {
 // Serve is the startup sequence of architecture section 15.1, in order.
 // Refusing to start is preferred over starting with silent data loss.
 func Serve(ctx context.Context, configPath string, out io.Writer, build Build) error {
-	fsys := fsx.NewOS()
+	guard := &libraryGuard{}
+	fsys := fsx.FS(fsx.NewGuarded(fsx.NewOS(), guard.deny))
 
 	// Before anything logs a timestamp or reads a directory.
 	timezone := privilege.ApplyTimezone(os.LookupEnv, out)
@@ -210,6 +211,10 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 	running.tool = mediatool.New(nil, 0).WithHardwareDecode(running.frameDecodeArgs)
 
 	if err := running.openDatabases(ctx); err != nil {
+		return err
+	}
+	guard.cache.Store(running.cache)
+	if err := running.applyModeEnv(ctx); err != nil {
 		return err
 	}
 	if err := running.applyEnvSettings(ctx); err != nil {
@@ -501,7 +506,6 @@ func (p *process) startJobs(ctx context.Context) error {
 	}
 	executor := jobs.NewExecutor(queue, wall, jobs.ExecutorConfig{
 		Owner:   owner,
-		Mode:    jobs.Mode(p.config.Mode),
 		Logger:  p.logger,
 		Running: p.running,
 	})
@@ -672,7 +676,7 @@ func (p *process) startServer(ctx context.Context) error {
 		slog.String("port_source", portSource),
 		slog.String("version", p.build.Version),
 		slog.String("sqlite_driver", store.DriverName()),
-		slog.String("mode", string(p.config.Mode)))
+		slog.String("mode", string(p.solarrMode())))
 
 	select {
 	case err := <-serverDone:

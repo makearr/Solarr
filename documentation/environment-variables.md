@@ -101,7 +101,7 @@ Indexer and download-client credentials belong to individual entries and are set
 |---|---|---|---|
 | `SOLARR_LOG_LEVEL` | `logging.level` | `info` | `debug`, `info`, `warn` or `error` |
 | `SOLARR_LOG_FORMAT` | `logging.format` | `json` | `json` or `text` |
-| `SOLARR_MODE` | `mode` | `normal` | `normal`, `observe` (decide and record, never act) or `shadow` (act except the irreversible steps) |
+| `SOLARR_MODE` | `mode` | `normal` | `normal`, `read_only` (no writes into a library), `pause_downloads`, `observe` (read-only, no searches, no downloads) or `arr_companion` (observe, plus monitoring sent back to the *Arrs). Sets Settings, General, Solarr mode at every start |
 
 ## Every other `config.yml` setting
 

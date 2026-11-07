@@ -250,6 +250,8 @@ func translateDispatchError(err error) error {
 		return apiserver.ErrDecisionNotAccepted
 	case errors.Is(err, music.ErrNoDownloaderForProtocol):
 		return apiserver.ErrNoDownloaderForProtocol
+	case errors.Is(err, music.ErrDownloadsPaused):
+		return apiserver.ErrDownloadsPaused
 	case errors.Is(err, library.ErrAcquisitionAlreadyInFlight):
 		return apiserver.ErrAcquisitionAlreadyInFlight
 	case errors.Is(err, music.ErrContentBlocklisted):

@@ -304,6 +304,15 @@ const (
 	FranchiseMemberOriginReasonCrossover FranchiseMemberOriginReason = "crossover"
 )
 
+// Defines values for GeneralSettingsSolarrMode.
+const (
+	GeneralSettingsSolarrModeArrCompanion   GeneralSettingsSolarrMode = "arr_companion"
+	GeneralSettingsSolarrModeNormal         GeneralSettingsSolarrMode = "normal"
+	GeneralSettingsSolarrModeObserve        GeneralSettingsSolarrMode = "observe"
+	GeneralSettingsSolarrModePauseDownloads GeneralSettingsSolarrMode = "pause_downloads"
+	GeneralSettingsSolarrModeReadOnly       GeneralSettingsSolarrMode = "read_only"
+)
+
 // Defines values for HealthCheckSeverity.
 const (
 	HealthCheckSeverityError   HealthCheckSeverity = "error"
@@ -2753,9 +2762,15 @@ type GeneralSettings struct {
 	// HuntOldMissing The automatic search also looks for missing items released before the freshness window (search.hunt_gaps). Default on.
 	HuntOldMissing *bool `json:"hunt_old_missing,omitempty"`
 
+	// SolarrMode How much of the outside world Solarr touches (general.solarr_mode): read_only writes nothing into a library, pause_downloads sends nothing to a download client, observe is read_only without indexer searches or downloads, arr_companion is observe plus sending monitoring back to the *Arrs. SOLARR_MODE sets it at every start.
+	SolarrMode *GeneralSettingsSolarrMode `json:"solarr_mode,omitempty"`
+
 	// VideoHashing Hash videos in the background so the duplicate finder matches re-encodes (scan.video_phash). Default off.
 	VideoHashing *bool `json:"video_hashing,omitempty"`
 }
+
+// GeneralSettingsSolarrMode How much of the outside world Solarr touches (general.solarr_mode): read_only writes nothing into a library, pause_downloads sends nothing to a download client, observe is read_only without indexer searches or downloads, arr_companion is observe plus sending monitoring back to the *Arrs. SOLARR_MODE sets it at every start.
+type GeneralSettingsSolarrMode string
 
 // GenreTree defines model for GenreTree.
 type GenreTree struct {

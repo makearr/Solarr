@@ -8,7 +8,7 @@ import type { components } from "@/api/schema";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import { SubTabs } from "@/ui/SubTabs";
 
-import { heatColor, parseSortKey, sortTasks, taskLoad, WEEK_HOURS, type SortDirection, type SortKey } from "./schedulerLoad";
+import { expectedDurations, formatRuntime, heatColor, parseSortKey, sortTasks, taskLoad, WEEK_HOURS, type SortDirection, type SortKey } from "./schedulerLoad";
 
 type Schedule = components["schemas"]["Schedule"];
 type BackupRetention = components["schemas"]["BackupRetention"];
@@ -123,22 +123,26 @@ export function SchedulerPage() {
 
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
-/** What runs when: a week of hours, white when idle, green to red by how many tasks share the hour. */
+/** What runs when: a week of hours, white when idle, green to red by the run time the hour's tasks add up to. */
 function Heatmap({ schedules }: { schedules: readonly Schedule[] }) {
   const [active, setActive] = useState<number | null>(null);
-  const tasks = schedules.filter((schedule) => schedule.enabled).map((schedule) => ({ name: schedule.name, load: taskLoad(schedule.cadences) }));
+  const enabled = schedules.filter((schedule) => schedule.enabled);
+  const durations = expectedDurations(enabled);
+  const tasks = enabled.map((schedule, index) => ({ name: schedule.name, load: taskLoad(schedule.cadences), duration: durations[index]! }));
   const names = (slot: number) => tasks.filter((task) => task.load[slot]! > 0).map((task) => task.name);
-  const counts = Array.from({ length: WEEK_HOURS }, (_, slot) => names(slot).length);
-  const busiest = Math.max(1, ...counts);
+  const runtimes = Array.from({ length: WEEK_HOURS }, (_, slot) => tasks.reduce((sum, task) => sum + task.load[slot]! * task.duration, 0));
+  const busiest = Math.max(0, ...runtimes);
   const describe = (slot: number) => {
     const here = names(slot);
     const label = `${WEEKDAYS[Math.floor(slot / 24)]} ${String(slot % 24).padStart(2, "0")}:00`;
-    return here.length === 0 ? `${label}: nothing runs` : `${label}: ${here.length} ${here.length === 1 ? "task" : "tasks"}, ${here.join(", ")}`;
+    return here.length === 0
+      ? `${label}: nothing runs`
+      : `${label}, ${here.length} ${here.length === 1 ? "task" : "tasks"}, ${formatRuntime(runtimes[slot]!)} total: ${here.join(", ")}`;
   };
   return (
     <section className="flex flex-col gap-2" aria-label="Schedule heatmap">
       <p className="text-xs text-ink-muted">
-        Tasks running per hour across a week, all enabled tasks together. Hover or focus an hour to list its tasks.
+        Run time per hour across a week, all enabled tasks together, from each task's last duration. Hover or focus an hour to list its tasks.
       </p>
       <div className="overflow-x-auto">
         <table className="border-separate border-spacing-0.5 text-[10px] text-ink-muted">
@@ -168,7 +172,8 @@ function Heatmap({ schedules }: { schedules: readonly Schedule[] }) {
                       onFocus={() => setActive(slot)}
                       onBlur={() => setActive(null)}
                       className="h-5 w-6 rounded-sm border border-border-subtle focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
-                      style={{ background: heatColor(counts[slot]!, busiest) }}
+                      title={describe(slot)}
+                      style={{ background: heatColor(runtimes[slot]!, busiest) }}
                     />
                   );
                 })}
@@ -183,13 +188,13 @@ function Heatmap({ schedules }: { schedules: readonly Schedule[] }) {
       <div className="flex items-center gap-2 text-xs text-ink-muted" role="group" aria-label="Legend">
         <span className="size-3 rounded-sm border border-border-subtle bg-white" aria-hidden />
         <span>Nothing runs</span>
-        <span className="ml-2">1 task</span>
+        <span className="ml-2">Light</span>
         <span
           aria-hidden
           className="h-3 w-24 rounded-sm border border-border-subtle"
           style={{ background: "linear-gradient(to right, hsl(120 75% 50%), hsl(60 75% 50%), hsl(0 75% 50%))" }}
         />
-        <span>{busiest} {busiest === 1 ? "task" : "tasks"} (busiest hour)</span>
+        <span>{formatRuntime(busiest)} (busiest hour)</span>
       </div>
     </section>
   );

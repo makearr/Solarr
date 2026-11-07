@@ -23,9 +23,10 @@ func (a ArrSync) Run(ctx context.Context, _ jobs.Job) error {
 	if err != nil {
 		return err
 	}
+	mode := a.Cache.Snapshot().SolarrMode()
 	var failures []error
 	for _, instance := range instances {
-		if !instance.Enabled || !instance.PushMonitoring || !a.supported(instance.App) {
+		if !instance.Enabled || !mode.PushesMonitoring(instance.PushMonitoring) || !a.supported(instance.App) {
 			continue
 		}
 		if _, err := a.PushMonitoring(ctx, instance.ID); err != nil {
@@ -42,7 +43,10 @@ func (a ArrSync) PushMonitoring(ctx context.Context, instanceID int64) (apiserve
 	if err != nil {
 		return apiserver.ArrPushResult{}, err
 	}
-	if !instance.PushMonitoring {
+	if mode := a.Cache.Snapshot().SolarrMode(); !mode.PushesMonitoring(instance.PushMonitoring) {
+		if mode == settings.ModeObserve {
+			return apiserver.ArrPushResult{}, errors.New("observe mode sends nothing to an *Arr; arr_companion does")
+		}
 		return apiserver.ArrPushResult{}, errors.New("this connection does not send monitoring back")
 	}
 	if !a.supported(instance.App) {

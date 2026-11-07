@@ -199,6 +199,13 @@ func NewDefaultRegistry() *Registry {
 		Default:  "true",
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeySolarrMode, Kind: KindString, Tier: TierNormal,
+		Name: "Solarr mode",
+		HelpText: "normal does everything; read_only never writes into a library; pause_downloads sends nothing to a download client; " +
+			"observe is read_only with no indexer search and no download; arr_companion is observe plus sending monitoring back to the *Arrs.",
+		Default: string(ModeNormal),
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyUsersNewLibraryPermission, Kind: KindString, Tier: TierNormal,
 		Name:     "New libraries",
 		HelpText: "What a new account is granted on libraries created after it: none, read, request or manage.",

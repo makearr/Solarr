@@ -200,8 +200,11 @@ logging:
   # json | text
   format: json
 
-# normal  — act on decisions
-# observe — decide and record, never act
-# shadow  — act on everything except the irreversible steps
+# normal          — everything is allowed
+# read_only       — never write into a library folder
+# pause_downloads — send nothing to a download client
+# observe         — read_only, no indexer search, no download
+# arr_companion   — observe, plus sending monitoring back to the *Arrs
+# Settings -> General changes it while running; SOLARR_MODE sets it at every start.
 mode: normal
 `

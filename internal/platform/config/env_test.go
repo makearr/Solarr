@@ -125,7 +125,7 @@ func TestParseWithEnv_ParsesTypedValues(t *testing.T) {
 		"SOLARR_DATABASE_BUSY_TIMEOUT", "45s",
 		"SOLARR_STORAGE_MIN_FREE_BYTES", "250GB",
 		"SOLARR_RETENTION_DECISIONS_FULL", "30d",
-		"SOLARR_MODE", "shadow",
+		"SOLARR_MODE", "read_only",
 		"SOLARR_BACKUP_SETTINGS_ON_CHANGE", "false",
 		"SOLARR_SECURITY_TRUSTED_PROXY_CIDRS", "[10.0.0.0/8, 192.168.0.0/16]",
 	))
@@ -142,8 +142,8 @@ func TestParseWithEnv_ParsesTypedValues(t *testing.T) {
 	if got, want := parsed.Retention.DecisionsFull.AsDuration(), 30*24*time.Hour; got != want {
 		t.Errorf("DecisionsFull = %v, want %v", got, want)
 	}
-	if parsed.Mode != config.ModeShadow {
-		t.Errorf("Mode = %q, want shadow", parsed.Mode)
+	if parsed.Mode != config.ModeReadOnly {
+		t.Errorf("Mode = %q, want read_only", parsed.Mode)
 	}
 	if parsed.Backup.SettingsOnChange {
 		t.Error("SettingsOnChange = true, want the override's false")

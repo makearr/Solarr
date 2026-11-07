@@ -54,7 +54,7 @@ export const CONNECTIONS: Section = {
     { label: "Indexers", path: "/connections/indexers", tier: "advanced", administrator: true },
     { label: "Download clients", path: "/connections/downloaders", tier: "advanced", administrator: true },
     { label: "Import lists", path: "/connections/import-lists", tier: "advanced", administrator: true },
-    { label: "Arr", path: "/connections/arr", tier: "expert", administrator: true },
+    { label: "Arrs", path: "/connections/arr", tier: "normal", administrator: true },
   ],
 };
 

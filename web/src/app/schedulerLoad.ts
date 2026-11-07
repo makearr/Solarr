@@ -46,11 +46,25 @@ export function taskLoad(cadences: readonly string[]): number[] {
   return total;
 }
 
-/** Nothing running is white; one task is green, the busiest slot red, with yellow between. */
-export function heatColor(tasksRunning: number, busiest: number): string {
-  if (tasksRunning <= 0) return "#ffffff";
-  const share = busiest <= 1 ? 0 : Math.min(1, (tasksRunning - 1) / (busiest - 1));
+/** Nothing running is white; the slot with the most run time is red, a tenth of it or less green, with yellow between. */
+export function heatColor(runtimeMs: number, busiestMs: number): string {
+  if (runtimeMs <= 0) return "#ffffff";
+  const share = busiestMs <= 0 ? 0 : Math.min(1, runtimeMs / busiestMs);
   return `hsl(${Math.round(120 * (1 - share))} 75% 50%)`;
+}
+
+/** What a run of each task is expected to take: its last recorded duration, else the mean of the recorded ones, else a second. */
+export function expectedDurations(tasks: readonly { last_duration_ms?: number | null }[]): number[] {
+  const recorded = tasks.flatMap((task) => (typeof task.last_duration_ms === "number" && task.last_duration_ms > 0 ? [task.last_duration_ms] : []));
+  const fallback = recorded.length > 0 ? recorded.reduce((sum, ms) => sum + ms, 0) / recorded.length : 1000;
+  return tasks.map((task) => (typeof task.last_duration_ms === "number" && task.last_duration_ms > 0 ? task.last_duration_ms : fallback));
+}
+
+/** "850 ms", "12.4 s", "3.5 min" for a total run time. */
+export function formatRuntime(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
+  return `${(ms / 60_000).toFixed(1)} min`;
 }
 
 export type SortKey = "next" | "last" | "duration";

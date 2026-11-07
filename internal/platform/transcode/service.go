@@ -65,11 +65,18 @@ type Service struct {
 	mu     sync.RWMutex
 	found  []Capability
 	active int
+	owned  map[string]ownedStream
+}
+
+// ownedStream is a running conversion that a newer one by the same owner may stop.
+type ownedStream struct {
+	cancel context.CancelFunc
+	done   chan struct{}
 }
 
 // NewService builds it; nothing is detected until Detect runs.
 func NewService(runner Runner, piper Piper, fsys fsx.FS) *Service {
-	return &Service{runner: runner, piper: piper, fsys: fsys}
+	return &Service{runner: runner, piper: piper, fsys: fsys, owned: map[string]ownedStream{}}
 }
 
 // Detect tries every encoder again and keeps the outcome.
@@ -143,6 +150,8 @@ func (s *Service) Stream(ctx context.Context, w io.Writer, spec Spec, maxSession
 	if !s.Available() {
 		return ErrUnavailable
 	}
+	ctx, finish := s.supersede(ctx, spec.Owner)
+	defer finish()
 	if !s.acquire(maxSessions) {
 		return ErrBusy
 	}
@@ -175,6 +184,32 @@ func attempts(spec Spec) []Spec {
 	software := spec
 	software.Accel, software.Device, software.HardwareDecode = Software, "", false
 	return append(steps, encodeOnly, software)
+}
+
+// supersede stops the owner's older conversion and waits for its slot to free; finish unregisters this one.
+func (s *Service) supersede(ctx context.Context, owner string) (context.Context, func()) {
+	if owner == "" {
+		return ctx, func() {}
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	mine := ownedStream{cancel: cancel, done: make(chan struct{})}
+	s.mu.Lock()
+	older, replaced := s.owned[owner]
+	s.owned[owner] = mine
+	s.mu.Unlock()
+	if replaced {
+		older.cancel()
+		<-older.done
+	}
+	return ctx, func() {
+		s.mu.Lock()
+		if s.owned[owner].done == mine.done {
+			delete(s.owned, owner)
+		}
+		s.mu.Unlock()
+		close(mine.done)
+		cancel()
+	}
 }
 
 func (s *Service) acquire(limit int64) bool {

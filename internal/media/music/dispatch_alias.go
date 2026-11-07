@@ -30,4 +30,5 @@ var (
 	ErrDecisionNotAccepted     = dispatch.ErrDecisionNotAccepted
 	ErrContentBlocklisted      = dispatch.ErrContentBlocklisted
 	ErrNoDownloaderForProtocol = dispatch.ErrNoDownloaderForProtocol
+	ErrDownloadsPaused         = dispatch.ErrDownloadsPaused
 )

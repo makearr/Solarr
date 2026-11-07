@@ -33,7 +33,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <ThemeToggle />
             <UserMenu />
           </header>
-          <main className="min-h-0 flex-1 overflow-y-auto">
+          <main data-region="content" className="min-h-0 flex-1 overflow-y-auto">
             <SectionTabs />
             <AdministratorGate>{children}</AdministratorGate>
           </main>

@@ -50,6 +50,16 @@ function SettingsPage({
   );
 }
 
+type SolarrMode = NonNullable<components["schemas"]["GeneralSettings"]["solarr_mode"]>;
+
+const SOLARR_MODES: readonly { value: SolarrMode; label: string; help: string }[] = [
+  { value: "normal", label: "Normal", help: "Everything Solarr is set up to do." },
+  { value: "read_only", label: "Read-only libraries", help: "Nothing is written into a library folder: no imports, renames, moves or deletes. Searching and downloading go on." },
+  { value: "pause_downloads", label: "Pause downloads", help: "Nothing is sent to a download client. Libraries can still be managed." },
+  { value: "observe", label: "Observe only", help: "Libraries are read-only, no indexer is searched and nothing is downloaded." },
+  { value: "arr_companion", label: "*Arr companion", help: "Observe only, and the monitoring of what an *Arr import matched is sent back to its *Arr." },
+];
+
 /** Switches that belong to no one page. */
 export function GeneralSettings() {
   const queryClient = useQueryClient();
@@ -63,6 +73,26 @@ export function GeneralSettings() {
   });
   return (
     <SettingsPage title="General">
+      <Card title="Mode" help="How much of the outside world Solarr touches. SOLARR_MODE in the environment sets this at every start.">
+        <fieldset className="flex flex-col gap-2" disabled={!general.data || change.isPending}>
+          <legend className="sr-only">Solarr mode</legend>
+          {SOLARR_MODES.map((choice) => (
+            <label key={choice.value} className="flex items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name="solarr-mode"
+                className="mt-1"
+                checked={(general.data?.solarr_mode ?? "normal") === choice.value}
+                onChange={() => change.mutate({ solarr_mode: choice.value })}
+              />
+              <span>
+                {choice.label}
+                <span className="block text-xs text-ink-muted">{choice.help}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      </Card>
       <Card title="Background work" help="Switches for work Solarr does by itself. A search you start yourself works whatever these say.">
         <label className="flex items-start gap-2 text-sm">
           <input

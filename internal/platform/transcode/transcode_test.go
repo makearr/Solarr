@@ -312,3 +312,30 @@ func TestSubtitleTracks_ListTextStreamsAndSidecarsAndSkipPictures(t *testing.T) 
 		t.Fatalf("SubtitleTracks = %+v, %v; want %+v", got, err, want)
 	}
 }
+
+func TestStream_ANewerConversionByTheSameOwnerTakesTheSlot(t *testing.T) {
+	service := transcode.NewService(fakeRunner{}, waitingPiper{}, nil)
+	spec := transcode.Spec{Owner: "1//a", Kind: transcode.Audio, Path: "/a"}
+	first := make(chan error, 1)
+	go func() { first <- service.Stream(t.Context(), io.Discard, spec, 1) }()
+	for service.Active() == 0 {
+	}
+	second := make(chan error, 1)
+	go func() { second <- service.Stream(t.Context(), io.Discard, spec, 1) }()
+	if err := <-first; err != nil {
+		t.Fatalf("replaced Stream = %v, want nil", err)
+	}
+	for service.Active() != 1 {
+	}
+	other := transcode.Spec{Owner: "2//a", Kind: transcode.Audio, Path: "/a"}
+	if err := service.Stream(t.Context(), io.Discard, other, 1); !errors.Is(err, transcode.ErrBusy) {
+		t.Fatalf("another owner's Stream = %v, want ErrBusy", err)
+	}
+}
+
+type waitingPiper struct{}
+
+func (waitingPiper) Pipe(ctx context.Context, _ io.Writer, _ string, _ ...string) error {
+	<-ctx.Done()
+	return nil
+}

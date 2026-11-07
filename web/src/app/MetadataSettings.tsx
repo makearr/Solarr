@@ -1,5 +1,5 @@
 import { SubTabs } from "@/ui/SubTabs";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Info } from "lucide-react";
 
@@ -104,16 +104,21 @@ export function MetadataSettings() {
         set per library type in the tabs beside this one, and a library can keep its own under its Settings, Metadata.
       </p>
       <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
-        {providers.data.map((provider) => (
-          <ProviderRow
-            key={provider.key}
-            provider={provider}
-            settings={settings}
-            busy={switchProvider.isPending && switchProvider.variables?.key === provider.key}
-            onSwitch={(enabled) => switchProvider.mutate({ key: provider.key, enabled })}
-            onPatch={(change) => patch.mutate(change)}
-            patching={patch.isPending}
-          />
+        {groupProviders(providers.data).map(({ group, members }) => (
+          <Fragment key={group}>
+            <li className="bg-header px-3 py-1 text-xs font-medium uppercase tracking-wide text-ink-muted">{group}</li>
+            {members.map((provider) => (
+              <ProviderRow
+                key={provider.key}
+                provider={provider}
+                settings={settings}
+                busy={switchProvider.isPending && switchProvider.variables?.key === provider.key}
+                onSwitch={(enabled) => switchProvider.mutate({ key: provider.key, enabled })}
+                onPatch={(change) => patch.mutate(change)}
+                patching={patch.isPending}
+              />
+            ))}
+          </Fragment>
         ))}
       </ul>
       {(switchProvider.isError || patch.isError) && <p className="text-sm text-danger">That change was refused.</p>}
@@ -167,6 +172,28 @@ function useKeySaver(path: "/metadata/tmdb/apikey" | "/metadata/tvdb/apikey" | "
       void queryClient.invalidateQueries({ queryKey: ["tv-providers"] });
     },
   });
+}
+
+/** The providers in the order the page lists them: the id hub, the *Arrs' own services, then each media type. */
+const PROVIDER_GROUPS: readonly { group: string; keys: readonly string[] }[] = [
+  { group: "Wikidata", keys: ["wikidata"] },
+  { group: "*Arr metadata", keys: ["musicbrainz-proxy", "skyhook", "radarr", "whisparr"] },
+  { group: "Music", keys: ["brainzmash", "musicbrainz", "theaudiodb", "coverartarchive", "acoustid"] },
+  { group: "Movies", keys: ["tmdb", "mdblist", "omdb", "fanart"] },
+  { group: "Series", keys: ["tvdb", "tvmaze", "anilist", "thexem"] },
+  { group: "Books and audiobooks", keys: ["openlibrary", "googlebooks", "hardcover", "fantlab", "audible", "itunes"] },
+  { group: "Adult", keys: ["stashdb", "theporndb", "fansdb"] },
+];
+
+function groupProviders(providers: readonly Provider[]): { group: string; members: Provider[] }[] {
+  const placed = new Set<string>();
+  const groups = PROVIDER_GROUPS.map(({ group, keys }) => {
+    const members = keys.flatMap((key) => providers.filter((provider) => provider.key === key));
+    members.forEach((provider) => placed.add(provider.key));
+    return { group, members };
+  });
+  const rest = providers.filter((provider) => !placed.has(provider.key));
+  return [...groups, { group: "Other", members: rest }].filter(({ members }) => members.length > 0);
 }
 
 /** Whether a provider has what it needs, in a word: its key, or none needed. */

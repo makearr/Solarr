@@ -127,16 +127,21 @@ func scaledInt64(value, scale float64) (int64, bool) {
 	return int64(scaled), true
 }
 
-// Mode is the dry-run level (ADR-20).
+// Mode is how much of the outside world Solarr touches; SOLARR_MODE seeds the setting of the same name
+// (documentation/solarr-mode.md).
 type Mode string
 
 const (
-	// ModeNormal acts on decisions.
+	// ModeNormal does everything it is configured to.
 	ModeNormal Mode = "normal"
-	// ModeObserve decides and records but never acts.
+	// ModeReadOnly never writes into a library folder.
+	ModeReadOnly Mode = "read_only"
+	// ModePauseDownloads sends nothing to a download client.
+	ModePauseDownloads Mode = "pause_downloads"
+	// ModeObserve is read-only with no indexer search and no download.
 	ModeObserve Mode = "observe"
-	// ModeShadow acts on everything except the irreversible steps.
-	ModeShadow Mode = "shadow"
+	// ModeArrCompanion is observe plus sending monitoring back to the *Arrs.
+	ModeArrCompanion Mode = "arr_companion"
 )
 
 // AuthMode is how requests are authenticated (ADR-14).
@@ -179,7 +184,7 @@ const (
 // allowedModes and friends drive both validation and the "expected one of"
 // message, so the two can never disagree.
 var (
-	allowedModes     = []Mode{ModeNormal, ModeObserve, ModeShadow}
+	allowedModes     = []Mode{ModeNormal, ModeReadOnly, ModePauseDownloads, ModeObserve, ModeArrCompanion}
 	allowedAuthModes = []AuthMode{AuthLocal, AuthProxy, AuthAPIKeyOnly, AuthNone}
 	allowedLevels    = []LogLevel{LevelDebug, LevelInfo, LevelWarn, LevelError}
 	allowedFormats   = []LogFormat{FormatJSON, FormatText}

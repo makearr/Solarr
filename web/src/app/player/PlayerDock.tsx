@@ -41,8 +41,8 @@ export function PlayerDock() {
 
 const FRAME: Record<PlayerMode, string> = {
   bar: "shrink-0 flex items-center gap-3 border-t border-border-subtle bg-surface px-3 py-2",
-  mini: "fixed bottom-4 right-4 z-40 flex w-[36rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-border-subtle bg-surface shadow-xl",
-  cinema: "fixed left-1/2 top-1/2 z-40 flex max-h-[92vh] w-[50vw] min-w-[40rem] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-border-subtle bg-surface shadow-2xl",
+  mini: "fixed z-40 flex flex-col overflow-hidden rounded-lg border border-border-subtle bg-surface shadow-xl",
+  cinema: "fixed z-40 flex max-h-[92vh] flex-col overflow-hidden rounded-lg border border-border-subtle bg-surface shadow-2xl",
   full: "fixed inset-0 z-50 flex flex-col bg-black text-white",
 };
 
@@ -57,6 +57,7 @@ function Dock({ item }: { item: PlayerItem }) {
   const player = usePlayer();
   const mode = player.mode;
   const media = useRef<HTMLVideoElement>(null);
+  const content = useContentBox();
 
   const info = useQuery({
     queryKey: ["playback", item.mediaObjectId],
@@ -144,7 +145,7 @@ function Dock({ item }: { item: PlayerItem }) {
   const unplayable = info.isError || failed;
 
   return (
-    <section aria-label={t("player.label")} data-region="player" className={`relative ${FRAME[mode]}`}>
+    <section aria-label={t("player.label")} data-region="player" style={floatingStyle(mode, content)} className={`${mode === "bar" ? "relative" : ""} ${FRAME[mode]}`}>
       <video
         ref={media}
         key={`${route}-${offset}-${quality}`}
@@ -273,6 +274,39 @@ function Dock({ item }: { item: PlayerItem }) {
       {mode === "bar" && <Modes mode={mode} onClose={player.close} />}
     </section>
   );
+}
+
+/** The page area beside the sidebar and above the status bar, which the floating modes stay inside. */
+function useContentBox(): DOMRect | null {
+  const [box, setBox] = useState<DOMRect | null>(null);
+  useEffect(() => {
+    const area = document.querySelector('[data-region="content"]');
+    if (!area) return;
+    const measure = () => setBox(area.getBoundingClientRect());
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(area);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+  return box;
+}
+
+const FLOAT_GAP = 16;
+const CINEMA_MAX_WIDTH = 1024;
+const MINI_WIDTH = 576;
+
+/** Mini and cinema sit in the content area's lower right corner; cinema is up to half its width, capped at the library's. */
+function floatingStyle(mode: PlayerMode, box: DOMRect | null): React.CSSProperties | undefined {
+  if (mode !== "mini" && mode !== "cinema") return undefined;
+  const right = box ? window.innerWidth - box.right + FLOAT_GAP : FLOAT_GAP;
+  const bottom = box ? window.innerHeight - box.bottom + FLOAT_GAP : FLOAT_GAP;
+  const available = (box ? box.width : window.innerWidth) - 2 * FLOAT_GAP;
+  const wanted = mode === "mini" ? MINI_WIDTH : Math.min(CINEMA_MAX_WIDTH, (box ? box.width : window.innerWidth) / 2);
+  return { right, bottom, width: Math.max(0, Math.min(wanted, available)) };
 }
 
 function sourceUrl(route: PlaybackRoute | null, mediaObjectId: number, offset: number, quality: Quality): string | undefined {
