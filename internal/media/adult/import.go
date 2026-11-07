@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"path"
 	"strings"
 	"time"
@@ -19,8 +18,6 @@ import (
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/moving/mover"
-	"github.com/makearr/Solarr/internal/platform/clock"
-	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
@@ -33,31 +30,10 @@ const defaultSceneMinutes = 20
 // ImporterConfig is what an Importer needs; Logger, RenameOnImport, ExtraFiles, Probe, AfterPlacing and Exclusions are
 // optional.
 type ImporterConfig struct {
-	FS           fsx.FS
-	Placer       placer.Placer
-	Physical     library.Physical
-	Series       library.Series
-	Reader       library.SeriesReader
-	Identity     library.Identity
-	Desired      library.Desired
-	Acquisitions batch.AcquisitionSource
-	Resolver     Resolver
-	Categories   interface {
-		Category(id int64) (settings.Category, bool)
-	}
-	// Exclusions lifts a scene's exclusion when a person names it for a held unit.
-	Exclusions interface {
-		Allow(ctx context.Context, mediaType, provider, externalID string) error
-	}
-	Clock          clock.Clock
-	Logger         *slog.Logger
-	RenameOnImport func() bool
-	// ExtraFiles lists the extensions of files brought along with the scene (its poster, an nfo); nil brings none.
-	ExtraFiles func(categoryID int64) []string
+	works.ImportDeps
+	Resolver Resolver
 	// Probe measures a downloaded file for the sample and audio checks; nil skips those two checks.
 	Probe func(ctx context.Context, absolutePath string) (measured mediatool.Measured, ok bool)
-	// AfterPlacing is told of each scene an import placed a file of.
-	AfterPlacing func(ctx context.Context, categoryID, workID int64)
 }
 
 // Importer is the adult module's batch importer: it works out which scene a download holds, names and places its video
@@ -214,15 +190,9 @@ func (p placing) Place(ctx context.Context, request batch.Request, unit inspect.
 }
 
 func (p placing) namingFor(categoryID int64) (Naming, settings.FileManagement) {
-	names := NamingFor(nil)
-	fileManagement := settings.DefaultFileManagement
-	if category, found := p.config.Categories.Category(categoryID); found {
-		names = NamingFor(category.Naming)
-		fileManagement = category.FileManagement
-	}
-	if p.config.RenameOnImport != nil && !p.config.RenameOnImport() {
-		names.RenameFiles = false
-	}
+	profile, fileManagement, mayRename := works.CategoryNaming(p.config.Categories, categoryID, p.config.RenameOnImport)
+	names := NamingFor(profile)
+	names.RenameFiles = names.RenameFiles && mayRename
 	return names, fileManagement
 }
 

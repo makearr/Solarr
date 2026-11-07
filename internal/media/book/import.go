@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"path"
 	"slices"
 	"strconv"
@@ -23,8 +22,6 @@ import (
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/moving/mover"
-	"github.com/makearr/Solarr/internal/platform/clock"
-	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // GuessFloor is the least confidence a held folder's guessed book is placed at by "Commit anyway".
@@ -33,29 +30,8 @@ const GuessFloor = 0.75
 // ImporterConfig is what an Importer needs; Logger, RenameOnImport, ExtraFiles, AfterPlacing and Exclusions are
 // optional.
 type ImporterConfig struct {
-	FS           fsx.FS
-	Placer       placer.Placer
-	Physical     library.Physical
-	Series       library.Series
-	Reader       library.SeriesReader
-	Identity     library.Identity
-	Desired      library.Desired
-	Acquisitions batch.AcquisitionSource
-	Resolver     Resolver
-	Categories   interface {
-		Category(id int64) (settings.Category, bool)
-	}
-	// Exclusions lifts a book's exclusion when a person names it for a held unit.
-	Exclusions interface {
-		Allow(ctx context.Context, mediaType, provider, externalID string) error
-	}
-	Clock          clock.Clock
-	Logger         *slog.Logger
-	RenameOnImport func() bool
-	// ExtraFiles lists the extensions of files brought along with the book (its cover, an nfo); nil brings none.
-	ExtraFiles func(categoryID int64) []string
-	// AfterPlacing is told of each book an import placed files of.
-	AfterPlacing func(ctx context.Context, categoryID, workID int64)
+	works.ImportDeps
+	Resolver Resolver
 }
 
 // Importer is the book module's batch importer: it works out which book a download holds, names and places its files
@@ -245,15 +221,9 @@ func (p placing) Place(ctx context.Context, request batch.Request, unit inspect.
 }
 
 func (p placing) namingFor(categoryID int64) (Naming, settings.FileManagement) {
-	names := p.format().NamingFor(nil)
-	fileManagement := settings.DefaultFileManagement
-	if category, found := p.config.Categories.Category(categoryID); found {
-		names = p.format().NamingFor(category.Naming)
-		fileManagement = category.FileManagement
-	}
-	if p.config.RenameOnImport != nil && !p.config.RenameOnImport() {
-		names.RenameFiles = false
-	}
+	profile, fileManagement, mayRename := works.CategoryNaming(p.config.Categories, categoryID, p.config.RenameOnImport)
+	names := p.format().NamingFor(profile)
+	names.RenameFiles = names.RenameFiles && mayRename
 	return names, fileManagement
 }
 

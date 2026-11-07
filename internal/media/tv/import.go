@@ -21,6 +21,7 @@ import (
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/importing/placer"
 	"github.com/makearr/Solarr/internal/importing/rules"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -574,15 +575,9 @@ type placedEpisode struct {
 }
 
 func (i Importer) namingFor(categoryID int64) (Naming, settings.FileManagement) {
-	names := NamingFor(nil)
-	fileManagement := settings.DefaultFileManagement
-	if category, found := i.config.Categories.Category(categoryID); found {
-		names = NamingFor(category.Naming)
-		fileManagement = category.FileManagement
-	}
-	if i.config.RenameOnImport != nil && !i.config.RenameOnImport() {
-		names.RenameFiles = false
-	}
+	profile, fileManagement, mayRename := works.CategoryNaming(i.config.Categories, categoryID, i.config.RenameOnImport)
+	names := NamingFor(profile)
+	names.RenameFiles = names.RenameFiles && mayRename
 	return names, fileManagement
 }
 
