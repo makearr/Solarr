@@ -185,7 +185,9 @@ function MemoryCopiesCard() {
     current.cache_sync_minutes !== data.cache_sync_minutes ||
     current.database_sync_minutes !== data.database_sync_minutes;
   const need = (current.cache_enabled ? data.cache_bytes_needed : 0) + (current.database_enabled ? data.database_bytes_needed : 0);
-  const short = need > data.available_bytes || need > data.tmpfs_free_bytes;
+  const onDisk = (current.cache_enabled ? data.cache_disk_bytes : 0) + (current.database_enabled ? data.database_disk_bytes : 0);
+  const shmTooSmall = data.tmpfs_total_bytes < onDisk * 1.2;
+  const short = shmTooSmall || need > data.available_bytes || need > data.tmpfs_free_bytes;
   const change = (patch: Partial<MemoryCopySettings>) => setDraft({ ...current, ...patch });
 
   return (
@@ -194,6 +196,30 @@ function MemoryCopiesCard() {
       tone="warn"
       help="Runs them from memory and copies them back to disk on an interval. Faster, but it takes a lot of additional RAM, and what changed since the last copy is lost if Solarr or the machine dies."
     >
+      <dl className="grid max-w-xl grid-cols-[1fr_auto] gap-x-6 gap-y-0.5 text-xs">
+        {(
+          [
+            [`Shared memory (${data.tmpfs_dir}), size`, formatBytes(data.tmpfs_total_bytes)],
+            ["  free", formatBytes(data.tmpfs_free_bytes)],
+            ["Cache on disk now", formatBytes(data.cache_disk_bytes)],
+            ["Databases on disk now", formatBytes(data.database_disk_bytes)],
+            ["Shared memory needed to turn the cache on (+20%)", formatBytes(data.cache_disk_bytes * 1.2)],
+            ["Shared memory needed to turn the databases on (+20%)", formatBytes(data.database_disk_bytes * 1.2)],
+            ["Shared memory needed to turn both on (+20%)", formatBytes((data.cache_disk_bytes + data.database_disk_bytes) * 1.2)],
+          ] as const
+        ).map(([label, value]) => (
+          <div key={label} className="contents">
+            <dt className="whitespace-pre text-ink-muted">{label}</dt>
+            <dd className="text-right tabular-nums">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {data.tmpfs_total_bytes < (data.cache_disk_bytes + data.database_disk_bytes) * 1.2 && (
+        <p className="text-xs text-warn">
+          The shared memory is smaller than both need. Raise shm_size for the container (docker run --shm-size, or shm_size in compose) and restart it; an option is turned on only when
+          the shared memory is at least 20% larger than what it would hold.
+        </p>
+      )}
       <p className="text-xs text-ink-muted">
         {data.limit_bytes > 0
           ? `This container may use ${formatBytes(data.limit_bytes)} and has ${formatBytes(data.available_bytes)} left`
@@ -229,7 +255,8 @@ function MemoryCopiesCard() {
       )}
       {(current.cache_enabled || current.database_enabled) && (
         <p className={`text-xs ${short ? "text-danger" : "text-ink-muted"}`}>
-          Needs {formatBytes(need)} of RAM (their size plus 10%).{short ? " That is more than is free, so it cannot be turned on." : ""}
+          Needs {formatBytes(need)} of RAM (their size plus 10%).
+          {shmTooSmall ? " The shared memory is not 20% larger than that, so it cannot be turned on." : short ? " That is more than is free, so it cannot be turned on." : ""}
         </p>
       )}
       {turnsOn && (

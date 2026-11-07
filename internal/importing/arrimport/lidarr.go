@@ -52,14 +52,15 @@ type LidarrRootFolder struct {
 // MusicBrainz id -- ADR-8's own external identity, reused rather than
 // inventing a parallel one.
 type LidarrArtist struct {
-	ID               int64   `json:"id"`
-	ArtistName       string  `json:"artistName"`
-	SortName         string  `json:"sortName"`
-	ForeignArtistID  string  `json:"foreignArtistId"`
-	Monitored        bool    `json:"monitored"`
-	RootFolderPath   string  `json:"rootFolderPath"`
-	QualityProfileID int64   `json:"qualityProfileId"`
-	Tags             []int64 `json:"tags"`
+	ID                int64   `json:"id"`
+	ArtistName        string  `json:"artistName"`
+	SortName          string  `json:"sortName"`
+	ForeignArtistID   string  `json:"foreignArtistId"`
+	Monitored         bool    `json:"monitored"`
+	RootFolderPath    string  `json:"rootFolderPath"`
+	QualityProfileID  int64   `json:"qualityProfileId"`
+	MetadataProfileID int64   `json:"metadataProfileId"`
+	Tags              []int64 `json:"tags"`
 }
 
 // LidarrAlbum is GET /api/v1/album's own shape, trimmed to what todo 4.13

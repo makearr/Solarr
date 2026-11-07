@@ -22,6 +22,19 @@ and the transcode folder are never put in RAM.
   time at every interval; a database that has not been written since the last copy is skipped.
 - RAM is counted by the container's cgroup. The options need the files' size plus 10%.
 
+## The RAM directory must be larger than what goes in
+
+At start the size of `tmpfs_dir` is read and logged. An option is turned on, and is kept on at a start, only when that size
+is at least **20% larger than what it would hold as it is on disk now** (the cache's pictures and `metadata.db`; the four
+databases; both added when both are on). Settings -> Cache shows the size, the room free, what each option holds on disk
+and what each needs, so the number to give `shm_size` is on the page.
+
+## Shutdown
+
+On SIGTERM everything that runs from RAM is copied to disk **at once**, before the running jobs drain, and again after
+they have stopped. A container runtime gives a stopping container ten seconds unless told otherwise
+(`stop_grace_period` in compose, `docker stop -t`): raise it if the databases are large.
+
 ## Turning it on
 
 Settings -> Cache shows what each option would take, the memory the **container** (its cgroup, not the host) may still

@@ -69,3 +69,45 @@ func TestSonarrClient_AddSeriesMonitorsAllAndSearchesForMissingEpisodes(t *testi
 		t.Errorf("body = %v", body)
 	}
 }
+
+func TestLidarrClient_AddArtistPostsTheLookupResultUnderTheDefaultsWithASearch(t *testing.T) {
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"http://lidarr.local/api/v1/artist": {status: 201, body: `{"id":261}`},
+	}}
+	lidarr := arrimport.NewLidarrClient(newTestClient(t, transport), "http://lidarr.local", "key")
+	id, err := lidarr.AddArtist(t.Context(), map[string]any{"id": 0, "artistName": "Vutu Doci", "foreignArtistId": "b7ff"},
+		arrimport.AddDefaults{QualityProfileID: 1, MetadataProfileID: 2, RootFolderPath: "/music"})
+	if err != nil || id != 261 {
+		t.Fatalf("AddArtist = %d, %v", id, err)
+	}
+	body := bodyOf(t, transport, 0)
+	options, _ := body["addOptions"].(map[string]any)
+	if _, hasID := body["id"]; hasID || body["foreignArtistId"] != "b7ff" || body["metadataProfileId"] != float64(2) ||
+		body["rootFolderPath"] != "/music" || options["searchForMissingAlbums"] != true {
+		t.Errorf("body = %v", body)
+	}
+}
+
+func TestWhisparrClient_LookupsAreByTitleAndAddSearchesForTheScene(t *testing.T) {
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"http://whisparr.local/api/v3/movie/lookup?term=best+of+stash": {status: 200, body: `[{"id":0,"title":"Best of Stash","foreignId":"tpdbId:84833799"}]`},
+		"http://whisparr.local/api/v3/movie":                           {status: 201, body: `{"id":9}`},
+		"http://whisparr.local/api/v3/command":                         {status: 201, body: `{"id":1}`},
+	}}
+	whisparr := arrimport.NewLidarrClient(newTestClient(t, transport), "http://whisparr.local", "key").Whisparr()
+	found, err := whisparr.LookupScenes(t.Context(), "best of stash")
+	if err != nil || len(found) != 1 || found[0]["foreignId"] != "tpdbId:84833799" {
+		t.Fatalf("LookupScenes = %v, %v", found, err)
+	}
+	id, err := whisparr.AddScene(t.Context(), found[0], arrimport.AddDefaults{QualityProfileID: 4, RootFolderPath: "/porn"})
+	if err != nil || id != 9 {
+		t.Fatalf("AddScene = %d, %v", id, err)
+	}
+	options, _ := bodyOf(t, transport, 1)["addOptions"].(map[string]any)
+	if options["searchForMovie"] != true {
+		t.Errorf("addOptions = %v", options)
+	}
+	if err := whisparr.SearchScene(t.Context(), 9); err != nil || bodyOf(t, transport, 2)["name"] != "MoviesSearch" {
+		t.Errorf("SearchScene = %v", err)
+	}
+}

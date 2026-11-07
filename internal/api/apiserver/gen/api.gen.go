@@ -4160,6 +4160,9 @@ type MemoryCopyStatus struct {
 	// CacheBytesNeeded Pictures and provider responses now
 	CacheBytesNeeded int64 `json:"cache_bytes_needed"`
 
+	// CacheDiskBytes What the cache option would hold
+	CacheDiskBytes int64 `json:"cache_disk_bytes"`
+
 	// CacheEnabled What config.yml holds.
 	CacheEnabled bool `json:"cache_enabled"`
 
@@ -4168,7 +4171,10 @@ type MemoryCopyStatus struct {
 	CacheSyncMinutes int64 `json:"cache_sync_minutes"`
 
 	// DatabaseBytesNeeded The four databases now
-	DatabaseBytesNeeded int64      `json:"database_bytes_needed"`
+	DatabaseBytesNeeded int64 `json:"database_bytes_needed"`
+
+	// DatabaseDiskBytes What the databases option would hold
+	DatabaseDiskBytes   int64      `json:"database_disk_bytes"`
 	DatabaseEnabled     bool       `json:"database_enabled"`
 	DatabaseRunning     bool       `json:"database_running"`
 	DatabaseSyncMinutes int64      `json:"database_sync_minutes"`
@@ -4186,6 +4192,9 @@ type MemoryCopyStatus struct {
 
 	// TmpfsFreeBytes Room left in the RAM directory.
 	TmpfsFreeBytes int64 `json:"tmpfs_free_bytes"`
+
+	// TmpfsTotalBytes The size of the RAM directory (the container's shm_size for /dev/shm); it must be at least a fifth larger than what is put in it.
+	TmpfsTotalBytes int64 `json:"tmpfs_total_bytes"`
 }
 
 // MetadataProviderInfo defines model for MetadataProviderInfo.

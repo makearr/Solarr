@@ -72,3 +72,14 @@ func TestMemoryWatch_DoesNothingWhileThereIsRoom(t *testing.T) {
 		t.Errorf("watch = %v, stopped = %v; want neither", err, stopped)
 	}
 }
+
+func TestShmLargeEnough_NeedsAFifthMoreThanWhatItWillHold(t *testing.T) {
+	for _, test := range []struct {
+		total, onDisk int64
+		want          bool
+	}{{1200, 1000, true}, {1199, 1000, false}, {64 << 20, 100 << 20, false}, {8 << 30, 2 << 30, true}, {0, 0, true}} {
+		if got := shmLargeEnough(test.total, test.onDisk); got != test.want {
+			t.Errorf("shmLargeEnough(%d, %d) = %v, want %v", test.total, test.onDisk, got, test.want)
+		}
+	}
+}

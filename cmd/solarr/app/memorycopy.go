@@ -26,6 +26,9 @@ const memoryWatchInterval = 30 * time.Second
 // memoryFloor is the free memory below which the RAM copies are given up: a twentieth of the limit, at least this.
 const memoryFloor = 256 << 20
 
+// shmHeadroom is how much larger than what it will hold the RAM directory must be: the files plus a fifth.
+const shmHeadroom = 1.2
+
 // noticeFile records, beside config.yml, why a RAM copy was switched off, until the next save of the setting.
 const noticeFile = "memory-copies.notice"
 
@@ -75,21 +78,23 @@ func (p *process) stageMemoryCopies(ctx context.Context) error {
 		p.logger.Warn("RAM copies not started: the container's memory could not be read", slog.Any("error", err))
 		return nil
 	}
-	cacheBytes, databaseBytes, err := p.memory.needs(ctx)
+	cacheDisk, databaseDisk, err := p.memory.onDisk(ctx)
 	if err != nil {
 		return err
 	}
 	wantCache, wantDatabase := settings.CacheTmpfs, settings.DatabaseTmpfs
-	free := p.tmpfsFree(settings.TmpfsDir)
+	total, free := p.tmpfsSize(settings.TmpfsDir)
+	p.logger.Info("RAM directory", slog.String("dir", settings.TmpfsDir), slog.Int64("size_bytes", total), slog.Int64("free_bytes", free),
+		slog.Int64("cache_on_disk_bytes", cacheDisk), slog.Int64("databases_on_disk_bytes", databaseDisk))
 	fits := func(cache, database bool) bool {
-		var need int64
+		var onDisk int64
 		if cache {
-			need += cacheBytes
+			onDisk += cacheDisk
 		}
 		if database {
-			need += databaseBytes
+			onDisk += databaseDisk
 		}
-		return need <= memory.AvailableBytes && need <= free
+		return shmLargeEnough(total, onDisk) && ramcopy.WithHeadroom(onDisk) <= memory.AvailableBytes && ramcopy.WithHeadroom(onDisk) <= free
 	}
 	// The cache goes first when both do not fit, as it is the one that can be fetched again.
 	if !fits(wantCache, wantDatabase) && wantCache {
@@ -109,8 +114,8 @@ func (p *process) stageMemoryCopies(ctx context.Context) error {
 	return nil
 }
 
-// needs is the RAM each option takes, with headroom.
-func (m *memoryCopy) needs(ctx context.Context) (cache, database int64, err error) {
+// onDisk is how much the cache's pictures and responses, and the four databases, are on disk now.
+func (m *memoryCopy) onDisk(ctx context.Context) (cache, database int64, err error) {
 	paths := m.p.config.Paths
 	images, err := ramcopy.DirBytes(ctx, m.p.fsys, filepath.Join(paths.CacheDir, "images"))
 	if err != nil {
@@ -121,7 +126,7 @@ func (m *memoryCopy) needs(ctx context.Context) (cache, database int64, err erro
 	for _, name := range []string{"library", "settings", "jobs", "statistics"} {
 		databases += fileBytes(m.p.fsys, filepath.Join(paths.DBDir, name+".db"))
 	}
-	return ramcopy.WithHeadroom(images + metadata), ramcopy.WithHeadroom(databases), nil
+	return images + metadata, databases, nil
 }
 
 func fileBytes(fsys fsx.FS, path string) int64 {
@@ -132,13 +137,17 @@ func fileBytes(fsys fsx.FS, path string) int64 {
 	return info.Size
 }
 
-func (p *process) tmpfsFree(dir string) int64 {
+// shmLargeEnough says the RAM directory is at least a fifth larger than what it would hold.
+func shmLargeEnough(total, onDisk int64) bool { return float64(total) >= float64(onDisk)*shmHeadroom }
+
+// tmpfsSize is the size and the free room of the filesystem the RAM directory is on.
+func (p *process) tmpfsSize(dir string) (total, free int64) {
 	for candidate := dir; candidate != "/" && candidate != "."; candidate = filepath.Dir(candidate) {
-		if _, free, err := p.fsys.DiskUsage(candidate); err == nil {
-			return free
+		if size, room, err := p.fsys.DiskUsage(candidate); err == nil {
+			return size, room
 		}
 	}
-	return 0
+	return 0, 0
 }
 
 // start copies the chosen folders into RAM and points the process at the copies.
@@ -386,11 +395,13 @@ func (a memoryCopies) Status(ctx context.Context) (apiserver.MemoryCopyStatus, e
 	p.memory.mu.Lock()
 	settings := p.memory.configured
 	p.memory.mu.Unlock()
-	cache, database, err := p.memory.needs(ctx)
+	cacheDisk, databaseDisk, err := p.memory.onDisk(ctx)
 	if err != nil {
 		return apiserver.MemoryCopyStatus{}, err
 	}
+	cache, database := ramcopy.WithHeadroom(cacheDisk), ramcopy.WithHeadroom(databaseDisk)
 	memory, memoryErr := ramcopy.ReadMemory(p.fsys)
+	shmTotal, shmFree := p.tmpfsSize(settings.TmpfsDir)
 	p.memory.mu.Lock()
 	defer p.memory.mu.Unlock()
 	status := apiserver.MemoryCopyStatus{
@@ -398,7 +409,8 @@ func (a memoryCopies) Status(ctx context.Context) (apiserver.MemoryCopyStatus, e
 		CacheRunning: p.memory.cacheRunning, DatabaseRunning: p.memory.databaseRunning,
 		CacheSyncMinutes: int64(settings.CacheSyncInterval.AsDuration() / time.Minute), DatabaseSyncMinutes: int64(settings.DatabaseSyncInterval.AsDuration() / time.Minute),
 		CacheBytesNeeded: cache, DatabaseBytesNeeded: database,
-		TmpfsFreeBytes: p.tmpfsFree(settings.TmpfsDir), TmpfsDir: settings.TmpfsDir, Notice: p.memory.notice,
+		TmpfsFreeBytes: shmFree, TmpfsTotalBytes: shmTotal, TmpfsDir: settings.TmpfsDir, Notice: p.memory.notice,
+		CacheDiskBytes: cacheDisk, DatabaseDiskBytes: databaseDisk,
 	}
 	if memoryErr == nil {
 		status.AvailableBytes, status.LimitBytes, status.MemorySource = memory.AvailableBytes, memory.LimitBytes, memory.Source
@@ -424,23 +436,27 @@ func (a memoryCopies) Set(ctx context.Context, change apiserver.MemoryCopySettin
 		if err != nil {
 			return err
 		}
-		cache, database, err := p.memory.needs(ctx)
+		cacheDisk, databaseDisk, err := p.memory.onDisk(ctx)
 		if err != nil {
 			return err
 		}
-		var need int64
+		var onDisk int64
 		if change.CacheEnabled {
-			need += cache
+			onDisk += cacheDisk
 		}
 		if change.DatabaseEnabled {
-			need += database
+			onDisk += databaseDisk
 		}
-		free := p.tmpfsFree(p.config.Memory.TmpfsDir)
+		need := ramcopy.WithHeadroom(onDisk)
+		total, free := p.tmpfsSize(p.config.Memory.TmpfsDir)
 		switch {
+		case !shmLargeEnough(total, onDisk):
+			return fmt.Errorf("%w: %s is %d MB and must be at least 20%% larger than the %d MB it would hold; raise shm_size",
+				apiserver.ErrNotEnoughMemory, p.config.Memory.TmpfsDir, total>>20, onDisk>>20)
 		case need > memory.AvailableBytes:
 			return fmt.Errorf("%w: it needs %d MB and the container has %d MB free", apiserver.ErrNotEnoughMemory, need>>20, memory.AvailableBytes>>20)
 		case need > free:
-			return fmt.Errorf("%w: %s has %d MB free, %d MB are needed; raise shm_size", apiserver.ErrNotEnoughMemory, p.config.Memory.TmpfsDir, free>>20, need>>20)
+			return fmt.Errorf("%w: %s has %d MB free, %d MB are needed", apiserver.ErrNotEnoughMemory, p.config.Memory.TmpfsDir, free>>20, need>>20)
 		}
 	}
 	p.memory.mu.Lock()

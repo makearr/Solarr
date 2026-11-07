@@ -23,8 +23,10 @@ type MemoryCopyStatus struct {
 	// BytesNeeded include the headroom.
 	CacheBytesNeeded, DatabaseBytesNeeded      int64
 	AvailableBytes, LimitBytes, TmpfsFreeBytes int64
-	MemorySource, TmpfsDir, Notice             string
-	LastCacheSync, LastDatabaseSync            *time.Time
+	// TmpfsTotalBytes is the size of the RAM directory; CacheDiskBytes and DatabaseDiskBytes what each option would hold.
+	TmpfsTotalBytes, CacheDiskBytes, DatabaseDiskBytes int64
+	MemorySource, TmpfsDir, Notice                     string
+	LastCacheSync, LastDatabaseSync                    *time.Time
 }
 
 // MemoryCopySettings is a change to them.
@@ -98,6 +100,7 @@ func (s *Server) writeMemoryCopies(w http.ResponseWriter, r *http.Request) {
 		CacheSyncMinutes: status.CacheSyncMinutes, DatabaseSyncMinutes: status.DatabaseSyncMinutes,
 		CacheBytesNeeded: status.CacheBytesNeeded, DatabaseBytesNeeded: status.DatabaseBytesNeeded,
 		AvailableBytes: status.AvailableBytes, LimitBytes: status.LimitBytes, TmpfsFreeBytes: status.TmpfsFreeBytes,
+		TmpfsTotalBytes: status.TmpfsTotalBytes, CacheDiskBytes: status.CacheDiskBytes, DatabaseDiskBytes: status.DatabaseDiskBytes,
 		MemorySource: status.MemorySource, TmpfsDir: status.TmpfsDir, LastCacheSync: status.LastCacheSync,
 		LastDatabaseSync: status.LastDatabaseSync,
 		RestartRequired:  status.CacheEnabled != status.CacheRunning || status.DatabaseEnabled != status.DatabaseRunning,

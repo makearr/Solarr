@@ -9133,7 +9133,7 @@ components:
       type: object
       required:
         [cache_enabled, database_enabled, cache_running, database_running, cache_sync_minutes, database_sync_minutes,
-         cache_bytes_needed, database_bytes_needed, available_bytes, limit_bytes, tmpfs_free_bytes, memory_source,
+         cache_bytes_needed, database_bytes_needed, available_bytes, limit_bytes, tmpfs_free_bytes, tmpfs_total_bytes, cache_disk_bytes, database_disk_bytes, memory_source,
          tmpfs_dir, restart_required]
       properties:
         cache_enabled: { type: boolean, description: What config.yml holds. }
@@ -9147,6 +9147,9 @@ components:
         available_bytes: { type: integer, format: int64, description: Memory the container may still use. }
         limit_bytes: { type: integer, format: int64, description: The container's memory limit; 0 when it has none. }
         tmpfs_free_bytes: { type: integer, format: int64, description: Room left in the RAM directory. }
+        tmpfs_total_bytes: { type: integer, format: int64, description: The size of the RAM directory (the container's shm_size for /dev/shm); it must be at least a fifth larger than what is put in it. }
+        cache_disk_bytes: { type: integer, format: int64, description: What the cache option would hold, as it is on disk now. }
+        database_disk_bytes: { type: integer, format: int64, description: What the databases option would hold, as it is on disk now. }
         memory_source: { type: string }
         tmpfs_dir: { type: string }
         restart_required: { type: boolean }

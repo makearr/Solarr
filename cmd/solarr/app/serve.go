@@ -720,6 +720,12 @@ func (p *process) startServer(ctx context.Context) error {
 	case <-stopping.Done():
 	}
 
+	// Before the jobs drain, which can outlast a runtime's grace period: what runs from RAM goes to disk at once,
+	// and again once the databases are idle (p.close).
+	signalCopy, cancelCopy := context.WithTimeout(context.Background(), 2*time.Minute)
+	p.memory.finalSync(signalCopy)
+	cancelCopy()
+
 	// Shutdown order matters (section 15.2): stop accepting first, then let the
 	// dispatcher drain, then close the databases in p.close.
 	p.logger.Info("shutting down")

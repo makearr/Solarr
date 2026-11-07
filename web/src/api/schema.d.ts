@@ -5962,6 +5962,21 @@ export interface components {
              * @description Room left in the RAM directory.
              */
             tmpfs_free_bytes: number;
+            /**
+             * Format: int64
+             * @description The size of the RAM directory (the container's shm_size for /dev/shm); it must be at least a fifth larger than what is put in it.
+             */
+            tmpfs_total_bytes: number;
+            /**
+             * Format: int64
+             * @description What the cache option would hold
+             */
+            cache_disk_bytes: number;
+            /**
+             * Format: int64
+             * @description What the databases option would hold
+             */
+            database_disk_bytes: number;
             memory_source: string;
             tmpfs_dir: string;
             restart_required: boolean;

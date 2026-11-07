@@ -38,3 +38,31 @@ func TestMostUsed_PicksTheCommonestAndIgnoresTheEmptyKey(t *testing.T) {
 		t.Errorf("mostUsed of nothing = %d, want 0", got)
 	}
 }
+
+func TestMediaTarget_SendsAlbumsAndArtistsToLidarrAndScenesToWhisparr(t *testing.T) {
+	for _, test := range []struct {
+		added apiserver.AddedWork
+		app   settings.ArrApp
+		link  string
+	}{
+		{apiserver.AddedWork{Kind: "album", Provider: "musicbrainz:release-group", ExternalID: "a1"}, settings.ArrAppLidarr, "album"},
+		{apiserver.AddedWork{Kind: "artist", Provider: "musicbrainz:artist", ExternalID: "a2"}, settings.ArrAppLidarr, "artist"},
+		{apiserver.AddedWork{Kind: "adult", Provider: "stashdb", ExternalID: "s1"}, settings.ArrAppWhisparr, "scene"},
+		{apiserver.AddedWork{Kind: "adult", Provider: "theporndb", ExternalID: "s2"}, settings.ArrAppWhisparr, "scene"},
+	} {
+		target, ok := mediaTarget(test.added)
+		if !ok || target.app != test.app || target.linkKind != test.link || target.ref != test.added.ExternalID {
+			t.Errorf("%+v: got %+v %v", test.added, target, ok)
+		}
+	}
+	if _, ok := mediaTarget(apiserver.AddedWork{Kind: "album", Provider: "tvdb", ExternalID: "1"}); ok {
+		t.Error("an album from another provider was handed to Lidarr")
+	}
+}
+
+func TestSceneHasID_MatchesTheForeignIdByItsSuffixOrAFieldOfItsOwn(t *testing.T) {
+	scene := map[string]any{"foreignId": "tpdbId:84833799", "title": "x"}
+	if !sceneHasID(scene, "84833799") || sceneHasID(scene, "other") || !sceneHasID(map[string]any{"stashId": "abc"}, "abc") {
+		t.Error("scene id matching is wrong")
+	}
+}

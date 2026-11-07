@@ -9,6 +9,7 @@ import { type Vocabulary, vocabularyOf } from "@/lib/i18n";
 import { invalidateWorkLists } from "@/lib/resources";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaTypes } from "@/lib/useMediaTypes";
+import { FileThumb } from "./FileThumb";
 import { Button } from "@/ui/Button";
 
 import { formatBytes } from "./Queue";
@@ -169,6 +170,9 @@ function GroupCard({ group, categoryId, words, onDone }: { group: Group; categor
                   </select>
                 </label>
               )}
+            </div>
+            <div className="flex h-24">
+              <FileThumb mediaObjectId={copy.media_object_id} kind="sheet" />
             </div>
             <span className="break-all font-mono text-ink-muted">{copy.paths.join("  =  ")}</span>
           </li>
