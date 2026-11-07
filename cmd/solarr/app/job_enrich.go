@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"log/slog"
-	"path/filepath"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
@@ -50,7 +49,7 @@ func (p *process) enrichJobs() []media.JobRegistration {
 		Roots:     adapters.Roots{Cache: p.cache},
 		HTTP:      imageClient,
 		FS:        p.fsys,
-		ImagesDir: filepath.Join(p.config.Paths.CacheDir, "images"),
+		ImagesDir: p.config.Paths.MediaCoverDir,
 		Clock:     clock.NewSystem(),
 		Logger:    p.logger,
 	})

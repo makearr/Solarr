@@ -3,7 +3,6 @@ package apiserver
 import (
 	"context"
 	"net/http"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -123,7 +122,7 @@ func (s *Server) GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64
 
 	cacheKey := row.CacheKey
 	if !row.Found && row.PosterURL != "" && s.remoteImages != nil {
-		if key, err := s.remoteImages.Ensure(r.Context(), row.PosterURL); err == nil {
+		if key, err := s.remoteImages.Promote(r.Context(), row.PosterURL); err == nil {
 			cacheKey, row.Found = key, true
 		}
 	}
@@ -149,8 +148,7 @@ func (s *Server) GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64
 		raw := string(*params.Size)
 		size = &raw
 	}
-	path := filepath.Join(s.imagesDir, cacheKey+"-"+artworkSizeSuffix(size)+".webp")
-	file, err := s.fsys.Open(path)
+	file, err := s.openLibraryImage(cacheKey, artworkSizeSuffix(size))
 	if err != nil {
 		// The DB row exists but the cache file does not -- a cache wipe between
 		// Record and now, not a caller error. Same 404 either way: the image is
@@ -218,8 +216,7 @@ func (s *Server) GetPersonArtwork(w http.ResponseWriter, r *http.Request, id int
 		raw := string(*params.Size)
 		size = &raw
 	}
-	path := filepath.Join(s.imagesDir, row.CacheKey+"-"+artworkSizeSuffix(size)+".webp")
-	file, err := s.fsys.Open(path)
+	file, err := s.openLibraryImage(row.CacheKey, artworkSizeSuffix(size))
 	if err != nil {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no image for this person")
 		return

@@ -104,8 +104,8 @@ const template = `# Solarr bootstrap configuration.
 # Every setting can also be given as an environment variable:
 #   server.port  ->  SOLARR_SERVER_PORT
 # Short forms exist for the common ones: SOLARR_PORT, SOLARR_LOG_LEVEL and the
-# five directories SOLARR_CONFIG_DIR, SOLARR_DATA_DIR, SOLARR_DB_DIR,
-# SOLARR_CACHE_DIR and SOLARR_BACKUP_DIR. Append _FILE to read a value from a
+# directories SOLARR_CONFIG_DIR, SOLARR_DB_DIR, SOLARR_CACHE_DIR,
+# SOLARR_MEDIACOVER_DIR and SOLARR_BACKUP_DIR. Append _FILE to read a value from a
 # file. A variable that is set wins over this file; the full list is in
 # documentation/environment-variables.md.
 #
@@ -122,10 +122,10 @@ server:
 # Defaults nest under config_dir, so mounting /config alone is enough.
 paths:
   config_dir: /config
-  data_dir: /config/data
-  db_dir: /config/data/db
-  cache_dir: /config/data/cache
-  backup_dir: /config/data/backups
+  db_dir: /config/db
+  cache_dir: /config/cache
+  mediacover_dir: /config/mediacover
+  backup_dir: /config/backups
 
 security:
   # Encrypts credentials in settings.db. Generated on first run.

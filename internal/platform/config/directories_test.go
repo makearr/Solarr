@@ -14,11 +14,11 @@ import (
 func configRootedAt(root string) config.Config {
 	settings := config.Default()
 	settings.Paths = config.Paths{
-		ConfigDir: root,
-		DataDir:   filepath.Join(root, "data"),
-		DBDir:     filepath.Join(root, "data", "db"),
-		CacheDir:  filepath.Join(root, "data", "cache"),
-		BackupDir: filepath.Join(root, "data", "backups"),
+		ConfigDir:     root,
+		DBDir:         filepath.Join(root, "db"),
+		CacheDir:      filepath.Join(root, "cache"),
+		MediaCoverDir: filepath.Join(root, "mediacover"),
+		BackupDir:     filepath.Join(root, "backups"),
 	}
 	return settings
 }
@@ -33,7 +33,7 @@ func TestCheckDirectories_CreatesWhatIsMissing(t *testing.T) {
 	if err := config.CheckDirectories(fsys, configRootedAt("/config")).OrNil(); err != nil {
 		t.Fatalf("CheckDirectories: %v", err)
 	}
-	for _, path := range []string{"/config/data", "/config/data/db", "/config/data/cache", "/config/data/backups"} {
+	for _, path := range []string{"/config/db", "/config/cache", "/config/mediacover", "/config/backups"} {
 		info, err := fsys.Stat(path)
 		if err != nil {
 			t.Errorf("Stat(%s): %v", path, err)
@@ -54,7 +54,7 @@ func TestCheckDirectories_LeavesNoProbeBehind(t *testing.T) {
 		t.Fatalf("CheckDirectories: %v", err)
 	}
 
-	entries, err := fsys.ReadDir("/config/data/db")
+	entries, err := fsys.ReadDir("/config/db")
 	if err != nil {
 		t.Fatalf("ReadDir: %v", err)
 	}
@@ -65,10 +65,10 @@ func TestCheckDirectories_LeavesNoProbeBehind(t *testing.T) {
 
 func TestCheckDirectories_ReportsAPathThatIsAFile(t *testing.T) {
 	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
-	if err := fsys.MkdirAll("/config/data", 0o755); err != nil {
+	if err := fsys.MkdirAll("/config", 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	file, err := fsys.Create("/config/data/db")
+	file, err := fsys.Create("/config/db")
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -88,10 +88,10 @@ func TestCheckDirectories_ReportsAPathThatIsAFile(t *testing.T) {
 
 func TestCheckDirectories_ReportsEveryUnusableDirectoryAtOnce(t *testing.T) {
 	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
-	if err := fsys.MkdirAll("/config/data", 0o755); err != nil {
+	if err := fsys.MkdirAll("/config", 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	for _, path := range []string{"/config/data/db", "/config/data/cache"} {
+	for _, path := range []string{"/config/db", "/config/cache"} {
 		file, err := fsys.Create(path)
 		if err != nil {
 			t.Fatalf("Create(%s): %v", path, err)
@@ -141,13 +141,13 @@ func TestCheckDirectories_NamesTheDirectoryOwnerWhenNotWritable(t *testing.T) {
 	// always enough, but the directory's own owner closes the last manual
 	// `ls -l` (documentation/startup-checks.md).
 	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
-	if err := fsys.MkdirAll("/config/data/db", 0o755); err != nil {
+	if err := fsys.MkdirAll("/config/db", 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	if err := fsys.Chown("/config/data/db", 0, 0); err != nil {
+	if err := fsys.Chown("/config/db", 0, 0); err != nil {
 		t.Fatalf("Chown: %v", err)
 	}
-	fsys.SetWriteDenied("/config/data/db", true)
+	fsys.SetWriteDenied("/config/db", true)
 
 	problems := config.CheckDirectories(fsys, configRootedAt("/config"))
 	problem, found := findProblem(problems, "paths.db_dir")
@@ -173,7 +173,7 @@ func TestCheckDirectories_PassesOnARealFilesystem(t *testing.T) {
 		t.Fatalf("CheckDirectories on a real directory: %v", err)
 	}
 
-	entries, err := fsys.ReadDir(filepath.Join(root, "data", "db"))
+	entries, err := fsys.ReadDir(filepath.Join(root, "db"))
 	if err != nil {
 		t.Fatalf("ReadDir: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestDirectoryRequirements_CoverEveryConfiguredPath(t *testing.T) {
 	}
 
 	for _, setting := range []string{
-		"paths.config_dir", "paths.data_dir", "paths.db_dir", "paths.cache_dir", "paths.backup_dir",
+		"paths.config_dir", "paths.db_dir", "paths.cache_dir", "paths.mediacover_dir", "paths.backup_dir",
 	} {
 		if !required[setting] {
 			t.Errorf("%s is configurable but never checked", setting)

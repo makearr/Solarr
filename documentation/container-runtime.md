@@ -31,7 +31,7 @@ Running them as root answers yes and the application then fails later as somebod
 
 ## What is owned, and what is not
 
-Owned: `config_dir`, `data_dir`, `db_dir`, `cache_dir`, `backup_dir` — the directories
+Owned: `config_dir`, `db_dir`, `cache_dir`, `mediacover_dir`, `backup_dir` — the directories
 Solarr creates.
 
 Never owned: the media roots. They hold the 500k files of ADR-22, they belong to the operator,

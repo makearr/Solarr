@@ -49,6 +49,10 @@ func (f *fakeRemoteImages) Ensure(_ context.Context, address string) (string, er
 	return "", errors.New("not reachable")
 }
 
+func (f *fakeRemoteImages) Promote(ctx context.Context, address string) (string, error) {
+	return f.Ensure(ctx, address)
+}
+
 // writeFixtureImage puts bytes at <testImagesDir>/<cacheKey>-<size>.webp in the
 // fixture's in-memory filesystem, the same layout ArtworkJob writes on disk.
 func (f worksFixture) writeFixtureImage(t *testing.T, cacheKey, size string, content []byte) {

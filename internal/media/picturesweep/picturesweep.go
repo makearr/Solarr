@@ -27,8 +27,8 @@ type Reader interface {
 
 // Cache is the provider picture cache as the sweep needs it.
 type Cache interface {
-	Cached(address string) bool
-	Ensure(ctx context.Context, address string) (string, error)
+	Stored(address string) bool
+	Promote(ctx context.Context, address string) (string, error)
 }
 
 // Config is what a Job needs; OrganisationKind is the organisations whose logos are shown (networks, studios).
@@ -64,7 +64,7 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 	var missing []string
 	for _, group := range [][]string{set.Posters, set.Logos, set.Photos} {
 		for _, address := range group {
-			if !j.config.Cache.Cached(address) {
+			if !j.config.Cache.Stored(address) {
 				missing = append(missing, address)
 			}
 		}
@@ -78,7 +78,7 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		_, err := j.config.Cache.Ensure(ctx, missing[index])
+		_, err := j.config.Cache.Promote(ctx, missing[index])
 		return err
 	})
 	for _, err := range outcomes {

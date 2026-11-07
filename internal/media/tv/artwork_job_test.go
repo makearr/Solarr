@@ -18,13 +18,13 @@ type fakePictures struct {
 	ensure []string
 }
 
-func (f *fakePictures) Cached(address string) bool {
+func (f *fakePictures) Stored(address string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.have[address]
 }
 
-func (f *fakePictures) Ensure(_ context.Context, address string) (string, error) {
+func (f *fakePictures) Promote(_ context.Context, address string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.ensure = append(f.ensure, address)

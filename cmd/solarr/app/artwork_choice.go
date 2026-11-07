@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"path/filepath"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/media"
@@ -47,7 +46,7 @@ func (p *process) musicPictures() *music.ArtworkChoice {
 			}
 			return options, nil
 		},
-		HTTP: client, FS: p.fsys, ImagesDir: filepath.Join(p.config.Paths.CacheDir, "images"), Clock: clock.NewSystem(),
+		HTTP: client, FS: p.fsys, ImagesDir: p.config.Paths.MediaCoverDir, Clock: clock.NewSystem(),
 	})
 }
 

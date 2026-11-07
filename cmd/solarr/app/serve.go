@@ -54,6 +54,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/logthrottle"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 	"github.com/makearr/Solarr/internal/platform/privilege"
+	"github.com/makearr/Solarr/internal/platform/remoteimage"
 	"github.com/makearr/Solarr/internal/platform/secrets"
 	"github.com/makearr/Solarr/internal/platform/transcode"
 	"github.com/makearr/Solarr/migrations"
@@ -183,6 +184,13 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 	if err != nil {
 		return err
 	}
+	loaded, moves, err := config.MigrateLegacyLayout(fsys, configPath, loaded)
+	if err != nil {
+		return err
+	}
+	for _, move := range moves {
+		_, _ = fmt.Fprintf(out, "moved %s to %s\n", move.From, move.To)
+	}
 
 	env, err := config.OSEnv(fsys)
 	if err != nil {
@@ -201,14 +209,22 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 	if err := config.CheckDirectories(fsys, loaded).OrNil(); err != nil {
 		return err
 	}
+	if moved, err := remoteimage.MoveLibraryCovers(fsys, filepath.Join(loaded.Paths.CacheDir, "images"), loaded.Paths.MediaCoverDir); err != nil {
+		return fmt.Errorf("move library covers out of the cache: %w", err)
+	} else if moved > 0 {
+		logger.Info("library covers moved out of the cache", "files", moved)
+	}
 
 	running := &process{
 		build: build, config: loaded, env: env, fsys: fsys, logger: logger, logRing: logRing,
 		timezone: timezone, configPath: configPath, tool: mediatool.New(nil, 0),
-		transcoder: transcode.NewService(mediatool.ExecRunner{}, transcode.ExecPiper{}, fsys),
+		transcoder: transcode.NewService(mediatool.ExecRunner{}, transcode.ExecPiper{Dir: filepath.Join(loaded.Paths.CacheDir, "transcode")}, fsys),
 	}
 	defer running.close()
 	running.tool = mediatool.New(nil, 0).WithHardwareDecode(running.frameDecodeArgs)
+	if err := running.transcoder.ClearScratch(filepath.Join(loaded.Paths.CacheDir, "transcode")); err != nil {
+		logger.Warn("clear the transcode cache", "error", err)
+	}
 
 	if err := running.openDatabases(ctx); err != nil {
 		return err
@@ -833,11 +849,12 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		IncompleteDiscographies: adapters.IncompleteDiscographies{
 			Coverage: statistics.NewRollup(p.statistics), People: library.NewPeople(p.library),
 		},
-		FS:           p.fsys,
-		ImagesDir:    filepath.Join(p.config.Paths.CacheDir, "images"),
-		PreviewsDir:  filepath.Join(p.config.Paths.ConfigDir, "previews"),
-		FilePreviews: library.NewWorks(p.library),
-		ConfigPath:   p.configPath,
+		FS:            p.fsys,
+		ImagesDir:     filepath.Join(p.config.Paths.CacheDir, "images"),
+		MediaCoverDir: p.config.Paths.MediaCoverDir,
+		PreviewsDir:   filepath.Join(p.config.Paths.ConfigDir, "previews"),
+		FilePreviews:  library.NewWorks(p.library),
+		ConfigPath:    p.configPath,
 		People: adapters.People{
 			People: library.NewPeople(p.library), Works: library.NewWorks(p.library), Roles: adapters.MediaTypes{Registry: p.media}.RoleKeys,
 			Categories: adapters.Categories{Cache: p.cache},

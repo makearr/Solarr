@@ -17,7 +17,7 @@ import (
 func (p *process) tagWritebackJob() media.JobRegistration {
 	return media.JobRegistration{Definition: music.TagWritebackDefinition, Handler: music.NewTagWritebackJob(music.TagWritebackConfig{
 		Files: library.NewTagWriteback(p.library), Roots: p.tagRoots, Tool: mediatool.New(nil, 0), FS: p.fsys,
-		ImagesDir: filepath.Join(p.config.Paths.CacheDir, "images"),
+		ImagesDir: p.config.Paths.MediaCoverDir,
 		CoversDir: filepath.Join(p.config.Paths.CacheDir, "tag-covers"),
 		Clock:     clock.NewSystem(), Logger: p.logger,
 	})}

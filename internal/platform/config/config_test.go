@@ -33,10 +33,10 @@ server:
   base_url: /solarr
 paths:
   config_dir: /config
-  data_dir: /config/data
-  db_dir: /config/data/db
-  cache_dir: /config/data/cache
-  backup_dir: /config/data/backups
+  db_dir: /config/db
+  cache_dir: /config/cache
+  mediacover_dir: /config/mediacover
+  backup_dir: /config/backups
 security:
   auth_mode: proxy
   trusted_proxy_header: X-Remote-User

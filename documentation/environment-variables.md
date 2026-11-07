@@ -44,11 +44,13 @@ environment:
 
 | Variable | Config key | Default | Meaning |
 |---|---|---|---|
-| `SOLARR_CONFIG_DIR` | `paths.config_dir` | `/config` | Directory holding `config.yml`; the file is looked up here unless `--config` is given. Mount a volume at the same path. `data_dir`, `db_dir`, `cache_dir` and `backup_dir` do **not** follow it: set them as well if they should move |
-| `SOLARR_DATA_DIR` | `paths.data_dir` | `/config/data` | Parent of the databases and caches |
-| `SOLARR_DB_DIR` | `paths.db_dir` | `/config/data/db` | Where `library.db`, `settings.db`, `jobs.db` and `statistics.db` live. Local disk only, never a network filesystem |
-| `SOLARR_CACHE_DIR` | `paths.cache_dir` | `/config/data/cache` | Disposable cache (artwork, provider responses) |
-| `SOLARR_BACKUP_DIR` | `paths.backup_dir` | `/config/data/backups` | Database backups |
+| `SOLARR_CONFIG_DIR` | `paths.config_dir` | `/config` | Directory holding `config.yml`; the file is looked up here unless `--config` is given. Mount a volume at the same path. `db_dir`, `cache_dir`, `mediacover_dir` and `backup_dir` do **not** follow it: set them as well if they should move |
+| `SOLARR_DB_DIR` | `paths.db_dir` | `/config/db` | Where `library.db`, `settings.db`, `jobs.db` and `statistics.db` live. Local disk only, never a network filesystem |
+| `SOLARR_CACHE_DIR` | `paths.cache_dir` | `/config/cache` | Disposable cache: pictures of items not in the library yet, provider responses, the transcode scratch folder (`transcode/`, emptied at start) |
+| `SOLARR_MEDIACOVER_DIR` | `paths.mediacover_dir` | `/config/mediacover` | Pictures of items in the library. A picture moves here from the cache when its item is added, without asking the provider again; the cache budget never touches it |
+| `SOLARR_BACKUP_DIR` | `paths.backup_dir` | `/config/backups` | Database backups |
+
+`paths.data_dir` is ignored. An older `config.yml` that names `/config/data/db`, `/config/data/cache` or `/config/data/backups` is moved to the new places at the first start, and the file is rewritten; a path set to anything else is left alone, and a start where both the old and the new folder exist is refused.
 | `SOLARR_PORT` | `server.port` | `5454` | HTTP port. Always wins over the Network screen, and is written to it so the screen shows it in effect |
 | `SOLARR_BIND` | `server.bind` | `0.0.0.0` | Address to listen on |
 | `SOLARR_BASE_URL` | `server.base_url` | `/` | Path prefix when served behind a reverse proxy under a sub-path, e.g. `/solarr` |

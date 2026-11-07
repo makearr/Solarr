@@ -77,9 +77,9 @@ func (p Paths) validate() Problems {
 	var problems Problems
 	for _, entry := range []struct{ path, value string }{
 		{"paths.config_dir", p.ConfigDir},
-		{"paths.data_dir", p.DataDir},
 		{"paths.db_dir", p.DBDir},
 		{"paths.cache_dir", p.CacheDir},
+		{"paths.mediacover_dir", p.MediaCoverDir},
 		{"paths.backup_dir", p.BackupDir},
 	} {
 		if entry.value == "" {

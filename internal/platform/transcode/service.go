@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"os"
 	"os/exec"
+	"path"
 	"sync"
 
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -26,12 +29,16 @@ type Piper interface {
 	Pipe(ctx context.Context, w io.Writer, name string, args ...string) error
 }
 
-// ExecPiper runs the real thing.
-type ExecPiper struct{}
+// ExecPiper runs the real thing; Dir is where ffmpeg runs and keeps its temporary files.
+type ExecPiper struct{ Dir string }
 
 // Pipe returns nil when ctx ended the command: a viewer who closed the player is not a failure.
-func (ExecPiper) Pipe(ctx context.Context, w io.Writer, name string, args ...string) error {
+func (e ExecPiper) Pipe(ctx context.Context, w io.Writer, name string, args ...string) error {
 	command := exec.CommandContext(ctx, name, args...)
+	if e.Dir != "" {
+		command.Dir = e.Dir
+		command.Env = append(os.Environ(), "TMPDIR="+e.Dir)
+	}
 	var stderr bytes.Buffer
 	command.Stdout = w
 	command.Stderr = &limitedWriter{buffer: &stderr, room: 4096}
@@ -77,6 +84,26 @@ type ownedStream struct {
 // NewService builds it; nothing is detected until Detect runs.
 func NewService(runner Runner, piper Piper, fsys fsx.FS) *Service {
 	return &Service{runner: runner, piper: piper, fsys: fsys, owned: map[string]ownedStream{}}
+}
+
+// ClearScratch removes what a conversion that was cut off left in dir; ffmpeg deletes its own files otherwise.
+func (s *Service) ClearScratch(dir string) error {
+	entries, err := s.fsys.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir {
+			continue
+		}
+		if err := s.fsys.Remove(path.Join(dir, entry.Name)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Detect tries every encoder again and keeps the outcome.

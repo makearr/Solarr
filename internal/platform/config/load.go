@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path/filepath"
 
 	"github.com/goccy/go-yaml"
 
@@ -58,9 +59,22 @@ func ParseWithEnv(data []byte, lookup Lookup) (Config, error) {
 		return config, problems
 	}
 
+	if !namesKey(document, "paths", "mediacover_dir") {
+		config.Paths.MediaCoverDir = filepath.Join(config.Paths.ConfigDir, "mediacover")
+	}
 	problems = append(problems, applyEnv(&config, lookup)...)
 	problems = append(problems, config.validate()...)
 	return config, problems.OrNil()
+}
+
+// namesKey says whether the document sets section.key; a file from before the key existed does not.
+func namesKey(document map[string]any, section, key string) bool {
+	values, ok := document[section].(map[string]any)
+	if !ok {
+		return false
+	}
+	_, named := values[key]
+	return named
 }
 
 // Load reads and parses config.yml. A missing file is ErrNotFound, so the caller

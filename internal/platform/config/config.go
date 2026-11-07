@@ -87,10 +87,14 @@ type Server struct {
 // volume mount is enough (§14).
 type Paths struct {
 	ConfigDir string `yaml:"config_dir"`
-	DataDir   string `yaml:"data_dir"`
-	DBDir     string `yaml:"db_dir"`
-	CacheDir  string `yaml:"cache_dir"`
-	BackupDir string `yaml:"backup_dir"`
+	// DataDir is ignored since the 2026-11 layout (databases, caches and backups sit beside config.yml); it is
+	// accepted so an older config.yml still loads.
+	DataDir string `yaml:"data_dir"`
+	DBDir   string `yaml:"db_dir"`
+	// CacheDir holds only what can be fetched again; MediaCoverDir holds the pictures of items in the library.
+	CacheDir      string `yaml:"cache_dir"`
+	MediaCoverDir string `yaml:"mediacover_dir"`
+	BackupDir     string `yaml:"backup_dir"`
 }
 
 // Security holds the encryption key and how users are authenticated (ADR-14).
@@ -163,11 +167,12 @@ func Default() Config {
 		Version: CurrentVersion,
 		Server:  Server{Bind: "0.0.0.0", Port: 5454, BaseURL: "/"},
 		Paths: Paths{
-			ConfigDir: "/config",
-			DataDir:   "/config/data",
-			DBDir:     "/config/data/db",
-			CacheDir:  "/config/data/cache",
-			BackupDir: "/config/data/backups",
+			ConfigDir:     "/config",
+			DataDir:       "/config/data",
+			DBDir:         "/config/db",
+			CacheDir:      "/config/cache",
+			MediaCoverDir: "/config/mediacover",
+			BackupDir:     "/config/backups",
 		},
 		Security: Security{
 			AuthMode:           AuthLocal,

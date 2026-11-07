@@ -56,10 +56,10 @@ func newGoldenServerWith(t *testing.T, extra ...media.Module) goldenServer {
 
 	loaded := config.Default()
 	loaded.Paths = config.Paths{
-		ConfigDir: root, DataDir: filepath.Join(root, "data"), DBDir: filepath.Join(root, "data", "db"),
-		CacheDir: filepath.Join(root, "data", "cache"), BackupDir: filepath.Join(root, "data", "backups"),
+		ConfigDir: root, DBDir: filepath.Join(root, "db"),
+		CacheDir: filepath.Join(root, "cache"), MediaCoverDir: filepath.Join(root, "mediacover"), BackupDir: filepath.Join(root, "backups"),
 	}
-	for _, dir := range []string{loaded.Paths.DBDir, loaded.Paths.CacheDir, loaded.Paths.BackupDir} {
+	for _, dir := range []string{loaded.Paths.DBDir, loaded.Paths.CacheDir, loaded.Paths.MediaCoverDir, loaded.Paths.BackupDir} {
 		if err := os.MkdirAll(dir, 0o750); err != nil {
 			t.Fatalf("mkdir %s: %v", dir, err)
 		}

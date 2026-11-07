@@ -354,10 +354,10 @@ precedence rules: [environment variables](documentation/environment-variables.md
 | Variable | Default | Meaning |
 |---|---|---|
 | `SOLARR_CONFIG_DIR` | `/config` | Directory holding `config.yml` |
-| `SOLARR_DATA_DIR` | `/config/data` | Parent of the databases and caches |
-| `SOLARR_DB_DIR` | `/config/data/db` | `library.db`, `settings.db`, `jobs.db`, `statistics.db`. Local disk only |
-| `SOLARR_CACHE_DIR` | `/config/data/cache` | Disposable cache (artwork, provider responses) |
-| `SOLARR_BACKUP_DIR` | `/config/data/backups` | Database backups |
+| `SOLARR_DB_DIR` | `/config/db` | `library.db`, `settings.db`, `jobs.db`, `statistics.db`. Local disk only |
+| `SOLARR_CACHE_DIR` | `/config/cache` | Disposable cache: pictures of items not in the library yet, provider responses, the transcode scratch folder |
+| `SOLARR_MEDIACOVER_DIR` | `/config/mediacover` | Pictures of items in the library; never evicted |
+| `SOLARR_BACKUP_DIR` | `/config/backups` | Database backups |
 | `SOLARR_PORT` | `5454` | HTTP port |
 | `SOLARR_BIND` | `0.0.0.0` | Address to listen on |
 | `SOLARR_BASE_URL` | `/` | Path prefix behind a reverse proxy under a sub-path, e.g. `/solarr` |

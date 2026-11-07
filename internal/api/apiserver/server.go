@@ -98,6 +98,8 @@ type Config struct {
 	// Required together with Artwork -- meaningless alone.
 	FS        fsx.FS
 	ImagesDir string
+	// MediaCoverDir holds the pictures of library items; ImagesDir only what the library does not hold yet.
+	MediaCoverDir string
 	// PreviewsDir holds the preview pictures of videos; without it a preview is 404.
 	PreviewsDir string
 	// FilePreviews names the previewed files of listed works; optional.
@@ -336,6 +338,7 @@ type Server struct {
 	artwork                 ArtworkReader
 	fsys                    fsx.FS
 	imagesDir               string
+	mediaCoverDir           string
 	previewsDir             string
 	filePreviews            FilePreviews
 	configPath              string
@@ -476,6 +479,7 @@ func New(config Config) (*Server, error) {
 		artwork:                 config.Artwork,
 		fsys:                    config.FS,
 		imagesDir:               config.ImagesDir,
+		mediaCoverDir:           config.MediaCoverDir,
 		previewsDir:             config.PreviewsDir,
 		filePreviews:            config.FilePreviews,
 		configPath:              config.ConfigPath,

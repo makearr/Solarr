@@ -19,6 +19,7 @@ var envAliases = map[string]string{
 	"SOLARR_DATA_DIR":       "paths.data_dir",
 	"SOLARR_DB_DIR":         "paths.db_dir",
 	"SOLARR_CACHE_DIR":      "paths.cache_dir",
+	"SOLARR_MEDIACOVER_DIR": "paths.mediacover_dir",
 	"SOLARR_BACKUP_DIR":     "paths.backup_dir",
 	"SOLARR_PORT":           "server.port",
 	"SOLARR_BIND":           "server.bind",

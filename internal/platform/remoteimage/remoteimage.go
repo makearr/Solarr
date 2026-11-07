@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -35,12 +36,14 @@ type Doer interface {
 	Get(ctx context.Context, url string) (*http.Response, error)
 }
 
-// Cache fetches and stores pictures under Dir, in the same flat directory the cover art uses, so the cache budget
-// evicts them by age and size like the rest.
+// Cache fetches and stores pictures under Dir, which the cache budget evicts by age and size; a library item's
+// picture is promoted to CoverDir, which the budget never touches.
 type Cache struct {
 	HTTP Doer
 	FS   fsx.FS
 	Dir  string
+	// CoverDir holds the pictures of library items; empty keeps everything in Dir.
+	CoverDir string
 	// Hosts are the image hosts that may be fetched, each matching itself and its subdomains.
 	Hosts []string
 	// Lookups counts the pictures found already cached; optional.
@@ -87,14 +90,14 @@ func (c *Cache) Ensure(ctx context.Context, address string) (string, error) {
 		return "", ErrNotAllowed
 	}
 	key := Key(address)
-	if c.cached(key) {
+	if c.cached(key) || c.stored(key) {
 		c.Lookups.Hit()
 		return key, nil
 	}
 	c.Lookups.Miss()
 	release := c.lockFor(key)
 	defer release()
-	if c.cached(key) {
+	if c.cached(key) || c.stored(key) {
 		return key, nil
 	}
 	source, err := c.download(ctx, address)
@@ -121,6 +124,100 @@ func (c *Cache) Ensure(ctx context.Context, address string) (string, error) {
 	return key, nil
 }
 
+// Promote makes the picture a library item's: it moves from the cache to CoverDir without asking the provider, and is
+// fetched straight into CoverDir only when the cache never had it.
+func (c *Cache) Promote(ctx context.Context, address string) (string, error) {
+	key, err := c.Ensure(ctx, address)
+	if err != nil || c.CoverDir == "" {
+		return key, err
+	}
+	release := c.lockFor(key)
+	defer release()
+	if c.stored(key) || !c.cached(key) {
+		return key, nil
+	}
+	if err := PromoteFiles(c.FS, c.Dir, c.CoverDir, key); err != nil {
+		return "", fmt.Errorf("remoteimage: promote %s: %w", key, err)
+	}
+	return key, nil
+}
+
+// Stored says whether the picture at the address is already kept for the library.
+func (c *Cache) Stored(address string) bool {
+	if c.CoverDir == "" {
+		return c.Cached(address)
+	}
+	return c.stored(Key(address))
+}
+
+func (c *Cache) stored(key string) bool {
+	if c.CoverDir == "" {
+		return false
+	}
+	_, err := c.FS.Stat(filepath.Join(c.CoverDir, FileName(key, artwork.Full)))
+	return err == nil
+}
+
+// MoveLibraryCovers moves the covers of albums and people (work-N and person-N keys) from the cache directory to
+// the library's, for an installation that kept them in the cache; it answers how many files moved.
+func MoveLibraryCovers(fsys fsx.FS, from, to string) (int, error) {
+	entries, err := fsys.ReadDir(from)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	moved := 0
+	for _, entry := range entries {
+		name := entry.Name
+		if !strings.HasPrefix(name, "work-") && !strings.HasPrefix(name, "person-") {
+			continue
+		}
+		if err := fsys.MkdirAll(to, 0o755); err != nil {
+			return moved, err
+		}
+		if err := fsys.Rename(filepath.Join(from, name), filepath.Join(to, name)); err != nil {
+			return moved, err
+		}
+		moved++
+	}
+	return moved, nil
+}
+
+// FileName is a picture's file name at a size.
+func FileName(key string, size artwork.Size) string {
+	name := map[artwork.Size]string{artwork.Thumb: "thumb", artwork.Small: "small", artwork.Full: "full"}[size]
+	return key + "-" + name + ".webp"
+}
+
+// PromoteFiles moves a key's pictures, the full size last so a half-moved set reads as absent, from one directory to
+// another; it copies when the two are different filesystems.
+func PromoteFiles(fsys fsx.FS, from, to, key string) error {
+	if err := fsys.MkdirAll(to, 0o755); err != nil {
+		return err
+	}
+	for _, size := range []artwork.Size{artwork.Thumb, artwork.Small, artwork.Full} {
+		source, destination := filepath.Join(from, FileName(key, size)), filepath.Join(to, FileName(key, size))
+		if err := fsys.Rename(source, destination); err == nil {
+			continue
+		}
+		file, err := fsys.Open(source)
+		if err != nil {
+			return err
+		}
+		err = fsx.WriteAtomic(fsys, destination, func(w io.Writer) error { _, err := io.Copy(w, file); return err })
+		_ = file.Close()
+		if err != nil {
+			return err
+		}
+		if err := fsys.Remove(source); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Original answers the picture at the address as the provider serves it, for a file a media server reads; nothing is
 // cached, and only the providers' image hosts are asked.
 func (c *Cache) Original(ctx context.Context, address string) ([]byte, error) {
@@ -131,8 +228,7 @@ func (c *Cache) Original(ctx context.Context, address string) ([]byte, error) {
 }
 
 func (c *Cache) path(key string, size artwork.Size) string {
-	name := map[artwork.Size]string{artwork.Thumb: "thumb", artwork.Small: "small", artwork.Full: "full"}[size]
-	return filepath.Join(c.Dir, key+"-"+name+".webp")
+	return filepath.Join(c.Dir, FileName(key, size))
 }
 
 // Cached says whether the picture at the address is already stored at every size.

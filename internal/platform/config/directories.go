@@ -35,9 +35,10 @@ type DirectoryRequirement struct {
 func (c Config) DirectoryRequirements() []DirectoryRequirement {
 	return []DirectoryRequirement{
 		{Setting: "paths.config_dir", Path: c.Paths.ConfigDir, Create: true},
-		{Setting: "paths.data_dir", Path: c.Paths.DataDir, Create: true},
 		{Setting: "paths.db_dir", Path: c.Paths.DBDir, Create: true},
 		{Setting: "paths.cache_dir", Path: c.Paths.CacheDir, Create: true},
+		{Setting: "paths.mediacover_dir", Path: c.Paths.MediaCoverDir, Create: true},
+		{Setting: "paths.cache_dir", Path: filepath.Join(c.Paths.CacheDir, "transcode"), Create: true},
 		{Setting: "paths.backup_dir", Path: c.Paths.BackupDir, Create: true},
 	}
 }
