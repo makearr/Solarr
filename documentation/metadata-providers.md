@@ -157,6 +157,9 @@ Comics: ComicVine, Metron; games: IGDB, ScreenScraper. None is built; a media ty
 | Movies | Wikidata ("part of the series", "media franchise") | a universe or franchise beyond TMDB's collections: Ihaol with Sfozutvaew and Romulus, the Marvel Cinematic Universe with its phases; kept only where it holds a film no single TMDB collection does (`movie.UniversePass`, daily) |
 | Series | Wikidata claims (part of the series, media franchise, spin-off, follows) | the series of a franchise, with those the library lacks to add |
 | Anime | AniList relations (sequel, prequel, spin-off, side story, parent, alternative) | the series of a franchise the library holds |
+| Music | MusicBrainz series ("part of" a release group series), asked once per soundtrack, 120 requests a pass | the scores of one series, given the Wikidata item of the series (P1407) and the franchises it is part of (`music.CollectionPass`, daily) |
+| Music | Wikidata, by release group (P436): the album's own series or franchise, or that of the film or show it is the soundtrack of (P406) | the franchise collection of the music library, under its widest item; a franchise reached through a soundtrack is kept for one album, as it links the scores with the films; one named on albums alone needs two |
+| Books, audiobooks | Wikidata series (P179) of the books' Open Library ids | no new collection: each series collection (kept by name) declares its Wikidata item and the franchises it is part of, when it is named like the series or more than half its books are in it (`book.SeriesKeysPass`, daily) |
 | Series | names that say they belong together ("PLUH" and "PLUH: Los Angeles", "Ppamir Vetl Z" and "Ppamir Vetl Super"), characters they share and crossover episodes | grouped by Solarr itself, in a collection of its own |
 | Any | made by hand | any works of the library |
 
@@ -202,7 +205,9 @@ and the series): each then shows the other's works (`relationship` kind `linked_
 (`internal/service/franchiselink`, every six hours) links those of different types that a provider puts in one franchise,
 without being asked: a series' Wikidata franchise and the same Wikidata franchise among a film collection's declared keys
 (`collection_declared_key`: the franchises, and their parents, most of a TMDB collection's films are in, written by the movie
-universe pass), a book series or soundtrack grouping that carries the same id. When two media types name one franchise id, the
+universe pass), a book series or soundtrack grouping that carries the same id, and a collection's own name as a TMDB keyword
+(`keyword:<name>`, declared by the link pass itself when more than half its works carry the keyword its name is: TMDB tags a
+franchise's films and shows alike; a keyword that is not the collection's name declares nothing). When two media types name one franchise id, the
 second keeps a sibling collection under `provider@media_type` so each library lists its own. A link shows the other collection's
 works and what its library type lacks (add with the one Add dialog into that library), the reason it was made (a shared
 `provider:id`, or by hand) and **Unlink**, which is remembered under the two collections' own ids (`collection_link_refusal`),

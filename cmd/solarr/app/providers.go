@@ -286,6 +286,12 @@ func theAudioDBCover(client theaudiodb.Client) func(ctx context.Context, release
 	}
 }
 
+// tvdbClient is the process's one TheTVDB client, made with the TV service.
+func (p *process) tvdbClient() tvdb.Client {
+	p.tvService()
+	return p.tvdbShared
+}
+
 // tvService is the process's one TV service: Skyhook and TVmaze each on their own ADR-13 bucket, TVmaze at its
 // published 20 calls per 10 seconds.
 func (p *process) tvService() tv.Service {

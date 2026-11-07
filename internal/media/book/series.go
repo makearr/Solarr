@@ -82,28 +82,34 @@ func (s SeriesBooks) seriesOf(ctx context.Context, row library.FranchiseRow) ([]
 	if err != nil || len(books) == 0 {
 		return nil, err
 	}
-	count := map[string]int{}
-	chosen := ""
-	for _, book := range books {
-		if slices.ContainsFunc(book.OpenLibrary, func(id string) bool { return slices.Contains(held, id) }) {
-			count[book.SeriesQID]++
-		}
-		if foldTitle(book.SeriesName) == foldTitle(row.Name) {
-			chosen = book.SeriesQID
-		}
-	}
-	if chosen == "" {
-		for qid, n := range count {
-			if chosen == "" || n > count[chosen] || (n == count[chosen] && qid < chosen) {
-				chosen = qid
-			}
-		}
-	}
+	chosen, _, _ := chooseSeries(books, held, row.Name)
 	books = slices.DeleteFunc(books, func(book wikidata.SeriesBook) bool { return book.SeriesQID != chosen })
 	slices.SortStableFunc(books, func(a, b wikidata.SeriesBook) int {
 		return cmp.Or(cmp.Compare(ordinal(a.Ordinal), ordinal(b.Ordinal)), cmp.Compare(a.Year, b.Year))
 	})
 	return books, nil
+}
+
+// chooseSeries picks a collection's series among those its held books are in: the one named like the collection, else
+// the one most of them are in; it answers how many held books that series has and whether its name is the collection's.
+func chooseSeries(books []wikidata.SeriesBook, held []string, name string) (qid string, inside int, named bool) {
+	count := map[string]int{}
+	for _, book := range books {
+		if slices.ContainsFunc(book.OpenLibrary, func(id string) bool { return slices.Contains(held, id) }) {
+			count[book.SeriesQID]++
+		}
+		if foldTitle(book.SeriesName) == foldTitle(name) {
+			qid, named = book.SeriesQID, true
+		}
+	}
+	if qid == "" {
+		for candidate, n := range count {
+			if qid == "" || n > count[qid] || (n == count[qid] && candidate < qid) {
+				qid = candidate
+			}
+		}
+	}
+	return qid, count[qid], named
 }
 
 // ordinal places a book by its number in the series, one without a number after the numbered ones.

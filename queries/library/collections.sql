@@ -623,3 +623,24 @@ FROM (
   WHERE kind = 'linked_collection' AND from_type = 'collection' AND to_type = 'collection'
 ) x JOIN collection o ON o.id = x.other_id
 ORDER BY x.id, x.other_id;
+
+-- Works of a media type known to a provider, with their first edition's label, that a collection source has not asked about since a time.
+-- name: ListWorksToCheckForCollections :many
+SELECT w.id AS work_id, CAST(MIN(e.external_id) AS TEXT) AS external_id,
+       CAST(COALESCE((SELECT d.label FROM edition d WHERE d.work_id = w.id AND d.kind NOT IN ('unknown', 'withdrawn')
+                 ORDER BY d.is_default DESC, d.id LIMIT 1), '') AS TEXT) AS edition_label
+FROM work w JOIN work_external_id e ON e.work_id = w.id AND e.provider = sqlc.arg(provider)
+WHERE w.media_type = sqlc.arg(media_type) AND w.id > sqlc.arg(after_id)
+  AND NOT EXISTS (SELECT 1 FROM work_collection_check c WHERE c.work_id = w.id AND c.source = sqlc.arg(source) AND c.checked_at >= sqlc.arg(since))
+GROUP BY w.id
+ORDER BY w.id
+LIMIT sqlc.arg(page_size);
+
+-- name: MarkWorkCollectionChecked :exec
+INSERT INTO work_collection_check (work_id, source, checked_at) VALUES (?, ?, ?)
+ON CONFLICT (work_id, source) DO UPDATE SET checked_at = excluded.checked_at;
+
+-- name: ListClassificationsOfType :many
+SELECT c.work_id, c.value FROM work_classification c JOIN work w ON w.id = c.work_id
+WHERE w.media_type = sqlc.arg(media_type) AND c.kind = sqlc.arg(kind)
+ORDER BY c.work_id, c.value;

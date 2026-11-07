@@ -537,6 +537,30 @@ func (p Provider) Label(ctx context.Context, priority Priority, mbid string) (La
 	return Label{}, fmt.Errorf("musicbrainz: no source answered label %s: %w", mbid, errors.Join(errs...))
 }
 
+// cacheKindSeries is the series a release group is part of.
+const cacheKindSeries = "musicbrainz:release-group-series"
+
+// ReleaseGroupSeries answers the series a release group is part of, cache-first, from the sources that can look them up;
+// cached says no source was asked, so a caller can spend its own request budget only on the rest.
+func (p Provider) ReleaseGroupSeries(ctx context.Context, priority Priority, releaseGroupMBID string) (series []Series, cached bool, err error) {
+	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
+	r := routeFor[SeriesLookup](ctx, p)
+	if found, ok := cachedJSON[[]Series](ctx, p, r, cacheKindSeries, releaseGroupMBID); ok {
+		return found, true, nil
+	}
+	answer, answered, errs := firstAnswer(ctx, p, r, func(ctx context.Context, lookup SeriesLookup) ([]Series, error) {
+		return lookup.ReleaseGroupSeries(ctx, releaseGroupMBID)
+	})
+	if answered {
+		rememberJSON(ctx, p, r, answer.Source.Name(), cacheKindSeries, releaseGroupMBID, answer.Value)
+		return answer.Value, false, nil
+	}
+	if len(errs) == 0 {
+		return nil, false, fmt.Errorf("musicbrainz: no source can look up series (release group %s)", releaseGroupMBID)
+	}
+	return nil, false, fmt.Errorf("musicbrainz: no source answered series of %s: %w", releaseGroupMBID, errors.Join(errs...))
+}
+
 // LabelReleaseGroups answers what a label released, cache-first, from the sources that can browse it.
 func (p Provider) LabelReleaseGroups(ctx context.Context, priority Priority, labelMBID string) ([]ReleaseGroup, error) {
 	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))

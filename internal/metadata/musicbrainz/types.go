@@ -232,6 +232,16 @@ type LabelLookup interface {
 	Label(ctx context.Context, mbid string) (Label, error)
 }
 
+// Series is a MusicBrainz series a release group is part of; Type is MusicBrainz's own ("Release group series", ...).
+type Series struct {
+	MBID, Name, Type string
+}
+
+// SeriesLookup is an optional Source capability: the series a release group is part of (its series relations).
+type SeriesLookup interface {
+	ReleaseGroupSeries(ctx context.Context, releaseGroupMBID string) ([]Series, error)
+}
+
 // LabelCatalogue is an optional Source capability: the release groups a label released, browsed by its releases.
 type LabelCatalogue interface {
 	LabelReleaseGroups(ctx context.Context, labelMBID string) ([]ReleaseGroup, error)

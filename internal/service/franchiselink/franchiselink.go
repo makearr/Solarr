@@ -5,6 +5,7 @@ package franchiselink
 import (
 	"context"
 	"log/slog"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -30,8 +31,10 @@ type Store interface {
 
 // Service is the pass's handler.
 type Service struct {
-	Store  Store
-	Logger *slog.Logger
+	Store Store
+	// Keywords declares the keyword keys before the links are made; nil declares none.
+	Keywords KeywordStore
+	Logger   *slog.Logger
 }
 
 // Run implements jobs.Handler.
@@ -44,11 +47,26 @@ func (s Service) Run(ctx context.Context, _ jobs.Job) error {
 	return nil
 }
 
-// Link applies the rule once and answers how many pairs it linked.
+// Link declares the keyword keys, applies the rule once and answers how many pairs it linked.
 func (s Service) Link(ctx context.Context) (int, error) {
 	candidates, err := s.Store.LinkCandidates(ctx)
 	if err != nil {
 		return 0, err
+	}
+	if s.Keywords != nil {
+		var mediaTypes []string
+		for _, candidate := range candidates {
+			if !slices.Contains(mediaTypes, candidate.MediaType) {
+				mediaTypes = append(mediaTypes, candidate.MediaType)
+			}
+		}
+		slices.Sort(mediaTypes)
+		if err := s.declareKeywords(ctx, mediaTypes); err != nil {
+			return 0, err
+		}
+		if candidates, err = s.Store.LinkCandidates(ctx); err != nil {
+			return 0, err
+		}
 	}
 	linked, refused, err := s.Store.LinkState(ctx)
 	if err != nil {

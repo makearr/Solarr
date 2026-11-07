@@ -3,12 +3,15 @@ package tv_test
 import (
 	"context"
 	"log/slog"
+	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
+	"github.com/makearr/Solarr/internal/metadata/tvdb"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -115,5 +118,77 @@ func TestTheFranchisePassFindsACrossoverInProviderListsAndJoinsTheSeriesItTouche
 		if len(collection.Members) > 1 {
 			t.Errorf("collection %q holds %d series again after one was taken out", collection.Name, len(collection.Members))
 		}
+	}
+}
+
+// fakeSeriesLists answers TheTVDB's lists by series and the entries of each list, and counts what was asked.
+type fakeSeriesLists struct {
+	lists   map[int64][]tvdb.List
+	entries map[int64][]tvdb.ListEntry
+	asked   []string
+}
+
+func (f *fakeSeriesLists) SeriesLists(_ context.Context, id int64) ([]tvdb.List, error) {
+	f.asked = append(f.asked, "series:"+strconv.FormatInt(id, 10))
+	return f.lists[id], nil
+}
+
+func (f *fakeSeriesLists) ListEntries(_ context.Context, id int64) ([]tvdb.ListEntry, error) {
+	f.asked = append(f.asked, "list:"+strconv.FormatInt(id, 10))
+	return f.entries[id], nil
+}
+
+func TestTheFranchisePassComparesTheSeriesOfAnOfficialListOnlyAndAsksEachSeriesAMonth(t *testing.T) {
+	sky := seriesByID{
+		11: eventSeries(11, "Invented Show", eventEpisode(111, 1, 5, "Great Night (1)", "2018-12-09")),
+		22: eventSeries(22, "Invented Spinoff", eventEpisode(222, 1, 8, "Quiet Night", "2018-12-11")),
+	}
+	service, opened := newService(t, sky, fakeTVmaze{err: tvmaze.ErrNotFound})
+	for _, id := range []int64{11, 22} {
+		if _, err := service.Add(t.Context(), tv.AddRequest{IDs: tv.IDs{TVDB: id}, CategoryID: 7, ProfileID: 1, Monitor: tv.MonitorNone}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lists := &fakeSeriesLists{
+		lists: map[int64][]tvdb.List{
+			11: {{ID: 500, Name: "Invented Franchise", IsOfficial: true}, {ID: 600, Name: "Someone's favourites"}},
+			22: {{ID: 500, Name: "Invented Franchise", IsOfficial: true}},
+		},
+		entries: map[int64][]tvdb.ListEntry{
+			500: {{SeriesID: 11, Order: 1}, {SeriesID: 22, Order: 2}, {SeriesID: 33, Order: 3}, {MovieID: 900, Order: 4}},
+			600: {{SeriesID: 11}, {SeriesID: 44}},
+		},
+	}
+	episodes := episodeListsByID{
+		11: listOf("Invented Show", tv.Episode{Season: 1, Number: 5, Title: "Great Night (1)", AirDate: "2018-12-09"}),
+		22: listOf("Invented Spinoff", tv.Episode{Season: 1, Number: 8, Title: "Quiet Night", AirDate: "2018-12-11"}),
+		33: listOf("Invented Sequel", tv.Episode{Season: 2, Number: 3, Title: "Great Night (2)", AirDate: "2018-12-10"}),
+		44: listOf("Unrelated Show", tv.Episode{Season: 1, Number: 1, Title: "Great Night (3)", AirDate: "2018-12-12"}),
+	}
+	crossovers := library.NewCrossovers(opened)
+	pass := tv.FranchisePass{
+		Franchises: library.NewFranchises(opened), Crossovers: crossovers, Series: service.Series, Episodes: episodes, Lists: lists,
+		Clock: clock.NewFakeAtEpoch(), Logger: slog.New(slog.DiscardHandler),
+	}
+	if err := pass.Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"series:11", "list:500", "series:22"}; !reflect.DeepEqual(lists.asked, want) {
+		t.Errorf("asked %v, want %v: a user's list is not read, an official one once", lists.asked, want)
+	}
+	events, err := crossovers.List(t.Context(), "tv")
+	if err != nil || len(events) != 1 {
+		t.Fatalf("events = %+v, %v; want the one the official list's series share", events, err)
+	}
+	if event := events[0]; event.Name != "Great Night" || event.Total != 2 || len(event.Missing) != 1 || event.Missing[0].ExternalID != "33" {
+		t.Errorf("event = %+v; want Great Night in two parts, part 2 the sequel's, and nothing of the user's list", event)
+	}
+
+	lists.asked = nil
+	if err := pass.Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(lists.asked) != 0 {
+		t.Errorf("asked again within the month: %v", lists.asked)
 	}
 }

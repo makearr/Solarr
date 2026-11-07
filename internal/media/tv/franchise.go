@@ -57,7 +57,9 @@ type FranchisePass struct {
 	Logger     *slog.Logger
 	// Episodes lists series' episodes to find crossovers in providers' data; nil compares none.
 	Episodes EpisodeLists
-	Clock    clock.Clock
+	// Lists reads TheTVDB's franchise lists as further families to compare; nil reads none.
+	Lists SeriesLists
+	Clock clock.Clock
 	// Again asks for another pass soon, when AniList's time ran out with entries still unread; nil asks none.
 	Again func(ctx context.Context)
 }

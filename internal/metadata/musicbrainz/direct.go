@@ -491,6 +491,36 @@ func (d direct) Label(ctx context.Context, mbid string) (Label, error) {
 	}, nil
 }
 
+// directSeriesRelations is a release group's JSON with inc=series-rels: its "part of" relations to series.
+type directSeriesRelations struct {
+	Relations []struct {
+		Type       string `json:"type"`
+		TargetType string `json:"target-type"`
+		Series     struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+			Type string `json:"type"`
+		} `json:"series"`
+	} `json:"relations"`
+}
+
+// ReleaseGroupSeries implements SeriesLookup: one request, so it is asked only of albums a pass picked.
+func (d direct) ReleaseGroupSeries(ctx context.Context, releaseGroupMBID string) ([]Series, error) {
+	var parsed directSeriesRelations
+	requestURL := fmt.Sprintf("%s/release-group/%s?fmt=json&inc=series-rels", d.baseURL, url.PathEscape(releaseGroupMBID))
+	if err := getJSON(ctx, d.client, requestURL, &parsed); err != nil {
+		return nil, fmt.Errorf("musicbrainz: series of release-group %s: %w", releaseGroupMBID, err)
+	}
+	series := []Series{}
+	for _, relation := range parsed.Relations {
+		if relation.TargetType != "series" || relation.Type != "part of" || relation.Series.ID == "" {
+			continue
+		}
+		series = append(series, Series{MBID: relation.Series.ID, Name: relation.Series.Name, Type: relation.Series.Type})
+	}
+	return series, nil
+}
+
 type directLabelReleases struct {
 	ReleaseCount int `json:"release-count"`
 	Releases     []struct {

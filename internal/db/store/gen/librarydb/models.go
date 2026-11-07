@@ -932,6 +932,12 @@ type WorkClassification struct {
 	Source string
 }
 
+type WorkCollectionCheck struct {
+	WorkID    int64
+	Source    string
+	CheckedAt int64
+}
+
 type WorkDate struct {
 	WorkID int64
 	Kind   string

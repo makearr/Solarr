@@ -865,6 +865,45 @@ func (q *Queries) ListCharacterCreditsOfType(ctx context.Context, mediaType stri
 	return items, nil
 }
 
+const listClassificationsOfType = `-- name: ListClassificationsOfType :many
+SELECT c.work_id, c.value FROM work_classification c JOIN work w ON w.id = c.work_id
+WHERE w.media_type = ?1 AND c.kind = ?2
+ORDER BY c.work_id, c.value
+`
+
+type ListClassificationsOfTypeParams struct {
+	MediaType string
+	Kind      string
+}
+
+type ListClassificationsOfTypeRow struct {
+	WorkID int64
+	Value  string
+}
+
+func (q *Queries) ListClassificationsOfType(ctx context.Context, arg ListClassificationsOfTypeParams) ([]ListClassificationsOfTypeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listClassificationsOfType, arg.MediaType, arg.Kind)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListClassificationsOfTypeRow{}
+	for rows.Next() {
+		var i ListClassificationsOfTypeRow
+		if err := rows.Scan(&i.WorkID, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCollectionLinkOrigins = `-- name: ListCollectionLinkOrigins :many
 SELECT low_id, high_id, reason, detail, created_at FROM collection_link_origin
 WHERE low_id = ?1 OR high_id = ?1 ORDER BY low_id, high_id
@@ -2559,6 +2598,64 @@ func (q *Queries) ListWorksNeedingReleaseGroupArtwork(ctx context.Context, arg L
 	return items, nil
 }
 
+const listWorksToCheckForCollections = `-- name: ListWorksToCheckForCollections :many
+SELECT w.id AS work_id, CAST(MIN(e.external_id) AS TEXT) AS external_id,
+       CAST(COALESCE((SELECT d.label FROM edition d WHERE d.work_id = w.id AND d.kind NOT IN ('unknown', 'withdrawn')
+                 ORDER BY d.is_default DESC, d.id LIMIT 1), '') AS TEXT) AS edition_label
+FROM work w JOIN work_external_id e ON e.work_id = w.id AND e.provider = ?1
+WHERE w.media_type = ?2 AND w.id > ?3
+  AND NOT EXISTS (SELECT 1 FROM work_collection_check c WHERE c.work_id = w.id AND c.source = ?4 AND c.checked_at >= ?5)
+GROUP BY w.id
+ORDER BY w.id
+LIMIT ?6
+`
+
+type ListWorksToCheckForCollectionsParams struct {
+	Provider  string
+	MediaType string
+	AfterID   int64
+	Source    string
+	Since     int64
+	PageSize  int64
+}
+
+type ListWorksToCheckForCollectionsRow struct {
+	WorkID       int64
+	ExternalID   string
+	EditionLabel string
+}
+
+// Works of a media type known to a provider, with their first edition's label, that a collection source has not asked about since a time.
+func (q *Queries) ListWorksToCheckForCollections(ctx context.Context, arg ListWorksToCheckForCollectionsParams) ([]ListWorksToCheckForCollectionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorksToCheckForCollections,
+		arg.Provider,
+		arg.MediaType,
+		arg.AfterID,
+		arg.Source,
+		arg.Since,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorksToCheckForCollectionsRow{}
+	for rows.Next() {
+		var i ListWorksToCheckForCollectionsRow
+		if err := rows.Scan(&i.WorkID, &i.ExternalID, &i.EditionLabel); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markAnimeChecked = `-- name: MarkAnimeChecked :exec
 INSERT INTO work_anime_check (work_id, checked_at) VALUES (?, ?)
 ON CONFLICT (work_id) DO UPDATE SET checked_at = excluded.checked_at
@@ -2571,6 +2668,22 @@ type MarkAnimeCheckedParams struct {
 
 func (q *Queries) MarkAnimeChecked(ctx context.Context, arg MarkAnimeCheckedParams) error {
 	_, err := q.db.ExecContext(ctx, markAnimeChecked, arg.WorkID, arg.CheckedAt)
+	return err
+}
+
+const markWorkCollectionChecked = `-- name: MarkWorkCollectionChecked :exec
+INSERT INTO work_collection_check (work_id, source, checked_at) VALUES (?, ?, ?)
+ON CONFLICT (work_id, source) DO UPDATE SET checked_at = excluded.checked_at
+`
+
+type MarkWorkCollectionCheckedParams struct {
+	WorkID    int64
+	Source    string
+	CheckedAt int64
+}
+
+func (q *Queries) MarkWorkCollectionChecked(ctx context.Context, arg MarkWorkCollectionCheckedParams) error {
+	_, err := q.db.ExecContext(ctx, markWorkCollectionChecked, arg.WorkID, arg.Source, arg.CheckedAt)
 	return err
 }
 

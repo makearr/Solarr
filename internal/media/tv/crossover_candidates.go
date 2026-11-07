@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/metadata/tvdb"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
 )
 
@@ -288,10 +289,11 @@ func crossoverFamilies(known wikidataKnowledge, titles map[int64]string) []cross
 	return out
 }
 
-// findProviderCrossovers compares the providers' episode lists of each family of series Wikidata ties together, those
-// the library lacks included, so the events found list their missing parts. A family is compared once a month.
+// findProviderCrossovers compares the providers' episode lists of each family of series Wikidata or TheTVDB's franchise
+// lists tie together, those the library lacks included, so the events found list their missing parts. A family is
+// compared once a month.
 func (p FranchisePass) findProviderCrossovers(ctx context.Context, known *wikidataKnowledge) error {
-	if p.Episodes == nil || p.Clock == nil || known == nil {
+	if p.Episodes == nil || p.Clock == nil {
 		return nil
 	}
 	works, err := p.Franchises.WorkNames(ctx, MediaType)
@@ -307,8 +309,21 @@ func (p FranchisePass) findProviderCrossovers(ctx context.Context, known *wikida
 		return err
 	}
 	held := heldIndex(series)
+	var families []crossoverFamily
+	if known != nil {
+		families = crossoverFamilies(*known, titles)
+	}
+	fromLists, err := p.listFamilies(ctx)
+	if err != nil {
+		return err
+	}
+	for _, family := range fromLists {
+		if !slices.ContainsFunc(families, func(other crossoverFamily) bool { return other.key == family.key }) {
+			families = append(families, family)
+		}
+	}
 	fetched, recorded := 0, 0
-	for _, family := range crossoverFamilies(*known, titles) {
+	for _, family := range families {
 		if checked, ok, err := p.Crossovers.FamilyCheckedAt(ctx, family.key); err != nil {
 			return err
 		} else if ok && p.Clock.Now().Sub(checked) < crossoverRecheck {
@@ -354,4 +369,86 @@ func (p FranchisePass) listFamily(ctx context.Context, family crossoverFamily, h
 		listed = append(listed, listedSeries{provider: provider, externalID: externalID, title: cmp.Or(fetched.Title, member.Label), held: isHeld, episodes: fetched.Episodes})
 	}
 	return listed, complete
+}
+
+// SeriesLists is TheTVDB as the crossover pass asks it: the lists a series is on, and the titles of a list.
+type SeriesLists interface {
+	SeriesLists(ctx context.Context, id int64) ([]tvdb.List, error)
+	ListEntries(ctx context.Context, id int64) ([]tvdb.ListEntry, error)
+}
+
+const (
+	// listsChecked is the source a series' TheTVDB lists are recorded as read under.
+	listsChecked = "tvdb-lists"
+	// listSeriesPerRun bounds the series one pass asks TheTVDB the lists of; each is asked again after crossoverRecheck.
+	listSeriesPerRun = 60
+)
+
+// listFamilies reads the lists of the series due and answers a family for each official list among them: TheTVDB keeps
+// one per franchise ("one city's emergency services", a spin-off line), a user's own lists say nothing.
+func (p FranchisePass) listFamilies(ctx context.Context) ([]crossoverFamily, error) {
+	if p.Lists == nil {
+		return nil, nil
+	}
+	due, err := p.Franchises.WorksToCheck(ctx, MediaType, ProviderTVDB, listsChecked, crossoverRecheck, 0, listSeriesPerRun)
+	if err != nil {
+		return nil, err
+	}
+	var families []crossoverFamily
+	read := map[int64]bool{}
+	var answered []int64
+	for _, work := range due {
+		id, err := strconv.ParseInt(work.ExternalID, 10, 64)
+		if err != nil || id <= 0 {
+			continue
+		}
+		lists, err := p.Lists.SeriesLists(ctx, id)
+		if err != nil {
+			p.Logger.Debug("series lists not read", slog.Int64("tvdb", id), slog.Any("error", err))
+			continue
+		}
+		complete := true
+		for _, list := range lists {
+			if !list.IsOfficial || read[list.ID] {
+				continue
+			}
+			entries, err := p.Lists.ListEntries(ctx, list.ID)
+			if err != nil {
+				complete = false
+				continue
+			}
+			read[list.ID] = true
+			if family, ok := officialListFamily(entries); ok {
+				families = append(families, family)
+			}
+		}
+		if complete {
+			answered = append(answered, work.WorkID)
+		}
+	}
+	if err := p.Franchises.MarkChecked(ctx, listsChecked, answered); err != nil {
+		return nil, err
+	}
+	return families, nil
+}
+
+// officialListFamily is the series of one list as a family, when it has two to crossoverFamilyMax of them; the list's
+// films are no part of it, as only series are compared episode by episode.
+func officialListFamily(entries []tvdb.ListEntry) (crossoverFamily, bool) {
+	var family crossoverFamily
+	var keys []string
+	for _, entry := range entries {
+		key := ProviderTVDB + ":" + strconv.FormatInt(entry.SeriesID, 10)
+		if entry.SeriesID <= 0 || slices.Contains(keys, key) {
+			continue
+		}
+		keys = append(keys, key)
+		family.members = append(family.members, wikidata.FranchiseSeries{TVDB: entry.SeriesID})
+	}
+	if len(keys) < 2 || len(keys) > crossoverFamilyMax {
+		return crossoverFamily{}, false
+	}
+	slices.Sort(keys)
+	family.key = strings.Join(keys, ",")
+	return family, true
 }

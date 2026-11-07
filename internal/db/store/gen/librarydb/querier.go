@@ -584,6 +584,7 @@ type Querier interface {
 	ListCharacterCreditsOfType(ctx context.Context, mediaType string) ([]ListCharacterCreditsOfTypeRow, error)
 	// Genres stored before they were tags, a page of works at a time.
 	ListClassificationGenres(ctx context.Context, pageSize int64) ([]ListClassificationGenresRow, error)
+	ListClassificationsOfType(ctx context.Context, arg ListClassificationsOfTypeParams) ([]ListClassificationsOfTypeRow, error)
 	ListCollectionLinkOrigins(ctx context.Context, id int64) ([]CollectionLinkOrigin, error)
 	ListCollectionLinkRefusals(ctx context.Context) ([]CollectionLinkRefusal, error)
 	// Collections of different libraries a person said are one (Babylon 5: its films and its series), both ways round.
@@ -970,6 +971,8 @@ type Querier interface {
 	// Works of a media type with a provider's id whose organisation in one role was never asked for: no work_field of
 	// that role from the asking provider. The edition label is the default (else first) edition's provider id.
 	ListWorksToAskOrganisation(ctx context.Context, arg ListWorksToAskOrganisationParams) ([]ListWorksToAskOrganisationRow, error)
+	// Works of a media type known to a provider, with their first edition's label, that a collection source has not asked about since a time.
+	ListWorksToCheckForCollections(ctx context.Context, arg ListWorksToCheckForCollectionsParams) ([]ListWorksToCheckForCollectionsRow, error)
 	// The works holding a file one sweep found gone, so their counts can follow.
 	ListWorksWithPathsMissingSince(ctx context.Context, arg ListWorksWithPathsMissingSinceParams) ([]int64, error)
 	MarkAnimeChecked(ctx context.Context, arg MarkAnimeCheckedParams) error
@@ -992,6 +995,7 @@ type Querier interface {
 	// so tightening it here does not touch a working caller.
 	MarkRecycleBinRestored(ctx context.Context, arg MarkRecycleBinRestoredParams) (int64, error)
 	MarkRequestFulfilled(ctx context.Context, id int64) (int64, error)
+	MarkWorkCollectionChecked(ctx context.Context, arg MarkWorkCollectionCheckedParams) error
 	MarkWorkItemsDirty(ctx context.Context, workID int64) error
 	MaxDesiredItemID(ctx context.Context) (int64, error)
 	MergeAliasesInto(ctx context.Context, arg MergeAliasesIntoParams) error

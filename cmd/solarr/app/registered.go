@@ -208,7 +208,7 @@ func (p *process) tvModule() tv.Module {
 		},
 		FranchisePass: &tv.FranchisePass{
 			Source: p.wikidataFetcher(), Anime: p.aniListClient(), Franchises: library.NewFranchises(p.library), Crossovers: library.NewCrossovers(p.library),
-			Series: p.tvService().Series, Logger: p.logger, Episodes: p.tvService(), Clock: clock.NewSystem(),
+			Series: p.tvService().Series, Logger: p.logger, Episodes: p.tvService(), Lists: p.tvdbClient(), Clock: clock.NewSystem(),
 			Again: func(ctx context.Context) {
 				_, _ = p.queue.Enqueue(ctx, jobs.Request{
 					Type: tv.FranchisePassJobType, ActionKey: "tv.franchises.continue", Priority: jobs.PriorityLow, RunAfter: clock.NewSystem().Now().Add(5 * time.Minute),
@@ -338,7 +338,18 @@ func (p *process) musicJobs() []media.JobRegistration {
 	labelLogos := media.JobRegistration{Definition: music.LabelLogosDefinition, Handler: music.LabelLogosJob{
 		Organisations: library.NewOrganisations(p.library), Source: p.wikidataFetcher(), Clock: clock.NewSystem(), Logger: p.logger,
 	}}
-	return append(registrations, p.tagWritebackJob(), p.artworkJob(), p.discographyCoverageJob(), p.searchCategoryJob(), labelLogos)
+	collections := media.JobRegistration{Definition: music.CollectionPassDefinition, Handler: music.CollectionPass{
+		Wikidata: p.wikidataFetcher(), MusicBrainz: p.musicBrainzProvider(), Franchises: library.NewFranchises(p.library), Logger: p.logger,
+		Libraries: adapters.EntityLibraries{
+			MediaType: string(music.MediaType), Works: library.NewWorks(p.library), People: library.NewPeople(p.library), Cache: p.cache,
+		},
+	}}
+	return append(registrations, p.tagWritebackJob(), p.artworkJob(), p.discographyCoverageJob(), p.searchCategoryJob(), labelLogos, collections)
+}
+
+// enqueueMusicCollections submits the pass that puts albums in the series and franchises they belong to.
+func (p *process) enqueueMusicCollections(ctx context.Context) (jobs.EnqueueResult, error) {
+	return music.EnqueueCollectionPass(ctx, p.queue)
 }
 
 // tvJobs are the job types the TV module brings besides its own typed ones.
@@ -528,6 +539,21 @@ func (p *process) enqueueCrossoverPass(ctx context.Context) (jobs.EnqueueResult,
 	return tv.EnqueueCrossoverPass(ctx, p.queue)
 }
 
+// bookSeriesKeysJob is the one pass that gives the series of both book types their Wikidata keys, brought by the first.
+func (p *process) bookSeriesKeysJob(format book.Format) []media.JobRegistration {
+	if format.MediaType != book.Formats[0].MediaType {
+		return nil
+	}
+	return []media.JobRegistration{{Definition: book.SeriesKeysDefinition, Handler: book.SeriesKeysPass{
+		Formats: book.Formats, Source: p.wikidataFetcher(), Franchises: library.NewFranchises(p.library), Logger: p.logger,
+	}}}
+}
+
+// enqueueBookSeriesKeys submits the pass that tells each book series its Wikidata item.
+func (p *process) enqueueBookSeriesKeys(ctx context.Context) (jobs.EnqueueResult, error) {
+	return book.EnqueueSeriesKeys(ctx, p.queue)
+}
+
 // bookModule wires one of the two book types: the sweep that finds its files, the add and refresh over Open Library,
 // Google Books and Audible, the search and the jobs that keep its metadata and covers current.
 func (p *process) bookModule(format book.Format) book.Module {
@@ -543,10 +569,10 @@ func (p *process) bookModule(format book.Format) book.Module {
 	module := book.Module{Format: format}
 	return book.Module{
 		Format: format,
-		Registrations: []media.JobRegistration{
+		Registrations: append([]media.JobRegistration{
 			{Definition: format.RefreshDefinition(), Handler: format.NewRefreshJob(library.NewSeriesReader(p.library), service, clock.NewSystem(), p.logger)},
 			{Definition: format.ArtworkDefinition(), Handler: format.NewArtworkJob(library.NewSeriesReader(p.library), p.remoteImages(), p.logger)},
-		},
+		}, p.bookSeriesKeysJob(format)...),
 		Sweep: scan.Sweep{
 			Consumer: book.NewConsumer(book.ConsumerConfig{
 				FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library), Service: service,

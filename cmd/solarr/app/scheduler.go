@@ -21,6 +21,8 @@ const (
 	subscriptionExpandScheduleCron = "10 */12 * * *" // every 12 hours
 	franchiseExpandScheduleCron    = "25 */12 * * *" // every 12 hours; at most 25 works a run
 	franchiseLinkScheduleCron      = "55 */6 * * *"  // every six hours; reads the franchise ids already held
+	musicCollectionsScheduleCron   = "50 4 * * *"    // daily; a bulk read of Wikidata and at most 120 MusicBrainz requests
+	bookSeriesKeysScheduleCron     = "15 5 * * *"    // daily; one bulk read of Wikidata for the book series
 	importListScheduleCron         = "35 * * * *"    // hourly; each list runs once its own cadence has passed
 	arrPushScheduleCron            = "50 */6 * * *"  // every six hours; only connections that send monitoring back
 	picturesScheduleCron           = "10 * * * *"    // hourly; 1,500 series pictures a run until the library's are all kept
@@ -103,6 +105,14 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	registry.MustRegister(jobs.Task{
 		Key: "movie_universes", Name: "Group films into franchises and universes", DefaultCadence: universePassScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Enqueue: p.enqueueUniversePass,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "music_collections", Name: "Find the series and franchises albums belong to", DefaultCadence: musicCollectionsScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Enqueue: p.enqueueMusicCollections,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "book_series_keys", Name: "Find the franchises book series belong to", DefaultCadence: bookSeriesKeysScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Enqueue: p.enqueueBookSeriesKeys,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "people_bridge", Name: "Match people across libraries", DefaultCadence: bridgeScheduleCron,

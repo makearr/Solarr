@@ -244,7 +244,9 @@ numbers nothing is known for are `gaps`. `Crossovers.MergeSplitEvents` folds eve
 `DetectEvents` extends the event of that name instead of making a second; an event a person edits becomes theirs (`source` user) and
 a deleted one is remembered (`crossover_event_dismissed`).
 **Provider detection** (`FranchisePass.findProviderCrossovers`, in the franchise pass): for each family Wikidata ties together (a
-franchise, spin-off and sequel claims; the series the library lacks included) the episode lists are read through the TV service and
+franchise, spin-off and sequel claims; the series the library lacks included), and the series of each official TheTVDB list a held
+series is on (`listFamilies`: TheTVDB keeps one per franchise, users' own lists are ignored; 60 series' lists a pass, each series
+asked again after a month, `work_collection_check` source `tvdb-lists`), the episode lists are read through the TV service and
 compared (`findCrossoverEvents`): one title in two or more series within 60 days, an episode whose title names another series of the
 family aired within a week of one of its own, and a spin-off's first episode with the parent's episode within two weeks before it that
 names it. `Crossovers.RecordProviderEvent` keeps what the library holds as members and the rest as `crossover_missing_part`, shown on
@@ -252,9 +254,9 @@ the event with "Add the series" (the unified Add dialog). A family is compared o
 series per pass. Events also put their series in one collection (`Crossovers.EventPairs` feed the franchise pass), undoable like any
 crossover-made membership. **Not the same** (`POST /parts/{id}/not-same`, `crossover_not_same`, by series and episode so a rebuilt
 part keeps it) removes a link and keeps the pair out of the suggestions, detection and the events.
-Not built yet: provider candidates from TMDB episode groups, TheTVDB remote ids and TVmaze links (Wikidata is the one source of
-families), suggestions from file hashes or TMDB episode notes, a release named after one series searched for the
-other's want, and a rename moving both paths.
+TMDB episode groups are no family source: every group read (orderings, story arcs, a character's essential episodes) holds only
+its own show's episodes (checked 2026-11-06), and TVmaze has no relation between shows. Not built yet: suggestions from file hashes
+or TMDB episode notes, a release named after one series searched for the other's want, and a rename moving both paths.
 
 ## Release filters (T2c: `judge.ApplyFilters`, `library.ReleaseFilters`)
 
