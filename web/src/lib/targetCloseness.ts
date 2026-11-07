@@ -35,6 +35,9 @@ export function targetClosenessChip(file: PartFile): { text: string; title: stri
     const perMinute = megabytes(file.target_expected_kbps, 1);
     lines.push(`A file on the target is about ${perMinute.toFixed(1)} MB/min (${Math.round(perMinute * 60)} MB/h, ${file.target_expected_kbps} kbit/s)`);
   }
+  if (file.size_bytes && file.duration_ms && file.duration_ms > 0) {
+    lines.push(`This file averages ${Math.round((file.size_bytes * 8) / file.duration_ms)} kbit/s overall (video, audio and container)`);
+  }
   const gaps = (file.target_gaps ?? []).map((gap) => `${gap.dimension}: ${gap.have} (wanted ${gap.want})`);
   if (gaps.length > 0) lines.push("Differs from the target in", ...gaps);
   return { text: sizeText(file.target_size_pct), title: lines.join("\n"), tone: sizeTone(file.target_size_pct) };

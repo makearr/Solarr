@@ -144,7 +144,7 @@ export function PartWanted({ info }: { info: MediaTypeInfo | undefined }) {
               {part.file && (
                 <span className="flex flex-wrap gap-1">
                   {fileTagChips(part.file).slice(0, 3).map((chip) => (
-                    <Chip key={chip.text} tone={chip.tone}>{chip.text}</Chip>
+                    <Chip key={chip.text} tone={chip.tone} title={chip.title}>{chip.text}</Chip>
                   ))}
                 </span>
               )}

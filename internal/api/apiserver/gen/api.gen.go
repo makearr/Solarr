@@ -295,6 +295,15 @@ const (
 	FitLevelOk   FitLevel = "ok"
 )
 
+// Defines values for FitNoteTag.
+const (
+	FitNoteTagAudioCodec       FitNoteTag = "audio_codec"
+	FitNoteTagAudioLanguage    FitNoteTag = "audio_language"
+	FitNoteTagResolution       FitNoteTag = "resolution"
+	FitNoteTagSubtitleLanguage FitNoteTag = "subtitle_language"
+	FitNoteTagVideoCodec       FitNoteTag = "video_codec"
+)
+
 // Defines values for FranchiseKind.
 const (
 	FranchiseKindCustom    FranchiseKind = "custom"
@@ -2675,6 +2684,20 @@ type FilePlaybackSubtitle struct {
 
 // FitLevel On the target, a little off it (the right codec at another bitrate, or a resolution in the same bracket), or far off it.
 type FitLevel string
+
+// FitNote defines model for FitNote.
+type FitNote struct {
+	// Dimension What differs: video bitrate, channels, audio language, ...
+	Dimension string `json:"dimension"`
+	Have      string `json:"have"`
+
+	// Tag The chip the difference explains.
+	Tag  FitNoteTag `json:"tag"`
+	Want string     `json:"want"`
+}
+
+// FitNoteTag The chip the difference explains.
+type FitNoteTag string
 
 // Follow The caller's follow of a person or organisation in one library.
 type Follow struct {
@@ -5848,6 +5871,9 @@ type TargetFit struct {
 
 	// AudioLanguage On the target, a little off it (the right codec at another bitrate, or a resolution in the same bracket), or far off it.
 	AudioLanguage *FitLevel `json:"audio_language,omitempty"`
+
+	// Notes What each tag that is not on the target differs in.
+	Notes *[]FitNote `json:"notes,omitempty"`
 
 	// Resolution On the target, a little off it (the right codec at another bitrate, or a resolution in the same bracket), or far off it.
 	Resolution *FitLevel `json:"resolution,omitempty"`

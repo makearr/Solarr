@@ -189,7 +189,7 @@ function Dock({ item }: { item: PlayerItem }) {
             {item.file ? (
               <>
                 {fileTagChips(item.file).map((chip) => (
-                  <Chip key={chip.text} tone={chip.tone}>{chip.text}</Chip>
+                  <Chip key={chip.text} tone={chip.tone} title={chip.title}>{chip.text}</Chip>
                 ))}
                 <TargetChip file={item.file} />
               </>

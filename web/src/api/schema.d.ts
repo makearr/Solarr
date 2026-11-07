@@ -8909,6 +8909,19 @@ export interface components {
             audio_codec?: components["schemas"]["FitLevel"];
             audio_language?: components["schemas"]["FitLevel"];
             subtitle_language?: components["schemas"]["FitLevel"];
+            /** @description What each tag that is not on the target differs in. */
+            notes?: components["schemas"]["FitNote"][];
+        };
+        FitNote: {
+            /**
+             * @description The chip the difference explains.
+             * @enum {string}
+             */
+            tag: "resolution" | "video_codec" | "audio_codec" | "audio_language" | "subtitle_language";
+            /** @description What differs: video bitrate, channels, audio language, ... */
+            dimension: string;
+            want: string;
+            have: string;
         };
         /**
          * @description On the target, a little off it (the right codec at another bitrate, or a resolution in the same bracket), or far off it.

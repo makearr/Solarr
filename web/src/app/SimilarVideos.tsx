@@ -145,7 +145,7 @@ function GroupCard({ group, scope, libraryName }: { group: Group; scope: Similar
             </div>
             <div className="flex flex-wrap items-center gap-1">
               {fileTagChips(video.file).map((chip) => (
-                <Chip key={chip.text} tone={chip.tone}>{chip.text}</Chip>
+                <Chip key={chip.text} tone={chip.tone} title={chip.title}>{chip.text}</Chip>
               ))}
               <TargetChip file={video.file} />
             </div>

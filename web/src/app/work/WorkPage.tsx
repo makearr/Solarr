@@ -724,7 +724,7 @@ function FilesTab({ work, words, info, categoryId }: { work: Work; words: Vocabu
               <span>{part.title ?? part.media_ref}</span>
               {part.file?.path && <span className="block break-all font-mono text-xs text-ink-muted">{part.file.path}</span>}
               <span className="mt-0.5 flex flex-wrap gap-1">
-                {part.file && fileTagChips(part.file).map((chip) => <Chip key={chip.text} tone={chip.tone}>{chip.text}</Chip>)}
+                {part.file && fileTagChips(part.file).map((chip) => <Chip key={chip.text} tone={chip.tone} title={chip.title}>{chip.text}</Chip>)}
               </span>
               {part.file && <ExpertFileInfo mediaObjectId={part.file.media_object_id} expert={expert} />}
             </td>
@@ -758,7 +758,7 @@ function WholeFiles({ work, expert }: { work: Work; expert?: ExpertFiles }) {
             </span>
             <span className="flex flex-wrap items-center gap-1">
               {fileTagChips(file).map((chip) => (
-                <Chip key={chip.text} tone={chip.tone}>{chip.text}</Chip>
+                <Chip key={chip.text} tone={chip.tone} title={chip.title}>{chip.text}</Chip>
               ))}
               <TargetChip file={file} />
             </span>

@@ -231,7 +231,7 @@ function PartRow({
             {part.file && (
               <span className="mt-0.5 flex flex-wrap items-center gap-1">
                 {fileTagChips(part.file).map((chip) => (
-                  <Chip key={chip.text} tone={chip.tone}>{chip.text}</Chip>
+                  <Chip key={chip.text} tone={chip.tone} title={chip.title}>{chip.text}</Chip>
                 ))}
                 <TargetChip file={part.file} />
               </span>

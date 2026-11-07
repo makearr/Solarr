@@ -12251,6 +12251,19 @@ components:
         audio_codec: { $ref: "#/components/schemas/FitLevel" }
         audio_language: { $ref: "#/components/schemas/FitLevel" }
         subtitle_language: { $ref: "#/components/schemas/FitLevel" }
+        notes:
+          type: array
+          description: What each tag that is not on the target differs in.
+          items: { $ref: "#/components/schemas/FitNote" }
+
+    FitNote:
+      type: object
+      required: [tag, dimension, want, have]
+      properties:
+        tag: { type: string, enum: [resolution, video_codec, audio_codec, audio_language, subtitle_language], description: The chip the difference explains. }
+        dimension: { type: string, description: 'What differs: video bitrate, channels, audio language, ...' }
+        want: { type: string }
+        have: { type: string }
 
     FitLevel:
       type: string

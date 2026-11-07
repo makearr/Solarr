@@ -10,6 +10,7 @@ import (
 	"math"
 	"net/http"
 	"path"
+	"slices"
 	"strconv"
 	"time"
 
@@ -364,7 +365,7 @@ func annotateFiles(access authz.Access, categoryIDs []int64, files []*gen.PartFi
 			}
 			file.MeetsCutoff = &meetsCutoff
 			if category.QualityTarget != nil {
-				setTargetCloseness(file, *category.QualityTarget, judgement)
+				setTargetCloseness(file, *category.QualityTarget, wantedLanguages(access.Snapshot(), category), judgement)
 			}
 		}
 		return
@@ -372,7 +373,7 @@ func annotateFiles(access authz.Access, categoryIDs []int64, files []*gen.PartFi
 }
 
 // setTargetCloseness shows how the file's size stands against the library's target, how each tag fits, and the parts that differ.
-func setTargetCloseness(file *gen.PartFile, target settings.QualityTarget, judgement quality.File) {
+func setTargetCloseness(file *gen.PartFile, target settings.QualityTarget, languages *settings.LanguageProfile, judgement quality.File) {
 	facts := partFileFacts(*file).File
 	actual := float64(file.BitrateKbps)
 	if file.SizeBytes != nil && file.DurationMs != nil && *file.DurationMs > 0 {
@@ -382,8 +383,22 @@ func setTargetCloseness(file *gen.PartFile, target settings.QualityTarget, judge
 		percent, kbps := int64(math.Round(ratio*100)), int64(math.Round(expected))
 		file.TargetSizePct, file.TargetExpectedKbps = &percent, &kbps
 	}
-	fits := quality.Fits(target, facts)
-	file.TargetFit = &gen.TargetFit{
+	// The languages a person wants are the library's language profile; the target's own list only fills in where there is none.
+	fitTarget := target
+	if languages != nil {
+		if audio := append(slices.Clone(languages.AudioRequired), languages.AudioPreferred...); len(audio) > 0 {
+			fitTarget.AudioLanguages = audio
+		}
+		if subtitles := append(slices.Clone(languages.SubtitleRequired), languages.SubtitlePreferred...); len(subtitles) > 0 {
+			fitTarget.SubtitleLanguages = subtitles
+		}
+	}
+	fits := quality.Fits(fitTarget, facts)
+	notes := make([]gen.FitNote, 0, len(fits.Notes))
+	for _, note := range fits.Notes {
+		notes = append(notes, gen.FitNote{Tag: gen.FitNoteTag(note.Tag), Dimension: note.Dimension, Want: note.Want, Have: note.Have})
+	}
+	file.TargetFit = &gen.TargetFit{Notes: &notes,
 		Resolution: fitLevel(fits.Resolution), VideoCodec: fitLevel(fits.VideoCodec), AudioCodec: fitLevel(fits.AudioCodec),
 		AudioLanguage: fitLevel(fits.AudioLanguage), SubtitleLanguage: fitLevel(fits.SubtitleLanguage),
 	}
@@ -395,6 +410,18 @@ func setTargetCloseness(file *gen.PartFile, target settings.QualityTarget, judge
 		gaps = append(gaps, gen.TargetGap{Dimension: gap.Dimension, Want: gap.Want, Have: gap.Have})
 	}
 	file.TargetGaps = &gaps
+}
+
+// wantedLanguages is the language profile of a library, nil when it has none.
+func wantedLanguages(snapshot *settings.Snapshot, category settings.Category) *settings.LanguageProfile {
+	if category.LanguageProfileID == nil {
+		return nil
+	}
+	profile, found := snapshot.LanguageProfile(*category.LanguageProfileID)
+	if !found {
+		return nil
+	}
+	return &profile
 }
 
 func fitLevel(fit quality.Fit) *gen.FitLevel {

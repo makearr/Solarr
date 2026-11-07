@@ -2,6 +2,8 @@ package quality_test
 
 import (
 	"math"
+	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -66,15 +68,31 @@ func TestFits(t *testing.T) {
 		{"960 lines is a bit off", score.FileFacts{Resolution: "720p", Height: 960}, quality.TagFits{Resolution: quality.FitNear}},
 		{"720p is far off", score.FileFacts{Resolution: "720p", Height: 720}, quality.TagFits{Resolution: quality.FitOff}},
 		{"right codec, other channels", score.FileFacts{AudioCodec: "aac", AudioChannels: "2.0"}, quality.TagFits{AudioCodec: quality.FitNear}},
-		{"wrong codec", score.FileFacts{VideoCodec: "h264", AudioCodec: "mp3"}, quality.TagFits{VideoCodec: quality.FitOff, AudioCodec: quality.FitOff}},
+		{"wrong codec", score.FileFacts{VideoCodec: "h264", AudioCodec: "mp3"}, quality.TagFits{VideoCodec: quality.FitOff, AudioCodec: quality.FitOff, SubtitleLanguage: quality.FitOK}},
 		{"wrong languages", score.FileFacts{AudioLanguages: []string{"de"}, SubtitleLanguages: []string{"fr"}}, quality.TagFits{AudioLanguage: quality.FitOff, SubtitleLanguage: quality.FitOff}},
 		{"wanted with unwanted is near", score.FileFacts{AudioLanguages: []string{"en", "de"}, SubtitleLanguages: []string{"fr", "en"}}, quality.TagFits{AudioLanguage: quality.FitNear, SubtitleLanguage: quality.FitNear}},
 		{"several wanted, all present, stays ok", score.FileFacts{AudioLanguages: []string{"en", "EN"}}, quality.TagFits{AudioLanguage: quality.FitOK}},
+		{"a video without subtitles holds no unwanted ones", score.FileFacts{VideoCodec: "h265", AudioLanguages: []string{"en"}}, quality.TagFits{VideoCodec: quality.FitOK, AudioLanguage: quality.FitOK, SubtitleLanguage: quality.FitOK}},
 		{"no subtitles at all is not red", score.FileFacts{AudioLanguages: []string{"en"}}, quality.TagFits{AudioLanguage: quality.FitOK}},
 	}
 	for _, test := range cases {
-		if got := quality.Fits(target, test.file); got != test.want {
+		got := quality.Fits(target, test.file)
+		got.Notes = nil
+		if !reflect.DeepEqual(got, test.want) {
 			t.Errorf("%s: %+v, want %+v", test.name, got, test.want)
 		}
+	}
+}
+
+func TestFits_NotesNameWhatDiffers(t *testing.T) {
+	bitrate := int64(2000)
+	target := settings.QualityTarget{MediaType: "tv", VideoCodec: "h265", VideoBitrateKbps: &bitrate, AudioCodec: "aac", AudioChannels: "5.1"}
+	got := quality.Fits(target, score.FileFacts{VideoCodec: "h265", VideoBitrate: 1_000_000, AudioCodec: "aac", AudioChannels: "2.0"}).Notes
+	want := []quality.FitNote{
+		{Tag: "video_codec", Dimension: "video bitrate", Want: "2000 kbit/s", Have: "1000 kbit/s"},
+		{Tag: "audio_codec", Dimension: "channels", Want: "5.1", Have: "2.0"},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("notes %+v, want %+v", got, want)
 	}
 }

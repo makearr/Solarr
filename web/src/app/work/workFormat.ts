@@ -37,31 +37,41 @@ export function relativeTime(at: number, now = Date.now()): string {
   return format.format(Math.round(minutes / 1440), "day");
 }
 
-export type FileChip = { text: string; tone?: ChipTone };
+export type FileChip = { text: string; tone?: ChipTone; title?: string };
 
 const FIT_TONE = { ok: "ok", near: "caution", off: "danger" } as const;
-const toned = (text: string | undefined, fit: components["schemas"]["FitLevel"] | undefined): FileChip | undefined =>
-  text === undefined ? undefined : { text, tone: fit ? FIT_TONE[fit] : undefined };
+const FIT_SAYS = { ok: "On the target.", near: "A little off the target.", off: "Far off the target." } as const;
+type FitTag = "resolution" | "video_codec" | "audio_codec" | "audio_language" | "subtitle_language";
+
+/** The hover text of a toned chip: how it stands and, for each difference, what was wanted and what the file has. */
+function fitTitle(file: PartFile, tag: FitTag, fit: components["schemas"]["FitLevel"]): string {
+  const notes = (file.target_fit?.notes ?? []).filter((note) => note.tag === tag);
+  return [FIT_SAYS[fit], ...notes.map((note) => `${note.dimension}: wanted ${note.want || "none"}, the file has ${note.have || "none"}`)].join("\n");
+}
+
+function toned(file: PartFile, tag: FitTag, text: string | undefined): FileChip | undefined {
+  const fit = file.target_fit?.[tag];
+  if (text === undefined) return undefined;
+  return fit ? { text, tone: FIT_TONE[fit], title: fitTitle(file, tag, fit) } : { text };
+}
 
 /** What the probe measured of a part's file, as short chips toned by how near each is to the library's target. */
 export function fileTagChips(file: PartFile): FileChip[] {
   const known = (codes: readonly string[] | undefined) => (codes ?? []).filter((code) => code !== "und");
-  const fit = file.target_fit;
   const audio = file.audio_codec ? `${file.audio_codec.toUpperCase()}${file.audio_channels ? ` ${file.audio_channels}` : ""}` : undefined;
   const plain = (text: string | undefined): FileChip | undefined => (text === undefined ? undefined : { text });
+  const hasSubtitles = file.subtitles && file.subtitles.length > 0;
+  const subtitles = hasSubtitles ? (known(file.subtitles).length > 0 ? `subs: ${known(file.subtitles).join(", ")}` : "subs") : file.target_fit?.subtitle_language ? "subs: none" : undefined;
   const chips = file.video_codec
     ? [
-        toned(file.resolution, fit?.resolution),
-        toned(file.video_codec.toUpperCase(), fit?.video_codec),
+        toned(file, "resolution", file.resolution),
+        toned(file, "video_codec", file.video_codec.toUpperCase()),
         plain(file.hdr ? file.hdr.toUpperCase() : undefined),
-        toned(audio, fit?.audio_codec),
-        toned(known(file.audio_languages).length > 0 ? `audio: ${known(file.audio_languages).join(", ")}` : undefined, fit?.audio_language),
-        toned(
-          file.subtitles && file.subtitles.length > 0 ? (known(file.subtitles).length > 0 ? `subs: ${known(file.subtitles).join(", ")}` : "subs") : undefined,
-          fit?.subtitle_language,
-        ),
+        toned(file, "audio_codec", audio),
+        toned(file, "audio_language", known(file.audio_languages).length > 0 ? `audio: ${known(file.audio_languages).join(", ")}` : undefined),
+        toned(file, "subtitle_language", subtitles),
       ]
-    : [toned(file.extension?.toUpperCase() ?? audio, fit?.audio_codec), plain(file.lossless ? "lossless" : file.bitrate_kbps > 0 ? `${file.bitrate_kbps} kbps` : undefined)];
+    : [toned(file, "audio_codec", file.extension?.toUpperCase() ?? audio), plain(file.lossless ? "lossless" : file.bitrate_kbps > 0 ? `${file.bitrate_kbps} kbps` : undefined)];
   return [...chips, plain(file.size_bytes ? formatSize(file.size_bytes) : undefined)].filter((chip): chip is FileChip => chip !== undefined && chip.text !== "");
 }
 

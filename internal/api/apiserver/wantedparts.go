@@ -116,7 +116,7 @@ func (s *Server) ListWantedParts(w http.ResponseWriter, r *http.Request, params 
 			}
 			view.File.MeetsCutoff = &meetsCutoff
 			if category.QualityTarget != nil {
-				setTargetCloseness(view.File, *category.QualityTarget, judgement)
+				setTargetCloseness(view.File, *category.QualityTarget, wantedLanguages(access.Snapshot(), category), judgement)
 			}
 			page.Items = append(page.Items, view)
 		}

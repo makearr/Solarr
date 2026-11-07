@@ -1,6 +1,7 @@
 package quality
 
 import (
+	"math"
 	"strconv"
 	"strings"
 
@@ -62,6 +63,13 @@ const (
 // TagFits is the fit of each tag a file shows, against the library's target.
 type TagFits struct {
 	Resolution, VideoCodec, AudioCodec, AudioLanguage, SubtitleLanguage Fit
+	// Notes say what each tag that is not on the target differs in.
+	Notes []FitNote
+}
+
+// FitNote is one difference behind a tag's fit: the tag, the dimension that differs, and the wanted and measured values.
+type FitNote struct {
+	Tag, Dimension, Want, Have string
 }
 
 // Off is the share a number is away from its target, equal for a factor and its inverse: half and double are both 0.5.
@@ -108,42 +116,80 @@ func Fits(target settings.QualityTarget, file score.FileFacts) TagFits {
 		if strings.EqualFold(file.Resolution, target.Resolution) {
 			fits.Resolution = FitOK
 		}
+		if fits.Resolution != FitOK && fits.Resolution != "" {
+			fits.note("resolution", "resolution", target.Resolution, file.Resolution)
+		}
 	}
 	if target.VideoCodec != "" && file.VideoCodec != "" {
 		fits.VideoCodec = FitOff
+		fits.note("video_codec", "video codec", target.VideoCodec, file.VideoCodec)
 		if strings.EqualFold(target.VideoCodec, file.VideoCodec) {
+			fits.Notes = fits.Notes[:len(fits.Notes)-1]
 			fits.VideoCodec = FitOK
 			if target.VideoBitrateKbps != nil && file.VideoBitrate > 0 &&
 				Off(float64(file.VideoBitrate)/1000/float64(*target.VideoBitrateKbps)) >= farOff {
 				fits.VideoCodec = FitNear
+				fits.note("video_codec", "video bitrate", kbpsText(float64(*target.VideoBitrateKbps)), kbpsText(float64(file.VideoBitrate)/1000))
 			}
 		}
 	}
 	if target.AudioCodec != "" && file.AudioCodec != "" {
 		fits.AudioCodec = FitOff
+		fits.note("audio_codec", "audio codec", target.AudioCodec, file.AudioCodec)
 		if strings.EqualFold(target.AudioCodec, file.AudioCodec) {
+			fits.Notes = fits.Notes[:len(fits.Notes)-1]
 			fits.AudioCodec = FitOK
-			if audioDiffers(target, file) {
+			if differences := audioDifferences(target, file); len(differences) > 0 {
 				fits.AudioCodec = FitNear
+				for _, difference := range differences {
+					fits.note("audio_codec", difference.Dimension, difference.Want, difference.Have)
+				}
 			}
 		}
 	}
-	fits.AudioLanguage = languageFit(target.AudioLanguages, file.AudioLanguages)
-	fits.SubtitleLanguage = languageFit(target.SubtitleLanguages, file.SubtitleLanguages)
+	fits.AudioLanguage = languageFit(target.AudioLanguages, file.AudioLanguages, false)
+	// A video with no subtitle track at all has none of the unwanted ones, so it counts as on the target.
+	fits.SubtitleLanguage = languageFit(target.SubtitleLanguages, file.SubtitleLanguages, file.VideoCodec != "")
+	if fits.AudioLanguage != "" && fits.AudioLanguage != FitOK {
+		fits.note("audio_language", "audio language", strings.Join(target.AudioLanguages, ", "), strings.Join(knownLanguages(file.AudioLanguages), ", "))
+	}
+	if fits.SubtitleLanguage != "" && fits.SubtitleLanguage != FitOK {
+		fits.note("subtitle_language", "subtitle language", strings.Join(target.SubtitleLanguages, ", "), strings.Join(knownLanguages(file.SubtitleLanguages), ", "))
+	}
 	return fits
 }
 
-// languageFit is ok when every language of the file is wanted, near when a wanted one comes with unwanted ones, off when
-// none is wanted; empty when the target wants none or the file states no known language (und is ignored).
-func languageFit(want, have []string) Fit {
+func (fits *TagFits) note(tag, dimension, want, have string) {
+	fits.Notes = append(fits.Notes, FitNote{Tag: tag, Dimension: dimension, Want: want, Have: have})
+}
+
+func kbpsText(kbps float64) string {
+	return strconv.FormatFloat(math.Round(kbps), 'f', -1, 64) + " kbit/s"
+}
+
+// knownLanguages drops und, which says nothing about a track.
+func knownLanguages(have []string) []string {
 	var known []string
 	for _, present := range have {
 		if !strings.EqualFold(present, "und") {
 			known = append(known, present)
 		}
 	}
-	have = known
-	if len(want) == 0 || len(have) == 0 {
+	return known
+}
+
+// languageFit is ok when every language of the file is wanted, near when a wanted one comes with unwanted ones, off when
+// none is wanted; empty when nothing is wanted or the file states no known language (und is ignored). With noneIsFine a
+// file without any language is ok, since it holds nothing unwanted.
+func languageFit(want, have []string, noneIsFine bool) Fit {
+	have = knownLanguages(have)
+	if len(want) == 0 {
+		return ""
+	}
+	if len(have) == 0 {
+		if noneIsFine {
+			return FitOK
+		}
 		return ""
 	}
 	wanted := 0
@@ -164,20 +210,24 @@ func languageFit(want, have []string) Fit {
 	return FitOK
 }
 
-// audioDiffers is the right audio codec at another channel layout, sample rate or bitrate.
-func audioDiffers(target settings.QualityTarget, file score.FileFacts) bool {
+// audioDifferences are the ways the right audio codec comes at another channel layout, sample rate or bitrate.
+func audioDifferences(target settings.QualityTarget, file score.FileFacts) []FitNote {
+	var differences []FitNote
 	if target.AudioChannels != "" && file.AudioChannels != "" && target.AudioChannels != file.AudioChannels {
-		return true
+		differences = append(differences, FitNote{Dimension: "channels", Want: target.AudioChannels, Have: file.AudioChannels})
 	}
 	if target.SampleRateHz > 0 && file.SampleRate > 0 && Off(float64(file.SampleRate)/float64(target.SampleRateHz)) >= nearOff {
-		return true
+		differences = append(differences, FitNote{Dimension: "sample rate", Want: strconv.FormatInt(target.SampleRateHz, 10) + " Hz", Have: strconv.Itoa(file.SampleRate) + " Hz"})
 	}
 	if target.AudioBitrateKbps != nil && file.AudioBitrate > 0 &&
 		Off(float64(file.AudioBitrate)/1000/float64(*target.AudioBitrateKbps)) >= farOff {
-		return true
+		differences = append(differences, FitNote{Dimension: "audio bitrate", Want: kbpsText(float64(*target.AudioBitrateKbps)), Have: kbpsText(float64(file.AudioBitrate) / 1000)})
 	}
-	return target.BitrateKbps != nil && !target.IsVideo() && file.AudioBitrate > 0 &&
-		Off(float64(file.AudioBitrate)/1000/float64(*target.BitrateKbps)) >= farOff
+	if target.BitrateKbps != nil && !target.IsVideo() && file.AudioBitrate > 0 &&
+		Off(float64(file.AudioBitrate)/1000/float64(*target.BitrateKbps)) >= farOff {
+		differences = append(differences, FitNote{Dimension: "bitrate", Want: kbpsText(float64(*target.BitrateKbps)), Have: kbpsText(float64(file.AudioBitrate) / 1000)})
+	}
+	return differences
 }
 
 // resolutionHeight is the lines of a label such as "1080p"; 0 when it has none.
