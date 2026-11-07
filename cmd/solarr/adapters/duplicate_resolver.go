@@ -93,11 +93,14 @@ func (d DuplicateResolver) sharesLibrary(ctx context.Context, snapshot *settings
 
 func (d DuplicateResolver) resolve(ctx context.Context, roots map[int64]settings.RootFolder, keepID int64, drops []apiserver.DuplicateDrop) (apiserver.DuplicateOutcome, error) {
 	var outcome apiserver.DuplicateOutcome
-	keepPaths, err := d.paths(ctx, keepID, roots, false)
-	if err != nil {
-		return outcome, err
+	var keepPaths []duplicatePath
+	if keepID != 0 {
+		var err error
+		if keepPaths, err = d.paths(ctx, keepID, roots, false); err != nil {
+			return outcome, err
+		}
 	}
-	if len(keepPaths) == 0 {
+	if keepID != 0 && len(keepPaths) == 0 {
 		return outcome, fmt.Errorf("%w: the copy to keep is not in this library", apiserver.ErrInvalidChoice)
 	}
 	for _, drop := range drops {

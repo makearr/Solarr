@@ -1023,17 +1023,12 @@ const (
 	WorkPartAvailableConfidenceUnknown WorkPartAvailableConfidence = "unknown"
 )
 
-// Defines values for ResolveCategoryDuplicatesJSONBodyDropAction.
-const (
-	ResolveCategoryDuplicatesJSONBodyDropActionLink    ResolveCategoryDuplicatesJSONBodyDropAction = "link"
-	ResolveCategoryDuplicatesJSONBodyDropActionRecycle ResolveCategoryDuplicatesJSONBodyDropAction = "recycle"
-)
-
 // Defines values for GetCategorySimilarVideosParamsLevel.
 const (
 	GetCategorySimilarVideosParamsLevelExact  GetCategorySimilarVideosParamsLevel = "exact"
 	GetCategorySimilarVideosParamsLevelHigh   GetCategorySimilarVideosParamsLevel = "high"
 	GetCategorySimilarVideosParamsLevelLow    GetCategorySimilarVideosParamsLevel = "low"
+	GetCategorySimilarVideosParamsLevelLowest GetCategorySimilarVideosParamsLevel = "lowest"
 	GetCategorySimilarVideosParamsLevelMedium GetCategorySimilarVideosParamsLevel = "medium"
 )
 
@@ -1042,6 +1037,7 @@ const (
 	GetSimilarVideosParamsLevelExact  GetSimilarVideosParamsLevel = "exact"
 	GetSimilarVideosParamsLevelHigh   GetSimilarVideosParamsLevel = "high"
 	GetSimilarVideosParamsLevelLow    GetSimilarVideosParamsLevel = "low"
+	GetSimilarVideosParamsLevelLowest GetSimilarVideosParamsLevel = "lowest"
 	GetSimilarVideosParamsLevelMedium GetSimilarVideosParamsLevel = "medium"
 )
 
@@ -2475,7 +2471,9 @@ type DuplicateResolveRequest struct {
 		Action        DuplicateResolveRequestDropAction `json:"action"`
 		MediaObjectId int64                             `json:"media_object_id"`
 	} `json:"drop"`
-	KeepMediaObjectId int64 `json:"keep_media_object_id"`
+
+	// KeepMediaObjectId The copy that stays; left out, every copy dropped must be recycled and none stays.
+	KeepMediaObjectId *int64 `json:"keep_media_object_id,omitempty"`
 }
 
 // DuplicateResolveRequestDropAction defines model for DuplicateResolveRequest.Drop.Action.
@@ -6570,18 +6568,6 @@ type OrderCategoriesJSONBody struct {
 	Ids []int64 `json:"ids"`
 }
 
-// ResolveCategoryDuplicatesJSONBody defines parameters for ResolveCategoryDuplicates.
-type ResolveCategoryDuplicatesJSONBody struct {
-	Drop []struct {
-		Action        ResolveCategoryDuplicatesJSONBodyDropAction `json:"action"`
-		MediaObjectId int64                                       `json:"media_object_id"`
-	} `json:"drop"`
-	KeepMediaObjectId int64 `json:"keep_media_object_id"`
-}
-
-// ResolveCategoryDuplicatesJSONBodyDropAction defines parameters for ResolveCategoryDuplicates.
-type ResolveCategoryDuplicatesJSONBodyDropAction string
-
 // MergeCategoryJSONBody defines parameters for MergeCategory.
 type MergeCategoryJSONBody struct {
 	IntoCategoryId int64 `json:"into_category_id"`
@@ -6620,7 +6606,7 @@ type SearchCategoryJSONBody struct {
 
 // GetCategorySimilarVideosParams defines parameters for GetCategorySimilarVideos.
 type GetCategorySimilarVideosParams struct {
-	// Level How alike two videos must look, as in Stash: exact (identical hashes), high (up to 4 of 64 bits apart), medium (up to 8, the default) or low (up to 10, finds more and wrong ones too).
+	// Level How alike two videos must look, as in Stash: exact (identical hashes), high (up to 4 of 64 bits apart), medium (up to 8, the default), low (up to 10) or lowest (up to 14, finds the most and wrong ones too).
 	Level *GetCategorySimilarVideosParamsLevel `form:"level,omitempty" json:"level,omitempty"`
 }
 
@@ -6686,7 +6672,7 @@ type UpdateDownloadFolderJSONBody struct {
 
 // GetSimilarVideosParams defines parameters for GetSimilarVideos.
 type GetSimilarVideosParams struct {
-	// Level How alike two videos must look, as in Stash: exact (identical hashes), high (up to 4 of 64 bits apart), medium (up to 8, the default) or low (up to 10, finds more and wrong ones too).
+	// Level How alike two videos must look, as in Stash: exact (identical hashes), high (up to 4 of 64 bits apart), medium (up to 8, the default), low (up to 10) or lowest (up to 14, finds the most and wrong ones too).
 	Level *GetSimilarVideosParamsLevel `form:"level,omitempty" json:"level,omitempty"`
 }
 
@@ -7657,7 +7643,7 @@ type OrderCategoriesJSONRequestBody OrderCategoriesJSONBody
 type UpdateCategoryJSONRequestBody = CategoryWrite
 
 // ResolveCategoryDuplicatesJSONRequestBody defines body for ResolveCategoryDuplicates for application/json ContentType.
-type ResolveCategoryDuplicatesJSONRequestBody ResolveCategoryDuplicatesJSONBody
+type ResolveCategoryDuplicatesJSONRequestBody = DuplicateResolveRequest
 
 // SetLibraryFileManagementJSONRequestBody defines body for SetLibraryFileManagement for application/json ContentType.
 type SetLibraryFileManagementJSONRequestBody = FileManagement

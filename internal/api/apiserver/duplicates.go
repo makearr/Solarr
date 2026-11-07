@@ -152,6 +152,21 @@ func (s *Server) routeResolveCategoryDuplicates(w http.ResponseWriter, r *http.R
 	}
 }
 
+// duplicateChoice reads a resolve request; a request that keeps no copy (keepID 0) may only recycle.
+func duplicateChoice(request gen.DuplicateResolveRequest) (keepID int64, drops []DuplicateDrop, valid bool) {
+	if request.KeepMediaObjectId != nil {
+		keepID = *request.KeepMediaObjectId
+	}
+	drops = make([]DuplicateDrop, len(request.Drop))
+	for i, drop := range request.Drop {
+		if keepID == 0 && drop.Action != gen.DuplicateResolveRequestDropActionRecycle {
+			return 0, nil, false
+		}
+		drops[i] = DuplicateDrop{MediaObjectID: drop.MediaObjectId, Action: string(drop.Action)}
+	}
+	return keepID, drops, len(drops) > 0
+}
+
 // ResolveCategoryDuplicates keeps the named copy of a track and links or recycles the others; manage access to the library.
 func (s *Server) ResolveCategoryDuplicates(w http.ResponseWriter, r *http.Request, id int64) {
 	access, err := authz.FromContext(r.Context())
@@ -168,15 +183,16 @@ func (s *Server) ResolveCategoryDuplicates(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var body gen.ResolveCategoryDuplicatesJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil || len(body.Drop) == 0 {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "keep and at least one copy to drop are required")
 		return
 	}
-	drops := make([]DuplicateDrop, len(body.Drop))
-	for i, drop := range body.Drop {
-		drops[i] = DuplicateDrop{MediaObjectID: drop.MediaObjectId, Action: string(drop.Action)}
+	keepID, drops, valid := duplicateChoice(body)
+	if !valid {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "at least one copy to drop is required, and merging needs a copy to keep")
+		return
 	}
-	outcome, err := s.duplicateResolver.ResolveDuplicates(r.Context(), id, body.KeepMediaObjectId, drops)
+	outcome, err := s.duplicateResolver.ResolveDuplicates(r.Context(), id, keepID, drops)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return

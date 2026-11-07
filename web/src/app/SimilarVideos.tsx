@@ -19,7 +19,7 @@ import { fileTagChips } from "./work/workFormat";
 
 type Group = components["schemas"]["SimilarVideoReport"]["groups"][number];
 type Video = Group["videos"][number];
-type Level = "exact" | "high" | "medium" | "low";
+type Level = "exact" | "high" | "medium" | "low" | "lowest";
 type Action = "link" | "recycle";
 
 /** One library's videos, or every library's (administrators only). */
@@ -30,6 +30,7 @@ const LEVELS: readonly { id: Level; label: string; help: string }[] = [
   { id: "high", label: "High", help: "up to 4 of 64 bits apart" },
   { id: "medium", label: "Medium", help: "up to 8 bits apart" },
   { id: "low", label: "Low", help: "up to 10 bits apart; finds more, and wrong ones too" },
+  { id: "lowest", label: "Lowest", help: "up to 14 bits apart; finds the most, check the groups" },
 ];
 
 const extensionOf = (path: string) => (path.match(/\.[^./\\]+$/)?.[0] ?? "").toLowerCase();
@@ -84,10 +85,9 @@ function GroupCard({ group, scope, libraryName }: { group: Group; scope: Similar
   const actionOf = (video: Video, action: Action): Action => (action === "link" && primary && mergeable(video, primary) ? "link" : "recycle");
   const apply = useMutation({
     mutationFn: ({ drops, action }: Pending) => {
-      const body = {
-        keep_media_object_id: (primary as Video).media_object_id,
-        drop: drops.map((video) => ({ media_object_id: video.media_object_id, action: actionOf(video, action) })),
-      };
+      const resolved = drops.map((video) => ({ media_object_id: video.media_object_id, action: actionOf(video, action) }));
+      // Only a merge needs a file that stays; deleting works with none.
+      const body = { keep_media_object_id: resolved.some((drop) => drop.action === "link") ? primary?.media_object_id : undefined, drop: resolved };
       return scope === "everywhere"
         ? ok(api.POST("/duplicates/similar-videos/resolve", { body }))
         : ok(api.POST("/categories/{id}/duplicates/resolve", { params: { path: { id: scope.categoryId } }, body }));
@@ -151,18 +151,18 @@ function GroupCard({ group, scope, libraryName }: { group: Group; scope: Similar
             </div>
             <span className="break-all font-mono text-ink-muted">{video.path}</span>
             {video.path_count > 1 && <span className="text-warn">The same file is linked at {video.path_count} paths; dropping it affects all of them.</span>}
-            {!isKept && !done && (
+            {!done && (
               <div className="flex flex-wrap gap-2">
-                <Button
-                  disabled={!canMerge}
-                  title={canMerge ? undefined : primary ? "Only a file in the same library and of the same kind can be merged; delete it instead." : "Keep at least one file first."}
-                  onClick={() => setPending({ drops: [video], action: "link" })}
-                >
-                  Merge into the kept file
-                </Button>
-                <Button disabled={primary === undefined} onClick={() => setPending({ drops: [video], action: "recycle" })}>
-                  Delete
-                </Button>
+                {!isKept && (
+                  <Button
+                    disabled={!canMerge}
+                    title={canMerge ? undefined : primary ? "Only a file in the same library and of the same kind can be merged; delete it instead." : "Keep at least one file first."}
+                    onClick={() => setPending({ drops: [video], action: "link" })}
+                  >
+                    Merge into the kept file
+                  </Button>
+                )}
+                <Button onClick={() => setPending({ drops: [video], action: "recycle" })}>Delete</Button>
               </div>
             )}
             </div>
@@ -170,7 +170,7 @@ function GroupCard({ group, scope, libraryName }: { group: Group; scope: Similar
         );
       })}
       {namesOtherEpisodes(group) && <p className="text-warn">These file names say different episodes. Check them before keeping one.</p>}
-      {primary === undefined && <p className="text-warn">Tick at least one file to keep.</p>}
+      {primary === undefined && !done && <p className="text-ink-muted">Tick a file to keep it, or delete them all.</p>}
       {done ? (
         <p className="text-ok">
           Done: {done.linked} merged, {done.recycled} deleted.
@@ -178,11 +178,11 @@ function GroupCard({ group, scope, libraryName }: { group: Group; scope: Similar
             <span key={problem} className="block text-warn">{problem}</span>
           ))}
         </p>
-      ) : pending && primary ? (
+      ) : pending ? (
         <div className="flex flex-col gap-2 rounded-md border border-warn p-2">
           {linking.length > 0 && (
             <p>
-              <span className="font-medium">Merge:</span> {nameOf(primary.path)} is kept. {linking.length === 1 ? "This file's" : "These files'"} location{linking.length === 1 ? "" : "s"} become a hardlink
+              <span className="font-medium">Merge:</span> {nameOf((primary as Video).path)} is kept. {linking.length === 1 ? "This file's" : "These files'"} location{linking.length === 1 ? "" : "s"} become a hardlink
               (a reflink where the filesystem offers it) to the kept file, so every path keeps working and the bytes are stored once. The old copy waits in the
               recycle bin for 7 days.
               {linking.map((video) => (
@@ -205,13 +205,15 @@ function GroupCard({ group, scope, libraryName }: { group: Group; scope: Similar
           </div>
         </div>
       ) : (
-        primary &&
-        unkept.length > 1 && (
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => setPending({ drops: unkept, action: "link" })}>Merge all the others into the kept file…</Button>
-            <Button onClick={() => setPending({ drops: unkept, action: "recycle" })}>Delete all the others…</Button>
-          </div>
-        )
+        <div className="flex flex-wrap gap-2">
+          {primary && unkept.length > 1 && (
+            <>
+              <Button onClick={() => setPending({ drops: unkept, action: "link" })}>Merge all the others into the kept file…</Button>
+              <Button onClick={() => setPending({ drops: unkept, action: "recycle" })}>Delete all the others…</Button>
+            </>
+          )}
+          <Button onClick={() => setPending({ drops: group.videos, action: "recycle" })}>Delete all {group.videos.length} files…</Button>
+        </div>
       )}
       {apply.isError && <p className="text-warn">That could not be done; nothing was changed.</p>}
     </li>

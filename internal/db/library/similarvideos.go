@@ -80,6 +80,8 @@ const (
 	SimilarityHigh   SimilarityLevel = "high"
 	SimilarityMedium SimilarityLevel = "medium"
 	SimilarityLow    SimilarityLevel = "low"
+	// SimilarityLowest was found free of false positives at 10 bits, so it reaches further.
+	SimilarityLowest SimilarityLevel = "lowest"
 )
 
 // MaxBits is the Hamming distance between mean-frame hashes at or under which two videos are compared frame by frame;
@@ -92,12 +94,14 @@ func (l SimilarityLevel) MaxBits() int {
 		return 4
 	case SimilarityLow:
 		return 10
+	case SimilarityLowest:
+		return 14
 	}
 	return 8
 }
 
 // FrameBits is the per-frame distance at this level when the medium level allows medium bits: the default 10 gives 0, 5,
-// 10 and 13 for exact, high, medium and low.
+// 10, 13 and 18 for exact, high, medium, low and lowest.
 func (l SimilarityLevel) FrameBits(medium int) int {
 	return (frameBitsFor(l.MaxBits())*medium + DefaultFrameBits/2) / DefaultFrameBits
 }

@@ -219,7 +219,7 @@ func TestGroupSimilar_TheLevelSetsHowFarApartTwoHashesMayBe(t *testing.T) {
 		bits  int
 		want  bool
 	}{
-		{SimilarityExact, 0, false}, {SimilarityHigh, 4, false}, {SimilarityMedium, 8, false}, {SimilarityLow, 10, true},
+		{SimilarityExact, 0, false}, {SimilarityHigh, 4, false}, {SimilarityMedium, 8, false}, {SimilarityLow, 10, true}, {SimilarityLowest, 14, true},
 	} {
 		if got := test.level.MaxBits(); got != test.bits {
 			t.Errorf("%s: %d bits, want %d", test.level, got, test.bits)
@@ -287,7 +287,7 @@ func TestFrameBits_ScaleWithTheLevelAndTheTolerance(t *testing.T) {
 		medium int
 		want   int
 	}{
-		{SimilarityExact, 10, 0}, {SimilarityHigh, 10, 5}, {SimilarityMedium, 10, 10}, {SimilarityLow, 10, 13},
+		{SimilarityExact, 10, 0}, {SimilarityHigh, 10, 5}, {SimilarityMedium, 10, 10}, {SimilarityLow, 10, 13}, {SimilarityLowest, 10, 18},
 		{SimilarityMedium, 6, 6}, {SimilarityMedium, 16, 16}, {SimilarityLow, 20, 26},
 	} {
 		if got := test.level.FrameBits(test.medium); got != test.want {

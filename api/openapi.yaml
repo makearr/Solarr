@@ -6684,8 +6684,8 @@ paths:
           required: false
           description: >-
             How alike two videos must look, as in Stash: exact (identical hashes), high (up to 4 of 64 bits apart), medium
-            (up to 8, the default) or low (up to 10, finds more and wrong ones too).
-          schema: { type: string, enum: [exact, high, medium, low], default: medium }
+            (up to 8, the default), low (up to 10) or lowest (up to 14, finds the most and wrong ones too).
+          schema: { type: string, enum: [exact, high, medium, low, lowest], default: medium }
       summary: Videos one library holds in more than one encode, found by perceptual hash (read only).
       description: >-
         Files that look like the same cut (a re-encode, another size or container), grouped by the distance between their
@@ -6714,8 +6714,8 @@ paths:
           required: false
           description: >-
             How alike two videos must look, as in Stash: exact (identical hashes), high (up to 4 of 64 bits apart), medium
-            (up to 8, the default) or low (up to 10, finds more and wrong ones too).
-          schema: { type: string, enum: [exact, high, medium, low], default: medium }
+            (up to 8, the default), low (up to 10) or lowest (up to 14, finds the most and wrong ones too).
+          schema: { type: string, enum: [exact, high, medium, low, lowest], default: medium }
       responses:
         "200":
           description: The groups.
@@ -6882,19 +6882,7 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              required: [keep_media_object_id, drop]
-              properties:
-                keep_media_object_id: { type: integer, format: int64 }
-                drop:
-                  type: array
-                  items:
-                    type: object
-                    required: [media_object_id, action]
-                    properties:
-                      media_object_id: { type: integer, format: int64 }
-                      action: { type: string, enum: [link, recycle] }
+            schema: { $ref: "#/components/schemas/DuplicateResolveRequest" }
       responses:
         "200":
           description: What was done.
@@ -14062,9 +14050,9 @@ components:
 
     DuplicateResolveRequest:
       type: object
-      required: [keep_media_object_id, drop]
+      required: [drop]
       properties:
-        keep_media_object_id: { type: integer, format: int64 }
+        keep_media_object_id: { type: integer, format: int64, description: "The copy that stays; left out, every copy dropped must be recycled and none stays." }
         drop:
           type: array
           items:

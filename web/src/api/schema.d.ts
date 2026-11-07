@@ -10269,8 +10269,11 @@ export interface components {
             blocklist: boolean;
         };
         DuplicateResolveRequest: {
-            /** Format: int64 */
-            keep_media_object_id: number;
+            /**
+             * Format: int64
+             * @description The copy that stays; left out, every copy dropped must be recycled and none stays.
+             */
+            keep_media_object_id?: number;
             drop: {
                 /** Format: int64 */
                 media_object_id: number;
@@ -17985,8 +17988,8 @@ export interface operations {
     getCategorySimilarVideos: {
         parameters: {
             query?: {
-                /** @description How alike two videos must look, as in Stash: exact (identical hashes), high (up to 4 of 64 bits apart), medium (up to 8, the default) or low (up to 10, finds more and wrong ones too). */
-                level?: "exact" | "high" | "medium" | "low";
+                /** @description How alike two videos must look, as in Stash: exact (identical hashes), high (up to 4 of 64 bits apart), medium (up to 8, the default), low (up to 10) or lowest (up to 14, finds the most and wrong ones too). */
+                level?: "exact" | "high" | "medium" | "low" | "lowest";
             };
             header?: never;
             path: {
@@ -18012,8 +18015,8 @@ export interface operations {
     getSimilarVideos: {
         parameters: {
             query?: {
-                /** @description How alike two videos must look, as in Stash: exact (identical hashes), high (up to 4 of 64 bits apart), medium (up to 8, the default) or low (up to 10, finds more and wrong ones too). */
-                level?: "exact" | "high" | "medium" | "low";
+                /** @description How alike two videos must look, as in Stash: exact (identical hashes), high (up to 4 of 64 bits apart), medium (up to 8, the default), low (up to 10) or lowest (up to 14, finds the most and wrong ones too). */
+                level?: "exact" | "high" | "medium" | "low" | "lowest";
             };
             header?: never;
             path?: never;
@@ -18259,16 +18262,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /** Format: int64 */
-                    keep_media_object_id: number;
-                    drop: {
-                        /** Format: int64 */
-                        media_object_id: number;
-                        /** @enum {string} */
-                        action: "link" | "recycle";
-                    }[];
-                };
+                "application/json": components["schemas"]["DuplicateResolveRequest"];
             };
         };
         responses: {

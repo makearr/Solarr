@@ -42,7 +42,7 @@ type SimilarVideoReader interface {
 const similarVideoGroupLimit = 300
 
 // similarLevels are the accepted values of the level parameter, medium being the default.
-var similarLevels = map[string]bool{"exact": true, "high": true, "medium": true, "low": true}
+var similarLevels = map[string]bool{"exact": true, "high": true, "medium": true, "low": true, "lowest": true}
 
 // similarLevelOf is the level a request asks for, and false when it names none that exists.
 func similarLevelOf(r *http.Request) (string, bool) {
@@ -60,7 +60,7 @@ func (s *Server) routeGetCategorySimilarVideos(w http.ResponseWriter, r *http.Re
 	}
 	level, valid := similarLevelOf(r)
 	if !valid {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "level must be exact, high, medium or low")
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "level must be exact, high, medium, low or lowest")
 		return
 	}
 	l := gen.GetCategorySimilarVideosParamsLevel(level)
@@ -70,7 +70,7 @@ func (s *Server) routeGetCategorySimilarVideos(w http.ResponseWriter, r *http.Re
 func (s *Server) routeGetSimilarVideos(w http.ResponseWriter, r *http.Request) {
 	level, valid := similarLevelOf(r)
 	if !valid {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "level must be exact, high, medium or low")
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "level must be exact, high, medium, low or lowest")
 		return
 	}
 	l := gen.GetSimilarVideosParamsLevel(level)
@@ -182,15 +182,16 @@ func (s *Server) ResolveSimilarVideos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.ResolveSimilarVideosJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil || len(body.Drop) == 0 {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "keep and at least one copy to drop are required")
 		return
 	}
-	drops := make([]DuplicateDrop, len(body.Drop))
-	for i, drop := range body.Drop {
-		drops[i] = DuplicateDrop{MediaObjectID: drop.MediaObjectId, Action: string(drop.Action)}
+	keepID, drops, valid := duplicateChoice(body)
+	if !valid {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "at least one copy to drop is required, and merging needs a copy to keep")
+		return
 	}
-	outcome, err := s.duplicateResolver.ResolveDuplicatesEverywhere(r.Context(), body.KeepMediaObjectId, drops)
+	outcome, err := s.duplicateResolver.ResolveDuplicatesEverywhere(r.Context(), keepID, drops)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
