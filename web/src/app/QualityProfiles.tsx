@@ -82,6 +82,29 @@ export function videoTargetFromProfile(rulesJSON: string | undefined): QualityTa
 
 /** A library's quality (2026-09-19, answered 2026-09-24): the profiles it accepts in order of
  *  preference, the cutoff where upgrades stop, and the one target it aims for. */
+/** What saving would do to the library: how many items turn upgradable (and so are searched for) or complete. */
+function ChangePreview({ id, body, unit }: { id: number; body: components["schemas"]["LibraryQualityWrite"]; unit: string }) {
+  const preview = useQuery({
+    queryKey: ["libraryQuality", id, "preview", body],
+    queryFn: () => ok(api.POST("/categories/{id}/quality/preview", { params: { path: { id } }, body })),
+    staleTime: 30_000,
+  });
+  const data = preview.data;
+  if (preview.isLoading) return <p className="text-xs text-ink-muted">Counting what this would change…</p>;
+  if (!data) return null;
+  if (!data.available) return <p className="text-xs text-ink-muted">No preview: {data.reason ?? "it cannot be counted"}.</p>;
+  const plural = (count: number) => `${count} ${unit}${count === 1 ? "" : "s"}`;
+  if (data.become_upgradable === 0 && data.stop_being_upgradable === 0) {
+    return <p className="text-xs text-ink-muted">Of {plural(data.items)} with files, none would change: {data.upgradable_now} stay upgradable.</p>;
+  }
+  return (
+    <p className="rounded-md border border-border-subtle bg-canvas p-2 text-xs">
+      Of {plural(data.items)} with files, {data.become_upgradable} would become upgradable and be searched for a better file,{" "}
+      {data.stop_being_upgradable} would count as complete. Upgradable: {data.upgradable_now} now, {data.upgradable_after} after saving.
+    </p>
+  );
+}
+
 function LibraryQualityEditor() {
   const tier = useTier();
   const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
@@ -405,6 +428,20 @@ function LibraryQualityEditor() {
             </button>
           ))}
         </div>
+      )}
+
+      {dirty && (
+        <ChangePreview
+          id={id}
+          unit={unit}
+          body={{
+            profile_ids: order,
+            cutoff_profile_id: order.length > 0 ? cutoff : undefined,
+            target_id: targetAuto ? undefined : targetId,
+            target_auto: targetAuto,
+            upgrades_allowed: upgrades,
+          }}
+        />
       )}
 
       <div className="flex flex-wrap items-center gap-2">

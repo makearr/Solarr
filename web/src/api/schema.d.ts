@@ -4114,6 +4114,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories/{id}/quality/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What saving this quality would change in the library, item by item; nothing is saved. Administrator only.
+         * @description Counts the library's items that are upgradable now and would be upgradable under the given profiles, cutoff and target. A media type that cannot say, or an automatic target, answers available false.
+         */
+        post: operations["previewLibraryQuality"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/naming": {
         parameters: {
             query?: never;
@@ -6453,6 +6475,30 @@ export interface components {
              * @description How long after a release was posted the other protocol waits; 0 is no delay. Omitted leaves it as it is.
              */
             protocol_delay_minutes?: number;
+        };
+        LibraryQualityPreview: {
+            available: boolean;
+            /** @description Why no count is given */
+            reason?: string;
+            /**
+             * Format: int64
+             * @description Items with files that could be judged.
+             */
+            items: number;
+            /** Format: int64 */
+            upgradable_now: number;
+            /** Format: int64 */
+            upgradable_after: number;
+            /**
+             * Format: int64
+             * @description Items that are complete now and would be searched for an upgrade.
+             */
+            become_upgradable: number;
+            /**
+             * Format: int64
+             * @description Items that are upgradable now and would count as complete.
+             */
+            stop_being_upgradable: number;
         };
         QualityProfileRef: {
             /** Format: int64 */
@@ -17598,6 +17644,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LibraryQuality"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    previewLibraryQuality: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryQualityWrite"];
+            };
+        };
+        responses: {
+            /** @description The preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryQualityPreview"];
                 };
             };
             400: components["responses"]["Problem"];

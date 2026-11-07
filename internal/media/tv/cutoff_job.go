@@ -46,6 +46,11 @@ func (j CutoffJob) CutoffPage(ctx context.Context, workID, afterID, limit int64)
 	return j.shared().CutoffPage(ctx, workID, afterID, limit)
 }
 
+// StateUnder implements cutoff.Previewing.
+func (j CutoffJob) StateUnder(ctx context.Context, snapshot *settings.Snapshot, category settings.Category, item library.CutoffItem) (string, bool, error) {
+	return j.shared().StateUnder(ctx, snapshot, category, item)
+}
+
 // CheckCutoff implements cutoff.Check: a second file of an episode is settled whatever the season's state, a file
 // holding several episodes only once it lost every one; a season with gaps is not marked, and one with an episode
 // below the cutoff is UPGRADABLE.

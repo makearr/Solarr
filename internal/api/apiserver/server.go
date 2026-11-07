@@ -130,6 +130,8 @@ type Config struct {
 	ImportDecisions func(ctx context.Context, workID int64) ([]ImportDecisionView, error)
 	// Statistics reads a library's rolled-up figures. Optional: nil answers 503.
 	Statistics StatisticsReader
+	// QualityPreview counts what a proposed library quality would change. Optional: nil answers 503.
+	QualityPreview QualityPreviewer
 	// FileRates answers a library's video files for the Insights target-size section. Optional: nil answers 503.
 	FileRates FileRates
 	// Duplicates finds a library's likely copies. Optional: nil answers 503.
@@ -357,6 +359,7 @@ type Server struct {
 	artworkChoices          ArtworkChoices
 	statistics              StatisticsReader
 	fileRates               FileRates
+	qualityPreview          QualityPreviewer
 	huntBudget              func(ctx context.Context) (HuntBudgetView, error)
 	downloaderSpeeds        func(ctx context.Context) ([]DownloaderSpeedView, error)
 	importDecisions         func(ctx context.Context, workID int64) ([]ImportDecisionView, error)
@@ -501,6 +504,7 @@ func New(config Config) (*Server, error) {
 		artworkChoices:          config.ArtworkChoices,
 		statistics:              config.Statistics,
 		fileRates:               config.FileRates,
+		qualityPreview:          config.QualityPreview,
 		huntBudget:              config.HuntBudget,
 		downloaderSpeeds:        config.DownloaderSpeeds,
 		importDecisions:         config.ImportDecisions,
@@ -696,6 +700,7 @@ func New(config Config) (*Server, error) {
 			secured.Put("/categories/{id}/metadata-sources", server.routeSetLibraryMetadataSources)
 			secured.Get("/categories/{id}/quality", server.routeGetLibraryQuality)
 			secured.Put("/categories/{id}/quality", server.routeSetLibraryQuality)
+			secured.Post("/categories/{id}/quality/preview", server.routePreviewLibraryQuality)
 			secured.Get("/categories/{id}/naming", server.routeGetLibraryNaming)
 			secured.Put("/categories/{id}/naming", server.routeSetLibraryNaming)
 			secured.Get("/categories/{id}/file-management", server.routeGetLibraryFileManagement)

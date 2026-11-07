@@ -145,3 +145,24 @@ func hasKey(set map[int64]bool, key int64) bool {
 	_, ok := set[key]
 	return ok
 }
+
+func TestCutoff_StateUnderAnotherTargetWritesNothing(t *testing.T) {
+	job, item, _, cache, _ := cutoffFilm(t, versionFile{"720p", false})
+	snapshot := cache.Snapshot()
+	current, _ := snapshot.Category(item.CategoryID)
+	lower := current
+	lower.QualityTarget = &settings.QualityTarget{Name: "720p", MediaType: movie.MediaType, Resolution: "720p"}
+
+	got := map[string]string{}
+	for name, category := range map[string]settings.Category{"now": current, "lower target": lower} {
+		state, decided, err := job.StateUnder(t.Context(), snapshot, category, item)
+		if err != nil || !decided {
+			t.Fatalf("%s: state %q decided %v, %v", name, state, decided, err)
+		}
+		got[name] = state
+	}
+	want := map[string]string{"now": movie.ItemStateUpgradable, "lower target": movie.ItemStateComplete}
+	if got["now"] != want["now"] || got["lower target"] != want["lower target"] {
+		t.Errorf("states %v, want %v", got, want)
+	}
+}

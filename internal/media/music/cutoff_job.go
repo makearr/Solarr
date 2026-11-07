@@ -36,12 +36,24 @@ func (j CutoffJob) CheckCutoff(ctx context.Context, snapshot *settings.Snapshot,
 	if err != nil {
 		return cutoff.Outcome{}, err
 	}
-	state, decided, err := j.stateFor(ctx, snapshot, item)
+	category, found := snapshot.Category(item.CategoryID)
+	if !found {
+		return cutoff.Outcome{Replaced: settled}, nil
+	}
+	state, decided, err := j.stateFor(ctx, snapshot, category, item)
 	if err != nil {
 		return cutoff.Outcome{}, err
 	}
 	// A recycle recomputed the item, so the judgment is written whatever the state read before.
 	return cutoff.Outcome{Replaced: settled, State: state, Decided: decided, Rewrite: settled > 0}, nil
+}
+
+// StateUnder implements cutoff.Previewing: the state the album would have in a library of the given quality.
+func (j CutoffJob) StateUnder(ctx context.Context, snapshot *settings.Snapshot, category settings.Category, item library.CutoffItem) (string, bool, error) {
+	if item.State != ItemStateComplete && item.State != ItemStateUpgradable {
+		return "", false, nil
+	}
+	return j.stateFor(ctx, snapshot, category, item)
 }
 
 // CutoffPage implements cutoff.Check: a page of albums to check, or the one album workID names.
@@ -213,11 +225,7 @@ const (
 )
 
 // stateFor judges every file of one album; decided is false while any file is unmeasured.
-func (j CutoffJob) stateFor(ctx context.Context, snapshot *settings.Snapshot, item library.CutoffItem) (string, bool, error) {
-	category, found := snapshot.Category(item.CategoryID)
-	if !found {
-		return "", false, nil
-	}
+func (j CutoffJob) stateFor(ctx context.Context, snapshot *settings.Snapshot, category settings.Category, item library.CutoffItem) (string, bool, error) {
 	if !category.QualityUpgrades {
 		return ItemStateComplete, true, nil // Lidarr's "Upgrades Allowed" off: every track here is enough
 	}

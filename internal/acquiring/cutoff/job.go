@@ -57,6 +57,13 @@ type Check interface {
 	CheckCutoff(ctx context.Context, snapshot *settings.Snapshot, item library.CutoffItem) (Outcome, error)
 }
 
+// Previewing is a media type's check that can say which state an item would have in a library of another quality,
+// writing nothing, so a quality change is previewed before it is saved.
+type Previewing interface {
+	Check
+	StateUnder(ctx context.Context, snapshot *settings.Snapshot, category settings.Category, item library.CutoffItem) (state string, decided bool, err error)
+}
+
 // Source is one media type's check, named for the log.
 type Source struct {
 	Name  string

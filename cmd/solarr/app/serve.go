@@ -871,6 +871,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		ImportDecisions:  adapters.ImportDecisions{Decisions: library.NewImportDecisions(p.library)}.ForWork,
 		Statistics:       adapters.Statistics{Rollup: statistics.NewRollup(p.statistics)},
 		FileRates:        adapters.FileRates{Works: library.NewWorks(p.library)}.ForCategory,
+		QualityPreview:   adapters.QualityPreview{Cache: p.cache, Registry: p.media}.Preview,
 		Duplicates: adapters.Duplicates{
 			Store: library.NewDuplicates(p.library), Settings: p.cache, ByName: adapters.MediaTypes{Registry: p.media}.DuplicatesByName,
 		},

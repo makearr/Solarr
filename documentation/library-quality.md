@@ -187,3 +187,7 @@ A single work can aim for another target than its library's: the **Add to Solarr
 offer the family's targets, and the choice is stored per item (`desired_target_override`, migration 0111, like the profile
 override); `judge.LibraryProfiles` ranks by it before the library's. The closeness shown on an owned file is still measured
 against the library's target.
+
+## Previewing a change
+
+Editing a library's quality shows, before Save, how many items would become upgradable (and be searched for a better file) and how many would count as complete. The count judges every item's files under the current and the proposed quality with the media type's own cutoff rules and writes nothing (`POST /categories/{id}/quality/preview`). An automatic target is not previewed: it is worked out when saved.

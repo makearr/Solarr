@@ -87,11 +87,25 @@ func (c Cutoff) CheckCutoff(ctx context.Context, snapshot *settings.Snapshot, it
 	if item.State == StatePartial {
 		return cutoff.Outcome{Replaced: settled}, nil
 	}
-	state, decided, tally, err := c.stateFor(ctx, snapshot, item)
+	category, found := snapshot.Category(item.CategoryID)
+	if !found {
+		return cutoff.Outcome{Replaced: settled}, nil
+	}
+	state, decided, tally, err := c.stateFor(ctx, snapshot, category, item)
 	if err != nil {
 		return cutoff.Outcome{}, err
 	}
 	return cutoff.Outcome{Replaced: settled, State: state, Decided: decided, Judged: tally.Judged, BelowCutoff: tally.BelowCutoff}, nil
+}
+
+// StateUnder is the state the item would have if its library were the given category, writing nothing; decided is
+// false for an item with gaps or unmeasured files.
+func (c Cutoff) StateUnder(ctx context.Context, snapshot *settings.Snapshot, category settings.Category, item library.CutoffItem) (string, bool, error) {
+	if item.State == StatePartial {
+		return "", false, nil
+	}
+	state, decided, _, err := c.stateFor(ctx, snapshot, category, item)
+	return state, decided, err
 }
 
 // settle keeps, per part a download brought a second file for, the strictly better measured file and recycles the
@@ -214,11 +228,9 @@ func allMeasured(files []File) bool {
 
 // stateFor judges the item's monitored files; decided is false while any file is unmeasured or there is none. The
 // tally is empty unless every monitored file was judged.
-func (c Cutoff) stateFor(ctx context.Context, snapshot *settings.Snapshot, item library.CutoffItem) (string, bool, cutoff.Tally, error) {
-	category, found := snapshot.Category(item.CategoryID)
-	if !found {
-		return "", false, cutoff.Tally{}, nil
-	}
+func (c Cutoff) stateFor(
+	ctx context.Context, snapshot *settings.Snapshot, category settings.Category, item library.CutoffItem,
+) (string, bool, cutoff.Tally, error) {
 	if c.NeverUpgrades {
 		return StateComplete, true, cutoff.Tally{}, nil
 	}

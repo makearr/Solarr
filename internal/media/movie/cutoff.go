@@ -37,6 +37,11 @@ func (j CutoffJob) CutoffPage(ctx context.Context, workID, afterID, limit int64)
 	return j.shared().CutoffPage(ctx, workID, afterID, limit)
 }
 
+// StateUnder implements cutoff.Previewing.
+func (j CutoffJob) StateUnder(ctx context.Context, snapshot *settings.Snapshot, category settings.Category, item library.CutoffItem) (string, bool, error) {
+	return j.shared().StateUnder(ctx, snapshot, category, item)
+}
+
 // CheckCutoff implements cutoff.Check.
 func (j CutoffJob) CheckCutoff(ctx context.Context, snapshot *settings.Snapshot, item library.CutoffItem) (cutoff.Outcome, error) {
 	return j.shared().CheckCutoff(ctx, snapshot, item)

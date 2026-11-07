@@ -3824,6 +3824,25 @@ type LibraryQuality struct {
 // LibraryQualityPreferredProtocol defines model for LibraryQuality.PreferredProtocol.
 type LibraryQualityPreferredProtocol string
 
+// LibraryQualityPreview defines model for LibraryQualityPreview.
+type LibraryQualityPreview struct {
+	Available bool `json:"available"`
+
+	// BecomeUpgradable Items that are complete now and would be searched for an upgrade.
+	BecomeUpgradable int64 `json:"become_upgradable"`
+
+	// Items Items with files that could be judged.
+	Items int64 `json:"items"`
+
+	// Reason Why no count is given
+	Reason *string `json:"reason,omitempty"`
+
+	// StopBeingUpgradable Items that are upgradable now and would count as complete.
+	StopBeingUpgradable int64 `json:"stop_being_upgradable"`
+	UpgradableAfter     int64 `json:"upgradable_after"`
+	UpgradableNow       int64 `json:"upgradable_now"`
+}
+
 // LibraryQualityWrite defines model for LibraryQualityWrite.
 type LibraryQualityWrite struct {
 	CutoffProfileId *int64 `json:"cutoff_profile_id,omitempty"`
@@ -7635,6 +7654,9 @@ type PreviewLibraryNamingJSONRequestBody = NamingSettings
 // SetLibraryQualityJSONRequestBody defines body for SetLibraryQuality for application/json ContentType.
 type SetLibraryQualityJSONRequestBody = LibraryQualityWrite
 
+// PreviewLibraryQualityJSONRequestBody defines body for PreviewLibraryQuality for application/json ContentType.
+type PreviewLibraryQualityJSONRequestBody = LibraryQualityWrite
+
 // RenameLibraryJSONRequestBody defines body for RenameLibrary for application/json ContentType.
 type RenameLibraryJSONRequestBody RenameLibraryJSONBody
 
@@ -8144,6 +8166,9 @@ type ServerInterface interface {
 	// Save a library's quality. Administrator only.
 	// (PUT /categories/{id}/quality)
 	SetLibraryQuality(w http.ResponseWriter, r *http.Request, id int64)
+	// What saving this quality would change in the library, item by item; nothing is saved. Administrator only.
+	// (POST /categories/{id}/quality/preview)
+	PreviewLibraryQuality(w http.ResponseWriter, r *http.Request, id int64)
 	// Preview or apply the library's naming to its files, on every root it uses. Administrator only.
 	// (POST /categories/{id}/rename)
 	RenameLibrary(w http.ResponseWriter, r *http.Request, id int64)
@@ -9380,6 +9405,12 @@ func (_ Unimplemented) GetLibraryQuality(w http.ResponseWriter, r *http.Request,
 // Save a library's quality. Administrator only.
 // (PUT /categories/{id}/quality)
 func (_ Unimplemented) SetLibraryQuality(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What saving this quality would change in the library, item by item; nothing is saved. Administrator only.
+// (POST /categories/{id}/quality/preview)
+func (_ Unimplemented) PreviewLibraryQuality(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12891,6 +12922,39 @@ func (siw *ServerInterfaceWrapper) SetLibraryQuality(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetLibraryQuality(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewLibraryQuality operation middleware
+func (siw *ServerInterfaceWrapper) PreviewLibraryQuality(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewLibraryQuality(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -23066,6 +23130,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/categories/{id}/quality", wrapper.SetLibraryQuality)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/categories/{id}/quality/preview", wrapper.PreviewLibraryQuality)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/categories/{id}/rename", wrapper.RenameLibrary)
