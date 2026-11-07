@@ -168,7 +168,7 @@ function libraryOrder(categories: readonly Category[]): Category[] {
 }
 
 /** Let a library hold a further media type: a select of the types it does not hold yet. */
-function AddLibraryType({ libraryId, held }: { libraryId: number; held: readonly string[] }) {
+function AddLibraryType({ libraryId, held, disabled }: { libraryId: number; held: readonly string[]; disabled: boolean }) {
   const queryClient = useQueryClient();
   const missing = useMediaTypes().filter((info) => !held.includes(info.key));
   const add = useMutation({
@@ -180,14 +180,13 @@ function AddLibraryType({ libraryId, held }: { libraryId: number; held: readonly
       void queryClient.invalidateQueries({ queryKey: ["libraries"] });
     },
   });
-  if (missing.length === 0) return null;
   return (
     <select
       aria-label="Also holds"
       value=""
-      disabled={add.isPending}
+      disabled={add.isPending || disabled || missing.length === 0}
       onChange={(event) => event.target.value && add.mutate(event.target.value)}
-      className="rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs text-ink-muted"
+      className="rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs text-ink-muted disabled:opacity-50"
     >
       <option value="">Also holds…</option>
       {missing.map((info) => (
@@ -227,87 +226,88 @@ function Row({
 }) {
   const mediaType = useMediaType(category.media_type);
   const further = category.library_id != null;
+  const slot = "flex min-w-0 items-center [&>*]:w-full";
+  const button =
+    "rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink focus-visible:outline-2 " +
+    "focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50";
   return (
-    <li className={`flex items-center gap-3 py-2.5 pr-3 ${further ? "pl-8" : "pl-3"}`}>
-      {further ? (
-        <span className="text-sm text-ink-muted">also holds</span>
-      ) : (
-        <>
-          <span className="flex">
-            <button type="button" aria-label={`Move ${category.name} up`} disabled={busy} onClick={() => onMove(-1)} className="rounded p-0.5 text-ink-muted hover:text-ink disabled:opacity-30">
-              <ArrowUp aria-hidden className="size-3.5" />
-            </button>
-            <button type="button" aria-label={`Move ${category.name} down`} disabled={busy} onClick={() => onMove(1)} className="rounded p-0.5 text-ink-muted hover:text-ink disabled:opacity-30">
-              <ArrowDown aria-hidden className="size-3.5" />
-            </button>
-          </span>
-          <span className="text-sm font-medium">{category.name}</span>
-        </>
-      )}
-      <span className="rounded-full border border-border-subtle px-1.5 py-px text-[0.6875rem]
-                       text-ink-muted">
-        {mediaTypeName(category.media_type)}
-      </span>
-      <LibraryTargetSelect categoryId={category.id} name={category.name} />
-      <LibraryLanguageSelect categoryId={category.id} name={category.name} />
-      {category.works != null && (
-        <span className="ml-auto shrink-0 text-xs text-ink-muted">
-          {category.works} {mediaType?.work.many.toLowerCase() ?? "works"}
+    <li className={`flex flex-wrap items-start gap-x-4 gap-y-2 py-2.5 pr-3 ${further ? "pl-8" : "pl-3"}`}>
+      <div className="flex w-56 shrink-0 items-center gap-2">
+        {further ? (
+          <span className="text-sm text-ink-muted">also holds</span>
+        ) : (
+          <>
+            <span className="flex">
+              <button type="button" aria-label={`Move ${category.name} up`} disabled={busy} onClick={() => onMove(-1)} className="rounded p-0.5 text-ink-muted hover:text-ink disabled:opacity-30">
+                <ArrowUp aria-hidden className="size-3.5" />
+              </button>
+              <button type="button" aria-label={`Move ${category.name} down`} disabled={busy} onClick={() => onMove(1)} className="rounded p-0.5 text-ink-muted hover:text-ink disabled:opacity-30">
+                <ArrowDown aria-hidden className="size-3.5" />
+              </button>
+            </span>
+            <span className="truncate text-sm font-medium">{category.name}</span>
+          </>
+        )}
+        <span className="rounded-full border border-border-subtle px-1.5 py-px text-[0.6875rem] text-ink-muted">
+          {mediaTypeName(category.media_type)}
         </span>
-      )}
-      {mediaType?.searches_library && (
-        <>
-          {searchMessage && <span className="text-xs text-ink-muted">{searchMessage}</span>}
+      </div>
+      {/* Every library gets the same slots in the same order; the grid wraps them to as many rows as the width needs. */}
+      <div className="grid min-w-0 flex-1 items-center gap-2 [grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr))]">
+        <div className={slot}>
+          <LibraryTargetSelect categoryId={category.id} name={category.name} />
+        </div>
+        <div className={slot}>
+          <LibraryLanguageSelect categoryId={category.id} name={category.name} />
+        </div>
+        <span className="text-xs text-ink-muted">
+          {category.works != null ? `${category.works} ${mediaType?.work.many.toLowerCase() ?? "works"}` : ""}
+        </span>
+        <div className={slot}>
           <button
             type="button"
             onClick={onSearch}
-            disabled={searchPending}
-            title="Search every monitored, incomplete album in this library"
-            className="rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted
-                       hover:text-ink disabled:opacity-50 focus-visible:outline-2
-                       focus-visible:outline-offset-2 focus-visible:outline-accent"
+            disabled={searchPending || !mediaType?.searches_library}
+            title={mediaType?.searches_library ? "Search every monitored, incomplete album in this library" : "This kind of library is searched per item"}
+            className={button}
           >
-            {searchPending ? "…" : "Search"}
+            {searchPending ? "…" : searchMessage ?? "Search"}
           </button>
-        </>
-      )}
-      {!further && <AddLibraryType libraryId={category.id} held={heldTypes} />}
-      {!further && mergeTargets.length > 0 && (
-        <select
-          aria-label={`Merge ${category.name} into another library`}
-          value=""
-          disabled={busy}
-          onChange={(event) => {
-            const into = Number(event.target.value);
-            const target = mergeTargets.find((other) => other.id === into);
-            if (target && window.confirm(`Merge ${category.name} into ${target.name}?\n\nIts works, folders and follows become ${target.name}'s and ${category.name} is removed. Files stay where they are.`)) {
-              onMerge(into);
-            }
-          }}
-          className="rounded-md border border-border-subtle bg-canvas px-1 py-1 text-xs text-ink-muted"
-        >
-          <option value="">Merge into…</option>
-          {mergeTargets.map((other) => (
-            <option key={other.id} value={other.id}>
-              {other.name}
-            </option>
-          ))}
-        </select>
-      )}
-      <button
-        type="button"
-        onClick={onEdit}
-        className="rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted
-                   hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2
-                   focus-visible:outline-accent"
-      >
-        Edit
-      </button>
-      <RemoveButton
-        aria-label={`Remove ${category.name}`}
-        onClick={onRemove}
-        disabled={busy}
-      />
+        </div>
+        <div className={slot}>
+          <AddLibraryType libraryId={category.id} held={heldTypes} disabled={further} />
+        </div>
+        <div className={slot}>
+          <select
+            aria-label={`Merge ${category.name} into another library`}
+            value=""
+            disabled={busy || further || mergeTargets.length === 0}
+            onChange={(event) => {
+              const into = Number(event.target.value);
+              const target = mergeTargets.find((other) => other.id === into);
+              if (target && window.confirm(`Merge ${category.name} into ${target.name}?\n\nIts works, folders and follows become ${target.name}'s and ${category.name} is removed. Files stay where they are.`)) {
+                onMerge(into);
+              }
+            }}
+            className="rounded-md border border-border-subtle bg-canvas px-1 py-1 text-xs text-ink-muted disabled:opacity-50"
+          >
+            <option value="">Merge into…</option>
+            {mergeTargets.map((other) => (
+              <option key={other.id} value={other.id}>
+                {other.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className={slot}>
+          <button type="button" onClick={onEdit} className={button}>
+            Edit
+          </button>
+        </div>
+        <div className="flex items-center">
+          <RemoveButton aria-label={`Remove ${category.name}`} onClick={onRemove} disabled={busy} />
+        </div>
+      </div>
     </li>
   );
 }
