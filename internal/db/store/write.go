@@ -111,12 +111,19 @@ func (s *Store) execute(op *writeOp) error {
 }
 
 // runInTransaction is the ordinary write path.
-func runInTransaction(ctx context.Context, db *sql.DB, database string, run func(context.Context, *sql.Tx) error) error {
+func runInTransaction(ctx context.Context, db *sql.DB, database string, run func(context.Context, *sql.Tx) error) (result error) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("store %s: begin: %w", database, err)
 	}
 
+	// A panic here runs on the writer goroutine, where nothing can recover it: it would end the process and leave the lock held.
+	defer func() {
+		if panicked := recover(); panicked != nil {
+			_ = tx.Rollback()
+			result = fmt.Errorf("store %s: write panicked: %v", database, panicked)
+		}
+	}()
 	if err := run(ctx, tx); err != nil {
 		if rollbackErr := tx.Rollback(); rollbackErr != nil {
 			// Both are reported: the caller needs its own error, and a failed

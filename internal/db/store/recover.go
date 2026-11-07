@@ -241,7 +241,7 @@ func probe(ctx context.Context, config Config, deep bool) error {
 		return fmt.Errorf("store %s: check %s: %w", config.Name, config.Path, err)
 	}
 
-	db, err := sql.Open(driverName, "file:"+config.Path)
+	db, err := sql.Open(driverName, fileURI(config.Path))
 	if err != nil {
 		return fmt.Errorf("store %s: open for integrity check: %w", config.Name, err)
 	}

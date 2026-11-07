@@ -13,7 +13,7 @@ var ErrPageSizeLocked = errors.New("store: page size cannot be changed on a popu
 
 // ensurePageSize runs before the WAL handles are opened, on its own connection (ADR-22).
 func ensurePageSize(ctx context.Context, config Config) error {
-	db, err := sql.Open(driverName, "file:"+config.Path)
+	db, err := sql.Open(driverName, fileURI(config.Path))
 	if err != nil {
 		return fmt.Errorf("store %s: open for page-size setup: %w", config.Name, err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -355,5 +356,45 @@ func TestWrite_AfterCloseIsRefused(t *testing.T) {
 	err = opened.Write(context.Background(), store.PrioNormal, func(context.Context, *sql.Tx) error { return nil })
 	if !errors.Is(err, store.ErrClosed) {
 		t.Errorf("Write after Close = %v, want ErrClosed", err)
+	}
+}
+
+func TestWrite_PanicRollsBackAndLeavesTheWriterUsable(t *testing.T) {
+	opened := openWritableStore(t, clock.NewFakeAtEpoch(), nil)
+
+	err := opened.Write(t.Context(), store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO work (id, title) VALUES (1, 'x')"); err != nil {
+			return err
+		}
+		panic("boom")
+	})
+	if err == nil {
+		t.Fatal("a panicking write reported success")
+	}
+	if got := countRows(t, opened); got != 0 {
+		t.Fatalf("rows after a panicked write = %d, want 0", got)
+	}
+	if err := opened.Write(t.Context(), store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "INSERT INTO work (id, title) VALUES (2, 'y')")
+		return err
+	}); err != nil {
+		t.Fatalf("write after a panic: %v", err)
+	}
+}
+
+func TestOpen_PathWithURICharacters(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "100%#a?b")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	opened, err := store.Open(t.Context(), clock.NewFakeAtEpoch(), store.Config{
+		Name: "library", Path: filepath.Join(dir, "library.db"), Logger: quietLogger(),
+	})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	_ = opened.Close()
+	if _, err := os.Stat(filepath.Join(dir, "library.db")); err != nil {
+		t.Fatalf("database not at the requested path: %v", err)
 	}
 }
