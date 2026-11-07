@@ -1,6 +1,6 @@
 import { describe as suite, expect, test } from "vitest";
 
-import { holds, parseWhere, passes, toWhere, whereWithTitle, type FilterField } from "./customFilter";
+import { holds, parseWhere, quickKey, passes, toWhere, whereWithTitle, type FilterField } from "./customFilter";
 
 const fields: FilterField[] = [
   { key: "title", label: "Title", kind: "text" },
@@ -10,6 +10,12 @@ const fields: FilterField[] = [
 ];
 
 suite("custom filters", () => {
+  test("quick filters compare by what is set, in any order", () => {
+    expect(quickKey({ tags: "a", q: "" })).toBe(quickKey({ tags: "a" }));
+    expect(quickKey({ q: "x", tags: "a" })).toBe(quickKey({ tags: "a", q: "x" }));
+    expect(quickKey({ q: "x" })).not.toBe(quickKey(undefined));
+  });
+
   test("round-trips through the where parameter and ignores what is unreadable", () => {
     const conditions = [{ field: "year", op: "gt", value: "2010" }];
     expect(parseWhere(toWhere(conditions))).toEqual(conditions);

@@ -21,6 +21,8 @@ const (
 	releaseGroupSeriesType = "Release group series"
 	// soundtrackType is the MusicBrainz secondary type of an album that is a score or soundtrack.
 	soundtrackType = "Soundtrack"
+	// compilationType is the secondary type of a compilation, which MusicBrainz also files in release group series.
+	compilationType = "Compilation"
 	// seriesLookupsPerRun bounds the MusicBrainz requests one pass makes for series (one a second, shared with enrichment).
 	seriesLookupsPerRun = 120
 	// seriesScanPerRun bounds the albums one pass looks at for series, most of them answered from the cache.
@@ -97,7 +99,7 @@ func (p CollectionPass) readSeries(ctx context.Context) error {
 			if err != nil {
 				continue
 			}
-			if !slices.Contains(group.SecondaryTypes, soundtrackType) {
+			if !slices.Contains(group.SecondaryTypes, soundtrackType) && !slices.Contains(group.SecondaryTypes, compilationType) {
 				done = append(done, work.WorkID)
 				continue
 			}

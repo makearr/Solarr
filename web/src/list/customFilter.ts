@@ -21,6 +21,13 @@ export interface SavedFilter {
   id: string;
   name: string;
   conditions: Condition[];
+  /** The list's quick filters (search text, tags, person) kept with the conditions; absent when none were set. */
+  quick?: Record<string, string>;
+}
+
+/** The quick filters that are set, as a stable string to compare two selections by. */
+export function quickKey(quick: Record<string, string> | undefined): string {
+  return JSON.stringify(Object.entries(quick ?? {}).filter(([, value]) => value !== "").sort(([a], [b]) => a.localeCompare(b)));
 }
 
 export const OPERATORS: Record<FilterKind, readonly (readonly [string, string])[]> = {

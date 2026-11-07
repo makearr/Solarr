@@ -250,7 +250,8 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
           fields={filterFieldsOf(info)}
           storageKey={`${categoryId}.${level}`}
           where={routeView.query.filters.where ?? ""}
-          onChange={(where) => setFilter("where", where)}
+          quick={{ q: routeView.query.filters.q ?? "", tags: routeView.query.filters.tags ?? "", person: routeView.query.filters.person ?? "" }}
+          onChange={(where, quick) => setQuery({ filters: { ...routeView.query.filters, where, q: quick?.q ?? "", tags: quick?.tags ?? "", person: quick?.person ?? "" } })}
         />
         <ToolbarSort
           sort={sort}

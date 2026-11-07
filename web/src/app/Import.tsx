@@ -494,6 +494,8 @@ function InspectForm() {
   const [categoryId, setCategoryId] = useState<number | "">(
     routeCategoryId ? Number(routeCategoryId) : "",
   );
+  // Best match routes by content; Decide later leaves every unit waiting for a library.
+  const [decideLater, setDecideLater] = useState(false);
   const [preview, setPreview] = useState(false);
   // D6: what nothing identified still becomes an album, marked unverified.
   // Off by default (asked 2026-09-30): an unrecognised folder waits for review unless asked for.
@@ -527,7 +529,7 @@ function InspectForm() {
           source_path: sourcePath,
           origin,
           category_id: categoryId === "" ? undefined : categoryId,
-          best_match: categoryId === "",
+          best_match: categoryId === "" && !decideLater,
           preview,
           add_unverified: addUnverified && !preview,
         },
@@ -574,15 +576,20 @@ function InspectForm() {
         </label>
         <label
           className={labelStyle}
-          title="Only files that fit the library's content are placed in it. Best match sends each folder to the library of the kind of media it holds."
+          title="Only files that fit the library's content are placed in it. Best match sends each folder to the library of the kind of media it holds. Decide later keeps every unit waiting for a library."
         >
           Library
           <select
             className={inputStyle}
-            value={categoryId}
-            onChange={(event) => setCategoryId(event.target.value === "" ? "" : Number(event.target.value))}
+            value={decideLater ? "later" : categoryId}
+            onChange={(event) => {
+              const value = event.target.value;
+              setDecideLater(value === "later");
+              setCategoryId(value === "" || value === "later" ? "" : Number(value));
+            }}
           >
             <option value="">Best match</option>
+            <option value="later">Decide later</option>
             {categories.data?.map((category) => (
               <option key={category.id} value={category.id}>
                 {libraryLabel(category)}

@@ -202,7 +202,7 @@ export function PeopleIndex() {
         </ToolbarSelect>
         <ToolbarFavorites active={view.query.filters.favorite === "only"} onChange={(active) => setFilter("favorite", active ? "only" : "")} />
         <ToolbarSearch value={view.query.filters.q ?? ""} onChange={(value) => setFilter("q", value)} placeholder="Name contains…" label="Filter people by name" />
-        <CustomFilterMenu fields={filterFields} storageKey={`people.${scope}`} where={view.query.filters.where ?? ""} onChange={(where) => setFilter("where", where)} />
+        <CustomFilterMenu fields={filterFields} storageKey={`people.${scope}`} where={view.query.filters.where ?? ""} quick={{ q: view.query.filters.q ?? "" }} onChange={(where, quick) => view.setQuery({ ...view.query, filters: { ...view.query.filters, where, q: quick?.q ?? "" } })} />
         <ToolbarSort
           sort={sort}
           descending={direction === "desc"}

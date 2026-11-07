@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import { usePreference } from "@/lib/usePreference";
 import { Button } from "@/ui/Button";
-import { describe, OPERATORS, parseWhere, toWhere, type Condition, type FilterField, type SavedFilter } from "@/list/customFilter";
+import { describe, OPERATORS, parseWhere, quickKey, toWhere, type Condition, type FilterField, type SavedFilter } from "@/list/customFilter";
 
 const control = "rounded-md border border-border-subtle bg-canvas px-2 py-1 text-sm text-ink";
 
@@ -16,7 +16,10 @@ interface Props {
   storageKey: string;
   /** The conditions in force, as the JSON the URL carries. */
   where: string;
-  onChange: (where: string) => void;
+  /** The list's quick filters in force (search text, tags, person); saved with a filter when given. */
+  quick?: Record<string, string>;
+  /** `quick` is the saved filter's quick filters (empty for Everything) when the list passed its own. */
+  onChange: (where: string, quick?: Record<string, string>) => void;
 }
 
 const blankCondition = (fields: readonly FilterField[]): Condition => {
@@ -25,26 +28,29 @@ const blankCondition = (fields: readonly FilterField[]): Condition => {
 };
 
 /** Sonarr's Filter menu: all, the filters a person saved, and a builder for a new one. */
-export function CustomFilterMenu({ fields, storageKey, where, onChange }: Props) {
+export function CustomFilterMenu({ fields, storageKey, where, quick, onChange }: Props) {
   const [saved, setSaved] = usePreference<SavedFilter[]>(`filters.${storageKey}`, []);
   const [editing, setEditing] = useState<SavedFilter | "new" | null>(null);
   const active = parseWhere(where);
-  const current = saved.find((filter) => toWhere(filter.conditions) === where);
-  const label = where === "" ? "Filter" : current?.name || "Custom filter";
+  const quickNow = quick === undefined ? undefined : Object.fromEntries(Object.entries(quick).filter(([, value]) => value !== ""));
+  const hasQuick = quickNow !== undefined && Object.keys(quickNow).length > 0;
+  const current = saved.find((filter) => toWhere(filter.conditions) === where && (quick === undefined || quickKey(filter.quick) === quickKey(quickNow)));
+  const label = where === "" && !hasQuick ? "Filter" : current?.name || "Custom filter";
+  const apply = (filter: SavedFilter) => onChange(toWhere(filter.conditions), quick === undefined ? undefined : (filter.quick ?? {}));
 
   const save = (filter: SavedFilter, apply: boolean) => {
     // A filter without a name is applied but never kept.
     if (filter.name !== "") {
       setSaved(saved.some((entry) => entry.id === filter.id) ? saved.map((entry) => (entry.id === filter.id ? filter : entry)) : [...saved, filter]);
     }
-    if (apply) onChange(toWhere(filter.conditions));
+    if (apply) onChange(toWhere(filter.conditions), quick === undefined ? undefined : (filter.quick ?? {}));
   };
 
   return (
     <>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger
-          className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-1 text-xs ${where === "" ? "border-border-subtle text-ink-muted hover:text-ink" : "border-accent text-ink"}`}
+          className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-1 text-xs ${where === "" && !hasQuick ? "border-border-subtle text-ink-muted hover:text-ink" : "border-accent text-ink"}`}
         >
           <Filter aria-hidden className="size-3.5" />
           {label}
@@ -52,20 +58,20 @@ export function CustomFilterMenu({ fields, storageKey, where, onChange }: Props)
         <DropdownMenu.Portal>
           <DropdownMenu.Content align="end" sideOffset={4} className="z-50 min-w-56 rounded-md border border-border-subtle bg-surface p-1 text-sm shadow-lg">
             <DropdownMenu.Item
-              onSelect={() => onChange("")}
+              onSelect={() => onChange("", quick === undefined ? undefined : {})}
               className="flex cursor-default items-center gap-2 rounded px-2 py-1 outline-none data-[highlighted]:bg-canvas"
             >
-              <span className="size-3.5">{where === "" && <Check aria-hidden className="size-3.5" />}</span>
+              <span className="size-3.5">{where === "" && !hasQuick && <Check aria-hidden className="size-3.5" />}</span>
               Everything
             </DropdownMenu.Item>
             {saved.map((filter) => (
               <DropdownMenu.Item
                 key={filter.id}
-                onSelect={() => onChange(toWhere(filter.conditions))}
+                onSelect={() => apply(filter)}
                 className="flex cursor-default items-center gap-2 rounded px-2 py-1 outline-none data-[highlighted]:bg-canvas"
               >
                 <span className="size-3.5">{current?.id === filter.id && <Check aria-hidden className="size-3.5" />}</span>
-                <span className="min-w-0 flex-1 truncate" title={filter.conditions.map((condition) => describe(condition, fields)).join(" and ")}>
+                <span className="min-w-0 flex-1 truncate" title={[...filter.conditions.map((condition) => describe(condition, fields)), ...Object.entries(filter.quick ?? {}).map(([key, value]) => `${key}: ${value}`)].join(" and ")}>
                   {filter.name}
                 </span>
               </DropdownMenu.Item>
@@ -87,9 +93,9 @@ export function CustomFilterMenu({ fields, storageKey, where, onChange }: Props)
                 Edit “{current.name}”
               </DropdownMenu.Item>
             )}
-            {where !== "" && !current && (
+            {(where !== "" || hasQuick) && !current && (
               <DropdownMenu.Item
-                onSelect={() => setEditing({ id: "", name: "", conditions: active })}
+                onSelect={() => setEditing({ id: "", name: "", conditions: active, quick: quickNow })}
                 className="flex cursor-default items-center gap-2 rounded px-2 py-1 outline-none data-[highlighted]:bg-canvas"
               >
                 <span className="size-3.5" />
@@ -102,12 +108,12 @@ export function CustomFilterMenu({ fields, storageKey, where, onChange }: Props)
       {editing !== null && (
         <FilterBuilder
           fields={fields}
-          initial={editing === "new" ? { id: "", name: "", conditions: active.length > 0 ? active : [blankCondition(fields)] } : editing}
+          initial={editing === "new" ? { id: "", name: "", conditions: active.length > 0 || hasQuick ? active : [blankCondition(fields)], quick: quickNow } : editing}
           onClose={() => setEditing(null)}
           onSave={(filter, apply) => save(filter, apply)}
           onDelete={(id) => {
             setSaved(saved.filter((entry) => entry.id !== id));
-            if (current?.id === id) onChange("");
+            if (current?.id === id) onChange("", quick === undefined ? undefined : {});
           }}
         />
       )}
@@ -129,9 +135,10 @@ function FilterBuilder({
   onDelete: (id: string) => void;
 }) {
   const [name, setName] = useState(initial.name);
-  const [conditions, setConditions] = useState<Condition[]>(initial.conditions.length > 0 ? initial.conditions : [blankCondition(fields)]);
+  const kept = Object.entries(initial.quick ?? {});
+  const [conditions, setConditions] = useState<Condition[]>(initial.conditions.length > 0 || kept.length > 0 ? initial.conditions : [blankCondition(fields)]);
   const set = (index: number, change: Partial<Condition>) => setConditions(conditions.map((condition, i) => (i === index ? { ...condition, ...change } : condition)));
-  const complete = conditions.length > 0 && conditions.every((condition) => condition.value !== "");
+  const complete = (conditions.length > 0 || kept.length > 0) && conditions.every((condition) => condition.value !== "");
 
   const changeField = (index: number, key: string) => {
     const field = fields.find((entry) => entry.key === key);
@@ -141,8 +148,8 @@ function FilterBuilder({
   const finish = (apply: boolean) => {
     const id = initial.id || `f${Date.now().toString(36)}`;
     // A filter without a name is applied but not kept.
-    if (name.trim() !== "") onSave({ id, name: name.trim(), conditions }, apply);
-    else if (apply) onSave({ id: "", name: "", conditions }, true);
+    if (name.trim() !== "") onSave({ id, name: name.trim(), conditions, quick: initial.quick }, apply);
+    else if (apply) onSave({ id: "", name: "", conditions, quick: initial.quick }, true);
     onClose();
   };
 
@@ -206,7 +213,7 @@ function FilterBuilder({
                   <button
                     type="button"
                     aria-label="Remove condition"
-                    disabled={conditions.length === 1}
+                    disabled={conditions.length === 1 && kept.length === 0}
                     onClick={() => setConditions(conditions.filter((_, i) => i !== index))}
                     className="rounded-md p-1 text-ink-muted hover:text-danger disabled:opacity-30"
                   >
@@ -216,6 +223,9 @@ function FilterBuilder({
               );
             })}
           </ul>
+          {kept.length > 0 && (
+            <p className="text-xs text-ink-muted">Also keeps the list's {kept.map(([key, value]) => `${key} “${value}”`).join(", ")}.</p>
+          )}
           <button type="button" onClick={() => setConditions([...conditions, blankCondition(fields)])} className="flex w-fit items-center gap-1 text-xs text-accent hover:underline">
             <Plus aria-hidden className="size-3.5" /> Add a condition
           </button>

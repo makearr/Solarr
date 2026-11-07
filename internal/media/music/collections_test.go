@@ -69,8 +69,9 @@ func TestCollectionPassMakesScoreSeriesAndFranchiseCollectionsThatCarryTheFranch
 	scoreOne := addAlbum(t, albums, "Vexmoor: Original Score", "rg-score-1")
 	scoreTwo := addAlbum(t, albums, "Vexmoor Returns: Original Score", "rg-score-2")
 	studio := addAlbum(t, albums, "Brightwater", "rg-studio")
+	addAlbum(t, albums, "Now That's Vexmoor", "rg-compilation")
 	sources := &fakeAlbumSeries{
-		types: map[string][]string{"rg-score-1": {"Soundtrack"}, "rg-score-2": {"Soundtrack"}},
+		types: map[string][]string{"rg-score-1": {"Soundtrack"}, "rg-score-2": {"Soundtrack"}, "rg-compilation": {"Compilation"}},
 		series: map[string][]musicbrainz.Series{
 			"rg-score-1": {{MBID: "series-1", Name: "Vexmoor Scores", Type: "Release group series"}, {MBID: "series-x", Name: "Label catalogue", Type: "Release series"}},
 			"rg-score-2": {{MBID: "series-1", Name: "Vexmoor Scores", Type: "Release group series"}},
@@ -92,8 +93,8 @@ func TestCollectionPassMakesScoreSeriesAndFranchiseCollectionsThatCarryTheFranch
 	if err := pass.Run(t.Context(), jobs.Job{}); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(sources.asked, []string{"rg-score-1", "rg-score-2"}) {
-		t.Errorf("series asked of %v, want the two soundtracks only", sources.asked)
+	if !reflect.DeepEqual(sources.asked, []string{"rg-score-1", "rg-score-2", "rg-compilation"}) {
+		t.Errorf("series asked of %v, want the two soundtracks and the compilation only", sources.asked)
 	}
 	candidates, err := franchises.LinkCandidates(t.Context())
 	if err != nil {
