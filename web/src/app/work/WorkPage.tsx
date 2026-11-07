@@ -718,7 +718,7 @@ function FilesTab({ work, words, info, categoryId }: { work: Work; words: Vocabu
               {part.number}
             </td>
             <td className="w-[clamp(7rem,16vw,14rem)] py-1.5 pr-3">
-              {part.file && <FileThumb mediaObjectId={part.file.media_object_id} kind="frame" wide explain className="min-h-16" />}
+              {part.file && <FileThumb mediaObjectId={part.file.media_object_id} kind="frame" wide placeholder className="min-h-16" />}
             </td>
             <td className="py-1.5">
               <span>{part.title ?? part.media_ref}</span>
@@ -750,7 +750,7 @@ function WholeFiles({ work, expert }: { work: Work; expert?: ExpertFiles }) {
       <ul className="flex flex-col divide-y divide-border-subtle text-sm">
         {files.map((file) => (
           <li key={file.media_object_id} className="flex gap-3 py-2">
-            <FileThumb mediaObjectId={file.media_object_id} kind="frame" wide explain className="min-h-24" />
+            <FileThumb mediaObjectId={file.media_object_id} kind="frame" wide placeholder className="min-h-24" />
             <div className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="flex items-center gap-2">
               <PlayButton extension={file.extension} item={{ mediaObjectId: file.media_object_id, title: work.title, durationMs: work.runtime_ms ?? undefined, file }} />

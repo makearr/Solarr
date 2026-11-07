@@ -102,8 +102,6 @@ type Config struct {
 	MediaCoverDir string
 	// PreviewsDir holds the preview pictures of videos; without it a preview is 404.
 	PreviewsDir string
-	// FilePreviews names the previewed files of listed works; optional.
-	FilePreviews FilePreviews
 	// VideoPictures starts the on-demand preview and hash sweeps; optional.
 	VideoPictures VideoPictures
 	// ConfigPath locates config.yml on disk. Optional: without it,
@@ -350,7 +348,6 @@ type Server struct {
 	imagesDir               string
 	mediaCoverDir           string
 	previewsDir             string
-	filePreviews            FilePreviews
 	videoPictures           VideoPictures
 	configPath              string
 	people                  PeopleReader
@@ -496,7 +493,6 @@ func New(config Config) (*Server, error) {
 		imagesDir:               config.ImagesDir,
 		mediaCoverDir:           config.MediaCoverDir,
 		previewsDir:             config.PreviewsDir,
-		filePreviews:            config.FilePreviews,
 		videoPictures:           config.VideoPictures,
 		configPath:              config.ConfigPath,
 		people:                  config.People,

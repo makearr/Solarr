@@ -230,35 +230,7 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		writeError(w, s.logger, err)
 		return
 	}
-	page := buildWorkPage(rows, limit, sort, s.wall.Now())
-	s.addPreviewFiles(r.Context(), page.Items)
-	writeJSON(w, s.logger, http.StatusOK, page)
-}
-
-// FilePreviews answers which files of a page of works have a single-frame preview.
-type FilePreviews interface {
-	PreviewFiles(ctx context.Context, workIDs []int64) (map[int64][]int64, error)
-}
-
-// addPreviewFiles names the previewed files of each listed work; a failed lookup leaves the list without pictures.
-func (s *Server) addPreviewFiles(ctx context.Context, items []gen.Work) {
-	if s.filePreviews == nil || s.previewsDir == "" || len(items) == 0 {
-		return
-	}
-	ids := make([]int64, len(items))
-	for index, item := range items {
-		ids[index] = item.Id
-	}
-	files, err := s.filePreviews.PreviewFiles(ctx, ids)
-	if err != nil {
-		s.logger.WarnContext(ctx, "preview files", "error", err)
-		return
-	}
-	for index, item := range items {
-		if found := files[item.Id]; len(found) > 0 {
-			items[index].PreviewFileIds = &found
-		}
-	}
+	writeJSON(w, s.logger, http.StatusOK, buildWorkPage(rows, limit, sort, s.wall.Now()))
 }
 
 // libraryMediaTypes are the media types of the library the list is of: its own, and with whole the types of its further

@@ -888,7 +888,6 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		ImagesDir:     p.imagesDir(),
 		MediaCoverDir: p.config.Paths.MediaCoverDir,
 		PreviewsDir:   filepath.Join(p.config.Paths.ConfigDir, "previews"),
-		FilePreviews:  library.NewWorks(p.library),
 		VideoPictures: videoPictures{process: p},
 		ConfigPath:    p.configPath,
 		People: adapters.People{

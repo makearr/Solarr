@@ -205,22 +205,6 @@ type Works struct {
 // NewWorks builds a reader over an open library store.
 func NewWorks(opened *store.Store) Works { return Works{store: opened} }
 
-// PreviewFiles answers, for a page of works, the first file of each that has a single-frame preview.
-func (w Works) PreviewFiles(ctx context.Context, workIDs []int64) (map[int64][]int64, error) {
-	if len(workIDs) == 0 {
-		return nil, nil
-	}
-	rows, err := librarydb.New(w.store.Read()).ListPreviewFilesForWorks(ctx, workIDs)
-	if err != nil {
-		return nil, fmt.Errorf("library: preview files: %w", err)
-	}
-	files := make(map[int64][]int64)
-	for _, row := range rows {
-		files[row.WorkID] = append(files[row.WorkID], row.MediaObjectID)
-	}
-	return files, nil
-}
-
 // composeList builds the query and its arguments from the filters actually set. The SQL
 // is assembled rather than written in queries/ because an optional predicate in static
 // SQL costs the index entirely -- 31 times slower, measured

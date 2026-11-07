@@ -813,8 +813,6 @@ type Querier interface {
 	// The planner's facts for one page of items (section 9.1): the dirty set, or with dirty_only 0
 	// the paced sweep. Absent hunt columns read as zero.
 	ListPlanInputs(ctx context.Context, arg ListPlanInputsParams) ([]ListPlanInputsRow, error)
-	// The first previewed file of each work of a page: one picture in front of the row, for a movie as for a series.
-	ListPreviewFilesForWorks(ctx context.Context, workIds []int64) ([]ListPreviewFilesForWorksRow, error)
 	// Parts nothing holds on to: no file covers them, no event across series lists them, and no broadcast is shared through them.
 	ListPrunableWorkParts(ctx context.Context, workID int64) ([]ListPrunableWorkPartsRow, error)
 	// One page of queued files with what their newest attempt concluded. The caller

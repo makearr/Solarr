@@ -38,7 +38,6 @@ import { TagChips } from "../TagChips";
 import { PersonFilter } from "../PersonFilter";
 import { BulkEditWork } from "./EditWork";
 import { LibraryMoveDialog } from "./LibraryMoveDialog";
-import { FileThumb, PreviewPlaceholder, isPreviewable, usePreviewPlaceholders } from "../FileThumb";
 import { formatMinutes } from "./workFormat";
 
 type Work = components["schemas"]["Work"];
@@ -201,9 +200,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
     listView,
   );
 
-  const placeholders = usePreviewPlaceholders();
-  const anyPreview = list.items.some((work) => (work.preview_file_ids ?? []).length > 0 || (placeholders && isPreviewable(work)));
-  const columns = useMemo(() => buildColumns(info, categoryId, new Set(hidden), anyPreview), [info, categoryId, hidden, anyPreview]);
+  const columns = useMemo(() => buildColumns(info, categoryId, new Set(hidden)), [info, categoryId, hidden]);
   const choosable = useMemo(() => buildColumns(info, categoryId, new Set()).filter((column) => column.header !== ""), [info, categoryId]);
   // The A-Z jump is for the orderings by name, ascending: it starts the list at the letter.
   const jumpable = (sort === "title" || sort === "artist") && routeView.query.direction !== "desc";
@@ -322,7 +319,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
 }
 
 /** The table's columns: picture and title always, then the base fields and the type's column facets, less the hidden. */
-function buildColumns(info: MediaTypeInfo | undefined, categoryId: string, hidden: ReadonlySet<string>, withPreviews = false): Column<Work>[] {
+function buildColumns(info: MediaTypeInfo | undefined, categoryId: string, hidden: ReadonlySet<string>): Column<Work>[] {
   const lead = info?.roles.find((role) => role.lead);
   const columns: Column<Work>[] = [
     {
@@ -341,20 +338,6 @@ function buildColumns(info: MediaTypeInfo | undefined, categoryId: string, hidde
         </div>
       ),
     },
-    ...(withPreviews
-      ? [{
-          key: "preview",
-          header: "",
-          width: "clamp(4rem,9vw,9rem)",
-          // One picture per video file of the work, as high as the row; a file belongs to no episode or edition.
-          render: (work: Work) => (
-            <div className="flex h-9 gap-1">
-              {(work.preview_file_ids ?? []).map((id) => <FileThumb key={id} mediaObjectId={id} kind="frame" />)}
-              {(work.preview_file_ids ?? []).length === 0 && isPreviewable(work) && <PreviewPlaceholder />}
-            </div>
-          ),
-        }]
-      : []),
     {
       key: "title",
       header: "Title",

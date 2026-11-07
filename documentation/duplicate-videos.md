@@ -39,10 +39,10 @@ video from the frames the hash reads, so a file is read once: a single frame (th
 720p) and a 3x3 sheet of each moment's most detailed frame (cells fitted into 426x240, 1278x720 for 16:9). Both are colour,
 in the video's own shape, uncropped, JPEG. They live in `<config dir>/previews/<id/1000>/<id>-frame.jpg` and `-sheet.jpg`
 (`internal/platform/previewstore`), belong to the file (`media_object`), and are listed in `video_preview` with the algorithm
-version, so a hash bump makes them again. `GET /files/{id}/preview/{kind}` serves them to whoever may read the file; the work
-list names the first previewed file of every work (`preview_file_ids`). The web interface shows the frame in the
-overview and table of a library and the sheet in file details and look-alike duplicates, unless the person switched
-Settings > Web UI > Show thumbnails off. Gap: previews of a deleted file stay on disk.
+version, so a hash bump makes them again. `GET /files/{id}/preview/{kind}` serves them to whoever may read the file. The web
+interface shows the frame in front of each file on a work's own page (each episode row of the Overview tab, the File box of
+a movie or scene, every row of the Files tab) and the sheet in look-alike duplicates, unless the person switched Settings >
+Web UI > Show thumbnails off. The library lists (grid, overview, table) show no previews. Gap: previews of a deleted file stay on disk.
 
 The pass is a setting, `scan.video_phash` (default off), edited by an administrator under Storage > Duplicates
 (`GET/PUT /settings/video-hashing`). Off, nothing new is hashed; hashes already stored still serve the finder, and the
@@ -104,5 +104,5 @@ duplicate detection refuses a second release of the same episode, so a repeat do
 The similarity level opens on **Exact** and remembers the one last chosen (a browser preference).
 
 Settings > General has two buttons that start the on-demand `library.video_pictures` job whatever the switches say: "Generate
-missing hashes" hashes every video without a hash, "Generate missing previews" also makes the pictures. A video of a library
-with no picture yet shows a placeholder linking to Settings while previews and thumbnails are both on.
+missing hashes" hashes every video without a hash, "Generate missing previews" also makes the pictures. On a work's page, a
+video file with no picture yet shows a placeholder linking to Settings while previews and thumbnails are both on.

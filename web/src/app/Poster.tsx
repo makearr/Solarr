@@ -20,7 +20,6 @@ export function Poster({
   topLeft,
   hoverActions,
   heart,
-  corner,
   showTitle = true,
   link,
   round = false,
@@ -41,8 +40,6 @@ export function Poster({
   hoverActions?: React.ReactNode;
   /** The favorite heart: always shown once hearted, otherwise on hover. */
   heart?: React.ReactNode;
-  /** A small picture laid over the cover's lower left: a video's preview frame. */
-  corner?: React.ReactNode;
   showTitle?: boolean;
   link: LinkProps | null;
   round?: boolean;
@@ -89,7 +86,6 @@ export function Poster({
         )}
         {badge && <span className="absolute right-1.5 top-1.5">{badge}</span>}
         {topLeft && <span className="absolute left-1.5 top-1.5">{topLeft}</span>}
-        {corner && <span className="absolute bottom-9 left-1.5">{corner}</span>}
         {heart && (
           <span className="absolute bottom-1.5 left-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 has-[[aria-pressed=true]]:opacity-100">
             {heart}

@@ -169,15 +169,6 @@ INSERT INTO video_preview (media_object_id, algorithm_version, has_frame, has_sh
 ON CONFLICT (media_object_id) DO UPDATE SET algorithm_version = excluded.algorithm_version, has_frame = excluded.has_frame,
   has_sheet = excluded.has_sheet, made_at = excluded.made_at;
 
--- The first previewed file of each work of a page: one picture in front of the row, for a movie as for a series.
--- name: ListPreviewFilesForWorks :many
-SELECT wf.work_id, CAST(MIN(vp.media_object_id) AS INTEGER) AS media_object_id
-FROM work_file wf
-JOIN video_preview vp ON vp.media_object_id = wf.media_object_id
-WHERE vp.has_frame = 1 AND wf.work_id IN (sqlc.slice('work_ids'))
-GROUP BY wf.work_id
-ORDER BY wf.work_id;
-
 -- name: SetPhash :exec
 UPDATE media_object SET phash = ? WHERE id = ?;
 

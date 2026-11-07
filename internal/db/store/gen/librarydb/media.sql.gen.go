@@ -8,7 +8,6 @@ package librarydb
 import (
 	"context"
 	"database/sql"
-	"strings"
 )
 
 const addLibraryPath = `-- name: AddLibraryPath :execlastid
@@ -891,54 +890,6 @@ func (q *Queries) ListPathsInRoot(ctx context.Context, arg ListPathsInRootParams
 			&i.LastSeenAt,
 			&i.MissingSince,
 		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listPreviewFilesForWorks = `-- name: ListPreviewFilesForWorks :many
-SELECT wf.work_id, CAST(MIN(vp.media_object_id) AS INTEGER) AS media_object_id
-FROM work_file wf
-JOIN video_preview vp ON vp.media_object_id = wf.media_object_id
-WHERE vp.has_frame = 1 AND wf.work_id IN (/*SLICE:work_ids*/?)
-GROUP BY wf.work_id
-ORDER BY wf.work_id
-`
-
-type ListPreviewFilesForWorksRow struct {
-	WorkID        int64
-	MediaObjectID int64
-}
-
-// The first previewed file of each work of a page: one picture in front of the row, for a movie as for a series.
-func (q *Queries) ListPreviewFilesForWorks(ctx context.Context, workIds []int64) ([]ListPreviewFilesForWorksRow, error) {
-	query := listPreviewFilesForWorks
-	var queryParams []interface{}
-	if len(workIds) > 0 {
-		for _, v := range workIds {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:work_ids*/?", strings.Repeat(",?", len(workIds))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:work_ids*/?", "NULL", 1)
-	}
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListPreviewFilesForWorksRow{}
-	for rows.Next() {
-		var i ListPreviewFilesForWorksRow
-		if err := rows.Scan(&i.WorkID, &i.MediaObjectID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

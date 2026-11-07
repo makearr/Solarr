@@ -12,6 +12,9 @@ import { Chip } from "@/ui/Chip";
 import { HeartButton } from "@/ui/HeartButton";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
+import { useShowThumbnails } from "@/lib/interfacePreferences";
+
+import { FileThumb, isVideoType } from "../FileThumb";
 import { PlayButton } from "../player/PlayButton";
 import { TargetChip } from "./TargetChip";
 import { fileTagChips, formatDuration, formatMinutes, partState, sceneNumber, type PartState } from "./workFormat";
@@ -205,6 +208,9 @@ function PartRow({
     : part.date;
   const absolute = part.alt_numbers?.absolute;
   const scene = sceneNumber(part);
+  const [thumbnails] = useShowThumbnails();
+  // A video's episode row leads with its file's frame; a row without a file keeps the space, so the titles line up.
+  const framed = thumbnails && isVideoType(info?.key);
   return (
     <tr className="border-b border-border-subtle last:border-0 align-top">
       <td className="w-9 px-3 py-1.5">
@@ -212,23 +218,28 @@ function PartRow({
       </td>
       <td className="w-12 py-1.5 tabular-nums text-ink-muted">{part.number ?? part.media_ref}</td>
       <td className="py-1.5">
-        <span>{title}</span>
-        {absolute && <span className="ml-2 text-xs text-ink-muted">#{absolute}</span>}
-        {scene && (
-          <span className="ml-2 text-xs text-ink-muted" title={t("work.sceneNumberHint", { number: scene })}>
-            {t("work.sceneNumber", { number: scene })}
-          </span>
-        )}
-        {part.file && (
-          <span className="mt-0.5 flex flex-wrap items-center gap-1">
-            {fileTagChips(part.file).map((chip) => (
-              <Chip key={chip.text} tone={chip.tone}>{chip.text}</Chip>
-            ))}
-            <TargetChip file={part.file} />
-          </span>
-        )}
-        <PartCredits credits={part.credits ?? []} categoryId={categoryId} info={info} />
-        {actions.badgesOf?.(part)}
+        <div className="flex gap-3">
+          {framed && (part.file ? <FileThumb mediaObjectId={part.file.media_object_id} kind="frame" placeholder className="min-h-14" /> : <span aria-hidden className="w-[clamp(4rem,9vw,9rem)] shrink-0" />)}
+          <div className="min-w-0 flex-1">
+            <span>{title}</span>
+            {absolute && <span className="ml-2 text-xs text-ink-muted">#{absolute}</span>}
+            {scene && (
+              <span className="ml-2 text-xs text-ink-muted" title={t("work.sceneNumberHint", { number: scene })}>
+                {t("work.sceneNumber", { number: scene })}
+              </span>
+            )}
+            {part.file && (
+              <span className="mt-0.5 flex flex-wrap items-center gap-1">
+                {fileTagChips(part.file).map((chip) => (
+                  <Chip key={chip.text} tone={chip.tone}>{chip.text}</Chip>
+                ))}
+                <TargetChip file={part.file} />
+              </span>
+            )}
+            <PartCredits credits={part.credits ?? []} categoryId={categoryId} info={info} />
+            {actions.badgesOf?.(part)}
+          </div>
+        </div>
       </td>
       <td className="hidden whitespace-nowrap py-1.5 pr-3 text-xs text-ink-muted sm:table-cell">
         {part.runtime_ms ? (part.runtime_ms >= 10 * 60_000 ? formatMinutes(part.runtime_ms) : formatDuration(part.runtime_ms)) : ""}
