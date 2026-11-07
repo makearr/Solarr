@@ -42,7 +42,7 @@ func Process(source []byte) (map[Size]Image, error) {
 func ProcessImage(img image.Image) (map[Size]Image, error) {
 	result := make(map[Size]Image, len(sizes))
 	for _, size := range sizes {
-		resized := ResizeLongestEdge(img, int(size))
+		resized := ResizeLongestEdge(img, edgeOf(size))
 		encoded, err := EncodeWebP(resized)
 		if err != nil {
 			return nil, err

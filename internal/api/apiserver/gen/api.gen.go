@@ -3033,6 +3033,32 @@ type ImagePick struct {
 	Url string `json:"url"`
 }
 
+// ImageSettings defines model for ImageSettings.
+type ImageSettings struct {
+	// CoverMaxEdge Longest edge in pixels of the largest stored picture of a library item.
+	CoverMaxEdge int64 `json:"cover_max_edge"`
+
+	// CoverQuality WebP quality.
+	CoverQuality int64 `json:"cover_quality"`
+
+	// PreviewMaxEdge Longest edge of a video preview picture; frames are read 1280 wide.
+	PreviewMaxEdge int64 `json:"preview_max_edge"`
+
+	// PreviewQuality JPEG quality.
+	PreviewQuality int64 `json:"preview_quality"`
+
+	// Recompress Read only. The running or last recompress; absent before the first.
+	Recompress *struct {
+		Done       int64      `json:"done"`
+		Failed     int64      `json:"failed"`
+		FinishedAt *time.Time `json:"finished_at,omitempty"`
+		Running    bool       `json:"running"`
+		SavedBytes int64      `json:"saved_bytes"`
+		StartedAt  *time.Time `json:"started_at,omitempty"`
+		Total      int64      `json:"total"`
+	} `json:"recompress,omitempty"`
+}
+
 // ImportCandidate One IDENTIFY strategy's ranked answer for a unit.
 type ImportCandidate struct {
 	Confidence float32 `json:"confidence"`
@@ -7612,6 +7638,9 @@ type UpdateCrossoverJSONRequestBody = CrossoverWrite
 // MonitorCrossoverJSONRequestBody defines body for MonitorCrossover for application/json ContentType.
 type MonitorCrossoverJSONRequestBody MonitorCrossoverJSONBody
 
+// SetImageSettingsJSONRequestBody defines body for SetImageSettings for application/json ContentType.
+type SetImageSettingsJSONRequestBody = ImageSettings
+
 // SetDefaultLanguagesJSONRequestBody defines body for SetDefaultLanguages for application/json ContentType.
 type SetDefaultLanguagesJSONRequestBody = DefaultLanguages
 
@@ -8157,6 +8186,15 @@ type ServerInterface interface {
 	// Keep only the newest backup, after checking it is valid. Administrator only.
 	// (POST /database/backups/clear)
 	ClearOldBackups(w http.ResponseWriter, r *http.Request)
+	// How big and how compressed stored pictures are made, and the state of a recompress. Administrator only.
+	// (GET /database/images)
+	GetImageSettings(w http.ResponseWriter, r *http.Request)
+	// Set the size and quality of stored pictures. Administrator only.
+	// (PUT /database/images)
+	SetImageSettings(w http.ResponseWriter, r *http.Request)
+	// Make the stored pictures of library items and the video previews again at the set size and quality. Administrator only.
+	// (POST /database/images/recompress)
+	RecompressImages(w http.ResponseWriter, r *http.Request)
 	// The audio languages a new library prefers, best first.
 	// (GET /defaultlanguages)
 	GetDefaultLanguages(w http.ResponseWriter, r *http.Request)
@@ -9450,6 +9488,24 @@ func (_ Unimplemented) GetDatabaseUsage(w http.ResponseWriter, r *http.Request) 
 // Keep only the newest backup, after checking it is valid. Administrator only.
 // (POST /database/backups/clear)
 func (_ Unimplemented) ClearOldBackups(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// How big and how compressed stored pictures are made, and the state of a recompress. Administrator only.
+// (GET /database/images)
+func (_ Unimplemented) GetImageSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Set the size and quality of stored pictures. Administrator only.
+// (PUT /database/images)
+func (_ Unimplemented) SetImageSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Make the stored pictures of library items and the video previews again at the set size and quality. Administrator only.
+// (POST /database/images/recompress)
+func (_ Unimplemented) RecompressImages(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -13533,6 +13589,72 @@ func (siw *ServerInterfaceWrapper) ClearOldBackups(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ClearOldBackups(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetImageSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetImageSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetImageSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetImageSettings operation middleware
+func (siw *ServerInterfaceWrapper) SetImageSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetImageSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RecompressImages operation middleware
+func (siw *ServerInterfaceWrapper) RecompressImages(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RecompressImages(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -22986,6 +23108,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/database/backups/clear", wrapper.ClearOldBackups)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/database/images", wrapper.GetImageSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/database/images", wrapper.SetImageSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/database/images/recompress", wrapper.RecompressImages)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/defaultlanguages", wrapper.GetDefaultLanguages)

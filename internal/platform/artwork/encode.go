@@ -25,12 +25,21 @@ func EncodeJPEG(img image.Image) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// EncodeJPEGAt is EncodeJPEG at a chosen quality, for the pictures of video previews.
+func EncodeJPEGAt(img image.Image, quality int) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
+		return nil, fmt.Errorf("artwork: encode jpeg: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
 // EncodeWebP writes img as lossy VP8 WebP. Cover art is photographic, so
 // lossy is the right trade-off; lossless would defeat much of the point of
 // choosing WebP here.
 func EncodeWebP(img image.Image) ([]byte, error) {
 	var buf bytes.Buffer
-	options := &webp.Options{Compression: webp.CompressionLossy, Quality: encodeQuality}
+	options := &webp.Options{Compression: webp.CompressionLossy, Quality: Current().Quality}
 	if err := webp.Encode(&buf, img, options); err != nil {
 		return nil, fmt.Errorf("artwork: encode webp: %w", err)
 	}

@@ -1591,6 +1591,58 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "503": { $ref: "#/components/responses/Problem" }
 
+  /database/images:
+    get:
+      operationId: getImageSettings
+      tags: [settings]
+      summary: How big and how compressed stored pictures are made, and the state of a recompress. Administrator only.
+      responses:
+        "200":
+          description: The figures and the last or running recompress.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageSettings" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setImageSettings
+      tags: [settings]
+      summary: Set the size and quality of stored pictures. Administrator only.
+      description: Applies to pictures made from then on; Recompress applies it to the ones already stored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImageSettings" }
+      responses:
+        "200":
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageSettings" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
+  /database/images/recompress:
+    post:
+      operationId: recompressImages
+      tags: [settings]
+      summary: Make the stored pictures of library items and the video previews again at the set size and quality. Administrator only.
+      description: Runs in the background, one picture at a time; a picture that would not come out smaller is left alone. 409 while a run is going.
+      responses:
+        "202":
+          description: Started.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageSettings" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
   /database/backups/clear:
     post:
       operationId: clearOldBackups
@@ -9101,6 +9153,26 @@ components:
         last_cache_sync: { type: string, format: date-time }
         last_database_sync: { type: string, format: date-time }
         notice: { type: string, description: Why an option was switched off or not started, until the next save. }
+    ImageSettings:
+      type: object
+      required: [cover_max_edge, cover_quality, preview_max_edge, preview_quality]
+      properties:
+        cover_max_edge: { type: integer, format: int64, minimum: 400, maximum: 4000, description: Longest edge in pixels of the largest stored picture of a library item. }
+        cover_quality: { type: integer, format: int64, minimum: 30, maximum: 95, description: WebP quality. }
+        preview_max_edge: { type: integer, format: int64, minimum: 320, maximum: 4000, description: Longest edge of a video preview picture; frames are read 1280 wide. }
+        preview_quality: { type: integer, format: int64, minimum: 30, maximum: 95, description: JPEG quality. }
+        recompress:
+          type: object
+          description: Read only. The running or last recompress; absent before the first.
+          required: [running, done, total, saved_bytes, failed]
+          properties:
+            running: { type: boolean }
+            done: { type: integer, format: int64 }
+            total: { type: integer, format: int64 }
+            saved_bytes: { type: integer, format: int64 }
+            failed: { type: integer, format: int64 }
+            started_at: { type: string, format: date-time }
+            finished_at: { type: string, format: date-time }
     DatabaseUsage:
       type: object
       required: [media_cover_bytes, previews_bytes, cache_bytes, backups_bytes, backup_count]

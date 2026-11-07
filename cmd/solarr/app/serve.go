@@ -44,6 +44,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
 	"github.com/makearr/Solarr/internal/moving/drainjob"
+	"github.com/makearr/Solarr/internal/platform/artwork"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
 	"github.com/makearr/Solarr/internal/platform/egress"
@@ -89,6 +90,8 @@ type process struct {
 	statistics *store.Store
 	// memory is the cache and databases kept in RAM, when config.yml asks for it.
 	memory *memoryCopy
+	// background ends when the process starts to shut down.
+	background context.Context
 	// requestStop ends the process the way a SIGTERM does.
 	requestStop func()
 	// configPath is where config.yml lives, for the write-back ADR-58's
@@ -645,6 +648,8 @@ func (p *process) startServer(ctx context.Context) error {
 	p.reportRootFolders()
 	// Ended at shutdown before the databases close, so no tick enqueues into a closing jobs.db.
 	background, stopBackground := context.WithCancel(ctx)
+	p.background = background
+	p.applyImageSettings()
 	defer stopBackground()
 	// Startup runs are per task and switchable on the Scheduler screen (2026-09-19 review).
 	p.startSchedulers(background)
@@ -795,6 +800,11 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			FS: p.fsys, MediaCoverDir: p.config.Paths.MediaCoverDir, PreviewsDir: filepath.Join(p.config.Paths.ConfigDir, "previews"),
 			CacheDir: p.config.Paths.CacheDir, BackupDir: p.config.Paths.BackupDir,
 			Scratch: filepath.Join(p.config.Paths.BackupDir, stagingDirName),
+			Recompress: &imageRecompress{
+				fs: p.fsys, coverDir: p.config.Paths.MediaCoverDir, previewsDir: filepath.Join(p.config.Paths.ConfigDir, "previews"),
+				images: func() settings.ImageSettings { return p.cache.Snapshot().ImageSettings() }, logger: p.logger,
+			},
+			Apply: p.applyImageSettings, Background: p.background,
 		},
 		MemoryCopies: memoryCopies{p: p},
 		Backups: backupSource{
@@ -1133,4 +1143,11 @@ func (p *process) detectTranscodeHardware(ctx context.Context) {
 func (p *process) frameDecodeArgs() []string {
 	policy := p.cache.Snapshot().StreamingSettings()
 	return p.transcoder.FrameDecodeArgs(policy.Hardware, policy.Device)
+}
+
+// applyImageSettings sets the size and quality new pictures are made with from the stored figures.
+func (p *process) applyImageSettings() {
+	images := p.cache.Snapshot().ImageSettings()
+	artwork.Configure(artwork.Options{FullEdge: int(images.CoverMaxEdge), Quality: int(images.CoverQuality)})
+	mediatool.ConfigurePreview(mediatool.PreviewOptions{MaxEdge: int(images.PreviewMaxEdge), Quality: int(images.PreviewQuality)})
 }

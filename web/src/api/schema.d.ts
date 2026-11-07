@@ -1094,6 +1094,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/database/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How big and how compressed stored pictures are made, and the state of a recompress. Administrator only. */
+        get: operations["getImageSettings"];
+        /**
+         * Set the size and quality of stored pictures. Administrator only.
+         * @description Applies to pictures made from then on; Recompress applies it to the ones already stored.
+         */
+        put: operations["setImageSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/database/images/recompress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make the stored pictures of library items and the video previews again at the set size and quality. Administrator only.
+         * @description Runs in the background, one picture at a time; a picture that would not come out smaller is left alone. 409 while a run is going.
+         */
+        post: operations["recompressImages"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/database/backups/clear": {
         parameters: {
             query?: never;
@@ -5930,6 +5971,44 @@ export interface components {
             last_database_sync?: string;
             /** @description Why an option was switched off or not started */
             notice?: string;
+        };
+        ImageSettings: {
+            /**
+             * Format: int64
+             * @description Longest edge in pixels of the largest stored picture of a library item.
+             */
+            cover_max_edge: number;
+            /**
+             * Format: int64
+             * @description WebP quality.
+             */
+            cover_quality: number;
+            /**
+             * Format: int64
+             * @description Longest edge of a video preview picture; frames are read 1280 wide.
+             */
+            preview_max_edge: number;
+            /**
+             * Format: int64
+             * @description JPEG quality.
+             */
+            preview_quality: number;
+            /** @description Read only. The running or last recompress; absent before the first. */
+            recompress?: {
+                running: boolean;
+                /** Format: int64 */
+                done: number;
+                /** Format: int64 */
+                total: number;
+                /** Format: int64 */
+                saved_bytes: number;
+                /** Format: int64 */
+                failed: number;
+                /** Format: date-time */
+                started_at?: string;
+                /** Format: date-time */
+                finished_at?: string;
+            };
         };
         DatabaseUsage: {
             /**
@@ -12149,6 +12228,81 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getImageSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The figures and the last or running recompress. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageSettings"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    setImageSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageSettings"];
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageSettings"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    recompressImages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Started. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageSettings"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
         };
     };

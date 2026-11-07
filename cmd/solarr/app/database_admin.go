@@ -16,7 +16,18 @@ import (
 type databaseAdmin struct {
 	FS                                                       fsx.FS
 	MediaCoverDir, PreviewsDir, CacheDir, BackupDir, Scratch string
+	Recompress                                               *imageRecompress
+	// Apply sets the figures new pictures are made with from the settings now stored.
+	Apply func()
+	// Background ends with the process, so a recompress stops at shutdown.
+	Background context.Context
 }
+
+func (a databaseAdmin) ImagesChanged() { a.Apply() }
+
+func (a databaseAdmin) StartRecompress(context.Context) bool { return a.Recompress.Start(a.Background) }
+
+func (a databaseAdmin) RecompressStatus() apiserver.RecompressStatus { return a.Recompress.Status() }
 
 func (a databaseAdmin) Usage(ctx context.Context) (apiserver.DatabaseUsage, error) {
 	var usage apiserver.DatabaseUsage

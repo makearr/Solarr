@@ -3,9 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
 import { isTierVisible, useTier } from "@/lib/useTier";
+import type { components } from "@/api/schema";
 import { Button } from "@/ui/Button";
 
-import { Card } from "./SettingsCard";
+import { Card, Field } from "./SettingsCard";
 import { BackupRetentionEditor } from "./Scheduler";
 
 /** Settings > Database, expert tier: where Solarr's own folders spend space, how many backups are kept, and the
@@ -32,6 +33,7 @@ function DatabaseSettings() {
   return (
     <section className="flex flex-col gap-4">
       <UsageCard />
+      <PicturesCard />
       <BackupsCard />
       <MaintenanceCard />
     </section>
@@ -57,6 +59,79 @@ function UsageCard() {
           </div>
         ))}
       </dl>
+    </Card>
+  );
+}
+
+type ImageSettings = components["schemas"]["ImageSettings"];
+
+const numberStyle =
+  "w-full rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+
+/** How big and how compressed the stored pictures of library items and the video previews are, and a button to make the
+ *  ones already stored again at those figures. */
+function PicturesCard() {
+  const queryClient = useQueryClient();
+  const images = useQuery({
+    queryKey: ["database-images"],
+    queryFn: () => ok(api.GET("/database/images")),
+    refetchInterval: (query) => (query.state.data?.recompress?.running ? 2000 : false),
+  });
+  const [draft, setDraft] = useState<ImageSettings | null>(null);
+  const save = useMutation({
+    mutationFn: (body: ImageSettings) => ok(api.PUT("/database/images", { body })),
+    onSuccess: () => {
+      setDraft(null);
+      return queryClient.invalidateQueries({ queryKey: ["database-images"] });
+    },
+  });
+  const recompress = useMutation({
+    mutationFn: () => ok(api.POST("/database/images/recompress", {})),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["database-images"] }),
+  });
+  if (images.error !== null || !images.data) return null;
+  const current = draft ?? images.data;
+  const dirty = draft !== null;
+  const run = images.data.recompress;
+  const change = (patch: Partial<ImageSettings>) => setDraft({ ...current, ...patch });
+  const number = (value: number, set: (next: number) => void, min: number, max: number) => (
+    <input type="number" min={min} max={max} value={value} disabled={save.isPending} onChange={(event) => set(Number(event.target.value))} className={numberStyle} />
+  );
+  return (
+    <Card
+      title="Pictures"
+      help="The longest edge and the compression of the stored pictures of library items (WebP) and of video previews (JPEG). New pictures use the figures at once; Recompress makes the stored ones again, and a picture that would not come out smaller is left alone."
+    >
+      <div className="flex flex-wrap items-start gap-4">
+        <Field label="Cover size (px)" help="Largest side, 400 to 4000." className="w-40">
+          {number(current.cover_max_edge, (cover_max_edge) => change({ cover_max_edge }), 400, 4000)}
+        </Field>
+        <Field label="Cover quality" help="30 to 95." className="w-32">
+          {number(current.cover_quality, (cover_quality) => change({ cover_quality }), 30, 95)}
+        </Field>
+        <Field label="Preview size (px)" help="Frames are read 1280 wide, so more changes nothing." className="w-40">
+          {number(current.preview_max_edge, (preview_max_edge) => change({ preview_max_edge }), 320, 4000)}
+        </Field>
+        <Field label="Preview quality" help="30 to 95." className="w-32">
+          {number(current.preview_quality, (preview_quality) => change({ preview_quality }), 30, 95)}
+        </Field>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="primary" onClick={() => save.mutate(current)} disabled={save.isPending || !dirty}>
+          {save.isPending ? "Saving…" : "Save"}
+        </Button>
+        <Button variant="secondary" onClick={() => recompress.mutate()} disabled={recompress.isPending || run?.running === true || dirty}>
+          {run?.running ? "Recompressing…" : "Recompress stored pictures"}
+        </Button>
+        {dirty && <span className="text-xs text-ink-muted">Save first; Recompress uses the saved figures.</span>}
+      </div>
+      {run && (
+        <p className="text-xs text-ink-muted">
+          {run.running ? `${run.done} of ${run.total} pictures` : `Last run: ${run.done} pictures`}; {formatBytes(run.saved_bytes)} saved
+          {run.failed > 0 ? `, ${run.failed} could not be read` : ""}.
+        </p>
+      )}
+      {(save.isError || recompress.isError) && <p className="text-xs text-danger">That was refused: check the figures, or a recompress is already running.</p>}
     </Card>
   );
 }

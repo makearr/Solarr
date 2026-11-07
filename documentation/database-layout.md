@@ -223,6 +223,8 @@ before it is packed; one failing copy fails the whole backup and leaves no bundl
 days, never below three) prunes bundles. Recovery at startup walks the bundles and the older single-database copies
 together, newest first. Backups taken before a migration and `settings.db`'s on-change copies stay single files.
 
+Settings -> Database also sets the **picture figures** (`images.*`, expert): the longest edge and quality of stored covers (WebP, default 1000 px at 82) and of video previews (JPEG, 1280 at 80; frames are read 1280 wide, so a larger edge changes nothing and the perceptual hash reads the same frames either way). New pictures use them at once; **Recompress** makes the stored ones again in the background, keeping only what comes out smaller, and a `.recompressed` marker beside the covers records the figures of the last run so a repeat takes only pictures made since (lossy pictures lose a little each time they are remade).
+
 Settings -> Database (expert, administrators) shows what the mediacover, previews, cache and backup folders hold, edits how many backups are kept, runs maintenance, backup and the keep rule by hand, and **Clear old backups**: it runs the full integrity check on the newest bundle and only then removes every older one (409 and nothing removed when the check fails).
 
 ## Corruption recovery at startup

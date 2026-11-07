@@ -175,6 +175,17 @@ func NewDefaultRegistry() *Registry {
 		Name: "Days to keep backups", HelpText: "Older backups are removed, but the newest 3 always stay.",
 		Default: strconv.Itoa(DefaultBackupKeepDays),
 	})
+	for _, image := range []struct {
+		key, name, help string
+		fallback        int
+	}{
+		{KeyCoverMaxEdge, "Cover size", "Longest edge in pixels of the largest stored picture of a library item.", DefaultCoverEdge},
+		{KeyCoverQuality, "Cover quality", "WebP quality of stored pictures, 30 to 95.", DefaultCoverWebP},
+		{KeyPreviewMaxEdge, "Preview size", "Longest edge in pixels of a video preview picture; pictures are read at 1280 wide.", DefaultPreviewEdge},
+		{KeyPreviewQuality, "Preview quality", "JPEG quality of video previews, 30 to 95.", DefaultPreviewJPEG},
+	} {
+		registry.MustRegister(SettingDef{Key: image.key, Kind: KindInt, Tier: TierExpert, Name: image.name, HelpText: image.help, Default: strconv.Itoa(image.fallback)})
+	}
 	registry.MustRegister(SettingDef{
 		Key: KeyReadyQueueLimit, Kind: KindInt, Tier: TierNormal,
 		Name: "Held releases", HelpText: "How many releases wait for a free download slot; the ones that would be sent last are dropped beyond it.",

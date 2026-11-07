@@ -6,6 +6,9 @@ import (
 	"image/draw"
 	"image/jpeg"
 	"math"
+	"sync/atomic"
+
+	"github.com/makearr/Solarr/internal/platform/artwork"
 )
 
 const (
@@ -15,9 +18,35 @@ const (
 	singleBoxWidth, singleBoxHeight = 1280, 720
 	// singleSlot is the third of nine moments, at three tenths of the video: inside its first third, not at the start.
 	singleSlot = 2
-	// previewQuality is the JPEG quality of both pictures.
-	previewQuality = 80
 )
+
+// PreviewOptions are what new previews are saved with: the longest edge a picture may have and the JPEG quality. Frames
+// are read at 1280x720 (cells 426x240), so an edge above that changes nothing; the hash reads the same frames either way.
+type PreviewOptions struct{ MaxEdge, Quality int }
+
+// DefaultPreviewOptions save the pictures as they are read, at quality 80.
+var DefaultPreviewOptions = PreviewOptions{MaxEdge: 1280, Quality: 80}
+
+var previewConfigured atomic.Pointer[PreviewOptions]
+
+// ConfigurePreview sets the options new previews are made with; zero fields keep the defaults.
+func ConfigurePreview(options PreviewOptions) {
+	if options.MaxEdge <= 0 {
+		options.MaxEdge = DefaultPreviewOptions.MaxEdge
+	}
+	if options.Quality <= 0 {
+		options.Quality = DefaultPreviewOptions.Quality
+	}
+	previewConfigured.Store(&options)
+}
+
+// CurrentPreview is the options in force.
+func CurrentPreview() PreviewOptions {
+	if options := previewConfigured.Load(); options != nil {
+		return *options
+	}
+	return DefaultPreviewOptions
+}
 
 // Preview is the pictures made from the frames a hash was made from, as JPEG; empty where none could be made.
 type Preview struct {
@@ -160,8 +189,9 @@ func paste(into *image.RGBA, at image.Point, rgb []byte, size pictureSize) {
 }
 
 func encodeJPEG(picture image.Image) []byte {
+	picture = artwork.ResizeLongestEdge(picture, CurrentPreview().MaxEdge)
 	var out bytes.Buffer
-	if err := jpeg.Encode(&out, picture, &jpeg.Options{Quality: previewQuality}); err != nil {
+	if err := jpeg.Encode(&out, picture, &jpeg.Options{Quality: CurrentPreview().Quality}); err != nil {
 		return nil
 	}
 	return out.Bytes()
