@@ -219,6 +219,12 @@ pass before `VACUUM`, which would otherwise rebuild it from whatever it could st
 would push every real one out of the rotation. Backups are written `0600`, as the live file is.
 `config.yml`'s `backup.schedule` and `backup.keep` are still accepted but ignored, with a warning.
 
+**The Backup task writes one bundle**, `solarr-backup.<timestamp>.tar.zst`, holding a copy of each of the four databases
+and `config.yml`. Each copy is taken with `VACUUM INTO` into `backups/.staging` and must pass `PRAGMA integrity_check`
+before it is packed; one failing copy fails the whole backup and leaves no bundle. The Clean old backups rule (count or
+days, never below three) prunes bundles. Recovery at startup walks the bundles and the older single-database copies
+together, newest first. Backups taken before a migration and `settings.db`'s on-change copies stay single files.
+
 ## Corruption recovery at startup
 
 Every database is verified before it is used (ADR-15, architecture section 15.1).

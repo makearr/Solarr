@@ -9,6 +9,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
@@ -19,8 +20,9 @@ import (
 // It reads the directory rather than a record of what was taken: a backup
 // that is not on disk is not a backup.
 type backupSource struct {
-	FS        fsx.FS
-	Directory string
+	FS         fsx.FS
+	Directory  string
+	ConfigPath string
 	// Stores is what RunNow backs up, in the order it backs them up.
 	Stores []*store.Store
 }
@@ -51,23 +53,18 @@ func (a backupSource) List(context.Context) ([]apiserver.BackupFileRow, error) {
 	return rows, nil
 }
 
-// RunNow backs up every store and answers what it wrote. A failure on any
-// store fails the whole request: reporting a partial backup as a backup is
-// how someone discovers at restore time that half of it is missing.
+// RunNow takes one verified bundle of every store and config.yml and answers it. A failure on any store fails the
+// whole request: reporting a partial backup as a backup is how someone discovers at restore time that half is missing.
 func (a backupSource) RunNow(ctx context.Context) ([]apiserver.BackupFileRow, error) {
-	written := make([]apiserver.BackupFileRow, 0, len(a.Stores))
-	for _, target := range a.Stores {
-		backupPath, err := target.Backup(ctx, a.Directory, store.BackupRotation)
-		if err != nil {
-			return nil, fmt.Errorf("adapters: back up: %w", err)
-		}
-		info, err := a.FS.Stat(backupPath)
-		if err != nil {
-			return nil, fmt.Errorf("adapters: stat backup %q: %w", backupPath, err)
-		}
-		written = append(written, apiserver.BackupFileRow{
-			Name: path.Base(backupPath), SizeBytes: info.Size, TakenAt: info.ModTime,
-		})
+	bundlePath, err := bundleBackup{
+		FS: a.FS, Directory: a.Directory, ConfigPath: a.ConfigPath, Stores: a.Stores, Clock: clock.NewSystem(),
+	}.Take(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("adapters: back up: %w", err)
 	}
-	return written, nil
+	info, err := a.FS.Stat(bundlePath)
+	if err != nil {
+		return nil, fmt.Errorf("adapters: stat backup %q: %w", bundlePath, err)
+	}
+	return []apiserver.BackupFileRow{{Name: path.Base(bundlePath), SizeBytes: info.Size, TakenAt: info.ModTime}}, nil
 }

@@ -781,7 +781,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		LogReader: logSource{ring: p.logRing},
 		Calendar:  adapters.Calendar{Calendar: library.NewCalendar(p.library)},
 		Backups: backupSource{
-			FS: p.fsys, Directory: p.config.Paths.BackupDir,
+			FS: p.fsys, Directory: p.config.Paths.BackupDir, ConfigPath: p.configPath,
 			Stores: []*store.Store{p.library, p.jobs, p.settings, p.statistics},
 		},
 		WorkAdder: adapters.WorkAdding{

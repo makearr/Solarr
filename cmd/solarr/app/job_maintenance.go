@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // Database maintenance, backups and their cleanup, all scheduler tasks since 2026-09-24.
@@ -168,26 +169,24 @@ func (j databaseMaintenanceJob) Run(ctx context.Context, _ jobs.Job) error {
 	return errors.Join(failures...)
 }
 
-// backupJob takes one rotation backup of each database it covers.
+// backupJob takes one verified backup bundle of every database and config.yml.
 type backupJob struct {
-	stores    []*store.Store
-	directory string
-	logger    *slog.Logger
+	backup bundleBackup
+	logger *slog.Logger
 }
 
 func (j backupJob) Run(ctx context.Context, _ jobs.Job) error {
-	for _, target := range j.stores {
-		path, err := target.Backup(ctx, j.directory, store.BackupRotation)
-		if err != nil {
-			return fmt.Errorf("back up %s: %w", target.Name(), err)
-		}
-		j.logger.Info("scheduled backup", slog.String("database", target.Name()), slog.String("path", path))
+	path, err := j.backup.Take(ctx)
+	if err != nil {
+		return err
 	}
+	j.logger.Info("scheduled backup", slog.String("path", path))
 	return nil
 }
 
-// backupCleanupJob applies the configured retention to each database's rotation backups.
+// backupCleanupJob applies the configured retention to the backup bundles and each database's older single copies.
 type backupCleanupJob struct {
+	fs        fsx.FS
 	stores    []*store.Store
 	directory string
 	cache     *settings.Cache
@@ -197,6 +196,19 @@ type backupCleanupJob struct {
 
 func (j backupCleanupJob) Run(_ context.Context, _ jobs.Job) error {
 	retention := j.cache.Snapshot().BackupRetention()
+	var bundles []string
+	var err error
+	if retention.Mode == settings.BackupKeepDays {
+		bundles, err = store.PruneBundles(j.fs, j.directory, 0, j.clock.Now().Add(-time.Duration(retention.KeepDays)*24*time.Hour))
+	} else {
+		bundles, err = store.PruneBundles(j.fs, j.directory, int(retention.KeepCount), time.Time{})
+	}
+	if err != nil {
+		return fmt.Errorf("clean backup bundles: %w", err)
+	}
+	if len(bundles) > 0 {
+		j.logger.Info("old backups removed", slog.Int("count", len(bundles)))
+	}
 	for _, target := range j.stores {
 		var removed []string
 		var err error
@@ -236,9 +248,15 @@ func (p *process) registerMaintenanceJobs(registry *jobs.Registry, executor *job
 		clock: clock.NewSystem(), logger: p.logger,
 	})
 	executor.Handle(jobRetentionJobType, jobRetentionJob{queue: p.queue, clock: clock.NewSystem(), logger: p.logger})
-	executor.Handle(backupJobType, backupJob{stores: backedUp, directory: p.config.Paths.BackupDir, logger: p.logger})
+	executor.Handle(backupJobType, backupJob{
+		backup: bundleBackup{
+			FS: p.fsys, Directory: p.config.Paths.BackupDir, ConfigPath: p.configPath, Clock: clock.NewSystem(),
+			Stores: []*store.Store{p.settings, p.jobs, p.library, p.statistics},
+		},
+		logger: p.logger,
+	})
 	executor.Handle(backupCleanupJobType, backupCleanupJob{
-		stores: backedUp, directory: p.config.Paths.BackupDir, cache: p.cache, clock: clock.NewSystem(), logger: p.logger,
+		fs: p.fsys, stores: backedUp, directory: p.config.Paths.BackupDir, cache: p.cache, clock: clock.NewSystem(), logger: p.logger,
 	})
 	return nil
 }

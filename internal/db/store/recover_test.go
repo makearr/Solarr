@@ -345,3 +345,34 @@ func TestRestore_ClearsALogLeftByTheFileItReplaced(t *testing.T) {
 		t.Errorf("stale log survived the restore: %v", err)
 	}
 }
+
+func TestOpenChecked_RestoresFromABackupBundle(t *testing.T) {
+	fixture := newRecoveryFixture(t)
+	fixture.seed(t, "bundle")
+	copied := fixture.backup(t)
+	if _, err := store.WriteBundle(fsx.NewOS(), fixture.backupDir, fixture.clock.Now(), []store.BundleMember{
+		{Name: "library.db", Path: copied},
+	}); err != nil {
+		t.Fatalf("WriteBundle: %v", err)
+	}
+	if err := os.Remove(copied); err != nil {
+		t.Fatal(err)
+	}
+	fixture.clock.Advance(time.Hour)
+	fixture.seed(t, "unsave")
+	corrupt(t, fixture.path)
+
+	opened, report, err := store.OpenChecked(t.Context(), fixture.clock, fixture.config(),
+		store.RecoveryOptions{BackupDir: fixture.backupDir})
+	if err != nil {
+		t.Fatalf("OpenChecked: %v", err)
+	}
+	defer func() { _ = opened.Close() }()
+
+	if !report.Recovered || !strings.HasSuffix(report.From, ".tar.zst") {
+		t.Errorf("report = %+v, want recovery from a bundle", report)
+	}
+	if got := fixture.notes(t, opened); got["bundle"] != 200 || got["unsave"] != 0 {
+		t.Errorf("notes = %v, want bundle:200 only", got)
+	}
+}

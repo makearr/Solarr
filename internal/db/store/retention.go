@@ -25,6 +25,8 @@ type BackupInfo struct {
 	Path string
 	Kind BackupKind
 	At   time.Time
+	// InBundle says Path is a bundle holding this database, not a copy of it.
+	InBundle bool
 }
 
 // ListBackups returns every backup for this database in directory, newest first.

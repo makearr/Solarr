@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"slices"
 	"strings"
 	"time"
 
@@ -108,7 +109,7 @@ func recoverFromBackup(ctx context.Context, c clock.Clock, config Config, option
 		return RecoveryReport{Database: config.Name}, fmt.Errorf("store %s: %w: no backup directory configured", config.Name, ErrUnrecoverable)
 	}
 
-	backups, err := ListBackups(config.FS, options.BackupDir, config.Name)
+	backups, err := recoverableBackups(config.FS, options.BackupDir, config.Name)
 	if err != nil {
 		return RecoveryReport{Database: config.Name}, err
 	}
@@ -124,7 +125,11 @@ func recoverFromBackup(ctx context.Context, c clock.Clock, config Config, option
 	report := RecoveryReport{Database: config.Name, CorruptPath: corruptPath}
 
 	for _, backup := range backups {
-		if err := Restore(config.FS, backup.Path, config.Path); err != nil {
+		if err := restoreBackup(config, backup); err != nil {
+			if backup.InBundle {
+				report.Rejected = append(report.Rejected, backup.Path)
+				continue
+			}
 			return report, err
 		}
 		if err := probe(ctx, config, true); err != nil {
@@ -139,6 +144,39 @@ func recoverFromBackup(ctx context.Context, c clock.Clock, config Config, option
 
 	return report, fmt.Errorf("store %s: %w: all %d backups in %s are corrupt too; the damaged database is kept at %s",
 		config.Name, ErrUnrecoverable, len(backups), options.BackupDir, corruptPath)
+}
+
+// recoverableBackups is every single-database backup and every bundle that may hold the database, newest first.
+func recoverableBackups(fsys fsx.FS, directory, name string) ([]BackupInfo, error) {
+	found, err := ListBackups(fsys, directory, name)
+	if err != nil {
+		return nil, err
+	}
+	bundles, err := ListBundles(fsys, directory)
+	if err != nil {
+		return nil, err
+	}
+	for _, bundle := range bundles {
+		found = append(found, BackupInfo{Path: bundle.Path, Kind: BackupRotation, At: bundle.At, InBundle: true})
+	}
+	slices.SortStableFunc(found, func(a, b BackupInfo) int { return b.At.Compare(a.At) })
+	return found, nil
+}
+
+// restoreBackup puts a backup, or the database's member of a bundle, over the database path.
+func restoreBackup(config Config, backup BackupInfo) error {
+	if !backup.InBundle {
+		return Restore(config.FS, backup.Path, config.Path)
+	}
+	if err := ExtractMember(config.FS, backup.Path, config.Name+".db", config.Path); err != nil {
+		return fmt.Errorf("store: restore %q from %q: %w", config.Name, backup.Path, err)
+	}
+	for _, suffix := range walSuffixes {
+		if err := config.FS.Remove(config.Path + suffix); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("store: remove stale %q: %w", config.Path+suffix, err)
+		}
+	}
+	return nil
 }
 
 // recycle bin moves the database aside as <path>.corrupt.<timestamp>, never deleting

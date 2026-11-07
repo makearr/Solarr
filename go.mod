@@ -7,6 +7,7 @@ require (
 	github.com/dlclark/regexp2 v1.12.0
 	github.com/go-chi/chi/v5 v5.4.0
 	github.com/goccy/go-yaml v1.19.2
+	github.com/klauspost/compress v1.19.0
 	github.com/mayahiro/go-webp v0.3.0
 	github.com/ncruces/go-sqlite3 v0.35.4
 	github.com/nwaples/rardecode/v2 v2.4.1
@@ -27,7 +28,6 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
-	github.com/klauspost/compress v1.19.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-sqlite3-wasm/v5 v5.0.35304 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
