@@ -943,7 +943,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Crossovers: library.NewCrossovers(p.library), Desired: library.NewDesired(p.library), SharedFiles: p.enqueueSharedFiles,
 		},
 		Franchises: adapters.LibraryFranchises{
-			Cache: p.cache, Registry: p.media, Store: library.NewFranchises(p.library),
+			Cache: p.cache, Registry: p.media, Store: library.NewFranchises(p.library), Clock: clock.NewSystem(),
 			MonitorWork: func(ctx context.Context, workID int64) error {
 				_, err := p.worksMonitor().MonitorWork(ctx, workID, apiserver.MonitorScope{Monitored: true})
 				return err

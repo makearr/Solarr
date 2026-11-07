@@ -101,19 +101,23 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "tv_franchises", Name: "Find the franchises series belong to", DefaultCadence: franchisePassScheduleCron,
-		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Enqueue: p.enqueueFranchisePass,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueFranchisePass,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "movie_universes", Name: "Group films into franchises and universes", DefaultCadence: universePassScheduleCron,
-		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Enqueue: p.enqueueUniversePass,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueUniversePass,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "music_collections", Name: "Find the series and franchises albums belong to", DefaultCadence: musicCollectionsScheduleCron,
-		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Enqueue: p.enqueueMusicCollections,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueMusicCollections,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "book_series_keys", Name: "Find the franchises book series belong to", DefaultCadence: bookSeriesKeysScheduleCron,
-		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Enqueue: p.enqueueBookSeriesKeys,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueBookSeriesKeys,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "people_bridge", Name: "Match people across libraries", DefaultCadence: bridgeScheduleCron,
@@ -126,11 +130,13 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "franchise_expand", Name: "Add the new works of monitored franchises", DefaultCadence: franchiseExpandScheduleCron,
-		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Enqueue: p.enqueueFranchiseExpand,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueFranchiseExpand,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "franchise_link", Name: "Link the collections of different libraries", DefaultCadence: franchiseLinkScheduleCron,
-		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Enqueue: p.enqueueFranchiseLink,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueFranchiseLink,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "import_lists", Name: "Add what import lists name", DefaultCadence: importListScheduleCron,

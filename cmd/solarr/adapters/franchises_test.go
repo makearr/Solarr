@@ -33,7 +33,7 @@ func TestMonitoringAHandMadeCollectionMonitorsItsWorksAndThoseAddedWhileMonitore
 		t.Fatal(err)
 	}
 	var monitored []int64
-	franchises := adapters.LibraryFranchises{Cache: cache, Store: store, MonitorWork: func(_ context.Context, workID int64) error {
+	franchises := adapters.LibraryFranchises{Cache: cache, Store: store, Clock: clock.NewFakeAtEpoch(), MonitorWork: func(_ context.Context, workID int64) error {
 		monitored = append(monitored, workID)
 		return nil
 	}}
@@ -80,7 +80,7 @@ func TestAHandLinkShowsWhoMadeItAndUnlinkingIsKept(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	franchises := adapters.LibraryFranchises{Cache: cache, Registry: registry, Store: store}
+	franchises := adapters.LibraryFranchises{Cache: cache, Registry: registry, Store: store, Clock: clock.NewFakeAtEpoch()}
 	one, err := store.Create(t.Context(), "music", first.ID, "Film scores")
 	if err != nil {
 		t.Fatal(err)

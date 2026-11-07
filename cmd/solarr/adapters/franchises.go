@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // picturesPerList bounds the provider calls one listing makes for franchise pictures; the rest follow next time.
@@ -21,6 +23,7 @@ type LibraryFranchises struct {
 	Cache    *settings.Cache
 	Registry *media.Registry
 	Store    library.Franchises
+	Clock    clock.Clock
 	// MonitorWork monitors a member of a hand-made collection; nil offers no monitoring of one.
 	MonitorWork func(ctx context.Context, workID int64) error
 }
@@ -88,7 +91,7 @@ func (a LibraryFranchises) List(ctx context.Context, categoryID int64) ([]gen.Fr
 		if row.PosterURL == "" {
 			row.PosterURL = firstPoster(row.Members)
 		}
-		views[index] = franchiseView(row, nil)
+		views[index] = franchiseView(row, nil, a.Clock.Now())
 		if counts, ok := linked[row.ID]; ok {
 			views[index].LinkedHeld, views[index].LinkedTotal = &counts.Held, &counts.Total
 		}
@@ -114,7 +117,7 @@ func (a LibraryFranchises) OfWork(ctx context.Context, categoryID, workID int64)
 		if row.PosterURL == "" {
 			row.PosterURL = firstPoster(row.Members)
 		}
-		views = append(views, franchiseView(row, nil))
+		views = append(views, franchiseView(row, nil, a.Clock.Now()))
 	}
 	return views, nil
 }
@@ -145,7 +148,7 @@ func (a LibraryFranchises) Get(ctx context.Context, categoryID, franchiseID int6
 				row.Total = known
 			}
 		}
-		view := franchiseView(row, missing)
+		view := franchiseView(row, missing, a.Clock.Now())
 		origins, err := a.Store.MemberOrigins(ctx, franchiseID)
 		if err != nil {
 			return gen.Franchise{}, err
@@ -224,7 +227,7 @@ func (a LibraryFranchises) linkView(ctx context.Context, link library.Collection
 	if provider, ok := a.capability(category); ok && row.Kind == library.FranchiseKind {
 		missing, _ = provider.MissingFranchiseMembers(ctx, category.ID, row.ID)
 	}
-	view := franchiseView(row, missing)
+	view := franchiseView(row, missing, a.Clock.Now())
 	out := gen.FranchiseLink{Id: row.ID, CategoryId: category.ID, Name: row.Name, Members: view.Members}
 	setString(&out.LibraryName, category.Name)
 	setString(&out.Detail, link.Detail)
@@ -299,7 +302,7 @@ func (a LibraryFranchises) Create(ctx context.Context, categoryID int64, name st
 	if err != nil {
 		return gen.Franchise{}, err
 	}
-	return franchiseView(library.FranchiseRow{ID: id, Name: name, Kind: library.CustomKind}, nil), nil
+	return franchiseView(library.FranchiseRow{ID: id, Name: name, Kind: library.CustomKind}, nil, a.Clock.Now()), nil
 }
 
 func editable(err error) error {
@@ -420,7 +423,19 @@ func (a LibraryFranchises) monitorCustom(ctx context.Context, franchiseID int64,
 }
 
 // franchiseView maps a collection with the works the library holds, and those it lacks when the provider lists them.
-func franchiseView(row library.FranchiseRow, missing []media.FranchiseMember) gen.Franchise {
+// memberStatus is the colour of a work's coverage bar: whole when the wanted item is, unreleased when it is not out yet.
+func memberStatus(member library.FranchiseMember, now time.Time) gen.FranchiseMemberStatus {
+	whole := member.WantedState == "COMPLETE" || member.WantedState == "UPGRADABLE" || (member.WantedState == "" && member.Files > 0)
+	switch {
+	case whole:
+		return gen.FranchiseMemberStatusComplete
+	case member.AvailableFrom > 0 && time.Unix(member.AvailableFrom, 0).After(now):
+		return gen.FranchiseMemberStatusUnreleased
+	}
+	return gen.FranchiseMemberStatusIncomplete
+}
+
+func franchiseView(row library.FranchiseRow, missing []media.FranchiseMember, now time.Time) gen.Franchise {
 	kind := gen.FranchiseKind(row.Kind)
 	if kind != gen.FranchiseKindCustom {
 		kind = gen.FranchiseKindFranchise
@@ -440,6 +455,9 @@ func franchiseView(row library.FranchiseRow, missing []media.FranchiseMember) ge
 	for _, member := range row.Members {
 		workID := member.WorkID
 		entry := gen.FranchiseMember{WorkId: &workID, Title: member.Title, Monitored: member.Monitored, HasFile: member.Files > 0}
+		status := memberStatus(member, now)
+		entry.Status = &status
+		entry.PresentCount, entry.RequiredCount = &member.PresentCount, &member.RequiredCount
 		setString(&entry.PosterUrl, member.PosterURL)
 		if member.Year > 0 {
 			year := int(member.Year)

@@ -312,6 +312,13 @@ const (
 	FranchiseMemberOriginReasonCrossover FranchiseMemberOriginReason = "crossover"
 )
 
+// Defines values for FranchiseMemberStatus.
+const (
+	FranchiseMemberStatusComplete   FranchiseMemberStatus = "complete"
+	FranchiseMemberStatusIncomplete FranchiseMemberStatus = "incomplete"
+	FranchiseMemberStatusUnreleased FranchiseMemberStatus = "unreleased"
+)
+
 // Defines values for GeneralSettingsSolarrMode.
 const (
 	GeneralSettingsSolarrModeArrCompanion   GeneralSettingsSolarrMode = "arr_companion"
@@ -2812,10 +2819,15 @@ type FranchiseMember struct {
 	// OriginReason Why Solarr put the work in this collection when a provider did not say so.
 	OriginReason *FranchiseMemberOriginReason `json:"origin_reason,omitempty"`
 	PosterUrl    *string                      `json:"poster_url,omitempty"`
+	PresentCount *int64                       `json:"present_count,omitempty"`
 
 	// Provider With external_id
-	Provider *string `json:"provider,omitempty"`
-	Title    string  `json:"title"`
+	Provider      *string `json:"provider,omitempty"`
+	RequiredCount *int64  `json:"required_count,omitempty"`
+
+	// Status What the library's wanted item says of it; absent for one the library lacks.
+	Status *FranchiseMemberStatus `json:"status,omitempty"`
+	Title  string                 `json:"title"`
 
 	// WorkId The library's work; absent for one it lacks.
 	WorkId *int64 `json:"work_id,omitempty"`
@@ -2824,6 +2836,9 @@ type FranchiseMember struct {
 
 // FranchiseMemberOriginReason Why Solarr put the work in this collection when a provider did not say so.
 type FranchiseMemberOriginReason string
+
+// FranchiseMemberStatus What the library's wanted item says of it; absent for one the library lacks.
+type FranchiseMemberStatus string
 
 // GateResult A hard requirement, evaluated before any comparison (ADR-40 stage 1).
 type GateResult struct {

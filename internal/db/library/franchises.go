@@ -108,6 +108,9 @@ type FranchiseMember struct {
 	Files     int64
 	// PosterURL is the work's picture at its provider, empty when it has none.
 	PosterURL string
+	// WantedState, PresentCount, RequiredCount and AvailableFrom are the library's own wanted item, for the coverage bar.
+	WantedState                                string
+	PresentCount, RequiredCount, AvailableFrom int64
 }
 
 // FranchiseRow is a collection as a library holds it: its members, and the member count the provider states.
@@ -152,7 +155,8 @@ func (f Franchises) InCategory(ctx context.Context, mediaType string, categoryID
 	}
 	for _, row := range members {
 		entry := &out[at[row.CollectionID]]
-		entry.Members = append(entry.Members, FranchiseMember{WorkID: row.WorkID, Title: row.Title, Year: row.Year, Monitored: row.Monitored > 0, Files: row.Files, PosterURL: posterOf(row.Images)})
+		entry.Members = append(entry.Members, FranchiseMember{WorkID: row.WorkID, Title: row.Title, Year: row.Year, Monitored: row.Monitored > 0, Files: row.Files, PosterURL: posterOf(row.Images),
+			WantedState: row.WantedState, PresentCount: row.PresentCount, RequiredCount: row.RequiredCount, AvailableFrom: row.AvailableFrom})
 	}
 	return out, nil
 }

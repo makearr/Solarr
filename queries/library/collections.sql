@@ -372,7 +372,15 @@ ORDER BY c.name, c.id;
 SELECT m.collection_id, w.id AS work_id, w.canonical_title AS title, CAST(COALESCE(w.year, 0) AS INTEGER) AS year,
        CAST(COALESCE((SELECT MAX(d.monitored) FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id)), 0) AS INTEGER) AS monitored,
        CAST((SELECT COUNT(*) FROM work_file f WHERE f.work_id = w.id) AS INTEGER) AS files,
-       CAST(COALESCE((SELECT f.value FROM work_field f WHERE f.work_id = w.id AND f.field = 'images' ORDER BY f.provider LIMIT 1), '') AS TEXT) AS images
+       CAST(COALESCE((SELECT f.value FROM work_field f WHERE f.work_id = w.id AND f.field = 'images' ORDER BY f.provider LIMIT 1), '') AS TEXT) AS images,
+       CAST(COALESCE((SELECT d.state FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id)
+                      ORDER BY d.satisfaction_kind = 'SET' DESC, d.id LIMIT 1), '') AS TEXT) AS wanted_state,
+       CAST(COALESCE((SELECT d.present_count FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id)
+                      ORDER BY d.satisfaction_kind = 'SET' DESC, d.id LIMIT 1), 0) AS INTEGER) AS present_count,
+       CAST(COALESCE((SELECT d.required_count FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id)
+                      ORDER BY d.satisfaction_kind = 'SET' DESC, d.id LIMIT 1), 0) AS INTEGER) AS required_count,
+       CAST(COALESCE((SELECT d.available_from FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id)
+                      ORDER BY d.satisfaction_kind = 'SET' DESC, d.id LIMIT 1), 0) AS INTEGER) AS available_from
 FROM collection_member m
 JOIN work w ON w.id = m.work_id
 WHERE m.collection_id IN (sqlc.slice(collection_ids))

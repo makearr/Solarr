@@ -54,6 +54,13 @@ merged name keeps leading there when a provider uses it again), adds or deletes 
 - One a provider or Solarr made can be renamed, deleted, filled with a work by hand or have a work taken out of
   it. None of that comes back undone on a refresh.
 - **Merge duplicates** (administrators) shows the collections that are one said twice and folds each group into its largest; **Link** joins a collection with one of another library so each shows the other's works. Collection posters carry the same coverage bar as artists, and a view (search, order, favorites) can be saved by name.
+- **A show and its films.** A film collection named for a series ("Sex and the City Collection"), or a film titled as
+  a show's movie ("Veronica Mars: The Movie"), is linked with a collection holding that series (made if the series is in
+  none), and each shows the other. It matches by title, so two series of one name match none, and a franchise of the
+  same name as an unrelated series can link wrongly: **Unlink** undoes it and the pair is not linked again. The pass
+  runs with the other collection tasks, which now also run at startup.
+- Every work of a collection, in this library or a linked one, is the same poster as in the library: the monitor
+  bookmark, the heart, the coverage bar and the search, refresh and Edit buttons.
 - **Monitor collection** on a provider's collection adds the works of it you lack. The task **Add the new works
   of monitored franchises** (every 12 hours, at most 25 works a run) adds what the provider lists later: films,
   series and books alike.

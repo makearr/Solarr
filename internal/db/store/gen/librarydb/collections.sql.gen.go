@@ -1075,7 +1075,15 @@ const listCollectionMembersInCategory = `-- name: ListCollectionMembersInCategor
 SELECT m.collection_id, w.id AS work_id, w.canonical_title AS title, CAST(COALESCE(w.year, 0) AS INTEGER) AS year,
        CAST(COALESCE((SELECT MAX(d.monitored) FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1), 0) AS INTEGER) AS monitored,
        CAST((SELECT COUNT(*) FROM work_file f WHERE f.work_id = w.id) AS INTEGER) AS files,
-       CAST(COALESCE((SELECT f.value FROM work_field f WHERE f.work_id = w.id AND f.field = 'images' ORDER BY f.provider LIMIT 1), '') AS TEXT) AS images
+       CAST(COALESCE((SELECT f.value FROM work_field f WHERE f.work_id = w.id AND f.field = 'images' ORDER BY f.provider LIMIT 1), '') AS TEXT) AS images,
+       CAST(COALESCE((SELECT d.state FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1
+                      ORDER BY d.satisfaction_kind = 'SET' DESC, d.id LIMIT 1), '') AS TEXT) AS wanted_state,
+       CAST(COALESCE((SELECT d.present_count FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1
+                      ORDER BY d.satisfaction_kind = 'SET' DESC, d.id LIMIT 1), 0) AS INTEGER) AS present_count,
+       CAST(COALESCE((SELECT d.required_count FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1
+                      ORDER BY d.satisfaction_kind = 'SET' DESC, d.id LIMIT 1), 0) AS INTEGER) AS required_count,
+       CAST(COALESCE((SELECT d.available_from FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1
+                      ORDER BY d.satisfaction_kind = 'SET' DESC, d.id LIMIT 1), 0) AS INTEGER) AS available_from
 FROM collection_member m
 JOIN work w ON w.id = m.work_id
 WHERE m.collection_id IN (/*SLICE:collection_ids*/?)
@@ -1089,13 +1097,17 @@ type ListCollectionMembersInCategoryParams struct {
 }
 
 type ListCollectionMembersInCategoryRow struct {
-	CollectionID int64
-	WorkID       int64
-	Title        string
-	Year         int64
-	Monitored    int64
-	Files        int64
-	Images       string
+	CollectionID  int64
+	WorkID        int64
+	Title         string
+	Year          int64
+	Monitored     int64
+	Files         int64
+	Images        string
+	WantedState   string
+	PresentCount  int64
+	RequiredCount int64
+	AvailableFrom int64
 }
 
 // The works of a library in the collections, monitored as the library's own item says, files counted.
@@ -1127,6 +1139,10 @@ func (q *Queries) ListCollectionMembersInCategory(ctx context.Context, arg ListC
 			&i.Monitored,
 			&i.Files,
 			&i.Images,
+			&i.WantedState,
+			&i.PresentCount,
+			&i.RequiredCount,
+			&i.AvailableFrom,
 		); err != nil {
 			return nil, err
 		}

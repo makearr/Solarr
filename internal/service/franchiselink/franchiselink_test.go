@@ -52,3 +52,32 @@ func TestLink_LinksSeriesFilmsAndSoundtracksOfOneFranchiseAndSkipsWhatWasUndone(
 		t.Errorf("Link with one pair undone = %d, %v; want the other two", made, err)
 	}
 }
+
+type fakeShows struct {
+	inputs library.ShowFilmInputs
+	made   []library.PlannedShowLink
+	into   []int64
+}
+
+func (f *fakeShows) ShowFilmInputs(context.Context, string, string) (library.ShowFilmInputs, error) {
+	return f.inputs, nil
+}
+
+func (f *fakeShows) MakeShowLink(_ context.Context, plan library.PlannedShowLink, _, _ string, seriesCollectionID int64) (bool, error) {
+	f.made = append(f.made, plan)
+	f.into = append(f.into, seriesCollectionID)
+	return true, nil
+}
+
+func TestLinkShows_LinksTheFilmCollectionNamedForAShowWithTheShowsCollection(t *testing.T) {
+	shows := &fakeShows{inputs: library.ShowFilmInputs{
+		FilmCollections:  []library.NamedCollection{{ID: 500, Name: "Sex and the City Collection"}},
+		Series:           []library.NamedWork{{WorkID: 25857, Title: "Sex and the City"}},
+		SeriesCollection: map[int64]int64{},
+	}}
+	service := Service{Shows: shows, FilmType: "movie", SeriesType: "tv", Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	made, err := service.LinkShows(t.Context())
+	if err != nil || made != 1 || len(shows.made) != 1 || shows.made[0].SeriesWorkID != 25857 || shows.into[0] != 0 {
+		t.Fatalf("LinkShows = %d, %v; made %+v into %v; want the film collection and the show, a collection made for the show", made, err, shows.made, shows.into)
+	}
+}

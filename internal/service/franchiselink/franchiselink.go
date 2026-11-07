@@ -29,9 +29,18 @@ type Store interface {
 	AutoLink(ctx context.Context, link library.PlannedLink) (bool, error)
 }
 
+// ShowFilmStore is what the show rule reads and writes: the films that are a series' movies.
+type ShowFilmStore interface {
+	ShowFilmInputs(ctx context.Context, filmType, seriesType string) (library.ShowFilmInputs, error)
+	MakeShowLink(ctx context.Context, plan library.PlannedShowLink, filmType, seriesType string, seriesCollectionID int64) (bool, error)
+}
+
 // Service is the pass's handler.
 type Service struct {
 	Store Store
+	// Shows, with FilmType and SeriesType, also links a series with the film collection named for it; nil does not.
+	Shows                ShowFilmStore
+	FilmType, SeriesType string
 	// Keywords declares the keyword keys before the links are made; nil declares none.
 	Keywords KeywordStore
 	Logger   *slog.Logger
@@ -43,8 +52,35 @@ func (s Service) Run(ctx context.Context, _ jobs.Job) error {
 	if err != nil {
 		return err
 	}
-	s.Logger.Info("collection link pass finished", slog.Int("linked", linked))
+	shows, err := s.LinkShows(ctx)
+	if err != nil {
+		return err
+	}
+	s.Logger.Info("collection link pass finished", slog.Int("linked", linked), slog.Int("shows", shows))
 	return nil
+}
+
+// LinkShows links every film collection and loose film that is a series' movies with the series' collection, making
+// the collection of a series that is in none; it answers how many links it made.
+func (s Service) LinkShows(ctx context.Context) (int, error) {
+	if s.Shows == nil {
+		return 0, nil
+	}
+	inputs, err := s.Shows.ShowFilmInputs(ctx, s.FilmType, s.SeriesType)
+	if err != nil {
+		return 0, err
+	}
+	made := 0
+	for _, plan := range library.PlanShowFilmLinks(inputs.FilmCollections, inputs.LooseFilms, inputs.Series) {
+		ok, err := s.Shows.MakeShowLink(ctx, plan, s.FilmType, s.SeriesType, inputs.SeriesCollection[plan.SeriesWorkID])
+		if err != nil {
+			return made, err
+		}
+		if ok {
+			made++
+		}
+	}
+	return made, nil
 }
 
 // Link declares the keyword keys, applies the rule once and answers how many pairs it linked.

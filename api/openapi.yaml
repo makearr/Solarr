@@ -10326,6 +10326,9 @@ components:
         year: { type: integer }
         monitored: { type: boolean }
         has_file: { type: boolean }
+        status: { type: string, enum: [complete, incomplete, unreleased], description: What the library's wanted item says of it; absent for one the library lacks. }
+        present_count: { type: integer, format: int64 }
+        required_count: { type: integer, format: int64 }
         origin_reason: { type: string, enum: [crossover], description: "Why Solarr put the work in this collection when a provider did not say so." }
         origin_detail: { type: string, description: "For a crossover: the shared episode and the series it is shared with." }
 

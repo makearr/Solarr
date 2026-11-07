@@ -22,6 +22,7 @@ import { useLibraries } from "@/lib/resources";
 import { useMediaType } from "@/lib/useMediaTypes";
 import { AddToLibrary } from "./work/AddToSolarr";
 import { CoverArt } from "./CoverArt";
+import { DEFAULT_POSTER_OPTIONS, IndexPoster, type IndexEntry } from "./IndexViews";
 import { usePreference } from "@/lib/usePreference";
 import { LetterRail } from "@/ui/LetterRail";
 import { HeartButton } from "@/ui/HeartButton";
@@ -363,21 +364,14 @@ function CollectionDetail({
             </>
           );
           return member.work_id ? (
-            <div key={key} className="flex flex-col gap-1">
-              <Link to="/library/$categoryId/works/$workId/$tab" params={{ categoryId, workId: String(member.work_id), tab: "overview" }} className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent">
-                {caption}
-              </Link>
-              <span className="flex items-center gap-2 text-xs">
-                <span className={member.has_file ? "text-ok" : member.monitored ? "text-danger" : "text-ink-muted"}>
-                  {member.has_file ? t("franchise.onDisk") : member.monitored ? t("franchise.missing") : t("franchise.unmonitored")}
-                </span>
-                {administrator && (
-                  <button type="button" className="ml-auto text-ink-muted hover:text-ink" title={custom ? t("collection.remove") : t("collection.dismiss")} onClick={() => take.mutate(member.work_id as number)}>
-                    ✕
-                  </button>
-                )}
-              </span>
-            </div>
+            <MemberPoster
+              key={key}
+              member={member}
+              categoryId={categoryId}
+              note={member.origin_reason === "crossover" ? t("franchise.originCrossover", { detail: member.origin_detail ?? "" }) : undefined}
+              onTake={administrator ? () => take.mutate(member.work_id as number) : undefined}
+              takeLabel={custom ? t("collection.remove") : t("collection.dismiss")}
+            />
           ) : (
             <div key={key} className="flex flex-col gap-1">
               {caption}
@@ -519,24 +513,7 @@ function LinkedCollections({ categoryId, franchise, administrator }: { categoryI
           <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-4">
             {link.members.map((member) =>
               member.work_id ? (
-                <Link
-                  key={member.work_id}
-                  to="/library/$categoryId/works/$workId/$tab"
-                  params={{ categoryId: String(link.category_id), workId: String(member.work_id), tab: "overview" }}
-                  className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent"
-                >
-                  <span className="block aspect-[2/3] overflow-hidden rounded-lg border border-border-subtle bg-canvas">
-                    {member.poster_url ? (
-                      <img src={remoteImage(member.poster_url, "small")} alt="" loading="lazy" className="size-full object-cover" />
-                    ) : (
-                      <CoverArt workId={member.work_id} title={member.title} size="small" className="size-full object-cover" />
-                    )}
-                  </span>
-                  <span className="truncate text-sm font-medium">
-                    {member.title}
-                    {member.year ? <span className="font-normal text-ink-muted"> ({member.year})</span> : null}
-                  </span>
-                </Link>
+                <MemberPoster key={member.work_id} member={member} categoryId={String(link.category_id)} />
               ) : (
                 <LinkedMissing key={`${member.provider}:${member.external_id}`} member={member} categoryId={String(link.category_id)} onDone={() => void queryClient.invalidateQueries({ queryKey: ["franchise", categoryId, franchise.id] })} />
               ),
@@ -551,6 +528,30 @@ function LinkedCollections({ categoryId, franchise, administrator }: { categoryI
       )}
       {linking && <LinkDialog categoryId={categoryId} franchise={franchise} onClose={() => setLinking(false)} />}
     </>
+  );
+}
+
+/** A work of a collection as the library shows it: the same poster with its monitor bookmark, heart, coverage bar and the
+ *  search, refresh and Edit buttons, whichever library the work is in. */
+function MemberPoster({ member, categoryId, note, onTake, takeLabel }: { member: FranchiseMember; categoryId: string; note?: string; onTake?: () => void; takeLabel?: string }) {
+  const entry: IndexEntry = {
+    id: member.work_id as number, kind: "works", title: member.title, year: member.year, monitored: member.monitored,
+    subtitle: member.year ? String(member.year) : undefined, status: member.status,
+    presentCount: member.present_count, requiredCount: member.required_count,
+    image: { subject: "works", id: member.work_id as number },
+    imageSrc: member.poster_url ? remoteImage(member.poster_url, "small") : undefined, portrait: true,
+    link: { to: "/library/$categoryId/works/$workId", params: { categoryId, workId: String(member.work_id) } },
+  };
+  return (
+    <div className="flex flex-col gap-1">
+      <IndexPoster entry={entry} options={DEFAULT_POSTER_OPTIONS} />
+      {note && <span className="truncate text-[11px] text-ink-muted" title={note}>{note}</span>}
+      {onTake && (
+        <button type="button" className="w-fit text-xs text-ink-muted hover:text-ink" title={takeLabel} onClick={onTake}>
+          ✕ {takeLabel}
+        </button>
+      )}
+    </div>
   );
 }
 

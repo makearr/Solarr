@@ -7093,6 +7093,15 @@ export interface components {
             monitored: boolean;
             has_file: boolean;
             /**
+             * @description What the library's wanted item says of it; absent for one the library lacks.
+             * @enum {string}
+             */
+            status?: "complete" | "incomplete" | "unreleased";
+            /** Format: int64 */
+            present_count?: number;
+            /** Format: int64 */
+            required_count?: number;
+            /**
              * @description Why Solarr put the work in this collection when a provider did not say so.
              * @enum {string}
              */
