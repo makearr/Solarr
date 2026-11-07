@@ -9,17 +9,6 @@ import (
 	"context"
 )
 
-const countStatRollup = `-- name: CountStatRollup :one
-SELECT CAST(COUNT(*) AS INTEGER) AS figures FROM stat_rollup
-`
-
-func (q *Queries) CountStatRollup(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countStatRollup)
-	var figures int64
-	err := row.Scan(&figures)
-	return figures, err
-}
-
 const deleteStatRollupMetric = `-- name: DeleteStatRollupMetric :exec
 DELETE FROM stat_rollup WHERE metric = ?
 `

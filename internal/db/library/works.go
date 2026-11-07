@@ -236,9 +236,8 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	}
 	predicates.AddIf(filter.FreshSince != "",
 		"(EXISTS (SELECT 1 FROM work_date wd WHERE wd.work_id = work.id AND wd.kind = ? AND wd.date >= ?)"+
-			" OR EXISTS (SELECT 1 FROM candidate_decision fcd JOIN candidate fc ON fc.id = fcd.candidate_id"+
-			" JOIN desired_item fdi ON fdi.id = fcd.desired_item_id"+
-			" WHERE fdi.work_id = work.id AND fc.source = 'rss' AND fc.first_seen_at >= ?))",
+			" OR EXISTS (SELECT 1 FROM rss_sighting rs JOIN desired_item fdi ON fdi.id = rs.desired_item_id"+
+			" WHERE fdi.work_id = work.id AND rs.seen_at >= ?))",
 		WorkDateStreet, filter.FreshSince, filter.FreshRSSSince)
 	// A work with no tracks yet is waiting for metadata, not missing: Lidarr never calls an album
 	// missing before it knows its tracks (answered 2026-09-28).

@@ -695,43 +695,6 @@ func (q *Queries) ListAllDeclaredKeys(ctx context.Context) ([]CollectionDeclared
 	return items, nil
 }
 
-const listAllStatRollup = `-- name: ListAllStatRollup :many
-SELECT metric, dimension, period, value, count, computed_at
-FROM stat_rollup
-ORDER BY metric, dimension, period
-`
-
-// What statistics.db's first start copies over (revision 2, D7); every chart reads statistics.db now.
-func (q *Queries) ListAllStatRollup(ctx context.Context) ([]StatRollup, error) {
-	rows, err := q.db.QueryContext(ctx, listAllStatRollup)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []StatRollup{}
-	for rows.Next() {
-		var i StatRollup
-		if err := rows.Scan(
-			&i.Metric,
-			&i.Dimension,
-			&i.Period,
-			&i.Value,
-			&i.Count,
-			&i.ComputedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listAnimeWithoutRelationCheck = `-- name: ListAnimeWithoutRelationCheck :many
 SELECT w.id AS work_id, CAST(MIN(e.external_id) AS TEXT) AS anilist
 FROM work w JOIN work_external_id e ON e.work_id = w.id AND e.provider = 'anilist'
@@ -3020,36 +2983,6 @@ func (q *Queries) SetGroupReputation(ctx context.Context, arg SetGroupReputation
 		arg.MislabelRate,
 		arg.LastObservedAt,
 		arg.UpdatedAt,
-	)
-	return err
-}
-
-const setStatRollup = `-- name: SetStatRollup :exec
-INSERT INTO stat_rollup (metric, dimension, period, value, count, computed_at)
-VALUES (?, ?, ?, ?, ?, ?)
-ON CONFLICT (metric, dimension, period) DO UPDATE SET
-  value = excluded.value,
-  count = excluded.count,
-  computed_at = excluded.computed_at
-`
-
-type SetStatRollupParams struct {
-	Metric     string
-	Dimension  string
-	Period     int64
-	Value      float64
-	Count      sql.NullInt64
-	ComputedAt int64
-}
-
-func (q *Queries) SetStatRollup(ctx context.Context, arg SetStatRollupParams) error {
-	_, err := q.db.ExecContext(ctx, setStatRollup,
-		arg.Metric,
-		arg.Dimension,
-		arg.Period,
-		arg.Value,
-		arg.Count,
-		arg.ComputedAt,
 	)
 	return err
 }

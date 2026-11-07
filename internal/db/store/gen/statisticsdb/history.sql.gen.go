@@ -94,56 +94,6 @@ func (q *Queries) AppendHistory(ctx context.Context, arg AppendHistoryParams) (i
 	return id, err
 }
 
-const copyHistoryEvent = `-- name: CopyHistoryEvent :exec
-INSERT OR IGNORE INTO history (at, kind, category_id, work_id, acquisition_id, release_title, work_title, lead_name, indexer, client, detail, event_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`
-
-type CopyHistoryEventParams struct {
-	At            int64
-	Kind          string
-	CategoryID    int64
-	WorkID        int64
-	AcquisitionID int64
-	ReleaseTitle  string
-	WorkTitle     string
-	LeadName      string
-	Indexer       string
-	Client        string
-	Detail        string
-	EventID       int64
-}
-
-// An event already copied is left as it is.
-func (q *Queries) CopyHistoryEvent(ctx context.Context, arg CopyHistoryEventParams) error {
-	_, err := q.db.ExecContext(ctx, copyHistoryEvent,
-		arg.At,
-		arg.Kind,
-		arg.CategoryID,
-		arg.WorkID,
-		arg.AcquisitionID,
-		arg.ReleaseTitle,
-		arg.WorkTitle,
-		arg.LeadName,
-		arg.Indexer,
-		arg.Client,
-		arg.Detail,
-		arg.EventID,
-	)
-	return err
-}
-
-const lastCopiedHistoryEvent = `-- name: LastCopiedHistoryEvent :one
-SELECT CAST(COALESCE(MAX(event_id), 0) AS INTEGER) AS event_id FROM history
-`
-
-func (q *Queries) LastCopiedHistoryEvent(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, lastCopiedHistoryEvent)
-	var event_id int64
-	err := row.Scan(&event_id)
-	return event_id, err
-}
-
 const listHistory = `-- name: ListHistory :many
 SELECT id, at, kind, category_id, work_id, acquisition_id, release_title, work_title, lead_name, indexer, client, detail, event_id
 FROM history

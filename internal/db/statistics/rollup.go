@@ -110,15 +110,6 @@ func (r Rollup) ForCategory(ctx context.Context, metric string, categoryID int64
 	return figures, nil
 }
 
-// Empty says whether the rollup holds nothing yet, as on the first start with statistics.db.
-func (r Rollup) Empty(ctx context.Context) (bool, error) {
-	count, err := statisticsdb.New(r.store.Read()).CountStatRollup(ctx)
-	if err != nil {
-		return false, fmt.Errorf("statistics: count rollup: %w", err)
-	}
-	return count == 0, nil
-}
-
 // StatDiscographyCoverage is the artists' coverage metric: key the person id, value the albums held, count the albums
 // their discography has under the default filters.
 const StatDiscographyCoverage = "discography_coverage"

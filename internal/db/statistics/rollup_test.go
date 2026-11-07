@@ -37,9 +37,6 @@ func openStatistics(t *testing.T) *store.Store {
 // A rollup replaces its metrics whole, and a library reads only its own figures.
 func TestRollup_ReplacesAndReadsPerLibrary(t *testing.T) {
 	rollup := statistics.NewRollup(openStatistics(t))
-	if empty, err := rollup.Empty(t.Context()); err != nil || !empty {
-		t.Fatalf("a new rollup: empty %v, %v", empty, err)
-	}
 	figures := []statistics.Figure{
 		{Metric: "albums_by_state", Dimension: statistics.Dimension(1, "MISSING"), Value: 1, Count: 1},
 		{Metric: "albums_by_state", Dimension: statistics.Dimension(10, "COMPLETE"), Value: 4, Count: 4},

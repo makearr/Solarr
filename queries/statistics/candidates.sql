@@ -80,28 +80,3 @@ FROM candidate_decision
 WHERE decided_at >= sqlc.arg(since)
 GROUP BY category_id, outcome
 ORDER BY category_id, outcome;
-
--- The copy from library.db keeps every id; a row already copied is left as it is.
--- name: CopyCandidate :exec
-INSERT OR IGNORE INTO candidate (id, indexer_id, guid, title, attributes_id, size_bytes, seeders, leechers,
-                                 published_at, protocol, download_url, parse_confidence, source, first_seen_at, expires_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-
--- name: CopyDecision :exec
-INSERT OR IGNORE INTO candidate_decision (id, candidate_id, desired_item_id, category_id, outcome, score, components_json,
-                                          rejections_json, deferrals_json, match_confidence, decided_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-
--- name: CopyDecisionRollup :exec
-INSERT OR IGNORE INTO decision_rollup (desired_item_id, period, outcome, count, best_score, top_reason)
-VALUES (?, ?, ?, ?, ?, ?);
-
--- Where a copy resumes.
--- name: LastCandidateID :one
-SELECT CAST(COALESCE(MAX(id), 0) AS INTEGER) AS id FROM candidate;
-
--- name: LastDecisionID :one
-SELECT CAST(COALESCE(MAX(id), 0) AS INTEGER) AS id FROM candidate_decision;
-
--- name: CountDecisionRollup :one
-SELECT CAST(COUNT(*) AS INTEGER) AS total FROM decision_rollup;

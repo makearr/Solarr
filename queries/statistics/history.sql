@@ -3,14 +3,6 @@ INSERT INTO history (at, kind, category_id, work_id, acquisition_id, release_tit
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id;
 
--- An event already copied is left as it is.
--- name: CopyHistoryEvent :exec
-INSERT OR IGNORE INTO history (at, kind, category_id, work_id, acquisition_id, release_title, work_title, lead_name, indexer, client, detail, event_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-
--- name: LastCopiedHistoryEvent :one
-SELECT CAST(COALESCE(MAX(event_id), 0) AS INTEGER) AS event_id FROM history;
-
 -- One page of history, newest first, of one work or of every one with work_id 0.
 -- name: ListHistory :many
 SELECT id, at, kind, category_id, work_id, acquisition_id, release_title, work_title, lead_name, indexer, client, detail, event_id

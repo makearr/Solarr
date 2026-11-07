@@ -113,20 +113,6 @@ WHERE e.kind != 'unknown'
 ORDER BY e.work_id
 LIMIT sqlc.arg(page_size);
 
--- name: SetStatRollup :exec
-INSERT INTO stat_rollup (metric, dimension, period, value, count, computed_at)
-VALUES (?, ?, ?, ?, ?, ?)
-ON CONFLICT (metric, dimension, period) DO UPDATE SET
-  value = excluded.value,
-  count = excluded.count,
-  computed_at = excluded.computed_at;
-
--- What statistics.db's first start copies over (revision 2, D7); every chart reads statistics.db now.
--- name: ListAllStatRollup :many
-SELECT metric, dimension, period, value, count, computed_at
-FROM stat_rollup
-ORDER BY metric, dimension, period;
-
 -- Only content-attributable outcomes count: a full disk is not the group's
 -- fault, and counting it would make reputation measure the environment (ADR-45).
 -- name: RecordGroupObservation :exec

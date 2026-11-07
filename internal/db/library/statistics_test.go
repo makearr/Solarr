@@ -117,27 +117,6 @@ func TestStatistics_GrowthByMonth(t *testing.T) {
 		}
 		return nil
 	})
-	item := createDesired(t, opened, createWork(t, opened, "music", "Album").ID, "SET", 10)
-	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
-		candidate, err := q.UpsertCandidate(ctx, librarydb.UpsertCandidateParams{
-			IndexerID: 1, Guid: "g", Title: "t", Protocol: "usenet", DownloadUrl: "u", Source: "search", FirstSeenAt: 1, ExpiresAt: 1 << 40,
-		})
-		if err != nil {
-			return err
-		}
-		for _, decided := range []struct {
-			outcome string
-			at      int64
-		}{{"REJECT", 9_000_000}, {"REJECT", 9_000_001}, {"ACCEPT", 9_000_002}, {"DEFER", 1}} {
-			if _, err := q.RecordDecision(ctx, librarydb.RecordDecisionParams{
-				CandidateID: candidate.ID, DesiredItemID: item.ID, Outcome: decided.outcome, ComponentsJson: "[]", DecidedAt: decided.at,
-			}); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-
 	now := int64(9_000_100)
 	roots := map[int64]int64{1: 1, 2: 1, 3: 2}
 	growth := figuresOf(t, statistics, roots, now, library.StatGrowthByMonth, 1)

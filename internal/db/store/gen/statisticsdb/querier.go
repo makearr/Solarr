@@ -18,14 +18,6 @@ type Querier interface {
 	// Searches and finds per library since a time.
 	AggregateSearchesByCategory(ctx context.Context, since int64) ([]AggregateSearchesByCategoryRow, error)
 	AppendHistory(ctx context.Context, arg AppendHistoryParams) (int64, error)
-	// The copy from library.db keeps every id; a row already copied is left as it is.
-	CopyCandidate(ctx context.Context, arg CopyCandidateParams) error
-	CopyDecision(ctx context.Context, arg CopyDecisionParams) error
-	CopyDecisionRollup(ctx context.Context, arg CopyDecisionRollupParams) error
-	// An event already copied is left as it is.
-	CopyHistoryEvent(ctx context.Context, arg CopyHistoryEventParams) error
-	CountDecisionRollup(ctx context.Context) (int64, error)
-	CountStatRollup(ctx context.Context) (int64, error)
 	DeleteDecisionsByID(ctx context.Context, ids interface{}) (int64, error)
 	// The oldest page of rows before a time, removed.
 	DeleteDownloadSpeedBefore(ctx context.Context, arg DeleteDownloadSpeedBeforeParams) (int64, error)
@@ -38,10 +30,6 @@ type Querier interface {
 	GetCandidate(ctx context.Context, id int64) (Candidate, error)
 	InsertDownloadSpeed(ctx context.Context, arg InsertDownloadSpeedParams) error
 	InsertSearchLog(ctx context.Context, arg InsertSearchLogParams) error
-	// Where a copy resumes.
-	LastCandidateID(ctx context.Context) (int64, error)
-	LastCopiedHistoryEvent(ctx context.Context) (int64, error)
-	LastDecisionID(ctx context.Context) (int64, error)
 	ListDecisionRollup(ctx context.Context, desiredItemID int64) ([]DecisionRollup, error)
 	// The interactive search view's own listing (F16): a decision means nothing without the release it was decided about.
 	ListDecisionsForItemWithCandidate(ctx context.Context, arg ListDecisionsForItemWithCandidateParams) ([]ListDecisionsForItemWithCandidateRow, error)

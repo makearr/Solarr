@@ -1,5 +1,5 @@
--- Every migration up to 0103, squashed into the schema they built (documentation/database-layout.md).
--- migrate:baseline replaces=8df9e92c4142d550cd60796257a239fe92b9952916b806eb9dec2beb9d021a56
+-- Every migration up to 0116, squashed into the schema they built (documentation/database-layout.md).
+-- migrate:baseline replaces=af89e47a7add60e42375c30885b845204892936b7ff59a7992cdf1943207a113
 
 CREATE TABLE work (
   id                INTEGER PRIMARY KEY,
@@ -319,45 +319,6 @@ CREATE TABLE counter (
   PRIMARY KEY (scope, metric)
 ) WITHOUT ROWID;
 
-CREATE TABLE candidate (
-  id               INTEGER PRIMARY KEY,
-  indexer_id       INTEGER NOT NULL,
-  guid             TEXT    NOT NULL,
-  title            TEXT    NOT NULL,
-  -- Claimed only: there is nothing to probe before downloading, so the bitrate
-  -- fields are null and the rate is estimated from size over runtime (ADR-39).
-  attributes_id    INTEGER REFERENCES media_attributes(id),
-  size_bytes       INTEGER,
-  seeders          INTEGER,
-  leechers         INTEGER,
-  published_at     INTEGER,
-  protocol         TEXT    NOT NULL
-                   CHECK (protocol IN ('usenet', 'torrent', 'ddl', 'feed')),
-  -- For ddl and feed this is the landing page or entry, not the file itself.
-  download_url     TEXT    NOT NULL,
-  parse_confidence REAL,
-  source           TEXT    NOT NULL CHECK (source IN ('rss', 'search')),
-  first_seen_at    INTEGER NOT NULL,
-  expires_at       INTEGER NOT NULL,
-  UNIQUE(indexer_id, guid)
-);
-CREATE INDEX candidate_expiry ON candidate(expires_at);
-
-CREATE TABLE candidate_decision (
-  id               INTEGER PRIMARY KEY,
-  candidate_id     INTEGER NOT NULL REFERENCES candidate(id) ON DELETE CASCADE,
-  desired_item_id  INTEGER NOT NULL REFERENCES desired_item(id) ON DELETE CASCADE,
-  outcome          TEXT    NOT NULL CHECK (outcome IN ('ACCEPT', 'REJECT', 'DEFER')),
-  score            REAL    NOT NULL,
-  components_json  TEXT    NOT NULL,
-  rejections_json  TEXT,
-  deferrals_json   TEXT,
-  match_confidence REAL,
-  decided_at       INTEGER NOT NULL
-);
-CREATE INDEX decision_by_item ON candidate_decision(desired_item_id, decided_at DESC);
-CREATE INDEX decision_by_candidate ON candidate_decision(candidate_id);
-
 CREATE TABLE blocklisted_release (
   id              INTEGER PRIMARY KEY,
   -- Null when blocked by content hash alone.
@@ -579,18 +540,6 @@ CREATE TABLE collection_external_id (
   PRIMARY KEY (provider, external_id)
 ) WITHOUT ROWID;
 
-CREATE TABLE stat_rollup (
-  metric      TEXT    NOT NULL,
-  dimension   TEXT    NOT NULL DEFAULT '',
-  -- Day bucket; 0 is the current snapshot.
-  period      INTEGER NOT NULL,
-  value       REAL    NOT NULL,
-  count       INTEGER,
-  computed_at INTEGER NOT NULL,
-  PRIMARY KEY (metric, dimension, period)
-) WITHOUT ROWID;
-CREATE INDEX stat_rollup_metric ON stat_rollup(metric, period DESC);
-
 CREATE TABLE artwork (
   id           INTEGER PRIMARY KEY,
   subject_type TEXT    NOT NULL,
@@ -630,19 +579,6 @@ CREATE TABLE group_observation (
   was_exploration INTEGER NOT NULL DEFAULT 0 CHECK (was_exploration IN (0, 1))
 );
 CREATE INDEX group_observation_grp ON group_observation(release_group, observed_at DESC);
-
-CREATE TABLE decision_rollup (
-  desired_item_id INTEGER NOT NULL REFERENCES desired_item(id) ON DELETE CASCADE,
-  -- Day bucket, as a Unix day number.
-  period          INTEGER NOT NULL,
-  outcome         TEXT    NOT NULL,
-  count           INTEGER NOT NULL,
-  best_score      REAL,
-  -- The rejection rule that fired most often in the bucket.
-  top_reason      TEXT,
-  PRIMARY KEY (desired_item_id, period, outcome)
-) WITHOUT ROWID;
-CREATE INDEX decision_rollup_period ON decision_rollup(period, outcome);
 
 CREATE VIRTUAL TABLE title_search USING fts5(
   title,
@@ -740,7 +676,9 @@ CREATE TABLE import_unit (
   reason            TEXT,                  -- structured code when QUEUE or SKIP
   work_created    INTEGER NOT NULL DEFAULT 0,
   edition_created INTEGER NOT NULL DEFAULT 0,
-  pack_id INTEGER REFERENCES pack(id)
+  pack_id INTEGER REFERENCES pack(id),
+  -- The library a Best match import routed this unit to; NULL places it into its session's. No FK: category lives in settings.db.
+  category_id INTEGER
 );
 CREATE INDEX idx_import_unit_session ON import_unit(session_id, decision);
 CREATE INDEX idx_import_unit_queue   ON import_unit(decision, confidence DESC)
@@ -1179,11 +1117,12 @@ CREATE TABLE arr_link (
   local_id    INTEGER NOT NULL,
   PRIMARY KEY (instance_id, source_kind, source_id)
 ) WITHOUT ROWID;
-CREATE INDEX arr_link_by_instance ON arr_link(instance_id);
 
 CREATE TABLE video_frame_hash (
   media_object_id INTEGER PRIMARY KEY REFERENCES media_object(id) ON DELETE CASCADE,
-  frames          BLOB    NOT NULL
+  frames          BLOB    NOT NULL,
+  -- Which hashing algorithm made the frames; a probe sweep hashes again what an older one made.
+  algorithm_version INTEGER NOT NULL DEFAULT 0
 );
 CREATE TRIGGER title_search_work_ai AFTER INSERT ON work BEGIN
   INSERT INTO title_search(rowid, title, work_id, media_type)
@@ -1238,3 +1177,156 @@ BEGIN
   INSERT INTO work_arrival (work_id, arrived_at) VALUES (NEW.work_id, NEW.first_seen_at)
   ON CONFLICT (work_id) DO UPDATE SET arrived_at = MAX(arrived_at, excluded.arrived_at);
 END;
+
+-- A foreign key's child column needs an index, or every delete of its parent scans the child table: a person 8.7 ms
+-- (55k works), an edition 1.1 ms (59k desired items), measured on a live library.
+CREATE INDEX work_by_lead_person ON work(lead_person_id) WHERE lead_person_id IS NOT NULL;
+CREATE INDEX desired_by_edition ON desired_item(edition_id) WHERE edition_id IS NOT NULL;
+-- A cover source asked about a work that answered none: the artwork sweep skips that pair until the miss is old, instead of
+-- asking again every half hour (680 albums, about seven minutes a run, measured on a live library).
+CREATE TABLE artwork_miss (
+  subject_type TEXT    NOT NULL,
+  subject_id   INTEGER NOT NULL,
+  source       TEXT    NOT NULL,
+  missed_at    INTEGER NOT NULL,
+  PRIMARY KEY (subject_type, subject_id, source)
+) WITHOUT ROWID;
+
+-- Why two collections of different libraries are shown as one, and what a person undid so it is not made again.
+CREATE TABLE collection_link_origin (
+  low_id     INTEGER NOT NULL REFERENCES collection(id) ON DELETE CASCADE,
+  high_id    INTEGER NOT NULL REFERENCES collection(id) ON DELETE CASCADE,
+  reason     TEXT    NOT NULL,
+  detail     TEXT    NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (low_id, high_id)
+) WITHOUT ROWID;
+CREATE INDEX collection_link_origin_high ON collection_link_origin(high_id);
+
+-- Keys are "provider:id" of a collection's franchise ids, so the memory outlives a collection Solarr rebuilds.
+CREATE TABLE collection_link_refusal (
+  low_key  TEXT NOT NULL,
+  high_key TEXT NOT NULL,
+  PRIMARY KEY (low_key, high_key)
+) WITHOUT ROWID;
+
+-- A franchise a provider says a collection's works belong to, beyond the ids the collection itself carries.
+CREATE TABLE collection_declared_key (
+  collection_id INTEGER NOT NULL REFERENCES collection(id) ON DELETE CASCADE,
+  provider      TEXT    NOT NULL,
+  external_id   TEXT    NOT NULL,
+  PRIMARY KEY (collection_id, provider, external_id)
+) WITHOUT ROWID;
+CREATE INDEX collection_declared_key_by_key ON collection_declared_key(provider, external_id);
+
+-- Why a work joined a collection Solarr made (a crossover episode it shares, a title, a provider), shown to the person who may undo it.
+CREATE TABLE collection_member_origin (
+  collection_id INTEGER NOT NULL REFERENCES collection(id) ON DELETE CASCADE,
+  work_id       INTEGER NOT NULL REFERENCES work(id) ON DELETE CASCADE,
+  reason        TEXT    NOT NULL,
+  detail        TEXT    NOT NULL DEFAULT '',
+  created_at    INTEGER NOT NULL,
+  PRIMARY KEY (collection_id, work_id)
+) WITHOUT ROWID;
+CREATE INDEX collection_member_origin_by_work ON collection_member_origin(work_id);
+
+-- What an event across series knows beyond its members: the part count the providers give and the key that merges split halves.
+CREATE TABLE crossover_event (
+  collection_id INTEGER PRIMARY KEY REFERENCES collection(id) ON DELETE CASCADE,
+  name_key      TEXT    NOT NULL,
+  total_parts   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX crossover_event_by_key ON crossover_event(name_key);
+
+-- A member whose place in the event is a guess from air dates, because its title carries no part number.
+CREATE TABLE crossover_member_guess (
+  collection_id INTEGER NOT NULL REFERENCES collection(id) ON DELETE CASCADE,
+  part_id       INTEGER NOT NULL,
+  PRIMARY KEY (collection_id, part_id)
+) WITHOUT ROWID;
+
+-- A part of an event a provider lists for a series the library lacks or for an episode it does not hold.
+CREATE TABLE crossover_missing_part (
+  collection_id INTEGER NOT NULL REFERENCES collection(id) ON DELETE CASCADE,
+  number        INTEGER NOT NULL,
+  provider      TEXT    NOT NULL,
+  external_id   TEXT    NOT NULL,
+  series_title  TEXT    NOT NULL,
+  season        INTEGER NOT NULL,
+  episode       INTEGER NOT NULL,
+  title         TEXT    NOT NULL DEFAULT '',
+  air_date      TEXT    NOT NULL DEFAULT '',
+  PRIMARY KEY (collection_id, provider, external_id, season, episode)
+) WITHOUT ROWID;
+
+-- Two episodes a person said are not one broadcast, kept by series and episode so a rebuilt part keeps the answer.
+CREATE TABLE crossover_not_same (
+  low_work_id  INTEGER NOT NULL REFERENCES work(id) ON DELETE CASCADE,
+  low_ref      TEXT    NOT NULL,
+  high_work_id INTEGER NOT NULL REFERENCES work(id) ON DELETE CASCADE,
+  high_ref     TEXT    NOT NULL,
+  created_at   INTEGER NOT NULL,
+  PRIMARY KEY (low_work_id, low_ref, high_work_id, high_ref)
+) WITHOUT ROWID;
+CREATE INDEX crossover_not_same_by_high ON crossover_not_same(high_work_id);
+
+-- An event a person deleted, so the same title in the same weeks is not found again.
+CREATE TABLE crossover_event_dismissed (
+  name_key   TEXT NOT NULL,
+  first_date TEXT NOT NULL,
+  PRIMARY KEY (name_key, first_date)
+) WITHOUT ROWID;
+
+-- A family of series whose provider episode lists were compared for events, so it is not fetched again for a month.
+CREATE TABLE crossover_family_checked (
+  family_key TEXT PRIMARY KEY,
+  checked_at INTEGER NOT NULL
+) WITHOUT ROWID;
+
+-- A part a person took out of an event Solarr found, kept by the event's name so detection does not put it back.
+CREATE TABLE crossover_excluded (
+  name_key TEXT NOT NULL,
+  part_key TEXT NOT NULL,
+  PRIMARY KEY (name_key, part_key)
+) WITHOUT ROWID;
+
+-- A quality target a person gave an item of its own, over its library's; the target lives in settings.db, so no foreign key.
+CREATE TABLE desired_target_override (
+  desired_item_id INTEGER PRIMARY KEY REFERENCES desired_item(id) ON DELETE CASCADE,
+  target_id       INTEGER NOT NULL
+) WITHOUT ROWID;
+
+-- When a provider was last asked which series or lists a work belongs to, by source, so a pass asks each work once in a while.
+CREATE TABLE work_collection_check (
+  work_id    INTEGER NOT NULL REFERENCES work(id) ON DELETE CASCADE,
+  source     TEXT    NOT NULL,
+  checked_at INTEGER NOT NULL,
+  PRIMARY KEY (work_id, source)
+) WITHOUT ROWID;
+
+-- Which videos have preview pictures on disk, and made by which algorithm; the pictures themselves are files in the previews folder.
+CREATE TABLE video_preview (
+  media_object_id   INTEGER PRIMARY KEY REFERENCES media_object(id) ON DELETE CASCADE,
+  algorithm_version INTEGER NOT NULL,
+  has_frame         INTEGER NOT NULL,
+  has_sheet         INTEGER NOT NULL,
+  made_at           INTEGER NOT NULL
+);
+
+-- A tag an administrator blocked: it is removed from every item and never created again, by a provider or a person.
+-- The slug is the tag's own and each of its aliases', so a provider's other spelling stays blocked too.
+CREATE TABLE blocked_tag (
+  slug       TEXT    PRIMARY KEY,
+  name       TEXT    NOT NULL,
+  genre_tree TEXT    NOT NULL DEFAULT '',
+  blocked_at INTEGER NOT NULL
+) WITHOUT ROWID;
+
+-- A person's hearts: items they want to find again, apart from a follow (which acquires). No foreign key: app_user lives in settings.db.
+CREATE TABLE favorite (
+  user_id      INTEGER NOT NULL,
+  subject_type TEXT    NOT NULL CHECK (subject_type IN ('work', 'work_part', 'person', 'organisation', 'collection', 'tag')),
+  subject_id   INTEGER NOT NULL,
+  created_at   INTEGER NOT NULL,
+  PRIMARY KEY (user_id, subject_type, subject_id)
+) WITHOUT ROWID;

@@ -212,28 +212,17 @@ func TestRestoringReleasesTheHeldBytes(t *testing.T) {
 
 // F4: which search caused this file, and which download produced it. The
 // acquisition denormalises the candidate because candidates expire.
-func TestProvenanceSurvivesTheCandidateExpiring(t *testing.T) {
+func TestProvenanceKeepsTheReleaseDetailOfTheAcquisition(t *testing.T) {
 	opened, queries := newLibrary(t)
 	work := createWork(t, opened, "movie", "Cige")
 	item := createDesired(t, opened, work.ID, "SINGLE", 1)
 	object := createObject(t, opened, "quick-1", 4096)
 
-	var candidate librarydb.Candidate
-	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
-		row, err := q.UpsertCandidate(ctx, librarydb.UpsertCandidateParams{
-			IndexerID: 1, Guid: "guid-a", Title: "Cige.2021.2160p.REMUX-GROUP",
-			Protocol: "usenet", DownloadUrl: "https://indexer/nzb/1",
-			Source: "search", FirstSeenAt: 1, ExpiresAt: 100,
-		})
-		candidate = row
-		return err
-	})
-
 	var acquisition librarydb.Acquisition
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
 		row, err := q.CreateAcquisition(ctx, librarydb.CreateAcquisitionParams{
 			DesiredItemID:  sql.NullInt64{Int64: item.ID, Valid: true},
-			CandidateID:    sql.NullInt64{Int64: candidate.ID, Valid: true},
+			CandidateID:    sql.NullInt64{Int64: 1, Valid: true},
 			IndexerID:      sql.NullInt64{Int64: 1, Valid: true},
 			CandidateGuid:  sql.NullString{String: "guid-a", Valid: true},
 			CandidateTitle: sql.NullString{String: "Cige.2021.2160p.REMUX-GROUP", Valid: true},
@@ -253,11 +242,6 @@ func TestProvenanceSurvivesTheCandidateExpiring(t *testing.T) {
 		return err
 	})
 
-	// The candidate expires; the provenance must not go with it.
-	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
-		return q.DeleteExpiredCandidates(ctx, 1_000)
-	})
-
 	chain, err := queries.ProvenanceForObject(t.Context(),
 		sql.NullInt64{Int64: object.ID, Valid: true})
 	if err != nil {
@@ -268,7 +252,7 @@ func TestProvenanceSurvivesTheCandidateExpiring(t *testing.T) {
 	}
 	if chain[0].SearchTerms.String != "dune 2021" ||
 		chain[0].CandidateTitle.String != "Cige.2021.2160p.REMUX-GROUP" {
-		t.Errorf("provenance lost its detail when the candidate expired: %+v", chain[0])
+		t.Errorf("provenance lost the detail the acquisition denormalised: %+v", chain[0])
 	}
 }
 
@@ -282,16 +266,7 @@ func TestAcquisitions_CreateRoundTrips(t *testing.T) {
 	work := createWork(t, opened, "music", "Discovery")
 	item := createDesired(t, opened, work.ID, "SET", 12)
 	acquisitions := library.NewAcquisitions(opened)
-	candidate, err := library.NewCandidates(opened).Upsert(t.Context(), library.NewReleaseCandidate{
-		IndexerID: 1, GUID: "guid-a", Title: "Nosi Zada-Discovery-2001-FLAC-GROUP",
-		Protocol: "usenet", DownloadURL: "https://indexer/nzb/1", Source: "search",
-		FirstSeenAt: 1, ExpiresAt: 100,
-	})
-	if err != nil {
-		t.Fatalf("Upsert: %v", err)
-	}
-
-	itemID, candidateID, indexerID := item.ID, candidate.ID, int64(1)
+	itemID, candidateID, indexerID := item.ID, int64(1), int64(1)
 	created, err := acquisitions.Create(t.Context(), library.NewAcquisition{
 		DesiredItemID: &itemID, CandidateID: &candidateID, IndexerID: &indexerID,
 		CandidateGUID: "guid-a", CandidateTitle: "Nosi Zada-Discovery-2001-FLAC-GROUP",
@@ -372,27 +347,5 @@ func TestAcquisitions_CreateSucceedsOnceThePriorOneIsTerminal(t *testing.T) {
 	}
 	if second.ID == first.ID {
 		t.Error("second acquisition reused the first one's id")
-	}
-}
-
-// The protocol enum has to admit what ADR-46 added, or podcasts and direct
-// downloads cannot be recorded at all.
-func TestEveryProtocolIsAccepted(t *testing.T) {
-	opened, _ := newLibrary(t)
-
-	for index, protocol := range []string{"usenet", "torrent", "ddl", "feed"} {
-		err := opened.Write(t.Context(), store.PrioInteractive,
-			func(ctx context.Context, tx *sql.Tx) error {
-				q := librarydb.New(opened.Read()).WithTx(tx)
-				_, err := q.UpsertCandidate(ctx, librarydb.UpsertCandidateParams{
-					IndexerID: int64(index + 1), Guid: "g", Title: "t",
-					Protocol: protocol, DownloadUrl: "u", Source: "search",
-					FirstSeenAt: 1, ExpiresAt: 2,
-				})
-				return err
-			})
-		if err != nil {
-			t.Errorf("protocol %q was refused: %v", protocol, err)
-		}
 	}
 }

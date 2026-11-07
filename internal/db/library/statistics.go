@@ -285,27 +285,6 @@ func dimensionOf(categoryID int64, key string) string {
 	return strconv.FormatInt(categoryID, 10) + "|" + key
 }
 
-// StoredRow is one row of library.db's own rollup, kept until statistics.db has taken it over (revision 2, D7).
-type StoredRow struct {
-	StatRow
-	ComputedAt int64
-}
-
-// StoredRollup answers every current figure library.db's rollup holds, for statistics.db's first start to copy.
-func (s Statistics) StoredRollup(ctx context.Context) ([]StoredRow, error) {
-	rows, err := librarydb.New(s.store.Read()).ListAllStatRollup(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("library: stored rollup: %w", err)
-	}
-	var stored []StoredRow
-	for _, row := range rows {
-		if row.Period == 0 {
-			stored = append(stored, StoredRow{StatRow{row.Metric, row.Dimension, row.Value, row.Count.Int64}, row.ComputedAt})
-		}
-	}
-	return stored, nil
-}
-
 // ArtistHeld is an artist with something held in a library: their MusicBrainz id and the release groups held.
 type ArtistHeld struct {
 	PersonID      int64

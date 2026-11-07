@@ -392,6 +392,29 @@ func TestListWorks_FreshFiltersToDayPreciseRecentReleases(t *testing.T) {
 	}
 }
 
+// A work an RSS feed showed a release for inside the window is fresh without a release date.
+func TestListWorks_FreshIncludesWorksRSSShowedRecently(t *testing.T) {
+	opened, _ := newLibrary(t)
+	seen := createWork(t, opened, "music", "Seen On RSS")
+	stale := createWork(t, opened, "music", "Seen Long Ago")
+	createWork(t, opened, "music", "Never Seen")
+	for work, at := range map[int64]int64{seen.ID: 2_000, stale.ID: 10} {
+		item := createDesired(t, opened, work, "SET", 10)
+		write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+			return q.RecordRSSSighting(ctx, librarydb.RecordRSSSightingParams{DesiredItemID: item.ID, SeenAt: at})
+		})
+	}
+
+	page, err := library.NewWorks(opened).List(t.Context(),
+		library.WorkFilter{FreshSince: "2026-09-01", FreshRSSSince: 1_000}, library.WorkCursor{}, 100)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(page) != 1 || page[0].ID != seen.ID {
+		t.Fatalf("Fresh page = %+v, want only the work RSS showed inside the window (%d)", page, seen.ID)
+	}
+}
+
 // The Wanted screen's own filter (2026-09-11): monitored and not COMPLETE
 // includes a work, an unmonitored one is excluded even with the same state,
 // and a monitored-but-COMPLETE one is excluded too -- COMPLETE means nothing

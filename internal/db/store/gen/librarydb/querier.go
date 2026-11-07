@@ -48,8 +48,6 @@ type Querier interface {
 	AggregateAcquisitionsByCategoryAndState(ctx context.Context, since int64) ([]AggregateAcquisitionsByCategoryAndStateRow, error)
 	// Monitored albums per library and state.
 	AggregateAlbumsByCategoryAndState(ctx context.Context) ([]AggregateAlbumsByCategoryAndStateRow, error)
-	// Release decisions since a time, per library and outcome.
-	AggregateDecisionsByCategoryAndOutcome(ctx context.Context, since int64) ([]AggregateDecisionsByCategoryAndOutcomeRow, error)
 	// Files and bytes first seen per root folder and month: growth since Solarr began watching.
 	AggregateFilesAddedByRootAndMonth(ctx context.Context) ([]AggregateFilesAddedByRootAndMonthRow, error)
 	// What the statistics rollup measures (section 21.12): bounded aggregates, run by a background job and read back
@@ -164,7 +162,6 @@ type Querier interface {
 	// A client's queue as Solarr fills it: sent and not finished downloading (ADR-57).
 	CountQueuedOnDownloader(ctx context.Context, downloaderID int64) (int64, error)
 	CountRecycleBin(ctx context.Context) (int64, error)
-	CountRollupOutcomes(ctx context.Context, since int64) ([]CountRollupOutcomesRow, error)
 	// Library health's own "unmatched files" figure (todo 4.8) -- same filter
 	// shape as ListUnidentified below, a count rather than a page.
 	CountUnidentified(ctx context.Context, arg CountUnidentifiedParams) (int64, error)
@@ -197,6 +194,7 @@ type Querier interface {
 	CoverPartLikeAnother(ctx context.Context, arg CoverPartLikeAnotherParams) error
 	// Which parts of a work have a file still there, by any item.
 	CoveredPartRefs(ctx context.Context, workID int64) ([]string, error)
+	// Candidates, decisions and provenance. Column lists follow table order.
 	CreateAcquisition(ctx context.Context, arg CreateAcquisitionParams) (Acquisition, error)
 	// *Arr import runs (todo 4.13, ADR-52). Column lists follow table order.
 	CreateArrImport(ctx context.Context, arg CreateArrImportParams) (ArrImport, error)
@@ -264,7 +262,6 @@ type Querier interface {
 	DeleteCrossoverMissingParts(ctx context.Context, collectionID int64) error
 	DeleteCrossoverNotSame(ctx context.Context, arg DeleteCrossoverNotSameParams) error
 	DeleteCustomCollection(ctx context.Context, id int64) (int64, error)
-	DeleteDecisionsByID(ctx context.Context, ids interface{}) (int64, error)
 	DeleteDesiredItemsForWork(ctx context.Context, workID int64) error
 	// Import revert's own use (todo 4.9): only ever called for an edition
 	// CommitUnit itself created (import_unit.edition_created), and only after
@@ -272,8 +269,6 @@ type Querier interface {
 	// edition_external_id cascades; import_unit.edition_id does not.
 	DeleteEdition(ctx context.Context, id int64) error
 	DeleteEditionCredits(ctx context.Context, editionID int64) error
-	// A DEFER is not a failure: the candidate stays cached until it expires (section 10.1).
-	DeleteExpiredCandidates(ctx context.Context, expiresAt int64) error
 	DeleteImportListEntries(ctx context.Context, listID int64) error
 	DeleteImportListState(ctx context.Context, listID int64) error
 	DeleteImportUnitExtras(ctx context.Context, unitID int64) error
@@ -301,15 +296,11 @@ type Querier interface {
 	// rather than trusting a silent no-op.
 	// The file's own row marked missing where it moves back to (a folder renamed by hand, then rescanned) is stale.
 	DeleteStaleDestinationPath(ctx context.Context, arg DeleteStaleDestinationPathParams) error
-	DeleteStatRollupMetric(ctx context.Context, metric string) error
-	DeleteStatRollupMetricForCategory(ctx context.Context, arg DeleteStatRollupMetricForCategoryParams) error
 	DeleteSubscription(ctx context.Context, id int64) error
 	DeleteTag(ctx context.Context, id int64) (int64, error)
 	// A file that resolves on a later sweep leaves the queue entirely -- there is no
 	// "resolved" state to keep around.
 	DeleteUnidentified(ctx context.Context, mediaObjectID int64) error
-	// A held release (ready_queue) keeps its candidate however old.
-	DeleteUnreferencedExpiredCandidates(ctx context.Context, arg DeleteUnreferencedExpiredCandidatesParams) (int64, error)
 	// What ties an album to a provider, leaving the local name an unverified album goes by.
 	DeleteVerifiedWorkExternalIDs(ctx context.Context, workID int64) error
 	DeleteWork(ctx context.Context, id int64) error
@@ -392,6 +383,7 @@ type Querier interface {
 	GetAcquisition(ctx context.Context, id int64) (Acquisition, error)
 	// The download a placed file came in with, nothing when a person imported it by hand.
 	GetAcquisitionIDOfMediaObject(ctx context.Context, mediaObjectID int64) (sql.NullInt64, error)
+	// Retention: decisions age into decision_rollup, then go; a candidate goes once nothing refers to it.
 	GetAcquisitionStall(ctx context.Context, acquisitionID int64) (AcquisitionStall, error)
 	// Checked before CreateAcquisition so a caller gets a clean, mapped refusal
 	// rather than the acquisition_one_inflight unique index's own raw
@@ -402,7 +394,6 @@ type Querier interface {
 	GetArtwork(ctx context.Context, arg GetArtworkParams) (string, error)
 	GetAttributes(ctx context.Context, id int64) (MediaAttribute, error)
 	GetBlockedContent(ctx context.Context, id int64) (BlockedContent, error)
-	GetCandidate(ctx context.Context, id int64) (Candidate, error)
 	GetCertificationAge(ctx context.Context, arg GetCertificationAgeParams) (sql.NullInt64, error)
 	GetCollection(ctx context.Context, id int64) (Collection, error)
 	// A collection a provider names, found by its id there: a movie's franchise.
@@ -538,10 +529,7 @@ type Querier interface {
 	// Every credit anywhere under a work, at any scope. Coverage counts use this;
 	// the work-level listing above deliberately does not.
 	ListAllCreditsUnderWork(ctx context.Context, workID int64) ([]Credit, error)
-	ListAllDecisionRollup(ctx context.Context) ([]DecisionRollup, error)
 	ListAllDeclaredKeys(ctx context.Context) ([]CollectionDeclaredKey, error)
-	// What statistics.db's first start copies over (revision 2, D7); every chart reads statistics.db now.
-	ListAllStatRollup(ctx context.Context) ([]StatRollup, error)
 	// Every other number of a page of parts, one per scheme: the first provider's.
 	ListAltNumbersForParts(ctx context.Context, partIds []int64) ([]ListAltNumbersForPartsRow, error)
 	// A part's number under one other scheme ("absolute" for anime), for a whole work.
@@ -582,8 +570,6 @@ type Querier interface {
 	ListCalendarEntries(ctx context.Context, arg ListCalendarEntriesParams) ([]ListCalendarEntriesRow, error)
 	// TV episodes in a date window, for the calendar: monitored episodes of series the caller's libraries hold.
 	ListCalendarEpisodes(ctx context.Context, arg ListCalendarEpisodesParams) ([]ListCalendarEpisodesRow, error)
-	// What statistics.db's copy reads, oldest first after an id (revision 2, D7).
-	ListCandidatesAfter(ctx context.Context, arg ListCandidatesAfterParams) ([]Candidate, error)
 	// Each primary file of a library with the size and running time its bitrate is judged from, one row per file.
 	ListCategoryFileRates(ctx context.Context, categoryID int64) ([]ListCategoryFileRatesRow, error)
 	// Certifications written before their age was read, a page at a time.
@@ -634,17 +620,6 @@ type Querier interface {
 	ListCrossoverMissingParts(ctx context.Context, collectionIds []int64) ([]CrossoverMissingPart, error)
 	// Every pair of episodes a person said are not one broadcast, as the parts they are now.
 	ListCrossoverNotSameParts(ctx context.Context) ([]ListCrossoverNotSamePartsRow, error)
-	ListDecisionRollup(ctx context.Context, desiredItemID int64) ([]DecisionRollup, error)
-	// A decision's library is its item's: the copy stores it so the statistics need no join back.
-	ListDecisionsAfter(ctx context.Context, arg ListDecisionsAfterParams) ([]ListDecisionsAfterRow, error)
-	// Every candidate with its full breakdown, newest first (F1, F16).
-	ListDecisionsForItem(ctx context.Context, arg ListDecisionsForItemParams) ([]CandidateDecision, error)
-	// The interactive search view's own listing (F16): a decision means nothing
-	// without the release it was decided about.
-	ListDecisionsForItemWithCandidate(ctx context.Context, arg ListDecisionsForItemWithCandidateParams) ([]ListDecisionsForItemWithCandidateRow, error)
-	// Retention: decisions age into decision_rollup, then go; a candidate goes once nothing refers to it.
-	// Ids rise with time, so the oldest page holds the oldest decisions; a page with none past the line ends the pass.
-	ListDecisionsToRetire(ctx context.Context, arg ListDecisionsToRetireParams) ([]ListDecisionsToRetireRow, error)
 	// What a file belongs to. A scan needs this to recognise bytes it has seen.
 	ListDesiredItemsForFile(ctx context.Context, mediaObjectID int64) ([]DesiredItemFile, error)
 	ListDesiredItemsForWork(ctx context.Context, workID int64) ([]DesiredItem, error)
@@ -997,6 +972,7 @@ type Querier interface {
 	MarkDesiredItemPlanned(ctx context.Context, arg MarkDesiredItemPlannedParams) error
 	// Clears dirty only when nothing the plan read has changed since; zero rows means plan it again.
 	MarkDesiredItemPlannedIfUnchanged(ctx context.Context, arg MarkDesiredItemPlannedIfUnchangedParams) (int64, error)
+	// Aged decision detail (section 5.7, Part VI Q5).
 	// After a restore the planner has to re-evaluate everything (ADR-15). Batched so no
 	// single transaction exceeds the write budget (Invariant 2), and self-terminating:
 	// it stops reporting rows once nothing is left clean.
@@ -1097,7 +1073,6 @@ type Querier interface {
 	RecordAcquiredFile(ctx context.Context, arg RecordAcquiredFileParams) (AcquisitionFile, error)
 	RecordArtworkMiss(ctx context.Context, arg RecordArtworkMissParams) error
 	RecordBlockedContentHit(ctx context.Context, arg RecordBlockedContentHitParams) error
-	RecordDecision(ctx context.Context, arg RecordDecisionParams) (CandidateDecision, error)
 	// Only content-attributable outcomes count: a full disk is not the group's
 	// fault, and counting it would make reputation measure the environment (ADR-45).
 	RecordGroupObservation(ctx context.Context, arg RecordGroupObservationParams) error
@@ -1142,8 +1117,6 @@ type Querier interface {
 	// RecomputePackCounts is then what updates the pack's own resolved_count.
 	ResolvePackItem(ctx context.Context, arg ResolvePackItemParams) error
 	ResumeMoveJob(ctx context.Context, id int64) (int64, error)
-	// Aged decision detail (section 5.7, Part VI Q5).
-	RollUpDecisions(ctx context.Context, arg RollUpDecisionsParams) error
 	// Whether the library still has a file on a root that is not missing: an empty root then is an unmounted disk.
 	RootHoldsFiles(ctx context.Context, rootFolderID int64) (int64, error)
 	// Ranked cross-media search over titles and aliases (migration 0010, section 21.1).
@@ -1246,7 +1219,6 @@ type Querier interface {
 	// Progress mid-sweep: the cursor advances, the watermark does not.
 	SetScanCursor(ctx context.Context, arg SetScanCursorParams) error
 	SetSeasonPartsMonitored(ctx context.Context, arg SetSeasonPartsMonitoredParams) error
-	SetStatRollup(ctx context.Context, arg SetStatRollupParams) error
 	SetTagName(ctx context.Context, arg SetTagNameParams) error
 	SetTagParentColumn(ctx context.Context, arg SetTagParentColumnParams) error
 	SetVideoFrameHashes(ctx context.Context, arg SetVideoFrameHashesParams) error
@@ -1304,8 +1276,6 @@ type Querier interface {
 	// enrichment pass -- so this is conditional rather than a plain UPDATE.
 	UpdateWorkYearIfNull(ctx context.Context, arg UpdateWorkYearIfNullParams) error
 	UpsertArtwork(ctx context.Context, arg UpsertArtworkParams) error
-	// Candidates, decisions and provenance. Column lists follow table order.
-	UpsertCandidate(ctx context.Context, arg UpsertCandidateParams) (Candidate, error)
 	UpsertCrossoverEvent(ctx context.Context, arg UpsertCrossoverEventParams) error
 	UpsertCrossoverMissingPart(ctx context.Context, arg UpsertCrossoverMissingPartParams) error
 	UpsertFileTrackClaim(ctx context.Context, arg UpsertFileTrackClaimParams) error

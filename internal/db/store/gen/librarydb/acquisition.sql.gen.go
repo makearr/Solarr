@@ -87,6 +87,7 @@ func (q *Queries) CountRecycleBin(ctx context.Context) (int64, error) {
 }
 
 const createAcquisition = `-- name: CreateAcquisition :one
+
 INSERT INTO acquisition (desired_item_id, candidate_id, indexer_id, candidate_guid,
                          candidate_title, search_terms, downloader_id,
                          download_client_ref, download_dir, client_category,
@@ -125,6 +126,7 @@ type CreateAcquisitionParams struct {
 	SizeBytes         sql.NullInt64
 }
 
+// Candidates, decisions and provenance. Column lists follow table order.
 func (q *Queries) CreateAcquisition(ctx context.Context, arg CreateAcquisitionParams) (Acquisition, error) {
 	row := q.db.QueryRowContext(ctx, createAcquisition,
 		arg.DesiredItemID,
@@ -186,28 +188,6 @@ func (q *Queries) DeleteAcquisitionStall(ctx context.Context, acquisitionID int6
 	return err
 }
 
-const deleteDecisionsByID = `-- name: DeleteDecisionsByID :execrows
-DELETE FROM candidate_decision WHERE id IN (SELECT value FROM json_each(?1))
-`
-
-func (q *Queries) DeleteDecisionsByID(ctx context.Context, ids interface{}) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteDecisionsByID, ids)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-const deleteExpiredCandidates = `-- name: DeleteExpiredCandidates :exec
-DELETE FROM candidate WHERE expires_at <= ?
-`
-
-// A DEFER is not a failure: the candidate stays cached until it expires (section 10.1).
-func (q *Queries) DeleteExpiredCandidates(ctx context.Context, expiresAt int64) error {
-	_, err := q.db.ExecContext(ctx, deleteExpiredCandidates, expiresAt)
-	return err
-}
-
 const deleteRecycleBinEntry = `-- name: DeleteRecycleBinEntry :exec
 DELETE FROM recycle_bin WHERE id = ?
 `
@@ -215,31 +195,6 @@ DELETE FROM recycle_bin WHERE id = ?
 func (q *Queries) DeleteRecycleBinEntry(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteRecycleBinEntry, id)
 	return err
-}
-
-const deleteUnreferencedExpiredCandidates = `-- name: DeleteUnreferencedExpiredCandidates :execrows
-DELETE FROM candidate WHERE id IN (
-  SELECT expired.id FROM candidate AS expired
-  WHERE expired.expires_at <= ?1
-    AND NOT EXISTS (SELECT 1 FROM candidate_decision d WHERE d.candidate_id = expired.id)
-    AND NOT EXISTS (SELECT 1 FROM ready_queue r WHERE r.candidate_id = expired.id)
-  ORDER BY expired.expires_at
-  LIMIT ?2
-)
-`
-
-type DeleteUnreferencedExpiredCandidatesParams struct {
-	Now      int64
-	PageSize int64
-}
-
-// A held release (ready_queue) keeps its candidate however old.
-func (q *Queries) DeleteUnreferencedExpiredCandidates(ctx context.Context, arg DeleteUnreferencedExpiredCandidatesParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteUnreferencedExpiredCandidates, arg.Now, arg.PageSize)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
 }
 
 const getAcquisition = `-- name: GetAcquisition :one
@@ -282,9 +237,11 @@ func (q *Queries) GetAcquisition(ctx context.Context, id int64) (Acquisition, er
 }
 
 const getAcquisitionStall = `-- name: GetAcquisitionStall :one
+
 SELECT acquisition_id, strikes, left_bytes, progress_at, checked_at, importing_finished FROM acquisition_stall WHERE acquisition_id = ?
 `
 
+// Retention: decisions age into decision_rollup, then go; a candidate goes once nothing refers to it.
 func (q *Queries) GetAcquisitionStall(ctx context.Context, acquisitionID int64) (AcquisitionStall, error) {
 	row := q.db.QueryRowContext(ctx, getAcquisitionStall, acquisitionID)
 	var i AcquisitionStall
@@ -339,36 +296,6 @@ func (q *Queries) GetActiveAcquisitionForItem(ctx context.Context, desiredItemID
 		&i.UpdatedAt,
 		&i.ContentHash,
 		&i.SizeBytes,
-	)
-	return i, err
-}
-
-const getCandidate = `-- name: GetCandidate :one
-SELECT id, indexer_id, guid, title, attributes_id, size_bytes, seeders, leechers,
-       published_at, protocol, download_url, parse_confidence, source,
-       first_seen_at, expires_at
-FROM candidate WHERE id = ?
-`
-
-func (q *Queries) GetCandidate(ctx context.Context, id int64) (Candidate, error) {
-	row := q.db.QueryRowContext(ctx, getCandidate, id)
-	var i Candidate
-	err := row.Scan(
-		&i.ID,
-		&i.IndexerID,
-		&i.Guid,
-		&i.Title,
-		&i.AttributesID,
-		&i.SizeBytes,
-		&i.Seeders,
-		&i.Leechers,
-		&i.PublishedAt,
-		&i.Protocol,
-		&i.DownloadUrl,
-		&i.ParseConfidence,
-		&i.Source,
-		&i.FirstSeenAt,
-		&i.ExpiresAt,
 	)
 	return i, err
 }
@@ -653,41 +580,6 @@ func (q *Queries) ListActiveRecycleBinOldestFirst(ctx context.Context, limit int
 	return items, nil
 }
 
-const listAllDecisionRollup = `-- name: ListAllDecisionRollup :many
-SELECT desired_item_id, period, outcome, count, best_score, top_reason
-FROM decision_rollup ORDER BY desired_item_id, period, outcome
-`
-
-func (q *Queries) ListAllDecisionRollup(ctx context.Context) ([]DecisionRollup, error) {
-	rows, err := q.db.QueryContext(ctx, listAllDecisionRollup)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []DecisionRollup{}
-	for rows.Next() {
-		var i DecisionRollup
-		if err := rows.Scan(
-			&i.DesiredItemID,
-			&i.Period,
-			&i.Outcome,
-			&i.Count,
-			&i.BestScore,
-			&i.TopReason,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listBlocklist = `-- name: ListBlocklist :many
 SELECT id, indexer_id, guid, content_hash, title, desired_item_id, reason,
        detail_json, source, expires_at, created_at
@@ -721,312 +613,6 @@ func (q *Queries) ListBlocklist(ctx context.Context, arg ListBlocklistParams) ([
 			&i.Source,
 			&i.ExpiresAt,
 			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listCandidatesAfter = `-- name: ListCandidatesAfter :many
-SELECT id, indexer_id, guid, title, attributes_id, size_bytes, seeders, leechers,
-       published_at, protocol, download_url, parse_confidence, source,
-       first_seen_at, expires_at
-FROM candidate WHERE id > ? ORDER BY id LIMIT ?
-`
-
-type ListCandidatesAfterParams struct {
-	ID    int64
-	Limit int64
-}
-
-// What statistics.db's copy reads, oldest first after an id (revision 2, D7).
-func (q *Queries) ListCandidatesAfter(ctx context.Context, arg ListCandidatesAfterParams) ([]Candidate, error) {
-	rows, err := q.db.QueryContext(ctx, listCandidatesAfter, arg.ID, arg.Limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Candidate{}
-	for rows.Next() {
-		var i Candidate
-		if err := rows.Scan(
-			&i.ID,
-			&i.IndexerID,
-			&i.Guid,
-			&i.Title,
-			&i.AttributesID,
-			&i.SizeBytes,
-			&i.Seeders,
-			&i.Leechers,
-			&i.PublishedAt,
-			&i.Protocol,
-			&i.DownloadUrl,
-			&i.ParseConfidence,
-			&i.Source,
-			&i.FirstSeenAt,
-			&i.ExpiresAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listDecisionsAfter = `-- name: ListDecisionsAfter :many
-SELECT cd.id, cd.candidate_id, cd.desired_item_id, CAST(COALESCE(di.category_id, 0) AS INTEGER) AS category_id,
-       cd.outcome, cd.score, cd.components_json, cd.rejections_json, cd.deferrals_json, cd.match_confidence, cd.decided_at
-FROM candidate_decision cd LEFT JOIN desired_item di ON di.id = cd.desired_item_id
-WHERE cd.id > ? ORDER BY cd.id LIMIT ?
-`
-
-type ListDecisionsAfterParams struct {
-	ID    int64
-	Limit int64
-}
-
-type ListDecisionsAfterRow struct {
-	ID              int64
-	CandidateID     int64
-	DesiredItemID   int64
-	CategoryID      int64
-	Outcome         string
-	Score           float64
-	ComponentsJson  string
-	RejectionsJson  sql.NullString
-	DeferralsJson   sql.NullString
-	MatchConfidence sql.NullFloat64
-	DecidedAt       int64
-}
-
-// A decision's library is its item's: the copy stores it so the statistics need no join back.
-func (q *Queries) ListDecisionsAfter(ctx context.Context, arg ListDecisionsAfterParams) ([]ListDecisionsAfterRow, error) {
-	rows, err := q.db.QueryContext(ctx, listDecisionsAfter, arg.ID, arg.Limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListDecisionsAfterRow{}
-	for rows.Next() {
-		var i ListDecisionsAfterRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.CandidateID,
-			&i.DesiredItemID,
-			&i.CategoryID,
-			&i.Outcome,
-			&i.Score,
-			&i.ComponentsJson,
-			&i.RejectionsJson,
-			&i.DeferralsJson,
-			&i.MatchConfidence,
-			&i.DecidedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listDecisionsForItem = `-- name: ListDecisionsForItem :many
-SELECT id, candidate_id, desired_item_id, outcome, score, components_json,
-       rejections_json, deferrals_json, match_confidence, decided_at
-FROM candidate_decision
-WHERE desired_item_id = ? ORDER BY decided_at DESC, id DESC LIMIT ?
-`
-
-type ListDecisionsForItemParams struct {
-	DesiredItemID int64
-	Limit         int64
-}
-
-// Every candidate with its full breakdown, newest first (F1, F16).
-func (q *Queries) ListDecisionsForItem(ctx context.Context, arg ListDecisionsForItemParams) ([]CandidateDecision, error) {
-	rows, err := q.db.QueryContext(ctx, listDecisionsForItem, arg.DesiredItemID, arg.Limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []CandidateDecision{}
-	for rows.Next() {
-		var i CandidateDecision
-		if err := rows.Scan(
-			&i.ID,
-			&i.CandidateID,
-			&i.DesiredItemID,
-			&i.Outcome,
-			&i.Score,
-			&i.ComponentsJson,
-			&i.RejectionsJson,
-			&i.DeferralsJson,
-			&i.MatchConfidence,
-			&i.DecidedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listDecisionsForItemWithCandidate = `-- name: ListDecisionsForItemWithCandidate :many
-SELECT cd.id, cd.candidate_id, cd.desired_item_id, cd.outcome, cd.score, cd.components_json,
-       cd.rejections_json, cd.deferrals_json, cd.match_confidence, cd.decided_at,
-       c.indexer_id, c.guid, c.title, c.size_bytes, c.seeders, c.leechers, c.published_at,
-       c.protocol, c.download_url, c.parse_confidence, c.source, c.first_seen_at, c.expires_at
-FROM candidate_decision cd
-JOIN candidate c ON c.id = cd.candidate_id
-WHERE cd.desired_item_id = ? ORDER BY cd.decided_at DESC, cd.id ASC LIMIT ?
-`
-
-type ListDecisionsForItemWithCandidateParams struct {
-	DesiredItemID int64
-	Limit         int64
-}
-
-type ListDecisionsForItemWithCandidateRow struct {
-	ID              int64
-	CandidateID     int64
-	DesiredItemID   int64
-	Outcome         string
-	Score           float64
-	ComponentsJson  string
-	RejectionsJson  sql.NullString
-	DeferralsJson   sql.NullString
-	MatchConfidence sql.NullFloat64
-	DecidedAt       int64
-	IndexerID       int64
-	Guid            string
-	Title           string
-	SizeBytes       sql.NullInt64
-	Seeders         sql.NullInt64
-	Leechers        sql.NullInt64
-	PublishedAt     sql.NullInt64
-	Protocol        string
-	DownloadUrl     string
-	ParseConfidence sql.NullFloat64
-	Source          string
-	FirstSeenAt     int64
-	ExpiresAt       int64
-}
-
-// The interactive search view's own listing (F16): a decision means nothing
-// without the release it was decided about.
-func (q *Queries) ListDecisionsForItemWithCandidate(ctx context.Context, arg ListDecisionsForItemWithCandidateParams) ([]ListDecisionsForItemWithCandidateRow, error) {
-	rows, err := q.db.QueryContext(ctx, listDecisionsForItemWithCandidate, arg.DesiredItemID, arg.Limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListDecisionsForItemWithCandidateRow{}
-	for rows.Next() {
-		var i ListDecisionsForItemWithCandidateRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.CandidateID,
-			&i.DesiredItemID,
-			&i.Outcome,
-			&i.Score,
-			&i.ComponentsJson,
-			&i.RejectionsJson,
-			&i.DeferralsJson,
-			&i.MatchConfidence,
-			&i.DecidedAt,
-			&i.IndexerID,
-			&i.Guid,
-			&i.Title,
-			&i.SizeBytes,
-			&i.Seeders,
-			&i.Leechers,
-			&i.PublishedAt,
-			&i.Protocol,
-			&i.DownloadUrl,
-			&i.ParseConfidence,
-			&i.Source,
-			&i.FirstSeenAt,
-			&i.ExpiresAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listDecisionsToRetire = `-- name: ListDecisionsToRetire :many
-
-SELECT cd.id, cd.desired_item_id, cd.outcome, cd.score, cd.rejections_json, cd.decided_at
-FROM candidate_decision AS cd
-WHERE cd.id IN (SELECT oldest.id FROM candidate_decision AS oldest ORDER BY oldest.id LIMIT ?1)
-  AND cd.decided_at < ?2
-ORDER BY cd.id
-`
-
-type ListDecisionsToRetireParams struct {
-	PageSize      int64
-	DecidedBefore int64
-}
-
-type ListDecisionsToRetireRow struct {
-	ID             int64
-	DesiredItemID  int64
-	Outcome        string
-	Score          float64
-	RejectionsJson sql.NullString
-	DecidedAt      int64
-}
-
-// Retention: decisions age into decision_rollup, then go; a candidate goes once nothing refers to it.
-// Ids rise with time, so the oldest page holds the oldest decisions; a page with none past the line ends the pass.
-func (q *Queries) ListDecisionsToRetire(ctx context.Context, arg ListDecisionsToRetireParams) ([]ListDecisionsToRetireRow, error) {
-	rows, err := q.db.QueryContext(ctx, listDecisionsToRetire, arg.PageSize, arg.DecidedBefore)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListDecisionsToRetireRow{}
-	for rows.Next() {
-		var i ListDecisionsToRetireRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.DesiredItemID,
-			&i.Outcome,
-			&i.Score,
-			&i.RejectionsJson,
-			&i.DecidedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1263,55 +849,6 @@ func (q *Queries) RecordAcquiredFile(ctx context.Context, arg RecordAcquiredFile
 	return i, err
 }
 
-const recordDecision = `-- name: RecordDecision :one
-INSERT INTO candidate_decision (candidate_id, desired_item_id, outcome, score,
-                                components_json, rejections_json, deferrals_json,
-                                match_confidence, decided_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, candidate_id, desired_item_id, outcome, score, components_json,
-          rejections_json, deferrals_json, match_confidence, decided_at
-`
-
-type RecordDecisionParams struct {
-	CandidateID     int64
-	DesiredItemID   int64
-	Outcome         string
-	Score           float64
-	ComponentsJson  string
-	RejectionsJson  sql.NullString
-	DeferralsJson   sql.NullString
-	MatchConfidence sql.NullFloat64
-	DecidedAt       int64
-}
-
-func (q *Queries) RecordDecision(ctx context.Context, arg RecordDecisionParams) (CandidateDecision, error) {
-	row := q.db.QueryRowContext(ctx, recordDecision,
-		arg.CandidateID,
-		arg.DesiredItemID,
-		arg.Outcome,
-		arg.Score,
-		arg.ComponentsJson,
-		arg.RejectionsJson,
-		arg.DeferralsJson,
-		arg.MatchConfidence,
-		arg.DecidedAt,
-	)
-	var i CandidateDecision
-	err := row.Scan(
-		&i.ID,
-		&i.CandidateID,
-		&i.DesiredItemID,
-		&i.Outcome,
-		&i.Score,
-		&i.ComponentsJson,
-		&i.RejectionsJson,
-		&i.DeferralsJson,
-		&i.MatchConfidence,
-		&i.DecidedAt,
-	)
-	return i, err
-}
-
 const recycleBin = `-- name: RecycleBin :one
 INSERT INTO recycle_bin (original_path, recycled_path, root_folder_id,
                         media_object_id, acquisition_id, reason, size_bytes,
@@ -1480,76 +1017,4 @@ func (q *Queries) SumRecycledBytes(ctx context.Context) (int64, error) {
 	var held int64
 	err := row.Scan(&held)
 	return held, err
-}
-
-const upsertCandidate = `-- name: UpsertCandidate :one
-
-INSERT INTO candidate (indexer_id, guid, title, attributes_id, size_bytes, seeders,
-                       leechers, published_at, protocol, download_url,
-                       parse_confidence, source, first_seen_at, expires_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (indexer_id, guid) DO UPDATE SET
-  title = excluded.title,
-  seeders = excluded.seeders,
-  leechers = excluded.leechers,
-  expires_at = excluded.expires_at
-RETURNING id, indexer_id, guid, title, attributes_id, size_bytes, seeders, leechers,
-          published_at, protocol, download_url, parse_confidence, source,
-          first_seen_at, expires_at
-`
-
-type UpsertCandidateParams struct {
-	IndexerID       int64
-	Guid            string
-	Title           string
-	AttributesID    sql.NullInt64
-	SizeBytes       sql.NullInt64
-	Seeders         sql.NullInt64
-	Leechers        sql.NullInt64
-	PublishedAt     sql.NullInt64
-	Protocol        string
-	DownloadUrl     string
-	ParseConfidence sql.NullFloat64
-	Source          string
-	FirstSeenAt     int64
-	ExpiresAt       int64
-}
-
-// Candidates, decisions and provenance. Column lists follow table order.
-func (q *Queries) UpsertCandidate(ctx context.Context, arg UpsertCandidateParams) (Candidate, error) {
-	row := q.db.QueryRowContext(ctx, upsertCandidate,
-		arg.IndexerID,
-		arg.Guid,
-		arg.Title,
-		arg.AttributesID,
-		arg.SizeBytes,
-		arg.Seeders,
-		arg.Leechers,
-		arg.PublishedAt,
-		arg.Protocol,
-		arg.DownloadUrl,
-		arg.ParseConfidence,
-		arg.Source,
-		arg.FirstSeenAt,
-		arg.ExpiresAt,
-	)
-	var i Candidate
-	err := row.Scan(
-		&i.ID,
-		&i.IndexerID,
-		&i.Guid,
-		&i.Title,
-		&i.AttributesID,
-		&i.SizeBytes,
-		&i.Seeders,
-		&i.Leechers,
-		&i.PublishedAt,
-		&i.Protocol,
-		&i.DownloadUrl,
-		&i.ParseConfidence,
-		&i.Source,
-		&i.FirstSeenAt,
-		&i.ExpiresAt,
-	)
-	return i, err
 }

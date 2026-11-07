@@ -87,45 +87,6 @@ func (q *Queries) AggregateAlbumsByCategoryAndState(ctx context.Context) ([]Aggr
 	return items, nil
 }
 
-const aggregateDecisionsByCategoryAndOutcome = `-- name: AggregateDecisionsByCategoryAndOutcome :many
-SELECT d.category_id, cd.outcome, CAST(COUNT(*) AS INTEGER) AS decisions
-FROM candidate_decision cd
-JOIN desired_item d ON d.id = cd.desired_item_id
-WHERE cd.decided_at >= ?1
-GROUP BY d.category_id, cd.outcome
-ORDER BY d.category_id, cd.outcome
-`
-
-type AggregateDecisionsByCategoryAndOutcomeRow struct {
-	CategoryID int64
-	Outcome    string
-	Decisions  int64
-}
-
-// Release decisions since a time, per library and outcome.
-func (q *Queries) AggregateDecisionsByCategoryAndOutcome(ctx context.Context, since int64) ([]AggregateDecisionsByCategoryAndOutcomeRow, error) {
-	rows, err := q.db.QueryContext(ctx, aggregateDecisionsByCategoryAndOutcome, since)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []AggregateDecisionsByCategoryAndOutcomeRow{}
-	for rows.Next() {
-		var i AggregateDecisionsByCategoryAndOutcomeRow
-		if err := rows.Scan(&i.CategoryID, &i.Outcome, &i.Decisions); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const aggregateFilesAddedByRootAndMonth = `-- name: AggregateFilesAddedByRootAndMonth :many
 SELECT lp.root_folder_id,
        CAST(strftime('%Y-%m', mo.first_seen_at, 'unixepoch') AS TEXT) AS month,
@@ -483,29 +444,6 @@ func (q *Queries) AggregateUnidentifiedByRoot(ctx context.Context) ([]AggregateU
 		return nil, err
 	}
 	return items, nil
-}
-
-const deleteStatRollupMetric = `-- name: DeleteStatRollupMetric :exec
-DELETE FROM stat_rollup WHERE metric = ?
-`
-
-func (q *Queries) DeleteStatRollupMetric(ctx context.Context, metric string) error {
-	_, err := q.db.ExecContext(ctx, deleteStatRollupMetric, metric)
-	return err
-}
-
-const deleteStatRollupMetricForCategory = `-- name: DeleteStatRollupMetricForCategory :exec
-DELETE FROM stat_rollup WHERE metric = ?1 AND dimension LIKE CAST(?2 AS TEXT) || '%'
-`
-
-type DeleteStatRollupMetricForCategoryParams struct {
-	Metric string
-	Prefix string
-}
-
-func (q *Queries) DeleteStatRollupMetricForCategory(ctx context.Context, arg DeleteStatRollupMetricForCategoryParams) error {
-	_, err := q.db.ExecContext(ctx, deleteStatRollupMetricForCategory, arg.Metric, arg.Prefix)
-	return err
 }
 
 const listHeldReleaseGroupsByArtist = `-- name: ListHeldReleaseGroupsByArtist :many

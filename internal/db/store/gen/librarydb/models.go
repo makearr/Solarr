@@ -158,37 +158,6 @@ type BlocklistedRelease struct {
 	CreatedAt     int64
 }
 
-type Candidate struct {
-	ID              int64
-	IndexerID       int64
-	Guid            string
-	Title           string
-	AttributesID    sql.NullInt64
-	SizeBytes       sql.NullInt64
-	Seeders         sql.NullInt64
-	Leechers        sql.NullInt64
-	PublishedAt     sql.NullInt64
-	Protocol        string
-	DownloadUrl     string
-	ParseConfidence sql.NullFloat64
-	Source          string
-	FirstSeenAt     int64
-	ExpiresAt       int64
-}
-
-type CandidateDecision struct {
-	ID              int64
-	CandidateID     int64
-	DesiredItemID   int64
-	Outcome         string
-	Score           float64
-	ComponentsJson  string
-	RejectionsJson  sql.NullString
-	DeferralsJson   sql.NullString
-	MatchConfidence sql.NullFloat64
-	DecidedAt       int64
-}
-
 type Collection struct {
 	ID         int64
 	MediaType  string
@@ -311,15 +280,6 @@ type CrossoverNotSame struct {
 	HighWorkID int64
 	HighRef    string
 	CreatedAt  int64
-}
-
-type DecisionRollup struct {
-	DesiredItemID int64
-	Period        int64
-	Outcome       string
-	Count         int64
-	BestScore     sql.NullFloat64
-	TopReason     sql.NullString
 }
 
 type DesiredItem struct {
@@ -824,15 +784,6 @@ type ScanState struct {
 	RunStartedAt    int64
 	RunFull         int64
 	FilesSeen       int64
-}
-
-type StatRollup struct {
-	Metric     string
-	Dimension  string
-	Period     int64
-	Value      float64
-	Count      sql.NullInt64
-	ComputedAt int64
 }
 
 type Subscription struct {

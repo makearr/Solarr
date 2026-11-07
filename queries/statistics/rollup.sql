@@ -16,6 +16,3 @@ SELECT metric, dimension, period, value, count, computed_at
 FROM stat_rollup
 WHERE metric = sqlc.arg(metric) AND period = 0 AND dimension LIKE CAST(sqlc.arg(prefix) AS TEXT) || '%'
 ORDER BY dimension;
-
--- name: CountStatRollup :one
-SELECT CAST(COUNT(*) AS INTEGER) AS figures FROM stat_rollup;

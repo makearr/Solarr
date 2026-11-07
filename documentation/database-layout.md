@@ -16,10 +16,10 @@ Whether an item is fresh because RSS showed it (ADR-55) is `rss_sighting` in `li
 on an RSS-found release is recorded; the planner and the Fresh filter read it, not the candidates.
 
 `statistics.db` holds download history, the statistics rollup, and every release a search found (`candidate`) with
-what was decided about it (`candidate_decision`, `decision_rollup`), copied there from `library.db` with their ids.
+what was decided about it (`candidate_decision`, `decision_rollup`).
 The planner, dispatch and Wanted never read them: a held release and an acquisition carry their own release, and
 freshness reads `rss_sighting`. Interactive search and a person's send read the decisions from `statistics.db`;
-`library.db`'s old candidate tables are no longer written and are dropped a release later.
+`library.db`'s old candidate and rollup tables were dropped by migration 0117 and the start-up copy removed with them.
 `download_speed` logs bytes and seconds per finished download and client (only downloads seen running), kept 90 days; the Clients page shows the 30-day average, and nothing chooses a client by it (F34).
 
 Before revision 2 the paragraph below was true. There is no `history.db`. `decision_rollup` sat in `library.db` beside the decisions it
@@ -184,8 +184,10 @@ To squash again: build a database from the current chain, dump `sqlite_master` (
 FTS5 excluded) and the seed rows into a new baseline at the last version, delete the older files,
 and check that a database built from the baseline is identical (schema text, `table_xinfo`, foreign
 keys, indexes, CHECKs, rows) both to the chain and to a live database. The original files stay in git history.
-The last squash (2026-11-03, library 0103, settings 0059, metadata 0003) did this in Python's `sqlite3`; it left
-a database from release 2026.10.001.515 (library 0096, settings 0053) refused, by the user's decision.
+The last squash (2026-11-07: library 0116, settings 0071, jobs 0007, statistics 0006; metadata stays 0003) did this in
+Python's `sqlite3`: the library baseline is the old one with the later migrations folded in by hand (comments kept), the
+others a dump of the built schema plus seed rows. A database from release 2026.10.001.515 stays refused, by the user's decision.
+A database already at the old last version takes the baseline as applied, so only `library/0117` runs on it.
 
 Every migration is preceded by a backup, and a failure restores from it rather than leaving a
 half-applied schema (Invariant 7).

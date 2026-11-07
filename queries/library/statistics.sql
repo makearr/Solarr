@@ -41,18 +41,6 @@ JOIN media_object mo ON mo.id = lp.media_object_id
 GROUP BY lp.root_folder_id, month
 ORDER BY lp.root_folder_id, month;
 
--- Release decisions since a time, per library and outcome.
--- name: AggregateDecisionsByCategoryAndOutcome :many
-SELECT d.category_id, cd.outcome, CAST(COUNT(*) AS INTEGER) AS decisions
-FROM candidate_decision cd
-JOIN desired_item d ON d.id = cd.desired_item_id
-WHERE cd.decided_at >= sqlc.arg(since)
-GROUP BY d.category_id, cd.outcome
-ORDER BY d.category_id, cd.outcome;
-
--- name: DeleteStatRollupMetric :exec
-DELETE FROM stat_rollup WHERE metric = ?;
-
 -- The artists with something held in a library, and the release groups they hold there: what a discography is
 -- compared against. A held work without a release-group id yields an empty id.
 -- name: ListHeldReleaseGroupsByArtist :many
@@ -66,9 +54,6 @@ LEFT JOIN work_external_id g ON g.work_id = c.work_id AND g.provider = 'musicbra
 WHERE EXISTS (SELECT 1 FROM work_file wf WHERE wf.work_id = c.work_id)
 GROUP BY p.id, x.external_id, g.external_id
 ORDER BY p.id;
-
--- name: DeleteStatRollupMetricForCategory :exec
-DELETE FROM stat_rollup WHERE metric = sqlc.arg(metric) AND dimension LIKE CAST(sqlc.arg(prefix) AS TEXT) || '%';
 
 -- Files and bytes per root folder and measured video attributes; what the probe could not read is "unknown".
 -- name: AggregateFilesByRootAndVideo :many

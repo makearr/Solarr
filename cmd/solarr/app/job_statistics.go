@@ -73,30 +73,3 @@ func statFigures(rows []library.StatRow) []statistics.Figure {
 	}
 	return figures
 }
-
-// copyStatRollup brings the figures library.db's rollup held into statistics.db on its first start, so the statistics
-// page and the incomplete discographies do not wait a day or a week for the next run.
-func (p *process) copyStatRollup(ctx context.Context) error {
-	rollup := statistics.NewRollup(p.statistics)
-	empty, err := rollup.Empty(ctx)
-	if err != nil || !empty {
-		return err
-	}
-	rows, err := library.NewStatistics(p.library).StoredRollup(ctx)
-	if err != nil || len(rows) == 0 {
-		return err
-	}
-	byMetric := map[string][]statistics.Figure{}
-	computedAt := map[string]int64{}
-	for _, row := range rows {
-		byMetric[row.Metric] = append(byMetric[row.Metric], statistics.Figure{Metric: row.Metric, Dimension: row.Dimension, Value: row.Value, Count: row.Count})
-		computedAt[row.Metric] = max(computedAt[row.Metric], row.ComputedAt)
-	}
-	for metric, figures := range byMetric {
-		if err := rollup.Replace(ctx, []string{metric}, figures, computedAt[metric]); err != nil {
-			return err
-		}
-	}
-	p.logger.Info("statistics moved to statistics.db", slog.Int("figures", len(rows)))
-	return nil
-}

@@ -62,26 +62,13 @@ func TestReadyQueueSkipsExpiredEntries(t *testing.T) {
 	work := createWork(t, opened, "movie", "Cige")
 	item := createDesired(t, opened, work.ID, "SINGLE", 1)
 
-	var fresh, stale librarydb.Candidate
-	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
-		for index, target := range []*librarydb.Candidate{&fresh, &stale} {
-			row, err := q.UpsertCandidate(ctx, librarydb.UpsertCandidateParams{
-				IndexerID: int64(index + 1), Guid: "g", Title: "t", Protocol: "usenet",
-				DownloadUrl: "u", Source: "search", FirstSeenAt: 1, ExpiresAt: 10_000,
-			})
-			if err != nil {
-				return err
-			}
-			*target = row
-		}
-		return nil
-	})
+	const fresh, stale = int64(1), int64(2)
 
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
 		for _, entry := range []struct {
 			candidate int64
 			expires   int64
-		}{{fresh.ID, 9_000}, {stale.ID, 100}} {
+		}{{fresh, 9_000}, {stale, 100}} {
 			if err := q.EnqueueReady(ctx, librarydb.EnqueueReadyParams{
 				CandidateID: entry.candidate, DesiredItemID: item.ID,
 				Priority: 50, QueuedAt: 1, ExpiresAt: entry.expires, Origin: "automatic",
@@ -97,7 +84,7 @@ func TestReadyQueueSkipsExpiredEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NextReady: %v", err)
 	}
-	if len(next) != 1 || next[0].CandidateID != fresh.ID {
+	if len(next) != 1 || next[0].CandidateID != fresh {
 		t.Errorf("the queue offered %d entries, want only the unexpired one", len(next))
 	}
 }
@@ -109,16 +96,10 @@ func TestReadyQueueTrimDropsWhatWouldBeSentLast(t *testing.T) {
 	var candidates []int64
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
 		for index, priority := range []int64{10, 90, 50} {
-			candidate, err := q.UpsertCandidate(ctx, librarydb.UpsertCandidateParams{
-				IndexerID: int64(index + 1), Guid: "g", Title: "t", Protocol: "usenet",
-				DownloadUrl: "u", Source: "search", FirstSeenAt: 1, ExpiresAt: 10_000,
-			})
-			if err != nil {
-				return err
-			}
-			candidates = append(candidates, candidate.ID)
+			candidate := int64(index + 1)
+			candidates = append(candidates, candidate)
 			if err := q.EnqueueReady(ctx, librarydb.EnqueueReadyParams{
-				CandidateID: candidate.ID, DesiredItemID: item.ID, Priority: priority, QueuedAt: 1, ExpiresAt: 9_000, Origin: "automatic",
+				CandidateID: candidate, DesiredItemID: item.ID, Priority: priority, QueuedAt: 1, ExpiresAt: 9_000, Origin: "automatic",
 			}); err != nil {
 				return err
 			}
@@ -147,15 +128,8 @@ func TestReadyQueueOrdersByPriorityThenAge(t *testing.T) {
 			priority int64
 			queued   int64
 		}{{10, 1}, {90, 500}, {90, 200}} {
-			candidate, err := q.UpsertCandidate(ctx, librarydb.UpsertCandidateParams{
-				IndexerID: int64(index + 1), Guid: "g", Title: "t", Protocol: "usenet",
-				DownloadUrl: "u", Source: "search", FirstSeenAt: 1, ExpiresAt: 10_000,
-			})
-			if err != nil {
-				return err
-			}
 			if err := q.EnqueueReady(ctx, librarydb.EnqueueReadyParams{
-				CandidateID: candidate.ID, DesiredItemID: item.ID,
+				CandidateID: int64(index + 1), DesiredItemID: item.ID,
 				Priority: entry.priority, QueuedAt: entry.queued, ExpiresAt: 9_000, Origin: "automatic",
 			}); err != nil {
 				return err

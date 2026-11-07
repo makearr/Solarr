@@ -65,32 +65,6 @@ func (h History) List(ctx context.Context, workID, beforeID int64, limit int) ([
 	return entries, nil
 }
 
-// LastCopiedEvent answers the newest jobs.db event copied, where a copy resumes.
-func (h History) LastCopiedEvent(ctx context.Context) (int64, error) {
-	id, err := statisticsdb.New(h.store.Read()).LastCopiedHistoryEvent(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("statistics: last copied event: %w", err)
-	}
-	return id, nil
-}
-
-// Copy stores entries copied from jobs.db's events in one transaction; an event already copied is left as it is.
-func (h History) Copy(ctx context.Context, entries []HistoryEntry) error {
-	err := h.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		queries := statisticsdb.New(tx)
-		for _, entry := range entries {
-			if err := queries.CopyHistoryEvent(ctx, statisticsdb.CopyHistoryEventParams(appendParams(entry))); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("statistics: copy history: %w", err)
-	}
-	return nil
-}
-
 func appendParams(entry HistoryEntry) statisticsdb.AppendHistoryParams {
 	return statisticsdb.AppendHistoryParams{
 		At: entry.At, Kind: entry.Kind, CategoryID: entry.CategoryID, WorkID: entry.WorkID, AcquisitionID: entry.AcquisitionID,
