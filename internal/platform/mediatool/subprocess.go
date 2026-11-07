@@ -313,6 +313,10 @@ func parseProbe(output []byte) (Probe, error) {
 			if measured.AudioCodec == "" {
 				measured.AudioCodec = stream.CodecName
 				measured.AudioBitrate = parseInt(stream.BitRate)
+				// Matroska states no stream bit_rate; its muxer tag BPS carries it.
+				if measured.AudioBitrate == 0 {
+					measured.AudioBitrate = parseInt(firstTag(stream.Tags, "BPS", "BPS-eng"))
+				}
 				measured.SampleRate = int(parseInt(stream.SampleRate))
 				measured.BitDepth = int(parseInt(stream.BitsPerRawSample))
 				measured.Channels = stream.Channels
@@ -403,4 +407,13 @@ func pixelAspect(ratio string) float64 {
 		return 0
 	}
 	return float64(top) / float64(bottom)
+}
+
+func firstTag(tags map[string]string, names ...string) string {
+	for _, name := range names {
+		if value := tags[name]; value != "" {
+			return value
+		}
+	}
+	return ""
 }

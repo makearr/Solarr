@@ -229,7 +229,7 @@ func (s SimilarVideos) addFacts(ctx context.Context, groups []SimilarGroup) erro
 			video.WorkID, video.WorkTitle = row.WorkID, row.WorkTitle
 			video.File = PartFile{
 				MediaObjectID: row.ID, AudioCodec: row.AudioCodec.String, VideoCodec: row.VideoCodec.String, Container: row.Container.String,
-				BitrateKbps: bitrateKbps(row.OverallBitrate, row.AudioBitrate), Lossless: row.Lossless.Valid && row.Lossless.Int64 == 1,
+				BitrateKbps: bitrateKbps(row.OverallBitrate, row.AudioBitrate, true), Lossless: row.Lossless.Valid && row.Lossless.Int64 == 1,
 				Extension: strings.ToLower(strings.TrimPrefix(path.Ext(video.RelPath), ".")), RelPath: video.RelPath, SizeBytes: row.SizeBytes,
 				Resolution: row.Resolution.String, HDR: row.Hdr.String, AudioChannels: row.AudioChannels.String,
 				VideoBitrateKbps: row.VideoBitrate.Int64 / 1000, AudioLanguages: jsonStrings(row.Languages), Subtitles: jsonStrings(row.Subtitles),

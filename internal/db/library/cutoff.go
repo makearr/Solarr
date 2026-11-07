@@ -61,7 +61,7 @@ func (d Desired) MeasuredFiles(ctx context.Context, workID int64) ([]MeasuredFil
 		files[index] = MeasuredFile{
 			MediaObjectID: row.MediaObjectID, MediaRef: row.MediaRef, Measured: row.AudioCodec.Valid, AudioCodec: row.AudioCodec.String,
 			Extension:      strings.ToLower(strings.TrimPrefix(path.Ext(row.RelPath), ".")),
-			BitrateKbps:    bitrateKbps(row.OverallBitrate, row.AudioBitrate),
+			BitrateKbps:    bitrateKbps(row.OverallBitrate, row.AudioBitrate, false),
 			Lossless:       row.Lossless.Valid && row.Lossless.Int64 == 1,
 			AudioLanguages: jsonStrings(row.Languages), LyricsLanguages: jsonStrings(row.LyricsLanguages),
 		}

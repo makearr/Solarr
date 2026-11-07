@@ -287,7 +287,7 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 		for _, row := range rows {
 			wholeFiles = append(wholeFiles, PartFile{
 				MediaObjectID: row.MediaObjectID, AudioCodec: row.AudioCodec.String, VideoCodec: row.VideoCodec.String,
-				Container: row.Container.String, BitrateKbps: bitrateKbps(row.OverallBitrate, row.AudioBitrate),
+				Container: row.Container.String, BitrateKbps: bitrateKbps(row.OverallBitrate, row.AudioBitrate, row.VideoCodec.String != ""),
 				Lossless: row.Lossless.Valid && row.Lossless.Int64 == 1, Extension: strings.ToLower(strings.TrimPrefix(path.Ext(row.RelPath), ".")),
 				RelPath: row.RelPath, SizeBytes: row.SizeBytes, Resolution: row.Resolution.String, HDR: row.Hdr.String,
 				AudioChannels: row.AudioChannels.String, VideoBitrateKbps: row.VideoBitrate.Int64 / 1000,
@@ -374,7 +374,7 @@ func detailParts(ctx context.Context, queries *librarydb.Queries, id int64, part
 			AudioCodec:    row.AudioCodec.String,
 			VideoCodec:    row.VideoCodec.String,
 			Container:     row.Container.String,
-			BitrateKbps:   bitrateKbps(row.OverallBitrate, row.AudioBitrate),
+			BitrateKbps:   bitrateKbps(row.OverallBitrate, row.AudioBitrate, row.VideoCodec.String != ""),
 			Lossless:      row.Lossless.Valid && row.Lossless.Int64 == 1,
 			Extension:     strings.ToLower(strings.TrimPrefix(path.Ext(row.RelPath), ".")),
 			RelPath:       row.RelPath,
@@ -431,8 +431,11 @@ func detailParts(ctx context.Context, queries *librarydb.Queries, id int64, part
 
 // bitrateKbps prefers the whole file's measured rate and falls back to the
 // audio stream's, both stored in bits per second.
-func bitrateKbps(overall, audio sql.NullInt64) int64 {
+func bitrateKbps(overall, audio sql.NullInt64, video bool) int64 {
 	switch {
+	// A video's overall rate is mostly picture; the audio stream's is the one the file is judged on.
+	case video:
+		return audio.Int64 / 1000
 	case overall.Valid && overall.Int64 > 0:
 		return overall.Int64 / 1000
 	case audio.Valid && audio.Int64 > 0:
