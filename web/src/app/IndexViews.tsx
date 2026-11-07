@@ -125,6 +125,7 @@ const actionable = (entry: IndexEntry) => entry.kind === "works" || entry.kind =
 /** One poster with Radarr's bookmark and hover actions; a component of its own, since the actions are hooks. */
 export function IndexPoster({ entry, options }: { entry: IndexEntry; options: PosterOptions }) {
   const actions = useItemActions(entry.kind, entry.id, entry.monitored);
+  const previewFileId = entry.previewFileIds?.[0];
   return (
     <div>
       <Poster
@@ -138,6 +139,11 @@ export function IndexPoster({ entry, options }: { entry: IndexEntry; options: Po
         badge={entry.artistCover ? <ArtistCoverMark /> : entry.badgeSrc ? <LogoBadge src={entry.badgeSrc} title={entry.badgeTitle} /> : undefined}
         topLeft={options.showMonitored ? <MonitorToggle actions={actions} /> : undefined}
         heart={<EntryHeart entry={entry} />}
+        corner={
+          previewFileId !== undefined
+            ? <FileThumb mediaObjectId={previewFileId} kind="frame" corner />
+            : entry.previewable ? <PreviewPlaceholder corner /> : undefined
+        }
         hoverActions={actionable(entry) ? <ActionButtons actions={actions} showNote={false} /> : undefined}
         showTitle={options.showTitle}
         round={entry.kind === "artists"}
