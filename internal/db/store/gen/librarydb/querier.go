@@ -809,7 +809,8 @@ type Querier interface {
 	// The planner's facts for one page of items (section 9.1): the dirty set, or with dirty_only 0
 	// the paced sweep. Absent hunt columns read as zero.
 	ListPlanInputs(ctx context.Context, arg ListPlanInputsParams) ([]ListPlanInputsRow, error)
-	// The files of a page of works that have a single-frame preview, for a work of at most four files (a movie, not a series).
+	// The files of a page of works that have a single-frame preview, for a work of at most four files and without parts
+	// (a movie, not a series: a picture per episode is no picture of the series).
 	ListPreviewFilesForWorks(ctx context.Context, workIds []int64) ([]ListPreviewFilesForWorksRow, error)
 	// Parts nothing holds on to: no file covers them, no event across series lists them, and no broadcast is shared through them.
 	ListPrunableWorkParts(ctx context.Context, workID int64) ([]ListPrunableWorkPartsRow, error)

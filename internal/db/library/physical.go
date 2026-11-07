@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -510,6 +511,38 @@ func (p Physical) DeleteObject(ctx context.Context, mediaObjectID int64) error {
 		return fmt.Errorf("library: delete object %d: %w", mediaObjectID, err)
 	}
 	return nil
+}
+
+// ExistingObjectIDs answers which of the media objects still exist, asked in chunks of 200.
+func (p Physical) ExistingObjectIDs(ctx context.Context, ids []int64) (map[int64]bool, error) {
+	found := make(map[int64]bool, len(ids))
+	for start := 0; start < len(ids); start += 200 {
+		if err := p.existingChunk(ctx, ids[start:min(start+200, len(ids))], found); err != nil {
+			return nil, fmt.Errorf("library: look up media objects: %w", err)
+		}
+	}
+	return found, nil
+}
+
+func (p Physical) existingChunk(ctx context.Context, chunk []int64, found map[int64]bool) error {
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")
+	arguments := make([]any, len(chunk))
+	for index, id := range chunk {
+		arguments[index] = id
+	}
+	rows, err := p.store.Read().QueryContext(ctx, `SELECT id FROM media_object WHERE id IN (`+placeholders+`)`, arguments...)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		found[id] = true
+	}
+	return rows.Err()
 }
 
 // DeleteLibraryPathRow removes exactly one library_path row, leaving its media_object

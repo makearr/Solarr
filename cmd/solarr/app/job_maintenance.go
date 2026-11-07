@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -47,6 +48,7 @@ var maintenanceDefinitions = []jobs.Definition{
 	{Type: backupCleanupJobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3},
 	{Type: recycleBinCleanupJobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3},
 	{Type: decisionRetentionJobType, Name: "Cleaning old search results", Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3},
+	previewCleanupDefinition,
 	{Type: jobRetentionJobType, Name: "Cleaning old jobs", Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3},
 }
 
@@ -246,6 +248,9 @@ func (p *process) registerMaintenanceJobs(registry *jobs.Registry, executor *job
 	executor.Handle(decisionRetentionJobType, decisionRetentionJob{
 		candidates: statistics.NewCandidates(p.statistics), speeds: statistics.NewDownloadSpeeds(p.statistics), keepFull: p.config.Retention.DecisionsFull.AsDuration(),
 		clock: clock.NewSystem(), logger: p.logger,
+	})
+	executor.Handle(previewCleanupJobType, previewCleanupJob{
+		fs: p.fsys, dir: filepath.Join(p.config.Paths.ConfigDir, "previews"), physical: library.NewPhysical(p.library), logger: p.logger,
 	})
 	executor.Handle(jobRetentionJobType, jobRetentionJob{queue: p.queue, clock: clock.NewSystem(), logger: p.logger})
 	executor.Handle(backupJobType, backupJob{

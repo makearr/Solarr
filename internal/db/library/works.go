@@ -321,7 +321,8 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		",\n       " + unverifiedColumn + " AS unverified" +
 		",\n       COALESCE((SELECT a.arrived_at FROM work_arrival a WHERE a.work_id = work.id), 0) AS arrived_at" +
 		",\n       (work.lead_person_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM artwork aw" +
-		" WHERE aw.subject_type = 'work' AND aw.subject_id = work.id AND aw.cache_key <> '')) AS artist_cover" +
+		" WHERE aw.subject_type = 'work' AND aw.subject_id = work.id AND aw.cache_key <> '')" +
+		" AND NOT EXISTS (SELECT 1 FROM work_field pf WHERE pf.work_id = work.id AND pf.field = 'images' AND pf.value <> '')) AS artist_cover" +
 		",\n       (NOT EXISTS (SELECT 1 FROM artwork own WHERE own.subject_type = 'work' AND own.subject_id = work.id AND own.cache_key <> '')" +
 		" AND NOT EXISTS (SELECT 1 FROM artwork lead WHERE lead.subject_type = 'person' AND lead.subject_id = work.lead_person_id" +
 		" AND lead.cache_key <> ''))" +

@@ -80,7 +80,7 @@ export function AddToSolarr({
   const kind = info.add_kinds.some((entry) => entry.key === candidate.kind) ? candidate.kind : (info.add_kinds[0]?.key ?? "");
 
   const add = useMutation({
-    mutationFn: async (mode: "now" | "manual") => {
+    mutationFn: async (mode: "add" | "now" | "manual") => {
       // Another target than the library's is this work's own.
       const ownTarget = !person && target !== libraryTarget && target !== "" && target !== "auto" ? Number(target) : undefined;
       const watch = mode === "manual" ? false : monitored;
@@ -170,13 +170,30 @@ export function AddToSolarr({
           <>
             <Button onClick={onClose}>{t("action.cancel")}</Button>
             {!requestOnly && !person && (
-              <Button busy={busy && add.variables === "manual"} busyLabel={t("addDialog.adding")} disabled={busy} onClick={() => add.mutate("manual")}>
-                {t("addDialog.searchManually")}
+              <>
+                <Button
+                  variant="primary"
+                  title={t("addDialog.addHelp")}
+                  busy={busy && add.variables === "add"}
+                  busyLabel={t("addDialog.adding")}
+                  disabled={busy}
+                  onClick={() => add.mutate("add")}
+                >
+                  {t("addDialog.add")}
+                </Button>
+                <Button title={t("addDialog.searchManuallyHelp")} busy={busy && add.variables === "manual"} busyLabel={t("addDialog.adding")} disabled={busy} onClick={() => add.mutate("manual")}>
+                  {t("addDialog.searchManually")}
+                </Button>
+                <Button title={t("addDialog.searchNowHelp")} busy={busy && add.variables === "now"} busyLabel={t("addDialog.adding")} disabled={busy} onClick={() => add.mutate("now")}>
+                  {t("addDialog.searchNow")}
+                </Button>
+              </>
+            )}
+            {(requestOnly || person) && (
+              <Button variant="primary" busy={busy && add.variables === "now"} busyLabel={t("addDialog.adding")} disabled={busy} onClick={() => add.mutate("now")}>
+                {requestOnly ? t("addDialog.request") : t("addDialog.follow")}
               </Button>
             )}
-            <Button variant="primary" busy={busy && add.variables === "now"} busyLabel={t("addDialog.adding")} disabled={busy} onClick={() => add.mutate("now")}>
-              {requestOnly ? t("addDialog.request") : person ? t("addDialog.follow") : t("addDialog.searchNow")}
-            </Button>
           </>
         )
       }

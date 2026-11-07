@@ -768,6 +768,13 @@ func TestListWorks_ArtistCoverMarksAnAlbumWithoutItsOwnCover(t *testing.T) {
 	covered := credited("Aretimok")
 	credited("Bafu")
 	createWork(t, opened, "music", "Cesoge")
+	// A film with a lead person and a provider poster is not an album shown by its artist.
+	poster := credited("Dolimeku")
+	if err := queries.SetWorkField(t.Context(), librarydb.SetWorkFieldParams{
+		WorkID: poster.ID, Field: "images", Provider: "tmdb", Value: sql.NullString{String: `[{"kind":"poster","url":"https://image.tmdb.org/x.jpg"}]`, Valid: true}, FetchedAt: 1,
+	}); err != nil {
+		t.Fatalf("SetWorkField: %v", err)
+	}
 	if err := queries.UpsertArtwork(t.Context(), librarydb.UpsertArtworkParams{
 		SubjectType: "work", SubjectID: covered.ID, Kind: "cover", CacheKey: "k",
 	}); err != nil {
@@ -782,7 +789,7 @@ func TestListWorks_ArtistCoverMarksAnAlbumWithoutItsOwnCover(t *testing.T) {
 	for _, row := range page {
 		got[row.CanonicalTitle] = row.ArtistCover
 	}
-	want := map[string]bool{"Aretimok": false, "Bafu": true, "Cesoge": false}
+	want := map[string]bool{"Aretimok": false, "Bafu": true, "Cesoge": false, "Dolimeku": false}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("artist cover = %v, want %v", got, want)
 	}

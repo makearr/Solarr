@@ -910,6 +910,7 @@ FROM work_file wf
 JOIN video_preview vp ON vp.media_object_id = wf.media_object_id
 WHERE vp.has_frame = 1 AND wf.work_id IN (/*SLICE:work_ids*/?)
   AND (SELECT COUNT(*) FROM work_file x WHERE x.work_id = wf.work_id) <= 4
+  AND NOT EXISTS (SELECT 1 FROM work_part p WHERE p.work_id = wf.work_id)
 ORDER BY wf.work_id, vp.media_object_id
 `
 
@@ -918,7 +919,8 @@ type ListPreviewFilesForWorksRow struct {
 	MediaObjectID int64
 }
 
-// The files of a page of works that have a single-frame preview, for a work of at most four files (a movie, not a series).
+// The files of a page of works that have a single-frame preview, for a work of at most four files and without parts
+// (a movie, not a series: a picture per episode is no picture of the series).
 func (q *Queries) ListPreviewFilesForWorks(ctx context.Context, workIds []int64) ([]ListPreviewFilesForWorksRow, error) {
 	query := listPreviewFilesForWorks
 	var queryParams []interface{}

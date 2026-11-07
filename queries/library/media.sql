@@ -169,13 +169,15 @@ INSERT INTO video_preview (media_object_id, algorithm_version, has_frame, has_sh
 ON CONFLICT (media_object_id) DO UPDATE SET algorithm_version = excluded.algorithm_version, has_frame = excluded.has_frame,
   has_sheet = excluded.has_sheet, made_at = excluded.made_at;
 
--- The files of a page of works that have a single-frame preview, for a work of at most four files (a movie, not a series).
+-- The files of a page of works that have a single-frame preview, for a work of at most four files and without parts
+-- (a movie, not a series: a picture per episode is no picture of the series).
 -- name: ListPreviewFilesForWorks :many
 SELECT wf.work_id, vp.media_object_id
 FROM work_file wf
 JOIN video_preview vp ON vp.media_object_id = wf.media_object_id
 WHERE vp.has_frame = 1 AND wf.work_id IN (sqlc.slice('work_ids'))
   AND (SELECT COUNT(*) FROM work_file x WHERE x.work_id = wf.work_id) <= 4
+  AND NOT EXISTS (SELECT 1 FROM work_part p WHERE p.work_id = wf.work_id)
 ORDER BY wf.work_id, vp.media_object_id;
 
 -- name: SetPhash :exec
