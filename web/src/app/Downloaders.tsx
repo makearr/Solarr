@@ -179,7 +179,10 @@ export function Downloaders() {
               {(() => {
                 const result = testResults[downloader.id];
                 return result && (
-                  <span className={`text-xs ${result.ok ? "text-ok" : "text-danger"}`}>{result.message}</span>
+                  <span className={`text-xs ${result.ok ? "text-ok" : "text-danger"}`}>
+                    {result.message}
+                    {result.ok && result.download_folder && <AddReportedFolder path={result.download_folder} label={downloader.name} />}
+                  </span>
                 );
               })()}
             </li>
@@ -202,6 +205,31 @@ export function Downloaders() {
       {kinds.isError && <p className="text-xs text-danger">The kinds of download client could not be read.</p>}
       {kinds.data && kinds.data.length > 0 && <AddDownloader kinds={kinds.data} onAdded={invalidate} />}
     </div>
+  );
+}
+
+/** Offers the folder a tested client reported as a download folder, unless it already is one. */
+function AddReportedFolder({ path, label }: { path: string; label: string }) {
+  const queryClient = useQueryClient();
+  const folders = useDownloadFolders();
+  const add = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.POST("/downloadfolders", { body: { path, label, watch: false } });
+      if (error) throw new Error((error as { detail?: string }).detail ?? "It could not be added.");
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["downloadfolders"] }),
+  });
+  if (!folders.data || folders.data.some((folder) => folder.path.replace(/\/$/, "") === path.replace(/\/$/, ""))) return null;
+  return (
+    <button
+      type="button"
+      disabled={add.isPending}
+      onClick={() => add.mutate()}
+      title="Without it, finished downloads sit in the queue as outside every download folder"
+      className="ml-2 rounded border border-border-subtle px-1.5 py-0.5 text-ink hover:bg-canvas"
+    >
+      {add.isError ? "Could not add; set it under Download folders" : "Add as download folder"}
+    </button>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
@@ -16,6 +16,9 @@ import { relativeTime } from "./workFormat";
 
 type Work = components["schemas"]["WorkDetail"];
 type Wanted = components["schemas"]["Wanted"];
+
+/** One-shot flag the header's Interactive search button sets, so the tab starts the search it opens on. */
+export const runInteractiveKey = (workId: number) => ["work", workId, "run-interactive"] as const;
 
 /** The work's search: what is searched (the work, or one group), when it was and will be searched, Search and
  *  Interactive search, different terms where the type takes them, and the latest search's releases. */
@@ -40,6 +43,13 @@ export function WorkSearchTab({ work, info, words, lead }: { work: Work; info: M
     mutationFn: (terms?: Record<string, string>) => ok(api.POST("/works/{id}/search", { params: { path: { id: work.id }, query }, body: terms })),
     onSuccess: changed,
   });
+  useEffect(() => {
+    if (queryClient.getQueryData(runInteractiveKey(work.id)) !== true) return;
+    queryClient.removeQueries({ queryKey: runInteractiveKey(work.id) });
+    search.mutate(undefined);
+    // Mount only: the flag is consumed once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const grab = useMutation({
     mutationFn: () => ok(api.POST("/works/{id}/grab", { params: { path: { id: work.id }, query } })),
     onSuccess: changed,

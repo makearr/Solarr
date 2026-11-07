@@ -40,7 +40,7 @@ import { TargetChip } from "./TargetChip";
 import { externalLinks, fileTagChips, formatMinutes, isUnverified } from "./workFormat";
 import { GroupSection, MonitorToggle, PartTable, PersonLink, useAllParts, type PartActions } from "./WorkParts";
 import { WorkCollections } from "./WorkCollections";
-import { WorkSearchTab } from "./WorkSearchTab";
+import { WorkSearchTab, runInteractiveKey } from "./WorkSearchTab";
 import { PlayButton } from "../player/PlayButton";
 
 type Work = components["schemas"]["WorkDetail"];
@@ -369,7 +369,10 @@ function WorkHeader({
               </Button>
             )}
             {work.can_request && groups.length > 0 && (
-              <Button icon={<ListChecks aria-hidden className="size-4" />} onClick={() => void navigate(interactive)}>
+              <Button icon={<ListChecks aria-hidden className="size-4" />} onClick={() => {
+                queryClient.setQueryData(runInteractiveKey(work.id), true);
+                void navigate(interactive);
+              }}>
                 {t("action.interactive")}
               </Button>
             )}
