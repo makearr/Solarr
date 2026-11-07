@@ -219,7 +219,7 @@ function PartRow({
       <td className="w-12 py-1.5 tabular-nums text-ink-muted">{part.number ?? part.media_ref}</td>
       <td className="py-1.5">
         <div className="flex gap-3">
-          {framed && (part.file ? <FileThumb mediaObjectId={part.file.media_object_id} kind="frame" placeholder className="min-h-14" /> : <span aria-hidden className="w-[clamp(4rem,9vw,9rem)] shrink-0" />)}
+          {framed && (part.file ? <FileThumb mediaObjectId={part.file.media_object_id} kind="frame" placeholder /> : <span aria-hidden className="w-[clamp(4rem,9vw,9rem)] shrink-0" />)}
           <div className="min-w-0 flex-1">
             <span>{title}</span>
             {absolute && <span className="ml-2 text-xs text-ink-muted">#{absolute}</span>}

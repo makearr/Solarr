@@ -16,8 +16,8 @@ export function FileThumb({ mediaObjectId, kind, wide = false, placeholder = fal
   if (!shown) return null;
   if (missing) return placeholder ? <PreviewPlaceholder wide={wide} className={className} /> : null;
   const src = `${API_PREFIX}/files/${mediaObjectId}/preview/${kind}`;
-  // Sheets share one fixed box so a column of them lines up whatever the video's shape; a frame fills the row's height.
-  const box = kind === "sheet" ? "h-24 w-40 self-start" : `self-stretch ${wide ? "w-[clamp(8rem,16vw,16rem)]" : "w-[clamp(4rem,9vw,9rem)]"}`;
+  // Every picture gets one fixed shape, so a column of them lines up whatever the video's shape or the row's height.
+  const box = kind === "sheet" ? "h-24 w-40 self-start" : `self-start aspect-video ${wide ? "w-[clamp(8rem,16vw,16rem)]" : "w-[clamp(4rem,9vw,9rem)]"}`;
   return (
     <>
       <button
@@ -30,7 +30,7 @@ export function FileThumb({ mediaObjectId, kind, wide = false, placeholder = fal
         }}
         className={`relative shrink-0 cursor-zoom-in ${box} ${className}`}
       >
-        <img src={src} alt="" loading="lazy" onError={() => setMissing(true)} className={`absolute inset-0 size-full rounded object-contain ${kind === "sheet" ? "object-center" : "object-left"}`} />
+        <img src={src} alt="" loading="lazy" onError={() => setMissing(true)} className={`absolute inset-0 size-full rounded bg-surface object-contain object-center`} />
       </button>
       {enlarged && (
         <Dialog title="Preview" width="wide" onClose={() => setEnlarged(false)}>
@@ -60,7 +60,7 @@ function PreviewPlaceholder({ wide = false, className = "" }: { wide?: boolean; 
   const navigate = useNavigate();
   const shown = usePreviewPlaceholders();
   if (!shown) return null;
-  const size = `self-stretch ${wide ? "w-[clamp(8rem,16vw,16rem)]" : "w-[clamp(4rem,9vw,9rem)]"}`;
+  const size = `self-start aspect-video ${wide ? "w-[clamp(8rem,16vw,16rem)]" : "w-[clamp(4rem,9vw,9rem)]"}`;
   return (
     <div
       title="No preview picture yet. Open Settings, General to generate the missing previews."
