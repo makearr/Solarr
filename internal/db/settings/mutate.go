@@ -1323,6 +1323,8 @@ func (c *Cache) CreateUser(ctx context.Context, cl clock.Clock, username, passwo
 
 // DeleteUser removes an account.
 func (c *Cache) DeleteUser(ctx context.Context, id int64) error {
+	c.administrators.Lock()
+	defer c.administrators.Unlock()
 	user, found := c.Snapshot().User(id)
 	if !found {
 		return fmt.Errorf("%w: user %d", ErrNotFound, id)
@@ -1337,6 +1339,8 @@ func (c *Cache) DeleteUser(ctx context.Context, id int64) error {
 
 // SetRole changes what a user may do outside any one category.
 func (c *Cache) SetRole(ctx context.Context, id int64, role Role) error {
+	c.administrators.Lock()
+	defer c.administrators.Unlock()
 	user, found := c.Snapshot().User(id)
 	if !found {
 		return fmt.Errorf("%w: user %d", ErrNotFound, id)

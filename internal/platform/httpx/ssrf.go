@@ -70,6 +70,7 @@ var blockedPrefixes = []struct {
 	{netip.MustParsePrefix("64:ff9b:1::/48"), ReasonReserved},     // local-use NAT64 (RFC 8215), the same
 	{netip.MustParsePrefix("100::/64"), ReasonUnroutable},         // discard-only
 	{netip.MustParsePrefix("2001:db8::/32"), ReasonReserved},      // documentation
+	{netip.MustParsePrefix("fec0::/10"), ReasonPrivate},           // deprecated site-local, still routed on some LANs
 }
 
 // ClassifyAddress reports why an address must not be contacted, or an empty reason if it may

@@ -58,7 +58,7 @@ func TestArgs_VAAPIVideoUploadsFramesAndCapsHeight(t *testing.T) {
 	want := []string{
 		"-hide_banner", "-loglevel", "error", "-nostdin",
 		"-init_hw_device", "vaapi=hw:/dev/dri/renderD128", "-filter_hw_device", "hw",
-		"-ss", "90.500", "-i", "/m/a.mkv",
+		"-ss", "90.500", "-protocol_whitelist", "file", "-i", "/m/a.mkv",
 		"-map", "0:v:0", "-map", "0:a:0?", "-vf", "scale=-2:'trunc(min(ih,720)/2)*2',format=nv12,hwupload",
 		"-c:v", "h264_vaapi", "-b:v", "4000k", "-maxrate", "4000k", "-bufsize", "8000k", "-g", "48",
 		"-c:a", "aac", "-b:a", "160k", "-ac", "2",
@@ -72,7 +72,7 @@ func TestArgs_VAAPIVideoUploadsFramesAndCapsHeight(t *testing.T) {
 func TestArgs_AudioDropsVideoAndWritesMP3(t *testing.T) {
 	args := transcode.Args(transcode.Spec{Kind: transcode.Audio, Path: "/m/a.flac"})
 	want := []string{
-		"-hide_banner", "-loglevel", "error", "-nostdin", "-i", "/m/a.flac",
+		"-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "file", "-i", "/m/a.flac",
 		"-vn", "-map", "0:a:0", "-c:a", "libmp3lame", "-b:a", "192k", "-f", "mp3", "pipe:1",
 	}
 	if !slices.Equal(args, want) {
@@ -114,7 +114,7 @@ func TestArgs_VAAPIHardwareDecodeKeepsFramesOnTheGPU(t *testing.T) {
 		MaxHeight: 720, VideoKbps: 4000, HardwareDecode: true,
 	})
 	want := []string{
-		"-hwaccel", "vaapi", "-hwaccel_device", "/dev/dri/renderD128", "-hwaccel_output_format", "vaapi", "-i", "/m/a.mkv",
+		"-hwaccel", "vaapi", "-hwaccel_device", "/dev/dri/renderD128", "-hwaccel_output_format", "vaapi", "-protocol_whitelist", "file", "-i", "/m/a.mkv",
 		"-map", "0:v:0", "-map", "0:a:0?", "-vf", "scale_vaapi=w=-2:h='trunc(min(ih,720)/2)*2':format=nv12", "-c:v", "h264_vaapi",
 	}
 	joined := strings.Join(args, " ")

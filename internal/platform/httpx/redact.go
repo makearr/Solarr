@@ -16,7 +16,8 @@ const redactedValue = "<redacted>"
 var secretQueryParams = map[string]struct{}{
 	"apikey": {}, "api_key": {}, "apitoken": {}, "api_token": {},
 	"client": {}, "key": {}, "token": {}, "access_token": {},
-	"passkey": {}, "rss_key": {}, "password": {}, "secret": {},
+	"passkey": {}, "rss_key": {}, "rsskey": {}, "authkey": {}, "torrent_pass": {}, "password": {}, "secret": {},
+	"auth": {}, "sid": {}, "r": {},
 }
 
 // RedactURL renders a URL for an error message or a log line: userinfo masked

@@ -297,6 +297,10 @@ func (j *Job) applyItem(
 	if err != nil {
 		return fmt.Errorf("source path before unlink: %w", err)
 	}
+	// A move onto itself did nothing, and unlinking its "source" would delete the only copy.
+	if destAbs, err := mover.RootRelativePath(j.fsys, destRoot.Path, item.DestRelPath); err == nil && destAbs == sourceAbs {
+		return j.moveJobs.SetItemState(ctx, item.MoveJobID, item.MediaObjectID, library.MoveItemDone, "")
+	}
 	if err := j.fsys.Remove(sourceAbs); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		// SameFilesystem's own rename(2) already moved the file, so a
 		// same-filesystem move reaches here with nothing left to unlink --
@@ -401,7 +405,7 @@ func (j *Job) moveCompanions(ctx context.Context, item library.Item, sourceRootI
 			j.logger.Warn("companion not moved", slog.String("path", sourceAbs), slog.Any("error", err))
 			continue
 		}
-		if !move.SameFilesystem {
+		if !move.SameFilesystem && sourceAbs != destAbs {
 			if err := j.fsys.Remove(sourceAbs); err != nil && !errors.Is(err, fs.ErrNotExist) {
 				j.logger.Warn("companion copied but its old name not removed", slog.String("path", sourceAbs), slog.Any("error", err))
 			}

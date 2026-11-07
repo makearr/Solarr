@@ -33,7 +33,7 @@ type SubtitleTrack struct {
 func (s *Service) SubtitleTracks(ctx context.Context, filePath string) ([]SubtitleTrack, error) {
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
-	out, err := s.runner.Run(ctx, ffprobe, "-v", "error", "-select_streams", "s", "-show_entries",
+	out, err := s.runner.Run(ctx, ffprobe, "-v", "error", "-protocol_whitelist", "file", "-select_streams", "s", "-show_entries",
 		"stream=codec_name:stream_tags=language,title:stream_disposition=default", "-of", "json", filePath)
 	if err != nil {
 		return nil, err
@@ -114,7 +114,7 @@ func (s *Service) SubtitleVTT(ctx context.Context, w io.Writer, filePath string,
 	if startSecond > 0 {
 		args = append(args, "-ss", strconv.FormatFloat(startSecond, 'f', 3, 64))
 	}
-	args = append(args, "-i", source)
+	args = append(args, "-protocol_whitelist", "file", "-i", source)
 	args = append(args, mapping...)
 	args = append(args, "-f", "webvtt", "-")
 	return s.piper.Pipe(ctx, w, ffmpeg, args...)

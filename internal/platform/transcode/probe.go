@@ -24,7 +24,7 @@ type Source struct {
 func (s *Service) ProbeSource(ctx context.Context, path string) (Source, error) {
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
-	out, err := s.runner.Run(ctx, ffprobe, "-v", "error", "-show_entries",
+	out, err := s.runner.Run(ctx, ffprobe, "-v", "error", "-protocol_whitelist", "file", "-show_entries",
 		"format=bit_rate,duration:stream=codec_type,codec_name,width,height,bit_rate", "-of", "json", path)
 	if err != nil {
 		return Source{}, err

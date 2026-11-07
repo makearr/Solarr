@@ -37,6 +37,8 @@ type Cache struct {
 	current atomic.Pointer[Snapshot]
 	// rebuilding serialises build-and-publish.
 	rebuilding sync.Mutex
+	// administrators serialises check-and-write of anything that removes an administrator, or two could each leave the other.
+	administrators sync.Mutex
 	// backupOnChange is optional (EnableBackupOnChange): without it, a write never
 	// backs up settings.db.
 	backupOnChange *backupOnChange

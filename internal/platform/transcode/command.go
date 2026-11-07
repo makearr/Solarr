@@ -52,7 +52,7 @@ func Args(spec Spec) []string {
 	if spec.StartSecond > 0 {
 		args = append(args, "-ss", strconv.FormatFloat(spec.StartSecond, 'f', 3, 64))
 	}
-	args = append(args, "-i", spec.Path)
+	args = append(args, "-protocol_whitelist", "file", "-i", spec.Path)
 
 	if spec.Kind == Audio {
 		return append(args, "-vn", "-map", "0:a:0", "-c:a", "libmp3lame", "-b:a", "192k", "-f", "mp3", "pipe:1")

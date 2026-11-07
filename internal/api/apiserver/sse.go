@@ -89,6 +89,16 @@ func (s *Server) StreamEvents(w http.ResponseWriter, r *http.Request, params gen
 		allowAll:   allowsSystemEvents(access),
 		closing:    s.streams.Done(),
 	}
+	// A stream outlives the request that opened it, so who may watch is asked again as it runs.
+	stream.reauthorize = func() bool {
+		user, err := s.identify(r)
+		if err != nil {
+			return false
+		}
+		current := authz.ForUser(s.auth.Settings.Snapshot(), user)
+		stream.access, stream.visible, stream.allowAll = current, visibleCategorySet(current), allowsSystemEvents(current)
+		return true
+	}
 
 	// Replay anything missed since the client's last id, before live events, so
 	// ordering holds across a reconnect.
@@ -111,6 +121,9 @@ type eventStream struct {
 	visible    map[int64]bool
 	allowAll   bool
 	closing    <-chan struct{}
+
+	// reauthorize re-resolves the caller's access; false ends the stream (account gone, session ended).
+	reauthorize func() bool
 }
 
 // run buffers events and flushes them on a tick.
@@ -161,6 +174,9 @@ func (e *eventStream) run(r *http.Request, subscription *events.Subscription, ti
 			clear(pending)
 
 		case <-keepAlive.C():
+			if e.reauthorize != nil && !e.reauthorize() {
+				return
+			}
 			if !e.comment("keep-alive") {
 				return
 			}

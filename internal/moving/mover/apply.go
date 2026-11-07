@@ -100,15 +100,18 @@ func ApplyOne(fsys fsx.FS, move PlannedMove, roots RootPath) error {
 		return err
 	}
 	if err := copyFile(fsys, sourceAbs, tempAbs); err != nil {
+		_ = fsys.Remove(tempAbs)
 		return fmt.Errorf("mover: copy %q to %q: %w", sourceAbs, tempAbs, err)
 	}
 	if err := Verify(fsys, sourceAbs, tempAbs, move.SizeBytes); err != nil {
+		_ = fsys.Remove(tempAbs)
 		return err
 	}
 	// The rename from temp to final name is itself same-filesystem (both
 	// under destRoot), so this last step is atomic too -- a reader never
 	// sees a partially-written file at the real destination name.
 	if err := fsys.Rename(tempAbs, destAbs); err != nil {
+		_ = fsys.Remove(tempAbs)
 		return fmt.Errorf("mover: rename %q to %q: %w", tempAbs, destAbs, err)
 	}
 	return nil
