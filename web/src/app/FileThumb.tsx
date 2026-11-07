@@ -1,6 +1,9 @@
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { Film } from "lucide-react";
 import { useState } from "react";
 
-import { API_PREFIX } from "@/api/client";
+import { API_PREFIX, api, ok } from "@/api/client";
 import { Dialog } from "@/ui/Dialog";
 import { useShowThumbnails } from "@/lib/interfacePreferences";
 
@@ -35,5 +38,35 @@ export function FileThumb({ mediaObjectId, kind, wide = false, explain = false, 
         </Dialog>
       )}
     </>
+  );
+}
+
+/** Whether a video with no preview picture yet shows a placeholder: previews on in Settings, General, thumbnails on in Web UI. */
+export function usePreviewPlaceholders(): boolean {
+  const [shown] = useShowThumbnails();
+  const general = useQuery({ queryKey: ["general-settings"], queryFn: () => ok(api.GET("/settings/general")) });
+  return shown && general.data?.video_previews === true;
+}
+
+const VIDEO_MEDIA_TYPES: ReadonlySet<string> = new Set(["tv", "movie", "adult"]);
+
+/** Whether a work is a video type that holds files, so a missing preview picture is worth a placeholder. */
+export function isPreviewable(work: { media_type: string; size_bytes?: number; present_count?: number }): boolean {
+  return VIDEO_MEDIA_TYPES.has(work.media_type) && ((work.size_bytes ?? 0) > 0 || (work.present_count ?? 0) > 0);
+}
+
+/** Stands where a video's preview picture will be, with the way to the settings that make it. */
+export function PreviewPlaceholder({ wide = false }: { wide?: boolean }) {
+  if (!usePreviewPlaceholders()) return null;
+  return (
+    <div
+      title="No preview picture yet. Open Settings, General to generate the missing previews."
+      className={`flex shrink-0 flex-col items-center justify-center gap-0.5 self-stretch rounded border border-dashed border-border-subtle text-ink-muted ${wide ? "w-[clamp(8rem,16vw,16rem)]" : "w-[clamp(4rem,9vw,9rem)]"}`}
+    >
+      <Film aria-hidden className="size-4" />
+      <Link to="/settings/general" onClick={(event) => event.stopPropagation()} className="text-[10px] text-accent hover:underline">
+        Settings
+      </Link>
+    </div>
   );
 }

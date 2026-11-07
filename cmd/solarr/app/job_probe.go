@@ -34,6 +34,10 @@ func (p *process) registerProbeJob(registry *jobs.Registry, executor *jobs.Execu
 		Logger:            p.logger,
 	})
 	executor.Handle(probe.JobType, job)
+	if err := registry.Register(probe.PicturesDefinition); err != nil {
+		return err
+	}
+	executor.Handle(probe.PicturesJobType, probe.NewPicturesJob(job))
 	return nil
 }
 
@@ -46,4 +50,16 @@ func (p *process) enqueueProbe(ctx context.Context) (jobs.EnqueueResult, error) 
 		p.logger.Warn("enqueue probe sweep", slog.Any("error", err))
 	}
 	return result, err
+}
+
+// videoPictures starts the on-demand preview and hash sweeps of Settings, General.
+type videoPictures struct{ process *process }
+
+func (v videoPictures) Generate(ctx context.Context, withPreviews bool) error {
+	mode := probe.PicturesHashesOnly
+	if withPreviews {
+		mode = probe.PicturesWithPreviews
+	}
+	_, err := probe.EnqueuePictures(ctx, v.process.queue, mode)
+	return err
 }

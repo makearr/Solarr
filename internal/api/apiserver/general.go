@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -63,4 +64,34 @@ func (s *Server) PatchGeneralSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, s.generalSettings())
+}
+
+// VideoPictures starts the sweeps that hash videos, and with previews make their pictures, whatever the settings say.
+type VideoPictures interface {
+	Generate(ctx context.Context, withPreviews bool) error
+}
+
+// GenerateVideoPreviews starts hashing and picture-making for every video still lacking them. Administrator only.
+func (s *Server) GenerateVideoPreviews(w http.ResponseWriter, r *http.Request) {
+	s.generateVideoPictures(w, r, true)
+}
+
+// GenerateVideoHashes starts hashing for every video still lacking a hash. Administrator only.
+func (s *Server) GenerateVideoHashes(w http.ResponseWriter, r *http.Request) {
+	s.generateVideoPictures(w, r, false)
+}
+
+func (s *Server) generateVideoPictures(w http.ResponseWriter, r *http.Request, withPreviews bool) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.videoPictures == nil {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "video pictures are not available here")
+		return
+	}
+	if err := s.videoPictures.Generate(r.Context(), withPreviews); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
 }

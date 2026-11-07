@@ -6780,6 +6780,28 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /settings/general/video-previews/generate:
+    post:
+      operationId: generateVideoPreviews
+      tags: [settings]
+      summary: Hash every video still lacking it and make its preview pictures, whatever the settings say. Administrator only.
+      responses:
+        "202": { description: The sweep is queued; it runs in the background. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /settings/general/video-hashes/generate:
+    post:
+      operationId: generateVideoHashes
+      tags: [settings]
+      summary: Hash every video still lacking it, whatever the settings say. Administrator only.
+      responses:
+        "202": { description: The sweep is queued; it runs in the background. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /settings/video-hashing:
     get:
       operationId: getVideoHashing

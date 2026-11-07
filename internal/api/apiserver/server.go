@@ -104,6 +104,8 @@ type Config struct {
 	PreviewsDir string
 	// FilePreviews names the previewed files of listed works; optional.
 	FilePreviews FilePreviews
+	// VideoPictures starts the on-demand preview and hash sweeps; optional.
+	VideoPictures VideoPictures
 	// ConfigPath locates config.yml on disk. Optional: without it,
 	// UpdateNetworkSettings writes only settings.db and never touches the
 	// file, same as before ADR-58's precedence was revised (2026-09-12).
@@ -349,6 +351,7 @@ type Server struct {
 	mediaCoverDir           string
 	previewsDir             string
 	filePreviews            FilePreviews
+	videoPictures           VideoPictures
 	configPath              string
 	people                  PeopleReader
 	organisations           OrganisationsReader
@@ -494,6 +497,7 @@ func New(config Config) (*Server, error) {
 		mediaCoverDir:           config.MediaCoverDir,
 		previewsDir:             config.PreviewsDir,
 		filePreviews:            config.FilePreviews,
+		videoPictures:           config.VideoPictures,
 		configPath:              config.ConfigPath,
 		people:                  config.People,
 		organisations:           config.Organisations,
@@ -807,6 +811,8 @@ func New(config Config) (*Server, error) {
 			secured.Post("/duplicates/similar-videos/resolve", server.ResolveSimilarVideos)
 			secured.Get("/settings/general", server.GetGeneralSettings)
 			secured.Patch("/settings/general", server.PatchGeneralSettings)
+			secured.Post("/settings/general/video-previews/generate", server.GenerateVideoPreviews)
+			secured.Post("/settings/general/video-hashes/generate", server.GenerateVideoHashes)
 			secured.Get("/settings/video-hashing", server.GetVideoHashing)
 			secured.Put("/settings/video-hashing", server.SetVideoHashing)
 			secured.Get("/settings/import-duplicates", server.GetImportDuplicates)

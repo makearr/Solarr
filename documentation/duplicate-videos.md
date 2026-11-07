@@ -102,3 +102,7 @@ the held file) is not matched, by the duration gate above and because its frames
 duplicate detection refuses a second release of the same episode, so a repeat download of one episode needs another client.
 
 The similarity level opens on **Exact** and remembers the one last chosen (a browser preference).
+
+Settings > General has two buttons that start the on-demand `library.video_pictures` job whatever the switches say: "Generate
+missing hashes" hashes every video without a hash, "Generate missing previews" also makes the pictures. A video of a library
+with no picture yet shows a placeholder linking to Settings while previews and thumbnails are both on.

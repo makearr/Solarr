@@ -8835,6 +8835,12 @@ type ServerInterface interface {
 	// Change the switches named; the rest stay. Administrator only.
 	// (PATCH /settings/general)
 	PatchGeneralSettings(w http.ResponseWriter, r *http.Request)
+	// Hash every video still lacking it, whatever the settings say. Administrator only.
+	// (POST /settings/general/video-hashes/generate)
+	GenerateVideoHashes(w http.ResponseWriter, r *http.Request)
+	// Hash every video still lacking it and make its preview pictures, whatever the settings say. Administrator only.
+	// (POST /settings/general/video-previews/generate)
+	GenerateVideoPreviews(w http.ResponseWriter, r *http.Request)
 	// Apply a configuration document, entirely or not at all.
 	// (POST /settings/import)
 	ImportSettings(w http.ResponseWriter, r *http.Request)
@@ -10743,6 +10749,18 @@ func (_ Unimplemented) GetGeneralSettings(w http.ResponseWriter, r *http.Request
 // Change the switches named; the rest stay. Administrator only.
 // (PATCH /settings/general)
 func (_ Unimplemented) PatchGeneralSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Hash every video still lacking it, whatever the settings say. Administrator only.
+// (POST /settings/general/video-hashes/generate)
+func (_ Unimplemented) GenerateVideoHashes(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Hash every video still lacking it and make its preview pictures, whatever the settings say. Administrator only.
+// (POST /settings/general/video-previews/generate)
+func (_ Unimplemented) GenerateVideoPreviews(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -20219,6 +20237,50 @@ func (siw *ServerInterfaceWrapper) PatchGeneralSettings(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// GenerateVideoHashes operation middleware
+func (siw *ServerInterfaceWrapper) GenerateVideoHashes(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GenerateVideoHashes(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GenerateVideoPreviews operation middleware
+func (siw *ServerInterfaceWrapper) GenerateVideoPreviews(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GenerateVideoPreviews(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ImportSettings operation middleware
 func (siw *ServerInterfaceWrapper) ImportSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -23799,6 +23861,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/settings/general", wrapper.PatchGeneralSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/settings/general/video-hashes/generate", wrapper.GenerateVideoHashes)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/settings/general/video-previews/generate", wrapper.GenerateVideoPreviews)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/settings/import", wrapper.ImportSettings)

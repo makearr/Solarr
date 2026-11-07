@@ -73,7 +73,7 @@ type Job struct {
 	clock       clock.Clock
 	logger      *slog.Logger
 	// resumeAt is each list's place when a run yielded, so the continuation does not re-read the files that failed first.
-	resumeAt [5]atomic.Int64
+	resumeAt [7]atomic.Int64
 }
 
 // Config is what a Job needs. Every field is required except Logger.
@@ -417,5 +417,73 @@ func Enqueue(ctx context.Context, queue *jobs.Queue) (jobs.EnqueueResult, error)
 	return queue.Enqueue(ctx, jobs.Request{
 		Type: JobType, ActionKey: ActionKey, Priority: jobs.PriorityLow,
 		Payload: []byte("{}"),
+	})
+}
+
+// PicturesJobType is the on-demand sweep behind Settings, General's "generate" buttons.
+const PicturesJobType = jobs.Type("library.video_pictures")
+
+// PicturesDefinition declares the on-demand sweep: background, retried, the same pool as the probe.
+var PicturesDefinition = jobs.Definition{
+	Name: "Making video pictures",
+	Type: PicturesJobType, Pool: jobs.PoolFiles, Mutating: true, MaxAttempts: 3,
+}
+
+// PicturesMode is what an on-demand sweep makes; both hash, whatever the settings say.
+type PicturesMode string
+
+// The two on-demand sweeps.
+const (
+	PicturesWithPreviews PicturesMode = "previews"
+	PicturesHashesOnly   PicturesMode = "hashes"
+)
+
+// PicturesJob hashes (and, in previews mode, makes the pictures of) every video still lacking them, ignoring the settings.
+type PicturesJob struct{ job *Job }
+
+// NewPicturesJob wraps a probe job so the on-demand sweep reads the same roots, tool and previews folder.
+func NewPicturesJob(job *Job) *PicturesJob { return &PicturesJob{job: job} }
+
+// Run implements jobs.Handler.
+func (p *PicturesJob) Run(ctx context.Context, request jobs.Job) error {
+	var payload struct {
+		Mode PicturesMode `json:"mode"`
+	}
+	if err := json.Unmarshal(request.Payload, &payload); err != nil {
+		return fmt.Errorf("probe: pictures payload: %w", err)
+	}
+	return p.job.sweepPictures(ctx, payload.Mode)
+}
+
+func (j *Job) sweepPictures(ctx context.Context, mode PicturesMode) error {
+	hasher, ok := j.tool.(PerceptualHasher)
+	if !ok {
+		return fmt.Errorf("probe: this tool cannot hash video")
+	}
+	previews := mode == PicturesWithPreviews
+	if previews && j.previewsDir == "" {
+		return fmt.Errorf("probe: no previews folder is configured")
+	}
+	pass := 5
+	if previews {
+		pass = 6
+	}
+	list := func(ctx context.Context, afterID, pageSize int64) ([]library.UnmeasuredFile, error) {
+		return j.physical.ListVideoWithoutHashOrPreview(ctx, afterID, pageSize, previews)
+	}
+	return j.backfill(ctx, j.clock.Now(), pass, "phash", list,
+		func(ctx context.Context, file library.UnmeasuredFile) error {
+			return j.perceptualHash(ctx, hasher, file, previews)
+		})
+}
+
+// EnqueuePictures submits one on-demand sweep, deduplicated per mode.
+func EnqueuePictures(ctx context.Context, queue *jobs.Queue, mode PicturesMode) (jobs.EnqueueResult, error) {
+	payload, err := json.Marshal(map[string]PicturesMode{"mode": mode})
+	if err != nil {
+		return jobs.EnqueueResult{}, err
+	}
+	return queue.Enqueue(ctx, jobs.Request{
+		Type: PicturesJobType, ActionKey: "library.video_pictures." + string(mode), Priority: jobs.PriorityLow, Payload: payload,
 	})
 }

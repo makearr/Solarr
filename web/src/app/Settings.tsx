@@ -71,6 +71,9 @@ export function GeneralSettings() {
       void queryClient.invalidateQueries({ queryKey: ["video-hashing"] });
     },
   });
+  const generate = useMutation({
+    mutationFn: (path: "/settings/general/video-previews/generate" | "/settings/general/video-hashes/generate") => ok(api.POST(path)),
+  });
   return (
     <SettingsPage title="General">
       <Card title="Mode" help="How much of the outside world Solarr touches. SOLARR_MODE in the environment sets this at every start.">
@@ -107,6 +110,7 @@ export function GeneralSettings() {
             <span className="block text-xs text-ink-muted">The automatic search also looks for missing items released before the freshness window. Off, only new releases and upgrades are searched.</span>
           </span>
         </label>
+        <div className="flex items-start justify-between gap-3">
         <label className="flex items-start gap-2 text-sm">
           <input
             type="checkbox"
@@ -120,6 +124,9 @@ export function GeneralSettings() {
             <span className="block text-xs text-ink-muted">Reads nine frames per video with ffmpeg in the background so Storage, Duplicates can match re-encodes. Off, nothing new is hashed; stored hashes keep working. {general.data?.video_previews === true ? "Stays on while previews are on." : ""}</span>
           </span>
         </label>
+        <GenerateButton label="Generate missing hashes" busy={generate.isPending} onClick={() => generate.mutate("/settings/general/video-hashes/generate")} />
+        </div>
+        <div className="flex items-start justify-between gap-3">
         <label className="flex items-start gap-2 text-sm">
           <input
             type="checkbox"
@@ -133,7 +140,11 @@ export function GeneralSettings() {
             <span className="block text-xs text-ink-muted">Keeps a single frame (up to 720p) and a 3x3 thumbnail sheet of each video, made from the same frames the hashing reads, in the previews folder of the config directory. Turns hashing on.</span>
           </span>
         </label>
+        <GenerateButton label="Generate missing previews" busy={generate.isPending} onClick={() => generate.mutate("/settings/general/video-previews/generate")} />
+        </div>
         {change.isError && <p className="text-sm text-danger">That change was refused.</p>}
+        {generate.isError && <p className="text-sm text-danger">That could not be started: it needs administrator access.</p>}
+        {generate.isSuccess && <p className="text-sm text-ok">Started in the background, whatever the switches above say. Previews also hash the videos.</p>}
       </Card>
     </SettingsPage>
   );
@@ -263,5 +274,13 @@ function FooterItems() {
         ))}
       </ul>
     </Card>
+  );
+}
+
+function GenerateButton({ label, busy, onClick }: { label: string; busy: boolean; onClick: () => void }) {
+  return (
+    <button type="button" disabled={busy} onClick={onClick} className="shrink-0 rounded-md border border-border-subtle px-3 py-1 text-xs hover:bg-surface disabled:opacity-50">
+      {label}
+    </button>
   );
 }

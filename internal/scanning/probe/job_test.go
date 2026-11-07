@@ -504,3 +504,44 @@ func TestJob_RunKeepsPreviewPicturesBesideTheHashWhenPreviewsAreOn(t *testing.T)
 		t.Errorf("hashed videos = %d, %v; want a.mkv hashed though hashing was off", len(rows), err)
 	}
 }
+
+// The on-demand sweep hashes whatever the settings say, and makes the pictures only in previews mode.
+func TestPicturesJob_HashesAndMakesPicturesWhateverTheSettingsSay(t *testing.T) {
+	for _, mode := range []probe.PicturesMode{probe.PicturesHashesOnly, probe.PicturesWithPreviews} {
+		t.Run(string(mode), func(t *testing.T) {
+			opened := newLibrary(t)
+			physical := library.NewPhysical(opened)
+			root, previews := t.TempDir(), t.TempDir()
+			if err := os.WriteFile(filepath.Join(root, "a.mkv"), make([]byte, 100), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			ids, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{{RelPath: "a.mkv", SizeBytes: 100, QuickHash: "a", FirstSeenAt: time.Unix(0, 0)}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			job := probe.NewJob(probe.Config{
+				Physical: physical, Coverage: library.NewProbeCoverage(opened, clock.NewFakeAtEpoch()),
+				Roots:             fakeRoots{1: settings.RootFolder{ID: 1, Path: root, Online: true}},
+				Tool:              &previewingTool{hashingTool{fakeTool: fakeTool{measured: mediatool.Measured{FormatName: "matroska", Duration: time.Second}}}},
+				FS:                fsx.NewOS(),
+				PerceptualHashing: func() bool { return false },
+				VideoPreviews:     func() bool { return false },
+				PreviewsDir:       previews,
+				Clock:             clock.NewFakeAtEpoch(),
+				Logger:            slog.New(slog.DiscardHandler),
+			})
+			payload := []byte(`{"mode":"` + string(mode) + `"}`)
+			if err := probe.NewPicturesJob(job).Run(t.Context(), jobs.Job{Payload: payload}); err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			rows, err := librarydb.New(opened.Read()).ListHashedVideos(t.Context(), library.VideoHashVersion)
+			if err != nil || len(rows) != 1 {
+				t.Errorf("hashed videos = %d, %v; want 1", len(rows), err)
+			}
+			_, statErr := os.Stat(previewstore.Path(previews, ids[0].MediaObjectID, previewstore.Frame))
+			if made := statErr == nil; made != (mode == probe.PicturesWithPreviews) {
+				t.Errorf("frame made = %v in mode %s", made, mode)
+			}
+		})
+	}
+}
