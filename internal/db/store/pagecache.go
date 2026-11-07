@@ -17,6 +17,8 @@ type PageCache struct {
 	FileBytes, WALBytes int64
 	// PerConnectionKB is the limit each connection's cache is held to.
 	PerConnectionKB int
+	// PoolSize is how many connections the database opens at most: the read pool and the writer.
+	PoolSize int
 	// Connections is how many connections were sampled; LimitBytes and UsedBytes cover those only.
 	Connections           int
 	LimitBytes, UsedBytes int64
@@ -26,7 +28,7 @@ type PageCache struct {
 
 // PageCache reports the database's page cache and file sizes.
 func (s *Store) PageCache(ctx context.Context) PageCache {
-	report := PageCache{Name: s.config.Name, PerConnectionKB: s.config.CacheSizeKB}
+	report := PageCache{Name: s.config.Name, PerConnectionKB: s.config.CacheSizeKB, PoolSize: s.config.ReadPoolSize + 1}
 	if info, err := s.fs.Stat(s.config.Path); err == nil {
 		report.FileBytes = info.Size
 	}

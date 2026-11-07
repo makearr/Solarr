@@ -311,3 +311,18 @@ func TestSweep_EnforceShrinksTheCacheToKeepTheDiskFree(t *testing.T) {
 		t.Errorf("with room: shrunk to %d, evicted %d; want the size limit to stand", result.ShrunkToBytes, result.ImagesEvicted)
 	}
 }
+
+func TestSweep_ShrinkRemovesOnlyWhatWentUnusedForTheGivenTime(t *testing.T) {
+	f := newFixture(t)
+	f.writeImage(t, "unused.webp", 10)
+	f.clock.Advance(8 * 24 * time.Hour)
+	f.writeImage(t, "recent.webp", 10)
+
+	result, err := f.sweep.Shrink(t.Context(), 7*24*time.Hour)
+	if err != nil {
+		t.Fatalf("Shrink: %v", err)
+	}
+	if result.ImagesEvicted != 1 || result.Report.Images.Bytes != 10 {
+		t.Errorf("evicted %d, left %d bytes; want 1 and 10", result.ImagesEvicted, result.Report.Images.Bytes)
+	}
+}

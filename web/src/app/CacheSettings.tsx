@@ -70,6 +70,13 @@ export function CacheSettings() {
     onSuccess: invalidate,
   });
 
+  const shrink = useMutation({
+    mutationFn: async () => {
+      await ok(api.POST("/cache/shrink", {}));
+    },
+    onSuccess: invalidate,
+  });
+
   if (report.error !== null || !report.data) return null;
 
   return (
@@ -121,7 +128,16 @@ export function CacheSettings() {
       <BudgetForm report={report.data} onSave={(budget) => update.mutate(budget)} busy={update.isPending} />
       {update.isError && <p className="text-sm text-danger">That budget was refused.</p>}
 
-      <Card title="Clear the cache" help="Throws everything away; it is fetched again as it is needed.">
+      <Card
+        title="Shrink or clear the cache"
+        help="Shrink drops what has not been used for seven days. Clear throws everything away; either is fetched again as it is needed."
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="secondary" onClick={() => shrink.mutate()} disabled={shrink.isPending}>
+            {shrink.isPending ? "Shrinking…" : "Shrink cache"}
+          </Button>
+        </div>
+        {shrink.isError && <p className="text-xs text-danger">The cache could not be shrunk.</p>}
         <ClearButton onClear={() => clear.mutate()} busy={clear.isPending} />
         {clear.isError && <p className="text-xs text-danger">The cache could not be cleared.</p>}
       </Card>
@@ -164,13 +180,13 @@ function DatabaseMemoryCard() {
     >
       <Card
         title="Database memory"
-        help="The page cache SQLite keeps in memory for the library database, per connection (it opens several). A bigger cache means fewer reads from disk; the smaller databases keep their own fixed sizes."
+        help="One ceiling for the page caches SQLite keeps in memory, all databases and connections together. The library takes most of it. A bigger ceiling means fewer reads from disk; it is a limit, not memory held from the start."
       >
         <div className="flex flex-wrap items-end gap-4">
-          <Field label="Library cache per connection (MB)" help={`Default ${Math.round(data.default_kb / 1024)} MB.`} className="w-56">
+          <Field label="Total database cache ceiling (MB)" help={`Default ${Math.round(data.default_kb / 1024)} MB.`} className="w-56">
             <input
               type="number"
-              min={2}
+              min={128}
               max={16384}
               value={shown}
               disabled={save.isPending}
@@ -195,7 +211,7 @@ function DatabaseMemoryCard() {
         </div>
         {data.restart_required && (
           <p className="text-xs text-warn">
-            Saved as {Math.round(data.configured_kb / 1024)} MB; the library database runs with {Math.round(data.running_kb / 1024)} MB until Solarr restarts.
+            Saved as {Math.round(data.configured_kb / 1024)} MB; the databases run with {Math.round(data.running_kb / 1024)} MB until Solarr restarts.
           </p>
         )}
         {save.isError && <p className="text-xs text-danger">That size was refused.</p>}

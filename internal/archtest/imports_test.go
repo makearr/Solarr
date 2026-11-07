@@ -128,7 +128,7 @@ var allowedInternalImports = map[string][]string{
 	// Section 21.6's resize-and-encode step: pure image processing (stdlib image
 	// package plus a pure-Go WebP encoder dependency), no I/O of its own.
 	"internal/platform/artwork":     {},
-	"internal/platform/remoteimage": {"internal/platform/artwork", "internal/platform/fsx", "internal/platform/hitcount", "internal/platform/httpx"},
+	"internal/platform/remoteimage": {"internal/platform/artwork", "internal/platform/clock", "internal/platform/fsx", "internal/platform/hitcount", "internal/platform/httpx"},
 	"internal/platform/hitcount":    {},
 	// Section 11.8's path template compiler/renderer: parsing and string
 	// building only, no I/O of its own. fsx is the one dependency, for the

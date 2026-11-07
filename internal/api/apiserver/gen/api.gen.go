@@ -7929,6 +7929,9 @@ type ServerInterface interface {
 	// Set the library database's page cache size. Administrator only.
 	// (PUT /cache/memory)
 	SetDatabaseMemory(w http.ResponseWriter, r *http.Request)
+	// Remove what the cache has not used for seven days. Administrator only.
+	// (POST /cache/shrink)
+	ShrinkCache(w http.ResponseWriter, r *http.Request)
 	// Releases in a date window, earliest first.
 	// (GET /calendar)
 	ListCalendar(w http.ResponseWriter, r *http.Request, params ListCalendarParams)
@@ -9057,6 +9060,12 @@ func (_ Unimplemented) GetDatabaseMemory(w http.ResponseWriter, r *http.Request)
 // Set the library database's page cache size. Administrator only.
 // (PUT /cache/memory)
 func (_ Unimplemented) SetDatabaseMemory(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove what the cache has not used for seven days. Administrator only.
+// (POST /cache/shrink)
+func (_ Unimplemented) ShrinkCache(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11778,6 +11787,28 @@ func (siw *ServerInterfaceWrapper) SetDatabaseMemory(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetDatabaseMemory(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ShrinkCache operation middleware
+func (siw *ServerInterfaceWrapper) ShrinkCache(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ShrinkCache(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -22533,6 +22564,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/cache/memory", wrapper.SetDatabaseMemory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/cache/shrink", wrapper.ShrinkCache)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/calendar", wrapper.ListCalendar)

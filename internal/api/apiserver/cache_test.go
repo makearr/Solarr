@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -19,6 +20,7 @@ type fakeCacheManager struct {
 	setBudgetErr error
 	clearErr     error
 	clearCalls   int
+	shrunkFor    time.Duration
 	lastBudget   apiserver.CacheBudget
 }
 
@@ -32,6 +34,11 @@ func (f *fakeCacheManager) SetBudget(_ context.Context, budget apiserver.CacheBu
 	}
 	f.lastBudget = budget
 	f.report.Budget = budget
+	return nil
+}
+
+func (f *fakeCacheManager) Shrink(_ context.Context, unusedFor time.Duration) error {
+	f.shrunkFor = unusedFor
 	return nil
 }
 
@@ -163,5 +170,22 @@ func TestClearCache_RequiresAdministrator(t *testing.T) {
 	}
 	if fixture.cacheManager.clearCalls != 0 {
 		t.Error("clear ran despite the caller not being an administrator")
+	}
+}
+
+func TestShrinkCache_AsksForAWeekUnusedAndNeedsAnAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	listener := fixture.signIn(t, "listener")
+	if recorder := fixture.do(authedPost(t, listener, "/api/v1/cache/shrink", "")); recorder.Code != http.StatusForbidden {
+		t.Fatalf("a listener's status = %d, want 403", recorder.Code)
+	}
+	fixture.createUser(t, "boss", settings.RoleAdmin)
+	admin := fixture.signIn(t, "boss")
+	if recorder := fixture.do(authedPost(t, admin, "/api/v1/cache/shrink", "")); recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if fixture.cacheManager.shrunkFor != 7*24*time.Hour {
+		t.Errorf("shrunk for %v, want 168h", fixture.cacheManager.shrunkFor)
 	}
 }

@@ -232,6 +232,31 @@ func (s *Sweep) Clear(ctx context.Context) error {
 	return s.cache.SetCacheMeasurement(ctx, s.clock, settings.CacheMeasurement{MeasuredAt: now.Unix()})
 }
 
+// Shrink removes what nothing has asked for within unusedFor: images by their last use (a cache hit renews it) and
+// provider responses by their age. It answers what it removed.
+func (s *Sweep) Shrink(ctx context.Context, unusedFor time.Duration) (Result, error) {
+	cutoff := s.clock.Now().Add(-unusedFor)
+	images, err := s.pruneImagesOlderThan(cutoff)
+	if err != nil {
+		return Result{}, fmt.Errorf("cachebudget: shrink images: %w", err)
+	}
+	metadata, err := s.metadata.DeleteOlderThan(ctx, cutoff)
+	if err != nil {
+		return Result{}, fmt.Errorf("cachebudget: shrink metadata: %w", err)
+	}
+	report, err := s.Measure(ctx)
+	if err != nil {
+		return Result{}, err
+	}
+	if err := s.cache.SetCacheMeasurement(ctx, s.clock, settings.CacheMeasurement{
+		ImagesBytes: report.Images.Bytes, MetadataBytes: report.Metadata.Bytes,
+		MeasuredAt: report.MeasuredAt.Unix(), DiskTotalBytes: report.DiskTotalBytes, DiskFreeBytes: report.DiskFreeBytes,
+	}); err != nil {
+		return Result{}, fmt.Errorf("cachebudget: record measurement: %w", err)
+	}
+	return Result{Report: report, ImagesEvicted: images, MetadataEvicted: metadata}, nil
+}
+
 type imageFile struct {
 	path    string
 	size    int64

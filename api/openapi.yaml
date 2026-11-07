@@ -1479,7 +1479,7 @@ paths:
               type: object
               required: [cache_size_kb]
               properties:
-                cache_size_kb: { type: integer, format: int64, minimum: 2048, maximum: 16777216 }
+                cache_size_kb: { type: integer, format: int64, minimum: 131072, maximum: 16777216 }
       responses:
         "200":
           description: Saved.
@@ -1600,6 +1600,24 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
+  /cache/shrink:
+    post:
+      operationId: shrinkCache
+      tags: [settings]
+      summary: Remove what the cache has not used for seven days. Administrator only.
+      description: >-
+        Pictures not shown and provider responses not fetched for seven days go; the rest stays. Always safe, like
+        clearing, and cheaper to recover from.
+      responses:
+        "200":
+          description: The report after shrinking.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CacheReport" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
         "503": { $ref: "#/components/responses/Problem" }
 
   /priority:

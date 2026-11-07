@@ -15,8 +15,10 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/makearr/Solarr/internal/platform/artwork"
+	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/hitcount"
 	"github.com/makearr/Solarr/internal/platform/httpx"
@@ -48,6 +50,8 @@ type Cache struct {
 	Hosts []string
 	// Lookups counts the pictures found already cached; optional.
 	Lookups *hitcount.Counter
+	// Clock dates a use of a cached picture, which Shrink goes by; without it uses are not recorded.
+	Clock clock.Clock
 
 	mu    sync.Mutex
 	locks map[string]*imageLock
@@ -92,6 +96,7 @@ func (c *Cache) Ensure(ctx context.Context, address string) (string, error) {
 	key := Key(address)
 	if c.cached(key) || c.stored(key) {
 		c.Lookups.Hit()
+		c.renew(key)
 		return key, nil
 	}
 	c.Lookups.Miss()
@@ -122,6 +127,24 @@ func (c *Cache) Ensure(ctx context.Context, address string) (string, error) {
 		}
 	}
 	return key, nil
+}
+
+// usedRenewal is how stale a picture's date must be before a use renews it, so a busy wall costs one write a day.
+const usedRenewal = 24 * time.Hour
+
+// renew dates a cached picture's use as now; best effort, and only for the cache, which is what Shrink reads.
+func (c *Cache) renew(key string) {
+	if c.Clock == nil {
+		return
+	}
+	info, err := c.FS.Stat(c.path(key, artwork.Full))
+	now := c.Clock.Now()
+	if err != nil || now.Sub(info.ModTime) < usedRenewal {
+		return
+	}
+	for _, size := range []artwork.Size{artwork.Thumb, artwork.Small, artwork.Full} {
+		_ = c.FS.Chtimes(c.path(key, size), now)
+	}
 }
 
 // Promote makes the picture a library item's: it moves from the cache to CoverDir without asking the provider, and is

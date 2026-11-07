@@ -114,7 +114,7 @@ Any other key is `SOLARR_` plus its path in upper case, dots replaced by undersc
 |---|---|---|
 | `SOLARR_DATABASE_BUSY_TIMEOUT` | `15s` | How long a database waits on a lock |
 | `SOLARR_DATABASE_PAGE_SIZE` | `4096` | SQLite page size; applied only when a database is created |
-| `SOLARR_DATABASE_CACHE_SIZE_KB` | `65536` | Library database page cache per connection |
+| `SOLARR_DATABASE_CACHE_SIZE_KB` | `393216` | One ceiling for the page caches of all databases and connections together |
 | `SOLARR_DATABASE_WRITE_WARN` | `50ms` | A write transaction longer than this is logged |
 | `SOLARR_DATABASE_WRITE_HARD` | `2s` | A write transaction longer than this is a fault |
 | `SOLARR_BACKUP_SETTINGS_ON_CHANGE` | `true` | Snapshot `settings.db` on every change |

@@ -46,8 +46,8 @@ func TestSetDatabaseMemory_WritesConfigYAMLAndReportsTheNewSetting(t *testing.T)
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body.ConfiguredKB != 131072 || body.DefaultKB != 65536 {
-		t.Errorf("body = %+v; want configured 131072 and default 65536", body)
+	if body.ConfiguredKB != 131072 || body.DefaultKB != 393216 {
+		t.Errorf("body = %+v; want configured 131072 and default 393216", body)
 	}
 	want := strings.Replace(memoryConfigYAML, "cache_size_kb: 65536", "cache_size_kb: 131072", 1)
 	if got := readFile(t, fixture.fsys, "/config/config.yml"); got != want {

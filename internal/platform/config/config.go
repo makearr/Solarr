@@ -107,8 +107,12 @@ type Security struct {
 	TrustedProxyCIDRs  []string `yaml:"trusted_proxy_cidrs"`
 }
 
-// DefaultCacheSizeKB is the page cache each connection of the library database gets.
-const DefaultCacheSizeKB = 65536
+// DefaultCacheSizeKB is the ceiling for the page caches of every database and connection together.
+const DefaultCacheSizeKB = 393216
+
+// legacyCacheSizeKB was the per-connection default before the figure became one ceiling; a file that still holds it
+// was never tuned, so it reads as the new default.
+const legacyCacheSizeKB = 65536
 
 // Database tunes SQLite (ADR-2, ADR-3).
 type Database struct {

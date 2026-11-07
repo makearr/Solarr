@@ -104,7 +104,7 @@ func TestSetDatabaseCacheSizeKB_ChangesOnlyThatLineOfTheShippedTemplate(t *testi
 	if err != nil {
 		t.Fatalf("SetDatabaseCacheSizeKB: %v", err)
 	}
-	want := strings.Replace(original, "cache_size_kb: 65536", "cache_size_kb: 131072", 1)
+	want := strings.Replace(original, "cache_size_kb: 393216", "cache_size_kb: 131072", 1)
 	if string(patched) != want {
 		t.Errorf("patched document differs from the original in more than the one line:\n%s", patched)
 	}

@@ -135,25 +135,23 @@ it (`library.ImportLists.Forget`), as it describes nothing but that list.
 ## Connections and page cache
 
 Each database has one write connection, a read pool and one checkpointer. SQLite's
-`cache_size` is **per connection**, so a figure meant for the library, applied to all three
-databases, is a ceiling several times what it looks like: 64 MiB across six connections
-each was over a gigabyte on hardware that is often a NAS.
+`cache_size` is **per connection**, so Solarr sets the *total* instead: `database.cache_size_kb` in `config.yml`
+(default 384 MiB) is one ceiling for every connection of every database, and each database takes a share of it, split
+over its connections (the read pool plus the writer, at least 1 MiB each). Settings → Cache edits the ceiling and reports
+each database's cache use and hit ratio (SQLite's `sqlite3_db_status` counters, read on request, nothing on the query
+path; modernc builds only). A value of 65536 from before the change reads as the new default, as it was the old
+per-connection default. The pools and shares are in `cmd/solarr/app/serve.go`:
 
-`database.cache_size_kb` in `config.yml` therefore sizes `library.db`, the only one that
-grows; Settings → Cache edits it and reports each database's cache use and hit ratio (SQLite's
-`sqlite3_db_status` counters, read on request, nothing on the query path; modernc builds only). The others take their size and pool from what they hold, in
-`cmd/solarr/app/serve.go`:
-
-| Database | Read pool | Page cache | Why |
+| Database | Read pool | Share of the ceiling | Why |
 |---|---|---|---|
-| `library.db` | 4 | `cache_size_kb` (64 MiB) | The only one at ADR-22 scale |
-| `jobs.db` | 2 | 8 MiB | Small, hot, never queried across 500k rows |
-| `statistics.db` | 2 | 8 MiB | Append-mostly; read by History and the statistics |
-| `settings.db` | 1 | 2 MiB | Fully cached in Go already (ADR-25) |
-| any checkpointer | — | 2 MiB | Walks the log; a reader's cache would be idle |
+| `library.db` | 4 | 80% | The only one at ADR-22 scale |
+| `jobs.db` | 2 | 8% | Small, hot, never queried across 500k rows |
+| `statistics.db` | 2 | 8% | Append-mostly; read by History and the statistics |
+| `settings.db` | 1 | 2% | Fully cached in Go already (ADR-25) |
+| `metadata.db` | 1 | 2% | Disposable provider responses |
+| any checkpointer | — | 2 MiB on top | Walks the log; a reader's cache would be idle |
 
-That is a ceiling of about 354 MiB, and `TestDatabaseProfiles_KeepTheCacheCeilingInHand`
-fails if a pool or a size pushes it past 384 MiB.
+`TestDatabaseProfiles_StayUnderTheOneCacheCeiling` fails if the connections' sizes added up pass the ceiling.
 
 **The driver is not configurable.** It is chosen by a build tag (`internal/db/store/
 driver_modernc.go` and `driver_ncruces.go`, ADR-5) and reported at startup and in

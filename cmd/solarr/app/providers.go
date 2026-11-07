@@ -558,7 +558,7 @@ func (s sceneSource) Names(ctx context.Context, tvdbID int64) ([]string, error) 
 // remoteImages is the provider picture cache, on its own rate bucket so a wall of posters cannot starve the metadata calls.
 func (p *process) remoteImages() *remoteimage.Cache {
 	client := p.providerClient(providerImages, nil, httpx.ClientConfig{})
-	return &remoteimage.Cache{HTTP: client, FS: p.fsys, Dir: filepath.Join(p.config.Paths.CacheDir, "images"), CoverDir: p.config.Paths.MediaCoverDir, Hosts: remoteimage.DefaultHosts, Lookups: &p.imageLookups}
+	return &remoteimage.Cache{HTTP: client, FS: p.fsys, Dir: filepath.Join(p.config.Paths.CacheDir, "images"), CoverDir: p.config.Paths.MediaCoverDir, Clock: clock.NewSystem(), Hosts: remoteimage.DefaultHosts, Lookups: &p.imageLookups}
 }
 
 // unidentifiedTV places queued TV files by a person's choice.

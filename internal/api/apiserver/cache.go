@@ -39,10 +39,10 @@ type CacheReport struct {
 
 // DatabaseMemoryRow is one database's page cache and file sizes.
 type DatabaseMemoryRow struct {
-	Name                                string
-	FileBytes, WALBytes                 int64
-	PerConnectionKB, Connections        int64
-	LimitBytes, UsedBytes, Hits, Misses int64
+	Name                                   string
+	FileBytes, WALBytes                    int64
+	PerConnectionKB, PoolSize, Connections int64
+	LimitBytes, UsedBytes, Hits, Misses    int64
 }
 
 // DatabaseMemoryReader answers every database's page cache; cmd/solarr/adapters reads the stores.
@@ -52,7 +52,7 @@ type DatabaseMemoryReader interface {
 
 // The bounds database.cache_size_kb may be saved within.
 const (
-	minCacheSizeKB = 2048
+	minCacheSizeKB = 131072
 	maxCacheSizeKB = 16 * 1024 * 1024
 )
 
@@ -67,7 +67,12 @@ type CacheManager interface {
 	SetBudget(ctx context.Context, budget CacheBudget) error
 	// Clear removes everything in both namespaces (Invariant 5: always safe).
 	Clear(ctx context.Context) error
+	// Shrink removes what has not been used for the given time.
+	Shrink(ctx context.Context, unusedFor time.Duration) error
 }
+
+// cacheShrinkUnused is how long a cached item must have gone unused for Shrink to remove it.
+const cacheShrinkUnused = 7 * 24 * time.Hour
 
 // GetCache answers the cache's own budgets and last-measured size.
 func (s *Server) GetCache(w http.ResponseWriter, r *http.Request) {
@@ -156,6 +161,28 @@ func (s *Server) ClearCache(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, cacheReportView(report))
 }
 
+// ShrinkCache removes everything in the cache not used for a week. Administrator only; always safe like Clear.
+func (s *Server) ShrinkCache(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.cacheManager == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "the cache is not available")
+		return
+	}
+	if err := s.cacheManager.Shrink(r.Context(), cacheShrinkUnused); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	report, err := s.cacheManager.Report(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, cacheReportView(report))
+}
+
 func cacheReportView(report CacheReport) gen.CacheReport {
 	return gen.CacheReport{
 		MaxBytes: report.Budget.MaxBytes, MaxAgeDays: report.Budget.MaxAgeDays,
@@ -216,9 +243,7 @@ func (s *Server) databaseMemoryView(ctx context.Context) gen.DatabaseMemory {
 				Name: row.Name, FileBytes: row.FileBytes, WalBytes: row.WALBytes, PerConnectionKb: row.PerConnectionKB,
 				Connections: row.Connections, LimitBytes: row.LimitBytes, UsedBytes: row.UsedBytes, Hits: row.Hits, Misses: row.Misses,
 			})
-			if row.Name == "library" {
-				running = row.PerConnectionKB
-			}
+			running += row.PerConnectionKB * row.PoolSize
 		}
 	}
 	return gen.DatabaseMemory{

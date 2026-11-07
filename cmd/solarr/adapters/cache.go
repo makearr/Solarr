@@ -30,7 +30,7 @@ func (a DatabaseMemory) DatabaseMemory(ctx context.Context) []apiserver.Database
 		report := opened.PageCache(ctx)
 		rows = append(rows, apiserver.DatabaseMemoryRow{
 			Name: report.Name, FileBytes: report.FileBytes, WALBytes: report.WALBytes,
-			PerConnectionKB: int64(report.PerConnectionKB), Connections: int64(report.Connections),
+			PerConnectionKB: int64(report.PerConnectionKB), PoolSize: int64(report.PoolSize), Connections: int64(report.Connections),
 			LimitBytes: report.LimitBytes, UsedBytes: report.UsedBytes, Hits: report.Hits, Misses: report.Misses,
 		})
 	}
@@ -83,6 +83,11 @@ func (a CacheManager) SetBudget(ctx context.Context, budget apiserver.CacheBudge
 		ImagesSharePercent: budget.ImagesSharePercent, MetadataSharePercent: budget.MetadataSharePercent,
 		MinFreePercent: minFree,
 	})
+}
+
+func (a CacheManager) Shrink(ctx context.Context, unusedFor time.Duration) error {
+	_, err := a.Sweep.Shrink(ctx, unusedFor)
+	return err
 }
 
 func (a CacheManager) Clear(ctx context.Context) error {

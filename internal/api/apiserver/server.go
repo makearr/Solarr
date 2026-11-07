@@ -890,6 +890,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/streaming/detect", server.DetectStreamingHardware)
 			secured.Get("/cache", server.GetCache)
 			secured.Patch("/cache", server.UpdateCacheBudget)
+			secured.Post("/cache/shrink", server.ShrinkCache)
 			secured.Get("/database", server.GetDatabaseUsage)
 			secured.Post("/database/backups/clear", server.ClearOldBackups)
 			secured.Get("/cache/memory", server.GetDatabaseMemory)

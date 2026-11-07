@@ -152,10 +152,9 @@ database:
   busy_timeout: 15s
   # Applied when a database is created and fixed thereafter.
   page_size: 4096
-  # Sizes library.db, which is the only one that grows. jobs.db and settings.db take
-  # smaller sizes from their role -- SQLite's cache is per connection, so one figure
-  # for all three is a ceiling several times what it looks like.
-  cache_size_kb: 65536
+  # One ceiling for the page caches of all databases and connections together; the
+  # library, the only one that grows, gets most of it.
+  cache_size_kb: 393216
   # A write transaction over write_warn is logged; over write_hard is an error.
   write_warn: 50ms
   write_hard: 2s

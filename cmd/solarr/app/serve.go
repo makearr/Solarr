@@ -443,14 +443,13 @@ func (p *process) reconcileRestore(ctx context.Context, cl clock.Clock, restored
 	return nil
 }
 
-// databaseProfile sizes one database for what it holds. SQLite's cache is per
-// connection, so a figure meant for the library, applied to all three, is a ceiling
-// several times what anyone asked for (documentation/database-layout.md).
+// databaseProfile sizes one database for what it holds. database.cache_size_kb is one ceiling for every database
+// and connection together; each database takes its share, split over its connections (documentation/database-layout.md).
 type databaseProfile struct {
 	name         string
 	readPoolSize int
-	// cacheSizeKB is zero for the database config.yml sizes, which is the library.
-	cacheSizeKB int
+	// sharePercent of the ceiling this database's connections may use between them.
+	sharePercent int
 	// inCacheDir puts the file under Paths.CacheDir instead of Paths.DBDir --
 	// ADR-2 keeps the disposable cache directory separate from the authoritative
 	// databases on purpose.
@@ -459,16 +458,19 @@ type databaseProfile struct {
 
 var (
 	// The library is the only one at ADR-22 scale and the only one worth tuning.
-	libraryProfile = databaseProfile{name: "library", readPoolSize: 4}
+	libraryProfile = databaseProfile{name: "library", readPoolSize: 4, sharePercent: 80}
 	// Small, hot and written constantly, but never queried across 500k rows.
-	jobsProfile = databaseProfile{name: "jobs", readPoolSize: 2, cacheSizeKB: 8192}
+	jobsProfile = databaseProfile{name: "jobs", readPoolSize: 2, sharePercent: 8}
 	// Append-mostly records read by History and the statistics, never by a decision.
-	statisticsProfile = databaseProfile{name: "statistics", readPoolSize: 2, cacheSizeKB: 8192}
+	statisticsProfile = databaseProfile{name: "statistics", readPoolSize: 2, sharePercent: 8}
 	// Fully cached in Go by ADR-25, so its page cache serves startup and little else.
-	settingsProfile = databaseProfile{name: "settings", readPoolSize: 1, cacheSizeKB: 2048}
+	settingsProfile = databaseProfile{name: "settings", readPoolSize: 1, sharePercent: 2}
 	// Disposable (ADR-2); small on purpose, the same as settings.
-	metadataProfile = databaseProfile{name: "metadata", readPoolSize: 1, cacheSizeKB: 2048, inCacheDir: true}
+	metadataProfile = databaseProfile{name: "metadata", readPoolSize: 1, sharePercent: 2, inCacheDir: true}
 )
+
+// minConnectionCacheKB is the least a connection is given, whatever the ceiling.
+const minConnectionCacheKB = 1024
 
 // Worker counts of the pools config.yml does not size. Every job still writes through its database's one writer
 // (ADR-3), so these bound disk and provider load, not database contention.
@@ -482,10 +484,8 @@ const (
 )
 
 func (p *process) storeConfig(profile databaseProfile) store.Config {
-	cacheSizeKB := profile.cacheSizeKB
-	if cacheSizeKB == 0 {
-		cacheSizeKB = p.config.Database.CacheSizeKB
-	}
+	// The writer is one more connection than the read pool.
+	cacheSizeKB := max(minConnectionCacheKB, p.config.Database.CacheSizeKB*profile.sharePercent/100/(profile.readPoolSize+1))
 	directory := p.config.Paths.DBDir
 	if profile.inCacheDir {
 		directory = p.config.Paths.CacheDir
