@@ -1,9 +1,11 @@
 import { API_PREFIX } from "@/api/client";
+import type { components } from "@/api/schema";
 
-/** Where the player sits: a bar under the page, a small window in the lower right corner, or the whole screen. */
-export type PlayerMode = "bar" | "mini" | "full";
+/** Where the player sits: a bar under the page, a small window in the lower right corner, a large window over the page
+ *  (cinema), or the whole screen. */
+export type PlayerMode = "bar" | "mini" | "cinema" | "full";
 
-export const PLAYER_MODES: readonly PlayerMode[] = ["bar", "mini", "full"];
+export const PLAYER_MODES: readonly PlayerMode[] = ["bar", "mini", "cinema", "full"];
 
 /** One thing to play: a library file and the words to show for it. */
 export type PlayerItem = {
@@ -12,6 +14,8 @@ export type PlayerItem = {
   subtitle?: string;
   /** The catalogue's length, for a file the probe has not measured yet. */
   durationMs?: number;
+  /** What the library knows of the file, shown as the same chips its work page shows. */
+  file?: components["schemas"]["PartFile"];
 };
 
 const MEDIA_EXTENSIONS = new Set([
@@ -22,6 +26,25 @@ const MEDIA_EXTENSIONS = new Set([
 /** Whether a file's type is one the player can be offered for; the server still has the last word. */
 export function isPlayableExtension(extension: string | undefined): boolean {
   return extension !== undefined && MEDIA_EXTENSIONS.has(extension.toLowerCase().replace(/^\./, ""));
+}
+
+/** The subtitle as WebVTT; a converted stream began at `startSecond`, so the cues move back by it. */
+export function subtitleUrl(mediaObjectId: number, track: number, startSecond: number): string {
+  return `${API_PREFIX}/files/${mediaObjectId}/subtitles/${track}?start=${Math.max(0, Math.floor(startSecond))}`;
+}
+
+/** "English" from a language code the track states, else the track's own title, else its number. */
+export function subtitleLabel(track: { id: number; language?: string; title?: string }): string {
+  let name = "";
+  if (track.language) {
+    try {
+      name = new Intl.DisplayNames(["en"], { type: "language" }).of(track.language) ?? "";
+    } catch {
+      name = track.language;
+    }
+  }
+  if (name === "" || name === track.language) name = track.language ?? "";
+  return [name, track.title && track.title !== name ? track.title : ""].filter(Boolean).join(" · ") || `Subtitle ${track.id + 1}`;
 }
 
 export function streamUrl(mediaObjectId: number): string {

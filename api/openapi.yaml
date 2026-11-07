@@ -1273,6 +1273,36 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /files/{mediaObjectId}/subtitles/{track}:
+    parameters:
+      - name: mediaObjectId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: track
+        in: path
+        required: true
+        description: A subtitle's id, as FilePlayback lists them.
+        schema: { type: integer }
+    get:
+      operationId: getFileSubtitle
+      tags: [library]
+      summary: One subtitle of a file as WebVTT, for the player's own track.
+      parameters:
+        - name: start
+          in: query
+          description: Where a converted stream began, in seconds; the cue times are moved back by it.
+          schema: { type: number, format: double, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: The subtitle.
+          content:
+            text/vtt:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
   /files/{mediaObjectId}/transcode:
     parameters:
       - name: mediaObjectId
@@ -3578,6 +3608,25 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/WorkDetail" }
         "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /works/{id}/file-details:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getWorkFileDetails
+      tags: [library]
+      summary: Every path of a work's files, how each was placed, and the files that may duplicate them.
+      responses:
+        "200":
+          description: One entry per file.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkFileDetails" }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
@@ -8695,6 +8744,47 @@ components:
           type: boolean
           description: The file's type and codecs are ones browsers play; the player still falls back to a conversion if this one cannot.
         transcode_available: { type: boolean, description: Transcoding is on and ffmpeg is installed. }
+        subtitles:
+          type: array
+          description: The text subtitles inside the file and beside it; absent when it has none or ffmpeg is missing.
+          items: { $ref: "#/components/schemas/FilePlaybackSubtitle" }
+
+    WorkFileDetails:
+      type: object
+      required: [files]
+      properties:
+        files:
+          type: array
+          items: { $ref: "#/components/schemas/WorkFileDetail" }
+
+    WorkFileDetail:
+      type: object
+      required: [media_object_id, paths, same_bytes, same_picture]
+      properties:
+        media_object_id: { type: integer, format: int64 }
+        paths:
+          type: array
+          items: { $ref: "#/components/schemas/WorkFilePath" }
+        same_bytes: { type: integer, format: int64, description: Other files with the same size and head and tail sample. }
+        same_picture: { type: integer, format: int64, description: Other videos with the same mean picture hash. }
+
+    WorkFilePath:
+      type: object
+      required: [path, link_kind, primary]
+      properties:
+        path: { type: string }
+        link_kind: { type: string, description: "How the path was placed: hardlink, reflink or copy." }
+        primary: { type: boolean }
+
+    FilePlaybackSubtitle:
+      type: object
+      required: [id, codec, default]
+      properties:
+        id: { type: integer, description: "What the subtitle path takes as its track." }
+        language: { type: string, description: "The code the track states, when it states one." }
+        title: { type: string, description: "The track's own name, or the subtitle file's name." }
+        codec: { type: string }
+        default: { type: boolean, description: The file marks it to show unasked. }
 
     StreamingSettings:
       type: object
@@ -11698,7 +11788,7 @@ components:
         target_closeness_pct:
           type: integer
           format: int64
-          description: How near the file is to the library's target quality, 0 to 100, from the parts both name. Absent when it sets none or nothing could be compared.
+          description: "How near the file is to the library's target quality, from the parts both name: 100 on it, lower short of it, up to 200 when it is over a number (only when nothing else is short). Absent when it sets none or nothing could be compared."
         target_gaps:
           type: array
           description: The parts of the target the file does not match, the furthest first.
@@ -13526,7 +13616,7 @@ components:
                 type: array
                 items:
                   type: object
-                  required: [media_object_id, size_bytes, path, path_count, duration_ms, width, height, category_id]
+                  required: [media_object_id, size_bytes, path, path_count, duration_ms, width, height, category_id, mean_hash, work_id, work_title, file]
                   properties:
                     media_object_id: { type: integer, format: int64 }
                     size_bytes: { type: integer, format: int64 }
@@ -13536,6 +13626,10 @@ components:
                     width: { type: integer, format: int64, description: Zero when not probed. }
                     height: { type: integer, format: int64, description: Zero when not probed. }
                     category_id: { type: integer, format: int64, description: The library the file is in. }
+                    mean_hash: { type: string, description: "The video's perceptual hash as 16 hex digits; two videos are as many bits apart as their hashes differ." }
+                    work_id: { type: integer, format: int64, description: The work the file belongs to; zero when none owns it. }
+                    work_title: { type: string, description: The work's title; empty when none owns the file. }
+                    file: { $ref: "#/components/schemas/PartFile" }
 
     LinkPreview:
       type: object

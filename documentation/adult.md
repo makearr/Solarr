@@ -88,7 +88,7 @@ quality*. RSS, hunting, upgrades and the cutoff check are the shared ones.
 
 ## Naming
 
-Slots *Studio Folder* and *Standard Scene*. The default, `{Studio Name}` then
+Slots *Studio Folder* and *Standard Scene*. The default, `[{Network Name}/]{Studio Name}` (the studio below its network when it has one; `{Studio Network}` is the same token) then
 `{Scene Title} ({Release Date})/[{Studio Name}] {Scene Title} ({Release Date})`, is the layout Stash users keep; a Whisparr
 preset and one with performers follow. Tokens: studio, network, scene title, code, release date and year, performer names,
 release group, original filename, StashDB id, part number.

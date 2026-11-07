@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Maximize2, PanelBottom, PictureInPicture2, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX, X } from "lucide-react";
+import { Maximize2, PanelBottom, PictureInPicture2, Pause, Play, RectangleHorizontal, SkipBack, SkipForward, Volume2, VolumeX, X } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t } from "@/lib/i18n";
 import { Button } from "@/ui/Button";
+import { Chip } from "@/ui/Chip";
+
+import { TargetChip } from "../work/TargetChip";
+import { fileChips } from "../work/workFormat";
 
 import { usePlayer } from "./PlayerContext";
 import {
@@ -15,6 +19,8 @@ import {
   formatClock,
   routeAfterFailure,
   streamUrl,
+  subtitleLabel,
+  subtitleUrl,
   transcodeUrl,
   type PlaybackRoute,
   type PlayerItem,
@@ -36,12 +42,14 @@ export function PlayerDock() {
 const FRAME: Record<PlayerMode, string> = {
   bar: "shrink-0 flex items-center gap-3 border-t border-border-subtle bg-surface px-3 py-2",
   mini: "fixed bottom-4 right-4 z-40 flex w-[36rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-border-subtle bg-surface shadow-xl",
+  cinema: "fixed left-1/2 top-1/2 z-40 flex max-h-[92vh] w-[50vw] min-w-[40rem] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-border-subtle bg-surface shadow-2xl",
   full: "fixed inset-0 z-50 flex flex-col bg-black text-white",
 };
 
 const VIDEO: Record<PlayerMode, string> = {
   bar: "h-14 w-24 shrink-0 rounded bg-black object-contain",
   mini: "aspect-video w-full bg-black object-contain",
+  cinema: "aspect-video max-h-[70vh] w-full bg-black object-contain",
   full: "min-h-0 w-full flex-1 bg-black object-contain",
 };
 
@@ -65,6 +73,7 @@ function Dock({ item }: { item: PlayerItem }) {
   const [volume, setVolume] = useState(storedVolume);
   const [failed, setFailed] = useState(false);
   const [quality, setQuality] = useState<Quality>("original");
+  const [subtitle, setSubtitle] = useState<number | null>(null);
   // Where a direct file resumes after a switch back from a converted stream, which restarts it at zero.
   const resumeAt = useRef(0);
 
@@ -129,11 +138,13 @@ function Dock({ item }: { item: PlayerItem }) {
     }
   };
 
+  const tracks = facts?.subtitles ?? [];
+  const chosenTrack = tracks.find((track) => track.id === subtitle);
   const src = chosenSource;
   const unplayable = info.isError || failed;
 
   return (
-    <section aria-label={t("player.label")} data-region="player" className={FRAME[mode]}>
+    <section aria-label={t("player.label")} data-region="player" className={`relative ${FRAME[mode]}`}>
       <video
         ref={media}
         key={`${route}-${offset}-${quality}`}
@@ -152,7 +163,16 @@ function Dock({ item }: { item: PlayerItem }) {
         onError={failedRoute}
         onEnded={player.hasNext ? player.next : undefined}
         onClick={() => togglePlay(media.current)}
-      />
+      >
+        {isVideo && chosenTrack && (
+          <track key={chosenTrack.id} kind="subtitles" default src={subtitleUrl(item.mediaObjectId, chosenTrack.id, route === "transcode" ? offset : 0)} srcLang={chosenTrack.language || undefined} label={subtitleLabel(chosenTrack)} />
+        )}
+      </video>
+      {mode !== "bar" && (
+        <div className="absolute right-2 top-2 z-10 rounded-md bg-black/60 p-0.5 text-white">
+          <Modes mode={mode} onClose={player.close} />
+        </div>
+      )}
       <div className={mode === "bar" ? "flex min-w-0 flex-1 items-center gap-3" : `flex flex-col gap-2 p-3 ${mode === "full" ? "mt-auto" : ""}`}>
         <div className={mode === "bar" ? "min-w-0 basis-56" : "flex items-start gap-2"}>
           <div className="min-w-0 flex-1">
@@ -162,8 +182,21 @@ function Dock({ item }: { item: PlayerItem }) {
               {!unplayable && route === "transcode" && ` · ${t("player.converted")}${quality === "original" ? "" : ` ${quality}`}`}
             </div>
           </div>
-          {mode !== "bar" && <Modes mode={mode} onClose={player.close} />}
         </div>
+        {mode !== "bar" && (item.file || facts) && (
+          <div className="flex flex-wrap items-center gap-1">
+            {item.file ? (
+              <>
+                {fileChips(item.file).map((chip) => (
+                  <Chip key={chip}>{chip}</Chip>
+                ))}
+                <TargetChip file={item.file} />
+              </>
+            ) : (
+              facts && describeSource(facts) !== "" && <Chip>{describeSource(facts)}</Chip>
+            )}
+          </div>
+        )}
         <div className="flex items-center gap-1">
           <Button variant="icon" aria-label={t("player.previous")} disabled={!player.hasPrevious} onClick={player.previous}>
             <SkipBack aria-hidden className="size-4" />
@@ -201,6 +234,22 @@ function Dock({ item }: { item: PlayerItem }) {
             {QUALITIES.map((choice) => (
               <option key={choice} value={choice} className="text-black">
                 {choice === "original" ? t("player.quality.original") : choice}
+              </option>
+            ))}
+          </select>
+        )}
+        {isVideo && tracks.length > 0 && (
+          <select
+            aria-label={t("player.subtitles")}
+            title={t("player.subtitles")}
+            value={subtitle ?? ""}
+            onChange={(event) => setSubtitle(event.target.value === "" ? null : Number(event.target.value))}
+            className="shrink-0 self-start rounded border border-border-subtle bg-transparent px-1 py-0.5 text-xs"
+          >
+            <option value="" className="text-black">{t("player.subtitles")}: {t("player.subtitles.off")}</option>
+            {tracks.map((track) => (
+              <option key={track.id} value={track.id} className="text-black">
+                {subtitleLabel(track)}
               </option>
             ))}
           </select>
@@ -254,14 +303,14 @@ function togglePlay(element: HTMLVideoElement | null) {
   else element.pause();
 }
 
-const MODE_ICONS = { bar: PanelBottom, mini: PictureInPicture2, full: Maximize2 } as const;
+const MODE_ICONS = { bar: PanelBottom, mini: PictureInPicture2, cinema: RectangleHorizontal, full: Maximize2 } as const;
 
 /** Where the player sits, and closing it. */
 function Modes({ mode, onClose }: { mode: PlayerMode; onClose: () => void }) {
   const player = usePlayer();
   return (
     <div className="flex shrink-0 items-center gap-0.5" role="group" aria-label={t("player.placement")}>
-      {(["bar", "mini", "full"] as const).map((choice) => {
+      {(["bar", "mini", "cinema", "full"] as const).map((choice) => {
         const Icon = MODE_ICONS[choice];
         return (
           <Button

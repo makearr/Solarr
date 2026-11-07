@@ -7,14 +7,21 @@ Previews an audio or video file from the web interface, in the browser, without 
 ## Where it appears
 
 A play button sits beside every file that is audio or video: a track, an episode, a movie file. The player lives in
-the page frame, so it keeps playing while you browse, and it has three placements (the choice is kept per account,
-as the `player.mode` preference):
+the page frame, so it keeps playing while you browse, and it has four placements (the choice is kept per account,
+as the `player.mode` preference). The placement buttons and Close sit in the top right corner of the picture (at the
+right end of the bar in bar mode), in the order bar, small window, cinema, full screen, close:
 
 | Mode | Where |
 |---|---|
 | Bar | a strip under the page, above the status bar |
 | Small window | a floating window in the lower right corner |
+| Cinema | a large window over the page, about half the screen wide |
 | Full screen | covers the page; Escape returns to the bar |
+
+Outside the bar the player shows the same chips as the file's work page (resolution, codecs, languages, size and the
+percentage of the library's target). A video with text subtitles, inside the file or beside it (`Film.en.srt`), has a
+**Subtitles** menu: `GET /files/{id}/subtitles/{track}` converts the chosen one to WebVTT with ffmpeg, moved back by
+the second a converted stream began at. Picture subtitles (PGS, DVD) cannot be shown.
 
 Previous and next walk the queue; a finished file starts the next.
 

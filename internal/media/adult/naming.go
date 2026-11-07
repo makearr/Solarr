@@ -18,6 +18,7 @@ const (
 	TokenStudioNameThe    = "Studio NameThe"
 	TokenStudioFirst      = "Studio NameFirstCharacter"
 	TokenNetworkName      = "Network Name"
+	TokenStudioNetwork    = "Studio Network"
 	TokenSceneTitle       = "Scene Title"
 	TokenSceneCleanTitle  = "Scene CleanTitle"
 	TokenSceneTitleThe    = "Scene TitleThe"
@@ -42,7 +43,7 @@ const (
 const maxNamedPerformers = 3
 
 // NamingScheme is the adult naming declaration. The first preset is Solarr's default, the layout Stash users keep
-// scenes in; Whisparr's follows.
+// scenes in, below the studio's network when it has one; Whisparr's follows.
 var NamingScheme = naming.Scheme{
 	Slots: []naming.Slot{
 		{Key: SlotStudioFolder, Label: "Studio Folder Format", Help: "The folder each studio's scenes go in."},
@@ -54,6 +55,7 @@ var NamingScheme = naming.Scheme{
 		{Spelling: "{Studio NameThe}", Group: "Studio", Example: "Night Studio, The", Help: "The studio with a leading The moved to the end."},
 		{Spelling: "{Studio NameFirstCharacter}", Group: "Studio", Example: "N", Help: "The first letter of the studio, for a folder per letter."},
 		{Spelling: "{Network Name}", Group: "Studio", Example: "Night Network", Help: "The network the studio belongs to."},
+		{Spelling: "{Studio Network}", Group: "Studio", Example: "Night Network", Help: "The network the studio belongs to, spelled as in a studio-network folder."},
 		{Spelling: "{Scene Title}", Group: "Scene", Example: "Class Two", Help: "The scene's title."},
 		{Spelling: "{Scene CleanTitle}", Group: "Scene", Example: "Class Two", Help: "The title without punctuation, & written as and."},
 		{Spelling: "{Scene TitleThe}", Group: "Scene", Example: "Class Two, The", Help: "The title with its leading article moved to the end."},
@@ -69,15 +71,15 @@ var NamingScheme = naming.Scheme{
 	},
 	Presets: []naming.Preset{
 		{Name: "Solarr default", Formats: map[string]string{
-			SlotStudioFolder:  "{Studio Name}",
+			SlotStudioFolder:  "[{Network Name}/]{Studio Name}",
 			SlotStandardScene: "{Scene Title}[ ({Release Date})]/[[{Studio Name}]] {Scene Title}[ ({Release Date})][ - {PartNumber:00}]",
 		}},
 		{Name: "Whisparr default", Formats: map[string]string{
-			SlotStudioFolder:  "{Studio Name}",
+			SlotStudioFolder:  "[{Network Name}/]{Studio Name}",
 			SlotStandardScene: "{Studio Name} - {Release Date} - {Scene Title}",
 		}},
 		{Name: "With performers", Formats: map[string]string{
-			SlotStudioFolder:  "{Studio Name}",
+			SlotStudioFolder:  "[{Network Name}/]{Studio Name}",
 			SlotStandardScene: "{Studio Name} - {Release Date} - {Performer Names} - {Scene Title}",
 		}},
 	},
@@ -172,6 +174,7 @@ func (s FileNaming) Context() naming.Context {
 	set(TokenStudioNameThe, naming.TitleThe(studio))
 	set(TokenStudioFirst, naming.FirstCharacter(naming.TitleThe(studio)))
 	set(TokenNetworkName, s.Network)
+	set(TokenStudioNetwork, s.Network)
 	if s.Title != "" {
 		set(TokenSceneTitle, s.Title)
 		set(TokenSceneCleanTitle, naming.CleanTitle(s.Title))

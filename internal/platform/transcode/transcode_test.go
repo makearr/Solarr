@@ -280,3 +280,35 @@ func memWithNode(t *testing.T, present bool) *fsx.Mem {
 	_ = writer.Close()
 	return fsys
 }
+
+type subtitleRunner struct{ fakeRunner }
+
+func (subtitleRunner) Run(context.Context, string, ...string) ([]byte, error) {
+	return []byte(`{"streams":[
+	 {"codec_name":"subrip","tags":{"language":"eng","title":"English"},"disposition":{"default":1}},
+	 {"codec_name":"hdmv_pgs_subtitle","tags":{"language":"deu"},"disposition":{"default":0}},
+	 {"codec_name":"ass","tags":{"language":"fra"},"disposition":{"default":0}}]}`), nil
+}
+
+func TestSubtitleTracks_ListTextStreamsAndSidecarsAndSkipPictures(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	if err := fsys.MkdirAll("/m", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"/m/film.mkv", "/m/film.nl.srt", "/m/other.srt"} {
+		writer, err := fsys.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = writer.Close()
+	}
+	got, err := transcode.NewService(subtitleRunner{}, nil, fsys).SubtitleTracks(t.Context(), "/m/film.mkv")
+	want := []transcode.SubtitleTrack{
+		{ID: 0, Language: "eng", Title: "English", Codec: "subrip", Default: true},
+		{ID: 2, Language: "fra", Codec: "ass"},
+		{ID: transcode.SidecarBase, Language: "nl", Title: "film.nl.srt", Codec: "srt"},
+	}
+	if err != nil || !slices.Equal(got, want) {
+		t.Fatalf("SubtitleTracks = %+v, %v; want %+v", got, err, want)
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path"
 	"strconv"
 	"time"
 
@@ -30,6 +31,23 @@ type WorkDetailReader interface {
 	WorkPlaces(ctx context.Context, id int64) (rootFolderIDs, categoryIDs []int64, err error)
 	// ListWorkParts answers one page of a work's parts, of one group or of all with group "".
 	ListWorkParts(ctx context.Context, id int64, group string, after paginate.TextCursor, limit int) ([]PartRow, error)
+	// WorkFileDetails answers every path of a work's files and the files that may duplicate them.
+	WorkFileDetails(ctx context.Context, id int64) ([]FileDetailRow, error)
+}
+
+// FileDetailRow is one file's paths, with the root folder each is under, and its duplicate candidates.
+type FileDetailRow struct {
+	MediaObjectID          int64
+	Paths                  []FilePathRow
+	SameBytes, SamePicture int
+}
+
+// FilePathRow is one place a file is held and how it was placed there.
+type FilePathRow struct {
+	RootFolderID int64
+	RelPath      string
+	LinkKind     string
+	Primary      bool
 }
 
 // GroupRow is one group of a work: its ref, its label and its wanted item.
@@ -1025,4 +1043,62 @@ func groupView(group GroupRow) gen.WorkGroup {
 type TagRef struct {
 	ID   int64
 	Name string
+}
+
+func (s *Server) routeGetWorkFileDetails(w http.ResponseWriter, r *http.Request) {
+	id, err := parsePathID(w, s, r, "id", "a work id must be a number")
+	if err != nil {
+		return
+	}
+	s.GetWorkFileDetails(w, r, id)
+}
+
+// GetWorkFileDetails answers every path of a work's files, how each was placed (hardlink, reflink, copy) and how many
+// other files may duplicate it; the work is visible to the caller as GetWork has it.
+func (s *Server) GetWorkFileDetails(w http.ResponseWriter, r *http.Request, id int64) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.workDetail == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "the library is not available")
+		return
+	}
+	roots, categories, err := s.workDetail.WorkPlaces(r.Context(), id)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
+		return
+	}
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	visibleRoots, visibleCategories, err := s.visibility(access, nil)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if !workDetailVisible(visibleRoots, visibleCategories, WorkDetailRow{RootFolderIDs: roots, CategoryIDs: categories}) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
+		return
+	}
+	details, err := s.workDetail.WorkFileDetails(r.Context(), id)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	rootPath := map[int64]string{}
+	for _, folder := range s.auth.Settings.Snapshot().RootFolders() {
+		rootPath[folder.ID] = folder.Path
+	}
+	files := make([]gen.WorkFileDetail, len(details))
+	for index, detail := range details {
+		paths := make([]gen.WorkFilePath, len(detail.Paths))
+		for at, place := range detail.Paths {
+			paths[at] = gen.WorkFilePath{Path: path.Join(rootPath[place.RootFolderID], place.RelPath), LinkKind: place.LinkKind, Primary: place.Primary}
+		}
+		files[index] = gen.WorkFileDetail{MediaObjectId: detail.MediaObjectID, Paths: paths, SameBytes: int64(detail.SameBytes), SamePicture: int64(detail.SamePicture)}
+	}
+	writeJSON(w, s.logger, http.StatusOK, gen.WorkFileDetails{Files: files})
 }

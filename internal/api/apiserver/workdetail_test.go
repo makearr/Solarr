@@ -37,6 +37,10 @@ func (f *fakeWorkDetailReader) WorkPlaces(_ context.Context, id int64) ([]int64,
 	return f.row.RootFolderIDs, f.row.CategoryIDs, f.err
 }
 
+func (f *fakeWorkDetailReader) WorkFileDetails(context.Context, int64) ([]apiserver.FileDetailRow, error) {
+	return nil, nil
+}
+
 func (f *fakeWorkDetailReader) ListWorkParts(_ context.Context, id int64, group string, _ paginate.TextCursor, limit int) ([]apiserver.PartRow, error) {
 	f.lastID, f.lastGroup = id, group
 	if len(f.parts) > limit {

@@ -18,6 +18,9 @@ var ErrBusy = errors.New("transcode: every conversion slot is in use")
 // ErrUnavailable is a conversion asked for on a machine without ffmpeg.
 var ErrUnavailable = errors.New("transcode: ffmpeg is not installed")
 
+// ErrNoSuchTrack is a subtitle asked for that the file does not have.
+var ErrNoSuchTrack = errors.New("transcode: no such subtitle")
+
 // Piper runs a command with its standard output going to w; the seam that keeps the tests off ffmpeg.
 type Piper interface {
 	Pipe(ctx context.Context, w io.Writer, name string, args ...string) error

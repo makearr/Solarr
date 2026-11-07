@@ -34,6 +34,7 @@ import { EditWork } from "./EditWork";
 import { NumberingDialog, useNumberingChoices } from "./NumberingDialog";
 import { ReleaseFiltersDialog } from "./ReleaseFiltersDialog";
 import { grabNote } from "./grabNote";
+import { ExpertFileInfo, type ExpertFiles, useExpertFiles } from "./FileExpert";
 import { TargetChip } from "./TargetChip";
 import { externalLinks, fileChips, formatMinutes, isUnverified } from "./workFormat";
 import { GroupSection, MonitorToggle, PartTable, PersonLink, useAllParts, type PartActions } from "./WorkParts";
@@ -88,7 +89,7 @@ function WorkView({ work, info, categoryId, tab }: { work: Work; info: MediaType
         <MergeSuggestion work={work} words={words} categoryId={categoryId} />
         <Tabs label={work.title} tabs={tabs} active={tab} />
         {tab === "overview" && <OverviewTab work={work} info={info} words={words} categoryId={categoryId} />}
-        {tab === "files" && <FilesTab work={work} words={words} info={info} />}
+        {tab === "files" && <FilesTab work={work} words={words} info={info} categoryId={categoryId} />}
         {tab === "history" && <HistoryTab workId={work.id} />}
         {tab === "search" && <WorkSearchTab work={work} info={info} words={words} lead={lead?.person_name ?? ""} />}
       </div>
@@ -563,6 +564,8 @@ function OverviewTab({ work, info, words, categoryId }: { work: Work; info: Medi
 
   return (
     <div className="flex flex-col gap-4">
+      {/* A work with no parts (a film, a scene) shows its file first, as a series shows each episode's. */}
+      {!grouped && !info?.part.one && <WholeFiles work={work} />}
       <CastStrip work={work} info={info} categoryId={categoryId} />
       {categoryId && <WorkCollections workId={work.id} categoryId={categoryId} />}
       {crossoverPart && categoryId && <CrossoverDialog part={crossoverPart} categoryId={categoryId} onClose={() => setCrossoverPart(undefined)} />}
@@ -585,9 +588,7 @@ function OverviewTab({ work, info, words, categoryId }: { work: Work; info: Medi
         ))
       ) : info?.part.one ? (
         <WholeParts work={work} info={info} words={words} categoryId={categoryId} actions={actions} />
-      ) : (
-        <WholeFiles work={work} />
-      )}
+      ) : null}
       {work.editions.length > 0 && (
         <details className="rounded-lg border border-border-subtle bg-surface p-3 text-sm">
           <summary className="cursor-pointer text-xs font-medium uppercase tracking-wide text-ink-muted">Releases ({work.editions.length})</summary>
@@ -628,7 +629,8 @@ const CREW_ORDER = ["director", "creator", "showrunner", "writer", "composer", "
 /** The work's people with their pictures: the actors first, then the director, the writers and the producers last; a person
  *  once, with every part they played. */
 function CastStrip({ work, info, categoryId }: { work: Work; info: MediaTypeInfo | undefined; categoryId: string | undefined }) {
-  const roles = (info?.roles ?? []).filter((role) => !role.part_scoped && (!role.lead || !work.lead_id));
+  // A poster type's lead role (a scene's performers) is on the strip too: its faces are what the page is about.
+  const roles = (info?.roles ?? []).filter((role) => !role.part_scoped && (!role.lead || !work.lead_id || info?.work_image === "poster"));
   const labelOf = (key: string) => roles.find((role) => role.key === key)?.label ?? key;
   const actorRoles = new Set(roles.filter((role) => role.character).map((role) => role.key));
   const rank = (role: string) => {
@@ -695,10 +697,11 @@ function EditionCard({ edition, workTitle }: { edition: Edition; workTitle: stri
 
 /** Sonarr's Files tab: every part with a file, where it is, what the probe measured, and whether it meets the library's
  *  quality. */
-function FilesTab({ work, words, info }: { work: Work; words: Vocabulary; info: MediaTypeInfo | undefined }) {
+function FilesTab({ work, words, info, categoryId }: { work: Work; words: Vocabulary; info: MediaTypeInfo | undefined; categoryId: string | undefined }) {
   const { parts, loading } = useAllParts(work.id, undefined);
+  const expert = useExpertFiles(work.id, categoryId);
   const present = parts.filter((part) => part.file);
-  if (!info?.part.one) return <WholeFiles work={work} />;
+  if (!info?.part.one) return <WholeFiles work={work} expert={expert} />;
   if (loading) return <p className="text-xs text-ink-muted">{t("work.loading")}</p>;
   if (present.length === 0) return <EmptyState title={`No ${words.parts} on disk yet.`} />;
   return (
@@ -716,6 +719,7 @@ function FilesTab({ work, words, info }: { work: Work; words: Vocabulary; info: 
               <span className="mt-0.5 flex flex-wrap gap-1">
                 {part.file && fileChips(part.file).map((chip) => <Chip key={chip}>{chip}</Chip>)}
               </span>
+              {part.file && <ExpertFileInfo mediaObjectId={part.file.media_object_id} expert={expert} />}
             </td>
             <td className="whitespace-nowrap py-1.5 text-right text-xs">
               {part.file && <TargetChip file={part.file} short />}{" "}
@@ -729,7 +733,7 @@ function FilesTab({ work, words, info }: { work: Work; words: Vocabulary; info: 
 }
 
 /** The files of a work with no parts (a movie): where each is and what the probe measured, a version each. */
-function WholeFiles({ work }: { work: Work }) {
+function WholeFiles({ work, expert }: { work: Work; expert?: ExpertFiles }) {
   const files = work.files ?? [];
   if (files.length === 0) {
     return <EmptyState title={work.wanted?.monitored ? t("work.file.missing") : t("work.file.none")} />;
@@ -741,7 +745,7 @@ function WholeFiles({ work }: { work: Work }) {
         {files.map((file) => (
           <li key={file.media_object_id} className="flex flex-col gap-1 py-2">
             <span className="flex items-center gap-2">
-              <PlayButton extension={file.extension} item={{ mediaObjectId: file.media_object_id, title: work.title, durationMs: work.runtime_ms ?? undefined }} />
+              <PlayButton extension={file.extension} item={{ mediaObjectId: file.media_object_id, title: work.title, durationMs: work.runtime_ms ?? undefined, file }} />
               {file.path && <span className="break-all font-mono text-xs">{file.path}</span>}
             </span>
             <span className="flex flex-wrap items-center gap-1">
@@ -751,6 +755,7 @@ function WholeFiles({ work }: { work: Work }) {
               <TargetChip file={file} />
               {file.meets_cutoff === false && <Chip tone="warn">below the cutoff</Chip>}
             </span>
+            {expert && <ExpertFileInfo mediaObjectId={file.media_object_id} expert={expert} />}
           </li>
         ))}
       </ul>

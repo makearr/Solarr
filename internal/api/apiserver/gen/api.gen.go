@@ -2554,6 +2554,9 @@ type FilePlayback struct {
 	// OverallBitrateKbps The file's own bitrate as the probe measured it.
 	OverallBitrateKbps *int64 `json:"overall_bitrate_kbps,omitempty"`
 
+	// Subtitles The text subtitles inside the file and beside it; absent when it has none or ffmpeg is missing.
+	Subtitles *[]FilePlaybackSubtitle `json:"subtitles,omitempty"`
+
 	// TranscodeAvailable Transcoding is on and ffmpeg is installed.
 	TranscodeAvailable bool    `json:"transcode_available"`
 	VideoBitrateKbps   *int64  `json:"video_bitrate_kbps,omitempty"`
@@ -2563,6 +2566,23 @@ type FilePlayback struct {
 
 // FilePlaybackKind defines model for FilePlayback.Kind.
 type FilePlaybackKind string
+
+// FilePlaybackSubtitle defines model for FilePlaybackSubtitle.
+type FilePlaybackSubtitle struct {
+	Codec string `json:"codec"`
+
+	// Default The file marks it to show unasked.
+	Default bool `json:"default"`
+
+	// Id What the subtitle path takes as its track.
+	Id int `json:"id"`
+
+	// Language The code the track states, when it states one.
+	Language *string `json:"language,omitempty"`
+
+	// Title The track's own name, or the subtitle file's name.
+	Title *string `json:"title,omitempty"`
+}
 
 // Follow The caller's follow of a person or organisation in one library.
 type Follow struct {
@@ -4398,7 +4418,7 @@ type PartFile struct {
 	// Subtitles Language codes of embedded and sidecar subtitles.
 	Subtitles *[]string `json:"subtitles,omitempty"`
 
-	// TargetClosenessPct How near the file is to the library's target quality, 0 to 100, from the parts both name. Absent when it sets none or nothing could be compared.
+	// TargetClosenessPct How near the file is to the library's target quality, from the parts both name: 100 on it, lower short of it, up to 200 when it is over a number (only when nothing else is short). Absent when it sets none or nothing could be compared.
 	TargetClosenessPct *int64 `json:"target_closeness_pct,omitempty"`
 
 	// TargetGaps The parts of the target the file does not match, the furthest first.
@@ -5358,9 +5378,15 @@ type SimilarVideoReport struct {
 			// DurationMs Zero when not probed.
 			DurationMs int64 `json:"duration_ms"`
 
+			// File The file covering one part, and what probing measured of it.
+			File PartFile `json:"file"`
+
 			// Height Zero when not probed.
-			Height        int64 `json:"height"`
-			MediaObjectId int64 `json:"media_object_id"`
+			Height int64 `json:"height"`
+
+			// MeanHash The video's perceptual hash as 16 hex digits; two videos are as many bits apart as their hashes differ.
+			MeanHash      string `json:"mean_hash"`
+			MediaObjectId int64  `json:"media_object_id"`
 
 			// Path The first path holding the file.
 			Path string `json:"path"`
@@ -5371,6 +5397,12 @@ type SimilarVideoReport struct {
 
 			// Width Zero when not probed.
 			Width int64 `json:"width"`
+
+			// WorkId The work the file belongs to; zero when none owns it.
+			WorkId int64 `json:"work_id"`
+
+			// WorkTitle The work's title; empty when none owns the file.
+			WorkTitle string `json:"work_title"`
 		} `json:"videos"`
 	} `json:"groups"`
 
@@ -6023,6 +6055,31 @@ type WorkExclusion struct {
 	Title    string `json:"title"`
 }
 
+// WorkFileDetail defines model for WorkFileDetail.
+type WorkFileDetail struct {
+	MediaObjectId int64          `json:"media_object_id"`
+	Paths         []WorkFilePath `json:"paths"`
+
+	// SameBytes Other files with the same size and head and tail sample.
+	SameBytes int64 `json:"same_bytes"`
+
+	// SamePicture Other videos with the same mean picture hash.
+	SamePicture int64 `json:"same_picture"`
+}
+
+// WorkFileDetails defines model for WorkFileDetails.
+type WorkFileDetails struct {
+	Files []WorkFileDetail `json:"files"`
+}
+
+// WorkFilePath defines model for WorkFilePath.
+type WorkFilePath struct {
+	// LinkKind How the path was placed: hardlink, reflink or copy.
+	LinkKind string `json:"link_kind"`
+	Path     string `json:"path"`
+	Primary  bool   `json:"primary"`
+}
+
 // WorkGroup defines model for WorkGroup.
 type WorkGroup struct {
 	DesiredItemId int64 `json:"desired_item_id"`
@@ -6358,6 +6415,12 @@ type StreamEventsParams struct {
 // ListFavoritesParams defines parameters for ListFavorites.
 type ListFavoritesParams struct {
 	SubjectType FavoriteSubject `form:"subject_type" json:"subject_type"`
+}
+
+// GetFileSubtitleParams defines parameters for GetFileSubtitle.
+type GetFileSubtitleParams struct {
+	// Start Where a converted stream began, in seconds; the cue times are moved back by it.
+	Start *float64 `form:"start,omitempty" json:"start,omitempty"`
 }
 
 // TranscodeFileParams defines parameters for TranscodeFile.
@@ -7964,6 +8027,9 @@ type ServerInterface interface {
 	// The file's own bytes, with byte ranges, for the browser to play as it is.
 	// (GET /files/{mediaObjectId}/stream)
 	StreamFile(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
+	// One subtitle of a file as WebVTT, for the player's own track.
+	// (GET /files/{mediaObjectId}/subtitles/{track})
+	GetFileSubtitle(w http.ResponseWriter, r *http.Request, mediaObjectId int64, track int, params GetFileSubtitleParams)
 	// The file converted by ffmpeg into what a browser plays, streamed as it is made.
 	// (GET /files/{mediaObjectId}/transcode)
 	TranscodeFile(w http.ResponseWriter, r *http.Request, mediaObjectId int64, params TranscodeFileParams)
@@ -8609,6 +8675,9 @@ type ServerInterface interface {
 	// Save an album's Edit dialog in one call.
 	// (PUT /works/{id}/edit)
 	SaveWorkEdit(w http.ResponseWriter, r *http.Request, id int64)
+	// Every path of a work's files, how each was placed, and the files that may duplicate them.
+	// (GET /works/{id}/file-details)
+	GetWorkFileDetails(w http.ResponseWriter, r *http.Request, id int64)
 	// The collections a work is part of, with the works of each the library holds.
 	// (GET /works/{id}/franchises)
 	ListWorkFranchises(w http.ResponseWriter, r *http.Request, id int64, params ListWorkFranchisesParams)
@@ -9302,6 +9371,12 @@ func (_ Unimplemented) RemoveAndBlockFile(w http.ResponseWriter, r *http.Request
 // The file's own bytes, with byte ranges, for the browser to play as it is.
 // (GET /files/{mediaObjectId}/stream)
 func (_ Unimplemented) StreamFile(w http.ResponseWriter, r *http.Request, mediaObjectId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One subtitle of a file as WebVTT, for the player's own track.
+// (GET /files/{mediaObjectId}/subtitles/{track})
+func (_ Unimplemented) GetFileSubtitle(w http.ResponseWriter, r *http.Request, mediaObjectId int64, track int, params GetFileSubtitleParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10592,6 +10667,12 @@ func (_ Unimplemented) GetWorkEdit(w http.ResponseWriter, r *http.Request, id in
 // Save an album's Edit dialog in one call.
 // (PUT /works/{id}/edit)
 func (_ Unimplemented) SaveWorkEdit(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every path of a work's files, how each was placed, and the files that may duplicate them.
+// (GET /works/{id}/file-details)
+func (_ Unimplemented) GetWorkFileDetails(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -14012,6 +14093,59 @@ func (siw *ServerInterfaceWrapper) StreamFile(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.StreamFile(w, r, mediaObjectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetFileSubtitle operation middleware
+func (siw *ServerInterfaceWrapper) GetFileSubtitle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "mediaObjectId" -------------
+	var mediaObjectId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "mediaObjectId", chi.URLParam(r, "mediaObjectId"), &mediaObjectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mediaObjectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "track" -------------
+	var track int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "track", chi.URLParam(r, "track"), &track, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "track", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetFileSubtitleParams
+
+	// ------------- Optional query parameter "start" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "start", r.URL.Query(), &params.Start)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "start", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetFileSubtitle(w, r, mediaObjectId, track, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -21184,6 +21318,39 @@ func (siw *ServerInterfaceWrapper) SaveWorkEdit(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// GetWorkFileDetails operation middleware
+func (siw *ServerInterfaceWrapper) GetWorkFileDetails(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWorkFileDetails(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListWorkFranchises operation middleware
 func (siw *ServerInterfaceWrapper) ListWorkFranchises(w http.ResponseWriter, r *http.Request) {
 
@@ -22311,6 +22478,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/files/{mediaObjectId}/stream", wrapper.StreamFile)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/files/{mediaObjectId}/subtitles/{track}", wrapper.GetFileSubtitle)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/files/{mediaObjectId}/transcode", wrapper.TranscodeFile)
 	})
 	r.Group(func(r chi.Router) {
@@ -22954,6 +23124,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/works/{id}/edit", wrapper.SaveWorkEdit)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works/{id}/file-details", wrapper.GetWorkFileDetails)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works/{id}/franchises", wrapper.ListWorkFranchises)

@@ -5,7 +5,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/bits"
+	"path"
 	"slices"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -54,6 +56,12 @@ type SimilarVideo struct {
 	RelPath      string
 	// PathCount is how many paths hold this file; RelPath is the first of them.
 	PathCount int
+	// Mean is the mean-frame perceptual hash; two videos are that many bits apart as their hashes differ.
+	Mean uint64
+	// File is what the probe measured; WorkID is zero for a file no work owns.
+	File      PartFile
+	WorkID    int64
+	WorkTitle string
 }
 
 // SimilarGroup is files whose hashes chain together within the distance; the largest comes first.
@@ -197,7 +205,35 @@ func (s SimilarVideos) Groups(ctx context.Context, rootFolderIDs []int64, level 
 	if err != nil {
 		return nil, err
 	}
-	return groupSimilar(videos, level.MaxBits(), s.frameBitsAt(level), limit), nil
+	groups := groupSimilar(videos, level.MaxBits(), s.frameBitsAt(level), limit)
+	if err := s.addFacts(ctx, groups); err != nil {
+		return nil, err
+	}
+	return groups, nil
+}
+
+// addFacts reads what the probe measured of each video that made a group, and the work it belongs to.
+func (s SimilarVideos) addFacts(ctx context.Context, groups []SimilarGroup) error {
+	queries := librarydb.New(s.store.Read())
+	for _, group := range groups {
+		for index := range group.Videos {
+			video := &group.Videos[index]
+			row, err := queries.GetVideoFacts(ctx, video.MediaObjectID)
+			if err != nil {
+				return fmt.Errorf("library: video %d facts: %w", video.MediaObjectID, err)
+			}
+			video.WorkID, video.WorkTitle = row.WorkID, row.WorkTitle
+			video.File = PartFile{
+				MediaObjectID: row.ID, AudioCodec: row.AudioCodec.String, VideoCodec: row.VideoCodec.String, Container: row.Container.String,
+				BitrateKbps: bitrateKbps(row.OverallBitrate, row.AudioBitrate), Lossless: row.Lossless.Valid && row.Lossless.Int64 == 1,
+				Extension: strings.ToLower(strings.TrimPrefix(path.Ext(video.RelPath), ".")), RelPath: video.RelPath, SizeBytes: row.SizeBytes,
+				Resolution: row.Resolution.String, HDR: row.Hdr.String, AudioChannels: row.AudioChannels.String,
+				VideoBitrateKbps: row.VideoBitrate.Int64 / 1000, AudioLanguages: jsonStrings(row.Languages), Subtitles: jsonStrings(row.Subtitles),
+				FrameRate: row.FrameRate.Float64, CRF: row.Crf.Float64,
+			}
+		}
+	}
+	return nil
 }
 
 // MatchInWork answers the videos of one work that show the same pictures as the given hash, by the finder's own test
@@ -247,7 +283,7 @@ func collectVideos(rows []librarydb.ListHashedVideosRow, rootFolderIDs []int64) 
 			return nil, fmt.Errorf("library: video %d: %w", row.ID, err)
 		}
 		videos = append(videos, hashedVideo{
-			video: SimilarVideo{MediaObjectID: row.ID, SizeBytes: row.SizeBytes, DurationMs: row.DurationMs.Int64, Width: row.Width.Int64, Height: row.Height.Int64, RootFolderID: row.RootFolderID, RelPath: row.RelPath, PathCount: 1},
+			video: SimilarVideo{MediaObjectID: row.ID, SizeBytes: row.SizeBytes, DurationMs: row.DurationMs.Int64, Width: row.Width.Int64, Height: row.Height.Int64, RootFolderID: row.RootFolderID, RelPath: row.RelPath, PathCount: 1, Mean: uint64(row.Phash.Int64)},
 			mean:  uint64(row.Phash.Int64), frames: frames,
 		})
 	}

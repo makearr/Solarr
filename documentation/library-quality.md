@@ -43,7 +43,7 @@ enough: the shipped profiles have no gates, so every release "passes" every one 
   A target is also the setting a later transcode will aim for, so every file and every candidate release is judged by **how
   close** it is, not only whether it meets it (`quality.Distance`): 0 to 100 %, a weighted share of the parts both name
   (resolution, codec, CRF and video bitrate weigh most; a number loses a quarter per half-octave away; a part the probe or
-  release name does not state is left out). A library file shows "82% of the target" with the gaps on hover; a candidate's
+  release name does not state is left out). A library file shows "82% of the target" with the gaps on hover (100% on it, and above 100 up to 200% when a bitrate or rate is over the target while nothing else is short); a candidate's
   decision carries a zero-point `target-closeness` component. The closeness ranks nothing; the tiers below do.
   **Content profiles** (migration 0064; Quality profiles > Content profiles) are what kind of material a target is for:
   video 4K, Sports, Anime, Old movies, TV series, Cartoon, CRT / VHS; audio Radio, CD, Lossless, Spoken, Spoken (mono).

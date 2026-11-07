@@ -195,6 +195,12 @@ func TestNamingRendersTheStudioFolderAndTheSceneBelowIt(t *testing.T) {
 	if want := "Night Studio/Class Two (2020-05-14)/[Night Studio] Class Two (2020-05-14).mp4"; err != nil || got != want {
 		t.Errorf("default = %q, %v; want %q", got, err, want)
 	}
+	facts.Network = "Night Network"
+	got, _, err = NamingFor(nil).RenderScene(facts, "x.mp4")
+	if want := "Night Network/Night Studio/Class Two (2020-05-14)/[Night Studio] Class Two (2020-05-14).mp4"; err != nil || got != want {
+		t.Errorf("with a network = %q, %v; want %q", got, err, want)
+	}
+	facts.Network = ""
 	profile := DefaultNamingProfile()
 	profile.Formats = map[string]string{SlotStudioFolder: "{Studio Name}", SlotStandardScene: "{Studio Name} - {Release Date} - {Performer Names} - {Scene Title}"}
 	preset := NamingFor(&profile)

@@ -21,6 +21,7 @@ func (s SimilarVideos) SimilarVideos(ctx context.Context, rootFolderIDs []int64,
 		for _, video := range group.Videos {
 			rows[i].Videos = append(rows[i].Videos, apiserver.SimilarVideoRow{
 				MediaObjectID: video.MediaObjectID, SizeBytes: video.SizeBytes, DurationMs: video.DurationMs, Width: video.Width, Height: video.Height, RootFolderID: video.RootFolderID, RelPath: video.RelPath, PathCount: video.PathCount,
+				Mean: video.Mean, File: partFileRow(&video.File), WorkID: video.WorkID, WorkTitle: video.WorkTitle,
 			})
 		}
 	}

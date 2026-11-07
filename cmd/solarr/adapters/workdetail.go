@@ -237,3 +237,20 @@ func partFileRow(file *library.PartFile) apiserver.PartFileRow {
 		FrameRate: file.FrameRate, CRF: file.CRF,
 	}
 }
+
+// WorkFileDetails maps a work's file paths and duplicate candidates.
+func (a WorkDetail) WorkFileDetails(ctx context.Context, id int64) ([]apiserver.FileDetailRow, error) {
+	details, err := a.Works.FileDetails(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]apiserver.FileDetailRow, len(details))
+	for index, detail := range details {
+		row := apiserver.FileDetailRow{MediaObjectID: detail.MediaObjectID, SameBytes: detail.SameBytes, SamePicture: detail.SamePicture}
+		for _, place := range detail.Paths {
+			row.Paths = append(row.Paths, apiserver.FilePathRow{RootFolderID: place.RootFolderID, RelPath: place.RelPath, LinkKind: place.LinkKind, Primary: place.Primary})
+		}
+		rows[index] = row
+	}
+	return rows, nil
+}

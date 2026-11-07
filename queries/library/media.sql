@@ -342,6 +342,40 @@ JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.m
 WHERE o.phash IS NOT NULL AND o.kind = 'video' AND f.algorithm_version = sqlc.arg(version)
 ORDER BY o.id;
 
+-- What the duplicate screens show of a video: its measured facts and the work it belongs to.
+-- name: GetVideoFacts :one
+SELECT o.id, o.overall_bitrate, o.audio_bitrate, o.video_bitrate, o.size_bytes,
+       a.audio_codec, a.video_codec, a.container, a.lossless, a.languages,
+       a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
+       CAST(COALESCE((SELECT wf.work_id FROM work_file wf WHERE wf.media_object_id = o.id ORDER BY wf.work_id LIMIT 1), 0) AS INTEGER) AS work_id,
+       CAST(COALESCE((SELECT w.canonical_title FROM work_file wf JOIN work w ON w.id = wf.work_id WHERE wf.media_object_id = o.id ORDER BY wf.work_id LIMIT 1), '') AS TEXT) AS work_title
+FROM media_object o
+LEFT JOIN media_attributes a ON a.id = o.measured_attributes_id
+WHERE o.id = ?;
+
+-- Every live path of a work's files, with how each was placed.
+-- name: ListLivePathsForWork :many
+SELECT wf.media_object_id, lp.root_folder_id, lp.rel_path, lp.link_kind, lp.is_primary
+FROM work_file wf
+JOIN library_path lp ON lp.media_object_id = wf.media_object_id AND lp.missing_since IS NULL
+WHERE wf.work_id = ?
+ORDER BY wf.media_object_id, lp.is_primary DESC, lp.id;
+
+-- Other files with the same bytes (size and head and tail sample) as each of a work's files.
+-- name: ListSameBytesPeersForWork :many
+SELECT m.id AS media_object_id, CAST(COUNT(x.id) AS INTEGER) AS peers
+FROM work_file wf
+JOIN media_object m ON m.id = wf.media_object_id
+JOIN media_object x ON x.quick_hash = m.quick_hash AND x.size_bytes = m.size_bytes AND x.id <> m.id
+WHERE wf.work_id = ?
+GROUP BY m.id;
+
+-- Every file that shows the same mean picture as one of a work's videos; the caller counts them per hash.
+-- name: ListSamePicturePeersForWork :many
+SELECT x.id, x.phash
+FROM media_object x
+WHERE x.phash IN (SELECT o.phash FROM work_file wf JOIN media_object o ON o.id = wf.media_object_id WHERE wf.work_id = ? AND o.phash IS NOT NULL);
+
 -- The hashed videos of one work: an import compares a download's pictures with what the work already holds.
 -- name: ListWorkVideoHashes :many
 SELECT o.id, o.phash, o.duration_ms, f.frames

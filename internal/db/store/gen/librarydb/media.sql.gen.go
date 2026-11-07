@@ -483,6 +483,65 @@ func (q *Queries) GetPathByLocation(ctx context.Context, arg GetPathByLocationPa
 	return i, err
 }
 
+const getVideoFacts = `-- name: GetVideoFacts :one
+SELECT o.id, o.overall_bitrate, o.audio_bitrate, o.video_bitrate, o.size_bytes,
+       a.audio_codec, a.video_codec, a.container, a.lossless, a.languages,
+       a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
+       CAST(COALESCE((SELECT wf.work_id FROM work_file wf WHERE wf.media_object_id = o.id ORDER BY wf.work_id LIMIT 1), 0) AS INTEGER) AS work_id,
+       CAST(COALESCE((SELECT w.canonical_title FROM work_file wf JOIN work w ON w.id = wf.work_id WHERE wf.media_object_id = o.id ORDER BY wf.work_id LIMIT 1), '') AS TEXT) AS work_title
+FROM media_object o
+LEFT JOIN media_attributes a ON a.id = o.measured_attributes_id
+WHERE o.id = ?
+`
+
+type GetVideoFactsRow struct {
+	ID             int64
+	OverallBitrate sql.NullInt64
+	AudioBitrate   sql.NullInt64
+	VideoBitrate   sql.NullInt64
+	SizeBytes      int64
+	AudioCodec     sql.NullString
+	VideoCodec     sql.NullString
+	Container      sql.NullString
+	Lossless       sql.NullInt64
+	Languages      sql.NullString
+	Resolution     sql.NullString
+	Hdr            sql.NullString
+	AudioChannels  sql.NullString
+	Subtitles      sql.NullString
+	FrameRate      sql.NullFloat64
+	Crf            sql.NullFloat64
+	WorkID         int64
+	WorkTitle      string
+}
+
+// What the duplicate screens show of a video: its measured facts and the work it belongs to.
+func (q *Queries) GetVideoFacts(ctx context.Context, id int64) (GetVideoFactsRow, error) {
+	row := q.db.QueryRowContext(ctx, getVideoFacts, id)
+	var i GetVideoFactsRow
+	err := row.Scan(
+		&i.ID,
+		&i.OverallBitrate,
+		&i.AudioBitrate,
+		&i.VideoBitrate,
+		&i.SizeBytes,
+		&i.AudioCodec,
+		&i.VideoCodec,
+		&i.Container,
+		&i.Lossless,
+		&i.Languages,
+		&i.Resolution,
+		&i.Hdr,
+		&i.AudioChannels,
+		&i.Subtitles,
+		&i.FrameRate,
+		&i.Crf,
+		&i.WorkID,
+		&i.WorkTitle,
+	)
+	return i, err
+}
+
 const internAttributes = `-- name: InternAttributes :one
 
 INSERT INTO media_attributes (attr_hash, resolution, source, video_codec, hdr,
@@ -633,6 +692,52 @@ func (q *Queries) ListHashedVideos(ctx context.Context, version int64) ([]ListHa
 			&i.RootFolderID,
 			&i.RelPath,
 			&i.Frames,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLivePathsForWork = `-- name: ListLivePathsForWork :many
+SELECT wf.media_object_id, lp.root_folder_id, lp.rel_path, lp.link_kind, lp.is_primary
+FROM work_file wf
+JOIN library_path lp ON lp.media_object_id = wf.media_object_id AND lp.missing_since IS NULL
+WHERE wf.work_id = ?
+ORDER BY wf.media_object_id, lp.is_primary DESC, lp.id
+`
+
+type ListLivePathsForWorkRow struct {
+	MediaObjectID int64
+	RootFolderID  int64
+	RelPath       string
+	LinkKind      string
+	IsPrimary     int64
+}
+
+// Every live path of a work's files, with how each was placed.
+func (q *Queries) ListLivePathsForWork(ctx context.Context, workID int64) ([]ListLivePathsForWorkRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLivePathsForWork, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLivePathsForWorkRow{}
+	for rows.Next() {
+		var i ListLivePathsForWorkRow
+		if err := rows.Scan(
+			&i.MediaObjectID,
+			&i.RootFolderID,
+			&i.RelPath,
+			&i.LinkKind,
+			&i.IsPrimary,
 		); err != nil {
 			return nil, err
 		}
@@ -856,6 +961,79 @@ func (q *Queries) ListRenameFilesOnRoot(ctx context.Context, arg ListRenameFiles
 			&i.EditionID,
 			&i.MediaRef,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSameBytesPeersForWork = `-- name: ListSameBytesPeersForWork :many
+SELECT m.id AS media_object_id, CAST(COUNT(x.id) AS INTEGER) AS peers
+FROM work_file wf
+JOIN media_object m ON m.id = wf.media_object_id
+JOIN media_object x ON x.quick_hash = m.quick_hash AND x.size_bytes = m.size_bytes AND x.id <> m.id
+WHERE wf.work_id = ?
+GROUP BY m.id
+`
+
+type ListSameBytesPeersForWorkRow struct {
+	MediaObjectID int64
+	Peers         int64
+}
+
+// Other files with the same bytes (size and head and tail sample) as each of a work's files.
+func (q *Queries) ListSameBytesPeersForWork(ctx context.Context, workID int64) ([]ListSameBytesPeersForWorkRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSameBytesPeersForWork, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSameBytesPeersForWorkRow{}
+	for rows.Next() {
+		var i ListSameBytesPeersForWorkRow
+		if err := rows.Scan(&i.MediaObjectID, &i.Peers); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSamePicturePeersForWork = `-- name: ListSamePicturePeersForWork :many
+SELECT x.id, x.phash
+FROM media_object x
+WHERE x.phash IN (SELECT o.phash FROM work_file wf JOIN media_object o ON o.id = wf.media_object_id WHERE wf.work_id = ? AND o.phash IS NOT NULL)
+`
+
+type ListSamePicturePeersForWorkRow struct {
+	ID    int64
+	Phash sql.NullInt64
+}
+
+// Every file that shows the same mean picture as one of a work's videos; the caller counts them per hash.
+func (q *Queries) ListSamePicturePeersForWork(ctx context.Context, workID int64) ([]ListSamePicturePeersForWorkRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSamePicturePeersForWork, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSamePicturePeersForWorkRow{}
+	for rows.Next() {
+		var i ListSamePicturePeersForWorkRow
+		if err := rows.Scan(&i.ID, &i.Phash); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

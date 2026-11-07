@@ -39,10 +39,14 @@ Reference: [file-management.md](../file-management.md).
 
 ## Similar videos (🔴)
 
-**Similar videos** (the Duplicates page of TV, movie and other video libraries) lists files that look like one
-cut in several encodes. **Keep the ticked file** makes the others links to it where the container matches and
-recycles the rest. It is not offered when the file names give different episodes (SxxExx), and it does not
-compare across libraries.
+**Similar videos** (the Duplicates page of TV, movie and other video libraries; administrators see every library's
+at **Storage → Duplicates**, with a **Library** menu that defaults to All) lists files that look like one cut in several
+encodes. Each file shows the chips of its work page, including its percentage of the library's target, a play button
+for a preview, a link to its item in its library and how many of the 64 hash bits differ from the kept file. The file
+closest to its library's target is ticked to keep; tick more than one to keep several. Every file that is not kept has
+**Merge into the kept file** (its locations become a hardlink or reflink to the kept file, the old copy waits 7 days in
+the recycle bin) and **Delete** (recycle bin). Merging needs the same library and the same file kind, otherwise only
+Delete is offered. A warning shows when the file names give different episodes (SxxExx).
 
 How it decides: a background pass at the end of the probe sweep samples seven frames of every video and keeps a
 64-bit perceptual hash of each frame and of their average (a file ffmpeg cannot decode stays unhashed and is

@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -172,6 +173,49 @@ func (s *Server) TranscodeFile(w http.ResponseWriter, r *http.Request, _ int64, 
 	s.routeTranscodeFile(w, r)
 }
 
+func (s *Server) GetFileSubtitle(w http.ResponseWriter, r *http.Request, _ int64, track int, params gen.GetFileSubtitleParams) {
+	s.routeGetFileSubtitle(w, r, track, derefOr(params.Start, 0))
+}
+
+func (s *Server) routeSubtitleRequest(w http.ResponseWriter, r *http.Request) {
+	track, err := strconv.Atoi(chi.URLParam(r, "track"))
+	if err != nil || track < 0 {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a subtitle id must be a number")
+		return
+	}
+	start, err := parseStart(r.URL.Query().Get("start"))
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "start must be a number of seconds")
+		return
+	}
+	s.routeGetFileSubtitle(w, r, track, start)
+}
+
+// routeGetFileSubtitle converts one subtitle to WebVTT; ffmpeg runs for as long as the text takes, which is a moment.
+func (s *Server) routeGetFileSubtitle(w http.ResponseWriter, r *http.Request, track int, start float64) {
+	file, _, ok := s.playbackFile(w, r)
+	if !ok {
+		return
+	}
+	if s.transcoder == nil || !s.transcoder.Available() {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "ffmpeg is not installed")
+		return
+	}
+	var text bytes.Buffer
+	switch err := s.transcoder.SubtitleVTT(r.Context(), &text, file.AbsolutePath, track, start); {
+	case errors.Is(err, transcode.ErrNoSuchTrack):
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such subtitle")
+		return
+	case err != nil:
+		s.logger.Warn("subtitle conversion failed", "file", file.AbsolutePath, "track", track, "error", err)
+		writeProblem(w, s.logger, http.StatusBadGateway, TypeUnavailable, "Conversion failed", "ffmpeg could not read this subtitle")
+		return
+	}
+	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
+	w.Header().Set("Cache-Control", "private, no-store")
+	_, _ = w.Write(text.Bytes())
+}
+
 func (s *Server) routeGetFilePlayback(w http.ResponseWriter, r *http.Request) {
 	file, kind, ok := s.playbackFile(w, r)
 	if !ok {
@@ -198,7 +242,24 @@ func (s *Server) routeGetFilePlayback(w http.ResponseWriter, r *http.Request) {
 	view.Container = nonEmpty(file.Container)
 	view.VideoCodec = nonEmpty(file.VideoCodec)
 	view.AudioCodec = nonEmpty(file.AudioCodec)
+	view.Subtitles = s.subtitleTracks(r.Context(), file, kind)
 	writeJSON(w, s.logger, http.StatusOK, view)
+}
+
+// subtitleTracks are the text subtitles a video has, nil for a file without any or when ffprobe cannot be asked.
+func (s *Server) subtitleTracks(ctx context.Context, file PlaybackFile, kind string) *[]gen.FilePlaybackSubtitle {
+	if kind != "video" || s.transcoder == nil || !s.transcoder.Available() {
+		return nil
+	}
+	tracks, err := s.transcoder.SubtitleTracks(ctx, file.AbsolutePath)
+	if err != nil || len(tracks) == 0 {
+		return nil
+	}
+	view := make([]gen.FilePlaybackSubtitle, len(tracks))
+	for index, track := range tracks {
+		view[index] = gen.FilePlaybackSubtitle{Id: track.ID, Language: nonEmpty(track.Language), Title: nonEmpty(track.Title), Codec: track.Codec, Default: track.Default}
+	}
+	return &view
 }
 
 func nonEmpty(value string) *string {

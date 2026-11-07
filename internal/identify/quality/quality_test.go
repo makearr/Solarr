@@ -144,10 +144,14 @@ func TestDistance_IsAShareOfTheMatchedPartsAndSkipsWhatWasNotMeasured(t *testing
 	if got, _ := quality.Distance(bitrate, score.FileFacts{VideoBitrate: 400_000}); got.Percent != 0 {
 		t.Errorf("a quarter of the bitrate = %d%%, want 0", got.Percent)
 	}
-	for _, kbps := range []int64{1500, 1600, 6400} {
-		if got, _ := quality.Distance(bitrate, score.FileFacts{VideoBitrate: kbps * 1000}); got.Percent != 100 {
-			t.Errorf("%d kbit/s = %d%%, want 100: at, a little under or over the target is on it", kbps, got.Percent)
+	for kbps, want := range map[int64]int{1500: 100, 1600: 100, 1700: 100, 2400: 150, 6400: 200} {
+		if got, _ := quality.Distance(bitrate, score.FileFacts{VideoBitrate: kbps * 1000}); got.Percent != want {
+			t.Errorf("%d kbit/s = %d%%, want %d: a little under the target is on it, over it counts above 100 up to 200", kbps, got.Percent, want)
 		}
+	}
+	wrongCodec := settings.QualityTarget{MediaType: "movie", VideoCodec: "h265", VideoBitrateKbps: bitrate.VideoBitrateKbps}
+	if got, _ := quality.Distance(wrongCodec, score.FileFacts{VideoCodec: "h264", VideoBitrate: 6_400_000}); got.Percent >= 100 {
+		t.Errorf("a wrong codec = %d%%: being over elsewhere must not make up for a gap", got.Percent)
 	}
 }
 

@@ -3,6 +3,7 @@ package apiserver
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"path"
 
@@ -19,6 +20,11 @@ type SimilarVideoRow struct {
 	RootFolderID             int64
 	RelPath                  string
 	PathCount                int
+	// Mean is the video's perceptual hash; File what the probe measured of it; WorkID is zero for a file no work owns.
+	Mean      uint64
+	File      PartFileRow
+	WorkID    int64
+	WorkTitle string
 }
 
 // SimilarVideoGroupRow is videos whose perceptual hashes are within MaxDistance bits of a neighbour.
@@ -106,6 +112,11 @@ func (s *Server) writeSimilarReport(w http.ResponseWriter, r *http.Request, fold
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "similar videos are not available")
 		return
 	}
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
 	snapshot := s.auth.Settings.Snapshot()
 	roots := make([]int64, len(folders))
 	rootPath := make(map[int64]string, len(folders))
@@ -122,14 +133,18 @@ func (s *Server) writeSimilarReport(w http.ResponseWriter, r *http.Request, fold
 		return
 	}
 	type videoView struct {
-		MediaObjectID int64  `json:"media_object_id"`
-		SizeBytes     int64  `json:"size_bytes"`
-		Path          string `json:"path"`
-		DurationMs    int64  `json:"duration_ms"`
-		Width         int64  `json:"width"`
-		Height        int64  `json:"height"`
-		CategoryID    int64  `json:"category_id"`
-		PathCount     int    `json:"path_count"`
+		MediaObjectID int64         `json:"media_object_id"`
+		SizeBytes     int64         `json:"size_bytes"`
+		Path          string        `json:"path"`
+		DurationMs    int64         `json:"duration_ms"`
+		Width         int64         `json:"width"`
+		Height        int64         `json:"height"`
+		CategoryID    int64         `json:"category_id"`
+		PathCount     int           `json:"path_count"`
+		MeanHash      string        `json:"mean_hash"`
+		WorkID        int64         `json:"work_id"`
+		WorkTitle     string        `json:"work_title"`
+		File          *gen.PartFile `json:"file"`
 	}
 	type groupView struct {
 		MaxDistance int         `json:"max_distance"`
@@ -143,9 +158,12 @@ func (s *Server) writeSimilarReport(w http.ResponseWriter, r *http.Request, fold
 	for _, group := range groups {
 		view := groupView{MaxDistance: group.MaxDistance, Videos: make([]videoView, 0, len(group.Videos))}
 		for _, video := range group.Videos {
+			file := partFileView(video.File)
+			annotateFiles(access, []int64{rootCategory[video.RootFolderID]}, []*gen.PartFile{file})
 			view.Videos = append(view.Videos, videoView{
 				MediaObjectID: video.MediaObjectID, SizeBytes: video.SizeBytes, Path: path.Join(rootPath[video.RootFolderID], video.RelPath),
 				DurationMs: video.DurationMs, Width: video.Width, Height: video.Height, CategoryID: rootCategory[video.RootFolderID], PathCount: video.PathCount,
+				MeanHash: fmt.Sprintf("%016x", video.Mean), WorkID: video.WorkID, WorkTitle: video.WorkTitle, File: file,
 			})
 		}
 		report.Groups = append(report.Groups, view)

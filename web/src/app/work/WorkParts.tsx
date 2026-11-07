@@ -252,7 +252,7 @@ function PartRow({
           </Button>
         )}
         {part.file && (
-          <PlayButton extension={part.file.extension} item={{ mediaObjectId: part.file.media_object_id, title, durationMs: part.runtime_ms ?? undefined }} />
+          <PlayButton extension={part.file.extension} item={{ mediaObjectId: part.file.media_object_id, title, durationMs: part.runtime_ms ?? undefined, file: part.file }} />
         )}
         {actions.onCrossover && (
           <Button variant="icon" title={t("crossover.action")} aria-label={`${t("crossover.action")} ${title}`} onClick={() => actions.onCrossover?.(part)}>

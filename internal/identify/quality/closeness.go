@@ -18,7 +18,9 @@ type Part struct {
 	Have      string
 	// Closeness is 1 when the file matches, falling to 0 as it gets further away.
 	Closeness float64
-	weight    float64
+	// Over is how far above the target a number sits, as a share of the target capped at 1; it only counts once nothing else is short.
+	Over   float64
+	weight float64
 }
 
 // Closeness is how near a file is to a target, from the parts both name; a part the probe could not read is left out.
@@ -68,8 +70,8 @@ func Distance(target settings.QualityTarget, file score.FileFacts) (closeness Cl
 		}
 		add(dimension, want, have, weight, value)
 	}
-	// number is closeness of a measured number to its target; with overIsFine a number above the target counts as on it,
-	// and one below it by no more than tolerance percent does too.
+	// number is closeness of a measured number to its target; with overIsFine a number above the target counts as on it
+	// (past the tolerance it adds to Over), and one below it by no more than tolerance percent does too.
 	number := func(dimension string, want, have, weight float64, unit string, tolerance float64, overIsFine bool) {
 		if want <= 0 || have <= 0 {
 			return
@@ -81,6 +83,9 @@ func Distance(target settings.QualityTarget, file score.FileFacts) (closeness Cl
 			value = 1 - math.Abs(math.Log2(have/want))/octavesToZero
 		}
 		add(dimension, formatNumber(want)+unit, formatNumber(have)+unit, weight, value)
+		if overIsFine && have > want*(1+tolerance/100) {
+			parts[len(parts)-1].Over = math.Min(1, have/want-1)
+		}
 	}
 	tolerance := float64(target.TolerancePct)
 	if tolerance <= 0 {
@@ -171,11 +176,16 @@ func Distance(target settings.QualityTarget, file score.FileFacts) (closeness Cl
 	if len(parts) == 0 {
 		return Closeness{}, false
 	}
-	var earned, possible float64
+	var earned, possible, over float64
 	for _, part := range parts {
 		earned += part.Closeness * part.weight
 		possible += part.weight
+		over += part.Over * part.weight
 	}
+	if earned < possible {
+		over = 0
+	}
+	earned += over
 	return Closeness{Percent: int(math.Round(100 * earned / possible)), Parts: parts}, true
 }
 

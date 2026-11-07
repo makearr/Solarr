@@ -858,6 +858,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/files/{mediaObjectId}/subtitles/{track}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+                /** @description A subtitle's id, as FilePlayback lists them. */
+                track: number;
+            };
+            cookie?: never;
+        };
+        /** One subtitle of a file as WebVTT, for the player's own track. */
+        get: operations["getFileSubtitle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/files/{mediaObjectId}/transcode": {
         parameters: {
             query?: never;
@@ -2366,6 +2387,25 @@ export interface paths {
          * @description Read-only. There is no scoring, decision or candidate history here yet -- that renders from a persisted Decision object section 21.3 describes, which stage 4's acquisition planner has not built. A work not under a root folder attached to a category the caller can read answers 404, indistinguishable from a work that does not exist (Invariant 37).
          */
         get: operations["getWork"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/works/{id}/file-details": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** Every path of a work's files, how each was placed, and the files that may duplicate them. */
+        get: operations["getWorkFileDetails"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5532,6 +5572,43 @@ export interface components {
             direct_play_likely: boolean;
             /** @description Transcoding is on and ffmpeg is installed. */
             transcode_available: boolean;
+            /** @description The text subtitles inside the file and beside it; absent when it has none or ffmpeg is missing. */
+            subtitles?: components["schemas"]["FilePlaybackSubtitle"][];
+        };
+        WorkFileDetails: {
+            files: components["schemas"]["WorkFileDetail"][];
+        };
+        WorkFileDetail: {
+            /** Format: int64 */
+            media_object_id: number;
+            paths: components["schemas"]["WorkFilePath"][];
+            /**
+             * Format: int64
+             * @description Other files with the same size and head and tail sample.
+             */
+            same_bytes: number;
+            /**
+             * Format: int64
+             * @description Other videos with the same mean picture hash.
+             */
+            same_picture: number;
+        };
+        WorkFilePath: {
+            path: string;
+            /** @description How the path was placed: hardlink, reflink or copy. */
+            link_kind: string;
+            primary: boolean;
+        };
+        FilePlaybackSubtitle: {
+            /** @description What the subtitle path takes as its track. */
+            id: number;
+            /** @description The code the track states, when it states one. */
+            language?: string;
+            /** @description The track's own name, or the subtitle file's name. */
+            title?: string;
+            codec: string;
+            /** @description The file marks it to show unasked. */
+            default: boolean;
         };
         StreamingSettings: {
             transcode_enabled: boolean;
@@ -8298,7 +8375,7 @@ export interface components {
             crf?: number;
             /**
              * Format: int64
-             * @description How near the file is to the library's target quality, 0 to 100, from the parts both name. Absent when it sets none or nothing could be compared.
+             * @description How near the file is to the library's target quality, from the parts both name: 100 on it, lower short of it, up to 200 when it is over a number (only when nothing else is short). Absent when it sets none or nothing could be compared.
              */
             target_closeness_pct?: number;
             /** @description The parts of the target the file does not match, the furthest first. */
@@ -9688,6 +9765,16 @@ export interface components {
                      * @description The library the file is in.
                      */
                     category_id: number;
+                    /** @description The video's perceptual hash as 16 hex digits; two videos are as many bits apart as their hashes differ. */
+                    mean_hash: string;
+                    /**
+                     * Format: int64
+                     * @description The work the file belongs to; zero when none owns it.
+                     */
+                    work_id: number;
+                    /** @description The work's title; empty when none owns the file. */
+                    work_title: string;
+                    file: components["schemas"]["PartFile"];
                 }[];
             }[];
         };
@@ -11289,6 +11376,36 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    getFileSubtitle: {
+        parameters: {
+            query?: {
+                /** @description Where a converted stream began, in seconds; the cue times are moved back by it. */
+                start?: number;
+            };
+            header?: never;
+            path: {
+                mediaObjectId: number;
+                /** @description A subtitle's id, as FilePlayback lists them. */
+                track: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The subtitle. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/vtt": string;
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     transcodeFile: {
@@ -13901,6 +14018,30 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getWorkFileDetails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One entry per file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkFileDetails"];
+                };
+            };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };

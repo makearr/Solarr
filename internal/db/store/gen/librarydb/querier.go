@@ -458,6 +458,8 @@ type Querier interface {
 	// file's own root_folder_id (to link work_root_folder), which the ranked
 	// candidates list alone does not carry.
 	GetUnidentified(ctx context.Context, mediaObjectID int64) (IdentificationQueue, error)
+	// What the duplicate screens show of a video: its measured facts and the work it belongs to.
+	GetVideoFacts(ctx context.Context, id int64) (GetVideoFactsRow, error)
 	GetWork(ctx context.Context, id int64) (Work, error)
 	// Resolving a provider id to a work is the first step of the Identifier chain (ADR-24).
 	GetWorkByExternalID(ctx context.Context, arg GetWorkByExternalIDParams) (Work, error)
@@ -722,6 +724,8 @@ type Querier interface {
 	ListLinkableCollections(ctx context.Context) ([]ListLinkableCollectionsRow, error)
 	// What the collection on the other end of every link holds, once from each side, so a list can add linked works up.
 	ListLinkedCollectionCounts(ctx context.Context) ([]ListLinkedCollectionCountsRow, error)
+	// Every live path of a work's files, with how each was placed.
+	ListLivePathsForWork(ctx context.Context, workID int64) ([]ListLivePathsForWorkRow, error)
 	// Which of a batch's files a person already identified; ids is a JSON array.
 	ListManuallyIdentified(ctx context.Context, mediaObjectIds string) ([]int64, error)
 	// The artists credited on a library's albums, with what a merge needs to rank them. shared is set
@@ -819,6 +823,8 @@ type Querier interface {
 	// Newest first, cursor on id (Invariant 32). A zero user_id or an empty state does not filter.
 	ListRequests(ctx context.Context, arg ListRequestsParams) ([]Request, error)
 	ListRootFoldersForWork(ctx context.Context, workID int64) ([]int64, error)
+	// Other files with the same bytes (size and head and tail sample) as each of a work's files.
+	ListSameBytesPeersForWork(ctx context.Context, workID int64) ([]ListSameBytesPeersForWorkRow, error)
 	// Every same-broadcast link of a media type, once from each side.
 	ListSameContentPairs(ctx context.Context, mediaType string) ([]ListSameContentPairsRow, error)
 	// The parts one part is the same broadcast as, either way round, with what a list shows of them.
@@ -826,6 +832,8 @@ type Querier interface {
 	// Episodes of different works with the same title on the same day, not linked and not ruled out: candidates for one
 	// broadcast twice, with what tells them apart (lengths, the people credited on each, how many are the same).
 	ListSameContentSuggestions(ctx context.Context, arg ListSameContentSuggestionsParams) ([]ListSameContentSuggestionsRow, error)
+	// Every file that shows the same mean picture as one of a work's videos; the caller counts them per hash.
+	ListSamePicturePeersForWork(ctx context.Context, workID int64) ([]ListSamePicturePeersForWorkRow, error)
 	ListScanStates(ctx context.Context) ([]ScanState, error)
 	// Every series with the ids Wikidata is asked by.
 	ListSeriesProviderIDs(ctx context.Context) ([]ListSeriesProviderIDsRow, error)
