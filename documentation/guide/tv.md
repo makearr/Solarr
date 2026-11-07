@@ -6,12 +6,13 @@
 ## Create a TV library (🟢)
 
 **Settings → Libraries**: create a library of media type **TV** and pick its **kind**: Series, Anime,
-Documentary, Reality or Kids. A kind only sets the starting point:
+Documentary, Reality, Kids or Daily. A kind only sets the starting point:
 
 - its quality profiles (1080p first for Anime, a smaller x265 profile for Reality);
 - its languages (English or German; Japanese, English or German for Anime);
 - for Anime, that a series the providers call standard is anime there, searched by absolute episode number and
   in the indexers' anime category too.
+- for Daily, that its series are daily shows, named and searched by air date.
 
 Give the library a root folder and a scan reads your folders: each series folder is matched by name,
 `{tvdb-123}` in the folder name, or what you already added, and every episode file is attached to its episode.

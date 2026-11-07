@@ -669,6 +669,11 @@
         "help": "Children's series.",
         "key": "kids",
         "label": "Kids"
+      },
+      {
+        "help": "Talk, news and game shows: its series are daily, searched and named by air date.",
+        "key": "daily",
+        "label": "Daily"
       }
     ],
     "label": "TV",

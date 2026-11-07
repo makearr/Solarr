@@ -6,13 +6,14 @@ import (
 	"github.com/makearr/Solarr/internal/media/screen"
 )
 
-// The kinds of TV library (T3): each is defaults only, and anime also types its series (seriesTypeOfKind).
+// The kinds of TV library (T3): each is defaults only, and anime and daily also type their series (seriesTypeOfKind).
 const (
 	KindSeries      = "series"
 	KindAnime       = "anime"
 	KindDocumentary = "documentary"
 	KindReality     = "reality"
 	KindKids        = "kids"
+	KindDaily       = "daily"
 )
 
 // The language profiles the kinds start with (section 19.8: series en/de, anime ja/en/de); preferred, never required.
@@ -44,12 +45,19 @@ var libraryKinds = []media.LibraryKind{
 		Key: KindKids, Label: "Kids", Help: "Children's series.",
 		QualityProfiles: []string{"HD 720p/1080p", "WEB 1080p"}, Language: seriesLanguages, Rules: screen.KidsRules,
 	},
+	{
+		Key: KindDaily, Label: "Daily", Help: "Talk, news and game shows: its series are daily, searched and named by air date.",
+		QualityProfiles: []string{"HD 720p/1080p", "WEB 1080p"}, Language: seriesLanguages,
+	},
 }
 
 // seriesTypeOfKind is the type a series added to a library of the kind takes when the providers say standard.
 func seriesTypeOfKind(kind string) SeriesType {
-	if kind == KindAnime {
+	switch kind {
+	case KindAnime:
 		return SeriesAnime
+	case KindDaily:
+		return SeriesDaily
 	}
 	return SeriesStandard
 }
