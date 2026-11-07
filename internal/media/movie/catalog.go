@@ -51,6 +51,10 @@ func (s catalogSource) Lookup(ctx context.Context, lookup media.AddLookup) ([]me
 		term, year = info.Title, info.Year
 	}
 	found, err := s.catalog.Service.Search(ctx, term, year, lookup.Limit)
+	if err == nil && len(found) == 0 && year != 0 {
+		// A number ending the name may be part of the title ("Blade Runner 2049"), not a year.
+		found, err = s.catalog.Service.Search(ctx, lookup.Query, 0, lookup.Limit)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", media.ErrSourceUnavailable, err)
 	}

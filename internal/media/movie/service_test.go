@@ -13,6 +13,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/metadata/radarrmeta"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
@@ -271,5 +272,24 @@ func TestSearchReadsAsManyTMDBPagesAsTheLimitNeeds(t *testing.T) {
 			t.Errorf("Search(total %d, limit %d) = %d hits from pages %v, want %d from %v",
 				test.total, test.limit, len(found), pages, test.wantHits, test.wantPages)
 		}
+	}
+}
+
+// yearStrictTMDB finds the film only when searched without a year, as TMDB does for a title ending in a number.
+type yearStrictTMDB struct{ fakeTMDB }
+
+func (f yearStrictTMDB) SearchMovies(ctx context.Context, term string, year, page int) ([]tmdb.MovieHit, error) {
+	if year != 0 {
+		return nil, nil
+	}
+	return f.fakeTMDB.SearchMovies(ctx, term, year, page)
+}
+
+func TestLookupKeepsANumberEndingTheNameWhenAsAYearItFindsNothing(t *testing.T) {
+	service, _ := newService(t, yearStrictTMDB{fakeTMDB{configured: true, movie: theExample()}}, fakeProxy{})
+	catalog := movie.Catalog{Service: service}
+	found, err := catalog.LookupWorks(t.Context(), media.AddLookup{Kind: "movie", Query: "Example 2049", Limit: 10})
+	if err != nil || len(found) != 1 || found[0].ExternalID != "603" {
+		t.Errorf("lookup = %+v, %v; want the film found without the year", found, err)
 	}
 }

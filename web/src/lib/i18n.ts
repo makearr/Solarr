@@ -237,7 +237,7 @@ const catalogue = {
   "grab.nothingFound": "Nothing found",
   "grab.noneSendable": "Found releases, none could be sent",
   "importLists.title": "Import lists",
-  "importLists.help": "Lists this library adds from: an AniList season or user list, a TMDB list, TMDB's trending or popular {works}. Each list is previewed before it is enabled, then synced on its own schedule; a {work} it added once is never added again, even after you remove it.",
+  "importLists.help": "Lists this library adds from: an AniList season or user list, a TMDB or MDBList list, TMDB's trending or popular {works}. Each list is previewed before it is enabled, then synced on its own schedule; a {work} it added once is never added again, even after you remove it.",
   "importLists.loading": "Loading…",
   "importLists.readFailed": "The import lists could not be read.",
   "importLists.none": "No import list yet.",
