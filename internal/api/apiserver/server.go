@@ -245,6 +245,8 @@ type Config struct {
 	CacheManager CacheManager
 	// DatabaseAdmin serves the expert Database page. Optional: nil answers 503.
 	DatabaseAdmin DatabaseAdmin
+	// MemoryCopies serves the Cache page's RAM options. Optional: nil answers 503.
+	MemoryCopies MemoryCopies
 	// Playback finds the file the built-in player opens; Transcoder converts it. Both optional: without them the player answers 503.
 	Playback   PlaybackLocator
 	Transcoder *transcode.Service
@@ -396,6 +398,7 @@ type Server struct {
 	scheduler               Scheduler
 	cacheManager            CacheManager
 	databaseAdmin           DatabaseAdmin
+	memoryCopies            MemoryCopies
 	playback                PlaybackLocator
 	transcoder              *transcode.Service
 	databaseMemory          DatabaseMemoryReader
@@ -538,6 +541,7 @@ func New(config Config) (*Server, error) {
 		scheduler:               config.Scheduler,
 		cacheManager:            config.CacheManager,
 		databaseAdmin:           config.DatabaseAdmin,
+		memoryCopies:            config.MemoryCopies,
 		playback:                config.Playback,
 		transcoder:              config.Transcoder,
 		databaseMemory:          config.DatabaseMemory,
@@ -890,6 +894,8 @@ func New(config Config) (*Server, error) {
 			secured.Post("/streaming/detect", server.DetectStreamingHardware)
 			secured.Get("/cache", server.GetCache)
 			secured.Patch("/cache", server.UpdateCacheBudget)
+			secured.Get("/cache/memory-copies", server.GetMemoryCopies)
+			secured.Put("/cache/memory-copies", server.SetMemoryCopies)
 			secured.Post("/cache/shrink", server.ShrinkCache)
 			secured.Get("/database", server.GetDatabaseUsage)
 			secured.Post("/database/backups/clear", server.ClearOldBackups)

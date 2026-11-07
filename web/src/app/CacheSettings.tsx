@@ -128,6 +128,8 @@ export function CacheSettings() {
       <BudgetForm report={report.data} onSave={(budget) => update.mutate(budget)} busy={update.isPending} />
       {update.isError && <p className="text-sm text-danger">That budget was refused.</p>}
 
+      <MemoryCopiesCard />
+
       <Card
         title="Shrink or clear the cache"
         help="Shrink drops what has not been used for seven days. Clear throws everything away; either is fetched again as it is needed."
@@ -142,6 +144,156 @@ export function CacheSettings() {
         {clear.isError && <p className="text-xs text-danger">The cache could not be cleared.</p>}
       </Card>
     </section>
+  );
+}
+
+type MemoryCopySettings = components["schemas"]["MemoryCopySettings"];
+
+/** The cache and the databases kept in RAM and copied back to disk: both off by default, each turned on only after
+ *  the person ticks that they understand the risk and the container has the memory. */
+function MemoryCopiesCard() {
+  const queryClient = useQueryClient();
+  const status = useQuery({
+    queryKey: ["cache-memory-copies"],
+    queryFn: () => ok(api.GET("/cache/memory-copies")),
+    refetchInterval: 15_000,
+  });
+  const [draft, setDraft] = useState<MemoryCopySettings | null>(null);
+  const save = useMutation({
+    mutationFn: async (body: MemoryCopySettings) => {
+      await ok(api.PUT("/cache/memory-copies", { body }));
+    },
+    onSuccess: () => {
+      setDraft(null);
+      return queryClient.invalidateQueries({ queryKey: ["cache-memory-copies"] });
+    },
+  });
+  if (status.error !== null || !status.data) return null;
+  const data = status.data;
+  const current: MemoryCopySettings = draft ?? {
+    cache_enabled: data.cache_enabled,
+    database_enabled: data.database_enabled,
+    cache_sync_minutes: data.cache_sync_minutes,
+    database_sync_minutes: data.database_sync_minutes,
+    acknowledged: false,
+  };
+  const turnsOn =
+    (current.cache_enabled && !data.cache_enabled) || (current.database_enabled && !data.database_enabled);
+  const dirty =
+    current.cache_enabled !== data.cache_enabled ||
+    current.database_enabled !== data.database_enabled ||
+    current.cache_sync_minutes !== data.cache_sync_minutes ||
+    current.database_sync_minutes !== data.database_sync_minutes;
+  const need = (current.cache_enabled ? data.cache_bytes_needed : 0) + (current.database_enabled ? data.database_bytes_needed : 0);
+  const short = need > data.available_bytes || need > data.tmpfs_free_bytes;
+  const change = (patch: Partial<MemoryCopySettings>) => setDraft({ ...current, ...patch });
+
+  return (
+    <Card
+      title="Keep the cache and databases in RAM"
+      tone="warn"
+      help="Runs them from memory and copies them back to disk on an interval. Faster, but it takes a lot of additional RAM, and what changed since the last copy is lost if Solarr or the machine dies."
+    >
+      <p className="text-xs text-ink-muted">
+        {data.limit_bytes > 0
+          ? `This container may use ${formatBytes(data.limit_bytes)} and has ${formatBytes(data.available_bytes)} left`
+          : `The container has no memory limit; the machine has ${formatBytes(data.available_bytes)} left`}
+        ; {data.tmpfs_dir} has room for {formatBytes(data.tmpfs_free_bytes)} (raise shm_size to give it more).
+      </p>
+      <MemoryCopyRow
+        label="Cache (pictures and provider responses)"
+        needed={data.cache_bytes_needed}
+        enabled={current.cache_enabled}
+        running={data.cache_running}
+        minutes={current.cache_sync_minutes}
+        lastSync={data.last_cache_sync}
+        disabled={save.isPending}
+        onEnabled={(cache_enabled) => change({ cache_enabled })}
+        onMinutes={(cache_sync_minutes) => change({ cache_sync_minutes })}
+      />
+      <MemoryCopyRow
+        label="Databases"
+        needed={data.database_bytes_needed}
+        enabled={current.database_enabled}
+        running={data.database_running}
+        minutes={current.database_sync_minutes}
+        lastSync={data.last_database_sync}
+        disabled={save.isPending}
+        onEnabled={(database_enabled) => change({ database_enabled })}
+        onMinutes={(database_sync_minutes) => change({ database_sync_minutes })}
+      />
+      {current.database_enabled && (
+        <p className="rounded-md border border-danger p-3 text-sm font-semibold text-danger">
+          DATA LOSS RISK: the databases hold everything Solarr knows. A crash, a power cut or an out-of-memory kill loses all changes since the last copy to disk.
+        </p>
+      )}
+      {(current.cache_enabled || current.database_enabled) && (
+        <p className={`text-xs ${short ? "text-danger" : "text-ink-muted"}`}>
+          Needs {formatBytes(need)} of RAM (their size plus 10%).{short ? " That is more than is free, so it cannot be turned on." : ""}
+        </p>
+      )}
+      {turnsOn && (
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={current.acknowledged} onChange={(event) => change({ acknowledged: event.target.checked })} />
+          I understand the risk
+        </label>
+      )}
+      <div className="flex items-center gap-3">
+        <Button variant="primary" onClick={() => save.mutate(current)} disabled={save.isPending || !dirty || (turnsOn && (!current.acknowledged || short))}>
+          {save.isPending ? "Saving…" : "Save"}
+        </Button>
+        {data.restart_required && <span className="text-xs text-warn">Saved; restart Solarr to apply it.</span>}
+      </div>
+      {save.isError && <p className="text-xs text-danger">Refused: the container does not have the memory, or the risk was not confirmed.</p>}
+      {data.notice && <p className="text-xs text-warn">{data.notice}</p>}
+    </Card>
+  );
+}
+
+function MemoryCopyRow({
+  label,
+  needed,
+  enabled,
+  running,
+  minutes,
+  lastSync,
+  disabled,
+  onEnabled,
+  onMinutes,
+}: {
+  label: string;
+  needed: number;
+  enabled: boolean;
+  running: boolean;
+  minutes: number;
+  lastSync?: string;
+  disabled: boolean;
+  onEnabled: (next: boolean) => void;
+  onMinutes: (next: number) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-4 text-sm">
+      <label className="flex min-w-72 items-center gap-2">
+        <input type="checkbox" checked={enabled} disabled={disabled} onChange={(event) => onEnabled(event.target.checked)} />
+        {label}
+      </label>
+      <span className="text-xs text-ink-muted">would take {formatBytes(needed)}</span>
+      <label className="flex items-center gap-1 text-xs text-ink-muted">
+        copy to disk every
+        <input
+          type="number"
+          min={1}
+          value={minutes}
+          disabled={disabled}
+          onChange={(event) => onMinutes(Math.max(1, Number(event.target.value) || 1))}
+          className={`${inputStyle} w-16`}
+        />
+        min
+      </label>
+      <span className="text-xs text-ink-muted">
+        {running ? `running from RAM${lastSync ? `, last copy ${new Date(lastSync).toLocaleTimeString()}` : ""}` : "from disk"}
+      </span>
+    </div>
   );
 }
 

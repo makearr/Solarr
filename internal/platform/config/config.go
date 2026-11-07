@@ -22,9 +22,21 @@ type Config struct {
 	Logging   Logging   `yaml:"logging"`
 	Network   Network   `yaml:"network"`
 	Metadata  Metadata  `yaml:"metadata"`
+	Memory    Memory    `yaml:"memory"`
 
 	// Mode is the dry-run level, enforced at the job executor (ADR-20).
 	Mode Mode `yaml:"mode"`
+}
+
+// Memory runs the pictures and provider responses of the cache, or the databases, from RAM and copies them back to disk
+// on an interval (documentation/memory-copies.md). Both are off by default; a crash loses what changed since the last copy.
+type Memory struct {
+	CacheTmpfs           bool     `yaml:"cache_tmpfs"`
+	DatabaseTmpfs        bool     `yaml:"database_tmpfs"`
+	CacheSyncInterval    Duration `yaml:"cache_sync_interval"`
+	DatabaseSyncInterval Duration `yaml:"database_sync_interval"`
+	// TmpfsDir is a RAM-backed directory; /dev/shm is one in every container, sized by the runtime's shm_size.
+	TmpfsDir string `yaml:"tmpfs_dir"`
 }
 
 // DefaultPublicIPEndpoint answers with a bare address and nothing else, which
@@ -203,6 +215,9 @@ func Default() Config {
 		Storage: Storage{
 			MinFreeBytes:   Bytes(50 * 1000 * 1000 * 1000),
 			MinFreePercent: 2,
+		},
+		Memory: Memory{
+			CacheSyncInterval: Duration(10 * time.Minute), DatabaseSyncInterval: Duration(5 * time.Minute), TmpfsDir: "/dev/shm/solarr",
 		},
 		Workers: Workers{Search: 4, Acquire: 2, Metadata: 4, Import: 1},
 		Logging: Logging{Level: LevelInfo, Format: FormatJSON},

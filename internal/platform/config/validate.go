@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/robfig/cron/v3"
 )
@@ -31,10 +32,27 @@ func (c Config) validate() Problems {
 	problems = append(problems, c.Storage.validate()...)
 	problems = append(problems, c.Workers.validate()...)
 	problems = append(problems, c.Logging.validate()...)
+	problems = append(problems, c.Memory.validate()...)
 
 	if !oneOf(c.Mode, allowedModes) {
 		problems = append(problems, newProblem("mode", string(c.Mode),
 			"expected one of: "+listOf(allowedModes)))
+	}
+	return problems
+}
+
+func (m Memory) validate() Problems {
+	var problems Problems
+	for _, entry := range []struct {
+		path     string
+		interval Duration
+	}{{"memory.cache_sync_interval", m.CacheSyncInterval}, {"memory.database_sync_interval", m.DatabaseSyncInterval}} {
+		if entry.interval < Duration(time.Minute) {
+			problems = append(problems, newProblem(entry.path, entry.interval.String(), "expected at least 1m"))
+		}
+	}
+	if !filepath.IsAbs(m.TmpfsDir) {
+		problems = append(problems, newProblem("memory.tmpfs_dir", m.TmpfsDir, "expected an absolute path"))
 	}
 	return problems
 }

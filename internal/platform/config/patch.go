@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -55,4 +56,38 @@ func setInt(data []byte, dotted string, value int, read func(Config) int) ([]byt
 	}
 
 	return result, nil
+}
+
+// SetMemory replaces the memory: section with m, appending one when the file has none; every other byte is kept.
+func SetMemory(data []byte, m Memory) ([]byte, error) {
+	block := fmt.Sprintf("memory:\n  cache_tmpfs: %t\n  database_tmpfs: %t\n  cache_sync_interval: %s\n  database_sync_interval: %s\n  tmpfs_dir: %s\n",
+		m.CacheTmpfs, m.DatabaseTmpfs, m.CacheSyncInterval, m.DatabaseSyncInterval, m.TmpfsDir)
+	lines := strings.SplitAfter(string(data), "\n")
+	start := slices.IndexFunc(lines, func(line string) bool { return strings.TrimRight(line, " \r\n") == "memory:" })
+	var patched string
+	if start < 0 {
+		separator := "\n"
+		if strings.HasSuffix(string(data), "\n\n") {
+			separator = ""
+		}
+		patched = string(data) + separator + block
+	} else {
+		end := start + 1
+		for end < len(lines) && (strings.HasPrefix(lines[end], " ") || strings.TrimSpace(lines[end]) == "") {
+			end++
+		}
+		// Blank lines that belong to what follows stay in front of it.
+		for end > start+1 && strings.TrimSpace(lines[end-1]) == "" {
+			end--
+		}
+		patched = strings.Join(lines[:start], "") + block + strings.Join(lines[end:], "")
+	}
+	reparsed, err := Parse([]byte(patched))
+	if err != nil {
+		return nil, fmt.Errorf("config: patched document is invalid: %w", err)
+	}
+	if reparsed.Memory != m {
+		return nil, fmt.Errorf("config: memory section did not read back as written")
+	}
+	return []byte(patched), nil
 }

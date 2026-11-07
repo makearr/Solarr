@@ -1114,6 +1114,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/cache/memory-copies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The RAM options of the cache and the databases, with what they would need. Administrator only. */
+        get: operations["getMemoryCopies"];
+        /**
+         * Turn the RAM options on or off. Administrator only.
+         * @description Turning one on needs the acknowledgement and enough free memory in the container (its cgroup, not the host) and enough room in the RAM directory; otherwise 400 or 409. Written to config.yml, applied at the next start.
+         */
+        put: operations["setMemoryCopies"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/cache/shrink": {
         parameters: {
             query?: never;
@@ -5809,6 +5830,62 @@ export interface components {
             metadata_hits?: number;
             /** Format: int64 */
             metadata_misses?: number;
+        };
+        MemoryCopySettings: {
+            cache_enabled: boolean;
+            database_enabled: boolean;
+            /** Format: int64 */
+            cache_sync_minutes: number;
+            /** Format: int64 */
+            database_sync_minutes: number;
+            /** @description The person confirmed they understand the risk. */
+            acknowledged: boolean;
+        };
+        MemoryCopyStatus: {
+            /** @description What config.yml holds. */
+            cache_enabled: boolean;
+            database_enabled: boolean;
+            /** @description What this run does. */
+            cache_running: boolean;
+            database_running: boolean;
+            /** Format: int64 */
+            cache_sync_minutes: number;
+            /** Format: int64 */
+            database_sync_minutes: number;
+            /**
+             * Format: int64
+             * @description Pictures and provider responses now
+             */
+            cache_bytes_needed: number;
+            /**
+             * Format: int64
+             * @description The four databases now
+             */
+            database_bytes_needed: number;
+            /**
+             * Format: int64
+             * @description Memory the container may still use.
+             */
+            available_bytes: number;
+            /**
+             * Format: int64
+             * @description The container's memory limit; 0 when it has none.
+             */
+            limit_bytes: number;
+            /**
+             * Format: int64
+             * @description Room left in the RAM directory.
+             */
+            tmpfs_free_bytes: number;
+            memory_source: string;
+            tmpfs_dir: string;
+            restart_required: boolean;
+            /** Format: date-time */
+            last_cache_sync?: string;
+            /** Format: date-time */
+            last_database_sync?: string;
+            /** @description Why an option was switched off or not started */
+            notice?: string;
         };
         DatabaseUsage: {
             /**
@@ -12035,6 +12112,58 @@ export interface operations {
                     "application/json": components["schemas"]["ClearedBackups"];
                 };
             };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getMemoryCopies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The options as configured and as running. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryCopyStatus"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    setMemoryCopies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryCopySettings"];
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryCopyStatus"];
+                };
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             409: components["responses"]["Problem"];

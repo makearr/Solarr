@@ -1602,6 +1602,44 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         "503": { $ref: "#/components/responses/Problem" }
 
+  /cache/memory-copies:
+    get:
+      operationId: getMemoryCopies
+      tags: [settings]
+      summary: The RAM options of the cache and the databases, with what they would need. Administrator only.
+      responses:
+        "200":
+          description: The options as configured and as running.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemoryCopyStatus" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setMemoryCopies
+      tags: [settings]
+      summary: Turn the RAM options on or off. Administrator only.
+      description: >-
+        Turning one on needs the acknowledgement and enough free memory in the container (its cgroup, not the host) and
+        enough room in the RAM directory; otherwise 400 or 409. Written to config.yml, applied at the next start.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemoryCopySettings" }
+      responses:
+        "200":
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemoryCopyStatus" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
   /cache/shrink:
     post:
       operationId: shrinkCache
@@ -8960,6 +8998,39 @@ components:
         metadata_hits: { type: integer, format: int64, description: Provider responses found in the cache since the process started. }
         metadata_misses: { type: integer, format: int64 }
 
+    MemoryCopySettings:
+      type: object
+      required: [cache_enabled, database_enabled, cache_sync_minutes, database_sync_minutes, acknowledged]
+      properties:
+        cache_enabled: { type: boolean }
+        database_enabled: { type: boolean }
+        cache_sync_minutes: { type: integer, format: int64, minimum: 1 }
+        database_sync_minutes: { type: integer, format: int64, minimum: 1 }
+        acknowledged: { type: boolean, description: The person confirmed they understand the risk. }
+    MemoryCopyStatus:
+      type: object
+      required:
+        [cache_enabled, database_enabled, cache_running, database_running, cache_sync_minutes, database_sync_minutes,
+         cache_bytes_needed, database_bytes_needed, available_bytes, limit_bytes, tmpfs_free_bytes, memory_source,
+         tmpfs_dir, restart_required]
+      properties:
+        cache_enabled: { type: boolean, description: What config.yml holds. }
+        database_enabled: { type: boolean }
+        cache_running: { type: boolean, description: What this run does. }
+        database_running: { type: boolean }
+        cache_sync_minutes: { type: integer, format: int64 }
+        database_sync_minutes: { type: integer, format: int64 }
+        cache_bytes_needed: { type: integer, format: int64, description: Pictures and provider responses now, plus 10%. }
+        database_bytes_needed: { type: integer, format: int64, description: The four databases now, plus 10%. }
+        available_bytes: { type: integer, format: int64, description: Memory the container may still use. }
+        limit_bytes: { type: integer, format: int64, description: The container's memory limit; 0 when it has none. }
+        tmpfs_free_bytes: { type: integer, format: int64, description: Room left in the RAM directory. }
+        memory_source: { type: string }
+        tmpfs_dir: { type: string }
+        restart_required: { type: boolean }
+        last_cache_sync: { type: string, format: date-time }
+        last_database_sync: { type: string, format: date-time }
+        notice: { type: string, description: Why an option was switched off or not started, until the next save. }
     DatabaseUsage:
       type: object
       required: [media_cover_bytes, previews_bytes, cache_bytes, backups_bytes, backup_count]

@@ -189,3 +189,37 @@ func TestShrinkCache_AsksForAWeekUnusedAndNeedsAnAdministrator(t *testing.T) {
 		t.Errorf("shrunk for %v, want 168h", fixture.cacheManager.shrunkFor)
 	}
 }
+
+type fakeMemoryCopies struct {
+	err     error
+	changes []apiserver.MemoryCopySettings
+}
+
+func (f *fakeMemoryCopies) Status(context.Context) (apiserver.MemoryCopyStatus, error) {
+	return apiserver.MemoryCopyStatus{TmpfsDir: "/dev/shm/solarr"}, nil
+}
+
+func (f *fakeMemoryCopies) Set(_ context.Context, change apiserver.MemoryCopySettings) error {
+	f.changes = append(f.changes, change)
+	return f.err
+}
+
+func TestSetMemoryCopies_MapsTheTwoRefusals(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "boss", settings.RoleAdmin)
+	admin := fixture.signIn(t, "boss")
+	body := `{"cache_enabled":true,"database_enabled":false,"cache_sync_minutes":10,"database_sync_minutes":5,"acknowledged":false}`
+	for _, test := range []struct {
+		refusal error
+		want    int
+	}{{nil, http.StatusOK}, {apiserver.ErrRiskNotAcknowledged, http.StatusBadRequest}, {apiserver.ErrNotEnoughMemory, http.StatusConflict}} {
+		fixture.memoryCopies.err = test.refusal
+		if recorder := fixture.do(authedPut(t, admin, "/api/v1/cache/memory-copies", body)); recorder.Code != test.want {
+			t.Errorf("refusal %v: status = %d, want %d (%s)", test.refusal, recorder.Code, test.want, recorder.Body)
+		}
+	}
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	if recorder := fixture.do(authedPut(t, fixture.signIn(t, "listener"), "/api/v1/cache/memory-copies", body)); recorder.Code != http.StatusForbidden {
+		t.Errorf("a listener's status = %d, want 403", recorder.Code)
+	}
+}

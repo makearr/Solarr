@@ -3,6 +3,7 @@ package config_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/platform/config"
 )
@@ -107,5 +108,30 @@ func TestSetDatabaseCacheSizeKB_ChangesOnlyThatLineOfTheShippedTemplate(t *testi
 	want := strings.Replace(original, "cache_size_kb: 393216", "cache_size_kb: 131072", 1)
 	if string(patched) != want {
 		t.Errorf("patched document differs from the original in more than the one line:\n%s", patched)
+	}
+}
+
+func TestSetMemory_ReplacesTheSectionAndKeepsEverythingElse(t *testing.T) {
+	memory := config.Memory{
+		CacheTmpfs: true, CacheSyncInterval: config.Duration(15 * time.Minute),
+		DatabaseSyncInterval: config.Duration(5 * time.Minute), TmpfsDir: "/dev/shm/solarr",
+	}
+	before := "version: 1\n# keep me\nserver:\n  port: 5454\n"
+	appended, err := config.SetMemory([]byte(before), memory)
+	if err != nil {
+		t.Fatalf("SetMemory (no section): %v", err)
+	}
+	if !strings.HasPrefix(string(appended), before) || !strings.Contains(string(appended), "cache_tmpfs: true") {
+		t.Errorf("appended = %q", appended)
+	}
+
+	memory.CacheTmpfs, memory.DatabaseTmpfs = false, true
+	replaced, err := config.SetMemory(appended, memory)
+	if err != nil {
+		t.Fatalf("SetMemory (section): %v", err)
+	}
+	if strings.Count(string(replaced), "memory:") != 1 || !strings.Contains(string(replaced), "database_tmpfs: true") ||
+		!strings.HasPrefix(string(replaced), before) {
+		t.Errorf("replaced = %q", replaced)
 	}
 }

@@ -199,6 +199,16 @@ logging:
   # json | text
   format: json
 
+# Run the cache, or the databases, from RAM and copy them back to disk on an interval.
+# Off by default; Settings -> Cache turns them on after checking the container has the memory.
+# A crash loses what changed since the last copy. tmpfs_dir needs room: set shm_size for /dev/shm.
+memory:
+  cache_tmpfs: false
+  database_tmpfs: false
+  cache_sync_interval: 10m
+  database_sync_interval: 5m
+  tmpfs_dir: /dev/shm/solarr
+
 # normal          — everything is allowed
 # read_only       — never write into a library folder
 # pause_downloads — send nothing to a download client

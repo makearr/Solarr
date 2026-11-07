@@ -87,6 +87,10 @@ type process struct {
 	metadata                      *store.Store
 	// statistics is what was seen and done; library.db is correct with it empty (D7).
 	statistics *store.Store
+	// memory is the cache and databases kept in RAM, when config.yml asks for it.
+	memory *memoryCopy
+	// requestStop ends the process the way a SIGTERM does.
+	requestStop func()
 	// configPath is where config.yml lives, for the write-back ADR-58's
 	// revised precedence needs (2026-09-12): config.yml now outranks
 	// settings.db, so the Network screen has to be able to update it.
@@ -226,6 +230,9 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 		logger.Warn("clear the transcode cache", "error", err)
 	}
 
+	if err := running.stageMemoryCopies(ctx); err != nil {
+		return err
+	}
 	if err := running.openDatabases(ctx); err != nil {
 		return err
 	}
@@ -488,7 +495,7 @@ func (p *process) storeConfig(profile databaseProfile) store.Config {
 	cacheSizeKB := max(minConnectionCacheKB, p.config.Database.CacheSizeKB*profile.sharePercent/100/(profile.readPoolSize+1))
 	directory := p.config.Paths.DBDir
 	if profile.inCacheDir {
-		directory = p.config.Paths.CacheDir
+		directory = p.metadataDir()
 	}
 	return store.Config{
 		Name:         profile.name,
@@ -671,8 +678,12 @@ func (p *process) startServer(ctx context.Context) error {
 		return err
 	}
 
-	stopping, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+	requested, requestStop := context.WithCancel(ctx)
+	defer requestStop()
+	p.requestStop = requestStop
+	stopping, stop := signal.NotifyContext(requested, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	p.memory.startSync(background)
 
 	p.startBackupSchedules()
 	go p.detectTranscodeHardware(stopping)
@@ -785,6 +796,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			CacheDir: p.config.Paths.CacheDir, BackupDir: p.config.Paths.BackupDir,
 			Scratch: filepath.Join(p.config.Paths.BackupDir, stagingDirName),
 		},
+		MemoryCopies: memoryCopies{p: p},
 		Backups: backupSource{
 			FS: p.fsys, Directory: p.config.Paths.BackupDir, ConfigPath: p.configPath,
 			Stores: []*store.Store{p.library, p.jobs, p.settings, p.statistics},
@@ -855,7 +867,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Coverage: statistics.NewRollup(p.statistics), People: library.NewPeople(p.library),
 		},
 		FS:            p.fsys,
-		ImagesDir:     filepath.Join(p.config.Paths.CacheDir, "images"),
+		ImagesDir:     p.imagesDir(),
 		MediaCoverDir: p.config.Paths.MediaCoverDir,
 		PreviewsDir:   filepath.Join(p.config.Paths.ConfigDir, "previews"),
 		FilePreviews:  library.NewWorks(p.library),
@@ -953,6 +965,9 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 // close drains and closes the databases. The write queues drain before their
 // handles close, which is bounded because every transaction is bounded.
 func (p *process) close() {
+	finalCopy, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	p.memory.finalSync(finalCopy)
+	cancel()
 	for _, opened := range []*store.Store{p.library, p.jobs, p.settings, p.statistics, p.metadata} {
 		if opened == nil {
 			continue

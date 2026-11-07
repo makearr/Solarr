@@ -36,7 +36,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/moving/linkjob", "internal/moving/mover", "internal/moving/moverjob", "internal/moving/renamejob", "internal/platform/clock", "internal/platform/config",
 		"internal/platform/egress", "internal/platform/events", "internal/platform/fsx",
 		"internal/platform/httpx", "internal/platform/logbuffer", "internal/platform/logthrottle", "internal/platform/mediatool", "internal/platform/transcode",
-		"internal/platform/privilege", "internal/platform/previewstore",
+		"internal/platform/privilege", "internal/platform/previewstore", "internal/platform/ramcopy",
 		"internal/platform/secrets", "internal/scanning/probe", "internal/scanning/scan", "migrations",
 	},
 	"cmd/solarr/adapters": {"internal/importing/arrmap", "internal/db/store", "internal/platform/secrets", "internal/media/works",
@@ -67,6 +67,8 @@ var allowedInternalImports = map[string][]string{
 	"internal/platform/clock": {},
 	// Where a video's preview pictures are kept on disk: path arithmetic only.
 	"internal/platform/previewstore": {},
+	// A RAM-backed working copy of a folder and the container's memory headroom: filesystem only.
+	"internal/platform/ramcopy": {"internal/platform/fsx"},
 	// A bounded in-memory slog handler (revision 7.16). Stdlib only: it wraps
 	// whatever handler it is given and knows nothing about this codebase.
 	"internal/platform/logbuffer": {},

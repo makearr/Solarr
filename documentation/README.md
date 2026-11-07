@@ -60,6 +60,7 @@ interface levels *normal / advanced / expert* in Settings → User.
 | [tv-providers-benchmark.md](tv-providers-benchmark.md) | Provider speed and richness, and the default order it set |
 | [media-tools.md](media-tools.md) | ffprobe, fpcalc and the tagging helper: what Alpine has, what it costs |
 | [database-layout.md](database-layout.md) | Which database a table belongs in, and why |
+| [memory-copies.md](memory-copies.md) | Running the cache or the databases from RAM, and the guard when memory runs out |
 | [benchmarks.md](benchmarks.md) | The 500k corpus, the performance targets as tests |
 | [duplicate-videos.md](duplicate-videos.md) | Perceptual hashing of videos, the finder's levels, why not Stash's method, merging |
 | [codebase-map.md](codebase-map.md) | The package tree, what depends on what, where to start reading |

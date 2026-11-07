@@ -58,6 +58,24 @@ func (s *Store) Backup(ctx context.Context, directory string, kind BackupKind) (
 	return path, nil
 }
 
+// SnapshotTo writes a consistent copy of the database to path, which must not exist. The writer is held for the
+// copy, as for a backup.
+func (s *Store) SnapshotTo(ctx context.Context, path string) error {
+	if !filepath.IsAbs(path) {
+		return fmt.Errorf("store %s: snapshot path %q must be absolute", s.config.Name, path)
+	}
+	err := s.writeExclusive(ctx, PrioBulk, true, func(ctx context.Context, db *sql.DB) error {
+		if _, err := db.ExecContext(ctx, "VACUUM INTO ?", path); err != nil {
+			return err
+		}
+		return s.fs.Chmod(path, 0o600)
+	})
+	if err != nil {
+		return fmt.Errorf("store %s: snapshot to %q: %w", s.config.Name, path, err)
+	}
+	return nil
+}
+
 // unusedBackupPath finds a free name (ADR-2). The kind is embedded right after the
 // name -- <name>.db.<kind>.<timestamp>[-N] -- so it survives a restart without a
 // separate manifest: retention has to tell a pre-migration backup from a rotation

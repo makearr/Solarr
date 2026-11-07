@@ -4090,6 +4090,52 @@ type MediaTypeInfoWantedGrain string
 // MediaTypeInfoWorkImage The shape of a work's picture: an album's square cover, a series' tall poster.
 type MediaTypeInfoWorkImage string
 
+// MemoryCopySettings defines model for MemoryCopySettings.
+type MemoryCopySettings struct {
+	// Acknowledged The person confirmed they understand the risk.
+	Acknowledged        bool  `json:"acknowledged"`
+	CacheEnabled        bool  `json:"cache_enabled"`
+	CacheSyncMinutes    int64 `json:"cache_sync_minutes"`
+	DatabaseEnabled     bool  `json:"database_enabled"`
+	DatabaseSyncMinutes int64 `json:"database_sync_minutes"`
+}
+
+// MemoryCopyStatus defines model for MemoryCopyStatus.
+type MemoryCopyStatus struct {
+	// AvailableBytes Memory the container may still use.
+	AvailableBytes int64 `json:"available_bytes"`
+
+	// CacheBytesNeeded Pictures and provider responses now
+	CacheBytesNeeded int64 `json:"cache_bytes_needed"`
+
+	// CacheEnabled What config.yml holds.
+	CacheEnabled bool `json:"cache_enabled"`
+
+	// CacheRunning What this run does.
+	CacheRunning     bool  `json:"cache_running"`
+	CacheSyncMinutes int64 `json:"cache_sync_minutes"`
+
+	// DatabaseBytesNeeded The four databases now
+	DatabaseBytesNeeded int64      `json:"database_bytes_needed"`
+	DatabaseEnabled     bool       `json:"database_enabled"`
+	DatabaseRunning     bool       `json:"database_running"`
+	DatabaseSyncMinutes int64      `json:"database_sync_minutes"`
+	LastCacheSync       *time.Time `json:"last_cache_sync,omitempty"`
+	LastDatabaseSync    *time.Time `json:"last_database_sync,omitempty"`
+
+	// LimitBytes The container's memory limit; 0 when it has none.
+	LimitBytes   int64  `json:"limit_bytes"`
+	MemorySource string `json:"memory_source"`
+
+	// Notice Why an option was switched off or not started
+	Notice          *string `json:"notice,omitempty"`
+	RestartRequired bool    `json:"restart_required"`
+	TmpfsDir        string  `json:"tmpfs_dir"`
+
+	// TmpfsFreeBytes Room left in the RAM directory.
+	TmpfsFreeBytes int64 `json:"tmpfs_free_bytes"`
+}
+
 // MetadataProviderInfo defines model for MetadataProviderInfo.
 type MetadataProviderInfo struct {
 	// AlsoFor The libraries it serves outside their order.
@@ -7474,6 +7520,9 @@ type UpdateCacheBudgetJSONRequestBody UpdateCacheBudgetJSONBody
 // SetDatabaseMemoryJSONRequestBody defines body for SetDatabaseMemory for application/json ContentType.
 type SetDatabaseMemoryJSONRequestBody SetDatabaseMemoryJSONBody
 
+// SetMemoryCopiesJSONRequestBody defines body for SetMemoryCopies for application/json ContentType.
+type SetMemoryCopiesJSONRequestBody = MemoryCopySettings
+
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody CreateCategoryJSONBody
 
@@ -7929,6 +7978,12 @@ type ServerInterface interface {
 	// Set the library database's page cache size. Administrator only.
 	// (PUT /cache/memory)
 	SetDatabaseMemory(w http.ResponseWriter, r *http.Request)
+	// The RAM options of the cache and the databases, with what they would need. Administrator only.
+	// (GET /cache/memory-copies)
+	GetMemoryCopies(w http.ResponseWriter, r *http.Request)
+	// Turn the RAM options on or off. Administrator only.
+	// (PUT /cache/memory-copies)
+	SetMemoryCopies(w http.ResponseWriter, r *http.Request)
 	// Remove what the cache has not used for seven days. Administrator only.
 	// (POST /cache/shrink)
 	ShrinkCache(w http.ResponseWriter, r *http.Request)
@@ -9060,6 +9115,18 @@ func (_ Unimplemented) GetDatabaseMemory(w http.ResponseWriter, r *http.Request)
 // Set the library database's page cache size. Administrator only.
 // (PUT /cache/memory)
 func (_ Unimplemented) SetDatabaseMemory(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The RAM options of the cache and the databases, with what they would need. Administrator only.
+// (GET /cache/memory-copies)
+func (_ Unimplemented) GetMemoryCopies(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Turn the RAM options on or off. Administrator only.
+// (PUT /cache/memory-copies)
+func (_ Unimplemented) SetMemoryCopies(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11787,6 +11854,50 @@ func (siw *ServerInterfaceWrapper) SetDatabaseMemory(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetDatabaseMemory(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMemoryCopies operation middleware
+func (siw *ServerInterfaceWrapper) GetMemoryCopies(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMemoryCopies(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetMemoryCopies operation middleware
+func (siw *ServerInterfaceWrapper) SetMemoryCopies(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetMemoryCopies(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -22564,6 +22675,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/cache/memory", wrapper.SetDatabaseMemory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/cache/memory-copies", wrapper.GetMemoryCopies)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/cache/memory-copies", wrapper.SetMemoryCopies)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/cache/shrink", wrapper.ShrinkCache)
