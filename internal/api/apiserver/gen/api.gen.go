@@ -2007,6 +2007,13 @@ type CategoryWriteMonitorDiscovered string
 // CategoryWriteTvMonitor TV libraries only; absent leaves it as it is.
 type CategoryWriteTvMonitor string
 
+// ClearedBackups defines model for ClearedBackups.
+type ClearedBackups struct {
+	// Kept The file name of the backup that was kept.
+	Kept    string `json:"kept"`
+	Removed int64  `json:"removed"`
+}
+
 // ConnectionTestResult defines model for ConnectionTestResult.
 type ConnectionTestResult struct {
 	// DownloadFolder Where a download client puts finished downloads, as it reports it.
@@ -2145,6 +2152,23 @@ type DatabaseMemoryRow struct {
 	PerConnectionKb int64  `json:"per_connection_kb"`
 	UsedBytes       int64  `json:"used_bytes"`
 	WalBytes        int64  `json:"wal_bytes"`
+}
+
+// DatabaseUsage defines model for DatabaseUsage.
+type DatabaseUsage struct {
+	// BackupCount Backup bundles on disk.
+	BackupCount  int64 `json:"backup_count"`
+	BackupsBytes int64 `json:"backups_bytes"`
+
+	// CacheBytes Everything under the cache folder.
+	CacheBytes     int64      `json:"cache_bytes"`
+	LatestBackupAt *time.Time `json:"latest_backup_at,omitempty"`
+
+	// MediaCoverBytes Pictures of items in the library.
+	MediaCoverBytes int64 `json:"media_cover_bytes"`
+
+	// PreviewsBytes Video preview pictures.
+	PreviewsBytes int64 `json:"previews_bytes"`
 }
 
 // Decision ADR-10: reasons are the result, never a side channel. score is derived from components, never computed separately, so the explanation and the decision cannot drift apart.
@@ -8037,6 +8061,12 @@ type ServerInterface interface {
 	// Configured libraries and current state, for the landing page.
 	// (GET /dashboard)
 	GetDashboard(w http.ResponseWriter, r *http.Request)
+	// Where the disk space of Solarr's own folders goes, and the newest backup. Administrator only.
+	// (GET /database)
+	GetDatabaseUsage(w http.ResponseWriter, r *http.Request)
+	// Keep only the newest backup, after checking it is valid. Administrator only.
+	// (POST /database/backups/clear)
+	ClearOldBackups(w http.ResponseWriter, r *http.Request)
 	// The audio languages a new library prefers, best first.
 	// (GET /defaultlanguages)
 	GetDefaultLanguages(w http.ResponseWriter, r *http.Request)
@@ -9291,6 +9321,18 @@ func (_ Unimplemented) MonitorCrossover(w http.ResponseWriter, r *http.Request, 
 // Configured libraries and current state, for the landing page.
 // (GET /dashboard)
 func (_ Unimplemented) GetDashboard(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Where the disk space of Solarr's own folders goes, and the newest backup. Administrator only.
+// (GET /database)
+func (_ Unimplemented) GetDatabaseUsage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Keep only the newest backup, after checking it is valid. Administrator only.
+// (POST /database/backups/clear)
+func (_ Unimplemented) ClearOldBackups(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -13246,6 +13288,50 @@ func (siw *ServerInterfaceWrapper) GetDashboard(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetDashboard(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetDatabaseUsage operation middleware
+func (siw *ServerInterfaceWrapper) GetDatabaseUsage(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDatabaseUsage(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ClearOldBackups operation middleware
+func (siw *ServerInterfaceWrapper) ClearOldBackups(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ClearOldBackups(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -22579,6 +22665,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/dashboard", wrapper.GetDashboard)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/database", wrapper.GetDatabaseUsage)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/database/backups/clear", wrapper.ClearOldBackups)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/defaultlanguages", wrapper.GetDefaultLanguages)

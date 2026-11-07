@@ -75,6 +75,7 @@ export const SETTINGS: Section = {
     { label: "Scheduler", path: "/settings/scheduler", tier: "normal", administrator: true },
     { label: "Backups", path: "/settings/backups", tier: "normal", administrator: true },
     { label: "Cache", path: "/settings/cache", tier: "expert", administrator: true },
+    { label: "Database", path: "/settings/database", tier: "expert", administrator: true },
     { label: "Logs", path: "/settings/logs", tier: "advanced", administrator: true },
   ],
 };

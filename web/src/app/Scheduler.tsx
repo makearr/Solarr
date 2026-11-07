@@ -502,8 +502,6 @@ function ScheduleRow({
         </span>
       </div>
 
-      {schedule.key === "backup_cleanup" && <BackupRetentionEditor />}
-
       {schedule.last_outcome === "error" && schedule.last_error && (
         <p className="text-xs text-danger">{schedule.last_error}</p>
       )}
@@ -657,7 +655,7 @@ function TriggerEditor({
 }
 
 /** The Clean old backups rule: the newest N, or everything younger than N days (asked for 2026-09-19). */
-function BackupRetentionEditor() {
+export function BackupRetentionEditor() {
   const queryClient = useQueryClient();
   const saved = useQuery({
     queryKey: ["settings", "backups"],
@@ -704,7 +702,7 @@ function BackupRetentionEditor() {
             onChange={(event) => setDraft({ ...current, keep_count: Number(event.target.value) || 3 })}
             className={`${triggerInputStyle} w-16`}
           />
-          backups of each database
+          backups
         </>
       ) : (
         <>

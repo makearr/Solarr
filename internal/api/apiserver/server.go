@@ -243,6 +243,8 @@ type Config struct {
 	// clear (todo 4.19). Optional: without it, the cache endpoints answer
 	// 503.
 	CacheManager CacheManager
+	// DatabaseAdmin serves the expert Database page. Optional: nil answers 503.
+	DatabaseAdmin DatabaseAdmin
 	// Playback finds the file the built-in player opens; Transcoder converts it. Both optional: without them the player answers 503.
 	Playback   PlaybackLocator
 	Transcoder *transcode.Service
@@ -393,6 +395,7 @@ type Server struct {
 	downloadRoots           DownloadFolderChecker
 	scheduler               Scheduler
 	cacheManager            CacheManager
+	databaseAdmin           DatabaseAdmin
 	playback                PlaybackLocator
 	transcoder              *transcode.Service
 	databaseMemory          DatabaseMemoryReader
@@ -534,6 +537,7 @@ func New(config Config) (*Server, error) {
 		downloadRoots:           config.DownloadRoots,
 		scheduler:               config.Scheduler,
 		cacheManager:            config.CacheManager,
+		databaseAdmin:           config.DatabaseAdmin,
 		playback:                config.Playback,
 		transcoder:              config.Transcoder,
 		databaseMemory:          config.DatabaseMemory,
@@ -886,6 +890,8 @@ func New(config Config) (*Server, error) {
 			secured.Post("/streaming/detect", server.DetectStreamingHardware)
 			secured.Get("/cache", server.GetCache)
 			secured.Patch("/cache", server.UpdateCacheBudget)
+			secured.Get("/database", server.GetDatabaseUsage)
+			secured.Post("/database/backups/clear", server.ClearOldBackups)
 			secured.Get("/cache/memory", server.GetDatabaseMemory)
 			secured.Put("/cache/memory", server.SetDatabaseMemory)
 			secured.Get("/recyclebin", server.GetRecycleBinLimits)

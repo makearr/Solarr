@@ -225,6 +225,8 @@ before it is packed; one failing copy fails the whole backup and leaves no bundl
 days, never below three) prunes bundles. Recovery at startup walks the bundles and the older single-database copies
 together, newest first. Backups taken before a migration and `settings.db`'s on-change copies stay single files.
 
+Settings -> Database (expert, administrators) shows what the mediacover, previews, cache and backup folders hold, edits how many backups are kept, runs maintenance, backup and the keep rule by hand, and **Clear old backups**: it runs the full integrity check on the newest bundle and only then removes every older one (409 and nothing removed when the check fails).
+
 ## Corruption recovery at startup
 
 Every database is verified before it is used (ADR-15, architecture section 15.1).

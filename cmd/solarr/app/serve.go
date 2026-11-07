@@ -780,6 +780,11 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		},
 		LogReader: logSource{ring: p.logRing},
 		Calendar:  adapters.Calendar{Calendar: library.NewCalendar(p.library)},
+		DatabaseAdmin: databaseAdmin{
+			FS: p.fsys, MediaCoverDir: p.config.Paths.MediaCoverDir, PreviewsDir: filepath.Join(p.config.Paths.ConfigDir, "previews"),
+			CacheDir: p.config.Paths.CacheDir, BackupDir: p.config.Paths.BackupDir,
+			Scratch: filepath.Join(p.config.Paths.BackupDir, stagingDirName),
+		},
 		Backups: backupSource{
 			FS: p.fsys, Directory: p.config.Paths.BackupDir, ConfigPath: p.configPath,
 			Stores: []*store.Store{p.library, p.jobs, p.settings, p.statistics},

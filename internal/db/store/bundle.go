@@ -26,6 +26,9 @@ const (
 	ConfigMember = "config.yml"
 )
 
+// ErrInvalidBundle means a backup bundle failed its check.
+var ErrInvalidBundle = errors.New("store: backup bundle is not valid")
+
 // BundleInfo is one backup bundle on disk.
 type BundleInfo struct {
 	Path string
@@ -232,7 +235,7 @@ func KeepOnlyLatestBundle(ctx context.Context, fsys fsx.FS, directory, scratch s
 		return nil, fmt.Errorf("store: no backup bundle in %q", directory)
 	}
 	if err := VerifyBundle(ctx, fsys, all[0].Path, scratch); err != nil {
-		return nil, fmt.Errorf("the newest backup is not valid, nothing was removed: %w", err)
+		return nil, fmt.Errorf("%w, nothing was removed: %w", ErrInvalidBundle, err)
 	}
 	var removed []string
 	for _, bundle := range all[1:] {

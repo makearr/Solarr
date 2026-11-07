@@ -359,6 +359,7 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/logs", component: lazyRouteComponent(() => import("./Logs"), "Logs") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/user", component: lazyRouteComponent(() => import("./Users"), "UserSettings") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/scheduler", component: lazyRouteComponent(() => import("./Scheduler"), "SchedulerPage") }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/settings/database", component: lazyRouteComponent(() => import("./DatabaseSettings"), "DatabaseSettingsPage") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/cache", component: lazyRouteComponent(() => import("./CacheSettings"), "CacheSettingsPage") }),
 ];
 

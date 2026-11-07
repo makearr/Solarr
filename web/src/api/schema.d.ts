@@ -1077,6 +1077,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/database": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Where the disk space of Solarr's own folders goes, and the newest backup. Administrator only. */
+        get: operations["getDatabaseUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/database/backups/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep only the newest backup, after checking it is valid. Administrator only.
+         * @description Opens the newest backup bundle and runs the full integrity check on every database in it. Only when all pass are the older bundles removed; otherwise nothing is removed and the answer is 409.
+         */
+        post: operations["clearOldBackups"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/priority": {
         parameters: {
             query?: never;
@@ -5752,6 +5789,38 @@ export interface components {
             metadata_hits?: number;
             /** Format: int64 */
             metadata_misses?: number;
+        };
+        DatabaseUsage: {
+            /**
+             * Format: int64
+             * @description Pictures of items in the library.
+             */
+            media_cover_bytes: number;
+            /**
+             * Format: int64
+             * @description Video preview pictures.
+             */
+            previews_bytes: number;
+            /**
+             * Format: int64
+             * @description Everything under the cache folder.
+             */
+            cache_bytes: number;
+            /** Format: int64 */
+            backups_bytes: number;
+            /**
+             * Format: int64
+             * @description Backup bundles on disk.
+             */
+            backup_count: number;
+            /** Format: date-time */
+            latest_backup_at?: string;
+        };
+        ClearedBackups: {
+            /** Format: int64 */
+            removed: number;
+            /** @description The file name of the backup that was kept. */
+            kept: string;
         };
         DatabaseMemory: {
             /**
@@ -11903,6 +11972,53 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    getDatabaseUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sizes of the media cover, preview, cache and backup folders. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatabaseUsage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    clearOldBackups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many bundles were removed and which one is kept. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClearedBackups"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getPrioritySettings: {

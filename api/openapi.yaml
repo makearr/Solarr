@@ -1568,6 +1568,40 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /database:
+    get:
+      operationId: getDatabaseUsage
+      tags: [settings]
+      summary: Where the disk space of Solarr's own folders goes, and the newest backup. Administrator only.
+      responses:
+        "200":
+          description: Sizes of the media cover, preview, cache and backup folders.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatabaseUsage" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
+  /database/backups/clear:
+    post:
+      operationId: clearOldBackups
+      tags: [settings]
+      summary: Keep only the newest backup, after checking it is valid. Administrator only.
+      description: >-
+        Opens the newest backup bundle and runs the full integrity check on every database in it. Only when all pass
+        are the older bundles removed; otherwise nothing is removed and the answer is 409.
+      responses:
+        "200":
+          description: How many bundles were removed and which one is kept.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ClearedBackups" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
   /priority:
     get:
       operationId: getPrioritySettings
@@ -8908,6 +8942,22 @@ components:
         metadata_hits: { type: integer, format: int64, description: Provider responses found in the cache since the process started. }
         metadata_misses: { type: integer, format: int64 }
 
+    DatabaseUsage:
+      type: object
+      required: [media_cover_bytes, previews_bytes, cache_bytes, backups_bytes, backup_count]
+      properties:
+        media_cover_bytes: { type: integer, format: int64, description: Pictures of items in the library. }
+        previews_bytes: { type: integer, format: int64, description: Video preview pictures. }
+        cache_bytes: { type: integer, format: int64, description: Everything under the cache folder. }
+        backups_bytes: { type: integer, format: int64 }
+        backup_count: { type: integer, format: int64, description: Backup bundles on disk. }
+        latest_backup_at: { type: string, format: date-time }
+    ClearedBackups:
+      type: object
+      required: [removed, kept]
+      properties:
+        removed: { type: integer, format: int64 }
+        kept: { type: string, description: The file name of the backup that was kept. }
     DatabaseMemory:
       type: object
       required: [configured_kb, running_kb, default_kb, restart_required, databases]
