@@ -261,14 +261,9 @@ func titleWords(name string) string {
 	return string(runes)
 }
 
-// assignGenres makes genres the work's provider tags of the genre tree, as source; a person's own stay (ADR-33). With
-// knownOnly a genre the tree does not hold is dropped.
+// assignGenres adds genres to the work's tags of the genre tree, as source; a refresh never removes one, only a person does.
+// With knownOnly a genre the tree does not hold is dropped.
 func assignGenres(ctx context.Context, queries *librarydb.Queries, workID int64, genreTree, source string, genres []string, knownOnly bool) error {
-	if err := queries.ClearWorkProviderTagsOfGenreTree(ctx, librarydb.ClearWorkProviderTagsOfGenreTreeParams{
-		WorkID: workID, GenreTree: genreTree,
-	}); err != nil {
-		return fmt.Errorf("clear genres: %w", err)
-	}
 	for _, genre := range genres {
 		ids, err := resolveGenre(ctx, queries, genreTree, genre, source, knownOnly)
 		if err != nil {

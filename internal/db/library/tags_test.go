@@ -70,7 +70,7 @@ func TestSeedGenreTree_PlacesProviderGenresUnderTheShippedTree(t *testing.T) {
 	if err := people.AssignGenres(t.Context(), work.ID, "music", []library.GenreLink{{Name: "Rap"}, {Name: "gangsta rap"}}); err != nil {
 		t.Fatalf("AssignGenres: %v", err)
 	}
-	want = []string{"Hip Hop 1", "Hip Hop/Gangsta Rap 1", "Polka 0", "Rock 0", "Rock/Metal 0", "Rock/Metal/Alternative Metal 0"}
+	want = []string{"Hip Hop 1", "Hip Hop/Gangsta Rap 1", "Polka 1", "Rock 1", "Rock/Metal 0", "Rock/Metal/Alternative Metal 1"}
 	if got := tagPaths(t, people, "music"); !reflect.DeepEqual(got, want) {
 		t.Fatalf("after an alias and a genre ending with one: tree = %v\nwant %v", got, want)
 	}
@@ -135,7 +135,7 @@ func TestTagTree_EditMergeDelete(t *testing.T) {
 	if err := people.DeleteTag(t.Context(), ids["Hip Hop"]); err != nil {
 		t.Fatalf("DeleteTag: %v", err)
 	}
-	if got, want := tagPaths(t, people, "music"), []string{"Rock 0", "Thrash Metal 0"}; !reflect.DeepEqual(got, want) {
+	if got, want := tagPaths(t, people, "music"), []string{"Rock 0", "Thrash Metal 1"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("after deleting Hip Hop: tree = %v, want %v", got, want)
 	}
 }

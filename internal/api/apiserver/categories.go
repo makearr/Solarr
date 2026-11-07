@@ -388,6 +388,10 @@ func (s *Server) applyKind(ctx context.Context, category settings.Category, kind
 // applyKindLanguage gives a library the kind's language profile, found by name or created.
 func (s *Server) applyKindLanguage(ctx context.Context, updated settings.Category, kind LibraryKind) (settings.Category, error) {
 	category := updated
+	// Music and adult follow no language unless the person sets one.
+	if category.MediaType == string(gen.MediaTypeMusic) || category.MediaType == string(gen.MediaTypeAdult) {
+		return updated, nil
+	}
 	snapshot2 := s.auth.Settings.Snapshot()
 	if snapshot2.TypeDefaultsFor(category.MediaType).LanguageProfileID != nil {
 		return updated, nil

@@ -248,8 +248,8 @@ func TestAssignGenres_NeverRemovesAUserTag(t *testing.T) {
 	for _, assignment := range assignments {
 		sources = append(sources, assignment.Source)
 	}
-	if len(assignments) != 2 {
-		t.Fatalf("assignments = %+v, want the new musicbrainz genre plus the surviving user tag", sources)
+	if len(assignments) != 3 {
+		t.Fatalf("assignments = %+v, want the earlier and the new musicbrainz genre plus the user tag", sources)
 	}
 }
 

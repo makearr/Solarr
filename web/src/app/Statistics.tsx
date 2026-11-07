@@ -4,7 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { vocabularyOf } from "@/lib/i18n";
+import { sizeText, sizeTone } from "@/lib/targetCloseness";
 import { useLibrary } from "@/lib/useLibrary";
+import { Chip } from "@/ui/Chip";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 
 import { formatBytes } from "./Queue";
@@ -284,6 +286,8 @@ export function Statistics() {
             </ul>
           </section>
 
+          <TargetSize categoryId={categoryId ?? ""} />
+
           <Searching
             windowDays={data.window_days}
             searches={data.searches}
@@ -398,4 +402,59 @@ function Searching({
 function groupLabel(ref: string, group: string): string {
   const number = /^[a-z](\d+)$/.exec(ref)?.[1];
   return number === undefined ? ref : `${group} ${Number(number)}`;
+}
+
+/** How far the library's video files are from the size its target expects, and the files furthest off it. */
+function TargetSize({ categoryId }: { categoryId: string }) {
+  const size = useQuery({
+    queryKey: ["target-size", categoryId],
+    enabled: categoryId !== "",
+    queryFn: () => ok(api.GET("/categories/{id}/target-size", { params: { path: { id: Number(categoryId) } } })),
+  });
+  const data = size.data;
+  if (!data || data.judged === 0) return null;
+  const buckets = [
+    { label: "On the target", note: "within 10%", count: data.on_target, bar: "bg-ok" },
+    { label: "A bit off", note: "10% to 25%", count: data.a_bit_off, bar: "bg-caution" },
+    { label: "Further off", note: "25% to 50%", count: data.further_off, bar: "bg-orange" },
+    { label: "Far off", note: "half or double and beyond", count: data.far_off, bar: "bg-danger" },
+  ];
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-sm font-medium">Size against the target</h2>
+      <p className="text-xs text-ink-muted">
+        Each video file's bitrate against the {data.expected_kbps} kbit/s a file on the target would have (video and audio plus container and subtitle overhead), over {data.judged} files.
+      </p>
+      <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {buckets.map((bucket) => (
+          <li key={bucket.label} className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface p-3">
+            <span className="text-2xl font-semibold tabular-nums">{bucket.count}</span>
+            <span className="relative h-1.5 overflow-hidden rounded-full bg-canvas">
+              <span className={`absolute inset-y-0 left-0 rounded-full ${bucket.bar}`} style={{ width: `${Math.round((bucket.count / data.judged) * 100)}%` }} />
+            </span>
+            <span className="text-xs text-ink-muted">
+              {bucket.label} · {bucket.note}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {data.furthest.length > 0 && (
+        <>
+          <h3 className="mt-1 text-xs font-medium text-ink-muted">Furthest from the target</h3>
+          <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
+            {data.furthest.map((file) => (
+              <li key={file.media_object_id} className="flex items-center gap-3 px-3 py-1.5 text-sm">
+                <Link to="/works/$id" params={{ id: String(file.work_id) }} className="min-w-0 flex-1 truncate hover:underline">
+                  {file.title}
+                  {file.media_ref ? <span className="text-ink-muted"> · {file.media_ref}</span> : null}
+                </Link>
+                {file.size_bytes != null && <span className="shrink-0 text-xs tabular-nums text-ink-muted">{formatBytes(file.size_bytes)}</span>}
+                <Chip tone={sizeTone(file.size_pct)}>{sizeText(file.size_pct)}</Chip>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
 }

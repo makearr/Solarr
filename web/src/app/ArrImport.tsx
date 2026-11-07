@@ -46,7 +46,7 @@ export function ArrImport() {
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col gap-4 overflow-y-auto p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold">Arrs</h1>
+        <h1 className="text-lg font-semibold">Arr</h1>
         <p className="text-sm leading-relaxed text-ink-muted">
           Connect an existing Sonarr/Radarr/Lidarr/Whisparr and choose what to bring in: its paths, what it
           monitors (as intent, never a download), only the monitoring status of what is already here, its

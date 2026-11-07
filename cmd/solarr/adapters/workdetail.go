@@ -234,7 +234,7 @@ func partFileRow(file *library.PartFile) apiserver.PartFileRow {
 		BitrateKbps: file.BitrateKbps, Lossless: file.Lossless, Extension: file.Extension, RelPath: file.RelPath,
 		SizeBytes: file.SizeBytes, Resolution: file.Resolution, HDR: file.HDR, AudioChannels: file.AudioChannels,
 		VideoBitrateKbps: file.VideoBitrateKbps, AudioLanguages: file.AudioLanguages, Subtitles: file.Subtitles,
-		FrameRate: file.FrameRate, CRF: file.CRF,
+		FrameRate: file.FrameRate, CRF: file.CRF, HeightPx: file.HeightPx, DurationMs: file.DurationMs,
 	}
 }
 

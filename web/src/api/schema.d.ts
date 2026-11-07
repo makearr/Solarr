@@ -4246,6 +4246,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories/{id}/target-size": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * How far the library's video files are from the size its target quality expects.
+         * @description Each file's bitrate against the bitrate a file on the library's target would have, read live: how many files are on it, a little, further and far off (the same distance for a factor and its inverse), and the files furthest off. Empty when the library has no target that names a bitrate. Needs read access to the library.
+         */
+        get: operations["getCategoryTargetSize"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/rootfolders": {
         parameters: {
             query?: never;
@@ -5273,7 +5295,7 @@ export interface components {
          * @description What a heart can be on; work_part is a song or an episode, organisation a studio or a network.
          * @enum {string}
          */
-        FavoriteSubject: "work" | "work_part" | "person" | "organisation" | "collection";
+        FavoriteSubject: "work" | "work_part" | "person" | "organisation" | "collection" | "tag";
         HealthStatus: {
             /** @enum {string} */
             status: "ok";
@@ -8375,9 +8397,25 @@ export interface components {
             crf?: number;
             /**
              * Format: int64
-             * @description How near the file is to the library's target quality, from the parts both name: 100 on it, lower short of it, up to 200 when it is over a number (only when nothing else is short). Absent when it sets none or nothing could be compared.
+             * @description The picture's lines the probe read; absent when it read none.
              */
-            target_closeness_pct?: number;
+            height?: number;
+            /**
+             * Format: int64
+             * @description The running time the probe read; absent when it read none.
+             */
+            duration_ms?: number;
+            /**
+             * Format: int64
+             * @description The file's bitrate as a percentage of the bitrate a file on the library's target would have (its video and audio bitrates plus container and subtitle overhead): 100 on it, 618 for six times as large, 50 for half. Absent when the target names no bitrate or the file's is unknown.
+             */
+            target_size_pct?: number;
+            /**
+             * Format: int64
+             * @description The overall bitrate, in kbit/s, the library's target expects of a file.
+             */
+            target_expected_kbps?: number;
+            target_fit?: components["schemas"]["TargetFit"];
             /** @description The parts of the target the file does not match, the furthest first. */
             target_gaps?: components["schemas"]["TargetGap"][];
             /** @description Codec, file type and bitrate match the library's target. Absent when it sets none. */
@@ -8385,6 +8423,68 @@ export interface components {
             /** @description Good enough that upgrades stop. Absent when the library sets neither target nor cutoff. */
             meets_cutoff?: boolean;
         };
+        CategoryTargetSize: {
+            /**
+             * Format: int64
+             * @description The files whose bitrate could be compared.
+             */
+            judged: number;
+            /**
+             * Format: int64
+             * @description The overall bitrate the target expects; 0 when it names none.
+             */
+            expected_kbps: number;
+            /**
+             * Format: int64
+             * @description Files within 10% of it.
+             */
+            on_target: number;
+            /**
+             * Format: int64
+             * @description Files 10% to 25% off.
+             */
+            a_bit_off: number;
+            /**
+             * Format: int64
+             * @description Files 25% to 50% off.
+             */
+            further_off: number;
+            /**
+             * Format: int64
+             * @description Files 50% or more off (half the bitrate or less
+             */
+            far_off: number;
+            furthest: components["schemas"]["TargetSizeFile"][];
+        };
+        TargetSizeFile: {
+            /** Format: int64 */
+            media_object_id: number;
+            /** Format: int64 */
+            work_id: number;
+            title: string;
+            /** @description The episode or part the file covers; absent for a whole work. */
+            media_ref?: string;
+            /**
+             * Format: int64
+             * @description The file's bitrate as a percentage of the target's.
+             */
+            size_pct: number;
+            /** Format: int64 */
+            size_bytes?: number;
+        };
+        /** @description How each tag of a file stands against the library's target; a tag the target names nothing for, or the file does not state, is absent. */
+        TargetFit: {
+            resolution?: components["schemas"]["FitLevel"];
+            video_codec?: components["schemas"]["FitLevel"];
+            audio_codec?: components["schemas"]["FitLevel"];
+            audio_language?: components["schemas"]["FitLevel"];
+            subtitle_language?: components["schemas"]["FitLevel"];
+        };
+        /**
+         * @description On the target, a little off it (the right codec at another bitrate, or a resolution in the same bracket), or far off it.
+         * @enum {string}
+         */
+        FitLevel: "ok" | "near" | "off";
         /** @description One part of a target quality a file does not match. */
         TargetGap: {
             /** @description resolution, video codec, CRF, ... */
@@ -17436,6 +17536,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CategoryStatistics"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getCategoryTargetSize: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The distances. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryTargetSize"];
                 };
             };
             401: components["responses"]["Problem"];

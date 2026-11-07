@@ -124,6 +124,8 @@ type Config struct {
 	ImportDecisions func(ctx context.Context, workID int64) ([]ImportDecisionView, error)
 	// Statistics reads a library's rolled-up figures. Optional: nil answers 503.
 	Statistics StatisticsReader
+	// FileRates answers a library's video files for the Insights target-size section. Optional: nil answers 503.
+	FileRates FileRates
 	// Duplicates finds a library's likely copies. Optional: nil answers 503.
 	Duplicates DuplicateReader
 	// SimilarVideos finds a library's videos that look alike. Optional: nil answers 503.
@@ -339,6 +341,7 @@ type Server struct {
 	artistActions           ArtistActions
 	artworkChoices          ArtworkChoices
 	statistics              StatisticsReader
+	fileRates               FileRates
 	huntBudget              func(ctx context.Context) (HuntBudgetView, error)
 	downloaderSpeeds        func(ctx context.Context) ([]DownloaderSpeedView, error)
 	importDecisions         func(ctx context.Context, workID int64) ([]ImportDecisionView, error)
@@ -476,6 +479,7 @@ func New(config Config) (*Server, error) {
 		artistActions:           config.ArtistActions,
 		artworkChoices:          config.ArtworkChoices,
 		statistics:              config.Statistics,
+		fileRates:               config.FileRates,
 		huntBudget:              config.HuntBudget,
 		downloaderSpeeds:        config.DownloaderSpeeds,
 		importDecisions:         config.ImportDecisions,
@@ -763,6 +767,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/categories/{id}/search", server.routeSearchCategory)
 			secured.Get("/categories/{id}", server.routeGetCategory)
 			secured.Get("/categories/{id}/statistics", server.routeGetCategoryStatistics)
+			secured.Get("/categories/{id}/target-size", server.routeGetCategoryTargetSize)
 			secured.Get("/categories/{id}/duplicates", server.routeGetCategoryDuplicates)
 			secured.Get("/categories/{id}/similar-videos", server.routeGetCategorySimilarVideos)
 			secured.Post("/categories/{id}/duplicates/resolve", server.routeResolveCategoryDuplicates)

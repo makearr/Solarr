@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"path"
 	"strconv"
@@ -120,6 +121,7 @@ type PartFileRow struct {
 	VideoBitrateKbps               int64
 	AudioLanguages, Subtitles      []string
 	FrameRate, CRF                 float64
+	HeightPx, DurationMs           int64
 }
 
 // CreditRow is one work-level credit, the person's own name included so a
@@ -361,24 +363,46 @@ func annotateFiles(access authz.Access, categoryIDs []int64, files []*gen.PartFi
 				file.MeetsTarget = &meetsTarget
 			}
 			file.MeetsCutoff = &meetsCutoff
-			setTargetCloseness(file, judgement)
+			if category.QualityTarget != nil {
+				setTargetCloseness(file, *category.QualityTarget, judgement)
+			}
 		}
 		return
 	}
 }
 
-// setTargetCloseness shows how near the file is to the library's target, and the parts that are not.
-func setTargetCloseness(file *gen.PartFile, judgement quality.File) {
+// setTargetCloseness shows how the file's size stands against the library's target, how each tag fits, and the parts that differ.
+func setTargetCloseness(file *gen.PartFile, target settings.QualityTarget, judgement quality.File) {
+	facts := partFileFacts(*file).File
+	actual := float64(file.BitrateKbps)
+	if file.SizeBytes != nil && file.DurationMs != nil && *file.DurationMs > 0 {
+		actual = float64(*file.SizeBytes) * 8 / float64(*file.DurationMs)
+	}
+	if ratio, expected, ok := quality.SizeRatio(target, actual); ok {
+		percent, kbps := int64(math.Round(ratio*100)), int64(math.Round(expected))
+		file.TargetSizePct, file.TargetExpectedKbps = &percent, &kbps
+	}
+	fits := quality.Fits(target, facts)
+	file.TargetFit = &gen.TargetFit{
+		Resolution: fitLevel(fits.Resolution), VideoCodec: fitLevel(fits.VideoCodec), AudioCodec: fitLevel(fits.AudioCodec),
+		AudioLanguage: fitLevel(fits.AudioLanguage), SubtitleLanguage: fitLevel(fits.SubtitleLanguage),
+	}
 	if judgement.Target == nil {
 		return
 	}
-	percent := int64(judgement.Target.Percent)
-	file.TargetClosenessPct = &percent
 	gaps := make([]gen.TargetGap, 0)
 	for _, gap := range judgement.Target.Gaps() {
 		gaps = append(gaps, gen.TargetGap{Dimension: gap.Dimension, Want: gap.Want, Have: gap.Have})
 	}
 	file.TargetGaps = &gaps
+}
+
+func fitLevel(fit quality.Fit) *gen.FitLevel {
+	if fit == "" {
+		return nil
+	}
+	level := gen.FitLevel(fit)
+	return &level
 }
 
 // partFileFacts is what probing measured of a file, as the facts a profile judges.
@@ -392,6 +416,7 @@ func partFileFacts(file gen.PartFile) score.Facts {
 		AudioChannels: derefOr(file.AudioChannels, ""), AudioLanguages: derefOr(file.AudioLanguages, nil),
 		SubtitleLanguages: derefOr(file.Subtitles, nil), VideoBitrate: derefOr(file.VideoBitrateKbps, 0) * 1000,
 		FrameRate: float64(derefOr(file.FrameRate, 0)), CRF: float64(derefOr(file.Crf, 0)),
+		Height: int(derefOr(file.Height, 0)),
 	}}
 	return facts
 }
@@ -900,6 +925,12 @@ func partFileView(file PartFileRow) *gen.PartFile {
 	if file.CRF > 0 {
 		crf := float32(file.CRF)
 		view.Crf = &crf
+	}
+	if file.HeightPx > 0 {
+		view.Height = &file.HeightPx
+	}
+	if file.DurationMs > 0 {
+		view.DurationMs = &file.DurationMs
 	}
 	return view
 }

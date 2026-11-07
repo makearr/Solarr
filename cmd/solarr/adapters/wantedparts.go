@@ -60,6 +60,7 @@ func (a WantedParts) rows(categoryID int64, parts []library.WantedPart) []apiser
 				BitrateKbps: file.BitrateKbps, Lossless: file.Lossless, SizeBytes: file.SizeBytes, Resolution: file.Resolution,
 				HDR: file.HDR, AudioChannels: file.AudioChannels, VideoBitrateKbps: file.VideoBitrateKbps,
 				AudioLanguages: file.AudioLanguages, Subtitles: file.Subtitles, FrameRate: file.FrameRate, CRF: file.CRF,
+				HeightPx: file.HeightPx, DurationMs: file.DurationMs,
 			}
 		}
 	}

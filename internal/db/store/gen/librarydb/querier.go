@@ -92,8 +92,6 @@ type Querier interface {
 	ClearProviderTagAssignments(ctx context.Context, arg ClearProviderTagAssignmentsParams) error
 	ClearVanished(ctx context.Context, rootFolderID int64) error
 	ClearWorkOrganisationRole(ctx context.Context, arg ClearWorkOrganisationRoleParams) error
-	// A refresh replaces every provider's genres of a work at once: every source but a person's own.
-	ClearWorkProviderTagsOfGenreTree(ctx context.Context, arg ClearWorkProviderTagsOfGenreTreeParams) error
 	// "You have 4 of 6 Ihaol films" is the first thing library-derived discovery
 	// looks for, so held and stated counts come back together (ADR-38).
 	CollectionCoverage(ctx context.Context, id int64) (CollectionCoverageRow, error)
@@ -580,6 +578,8 @@ type Querier interface {
 	ListCalendarEpisodes(ctx context.Context, arg ListCalendarEpisodesParams) ([]ListCalendarEpisodesRow, error)
 	// What statistics.db's copy reads, oldest first after an id (revision 2, D7).
 	ListCandidatesAfter(ctx context.Context, arg ListCandidatesAfterParams) ([]Candidate, error)
+	// Each primary file of a library with the size and running time its bitrate is judged from, one row per file.
+	ListCategoryFileRates(ctx context.Context, categoryID int64) ([]ListCategoryFileRatesRow, error)
 	// Certifications written before their age was read, a page at a time.
 	ListCertificationsWithoutAge(ctx context.Context, limit int64) ([]ListCertificationsWithoutAgeRow, error)
 	// Who plays whom in each work of a media type, once per work: a character two series share makes them one family.

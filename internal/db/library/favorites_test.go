@@ -47,10 +47,10 @@ func TestFavorites_AreKeptPerUserAndKindAndSetIsIdempotent(t *testing.T) {
 
 func TestFavorites_AnUnknownKindIsRefusedByTheTable(t *testing.T) {
 	opened, _ := newLibrary(t)
-	if err := library.NewFavorites(opened, clock.NewFakeAtEpoch()).Set(t.Context(), 1, "tag", 1, true); err == nil {
+	if err := library.NewFavorites(opened, clock.NewFakeAtEpoch()).Set(t.Context(), 1, "genre", 1, true); err == nil {
 		t.Fatal("hearting a kind the table does not know succeeded")
 	}
-	if library.IsFavoriteSubject("tag") || !library.IsFavoriteSubject(library.FavoriteOrganisation) {
+	if library.IsFavoriteSubject("genre") || !library.IsFavoriteSubject(library.FavoriteOrganisation) {
 		t.Error("IsFavoriteSubject disagrees with the table")
 	}
 }

@@ -28,7 +28,7 @@ const (
 
 // GenreTree holds the tags of scenes. The servers' tags are a community vocabulary, so every one becomes a tag and the
 // tree starts empty.
-var GenreTree = media.GenreTree{Key: "adult", Label: "Tags", Version: 1}
+var GenreTree = media.GenreTree{Key: "adult", Label: "Adult", Version: 1}
 
 // ToWrite turns a merged scene into what the library stores; now decides whether it is out yet.
 func ToWrite(scene Scene, now time.Time) library.SeriesWrite {

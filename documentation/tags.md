@@ -9,7 +9,7 @@ One mechanism for genres and labels (ADR-33, `private` plan 10 L1): every genre 
 |---|---|---|
 | Music genres | `music` (`internal/media/music/genretree.go`) | the shipped tree, MusicBrainz, Wikidata, a person |
 | Film and TV genres | `screen` (`internal/media/screen`), shared by TV and movies | the shipped tree, TMDB, Skyhook, TVmaze, Wikidata, a person |
-| Free labels | `""` | a person |
+| Your tags (free labels) | `""` | a person |
 
 A media type declares its genre tree on its descriptor (`media.Descriptor.GenreTree`). A genre tree's tags carry its key
 in their slug (`music/rock`), so two genre trees may both have a Comedy.
@@ -24,7 +24,7 @@ in their slug (`music/rock`), so two genre trees may both have a Comedy.
 3. a new tag, spelled in title case, placed under the tag whose name is its longest whole-word ending, by name or
    alias ("gangsta rap" under Hip Hop, "alternative metal" under Metal).
 
-A refresh replaces only the work's provider tags of that genre tree; a person's (source `user`) are never removed.
+A refresh only adds the provider's tags to a work; it never removes one, and a person's (source `user`) are never touched. Tags go away only by hand: deleting one on the Tags page. A tag can be hearted (favorite) and opened to list the items carrying it.
 
 ## The shipped tree
 

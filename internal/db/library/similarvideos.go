@@ -229,7 +229,7 @@ func (s SimilarVideos) addFacts(ctx context.Context, groups []SimilarGroup) erro
 				Extension: strings.ToLower(strings.TrimPrefix(path.Ext(video.RelPath), ".")), RelPath: video.RelPath, SizeBytes: row.SizeBytes,
 				Resolution: row.Resolution.String, HDR: row.Hdr.String, AudioChannels: row.AudioChannels.String,
 				VideoBitrateKbps: row.VideoBitrate.Int64 / 1000, AudioLanguages: jsonStrings(row.Languages), Subtitles: jsonStrings(row.Subtitles),
-				FrameRate: row.FrameRate.Float64, CRF: row.Crf.Float64,
+				FrameRate: row.FrameRate.Float64, CRF: row.Crf.Float64, HeightPx: row.Height.Int64, DurationMs: row.DurationMs.Int64,
 			}
 		}
 	}

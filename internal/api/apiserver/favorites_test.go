@@ -75,8 +75,8 @@ func TestFavorites_RefuseWhatCannotBeHearted(t *testing.T) {
 	fixture.createUser(t, "listener", settings.RoleReadonly)
 	cookies := fixture.signIn(t, "listener")
 
-	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/favorites/tag/1", "")); recorder.Code != http.StatusBadRequest {
-		t.Errorf("hearting a tag = %d, want 400", recorder.Code)
+	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/favorites/genre/1", "")); recorder.Code != http.StatusBadRequest {
+		t.Errorf("hearting a genre = %d, want 400", recorder.Code)
 	}
 	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/favorites/work/abc", "")); recorder.Code != http.StatusBadRequest {
 		t.Errorf("hearting work abc = %d, want 400", recorder.Code)

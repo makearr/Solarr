@@ -90,7 +90,7 @@ FROM desired_item_file WHERE media_object_id = ? ORDER BY desired_item_id;
 -- name: ListPartFilesForWork :many
 SELECT f.media_ref, f.media_object_id, o.overall_bitrate, o.audio_bitrate,
        a.audio_codec, a.video_codec, a.container, a.lossless, a.languages, a.lyrics_languages,
-       o.size_bytes, o.video_bitrate, a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
+       o.size_bytes, o.video_bitrate, o.height, o.duration_ms, a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
        CAST(COALESCE((SELECT lp.rel_path FROM library_path lp WHERE lp.media_object_id = o.id
                       ORDER BY EXISTS (SELECT 1 FROM work_file wf JOIN library_path sib ON sib.media_object_id = wf.media_object_id
                                        WHERE wf.work_id = d.work_id AND wf.media_object_id <> o.id
@@ -110,7 +110,7 @@ ORDER BY f.media_ref, f.media_object_id;
 -- name: ListWholeFilesForWork :many
 SELECT f.media_object_id, o.overall_bitrate, o.audio_bitrate,
        a.audio_codec, a.video_codec, a.container, a.lossless, a.languages,
-       o.size_bytes, o.video_bitrate, a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
+       o.size_bytes, o.video_bitrate, o.height, o.duration_ms, a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
        CAST(COALESCE((SELECT lp.rel_path FROM library_path lp WHERE lp.media_object_id = o.id
                       ORDER BY lp.is_primary DESC, lp.id LIMIT 1), '') AS TEXT) AS rel_path
 FROM desired_item d
@@ -590,3 +590,15 @@ JOIN desired_item_file f ON f.desired_item_id = s.id
 JOIN desired_item t ON t.work_id = s.work_id AND t.category_id = sqlc.arg(to_category_id)
                    AND t.media_ref = s.media_ref AND t.satisfaction_kind = s.satisfaction_kind
 WHERE s.work_id = sqlc.arg(work_id) AND s.category_id = sqlc.arg(from_category_id);
+
+-- Each primary file of a library with the size and running time its bitrate is judged from, one row per file.
+-- name: ListCategoryFileRates :many
+SELECT o.id AS media_object_id, d.work_id, w.canonical_title AS title, CAST(MIN(d.media_ref) AS TEXT) AS media_ref,
+       o.size_bytes, CAST(COALESCE(o.duration_ms, 0) AS INTEGER) AS duration_ms, CAST(COALESCE(o.overall_bitrate, 0) AS INTEGER) AS overall_bitrate
+FROM desired_item d
+JOIN desired_item_file f ON f.desired_item_id = d.id AND f.role = 'primary'
+JOIN media_object o ON o.id = f.media_object_id
+JOIN work w ON w.id = d.work_id
+WHERE d.category_id = ? AND o.kind = 'video'
+GROUP BY o.id
+ORDER BY o.id;

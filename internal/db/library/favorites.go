@@ -17,12 +17,13 @@ const (
 	FavoritePerson       = "person"
 	FavoriteOrganisation = "organisation"
 	FavoriteCollection   = "collection"
+	FavoriteTag          = "tag"
 )
 
 // IsFavoriteSubject reports whether a heart can be on this kind of thing.
 func IsFavoriteSubject(subjectType string) bool {
 	switch subjectType {
-	case FavoriteWork, FavoriteWorkPart, FavoritePerson, FavoriteOrganisation, FavoriteCollection:
+	case FavoriteWork, FavoriteWorkPart, FavoritePerson, FavoriteOrganisation, FavoriteCollection, FavoriteTag:
 		return true
 	}
 	return false

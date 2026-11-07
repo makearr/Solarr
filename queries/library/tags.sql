@@ -68,12 +68,6 @@ SELECT id FROM tag WHERE parent_id = ? ORDER BY id;
 -- name: DeleteTag :execrows
 DELETE FROM tag WHERE id = ?;
 
--- A refresh replaces every provider's genres of a work at once: every source but a person's own.
--- name: ClearWorkProviderTagsOfGenreTree :exec
-DELETE FROM tag_assignment
-WHERE subject_type = 'work' AND subject_id = sqlc.arg(work_id) AND source <> 'user'
-  AND tag_id IN (SELECT t.id FROM tag t WHERE t.genre_tree = sqlc.arg(genre_tree));
-
 -- Genres stored before they were tags, a page of works at a time.
 -- name: ListClassificationGenres :many
 SELECT wc.work_id, w.media_type, wc.value, wc.source FROM work_classification wc JOIN work w ON w.id = wc.work_id

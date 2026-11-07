@@ -36,7 +36,7 @@ import { ReleaseFiltersDialog } from "./ReleaseFiltersDialog";
 import { grabNote } from "./grabNote";
 import { ExpertFileInfo, type ExpertFiles, useExpertFiles } from "./FileExpert";
 import { TargetChip } from "./TargetChip";
-import { externalLinks, fileChips, formatMinutes, isUnverified } from "./workFormat";
+import { externalLinks, fileTagChips, formatMinutes, isUnverified } from "./workFormat";
 import { GroupSection, MonitorToggle, PartTable, PersonLink, useAllParts, type PartActions } from "./WorkParts";
 import { WorkCollections } from "./WorkCollections";
 import { WorkSearchTab } from "./WorkSearchTab";
@@ -717,13 +717,12 @@ function FilesTab({ work, words, info, categoryId }: { work: Work; words: Vocabu
               <span>{part.title ?? part.media_ref}</span>
               {part.file?.path && <span className="block break-all font-mono text-xs text-ink-muted">{part.file.path}</span>}
               <span className="mt-0.5 flex flex-wrap gap-1">
-                {part.file && fileChips(part.file).map((chip) => <Chip key={chip}>{chip}</Chip>)}
+                {part.file && fileTagChips(part.file).map((chip) => <Chip key={chip.text} tone={chip.tone}>{chip.text}</Chip>)}
               </span>
               {part.file && <ExpertFileInfo mediaObjectId={part.file.media_object_id} expert={expert} />}
             </td>
             <td className="whitespace-nowrap py-1.5 text-right text-xs">
               {part.file && <TargetChip file={part.file} short />}{" "}
-              {part.file?.meets_cutoff != null && <Chip tone={part.file.meets_cutoff ? "ok" : "warn"}>cutoff</Chip>}
             </td>
           </tr>
         ))}
@@ -749,11 +748,10 @@ function WholeFiles({ work, expert }: { work: Work; expert?: ExpertFiles }) {
               {file.path && <span className="break-all font-mono text-xs">{file.path}</span>}
             </span>
             <span className="flex flex-wrap items-center gap-1">
-              {fileChips(file).map((chip) => (
-                <Chip key={chip}>{chip}</Chip>
+              {fileTagChips(file).map((chip) => (
+                <Chip key={chip.text} tone={chip.tone}>{chip.text}</Chip>
               ))}
               <TargetChip file={file} />
-              {file.meets_cutoff === false && <Chip tone="warn">below the cutoff</Chip>}
             </span>
             {expert && <ExpertFileInfo mediaObjectId={file.media_object_id} expert={expert} />}
           </li>

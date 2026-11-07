@@ -12,7 +12,7 @@ import { Chip } from "@/ui/Chip";
 
 import { InteractiveSearch } from "../InteractiveSearch";
 import { grabNote } from "./grabNote";
-import { fileChips } from "./workFormat";
+import { fileTagChips } from "./workFormat";
 
 type Part = components["schemas"]["WantedPart"];
 
@@ -143,8 +143,8 @@ export function PartWanted({ info }: { info: MediaTypeInfo | undefined }) {
               <span className="w-24 text-xs text-ink-muted">{part.date ?? ""}</span>
               {part.file && (
                 <span className="flex flex-wrap gap-1">
-                  {fileChips(part.file).slice(0, 3).map((chip) => (
-                    <Chip key={chip}>{chip}</Chip>
+                  {fileTagChips(part.file).slice(0, 3).map((chip) => (
+                    <Chip key={chip.text} tone={chip.tone}>{chip.text}</Chip>
                   ))}
                 </span>
               )}

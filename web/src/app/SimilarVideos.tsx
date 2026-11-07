@@ -6,6 +6,7 @@ import { useState } from "react";
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useLibraries } from "@/lib/resources";
+import { sizeOff } from "@/lib/targetCloseness";
 import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
 import { inputStyle } from "@/ui/form";
@@ -13,7 +14,7 @@ import { inputStyle } from "@/ui/form";
 import { PlayButton } from "./player/PlayButton";
 import { formatBytes } from "./Queue";
 import { TargetChip } from "./work/TargetChip";
-import { fileChips } from "./work/workFormat";
+import { fileTagChips } from "./work/workFormat";
 
 type Group = components["schemas"]["SimilarVideoReport"]["groups"][number];
 type Video = Group["videos"][number];
@@ -46,7 +47,7 @@ const formatDuration = (ms: number) => {
 const mergeable = (video: Video, keep: Video) => video.category_id === keep.category_id && extensionOf(video.path) === extensionOf(keep.path);
 
 /** How far a file is from the library's target, either way; a file with no target to judge by is furthest. */
-const distanceFromTarget = (video: Video) => (video.file.target_closeness_pct == null ? Number.POSITIVE_INFINITY : Math.abs(video.file.target_closeness_pct - 100));
+const distanceFromTarget = (video: Video) => (video.file.target_size_pct == null ? Number.POSITIVE_INFINITY : sizeOff(video.file.target_size_pct));
 
 /** The file to keep unasked: the one closest to its library's target, the larger on a tie (and the largest when no target judges). */
 function closestToTarget(videos: readonly Video[]): Video {
@@ -140,11 +141,10 @@ function GroupCard({ group, scope, libraryName }: { group: Group; scope: Similar
               {video.duration_ms > 0 && <span className="text-ink-muted">{formatDuration(video.duration_ms)}</span>}
             </div>
             <div className="flex flex-wrap items-center gap-1">
-              {fileChips(video.file).map((chip) => (
-                <Chip key={chip}>{chip}</Chip>
+              {fileTagChips(video.file).map((chip) => (
+                <Chip key={chip.text} tone={chip.tone}>{chip.text}</Chip>
               ))}
               <TargetChip file={video.file} />
-              {video.file.meets_cutoff === false && <Chip tone="warn">below the cutoff</Chip>}
             </div>
             <span className="break-all font-mono text-ink-muted">{video.path}</span>
             {video.path_count > 1 && <span className="text-warn">The same file is linked at {video.path_count} paths; dropping it affects all of them.</span>}

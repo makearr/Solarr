@@ -344,7 +344,7 @@ ORDER BY o.id;
 
 -- What the duplicate screens show of a video: its measured facts and the work it belongs to.
 -- name: GetVideoFacts :one
-SELECT o.id, o.overall_bitrate, o.audio_bitrate, o.video_bitrate, o.size_bytes,
+SELECT o.id, o.overall_bitrate, o.audio_bitrate, o.video_bitrate, o.size_bytes, o.height, o.duration_ms,
        a.audio_codec, a.video_codec, a.container, a.lossless, a.languages,
        a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
        CAST(COALESCE((SELECT wf.work_id FROM work_file wf WHERE wf.media_object_id = o.id ORDER BY wf.work_id LIMIT 1), 0) AS INTEGER) AS work_id,

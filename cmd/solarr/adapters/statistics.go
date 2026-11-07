@@ -75,3 +75,19 @@ func (s Statistics) CategoryStatistics(ctx context.Context, categoryID int64) (a
 	sort.Slice(view.GrowthByMonth, func(i, j int) bool { return view.GrowthByMonth[i].Key < view.GrowthByMonth[j].Key })
 	return view, nil
 }
+
+// FileRates satisfies apiserver.FileRates over the library's files.
+type FileRates struct{ Works library.Works }
+
+// ForCategory answers a library's primary video files.
+func (f FileRates) ForCategory(ctx context.Context, categoryID int64) ([]apiserver.FileRateView, error) {
+	rates, err := f.Works.FileRates(ctx, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	views := make([]apiserver.FileRateView, len(rates))
+	for index, rate := range rates {
+		views[index] = apiserver.FileRateView(rate)
+	}
+	return views, nil
+}

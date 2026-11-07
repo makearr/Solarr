@@ -19,6 +19,9 @@
   --color-danger: oklch(58% 0.19 27);
   --color-ok: oklch(62% 0.15 150);
   --color-warn: oklch(72% 0.15 75);
+  /* Distance from a target: green is ok, then caution (yellow), orange, danger (red). */
+  --color-caution: oklch(80% 0.16 100);
+  --color-orange: oklch(68% 0.18 50);
   --color-busy: oklch(58% 0.19 305);
   /* The header bar: the page's own ground unless a scheme colours it, as the *arr apps do. */
   --color-header: var(--color-canvas);

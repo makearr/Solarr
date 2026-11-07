@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 
-export type ChipTone = "neutral" | "accent" | "ok" | "warn" | "danger" | "busy";
+export type ChipTone = "neutral" | "accent" | "ok" | "caution" | "orange" | "warn" | "danger" | "busy";
 
 const TONES: Record<ChipTone, string> = {
   neutral: "border-border-subtle text-ink-muted",
   accent: "border-accent text-accent",
   ok: "border-ok text-ok",
+  caution: "border-caution text-caution",
+  orange: "border-orange text-orange",
   warn: "border-warn text-warn",
   danger: "border-danger text-danger",
   busy: "border-busy text-busy",

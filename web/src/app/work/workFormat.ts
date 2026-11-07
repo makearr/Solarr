@@ -1,4 +1,5 @@
 import type { components } from "@/api/schema";
+import type { ChipTone } from "@/ui/Chip";
 
 type Part = components["schemas"]["WorkPart"];
 type PartFile = components["schemas"]["PartFile"];
@@ -36,22 +37,36 @@ export function relativeTime(at: number, now = Date.now()): string {
   return format.format(Math.round(minutes / 1440), "day");
 }
 
-/** What the probe measured of a part's file, as short chips: a video's picture and sound, an audio file's format. */
-export function fileChips(file: PartFile): string[] {
+export type FileChip = { text: string; tone?: ChipTone };
+
+const FIT_TONE = { ok: "ok", near: "caution", off: "danger" } as const;
+const toned = (text: string | undefined, fit: components["schemas"]["FitLevel"] | undefined): FileChip | undefined =>
+  text === undefined ? undefined : { text, tone: fit ? FIT_TONE[fit] : undefined };
+
+/** What the probe measured of a part's file, as short chips toned by how near each is to the library's target. */
+export function fileTagChips(file: PartFile): FileChip[] {
   const known = (codes: readonly string[] | undefined) => (codes ?? []).filter((code) => code !== "und");
+  const fit = file.target_fit;
   const audio = file.audio_codec ? `${file.audio_codec.toUpperCase()}${file.audio_channels ? ` ${file.audio_channels}` : ""}` : undefined;
+  const plain = (text: string | undefined): FileChip | undefined => (text === undefined ? undefined : { text });
   const chips = file.video_codec
     ? [
-        file.resolution,
-        file.video_codec.toUpperCase(),
-        file.hdr ? file.hdr.toUpperCase() : undefined,
-        audio,
-        known(file.audio_languages).length > 0 ? `audio: ${known(file.audio_languages).join(", ")}` : undefined,
-        file.subtitles && file.subtitles.length > 0 ? (known(file.subtitles).length > 0 ? `subs: ${known(file.subtitles).join(", ")}` : "subs") : undefined,
+        toned(file.resolution, fit?.resolution),
+        toned(file.video_codec.toUpperCase(), fit?.video_codec),
+        plain(file.hdr ? file.hdr.toUpperCase() : undefined),
+        toned(audio, fit?.audio_codec),
+        toned(known(file.audio_languages).length > 0 ? `audio: ${known(file.audio_languages).join(", ")}` : undefined, fit?.audio_language),
+        toned(
+          file.subtitles && file.subtitles.length > 0 ? (known(file.subtitles).length > 0 ? `subs: ${known(file.subtitles).join(", ")}` : "subs") : undefined,
+          fit?.subtitle_language,
+        ),
       ]
-    : [file.extension?.toUpperCase() ?? audio, file.lossless ? "lossless" : file.bitrate_kbps > 0 ? `${file.bitrate_kbps} kbps` : undefined];
-  return [...chips, file.size_bytes ? formatSize(file.size_bytes) : undefined].filter((chip): chip is string => Boolean(chip));
+    : [toned(file.extension?.toUpperCase() ?? audio, fit?.audio_codec), plain(file.lossless ? "lossless" : file.bitrate_kbps > 0 ? `${file.bitrate_kbps} kbps` : undefined)];
+  return [...chips, plain(file.size_bytes ? formatSize(file.size_bytes) : undefined)].filter((chip): chip is FileChip => chip !== undefined && chip.text !== "");
 }
+
+/** The same chips as plain text. */
+export const fileChips = (file: PartFile): string[] => fileTagChips(file).map((chip) => chip.text);
 
 export type PartState = "present" | "missing" | "upcoming" | "unmonitored";
 

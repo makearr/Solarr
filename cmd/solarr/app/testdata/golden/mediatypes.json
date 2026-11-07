@@ -1237,7 +1237,7 @@
     "follow_options": [],
     "genre_tree": {
       "key": "adult",
-      "label": "Tags"
+      "label": "Adult"
     },
     "group": {
       "many": "",

@@ -9,7 +9,7 @@ import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
 
 import { TargetChip } from "../work/TargetChip";
-import { fileChips } from "../work/workFormat";
+import { fileTagChips } from "../work/workFormat";
 
 import { usePlayer } from "./PlayerContext";
 import {
@@ -188,8 +188,8 @@ function Dock({ item }: { item: PlayerItem }) {
           <div className="flex flex-wrap items-center gap-1">
             {item.file ? (
               <>
-                {fileChips(item.file).map((chip) => (
-                  <Chip key={chip}>{chip}</Chip>
+                {fileTagChips(item.file).map((chip) => (
+                  <Chip key={chip.text} tone={chip.tone}>{chip.text}</Chip>
                 ))}
                 <TargetChip file={item.file} />
               </>

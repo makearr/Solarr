@@ -687,13 +687,13 @@ func TestCreateCategory_EveryLibraryGetsALanguageFromTheDefaults(t *testing.T) {
 		snapshot := fixture.cache.Snapshot()
 		category, _ := snapshot.Category(created.ID)
 		if category.LanguageProfileID == nil {
-			t.Fatalf("%s has no language profile", body)
+			return settings.LanguageProfile{}
 		}
 		profile, _ := snapshot.LanguageProfile(*category.LanguageProfileID)
 		return profile
 	}
-	if profile := languageOf(`{"media_type":"music","name":"Songs"}`); profile.Name != "Prefer en, de" {
-		t.Errorf("a music library got %q, want the defaults", profile.Name)
+	if profile := languageOf(`{"media_type":"music","name":"Songs"}`); profile.Name != "" {
+		t.Errorf("a music library got %q, want no language preference", profile.Name)
 	}
 	if profile := languageOf(`{"media_type":"tv","name":"Anime","kind":"anime"}`); !reflect.DeepEqual(profile.AudioPreferred, []string{"ja", "en", "de"}) {
 		t.Errorf("an anime library prefers %v, want Japanese first, then the defaults", profile.AudioPreferred)

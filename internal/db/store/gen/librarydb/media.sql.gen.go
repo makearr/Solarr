@@ -484,7 +484,7 @@ func (q *Queries) GetPathByLocation(ctx context.Context, arg GetPathByLocationPa
 }
 
 const getVideoFacts = `-- name: GetVideoFacts :one
-SELECT o.id, o.overall_bitrate, o.audio_bitrate, o.video_bitrate, o.size_bytes,
+SELECT o.id, o.overall_bitrate, o.audio_bitrate, o.video_bitrate, o.size_bytes, o.height, o.duration_ms,
        a.audio_codec, a.video_codec, a.container, a.lossless, a.languages,
        a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
        CAST(COALESCE((SELECT wf.work_id FROM work_file wf WHERE wf.media_object_id = o.id ORDER BY wf.work_id LIMIT 1), 0) AS INTEGER) AS work_id,
@@ -500,6 +500,8 @@ type GetVideoFactsRow struct {
 	AudioBitrate   sql.NullInt64
 	VideoBitrate   sql.NullInt64
 	SizeBytes      int64
+	Height         sql.NullInt64
+	DurationMs     sql.NullInt64
 	AudioCodec     sql.NullString
 	VideoCodec     sql.NullString
 	Container      sql.NullString
@@ -525,6 +527,8 @@ func (q *Queries) GetVideoFacts(ctx context.Context, id int64) (GetVideoFactsRow
 		&i.AudioBitrate,
 		&i.VideoBitrate,
 		&i.SizeBytes,
+		&i.Height,
+		&i.DurationMs,
 		&i.AudioCodec,
 		&i.VideoCodec,
 		&i.Container,

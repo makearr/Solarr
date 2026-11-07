@@ -67,6 +67,8 @@ type PartFile struct {
 	AudioLanguages, Subtitles      []string
 	// FrameRate is measured; CRF is the constant rate factor the encoder states, 0 when it states none.
 	FrameRate, CRF float64
+	// HeightPx and DurationMs are the picture's lines and the running time the probe read; 0 when it read none.
+	HeightPx, DurationMs int64
 }
 
 // Credit is one work-level credit, with the person's own name -- the work
@@ -290,7 +292,7 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 				RelPath: row.RelPath, SizeBytes: row.SizeBytes, Resolution: row.Resolution.String, HDR: row.Hdr.String,
 				AudioChannels: row.AudioChannels.String, VideoBitrateKbps: row.VideoBitrate.Int64 / 1000,
 				AudioLanguages: jsonStrings(row.Languages), Subtitles: jsonStrings(row.Subtitles),
-				FrameRate: row.FrameRate.Float64, CRF: row.Crf.Float64,
+				FrameRate: row.FrameRate.Float64, CRF: row.Crf.Float64, HeightPx: row.Height.Int64, DurationMs: row.DurationMs.Int64,
 			})
 		}
 	}
@@ -379,7 +381,7 @@ func detailParts(ctx context.Context, queries *librarydb.Queries, id int64, part
 			SizeBytes:     row.SizeBytes, Resolution: row.Resolution.String, HDR: row.Hdr.String,
 			AudioChannels: row.AudioChannels.String, VideoBitrateKbps: row.VideoBitrate.Int64 / 1000,
 			AudioLanguages: jsonStrings(row.Languages), Subtitles: jsonStrings(row.Subtitles),
-			FrameRate: row.FrameRate.Float64, CRF: row.Crf.Float64,
+			FrameRate: row.FrameRate.Float64, CRF: row.Crf.Float64, HeightPx: row.Height.Int64, DurationMs: row.DurationMs.Int64,
 		}
 	}
 	partIDs := make([]int64, len(parts))
@@ -549,4 +551,28 @@ func (w Works) ManualFields(ctx context.Context, workID int64) (map[string]strin
 		}
 	}
 	return manual, nil
+}
+
+// FileRate is one video file of a library with what its bitrate is judged from.
+type FileRate struct {
+	MediaObjectID, WorkID int64
+	Title, MediaRef       string
+	SizeBytes, DurationMs int64
+	OverallBitrate        int64
+}
+
+// FileRates answers every primary video file of a library, for judging how far each is from the library's target.
+func (w Works) FileRates(ctx context.Context, categoryID int64) ([]FileRate, error) {
+	rows, err := librarydb.New(w.store.Read()).ListCategoryFileRates(ctx, categoryID)
+	if err != nil {
+		return nil, fmt.Errorf("library: file rates of category %d: %w", categoryID, err)
+	}
+	rates := make([]FileRate, len(rows))
+	for index, row := range rows {
+		rates[index] = FileRate{
+			MediaObjectID: row.MediaObjectID, WorkID: row.WorkID, Title: row.Title, MediaRef: row.MediaRef,
+			SizeBytes: row.SizeBytes, DurationMs: row.DurationMs, OverallBitrate: row.OverallBitrate,
+		}
+	}
+	return rates, nil
 }

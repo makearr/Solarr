@@ -18,7 +18,7 @@ type Favorites interface {
 
 var favoriteSubjects = map[gen.FavoriteSubject]bool{
 	gen.FavoriteSubjectWork: true, gen.FavoriteSubjectWorkPart: true, gen.FavoriteSubjectPerson: true,
-	gen.FavoriteSubjectOrganisation: true, gen.FavoriteSubjectCollection: true,
+	gen.FavoriteSubjectOrganisation: true, gen.FavoriteSubjectCollection: true, gen.FavoriteSubjectTag: true,
 }
 
 // favoriteCaller answers the caller's user id; false means the answer was written.

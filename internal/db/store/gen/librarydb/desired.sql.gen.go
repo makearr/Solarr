@@ -622,6 +622,60 @@ func (q *Queries) ListAlbumItemsForCutoff(ctx context.Context, arg ListAlbumItem
 	return items, nil
 }
 
+const listCategoryFileRates = `-- name: ListCategoryFileRates :many
+SELECT o.id AS media_object_id, d.work_id, w.canonical_title AS title, CAST(MIN(d.media_ref) AS TEXT) AS media_ref,
+       o.size_bytes, CAST(COALESCE(o.duration_ms, 0) AS INTEGER) AS duration_ms, CAST(COALESCE(o.overall_bitrate, 0) AS INTEGER) AS overall_bitrate
+FROM desired_item d
+JOIN desired_item_file f ON f.desired_item_id = d.id AND f.role = 'primary'
+JOIN media_object o ON o.id = f.media_object_id
+JOIN work w ON w.id = d.work_id
+WHERE d.category_id = ? AND o.kind = 'video'
+GROUP BY o.id
+ORDER BY o.id
+`
+
+type ListCategoryFileRatesRow struct {
+	MediaObjectID  int64
+	WorkID         int64
+	Title          string
+	MediaRef       string
+	SizeBytes      int64
+	DurationMs     int64
+	OverallBitrate int64
+}
+
+// Each primary file of a library with the size and running time its bitrate is judged from, one row per file.
+func (q *Queries) ListCategoryFileRates(ctx context.Context, categoryID int64) ([]ListCategoryFileRatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCategoryFileRates, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCategoryFileRatesRow{}
+	for rows.Next() {
+		var i ListCategoryFileRatesRow
+		if err := rows.Scan(
+			&i.MediaObjectID,
+			&i.WorkID,
+			&i.Title,
+			&i.MediaRef,
+			&i.SizeBytes,
+			&i.DurationMs,
+			&i.OverallBitrate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCountersForScope = `-- name: ListCountersForScope :many
 SELECT scope, metric, value, updated_at FROM counter WHERE scope = ? ORDER BY metric
 `
@@ -1278,7 +1332,7 @@ func (q *Queries) ListMonitoredPartsLosingFiles(ctx context.Context, arg ListMon
 const listPartFilesForWork = `-- name: ListPartFilesForWork :many
 SELECT f.media_ref, f.media_object_id, o.overall_bitrate, o.audio_bitrate,
        a.audio_codec, a.video_codec, a.container, a.lossless, a.languages, a.lyrics_languages,
-       o.size_bytes, o.video_bitrate, a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
+       o.size_bytes, o.video_bitrate, o.height, o.duration_ms, a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
        CAST(COALESCE((SELECT lp.rel_path FROM library_path lp WHERE lp.media_object_id = o.id
                       ORDER BY EXISTS (SELECT 1 FROM work_file wf JOIN library_path sib ON sib.media_object_id = wf.media_object_id
                                        WHERE wf.work_id = d.work_id AND wf.media_object_id <> o.id
@@ -1308,6 +1362,8 @@ type ListPartFilesForWorkRow struct {
 	LyricsLanguages sql.NullString
 	SizeBytes       int64
 	VideoBitrate    sql.NullInt64
+	Height          sql.NullInt64
+	DurationMs      sql.NullInt64
 	Resolution      sql.NullString
 	Hdr             sql.NullString
 	AudioChannels   sql.NullString
@@ -1343,6 +1399,8 @@ func (q *Queries) ListPartFilesForWork(ctx context.Context, workID int64) ([]Lis
 			&i.LyricsLanguages,
 			&i.SizeBytes,
 			&i.VideoBitrate,
+			&i.Height,
+			&i.DurationMs,
 			&i.Resolution,
 			&i.Hdr,
 			&i.AudioChannels,
@@ -1574,7 +1632,7 @@ func (q *Queries) ListWantedAlbumsByArtistName(ctx context.Context, arg ListWant
 const listWholeFilesForWork = `-- name: ListWholeFilesForWork :many
 SELECT f.media_object_id, o.overall_bitrate, o.audio_bitrate,
        a.audio_codec, a.video_codec, a.container, a.lossless, a.languages,
-       o.size_bytes, o.video_bitrate, a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
+       o.size_bytes, o.video_bitrate, o.height, o.duration_ms, a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
        CAST(COALESCE((SELECT lp.rel_path FROM library_path lp WHERE lp.media_object_id = o.id
                       ORDER BY lp.is_primary DESC, lp.id LIMIT 1), '') AS TEXT) AS rel_path
 FROM desired_item d
@@ -1598,6 +1656,8 @@ type ListWholeFilesForWorkRow struct {
 	Languages      sql.NullString
 	SizeBytes      int64
 	VideoBitrate   sql.NullInt64
+	Height         sql.NullInt64
+	DurationMs     sql.NullInt64
 	Resolution     sql.NullString
 	Hdr            sql.NullString
 	AudioChannels  sql.NullString
@@ -1628,6 +1688,8 @@ func (q *Queries) ListWholeFilesForWork(ctx context.Context, workID int64) ([]Li
 			&i.Languages,
 			&i.SizeBytes,
 			&i.VideoBitrate,
+			&i.Height,
+			&i.DurationMs,
 			&i.Resolution,
 			&i.Hdr,
 			&i.AudioChannels,

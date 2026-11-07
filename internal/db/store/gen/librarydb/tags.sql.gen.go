@@ -33,23 +33,6 @@ func (q *Queries) ClearClassificationGenres(ctx context.Context, workID int64) e
 	return err
 }
 
-const clearWorkProviderTagsOfGenreTree = `-- name: ClearWorkProviderTagsOfGenreTree :exec
-DELETE FROM tag_assignment
-WHERE subject_type = 'work' AND subject_id = ?1 AND source <> 'user'
-  AND tag_id IN (SELECT t.id FROM tag t WHERE t.genre_tree = ?2)
-`
-
-type ClearWorkProviderTagsOfGenreTreeParams struct {
-	WorkID    int64
-	GenreTree string
-}
-
-// A refresh replaces every provider's genres of a work at once: every source but a person's own.
-func (q *Queries) ClearWorkProviderTagsOfGenreTree(ctx context.Context, arg ClearWorkProviderTagsOfGenreTreeParams) error {
-	_, err := q.db.ExecContext(ctx, clearWorkProviderTagsOfGenreTree, arg.WorkID, arg.GenreTree)
-	return err
-}
-
 const cutTagSubtree = `-- name: CutTagSubtree :exec
 DELETE FROM tag_closure
 WHERE descendant_id IN (SELECT d.descendant_id FROM tag_closure d WHERE d.ancestor_id = ?1)

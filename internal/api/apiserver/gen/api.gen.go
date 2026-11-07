@@ -244,6 +244,7 @@ const (
 	FavoriteSubjectCollection   FavoriteSubject = "collection"
 	FavoriteSubjectOrganisation FavoriteSubject = "organisation"
 	FavoriteSubjectPerson       FavoriteSubject = "person"
+	FavoriteSubjectTag          FavoriteSubject = "tag"
 	FavoriteSubjectWork         FavoriteSubject = "work"
 	FavoriteSubjectWorkPart     FavoriteSubject = "work_part"
 )
@@ -285,6 +286,13 @@ const (
 const (
 	FilePlaybackKindAudio FilePlaybackKind = "audio"
 	FilePlaybackKindVideo FilePlaybackKind = "video"
+)
+
+// Defines values for FitLevel.
+const (
+	FitLevelNear FitLevel = "near"
+	FitLevelOff  FitLevel = "off"
+	FitLevelOk   FitLevel = "ok"
 )
 
 // Defines values for FranchiseKind.
@@ -1942,6 +1950,28 @@ type CategoryStatistics struct {
 	WorksByState []StatisticsCount `json:"works_by_state"`
 }
 
+// CategoryTargetSize defines model for CategoryTargetSize.
+type CategoryTargetSize struct {
+	// ABitOff Files 10% to 25% off.
+	ABitOff int64 `json:"a_bit_off"`
+
+	// ExpectedKbps The overall bitrate the target expects; 0 when it names none.
+	ExpectedKbps int64 `json:"expected_kbps"`
+
+	// FarOff Files 50% or more off (half the bitrate or less
+	FarOff int64 `json:"far_off"`
+
+	// FurtherOff Files 25% to 50% off.
+	FurtherOff int64            `json:"further_off"`
+	Furthest   []TargetSizeFile `json:"furthest"`
+
+	// Judged The files whose bitrate could be compared.
+	Judged int64 `json:"judged"`
+
+	// OnTarget Files within 10% of it.
+	OnTarget int64 `json:"on_target"`
+}
+
 // CategoryWrite defines model for CategoryWrite.
 type CategoryWrite struct {
 	// Kind One of the media type's kinds; absent leaves it. Changing it applies no defaults, it only says what the library is.
@@ -2592,6 +2622,9 @@ type FilePlaybackSubtitle struct {
 	// Title The track's own name, or the subtitle file's name.
 	Title *string `json:"title,omitempty"`
 }
+
+// FitLevel On the target, a little off it (the right codec at another bitrate, or a resolution in the same bracket), or far off it.
+type FitLevel string
 
 // Follow The caller's follow of a person or organisation in one library.
 type Follow struct {
@@ -4412,12 +4445,18 @@ type PartFile struct {
 	// Crf The constant rate factor the encoder states.
 	Crf *float32 `json:"crf,omitempty"`
 
+	// DurationMs The running time the probe read; absent when it read none.
+	DurationMs *int64 `json:"duration_ms,omitempty"`
+
 	// Extension The file's own type, "m4a" -- container is ffprobe's demuxer list.
-	Extension     *string  `json:"extension,omitempty"`
-	FrameRate     *float32 `json:"frame_rate,omitempty"`
-	Hdr           *string  `json:"hdr,omitempty"`
-	Lossless      bool     `json:"lossless"`
-	MediaObjectId int64    `json:"media_object_id"`
+	Extension *string  `json:"extension,omitempty"`
+	FrameRate *float32 `json:"frame_rate,omitempty"`
+	Hdr       *string  `json:"hdr,omitempty"`
+
+	// Height The picture's lines the probe read; absent when it read none.
+	Height        *int64 `json:"height,omitempty"`
+	Lossless      bool   `json:"lossless"`
+	MediaObjectId int64  `json:"media_object_id"`
 
 	// MeetsCutoff Good enough that upgrades stop. Absent when the library sets neither target nor cutoff.
 	MeetsCutoff *bool `json:"meets_cutoff,omitempty"`
@@ -4433,13 +4472,19 @@ type PartFile struct {
 	// Subtitles Language codes of embedded and sidecar subtitles.
 	Subtitles *[]string `json:"subtitles,omitempty"`
 
-	// TargetClosenessPct How near the file is to the library's target quality, from the parts both name: 100 on it, lower short of it, up to 200 when it is over a number (only when nothing else is short). Absent when it sets none or nothing could be compared.
-	TargetClosenessPct *int64 `json:"target_closeness_pct,omitempty"`
+	// TargetExpectedKbps The overall bitrate, in kbit/s, the library's target expects of a file.
+	TargetExpectedKbps *int64 `json:"target_expected_kbps,omitempty"`
+
+	// TargetFit How each tag of a file stands against the library's target; a tag the target names nothing for, or the file does not state, is absent.
+	TargetFit *TargetFit `json:"target_fit,omitempty"`
 
 	// TargetGaps The parts of the target the file does not match, the furthest first.
-	TargetGaps       *[]TargetGap `json:"target_gaps,omitempty"`
-	VideoBitrateKbps *int64       `json:"video_bitrate_kbps,omitempty"`
-	VideoCodec       *string      `json:"video_codec,omitempty"`
+	TargetGaps *[]TargetGap `json:"target_gaps,omitempty"`
+
+	// TargetSizePct The file's bitrate as a percentage of the bitrate a file on the library's target would have (its video and audio bitrates plus container and subtitle overhead): 100 on it, 618 for six times as large, 50 for half. Absent when the target names no bitrate or the file's is unknown.
+	TargetSizePct    *int64  `json:"target_size_pct,omitempty"`
+	VideoBitrateKbps *int64  `json:"video_bitrate_kbps,omitempty"`
+	VideoCodec       *string `json:"video_codec,omitempty"`
 }
 
 // PathEntry defines model for PathEntry.
@@ -5635,6 +5680,24 @@ type Tagging struct {
 	WriteMetadata bool `json:"write_metadata"`
 }
 
+// TargetFit How each tag of a file stands against the library's target; a tag the target names nothing for, or the file does not state, is absent.
+type TargetFit struct {
+	// AudioCodec On the target, a little off it (the right codec at another bitrate, or a resolution in the same bracket), or far off it.
+	AudioCodec *FitLevel `json:"audio_codec,omitempty"`
+
+	// AudioLanguage On the target, a little off it (the right codec at another bitrate, or a resolution in the same bracket), or far off it.
+	AudioLanguage *FitLevel `json:"audio_language,omitempty"`
+
+	// Resolution On the target, a little off it (the right codec at another bitrate, or a resolution in the same bracket), or far off it.
+	Resolution *FitLevel `json:"resolution,omitempty"`
+
+	// SubtitleLanguage On the target, a little off it (the right codec at another bitrate, or a resolution in the same bracket), or far off it.
+	SubtitleLanguage *FitLevel `json:"subtitle_language,omitempty"`
+
+	// VideoCodec On the target, a little off it (the right codec at another bitrate, or a resolution in the same bracket), or far off it.
+	VideoCodec *FitLevel `json:"video_codec,omitempty"`
+}
+
 // TargetGap One part of a target quality a file does not match.
 type TargetGap struct {
 	// Dimension resolution, video codec, CRF, ...
@@ -5673,6 +5736,20 @@ type TargetProfile struct {
 	Resolution        *string `json:"resolution,omitempty"`
 	SampleRateHz      *int64  `json:"sample_rate_hz,omitempty"`
 	VideoCodec        *string `json:"video_codec,omitempty"`
+}
+
+// TargetSizeFile defines model for TargetSizeFile.
+type TargetSizeFile struct {
+	MediaObjectId int64 `json:"media_object_id"`
+
+	// MediaRef The episode or part the file covers; absent for a whole work.
+	MediaRef  *string `json:"media_ref,omitempty"`
+	SizeBytes *int64  `json:"size_bytes,omitempty"`
+
+	// SizePct The file's bitrate as a percentage of the target's.
+	SizePct int64  `json:"size_pct"`
+	Title   string `json:"title"`
+	WorkId  int64  `json:"work_id"`
 }
 
 // TestDownloaderRequest defines model for TestDownloaderRequest.
@@ -7919,6 +7996,9 @@ type ServerInterface interface {
 	// Every tag the library's works carry, and every tag above one, with how many of its works carry it or one below it (works): what the list's tag filter offers.
 	// (GET /categories/{id}/tags)
 	ListLibraryTags(w http.ResponseWriter, r *http.Request, id int64, params ListLibraryTagsParams)
+	// How far the library's video files are from the size its target quality expects.
+	// (GET /categories/{id}/target-size)
+	GetCategoryTargetSize(w http.ResponseWriter, r *http.Request, id int64)
 	// Let a library hold a further media type (an Anime library holding movies as well as series). Administrator only. The type gets its own settings and root folders inside the library; name, priority, maximum rating, search share and access stay the library's.
 	// (POST /categories/{id}/types)
 	AddLibraryType(w http.ResponseWriter, r *http.Request, id int64)
@@ -9140,6 +9220,12 @@ func (_ Unimplemented) SetLibraryTagging(w http.ResponseWriter, r *http.Request,
 // Every tag the library's works carry, and every tag above one, with how many of its works carry it or one below it (works): what the list's tag filter offers.
 // (GET /categories/{id}/tags)
 func (_ Unimplemented) ListLibraryTags(w http.ResponseWriter, r *http.Request, id int64, params ListLibraryTagsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// How far the library's video files are from the size its target quality expects.
+// (GET /categories/{id}/target-size)
+func (_ Unimplemented) GetCategoryTargetSize(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12853,6 +12939,39 @@ func (siw *ServerInterfaceWrapper) ListLibraryTags(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListLibraryTags(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCategoryTargetSize operation middleware
+func (siw *ServerInterfaceWrapper) GetCategoryTargetSize(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCategoryTargetSize(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -22368,6 +22487,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories/{id}/tags", wrapper.ListLibraryTags)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/categories/{id}/target-size", wrapper.GetCategoryTargetSize)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/categories/{id}/types", wrapper.AddLibraryType)

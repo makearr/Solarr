@@ -14,7 +14,7 @@ import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 import { PlayButton } from "../player/PlayButton";
 import { TargetChip } from "./TargetChip";
-import { fileChips, formatDuration, formatMinutes, partState, sceneNumber, type PartState } from "./workFormat";
+import { fileTagChips, formatDuration, formatMinutes, partState, sceneNumber, type PartState } from "./workFormat";
 
 type Part = components["schemas"]["WorkPart"];
 type Group = components["schemas"]["WorkGroup"];
@@ -221,11 +221,10 @@ function PartRow({
         )}
         {part.file && (
           <span className="mt-0.5 flex flex-wrap items-center gap-1">
-            {fileChips(part.file).map((chip) => (
-              <Chip key={chip}>{chip}</Chip>
+            {fileTagChips(part.file).map((chip) => (
+              <Chip key={chip.text} tone={chip.tone}>{chip.text}</Chip>
             ))}
             <TargetChip file={part.file} />
-            {part.file.meets_cutoff === false && <Chip tone="warn">below the cutoff</Chip>}
           </span>
         )}
         <PartCredits credits={part.credits ?? []} categoryId={categoryId} info={info} />
