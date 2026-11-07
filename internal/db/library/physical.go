@@ -264,7 +264,18 @@ func (p Physical) SetOshash(ctx context.Context, mediaObjectID int64, oshash str
 
 // ListVideoWithoutFrameHashes pages through the video files with no per-frame hash of the current algorithm yet, oldest id first.
 func (p Physical) ListVideoWithoutFrameHashes(ctx context.Context, afterID int64, pageSize int64) ([]UnmeasuredFile, error) {
-	rows, err := librarydb.New(p.store.Read()).ListVideoWithoutFrameHashes(ctx, librarydb.ListVideoWithoutFrameHashesParams{AfterID: afterID, Version: VideoHashVersion, PageSize: pageSize})
+	return p.ListVideoWithoutHashOrPreview(ctx, afterID, pageSize, false)
+}
+
+// ListVideoWithoutHashOrPreview is the same list, and with wantPreviews the videos with no preview pictures yet too.
+func (p Physical) ListVideoWithoutHashOrPreview(ctx context.Context, afterID int64, pageSize int64, wantPreviews bool) ([]UnmeasuredFile, error) {
+	want := int64(0)
+	if wantPreviews {
+		want = 1
+	}
+	rows, err := librarydb.New(p.store.Read()).ListVideoWithoutFrameHashes(ctx, librarydb.ListVideoWithoutFrameHashesParams{
+		AfterID: afterID, Version: VideoHashVersion, WantPreviews: want, PageSize: pageSize,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("library: list video without frame hashes: %w", err)
 	}
@@ -273,6 +284,25 @@ func (p Physical) ListVideoWithoutFrameHashes(ctx context.Context, afterID int64
 		files[index] = UnmeasuredFile{MediaObjectID: row.ID, RootFolderID: row.RootFolderID, RelPath: row.RelPath}
 	}
 	return files, nil
+}
+
+// SetVideoPreview records that a video's preview pictures are on disk, and which of them.
+func (p Physical) SetVideoPreview(ctx context.Context, mediaObjectID int64, hasFrame, hasSheet bool, madeAt int64) error {
+	flag := func(on bool) int64 {
+		if on {
+			return 1
+		}
+		return 0
+	}
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetVideoPreview(ctx, librarydb.SetVideoPreviewParams{
+			MediaObjectID: mediaObjectID, AlgorithmVersion: VideoHashVersion, HasFrame: flag(hasFrame), HasSheet: flag(hasSheet), MadeAt: madeAt,
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("library: set video preview %d: %w", mediaObjectID, err)
+	}
+	return nil
 }
 
 // SetPerceptualHash records a video's mean-frame hash and its per-frame hashes; the 64 bits of the mean are stored

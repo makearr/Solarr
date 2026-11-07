@@ -1253,6 +1253,31 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /files/{mediaObjectId}/preview/{kind}:
+    parameters:
+      - name: mediaObjectId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: kind
+        in: path
+        required: true
+        description: The single frame, or the 3x3 thumbnail sheet.
+        schema: { type: string, enum: [frame, sheet] }
+    get:
+      operationId: getFilePreview
+      tags: [library]
+      summary: A preview picture of a video file, made by the probe sweep when previews are on.
+      description: 404 when the file has none, or is not in a library the caller can read (ADR-27).
+      responses:
+        "200":
+          description: The picture.
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /files/{mediaObjectId}/stream:
     parameters:
       - name: mediaObjectId
@@ -10145,6 +10170,10 @@ components:
         poster_url: { type: string, description: "The work's poster at its provider; absent for a work whose picture is its artwork (an album's cover)." }
         badge_url: { type: string, description: "The logo that marks the work's tile, its organisation in the type's badge role (a series' network); absent for none." }
         badge_name: { type: string, description: The name of the organisation the badge is the logo of. }
+        preview_file_ids:
+          type: array
+          items: { type: integer, format: int64 }
+          description: In a list, the work's files that have a single-frame preview (GET /files/{id}/preview/frame); only for a work of at most four files.
         narrators: { type: string, description: "An audiobook's readers, comma-joined; absent on any other work." }
         lead_id:
           type: integer
@@ -13642,6 +13671,7 @@ components:
       description: Switches that belong to no one page. Always answered in full; a PATCH changes the ones it names.
       properties:
         video_hashing: { type: boolean, description: "Hash videos in the background so the duplicate finder matches re-encodes (scan.video_phash). Default off." }
+        video_previews: { type: boolean, description: "Make a single frame and a 3x3 thumbnail sheet of each video from the frames the hashing reads (scan.video_previews). Turning it on turns video_hashing on. Default off." }
         hunt_old_missing: { type: boolean, description: "The automatic search also looks for missing items released before the freshness window (search.hunt_gaps). Default on." }
         solarr_mode:
           type: string

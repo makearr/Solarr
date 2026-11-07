@@ -1,6 +1,9 @@
 package mediatool_test
 
 import (
+	"bytes"
+	"image"
+	"image/jpeg"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -164,7 +167,7 @@ func TestPerceptualHash_AgainstRealFFmpeg(t *testing.T) {
 	}
 	matching := func(a, b mediatool.VideoHash) int {
 		matched := 0
-		for slot := range 7 {
+		for slot := range 9 {
 			near := false
 			for _, first := range a.Frames {
 				for _, second := range b.Frames {
@@ -192,8 +195,8 @@ func TestPerceptualHash_AgainstRealFFmpeg(t *testing.T) {
 		{"starting three frames later", encode("late.mkv", cut, "trim=start=0.3,setpts=PTS-STARTPTS", "-c:v", "mpeg4", "-b:v", "2M")},
 	} {
 		got := hash(variant.path)
-		if matched := matching(reference, got); matched < 6 {
-			t.Errorf("%s: %d of 7 moments match, want >= 6", variant.name, matched)
+		if matched := matching(reference, got); matched < 7 {
+			t.Errorf("%s: %d of 9 moments match, want >= 7", variant.name, matched)
 		}
 		if distance := mediatool.PerceptualDistance(reference.Mean, got.Mean); distance > 10 {
 			t.Errorf("%s: mean hashes %d bits apart, want <= 10", variant.name, distance)
@@ -203,12 +206,43 @@ func TestPerceptualHash_AgainstRealFFmpeg(t *testing.T) {
 	if got := mediatool.PerceptualDistance(reference.Mean, other.Mean); got < 12 {
 		t.Errorf("different pictures: %d bits apart, want >= 12", got)
 	}
-	if got := matching(reference, other); got >= 5 {
+	if got := matching(reference, other); got >= 6 {
 		t.Errorf("different pictures: %d moments match, want fewer than two thirds", got)
 	}
 	backwards := hash(encode("backwards.mkv", cut, "reverse", "-c:v", "mpeg4", "-b:v", "2M"))
-	t.Logf("backwards: mean %d bits apart, %d of 7 moments match", mediatool.PerceptualDistance(reference.Mean, backwards.Mean), matching(reference, backwards))
-	if got := matching(reference, backwards); got >= 5 {
+	t.Logf("backwards: mean %d bits apart, %d of 9 moments match", mediatool.PerceptualDistance(reference.Mean, backwards.Mean), matching(reference, backwards))
+	if got := matching(reference, backwards); got >= 6 {
 		t.Errorf("the cut played backwards: %d moments match, want fewer than two thirds", got)
+	}
+}
+
+// One read of the video gives the same hash as the hash alone, plus a single frame at the video's own shape and a 3x3
+// sheet of 426x240 cells.
+func TestHashAndPreview_AgainstRealFFmpeg(t *testing.T) {
+	requireFFmpeg(t)
+	path := filepath.Join(t.TempDir(), "wide.mkv")
+	command := exec.CommandContext(t.Context(), "ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-t", "10", "-i", "testsrc2=size=1920x800:rate=25",
+		"-c:v", "libx264", "-pix_fmt", "yuv420p", path)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("encode: %v: %s", err, output)
+	}
+	tool := mediatool.New(mediatool.ExecRunner{}, 1)
+	alone, err := tool.PerceptualHash(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash, preview, err := tool.HashAndPreview(t.Context(), path, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hash.Mean != alone.Mean || len(hash.Frames) != len(alone.Frames) {
+		t.Errorf("hash with previews %x/%d frames, without %x/%d", hash.Mean, len(hash.Frames), alone.Mean, len(alone.Frames))
+	}
+	for name, want := range map[string]image.Rectangle{"frame": image.Rect(0, 0, 1280, 534), "sheet": image.Rect(0, 0, 3*426, 3*178)} {
+		data := map[string][]byte{"frame": preview.Frame, "sheet": preview.Sheet}[name]
+		picture, err := jpeg.Decode(bytes.NewReader(data))
+		if err != nil || picture.Bounds() != want {
+			t.Errorf("%s: %v %v, want %v", name, picture != nil && picture.Bounds() == want, err, want)
+		}
 	}
 }

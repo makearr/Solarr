@@ -833,9 +833,11 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		IncompleteDiscographies: adapters.IncompleteDiscographies{
 			Coverage: statistics.NewRollup(p.statistics), People: library.NewPeople(p.library),
 		},
-		FS:         p.fsys,
-		ImagesDir:  filepath.Join(p.config.Paths.CacheDir, "images"),
-		ConfigPath: p.configPath,
+		FS:           p.fsys,
+		ImagesDir:    filepath.Join(p.config.Paths.CacheDir, "images"),
+		PreviewsDir:  filepath.Join(p.config.Paths.ConfigDir, "previews"),
+		FilePreviews: library.NewWorks(p.library),
+		ConfigPath:   p.configPath,
 		People: adapters.People{
 			People: library.NewPeople(p.library), Works: library.NewWorks(p.library), Roles: adapters.MediaTypes{Registry: p.media}.RoleKeys,
 			Categories: adapters.Categories{Cache: p.cache},

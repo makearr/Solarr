@@ -292,6 +292,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		UnidentifiedResolver: unidentifiedResolver,
 		Artwork:              artwork,
 		Playback:             playback,
+		PreviewsDir:          "/config/previews",
 		RemoteImages:         remoteImages,
 		People:               people,
 		Organisations:        organisations,

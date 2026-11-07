@@ -74,6 +74,8 @@ type Measured struct {
 	Channels int
 	Width    int
 	Height   int
+	// PixelAspect is the width of a pixel over its height; 0 when the file states none, which means square.
+	PixelAspect float64
 	// AudioLanguages and LyricsLanguages are two-letter codes; empty when the file states none.
 	AudioLanguages  []string
 	LyricsLanguages []string

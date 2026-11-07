@@ -348,20 +348,20 @@ func (r *frameRunner) Run(_ context.Context, _ string, args ...string) ([]byte, 
 	if r.hardwareFails && slices.Contains(args, "-hwaccel") {
 		return nil, errors.New("vaapi failed")
 	}
-	return make([]byte, windowFrames*FrameSide*FrameSide), nil
+	return make([]byte, windowFrames*FrameSide*FrameSide*3), nil
 }
 
 func TestWindowAt_DecodesOnTheGPUAndFallsBackToTheProcessor(t *testing.T) {
 	hardware := func() []string { return []string{"-hwaccel", "vaapi", "-hwaccel_device", "/dev/dri/renderD128"} }
 	good := &frameRunner{}
-	if _, err := New(good, 1).WithHardwareDecode(hardware).windowAt(t.Context(), "/m/a.mkv", time.Second); err != nil {
+	if _, err := New(good, 1).WithHardwareDecode(hardware).windowAt(t.Context(), "/m/a.mkv", time.Second, pictureSize{FrameSide, FrameSide}); err != nil {
 		t.Fatal(err)
 	}
 	if len(good.calls) != 1 || !slices.Contains(good.calls[0], "-hwaccel") {
 		t.Fatalf("calls = %v; want one call with -hwaccel", good.calls)
 	}
 	bad := &frameRunner{hardwareFails: true}
-	if _, err := New(bad, 1).WithHardwareDecode(hardware).windowAt(t.Context(), "/m/a.mkv", time.Second); err != nil {
+	if _, err := New(bad, 1).WithHardwareDecode(hardware).windowAt(t.Context(), "/m/a.mkv", time.Second, pictureSize{FrameSide, FrameSide}); err != nil {
 		t.Fatal(err)
 	}
 	if len(bad.calls) != 2 || slices.Contains(bad.calls[1], "-hwaccel") {

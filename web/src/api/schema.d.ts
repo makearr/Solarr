@@ -839,6 +839,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/files/{mediaObjectId}/preview/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+                /** @description The single frame, or the 3x3 thumbnail sheet. */
+                kind: "frame" | "sheet";
+            };
+            cookie?: never;
+        };
+        /**
+         * A preview picture of a video file, made by the probe sweep when previews are on.
+         * @description 404 when the file has none, or is not in a library the caller can read (ADR-27).
+         */
+        get: operations["getFilePreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/files/{mediaObjectId}/stream": {
         parameters: {
             query?: never;
@@ -6903,6 +6927,8 @@ export interface components {
             badge_url?: string;
             /** @description The name of the organisation the badge is the logo of. */
             badge_name?: string;
+            /** @description In a list, the work's files that have a single-frame preview (GET /files/{id}/preview/frame); only for a work of at most four files. */
+            preview_file_ids?: number[];
             /** @description An audiobook's readers, comma-joined; absent on any other work. */
             narrators?: string;
             /**
@@ -9806,6 +9832,8 @@ export interface components {
         GeneralSettings: {
             /** @description Hash videos in the background so the duplicate finder matches re-encodes (scan.video_phash). Default off. */
             video_hashing?: boolean;
+            /** @description Make a single frame and a 3x3 thumbnail sheet of each video from the frames the hashing reads (scan.video_previews). Turning it on turns video_hashing on. Default off. */
+            video_previews?: boolean;
             /** @description The automatic search also looks for missing items released before the freshness window (search.hunt_gaps). Default on. */
             hunt_old_missing?: boolean;
             /**
@@ -11454,6 +11482,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FilePlayback"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getFilePreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+                /** @description The single frame, or the 3x3 thumbnail sheet. */
+                kind: "frame" | "sheet";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The picture. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
                 };
             };
             401: components["responses"]["Problem"];

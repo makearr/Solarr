@@ -19,11 +19,11 @@ const phashSide = 32
 const FrameSide = 128
 
 // PerceptualVersion stamps the algorithm in the stored hashes; bump it when hashes stop being comparable.
-const PerceptualVersion = 2
+const PerceptualVersion = 3
 
 const (
 	// phashSamples is how many moments across a video's length are hashed, at stable fractions of its duration.
-	phashSamples = 7
+	phashSamples = 9
 	// windowFrames frames, windowStep apart, are read at each moment, so a shift of a few frames still lands on one of them.
 	windowFrames = 5
 	windowRate   = 8
@@ -298,37 +298,60 @@ func PerceptualDistance(a, b uint64) int { return bits.OnesCount64(a ^ b) }
 // PerceptualHash reads a short window at phashSamples stable fractions of the video's duration, so another frame rate,
 // codec, size or aspect ratio gives the same pictures, and hashes them (ADR-35, documentation/duplicate-videos.md).
 func (s *Subprocess) PerceptualHash(ctx context.Context, path string) (VideoHash, error) {
+	hash, _, err := s.HashAndPreview(ctx, path, false)
+	return hash, err
+}
+
+// HashAndPreview reads each sampled moment once, in colour at the size the preview wants, and makes both the perceptual
+// hash and, when previews is set, the single frame and the thumbnail sheet from those same frames.
+func (s *Subprocess) HashAndPreview(ctx context.Context, path string, previews bool) (VideoHash, Preview, error) {
 	probe := s.probeOne(ctx, path)
 	if probe.Err != nil {
-		return VideoHash{}, probe.Err
+		return VideoHash{}, Preview{}, probe.Err
 	}
 	length := probe.Measured.Duration
 	if length <= 0 {
-		return VideoHash{}, ErrNoFrames
+		return VideoHash{}, Preview{}, ErrNoFrames
 	}
-	windows := make([][][]byte, phashSamples)
+	display := displaySize(probe.Measured)
+	cell := display.fitted(cellBoxWidth, cellBoxHeight)
+	moments := make([]moment, phashSamples)
 	read := 0
 	for sample := range phashSamples {
 		at := length * time.Duration(sample+1) / (phashSamples + 1)
-		window, err := s.windowAt(ctx, path, at)
+		size := cell
+		if previews && sample == singleSlot {
+			size = display.fitted(singleBoxWidth, singleBoxHeight)
+		}
+		frames, err := s.windowAt(ctx, path, at, size)
 		if err != nil {
 			if ctx.Err() != nil {
-				return VideoHash{}, ctx.Err()
+				return VideoHash{}, Preview{}, ctx.Err()
 			}
 			continue
 		}
-		windows[sample] = window
+		moments[sample] = moment{size: size, frames: frames}
 		read++
 	}
 	if read <= phashSamples/2 {
-		return VideoHash{}, ErrNoFrames
+		return VideoHash{}, Preview{}, ErrNoFrames
 	}
-	return HashOfWindows(windows)
+	windows := make([][][]byte, phashSamples)
+	for slot, one := range moments {
+		for _, frame := range one.frames {
+			windows[slot] = append(windows[slot], greyOf(frame, one.size))
+		}
+	}
+	hash, err := HashOfWindows(windows)
+	if err != nil || !previews {
+		return hash, Preview{}, err
+	}
+	return hash, previewOf(moments, windows, cell), nil
 }
 
-// windowAt reads windowFrames frames windowStep apart, centred on at, at FrameSide square and grey; the fps filter
-// makes the spacing the same whatever the source's frame rate, and the sample aspect ratio is applied before stretching.
-func (s *Subprocess) windowAt(ctx context.Context, path string, at time.Duration) ([][]byte, error) {
+// windowAt reads windowFrames frames windowStep apart, centred on at, as RGB at size; the fps filter makes the spacing
+// the same whatever the source's frame rate, and the sample aspect ratio is applied before the picture is resized.
+func (s *Subprocess) windowAt(ctx context.Context, path string, at time.Duration, size pictureSize) ([][]byte, error) {
 	bounded, cancel := context.WithTimeout(ctx, perFileTimeout)
 	defer cancel()
 
@@ -336,9 +359,10 @@ func (s *Subprocess) windowAt(ctx context.Context, path string, at time.Duration
 	args := []string{"-v", "error", "-protocol_whitelist", "file"}
 	rest := []string{"-ss", strconv.FormatFloat(start.Seconds(), 'f', 3, 64), "-i", path,
 		"-an", "-sn", "-frames:v", strconv.Itoa(windowFrames),
-		"-vf", fmt.Sprintf("fps=%d,scale=trunc(iw*sar):ih,setsar=1,scale=%d:%d:flags=area,format=gray", windowRate, FrameSide, FrameSide),
+		"-vf", fmt.Sprintf("fps=%d,scale=trunc(iw*sar):ih,setsar=1,scale=%d:%d:flags=area,format=rgb24", windowRate, size.width, size.height),
 		"-f", "rawvideo", "pipe:1"}
-	valid := func(output []byte) bool { return len(output) > 0 && len(output)%(FrameSide*FrameSide) == 0 }
+	bytesPerFrame := size.width * size.height * 3
+	valid := func(output []byte) bool { return len(output) > 0 && len(output)%bytesPerFrame == 0 }
 	var output []byte
 	var err error
 	if s.decodeArgs != nil {
@@ -358,9 +382,9 @@ func (s *Subprocess) windowAt(ctx context.Context, path string, at time.Duration
 	if !valid(output) {
 		return nil, fmt.Errorf("mediatool: window %s: %d bytes", path, len(output))
 	}
-	frames := make([][]byte, 0, len(output)/(FrameSide*FrameSide))
-	for offset := 0; offset < len(output); offset += FrameSide * FrameSide {
-		frames = append(frames, output[offset:offset+FrameSide*FrameSide])
+	frames := make([][]byte, 0, len(output)/bytesPerFrame)
+	for offset := 0; offset < len(output); offset += bytesPerFrame {
+		frames = append(frames, output[offset:offset+bytesPerFrame])
 	}
 	return frames, nil
 }

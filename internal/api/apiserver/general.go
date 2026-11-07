@@ -12,9 +12,9 @@ import (
 
 func (s *Server) generalSettings() gen.GeneralSettings {
 	snapshot := s.auth.Settings.Snapshot()
-	hashing, gaps := snapshot.VideoPerceptualHash(), snapshot.HuntGaps()
+	hashing, previews, gaps := snapshot.VideoPerceptualHash(), snapshot.VideoPreviews(), snapshot.HuntGaps()
 	mode := gen.GeneralSettingsSolarrMode(snapshot.SolarrMode())
-	return gen.GeneralSettings{VideoHashing: &hashing, HuntOldMissing: &gaps, SolarrMode: &mode}
+	return gen.GeneralSettings{VideoHashing: &hashing, VideoPreviews: &previews, HuntOldMissing: &gaps, SolarrMode: &mode}
 }
 
 // GetGeneralSettings answers the instance-wide switches of Settings -> General.
@@ -34,6 +34,12 @@ func (s *Server) PatchGeneralSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.VideoHashing != nil {
 		if err := s.auth.Settings.SetVideoPerceptualHash(r.Context(), s.auth.Clock, *body.VideoHashing); err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
+	}
+	if body.VideoPreviews != nil {
+		if err := s.auth.Settings.SetVideoPreviews(r.Context(), s.auth.Clock, *body.VideoPreviews); err != nil {
 			writeError(w, s.logger, err)
 			return
 		}

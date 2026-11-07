@@ -141,3 +141,37 @@ func TestTranscodeTarget(t *testing.T) {
 		}
 	}
 }
+
+func TestFilePreview_ServedToWhoMayReadTheFileAndNotToAnyoneElse(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, root := fixture.createCategoryWithRoot(t, "Video", "/media/video")
+	viewer := fixture.createUser(t, "viewer", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), viewer.ID, category.ID, settings.PermissionRead); err != nil {
+		t.Fatal(err)
+	}
+	fixture.createUser(t, "stranger", settings.RoleReadonly)
+	fixture.playback.file = apiserver.PlaybackFile{MediaObjectID: 7, AbsolutePath: "/media/video/a.mkv", RootFolderID: root.ID, Kind: "video"}
+	if err := fixture.fsys.MkdirAll("/config/previews/0", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	picture, err := fixture.fsys.Create("/config/previews/0/7-sheet.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = picture.Write([]byte("jpeg bytes"))
+	_ = picture.Close()
+
+	seen := fixture.do(authedGet(t, fixture.signIn(t, "viewer"), "/api/v1/files/7/preview/sheet"))
+	if seen.Code != http.StatusOK || seen.Body.String() != "jpeg bytes" || seen.Header().Get("Content-Type") != "image/jpeg" {
+		t.Errorf("viewer: %d %q %q, want the picture", seen.Code, seen.Body, seen.Header().Get("Content-Type"))
+	}
+	if got := fixture.do(authedGet(t, fixture.signIn(t, "viewer"), "/api/v1/files/7/preview/frame")).Code; got != http.StatusNotFound {
+		t.Errorf("a picture never made = %d, want 404", got)
+	}
+	if got := fixture.do(authedGet(t, fixture.signIn(t, "stranger"), "/api/v1/files/7/preview/sheet")).Code; got != http.StatusNotFound {
+		t.Errorf("a file the caller cannot read = %d, want 404", got)
+	}
+	if got := fixture.do(authedGet(t, fixture.signIn(t, "viewer"), "/api/v1/files/7/preview/poster")).Code; got != http.StatusBadRequest && got != http.StatusNotFound {
+		t.Errorf("an unknown kind = %d, want 400", got)
+	}
+}

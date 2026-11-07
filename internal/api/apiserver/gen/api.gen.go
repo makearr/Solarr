@@ -2808,6 +2808,9 @@ type GeneralSettings struct {
 
 	// VideoHashing Hash videos in the background so the duplicate finder matches re-encodes (scan.video_phash). Default off.
 	VideoHashing *bool `json:"video_hashing,omitempty"`
+
+	// VideoPreviews Make a single frame and a 3x3 thumbnail sheet of each video from the frames the hashing reads (scan.video_previews). Turning it on turns video_hashing on. Default off.
+	VideoPreviews *bool `json:"video_previews,omitempty"`
 }
 
 // GeneralSettingsSolarrMode How much of the outside world Solarr touches (general.solarr_mode): read_only writes nothing into a library, pause_downloads sends nothing to a download client, observe is read_only without indexer searches or downloads, arr_companion is observe plus sending monitoring back to the *Arrs. SOLARR_MODE sets it at every start.
@@ -6012,9 +6015,12 @@ type Work struct {
 	Overview *string `json:"overview,omitempty"`
 
 	// PosterUrl The work's poster at its provider; absent for a work whose picture is its artwork (an album's cover).
-	PosterUrl     *string `json:"poster_url,omitempty"`
-	PresentCount  *int64  `json:"present_count,omitempty"`
-	RequiredCount *int64  `json:"required_count,omitempty"`
+	PosterUrl    *string `json:"poster_url,omitempty"`
+	PresentCount *int64  `json:"present_count,omitempty"`
+
+	// PreviewFileIds In a list, the work's files that have a single-frame preview (GET /files/{id}/preview/frame); only for a work of at most four files.
+	PreviewFileIds *[]int64 `json:"preview_file_ids,omitempty"`
+	RequiredCount  *int64   `json:"required_count,omitempty"`
 
 	// SizeBytes Size on disk of the album's files.
 	SizeBytes *int64 `json:"size_bytes,omitempty"`
@@ -8124,6 +8130,9 @@ type ServerInterface interface {
 	// What the built-in player needs to know to play a file.
 	// (GET /files/{mediaObjectId}/playback)
 	GetFilePlayback(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
+	// A preview picture of a video file, made by the probe sweep when previews are on.
+	// (GET /files/{mediaObjectId}/preview/{kind})
+	GetFilePreview(w http.ResponseWriter, r *http.Request, mediaObjectId int64, kind string)
 	// "This is fake, get rid of it and make sure it never comes back" (architecture.md section 10.8/ADR-53 section 3). Administrator only.
 	// (POST /files/{mediaObjectId}/remove-block)
 	RemoveAndBlockFile(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
@@ -9468,6 +9477,12 @@ func (_ Unimplemented) AddFavorite(w http.ResponseWriter, r *http.Request, subje
 // What the built-in player needs to know to play a file.
 // (GET /files/{mediaObjectId}/playback)
 func (_ Unimplemented) GetFilePlayback(w http.ResponseWriter, r *http.Request, mediaObjectId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A preview picture of a video file, made by the probe sweep when previews are on.
+// (GET /files/{mediaObjectId}/preview/{kind})
+func (_ Unimplemented) GetFilePreview(w http.ResponseWriter, r *http.Request, mediaObjectId int64, kind string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -14169,6 +14184,48 @@ func (siw *ServerInterfaceWrapper) GetFilePlayback(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetFilePlayback(w, r, mediaObjectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetFilePreview operation middleware
+func (siw *ServerInterfaceWrapper) GetFilePreview(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "mediaObjectId" -------------
+	var mediaObjectId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "mediaObjectId", chi.URLParam(r, "mediaObjectId"), &mediaObjectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mediaObjectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "kind" -------------
+	var kind string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", chi.URLParam(r, "kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetFilePreview(w, r, mediaObjectId, kind)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -22615,6 +22672,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/files/{mediaObjectId}/playback", wrapper.GetFilePlayback)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/files/{mediaObjectId}/preview/{kind}", wrapper.GetFilePreview)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/files/{mediaObjectId}/remove-block", wrapper.RemoveAndBlockFile)

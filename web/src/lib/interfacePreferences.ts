@@ -12,6 +12,12 @@ export function useShowFooter(): [boolean, (value: boolean) => void] {
   return [shown, set];
 }
 
+/** Whether a video's preview pictures show beside its row; Settings -> Web UI, on by default (2026-11-07). */
+export function useShowThumbnails(): [boolean, (value: boolean) => void] {
+  const [shown, set] = usePreference("ui.show_thumbnails", true);
+  return [shown, set];
+}
+
 /** What the status bar can show, each its own switch and place in Settings -> Web UI (2026-10-24). */
 export const FOOTER_ITEMS = ["events", "work", "queue", "ip", "time", "version"] as const;
 export type FooterItem = (typeof FOOTER_ITEMS)[number];

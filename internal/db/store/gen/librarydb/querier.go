@@ -809,6 +809,8 @@ type Querier interface {
 	// The planner's facts for one page of items (section 9.1): the dirty set, or with dirty_only 0
 	// the paced sweep. Absent hunt columns read as zero.
 	ListPlanInputs(ctx context.Context, arg ListPlanInputsParams) ([]ListPlanInputsRow, error)
+	// The files of a page of works that have a single-frame preview, for a work of at most four files (a movie, not a series).
+	ListPreviewFilesForWorks(ctx context.Context, workIds []int64) ([]ListPreviewFilesForWorksRow, error)
 	// Parts nothing holds on to: no file covers them, no event across series lists them, and no broadcast is shared through them.
 	ListPrunableWorkParts(ctx context.Context, workID int64) ([]ListPrunableWorkPartsRow, error)
 	// One page of queued files with what their newest attempt concluded. The caller
@@ -904,7 +906,8 @@ type Querier interface {
 	ListUnverifiedWorksForFile(ctx context.Context, mediaObjectID int64) ([]int64, error)
 	// Monitored albums below their library's cutoff: what the Cutoff Unmet search walks.
 	ListUpgradableDesiredItems(ctx context.Context, arg ListUpgradableDesiredItemsParams) ([]ListUpgradableDesiredItemsRow, error)
-	// Video files with no per-frame hash yet, those hashed before it included: the lowest-priority pass of the probe sweep (ADR-35).
+	// Video files with no per-frame hash yet, those hashed before it included, and (when previews are wanted) those with no
+	// preview of the current algorithm: the lowest-priority pass of the probe sweep (ADR-35).
 	ListVideoWithoutFrameHashes(ctx context.Context, arg ListVideoWithoutFrameHashesParams) ([]ListVideoWithoutFrameHashesRow, error)
 	// Video files scanned before oshash was written at scan time; under 64 KiB the hash is undefined, so those never list.
 	ListVideoWithoutOshash(ctx context.Context, arg ListVideoWithoutOshashParams) ([]ListVideoWithoutOshashRow, error)
@@ -1245,6 +1248,7 @@ type Querier interface {
 	SetTagName(ctx context.Context, arg SetTagNameParams) error
 	SetTagParentColumn(ctx context.Context, arg SetTagParentColumnParams) error
 	SetVideoFrameHashes(ctx context.Context, arg SetVideoFrameHashesParams) error
+	SetVideoPreview(ctx context.Context, arg SetVideoPreviewParams) error
 	SetWorkCertification(ctx context.Context, arg SetWorkCertificationParams) error
 	SetWorkClassification(ctx context.Context, arg SetWorkClassificationParams) error
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error

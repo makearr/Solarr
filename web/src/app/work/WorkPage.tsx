@@ -35,6 +35,7 @@ import { NumberingDialog, useNumberingChoices } from "./NumberingDialog";
 import { ReleaseFiltersDialog } from "./ReleaseFiltersDialog";
 import { grabNote } from "./grabNote";
 import { ExpertFileInfo, type ExpertFiles, useExpertFiles } from "./FileExpert";
+import { FileThumb } from "../FileThumb";
 import { TargetChip } from "./TargetChip";
 import { externalLinks, fileTagChips, formatMinutes, isUnverified } from "./workFormat";
 import { GroupSection, MonitorToggle, PartTable, PersonLink, useAllParts, type PartActions } from "./WorkParts";
@@ -713,6 +714,9 @@ function FilesTab({ work, words, info, categoryId }: { work: Work; words: Vocabu
               {part.section ? `${part.section} · ` : ""}
               {part.number}
             </td>
+            <td className="w-[clamp(7rem,16vw,14rem)] py-1.5 pr-3">
+              {part.file && <FileThumb mediaObjectId={part.file.media_object_id} kind="sheet" className="min-h-16" />}
+            </td>
             <td className="py-1.5">
               <span>{part.title ?? part.media_ref}</span>
               {part.file?.path && <span className="block break-all font-mono text-xs text-ink-muted">{part.file.path}</span>}
@@ -742,7 +746,9 @@ function WholeFiles({ work, expert }: { work: Work; expert?: ExpertFiles }) {
       <h2 className="text-sm font-semibold">{files.length > 1 ? t("work.file.versions", { count: files.length }) : t("work.file.one")}</h2>
       <ul className="flex flex-col divide-y divide-border-subtle text-sm">
         {files.map((file) => (
-          <li key={file.media_object_id} className="flex flex-col gap-1 py-2">
+          <li key={file.media_object_id} className="flex gap-3 py-2">
+            <FileThumb mediaObjectId={file.media_object_id} kind="sheet" className="min-h-20" />
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="flex items-center gap-2">
               <PlayButton extension={file.extension} item={{ mediaObjectId: file.media_object_id, title: work.title, durationMs: work.runtime_ms ?? undefined, file }} />
               {file.path && <span className="break-all font-mono text-xs">{file.path}</span>}
@@ -754,6 +760,7 @@ function WholeFiles({ work, expert }: { work: Work; expert?: ExpertFiles }) {
               <TargetChip file={file} />
             </span>
             {expert && <ExpertFileInfo mediaObjectId={file.media_object_id} expert={expert} />}
+            </div>
           </li>
         ))}
       </ul>

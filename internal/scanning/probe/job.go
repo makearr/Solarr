@@ -24,6 +24,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/filekind"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/platform/previewstore"
 )
 
 // JobType is the registered type of the background probe sweep.
@@ -61,14 +62,16 @@ type Roots interface {
 // Job probes every media_object with no measured half yet, in bounded,
 // resumable batches, until none remain or the context is cancelled.
 type Job struct {
-	physical library.Physical
-	coverage library.ProbeCoverage
-	roots    Roots
-	tool     mediatool.Tool
-	fs       fsx.FS
-	hashing  func() bool
-	clock    clock.Clock
-	logger   *slog.Logger
+	physical    library.Physical
+	coverage    library.ProbeCoverage
+	roots       Roots
+	tool        mediatool.Tool
+	fs          fsx.FS
+	hashing     func() bool
+	previews    func() bool
+	previewsDir string
+	clock       clock.Clock
+	logger      *slog.Logger
 	// resumeAt is each list's place when a run yielded, so the continuation does not re-read the files that failed first.
 	resumeAt [5]atomic.Int64
 }
@@ -83,8 +86,11 @@ type Config struct {
 	FS fsx.FS
 	// PerceptualHashing says whether videos are hashed this run; nil means always.
 	PerceptualHashing func() bool
-	Clock             clock.Clock
-	Logger            *slog.Logger
+	// VideoPreviews says whether the hashing also keeps a single frame and a sheet of each video in PreviewsDir; nil means never.
+	VideoPreviews func() bool
+	PreviewsDir   string
+	Clock         clock.Clock
+	Logger        *slog.Logger
 }
 
 // NewJob builds the handler.
@@ -95,7 +101,7 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		physical: config.Physical, coverage: config.Coverage, roots: config.Roots,
-		tool: config.Tool, fs: config.FS, hashing: config.PerceptualHashing, clock: config.Clock, logger: logger,
+		tool: config.Tool, fs: config.FS, hashing: config.PerceptualHashing, previews: config.VideoPreviews, previewsDir: config.PreviewsDir, clock: config.Clock, logger: logger,
 	}
 }
 
@@ -147,10 +153,14 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 	if err := j.backfill(ctx, started, oshashPass, "oshash", j.physical.ListVideoWithoutOshash, j.hashFile); err != nil {
 		return err
 	}
-	if hasher, ok := j.tool.(PerceptualHasher); ok && (j.hashing == nil || j.hashing()) {
-		err := j.backfill(ctx, started, phashPass, "phash", j.physical.ListVideoWithoutFrameHashes,
+	previews := j.previews != nil && j.previews() && j.previewsDir != ""
+	if hasher, ok := j.tool.(PerceptualHasher); ok && (j.hashing == nil || j.hashing() || previews) {
+		list := func(ctx context.Context, afterID, pageSize int64) ([]library.UnmeasuredFile, error) {
+			return j.physical.ListVideoWithoutHashOrPreview(ctx, afterID, pageSize, previews)
+		}
+		err := j.backfill(ctx, started, phashPass, "phash", list,
 			func(ctx context.Context, file library.UnmeasuredFile) error {
-				return j.perceptualHash(ctx, hasher, file)
+				return j.perceptualHash(ctx, hasher, file, previews)
 			})
 		if err != nil {
 			return err
@@ -178,6 +188,11 @@ const (
 // PerceptualHasher is the tool's frame hash (ADR-35); a Tool without it leaves video unhashed.
 type PerceptualHasher interface {
 	PerceptualHash(ctx context.Context, path string) (mediatool.VideoHash, error)
+}
+
+// PreviewMaker is a hasher that can also make the preview pictures from the frames it reads.
+type PreviewMaker interface {
+	HashAndPreview(ctx context.Context, path string, previews bool) (mediatool.VideoHash, mediatool.Preview, error)
 }
 
 // backfill hashes the video files a pass still lists (the hash was not written at scan time); a file that cannot
@@ -218,12 +233,20 @@ func (j *Job) backfill(
 	}
 }
 
-func (j *Job) perceptualHash(ctx context.Context, hasher PerceptualHasher, file library.UnmeasuredFile) error {
+func (j *Job) perceptualHash(ctx context.Context, hasher PerceptualHasher, file library.UnmeasuredFile, previews bool) error {
 	root, found := j.roots.RootFolder(file.RootFolderID)
 	if !found {
 		return fmt.Errorf("root folder %d is not configured", file.RootFolderID)
 	}
-	hash, err := hasher.PerceptualHash(ctx, path.Join(root.Path, file.RelPath))
+	absolute := path.Join(root.Path, file.RelPath)
+	var hash mediatool.VideoHash
+	var preview mediatool.Preview
+	var err error
+	if maker, ok := hasher.(PreviewMaker); ok && previews {
+		hash, preview, err = maker.HashAndPreview(ctx, absolute, true)
+	} else {
+		hash, err = hasher.PerceptualHash(ctx, absolute)
+	}
 	if err != nil {
 		return err
 	}
@@ -231,7 +254,48 @@ func (j *Job) perceptualHash(ctx context.Context, hasher PerceptualHasher, file 
 	for index, frame := range hash.Frames {
 		frames[index] = library.FrameHash{Slot: frame.Slot, Hash: frame.Hash}
 	}
-	return j.physical.SetPerceptualHash(ctx, file.MediaObjectID, hash.Mean, frames)
+	if err := j.physical.SetPerceptualHash(ctx, file.MediaObjectID, hash.Mean, frames); err != nil {
+		return err
+	}
+	if !previews {
+		return nil
+	}
+	return j.keepPreview(ctx, file.MediaObjectID, preview)
+}
+
+// keepPreview writes the pictures into the previews folder, then records which exist.
+func (j *Job) keepPreview(ctx context.Context, mediaObjectID int64, preview mediatool.Preview) error {
+	if err := j.fs.MkdirAll(previewstore.Folder(j.previewsDir, mediaObjectID), 0o755); err != nil {
+		return err
+	}
+	for kind, data := range map[string][]byte{previewstore.Frame: preview.Frame, previewstore.Sheet: preview.Sheet} {
+		if len(data) == 0 {
+			continue
+		}
+		if err := j.writePreview(previewstore.Path(j.previewsDir, mediaObjectID, kind), data); err != nil {
+			return err
+		}
+	}
+	return j.physical.SetVideoPreview(ctx, mediaObjectID, len(preview.Frame) > 0, len(preview.Sheet) > 0, j.clock.Now().Unix())
+}
+
+// writePreview lands a picture whole or not at all, so a reader never sees half of one.
+func (j *Job) writePreview(target string, data []byte) error {
+	partial := target + ".partial"
+	out, err := j.fs.Create(partial)
+	if err != nil {
+		return err
+	}
+	if _, err := out.Write(data); err != nil {
+		_ = out.Close()
+		_ = j.fs.Remove(partial)
+		return err
+	}
+	if err := out.Close(); err != nil {
+		_ = j.fs.Remove(partial)
+		return err
+	}
+	return j.fs.Rename(partial, target)
 }
 
 func (j *Job) hashFile(ctx context.Context, file library.UnmeasuredFile) error {

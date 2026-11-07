@@ -7,9 +7,10 @@ Finding the same video stored more than once, in another encode, size or contain
 The probe sweep's last pass hashes every video (`mediatool.PerceptualHash`, algorithm version 2, stored beside each hash).
 It is built so the same footage at another resolution, frame rate, codec, aspect ratio or a few frames' offset still matches:
 
-1. **Moments by time.** Seven moments at 1/8 to 7/8 of the duration, so a re-encode with another frame rate or frame
+1. **Moments by time.** Nine moments at 1/10 to 9/10 of the duration, so a re-encode with another frame rate or frame
    index lands on the same picture. One ffmpeg call per moment reads a window of five frames 0.125 s apart (`fps=8`, so the
-   spacing is the same whatever the source's rate), applies the sample aspect ratio, stretches to 128x128 and converts to grey.
+   spacing is the same whatever the source's rate) in colour, with the sample aspect ratio applied, at most 426x240 (the
+   third moment at most 1280x720 while previews are on, never enlarged); Go then stretches each frame to 128x128 and converts it to grey.
 2. **Black bars off.** Per video, the rows and columns at each edge that are mostly (55%) at most 40 grey are bars, up to
    35% of a side. The crop is the lower quartile across all frames, so a logo, subtitles or a dark scene on a few frames
    neither shrinks nor grows it. Letterboxed, pillarboxed and stretched copies reduce to the same picture.
@@ -30,6 +31,18 @@ Algorithm version: `video_frame_hash.algorithm_version` (`library.VideoHashVersi
 `mediatool.PerceptualVersion`; a test pins that). A video with no hash of the current version is hashed again by the next
 sweep, so changing the algorithm means bumping the number. Migration 0107 dropped every version-1 hash (and
 `media_object.phash` of videos) for that reason.
+
+## Previews
+
+`scan.video_previews` (default off, Settings > General; turning it on turns `scan.video_phash` on) makes two pictures of each
+video from the frames the hash reads, so a file is read once: a single frame (the third moment, 3/10 into the video, at most
+720p) and a 3x3 sheet of each moment's most detailed frame (cells fitted into 426x240, 1278x720 for 16:9). Both are colour,
+in the video's own shape, uncropped, JPEG. They live in `<config dir>/previews/<id/1000>/<id>-frame.jpg` and `-sheet.jpg`
+(`internal/platform/previewstore`), belong to the file (`media_object`), and are listed in `video_preview` with the algorithm
+version, so a hash bump makes them again. `GET /files/{id}/preview/{kind}` serves them to whoever may read the file; the work
+list names the previewed files of works of at most four files (`preview_file_ids`). The web interface shows the frame in the
+overview and table of a library and the sheet in file details and look-alike duplicates, unless the person switched
+Settings > Web UI > Show thumbnails off. Gap: previews of a deleted file stay on disk.
 
 The pass is a setting, `scan.video_phash` (default off), edited by an administrator under Storage > Duplicates
 (`GET/PUT /settings/video-hashing`). Off, nothing new is hashed; hashes already stored still serve the finder, and the

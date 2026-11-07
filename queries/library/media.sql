@@ -151,15 +151,32 @@ LIMIT sqlc.arg(page_size);
 -- name: SetOshash :exec
 UPDATE media_object SET oshash = ? WHERE id = ?;
 
--- Video files with no per-frame hash yet, those hashed before it included: the lowest-priority pass of the probe sweep (ADR-35).
+-- Video files with no per-frame hash yet, those hashed before it included, and (when previews are wanted) those with no
+-- preview of the current algorithm: the lowest-priority pass of the probe sweep (ADR-35).
 -- name: ListVideoWithoutFrameHashes :many
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_object o
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE o.kind = 'video' AND o.id > sqlc.arg(after_id)
-  AND NOT EXISTS (SELECT 1 FROM video_frame_hash f WHERE f.media_object_id = o.id AND f.algorithm_version = sqlc.arg(version))
+  AND (NOT EXISTS (SELECT 1 FROM video_frame_hash f WHERE f.media_object_id = o.id AND f.algorithm_version = sqlc.arg(version))
+       OR (CAST(sqlc.arg(want_previews) AS INTEGER) = 1
+           AND NOT EXISTS (SELECT 1 FROM video_preview v WHERE v.media_object_id = o.id AND v.algorithm_version = sqlc.arg(version))))
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
+
+-- name: SetVideoPreview :exec
+INSERT INTO video_preview (media_object_id, algorithm_version, has_frame, has_sheet, made_at) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (media_object_id) DO UPDATE SET algorithm_version = excluded.algorithm_version, has_frame = excluded.has_frame,
+  has_sheet = excluded.has_sheet, made_at = excluded.made_at;
+
+-- The files of a page of works that have a single-frame preview, for a work of at most four files (a movie, not a series).
+-- name: ListPreviewFilesForWorks :many
+SELECT wf.work_id, vp.media_object_id
+FROM work_file wf
+JOIN video_preview vp ON vp.media_object_id = wf.media_object_id
+WHERE vp.has_frame = 1 AND wf.work_id IN (sqlc.slice('work_ids'))
+  AND (SELECT COUNT(*) FROM work_file x WHERE x.work_id = wf.work_id) <= 4
+ORDER BY wf.work_id, vp.media_object_id;
 
 -- name: SetPhash :exec
 UPDATE media_object SET phash = ? WHERE id = ?;

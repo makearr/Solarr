@@ -183,7 +183,13 @@ func NewDefaultRegistry() *Registry {
 	registry.MustRegister(SettingDef{
 		Key: KeyVideoPerceptualHash, Kind: KindBool, Tier: TierNormal,
 		Name:     "Find duplicate videos",
-		HelpText: "Hashes what each video looks like in the background so the duplicate finder can match re-encodes. It reads a short run of frames at seven moments per file with ffmpeg; off, nothing new is hashed and hashes already stored keep working.",
+		HelpText: "Hashes what each video looks like in the background so the duplicate finder can match re-encodes. It reads a short run of frames at nine moments per file with ffmpeg; off, nothing new is hashed and hashes already stored keep working.",
+		Default:  "false",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyVideoPreviews, Kind: KindBool, Tier: TierNormal,
+		Name:     "Video previews",
+		HelpText: "Makes a single frame (up to 720p) and a 3x3 thumbnail sheet of each video from the same frames the hashing reads, and keeps them in the previews folder under the config directory. Turning it on turns the hashing on.",
 		Default:  "false",
 	})
 	registry.MustRegister(SettingDef{

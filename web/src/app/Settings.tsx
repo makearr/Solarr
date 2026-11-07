@@ -12,7 +12,7 @@ import { Network } from "./Network";
 import { Streaming } from "./Streaming";
 import { Priority } from "./Priority";
 import { UnwantedFiles } from "./UnwantedFiles";
-import { useFooterItems, useShowCalendar, useShowFooter, type FooterItem } from "@/lib/interfacePreferences";
+import { useFooterItems, useShowCalendar, useShowFooter, useShowThumbnails, type FooterItem } from "@/lib/interfacePreferences";
 import { isTierVisible, useTier, type Tier } from "@/lib/useTier";
 
 import { SubTabs } from "@/ui/SubTabs";
@@ -111,13 +111,26 @@ export function GeneralSettings() {
           <input
             type="checkbox"
             className="mt-1"
-            disabled={!general.data || change.isPending}
+            disabled={!general.data || change.isPending || general.data?.video_previews === true}
             checked={general.data?.video_hashing ?? false}
             onChange={(event) => change.mutate({ video_hashing: event.target.checked })}
           />
           <span>
             Hash videos to find look-alike duplicates (perceptual hash)
-            <span className="block text-xs text-ink-muted">Reads seven frames per video with ffmpeg in the background so Storage, Duplicates can match re-encodes. Off, nothing new is hashed; stored hashes keep working.</span>
+            <span className="block text-xs text-ink-muted">Reads nine frames per video with ffmpeg in the background so Storage, Duplicates can match re-encodes. Off, nothing new is hashed; stored hashes keep working. {general.data?.video_previews === true ? "Stays on while previews are on." : ""}</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            disabled={!general.data || change.isPending}
+            checked={general.data?.video_previews ?? false}
+            onChange={(event) => change.mutate({ video_previews: event.target.checked })}
+          />
+          <span>
+            Make preview pictures of videos
+            <span className="block text-xs text-ink-muted">Keeps a single frame (up to 720p) and a 3x3 thumbnail sheet of each video, made from the same frames the hashing reads, in the previews folder of the config directory. Turns hashing on.</span>
           </span>
         </label>
         {change.isError && <p className="text-sm text-danger">That change was refused.</p>}
@@ -188,6 +201,7 @@ export function MetadataSettingsPage() {
 export function WebUISettings() {
   const [showCalendar, setShowCalendar] = useShowCalendar();
   const [showFooter, setShowFooter] = useShowFooter();
+  const [showThumbnails, setShowThumbnails] = useShowThumbnails();
   return (
     <SettingsPage title="Web UI">
       <Card title="Layout" help="Your own view only; every other account keeps its own.">
@@ -198,6 +212,10 @@ export function WebUISettings() {
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={showFooter} onChange={(event) => setShowFooter(event.target.checked)} />
           Show the status bar along the bottom
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={showThumbnails} onChange={(event) => setShowThumbnails(event.target.checked)} />
+          Show thumbnails of videos
         </label>
       </Card>
       {showFooter && <FooterItems />}

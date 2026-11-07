@@ -1,4 +1,5 @@
 import type { LinkProps } from "@tanstack/react-router";
+import { FileThumb } from "./FileThumb";
 import { Link } from "@tanstack/react-router";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { LayoutGrid, Rows3, Settings2, StretchHorizontal } from "lucide-react";
@@ -32,6 +33,8 @@ export interface IndexEntry {
   sizeBytes?: number;
   artistCover?: boolean;
   image: { subject: "works" | "people"; id: number } | null;
+  /** The video files of a work that have a single-frame preview; one picture each, beside the poster, never in place of it. */
+  previewFileIds?: readonly number[];
   /** A provider's picture, for a work whose picture is not its own artwork (a series' poster). */
   imageSrc?: string;
   /** A tall poster rather than a square cover. */
@@ -57,6 +60,7 @@ export function workEntry(work: Work, categoryId?: string, info?: MediaTypeInfo)
     monitored: work.monitored, overview: work.overview, sizeBytes: work.size_bytes, artistCover: work.artist_cover,
     // Nothing to ask for when neither the work, its lead nor a provider poster has a picture.
     image: work.no_artwork && !work.poster_url ? null : { subject: "works", id: work.id },
+    previewFileIds: work.preview_file_ids,
     imageSrc: work.poster_url ? remoteImage(work.poster_url, "small") : undefined,
     badgeSrc: work.badge_url ? remoteImage(work.badge_url, "thumb") : undefined,
     badgeTitle: work.badge_name,
@@ -291,6 +295,7 @@ function OverviewRow({ entry }: { entry: IndexEntry }) {
           </span>
         )}
       </div>
+      {(entry.previewFileIds ?? []).map((id) => <FileThumb key={id} mediaObjectId={id} kind="frame" wide />)}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-center gap-2">
           <MonitorToggle actions={actions} />

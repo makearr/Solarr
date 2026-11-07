@@ -274,6 +274,7 @@ type ffprobeOutput struct {
 		Channels         int               `json:"channels"`
 		Width            int               `json:"width"`
 		Height           int               `json:"height"`
+		SampleAspect     string            `json:"sample_aspect_ratio"`
 		Tags             map[string]string `json:"tags"`
 		AvgFrameRate     string            `json:"avg_frame_rate"`
 		RFrameRate       string            `json:"r_frame_rate"`
@@ -328,6 +329,7 @@ func parseProbe(output []byte) (Probe, error) {
 				measured.VideoBitrate = parseInt(stream.BitRate)
 				measured.Width = stream.Width
 				measured.Height = stream.Height
+				measured.PixelAspect = pixelAspect(stream.SampleAspect)
 				measured.FrameRate = frameRate(stream.AvgFrameRate, stream.RFrameRate)
 				measured.ScanType = scanType(stream.FieldOrder)
 				measured.HDR = hdrOf(stream.ColorTransfer, func(kind string) bool {
@@ -388,4 +390,17 @@ func (s *Subprocess) EmbeddedPicture(ctx context.Context, path string) ([]byte, 
 		return nil, fmt.Errorf("mediatool: picture %s: %d bytes exceeds %d", path, len(output), maxEmbeddedPictureBytes)
 	}
 	return output, nil
+}
+
+// pixelAspect reads ffprobe's "16:11"; 0 for "0:1", "N/A" or anything else that is no ratio.
+func pixelAspect(ratio string) float64 {
+	numerator, denominator, found := strings.Cut(ratio, ":")
+	if !found {
+		return 0
+	}
+	top, bottom := parseInt(numerator), parseInt(denominator)
+	if top <= 0 || bottom <= 0 {
+		return 0
+	}
+	return float64(top) / float64(bottom)
 }

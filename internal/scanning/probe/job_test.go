@@ -20,6 +20,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/platform/previewstore"
 	"github.com/makearr/Solarr/internal/scanning/probe"
 	"github.com/makearr/Solarr/migrations"
 )
@@ -436,5 +437,70 @@ func TestJob_RunNeverAsksTheToolAboutAnEbook(t *testing.T) {
 	}
 	if len(tool.asked) != 1 || filepath.Base(tool.asked[0]) != "track.flac" {
 		t.Errorf("tool was asked about %v, want only track.flac", tool.asked)
+	}
+}
+
+// previewingTool also makes the pictures; it hands back a fixed one per file.
+type previewingTool struct{ hashingTool }
+
+func (p *previewingTool) HashAndPreview(ctx context.Context, path string, previews bool) (mediatool.VideoHash, mediatool.Preview, error) {
+	hash, err := p.PerceptualHash(ctx, path)
+	if err != nil || !previews {
+		return hash, mediatool.Preview{}, err
+	}
+	return hash, mediatool.Preview{Frame: []byte("frame:" + filepath.Base(path)), Sheet: []byte("sheet:" + filepath.Base(path))}, nil
+}
+
+// With previews on, one read per video gives the hash and both pictures, written under the previews folder and recorded;
+// a video that cannot be read gets neither, and turning previews on hashes even with the hashing switch off.
+func TestJob_RunKeepsPreviewPicturesBesideTheHashWhenPreviewsAreOn(t *testing.T) {
+	opened := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	root, previews := t.TempDir(), t.TempDir()
+	for _, name := range []string{"a.mkv", "broken.mkv"} {
+		if err := os.WriteFile(filepath.Join(root, name), make([]byte, 100), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ids, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "a.mkv", SizeBytes: 100, QuickHash: "a", FirstSeenAt: time.Unix(0, 0)},
+		{RelPath: "broken.mkv", SizeBytes: 100, QuickHash: "b", FirstSeenAt: time.Unix(0, 0)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := probe.NewJob(probe.Config{
+		Physical:          physical,
+		Coverage:          library.NewProbeCoverage(opened, clock.NewFakeAtEpoch()),
+		Roots:             fakeRoots{1: settings.RootFolder{ID: 1, Path: root, Online: true}},
+		Tool:              &previewingTool{hashingTool{fakeTool: fakeTool{measured: mediatool.Measured{FormatName: "matroska", Duration: time.Second}}, failFor: "broken.mkv"}},
+		FS:                fsx.NewOS(),
+		PerceptualHashing: func() bool { return false },
+		VideoPreviews:     func() bool { return true },
+		PreviewsDir:       previews,
+		Clock:             clock.NewFakeAtEpoch(),
+		Logger:            slog.New(slog.DiscardHandler),
+	})
+	if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	for kind, want := range map[string]string{previewstore.Frame: "frame:a.mkv", previewstore.Sheet: "sheet:a.mkv"} {
+		got, err := os.ReadFile(previewstore.Path(previews, ids[0].MediaObjectID, kind))
+		if err != nil || string(got) != want {
+			t.Errorf("%s = %q, %v; want %q", kind, got, err, want)
+		}
+	}
+	if _, err := os.Stat(previewstore.Path(previews, ids[1].MediaObjectID, previewstore.Frame)); !os.IsNotExist(err) {
+		t.Errorf("the video that could not be read has a preview: %v", err)
+	}
+	var recorded int
+	err = opened.Read().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM video_preview WHERE media_object_id = ? AND has_frame = 1 AND has_sheet = 1 AND algorithm_version = ?`,
+		ids[0].MediaObjectID, library.VideoHashVersion).Scan(&recorded)
+	if err != nil || recorded != 1 {
+		t.Errorf("recorded previews of a.mkv = %d, %v; want 1", recorded, err)
+	}
+	rows, err := librarydb.New(opened.Read()).ListHashedVideos(t.Context(), library.VideoHashVersion)
+	if err != nil || len(rows) != 1 {
+		t.Errorf("hashed videos = %d, %v; want a.mkv hashed though hashing was off", len(rows), err)
 	}
 }

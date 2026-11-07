@@ -28,7 +28,7 @@ function HashingSwitch() {
       <span className="flex flex-col gap-0.5">
         <span className="font-medium">Hash videos in the background</span>
         <span className="text-ink-muted">
-          Reads seven frames of every video with ffmpeg so re-encodes can be found. Switch it off to save the load; hashes already
+          Reads nine frames of every video with ffmpeg so re-encodes can be found. Switch it off to save the load; hashes already
           stored keep working.
         </span>
         {save.isError && <span className="text-danger">That change was refused.</span>}

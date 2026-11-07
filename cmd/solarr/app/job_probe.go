@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log/slog"
+	"path/filepath"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
@@ -27,6 +28,8 @@ func (p *process) registerProbeJob(registry *jobs.Registry, executor *jobs.Execu
 		Tool:              mediatool.New(nil, 0),
 		FS:                p.fsys,
 		PerceptualHashing: func() bool { return p.cache.Snapshot().VideoPerceptualHash() },
+		VideoPreviews:     func() bool { return p.cache.Snapshot().VideoPreviews() },
+		PreviewsDir:       filepath.Join(p.config.Paths.ConfigDir, "previews"),
 		Clock:             clock.NewSystem(),
 		Logger:            p.logger,
 	})

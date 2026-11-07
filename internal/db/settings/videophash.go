@@ -31,3 +31,19 @@ const (
 func (s *Snapshot) VideoPhashFrameBits() int {
 	return int(min(MaxVideoPhashFrameBits, max(MinVideoPhashFrameBits, s.policyInt(KeyVideoPhashFrameBits, DefaultVideoPhashFrameBits))))
 }
+
+// KeyVideoPreviews switches the preview pictures made from the frames the hashing reads.
+const KeyVideoPreviews = "scan.video_previews"
+
+// VideoPreviews is whether the probe sweep makes a single frame and a thumbnail sheet of each video; off unless turned on.
+func (s *Snapshot) VideoPreviews() bool { return s.policyBool(KeyVideoPreviews, false) }
+
+// SetVideoPreviews turns the previews on or off. On, it turns the hashing on too, since both read the same frames and
+// the hashing then costs next to nothing; off leaves the hashing as it is and the pictures made stay.
+func (c *Cache) SetVideoPreviews(ctx context.Context, cl clock.Clock, enabled bool) error {
+	changes := map[string]string{KeyVideoPreviews: boolPolicy(enabled)}
+	if enabled {
+		changes[KeyVideoPerceptualHash] = boolPolicy(true)
+	}
+	return c.setPolicies(ctx, cl, changes)
+}

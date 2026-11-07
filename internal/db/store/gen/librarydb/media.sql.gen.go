@@ -8,6 +8,7 @@ package librarydb
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const addLibraryPath = `-- name: AddLibraryPath :execlastid
@@ -903,6 +904,54 @@ func (q *Queries) ListPathsInRoot(ctx context.Context, arg ListPathsInRootParams
 	return items, nil
 }
 
+const listPreviewFilesForWorks = `-- name: ListPreviewFilesForWorks :many
+SELECT wf.work_id, vp.media_object_id
+FROM work_file wf
+JOIN video_preview vp ON vp.media_object_id = wf.media_object_id
+WHERE vp.has_frame = 1 AND wf.work_id IN (/*SLICE:work_ids*/?)
+  AND (SELECT COUNT(*) FROM work_file x WHERE x.work_id = wf.work_id) <= 4
+ORDER BY wf.work_id, vp.media_object_id
+`
+
+type ListPreviewFilesForWorksRow struct {
+	WorkID        int64
+	MediaObjectID int64
+}
+
+// The files of a page of works that have a single-frame preview, for a work of at most four files (a movie, not a series).
+func (q *Queries) ListPreviewFilesForWorks(ctx context.Context, workIds []int64) ([]ListPreviewFilesForWorksRow, error) {
+	query := listPreviewFilesForWorks
+	var queryParams []interface{}
+	if len(workIds) > 0 {
+		for _, v := range workIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:work_ids*/?", strings.Repeat(",?", len(workIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:work_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPreviewFilesForWorksRow{}
+	for rows.Next() {
+		var i ListPreviewFilesForWorksRow
+		if err := rows.Scan(&i.WorkID, &i.MediaObjectID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRenameFilesOnRoot = `-- name: ListRenameFilesOnRoot :many
 SELECT lp.media_object_id, lp.rel_path, o.size_bytes, d.work_id, CAST(COALESCE(d.edition_id, 0) AS INTEGER) AS edition_id,
        f.media_ref
@@ -1325,15 +1374,18 @@ SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_object o
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE o.kind = 'video' AND o.id > ?1
-  AND NOT EXISTS (SELECT 1 FROM video_frame_hash f WHERE f.media_object_id = o.id AND f.algorithm_version = ?2)
+  AND (NOT EXISTS (SELECT 1 FROM video_frame_hash f WHERE f.media_object_id = o.id AND f.algorithm_version = ?2)
+       OR (CAST(?3 AS INTEGER) = 1
+           AND NOT EXISTS (SELECT 1 FROM video_preview v WHERE v.media_object_id = o.id AND v.algorithm_version = ?2)))
 ORDER BY o.id
-LIMIT ?3
+LIMIT ?4
 `
 
 type ListVideoWithoutFrameHashesParams struct {
-	AfterID  int64
-	Version  int64
-	PageSize int64
+	AfterID      int64
+	Version      int64
+	WantPreviews int64
+	PageSize     int64
 }
 
 type ListVideoWithoutFrameHashesRow struct {
@@ -1343,9 +1395,15 @@ type ListVideoWithoutFrameHashesRow struct {
 	RelPath      string
 }
 
-// Video files with no per-frame hash yet, those hashed before it included: the lowest-priority pass of the probe sweep (ADR-35).
+// Video files with no per-frame hash yet, those hashed before it included, and (when previews are wanted) those with no
+// preview of the current algorithm: the lowest-priority pass of the probe sweep (ADR-35).
 func (q *Queries) ListVideoWithoutFrameHashes(ctx context.Context, arg ListVideoWithoutFrameHashesParams) ([]ListVideoWithoutFrameHashesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listVideoWithoutFrameHashes, arg.AfterID, arg.Version, arg.PageSize)
+	rows, err := q.db.QueryContext(ctx, listVideoWithoutFrameHashes,
+		arg.AfterID,
+		arg.Version,
+		arg.WantPreviews,
+		arg.PageSize,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1826,6 +1884,31 @@ type SetVideoFrameHashesParams struct {
 
 func (q *Queries) SetVideoFrameHashes(ctx context.Context, arg SetVideoFrameHashesParams) error {
 	_, err := q.db.ExecContext(ctx, setVideoFrameHashes, arg.MediaObjectID, arg.Frames, arg.AlgorithmVersion)
+	return err
+}
+
+const setVideoPreview = `-- name: SetVideoPreview :exec
+INSERT INTO video_preview (media_object_id, algorithm_version, has_frame, has_sheet, made_at) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (media_object_id) DO UPDATE SET algorithm_version = excluded.algorithm_version, has_frame = excluded.has_frame,
+  has_sheet = excluded.has_sheet, made_at = excluded.made_at
+`
+
+type SetVideoPreviewParams struct {
+	MediaObjectID    int64
+	AlgorithmVersion int64
+	HasFrame         int64
+	HasSheet         int64
+	MadeAt           int64
+}
+
+func (q *Queries) SetVideoPreview(ctx context.Context, arg SetVideoPreviewParams) error {
+	_, err := q.db.ExecContext(ctx, setVideoPreview,
+		arg.MediaObjectID,
+		arg.AlgorithmVersion,
+		arg.HasFrame,
+		arg.HasSheet,
+		arg.MadeAt,
+	)
 	return err
 }
 

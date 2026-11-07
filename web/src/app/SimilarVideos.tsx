@@ -11,6 +11,7 @@ import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
 import { inputStyle } from "@/ui/form";
 
+import { FileThumb } from "./FileThumb";
 import { PlayButton } from "./player/PlayButton";
 import { formatBytes } from "./Queue";
 import { TargetChip } from "./work/TargetChip";
@@ -117,7 +118,9 @@ function GroupCard({ group, scope, libraryName }: { group: Group; scope: Similar
         const bits = primary && primary.media_object_id !== video.media_object_id ? bitsApart(primary.mean_hash, video.mean_hash) : undefined;
         const canMerge = primary !== undefined && !isKept && mergeable(video, primary);
         return (
-          <div key={video.media_object_id} className={`flex flex-col gap-1 rounded-md border px-2.5 py-1.5 ${isKept ? "border-accent bg-accent/5" : "border-border-subtle"}`}>
+          <div key={video.media_object_id} className={`flex gap-2 rounded-md border px-2.5 py-1.5 ${isKept ? "border-accent bg-accent/5" : "border-border-subtle"}`}>
+            <FileThumb mediaObjectId={video.media_object_id} kind="sheet" />
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <label className="flex items-center gap-1.5">
                 <input type="checkbox" checked={isKept} onChange={() => toggle(video)} aria-label={`Keep ${video.work_title || nameOf(video.path)}`} />
@@ -162,6 +165,7 @@ function GroupCard({ group, scope, libraryName }: { group: Group; scope: Similar
                 </Button>
               </div>
             )}
+            </div>
           </div>
         );
       })}

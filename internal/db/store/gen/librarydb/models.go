@@ -891,6 +891,14 @@ type VideoFrameHash struct {
 	AlgorithmVersion int64
 }
 
+type VideoPreview struct {
+	MediaObjectID    int64
+	AlgorithmVersion int64
+	HasFrame         int64
+	HasSheet         int64
+	MadeAt           int64
+}
+
 type Work struct {
 	ID                 int64
 	MediaType          string

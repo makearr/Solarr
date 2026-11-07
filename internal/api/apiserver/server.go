@@ -98,6 +98,10 @@ type Config struct {
 	// Required together with Artwork -- meaningless alone.
 	FS        fsx.FS
 	ImagesDir string
+	// PreviewsDir holds the preview pictures of videos; without it a preview is 404.
+	PreviewsDir string
+	// FilePreviews names the previewed files of listed works; optional.
+	FilePreviews FilePreviews
 	// ConfigPath locates config.yml on disk. Optional: without it,
 	// UpdateNetworkSettings writes only settings.db and never touches the
 	// file, same as before ADR-58's precedence was revised (2026-09-12).
@@ -332,6 +336,8 @@ type Server struct {
 	artwork                 ArtworkReader
 	fsys                    fsx.FS
 	imagesDir               string
+	previewsDir             string
+	filePreviews            FilePreviews
 	configPath              string
 	people                  PeopleReader
 	organisations           OrganisationsReader
@@ -470,6 +476,8 @@ func New(config Config) (*Server, error) {
 		artwork:                 config.Artwork,
 		fsys:                    config.FS,
 		imagesDir:               config.ImagesDir,
+		previewsDir:             config.PreviewsDir,
+		filePreviews:            config.FilePreviews,
 		configPath:              config.ConfigPath,
 		people:                  config.People,
 		organisations:           config.Organisations,
@@ -865,6 +873,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/network", server.GetNetworkSettings)
 			secured.Patch("/network", server.UpdateNetworkSettings)
 			secured.Get("/files/{mediaObjectId}/playback", server.routeGetFilePlayback)
+			secured.Get("/files/{mediaObjectId}/preview/{kind}", server.routeGetFilePreview)
 			secured.Get("/files/{mediaObjectId}/stream", server.routeStreamFile)
 			secured.Get("/files/{mediaObjectId}/transcode", server.routeTranscodeFile)
 			secured.Get("/files/{mediaObjectId}/subtitles/{track}", server.routeSubtitleRequest)

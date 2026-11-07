@@ -15,7 +15,7 @@ import (
 
 // VideoHashVersion is the perceptual-hash algorithm the stored hashes come from (mediatool.PerceptualVersion); a video
 // hashed by another version is hashed again.
-const VideoHashVersion = 2
+const VideoHashVersion = 3
 
 // DefaultFrameBits is the per-frame distance, in bits, at the medium level; the setting scan.video_phash_frame_bits tunes it.
 const DefaultFrameBits = 10
