@@ -35,6 +35,8 @@ const (
 	StatAlbumsByState = "albums_by_state"
 	// StatDownloadsByState: value and count the downloads of the last 30 days, key their state.
 	StatDownloadsByState = "downloads_by_state"
+	// StatFilesUnidentified: files awaiting manual identification, count files, key "files".
+	StatFilesUnidentified = "files_unidentified"
 	// StatGrowthByMonth: value bytes, count files first seen in the month, key "YYYY-MM".
 	StatGrowthByMonth = "growth_by_month"
 	// StatDecisionsByOutcome: value and count the release decisions of the last 30 days, key ACCEPT, REJECT or DEFER;
@@ -63,6 +65,7 @@ const (
 // topSeries is how many series the size and gap lists keep per library; topSearched the most-searched list.
 const (
 	topSeries   = 20
+	topBiggest  = 6
 	topSearched = 10
 )
 
@@ -91,7 +94,7 @@ type StatRow struct {
 var ComputedMetrics = []string{
 	StatSeriesSize, StatSeriesGaps, StatSizePerHour, StatVideoBitrate, StatFilesByCodec, StatFilesByVideoCodec,
 	StatFilesByResolution, StatFilesByHDR, StatFilesByAudio, StatAlbumsByState, StatDownloadsByState, StatGrowthByMonth,
-	StatMostSearched,
+	StatMostSearched, StatFilesUnidentified,
 }
 
 // Figures measures every computed metric from library.db; the caller stores them in statistics.db. categoryOfRoot
@@ -134,6 +137,10 @@ func (s Statistics) Figures(ctx context.Context, categoryOfRoot map[int64]int64,
 	if err != nil {
 		return nil, fmt.Errorf("library: statistics: size per hour: %w", err)
 	}
+	unidentified, err := reader.AggregateUnidentifiedByRoot(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("library: statistics: unidentified: %w", err)
+	}
 	mostSearched, err := reader.ListMostSearchedMissing(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("library: statistics: most searched: %w", err)
@@ -147,7 +154,7 @@ func (s Statistics) Figures(ctx context.Context, categoryOfRoot map[int64]int64,
 	var figures []figure
 	taken := map[string]int{}
 	for _, row := range seriesSize {
-		if key := dimensionOf(row.CategoryID, fmt.Sprintf("%d|%s", row.WorkID, row.Title)); taken[StatSeriesSize+strconv.FormatInt(row.CategoryID, 10)] < topSeries {
+		if key := dimensionOf(row.CategoryID, fmt.Sprintf("%d|%s", row.WorkID, row.Title)); taken[StatSeriesSize+strconv.FormatInt(row.CategoryID, 10)] < topBiggest {
 			taken[StatSeriesSize+strconv.FormatInt(row.CategoryID, 10)]++
 			figures = append(figures, figure{StatSeriesSize, key, float64(row.Bytes), row.Files})
 		}
@@ -250,6 +257,15 @@ func (s Statistics) Figures(ctx context.Context, categoryOfRoot map[int64]int64,
 	}
 	for _, one := range byMonth {
 		figures = append(figures, *one)
+	}
+	waiting := map[int64]int64{}
+	for _, row := range unidentified {
+		if category, found := categoryOfRoot[row.RootFolderID]; found {
+			waiting[category] += row.Files
+		}
+	}
+	for category, files := range waiting {
+		figures = append(figures, figure{StatFilesUnidentified, dimensionOf(category, "files"), float64(files), files})
 	}
 	for _, row := range albums {
 		figures = append(figures, figure{StatAlbumsByState, dimensionOf(row.CategoryID, row.State), float64(row.Albums), row.Albums})

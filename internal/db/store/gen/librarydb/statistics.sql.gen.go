@@ -449,6 +449,42 @@ func (q *Queries) AggregateSizePerHour(ctx context.Context) ([]AggregateSizePerH
 	return items, nil
 }
 
+const aggregateUnidentifiedByRoot = `-- name: AggregateUnidentifiedByRoot :many
+SELECT q.root_folder_id, CAST(COUNT(*) AS INTEGER) AS files
+FROM identification_queue q
+GROUP BY q.root_folder_id
+ORDER BY q.root_folder_id
+`
+
+type AggregateUnidentifiedByRootRow struct {
+	RootFolderID int64
+	Files        int64
+}
+
+// Files still waiting in the manual identification queue, per root folder.
+func (q *Queries) AggregateUnidentifiedByRoot(ctx context.Context) ([]AggregateUnidentifiedByRootRow, error) {
+	rows, err := q.db.QueryContext(ctx, aggregateUnidentifiedByRoot)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AggregateUnidentifiedByRootRow{}
+	for rows.Next() {
+		var i AggregateUnidentifiedByRootRow
+		if err := rows.Scan(&i.RootFolderID, &i.Files); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteStatRollupMetric = `-- name: DeleteStatRollupMetric :exec
 DELETE FROM stat_rollup WHERE metric = ?
 `

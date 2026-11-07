@@ -19,10 +19,10 @@ export function sizeTone(pct: number): ChipTone {
   return "danger";
 }
 
-/** "94%, below the target", "108% above the target", or "100% of the target" while it is near enough. */
+/** "94%, at target" while it is near enough, else "53%, below the target" or "288%, above the target". */
 export function sizeText(pct: number): string {
-  if (sizeOff(pct) < 0.1) return `${pct}% of the target`;
-  return pct < 100 ? `${pct}%, below the target` : `${pct}% above the target`;
+  if (sizeOff(pct) < 0.1) return `${pct}%, at target`;
+  return pct < 100 ? `${pct}%, below the target` : `${pct}%, above the target`;
 }
 
 const megabytes = (kbps: number, perMinutes: number) => (kbps * 60 * perMinutes) / 8 / 1000;

@@ -1921,6 +1921,9 @@ type CategoryStatistics struct {
 	// FilesByVideoCodec Video libraries only; the measured video codec of each file.
 	FilesByVideoCodec *[]StatisticsFiles `json:"files_by_video_codec,omitempty"`
 
+	// FilesUnidentified Files still waiting in the manual identification queue; absent when none.
+	FilesUnidentified *int64 `json:"files_unidentified,omitempty"`
+
 	// GrowthByMonth Files and bytes first seen per month, oldest first; the first scan lands in one month.
 	GrowthByMonth []StatisticsFiles `json:"growth_by_month"`
 
@@ -1936,7 +1939,7 @@ type CategoryStatistics struct {
 	// Searches The searches of the window and how many found a release the library accepts.
 	Searches *StatisticsSearches `json:"searches,omitempty"`
 
-	// SeriesBySize Video libraries only; the 20 series taking most space.
+	// SeriesBySize Video libraries only; the 6 series taking most space.
 	SeriesBySize *[]StatisticsSeries `json:"series_by_size,omitempty"`
 
 	// SeriesGaps Video libraries only; the 20 series with most aired episodes missing, with how many are still to air.
@@ -1962,8 +1965,13 @@ type CategoryTargetSize struct {
 	FarOff int64 `json:"far_off"`
 
 	// FurtherOff Files 25% to 50% off.
-	FurtherOff int64            `json:"further_off"`
-	Furthest   []TargetSizeFile `json:"furthest"`
+	FurtherOff int64 `json:"further_off"`
+
+	// FurthestAbove The files furthest over the target, most first.
+	FurthestAbove []TargetSizeFile `json:"furthest_above"`
+
+	// FurthestBelow The files furthest under the target, most first.
+	FurthestBelow []TargetSizeFile `json:"furthest_below"`
 
 	// Judged The files whose bitrate could be compared.
 	Judged int64 `json:"judged"`

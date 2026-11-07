@@ -41,6 +41,7 @@ type StatisticsView struct {
 	MostSearched       []StatisticsFigure
 	Indexers           []StatisticsFigure
 	BelowCutoff        []StatisticsFigure
+	Unidentified       []StatisticsFigure
 }
 
 // StatisticsReader answers a library's statistics from stat_rollup (section 21.12).
@@ -111,6 +112,9 @@ func (s *Server) GetCategoryStatistics(w http.ResponseWriter, r *http.Request, i
 	out.SizePerHour = pictureFigures(view.SizePerHour, view.VideoBitrate)
 	out.Searches, out.MostSearched = searchFigures(view.Searches), mostSearched(view.MostSearched)
 	out.Indexers = indexerFigures(view.Indexers)
+	for _, figure := range view.Unidentified {
+		out.FilesUnidentified = &figure.Count
+	}
 	if !view.ComputedAt.IsZero() {
 		out.ComputedAt = &view.ComputedAt
 	}

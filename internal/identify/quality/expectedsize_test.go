@@ -68,6 +68,8 @@ func TestFits(t *testing.T) {
 		{"right codec, other channels", score.FileFacts{AudioCodec: "aac", AudioChannels: "2.0"}, quality.TagFits{AudioCodec: quality.FitNear}},
 		{"wrong codec", score.FileFacts{VideoCodec: "h264", AudioCodec: "mp3"}, quality.TagFits{VideoCodec: quality.FitOff, AudioCodec: quality.FitOff}},
 		{"wrong languages", score.FileFacts{AudioLanguages: []string{"de"}, SubtitleLanguages: []string{"fr"}}, quality.TagFits{AudioLanguage: quality.FitOff, SubtitleLanguage: quality.FitOff}},
+		{"wanted with unwanted is near", score.FileFacts{AudioLanguages: []string{"en", "de"}, SubtitleLanguages: []string{"fr", "en"}}, quality.TagFits{AudioLanguage: quality.FitNear, SubtitleLanguage: quality.FitNear}},
+		{"several wanted, all present, stays ok", score.FileFacts{AudioLanguages: []string{"en", "EN"}}, quality.TagFits{AudioLanguage: quality.FitOK}},
 		{"no subtitles at all is not red", score.FileFacts{AudioLanguages: []string{"en"}}, quality.TagFits{AudioLanguage: quality.FitOK}},
 	}
 	for _, test := range cases {

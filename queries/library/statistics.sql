@@ -144,3 +144,10 @@ JOIN work w ON w.id = d.work_id
 WHERE h.class = 'missing' AND h.search_count >= 2 AND d.monitored = 1 AND d.state IN ('MISSING', 'PARTIAL')
 ORDER BY h.search_count DESC, h.last_searched_at, h.desired_item_id
 LIMIT 5000;
+
+-- Files still waiting in the manual identification queue, per root folder.
+-- name: AggregateUnidentifiedByRoot :many
+SELECT q.root_folder_id, CAST(COUNT(*) AS INTEGER) AS files
+FROM identification_queue q
+GROUP BY q.root_folder_id
+ORDER BY q.root_folder_id;

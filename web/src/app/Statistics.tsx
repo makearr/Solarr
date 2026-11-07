@@ -99,6 +99,82 @@ function WorkList({ title, note, rows, categoryId, gaps }: { title: string; note
 }
 
 /** Where a figure leads: the filtered view that shows exactly those items. */
+function StatTile({ value, label, note, to, search }: { value: string; label: string; note?: string; to?: string; search?: Record<string, string> }) {
+  const body = (
+    <>
+      <span className="text-2xl font-semibold tabular-nums">{value}</span>
+      <span className="text-xs text-ink-muted">{label}</span>
+      {note !== undefined && <span className="text-xs tabular-nums text-ink-muted">{note}</span>}
+    </>
+  );
+  const className = "flex flex-col rounded-lg border border-border-subtle bg-surface p-3";
+  return (
+    <li>
+      {to === undefined ? (
+        <div className={className}>{body}</div>
+      ) : (
+        <Link to={to} search={search} className={`${className} hover:border-accent`}>
+          {body}
+        </Link>
+      )}
+    </li>
+  );
+}
+
+const share = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : "0%");
+
+/** How many files the library holds and how many are identified, and how many wanted items are still missing. */
+function FilesSection({ totalFiles, unidentified, states, items, categoryId, worksLevel }: {
+  totalFiles: number;
+  unidentified: number;
+  states: components["schemas"]["StatisticsCount"][];
+  items: string;
+  categoryId: string;
+  worksLevel: string;
+}) {
+  const identified = Math.max(0, totalFiles - unidentified);
+  const wanted = states.reduce((sum, row) => sum + row.count, 0);
+  const missing = states.find((row) => row.key === "MISSING")?.count ?? 0;
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-sm font-medium">Files</h2>
+      <p className="text-xs text-ink-muted">Files in the library, how many are identified, and the monitored {items} still missing.</p>
+      <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <StatTile value={String(totalFiles)} label="Files in the library" to={`/library/${categoryId}/${worksLevel}`} />
+        <StatTile value={String(identified)} label="Identified" note={share(identified, totalFiles)} />
+        <StatTile value={String(unidentified)} label="Not identified" note={share(unidentified, totalFiles)} to="/unidentified" />
+        <StatTile value={String(missing)} label={`Wanted but missing ${items}`} note={`${share(missing, wanted)} of ${wanted} wanted`} to={`/library/${categoryId}/wanted`} />
+      </ul>
+      <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {states.filter((row) => row.key !== "MISSING").map((row) => {
+          const target = stateLink(categoryId, worksLevel, row.key);
+          return <StatTile key={row.key} value={String(row.count)} label={STATE_LABELS[row.key] ?? row.key} to={target.to} search={target.search} />;
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/** Space the library's files use and how much is free on the disks under its root folders. */
+function StorageSection({ usedBytes, categoryId }: { usedBytes: number; categoryId: string }) {
+  const roots = useQuery({ queryKey: ["rootfolders"], queryFn: () => ok(api.GET("/rootfolders")) });
+  const mine = (roots.data ?? []).filter((root) => (root.categories ?? []).some((attached) => String(attached.id) === categoryId));
+  // Roots on one filesystem share their free space, so each filesystem counts once.
+  const disks = new Map<string, { total: number; free: number }>();
+  for (const root of mine) disks.set(root.filesystem_id || `root-${root.id}`, { total: root.total_bytes ?? 0, free: root.free_bytes ?? 0 });
+  const free = [...disks.values()].reduce((sum, disk) => sum + disk.free, 0);
+  const total = [...disks.values()].reduce((sum, disk) => sum + disk.total, 0);
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-sm font-medium">Storage</h2>
+      <ul className="grid gap-2 sm:grid-cols-3">
+        <StatTile value={formatBytes(usedBytes)} label="Used by the library" />
+        <StatTile value={total > 0 ? formatBytes(free) : "unknown"} label="Available" note={total > 0 ? `${share(free, total)} of ${formatBytes(total)}` : undefined} />
+      </ul>
+    </section>
+  );
+}
+
 function stateLink(categoryId: string, worksLevel: string, state: string): { to: string; search?: Record<string, string> } {
   if (state === "COMPLETE") return { to: `/library/${categoryId}/${worksLevel}` };
   if (state === "UPGRADABLE") return { to: `/library/${categoryId}/wanted`, search: { view: "cutoff" } };
@@ -128,7 +204,6 @@ export function Statistics() {
   const growth = data?.growth_by_month ?? [];
   const largestMonth = Math.max(1, ...growth.map((row) => row.bytes));
   const decisions = (data?.decisions_by_outcome ?? []).reduce((sum, row) => sum + row.count, 0);
-  const albums = (data?.works_by_state ?? []).reduce((sum, row) => sum + row.count, 0);
 
   return (
     <div className="mx-auto flex h-full max-w-4xl flex-col gap-6 overflow-y-auto p-6">
@@ -145,58 +220,56 @@ export function Statistics() {
 
       {data && (
         <>
-          <section className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium">Completeness</h2>
-            <p className="text-xs text-ink-muted">
-              {albums} monitored {items}. Each figure opens those {items}.
-            </p>
-            <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              {data.works_by_state.map((row) => {
-                const target = stateLink(categoryId ?? "", worksLevel, row.key);
-                return (
-                  <li key={row.key}>
-                    <Link
-                      to={target.to}
-                      search={target.search}
-                      className="flex flex-col rounded-lg border border-border-subtle bg-surface p-3 hover:border-accent"
-                    >
-                      <span className="text-2xl font-semibold tabular-nums">{row.count}</span>
-                      <span className="text-xs text-ink-muted">{STATE_LABELS[row.key] ?? row.key}</span>
-                    </Link>
+          <Searching
+            windowDays={data.window_days}
+            searches={data.searches}
+            mostSearched={data.most_searched}
+            categoryId={categoryId ?? ""}
+            group={words.Group ?? "Group"}
+          />
+
+          {data.indexers !== undefined && data.indexers.length > 0 && (
+            <section className="flex flex-col gap-2">
+              <h2 className="text-sm font-medium">Indexers, last {data.window_days} days</h2>
+              <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
+                {data.indexers.map((row) => (
+                  <li key={row.name} className="flex items-center gap-3 px-3 py-2 text-sm">
+                    <span className="min-w-0 flex-1 truncate">{row.name}</span>
+                    <span className="shrink-0 text-xs text-ink-muted tabular-nums">
+                      {row.grabbed} grabbed · {row.imported} imported · {row.failed} failed
+                    </span>
                   </li>
-                );
-              })}
-              {data.works_by_state.length === 0 && <li className="text-sm text-ink-muted">No monitored {items}.</li>}
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <section className="flex flex-col gap-2">
+            <h2 className="text-sm font-medium">Acquisition, last {data.window_days} days</h2>
+            <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {data.downloads_by_state.map((row) => (
+                <li key={row.key}>
+                  <Link
+                    to="/activity/history"
+                    className="flex flex-col rounded-lg border border-border-subtle bg-surface p-3 hover:border-accent"
+                  >
+                    <span className="text-2xl font-semibold tabular-nums">{row.count}</span>
+                    <span className="text-xs text-ink-muted">{STATE_LABELS[row.key] ?? row.key}</span>
+                  </Link>
+                </li>
+              ))}
+              {data.downloads_by_state.length === 0 && <li className="text-sm text-ink-muted">No downloads in this window.</li>}
             </ul>
           </section>
-
-          {video && (
-            <>
-              <Breakdown title="Resolution" note="As the probe measured each file." rows={data.files_by_resolution} />
-              <Breakdown title="Video codec" note="As the probe measured each file." rows={data.files_by_video_codec} />
-              <Breakdown title="HDR" note="Files without an HDR format count as sdr." rows={data.files_by_hdr} />
-              <Breakdown title="Audio" note="Codec and channel layout of the first audio track." rows={data.files_by_audio} />
-              <section className="flex flex-col gap-2">
-                {(data.size_per_hour ?? []).length > 0 && (
-                  <>
-                    <h2 className="text-sm font-medium">Size and bitrate per hour</h2>
-                    <p className="text-xs text-ink-muted">Bytes per hour of picture and the average video bitrate: a file far above its neighbours is bloated, far below starved.</p>
-                    <ul className="flex flex-col gap-1.5">
-                      {(data.size_per_hour ?? []).map((row) => (
-                        <li key={row.key} className="flex items-center gap-3 text-sm">
-                          <span className="w-28 shrink-0 uppercase">{row.key}</span>
-                          <span className="flex-1 text-xs tabular-nums text-ink-muted">
-                            {formatBytes(row.bytes_per_hour)} per hour · {row.video_kbps > 0 ? `${(row.video_kbps / 1000).toFixed(1)} Mbit/s video` : "bitrate unknown"}
-                          </span>
-                          <span className="w-24 shrink-0 text-right text-xs tabular-nums text-ink-muted">{row.files} files</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </section>
-            </>
-          )}
+          <FilesSection
+            totalFiles={totalFiles}
+            unidentified={data.files_unidentified ?? 0}
+            states={data.works_by_state}
+            items={items ?? "items"}
+            categoryId={categoryId ?? ""}
+            worksLevel={worksLevel}
+          />
+          <StorageSection usedBytes={totalBytes} categoryId={categoryId ?? ""} />
           {(data.quality_vs_target ?? []).length > 0 && (
             <section className="flex flex-col gap-2">
               <h2 className="text-sm font-medium">Quality against the target</h2>
@@ -213,7 +286,16 @@ export function Statistics() {
               </ul>
             </section>
           )}
-          <WorkList title={`Biggest ${words.works}`} note={`The 20 ${words.works} taking most space, each file counted once.`} rows={data.series_by_size} categoryId={categoryId ?? ""} />
+          <TargetSize categoryId={categoryId ?? ""} />
+          {video && (
+            <>
+              <Breakdown title="Resolution" note="As the probe measured each file." rows={data.files_by_resolution} />
+              <Breakdown title="Video codec" note="As the probe measured each file." rows={data.files_by_video_codec} />
+              <Breakdown title="HDR" note="Files without an HDR format count as sdr." rows={data.files_by_hdr} />
+              <Breakdown title="Audio" note="Codec and channel layout of the first audio track." rows={data.files_by_audio} />
+            </>
+          )}
+          <WorkList title={`Biggest ${words.works}`} note={`The 6 ${words.works} taking most space, each file counted once.`} rows={data.series_by_size} categoryId={categoryId ?? ""} />
           <WorkList
             title="Gaps"
             note={`Monitored ${words.parts} without a file: the ones already out are missing, the others are still to come.`}
@@ -286,49 +368,6 @@ export function Statistics() {
             </ul>
           </section>
 
-          <TargetSize categoryId={categoryId ?? ""} />
-
-          <Searching
-            windowDays={data.window_days}
-            searches={data.searches}
-            mostSearched={data.most_searched}
-            categoryId={categoryId ?? ""}
-            group={words.Group ?? "Group"}
-          />
-
-          {data.indexers !== undefined && data.indexers.length > 0 && (
-            <section className="flex flex-col gap-2">
-              <h2 className="text-sm font-medium">Indexers, last {data.window_days} days</h2>
-              <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
-                {data.indexers.map((row) => (
-                  <li key={row.name} className="flex items-center gap-3 px-3 py-2 text-sm">
-                    <span className="min-w-0 flex-1 truncate">{row.name}</span>
-                    <span className="shrink-0 text-xs text-ink-muted tabular-nums">
-                      {row.grabbed} grabbed · {row.imported} imported · {row.failed} failed
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          <section className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium">Acquisition, last {data.window_days} days</h2>
-            <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              {data.downloads_by_state.map((row) => (
-                <li key={row.key}>
-                  <Link
-                    to="/activity/history"
-                    className="flex flex-col rounded-lg border border-border-subtle bg-surface p-3 hover:border-accent"
-                  >
-                    <span className="text-2xl font-semibold tabular-nums">{row.count}</span>
-                    <span className="text-xs text-ink-muted">{STATE_LABELS[row.key] ?? row.key}</span>
-                  </Link>
-                </li>
-              ))}
-              {data.downloads_by_state.length === 0 && <li className="text-sm text-ink-muted">No downloads in this window.</li>}
-            </ul>
-          </section>
         </>
       )}
     </div>
@@ -438,23 +477,29 @@ function TargetSize({ categoryId }: { categoryId: string }) {
           </li>
         ))}
       </ul>
-      {data.furthest.length > 0 && (
-        <>
-          <h3 className="mt-1 text-xs font-medium text-ink-muted">Furthest from the target</h3>
-          <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
-            {data.furthest.map((file) => (
-              <li key={file.media_object_id} className="flex items-center gap-3 px-3 py-1.5 text-sm">
-                <Link to="/works/$id" params={{ id: String(file.work_id) }} className="min-w-0 flex-1 truncate hover:underline">
-                  {file.title}
-                  {file.media_ref ? <span className="text-ink-muted"> · {file.media_ref}</span> : null}
-                </Link>
-                {file.size_bytes != null && <span className="shrink-0 text-xs tabular-nums text-ink-muted">{formatBytes(file.size_bytes)}</span>}
-                <Chip tone={sizeTone(file.size_pct)}>{sizeText(file.size_pct)}</Chip>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+      <FileList title="Furthest below the target" files={data.furthest_below} />
+      <FileList title="Furthest above the target" files={data.furthest_above} />
     </section>
+  );
+}
+
+function FileList({ title, files }: { title: string; files: components["schemas"]["TargetSizeFile"][] }) {
+  if (files.length === 0) return null;
+  return (
+    <>
+      <h3 className="mt-1 text-xs font-medium text-ink-muted">{title}</h3>
+      <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
+        {files.map((file) => (
+          <li key={file.media_object_id} className="flex items-center gap-3 px-3 py-1.5 text-sm">
+            <Link to="/works/$id" params={{ id: String(file.work_id) }} className="min-w-0 flex-1 truncate hover:underline">
+              {file.title}
+              {file.media_ref ? <span className="text-ink-muted"> · {file.media_ref}</span> : null}
+            </Link>
+            {file.size_bytes != null && <span className="shrink-0 text-xs tabular-nums text-ink-muted">{formatBytes(file.size_bytes)}</span>}
+            <Chip tone={sizeTone(file.size_pct)}>{sizeText(file.size_pct)}</Chip>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }

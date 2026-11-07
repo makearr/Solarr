@@ -8454,7 +8454,10 @@ export interface components {
              * @description Files 50% or more off (half the bitrate or less
              */
             far_off: number;
-            furthest: components["schemas"]["TargetSizeFile"][];
+            /** @description The files furthest under the target, most first. */
+            furthest_below: components["schemas"]["TargetSizeFile"][];
+            /** @description The files furthest over the target, most first. */
+            furthest_above: components["schemas"]["TargetSizeFile"][];
         };
         TargetSizeFile: {
             /** Format: int64 */
@@ -9933,10 +9936,15 @@ export interface components {
             files_by_hdr?: components["schemas"]["StatisticsFiles"][];
             /** @description Audio codec and channel layout, e.g. "eac3 5.1". */
             files_by_audio?: components["schemas"]["StatisticsFiles"][];
-            /** @description Video libraries only; the 20 series taking most space. */
+            /** @description Video libraries only; the 6 series taking most space. */
             series_by_size?: components["schemas"]["StatisticsSeries"][];
             /** @description Video libraries only; the 20 series with most aired episodes missing, with how many are still to air. */
             series_gaps?: components["schemas"]["StatisticsSeries"][];
+            /**
+             * Format: int64
+             * @description Files still waiting in the manual identification queue; absent when none.
+             */
+            files_unidentified?: number;
             /** @description Video libraries only; bytes per hour of picture and average video bitrate by resolution and codec. */
             size_per_hour?: components["schemas"]["StatisticsPicture"][];
             works_by_state: components["schemas"]["StatisticsCount"][];

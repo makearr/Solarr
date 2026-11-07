@@ -46,10 +46,15 @@ export function taskLoad(cadences: readonly string[]): number[] {
   return total;
 }
 
-/** Nothing running is white; the slot with the most run time is red, a tenth of it or less green, with yellow between. */
+export const GREEN_BELOW_MS = 60_000;
+/** A task that recorded a run faster than this is left off the heatmap. */
+export const NEGLIGIBLE_TASK_MS = 20;
+
+/** Nothing running is white; up to a minute of run time stays green, then it turns yellow to red at the busiest slot. */
 export function heatColor(runtimeMs: number, busiestMs: number): string {
   if (runtimeMs <= 0) return "#ffffff";
-  const share = busiestMs <= 0 ? 0 : Math.min(1, runtimeMs / busiestMs);
+  if (runtimeMs <= GREEN_BELOW_MS || busiestMs <= GREEN_BELOW_MS) return "hsl(120 75% 50%)";
+  const share = Math.min(1, (runtimeMs - GREEN_BELOW_MS) / (busiestMs - GREEN_BELOW_MS));
   return `hsl(${Math.round(120 * (1 - share))} 75% 50%)`;
 }
 

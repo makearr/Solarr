@@ -64,6 +64,8 @@ type Querier interface {
 	AggregateSeriesSize(ctx context.Context) ([]AggregateSeriesSizeRow, error)
 	// Bytes per hour of picture and the average video bitrate by resolution and codec: bloated or starved files show here.
 	AggregateSizePerHour(ctx context.Context) ([]AggregateSizePerHourRow, error)
+	// Files still waiting in the manual identification queue, per root folder.
+	AggregateUnidentifiedByRoot(ctx context.Context) ([]AggregateUnidentifiedByRootRow, error)
 	// Whether any unverified album exists, so a scan skips the per-file check on a library with none.
 	AnyUnverifiedWork(ctx context.Context) (int64, error)
 	AssignTag(ctx context.Context, arg AssignTagParams) error

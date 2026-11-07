@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, RefreshCw, RotateCcw } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, RefreshCw, RotateCcw } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -111,6 +111,7 @@ function InstanceCard({
   // An import starts from its options (2026-09-30); the run it started is shown until the next.
   const [choosing, setChoosing] = useState(false);
   const [started, setStarted] = useState<ArrImportRun | null>(null);
+  const [editing, setEditing] = useState(false);
 
   return (
     <li className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
@@ -161,6 +162,16 @@ function InstanceCard({
           Import…
         </button>
         )}
+        <button
+          type="button"
+          aria-label={`Edit ${instance.name}`}
+          title="Change this connection's name, address, API key or library"
+          onClick={() => setEditing(!editing)}
+          className={`${instance.app === "prowlarr" ? "ml-auto " : ""}flex shrink-0 items-center gap-1 rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`}
+        >
+          <Pencil aria-hidden className="size-3.5" />
+          Edit
+        </button>
         <RemoveButton
           aria-label={`Remove ${instance.name}`}
           onClick={onRemove}
@@ -169,6 +180,15 @@ function InstanceCard({
         />
       </div>
 
+      {editing && (
+        <EditInstance
+          instance={instance}
+          onDone={() => {
+            setEditing(false);
+            onChanged();
+          }}
+        />
+      )}
       {choosing && (
         <ArrSyncOptions
           instance={instance}
@@ -188,6 +208,77 @@ function InstanceCard({
 
       {expanded && <InstanceHistory instanceId={instance.id} />}
     </li>
+  );
+}
+
+/** The connection's own facts; the API key is replaced only when a new one is typed. */
+function EditInstance({ instance, onDone }: { instance: ArrInstance; onDone: () => void }) {
+  const categories = useCategories();
+  const libraryLabel = useLibraryLabel();
+  const [name, setName] = useState(instance.name);
+  const [baseUrl, setBaseUrl] = useState(instance.base_url);
+  const [apiKey, setApiKey] = useState("");
+  const [categoryId, setCategoryId] = useState(instance.category_id ? String(instance.category_id) : "");
+  const [enabled, setEnabled] = useState(instance.enabled);
+  const save = useMutation({
+    mutationFn: async () => {
+      await ok(api.PATCH("/arr/instances/{id}", {
+        params: { path: { id: instance.id } },
+        body: {
+          name,
+          base_url: baseUrl,
+          category_id: categoryId ? Number(categoryId) : undefined,
+          enabled,
+          push_monitoring: instance.push_monitoring,
+        },
+      }));
+      if (apiKey.trim()) await ok(api.POST("/arr/instances/{id}/apikey", { params: { path: { id: instance.id } }, body: { api_key: apiKey.trim() } }));
+    },
+    onSuccess: onDone,
+  });
+  return (
+    <form
+      className={addFormStyle}
+      onSubmit={(event) => {
+        event.preventDefault();
+        save.mutate();
+      }}
+    >
+      <label className="flex min-w-32 flex-col gap-1 text-xs text-ink-muted">
+        Name
+        <input className={inputStyle} value={name} autoComplete="off" onChange={(event) => setName(event.target.value)} />
+      </label>
+      <label className="flex min-w-48 flex-1 flex-col gap-1 text-xs text-ink-muted">
+        Base URL
+        <input className={inputStyle} value={baseUrl} autoComplete="off" onChange={(event) => setBaseUrl(event.target.value)} />
+      </label>
+      <label className="flex min-w-40 flex-col gap-1 text-xs text-ink-muted">
+        New API key
+        <input className={inputStyle} type="password" value={apiKey} placeholder="unchanged" autoComplete="off" onChange={(event) => setApiKey(event.target.value)} />
+      </label>
+      <label className={labelStyle}>
+        Library
+        <select className={inputStyle} value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+          <option value="">Match by root folder path</option>
+          {(categories.data ?? []).map((category) => (
+            <option key={category.id} value={category.id}>
+              {libraryLabel(category)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex items-center gap-1.5 text-xs text-ink-muted">
+        <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
+        Enabled
+      </label>
+      <Button variant="primary" type="submit" disabled={!name.trim() || !baseUrl.trim() || save.isPending}>
+        {save.isPending ? "Saving…" : "Save"}
+      </Button>
+      <Button type="button" onClick={onDone}>
+        Cancel
+      </Button>
+      {save.isError && <p className="w-full text-xs text-danger">{(save.error as { detail?: string }).detail ?? "That connection could not be changed."}</p>}
+    </form>
   );
 }
 
@@ -215,7 +306,7 @@ function PushMonitoring({ instance, onChanged }: { instance: ArrInstance; onChan
     <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
       <label className="flex items-center gap-1.5">
         <input type="checkbox" checked={on} disabled={toggle.isPending} onChange={(event) => toggle.mutate(event.target.checked)} />
-        Send monitoring back to {instance.name}
+        <span title={`Write the monitored flag of what an import brought in back to ${instance.name}, whenever it changes here. The one thing Solarr ever writes to an *Arr.`}>Send back</span>
       </label>
       <span>Only items an import brought in, only their monitored flag; Solarr's state stands.</span>
       {on && (

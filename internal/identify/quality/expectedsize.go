@@ -92,7 +92,7 @@ func fitOf(off float64) Fit {
 	return FitOff
 }
 
-// Fits judges the tags of a file against a target. A language tag is only ok or off, a subtitle tag is left out when the file
+// Fits judges the tags of a file against a target. A subtitle tag is left out when the file
 // has no subtitles at all, and a codec is near when it is the target's with another bitrate, channel layout or sample rate.
 func Fits(target settings.QualityTarget, file score.FileFacts) TagFits {
 	var fits TagFits
@@ -128,19 +128,40 @@ func Fits(target settings.QualityTarget, file score.FileFacts) TagFits {
 			}
 		}
 	}
-	if len(target.AudioLanguages) > 0 && len(file.AudioLanguages) > 0 {
-		fits.AudioLanguage = FitOff
-		if shares(target.AudioLanguages, file.AudioLanguages) {
-			fits.AudioLanguage = FitOK
-		}
-	}
-	if len(target.SubtitleLanguages) > 0 && len(file.SubtitleLanguages) > 0 {
-		fits.SubtitleLanguage = FitOff
-		if shares(target.SubtitleLanguages, file.SubtitleLanguages) {
-			fits.SubtitleLanguage = FitOK
-		}
-	}
+	fits.AudioLanguage = languageFit(target.AudioLanguages, file.AudioLanguages)
+	fits.SubtitleLanguage = languageFit(target.SubtitleLanguages, file.SubtitleLanguages)
 	return fits
+}
+
+// languageFit is ok when every language of the file is wanted, near when a wanted one comes with unwanted ones, off when
+// none is wanted; empty when the target wants none or the file states no known language (und is ignored).
+func languageFit(want, have []string) Fit {
+	var known []string
+	for _, present := range have {
+		if !strings.EqualFold(present, "und") {
+			known = append(known, present)
+		}
+	}
+	have = known
+	if len(want) == 0 || len(have) == 0 {
+		return ""
+	}
+	wanted := 0
+	for _, present := range have {
+		for _, language := range want {
+			if strings.EqualFold(language, present) {
+				wanted++
+				break
+			}
+		}
+	}
+	switch {
+	case wanted == 0:
+		return FitOff
+	case wanted < len(have):
+		return FitNear
+	}
+	return FitOK
 }
 
 // audioDiffers is the right audio codec at another channel layout, sample rate or bitrate.

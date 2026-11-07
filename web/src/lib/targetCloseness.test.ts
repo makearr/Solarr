@@ -20,9 +20,9 @@ describe("sizeTone", () => {
 
 describe("sizeText", () => {
   it("says which side of the target the file is on", () => {
-    expect(sizeText(94)).toBe("94% of the target");
+    expect(sizeText(94)).toBe("94%, at target");
     expect(sizeText(53)).toBe("53%, below the target");
-    expect(sizeText(618)).toBe("618% above the target");
+    expect(sizeText(618)).toBe("618%, above the target");
   });
 });
 

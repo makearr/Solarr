@@ -11832,7 +11832,7 @@ components:
 
     CategoryTargetSize:
       type: object
-      required: [judged, expected_kbps, on_target, a_bit_off, further_off, far_off, furthest]
+      required: [judged, expected_kbps, on_target, a_bit_off, further_off, far_off, furthest_below, furthest_above]
       properties:
         judged: { type: integer, format: int64, description: The files whose bitrate could be compared. }
         expected_kbps: { type: integer, format: int64, description: The overall bitrate the target expects; 0 when it names none. }
@@ -11840,8 +11840,13 @@ components:
         a_bit_off: { type: integer, format: int64, description: Files 10% to 25% off. }
         further_off: { type: integer, format: int64, description: Files 25% to 50% off. }
         far_off: { type: integer, format: int64, description: Files 50% or more off (half the bitrate or less, double or more). }
-        furthest:
+        furthest_below:
           type: array
+          description: The files furthest under the target, most first.
+          items: { $ref: "#/components/schemas/TargetSizeFile" }
+        furthest_above:
+          type: array
+          description: The files furthest over the target, most first.
           items: { $ref: "#/components/schemas/TargetSizeFile" }
     TargetSizeFile:
       type: object
@@ -13771,12 +13776,16 @@ components:
           items: { $ref: "#/components/schemas/StatisticsFiles" }
         series_by_size:
           type: array
-          description: Video libraries only; the 20 series taking most space.
+          description: Video libraries only; the 6 series taking most space.
           items: { $ref: "#/components/schemas/StatisticsSeries" }
         series_gaps:
           type: array
           description: Video libraries only; the 20 series with most aired episodes missing, with how many are still to air.
           items: { $ref: "#/components/schemas/StatisticsSeries" }
+        files_unidentified:
+          type: integer
+          format: int64
+          description: Files still waiting in the manual identification queue; absent when none.
         size_per_hour:
           type: array
           description: Video libraries only; bytes per hour of picture and average video bitrate by resolution and codec.

@@ -38,11 +38,12 @@ test("nonsense counts for nothing, and a task adds its cadences", () => {
   expect(taskLoad([]).length).toBe(WEEK_HOURS);
 });
 
-test("heat colour: white when idle, red at the busiest slot, green when light, yellow between", () => {
-  expect(heatColor(0, 5000)).toBe("#ffffff");
-  expect(heatColor(5000, 5000)).toBe("hsl(0 75% 50%)");
-  expect(heatColor(2500, 5000)).toBe("hsl(60 75% 50%)");
-  expect(heatColor(50, 5000)).toBe("hsl(119 75% 50%)");
+test("heat colour: white when idle, green up to a minute, then yellow to red at the busiest slot", () => {
+  expect(heatColor(0, 300_000)).toBe("#ffffff");
+  expect(heatColor(59_000, 300_000)).toBe("hsl(120 75% 50%)");
+  expect(heatColor(300_000, 300_000)).toBe("hsl(0 75% 50%)");
+  expect(heatColor(180_000, 300_000)).toBe("hsl(60 75% 50%)");
+  expect(heatColor(200_000, 50_000)).toBe("hsl(120 75% 50%)");
 });
 
 test("a task without a recorded duration is expected to take the mean of the others", () => {

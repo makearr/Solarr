@@ -148,26 +148,26 @@ export function ArrSyncOptions({
         <legend className="mb-1 text-ink-muted">What to bring in</legend>
         <label className="flex items-center gap-1.5">
           <input type="radio" name={`arr-mode-${instance.id}`} checked={!monitoringOnly} onChange={() => setMonitoringOnly(false)} />
-          What {instance.name} holds: its paths, items and settings, as chosen below
+          <span title="Bring in what the *Arr holds, as chosen below: its root folders, its items and how its paths read here.">Items and settings</span>
         </label>
         <label className="flex items-center gap-1.5">
           <input type="radio" name={`arr-mode-${instance.id}`} checked={monitoringOnly} onChange={() => setMonitoringOnly(true)} />
-          Only the monitoring status of what is already here: nothing is added, and what {instance.name} monitors is monitored here
+          <span title="Add nothing. Items already here are monitored when the *Arr monitors them.">Monitoring only</span>
         </label>
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={indexers} onChange={(event) => setIndexers(event.target.checked)} />
-          Its indexers (Newznab and Torznab ones, as they are switched there)
+          <span title="Copy its Newznab and Torznab indexers, switched on or off as they are there.">Indexers</span>
         </label>
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={downloadClients} onChange={(event) => setDownloadClients(event.target.checked)} />
-          Its download clients (added switched off: {instance.name} hides their passwords)
+          <span title="Copy its download clients. They arrive switched off, because the *Arr hides their passwords.">Download clients</span>
         </label>
       </fieldset>
       {!monitoringOnly && (
         <>
       <label className="flex items-center gap-2">
         <input type="checkbox" checked={importFolders} onChange={(event) => setImportFolders(event.target.checked)} />
-        Its library: add its root folders
+        <span title="Add the *Arr's root folders to the library chosen here and scan them.">Libraries</span>
         <select
           aria-label="Into which library"
           value={libraryId ?? ""}
@@ -216,11 +216,11 @@ export function ArrSyncOptions({
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={monitored} onChange={(event) => setMonitored(event.target.checked)} />
-          {words.monitored}
+          <span title="Bring in what the *Arr monitors, as intent: nothing is downloaded by this.">Monitored</span>
         </label>
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={unmonitored} onChange={(event) => setUnmonitored(event.target.checked)} />
-          Unmonitored ones (they stay unmonitored)
+          <span title="Also bring in what the *Arr does not monitor. These stay unmonitored here.">Unmonitored</span>
         </label>
         {instance.app === "lidarr" && (
         <label className="flex items-center gap-1.5">

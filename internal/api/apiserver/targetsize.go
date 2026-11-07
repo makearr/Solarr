@@ -12,8 +12,8 @@ import (
 	"github.com/makearr/Solarr/internal/identify/quality"
 )
 
-// furthestFileCount is how many of the files furthest from the target the Insights list shows.
-const furthestFileCount = 15
+// furthestFileCount is how many files furthest below, and furthest above, the target the Insights lists show.
+const furthestFileCount = 6
 
 // FileRateView is one video file of a library with what its bitrate is judged from.
 type FileRateView struct {
@@ -48,7 +48,7 @@ func (s *Server) GetCategoryTargetSize(w http.ResponseWriter, r *http.Request, i
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "file sizes are not available")
 		return
 	}
-	out := gen.CategoryTargetSize{Furthest: []gen.TargetSizeFile{}}
+	out := gen.CategoryTargetSize{FurthestBelow: []gen.TargetSizeFile{}, FurthestAbove: []gen.TargetSizeFile{}}
 	expected := 0.0
 	if category.QualityTarget != nil {
 		expected, _ = quality.ExpectedKbps(*category.QualityTarget)
@@ -90,8 +90,8 @@ func (s *Server) GetCategoryTargetSize(w http.ResponseWriter, r *http.Request, i
 		}
 	}
 	out.Judged = int64(len(files))
-	sort.SliceStable(files, func(a, b int) bool { return quality.Off(files[a].ratio) > quality.Off(files[b].ratio) })
-	for _, file := range files[:min(furthestFileCount, len(files))] {
+	sort.SliceStable(files, func(a, b int) bool { return files[a].ratio < files[b].ratio })
+	entryOf := func(file judged) gen.TargetSizeFile {
 		entry := gen.TargetSizeFile{
 			MediaObjectId: file.row.MediaObjectID, WorkId: file.row.WorkID, Title: file.row.Title, SizePct: int64(math.Round(file.ratio * 100)),
 		}
@@ -101,7 +101,19 @@ func (s *Server) GetCategoryTargetSize(w http.ResponseWriter, r *http.Request, i
 		if file.row.SizeBytes > 0 {
 			entry.SizeBytes = &file.row.SizeBytes
 		}
-		out.Furthest = append(out.Furthest, entry)
+		return entry
+	}
+	for _, file := range files {
+		if file.ratio >= 1 || len(out.FurthestBelow) == furthestFileCount {
+			break
+		}
+		out.FurthestBelow = append(out.FurthestBelow, entryOf(file))
+	}
+	for index := len(files) - 1; index >= 0; index-- {
+		if files[index].ratio <= 1 || len(out.FurthestAbove) == furthestFileCount {
+			break
+		}
+		out.FurthestAbove = append(out.FurthestAbove, entryOf(files[index]))
 	}
 	writeJSON(w, s.logger, http.StatusOK, out)
 }

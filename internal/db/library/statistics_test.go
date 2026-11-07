@@ -151,7 +151,7 @@ func TestStatistics_GrowthByMonth(t *testing.T) {
 }
 
 // Each library keeps its own 20 biggest works, whatever the works of another library weigh.
-func TestStatistics_BiggestWorksAreTwentyPerLibrary(t *testing.T) {
+func TestStatistics_BiggestWorksAreSixPerLibrary(t *testing.T) {
 	opened, _ := newLibrary(t)
 	statistics := library.NewStatistics(opened)
 	for index := range 22 {
@@ -170,8 +170,8 @@ func TestStatistics_BiggestWorksAreTwentyPerLibrary(t *testing.T) {
 		for _, figure := range got {
 			largest = max(largest, int64(figure.Value))
 		}
-		if len(got) != 20 || largest != biggest {
-			t.Errorf("library %d: %d works, the largest %d; want 20 with %d", category, len(got), largest, biggest)
+		if len(got) != 6 || largest != biggest {
+			t.Errorf("library %d: %d works, the largest %d; want 6 with %d", category, len(got), largest, biggest)
 		}
 	}
 }

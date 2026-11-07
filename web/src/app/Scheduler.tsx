@@ -8,7 +8,7 @@ import type { components } from "@/api/schema";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import { SubTabs } from "@/ui/SubTabs";
 
-import { expectedDurations, formatRuntime, heatColor, parseSortKey, sortTasks, taskLoad, WEEK_HOURS, type SortDirection, type SortKey } from "./schedulerLoad";
+import { expectedDurations, formatRuntime, heatColor, NEGLIGIBLE_TASK_MS, parseSortKey, sortTasks, taskLoad, WEEK_HOURS, type SortDirection, type SortKey } from "./schedulerLoad";
 
 type Schedule = components["schemas"]["Schedule"];
 type BackupRetention = components["schemas"]["BackupRetention"];
@@ -126,7 +126,7 @@ const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 /** What runs when: a week of hours, white when idle, green to red by the run time the hour's tasks add up to. */
 function Heatmap({ schedules }: { schedules: readonly Schedule[] }) {
   const [active, setActive] = useState<number | null>(null);
-  const enabled = schedules.filter((schedule) => schedule.enabled);
+  const enabled = schedules.filter((schedule) => schedule.enabled && !(typeof schedule.last_duration_ms === "number" && schedule.last_duration_ms > 0 && schedule.last_duration_ms < NEGLIGIBLE_TASK_MS));
   const durations = expectedDurations(enabled);
   const tasks = enabled.map((schedule, index) => ({ name: schedule.name, load: taskLoad(schedule.cadences), duration: durations[index]! }));
   const names = (slot: number) => tasks.filter((task) => task.load[slot]! > 0).map((task) => task.name);
@@ -142,7 +142,7 @@ function Heatmap({ schedules }: { schedules: readonly Schedule[] }) {
   return (
     <section className="flex flex-col gap-2" aria-label="Schedule heatmap">
       <p className="text-xs text-ink-muted">
-        Run time per hour across a week, all enabled tasks together, from each task's last duration. Hover or focus an hour to list its tasks.
+        Run time per hour across a week, all enabled tasks together, from each task's last duration; tasks under 20 ms are left out. Hover or focus an hour to list its tasks.
       </p>
       <div className="overflow-x-auto">
         <table className="border-separate border-spacing-0.5 text-[10px] text-ink-muted">
@@ -192,9 +192,9 @@ function Heatmap({ schedules }: { schedules: readonly Schedule[] }) {
         <span
           aria-hidden
           className="h-3 w-24 rounded-sm border border-border-subtle"
-          style={{ background: "linear-gradient(to right, hsl(120 75% 50%), hsl(60 75% 50%), hsl(0 75% 50%))" }}
+          style={{ background: "linear-gradient(to right, hsl(120 75% 50%), hsl(120 75% 50%) 20%, hsl(60 75% 50%) 60%, hsl(0 75% 50%))" }}
         />
-        <span>{formatRuntime(busiest)} (busiest hour)</span>
+        <span>{formatRuntime(busiest)} (busiest hour); green up to 1 min</span>
       </div>
     </section>
   );
