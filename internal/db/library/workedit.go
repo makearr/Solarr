@@ -145,6 +145,9 @@ func userTag(ctx context.Context, queries *librarydb.Queries, genreTree, name st
 		return nil, ErrTagName
 	}
 	id, err := createTag(ctx, queries, name, "", userTagSource, 0)
+	if errors.Is(err, ErrTagBlocked) {
+		return nil, nil
+	}
 	return []int64{id}, err
 }
 

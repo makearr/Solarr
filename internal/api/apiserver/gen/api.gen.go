@@ -1645,6 +1645,16 @@ type BlockedPresent struct {
 	Title            string `json:"title"`
 }
 
+// BlockedTag defines model for BlockedTag.
+type BlockedTag struct {
+	// BlockedAt Unix seconds.
+	BlockedAt int64 `json:"blocked_at"`
+
+	// GenreTree The genre tree's key; empty for a free label.
+	GenreTree string `json:"genre_tree"`
+	Name      string `json:"name"`
+}
+
 // BlocklistEntry One release that will not be grabbed again (section 10.11).
 type BlocklistEntry struct {
 	ContentHash *string   `json:"content_hash,omitempty"`
@@ -7133,6 +7143,12 @@ type CreateTagJSONBody struct {
 	ParentId  *int64 `json:"parent_id"`
 }
 
+// UnblockTagParams defines parameters for UnblockTag.
+type UnblockTagParams struct {
+	Name      string  `form:"name" json:"name"`
+	GenreTree *string `form:"genre_tree,omitempty" json:"genre_tree,omitempty"`
+}
+
 // EditTagJSONBody defines parameters for EditTag.
 type EditTagJSONBody struct {
 	Name     string `json:"name"`
@@ -8782,12 +8798,21 @@ type ServerInterface interface {
 	// Add a tag to a genre tree ("" for a free label), under a parent of the same genre tree or at the top. Administrator only.
 	// (POST /tags)
 	CreateTag(w http.ResponseWriter, r *http.Request)
+	// Let a blocked tag be created again; a provider's genre returns at its next refresh. Administrator only.
+	// (DELETE /tags/blocked)
+	UnblockTag(w http.ResponseWriter, r *http.Request, params UnblockTagParams)
+	// The blocked tags. Administrator only.
+	// (GET /tags/blocked)
+	ListBlockedTags(w http.ResponseWriter, r *http.Request)
 	// Delete a tag and take it off every work; its children move up. A provider's genre comes back with the next refresh: merge it instead. Administrator only.
 	// (DELETE /tags/{id})
 	DeleteTag(w http.ResponseWriter, r *http.Request, id int64)
 	// Rename a tag and place it under another of its genre tree (parent_id null for the top). A provider's genre keeps its old name as an alias, so the next refresh finds it again. Administrator only.
 	// (PUT /tags/{id})
 	EditTag(w http.ResponseWriter, r *http.Request, id int64)
+	// Take a tag off every item and refuse it from then on, by a provider or a person, under its name and its aliases. Administrator only.
+	// (POST /tags/{id}/block)
+	BlockTag(w http.ResponseWriter, r *http.Request, id int64)
 	// Fold this tag into another of its genre tree: works, aliases and children move over, its name becomes an alias. Administrator only.
 	// (POST /tags/{id}/merge)
 	MergeTag(w http.ResponseWriter, r *http.Request, id int64)
@@ -10726,6 +10751,18 @@ func (_ Unimplemented) CreateTag(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Let a blocked tag be created again; a provider's genre returns at its next refresh. Administrator only.
+// (DELETE /tags/blocked)
+func (_ Unimplemented) UnblockTag(w http.ResponseWriter, r *http.Request, params UnblockTagParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The blocked tags. Administrator only.
+// (GET /tags/blocked)
+func (_ Unimplemented) ListBlockedTags(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Delete a tag and take it off every work; its children move up. A provider's genre comes back with the next refresh: merge it instead. Administrator only.
 // (DELETE /tags/{id})
 func (_ Unimplemented) DeleteTag(w http.ResponseWriter, r *http.Request, id int64) {
@@ -10735,6 +10772,12 @@ func (_ Unimplemented) DeleteTag(w http.ResponseWriter, r *http.Request, id int6
 // Rename a tag and place it under another of its genre tree (parent_id null for the top). A provider's genre keeps its old name as an alias, so the next refresh finds it again. Administrator only.
 // (PUT /tags/{id})
 func (_ Unimplemented) EditTag(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Take a tag off every item and refuse it from then on, by a provider or a person, under its name and its aliases. Administrator only.
+// (POST /tags/{id}/block)
+func (_ Unimplemented) BlockTag(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -20481,6 +20524,78 @@ func (siw *ServerInterfaceWrapper) CreateTag(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// UnblockTag operation middleware
+func (siw *ServerInterfaceWrapper) UnblockTag(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UnblockTagParams
+
+	// ------------- Required query parameter "name" -------------
+
+	if paramValue := r.URL.Query().Get("name"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "name"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "name", r.URL.Query(), &params.Name)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "genre_tree" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "genre_tree", r.URL.Query(), &params.GenreTree)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "genre_tree", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnblockTag(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListBlockedTags operation middleware
+func (siw *ServerInterfaceWrapper) ListBlockedTags(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBlockedTags(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteTag operation middleware
 func (siw *ServerInterfaceWrapper) DeleteTag(w http.ResponseWriter, r *http.Request) {
 
@@ -20538,6 +20653,39 @@ func (siw *ServerInterfaceWrapper) EditTag(w http.ResponseWriter, r *http.Reques
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.EditTag(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BlockTag operation middleware
+func (siw *ServerInterfaceWrapper) BlockTag(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BlockTag(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -23481,10 +23629,19 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/tags", wrapper.CreateTag)
 	})
 	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/tags/blocked", wrapper.UnblockTag)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/tags/blocked", wrapper.ListBlockedTags)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/tags/{id}", wrapper.DeleteTag)
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/tags/{id}", wrapper.EditTag)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/tags/{id}/block", wrapper.BlockTag)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/tags/{id}/merge", wrapper.MergeTag)

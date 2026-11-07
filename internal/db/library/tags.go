@@ -62,6 +62,9 @@ func (p People) SeedGenreTree(ctx context.Context, genreTree string, version int
 			switch {
 			case errors.Is(err, sql.ErrNoRows):
 				id, err := createTag(ctx, queries, node.Name, genreTree, shippedSource, parentID)
+				if errors.Is(err, ErrTagBlocked) {
+					continue
+				}
 				if err != nil {
 					return err
 				}
@@ -198,8 +201,18 @@ func suffixParent(ctx context.Context, queries *librarydb.Queries, genreTree, sl
 	return 0, nil
 }
 
-// createTag adds a tag under parentID (0 for none) with its closure rows.
+// ErrTagBlocked refuses a tag an administrator blocked.
+var ErrTagBlocked = errors.New("library: that tag is blocked")
+
+// createTag adds a tag under parentID (0 for none) with its closure rows; a blocked name is ErrTagBlocked.
 func createTag(ctx context.Context, queries *librarydb.Queries, name, genreTree, source string, parentID int64) (int64, error) {
+	blocked, err := queries.IsTagBlocked(ctx, genreTreeSlug(genreTree, name))
+	if err != nil {
+		return 0, err
+	}
+	if blocked > 0 {
+		return 0, ErrTagBlocked
+	}
 	tag, err := queries.CreateTag(ctx, librarydb.CreateTagParams{
 		Name: name, Slug: genreTreeSlug(genreTree, name), Source: source, GenreTree: genreTree,
 		ParentID: sql.NullInt64{Int64: parentID, Valid: parentID != 0},
@@ -246,6 +259,9 @@ func resolveGenre(ctx context.Context, queries *librarydb.Queries, genreTree, na
 		name = titleWords(name)
 	}
 	id, err := createTag(ctx, queries, name, genreTree, source, parentID)
+	if errors.Is(err, ErrTagBlocked) {
+		return nil, nil
+	}
 	return []int64{id}, err
 }
 
@@ -522,25 +538,93 @@ func mergeTag(ctx context.Context, queries *librarydb.Queries, from librarydb.Ta
 // back with the next refresh unless merged instead.
 func (p People) DeleteTag(ctx context.Context, id int64) error {
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return deleteTag(ctx, librarydb.New(tx), id)
+	})
+	if err != nil {
+		return fmt.Errorf("library: delete tag %d: %w", id, err)
+	}
+	return nil
+}
+
+func deleteTag(ctx context.Context, queries *librarydb.Queries, id int64) error {
+	tag, err := queries.GetTag(ctx, id)
+	if err != nil {
+		return err
+	}
+	children, err := queries.ListTagChildren(ctx, sql.NullInt64{Int64: id, Valid: true})
+	if err != nil {
+		return err
+	}
+	for _, child := range children {
+		if err := moveTag(ctx, queries, child, tag.ParentID.Int64); err != nil {
+			return err
+		}
+	}
+	_, err = queries.DeleteTag(ctx, id)
+	return err
+}
+
+// BlockedTag is a tag an administrator blocked.
+type BlockedTag struct {
+	Name, GenreTree string
+	BlockedAt       int64
+}
+
+// BlockTag removes a tag from every item and refuses it from then on, under its own name and each alias; at is when.
+func (p People) BlockTag(ctx context.Context, id, at int64) error {
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
 		tag, err := queries.GetTag(ctx, id)
 		if err != nil {
 			return err
 		}
-		children, err := queries.ListTagChildren(ctx, sql.NullInt64{Int64: id, Valid: true})
+		aliases, err := queries.ListAliasesOfTag(ctx, id)
 		if err != nil {
 			return err
 		}
-		for _, child := range children {
-			if err := moveTag(ctx, queries, child, tag.ParentID.Int64); err != nil {
+		slugs := []string{tag.Slug}
+		for _, alias := range aliases {
+			slugs = append(slugs, genreTreeSlug(tag.GenreTree, alias))
+		}
+		for _, slug := range slugs {
+			if err := queries.BlockTagSlug(ctx, librarydb.BlockTagSlugParams{Slug: slug, Name: tag.Name, GenreTree: tag.GenreTree, BlockedAt: at}); err != nil {
 				return err
 			}
 		}
-		_, err = queries.DeleteTag(ctx, id)
-		return err
+		return deleteTag(ctx, queries, id)
 	})
 	if err != nil {
-		return fmt.Errorf("library: delete tag %d: %w", id, err)
+		return fmt.Errorf("library: block tag %d: %w", id, err)
+	}
+	return nil
+}
+
+// BlockedTags lists the blocked tags by name, each once.
+func (p People) BlockedTags(ctx context.Context) ([]BlockedTag, error) {
+	rows, err := librarydb.New(p.store.Read()).ListBlockedTags(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("library: list blocked tags: %w", err)
+	}
+	var tags []BlockedTag
+	seen := map[string]bool{}
+	for _, row := range rows {
+		key := row.GenreTree + "/" + row.Name
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		tags = append(tags, BlockedTag{Name: row.Name, GenreTree: row.GenreTree, BlockedAt: row.BlockedAt})
+	}
+	return tags, nil
+}
+
+// UnblockTag lets a tag be created again; a provider's genre comes back at the next refresh.
+func (p People) UnblockTag(ctx context.Context, name, genreTree string) error {
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).UnblockTagSlugs(ctx, librarydb.UnblockTagSlugsParams{Name: name, GenreTree: genreTree})
+	})
+	if err != nil {
+		return fmt.Errorf("library: unblock tag %q: %w", name, err)
 	}
 	return nil
 }

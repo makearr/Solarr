@@ -1,6 +1,7 @@
 package library_test
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
@@ -93,5 +94,49 @@ func TestSetUserTags_ReplacesOnlyTheUsersOwn(t *testing.T) {
 	}
 	if want := []string{":Road trip", ":Sleep", "music:Jazz", "music:Rock"}; !reflect.DeepEqual(every, want) {
 		t.Fatalf("every tag = %v, want %v (one Rock, the genre)", every, want)
+	}
+}
+
+func TestBlockTag_TakesItOffEveryWorkAndRefusesItAgainUntilUnblocked(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	work := createWork(t, opened, "music", "Aretimok")
+	if err := people.SetUserTags(t.Context(), work.ID, "music", []string{"Zorbo", "Keepme"}); err != nil {
+		t.Fatalf("SetUserTags: %v", err)
+	}
+	tags, err := people.UserTags(t.Context(), work.ID)
+	if err != nil || len(tags) != 2 {
+		t.Fatalf("tags = %v, %v; want both", tags, err)
+	}
+	var zorbo int64
+	for _, tag := range tags {
+		if tag.Name == "Zorbo" {
+			zorbo = tag.ID
+		}
+	}
+
+	if err := people.BlockTag(t.Context(), zorbo, 100); err != nil {
+		t.Fatalf("BlockTag: %v", err)
+	}
+	if err := people.SetUserTags(t.Context(), work.ID, "music", []string{"Zorbo", "Keepme"}); err != nil {
+		t.Fatalf("SetUserTags after the block: %v", err)
+	}
+	after, _ := people.UserTags(t.Context(), work.ID)
+	if len(after) != 1 || after[0].Name != "Keepme" {
+		t.Errorf("tags after the block = %v, want only Keepme", after)
+	}
+	if _, err := people.CreateTag(t.Context(), "zorbo", "", 0); !errors.Is(err, library.ErrTagBlocked) {
+		t.Errorf("CreateTag of a blocked name = %v, want ErrTagBlocked", err)
+	}
+	blocked, err := people.BlockedTags(t.Context())
+	if err != nil || len(blocked) != 1 || blocked[0].Name != "Zorbo" {
+		t.Fatalf("blocked = %v, %v", blocked, err)
+	}
+
+	if err := people.UnblockTag(t.Context(), "Zorbo", blocked[0].GenreTree); err != nil {
+		t.Fatalf("UnblockTag: %v", err)
+	}
+	if _, err := people.CreateTag(t.Context(), "Zorbo", "", 0); err != nil {
+		t.Errorf("CreateTag after unblocking: %v", err)
 	}
 }

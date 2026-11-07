@@ -3951,6 +3951,57 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /tags/{id}/block:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: blockTag
+      tags: [library]
+      summary: >-
+        Take a tag off every item and refuse it from then on, by a provider or a person, under its name and its aliases.
+        Administrator only.
+      responses:
+        "204": { description: Blocked. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /tags/blocked:
+    get:
+      operationId: listBlockedTags
+      tags: [library]
+      summary: The blocked tags. Administrator only.
+      responses:
+        "200":
+          description: The blocked tags by name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BlockedTag" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: unblockTag
+      tags: [library]
+      summary: Let a blocked tag be created again; a provider's genre returns at its next refresh. Administrator only.
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema: { type: string }
+        - name: genre_tree
+          in: query
+          schema: { type: string }
+      responses:
+        "204": { description: Unblocked. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /tags/{id}/merge:
     parameters:
       - name: id
@@ -9758,6 +9809,13 @@ components:
         id: { type: integer, format: int64 }
         name: { type: string }
 
+    BlockedTag:
+      type: object
+      required: [name, genre_tree, blocked_at]
+      properties:
+        name: { type: string }
+        genre_tree: { type: string, description: The genre tree's key; empty for a free label. }
+        blocked_at: { type: integer, format: int64, description: Unix seconds. }
     TagNode:
       type: object
       required: [id, name, genre_tree, source, works, aliases]

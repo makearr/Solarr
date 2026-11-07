@@ -24,6 +24,9 @@ var ErrTagNameTaken = errors.New("apiserver: tag name taken")
 // ErrTagMove marks a tag put under another genre tree's or its own subtree; the answer is 409.
 var ErrTagMove = errors.New("apiserver: a tag moves only within its genre tree, never under itself")
 
+// ErrTagBlocked is a tag created that an administrator blocked.
+var ErrTagBlocked = errors.New("apiserver: that tag is blocked")
+
 // TagRow is one tag of the tree; ParentID 0 is the top of its genre tree, Genre tree "" a free label.
 type TagRow struct {
 	ID        int64
@@ -68,8 +71,20 @@ type WorkEditor interface {
 	MergeTag(ctx context.Context, fromID, intoID int64) error
 	// DeleteTag removes the tag from every work; a missing id wraps sql.ErrNoRows.
 	DeleteTag(ctx context.Context, id int64) error
+	// BlockTag removes the tag from every work and refuses it from then on; at is when.
+	BlockTag(ctx context.Context, id, at int64) error
+	// BlockedTags lists what was blocked.
+	BlockedTags(ctx context.Context) ([]BlockedTagRow, error)
+	// UnblockTag lets the tag be created again.
+	UnblockTag(ctx context.Context, name, genreTree string) error
 	// BulkEdit applies change to every work the selection matches and answers how many matched; preview changes nothing.
 	BulkEdit(ctx context.Context, selection BulkSelection, change BulkEditChange, preview bool) (int64, error)
+}
+
+// BlockedTagRow is a tag an administrator blocked.
+type BlockedTagRow struct {
+	Name, GenreTree string
+	BlockedAt       int64
 }
 
 // BulkEditChange is what a bulk edit changes: nil Monitored, false SetProfile and empty tag lists leave a thing alone.
@@ -169,6 +184,8 @@ func (s *Server) writeWorkEditError(w http.ResponseWriter, err error) {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
 	case errors.Is(err, ErrTagNameTaken):
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Conflict", "another tag already has that name")
+	case errors.Is(err, ErrTagBlocked):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Conflict", "that tag is blocked; unblock it first")
 	case errors.Is(err, ErrTagMove):
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Conflict", "a tag moves only within its genre tree, never under itself")
 	case errors.Is(err, sql.ErrNoRows):

@@ -74,6 +74,7 @@ type Querier interface {
 	// already holds something -- a backfill for people resolved before a field
 	// had a source, not a refresh (a manual override must always win, ADR-8).
 	BackfillPersonDetails(ctx context.Context, arg BackfillPersonDetailsParams) error
+	BlockTagSlug(ctx context.Context, arg BlockTagSlugParams) error
 	BlocklistRelease(ctx context.Context, arg BlocklistReleaseParams) (BlocklistedRelease, error)
 	CancelMoveJob(ctx context.Context, arg CancelMoveJobParams) (int64, error)
 	ClearClassificationGenres(ctx context.Context, workID int64) error
@@ -498,6 +499,7 @@ type Querier interface {
 	InternAttributes(ctx context.Context, arg InternAttributesParams) (MediaAttribute, error)
 	// The pipeline filters against this between dedupe and evaluate (section 10.11).
 	IsBlocklisted(ctx context.Context, arg IsBlocklistedParams) (int64, error)
+	IsTagBlocked(ctx context.Context, slug string) (int64, error)
 	IsTagInSubtree(ctx context.Context, arg IsTagInSubtreeParams) (int64, error)
 	JoinTagSubtree(ctx context.Context, arg JoinTagSubtreeParams) error
 	// A merged release's old id still names its edition, or files tagged with it open a second one.
@@ -532,6 +534,7 @@ type Querier interface {
 	ListAliasesForPeople(ctx context.Context, personIds []int64) ([]ListAliasesForPeopleRow, error)
 	// The person detail page's own need: every alias this person is known by.
 	ListAliasesForPerson(ctx context.Context, personID int64) ([]string, error)
+	ListAliasesOfTag(ctx context.Context, tagID int64) ([]string, error)
 	// Every credit anywhere under a work, at any scope. Coverage counts use this;
 	// the work-level listing above deliberately does not.
 	ListAllCreditsUnderWork(ctx context.Context, workID int64) ([]Credit, error)
@@ -568,6 +571,7 @@ type Querier interface {
 	// page -- acceptable today since a block rarely has more than a handful of
 	// present copies, revisit if that stops being true.
 	ListBlockedContentPresentInLibrary(ctx context.Context, arg ListBlockedContentPresentInLibraryParams) ([]ListBlockedContentPresentInLibraryRow, error)
+	ListBlockedTags(ctx context.Context) ([]BlockedTag, error)
 	ListBlocklist(ctx context.Context, arg ListBlocklistParams) ([]BlocklistedRelease, error)
 	// Releases in a date window that this library has a reason to care about:
 	// either something wants the work, or an artist credited on it is monitored.
@@ -1281,6 +1285,7 @@ type Querier interface {
 	TouchLibraryPath(ctx context.Context, arg TouchLibraryPathParams) error
 	// The queue holds at most keep entries: what would be sent last goes first (section 10.5).
 	TrimReady(ctx context.Context, keep int64) error
+	UnblockTagSlugs(ctx context.Context, arg UnblockTagSlugsParams) error
 	UnlinkWorkFile(ctx context.Context, arg UnlinkWorkFileParams) error
 	UnlinkWorkFiles(ctx context.Context, workID int64) error
 	// A library's "Unmonitor Deleted Tracks": items holding a file a full scan just found gone.

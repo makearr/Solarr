@@ -137,6 +137,13 @@ type BlockedContent struct {
 	LastHitAt    sql.NullInt64
 }
 
+type BlockedTag struct {
+	Slug      string
+	Name      string
+	GenreTree string
+	BlockedAt int64
+}
+
 type BlocklistedRelease struct {
 	ID            int64
 	IndexerID     sql.NullInt64

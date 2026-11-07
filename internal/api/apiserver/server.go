@@ -652,6 +652,9 @@ func New(config Config) (*Server, error) {
 			secured.Get("/categories/{id}/tags", server.routeListLibraryTags)
 			secured.Put("/tags/{id}", server.withTagID(server.EditTag))
 			secured.Delete("/tags/{id}", server.withTagID(server.DeleteTag))
+			secured.Post("/tags/{id}/block", server.withTagID(server.BlockTag))
+			secured.Get("/tags/blocked", server.ListBlockedTags)
+			secured.Delete("/tags/blocked", server.routeUnblockTag)
 			secured.Post("/tags/{id}/merge", server.withTagID(server.MergeTag))
 			secured.Post("/works/{id}/remove", server.routeRemoveWork)
 			secured.Get("/works/{id}/merge-suggestion", func(w http.ResponseWriter, r *http.Request) {

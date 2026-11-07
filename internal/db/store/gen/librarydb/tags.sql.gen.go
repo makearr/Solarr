@@ -24,6 +24,27 @@ func (q *Queries) AddTagAlias(ctx context.Context, arg AddTagAliasParams) error 
 	return err
 }
 
+const blockTagSlug = `-- name: BlockTagSlug :exec
+INSERT INTO blocked_tag (slug, name, genre_tree, blocked_at) VALUES (?, ?, ?, ?) ON CONFLICT (slug) DO NOTHING
+`
+
+type BlockTagSlugParams struct {
+	Slug      string
+	Name      string
+	GenreTree string
+	BlockedAt int64
+}
+
+func (q *Queries) BlockTagSlug(ctx context.Context, arg BlockTagSlugParams) error {
+	_, err := q.db.ExecContext(ctx, blockTagSlug,
+		arg.Slug,
+		arg.Name,
+		arg.GenreTree,
+		arg.BlockedAt,
+	)
+	return err
+}
+
 const clearClassificationGenres = `-- name: ClearClassificationGenres :exec
 DELETE FROM work_classification WHERE work_id = ? AND kind = 'genre'
 `
@@ -89,6 +110,17 @@ func (q *Queries) GetTag(ctx context.Context, id int64) (Tag, error) {
 	return i, err
 }
 
+const isTagBlocked = `-- name: IsTagBlocked :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM blocked_tag WHERE slug = ?
+`
+
+func (q *Queries) IsTagBlocked(ctx context.Context, slug string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, isTagBlocked, slug)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const isTagInSubtree = `-- name: IsTagInSubtree :one
 SELECT CAST(COUNT(*) AS INTEGER) FROM tag_closure WHERE ancestor_id = ?1 AND descendant_id = ?2
 `
@@ -120,6 +152,65 @@ type JoinTagSubtreeParams struct {
 func (q *Queries) JoinTagSubtree(ctx context.Context, arg JoinTagSubtreeParams) error {
 	_, err := q.db.ExecContext(ctx, joinTagSubtree, arg.ParentID, arg.TagID)
 	return err
+}
+
+const listAliasesOfTag = `-- name: ListAliasesOfTag :many
+SELECT alias FROM tag_alias WHERE tag_id = ? ORDER BY alias
+`
+
+func (q *Queries) ListAliasesOfTag(ctx context.Context, tagID int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listAliasesOfTag, tagID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var alias string
+		if err := rows.Scan(&alias); err != nil {
+			return nil, err
+		}
+		items = append(items, alias)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBlockedTags = `-- name: ListBlockedTags :many
+SELECT slug, name, genre_tree, blocked_at FROM blocked_tag ORDER BY name COLLATE NOCASE, slug
+`
+
+func (q *Queries) ListBlockedTags(ctx context.Context) ([]BlockedTag, error) {
+	rows, err := q.db.QueryContext(ctx, listBlockedTags)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BlockedTag{}
+	for rows.Next() {
+		var i BlockedTag
+		if err := rows.Scan(
+			&i.Slug,
+			&i.Name,
+			&i.GenreTree,
+			&i.BlockedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listClassificationGenres = `-- name: ListClassificationGenres :many
@@ -558,5 +649,19 @@ type SetTagParentColumnParams struct {
 
 func (q *Queries) SetTagParentColumn(ctx context.Context, arg SetTagParentColumnParams) error {
 	_, err := q.db.ExecContext(ctx, setTagParentColumn, arg.ParentID, arg.ID)
+	return err
+}
+
+const unblockTagSlugs = `-- name: UnblockTagSlugs :exec
+DELETE FROM blocked_tag WHERE name = ? AND genre_tree = ?
+`
+
+type UnblockTagSlugsParams struct {
+	Name      string
+	GenreTree string
+}
+
+func (q *Queries) UnblockTagSlugs(ctx context.Context, arg UnblockTagSlugsParams) error {
+	_, err := q.db.ExecContext(ctx, unblockTagSlugs, arg.Name, arg.GenreTree)
 	return err
 }

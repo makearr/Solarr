@@ -365,11 +365,33 @@ func (a WorkEdit) DeleteTag(ctx context.Context, id int64) error {
 	return a.People.DeleteTag(ctx, id)
 }
 
+// BlockTag removes a tag from every work and refuses it from then on.
+func (a WorkEdit) BlockTag(ctx context.Context, id, at int64) error {
+	return a.People.BlockTag(ctx, id, at)
+}
+
+// BlockedTags lists the blocked tags.
+func (a WorkEdit) BlockedTags(ctx context.Context) ([]apiserver.BlockedTagRow, error) {
+	tags, err := a.People.BlockedTags(ctx)
+	rows := make([]apiserver.BlockedTagRow, len(tags))
+	for index, tag := range tags {
+		rows[index] = apiserver.BlockedTagRow{Name: tag.Name, GenreTree: tag.GenreTree, BlockedAt: tag.BlockedAt}
+	}
+	return rows, err
+}
+
+// UnblockTag lets a tag be created again.
+func (a WorkEdit) UnblockTag(ctx context.Context, name, genreTree string) error {
+	return a.People.UnblockTag(ctx, name, genreTree)
+}
+
 // tagError maps the library's refusals to the ones writeWorkEditError knows.
 func tagError(err error) error {
 	switch {
 	case errors.Is(err, library.ErrTagExists):
 		return fmt.Errorf("%w: %w", apiserver.ErrTagNameTaken, err)
+	case errors.Is(err, library.ErrTagBlocked):
+		return fmt.Errorf("%w: %w", apiserver.ErrTagBlocked, err)
 	case errors.Is(err, library.ErrTagMove):
 		return fmt.Errorf("%w: %w", apiserver.ErrTagMove, err)
 	case errors.Is(err, library.ErrTagName):

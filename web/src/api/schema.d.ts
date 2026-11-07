@@ -2618,6 +2618,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tags/{id}/block": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Take a tag off every item and refuse it from then on, by a provider or a person, under its name and its aliases. Administrator only. */
+        post: operations["blockTag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tags/blocked": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The blocked tags. Administrator only. */
+        get: operations["listBlockedTags"];
+        put?: never;
+        post?: never;
+        /** Let a blocked tag be created again; a provider's genre returns at its next refresh. Administrator only. */
+        delete: operations["unblockTag"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tags/{id}/merge": {
         parameters: {
             query?: never;
@@ -6628,6 +6665,16 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+        };
+        BlockedTag: {
+            name: string;
+            /** @description The genre tree's key; empty for a free label. */
+            genre_tree: string;
+            /**
+             * Format: int64
+             * @description Unix seconds.
+             */
+            blocked_at: number;
         };
         TagNode: {
             /** Format: int64 */
@@ -14738,6 +14785,75 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    blockTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Blocked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listBlockedTags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The blocked tags by name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockedTag"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    unblockTag: {
+        parameters: {
+            query: {
+                name: string;
+                genre_tree?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unblocked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     mergeTag: {

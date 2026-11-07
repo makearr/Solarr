@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 
@@ -105,6 +105,17 @@ export function Tags() {
       if (error) throw failure(response.status);
     },
     onSuccess: refresh,
+  });
+
+  const block = useMutation({
+    mutationFn: async (id: number) => {
+      const { error, response } = await api.POST("/tags/{id}/block", { params: { path: { id } } });
+      if (error) throw failure(response.status);
+    },
+    onSuccess: () => {
+      refresh();
+      void queryClient.invalidateQueries({ queryKey: ["blocked-tags"] });
+    },
   });
 
   const parentChoices = (exclude: Set<number>) =>
@@ -243,6 +254,19 @@ export function Tags() {
                     >
                       Delete
                     </button>
+                    <button
+                      type="button"
+                      disabled={block.isPending}
+                      title="Delete it and never let it come back, not from a provider and not from anyone's edit"
+                      onClick={() => {
+                        if (confirm(`Block the tag "${tag.name}"? It comes off ${tag.works} ${tag.works === 1 ? "item" : "items"} and is not created again until you unblock it below.`)) {
+                          block.mutate(tag.id);
+                        }
+                      }}
+                      className={button}
+                    >
+                      Block
+                    </button>
                   </>
                 )}
               </>
@@ -256,6 +280,8 @@ export function Tags() {
         </p>
       )}
       {remove.isError && <p className="text-xs text-danger">That could not be deleted.</p>}
+      {block.isError && <p className="text-xs text-danger">That could not be blocked.</p>}
+      {administrator && <BlockedTags />}
       {openTag && <TagItems tag={openTag} />}
     </Card>
   );
@@ -291,6 +317,38 @@ function TagItems({ tag }: { tag: TagNode }) {
           Show more
         </button>
       )}
+    </section>
+  );
+}
+
+/** The tags an administrator blocked: gone from every item and never created again until unblocked here. */
+function BlockedTags() {
+  const queryClient = useQueryClient();
+  const blocked = useQuery({ queryKey: ["blocked-tags"], queryFn: () => ok(api.GET("/tags/blocked")) });
+  const unblock = useMutation({
+    mutationFn: async (tag: components["schemas"]["BlockedTag"]) => {
+      const { error } = await api.DELETE("/tags/blocked", { params: { query: { name: tag.name, genre_tree: tag.genre_tree } } });
+      if (error) throw new Error("failed");
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["blocked-tags"] }),
+  });
+  const rows = blocked.data ?? [];
+  return (
+    <section className="flex max-w-3xl flex-col gap-1" aria-label="Blocked tags">
+      <h3 className="text-sm font-medium">Blocked tags</h3>
+      {blocked.isSuccess && rows.length === 0 && <p className="text-sm text-ink-muted">No tag is blocked. Block puts a tag here.</p>}
+      <ul className="flex flex-col rounded-md border border-border-subtle">
+        {rows.map((tag) => (
+          <li key={`${tag.genre_tree}/${tag.name}`} className="flex items-center gap-3 border-b border-border-subtle px-2 py-0.5 text-sm last:border-0">
+            <span className="min-w-0 flex-1 truncate">{tag.name}</span>
+            <span className="shrink-0 text-xs text-ink-muted">{tag.genre_tree === "" ? "your tags" : tag.genre_tree}</span>
+            <button type="button" disabled={unblock.isPending} onClick={() => unblock.mutate(tag)} className={button}>
+              Unblock
+            </button>
+          </li>
+        ))}
+      </ul>
+      {unblock.isError && <p className="text-xs text-danger">That could not be unblocked.</p>}
     </section>
   );
 }

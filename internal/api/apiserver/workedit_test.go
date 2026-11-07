@@ -25,6 +25,7 @@ type fakeWorkEditor struct {
 	libraryTagsFor []int64
 	merged         string
 	deleted        int64
+	blocked        string
 }
 
 func (f *fakeWorkEditor) GetWorkEdit(context.Context, int64) (apiserver.WorkEditRow, error) {
@@ -73,6 +74,49 @@ func (f *fakeWorkEditor) MergeTag(_ context.Context, fromID, intoID int64) error
 func (f *fakeWorkEditor) DeleteTag(_ context.Context, id int64) error {
 	f.deleted = id
 	return f.err
+}
+
+func (f *fakeWorkEditor) BlockTag(_ context.Context, id, _ int64) error {
+	f.blocked = fmt.Sprintf("block %d", id)
+	return f.err
+}
+
+func (f *fakeWorkEditor) BlockedTags(context.Context) ([]apiserver.BlockedTagRow, error) {
+	return []apiserver.BlockedTagRow{{Name: "Zorbo", GenreTree: "music", BlockedAt: 5}}, f.err
+}
+
+func (f *fakeWorkEditor) UnblockTag(_ context.Context, name, genreTree string) error {
+	f.blocked = "unblock " + name + "/" + genreTree
+	return f.err
+}
+
+func TestTags_BlockingAndUnblockingAreAdministratorWork(t *testing.T) {
+	fixture, cookies := visibleWorksFixture(t)
+	for _, request := range []*http.Request{
+		authedPost(t, cookies, "/api/v1/tags/3/block", ""),
+		authedGet(t, cookies, "/api/v1/tags/blocked"),
+		authedDelete(t, cookies, "/api/v1/tags/blocked?name=Zorbo"),
+	} {
+		if recorder := fixture.do(request); recorder.Code != http.StatusForbidden {
+			t.Fatalf("%s %s by a listener: status %d, want 403", request.Method, request.URL.Path, recorder.Code)
+		}
+	}
+	if fixture.workEditor.blocked != "" {
+		t.Fatal("a listener reached the block list")
+	}
+
+	fixture.createUser(t, "boss", settings.RoleAdmin)
+	admin := fixture.signIn(t, "boss")
+	if recorder := fixture.do(authedPost(t, admin, "/api/v1/tags/3/block", "")); recorder.Code != http.StatusNoContent || fixture.workEditor.blocked != "block 3" {
+		t.Fatalf("block: status %d, %q", recorder.Code, fixture.workEditor.blocked)
+	}
+	if recorder := fixture.do(authedGet(t, admin, "/api/v1/tags/blocked")); recorder.Code != http.StatusOK ||
+		recorder.Body.String() != `[{"blocked_at":5,"genre_tree":"music","name":"Zorbo"}]`+"\n" {
+		t.Fatalf("list: status %d, body %q", recorder.Code, recorder.Body)
+	}
+	if recorder := fixture.do(authedDelete(t, admin, "/api/v1/tags/blocked?name=Zorbo&genre_tree=music")); recorder.Code != http.StatusNoContent || fixture.workEditor.blocked != "unblock Zorbo/music" {
+		t.Fatalf("unblock: status %d, %q", recorder.Code, fixture.workEditor.blocked)
+	}
 }
 
 func TestWorkEdit_ReadsAndSavesTheWholeDialog(t *testing.T) {

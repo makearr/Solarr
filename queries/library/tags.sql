@@ -104,3 +104,18 @@ JOIN tag_closure c ON c.descendant_id = a.tag_id
 JOIN tag t ON t.id = c.ancestor_id
 WHERE a.subject_type = 'work' AND t.genre_tree <> ''
   AND a.subject_id IN (SELECT d.work_id FROM desired_item d WHERE d.category_id = ?);
+
+-- name: IsTagBlocked :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM blocked_tag WHERE slug = ?;
+
+-- name: BlockTagSlug :exec
+INSERT INTO blocked_tag (slug, name, genre_tree, blocked_at) VALUES (?, ?, ?, ?) ON CONFLICT (slug) DO NOTHING;
+
+-- name: ListBlockedTags :many
+SELECT slug, name, genre_tree, blocked_at FROM blocked_tag ORDER BY name COLLATE NOCASE, slug;
+
+-- name: UnblockTagSlugs :exec
+DELETE FROM blocked_tag WHERE name = ? AND genre_tree = ?;
+
+-- name: ListAliasesOfTag :many
+SELECT alias FROM tag_alias WHERE tag_id = ? ORDER BY alias;
