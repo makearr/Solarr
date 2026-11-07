@@ -82,7 +82,7 @@ func TestAddWork_RequestOnlyUserFilesARequestAnAdministratorDecides(t *testing.T
 	fixture := newWorksFixture(t)
 	category, _ := fixture.createCategoryWithRoot(t, "TV", "/media/tv")
 	fixture.createUser(t, "admin", settings.RoleAdmin)
-	asker := fixture.createUser(t, "asker", settings.RoleOperator)
+	asker := fixture.createUser(t, "asker", settings.RoleUser)
 	if err := fixture.cache.SetCategoryAccess(t.Context(), asker.ID, category.ID, settings.PermissionRequest); err != nil {
 		t.Fatal(err)
 	}
@@ -120,8 +120,8 @@ func TestAddWork_AutoApproveAddsAtOnceAndListsAreScopedToTheCaller(t *testing.T)
 	fixture := newWorksFixture(t)
 	category, _ := fixture.createCategoryWithRoot(t, "TV", "/media/tv")
 	fixture.createUser(t, "admin", settings.RoleAdmin)
-	trusted := fixture.createUser(t, "trusted", settings.RoleOperator)
-	other := fixture.createUser(t, "other", settings.RoleOperator)
+	trusted := fixture.createUser(t, "trusted", settings.RoleUser)
+	other := fixture.createUser(t, "other", settings.RoleUser)
 	for _, user := range []settings.User{trusted, other} {
 		if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, settings.PermissionRequest); err != nil {
 			t.Fatal(err)
@@ -149,5 +149,25 @@ func TestAddWork_AutoApproveAddsAtOnceAndListsAreScopedToTheCaller(t *testing.T)
 		if err := json.Unmarshal(recorder.Body.Bytes(), &page); err != nil || len(page.Items) != want {
 			t.Errorf("%s sees %d requests (%v), want %d", user, len(page.Items), err, want)
 		}
+	}
+}
+
+// The add level is a request that is approved at once: nothing waits, and the add is recorded.
+func TestAddWork_TheAddLevelAddsAtOnceWithoutAutoApprove(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, _ := fixture.createCategoryWithRoot(t, "TV", "/media/tv")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	adder := fixture.createUser(t, "adder", settings.RoleUser)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), adder.ID, category.ID, settings.PermissionAdd); err != nil {
+		t.Fatal(err)
+	}
+	fixture.workAdder.result = apiserver.AddWorkResult{Kind: "series", WorkID: 9}
+	body := fmt.Sprintf(`{"category_id":%d,"kind":"series","provider":"tvdb","external_id":"1","title":"Some Show"}`, category.ID)
+	recorder := fixture.do(authedPost(t, fixture.signIn(t, "adder"), "/api/v1/works", body))
+	if recorder.Code != http.StatusOK || len(fixture.workAdder.adds) != 1 {
+		t.Fatalf("status %d (%s), %d adds; want one add at once", recorder.Code, recorder.Body, len(fixture.workAdder.adds))
+	}
+	if len(fixture.requests.records) != 1 || fixture.requests.records[0].State != "FULFILLED" {
+		t.Errorf("requests = %+v, want one fulfilled record", fixture.requests.records)
 	}
 }

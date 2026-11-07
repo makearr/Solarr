@@ -43,6 +43,7 @@ func (s *Server) CreateUser(w http.ResponseWriter, r *http.Request) {
 		Role     string              `json:"role"`
 		Access   []gen.CategoryGrant `json:"access"`
 		Limits   *gen.UserLimits     `json:"limits"`
+		Blocked  []int64             `json:"blocked_tag_ids"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&request); err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
@@ -59,7 +60,7 @@ func (s *Server) CreateUser(w http.ResponseWriter, r *http.Request) {
 	role, ok := parseRole(request.Role)
 	if !ok {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "role must be admin, operator or readonly")
+			"Bad request", "role must be admin, user or readonly")
 		return
 	}
 
@@ -79,10 +80,20 @@ func (s *Server) CreateUser(w http.ResponseWriter, r *http.Request) {
 	for _, grant := range request.Access {
 		account.Access[grant.CategoryId] = settings.Permission(grant.Permission)
 	}
+	blocked, ok := s.blockedTagsOf(w, r, request.Blocked)
+	if !ok {
+		return
+	}
 	created, err := s.auth.Settings.CreateAccount(r.Context(), s.auth.Clock, account)
 	if err != nil {
 		s.writeUserError(w, err)
 		return
+	}
+	if len(blocked) > 0 {
+		if err := s.auth.Settings.SetUserBlockedTags(r.Context(), created.ID, blocked); err != nil {
+			s.writeUserError(w, err)
+			return
+		}
 	}
 	s.logger.InfoContext(r.Context(), "account created",
 		"username", created.Username, "role", string(created.Role))
@@ -98,6 +109,7 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, id int64) {
 		Role     *string         `json:"role"`
 		Password *string         `json:"password"`
 		Limits   *gen.UserLimits `json:"limits"`
+		Blocked  *[]int64        `json:"blocked_tag_ids"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&request); err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
@@ -115,10 +127,21 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, id int64) {
 		role, ok := parseRole(*request.Role)
 		if !ok {
 			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-				"Bad request", "role must be admin, operator or readonly")
+				"Bad request", "role must be admin, user or readonly")
 			return
 		}
 		if err := s.auth.Settings.SetRole(r.Context(), id, role); err != nil {
+			s.writeUserError(w, err)
+			return
+		}
+	}
+
+	if request.Blocked != nil {
+		blocked, ok := s.blockedTagsOf(w, r, *request.Blocked)
+		if !ok {
+			return
+		}
+		if err := s.auth.Settings.SetUserBlockedTags(r.Context(), id, blocked); err != nil {
 			s.writeUserError(w, err)
 			return
 		}
@@ -248,11 +271,42 @@ func (s *Server) userView(user settings.User) gen.UserAccount {
 		CreatedAt:   user.CreatedAt,
 		Access:      grants,
 		Tier:        gen.Tier(user.Tier),
+		BlockedTags: blockedTagViews(snapshot.UserBlockedTags(user.ID)),
 		Limits: gen.UserLimits{
 			TierDefault: gen.Tier(user.Limits.TierDefault), TierMax: gen.Tier(user.Limits.TierMax),
 			NewLibraryPermission: gen.Permission(user.Limits.NewLibraryPermission), AutoApprove: &user.Limits.AutoApprove,
 		},
 	}
+}
+
+// blockedTagsOf names the tags an administrator picked, so the account keeps the name a tag had when it was blocked.
+func (s *Server) blockedTagsOf(w http.ResponseWriter, r *http.Request, ids []int64) ([]settings.UserBlockedTag, bool) {
+	if len(ids) == 0 {
+		return nil, true
+	}
+	if s.workEditor == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "tags are not available")
+		return nil, false
+	}
+	rows, err := s.workEditor.TagTree(r.Context(), "*")
+	if err != nil {
+		writeError(w, s.logger, err)
+		return nil, false
+	}
+	names := make(map[int64]string, len(rows))
+	for _, row := range rows {
+		names[row.ID] = row.Name
+	}
+	tags := make([]settings.UserBlockedTag, 0, len(ids))
+	for _, id := range ids {
+		name, known := names[id]
+		if !known {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "no such tag")
+			return nil, false
+		}
+		tags = append(tags, settings.UserBlockedTag{TagID: id, Name: name})
+	}
+	return tags, true
 }
 
 func limitsFrom(limits gen.UserLimits) settings.UserLimits {
@@ -294,8 +348,12 @@ func (s *Server) SetUserDefaults(w http.ResponseWriter, r *http.Request) {
 }
 
 func parseRole(value string) (settings.Role, bool) {
+	if value == "operator" {
+		// The role's old name, still sent by older exports and scripts.
+		value = string(settings.RoleUser)
+	}
 	switch settings.Role(value) {
-	case settings.RoleAdmin, settings.RoleOperator, settings.RoleReadonly:
+	case settings.RoleAdmin, settings.RoleUser, settings.RoleReadonly:
 		return settings.Role(value), true
 	}
 	return "", false
@@ -304,7 +362,7 @@ func parseRole(value string) (settings.Role, bool) {
 func parsePermission(value string) (settings.Permission, bool) {
 	switch settings.Permission(value) {
 	case settings.PermissionNone, settings.PermissionRead,
-		settings.PermissionRequest, settings.PermissionManage:
+		settings.PermissionRequest, settings.PermissionAdd, settings.PermissionManage:
 		return settings.Permission(value), true
 	}
 	return "", false
@@ -334,4 +392,12 @@ func (s *Server) keepSignedIn(w http.ResponseWriter, r *http.Request, user setti
 		return
 	}
 	http.SetCookie(w, s.sessionCookie(s.auth.Sessions.Issue(user.ID, user.SessionStamp), int(s.auth.Sessions.TTL().Seconds()), r))
+}
+
+func blockedTagViews(tags []settings.UserBlockedTag) *[]gen.UserBlockedTag {
+	views := make([]gen.UserBlockedTag, len(tags))
+	for index, tag := range tags {
+		views[index] = gen.UserBlockedTag{TagId: tag.TagID, Name: tag.Name}
+	}
+	return &views
 }

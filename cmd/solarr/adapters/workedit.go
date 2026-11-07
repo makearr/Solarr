@@ -365,6 +365,11 @@ func (a WorkEdit) DeleteTag(ctx context.Context, id int64) error {
 	return a.People.DeleteTag(ctx, id)
 }
 
+// WorkCarriesAnyTag says whether the work carries one of the tags or one below it.
+func (a WorkEdit) WorkCarriesAnyTag(ctx context.Context, workID int64, tagIDs []int64) (bool, error) {
+	return a.People.WorkCarriesAnyTag(ctx, workID, tagIDs)
+}
+
 // BlockTag removes a tag from every work and refuses it from then on.
 func (a WorkEdit) BlockTag(ctx context.Context, id, at int64) error {
 	return a.People.BlockTag(ctx, id, at)

@@ -70,6 +70,7 @@ type Querier interface {
 	DeleteRootFolder(ctx context.Context, id int64) error
 	DeleteTargetProfile(ctx context.Context, id int64) error
 	DeleteUser(ctx context.Context, id int64) error
+	DeleteUserBlockedTags(ctx context.Context, userID int64) error
 	DetachRootFolderFromCategory(ctx context.Context, arg DetachRootFolderFromCategoryParams) error
 	GetArrInstance(ctx context.Context, id int64) (ArrInstance, error)
 	GetCalendarFeed(ctx context.Context, userID int64) (CalendarFeed, error)
@@ -90,8 +91,10 @@ type Querier interface {
 	InsertCategoryMetadataSource(ctx context.Context, arg InsertCategoryMetadataSourceParams) error
 	InsertCategoryQualityProfile(ctx context.Context, arg InsertCategoryQualityProfileParams) error
 	InsertNamingFormat(ctx context.Context, arg InsertNamingFormatParams) error
+	InsertUserBlockedTag(ctx context.Context, arg InsertUserBlockedTagParams) error
 	ListAPIKeysForUser(ctx context.Context, userID int64) ([]ApiKey, error)
 	ListAllCategoryAccess(ctx context.Context) ([]UserCategoryAccess, error)
+	ListAllUserBlockedTags(ctx context.Context) ([]UserBlockedTag, error)
 	ListArrInstances(ctx context.Context) ([]ArrInstance, error)
 	ListCategories(ctx context.Context) ([]Category, error)
 	ListCategoryFileManagement(ctx context.Context) ([]CategoryFileManagement, error)

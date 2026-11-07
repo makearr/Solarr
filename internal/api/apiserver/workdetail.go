@@ -310,7 +310,7 @@ func (s *Server) GetWork(w http.ResponseWriter, r *http.Request, id int64) {
 		writeError(w, s.logger, err)
 		return
 	}
-	if !workDetailVisible(rootFolderIDs, categoryIDs, row) {
+	if !workDetailVisible(rootFolderIDs, categoryIDs, row) || s.keptFromWork(r.Context(), access, id) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
 		return
 	}
@@ -618,6 +618,30 @@ func (s *Server) workVisible(w http.ResponseWriter, r *http.Request, access auth
 
 // workPermitted is workVisible for an action needing more than read: a work the caller can read
 // but not act on answers 403, one they cannot read 404. The work's libraries decide, not the login.
+// blockedTagIDs are the tags an administrator keeps this account from.
+func blockedTagIDs(access authz.Access) []int64 {
+	if access.Snapshot() == nil {
+		return nil
+	}
+	tags := access.Snapshot().UserBlockedTags(access.UserID())
+	ids := make([]int64, len(tags))
+	for index, tag := range tags {
+		ids[index] = tag.TagID
+	}
+	return ids
+}
+
+// keptFromWork says the account may not see the work because it carries a tag the account is blocked from; a failed
+// lookup keeps it hidden rather than shown.
+func (s *Server) keptFromWork(ctx context.Context, access authz.Access, workID int64) bool {
+	ids := blockedTagIDs(access)
+	if len(ids) == 0 || s.workEditor == nil {
+		return false
+	}
+	carries, err := s.workEditor.WorkCarriesAnyTag(ctx, workID, ids)
+	return err != nil || carries
+}
+
 func (s *Server) workPermitted(
 	w http.ResponseWriter, r *http.Request, access authz.Access, id int64, required settings.Permission,
 ) bool {
@@ -632,6 +656,10 @@ func (s *Server) workPermitted(
 	}
 	rootFolderIDs, categoryIDs := s.visibleAt(access, settings.PermissionRead)
 	if !workDetailVisible(rootFolderIDs, categoryIDs, row) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
+		return false
+	}
+	if s.keptFromWork(r.Context(), access, id) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
 		return false
 	}

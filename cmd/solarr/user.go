@@ -31,7 +31,7 @@ func runUser(args []string, out, errOut io.Writer) error {
 	flags.SetOutput(errOut)
 	configPath := flags.String("config", defaultConfigPath(), "path to config.yml")
 	username := flags.String("username", "", "account name")
-	role := flags.String("role", string(settings.RoleAdmin), "admin | operator | readonly")
+	role := flags.String("role", string(settings.RoleAdmin), "admin | user | readonly")
 	passwordStdin := flags.Bool("password-stdin", false, "read the password from standard input")
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
@@ -97,9 +97,9 @@ func addUser(configPath, username, role string, passwordStdin bool, out io.Write
 	}
 	parsedRole := settings.Role(role)
 	switch parsedRole {
-	case settings.RoleAdmin, settings.RoleOperator, settings.RoleReadonly:
+	case settings.RoleAdmin, settings.RoleUser, settings.RoleReadonly:
 	default:
-		return fmt.Errorf("user add: unknown role %q; expected admin, operator or readonly", role)
+		return fmt.Errorf("user add: unknown role %q; expected admin, user or readonly", role)
 	}
 
 	cache, closeStore, err := openSettings(configPath)

@@ -71,6 +71,8 @@ type WorkEditor interface {
 	MergeTag(ctx context.Context, fromID, intoID int64) error
 	// DeleteTag removes the tag from every work; a missing id wraps sql.ErrNoRows.
 	DeleteTag(ctx context.Context, id int64) error
+	// WorkCarriesAnyTag says whether the work carries one of the tags or one below it.
+	WorkCarriesAnyTag(ctx context.Context, workID int64, tagIDs []int64) (bool, error)
 	// BlockTag removes the tag from every work and refuses it from then on; at is when.
 	BlockTag(ctx context.Context, id, at int64) error
 	// BlockedTags lists what was blocked.

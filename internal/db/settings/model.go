@@ -10,7 +10,7 @@ type Role string
 // Roles as of ADR-14. OIDC, LDAP and WebAuthn are deferred until someone asks.
 const (
 	RoleAdmin    Role = "admin"
-	RoleOperator Role = "operator"
+	RoleUser     Role = "user"
 	RoleReadonly Role = "readonly"
 )
 
@@ -38,6 +38,8 @@ const (
 	PermissionRead Permission = "read"
 	// PermissionRequest adds requesting additions for approval.
 	PermissionRequest Permission = "request"
+	// PermissionAdd adds adding at once: a request that needs no approval.
+	PermissionAdd Permission = "add"
 	// PermissionManage adds monitoring, editing, upgrading and deleting.
 	PermissionManage Permission = "manage"
 )
@@ -49,8 +51,10 @@ func (p Permission) rank() int {
 		return 1
 	case PermissionRequest:
 		return 2
-	case PermissionManage:
+	case PermissionAdd:
 		return 3
+	case PermissionManage:
+		return 4
 	default:
 		return 0
 	}

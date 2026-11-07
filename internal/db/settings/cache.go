@@ -134,6 +134,14 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("settings: list category access: %w", err)
 	}
+	blockedRows, err := c.queries.ListAllUserBlockedTags(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list blocked tags of users: %w", err)
+	}
+	blockedByUser := make(map[int64][]UserBlockedTag)
+	for _, row := range blockedRows {
+		blockedByUser[row.UserID] = append(blockedByUser[row.UserID], UserBlockedTag{TagID: row.TagID, Name: row.TagName})
+	}
 	qualityProfiles, err := c.queries.ListQualityProfiles(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("settings: list quality profiles: %w", err)
@@ -229,6 +237,7 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 	)
 	snapshot.targetProfiles = convertTargetProfiles(targetProfiles)
 	snapshot.defaultLanguages = defaultLanguages
+	snapshot.blockedTagsByUser = blockedByUser
 	return snapshot, nil
 }
 

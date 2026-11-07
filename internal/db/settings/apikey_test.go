@@ -170,7 +170,7 @@ func TestRevealAPIKey_ShowsTheOwnersSealedKeyOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateUser(owner): %v", err)
 	}
-	other, err := cache.CreateUser(t.Context(), fake, "other", "hash", settings.RoleOperator)
+	other, err := cache.CreateUser(t.Context(), fake, "other", "hash", settings.RoleUser)
 	if err != nil {
 		t.Fatalf("CreateUser(other): %v", err)
 	}

@@ -5513,6 +5513,13 @@ export interface components {
             access: components["schemas"]["CategoryGrant"][];
             tier: components["schemas"]["Tier"];
             limits: components["schemas"]["UserLimits"];
+            /** @description The tags the account is kept from. */
+            blocked_tags?: components["schemas"]["UserBlockedTag"][];
+        };
+        UserBlockedTag: {
+            /** Format: int64 */
+            tag_id: number;
+            name: string;
         };
         /** @enum {string} */
         Tier: "normal" | "advanced" | "expert";
@@ -6595,12 +6602,12 @@ export interface components {
             role: components["schemas"]["Role"];
         };
         /** @enum {string} */
-        Role: "admin" | "operator" | "readonly";
+        Role: "admin" | "user" | "readonly";
         /**
          * @description `none` is never returned: a category a caller cannot read is absent entirely, and reaching it directly is a 404 rather than a 403.
          * @enum {string}
          */
-        Permission: "none" | "read" | "request" | "manage";
+        Permission: "none" | "read" | "request" | "add" | "manage";
         Me: {
             /** Format: int64 */
             user_id: number;
@@ -10923,6 +10930,8 @@ export interface operations {
                     /** @description The libraries the account may use. An administrator manages every one regardless. */
                     access?: components["schemas"]["CategoryGrant"][];
                     limits?: components["schemas"]["UserLimits"];
+                    /** @description Tags the account is kept from, whatever its library access; items carrying one are not shown to it. */
+                    blocked_tag_ids?: number[];
                 };
             };
         };
@@ -10980,6 +10989,8 @@ export interface operations {
                     /** Format: password */
                     password?: string;
                     limits?: components["schemas"]["UserLimits"];
+                    /** @description The whole list of tags the account is kept from; absent leaves it as it is. */
+                    blocked_tag_ids?: number[];
                 };
             };
         };

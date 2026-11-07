@@ -426,9 +426,9 @@ func TestDeleteUser_TakesTheirGrantsWithThem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateCategory: %v", err)
 	}
-	// An operator, not an administrator: removing the only administrator is
+	// A user, not an administrator: removing the only administrator is
 	// refused, and this test is about grants outliving their owner.
-	user, err := cache.CreateUser(t.Context(), fake, "avs", "hash", settings.RoleOperator)
+	user, err := cache.CreateUser(t.Context(), fake, "avs", "hash", settings.RoleUser)
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}

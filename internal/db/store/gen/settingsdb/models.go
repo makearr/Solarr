@@ -343,6 +343,12 @@ type TargetProfile struct {
 	Builtin           int64
 }
 
+type UserBlockedTag struct {
+	UserID  int64
+	TagID   int64
+	TagName string
+}
+
 type UserCategoryAccess struct {
 	UserID     int64
 	CategoryID int64

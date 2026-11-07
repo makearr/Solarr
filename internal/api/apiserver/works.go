@@ -219,7 +219,7 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		WorksFilter{
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Sort: sort, Direction: direction,
 			Fresh: derefOr(params.Fresh, false), Wanted: derefOr(params.Wanted, false), CutoffUnmet: derefOr(params.CutoffUnmet, false),
-			Where: derefOr(params.Where, ""), TagIDs: carry, ExcludedTagIDs: without, AboveRating: derefOr(params.AboveRating, false),
+			Where: derefOr(params.Where, ""), TagIDs: carry, ExcludedTagIDs: append(without, blockedTagIDs(access)...), AboveRating: derefOr(params.AboveRating, false),
 			MediaType:      derefOr(params.MediaType, ""),
 			PersonID:       derefOr(params.PersonId, 0),
 			FavoriteUserID: favoriteViewer(params.Favorite, access),

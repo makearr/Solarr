@@ -696,6 +696,7 @@ const (
 
 // Defines values for Permission.
 const (
+	PermissionAdd     Permission = "add"
 	PermissionManage  Permission = "manage"
 	PermissionNone    Permission = "none"
 	PermissionRead    Permission = "read"
@@ -814,8 +815,8 @@ const (
 // Defines values for Role.
 const (
 	RoleAdmin    Role = "admin"
-	RoleOperator Role = "operator"
 	RoleReadonly Role = "readonly"
+	RoleUser     Role = "user"
 )
 
 // Defines values for RootFolderDrainState.
@@ -5968,8 +5969,11 @@ type UpdateIndexerRequest struct {
 
 // UserAccount defines model for UserAccount.
 type UserAccount struct {
-	Access    []CategoryGrant `json:"access"`
-	CreatedAt time.Time       `json:"created_at"`
+	Access []CategoryGrant `json:"access"`
+
+	// BlockedTags The tags the account is kept from.
+	BlockedTags *[]UserBlockedTag `json:"blocked_tags,omitempty"`
+	CreatedAt   time.Time         `json:"created_at"`
 
 	// HasPassword False for an account that authenticates by proxy header or API key, or the passwordless one an open-access install creates.
 	HasPassword bool  `json:"has_password"`
@@ -5980,6 +5984,12 @@ type UserAccount struct {
 	Role     Role       `json:"role"`
 	Tier     Tier       `json:"tier"`
 	Username string     `json:"username"`
+}
+
+// UserBlockedTag defines model for UserBlockedTag.
+type UserBlockedTag struct {
+	Name  string `json:"name"`
+	TagId int64  `json:"tag_id"`
 }
 
 // UserDefaults defines model for UserDefaults.
@@ -7165,6 +7175,9 @@ type CreateUserJSONBody struct {
 	// Access The libraries the account may use. An administrator manages every one regardless.
 	Access *[]CategoryGrant `json:"access,omitempty"`
 
+	// BlockedTagIds Tags the account is kept from, whatever its library access; items carrying one are not shown to it.
+	BlockedTagIds *[]int64 `json:"blocked_tag_ids,omitempty"`
+
 	// Limits What an administrator decides for an account beyond its role and grants.
 	Limits   *UserLimits `json:"limits,omitempty"`
 	Password string      `json:"password"`
@@ -7174,6 +7187,9 @@ type CreateUserJSONBody struct {
 
 // UpdateUserJSONBody defines parameters for UpdateUser.
 type UpdateUserJSONBody struct {
+	// BlockedTagIds The whole list of tags the account is kept from; absent leaves it as it is.
+	BlockedTagIds *[]int64 `json:"blocked_tag_ids,omitempty"`
+
 	// Limits What an administrator decides for an account beyond its role and grants.
 	Limits   *UserLimits `json:"limits,omitempty"`
 	Password *string     `json:"password,omitempty"`

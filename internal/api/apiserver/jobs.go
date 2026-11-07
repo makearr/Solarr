@@ -53,7 +53,7 @@ func visibilityFor(access authz.Access) jobs.Visibility {
 	role := access.Role()
 	return jobs.Visibility{
 		Categories: access.VisibleCategoryIDs(settings.PermissionRead),
-		System:     access.IsSystem() || role == settings.RoleAdmin || role == settings.RoleOperator,
+		System:     access.IsSystem() || role == settings.RoleAdmin || role == settings.RoleUser,
 	}
 }
 

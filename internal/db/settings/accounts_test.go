@@ -126,3 +126,30 @@ func TestSetRole_PromotionGrantsEveryLibrary(t *testing.T) {
 		t.Errorf("new-library permission = %q, want manage", got.Limits.NewLibraryPermission)
 	}
 }
+
+// The add grant is stored and ranks between request and manage; an account's blocked tags are replaced as a whole.
+func TestAccounts_StoreTheAddGrantAndTheBlockedTags(t *testing.T) {
+	cache, fake := newCache(t)
+	music, _ := cache.CreateCategory(t.Context(), "music", "Music", 10)
+	user, err := cache.CreateAccount(t.Context(), fake, settings.NewAccount{
+		Username: "adder", PasswordHash: "hash", Role: settings.RoleUser, Limits: cache.DefaultLimits(settings.RoleUser),
+		Access: map[int64]settings.Permission{music.ID: settings.PermissionAdd},
+	})
+	if err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+	granted := cache.Snapshot().Permission(user.ID, music.ID)
+	if granted != settings.PermissionAdd || !granted.AtLeast(settings.PermissionRequest) || granted.AtLeast(settings.PermissionManage) {
+		t.Errorf("grant = %q; want add, which includes request and not manage", granted)
+	}
+
+	if err := cache.SetUserBlockedTags(t.Context(), user.ID, []settings.UserBlockedTag{{TagID: 4, Name: "Zorbo"}, {TagID: 9, Name: "Keepme"}}); err != nil {
+		t.Fatalf("SetUserBlockedTags: %v", err)
+	}
+	if err := cache.SetUserBlockedTags(t.Context(), user.ID, []settings.UserBlockedTag{{TagID: 9, Name: "Keepme"}}); err != nil {
+		t.Fatalf("SetUserBlockedTags again: %v", err)
+	}
+	if got := cache.Snapshot().UserBlockedTags(user.ID); !reflect.DeepEqual(got, []settings.UserBlockedTag{{TagID: 9, Name: "Keepme"}}) {
+		t.Errorf("blocked tags = %v, want only Keepme", got)
+	}
+}

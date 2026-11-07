@@ -564,6 +564,27 @@ func deleteTag(ctx context.Context, queries *librarydb.Queries, id int64) error 
 	return err
 }
 
+// WorkCarriesAnyTag says whether the work carries one of the tags or one below it.
+func (p People) WorkCarriesAnyTag(ctx context.Context, workID int64, tagIDs []int64) (bool, error) {
+	if len(tagIDs) == 0 {
+		return false, nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(tagIDs)), ",")
+	arguments := make([]any, 0, len(tagIDs)+1)
+	arguments = append(arguments, workID)
+	for _, id := range tagIDs {
+		arguments = append(arguments, id)
+	}
+	var carries bool
+	err := p.store.Read().QueryRowContext(ctx,
+		`SELECT EXISTS (SELECT 1 FROM tag_assignment ta JOIN tag_closure tc ON tc.descendant_id = ta.tag_id
+		 WHERE ta.subject_type = 'work' AND ta.subject_id = ? AND tc.ancestor_id IN (`+placeholders+`))`, arguments...).Scan(&carries)
+	if err != nil {
+		return false, fmt.Errorf("library: tags of work %d: %w", workID, err)
+	}
+	return carries, nil
+}
+
 // BlockedTag is a tag an administrator blocked.
 type BlockedTag struct {
 	Name, GenreTree string

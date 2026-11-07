@@ -1447,6 +1447,24 @@ func (c *Cache) SetCategoryAccess(ctx context.Context, userID, categoryID int64,
 	})
 }
 
+// SetUserBlockedTags makes tags the whole list of tags the account is kept from.
+func (c *Cache) SetUserBlockedTags(ctx context.Context, userID int64, tags []UserBlockedTag) error {
+	if _, found := c.Snapshot().User(userID); !found {
+		return fmt.Errorf("%w: user %d", ErrNotFound, userID)
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		if err := queries.DeleteUserBlockedTags(ctx, userID); err != nil {
+			return err
+		}
+		for _, tag := range tags {
+			if err := queries.InsertUserBlockedTag(ctx, settingsdb.InsertUserBlockedTagParams{UserID: userID, TagID: tag.TagID, TagName: tag.Name}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // PasswordHash reads a user's stored hash.
 func (c *Cache) PasswordHash(ctx context.Context, username string) (string, error) {
 	row, err := c.queries.GetUserByUsername(ctx, username)

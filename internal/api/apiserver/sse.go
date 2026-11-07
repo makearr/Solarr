@@ -288,7 +288,7 @@ func visibleCategorySet(access authz.Access) map[int64]bool {
 // same reasoning as job listings: it is a question about roles.
 func allowsSystemEvents(access authz.Access) bool {
 	role := access.Role()
-	return access.IsSystem() || role == settings.RoleAdmin || role == settings.RoleOperator
+	return access.IsSystem() || role == settings.RoleAdmin || role == settings.RoleUser
 }
 
 // collect adds an event to the coalescing buffer, dropping what this connection may not see

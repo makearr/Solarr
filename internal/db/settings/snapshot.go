@@ -26,6 +26,7 @@ type Snapshot struct {
 	defaultLanguages     []string
 	languageProfileByID  map[int64]LanguageProfile
 	exclusionPatternByID map[int64]ExclusionPattern
+	blockedTagsByUser    map[int64][]UserBlockedTag
 }
 
 // Users returns every account, ordered by username.
@@ -114,6 +115,9 @@ func (s *Snapshot) Permission(userID, categoryID int64) Permission {
 	}
 	return granted
 }
+
+// UserBlockedTags are the tags the account is kept from: the items carrying one are not shown to it.
+func (s *Snapshot) UserBlockedTags(userID int64) []UserBlockedTag { return s.blockedTagsByUser[userID] }
 
 // VisibleCategoryIDs returns the categories a user may see at the given level, in snapshot
 // order (Invariant 36).

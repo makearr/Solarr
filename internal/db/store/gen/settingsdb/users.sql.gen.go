@@ -111,6 +111,15 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 	return err
 }
 
+const deleteUserBlockedTags = `-- name: DeleteUserBlockedTags :exec
+DELETE FROM user_blocked_tag WHERE user_id = ?
+`
+
+func (q *Queries) DeleteUserBlockedTags(ctx context.Context, userID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteUserBlockedTags, userID)
+	return err
+}
+
 const getPreference = `-- name: GetPreference :one
 SELECT user_id, key, value_json FROM user_preference WHERE user_id = ? AND key = ?
 `
@@ -194,6 +203,21 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (AppUs
 	return i, err
 }
 
+const insertUserBlockedTag = `-- name: InsertUserBlockedTag :exec
+INSERT INTO user_blocked_tag (user_id, tag_id, tag_name) VALUES (?, ?, ?) ON CONFLICT (user_id, tag_id) DO NOTHING
+`
+
+type InsertUserBlockedTagParams struct {
+	UserID  int64
+	TagID   int64
+	TagName string
+}
+
+func (q *Queries) InsertUserBlockedTag(ctx context.Context, arg InsertUserBlockedTagParams) error {
+	_, err := q.db.ExecContext(ctx, insertUserBlockedTag, arg.UserID, arg.TagID, arg.TagName)
+	return err
+}
+
 const listAPIKeysForUser = `-- name: ListAPIKeysForUser :many
 SELECT id, user_id, name, key_hash, created_at, last_used_at, key_sealed
 FROM api_key WHERE user_id = ? ORDER BY created_at
@@ -244,6 +268,33 @@ func (q *Queries) ListAllCategoryAccess(ctx context.Context) ([]UserCategoryAcce
 	for rows.Next() {
 		var i UserCategoryAccess
 		if err := rows.Scan(&i.UserID, &i.CategoryID, &i.Permission); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllUserBlockedTags = `-- name: ListAllUserBlockedTags :many
+SELECT user_id, tag_id, tag_name FROM user_blocked_tag ORDER BY user_id, tag_name COLLATE NOCASE
+`
+
+func (q *Queries) ListAllUserBlockedTags(ctx context.Context) ([]UserBlockedTag, error) {
+	rows, err := q.db.QueryContext(ctx, listAllUserBlockedTags)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []UserBlockedTag{}
+	for rows.Next() {
+		var i UserBlockedTag
+		if err := rows.Scan(&i.UserID, &i.TagID, &i.TagName); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -75,3 +75,12 @@ SELECT u.id, u.username, u.password_hash, u.role, u.created_at, u.ui_tier, u.ui_
   u.ui_tier_max, u.new_library_permission, u.auto_approve, k.id AS key_id
 FROM api_key k JOIN app_user u ON u.id = k.user_id
 WHERE k.key_hash = ?;
+
+-- name: ListAllUserBlockedTags :many
+SELECT user_id, tag_id, tag_name FROM user_blocked_tag ORDER BY user_id, tag_name COLLATE NOCASE;
+
+-- name: DeleteUserBlockedTags :exec
+DELETE FROM user_blocked_tag WHERE user_id = ?;
+
+-- name: InsertUserBlockedTag :exec
+INSERT INTO user_blocked_tag (user_id, tag_id, tag_name) VALUES (?, ?, ?) ON CONFLICT (user_id, tag_id) DO NOTHING;

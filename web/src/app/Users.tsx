@@ -6,7 +6,7 @@ import { api, ok } from "@/api/client";
 import { useAuthPolicy, useSetAuthRequired } from "@/lib/useAuthPolicy";
 import { useSetMyTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
-import { useCategories, useUserDefaults } from "@/lib/resources";
+import { useCategories, useTagTree, useUserDefaults } from "@/lib/resources";
 import { Button, RemoveButton } from "@/ui/Button";
 import { inputStyle, labelStyle } from "@/ui/form";
 
@@ -24,10 +24,13 @@ const TIER_RANK: Record<Tier, number> = { normal: 0, advanced: 1, expert: 2 };
 
 const PERMISSIONS: readonly { id: Permission; label: string }[] = [
   { id: "none", label: "No access" },
-  { id: "read", label: "Read" },
   { id: "request", label: "Request" },
+  { id: "add", label: "Add" },
   { id: "manage", label: "Manage" },
 ];
+
+/** Add is a request that is approved at once; the old view-only grant is listed only where an account still has one. */
+const PERMISSION_HELP = "No access: the library is not there. Request: browse and ask, an administrator approves. Add: like Request, approved at once. Manage: add, edit and delete.";
 
 const TIERS: readonly { id: Tier; label: string; blurb: string }[] = [
   { id: "normal", label: "Normal", blurb: "Browsing, wanting and adding. Everything a working library needs." },
@@ -369,7 +372,7 @@ function AccessSection() {
 
 const ROLES: readonly { id: Role; label: string; blurb: string }[] = [
   { id: "admin", label: "Administrator", blurb: "Changes settings, indexers and downloaders." },
-  { id: "operator", label: "Operator", blurb: "Works the queue; libraries are granted per category." },
+  { id: "user", label: "User", blurb: "Works the queue; libraries are granted per category." },
   { id: "readonly", label: "Read only", blurb: "Looks, and requests where allowed." },
 ];
 
@@ -386,9 +389,9 @@ export function Users({ currentUserId }: { currentUserId: number }) {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["users"] });
 
   const update = useMutation({
-    mutationFn: (change: { id: number; role?: Role; password?: string; limits?: UserLimits }) => ok(api.PATCH("/users/{id}", {
+    mutationFn: (change: { id: number; role?: Role; password?: string; limits?: UserLimits; blocked?: BlockedTag[] }) => ok(api.PATCH("/users/{id}", {
       params: { path: { id: change.id } },
-      body: { role: change.role, password: change.password, limits: change.limits },
+      body: { role: change.role, password: change.password, limits: change.limits, blocked_tag_ids: change.blocked?.map((tag) => tag.tag_id) },
     })),
     onSuccess: invalidate,
   });
@@ -428,6 +431,7 @@ export function Users({ currentUserId }: { currentUserId: number }) {
             onRole={(role) => update.mutate({ id: user.id, role })}
             onPassword={(password) => update.mutate({ id: user.id, password })}
             onLimits={(limits) => update.mutate({ id: user.id, limits })}
+            onBlocked={(blocked) => update.mutate({ id: user.id, blocked })}
             onGrant={(categoryId, permission) => grant.mutate({ id: user.id, categoryId, permission })}
             onRemove={() => remove.mutate(user.id)}
             busy={update.isPending || remove.isPending || grant.isPending}
@@ -496,12 +500,65 @@ function PermissionSelect({
       onChange={(event) => onChange(event.target.value as Permission)}
       className="rounded-md border border-border-subtle bg-canvas px-1.5 py-0.5 text-xs disabled:opacity-60"
     >
-      {PERMISSIONS.map((permission) => (
+      {(value === "read" ? [{ id: "read" as Permission, label: "View only (old)" }, ...PERMISSIONS] : PERMISSIONS).map((permission) => (
         <option key={permission.id} value={permission.id}>
           {permission.label}
         </option>
       ))}
     </select>
+  );
+}
+
+type BlockedTag = { tag_id: number; name: string };
+
+/** The tags an account is kept from: items carrying one are not shown to it, whatever its library access. */
+function BlockedTagsField({
+  who,
+  tags,
+  disabled,
+  onChange,
+}: {
+  who: string;
+  tags: readonly BlockedTag[];
+  disabled?: boolean;
+  onChange: (tags: BlockedTag[]) => void;
+}) {
+  const all = useTagTree().data ?? [];
+  const chosen = new Set(tags.map((tag) => tag.tag_id));
+  return (
+    <div className="flex flex-col gap-1.5 text-xs text-ink-muted">
+      <span title="Items with one of these tags, or a tag below it, are hidden from this account">Hide items tagged</span>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {tags.map((tag) => (
+          <span key={tag.tag_id} className="flex items-center gap-1 rounded-full border border-border-subtle px-2 py-0.5 text-ink">
+            {tag.name}
+            <button type="button" aria-label={`Stop hiding ${tag.name} from ${who}`} disabled={disabled} onClick={() => onChange(tags.filter((entry) => entry.tag_id !== tag.tag_id))}>
+              ×
+            </button>
+          </span>
+        ))}
+        <select
+          aria-label={`Hide a tag from ${who}`}
+          value=""
+          disabled={disabled}
+          onChange={(event) => {
+            const picked = all.find((tag) => tag.id === Number(event.target.value));
+            if (picked) onChange([...tags, { tag_id: picked.id, name: picked.name }]);
+          }}
+          className="rounded-md border border-border-subtle bg-canvas px-1.5 py-0.5 text-xs"
+        >
+          <option value="">Add a tag…</option>
+          {all
+            .filter((tag) => !chosen.has(tag.id))
+            .map((tag) => (
+              <option key={tag.id} value={tag.id}>
+                {tag.name}
+                {tag.genre_tree ? ` (${tag.genre_tree})` : ""}
+              </option>
+            ))}
+        </select>
+      </div>
+    </div>
   );
 }
 
@@ -652,6 +709,7 @@ function Row({
   onRole,
   onPassword,
   onLimits,
+  onBlocked,
   onGrant,
   onRemove,
   busy,
@@ -662,6 +720,7 @@ function Row({
   onRole: (role: Role) => void;
   onPassword: (password: string) => void;
   onLimits: (limits: UserLimits) => void;
+  onBlocked: (tags: BlockedTag[]) => void;
   onGrant: (categoryId: number, permission: Permission) => void;
   onRemove: () => void;
   busy: boolean;
@@ -685,20 +744,9 @@ function Row({
           </span>
         )}
 
-        <select
-          aria-label={`Role for ${user.username}`}
-          value={user.role}
-          disabled={busy}
-          onChange={(event) => onRole(event.target.value as Role)}
-          className="ml-auto rounded-md border border-border-subtle bg-canvas px-1.5 py-0.5 text-xs"
-        >
-          {ROLES.map((role) => (
-            <option key={role.id} value={role.id}>
-              {role.label}
-            </option>
-          ))}
-        </select>
-
+        <span className="ml-auto rounded-full border border-border-subtle px-1.5 py-px text-[0.6875rem] text-ink-muted">
+          {ROLES.find((role) => role.id === user.role)?.label}
+        </span>
         <button
           type="button"
           aria-expanded={open}
@@ -707,17 +755,7 @@ function Row({
                      hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2
                      focus-visible:outline-accent"
         >
-          Access
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setResetting(!resetting)}
-          className="rounded-md border border-border-subtle px-2 py-0.5 text-xs text-ink-muted
-                     hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2
-                     focus-visible:outline-accent"
-        >
-          Password
+          Edit
         </button>
 
         <RemoveButton
@@ -746,6 +784,25 @@ function Row({
 
       {open && (
         <div className="flex flex-col gap-3 rounded-md border border-border-subtle bg-canvas p-2.5">
+          <label className="flex items-center gap-2 text-xs text-ink-muted">
+            Role
+            <select
+              aria-label={`Role for ${user.username}`}
+              value={user.role}
+              disabled={busy}
+              onChange={(event) => onRole(event.target.value as Role)}
+              className="rounded-md border border-border-subtle bg-canvas px-1.5 py-0.5 text-xs"
+            >
+              {ROLES.map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="text-xs text-ink-muted" title={PERMISSION_HELP}>
+            Libraries ({PERMISSION_HELP})
+          </span>
           <AccessGrid
             who={user.username}
             libraries={libraries}
@@ -761,6 +818,14 @@ function Row({
             disabled={busy}
             onChange={onLimits}
           />
+          {!isAdmin && <BlockedTagsField who={user.username} tags={user.blocked_tags ?? []} disabled={busy} onChange={onBlocked} />}
+          <button
+            type="button"
+            onClick={() => setResetting(!resetting)}
+            className="self-start rounded-md border border-border-subtle px-2 py-0.5 text-xs text-ink-muted hover:text-ink"
+          >
+            Change password
+          </button>
         </div>
       )}
 
@@ -807,6 +872,7 @@ function AddUser({ libraries, onAdded }: { libraries: readonly Library[]; onAdde
   const [role, setRole] = useState<Role>("readonly");
   const [grants, setGrants] = useState<CategoryGrant[]>([]);
   const [limits, setLimits] = useState<UserLimits | null>(null);
+  const [blocked, setBlocked] = useState<BlockedTag[]>([]);
   const shownLimits: UserLimits = limits ?? {
     tier_default: "normal",
     tier_max: "expert",
@@ -816,13 +882,14 @@ function AddUser({ libraries, onAdded }: { libraries: readonly Library[]; onAdde
 
   const create = useMutation({
     mutationFn: () => ok(api.POST("/users", {
-      body: { username, password, role, access: grants, limits: shownLimits },
+      body: { username, password, role, access: grants, limits: shownLimits, blocked_tag_ids: blocked.map((tag) => tag.tag_id) },
     })),
     onSuccess: () => {
       setUsername("");
       setPassword("");
       setGrants([]);
       setLimits(null);
+      setBlocked([]);
       onAdded();
     },
   });
@@ -897,6 +964,7 @@ function AddUser({ libraries, onAdded }: { libraries: readonly Library[]; onAdde
         isAdmin={role === "admin"}
         onChange={setLimits}
       />
+      {role !== "admin" && <BlockedTagsField who="the new account" tags={blocked} onChange={setBlocked} />}
 
       <div className="flex flex-wrap items-center gap-2">
         <Button

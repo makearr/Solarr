@@ -30,6 +30,12 @@ type UserLimits struct {
 	AutoApprove bool
 }
 
+// UserBlockedTag is a library tag an account is kept from, by id, with its name as it was when blocked.
+type UserBlockedTag struct {
+	TagID int64
+	Name  string
+}
+
 // NewAccount is everything an account is created with, written as one transaction.
 type NewAccount struct {
 	Username     string
@@ -57,7 +63,7 @@ func (t Tier) valid() bool { return t == TierNormal || t == TierAdvanced || t ==
 func (t Tier) AtLeast(required Tier) bool { return t.rank() >= required.rank() }
 
 func (p Permission) valid() bool {
-	return p == PermissionNone || p == PermissionRead || p == PermissionRequest || p == PermissionManage
+	return p == PermissionNone || p == PermissionRead || p == PermissionRequest || p == PermissionAdd || p == PermissionManage
 }
 
 // NewLibraryPermission is the configured grant a new account gets on later libraries.
@@ -73,7 +79,7 @@ func (s *Snapshot) NewLibraryPermission() Permission {
 func (c *Cache) SetNewLibraryPermission(ctx context.Context, cl clock.Clock, permission Permission) error {
 	if !permission.valid() {
 		return config.Problems{{Path: KeyUsersNewLibraryPermission, Value: string(permission),
-			Expectation: "none, read, request or manage"}}
+			Expectation: "none, read, request, add or manage"}}
 	}
 	return c.setPolicy(ctx, cl, KeyUsersNewLibraryPermission, string(permission))
 }

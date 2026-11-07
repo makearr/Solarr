@@ -568,6 +568,10 @@ paths:
                   description: The libraries the account may use. An administrator manages every one regardless.
                   items: { $ref: "#/components/schemas/CategoryGrant" }
                 limits: { $ref: "#/components/schemas/UserLimits" }
+                blocked_tag_ids:
+                  type: array
+                  description: Tags the account is kept from, whatever its library access; items carrying one are not shown to it.
+                  items: { type: integer, format: int64 }
       responses:
         "201":
           description: Created.
@@ -602,6 +606,10 @@ paths:
                 role: { $ref: "#/components/schemas/Role" }
                 password: { type: string, format: password }
                 limits: { $ref: "#/components/schemas/UserLimits" }
+                blocked_tag_ids:
+                  type: array
+                  description: The whole list of tags the account is kept from; absent leaves it as it is.
+                  items: { type: integer, format: int64 }
       responses:
         "200":
           description: The updated account.
@@ -8629,6 +8637,17 @@ components:
         tier:
           $ref: "#/components/schemas/Tier"
         limits: { $ref: "#/components/schemas/UserLimits" }
+        blocked_tags:
+          type: array
+          description: The tags the account is kept from.
+          items: { $ref: "#/components/schemas/UserBlockedTag" }
+
+    UserBlockedTag:
+      type: object
+      required: [tag_id, name]
+      properties:
+        tag_id: { type: integer, format: int64 }
+        name: { type: string }
 
     Tier:
       type: string
@@ -9714,14 +9733,14 @@ components:
 
     Role:
       type: string
-      enum: [admin, operator, readonly]
+      enum: [admin, user, readonly]
 
     Permission:
       type: string
       description: >-
         `none` is never returned: a category a caller cannot read is absent
         entirely, and reaching it directly is a 404 rather than a 403.
-      enum: [none, read, request, manage]
+      enum: [none, read, request, add, manage]
 
     Me:
       type: object

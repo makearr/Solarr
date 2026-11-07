@@ -26,6 +26,7 @@ type fakeWorkEditor struct {
 	merged         string
 	deleted        int64
 	blocked        string
+	carrying       map[int64]bool
 }
 
 func (f *fakeWorkEditor) GetWorkEdit(context.Context, int64) (apiserver.WorkEditRow, error) {
@@ -74,6 +75,10 @@ func (f *fakeWorkEditor) MergeTag(_ context.Context, fromID, intoID int64) error
 func (f *fakeWorkEditor) DeleteTag(_ context.Context, id int64) error {
 	f.deleted = id
 	return f.err
+}
+
+func (f *fakeWorkEditor) WorkCarriesAnyTag(_ context.Context, workID int64, _ []int64) (bool, error) {
+	return f.carrying[workID], f.err
 }
 
 func (f *fakeWorkEditor) BlockTag(_ context.Context, id, _ int64) error {
@@ -272,5 +277,31 @@ func TestListLibraryTags_AsksForTheLibrary(t *testing.T) {
 	}
 	if !reflect.DeepEqual(fixture.workEditor.libraryTagsFor, []int64{1}) {
 		t.Errorf("asked for libraries %v, want [1]", fixture.workEditor.libraryTagsFor)
+	}
+}
+
+// A tag an administrator keeps an account from leaves the list for it and makes the work a 404, whatever its library access.
+func TestBlockedTagsOfAnAccount_HideTheWorkFromThatAccount(t *testing.T) {
+	fixture, cookies := visibleWorksFixture(t)
+	fixture.workEditor.carrying = map[int64]bool{1: true}
+	listener := fixture.cache.Snapshot().Users()
+	var userID int64
+	for _, user := range listener {
+		if user.Role == settings.RoleReadonly {
+			userID = user.ID
+		}
+	}
+	if err := fixture.cache.SetUserBlockedTags(t.Context(), userID, []settings.UserBlockedTag{{TagID: 1, Name: "Rock"}}); err != nil {
+		t.Fatal(err)
+	}
+	if recorder := fixture.do(authedGet(t, cookies, "/api/v1/works/1")); recorder.Code != http.StatusNotFound {
+		t.Errorf("a work with the blocked tag: status %d, want 404", recorder.Code)
+	}
+	if recorder := fixture.do(authedGet(t, cookies, "/api/v1/works")); recorder.Code != http.StatusOK {
+		t.Fatalf("list: status %d", recorder.Code)
+	}
+	excluded := fixture.works.lastFilter.ExcludedTagIDs
+	if len(excluded) != 1 || excluded[0] != 1 {
+		t.Errorf("the list excluded %v, want the blocked tag 1", excluded)
 	}
 }

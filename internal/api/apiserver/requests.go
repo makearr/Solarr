@@ -69,7 +69,8 @@ func (s *Server) fileRequest(w http.ResponseWriter, r *http.Request, access auth
 		UserID: access.UserID(), CategoryID: body.CategoryId, ExternalRef: body.Provider + ":" + body.ExternalId,
 		MediaType: category.MediaType, ScopeJSON: string(scope), State: requestPending,
 	}
-	if user, known := access.Snapshot().User(access.UserID()); known && user.Limits.AutoApprove {
+	user, known := access.Snapshot().User(access.UserID())
+	if access.Permission(body.CategoryId).AtLeast(settings.PermissionAdd) || (known && user.Limits.AutoApprove) {
 		result, err := s.performAdd(r.Context(), access.UserID(), body)
 		if err != nil {
 			s.writeAddError(w, err)
