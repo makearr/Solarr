@@ -284,6 +284,15 @@ func (s *Server) GetPerson(w http.ResponseWriter, r *http.Request, id int64) {
 		writeError(w, s.logger, err)
 		return
 	}
+	if access, err := authz.FromContext(r.Context()); err == nil && len(blockedTagIDs(access)) > 0 {
+		visibleCredits := make([]PersonCreditRow, 0, len(credits))
+		for _, credit := range credits {
+			if !s.keptFromWork(r.Context(), access, credit.Work.ID) {
+				visibleCredits = append(visibleCredits, credit)
+			}
+		}
+		credits = visibleCredits
+	}
 	detail.Credits = creditViews(credits, s.wall.Now())
 	writeJSON(w, s.logger, http.StatusOK, detail)
 }

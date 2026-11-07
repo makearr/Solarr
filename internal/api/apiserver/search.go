@@ -91,7 +91,21 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request, params gen.Searc
 		return
 	}
 
-	writeJSON(w, s.logger, http.StatusOK, buildSearchResults(rows))
+	writeJSON(w, s.logger, http.StatusOK, buildSearchResults(s.withoutKeptWorks(r.Context(), access, rows)))
+}
+
+// withoutKeptWorks drops the results carrying a tag the account is blocked from.
+func (s *Server) withoutKeptWorks(ctx context.Context, access authz.Access, rows []SearchResultRow) []SearchResultRow {
+	if len(blockedTagIDs(access)) == 0 {
+		return rows
+	}
+	kept := make([]SearchResultRow, 0, len(rows))
+	for _, row := range rows {
+		if !s.keptFromWork(ctx, access, row.Work.ID) {
+			kept = append(kept, row)
+		}
+	}
+	return kept
 }
 
 // buildSearchResults never returns nil, so a query matching nothing encodes as "[]"
