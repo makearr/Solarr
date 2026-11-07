@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/screen"
@@ -27,17 +26,11 @@ type Module struct {
 	SceneNumberingDown func() bool
 	// Registrations are job types TV brings besides the ones named below, with their handlers.
 	Registrations []media.JobRegistration
-	Sweep         scan.Sweep
-	// Hunt searches for one wanted season and sends the best release; nil leaves TV unhunted.
-	Hunt func(ctx context.Context, itemID int64) (plan.Outcome, error)
-	// Adder looks a work up and adds it; nil leaves the type without an add.
-	Adder media.Adding
+	// Wiring is the add, pictures, refresh and hunt services.
+	media.Wiring
+	Sweep scan.Sweep
 	// Files places a library file nothing identified; nil leaves such files to wait.
 	Files media.PlacingFiles
-	// Pictures lists and keeps the providers' pictures of a work; nil leaves the picture unchosen.
-	Pictures media.Picturing
-	// Refresh reads one series again from its sources; nil leaves it unrefreshable.
-	Refresh func(ctx context.Context, workID int64) (duplicate bool, err error)
 	// Feed is TV's part of the RSS sync.
 	Feed
 	// CutoffJob is TV's part of the cutoff check.
@@ -106,14 +99,6 @@ func (m Module) MonitorFranchise(ctx context.Context, categoryID, franchiseID in
 // ScanSweep implements media.Scanning.
 func (m Module) ScanSweep() scan.Sweep { return m.Sweep }
 
-// LookupWorks implements media.Adding.
-func (m Module) LookupWorks(ctx context.Context, lookup media.AddLookup) ([]media.AddCandidate, error) {
-	if m.Adder == nil {
-		return nil, media.ErrNotWired
-	}
-	return m.Adder.LookupWorks(ctx, lookup)
-}
-
 // HealthChecks implements media.Healthy: TMDB, the one TV provider that needs the owner's own key, is not set up.
 func (m Module) HealthChecks(libraries int) []media.HealthCheck {
 	if libraries == 0 {
@@ -157,44 +142,12 @@ func (m Module) ResolveListEntry(ctx context.Context, entry media.ListEntry) (me
 	return m.Lists.ResolveListEntry(ctx, entry)
 }
 
-// AddWork implements media.Adding.
-func (m Module) AddWork(ctx context.Context, request media.AddRequest) (media.AddResult, error) {
-	if m.Adder == nil {
-		return media.AddResult{}, media.ErrNotWired
-	}
-	return m.Adder.AddWork(ctx, request)
-}
-
 // PlaceFile implements media.PlacingFiles.
 func (m Module) PlaceFile(ctx context.Context, categoryID, mediaObjectID int64, placement media.Placement, wholeFolder bool) (int64, int64, error) {
 	if m.Files == nil {
 		return 0, 0, media.ErrNotWired
 	}
 	return m.Files.PlaceFile(ctx, categoryID, mediaObjectID, placement, wholeFolder)
-}
-
-// WorkPictures implements media.Picturing.
-func (m Module) WorkPictures(ctx context.Context, workID int64) ([]media.ImageOption, error) {
-	if m.Pictures == nil {
-		return nil, media.ErrNotWired
-	}
-	return m.Pictures.WorkPictures(ctx, workID)
-}
-
-// PickWorkPicture implements media.Picturing.
-func (m Module) PickWorkPicture(ctx context.Context, workID int64, imageURL string) error {
-	if m.Pictures == nil {
-		return media.ErrNotWired
-	}
-	return m.Pictures.PickWorkPicture(ctx, workID, imageURL)
-}
-
-// RefreshWork implements media.Refreshing.
-func (m Module) RefreshWork(ctx context.Context, workID int64) (bool, error) {
-	if m.Refresh == nil {
-		return false, media.ErrNotWired
-	}
-	return m.Refresh(ctx, workID)
 }
 
 // NumberingChoices implements media.Renumbering.
@@ -221,14 +174,6 @@ func (m Module) ApplyNumbering(ctx context.Context, workID int64, basis string) 
 	return m.Renumber.ApplyNumbering(ctx, workID, basis)
 }
 
-// HuntSearch implements media.Hunting.
-func (m Module) HuntSearch(ctx context.Context, itemID int64) (plan.Outcome, error) {
-	if m.Hunt == nil {
-		return plan.OutcomeNotWanted, nil
-	}
-	return m.Hunt(ctx, itemID)
-}
-
 // ReleaseLabel implements media.Labelling.
 func (Module) ReleaseLabel(releaseTitle, itemRef string, now time.Time) string {
 	return ReleaseLabel(releaseTitle, itemRef, now)
@@ -236,10 +181,8 @@ func (Module) ReleaseLabel(releaseTitle, itemRef string, now time.Time) string {
 
 // RegisterJobs implements media.Jobs.
 func (m Module) RegisterJobs(register media.JobRegistrar) error {
-	for _, registration := range m.Registrations {
-		if err := register(registration.Definition, registration.Handler); err != nil {
-			return err
-		}
+	if err := media.RegisterAll(register, m.Registrations); err != nil {
+		return err
 	}
 	if m.SharedFiles != nil {
 		if err := register(SharedFilesDefinition, m.SharedFiles); err != nil {

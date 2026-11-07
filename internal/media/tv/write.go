@@ -147,7 +147,7 @@ func ToWrite(series Series, options WriteOptions) library.SeriesWrite {
 		source = series.Sources[0]
 	}
 	write := library.SeriesWrite{
-		Work:             library.WorkIdentity{MediaType: MediaType, CanonicalTitle: series.Title, SortTitle: SortTitle(series.Title)},
+		Work:             library.WorkIdentity{MediaType: MediaType, CanonicalTitle: series.Title, SortTitle: library.SortTitle(series.Title)},
 		Year:             yearPtr,
 		OriginalLanguage: series.OriginalLanguage,
 		RuntimeMs:        runtimePtr,
@@ -343,15 +343,4 @@ func orDefault(value, fallback string) string {
 		return fallback
 	}
 	return value
-}
-
-// SortTitle lowercases a title, collapses whitespace and drops a leading article, so "The Show" sorts under S.
-func SortTitle(title string) string {
-	lowered := strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(title))), " ")
-	for _, article := range []string{"the ", "a ", "an "} {
-		if rest, ok := strings.CutPrefix(lowered, article); ok {
-			return rest
-		}
-	}
-	return lowered
 }

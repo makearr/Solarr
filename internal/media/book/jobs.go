@@ -29,12 +29,12 @@ func (f Format) RefreshJobType() jobs.Type { return jobs.Type(f.MediaType + ".re
 
 // RefreshDefinition declares the format's sweep: background metadata work, retried on transient failure.
 func (f Format) RefreshDefinition() jobs.Definition {
-	return jobs.Definition{Name: "Refreshing " + lower(f.Many), Type: f.RefreshJobType(), Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 3}
+	return works.RefreshDefinition("Refreshing "+lower(f.Many), f.RefreshJobType())
 }
 
 // EnqueueRefresh submits one refresh sweep, one at a time (Invariant 16).
 func (f Format) EnqueueRefresh(ctx context.Context, queue *jobs.Queue) (jobs.EnqueueResult, error) {
-	return queue.Enqueue(ctx, jobs.Request{Type: f.RefreshJobType(), ActionKey: string(f.RefreshJobType()), Priority: jobs.PriorityLow, Payload: []byte("{}")})
+	return works.EnqueueRefresh(ctx, queue, f.RefreshJobType())
 }
 
 // NewRefreshJob is the shared refresh sweep over the format's books that are due, so new covers, descriptions and
@@ -66,7 +66,7 @@ func (f Format) ArtworkJobType() jobs.Type { return jobs.Type(f.MediaType + ".ar
 
 // ArtworkDefinition declares the format's picture sweep.
 func (f Format) ArtworkDefinition() jobs.Definition {
-	return jobs.Definition{Name: "Fetching " + lower(f.One) + " covers", Type: f.ArtworkJobType(), Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 1}
+	return works.ArtworkDefinition("Fetching "+lower(f.One)+" covers", f.ArtworkJobType())
 }
 
 // NewArtworkJob keeps the format's covers, publisher logos and author photos in the picture cache.
@@ -76,7 +76,7 @@ func (f Format) NewArtworkJob(reader picturesweep.Reader, cache picturesweep.Cac
 
 // EnqueueArtwork submits one picture sweep.
 func (f Format) EnqueueArtwork(ctx context.Context, queue *jobs.Queue) (jobs.EnqueueResult, error) {
-	return queue.Enqueue(ctx, jobs.Request{Type: f.ArtworkJobType(), ActionKey: string(f.ArtworkJobType()), Priority: jobs.PriorityLow})
+	return works.EnqueueArtwork(ctx, queue, f.ArtworkJobType())
 }
 
 // RenameConfig is what naming a library's book files needs (Readarr's Rename Books); renamejob.Engine does the rest.

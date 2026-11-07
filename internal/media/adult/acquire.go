@@ -122,13 +122,7 @@ type CutoffJob struct {
 }
 
 func (j CutoffJob) shared() works.Cutoff {
-	return works.Cutoff{
-		Desired: j.Desired, Recycle: j.Recycle, Versions: true,
-		Page: func(ctx context.Context, afterID, limit int64) ([]library.CutoffItem, error) {
-			return j.Desired.CutoffPageOf(ctx, MediaType, afterID, limit)
-		},
-		Files: func(ctx context.Context, itemID int64) ([]works.File, error) { return itemFiles(ctx, j.Reader, itemID) },
-	}
+	return works.VersionedCutoff(MediaType, j.Desired, j.Reader, j.Recycle)
 }
 
 // CutoffPage implements cutoff.Check.

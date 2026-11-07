@@ -68,7 +68,7 @@ func ToWrite(movie Movie, options WriteOptions) library.SeriesWrite {
 		availability = DefaultAvailability
 	}
 	write := library.SeriesWrite{
-		Work:                library.WorkIdentity{MediaType: MediaType, CanonicalTitle: movie.Title, SortTitle: SortTitle(movie.Title)},
+		Work:                library.WorkIdentity{MediaType: MediaType, CanonicalTitle: movie.Title, SortTitle: library.SortTitle(movie.Title)},
 		Year:                yearPtr,
 		OriginalLanguage:    movie.OriginalLanguage,
 		RuntimeMs:           runtimePtr,
@@ -166,15 +166,4 @@ func fieldWrites(movie Movie, source string, now time.Time) []library.SeriesFiel
 		}
 	}
 	return fields
-}
-
-// SortTitle lowercases a title, collapses whitespace and drops a leading article, so "The Example Film" sorts under M.
-func SortTitle(title string) string {
-	lowered := strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(title))), " ")
-	for _, article := range []string{"the ", "a ", "an "} {
-		if rest, ok := strings.CutPrefix(lowered, article); ok {
-			return rest
-		}
-	}
-	return lowered
 }

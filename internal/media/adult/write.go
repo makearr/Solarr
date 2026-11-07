@@ -46,7 +46,7 @@ func ToWrite(scene Scene, now time.Time) library.SeriesWrite {
 		source = scene.Sources[0]
 	}
 	write := library.SeriesWrite{
-		Work:             library.WorkIdentity{MediaType: MediaType, CanonicalTitle: scene.Title, SortTitle: SortTitle(scene.Title)},
+		Work:             library.WorkIdentity{MediaType: MediaType, CanonicalTitle: scene.Title, SortTitle: library.SortTitle(scene.Title)},
 		Year:             yearPtr,
 		RuntimeMs:        runtimePtr,
 		Description:      scene.Overview,
@@ -139,17 +139,6 @@ func fieldWrites(scene Scene, source string, now time.Time) []library.SeriesFiel
 		}
 	}
 	return fields
-}
-
-// SortTitle lowercases a title, collapses whitespace and drops a leading article.
-func SortTitle(title string) string {
-	lowered := strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(title))), " ")
-	for _, article := range []string{"the ", "a ", "an "} {
-		if rest, ok := strings.CutPrefix(lowered, article); ok {
-			return rest
-		}
-	}
-	return lowered
 }
 
 // yearString is a year as text, empty when unknown.

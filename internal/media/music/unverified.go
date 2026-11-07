@@ -117,7 +117,7 @@ func (c Committer) IdentifyUnverified(
 	if known, found, err := c.identity.KnownWork(ctx, best.ExternalID.Provider, best.ExternalID.ExternalID); err != nil {
 		return Placed{}, fmt.Errorf("music: identify unverified work %d: %w", fromWorkID, err)
 	} else if found {
-		work.CanonicalTitle, work.SortTitle = known.Title, SortTitle(known.Title)
+		work.CanonicalTitle, work.SortTitle = known.Title, library.SortTitle(known.Title)
 	}
 	locations, err := c.identity.WorkFileRoots(ctx, fromWorkID)
 	if err != nil {

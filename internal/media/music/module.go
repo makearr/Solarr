@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/parse"
 	"github.com/makearr/Solarr/internal/media"
@@ -22,17 +21,11 @@ const MediaType media.Key = "music"
 type Module struct {
 	// Registrations are the job types music brings, with their handlers.
 	Registrations []media.JobRegistration
-	Sweep         scan.Sweep
-	// Hunt searches for one wanted album and sends the best release; nil leaves music unhunted.
-	Hunt func(ctx context.Context, itemID int64) (plan.Outcome, error)
-	// Adder looks a work up and adds it; nil leaves the type without an add.
-	Adder media.Adding
+	// Wiring is the add, pictures, refresh and hunt services.
+	media.Wiring
+	Sweep scan.Sweep
 	// Files places a library file nothing identified; nil leaves such files to wait.
 	Files media.PlacingFiles
-	// Pictures lists and keeps the providers' pictures of a work; nil leaves the picture unchosen.
-	Pictures media.Picturing
-	// Refresh reads one album again from its sources; nil leaves it unrefreshable.
-	Refresh func(ctx context.Context, workID int64) (duplicate bool, err error)
 	// Realign places an album's claimed files on its tracks; nil leaves merged files where they were.
 	Realign func(ctx context.Context, workID int64) error
 	// Rename is what renaming a music library needs; nil leaves music without a rename.
@@ -49,22 +42,6 @@ type Module struct {
 	Searching
 }
 
-// LookupWorks implements media.Adding.
-func (m Module) LookupWorks(ctx context.Context, lookup media.AddLookup) ([]media.AddCandidate, error) {
-	if m.Adder == nil {
-		return nil, media.ErrNotWired
-	}
-	return m.Adder.LookupWorks(ctx, lookup)
-}
-
-// AddWork implements media.Adding.
-func (m Module) AddWork(ctx context.Context, request media.AddRequest) (media.AddResult, error) {
-	if m.Adder == nil {
-		return media.AddResult{}, media.ErrNotWired
-	}
-	return m.Adder.AddWork(ctx, request)
-}
-
 // PlaceFile implements media.PlacingFiles.
 func (m Module) PlaceFile(ctx context.Context, categoryID, mediaObjectID int64, placement media.Placement, wholeFolder bool) (int64, int64, error) {
 	if m.Files == nil {
@@ -73,44 +50,12 @@ func (m Module) PlaceFile(ctx context.Context, categoryID, mediaObjectID int64, 
 	return m.Files.PlaceFile(ctx, categoryID, mediaObjectID, placement, wholeFolder)
 }
 
-// WorkPictures implements media.Picturing.
-func (m Module) WorkPictures(ctx context.Context, workID int64) ([]media.ImageOption, error) {
-	if m.Pictures == nil {
-		return nil, media.ErrNotWired
-	}
-	return m.Pictures.WorkPictures(ctx, workID)
-}
-
-// PickWorkPicture implements media.Picturing.
-func (m Module) PickWorkPicture(ctx context.Context, workID int64, imageURL string) error {
-	if m.Pictures == nil {
-		return media.ErrNotWired
-	}
-	return m.Pictures.PickWorkPicture(ctx, workID, imageURL)
-}
-
-// RefreshWork implements media.Refreshing.
-func (m Module) RefreshWork(ctx context.Context, workID int64) (bool, error) {
-	if m.Refresh == nil {
-		return false, media.ErrNotWired
-	}
-	return m.Refresh(ctx, workID)
-}
-
 // AfterMerge implements media.Merging: the files an album took over are placed on its own tracklist.
 func (m Module) AfterMerge(ctx context.Context, keepID int64) error {
 	if m.Realign == nil {
 		return nil
 	}
 	return m.Realign(ctx, keepID)
-}
-
-// HuntSearch implements media.Hunting.
-func (m Module) HuntSearch(ctx context.Context, itemID int64) (plan.Outcome, error) {
-	if m.Hunt == nil {
-		return plan.OutcomeNotWanted, nil
-	}
-	return m.Hunt(ctx, itemID)
 }
 
 // NameFiles implements media.Renaming.
@@ -123,12 +68,7 @@ func (m Module) NameFiles(ctx context.Context, category settings.Category, workI
 
 // RegisterJobs implements media.Jobs.
 func (m Module) RegisterJobs(register media.JobRegistrar) error {
-	for _, registration := range m.Registrations {
-		if err := register(registration.Definition, registration.Handler); err != nil {
-			return err
-		}
-	}
-	return nil
+	return media.RegisterAll(register, m.Registrations)
 }
 
 // ScanSweep implements media.Scanning.

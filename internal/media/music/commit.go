@@ -332,7 +332,7 @@ func (c Committer) CommitMatchedUnit(
 	}
 	if found {
 		// Tags said "HEKA" where MusicBrainz says "Heka": a known album is named canonically.
-		work.CanonicalTitle, work.SortTitle = known.Title, SortTitle(known.Title)
+		work.CanonicalTitle, work.SortTitle = known.Title, library.SortTitle(known.Title)
 		if known.ArtistName != "" {
 			artist = known.ArtistName
 		}
@@ -341,7 +341,7 @@ func (c Committer) CommitMatchedUnit(
 		}
 	} else if matched != nil && matched.AlbumTitle != "" {
 		// A new album is named as enrichment will name it, or every import showed up as a rename at once.
-		work.CanonicalTitle, work.SortTitle = matched.AlbumTitle, SortTitle(matched.AlbumTitle)
+		work.CanonicalTitle, work.SortTitle = matched.AlbumTitle, library.SortTitle(matched.AlbumTitle)
 		if matched.ArtistName != "" {
 			artist = matched.ArtistName
 		}
@@ -714,7 +714,7 @@ func unitWorkIdentity(sourceRoot string, unit inspect.Unit, tags mediatool.Tags)
 	if title == "" {
 		_, title = folderNames(sourceRoot, unit.Directory)
 	}
-	return library.WorkIdentity{MediaType: "music", CanonicalTitle: title, SortTitle: SortTitle(title)}
+	return library.WorkIdentity{MediaType: "music", CanonicalTitle: title, SortTitle: library.SortTitle(title)}
 }
 
 // releaseEditionLink is the placeholder edition for a release album matching chose, the same

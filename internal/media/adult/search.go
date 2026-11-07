@@ -100,7 +100,7 @@ func (b sceneSpec) Wanted(ctx context.Context, item librarydb.DesiredItem, _ int
 	if s.Settings == nil {
 		return w, false, nil
 	}
-	files, err := itemFiles(ctx, s.Reader, item.ID)
+	files, err := works.ItemFiles(ctx, s.Reader, item.ID)
 	if err != nil {
 		return w, false, err
 	}
@@ -186,19 +186,3 @@ func (w wanted) isTheScene(name string) bool {
 
 // compact is a name with no spaces: how scene groups write a studio.
 func compact(name string) string { return strings.ReplaceAll(NameKey(name), " ", "") }
-
-// itemFiles are a scene's files as the cutoff check and the upgrade search judge them.
-func itemFiles(ctx context.Context, reader library.SeriesReader, itemID int64) ([]works.File, error) {
-	files, err := reader.ItemFiles(ctx, itemID)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]works.File, len(files))
-	for index, file := range files {
-		out[index] = works.File{
-			MediaObjectID: file.File.MediaObjectID, AddedAt: file.AddedAt, Measured: file.Measured, Monitored: file.Monitored,
-			Facts: releasefacts.FromFile(file.File),
-		}
-	}
-	return out, nil
-}

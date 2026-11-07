@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/works"
@@ -19,15 +18,9 @@ type Module struct {
 	Format Format
 	// Registrations are the job types the format brings, with their handlers.
 	Registrations []media.JobRegistration
-	Sweep         scan.Sweep
-	// Adder looks a book up and adds it; nil leaves the type without an add.
-	Adder media.Adding
-	// Pictures lists and keeps the providers' covers of a book; nil leaves the cover unchosen.
-	Pictures media.Picturing
-	// Refresh reads one book again from its sources; nil leaves it unrefreshable.
-	Refresh func(ctx context.Context, workID int64) (duplicate bool, err error)
-	// Hunt searches for one wanted book and sends the best release; nil leaves books unhunted.
-	Hunt func(ctx context.Context, itemID int64) (plan.Outcome, error)
+	// Wiring is the add, pictures, refresh and hunt services.
+	media.Wiring
+	Sweep scan.Sweep
 	// Feed is the format's part of the RSS sync.
 	Feed
 	// CutoffJob is the format's part of the cutoff check.
@@ -109,62 +102,9 @@ func (m Module) NameFiles(ctx context.Context, category settings.Category, workI
 // ScanSweep implements media.Scanning.
 func (m Module) ScanSweep() scan.Sweep { return m.Sweep }
 
-// LookupWorks implements media.Adding.
-func (m Module) LookupWorks(ctx context.Context, lookup media.AddLookup) ([]media.AddCandidate, error) {
-	if m.Adder == nil {
-		return nil, media.ErrNotWired
-	}
-	return m.Adder.LookupWorks(ctx, lookup)
-}
-
-// AddWork implements media.Adding.
-func (m Module) AddWork(ctx context.Context, request media.AddRequest) (media.AddResult, error) {
-	if m.Adder == nil {
-		return media.AddResult{}, media.ErrNotWired
-	}
-	return m.Adder.AddWork(ctx, request)
-}
-
-// WorkPictures implements media.Picturing.
-func (m Module) WorkPictures(ctx context.Context, workID int64) ([]media.ImageOption, error) {
-	if m.Pictures == nil {
-		return nil, media.ErrNotWired
-	}
-	return m.Pictures.WorkPictures(ctx, workID)
-}
-
-// PickWorkPicture implements media.Picturing.
-func (m Module) PickWorkPicture(ctx context.Context, workID int64, imageURL string) error {
-	if m.Pictures == nil {
-		return media.ErrNotWired
-	}
-	return m.Pictures.PickWorkPicture(ctx, workID, imageURL)
-}
-
-// RefreshWork implements media.Refreshing.
-func (m Module) RefreshWork(ctx context.Context, workID int64) (bool, error) {
-	if m.Refresh == nil {
-		return false, media.ErrNotWired
-	}
-	return m.Refresh(ctx, workID)
-}
-
-// HuntSearch implements media.Hunting.
-func (m Module) HuntSearch(ctx context.Context, itemID int64) (plan.Outcome, error) {
-	if m.Hunt == nil {
-		return plan.OutcomeNotWanted, nil
-	}
-	return m.Hunt(ctx, itemID)
-}
-
 // RegisterJobs implements media.Jobs.
 func (m Module) RegisterJobs(register media.JobRegistrar) error {
-	for _, registration := range m.Registrations {
-		if err := register(registration.Definition, registration.Handler); err != nil {
-			return err
-		}
-	}
-	return nil
+	return media.RegisterAll(register, m.Registrations)
 }
 
 // NamingScheme implements media.Naming.

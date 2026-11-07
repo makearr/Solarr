@@ -108,36 +108,17 @@ var defaultOptions = naming.Options{ReplaceIllegalCharacters: true, ColonReplace
 
 // NamingFor resolves a library's stored profile; nil is the scheme's default preset.
 func (f Format) NamingFor(profile *settings.NamingProfile) Naming {
-	if profile == nil {
-		return Naming{Formats: f.NamingScheme().Default().Formats, Options: defaultOptions, RenameFiles: true}
-	}
-	return Naming{
-		Formats: profile.Formats,
-		Options: naming.Options{
-			ReplaceIllegalCharacters: profile.ReplaceIllegalCharacters,
-			ColonReplacement:         naming.ColonReplacement(profile.ColonReplacement),
-		},
-		RenameFiles: profile.RenameFiles,
-	}
+	return Naming(f.NamingScheme().Resolve(profile, defaultOptions))
 }
 
 // DefaultNamingProfile is NamingFor(nil) in stored form.
 func (f Format) DefaultNamingProfile() settings.NamingProfile {
-	return settings.NamingProfile{
-		RenameFiles: true, ReplaceIllegalCharacters: defaultOptions.ReplaceIllegalCharacters,
-		ColonReplacement: string(defaultOptions.ColonReplacement), Formats: f.NamingScheme().Default().Formats,
-	}
+	return f.NamingScheme().DefaultProfile(defaultOptions)
 }
 
 // ValidateNaming is settings.NamingValidator for the format.
 func (f Format) ValidateNaming(profile settings.NamingProfile) error {
-	if err := f.NamingScheme().Validate(profile.Formats); err != nil {
-		return err
-	}
-	if !naming.ColonReplacement(profile.ColonReplacement).Valid() {
-		return fmt.Errorf("naming: unknown colon replacement %q", profile.ColonReplacement)
-	}
-	return nil
+	return f.NamingScheme().ValidateProfile(profile)
 }
 
 // FileNaming is every fact a book file's name can draw on; a zero field renders as absent.

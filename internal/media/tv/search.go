@@ -124,7 +124,7 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 	if err := s.addUpgrades(ctx, item, only, detail, &w); err != nil {
 		return wanted{}, err
 	}
-	w.names = w.titles()
+	w.names = parsetv.CleanTitleSet(w.title, w.aliases)
 	switch {
 	case runtimeCount > 0:
 		w.runtimeMs = runtimeSum / runtimeCount
@@ -183,17 +183,6 @@ func otherQueryIDs(ids map[string]string) map[string]string {
 		}
 	}
 	return out
-}
-
-// titles are every name a release may call the series by, cleaned for comparison.
-func (w wanted) titles() map[string]bool {
-	names := map[string]bool{}
-	for _, title := range append([]string{w.title}, w.aliases...) {
-		if clean := parsetv.CleanTitle(title); clean != "" {
-			names[clean] = true
-		}
-	}
-	return names
 }
 
 // maxSceneSeasons bounds the scene seasons one TheTVDB season is asked as.

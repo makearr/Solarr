@@ -82,7 +82,7 @@ func (c Consumer) trackPass(ctx context.Context, out *batchResult, files []pendi
 		})
 		out.identify(file.index, library.WorkLink{
 			Provider: ProviderReleaseGroup, ExternalID: home.MBID, Confidence: confidence,
-			Work:         library.WorkIdentity{MediaType: "music", CanonicalTitle: home.Title, SortTitle: SortTitle(home.Title)},
+			Work:         library.WorkIdentity{MediaType: "music", CanonicalTitle: home.Title, SortTitle: library.SortTitle(home.Title)},
 			RootFolderID: out.rootFolderID, MediaObjectID: out.mediaObjectIDs[file.index],
 		}, TrackFile{MediaObjectID: out.mediaObjectIDs[file.index], Title: local.Title.Value, RecordingMBID: recording.RecordingMBID})
 	}

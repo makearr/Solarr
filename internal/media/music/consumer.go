@@ -1218,7 +1218,7 @@ func tagSourceFor(root settings.RootFolder, observed []scan.Observed) Resolved {
 func matchedWorkIdentity(observed scan.Observed, group musicbrainz.ReleaseGroup) library.WorkIdentity {
 	identity := newWorkIdentity(observed)
 	if group.Title != "" {
-		identity.CanonicalTitle, identity.SortTitle = group.Title, SortTitle(group.Title)
+		identity.CanonicalTitle, identity.SortTitle = group.Title, library.SortTitle(group.Title)
 	}
 	identity.Subtype = group.PrimaryType
 	return identity
@@ -1229,7 +1229,7 @@ func newWorkIdentity(observed scan.Observed) library.WorkIdentity {
 	if title == "" {
 		title = albumTitleFallback(observed.File.RelPath)
 	}
-	return library.WorkIdentity{MediaType: "music", CanonicalTitle: title, SortTitle: SortTitle(title)}
+	return library.WorkIdentity{MediaType: "music", CanonicalTitle: title, SortTitle: library.SortTitle(title)}
 }
 
 // newEditionLink resolves the release (edition-level) MBID, when the file carries

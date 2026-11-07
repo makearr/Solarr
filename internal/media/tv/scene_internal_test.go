@@ -52,7 +52,7 @@ func TestAScenePackHoldsTheEpisodesTheSceneReleasesUnderItsSeason(t *testing.T) 
 	for _, episode := range episodes {
 		w.missing[episode.Number] = episode
 	}
-	w.names = w.titles()
+	w.names = parsetv.CleanTitleSet(w.title, w.aliases)
 	for name, want := range map[string][]int{
 		"Example.Show.S01.1080p.WEB-DL-GRP":     {1, 2},
 		"Example.Show.S02.1080p.WEB-DL-GRP":     {3, 4},

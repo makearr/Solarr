@@ -741,3 +741,14 @@ func containsInt(list []int, n int) bool {
 	}
 	return false
 }
+
+// CleanTitleSet is every name a release may call a work by (its title and aliases), cleaned for comparison.
+func CleanTitleSet(title string, aliases []string) map[string]bool {
+	names := map[string]bool{}
+	for _, name := range append([]string{title}, aliases...) {
+		if clean := CleanTitle(name); clean != "" {
+			names[clean] = true
+		}
+	}
+	return names
+}

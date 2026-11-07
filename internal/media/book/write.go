@@ -56,7 +56,7 @@ func ToWrite(format Format, book Book, now time.Time) library.SeriesWrite {
 		source = book.Sources[0]
 	}
 	write := library.SeriesWrite{
-		Work:             library.WorkIdentity{MediaType: format.MediaType, CanonicalTitle: book.Title, SortTitle: SortTitle(book.Title)},
+		Work:             library.WorkIdentity{MediaType: format.MediaType, CanonicalTitle: book.Title, SortTitle: library.SortTitle(book.Title)},
 		Year:             yearPtr,
 		OriginalLanguage: book.Language,
 		RuntimeMs:        runtimePtr,
@@ -191,15 +191,4 @@ func fieldWrites(book Book, source string, now time.Time) []library.SeriesFieldW
 		}
 	}
 	return fields
-}
-
-// SortTitle lowercases a title, collapses whitespace and drops a leading article.
-func SortTitle(title string) string {
-	lowered := strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(title))), " ")
-	for _, article := range []string{"the ", "a ", "an "} {
-		if rest, ok := strings.CutPrefix(lowered, article); ok {
-			return rest
-		}
-	}
-	return lowered
 }

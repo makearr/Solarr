@@ -6,19 +6,14 @@ import (
 
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/picturesweep"
+	"github.com/makearr/Solarr/internal/media/works"
 )
 
 // ArtworkJobType is the registered type of the sweep that keeps a library's pictures at hand.
 const ArtworkJobType = jobs.Type("tv.artwork")
 
-// ArtworkActionKey deduplicates the sweep: one at a time (Invariant 16).
-const ArtworkActionKey = "tv.artwork"
-
 // ArtworkDefinition declares the sweep: background metadata work, resumed by the next run.
-var ArtworkDefinition = jobs.Definition{
-	Name: "Fetching series pictures",
-	Type: ArtworkJobType, Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 1,
-}
+var ArtworkDefinition = works.ArtworkDefinition("Fetching series pictures", ArtworkJobType)
 
 // NewArtworkJob keeps TV libraries' series posters, network logos and billed-first cast photos in the picture cache.
 func NewArtworkJob(reader picturesweep.Reader, cache picturesweep.Cache, logger *slog.Logger) *picturesweep.Job {
@@ -27,5 +22,5 @@ func NewArtworkJob(reader picturesweep.Reader, cache picturesweep.Cache, logger 
 
 // EnqueueArtwork submits one sweep, deduplicated by ArtworkActionKey.
 func EnqueueArtwork(ctx context.Context, queue *jobs.Queue) (jobs.EnqueueResult, error) {
-	return queue.Enqueue(ctx, jobs.Request{Type: ArtworkJobType, ActionKey: ArtworkActionKey, Priority: jobs.PriorityLow})
+	return works.EnqueueArtwork(ctx, queue, ArtworkJobType)
 }

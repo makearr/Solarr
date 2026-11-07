@@ -111,7 +111,7 @@ func (p *process) musicModule() music.Module {
 	realign := func(ctx context.Context, workID int64) error {
 		return music.AlignClaimedFiles(ctx, &desired, clock.NewSystem(), workID)
 	}
-	return music.Module{Registrations: p.musicJobs(), Hunt: p.musicHunt, Refresh: refresh, Realign: realign, Adder: p.musicAdder(), Pictures: p.musicPictures(), Files: p.musicFiles(), Passes: passes, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
+	return music.Module{Registrations: p.musicJobs(), Realign: realign, Files: p.musicFiles(), Passes: passes, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
 		Consumer: consumer,
 		Include:  scan.IsAudio,
 		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{
@@ -122,7 +122,9 @@ func (p *process) musicModule() music.Module {
 		// Enrichment follows at once, not at the next hourly run: a new library had no tracklists,
 		// photos or Wanted for up to an hour (found 2026-09-28).
 		OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx); _, _ = p.enrichmentPass(ctx, false) },
-	}}
+	},
+		Wiring: media.Wiring{Hunt: p.musicHunt, Refresh: refresh, Adder: p.musicAdder(), Pictures: p.musicPictures()},
+	}
 }
 
 // tvModule wires TV's sweep; its waiting files are identified again by the shared identify-retry task.
@@ -142,10 +144,7 @@ func (p *process) tvModule() tv.Module {
 				Grain: tv.Module{}.Descriptor().WantedGrain, FS: p.fsys, Logger: p.logger,
 			},
 		},
-		Hunt:     p.tvHunt,
 		Rename:   &tv.RenameConfig{Series: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},
-		Adder:    p.seriesCatalog(),
-		Pictures: p.seriesCatalog(),
 		Renumber: p.seriesCatalog(),
 		Files:    p.unidentifiedTV(),
 		Passes: media.Passes{
@@ -157,17 +156,6 @@ func (p *process) tvModule() tv.Module {
 				result, err := tv.EnqueueArtwork(ctx, p.queue)
 				return result.Duplicate, err
 			},
-		},
-		// A series is read again at once, as Sonarr's Refresh: it is one work and a handful of requests.
-		Refresh: func(ctx context.Context, workID int64) (bool, error) {
-			_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
-			if err != nil {
-				return false, err
-			}
-			if len(libraries) == 0 {
-				return false, fmt.Errorf("series %d is in no library", workID)
-			}
-			return false, p.seriesCatalog().Refresh(ctx, libraries[0], workID)
 		},
 		Feed: tv.Feed{
 			Grab: p.tvGrab(), Reader: library.NewSeriesReader(p.library), Indexers: p.tvIndexerConns, Logger: p.logger,
@@ -222,6 +210,18 @@ func (p *process) tvModule() tv.Module {
 		},
 		Profiling: tv.Profiling{People: library.NewPeople(p.library), Reader: library.NewSeriesReader(p.library), Source: p.tmdbShared, Albums: p.knownAlbums()},
 		Lists:     tv.Lists{Service: p.tvService()},
+		Wiring: media.Wiring{Hunt: p.tvHunt, Adder: p.seriesCatalog(), Pictures: p.seriesCatalog(), // A series is read again at once, as Sonarr's Refresh: it is one work and a handful of requests.
+			Refresh: func(ctx context.Context, workID int64) (bool, error) {
+				_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
+				if err != nil {
+					return false, err
+				}
+				if len(libraries) == 0 {
+					return false, fmt.Errorf("series %d is in no library", workID)
+				}
+				return false, p.seriesCatalog().Refresh(ctx, libraries[0], workID)
+			},
+		},
 	}
 }
 
@@ -415,8 +415,7 @@ func (p *process) movieModule() movie.Module {
 				Grain: movie.Module{}.Descriptor().WantedGrain, FS: p.fsys, Logger: p.logger,
 			},
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
-		},
-		Adder: catalog, Franchise: catalog,
+		}, Franchise: catalog,
 		Rename:    &movie.RenameConfig{Movies: library.NewSeriesReader(p.library)},
 		Profiling: knownfor.Profiling{People: library.NewPeople(p.library), Reader: library.NewSeriesReader(p.library), Source: p.tmdbShared, Albums: p.knownAlbums()},
 		Files: movie.Files{
@@ -439,7 +438,6 @@ func (p *process) movieModule() movie.Module {
 			},
 			Logger: p.logger,
 		},
-		Hunt: p.movieHunt,
 		Feed: movie.Feed{
 			Grab: p.movieGrab(), Reader: library.NewSeriesReader(p.library), Indexers: p.movieIndexerConns, Logger: p.logger,
 			Libraries: p.libraryIDsOf(movie.MediaType),
@@ -449,19 +447,7 @@ func (p *process) movieModule() movie.Module {
 			Recycle: p.recycleSuperseded, Logger: p.logger,
 		},
 		Searching: movie.NewSearching(p.movieGrab(), p.movieIndexerConns, clock.NewSystem()),
-		Pictures:  adapters.ProviderPictures{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library), Clock: clock.NewSystem()},
 		Service:   p.movieService(),
-		// A movie is read again at once, as Radarr's Refresh: it is one work and a couple of requests.
-		Refresh: func(ctx context.Context, workID int64) (bool, error) {
-			_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
-			if err != nil {
-				return false, err
-			}
-			if len(libraries) == 0 {
-				return false, fmt.Errorf("movie %d is in no library", workID)
-			}
-			return false, catalog.Refresh(ctx, libraries[0], workID)
-		},
 		Passes: media.Passes{
 			WorksPass: func(ctx context.Context, _ bool) (bool, error) {
 				result, err := movie.EnqueueRefresh(ctx, p.queue)
@@ -470,6 +456,18 @@ func (p *process) movieModule() movie.Module {
 			PicturesPass: func(ctx context.Context, _ bool) (bool, error) {
 				result, err := movie.EnqueueArtwork(ctx, p.queue)
 				return result.Duplicate, err
+			},
+		},
+		Wiring: media.Wiring{Adder: catalog, Hunt: p.movieHunt, Pictures: adapters.ProviderPictures{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library), Clock: clock.NewSystem()}, // A movie is read again at once, as Radarr's Refresh: it is one work and a couple of requests.
+			Refresh: func(ctx context.Context, workID int64) (bool, error) {
+				_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
+				if err != nil {
+					return false, err
+				}
+				if len(libraries) == 0 {
+					return false, fmt.Errorf("movie %d is in no library", workID)
+				}
+				return false, catalog.Refresh(ctx, libraries[0], workID)
 			},
 		},
 	}
@@ -585,16 +583,33 @@ func (p *process) bookModule(format book.Format) book.Module {
 			},
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		},
-		Adder:    catalog,
-		Pictures: adapters.ProviderPictures{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library), Clock: clock.NewSystem()},
-		Files:    book.NewFiles(resolver, library.NewUnidentified(p.library), clock.NewSystem(), catalog.AllowAgain),
-		Rename:   &book.RenameConfig{Format: format, Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},
-		Authors:  &authors,
-		Follow:   &book.Following{Authors: authors, Catalog: catalog},
+		Files:   book.NewFiles(resolver, library.NewUnidentified(p.library), clock.NewSystem(), catalog.AllowAgain),
+		Rename:  &book.RenameConfig{Format: format, Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},
+		Authors: &authors,
+		Follow:  &book.Following{Authors: authors, Catalog: catalog},
 		Series: &book.SeriesBooks{
 			Franchises: library.NewFranchises(p.library), Reader: library.NewSeriesReader(p.library), Source: p.wikidataFetcher(), Catalog: catalog,
 		},
-		Hunt: func(ctx context.Context, itemID int64) (plan.Outcome, error) {
+		Feed: book.Feed{
+			Format: format, Grab: grab, Reader: library.NewSeriesReader(p.library), Indexers: conns, Logger: p.logger, Libraries: p.libraryIDsOf(format.MediaType),
+		},
+		CutoffJob: book.CutoffJob{
+			Format: format, Desired: library.NewDesired(p.library), Reader: library.NewSeriesReader(p.library), Physical: library.NewPhysical(p.library),
+			Settings: p.cache, Recycle: p.recycleSuperseded, Logger: p.logger,
+		},
+		Searching: format.NewSearching(grab, conns, clock.NewSystem()),
+		Service:   service,
+		Passes: media.Passes{
+			WorksPass: func(ctx context.Context, _ bool) (bool, error) {
+				result, err := format.EnqueueRefresh(ctx, p.queue)
+				return result.Duplicate, err
+			},
+			PicturesPass: func(ctx context.Context, _ bool) (bool, error) {
+				result, err := format.EnqueueArtwork(ctx, p.queue)
+				return result.Duplicate, err
+			},
+		},
+		Wiring: media.Wiring{Adder: catalog, Pictures: adapters.ProviderPictures{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library), Clock: clock.NewSystem()}, Hunt: func(ctx context.Context, itemID int64) (plan.Outcome, error) {
 			found, err := conns(ctx)
 			if err != nil {
 				return plan.OutcomeSearched, err
@@ -612,35 +627,16 @@ func (p *process) bookModule(format book.Format) book.Module {
 				p.logger.Info("hunt: release chosen", slog.Int64("item_id", itemID), slog.Bool("held", result.Held))
 			}
 			return plan.OutcomeSearched, nil
-		},
-		Feed: book.Feed{
-			Format: format, Grab: grab, Reader: library.NewSeriesReader(p.library), Indexers: conns, Logger: p.logger, Libraries: p.libraryIDsOf(format.MediaType),
-		},
-		CutoffJob: book.CutoffJob{
-			Format: format, Desired: library.NewDesired(p.library), Reader: library.NewSeriesReader(p.library), Physical: library.NewPhysical(p.library),
-			Settings: p.cache, Recycle: p.recycleSuperseded, Logger: p.logger,
-		},
-		Searching: format.NewSearching(grab, conns, clock.NewSystem()),
-		Service:   service,
-		// A book is read again at once, as Readarr's Refresh: it is one work and a few requests.
-		Refresh: func(ctx context.Context, workID int64) (bool, error) {
-			_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
-			if err != nil {
-				return false, err
-			}
-			if len(libraries) == 0 {
-				return false, fmt.Errorf("%s %d is in no library", format.MediaType, workID)
-			}
-			return false, catalog.Refresh(ctx, libraries[0], workID)
-		},
-		Passes: media.Passes{
-			WorksPass: func(ctx context.Context, _ bool) (bool, error) {
-				result, err := format.EnqueueRefresh(ctx, p.queue)
-				return result.Duplicate, err
-			},
-			PicturesPass: func(ctx context.Context, _ bool) (bool, error) {
-				result, err := format.EnqueueArtwork(ctx, p.queue)
-				return result.Duplicate, err
+		}, // A book is read again at once, as Readarr's Refresh: it is one work and a few requests.
+			Refresh: func(ctx context.Context, workID int64) (bool, error) {
+				_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
+				if err != nil {
+					return false, err
+				}
+				if len(libraries) == 0 {
+					return false, fmt.Errorf("%s %d is in no library", format.MediaType, workID)
+				}
+				return false, catalog.Refresh(ctx, libraries[0], workID)
 			},
 		},
 	}
@@ -692,17 +688,36 @@ func (p *process) adultModule() adult.Module {
 			},
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		},
-		Adder:    catalog,
-		Pictures: adapters.ProviderPictures{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library), Clock: clock.NewSystem()},
-		Files:    adult.NewFiles(resolver, library.NewUnidentified(p.library), clock.NewSystem(), catalog.AllowAgain),
-		Rename:   &adult.RenameConfig{Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},
+		Files:  adult.NewFiles(resolver, library.NewUnidentified(p.library), clock.NewSystem(), catalog.AllowAgain),
+		Rename: &adult.RenameConfig{Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},
 		Follow: &adult.Following{
 			Service: service, Catalog: catalog, People: library.NewPeople(p.library), Studios: library.NewSubscriptions(p.library),
 			Now: func() time.Time { return clock.NewSystem().Now() },
 		},
 		Scenes:  &adult.PerformerScenes{Service: service, People: library.NewPeople(p.library)},
 		Service: service,
-		Hunt: func(ctx context.Context, itemID int64) (plan.Outcome, error) {
+		Feed: adult.Feed{
+			Grab: grab, Reader: library.NewSeriesReader(p.library), Indexers: conns, Logger: p.logger, Libraries: p.libraryIDsOf(adult.MediaType),
+		},
+		CutoffJob: adult.CutoffJob{
+			Desired: library.NewDesired(p.library), Reader: library.NewSeriesReader(p.library), Settings: p.cache, Recycle: p.recycleSuperseded, Logger: p.logger,
+		},
+		Searching: adult.NewSearching(grab, conns, clock.NewSystem()),
+		Passes: media.Passes{
+			WorksPass: func(ctx context.Context, _ bool) (bool, error) {
+				result, err := adult.EnqueueRefresh(ctx, p.queue)
+				return result.Duplicate, err
+			},
+			PeoplePass: func(ctx context.Context, _ bool) (bool, error) {
+				result, err := adult.EnqueuePerformers(ctx, p.queue)
+				return result.Duplicate, err
+			},
+			PicturesPass: func(ctx context.Context, _ bool) (bool, error) {
+				result, err := adult.EnqueueArtwork(ctx, p.queue)
+				return result.Duplicate, err
+			},
+		},
+		Wiring: media.Wiring{Adder: catalog, Pictures: adapters.ProviderPictures{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library), Clock: clock.NewSystem()}, Hunt: func(ctx context.Context, itemID int64) (plan.Outcome, error) {
 			found, err := conns(ctx)
 			if err != nil {
 				return plan.OutcomeSearched, err
@@ -720,37 +735,16 @@ func (p *process) adultModule() adult.Module {
 				p.logger.Info("hunt: release chosen", slog.Int64("item_id", itemID), slog.Bool("held", result.Held))
 			}
 			return plan.OutcomeSearched, nil
-		},
-		Feed: adult.Feed{
-			Grab: grab, Reader: library.NewSeriesReader(p.library), Indexers: conns, Logger: p.logger, Libraries: p.libraryIDsOf(adult.MediaType),
-		},
-		CutoffJob: adult.CutoffJob{
-			Desired: library.NewDesired(p.library), Reader: library.NewSeriesReader(p.library), Settings: p.cache, Recycle: p.recycleSuperseded, Logger: p.logger,
-		},
-		Searching: adult.NewSearching(grab, conns, clock.NewSystem()),
-		// A scene is read again at once, as Whisparr's Refresh: it is one work and a few requests.
-		Refresh: func(ctx context.Context, workID int64) (bool, error) {
-			_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
-			if err != nil {
-				return false, err
-			}
-			if len(libraries) == 0 {
-				return false, fmt.Errorf("%s %d is in no library", adult.MediaType, workID)
-			}
-			return false, catalog.Refresh(ctx, libraries[0], workID)
-		},
-		Passes: media.Passes{
-			WorksPass: func(ctx context.Context, _ bool) (bool, error) {
-				result, err := adult.EnqueueRefresh(ctx, p.queue)
-				return result.Duplicate, err
-			},
-			PeoplePass: func(ctx context.Context, _ bool) (bool, error) {
-				result, err := adult.EnqueuePerformers(ctx, p.queue)
-				return result.Duplicate, err
-			},
-			PicturesPass: func(ctx context.Context, _ bool) (bool, error) {
-				result, err := adult.EnqueueArtwork(ctx, p.queue)
-				return result.Duplicate, err
+		}, // A scene is read again at once, as Whisparr's Refresh: it is one work and a few requests.
+			Refresh: func(ctx context.Context, workID int64) (bool, error) {
+				_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
+				if err != nil {
+					return false, err
+				}
+				if len(libraries) == 0 {
+					return false, fmt.Errorf("%s %d is in no library", adult.MediaType, workID)
+				}
+				return false, catalog.Refresh(ctx, libraries[0], workID)
 			},
 		},
 	}

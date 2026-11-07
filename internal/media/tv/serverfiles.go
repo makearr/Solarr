@@ -16,6 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/moving/sidecar"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -272,11 +273,8 @@ func episodeDocument(detail library.SeriesDetailRow, file library.PartPath) ([]b
 // ServerFilesJobType is the registered type of the pass that writes Jellyfin and Kodi files.
 const ServerFilesJobType = jobs.Type("tv.media_server_files")
 
-// ServerFilesDefinition declares the pass: housekeeping, never in front of anything a person waits on.
-var ServerFilesDefinition = jobs.Definition{
-	Name: "Writing Jellyfin and Kodi files",
-	Type: ServerFilesJobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 2,
-}
+// ServerFilesDefinition declares the pass.
+var ServerFilesDefinition = works.ServerFilesDefinition("Writing Jellyfin and Kodi files", ServerFilesJobType)
 
 // ServerFilesJob writes the missing files of every series in each TV library that asks for them.
 type ServerFilesJob struct {
@@ -289,80 +287,18 @@ type ServerFilesJob struct {
 
 // Run implements jobs.Handler.
 func (j ServerFilesJob) Run(ctx context.Context, job jobs.Job) error {
-	var one serverFilesPayload
-	if err := json.Unmarshal(job.Payload, &one); err == nil && one.WorkID != 0 {
-		return j.runOne(ctx, one)
-	}
-	written, series := 0, 0
-	for _, category := range j.Libraries() {
-		if category.MediaType != MediaType || !category.FileManagement.MediaServerFiles {
-			continue
-		}
-		for _, root := range j.RootsOf(category.ID) {
-			if !sidecar.WritableRoot(root) {
-				continue
-			}
-			var afterID int64
-			for {
-				works, err := j.Writer.Reader.WorksOnRoot(ctx, string(MediaType), root.ID, afterID, serverFilesPage)
-				if err != nil {
-					return err
-				}
-				for _, workID := range works {
-					afterID = workID
-					made, err := j.Writer.WriteSeries(ctx, category.ID, workID)
-					if err != nil {
-						j.Logger.Warn("jellyfin/kodi files of a series failed", slog.Int64("work_id", workID), slog.Any("error", err))
-						continue
-					}
-					written, series = written+made, series+1
-				}
-				if len(works) < serverFilesPage {
-					break
-				}
-			}
-		}
-	}
-	j.Logger.Info("jellyfin and kodi files written", slog.Int("files", written), slog.Int("series", series))
-	return nil
+	return works.ServerFilesPass{
+		MediaType: MediaType, Noun: "series", Reader: j.Writer.Reader, Write: j.Writer.WriteSeries,
+		Libraries: j.Libraries, RootsOf: j.RootsOf, Logger: j.Logger,
+	}.Run(ctx, job)
 }
 
-const serverFilesPage = 200
-
-// serverFilesPayload names the one series a pass is for; empty is every series.
-type serverFilesPayload struct {
-	CategoryID int64 `json:"category_id"`
-	WorkID     int64 `json:"work_id"`
-}
-
-func (j ServerFilesJob) runOne(ctx context.Context, one serverFilesPayload) error {
-	for _, category := range j.Libraries() {
-		if category.ID != one.CategoryID || category.MediaType != MediaType || !category.FileManagement.MediaServerFiles {
-			continue
-		}
-		made, err := j.Writer.WriteSeries(ctx, one.CategoryID, one.WorkID)
-		if err != nil {
-			return err
-		}
-		j.Logger.Info("jellyfin and kodi files written", slog.Int("files", made), slog.Int64("work_id", one.WorkID))
-	}
-	return nil
-}
-
-// EnqueueServerFilesFor submits a pass for one series, as right after an import; one already waiting for it is the same work.
+// EnqueueServerFilesFor submits a pass for one series, as right after an import.
 func EnqueueServerFilesFor(ctx context.Context, queue *jobs.Queue, categoryID, workID int64) (jobs.EnqueueResult, error) {
-	payload, err := json.Marshal(serverFilesPayload{CategoryID: categoryID, WorkID: workID})
-	if err != nil {
-		return jobs.EnqueueResult{}, err
-	}
-	return queue.Enqueue(ctx, jobs.Request{
-		Type: ServerFilesJobType, ActionKey: fmt.Sprintf("%s:%d", ServerFilesJobType, workID), Priority: jobs.PriorityLow, Payload: payload,
-	})
+	return works.EnqueueServerFilesFor(ctx, queue, ServerFilesJobType, categoryID, workID)
 }
 
-// EnqueueServerFiles submits one pass; a second while one waits is the same work.
+// EnqueueServerFiles submits one pass over every series.
 func EnqueueServerFiles(ctx context.Context, queue *jobs.Queue) (jobs.EnqueueResult, error) {
-	return queue.Enqueue(ctx, jobs.Request{
-		Type: ServerFilesJobType, ActionKey: string(ServerFilesJobType), Priority: jobs.PriorityLow, Payload: []byte("{}"),
-	})
+	return works.EnqueueServerFiles(ctx, queue, ServerFilesJobType)
 }

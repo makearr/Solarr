@@ -1,7 +1,6 @@
 package music
 
 import (
-	"errors"
 	"fmt"
 	"path"
 	"regexp"
@@ -109,35 +108,17 @@ type Naming struct {
 
 // NamingFor resolves a library's stored profile; nil is the scheme's default preset.
 func NamingFor(profile *settings.NamingProfile) Naming {
-	if profile == nil {
-		return Naming{Formats: NamingScheme.Default().Formats, Options: naming.DefaultOptions, RenameFiles: true}
-	}
-	return Naming{
-		Formats: profile.Formats,
-		Options: naming.Options{
-			ReplaceIllegalCharacters: profile.ReplaceIllegalCharacters,
-			ColonReplacement:         naming.ColonReplacement(profile.ColonReplacement),
-		},
-		RenameFiles: profile.RenameFiles,
-	}
+	return Naming(NamingScheme.Resolve(profile, naming.DefaultOptions))
 }
 
 // DefaultNamingProfile is NamingFor(nil) in stored form: what a never-saved library uses.
 func DefaultNamingProfile() settings.NamingProfile {
-	return settings.NamingProfile{
-		RenameFiles: true, ReplaceIllegalCharacters: naming.DefaultOptions.ReplaceIllegalCharacters,
-		ColonReplacement: string(naming.DefaultOptions.ColonReplacement),
-		Formats:          NamingScheme.Default().Formats,
-	}
+	return NamingScheme.DefaultProfile(naming.DefaultOptions)
 }
 
 // ValidateNaming is settings.NamingValidator for music.
 func ValidateNaming(profile settings.NamingProfile) error {
-	problems := []error{NamingScheme.Validate(profile.Formats)}
-	if !naming.ColonReplacement(profile.ColonReplacement).Valid() {
-		problems = append(problems, fmt.Errorf("naming: unknown colon replacement %q", profile.ColonReplacement))
-	}
-	return errors.Join(problems...)
+	return NamingScheme.ValidateProfile(profile)
 }
 
 // RenderTrack renders one track's path below its root: the artist folder, then the standard

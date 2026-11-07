@@ -932,7 +932,7 @@ func (s Service) searchTMDB(ctx context.Context, term string, have []Candidate) 
 
 // searchKey names a hit by title without TheTVDB's "(US)" or "(2019)" disambiguation, and year.
 func searchKey(title string, year int) string {
-	return SortTitle(trailingBrackets.ReplaceAllString(title, "")) + "|" + strconv.Itoa(year)
+	return library.SortTitle(trailingBrackets.ReplaceAllString(title, "")) + "|" + strconv.Itoa(year)
 }
 
 var trailingBrackets = regexp.MustCompile(`\s*\([^)]*\)\s*$`)

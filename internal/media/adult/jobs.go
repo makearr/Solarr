@@ -33,12 +33,12 @@ const ArtworkJobType jobs.Type = "adult.artwork"
 
 // RefreshDefinition declares the sweep: background metadata work, retried on transient failure.
 func RefreshDefinition() jobs.Definition {
-	return jobs.Definition{Name: "Refreshing scenes", Type: RefreshJobType, Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 3}
+	return works.RefreshDefinition("Refreshing scenes", RefreshJobType)
 }
 
 // EnqueueRefresh submits one refresh sweep, one at a time (Invariant 16).
 func EnqueueRefresh(ctx context.Context, queue *jobs.Queue) (jobs.EnqueueResult, error) {
-	return queue.Enqueue(ctx, jobs.Request{Type: RefreshJobType, ActionKey: string(RefreshJobType), Priority: jobs.PriorityLow, Payload: []byte("{}")})
+	return works.EnqueueRefresh(ctx, queue, RefreshJobType)
 }
 
 // NewRefreshJob is the shared refresh sweep over the scenes that are due, so new tags, performers and pictures reach the
@@ -61,7 +61,7 @@ func NewRefreshJob(reader library.SeriesReader, service Service, clock clock.Clo
 
 // ArtworkDefinition declares the picture sweep.
 func ArtworkDefinition() jobs.Definition {
-	return jobs.Definition{Name: "Fetching scene posters", Type: ArtworkJobType, Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 1}
+	return works.ArtworkDefinition("Fetching scene posters", ArtworkJobType)
 }
 
 // NewArtworkJob keeps the posters, studio logos and performer photos in the picture cache.
@@ -71,7 +71,7 @@ func NewArtworkJob(reader picturesweep.Reader, cache picturesweep.Cache, logger 
 
 // EnqueueArtwork submits one picture sweep.
 func EnqueueArtwork(ctx context.Context, queue *jobs.Queue) (jobs.EnqueueResult, error) {
-	return queue.Enqueue(ctx, jobs.Request{Type: ArtworkJobType, ActionKey: string(ArtworkJobType), Priority: jobs.PriorityLow})
+	return works.EnqueueArtwork(ctx, queue, ArtworkJobType)
 }
 
 // RenameConfig is what naming a library's scene files needs; renamejob.Engine does the rest.

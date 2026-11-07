@@ -234,7 +234,7 @@ func (a Adder) addArtist(ctx context.Context, category settings.Category, reques
 func AlbumLink(releaseGroupMBID, title string) library.WorkLink {
 	return library.WorkLink{
 		Provider: ProviderReleaseGroup, ExternalID: releaseGroupMBID, Confidence: 1.0,
-		Work: library.WorkIdentity{MediaType: string(MediaType), CanonicalTitle: title, SortTitle: SortTitle(title)},
+		Work: library.WorkIdentity{MediaType: string(MediaType), CanonicalTitle: title, SortTitle: library.SortTitle(title)},
 	}
 }
 

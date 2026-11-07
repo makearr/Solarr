@@ -1504,7 +1504,7 @@ func TestEnrichJob_NamesTheWorkAfterItsReleaseGroup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetWork: %v", err)
 	}
-	if work.CanonicalTitle != "Live! At the Rainbow" || work.SortTitle != music.SortTitle("Live! At the Rainbow") {
+	if work.CanonicalTitle != "Live! At the Rainbow" || work.SortTitle != library.SortTitle("Live! At the Rainbow") {
 		t.Errorf("work titled %q / %q, want the release group's title", work.CanonicalTitle, work.SortTitle)
 	}
 }

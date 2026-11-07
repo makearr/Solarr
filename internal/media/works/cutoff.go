@@ -7,6 +7,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/acquiring/cutoff"
 	"github.com/makearr/Solarr/internal/acquiring/judge"
+	"github.com/makearr/Solarr/internal/acquiring/releasefacts"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/quality"
@@ -316,4 +317,34 @@ func BelowCutoff(snapshot *settings.Snapshot, categoryID int64, files []File, ne
 		}
 	}
 	return below
+}
+
+// ItemFiles are an item's files as the cutoff check and the upgrade search judge them, by what the probe measured.
+func ItemFiles(ctx context.Context, reader library.SeriesReader, itemID int64) ([]File, error) {
+	files, err := reader.ItemFiles(ctx, itemID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]File, len(files))
+	for index, file := range files {
+		out[index] = File{
+			MediaObjectID: file.File.MediaObjectID, AddedAt: file.AddedAt, Measured: file.Measured, Monitored: file.Monitored,
+			Facts: releasefacts.FromFile(file.File),
+		}
+	}
+	return out, nil
+}
+
+// VersionedCutoff is the cutoff check of a type whose files are versions of one item (a film, a scene): two held on
+// purpose are no contest and one at the cutoff completes the item.
+func VersionedCutoff(mediaType string, desired library.Desired, reader library.SeriesReader,
+	recycle func(ctx context.Context, mediaObjectID, categoryID int64, replaced bool) error,
+) Cutoff {
+	return Cutoff{
+		Desired: desired, Recycle: recycle, Versions: true,
+		Page: func(ctx context.Context, afterID, limit int64) ([]library.CutoffItem, error) {
+			return desired.CutoffPageOf(ctx, mediaType, afterID, limit)
+		},
+		Files: func(ctx context.Context, itemID int64) ([]File, error) { return ItemFiles(ctx, reader, itemID) },
+	}
 }

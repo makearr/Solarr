@@ -15,14 +15,8 @@ import (
 // RefreshJobType is the registered type of the series refresh sweep.
 const RefreshJobType = jobs.Type("tv.refresh_series")
 
-// RefreshActionKey deduplicates the sweep: one at a time (Invariant 16).
-const RefreshActionKey = "tv.refresh_series"
-
 // RefreshDefinition declares the sweep: background metadata work, retried on transient failure.
-var RefreshDefinition = jobs.Definition{
-	Name: "Refreshing series",
-	Type: RefreshJobType, Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 3,
-}
+var RefreshDefinition = works.RefreshDefinition("Refreshing series", RefreshJobType)
 
 const (
 	// continuingRefresh and endedRefresh are Sonarr's pattern: a running series twice a day, an ended one weekly.
@@ -70,5 +64,5 @@ func NewRefreshJob(config RefreshConfig) works.RefreshJob {
 
 // EnqueueRefresh submits one refresh sweep, deduplicated by RefreshActionKey.
 func EnqueueRefresh(ctx context.Context, queue *jobs.Queue) (jobs.EnqueueResult, error) {
-	return queue.Enqueue(ctx, jobs.Request{Type: RefreshJobType, ActionKey: RefreshActionKey, Priority: jobs.PriorityLow, Payload: []byte("{}")})
+	return works.EnqueueRefresh(ctx, queue, RefreshJobType)
 }

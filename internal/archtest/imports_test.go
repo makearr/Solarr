@@ -135,7 +135,7 @@ var allowedInternalImports = map[string][]string{
 	// Section 11.8's path template compiler/renderer: parsing and string
 	// building only, no I/O of its own. fsx is the one dependency, for the
 	// ADR-14 sanitiser choke point every rendered component passes through.
-	"internal/moving/naming": {"internal/platform/fsx"},
+	"internal/moving/naming": {"internal/platform/fsx", "internal/db/settings"},
 	// Section 11.7's root-folder chooser: pure ranking logic over candidates
 	// the caller already fetched, no I/O and no settings.db of its own --
 	// the same separation internal/identify/score keeps from internal/db/settings.
@@ -431,7 +431,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/acquiring/rss", "internal/db/library", "internal/db/settings", "internal/db/statistics", "internal/db/store/gen/librarydb",
 		"internal/identify/model", "internal/identify/parsetv", "internal/identify/quality", "internal/identify/score", "internal/jobs", "internal/media",
 		"internal/importing/batch", "internal/importing/inspect", "internal/importing/placer", "internal/scanning/scan",
-		"internal/platform/fsx",
+		"internal/platform/fsx", "internal/importing/rules", "internal/platform/mediatool", "internal/acquiring/releasefacts", "internal/moving/sidecar",
 		"internal/platform/clock", "internal/platform/parallel",
 	},
 	// The book providers: Open Library, Google Books, Audible's catalog with Audnexus.

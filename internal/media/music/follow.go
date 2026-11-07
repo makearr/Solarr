@@ -187,7 +187,7 @@ func (f Following) AddFollowed(ctx context.Context, follow media.Follow, candida
 	}
 	workIDs, err := f.Identity.ResolveWorks(ctx, f.Clock.Now(), []library.WorkLink{{
 		Provider: ProviderReleaseGroup, ExternalID: candidate.ExternalID, Confidence: 1.0,
-		Work: library.WorkIdentity{MediaType: string(MediaType), CanonicalTitle: candidate.Title, SortTitle: SortTitle(candidate.Title)},
+		Work: library.WorkIdentity{MediaType: string(MediaType), CanonicalTitle: candidate.Title, SortTitle: library.SortTitle(candidate.Title)},
 	}})
 	if err != nil {
 		return fmt.Errorf("music: resolve work: %w", err)

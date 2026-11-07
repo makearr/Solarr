@@ -102,14 +102,14 @@ func (m movieSpec) Wanted(ctx context.Context, item librarydb.DesiredItem, _ int
 		return wanted{}, false, err
 	}
 	w := wanted{title: basics.Title, aliases: basics.Aliases, year: int(basics.Year), tmdb: ids[ProviderTMDB], imdb: ids[ProviderIMDb], runtimeMs: basics.RuntimeMs}
-	w.titles = w.titleSet()
+	w.titles = parsetv.CleanTitleSet(w.title, w.aliases)
 	if item.PresentCount == 0 {
 		return w, true, nil
 	}
 	if m.search.Settings == nil {
 		return w, false, nil
 	}
-	files, err := itemFiles(ctx, m.search.Reader, item.ID)
+	files, err := works.ItemFiles(ctx, m.search.Reader, item.ID)
 	if err != nil {
 		return w, false, err
 	}
@@ -139,33 +139,6 @@ func (movieSpec) Read(w wanted, raw indexer.RawItem, conn judge.Conn, _ time.Tim
 	facts := releasefacts.FromRelease(info.Claims, info.ReleaseGroup, raw, conn.Impl)
 	releasefacts.EstimateBitrate(&facts, raw.SizeBytes, 1, w.runtimeMs)
 	return works.Release{Facts: facts, ReleaseGroup: info.ReleaseGroup, Revised: info.Claims.Version > 1}, true
-}
-
-// itemFiles are a movie's files as the cutoff check and the upgrade search judge them.
-func itemFiles(ctx context.Context, reader library.SeriesReader, itemID int64) ([]works.File, error) {
-	files, err := reader.ItemFiles(ctx, itemID)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]works.File, len(files))
-	for index, file := range files {
-		out[index] = works.File{
-			MediaObjectID: file.File.MediaObjectID, AddedAt: file.AddedAt, Measured: file.Measured, Monitored: file.Monitored,
-			Facts: releasefacts.FromFile(file.File),
-		}
-	}
-	return out, nil
-}
-
-// titleSet is every name a release may call the movie by, cleaned for comparison.
-func (w wanted) titleSet() map[string]bool {
-	names := map[string]bool{}
-	for _, title := range append([]string{w.title}, w.aliases...) {
-		if clean := parsetv.CleanTitle(title); clean != "" {
-			names[clean] = true
-		}
-	}
-	return names
 }
 
 // queries builds the tiers of one movie's search: the id queries first, then text in the spellings releases use.

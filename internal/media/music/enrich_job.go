@@ -402,7 +402,7 @@ func (j *EnrichJob) retitle(ctx context.Context, workID int64, rg musicbrainz.Re
 	if rg.Title == "" {
 		return
 	}
-	if err := j.identity.RetitleWork(ctx, j.clock.Now().Unix(), workID, rg.Title, SortTitle(rg.Title)); err != nil {
+	if err := j.identity.RetitleWork(ctx, j.clock.Now().Unix(), workID, rg.Title, library.SortTitle(rg.Title)); err != nil {
 		j.logger.WarnContext(ctx, "retitle work failed", slog.Int64("work_id", workID), slog.Any("error", err))
 	}
 }
@@ -472,7 +472,7 @@ func (j *EnrichJob) chooseEdition(
 
 	resolutions, err := j.identity.ResolveWorksDetailed(ctx, j.clock.Now(), []library.WorkLink{{
 		Provider: ProviderReleaseGroup, ExternalID: work.ReleaseGroupMBID, Confidence: siblingConfidence,
-		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: release.Title, SortTitle: SortTitle(release.Title)},
+		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: release.Title, SortTitle: library.SortTitle(release.Title)},
 		Edition: &library.EditionLink{
 			Provider: ProviderRelease, ExternalID: release.MBID, Confidence: siblingConfidence,
 			Edition: library.EditionIdentity{Kind: "unknown", Label: release.MBID},

@@ -110,7 +110,7 @@ func (p *UniversePass) Run(ctx context.Context, _ jobs.Job) error {
 		if err != nil {
 			return err
 		}
-		if gone := without(members, universe.Works); len(gone) > 0 {
+		if gone := slices.DeleteFunc(slices.Clone(members), func(id int64) bool { return slices.Contains(universe.Works, id) }); len(gone) > 0 {
 			if err := p.Franchises.RemoveFromFranchise(ctx, collection, gone); err != nil {
 				return err
 			}
@@ -158,16 +158,6 @@ func declaredFranchises(members []int64, direct map[string][]int64, parents map[
 	}
 	slices.Sort(declared)
 	return declared
-}
-
-func without(have, keep []int64) []int64 {
-	var gone []int64
-	for _, id := range have {
-		if !slices.Contains(keep, id) {
-			gone = append(gone, id)
-		}
-	}
-	return gone
 }
 
 // Universe is one franchise or universe of the library: the Wikidata item that names it, its name and its films.

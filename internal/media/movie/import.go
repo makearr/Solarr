@@ -18,7 +18,6 @@ import (
 	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/importing/placer"
-	"github.com/makearr/Solarr/internal/importing/rules"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/moving/mover"
@@ -90,7 +89,7 @@ var (
 
 // Resolve implements works.UnitPlacer: the film from its folder and file names, and the ids an nfo beside the file names.
 func (p placing) Resolve(ctx context.Context, request batch.Request, unit inspect.Unit) (int64, []model.Identification) {
-	file := largest(unit.Media)
+	file := works.LargestFile(unit.Media)
 	if file == nil {
 		return 0, nil
 	}
@@ -132,47 +131,10 @@ func namedIDs(provider, externalID string) (IDs, error) {
 	return IDs{}, fmt.Errorf("%w: %s %q", ErrNotAMovieID, provider, externalID)
 }
 
-// largest is the unit's biggest video file, which is the film; the rest are extras and samples.
-func largest(media []inspect.File) *inspect.File {
-	var best *inspect.File
-	for index := range media {
-		if best == nil || media[index].SizeBytes > best.SizeBytes {
-			best = &media[index]
-		}
-	}
-	return best
-}
-
-// screen holds the film's file against the checks Radarr makes before it imports: still being unpacked, one disc of
-// several, a sample by its runtime, no audio track. nil lets it through.
-func (p placing) screen(ctx context.Context, sourceAbs string, siblings []string, expectedMinutes int) *model.Rejection {
-	for _, rejection := range []*model.Rejection{rules.Unpacking(sourceAbs, false), rules.MultiPart(sourceAbs, siblings)} {
-		if rejection != nil {
-			return rejection
-		}
-	}
-	if p.config.Probe == nil {
-		return nil
-	}
-	measured, ok := p.config.Probe(ctx, sourceAbs)
-	if expectedMinutes == 0 {
-		expectedMinutes = defaultMovieMinutes
-	}
-	if verdict := rules.Sample(rules.SampleFacts{Path: sourceAbs, Runtime: measured.Duration, Probed: ok, ExpectedMinutes: expectedMinutes}); verdict == rules.VerdictSample {
-		return rules.RejectSample(verdict, false)
-	}
-	// A file ffprobe could not read is let through, unlike Radarr, which waits: the tool is optional here.
-	audioStreams := 0
-	if measured.AudioCodec != "" {
-		audioStreams = 1
-	}
-	return rules.HasAudio(ok && measured.VideoCodec != "", audioStreams)
-}
-
 // Place implements works.UnitPlacer.
 func (p placing) Place(ctx context.Context, request batch.Request, unit inspect.Unit, workID int64, upgrade bool) (*library.Placement, error) {
 	now := p.config.Clock.Now()
-	file := largest(unit.Media)
+	file := works.LargestFile(unit.Media)
 	if file == nil {
 		return nil, batch.ErrNothingToPlace
 	}
@@ -193,7 +155,7 @@ func (p placing) Place(ctx context.Context, request batch.Request, unit inspect.
 	for _, other := range unit.Media {
 		siblings = append(siblings, path.Join(request.SourcePath, other.RelPath))
 	}
-	if rejection := p.screen(ctx, sourceAbs, siblings, int(basics.RuntimeMs/60_000)); rejection != nil {
+	if rejection := works.ScreenVideo(ctx, p.config.Probe, sourceAbs, siblings, int(basics.RuntimeMs/60_000), defaultMovieMinutes); rejection != nil {
 		return nil, &batch.RejectedError{MediaType: MediaType, Rejections: []model.Rejection{*rejection}}
 	}
 	info, _ := parsemovie.ParsePath(file.RelPath)

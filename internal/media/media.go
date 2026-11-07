@@ -686,6 +686,16 @@ type JobRegistration struct {
 	Handler    jobs.Handler
 }
 
+// RegisterAll registers each of a module's job types with its handler.
+func RegisterAll(register JobRegistrar, registrations []JobRegistration) error {
+	for _, registration := range registrations {
+		if err := register(registration.Definition, registration.Handler); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Jobs is the capability of a media type that brings job types of its own.
 type Jobs interface {
 	RegisterJobs(register JobRegistrar) error

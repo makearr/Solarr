@@ -178,7 +178,7 @@ func (p CollectionPass) readFranchises(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if gone := withoutWorks(members, franchise.Works); len(gone) > 0 {
+		if gone := slices.DeleteFunc(slices.Clone(members), func(id int64) bool { return slices.Contains(franchise.Works, id) }); len(gone) > 0 {
 			if err := p.Franchises.RemoveFromFranchise(ctx, collection, gone); err != nil {
 				return err
 			}
@@ -352,16 +352,6 @@ func familyTop(qids []string, parents map[string][]string) string {
 		}
 	}
 	return top
-}
-
-func withoutWorks(have, keep []int64) []int64 {
-	var gone []int64
-	for _, id := range have {
-		if !slices.Contains(keep, id) {
-			gone = append(gone, id)
-		}
-	}
-	return gone
 }
 
 // CollectionPassActionKey deduplicates the pass: one at a time.

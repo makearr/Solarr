@@ -15,14 +15,8 @@ import (
 // RefreshJobType is the registered type of the movie refresh sweep.
 const RefreshJobType = jobs.Type("movie.refresh_movies")
 
-// RefreshActionKey deduplicates the sweep: one at a time (Invariant 16).
-const RefreshActionKey = "movie.refresh_movies"
-
 // RefreshDefinition declares the sweep: background metadata work, retried on transient failure.
-var RefreshDefinition = jobs.Definition{
-	Name: "Refreshing movies",
-	Type: RefreshJobType, Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 3,
-}
+var RefreshDefinition = works.RefreshDefinition("Refreshing movies", RefreshJobType)
 
 const (
 	// activeRefresh and releasedRefresh: a movie still to come (new dates, a new cut, a cast) weekly, a released one monthly.
@@ -61,20 +55,14 @@ func NewRefreshJob(config RefreshConfig) works.RefreshJob {
 
 // EnqueueRefresh submits one refresh sweep, deduplicated by RefreshActionKey.
 func EnqueueRefresh(ctx context.Context, queue *jobs.Queue) (jobs.EnqueueResult, error) {
-	return queue.Enqueue(ctx, jobs.Request{Type: RefreshJobType, ActionKey: RefreshActionKey, Priority: jobs.PriorityLow, Payload: []byte("{}")})
+	return works.EnqueueRefresh(ctx, queue, RefreshJobType)
 }
 
 // ArtworkJobType is the registered type of the sweep that keeps a movie library's pictures at hand.
 const ArtworkJobType = jobs.Type("movie.artwork")
 
-// ArtworkActionKey deduplicates the sweep: one at a time (Invariant 16).
-const ArtworkActionKey = "movie.artwork"
-
 // ArtworkDefinition declares the sweep: background metadata work, resumed by the next run.
-var ArtworkDefinition = jobs.Definition{
-	Name: "Fetching movie pictures",
-	Type: ArtworkJobType, Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 1,
-}
+var ArtworkDefinition = works.ArtworkDefinition("Fetching movie pictures", ArtworkJobType)
 
 // NewArtworkJob keeps movie libraries' posters, studio logos and billed-first cast photos in the picture cache.
 func NewArtworkJob(reader picturesweep.Reader, cache picturesweep.Cache, logger *slog.Logger) *picturesweep.Job {
@@ -83,5 +71,5 @@ func NewArtworkJob(reader picturesweep.Reader, cache picturesweep.Cache, logger 
 
 // EnqueueArtwork submits one sweep, deduplicated by ArtworkActionKey.
 func EnqueueArtwork(ctx context.Context, queue *jobs.Queue) (jobs.EnqueueResult, error) {
-	return queue.Enqueue(ctx, jobs.Request{Type: ArtworkJobType, ActionKey: ArtworkActionKey, Priority: jobs.PriorityLow})
+	return works.EnqueueArtwork(ctx, queue, ArtworkJobType)
 }
