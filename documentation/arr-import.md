@@ -72,3 +72,14 @@ audio, TV, adult, books; not console or PC), and whether to sync every hour. **S
 
 Priority comes from Prowlarr when an indexer is added and is Solarr's after that. A pause follows Prowlarr only when
 Prowlarr's own flag has changed since the last sync, so pausing an indexer here is not undone by the next sync.
+
+### Proxies
+
+Connections > Indexers > Proxies lists the proxies an indexer can go through: HTTP, SOCKS5 and FlareSolverr. Each indexer
+picks one. With the Prowlarr option "Proxies" on, Prowlarr's FlareSolverr and credential-free HTTP/SOCKS5 proxies are
+copied into the list and given to the indexers that share a tag with them in Prowlarr; a proxy you chose by hand is kept.
+Prowlarr's own FlareSolverr address is often `http://localhost:8191/`, which is that host's localhost: change the copied
+entry to an address Solarr can reach. A proxy an indexer uses cannot be removed.
+
+FlareSolverr is asked only when a site answers with a Cloudflare or DDoS-Guard challenge; its clearance cookies and user
+agent are then reused for the site's next requests, so downloads still go straight to the site.

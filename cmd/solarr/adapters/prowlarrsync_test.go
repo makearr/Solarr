@@ -73,3 +73,46 @@ func TestProwlarrSyncFollowsOptionsAndPauses(t *testing.T) {
 		t.Fatalf("fourth sync = %+v, %v; want both updated (its pause was already mirrored here)", result, err)
 	}
 }
+
+func TestProwlarrSyncGivesIndexersTheProxyTheyShareATagWith(t *testing.T) {
+	cache := newSweepCache(t)
+	cipher, err := secrets.New(make([]byte, 32))
+	if err != nil {
+		t.Fatalf("secrets.New: %v", err)
+	}
+	cache.EnableSecrets(cipher)
+	instance, err := cache.CreateArrInstance(t.Context(), settings.ArrInstanceRequest{
+		App: settings.ArrAppProwlarr, Name: "P", BaseURL: "http://prowlarr:9697", Enabled: true,
+	}, secrets.Secret("key"), 1)
+	if err != nil {
+		t.Fatalf("CreateArrInstance: %v", err)
+	}
+	prowlarr := adapters.Prowlarr{
+		Cache: cache, Clock: clock.NewFakeAtEpoch(),
+		List: func(context.Context, string, string) ([]indexer.ProwlarrIndexer, error) {
+			return []indexer.ProwlarrIndexer{
+				{ProwlarrID: 1, Name: "Tagged", Impl: "torznab", Enabled: true, Supported: true, BaseURL: "http://prowlarr:9697/1", Tags: []int64{1}},
+				{ProwlarrID: 2, Name: "Plain", Impl: "torznab", Enabled: true, Supported: true, BaseURL: "http://prowlarr:9697/2"},
+			}, nil
+		},
+		Proxies: func(context.Context, string, string) ([]indexer.ProwlarrProxy, error) {
+			return []indexer.ProwlarrProxy{{ProwlarrID: 9, Name: "FlareSolverr", Kind: "flaresolverr", URL: "http://localhost:8191/", Tags: []int64{1}}}, nil
+		},
+	}
+	for range 2 {
+		if _, err := prowlarr.SyncIndexers(t.Context(), instance.ID); err != nil {
+			t.Fatalf("SyncIndexers: %v", err)
+		}
+	}
+	proxies, _ := cache.Proxies(t.Context())
+	indexers, _ := cache.Indexers(t.Context())
+	if len(proxies) != 1 || proxies[0].Kind != settings.ProxyFlareSolverr {
+		t.Fatalf("proxies = %+v, want the one FlareSolverr, not duplicated by a second sync", proxies)
+	}
+	for _, found := range indexers {
+		used := found.ProxyID()
+		if (found.Name == "Tagged") != (used != nil && *used == proxies[0].ID) {
+			t.Errorf("%s proxy = %v", found.Name, used)
+		}
+	}
+}

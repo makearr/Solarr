@@ -2060,6 +2060,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/proxies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The proxy list an indexer can pick from. Administrator only. */
+        get: operations["listProxies"];
+        put?: never;
+        /** Add a proxy. Administrator only. */
+        post: operations["addProxy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/proxies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Change a proxy. Administrator only. */
+        put: operations["updateProxy"];
+        post?: never;
+        /** Remove a proxy no indexer uses. Administrator only. */
+        delete: operations["deleteProxy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/arr/instances/{id}/prowlarr-sync": {
         parameters: {
             query?: never;
@@ -7939,6 +7977,11 @@ export interface components {
             /** Format: date-time */
             caps_fetched_at?: string;
             api_key: components["schemas"]["SecretMask"];
+            /**
+             * Format: int64
+             * @description The entry of /proxies this indexer's requests go through.
+             */
+            proxy_id?: number;
             /** @description ADR-47, expert tier: an HTTP/SOCKS5 proxy for this indexer's own requests only. Empty means "use the global egress proxy, if any" -- not "no proxy". FlareSolverr is not yet built. */
             egress_proxy_url?: string;
             source?: components["schemas"]["IndexerSource"];
@@ -7948,6 +7991,26 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        /** @enum {string} */
+        ProxyKind: "http" | "socks5" | "flaresolverr";
+        ProxyRequest: {
+            name: string;
+            kind: components["schemas"]["ProxyKind"];
+            /** @description http://host:port, socks5://host:port, or FlareSolverr's address. */
+            url: string;
+        };
+        Proxy: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            kind: components["schemas"]["ProxyKind"];
+            url: string;
+            /**
+             * Format: int64
+             * @description The Prowlarr connection whose sync keeps it.
+             */
+            source_arr_id?: number;
         };
         /** @description The indexer of a connected Prowlarr that this one follows. */
         IndexerSource: {
@@ -7973,6 +8036,8 @@ export interface components {
              */
             priority: number;
             egress_proxy_url?: string;
+            /** Format: int64 */
+            proxy_id?: number;
             /** @description Newznab categories for music; omitted or empty means [3000] (Audio). */
             music_categories?: number[];
         };
@@ -7990,6 +8055,8 @@ export interface components {
              */
             priority: number;
             egress_proxy_url?: string;
+            /** Format: int64 */
+            proxy_id?: number;
             /** @description Newznab categories for music; omitted or empty means [3000] (Audio). */
             music_categories?: number[];
         };
@@ -14056,6 +14123,104 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
+        };
+    };
+    listProxies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The proxies. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Proxy"][];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    addProxy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProxyRequest"];
+            };
+        };
+        responses: {
+            /** @description The proxy. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Proxy"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    updateProxy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProxyRequest"];
+            };
+        };
+        responses: {
+            /** @description The proxy. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Proxy"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteProxy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     getArrInstanceSyncOptions: {

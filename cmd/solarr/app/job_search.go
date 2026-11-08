@@ -44,7 +44,7 @@ func (p *process) indexerConns(ctx context.Context) ([]music.IndexerConn, error)
 			p.logger.Warn("indexer skipped: its API key cannot be read", slog.Int64("indexer_id", indexer.ID), slog.Any("error", err))
 			continue
 		}
-		client, known := p.indexerDriver(indexer, apiKey.Reveal())
+		client, known := p.indexerDriver(ctx, indexer, apiKey.Reveal())
 		if !known {
 			continue
 		}
@@ -106,7 +106,7 @@ func (p *process) searchConns(ctx context.Context, categories func(settings.Inde
 			p.logger.Warn("indexer skipped: its API key cannot be read", slog.Int64("indexer_id", found.ID), slog.Any("error", err))
 			continue
 		}
-		client, known := p.indexerDriver(found, apiKey.Reveal())
+		client, known := p.indexerDriver(ctx, found, apiKey.Reveal())
 		if !known {
 			continue
 		}
@@ -222,7 +222,7 @@ func (p *process) fetchRelease(ctx context.Context, indexerID int64, link string
 		if err != nil {
 			return nil, err
 		}
-		client, known := p.indexerDriver(found, apiKey.Reveal())
+		client, known := p.indexerDriver(ctx, found, apiKey.Reveal())
 		if !known {
 			return nil, fmt.Errorf("indexer %d is a kind Solarr has no implementation of", indexerID)
 		}

@@ -46,6 +46,8 @@ type Querier interface {
 	CreateIndexer(ctx context.Context, arg CreateIndexerParams) (Indexer, error)
 	CreateLanguageProfile(ctx context.Context, arg CreateLanguageProfileParams) (LanguageProfile, error)
 	CreateNamingProfile(ctx context.Context, arg CreateNamingProfileParams) (int64, error)
+	// Proxies an indexer can use. Column lists follow table order.
+	CreateProxy(ctx context.Context, arg CreateProxyParams) (Proxy, error)
 	CreateQualityProfile(ctx context.Context, arg CreateQualityProfileParams) (QualityProfile, error)
 	CreateQualityTarget(ctx context.Context, arg CreateQualityTargetParams) (int64, error)
 	CreateRootFolder(ctx context.Context, arg CreateRootFolderParams) (RootFolder, error)
@@ -65,6 +67,7 @@ type Querier interface {
 	DeleteLanguageProfile(ctx context.Context, id int64) error
 	DeleteNamingFormats(ctx context.Context, namingProfileID int64) error
 	DeleteNamingProfile(ctx context.Context, id int64) error
+	DeleteProxy(ctx context.Context, id int64) error
 	DeleteQualityProfile(ctx context.Context, id int64) error
 	DeleteQualityTarget(ctx context.Context, id int64) error
 	DeleteRootFolder(ctx context.Context, id int64) error
@@ -84,6 +87,7 @@ type Querier interface {
 	GetInstanceSetting(ctx context.Context, key string) (InstanceSetting, error)
 	GetPlacementAffinity(ctx context.Context, arg GetPlacementAffinityParams) (int64, error)
 	GetPreference(ctx context.Context, arg GetPreferenceParams) (UserPreference, error)
+	GetProxy(ctx context.Context, id int64) (Proxy, error)
 	GetUserByAPIKeyHash(ctx context.Context, keyHash string) (GetUserByAPIKeyHashRow, error)
 	// Columns are listed explicitly rather than with *, so adding one cannot
 	// silently reshape an existing result (documentation/sql-and-sqlc.md).
@@ -119,6 +123,7 @@ type Querier interface {
 	// One naming profile per library (category.naming_profile_id), its templates per slot.
 	ListNamingProfiles(ctx context.Context) ([]NamingProfile, error)
 	ListPreferencesForUser(ctx context.Context, userID int64) ([]UserPreference, error)
+	ListProxies(ctx context.Context) ([]Proxy, error)
 	// Quality and language profiles (ADR-40, section 19.8).
 	ListQualityProfiles(ctx context.Context) ([]QualityProfile, error)
 	ListQualityTargets(ctx context.Context) ([]QualityTarget, error)
@@ -197,6 +202,7 @@ type Querier interface {
 	UpdateIndexer(ctx context.Context, arg UpdateIndexerParams) error
 	UpdateLanguageProfile(ctx context.Context, arg UpdateLanguageProfileParams) error
 	UpdateNamingProfile(ctx context.Context, arg UpdateNamingProfileParams) error
+	UpdateProxy(ctx context.Context, arg UpdateProxyParams) error
 	UpdateQualityProfile(ctx context.Context, arg UpdateQualityProfileParams) error
 	UpdateQualityTarget(ctx context.Context, arg UpdateQualityTargetParams) error
 	UpdateTargetProfile(ctx context.Context, arg UpdateTargetProfileParams) error

@@ -63,7 +63,7 @@ func (s *Server) AddIndexer(w http.ResponseWriter, r *http.Request) {
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
 		Enabled: derefOr(body.Enabled, true), Priority: derefOr(body.Priority, 25),
 		EgressProxyURL: derefOr(body.EgressProxyUrl, ""), MusicCategories: derefOr(body.MusicCategories, nil),
-		Definition: derefOr(body.Definition, ""),
+		Definition: derefOr(body.Definition, ""), ProxyID: proxyFromRequest(body.ProxyId),
 	}, secrets.Secret(derefOr(body.ApiKey, "")), s.wall.Now().Unix())
 	if err != nil {
 		writeIndexerError(w, s, err, "The connection has problems", "Nothing was created.")
@@ -102,8 +102,13 @@ func (s *Server) UpdateIndexer(w http.ResponseWriter, r *http.Request, id int64)
 	// No definition in the request keeps the stored one: editing an indexer must not forget where it came from.
 	definition := derefOr(body.Definition, "")
 	var source *settings.IndexerSource
+	proxyID := body.ProxyId
 	if existing, err := s.auth.Settings.GetIndexer(r.Context(), id); err == nil {
 		source = existing.Source()
+		// Absent keeps the stored proxy; 0 takes it off.
+		if proxyID == nil {
+			proxyID = existing.ProxyID()
+		}
 		if body.Definition == nil {
 			definition = existing.Definition()
 		}
@@ -112,7 +117,7 @@ func (s *Server) UpdateIndexer(w http.ResponseWriter, r *http.Request, id int64)
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
 		Enabled: derefOr(body.Enabled, true), Priority: derefOr(body.Priority, 25),
 		EgressProxyURL: derefOr(body.EgressProxyUrl, ""), MusicCategories: derefOr(body.MusicCategories, nil),
-		Definition: definition, Source: source,
+		Definition: definition, Source: source, ProxyID: proxyFromRequest(proxyID),
 	}, s.wall.Now().Unix())
 	if err != nil {
 		writeIndexerError(w, s, err, "The connection has problems", "Nothing was changed.")
@@ -265,6 +270,7 @@ func indexerView(indexer settings.Indexer) gen.Indexer {
 	if source := indexer.Source(); source != nil {
 		view.Source = &gen.IndexerSource{ArrId: source.ArrID, ExternalId: source.ExternalID}
 	}
+	view.ProxyId = indexer.ProxyID()
 	categories := indexer.MusicCategories()
 	view.MusicCategories = &categories
 	if egress := indexer.Egress(); egress.ProxyURL != "" {
@@ -272,4 +278,12 @@ func indexerView(indexer settings.Indexer) gen.Indexer {
 		view.EgressProxyUrl = &proxyURL
 	}
 	return view
+}
+
+// proxyFromRequest reads the request's proxy id: absent or 0 is no proxy.
+func proxyFromRequest(id *int64) *int64 {
+	if id == nil || *id <= 0 {
+		return nil
+	}
+	return id
 }

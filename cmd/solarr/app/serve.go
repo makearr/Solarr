@@ -826,7 +826,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		CategoryMerger:   library.NewCategoryMerges(p.library),
 		Prowlarr:         adapters.Prowlarr{Cache: p.cache, List: p.listProwlarr},
 		ArrConnections: adapters.Prowlarr{
-			Cache: p.cache, List: p.listProwlarr, Lidarr: p.arrClientFactory(), Clock: clock.NewSystem(),
+			Cache: p.cache, List: p.listProwlarr, Proxies: p.listProwlarrProxies, Lidarr: p.arrClientFactory(), Clock: clock.NewSystem(),
 		},
 		IndexerTester: adapters.ConnectionTester{
 			Cache: p.cache, Indexer: p.indexerClientFactory(), Downloader: p.downloaderClientFactory(),

@@ -3065,6 +3065,71 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         "502": { $ref: "#/components/responses/Problem" }
 
+  /proxies:
+    get:
+      operationId: listProxies
+      tags: [settings]
+      summary: The proxy list an indexer can pick from. Administrator only.
+      responses:
+        "200":
+          description: The proxies.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Proxy" }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: addProxy
+      tags: [settings]
+      summary: Add a proxy. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProxyRequest" }
+      responses:
+        "201":
+          description: The proxy.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Proxy" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /proxies/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      operationId: updateProxy
+      tags: [settings]
+      summary: Change a proxy. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProxyRequest" }
+      responses:
+        "200":
+          description: The proxy.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Proxy" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteProxy
+      tags: [settings]
+      summary: Remove a proxy no indexer uses. Administrator only.
+      responses:
+        "204": { description: Removed. }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
   /arr/instances/{id}/prowlarr-sync:
     parameters:
       - name: id
@@ -11225,6 +11290,7 @@ components:
           description: The indexer's own last t=caps response, opaque (ADR-43). Empty until fetched.
         caps_fetched_at: { type: string, format: date-time }
         api_key: { $ref: "#/components/schemas/SecretMask" }
+        proxy_id: { type: integer, format: int64, description: The entry of /proxies this indexer's requests go through. }
         egress_proxy_url:
           type: string
           description: >-
@@ -11241,6 +11307,28 @@ components:
             (Audio) unless set.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+
+    ProxyKind:
+      type: string
+      enum: [http, socks5, flaresolverr]
+
+    ProxyRequest:
+      type: object
+      required: [name, kind, url]
+      properties:
+        name: { type: string, minLength: 1 }
+        kind: { $ref: "#/components/schemas/ProxyKind" }
+        url: { type: string, description: "http://host:port, socks5://host:port, or FlareSolverr's address." }
+
+    Proxy:
+      type: object
+      required: [id, name, kind, url]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        kind: { $ref: "#/components/schemas/ProxyKind" }
+        url: { type: string }
+        source_arr_id: { type: integer, format: int64, description: The Prowlarr connection whose sync keeps it. }
 
     IndexerSource:
       type: object
@@ -11264,6 +11352,7 @@ components:
         enabled: { type: boolean, default: true }
         priority: { type: integer, format: int64, minimum: 1, maximum: 50, default: 25, description: "Lower is preferred when several indexers list the same release." }
         egress_proxy_url: { type: string }
+        proxy_id: { type: integer, format: int64 }
         music_categories:
           type: array
           items: { type: integer }
@@ -11280,6 +11369,7 @@ components:
         enabled: { type: boolean, default: true }
         priority: { type: integer, format: int64, minimum: 1, maximum: 50, default: 25 }
         egress_proxy_url: { type: string }
+        proxy_id: { type: integer, format: int64 }
         music_categories:
           type: array
           items: { type: integer }

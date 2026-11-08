@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"net/http"
 	"net/url"
 	"slices"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/acquiring/indexer/flaresolverr"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -186,6 +188,12 @@ func (p *process) listProwlarr(ctx context.Context, baseURL, apiKey string) ([]i
 	return indexer.ListProwlarr(ctx, client, baseURL, apiKey)
 }
 
+// listProwlarrProxies reads a Prowlarr's indexer proxies, as listProwlarr reads its indexers.
+func (p *process) listProwlarrProxies(ctx context.Context, baseURL, apiKey string) ([]indexer.ProwlarrProxy, error) {
+	client := p.providerClient(providerProwlarr, connectionGuard(baseURL), httpx.ClientConfig{Timeout: 30 * time.Second})
+	return indexer.ListProwlarrProxies(ctx, client, baseURL, apiKey)
+}
+
 // indexerLiveProxyPolicy resolves ADR-47's own per-indexer egress proxy when
 // the connection has one configured, falling back to ADR-58's global egress
 // proxy otherwise -- an indexer with no egress block behaves exactly as
@@ -213,14 +221,26 @@ func (p *process) indexerLiveProxyPolicy(egress settings.IndexerEgress) httpx.Li
 // is used, so a newly added indexer needs no code change here.
 func (p *process) indexerClientFactory() adapters.IndexerHTTPFactory {
 	return func(indexerID int64, baseURL string, egress settings.IndexerEgress) *httpx.Client {
-		return p.providerClient(providerIndexerPrefix+strconv.FormatInt(indexerID, 10), connectionGuard(baseURL),
-			httpx.ClientConfig{Proxy: p.indexerLiveProxyPolicy(egress)})
+		guard := connectionGuard(baseURL)
+		config := httpx.ClientConfig{Proxy: p.indexerLiveProxyPolicy(egress)}
+		if egress.FlareSolverrURL != "" {
+			config.Transport = p.flareSolverrTransport(guard, egress.FlareSolverrURL, config.Proxy)
+		}
+		return p.providerClient(providerIndexerPrefix+strconv.FormatInt(indexerID, 10), guard, config)
+	}
+}
+
+// flareSolverrTransport reaches the site direct and FlareSolverr (whose own host the guard allows) when a challenge stops it.
+func (p *process) flareSolverrTransport(site *httpx.Guard, solverURL string, proxy httpx.LiveProxyPolicy) http.RoundTripper {
+	return &flaresolverr.Transport{
+		Direct: httpx.NewTransport(site, proxy), Solver: httpx.NewTransport(connectionGuard(solverURL), nil), SolverURL: solverURL,
+		CheckDestination: site.CheckDestination,
 	}
 }
 
 // indexerDriver builds one configured indexer on its implementation; known is false for one Solarr has none of.
-func (p *process) indexerDriver(found settings.Indexer, apiKey string) (indexer.Driver, bool) {
-	deps := adapters.IndexerDeps{HTTP: p.indexerClientFactory()(found.ID, found.BaseURL, found.Egress()), Clock: clock.NewSystem()}
+func (p *process) indexerDriver(ctx context.Context, found settings.Indexer, apiKey string) (indexer.Driver, bool) {
+	deps := adapters.IndexerDeps{HTTP: p.indexerClientFactory()(found.ID, found.BaseURL, p.cache.ResolveEgress(ctx, found)), Clock: clock.NewSystem()}
 	return adapters.NewIndexer(found.Impl, deps, indexer.Connection{BaseURL: found.BaseURL, APIKey: apiKey})
 }
 

@@ -51,7 +51,7 @@ func (c ConnectionTester) TestIndexer(ctx context.Context, id int64) (apiserver.
 		return apiserver.ConnectionTestResult{}, err
 	}
 
-	result := c.testIndexer(ctx, found.Impl, c.Indexer(id, found.BaseURL, found.Egress()), found.BaseURL, apiKey.Reveal())
+	result := c.testIndexer(ctx, found.Impl, c.Indexer(id, found.BaseURL, c.Cache.ResolveEgress(ctx, found)), found.BaseURL, apiKey.Reveal())
 	if result.OK {
 		// Best-effort: a failed write must not turn a successful connection
 		// test into a reported failure -- the caps response itself is what

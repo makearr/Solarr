@@ -770,6 +770,13 @@ const (
 	ProwlarrIndexerImplTorznab ProwlarrIndexerImpl = "torznab"
 )
 
+// Defines values for ProxyKind.
+const (
+	ProxyKindFlaresolverr ProxyKind = "flaresolverr"
+	ProxyKindHttp         ProxyKind = "http"
+	ProxyKindSocks5       ProxyKind = "socks5"
+)
+
 // Defines values for QueueItemClientState.
 const (
 	QueueItemClientStateCompleted   QueueItemClientState = "completed"
@@ -1289,6 +1296,7 @@ type AddIndexerRequest struct {
 
 	// Priority Lower is preferred when several indexers list the same release.
 	Priority *int64 `json:"priority,omitempty"`
+	ProxyId  *int64 `json:"proxy_id,omitempty"`
 }
 
 // AddWorkRequest defines model for AddWorkRequest.
@@ -3454,6 +3462,9 @@ type Indexer struct {
 	Name            string `json:"name"`
 	Priority        int64  `json:"priority"`
 
+	// ProxyId The entry of /proxies this indexer's requests go through.
+	ProxyId *int64 `json:"proxy_id,omitempty"`
+
 	// Source The indexer of a connected Prowlarr that this one follows.
 	Source    *IndexerSource `json:"source,omitempty"`
 	UpdatedAt time.Time      `json:"updated_at"`
@@ -4995,6 +5006,29 @@ type ProwlarrSyncResult struct {
 	Updated int64 `json:"updated"`
 }
 
+// Proxy defines model for Proxy.
+type Proxy struct {
+	Id   int64     `json:"id"`
+	Kind ProxyKind `json:"kind"`
+	Name string    `json:"name"`
+
+	// SourceArrId The Prowlarr connection whose sync keeps it.
+	SourceArrId *int64 `json:"source_arr_id,omitempty"`
+	Url         string `json:"url"`
+}
+
+// ProxyKind defines model for ProxyKind.
+type ProxyKind string
+
+// ProxyRequest defines model for ProxyRequest.
+type ProxyRequest struct {
+	Kind ProxyKind `json:"kind"`
+	Name string    `json:"name"`
+
+	// Url http://host:port, socks5://host:port, or FlareSolverr's address.
+	Url string `json:"url"`
+}
+
 // QualityProfile ADR-40's policy: hard gates, then lexicographic tiers, then an additive score. `rules` and `upgrade` are kept as opaque JSON here -- internal/identify/score owns that shape (Parse/ParseUpgrade); this layer only checks a name and that they decode (settings. validateQualityProfile).
 type QualityProfile struct {
 	Id int64 `json:"id"`
@@ -6097,6 +6131,7 @@ type UpdateIndexerRequest struct {
 	MusicCategories *[]int `json:"music_categories,omitempty"`
 	Name            string `json:"name"`
 	Priority        *int64 `json:"priority,omitempty"`
+	ProxyId         *int64 `json:"proxy_id,omitempty"`
 }
 
 // UserAccount defines model for UserAccount.
@@ -7909,6 +7944,12 @@ type MergePersonJSONRequestBody MergePersonJSONBody
 // UpdatePrioritySettingsJSONRequestBody defines body for UpdatePrioritySettings for application/json ContentType.
 type UpdatePrioritySettingsJSONRequestBody = PrioritySettings
 
+// AddProxyJSONRequestBody defines body for AddProxy for application/json ContentType.
+type AddProxyJSONRequestBody = ProxyRequest
+
+// UpdateProxyJSONRequestBody defines body for UpdateProxy for application/json ContentType.
+type UpdateProxyJSONRequestBody = ProxyRequest
+
 // CreateQualityProfileJSONRequestBody defines body for CreateQualityProfile for application/json ContentType.
 type CreateQualityProfileJSONRequestBody = QualityProfileWrite
 
@@ -8772,6 +8813,18 @@ type ServerInterface interface {
 	// How urgently an item a person adds to a library would be searched for, against the automatic searches.
 	// (GET /priority/request)
 	GetRequestPriority(w http.ResponseWriter, r *http.Request, params GetRequestPriorityParams)
+	// The proxy list an indexer can pick from. Administrator only.
+	// (GET /proxies)
+	ListProxies(w http.ResponseWriter, r *http.Request)
+	// Add a proxy. Administrator only.
+	// (POST /proxies)
+	AddProxy(w http.ResponseWriter, r *http.Request)
+	// Remove a proxy no indexer uses. Administrator only.
+	// (DELETE /proxies/{id})
+	DeleteProxy(w http.ResponseWriter, r *http.Request, id int64)
+	// Change a proxy. Administrator only.
+	// (PUT /proxies/{id})
+	UpdateProxy(w http.ResponseWriter, r *http.Request, id int64)
 	// Every quality profile (ADR-40).
 	// (GET /qualityprofiles)
 	ListQualityProfiles(w http.ResponseWriter, r *http.Request)
@@ -10581,6 +10634,30 @@ func (_ Unimplemented) UpdatePrioritySettings(w http.ResponseWriter, r *http.Req
 // How urgently an item a person adds to a library would be searched for, against the automatic searches.
 // (GET /priority/request)
 func (_ Unimplemented) GetRequestPriority(w http.ResponseWriter, r *http.Request, params GetRequestPriorityParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The proxy list an indexer can pick from. Administrator only.
+// (GET /proxies)
+func (_ Unimplemented) ListProxies(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add a proxy. Administrator only.
+// (POST /proxies)
+func (_ Unimplemented) AddProxy(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a proxy no indexer uses. Administrator only.
+// (DELETE /proxies/{id})
+func (_ Unimplemented) DeleteProxy(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change a proxy. Administrator only.
+// (PUT /proxies/{id})
+func (_ Unimplemented) UpdateProxy(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -19232,6 +19309,116 @@ func (siw *ServerInterfaceWrapper) GetRequestPriority(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ListProxies operation middleware
+func (siw *ServerInterfaceWrapper) ListProxies(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListProxies(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddProxy operation middleware
+func (siw *ServerInterfaceWrapper) AddProxy(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddProxy(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteProxy operation middleware
+func (siw *ServerInterfaceWrapper) DeleteProxy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteProxy(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateProxy operation middleware
+func (siw *ServerInterfaceWrapper) UpdateProxy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateProxy(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListQualityProfiles operation middleware
 func (siw *ServerInterfaceWrapper) ListQualityProfiles(w http.ResponseWriter, r *http.Request) {
 
@@ -23924,6 +24111,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/priority/request", wrapper.GetRequestPriority)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/proxies", wrapper.ListProxies)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/proxies", wrapper.AddProxy)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/proxies/{id}", wrapper.DeleteProxy)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/proxies/{id}", wrapper.UpdateProxy)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/qualityprofiles", wrapper.ListQualityProfiles)

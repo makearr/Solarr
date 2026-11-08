@@ -257,6 +257,17 @@ type PlacementAffinity struct {
 	UpdatedAt    int64
 }
 
+type Proxy struct {
+	ID               int64
+	Name             string
+	Kind             string
+	Url              string
+	SourceArrID      sql.NullInt64
+	SourceExternalID sql.NullInt64
+	CreatedAt        int64
+	UpdatedAt        int64
+}
+
 type QualityProfile struct {
 	ID            int64
 	Name          string

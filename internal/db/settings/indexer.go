@@ -47,6 +47,8 @@ type Indexer struct {
 // represent (todo, private/questions.md).
 type IndexerEgress struct {
 	ProxyURL string `json:"proxy_url,omitempty"`
+	// FlareSolverrURL is set only by ResolveEgress, from the indexer's chosen FlareSolverr proxy.
+	FlareSolverrURL string `json:"-"`
 }
 
 // indexerSettingsJSON is SettingsJSON's own top-level shape -- a wrapper
@@ -59,6 +61,17 @@ type indexerSettingsJSON struct {
 	// Definition is the catalog entry the indexer was added from ("nzbgeek"); absent for one added before the catalog.
 	Definition string         `json:"definition,omitempty"`
 	Source     *IndexerSource `json:"source,omitempty"`
+	// ProxyID is the entry of the proxy list the indexer's requests go through.
+	ProxyID *int64 `json:"proxy_id,omitempty"`
+}
+
+// ProxyID is the proxy the indexer uses; nil for none.
+func (i Indexer) ProxyID() *int64 {
+	var parsed indexerSettingsJSON
+	if i.SettingsJSON == "" || json.Unmarshal([]byte(i.SettingsJSON), &parsed) != nil {
+		return nil
+	}
+	return parsed.ProxyID
 }
 
 // IndexerSource says an indexer is kept in step with an indexer one connected Prowlarr serves.
@@ -143,12 +156,12 @@ func (i Indexer) Definition() string {
 // buildIndexerSettingsJSON encodes the request's egress and categories into SettingsJSON, or "" when
 // both are unset, so an indexer nobody configured still reads back with SettingsJSON == "".
 func buildIndexerSettingsJSON(request IndexerRequest) string {
-	if request.EgressProxyURL == "" && len(request.MusicCategories) == 0 && request.Definition == "" && request.Source == nil {
+	if request.EgressProxyURL == "" && len(request.MusicCategories) == 0 && request.Definition == "" && request.Source == nil && request.ProxyID == nil {
 		return ""
 	}
 	encoded, err := json.Marshal(indexerSettingsJSON{
 		Egress: IndexerEgress{ProxyURL: request.EgressProxyURL}, MusicCategories: request.MusicCategories,
-		Definition: request.Definition, Source: request.Source,
+		Definition: request.Definition, Source: request.Source, ProxyID: request.ProxyID,
 	})
 	if err != nil {
 		return ""
@@ -173,6 +186,8 @@ type IndexerRequest struct {
 	Definition string
 	// Source is the Prowlarr indexer it follows; nil for none.
 	Source *IndexerSource
+	// ProxyID names a proxy of the proxy list; nil for none.
+	ProxyID *int64
 }
 
 // defaultIndexerPriority is Lidarr's default, what a request without one gets.

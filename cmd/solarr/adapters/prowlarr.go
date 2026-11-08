@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
@@ -22,8 +23,10 @@ type Prowlarr struct {
 	Cache  *settings.Cache
 	List   func(ctx context.Context, baseURL, apiKey string) ([]indexer.ProwlarrIndexer, error)
 	Lidarr LidarrClientFactory
-	Clock  clock.Clock
-	Logger *slog.Logger
+	// Proxies reads a Prowlarr's indexer proxies; nil syncs none.
+	Proxies func(ctx context.Context, baseURL, apiKey string) ([]indexer.ProwlarrProxy, error)
+	Clock   clock.Clock
+	Logger  *slog.Logger
 }
 
 // Run syncs every enabled Prowlarr connection whose sync is automatic; one failing does not stop the others.
@@ -267,6 +270,10 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 	}
 	now := a.Clock.Now().Unix()
 	var result SyncResult
+	proxyOf, err := a.syncProxies(ctx, instance, key, options, now)
+	if err != nil {
+		return result, err
+	}
 	for _, entry := range listed {
 		if (entry.Enabled && !options.ActiveIndexers) || (!entry.Enabled && !options.PausedIndexers) ||
 			(options.SupportedOnly && !entry.Supported) {
@@ -281,7 +288,7 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 		if !found {
 			if _, err := a.Cache.CreateIndexer(ctx, settings.IndexerRequest{
 				Name: entry.Name, Impl: entry.Impl, BaseURL: entry.BaseURL, Enabled: entry.Enabled, Priority: entry.Priority,
-				Source: source,
+				Source: source, ProxyID: proxyOf(entry),
 			}, secret, now); err != nil {
 				return result, fmt.Errorf("add %s: %w", entry.Name, err)
 			}
@@ -297,10 +304,14 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 				result.Paused++
 			}
 		}
+		chosen := existing.ProxyID()
+		if chosen == nil || a.followsProxy(ctx, *chosen, instanceID) {
+			chosen = proxyOf(entry)
+		}
 		request := settings.IndexerRequest{
 			Name: entry.Name, Impl: entry.Impl, BaseURL: entry.BaseURL, Enabled: enabled, Priority: existing.Priority,
 			EgressProxyURL: existing.Egress().ProxyURL, MusicCategories: existing.StoredMusicCategories(),
-			Definition: existing.Definition(), Source: source,
+			Definition: existing.Definition(), Source: source, ProxyID: chosen,
 		}
 		if _, err := a.Cache.UpdateIndexer(ctx, existing.ID, request, now); err != nil {
 			return result, fmt.Errorf("update %s: %w", entry.Name, err)
@@ -313,4 +324,70 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 		result.Updated++
 	}
 	return result, nil
+}
+
+// followsProxy reports whether the proxy is one this Prowlarr connection's sync made, so the sync may change it.
+func (a Prowlarr) followsProxy(ctx context.Context, proxyID, instanceID int64) bool {
+	proxy, err := a.Cache.GetProxy(ctx, proxyID)
+	return err != nil || proxy.SourceArrID == instanceID
+}
+
+// syncProxies makes the Prowlarr's proxies entries of the proxy list and answers which one an indexer gets: the first
+// that shares a tag with it, a FlareSolverr before the others. With the option off or no reader it answers none.
+func (a Prowlarr) syncProxies(ctx context.Context, instance settings.ArrInstance, key string, options settings.ProwlarrSync, now int64) (func(indexer.ProwlarrIndexer) *int64, error) {
+	none := func(indexer.ProwlarrIndexer) *int64 { return nil }
+	if !options.Proxies || a.Proxies == nil {
+		return none, nil
+	}
+	listed, err := a.Proxies(ctx, instance.BaseURL, key)
+	if err != nil {
+		return none, err
+	}
+	held, err := a.Cache.Proxies(ctx)
+	if err != nil {
+		return none, err
+	}
+	byExternal := map[int64]settings.Proxy{}
+	for _, one := range held {
+		if one.SourceArrID == instance.ID {
+			byExternal[one.SourceExternalID] = one
+		}
+	}
+	type tagged struct {
+		id   int64
+		kind string
+		tags []int64
+	}
+	var usable []tagged
+	for _, one := range listed {
+		request := settings.ProxyRequest{
+			Name: instance.Name + ": " + one.Name, Kind: settings.ProxyKind(one.Kind), URL: one.URL,
+			SourceArrID: instance.ID, SourceExternalID: one.ProwlarrID,
+		}
+		existing, found := byExternal[one.ProwlarrID]
+		if found {
+			if _, err = a.Cache.UpdateProxy(ctx, existing.ID, request, now); err != nil {
+				return none, fmt.Errorf("proxy %s: %w", one.Name, err)
+			}
+		} else if existing, err = a.Cache.CreateProxy(ctx, request, now); err != nil {
+			return none, fmt.Errorf("proxy %s: %w", one.Name, err)
+		}
+		usable = append(usable, tagged{id: existing.ID, kind: one.Kind, tags: one.Tags})
+	}
+	return func(entry indexer.ProwlarrIndexer) *int64 {
+		var chosen *tagged
+		for index, candidate := range usable {
+			shares := false
+			for _, tag := range candidate.tags {
+				shares = shares || slices.Contains(entry.Tags, tag)
+			}
+			if shares && (chosen == nil || (candidate.kind == "flaresolverr" && chosen.kind != "flaresolverr")) {
+				chosen = &usable[index]
+			}
+		}
+		if chosen == nil {
+			return nil
+		}
+		return &chosen.id
+	}, nil
 }

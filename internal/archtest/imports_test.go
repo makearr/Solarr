@@ -23,7 +23,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/db/store", "internal/platform/clock", "internal/platform/config", "internal/platform/fsx",
 		"migrations",
 	},
-	"cmd/solarr/app": {"internal/service/franchisewatch", "internal/service/franchiselink", "internal/importing/arrmap", "internal/platform/hitcount", "internal/media/adult", "internal/media/book", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/itunes", "internal/metadata/fantlab", "internal/metadata/hardcover", "internal/metadata/stashbox", "internal/metadata/theporndb", "internal/metadata/whisparr", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow", "internal/service/importlist",
+	"cmd/solarr/app": {"internal/acquiring/indexer/flaresolverr", "internal/service/franchisewatch", "internal/service/franchiselink", "internal/importing/arrmap", "internal/platform/hitcount", "internal/media/adult", "internal/media/book", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/itunes", "internal/metadata/fantlab", "internal/metadata/hardcover", "internal/metadata/stashbox", "internal/metadata/theporndb", "internal/metadata/whisparr", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow", "internal/service/importlist",
 		"internal/media", "internal/platform/remoteimage", "cmd/solarr/adapters", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/plan",
 		"internal/acquiring/poll", "internal/acquiring/qbittorrent", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
@@ -185,6 +185,8 @@ var allowedInternalImports = map[string][]string{
 	// database of its own, no title parsing or scoring (ADR-18/40 stay
 	// the candidate pipeline's own job).
 	"internal/acquiring/indexer": {"internal/platform/httpx"},
+	// FlareSolverr solves challenges for an indexer's requests; it knows no other package.
+	"internal/acquiring/indexer/flaresolverr": {},
 	// Prowlarr's API-based indexers, each on indexer.Base: "just a client" over its site's documented API.
 	"internal/acquiring/indexer/thepiratebay":    {"internal/acquiring/indexer", "internal/platform/httpx"},
 	"internal/acquiring/indexer/nyaa":            {"internal/acquiring/indexer", "internal/platform/httpx"},

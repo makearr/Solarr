@@ -92,6 +92,7 @@ export function Indexers() {
       </header>
 
       <AddFromProwlarr onAdded={invalidate} />
+      <Proxies />
 
       <div className="flex items-center gap-2">
         <h2 className="text-sm font-medium">Connected, by priority</h2>
@@ -172,6 +173,7 @@ export function Indexers() {
                 {indexer.caps_fetched_at ? ` · capabilities last read ${new Date(indexer.caps_fetched_at).toLocaleString()}` : " · capabilities never read"}
                 {expert && indexer.egress_proxy_url ? ` · FlareSolverr proxy ${indexer.egress_proxy_url}` : ""}
               </span>
+              <ProxyPicker indexer={indexer} onSaved={invalidate} />
               <MusicCategories indexer={indexer} onSaved={invalidate} />
               {(() => {
                 const companion = missingDownloader(kindOf(indexer), indexer.base_url, downloaders.data ?? [], clientKinds.data ?? []);
@@ -536,6 +538,111 @@ function PriorityInput({ value, busy, onSave }: { value: number; busy: boolean; 
         className="w-12 rounded-md border border-border-subtle bg-canvas px-1 py-0.5 text-xs text-ink
                    focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       />
+    </label>
+  );
+}
+
+type ProxyEntry = components["schemas"]["Proxy"];
+
+/** The list of proxies indexers can go through: HTTP, SOCKS5 and FlareSolverr, or those a synced Prowlarr brought. */
+function Proxies() {
+  const queryClient = useQueryClient();
+  const proxies = useQuery({ queryKey: ["proxies"], queryFn: () => ok(api.GET("/proxies")) });
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState<ProxyEntry["kind"]>("flaresolverr");
+  const [address, setAddress] = useState("");
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ["proxies"] });
+    void queryClient.invalidateQueries({ queryKey: ["indexers"] });
+  };
+  const add = useMutation({
+    mutationFn: () => ok(api.POST("/proxies", { body: { name, kind, url: address } })),
+    onSuccess: () => {
+      setName("");
+      setAddress("");
+      refresh();
+    },
+  });
+  const remove = useMutation({
+    mutationFn: (id: number) => ok(api.DELETE("/proxies/{id}", { params: { path: { id } } })),
+    onSuccess: refresh,
+  });
+  return (
+    <details className="rounded-lg border border-border-subtle bg-surface p-3 text-sm">
+      <summary className="cursor-pointer font-medium">Proxies ({proxies.data?.length ?? 0})</summary>
+      <ul className="mt-2 flex flex-col gap-1 text-xs">
+        {proxies.data?.map((proxy) => (
+          <li key={proxy.id} className="flex items-center gap-2">
+            <span className="text-ink">{proxy.name}</span>
+            <Badge tone="ok">{proxy.kind}</Badge>
+            <span className="truncate font-mono text-ink-muted">{proxy.url}</span>
+            {proxy.source_arr_id && <span className="text-ink-muted">· from Prowlarr</span>}
+            <span className="ml-auto">
+              <RemoveButton aria-label={`Remove ${proxy.name}`} onClick={() => remove.mutate(proxy.id)} disabled={remove.isPending} />
+            </span>
+          </li>
+        ))}
+        {proxies.data?.length === 0 && <li className="text-ink-muted">None yet. Prowlarr's can be synced from its connection.</li>}
+      </ul>
+      {remove.isError && <p className="mt-1 text-xs text-danger">{(remove.error as { detail?: string }).detail ?? "It could not be removed."}</p>}
+      <form
+        className="mt-2 flex flex-wrap items-center gap-2 text-xs"
+        onSubmit={(event) => {
+          event.preventDefault();
+          add.mutate();
+        }}
+      >
+        <input className={`${inputStyle} w-36`} placeholder="Name" value={name} onChange={(event) => setName(event.target.value)} />
+        <select className={inputStyle} value={kind} onChange={(event) => setKind(event.target.value as ProxyEntry["kind"])}>
+          <option value="flaresolverr">FlareSolverr</option>
+          <option value="http">HTTP</option>
+          <option value="socks5">SOCKS5</option>
+        </select>
+        <input
+          className={`${inputStyle} w-64`}
+          placeholder={kind === "socks5" ? "socks5://host:1080" : kind === "http" ? "http://host:3128" : "http://host:8191"}
+          value={address}
+          onChange={(event) => setAddress(event.target.value)}
+        />
+        <button type="submit" disabled={!name || !address || add.isPending} className="rounded-md border border-border-subtle px-2 py-0.5 text-ink-muted hover:text-ink disabled:opacity-50">
+          Add proxy
+        </button>
+        {add.isError && <span className="text-danger">{(add.error as { detail?: string }).detail ?? "It could not be added."}</span>}
+      </form>
+    </details>
+  );
+}
+
+/** Which proxy of the list one indexer's requests go through. */
+function ProxyPicker({ indexer, onSaved }: { indexer: Indexer; onSaved: () => void }) {
+  const proxies = useQuery({ queryKey: ["proxies"], queryFn: () => ok(api.GET("/proxies")) });
+  const save = useMutation({
+    mutationFn: (proxyId: number) =>
+      ok(api.PATCH("/indexers/{id}", {
+        params: { path: { id: indexer.id } },
+        body: {
+          name: indexer.name, impl: indexer.impl, base_url: indexer.base_url, priority: indexer.priority,
+          enabled: indexer.enabled, egress_proxy_url: indexer.egress_proxy_url, music_categories: indexer.music_categories,
+          proxy_id: proxyId,
+        },
+      })),
+    onSuccess: onSaved,
+  });
+  if (!proxies.data || proxies.data.length === 0) return null;
+  return (
+    <label className="flex items-center gap-1.5 text-xs text-ink-muted">
+      Proxy
+      <select
+        className={inputStyle}
+        value={indexer.proxy_id ?? 0}
+        disabled={save.isPending}
+        onChange={(event) => save.mutate(Number(event.target.value))}
+      >
+        <option value={0}>None</option>
+        {proxies.data.map((proxy) => (
+          <option key={proxy.id} value={proxy.id}>{proxy.name} ({proxy.kind})</option>
+        ))}
+      </select>
     </label>
   );
 }
