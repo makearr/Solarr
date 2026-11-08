@@ -560,7 +560,7 @@ function UpstreamKey({ indexer, onSaved }: { indexer: Indexer; onSaved: () => vo
       >
         Use it directly
       </button>
-      {use.isError && <span className="text-danger">It could not be changed.</span>}
+      {use.isError && <span className="text-danger">{(use.error as { detail?: string }).detail ?? "It could not be changed."}</span>}
     </span>
   );
 }
