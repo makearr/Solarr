@@ -291,6 +291,7 @@ function AddDownloader({ kinds, onAdded }: { kinds: DownloaderKind[]; onAdded: (
   const [removeChoice, setRemoveChoice] = useState<boolean | null>(null);
   const removeCompleted = removeChoice ?? !kind?.keeps_completed;
   const [maxQueued, setMaxQueued] = useState(DEFAULT_MAX_QUEUED);
+  const [priority, setPriority] = useState(25);
   const [sendUser, setSendUser] = useState(true);
   const [sendRSS, setSendRSS] = useState(true);
   const [seedRatio, setSeedRatio] = useState("");
@@ -326,6 +327,7 @@ function AddDownloader({ kinds, onAdded }: { kinds: DownloaderKind[]; onAdded: (
         category: category || undefined,
         remove_completed: removeCompleted,
         max_queued: maxQueued,
+        priority,
         always_send_user_grabs: sendUser,
         always_send_rss_grabs: sendRSS,
         seed_ratio: Number(seedRatio) > 0 ? Number(seedRatio) : undefined,
@@ -440,6 +442,8 @@ function AddDownloader({ kinds, onAdded }: { kinds: DownloaderKind[]; onAdded: (
         onRemoveCompleted={setRemoveChoice}
         maxQueued={maxQueued}
         onMaxQueued={setMaxQueued}
+        priority={priority}
+        onPriority={setPriority}
         sendUser={sendUser}
         onSendUser={setSendUser}
         sendRSS={sendRSS}
@@ -545,6 +549,8 @@ function OptionFields({
   onRemoveCompleted,
   maxQueued,
   onMaxQueued,
+  priority,
+  onPriority,
   sendUser,
   onSendUser,
   sendRSS,
@@ -559,6 +565,8 @@ function OptionFields({
   onRemoveCompleted: (value: boolean) => void;
   maxQueued: number;
   onMaxQueued: (value: number) => void;
+  priority: number;
+  onPriority: (value: number) => void;
   sendUser: boolean;
   onSendUser: (value: boolean) => void;
   sendRSS: boolean;
@@ -596,6 +604,20 @@ function OptionFields({
           max={1000}
           value={maxQueued}
           onChange={(event) => onMaxQueued(Math.max(1, Math.min(1000, Number(event.target.value) || 1)))}
+        />
+      </label>
+      <label
+        className="flex w-28 flex-col gap-1 text-ink-muted"
+        title="1 to 50. Of the clients that take a release, the lowest number is sent to first; an indexer can be bound to one client instead"
+      >
+        Priority
+        <input
+          className={inputStyle}
+          type="number"
+          min={1}
+          max={50}
+          value={priority}
+          onChange={(event) => onPriority(Math.max(1, Math.min(50, Number(event.target.value) || 25)))}
         />
       </label>
       <label
@@ -644,6 +666,7 @@ function ClientOptionsForm({ downloader, kind, onDone }: { downloader: Downloade
   const [remotePath, setRemotePath] = useState(current.remote_path ?? "");
   const [localPath, setLocalPath] = useState(current.local_path ?? "");
   const [maxQueued, setMaxQueued] = useState(current.max_queued ?? DEFAULT_MAX_QUEUED);
+  const [priority, setPriority] = useState(current.priority ?? 25);
   const [sendUser, setSendUser] = useState(current.always_send_user_grabs ?? true);
   const [sendRSS, setSendRSS] = useState(current.always_send_rss_grabs ?? true);
   const [seedRatio, setSeedRatio] = useState(current.seed_ratio ? String(current.seed_ratio) : "");
@@ -685,7 +708,7 @@ function ClientOptionsForm({ downloader, kind, onDone }: { downloader: Downloade
           name: downloader.name, impl: downloader.impl, base_url: downloader.base_url, protocol: downloader.protocol,
           enabled: downloader.enabled,
           options: {
-            category: category || undefined, remove_completed: removeCompleted, max_queued: maxQueued,
+            category: category || undefined, remove_completed: removeCompleted, max_queued: maxQueued, priority,
             always_send_user_grabs: sendUser, always_send_rss_grabs: sendRSS,
             seed_ratio: Number(seedRatio) > 0 ? Number(seedRatio) : undefined,
             seed_minutes: Number(seedMinutes) > 0 ? Math.round(Number(seedMinutes)) : undefined,
@@ -711,6 +734,8 @@ function ClientOptionsForm({ downloader, kind, onDone }: { downloader: Downloade
         onRemoveCompleted={setRemoveCompleted}
         maxQueued={maxQueued}
         onMaxQueued={setMaxQueued}
+        priority={priority}
+        onPriority={setPriority}
         sendUser={sendUser}
         onSendUser={setSendUser}
         sendRSS={sendRSS}

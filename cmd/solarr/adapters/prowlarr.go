@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -234,6 +235,8 @@ func SameClientAddress(a, b string) bool {
 // SyncResult counts what one Prowlarr sync did.
 type SyncResult struct {
 	Added, Updated, Paused, Resumed, Skipped int64
+	// ClientsAdded were created from Prowlarr's download clients; ClientsWaiting need a secret Prowlarr will not give.
+	ClientsAdded, ClientsWaiting int64
 }
 
 // SyncIndexers keeps the indexers the options choose in step with the Prowlarr connection: new ones are added, the
@@ -274,6 +277,12 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 	if err != nil {
 		return result, err
 	}
+	if options.DownloadClients && a.Lidarr != nil {
+		result.ClientsAdded, result.ClientsWaiting, err = a.syncDownloadClients(ctx, instance, key, now)
+		if err != nil {
+			return result, err
+		}
+	}
 	for _, entry := range listed {
 		if (entry.Enabled && !options.ActiveIndexers) || (!entry.Enabled && !options.PausedIndexers) ||
 			(options.SupportedOnly && !entry.Supported) {
@@ -311,7 +320,7 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 		request := settings.IndexerRequest{
 			Name: entry.Name, Impl: entry.Impl, BaseURL: entry.BaseURL, Enabled: enabled, Priority: existing.Priority,
 			EgressProxyURL: existing.Egress().ProxyURL, MusicCategories: existing.StoredMusicCategories(),
-			Definition: existing.Definition(), Source: source, ProxyID: chosen,
+			Definition: existing.Definition(), Source: source, ProxyID: chosen, DownloadClientID: existing.DownloadClientID(),
 		}
 		if _, err := a.Cache.UpdateIndexer(ctx, existing.ID, request, now); err != nil {
 			return result, fmt.Errorf("update %s: %w", entry.Name, err)
@@ -390,4 +399,50 @@ func (a Prowlarr) syncProxies(ctx context.Context, instance settings.ArrInstance
 		}
 		return &chosen.id
 	}, nil
+}
+
+// syncDownloadClients adds Prowlarr's active download clients that need no secret: a client with an address, signed in
+// without a user name, and not one that asks for an API key or password. The rest are counted as waiting; the connection's
+// "Use its download clients" asks for their secret once.
+func (a Prowlarr) syncDownloadClients(ctx context.Context, instance settings.ArrInstance, key string, now int64) (added, waiting int64, err error) {
+	clients, err := a.downloadClients(ctx, instance, key)
+	if err != nil {
+		return 0, 0, err
+	}
+	held, err := a.Cache.Downloaders(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	here := map[string]bool{}
+	for _, existing := range held {
+		here[strings.TrimRight(existing.BaseURL, "/")] = true
+	}
+	for _, client := range clients {
+		kind, known := DownloadClientDefinition(strings.ToLower(client.Implementation))
+		if !client.Enabled || !known || !kind.HasAddress() || here[client.BaseURL()] {
+			continue
+		}
+		if client.Username != "" || (kind.SecretLabel != "" && !kind.UserName) {
+			waiting++
+			continue
+		}
+		options := settings.DownloaderOptions{Category: client.Category}
+		if client.Priority > 0 {
+			priority := min(client.Priority, 50)
+			options.Priority = &priority
+		}
+		encoded, err := json.Marshal(options)
+		if err != nil {
+			return added, waiting, err
+		}
+		if _, err := a.Cache.CreateDownloader(ctx, settings.DownloaderRequest{
+			Name: client.Name, Impl: strings.ToLower(client.Implementation), BaseURL: client.BaseURL(), Enabled: true,
+			Protocol: string(kind.Protocol), SettingsJSON: string(encoded),
+		}, "", now); err != nil {
+			return added, waiting, fmt.Errorf("add download client %s: %w", client.Name, err)
+		}
+		here[client.BaseURL()] = true
+		added++
+	}
+	return added, waiting, nil
 }

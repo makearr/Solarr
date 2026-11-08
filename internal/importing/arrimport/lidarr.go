@@ -183,6 +183,8 @@ type DownloadClient struct {
 	UseSSL         bool
 	URLBase        string
 	Category       string
+	// Priority is the *Arr's own, 1 to 50; zero when it sends none.
+	Priority int
 	// Username is where the *Arr keeps one (qBittorrent); the password comes back masked, so none is read.
 	Username string
 }
@@ -192,6 +194,7 @@ type downloadClientWire struct {
 	Implementation string `json:"implementation"`
 	Protocol       string `json:"protocol"`
 	Enable         bool   `json:"enable"`
+	Priority       int    `json:"priority"`
 	Fields         []struct {
 		Name  string          `json:"name"`
 		Value json.RawMessage `json:"value"`
@@ -212,7 +215,7 @@ func (c LidarrClient) downloadClients(ctx context.Context, path string) ([]Downl
 	clients := make([]DownloadClient, len(wire))
 	for index, entry := range wire {
 		client := DownloadClient{
-			Name: entry.Name, Implementation: entry.Implementation, Protocol: entry.Protocol, Enabled: entry.Enable,
+			Name: entry.Name, Implementation: entry.Implementation, Protocol: entry.Protocol, Enabled: entry.Enable, Priority: entry.Priority,
 		}
 		for _, field := range entry.Fields {
 			decode := func(target any) error {

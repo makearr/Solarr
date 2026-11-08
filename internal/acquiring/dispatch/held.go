@@ -31,9 +31,9 @@ func (d Dispatch) HoldIfFull(
 	if err != nil {
 		return false, err
 	}
-	downloader, found := firstMatchingProtocol(downloaders, detail.ReleaseCandidate.Protocol)
-	if !found || downloader.alwaysSent(origin) {
-		return false, nil
+	downloader, found, err := d.choose(ctx, downloaders, detail.ReleaseCandidate.IndexerID, detail.ReleaseCandidate.Protocol)
+	if err != nil || !found || downloader.alwaysSent(origin) {
+		return false, err
 	}
 	if room, err := d.hasRoom(ctx, downloader); err != nil || room {
 		return false, err
@@ -119,7 +119,10 @@ func (d Dispatch) SendHeld(ctx context.Context, at time.Time) (int, error) {
 			}
 			continue
 		}
-		downloader, found := firstMatchingProtocol(downloaders, entry.Protocol)
+		downloader, found, err := d.choose(ctx, downloaders, entry.IndexerID, entry.Protocol)
+		if err != nil {
+			return sent, err
+		}
 		if !found {
 			continue // kept: a client for it may be enabled again
 		}

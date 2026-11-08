@@ -185,7 +185,7 @@ func (p *process) downloaderConnsFor(ctx context.Context, mediaType string) ([]m
 		}
 		conns = append(conns, music.DownloaderConn{
 			ID: downloader.ID, Protocol: downloader.Protocol, Category: downloader.Options().CategoryFor(mediaType),
-			MaxQueued:      downloader.Options().MaxQueuedDownloads(),
+			MaxQueued: downloader.Options().MaxQueuedDownloads(), Priority: downloader.Options().PriorityRank(),
 			AlwaysSendUser: downloader.Options().SendsUserGrabs(),
 			AlwaysSendRSS:  downloader.Options().SendsRSSGrabs(),
 			Client:         client,
@@ -211,10 +211,20 @@ func (p *process) dispatchFor(mediaType string) music.Dispatch {
 		Candidates: statistics.NewCandidates(p.statistics), Acquisitions: library.NewAcquisitions(p.library),
 		Desired:     library.NewDesired(p.library),
 		Downloaders: func(ctx context.Context) ([]music.DownloaderConn, error) { return p.downloaderConnsFor(ctx, mediaType) },
+		BoundClient: p.boundClient,
 		Fetch:       p.fetchRelease, History: p.recordDownloadHistory, Ready: &ready, Blocklist: &blocklist,
 		ReadyLimit: func() int64 { return p.cache.Snapshot().ReadyQueueLimit() }, Admits: p.ratingAdmits,
 		Paused: func() bool { return p.solarrMode().DownloadsPaused() },
 	}
+}
+
+// boundClient is the download client an indexer's releases are bound to, 0 for none.
+func (p *process) boundClient(ctx context.Context, indexerID int64) int64 {
+	found, err := p.cache.GetIndexer(ctx, indexerID)
+	if err != nil || found.DownloadClientID() == nil {
+		return 0
+	}
+	return *found.DownloadClientID()
 }
 
 // fetchRelease downloads a release's NZB or torrent through the indexer that listed it, disabled or not:

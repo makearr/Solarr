@@ -280,7 +280,7 @@ func optionsJSON(options *gen.DownloaderOptions) string {
 	stored := settings.DownloaderOptions{
 		RemoveCompleted: options.RemoveCompleted, Category: derefOr(options.Category, ""),
 		RemotePath: derefOr(options.RemotePath, ""), LocalPath: derefOr(options.LocalPath, ""),
-		MaxQueued: options.MaxQueued, AlwaysSendUserGrabs: options.AlwaysSendUserGrabs,
+		MaxQueued: options.MaxQueued, Priority: options.Priority, AlwaysSendUserGrabs: options.AlwaysSendUserGrabs,
 		AlwaysSendRSSGrabs: options.AlwaysSendRssGrabs, SeedRatio: positiveFloat(options.SeedRatio), SeedMinutes: positiveInt(options.SeedMinutes),
 		SeedBoth: derefOr(options.SeedBoth, false), MaxSeedMinutes: positiveInt(options.MaxSeedMinutes),
 		URLBase: strings.TrimSpace(derefOr(options.UrlBase, "")), DropFolder: strings.TrimSpace(derefOr(options.DropFolder, "")),
@@ -331,7 +331,7 @@ func downloaderOptionsView(options settings.DownloaderOptions) *gen.DownloaderOp
 	return &gen.DownloaderOptions{
 		Category: strPtr(options.Category), RemoveCompleted: options.RemoveCompleted,
 		RemotePath: strPtr(options.RemotePath), LocalPath: strPtr(options.LocalPath),
-		MaxQueued: options.MaxQueued, AlwaysSendUserGrabs: options.AlwaysSendUserGrabs,
+		MaxQueued: options.MaxQueued, Priority: options.Priority, AlwaysSendUserGrabs: options.AlwaysSendUserGrabs,
 		AlwaysSendRssGrabs: options.AlwaysSendRSSGrabs,
 		SeedRatio:          positiveFloat(options.SeedRatio), SeedMinutes: positiveInt(options.SeedMinutes),
 		SeedBoth: boolPtrIf(options.SeedBoth), MaxSeedMinutes: positiveInt(options.MaxSeedMinutes),
@@ -372,6 +372,10 @@ func (s *Server) validOptions(w http.ResponseWriter, options *gen.DownloaderOpti
 	if options != nil && options.StallCleanup != nil && !validStallCleanup(*options.StallCleanup) {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request",
 			"stall cleanup: strikes 1-50, check_minutes 1-1440, no_progress_hours 1-168, ignore_above_gb 0-100000")
+		return false
+	}
+	if options != nil && options.Priority != nil && (*options.Priority < 1 || *options.Priority > 50) {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "priority must be between 1 and 50")
 		return false
 	}
 	if options != nil && options.MaxQueued != nil && (*options.MaxQueued < 1 || *options.MaxQueued > 1000) {

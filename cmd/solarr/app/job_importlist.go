@@ -66,7 +66,7 @@ func (p *process) registerProwlarrSyncJob(registry *jobs.Registry, executor *job
 	if err := registry.Register(prowlarrSyncJob); err != nil {
 		return err
 	}
-	executor.Handle(prowlarrSyncJob.Type, adapters.Prowlarr{Cache: p.cache, List: p.listProwlarr, Proxies: p.listProwlarrProxies, Clock: clock.NewSystem(), Logger: p.logger})
+	executor.Handle(prowlarrSyncJob.Type, adapters.Prowlarr{Cache: p.cache, List: p.listProwlarr, Proxies: p.listProwlarrProxies, Lidarr: p.arrClientFactory(), Clock: clock.NewSystem(), Logger: p.logger})
 	return nil
 }
 

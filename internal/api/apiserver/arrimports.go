@@ -514,7 +514,10 @@ type ArrConnections interface {
 }
 
 // ProwlarrSyncResult counts what one Prowlarr sync did.
-type ProwlarrSyncResult struct{ Added, Updated, Paused, Resumed, Skipped int64 }
+type ProwlarrSyncResult struct {
+	Added, Updated, Paused, Resumed, Skipped int64
+	ClientsAdded, ClientsWaiting             int64
+}
 
 func syncOptionsView(options settings.ProwlarrSync) gen.ProwlarrSyncOptions {
 	return gen.ProwlarrSyncOptions{
@@ -583,6 +586,7 @@ func (s *Server) SyncArrInstanceIndexers(w http.ResponseWriter, r *http.Request,
 	}
 	writeJSON(w, s.logger, http.StatusOK, gen.ProwlarrSyncResult{
 		Added: result.Added, Updated: result.Updated, Paused: result.Paused, Resumed: result.Resumed, Skipped: result.Skipped,
+		ClientsAdded: &result.ClientsAdded, ClientsWaiting: &result.ClientsWaiting,
 	})
 }
 

@@ -209,3 +209,14 @@ Solarr asks an indexer in the categories its own capabilities (t=caps) list for 
 indexer is searched, stored on it, and read again after a week or on Test. An indexer that lists nothing for a type is
 not asked for it; one that lists no categories at all is asked without any. Music categories can still be overridden
 by hand on the indexer; empty means the indexer's own.
+
+## Which download client gets a release
+
+Each client has a priority from 1 to 50 (lower first, default 25). A release goes to the client its indexer is bound to
+(the indexer's "Download client" choice, shown when more than one client takes its protocol) if that client is enabled
+and takes the protocol; otherwise to the lowest-numbered client that takes the protocol and has room in its queue. A
+bound client that is disabled does not stall the indexer: its releases go to the others.
+
+Prowlarr's sync can add its active download clients: those that sign in without a user name and need no API key or
+password are created with Prowlarr's priority and category; the others are counted as waiting and are added from the
+connection's "Use its download clients", which asks for the secret once because Prowlarr hides it.

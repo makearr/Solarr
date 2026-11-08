@@ -1285,10 +1285,11 @@ type AddIndexerRequest struct {
 	BaseUrl string  `json:"base_url"`
 
 	// Definition The /indexers/schema entry it is added from; on update, absent keeps the stored one.
-	Definition     *string `json:"definition,omitempty"`
-	EgressProxyUrl *string `json:"egress_proxy_url,omitempty"`
-	Enabled        *bool   `json:"enabled,omitempty"`
-	Impl           string  `json:"impl"`
+	Definition       *string `json:"definition,omitempty"`
+	DownloadClientId *int64  `json:"download_client_id,omitempty"`
+	EgressProxyUrl   *string `json:"egress_proxy_url,omitempty"`
+	Enabled          *bool   `json:"enabled,omitempty"`
+	Impl             string  `json:"impl"`
 
 	// MusicCategories Newznab categories for music; omitted or empty means the indexer's own, read from its capabilities.
 	MusicCategories *[]int `json:"music_categories,omitempty"`
@@ -2351,6 +2352,9 @@ type DownloaderOptions struct {
 
 	// MaxSeedMinutes Torrent clients: hard stop; the torrent is removed after this many minutes of seeding whatever the ratio. 0 or absent is none.
 	MaxSeedMinutes *int `json:"max_seed_minutes,omitempty"`
+
+	// Priority Of the clients that take a release, the lowest number is sent to first. Absent means 25.
+	Priority *int `json:"priority,omitempty"`
 
 	// RemotePath Where the client says its downloads are (remote path mapping).
 	RemotePath *string `json:"remote_path,omitempty"`
@@ -3448,6 +3452,9 @@ type Indexer struct {
 
 	// Definition The /indexers/schema entry it was added from ("nzbgeek"); absent for one added before the catalog.
 	Definition *string `json:"definition,omitempty"`
+
+	// DownloadClientId The download client this indexer's releases go to; absent or 0 means any that takes the protocol.
+	DownloadClientId *int64 `json:"download_client_id,omitempty"`
 
 	// EgressProxyUrl ADR-47, expert tier: an HTTP/SOCKS5 proxy for this indexer's own requests only. Empty means "use the global egress proxy, if any" -- not "no proxy". FlareSolverr is not yet built.
 	EgressProxyUrl *string `json:"egress_proxy_url,omitempty"`
@@ -4999,11 +5006,17 @@ type ProwlarrSyncOptions struct {
 
 // ProwlarrSyncResult defines model for ProwlarrSyncResult.
 type ProwlarrSyncResult struct {
-	Added   int64 `json:"added"`
-	Paused  int64 `json:"paused"`
-	Resumed int64 `json:"resumed"`
-	Skipped int64 `json:"skipped"`
-	Updated int64 `json:"updated"`
+	Added int64 `json:"added"`
+
+	// ClientsAdded Download clients created from Prowlarr's
+	ClientsAdded *int64 `json:"clients_added,omitempty"`
+
+	// ClientsWaiting Download clients that need a secret Prowlarr hides; add them under the connection's download clients.
+	ClientsWaiting *int64 `json:"clients_waiting,omitempty"`
+	Paused         int64  `json:"paused"`
+	Resumed        int64  `json:"resumed"`
+	Skipped        int64  `json:"skipped"`
+	Updated        int64  `json:"updated"`
 }
 
 // Proxy defines model for Proxy.
@@ -6122,10 +6135,11 @@ type UpdateIndexerRequest struct {
 	BaseUrl string `json:"base_url"`
 
 	// Definition The /indexers/schema entry it is added from; on update, absent keeps the stored one.
-	Definition     *string `json:"definition,omitempty"`
-	EgressProxyUrl *string `json:"egress_proxy_url,omitempty"`
-	Enabled        *bool   `json:"enabled,omitempty"`
-	Impl           string  `json:"impl"`
+	Definition       *string `json:"definition,omitempty"`
+	DownloadClientId *int64  `json:"download_client_id,omitempty"`
+	EgressProxyUrl   *string `json:"egress_proxy_url,omitempty"`
+	Enabled          *bool   `json:"enabled,omitempty"`
+	Impl             string  `json:"impl"`
 
 	// MusicCategories Newznab categories for music; omitted or empty means the indexer's own, read from its capabilities.
 	MusicCategories *[]int `json:"music_categories,omitempty"`

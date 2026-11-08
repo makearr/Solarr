@@ -2,12 +2,18 @@ package adapters_test
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/importing/arrimport"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
@@ -116,3 +122,48 @@ func TestProwlarrSyncGivesIndexersTheProxyTheyShareATagWith(t *testing.T) {
 		}
 	}
 }
+
+// A client that signs in without a user name or secret is created; one that needs an API key is only counted.
+func TestProwlarrSyncAddsDownloadClientsThatNeedNoSecret(t *testing.T) {
+	cache := newSweepCache(t)
+	cipher, err := secrets.New(make([]byte, 32))
+	if err != nil {
+		t.Fatalf("secrets.New: %v", err)
+	}
+	cache.EnableSecrets(cipher)
+	served := `[
+	 {"name":"qBit","implementation":"QBittorrent","protocol":"torrent","enable":true,"priority":3,"fields":[{"name":"host","value":"10.0.1.134"},{"name":"port","value":8086},{"name":"category","value":"prowlarr"}]},
+	 {"name":"SAB","implementation":"Sabnzbd","protocol":"usenet","enable":true,"priority":1,"fields":[{"name":"host","value":"10.0.1.134"},{"name":"port","value":8080}]}]`
+	instance, err := cache.CreateArrInstance(t.Context(), settings.ArrInstanceRequest{
+		App: settings.ArrAppProwlarr, Name: "P", BaseURL: "http://prowlarr.local", Enabled: true,
+	}, secrets.Secret("key"), 1)
+	if err != nil {
+		t.Fatalf("CreateArrInstance: %v", err)
+	}
+	prowlarr := adapters.Prowlarr{
+		Cache: cache, Clock: clock.NewFakeAtEpoch(),
+		List: func(context.Context, string, string) ([]indexer.ProwlarrIndexer, error) { return nil, nil },
+		Lidarr: func(baseURL, apiKey string) arrimport.LidarrClient {
+			fake := clock.NewFakeAtEpoch()
+			limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter)
+			breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute})
+			return arrimport.NewLidarrClient(httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), limiter, breaker, httpx.ClientConfig{
+				Provider: "prowlarr-test", UserAgent: "test", Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+					return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(served))}, nil
+				}),
+			}), baseURL, apiKey)
+		},
+	}
+	result, err := prowlarr.SyncIndexers(t.Context(), instance.ID)
+	if err != nil || result.ClientsAdded != 1 || result.ClientsWaiting != 1 {
+		t.Fatalf("sync = %+v, %v; want qBittorrent added and SABnzbd waiting for its key", result, err)
+	}
+	clients, _ := cache.Downloaders(t.Context())
+	if len(clients) != 1 || clients[0].Impl != "qbittorrent" || clients[0].Options().PriorityRank() != 3 || clients[0].Options().Category != "prowlarr" {
+		t.Errorf("clients = %+v", clients)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) { return f(request) }

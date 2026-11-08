@@ -10810,6 +10810,8 @@ components:
         paused: { type: integer, format: int64 }
         resumed: { type: integer, format: int64 }
         skipped: { type: integer, format: int64 }
+        clients_added: { type: integer, format: int64, description: Download clients created from Prowlarr's, those that need no secret. }
+        clients_waiting: { type: integer, format: int64, description: Download clients that need a secret Prowlarr hides; add them under the connection's download clients. }
 
     HistoryPage:
       type: object
@@ -11291,6 +11293,7 @@ components:
         caps_fetched_at: { type: string, format: date-time }
         api_key: { $ref: "#/components/schemas/SecretMask" }
         proxy_id: { type: integer, format: int64, description: The entry of /proxies this indexer's requests go through. }
+        download_client_id: { type: integer, format: int64, description: The download client this indexer's releases go to; absent or 0 means any that takes the protocol. }
         egress_proxy_url:
           type: string
           description: >-
@@ -11353,6 +11356,7 @@ components:
         priority: { type: integer, format: int64, minimum: 1, maximum: 50, default: 25, description: "Lower is preferred when several indexers list the same release." }
         egress_proxy_url: { type: string }
         proxy_id: { type: integer, format: int64 }
+        download_client_id: { type: integer, format: int64 }
         music_categories:
           type: array
           items: { type: integer }
@@ -11370,6 +11374,7 @@ components:
         priority: { type: integer, format: int64, minimum: 1, maximum: 50, default: 25 }
         egress_proxy_url: { type: string }
         proxy_id: { type: integer, format: int64 }
+        download_client_id: { type: integer, format: int64 }
         music_categories:
           type: array
           items: { type: integer }
@@ -11515,6 +11520,11 @@ components:
         local_path:
           type: string
           description: Where Solarr sees that same folder.
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 50
+          description: Of the clients that take a release, the lowest number is sent to first. Absent means 25.
         max_queued:
           type: integer
           minimum: 1

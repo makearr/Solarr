@@ -18,6 +18,8 @@ type DownloaderOptions struct {
 	LocalPath  string `json:"local_path,omitempty"`
 	// Category is Lidarr's client category; empty means the media type's own name ("music").
 	Category string `json:"category,omitempty"`
+	// Priority is 1 to 50, lower first: of the clients that take a release, the lowest number is sent to.
+	Priority *int `json:"priority,omitempty"`
 	// MaxQueued is ADR-57's queue depth: automatic sends beyond it are held, not sent.
 	MaxQueued *int `json:"max_queued,omitempty"`
 	// AlwaysSendUserGrabs and AlwaysSendRSSGrabs let a user's own grabs and RSS grabs past a full
@@ -128,6 +130,17 @@ func (d Downloader) Options() DownloaderOptions {
 // RemovesCompleted is RemoveCompleted with its default.
 func (o DownloaderOptions) RemovesCompleted() bool {
 	return o.RemoveCompleted == nil || *o.RemoveCompleted
+}
+
+// DefaultDownloaderPriority is a client's priority until one is set.
+const DefaultDownloaderPriority = 25
+
+// PriorityRank is Priority with its default.
+func (o DownloaderOptions) PriorityRank() int {
+	if o.Priority == nil {
+		return DefaultDownloaderPriority
+	}
+	return *o.Priority
 }
 
 // MaxQueuedDownloads is MaxQueued with its default.

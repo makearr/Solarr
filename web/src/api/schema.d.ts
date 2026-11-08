@@ -7546,6 +7546,16 @@ export interface components {
             resumed: number;
             /** Format: int64 */
             skipped: number;
+            /**
+             * Format: int64
+             * @description Download clients created from Prowlarr's
+             */
+            clients_added?: number;
+            /**
+             * Format: int64
+             * @description Download clients that need a secret Prowlarr hides; add them under the connection's download clients.
+             */
+            clients_waiting?: number;
         };
         /** @description One cursor page of download history. */
         HistoryPage: {
@@ -7982,6 +7992,11 @@ export interface components {
              * @description The entry of /proxies this indexer's requests go through.
              */
             proxy_id?: number;
+            /**
+             * Format: int64
+             * @description The download client this indexer's releases go to; absent or 0 means any that takes the protocol.
+             */
+            download_client_id?: number;
             /** @description ADR-47, expert tier: an HTTP/SOCKS5 proxy for this indexer's own requests only. Empty means "use the global egress proxy, if any" -- not "no proxy". FlareSolverr is not yet built. */
             egress_proxy_url?: string;
             source?: components["schemas"]["IndexerSource"];
@@ -8038,6 +8053,8 @@ export interface components {
             egress_proxy_url?: string;
             /** Format: int64 */
             proxy_id?: number;
+            /** Format: int64 */
+            download_client_id?: number;
             /** @description Newznab categories for music; omitted or empty means the indexer's own, read from its capabilities. */
             music_categories?: number[];
         };
@@ -8057,6 +8074,8 @@ export interface components {
             egress_proxy_url?: string;
             /** Format: int64 */
             proxy_id?: number;
+            /** Format: int64 */
+            download_client_id?: number;
             /** @description Newznab categories for music; omitted or empty means the indexer's own, read from its capabilities. */
             music_categories?: number[];
         };
@@ -8185,6 +8204,8 @@ export interface components {
             remote_path?: string;
             /** @description Where Solarr sees that same folder. */
             local_path?: string;
+            /** @description Of the clients that take a release, the lowest number is sent to first. Absent means 25. */
+            priority?: number;
             /** @description How many of Solarr's downloads this client may hold at once before further automatic sends are held (ADR-57). Absent means 10. */
             max_queued?: number;
             /** @description A user's own grab goes to this client even when it is full. Absent means yes. */

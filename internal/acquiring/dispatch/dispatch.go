@@ -45,6 +45,8 @@ type DownloaderConn struct {
 	Category string
 	// MaxQueued is ADR-57's queue depth: an automatic send beyond it is held. 0 means no limit.
 	MaxQueued int
+	// Priority is the client's, 1 to 50: of the clients that take a release the lowest number is sent to first.
+	Priority int
 	// AlwaysSendUser and AlwaysSendRSS let those grabs past a full queue (2026-09-29).
 	AlwaysSendUser bool
 	AlwaysSendRSS  bool
@@ -94,7 +96,9 @@ type Dispatch struct {
 	Acquisitions library.Acquisitions
 	Desired      library.Desired
 	Downloaders  DownloaderSource
-	Fetch        ReleaseFetcher
+	// BoundClient answers the download client an indexer is bound to, 0 for none: its releases go there.
+	BoundClient func(ctx context.Context, indexerID int64) int64
+	Fetch       ReleaseFetcher
 	// History is optional: told of every grab, for History and the album's page.
 	History func(ctx context.Context, kind download.HistoryKind, acquisition library.Acquisition, detail string)
 	// Ready is optional: where an automatic send is held while its client's queue is full.
@@ -150,7 +154,10 @@ func (d Dispatch) SendRelease(ctx context.Context, itemID int64, release library
 	if err != nil {
 		return library.Acquisition{}, fmt.Errorf("dispatch: downloaders: %w", err)
 	}
-	downloader, found := firstMatchingProtocol(downloaders, detail.ReleaseCandidate.Protocol)
+	downloader, found, err := d.choose(ctx, downloaders, detail.ReleaseCandidate.IndexerID, detail.ReleaseCandidate.Protocol)
+	if err != nil {
+		return library.Acquisition{}, fmt.Errorf("dispatch: %w", err)
+	}
 	if !found {
 		return library.Acquisition{}, ErrNoDownloaderForProtocol
 	}
@@ -229,12 +236,3 @@ func (d Dispatch) findDecision(ctx context.Context, itemID, decisionID int64) (l
 // for a manual, low-frequency action; the same ceiling
 // adapters.CandidateSearch's own history listing already uses.
 const DecisionLookupLimit = 100
-
-func firstMatchingProtocol(downloaders []DownloaderConn, protocol string) (DownloaderConn, bool) {
-	for _, downloader := range downloaders {
-		if downloader.Protocol == protocol {
-			return downloader, true
-		}
-	}
-	return DownloaderConn{}, false
-}

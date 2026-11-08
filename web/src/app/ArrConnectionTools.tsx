@@ -246,6 +246,8 @@ function ProwlarrSync({ instanceId }: { instanceId: number }) {
         <p className="text-xs text-ink-muted">
           {sync.data.added} added, {sync.data.updated} updated, {sync.data.paused} paused, {sync.data.resumed} resumed,
           {" "}{sync.data.skipped} left out. They are under Connections → Indexers.
+          {(sync.data.clients_added ?? 0) > 0 && ` ${sync.data.clients_added} download client(s) added.`}
+          {(sync.data.clients_waiting ?? 0) > 0 && ` ${sync.data.clients_waiting} more need a password or key: use "Use its download clients…".`}
         </p>
       )}
       {sync.isError && <p className="text-xs text-danger">{(sync.error as { detail?: string }).detail ?? "The sync failed."}</p>}

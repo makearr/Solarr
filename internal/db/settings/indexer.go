@@ -62,6 +62,17 @@ type indexerSettingsJSON struct {
 	Source     *IndexerSource `json:"source,omitempty"`
 	// ProxyID is the entry of the proxy list the indexer's requests go through.
 	ProxyID *int64 `json:"proxy_id,omitempty"`
+	// DownloadClientID binds the indexer's releases to one download client, referenced by id.
+	DownloadClientID *int64 `json:"download_client_id,omitempty"`
+}
+
+// DownloadClientID is the download client the indexer's releases are bound to; nil for any that takes the protocol.
+func (i Indexer) DownloadClientID() *int64 {
+	var parsed indexerSettingsJSON
+	if i.SettingsJSON == "" || json.Unmarshal([]byte(i.SettingsJSON), &parsed) != nil {
+		return nil
+	}
+	return parsed.DownloadClientID
 }
 
 // ProxyID is the proxy the indexer uses; nil for none.
@@ -128,12 +139,12 @@ func (i Indexer) Definition() string {
 // buildIndexerSettingsJSON encodes the request's egress and categories into SettingsJSON, or "" when
 // both are unset, so an indexer nobody configured still reads back with SettingsJSON == "".
 func buildIndexerSettingsJSON(request IndexerRequest) string {
-	if request.EgressProxyURL == "" && len(request.MusicCategories) == 0 && request.Definition == "" && request.Source == nil && request.ProxyID == nil {
+	if request.EgressProxyURL == "" && len(request.MusicCategories) == 0 && request.Definition == "" && request.Source == nil && request.ProxyID == nil && request.DownloadClientID == nil {
 		return ""
 	}
 	encoded, err := json.Marshal(indexerSettingsJSON{
 		Egress: IndexerEgress{ProxyURL: request.EgressProxyURL}, MusicCategories: request.MusicCategories,
-		Definition: request.Definition, Source: request.Source, ProxyID: request.ProxyID,
+		Definition: request.Definition, Source: request.Source, ProxyID: request.ProxyID, DownloadClientID: request.DownloadClientID,
 	})
 	if err != nil {
 		return ""
@@ -160,6 +171,8 @@ type IndexerRequest struct {
 	Source *IndexerSource
 	// ProxyID names a proxy of the proxy list; nil for none.
 	ProxyID *int64
+	// DownloadClientID binds releases to a download client; nil for any.
+	DownloadClientID *int64
 }
 
 // defaultIndexerPriority is Lidarr's default, what a request without one gets.

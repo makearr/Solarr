@@ -174,6 +174,7 @@ export function Indexers() {
                 {expert && indexer.egress_proxy_url ? ` · FlareSolverr proxy ${indexer.egress_proxy_url}` : ""}
               </span>
               <ProxyPicker indexer={indexer} onSaved={invalidate} />
+              <ClientPicker indexer={indexer} onSaved={invalidate} />
               <MusicCategories indexer={indexer} onSaved={invalidate} />
               {(() => {
                 const companion = missingDownloader(kindOf(indexer), indexer.base_url, downloaders.data ?? [], clientKinds.data ?? []);
@@ -663,4 +664,47 @@ function ProxyPicker({ indexer, onSaved }: { indexer: Indexer; onSaved: () => vo
       </select>
     </label>
   );
+}
+
+/** Which download client an indexer's releases go to: any that takes the protocol, or one of them. */
+function ClientPicker({ indexer, onSaved }: { indexer: Indexer; onSaved: () => void }) {
+  const downloaders = useQuery({ queryKey: ["downloaders"], queryFn: () => ok(api.GET("/downloaders")) });
+  const save = useMutation({
+    mutationFn: (clientId: number) =>
+      ok(api.PATCH("/indexers/{id}", {
+        params: { path: { id: indexer.id } },
+        body: {
+          name: indexer.name, impl: indexer.impl, base_url: indexer.base_url, priority: indexer.priority,
+          enabled: indexer.enabled, egress_proxy_url: indexer.egress_proxy_url, music_categories: indexer.music_categories,
+          download_client_id: clientId,
+        },
+      })),
+    onSuccess: onSaved,
+  });
+  const protocol = kindProtocol(indexer.impl);
+  const fitting = (downloaders.data ?? []).filter((client) => client.protocol === protocol);
+  if (fitting.length < 2 && !indexer.download_client_id) return null;
+  return (
+    <label className="flex items-center gap-1.5 text-xs text-ink-muted">
+      Download client
+      <select
+        className={inputStyle}
+        value={indexer.download_client_id ?? 0}
+        disabled={save.isPending}
+        onChange={(event) => save.mutate(Number(event.target.value))}
+      >
+        <option value={0}>Any that takes {protocol}</option>
+        {fitting.map((client) => (
+          <option key={client.id} value={client.id}>{client.name}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** How an implementation's releases are downloaded: usenet for Newznab, soulseek's own, else torrent. */
+function kindProtocol(impl: string): string {
+  if (impl === "newznab") return "usenet";
+  if (impl === "soulseek") return "ddl";
+  return "torrent";
 }
