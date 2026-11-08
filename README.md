@@ -778,6 +778,10 @@ standards](documentation/coding-standards.md) and judge the result yourself.
 Changes since the first release, **2026.10.001.515** (25 October 2026), newest areas first. The history of earlier
 releases is in [CHANGELOG.md](CHANGELOG.md), and the commit log has every detail.
 
+**Upgrading:** databases created by 2026.10.001.515 or earlier are refused at start-up (one baseline migration per
+database now). Use the *Arr import or start a fresh config folder; the first start on the new layout moves
+`data/{db,cache,backups}` to `{db,cache,backups}` by itself.
+
 - **Books and audiobooks are real libraries.** Metadata from Open Library, Google Books, Hardcover, FantLab, iTunes and
   Audible (with Audnexus), covers, one collection per series and the books a series still lacks, **Monitor** on a
   whole series, **follow an author**, and a **Narrators** level, filter and column for audiobooks.

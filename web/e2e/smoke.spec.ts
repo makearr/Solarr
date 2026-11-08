@@ -205,13 +205,14 @@ test("a target quality can be made under quality profiles, and language profiles
   await signIn(page);
   await page.goto("/quality-profiles");
   await expect(page.getByRole("heading", { name: "Target qualities" })).toBeVisible();
+  await page.getByRole("button", { name: "Languages", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Language profiles" })).toBeVisible();
+  await page.getByRole("button", { name: "Target qualities", exact: true }).click();
 
   await page.getByRole("button", { name: "New target" }).click();
   await page.getByLabel("Name").first().fill("E2E 1080p");
-  await page.getByRole("combobox", { name: /^For/ }).selectOption("tv");
   for (const group of ["Container", "Video", "Audio"]) {
-    await expect(page.getByText(group, { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("group", { name: group, exact: true })).toBeVisible();
   }
   await page.screenshot({ path: "/e2e-out/target-form.png" });
   await page.getByRole("button", { name: "Save", exact: true }).click();
