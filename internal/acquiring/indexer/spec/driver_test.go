@@ -242,3 +242,23 @@ func TestTemplatesReadDotNetStyle(t *testing.T) {
 		}
 	}
 }
+
+func TestRequestsAreSentInTheSitesCharacterSet(t *testing.T) {
+	var raw string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw = r.URL.RawQuery
+		w.Header().Set("Content-Type", "text/html")
+		// "Привет" in windows-1251.
+		_, _ = w.Write([]byte("<table><tr class=\"r\"><td class=\"n\"><a href=\"/t/1\">\xcf\xf0\xe8\xe2\xe5\xf2</a></td><td class=\"c\">Lossless</td><td class=\"s\">1 MB</td><td class=\"se\">1</td><td class=\"le\">1</td><td class=\"d\">1 hour ago</td><td><a class=\"dl\" href=\"magnet:?xt=urn:btih:ab\">m</a></td></tr></table>"))
+	}))
+	defer server.Close()
+	spec := htmlSpec()
+	spec.Encoding = "windows-1251"
+	items, err := testDriver(t, spec, server, nil).Search(t.Context(), indexer.SearchRequest{Query: "Привет"})
+	if err != nil || len(items) != 1 || items[0].Title != "Привет" {
+		t.Fatalf("Search = %+v, %v; want the title decoded from windows-1251", items, err)
+	}
+	if !strings.Contains(raw, "q=%CF%F0%E8%E2%E5%F2") {
+		t.Errorf("query = %q, want the keywords as windows-1251 bytes", raw)
+	}
+}

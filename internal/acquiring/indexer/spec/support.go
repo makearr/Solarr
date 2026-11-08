@@ -3,6 +3,8 @@ package spec
 import (
 	"slices"
 	"strings"
+
+	"golang.org/x/text/encoding/htmlindex"
 )
 
 // Unsupported lists why the engine cannot search the spec; empty means it can.
@@ -30,8 +32,9 @@ func (s Spec) Unsupported() []string {
 		add("results grouped under date headings")
 	}
 	if enc := strings.ToLower(s.Encoding); enc != "" && enc != "utf-8" && enc != "utf8" {
-		// Pages are decoded by their declared charset, but forms and queries are sent as UTF-8.
-		add("a site that expects " + s.Encoding + " requests")
+		if _, err := htmlindex.Get(enc); err != nil {
+			add("the " + s.Encoding + " character set")
+		}
 	}
 	check := func(text string) {
 		if strings.Contains(text, "{{") {

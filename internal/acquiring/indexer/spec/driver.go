@@ -17,6 +17,8 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/net/html/charset"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/htmlindex"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -117,7 +119,7 @@ type page struct {
 func (d *Driver) fetch(ctx context.Context, method, target string, form url.Values, headers map[string][]string) (page, error) {
 	var body io.Reader
 	if method == http.MethodPost {
-		body = strings.NewReader(form.Encode())
+		body = strings.NewReader(d.encodeValues(form))
 	}
 	request, err := http.NewRequestWithContext(ctx, method, target, body)
 	if err != nil {
@@ -150,7 +152,11 @@ func (d *Driver) fetch(ctx context.Context, method, target string, form url.Valu
 	if len(raw) > maxAnswerBytes {
 		return page{}, fmt.Errorf("spec: %s answered more than %d bytes", d.spec.ID, maxAnswerBytes)
 	}
-	if reader, err := charset.NewReader(bytes.NewReader(raw), response.Header.Get("Content-Type")); err == nil {
+	contentType := response.Header.Get("Content-Type")
+	if !strings.Contains(strings.ToLower(contentType), "charset") && d.encoder() != nil {
+		contentType += "; charset=" + d.spec.Encoding
+	}
+	if reader, err := charset.NewReader(bytes.NewReader(raw), contentType); err == nil {
 		if decoded, err := io.ReadAll(reader); err == nil {
 			raw = decoded
 		}
@@ -239,7 +245,7 @@ func (d *Driver) login(ctx context.Context) error {
 		}
 	}
 	if method == http.MethodGet {
-		target += map[bool]string{true: "&", false: "?"}[strings.Contains(target, "?")] + inputs.Encode()
+		target += map[bool]string{true: "&", false: "?"}[strings.Contains(target, "?")] + d.encodeValues(inputs)
 	}
 	answer, err := d.fetch(ctx, method, target, inputs, login.Headers)
 	if err != nil {
@@ -488,7 +494,7 @@ func (d *Driver) searchPath(ctx context.Context, path SearchPath, variables *Var
 		method = http.MethodPost
 	}
 	if method == http.MethodGet {
-		query := inputs.Encode()
+		query := d.encodeValues(inputs)
 		if raw != "" {
 			query = strings.TrimPrefix(query+"&"+raw, "&")
 		}
@@ -763,4 +769,46 @@ func (d *Driver) absolute(link string) string {
 		return link
 	}
 	return resolved
+}
+
+// encoder is the encoder of the character set the site expects requests in; nil for UTF-8.
+func (d *Driver) encoder() *encoding.Encoder {
+	name := strings.ToLower(d.spec.Encoding)
+	if name == "" || name == "utf-8" || name == "utf8" {
+		return nil
+	}
+	found, err := htmlindex.Get(name)
+	if err != nil {
+		return nil
+	}
+	return found.NewEncoder()
+}
+
+// encodeValues writes a form or query as the site expects it: each key and value in its character set, then escaped.
+func (d *Driver) encodeValues(values url.Values) string {
+	encoder := d.encoder()
+	if encoder == nil {
+		return values.Encode()
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	escape := func(text string) string {
+		if converted, err := encoder.String(text); err == nil {
+			text = converted
+		}
+		return url.QueryEscape(text)
+	}
+	var out strings.Builder
+	for _, key := range keys {
+		for _, value := range values[key] {
+			if out.Len() > 0 {
+				out.WriteByte('&')
+			}
+			out.WriteString(escape(key) + "=" + escape(value))
+		}
+	}
+	return out.String()
 }
