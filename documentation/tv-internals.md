@@ -2,8 +2,7 @@
 
 > **Level: 🔴 Expert.** How the TV parser, providers and storage fit together.
 
-TV is built after music (`private/next.md` section 6 holds the plan and its open items). This page records what the
-code does, not the plan.
+This page records what the TV code does, not the plan.
 
 ## Parsing a release or file name (`internal/identify/parsetv`)
 

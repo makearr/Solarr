@@ -7,7 +7,7 @@ are your own; another user does not see them.
 ## What can be hearted (🟡)
 
 Albums, series, films and other works; songs and episodes; artists, actors and other people; studios, labels and
-networks; collections.
+networks; collections; tags (a heart on a tag opens the items carrying it).
 
 The heart sits on the cover (shown on hover until it is set), in the **Favorite** column of every table, in the
 overview rows, on the track and episode rows of a work, and beside the name on a person, organisation, work or

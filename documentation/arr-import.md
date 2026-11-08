@@ -37,6 +37,13 @@ connection or in the setup assistant). It is the one thing Solarr writes to an *
 - It runs every six hours (*Send monitoring back to the *Arrs* in the scheduler), and *Send now* on the connection does it at once;
   the connection shows when it last did and how many items changed.
 
+## Living beside the *Arrs
+
+In **`arr_companion`** mode ([solarr-mode.md](solarr-mode.md)) Solarr never searches or downloads. An item added in Solarr is
+handed to the connected Radarr, Sonarr, Lidarr (an album or artist by MusicBrainz id) or Whisparr (a scene, by its StashDB or
+ThePornDB id) under that *Arr's most-used profile and folder, and Solarr follows the *Arr's monitoring and finds the file at
+the next scan.
+
 ## Where it is
 
 `internal/importing/arrimport` (the clients, including `SetMonitored`), `internal/importing/arrmap` (the walk, the monitoring

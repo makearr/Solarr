@@ -156,6 +156,10 @@ Quality page the target comes first and the profile list below it, "none" by def
 media type's preferred ("Space conscious") target and no profile; a type with no shipped target (comics, ROMs) still starts with the
 kind's profiles. For the others the kind's profiles (Anime 1080p) are offered as one-click "Suggested for this kind of library" buttons in the expert profile section of the library's Quality page.
 
+**A target for one work.** The Add and Edit dialogs can set a target for a single work (`desired_target_override`); the
+judge prefers it over the library's target (`judge.LibraryProfiles`). The Add dialog no longer rewrites the library's
+target. How close the files already owned are is still judged against the library's target.
+
 ## Families, names and tiles
 
 Target qualities belong to a **family** of media types, not to one type (migration 0069, `settings.TargetFamily`): **video**

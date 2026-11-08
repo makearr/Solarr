@@ -63,7 +63,7 @@ convention. Write `section 5.5`, not `§5.5`, in SQL.
   foreign key into the one being rebuilt, `DROP TABLE` cascades those rows away the instant it
   runs — even though every id is about to be preserved in the replacement table under the same
   name. This is not a guess; it was confirmed with a throwaway script before writing migration
-  0030 (`private/notes.md` §3, todo 4.23/F33). `PRAGMA foreign_keys=OFF` is the documented fix,
+  0030 (todo 4.23/F33). `PRAGMA foreign_keys=OFF` is the documented fix,
   but it is **also a no-op inside a transaction**, and `store.applyMigration` always runs a
   migration's SQL inside one. A migration that needs this puts
   `-- migrate:disable-foreign-keys` anywhere in its own `.sql` file (`migrations.go`'s own

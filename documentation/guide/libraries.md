@@ -55,6 +55,7 @@ merged name keeps leading there when a provider uses it again), adds or deletes 
   it. None of that comes back undone on a refresh.
 - Collections of different libraries that a provider puts in one franchise (the same Star Wars in the movie and the book library) are **linked by shared franchise keys**; **Unlink** is sticky, so a pair you separated is not joined again.
 - **Merge duplicates** (administrators) shows the collections that are one said twice and folds each group into its largest; **Link** joins a collection with one of another library so each shows the other's works. Collection posters carry the same coverage bar as artists, and a view (search, order, favorites) can be saved by name.
+- **Music**: collections come from MusicBrainz series, for soundtracks and compilation albums alike.
 - **A show and its films.** A film collection named for a series ("Sex and the City Collection"), or a film titled as
   a show's movie ("Veronica Mars: The Movie"), is linked with a collection holding that series (made if the series is in
   none), and each shows the other. It matches by title, so two series of one name match none, and a franchise of the
@@ -72,7 +73,8 @@ merged name keeps leading there when a provider uses it again), adds or deletes 
 **Filter** (Series, Cast, and the Artists and Albums levels) is Sonarr's custom filter: build conditions (field,
 operator, value) that must all hold, optionally name and save them, and pick a saved one from the menu. The
 active filter is in the address, so a link keeps it. A **Person** filter beside Tags narrows a library's list to
-one person's works (type-ahead over people).
+one person's works (type-ahead over people). A saved filter also keeps the list's search text, tags and person, so one
+filter restores the whole view.
 
 ## Quality, naming and files per library (🟡)
 

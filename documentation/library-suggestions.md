@@ -26,6 +26,7 @@ kind's shipped ones (`media.LibraryKind.Rules`, `internal/media/screen/kinds.go`
 | Documentary | Documentary |
 | Kids | Kids; Family |
 | Reality | Reality |
+| Daily | none: the kind only types its series as daily shows (guide/tv.md) |
 
 A further media type of a library uses the library's rules and kind.
 

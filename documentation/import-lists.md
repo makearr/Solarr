@@ -3,7 +3,8 @@
 > **Level: 🟡 Advanced.** Lists that add series for you.
 
 A library's import lists add the works a list names (ADR-38): an AniList season, an AniList user's list, a TMDB list,
-TMDB's trending or popular shows. They are the third source of discovery, after what the library itself suggests and
+TMDB's trending or popular shows, an MDBList list, or (adult libraries) a StashDB favourites list. Every library's lists are
+also gathered under **Connections → Import lists**. They are the third source of discovery, after what the library itself suggests and
 the people it follows, and they are previewed before they are enabled.
 
 ## The pieces

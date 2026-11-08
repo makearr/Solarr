@@ -29,5 +29,5 @@ categories, so none of them knows about mixing. What makes them one library:
 
 ## Anime
 
-Adding a TV library of the kind *Anime* offers "Also holds movies", ticked: the library is created and the movie member is added
+The new-library form's **Also holds** offers every other media type, adult included. A TV library of the kind *Anime* has "Movies" ticked: the library is created and the movie member is added
 at once, so anime series and anime films are one library (`useNewLibrary`).

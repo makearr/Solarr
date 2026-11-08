@@ -20,7 +20,7 @@ the importer passes in and answers with a `model.Rejection` or nothing.
 | FullSeason (one file named as a whole season) | `rules.FullSeason` | TV importer |
 | SplitEpisode (one episode split over files) | `rules.SplitEpisode` | TV importer |
 | AbsoluteEpisodeNumber (anime, naming needs it, recently aired) | `rules.MissingAbsolute` | pending the naming flag |
-| EpisodeTitle (never / bulk season releases / always; TBA or empty, aired within 48 h) | `rules.EpisodeTitle` | pending a setting; open question in `private/questions.md` |
+| EpisodeTitle (never / bulk season releases / always; TBA or empty, aired within 48 h) | `rules.EpisodeTitle` | TV importer, by the library's **Episode Title Required** (always, the default; whole-season releases only; never): see `tv.IsTBA`, `TitleWaitAfterAiring` |
 | MatchesGrab (episodes outside the grabbed release) | `rules.NotInRelease`, `rules.Unexpected` | pending |
 | MatchesFolder (episodes unexpected by the folder name) | `rules.Unexpected` | pending (unimplemented in Radarr) |
 | SameEpisodesImport (the file on disk holds more episodes) | `rules.ExistingHasMore` | pending |

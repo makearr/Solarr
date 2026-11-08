@@ -88,6 +88,8 @@ time zone**.
   preview which episodes move, apply. The files follow their episodes and keep their names until you rename them.
 - **Edit → Series type** shows what was detected (anime, daily or standard) and lets you change it. Anime
   seasons are also searched by absolute episode number.
+- Where TheXEM maps a series' scene numbering, searches and imports use its numbers, so a release numbered the scene's way lands
+  on the right episode.
 
 ## Crossovers (🟡)
 
@@ -107,7 +109,8 @@ providers' episode lists again at once, so the parts it supplies show up.
 
 ## Quality for TV (🟡)
 
-**Quality profiles** (Settings, then Quality profiles) are edited with a form: rank resolution, source, codec,
+**Settings → Quality** opens on the **target** (a named preset per library; a single series can have its own in the Add and
+Edit dialogs); **quality profiles**, below it at the advanced and expert levels, are edited with a form: rank resolution, source, codec,
 HDR and audio best first, set the lowest and highest resolution accepted, name codecs never to accept, require
 an audio language, and list **preferred release groups** that rank above an otherwise equal release. A profile's
 target for video also takes file types (mkv, mp4, avi, wmv, mpeg, ts ...), audio channels, audio and subtitle
