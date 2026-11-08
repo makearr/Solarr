@@ -167,3 +167,32 @@ func TestProwlarrSyncAddsDownloadClientsThatNeedNoSecret(t *testing.T) {
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) { return f(request) }
+
+func TestProwlarrSyncTellsTwoConnectionsSameNamedIndexersApart(t *testing.T) {
+	cache := newSweepCache(t)
+	cipher, err := secrets.New(make([]byte, 32))
+	if err != nil {
+		t.Fatalf("secrets.New: %v", err)
+	}
+	cache.EnableSecrets(cipher)
+	listed := func(base string) func(context.Context, string, string) ([]indexer.ProwlarrIndexer, error) {
+		return func(context.Context, string, string) ([]indexer.ProwlarrIndexer, error) {
+			return []indexer.ProwlarrIndexer{{ProwlarrID: 1, Name: "NZBgeek", Impl: "newznab", Enabled: true, Supported: true, BaseURL: base + "/1"}}, nil
+		}
+	}
+	for index, name := range []string{"One", "Two"} {
+		base := "http://prowlarr" + name
+		instance, err := cache.CreateArrInstance(t.Context(), settings.ArrInstanceRequest{App: settings.ArrAppProwlarr, Name: name, BaseURL: base, Enabled: true}, secrets.Secret("k"), 1)
+		if err != nil {
+			t.Fatalf("CreateArrInstance: %v", err)
+		}
+		prowlarr := adapters.Prowlarr{Cache: cache, Clock: clock.NewFakeAtEpoch(), List: listed(base)}
+		if result, err := prowlarr.SyncIndexers(t.Context(), instance.ID); err != nil || result.Added != 1 {
+			t.Fatalf("sync %d = %+v, %v", index, result, err)
+		}
+	}
+	indexers, _ := cache.Indexers(t.Context())
+	if len(indexers) != 2 || indexers[0].Name == indexers[1].Name {
+		t.Errorf("indexers = %+v, want two with different names", indexers)
+	}
+}

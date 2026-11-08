@@ -261,7 +261,9 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 		return SyncResult{}, err
 	}
 	byBase, bySource := map[string]settings.Indexer{}, map[int64]settings.Indexer{}
+	names := map[string]bool{}
 	for _, existing := range configured {
+		names[existing.Name] = true
 		byBase[existing.BaseURL] = existing
 		if source := existing.Source(); source != nil && source.ArrID == instanceID {
 			bySource[source.ExternalID] = existing
@@ -273,6 +275,7 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 	}
 	now := a.Clock.Now().Unix()
 	var result SyncResult
+	var failures []error
 	proxyOf, err := a.syncProxies(ctx, instance, key, options, now)
 	if err != nil {
 		return result, err
@@ -295,11 +298,18 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 			existing, found = byBase[entry.BaseURL]
 		}
 		if !found {
+			// Two Prowlarrs often serve the same site; the second is told apart by its connection's name.
+			name := entry.Name
+			if names[name] {
+				name = entry.Name + " (" + instance.Name + ")"
+			}
+			names[name] = true
 			if _, err := a.Cache.CreateIndexer(ctx, settings.IndexerRequest{
-				Name: entry.Name, Impl: entry.Impl, BaseURL: entry.BaseURL, Enabled: entry.Enabled, Priority: entry.Priority,
+				Name: name, Impl: entry.Impl, BaseURL: entry.BaseURL, Enabled: entry.Enabled, Priority: entry.Priority,
 				Source: source, ProxyID: proxyOf(entry), QueriesPerHour: entry.QueriesPerHour,
 			}, secret, now); err != nil {
-				return result, fmt.Errorf("add %s: %w", entry.Name, err)
+				failures = append(failures, fmt.Errorf("add %s: %w", entry.Name, err))
+				continue
 			}
 			result.Added++
 			continue
@@ -323,21 +333,23 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 			queries = entry.QueriesPerHour
 		}
 		request := settings.IndexerRequest{
-			Name: entry.Name, Impl: entry.Impl, BaseURL: entry.BaseURL, Enabled: enabled, Priority: existing.Priority,
+			Name: existing.Name, Impl: entry.Impl, BaseURL: entry.BaseURL, Enabled: enabled, Priority: existing.Priority,
 			EgressProxyURL: existing.Egress().ProxyURL, MusicCategories: existing.StoredMusicCategories(),
 			Definition: existing.Definition(), Source: source, ProxyID: chosen, DownloadClientID: existing.DownloadClientID(), QueriesPerHour: queries,
 		}
 		if _, err := a.Cache.UpdateIndexer(ctx, existing.ID, request, now); err != nil {
-			return result, fmt.Errorf("update %s: %w", entry.Name, err)
+			failures = append(failures, fmt.Errorf("update %s: %w", entry.Name, err))
+			continue
 		}
 		if held, err := a.Cache.DecryptedIndexerAPIKey(ctx, existing.ID); err != nil || held.Reveal() != secret.Reveal() {
 			if err := a.Cache.SetIndexerAPIKey(ctx, existing.ID, secret, now); err != nil {
-				return result, fmt.Errorf("key of %s: %w", entry.Name, err)
+				failures = append(failures, fmt.Errorf("key of %s: %w", entry.Name, err))
+				continue
 			}
 		}
 		result.Updated++
 	}
-	return result, nil
+	return result, errors.Join(failures...)
 }
 
 // followsProxy reports whether the proxy is one this Prowlarr connection's sync made, so the sync may change it.
