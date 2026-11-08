@@ -61,3 +61,14 @@ Two libraries of one media type can be merged (Settings, Libraries, *Merge intoâ
 items, requests, collections, import sessions, moves and follows of the first become the second's, its root folders are
 attached to the second, its access grants are dropped and it is removed. A work both held is wanted once. Files stay where
 they are; each library's rollups are recomputed.
+
+## Prowlarr sync
+
+A Prowlarr connection keeps indexers in step instead of importing a library. Under the connection, choose what follows:
+active indexers, paused indexers (added paused), only indexers with a category of a media type Solarr serves (movies,
+audio, TV, adult, books; not console or PC), and whether to sync every hour. **Sync now** runs it at once; the task
+"Sync Prowlarr indexers" runs the automatic ones. The followed indexers appear under Connections > Indexers marked
+"via Prowlarr", searched through Prowlarr's per-indexer address with Prowlarr's key.
+
+Priority comes from Prowlarr when an indexer is added and is Solarr's after that. A pause follows Prowlarr only when
+Prowlarr's own flag has changed since the last sync, so pausing an indexer here is not undone by the next sync.

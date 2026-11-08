@@ -2,7 +2,9 @@ package adapters
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"strings"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
+	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -20,6 +23,31 @@ type Prowlarr struct {
 	List   func(ctx context.Context, baseURL, apiKey string) ([]indexer.ProwlarrIndexer, error)
 	Lidarr LidarrClientFactory
 	Clock  clock.Clock
+	Logger *slog.Logger
+}
+
+// Run syncs every enabled Prowlarr connection whose sync is automatic; one failing does not stop the others.
+func (a Prowlarr) Run(ctx context.Context, _ jobs.Job) error {
+	instances, err := a.Cache.ArrInstances(ctx)
+	if err != nil {
+		return err
+	}
+	var failures []error
+	for _, instance := range instances {
+		if instance.App != settings.ArrAppProwlarr || !instance.Enabled || !instance.Sync().Automatic {
+			continue
+		}
+		_, err := a.syncIndexers(ctx, instance.ID)
+		message := ""
+		if err != nil {
+			message = err.Error()
+			failures = append(failures, fmt.Errorf("%s: %w", instance.Name, err))
+		}
+		if recorded := a.Cache.SetArrInstanceSyncResult(ctx, instance.ID, a.Clock.Now().Unix(), message); recorded != nil && a.Logger != nil {
+			a.Logger.Warn("record prowlarr sync", slog.Int64("instance_id", instance.ID), slog.Any("error", recorded))
+		}
+	}
+	return errors.Join(failures...)
 }
 
 func (a Prowlarr) ListProwlarr(ctx context.Context, baseURL, apiKey string) ([]apiserver.ProwlarrIndexerRow, error) {
@@ -198,4 +226,91 @@ func SameClientAddress(a, b string) bool {
 	}
 	left := hostPort(a)
 	return left != "" && left == hostPort(b)
+}
+
+// SyncResult counts what one Prowlarr sync did.
+type SyncResult struct {
+	Added, Updated, Paused, Resumed, Skipped int64
+}
+
+// SyncIndexers keeps the indexers the options choose in step with the Prowlarr connection: new ones are added, the
+// address, name and key follow Prowlarr, and a pause changes here only when it changed there since the last sync.
+func (a Prowlarr) SyncIndexers(ctx context.Context, instanceID int64) (apiserver.ProwlarrSyncResult, error) {
+	result, err := a.syncIndexers(ctx, instanceID)
+	return apiserver.ProwlarrSyncResult(result), err
+}
+
+func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResult, error) {
+	instance, key, err := a.connection(ctx, instanceID, settings.ArrAppProwlarr)
+	if err != nil {
+		return SyncResult{}, err
+	}
+	options := instance.Sync()
+	listed, err := a.List(ctx, instance.BaseURL, key)
+	if err != nil {
+		return SyncResult{}, err
+	}
+	configured, err := a.Cache.Indexers(ctx)
+	if err != nil {
+		return SyncResult{}, err
+	}
+	byBase, bySource := map[string]settings.Indexer{}, map[int64]settings.Indexer{}
+	for _, existing := range configured {
+		byBase[existing.BaseURL] = existing
+		if source := existing.Source(); source != nil && source.ArrID == instanceID {
+			bySource[source.ExternalID] = existing
+		}
+	}
+	secret, err := a.Cache.DecryptedAPIKey(ctx, instanceID)
+	if err != nil {
+		return SyncResult{}, err
+	}
+	now := a.Clock.Now().Unix()
+	var result SyncResult
+	for _, entry := range listed {
+		if (entry.Enabled && !options.ActiveIndexers) || (!entry.Enabled && !options.PausedIndexers) ||
+			(options.SupportedOnly && !entry.Supported) {
+			result.Skipped++
+			continue
+		}
+		source := &settings.IndexerSource{ArrID: instanceID, ExternalID: entry.ProwlarrID, UpstreamEnabled: entry.Enabled}
+		existing, found := bySource[entry.ProwlarrID]
+		if !found {
+			existing, found = byBase[entry.BaseURL]
+		}
+		if !found {
+			if _, err := a.Cache.CreateIndexer(ctx, settings.IndexerRequest{
+				Name: entry.Name, Impl: entry.Impl, BaseURL: entry.BaseURL, Enabled: entry.Enabled, Priority: entry.Priority,
+				Source: source,
+			}, secret, now); err != nil {
+				return result, fmt.Errorf("add %s: %w", entry.Name, err)
+			}
+			result.Added++
+			continue
+		}
+		enabled := existing.Enabled
+		if previous := existing.Source(); previous == nil || previous.UpstreamEnabled != entry.Enabled {
+			enabled = entry.Enabled
+			if enabled != existing.Enabled && enabled {
+				result.Resumed++
+			} else if enabled != existing.Enabled {
+				result.Paused++
+			}
+		}
+		request := settings.IndexerRequest{
+			Name: entry.Name, Impl: entry.Impl, BaseURL: entry.BaseURL, Enabled: enabled, Priority: existing.Priority,
+			EgressProxyURL: existing.Egress().ProxyURL, MusicCategories: existing.StoredMusicCategories(),
+			Definition: existing.Definition(), Source: source,
+		}
+		if _, err := a.Cache.UpdateIndexer(ctx, existing.ID, request, now); err != nil {
+			return result, fmt.Errorf("update %s: %w", entry.Name, err)
+		}
+		if held, err := a.Cache.DecryptedIndexerAPIKey(ctx, existing.ID); err != nil || held.Reveal() != secret.Reveal() {
+			if err := a.Cache.SetIndexerAPIKey(ctx, existing.ID, secret, now); err != nil {
+				return result, fmt.Errorf("key of %s: %w", entry.Name, err)
+			}
+		}
+		result.Updated++
+	}
+	return result, nil
 }

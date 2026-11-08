@@ -3065,6 +3065,56 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         "502": { $ref: "#/components/responses/Problem" }
 
+  /arr/instances/{id}/prowlarr-sync:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getArrInstanceSyncOptions
+      tags: [settings]
+      summary: What a Prowlarr connection keeps in step with Solarr. Administrator only.
+      responses:
+        "200":
+          description: The options, the defaults until set.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProwlarrSyncOptions" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setArrInstanceSyncOptions
+      tags: [settings]
+      summary: Set what a Prowlarr connection keeps in step with Solarr. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProwlarrSyncOptions" }
+      responses:
+        "200":
+          description: The options as stored.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProwlarrSyncOptions" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: syncArrInstanceIndexers
+      tags: [settings]
+      summary: Sync the connection's indexers now, by its options. Administrator only.
+      responses:
+        "200":
+          description: What the sync did.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProwlarrSyncResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
+
   /arr/instances/{id}/downloadclients:
     parameters:
       - name: id
@@ -10675,6 +10725,27 @@ components:
           type: boolean
           description: An indexer with this base URL is already configured here.
 
+    ProwlarrSyncOptions:
+      type: object
+      required: [active_indexers, paused_indexers, supported_only, download_clients, proxies, automatic]
+      properties:
+        active_indexers: { type: boolean, description: Follow Prowlarr's enabled indexers. }
+        paused_indexers: { type: boolean, description: Follow Prowlarr's paused indexers, added paused. }
+        supported_only: { type: boolean, description: Only indexers with a category of a media type Solarr serves. }
+        download_clients: { type: boolean, description: Offer Prowlarr's active download clients. }
+        proxies: { type: boolean, description: Follow the proxies Prowlarr's indexers use (FlareSolverr included). }
+        automatic: { type: boolean, description: Sync on the schedule, not only when asked. }
+
+    ProwlarrSyncResult:
+      type: object
+      required: [added, updated, paused, resumed, skipped]
+      properties:
+        added: { type: integer, format: int64 }
+        updated: { type: integer, format: int64 }
+        paused: { type: integer, format: int64 }
+        resumed: { type: integer, format: int64 }
+        skipped: { type: integer, format: int64 }
+
     HistoryPage:
       type: object
       description: One cursor page of download history.
@@ -11160,6 +11231,8 @@ components:
             ADR-47, expert tier: an HTTP/SOCKS5 proxy for this indexer's own
             requests only. Empty means "use the global egress proxy, if any"
             -- not "no proxy". FlareSolverr is not yet built.
+        source:
+          $ref: "#/components/schemas/IndexerSource"
         music_categories:
           type: array
           items: { type: integer }
@@ -11168,6 +11241,14 @@ components:
             (Audio) unless set.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+
+    IndexerSource:
+      type: object
+      description: The indexer of a connected Prowlarr that this one follows.
+      required: [arr_id, external_id]
+      properties:
+        arr_id: { type: integer, format: int64 }
+        external_id: { type: integer, format: int64 }
 
     AddIndexerRequest:
       type: object

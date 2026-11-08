@@ -101,8 +101,10 @@ func (s *Server) UpdateIndexer(w http.ResponseWriter, r *http.Request, id int64)
 	}
 	// No definition in the request keeps the stored one: editing an indexer must not forget where it came from.
 	definition := derefOr(body.Definition, "")
-	if body.Definition == nil {
-		if existing, err := s.auth.Settings.GetIndexer(r.Context(), id); err == nil {
+	var source *settings.IndexerSource
+	if existing, err := s.auth.Settings.GetIndexer(r.Context(), id); err == nil {
+		source = existing.Source()
+		if body.Definition == nil {
 			definition = existing.Definition()
 		}
 	}
@@ -110,7 +112,7 @@ func (s *Server) UpdateIndexer(w http.ResponseWriter, r *http.Request, id int64)
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
 		Enabled: derefOr(body.Enabled, true), Priority: derefOr(body.Priority, 25),
 		EgressProxyURL: derefOr(body.EgressProxyUrl, ""), MusicCategories: derefOr(body.MusicCategories, nil),
-		Definition: definition,
+		Definition: definition, Source: source,
 	}, s.wall.Now().Unix())
 	if err != nil {
 		writeIndexerError(w, s, err, "The connection has problems", "Nothing was changed.")
@@ -259,6 +261,9 @@ func indexerView(indexer settings.Indexer) gen.Indexer {
 	if indexer.CapsFetchedAt != nil {
 		at := unixTime(*indexer.CapsFetchedAt)
 		view.CapsFetchedAt = &at
+	}
+	if source := indexer.Source(); source != nil {
+		view.Source = &gen.IndexerSource{ArrId: source.ArrID, ExternalId: source.ExternalID}
 	}
 	categories := indexer.MusicCategories()
 	view.MusicCategories = &categories

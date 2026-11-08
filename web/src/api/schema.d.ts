@@ -2060,6 +2060,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/arr/instances/{id}/prowlarr-sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** What a Prowlarr connection keeps in step with Solarr. Administrator only. */
+        get: operations["getArrInstanceSyncOptions"];
+        /** Set what a Prowlarr connection keeps in step with Solarr. Administrator only. */
+        put: operations["setArrInstanceSyncOptions"];
+        /** Sync the connection's indexers now, by its options. Administrator only. */
+        post: operations["syncArrInstanceIndexers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/arr/instances/{id}/downloadclients": {
         parameters: {
             query?: never;
@@ -7462,6 +7483,32 @@ export interface components {
             /** @description An indexer with this base URL is already configured here. */
             already_added: boolean;
         };
+        ProwlarrSyncOptions: {
+            /** @description Follow Prowlarr's enabled indexers. */
+            active_indexers: boolean;
+            /** @description Follow Prowlarr's paused indexers */
+            paused_indexers: boolean;
+            /** @description Only indexers with a category of a media type Solarr serves. */
+            supported_only: boolean;
+            /** @description Offer Prowlarr's active download clients. */
+            download_clients: boolean;
+            /** @description Follow the proxies Prowlarr's indexers use (FlareSolverr included). */
+            proxies: boolean;
+            /** @description Sync on the schedule */
+            automatic: boolean;
+        };
+        ProwlarrSyncResult: {
+            /** Format: int64 */
+            added: number;
+            /** Format: int64 */
+            updated: number;
+            /** Format: int64 */
+            paused: number;
+            /** Format: int64 */
+            resumed: number;
+            /** Format: int64 */
+            skipped: number;
+        };
         /** @description One cursor page of download history. */
         HistoryPage: {
             items: components["schemas"]["HistoryEntry"][];
@@ -7894,12 +7941,20 @@ export interface components {
             api_key: components["schemas"]["SecretMask"];
             /** @description ADR-47, expert tier: an HTTP/SOCKS5 proxy for this indexer's own requests only. Empty means "use the global egress proxy, if any" -- not "no proxy". FlareSolverr is not yet built. */
             egress_proxy_url?: string;
+            source?: components["schemas"]["IndexerSource"];
             /** @description Newznab categories music is searched and RSS-read in (D17). Always answered; [3000] (Audio) unless set. */
             music_categories?: number[];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        /** @description The indexer of a connected Prowlarr that this one follows. */
+        IndexerSource: {
+            /** Format: int64 */
+            arr_id: number;
+            /** Format: int64 */
+            external_id: number;
         };
         AddIndexerRequest: {
             name: string;
@@ -13995,6 +14050,84 @@ export interface operations {
                         /** Format: int64 */
                         added: number;
                     };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+        };
+    };
+    getArrInstanceSyncOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The options, the defaults until set. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProwlarrSyncOptions"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setArrInstanceSyncOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProwlarrSyncOptions"];
+            };
+        };
+        responses: {
+            /** @description The options as stored. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProwlarrSyncOptions"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    syncArrInstanceIndexers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the sync did. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProwlarrSyncResult"];
                 };
             };
             403: components["responses"]["Problem"];

@@ -3,6 +3,7 @@ package settings
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -52,6 +53,52 @@ type ArrInstance struct {
 	// PushMonitoring sends the monitored flag of what was imported back to the *Arr, when it changes here.
 	PushMonitoring bool
 	LastPushedAt   *int64
+	// SyncJSON holds a Prowlarr connection's ProwlarrSync, empty until set.
+	SyncJSON string
+}
+
+// ProwlarrSync is what a Prowlarr connection keeps in step with Solarr.
+type ProwlarrSync struct {
+	// ActiveIndexers and PausedIndexers choose which of Prowlarr's indexers are followed by their enabled flag.
+	ActiveIndexers bool `json:"active_indexers"`
+	PausedIndexers bool `json:"paused_indexers"`
+	// SupportedOnly follows only indexers with a category of a media type Solarr serves.
+	SupportedOnly   bool `json:"supported_only"`
+	DownloadClients bool `json:"download_clients"`
+	Proxies         bool `json:"proxies"`
+	// Automatic runs the sync on the schedule; otherwise only when asked.
+	Automatic bool `json:"automatic"`
+}
+
+// DefaultProwlarrSync is a new connection's sync: active, supported indexers, kept up to date.
+func DefaultProwlarrSync() ProwlarrSync {
+	return ProwlarrSync{ActiveIndexers: true, SupportedOnly: true, DownloadClients: true, Proxies: true, Automatic: true}
+}
+
+// Sync is the connection's sync options, the defaults until set.
+func (i ArrInstance) Sync() ProwlarrSync {
+	options := DefaultProwlarrSync()
+	if i.SyncJSON != "" {
+		_ = json.Unmarshal([]byte(i.SyncJSON), &options)
+	}
+	return options
+}
+
+// SetArrInstanceSyncOptions stores a Prowlarr connection's sync options.
+func (c *Cache) SetArrInstanceSyncOptions(ctx context.Context, id int64, options ProwlarrSync, at int64) error {
+	encoded, err := json.Marshal(options)
+	if err != nil {
+		return fmt.Errorf("settings: encode sync options: %w", err)
+	}
+	err = c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		return c.queries.WithTx(tx).SetArrInstanceSyncOptions(ctx, settingsdb.SetArrInstanceSyncOptionsParams{
+			SyncJson: sql.NullString{String: string(encoded), Valid: true}, UpdatedAt: at, ID: id,
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("settings: arr instance %d sync options: %w", id, err)
+	}
+	return nil
 }
 
 // ArrInstanceRequest is what CreateArrInstance/UpdateArrInstance accept for
@@ -255,7 +302,7 @@ func convertArrInstance(row settingsdb.ArrInstance) ArrInstance {
 		CategoryID: int64Ptr(row.CategoryID), Enabled: row.Enabled != 0,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 		LastSyncedAt: int64Ptr(row.LastSyncedAt), LastSyncError: row.LastSyncError.String,
-		PushMonitoring: row.PushMonitoring != 0, LastPushedAt: int64Ptr(row.LastPushedAt),
+		PushMonitoring: row.PushMonitoring != 0, LastPushedAt: int64Ptr(row.LastPushedAt), SyncJSON: row.SyncJson.String,
 	}
 }
 

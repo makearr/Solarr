@@ -57,3 +57,19 @@ func (p *process) registerArrPushJob(registry *jobs.Registry, executor *jobs.Exe
 func (p *process) enqueueArrPush(ctx context.Context) (jobs.EnqueueResult, error) {
 	return p.queue.Enqueue(ctx, jobs.Request{Type: arrPushJob.Type, ActionKey: string(arrPushJob.Type), Priority: jobs.PriorityLow, Payload: []byte("{}")})
 }
+
+// prowlarrSyncJob keeps the indexers of the connected Prowlarrs in step with the options each connection has set.
+var prowlarrSyncJob = jobs.Definition{Name: "Syncing Prowlarr indexers", Type: "prowlarr.sync", Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 1}
+
+// registerProwlarrSyncJob wires that sync.
+func (p *process) registerProwlarrSyncJob(registry *jobs.Registry, executor *jobs.Executor) error {
+	if err := registry.Register(prowlarrSyncJob); err != nil {
+		return err
+	}
+	executor.Handle(prowlarrSyncJob.Type, adapters.Prowlarr{Cache: p.cache, List: p.listProwlarr, Clock: clock.NewSystem(), Logger: p.logger})
+	return nil
+}
+
+func (p *process) enqueueProwlarrSync(ctx context.Context) (jobs.EnqueueResult, error) {
+	return p.queue.Enqueue(ctx, jobs.Request{Type: prowlarrSyncJob.Type, ActionKey: string(prowlarrSyncJob.Type), Priority: jobs.PriorityLow, Payload: []byte("{}")})
+}

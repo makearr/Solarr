@@ -19,6 +19,7 @@ const input = "rounded-md border border-border-subtle bg-canvas px-2 py-1 text-x
 export function ArrConnectionTools({ instanceId, app }: { instanceId: number; app: ArrApp }) {
   return (
     <div className="flex flex-col gap-3 border-t border-border-subtle pt-2">
+      {app === "prowlarr" && <ProwlarrSync instanceId={instanceId} />}
       {app === "prowlarr" && <UseIndexers instanceId={instanceId} />}
       {(app === "prowlarr" || app === "lidarr") && <UseDownloadClients instanceId={instanceId} app={app} />}
     </div>
@@ -192,5 +193,62 @@ function DownloadClientRow({ client, instanceId, keepCategory }: { client: ArrDo
         </>
       )}
     </div>
+  );
+}
+
+type SyncOptions = components["schemas"]["ProwlarrSyncOptions"];
+
+const syncChoices: { key: keyof SyncOptions; label: string }[] = [
+  { key: "active_indexers", label: "Active indexers" },
+  { key: "paused_indexers", label: "Paused indexers (added paused)" },
+  { key: "supported_only", label: "Only indexers with categories Solarr serves" },
+  { key: "download_clients", label: "Active download clients" },
+  { key: "proxies", label: "Proxies the indexers use (FlareSolverr)" },
+  { key: "automatic", label: "Keep in step every hour" },
+];
+
+/** What Solarr keeps in step with this Prowlarr, and a button to do it now. */
+function ProwlarrSync({ instanceId }: { instanceId: number }) {
+  const queryClient = useQueryClient();
+  const options = useQuery({
+    queryKey: ["arr-sync-options", instanceId],
+    queryFn: () => ok(api.GET("/arr/instances/{id}/prowlarr-sync", { params: { path: { id: instanceId } } })),
+  });
+  const save = useMutation({
+    mutationFn: (body: SyncOptions) => ok(api.PUT("/arr/instances/{id}/prowlarr-sync", { params: { path: { id: instanceId } }, body })),
+    onSuccess: (stored) => queryClient.setQueryData(["arr-sync-options", instanceId], stored),
+  });
+  const sync = useMutation({
+    mutationFn: () => ok(api.POST("/arr/instances/{id}/prowlarr-sync", { params: { path: { id: instanceId } } })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["indexers"] });
+      void queryClient.invalidateQueries({ queryKey: ["arr-indexers", instanceId] });
+    },
+  });
+  return (
+    <section className="flex flex-col gap-1.5 text-sm">
+      <h3 className="text-xs font-medium text-ink-muted">Keep in step with Prowlarr</h3>
+      {syncChoices.map((choice) => (
+        <label key={choice.key} className="flex items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            checked={options.data?.[choice.key] ?? false}
+            disabled={!options.data || save.isPending}
+            onChange={(event) => options.data && save.mutate({ ...options.data, [choice.key]: event.target.checked })}
+          />
+          {choice.label}
+        </label>
+      ))}
+      <button type="button" disabled={sync.isPending} onClick={() => sync.mutate()} className={button}>
+        {sync.isPending ? "Syncing…" : "Sync now"}
+      </button>
+      {sync.isSuccess && (
+        <p className="text-xs text-ink-muted">
+          {sync.data.added} added, {sync.data.updated} updated, {sync.data.paused} paused, {sync.data.resumed} resumed,
+          {" "}{sync.data.skipped} left out. They are under Connections → Indexers.
+        </p>
+      )}
+      {sync.isError && <p className="text-xs text-danger">{(sync.error as { detail?: string }).detail ?? "The sync failed."}</p>}
+    </section>
   );
 }

@@ -133,6 +133,7 @@ type Querier interface {
 	// pointless churn on every unrelated edit.
 	SetArrInstanceAPIKey(ctx context.Context, arg SetArrInstanceAPIKeyParams) error
 	SetArrInstancePushed(ctx context.Context, arg SetArrInstancePushedParams) error
+	SetArrInstanceSyncOptions(ctx context.Context, arg SetArrInstanceSyncOptionsParams) error
 	SetArrInstanceSyncResult(ctx context.Context, arg SetArrInstanceSyncResultParams) error
 	SetCategoryAccess(ctx context.Context, arg SetCategoryAccessParams) error
 	SetCategoryKind(ctx context.Context, arg SetCategoryKindParams) error

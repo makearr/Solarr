@@ -3450,10 +3450,13 @@ type Indexer struct {
 	Impl string `json:"impl"`
 
 	// MusicCategories Newznab categories music is searched and RSS-read in (D17). Always answered; [3000] (Audio) unless set.
-	MusicCategories *[]int    `json:"music_categories,omitempty"`
-	Name            string    `json:"name"`
-	Priority        int64     `json:"priority"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	MusicCategories *[]int `json:"music_categories,omitempty"`
+	Name            string `json:"name"`
+	Priority        int64  `json:"priority"`
+
+	// Source The indexer of a connected Prowlarr that this one follows.
+	Source    *IndexerSource `json:"source,omitempty"`
+	UpdatedAt time.Time      `json:"updated_at"`
 }
 
 // IndexerKind One entry of the indexer catalog, as Prowlarr's add list describes it.
@@ -3499,6 +3502,12 @@ type IndexerSearchError struct {
 
 	// TooSlow The indexer had not answered when the search's 20-second deadline passed (ADR-37).
 	TooSlow bool `json:"too_slow"`
+}
+
+// IndexerSource The indexer of a connected Prowlarr that this one follows.
+type IndexerSource struct {
+	ArrId      int64 `json:"arr_id"`
+	ExternalId int64 `json:"external_id"`
 }
 
 // Job The job's payload is deliberately absent. It can carry paths and provider identifiers, and a listing is not the place to hand that out.
@@ -4955,6 +4964,36 @@ type ProwlarrIndexer struct {
 
 // ProwlarrIndexerImpl defines model for ProwlarrIndexer.Impl.
 type ProwlarrIndexerImpl string
+
+// ProwlarrSyncOptions defines model for ProwlarrSyncOptions.
+type ProwlarrSyncOptions struct {
+	// ActiveIndexers Follow Prowlarr's enabled indexers.
+	ActiveIndexers bool `json:"active_indexers"`
+
+	// Automatic Sync on the schedule
+	Automatic bool `json:"automatic"`
+
+	// DownloadClients Offer Prowlarr's active download clients.
+	DownloadClients bool `json:"download_clients"`
+
+	// PausedIndexers Follow Prowlarr's paused indexers
+	PausedIndexers bool `json:"paused_indexers"`
+
+	// Proxies Follow the proxies Prowlarr's indexers use (FlareSolverr included).
+	Proxies bool `json:"proxies"`
+
+	// SupportedOnly Only indexers with a category of a media type Solarr serves.
+	SupportedOnly bool `json:"supported_only"`
+}
+
+// ProwlarrSyncResult defines model for ProwlarrSyncResult.
+type ProwlarrSyncResult struct {
+	Added   int64 `json:"added"`
+	Paused  int64 `json:"paused"`
+	Resumed int64 `json:"resumed"`
+	Skipped int64 `json:"skipped"`
+	Updated int64 `json:"updated"`
+}
 
 // QualityProfile ADR-40's policy: hard gates, then lexicographic tiers, then an additive score. `rules` and `upgrade` are kept as opaque JSON here -- internal/identify/score owns that shape (Parse/ParseUpgrade); this layer only checks a name and that they decode (settings. validateQualityProfile).
 type QualityProfile struct {
@@ -7618,6 +7657,9 @@ type UseArrInstanceIndexersJSONRequestBody UseArrInstanceIndexersJSONBody
 // PreviewArrImportJSONRequestBody defines body for PreviewArrImport for application/json ContentType.
 type PreviewArrImportJSONRequestBody = ArrSyncOptions
 
+// SetArrInstanceSyncOptionsJSONRequestBody defines body for SetArrInstanceSyncOptions for application/json ContentType.
+type SetArrInstanceSyncOptionsJSONRequestBody = ProwlarrSyncOptions
+
 // SyncArrInstanceJSONRequestBody defines body for SyncArrInstance for application/json ContentType.
 type SyncArrInstanceJSONRequestBody = ArrSyncOptions
 
@@ -8049,6 +8091,15 @@ type ServerInterface interface {
 	// What an import with these options would do, read only (ADR-52's preview). Administrator only.
 	// (POST /arr/instances/{id}/preview)
 	PreviewArrImport(w http.ResponseWriter, r *http.Request, id int64)
+	// What a Prowlarr connection keeps in step with Solarr. Administrator only.
+	// (GET /arr/instances/{id}/prowlarr-sync)
+	GetArrInstanceSyncOptions(w http.ResponseWriter, r *http.Request, id int64)
+	// Sync the connection's indexers now, by its options. Administrator only.
+	// (POST /arr/instances/{id}/prowlarr-sync)
+	SyncArrInstanceIndexers(w http.ResponseWriter, r *http.Request, id int64)
+	// Set what a Prowlarr connection keeps in step with Solarr. Administrator only.
+	// (PUT /arr/instances/{id}/prowlarr-sync)
+	SetArrInstanceSyncOptions(w http.ResponseWriter, r *http.Request, id int64)
 	// Send the monitored flag of what an import brought in back to this *Arr, now, where it differs. The connection must have push_monitoring on; only items an import matched are touched, and only their monitored flag. Administrator only.
 	// (POST /arr/instances/{id}/push)
 	PushArrMonitoring(w http.ResponseWriter, r *http.Request, id int64)
@@ -9168,6 +9219,24 @@ func (_ Unimplemented) UseArrInstanceIndexers(w http.ResponseWriter, r *http.Req
 // What an import with these options would do, read only (ADR-52's preview). Administrator only.
 // (POST /arr/instances/{id}/preview)
 func (_ Unimplemented) PreviewArrImport(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What a Prowlarr connection keeps in step with Solarr. Administrator only.
+// (GET /arr/instances/{id}/prowlarr-sync)
+func (_ Unimplemented) GetArrInstanceSyncOptions(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Sync the connection's indexers now, by its options. Administrator only.
+// (POST /arr/instances/{id}/prowlarr-sync)
+func (_ Unimplemented) SyncArrInstanceIndexers(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Set what a Prowlarr connection keeps in step with Solarr. Administrator only.
+// (PUT /arr/instances/{id}/prowlarr-sync)
+func (_ Unimplemented) SetArrInstanceSyncOptions(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11648,6 +11717,105 @@ func (siw *ServerInterfaceWrapper) PreviewArrImport(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PreviewArrImport(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArrInstanceSyncOptions operation middleware
+func (siw *ServerInterfaceWrapper) GetArrInstanceSyncOptions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArrInstanceSyncOptions(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SyncArrInstanceIndexers operation middleware
+func (siw *ServerInterfaceWrapper) SyncArrInstanceIndexers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SyncArrInstanceIndexers(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetArrInstanceSyncOptions operation middleware
+func (siw *ServerInterfaceWrapper) SetArrInstanceSyncOptions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetArrInstanceSyncOptions(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -23075,6 +23243,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/arr/instances/{id}/preview", wrapper.PreviewArrImport)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/arr/instances/{id}/prowlarr-sync", wrapper.GetArrInstanceSyncOptions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/arr/instances/{id}/prowlarr-sync", wrapper.SyncArrInstanceIndexers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/arr/instances/{id}/prowlarr-sync", wrapper.SetArrInstanceSyncOptions)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/arr/instances/{id}/push", wrapper.PushArrMonitoring)

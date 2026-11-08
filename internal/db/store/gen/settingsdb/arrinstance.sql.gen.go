@@ -15,7 +15,7 @@ const createArrInstance = `-- name: CreateArrInstance :one
 INSERT INTO arr_instance (app, name, base_url, api_key, category_id, enabled, created_at, updated_at, push_monitoring)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, app, name, base_url, api_key, category_id, enabled, created_at, updated_at,
-          last_synced_at, last_sync_error, push_monitoring, last_pushed_at
+          last_synced_at, last_sync_error, push_monitoring, last_pushed_at, sync_json
 `
 
 type CreateArrInstanceParams struct {
@@ -58,6 +58,7 @@ func (q *Queries) CreateArrInstance(ctx context.Context, arg CreateArrInstancePa
 		&i.LastSyncError,
 		&i.PushMonitoring,
 		&i.LastPushedAt,
+		&i.SyncJson,
 	)
 	return i, err
 }
@@ -73,7 +74,7 @@ func (q *Queries) DeleteArrInstance(ctx context.Context, id int64) error {
 
 const getArrInstance = `-- name: GetArrInstance :one
 SELECT id, app, name, base_url, api_key, category_id, enabled, created_at, updated_at,
-       last_synced_at, last_sync_error, push_monitoring, last_pushed_at
+       last_synced_at, last_sync_error, push_monitoring, last_pushed_at, sync_json
 FROM arr_instance WHERE id = ?
 `
 
@@ -94,13 +95,14 @@ func (q *Queries) GetArrInstance(ctx context.Context, id int64) (ArrInstance, er
 		&i.LastSyncError,
 		&i.PushMonitoring,
 		&i.LastPushedAt,
+		&i.SyncJson,
 	)
 	return i, err
 }
 
 const listArrInstances = `-- name: ListArrInstances :many
 SELECT id, app, name, base_url, api_key, category_id, enabled, created_at, updated_at,
-       last_synced_at, last_sync_error, push_monitoring, last_pushed_at
+       last_synced_at, last_sync_error, push_monitoring, last_pushed_at, sync_json
 FROM arr_instance ORDER BY app, name
 `
 
@@ -127,6 +129,7 @@ func (q *Queries) ListArrInstances(ctx context.Context) ([]ArrInstance, error) {
 			&i.LastSyncError,
 			&i.PushMonitoring,
 			&i.LastPushedAt,
+			&i.SyncJson,
 		); err != nil {
 			return nil, err
 		}
@@ -171,6 +174,21 @@ type SetArrInstancePushedParams struct {
 
 func (q *Queries) SetArrInstancePushed(ctx context.Context, arg SetArrInstancePushedParams) error {
 	_, err := q.db.ExecContext(ctx, setArrInstancePushed, arg.LastPushedAt, arg.ID)
+	return err
+}
+
+const setArrInstanceSyncOptions = `-- name: SetArrInstanceSyncOptions :exec
+UPDATE arr_instance SET sync_json = ?, updated_at = ? WHERE id = ?
+`
+
+type SetArrInstanceSyncOptionsParams struct {
+	SyncJson  sql.NullString
+	UpdatedAt int64
+	ID        int64
+}
+
+func (q *Queries) SetArrInstanceSyncOptions(ctx context.Context, arg SetArrInstanceSyncOptionsParams) error {
+	_, err := q.db.ExecContext(ctx, setArrInstanceSyncOptions, arg.SyncJson, arg.UpdatedAt, arg.ID)
 	return err
 }
 

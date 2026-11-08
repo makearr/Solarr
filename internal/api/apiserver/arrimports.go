@@ -510,6 +510,80 @@ type ArrConnections interface {
 	InstanceIndexers(ctx context.Context, instanceID int64) ([]ProwlarrIndexerRow, error)
 	UseInstanceIndexers(ctx context.Context, instanceID int64, prowlarrIDs []int64) (int64, error)
 	InstanceDownloadClients(ctx context.Context, instanceID int64) ([]ArrDownloadClientRow, error)
+	SyncIndexers(ctx context.Context, instanceID int64) (ProwlarrSyncResult, error)
+}
+
+// ProwlarrSyncResult counts what one Prowlarr sync did.
+type ProwlarrSyncResult struct{ Added, Updated, Paused, Resumed, Skipped int64 }
+
+func syncOptionsView(options settings.ProwlarrSync) gen.ProwlarrSyncOptions {
+	return gen.ProwlarrSyncOptions{
+		ActiveIndexers: options.ActiveIndexers, PausedIndexers: options.PausedIndexers, SupportedOnly: options.SupportedOnly,
+		DownloadClients: options.DownloadClients, Proxies: options.Proxies, Automatic: options.Automatic,
+	}
+}
+
+func (s *Server) routeArrInstanceSync(w http.ResponseWriter, r *http.Request) {
+	id, err := parsePathID(w, s, r, "id", "an instance id must be a number")
+	if err != nil || !s.requireAdministrator(w, r) {
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		s.GetArrInstanceSyncOptions(w, r, id)
+	case http.MethodPut:
+		s.SetArrInstanceSyncOptions(w, r, id)
+	default:
+		s.SyncArrInstanceIndexers(w, r, id)
+	}
+}
+
+// GetArrInstanceSyncOptions answers what a Prowlarr connection keeps in step.
+func (s *Server) GetArrInstanceSyncOptions(w http.ResponseWriter, r *http.Request, id int64) {
+	instance, err := s.auth.Settings.GetArrInstance(r.Context(), id)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such connection")
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, syncOptionsView(instance.Sync()))
+}
+
+// SetArrInstanceSyncOptions stores what a Prowlarr connection keeps in step.
+func (s *Server) SetArrInstanceSyncOptions(w http.ResponseWriter, r *http.Request, id int64) {
+	var body gen.SetArrInstanceSyncOptionsJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected the sync options")
+		return
+	}
+	options := settings.ProwlarrSync{
+		ActiveIndexers: body.ActiveIndexers, PausedIndexers: body.PausedIndexers, SupportedOnly: body.SupportedOnly,
+		DownloadClients: body.DownloadClients, Proxies: body.Proxies, Automatic: body.Automatic,
+	}
+	if _, err := s.auth.Settings.GetArrInstance(r.Context(), id); err != nil {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such connection")
+		return
+	}
+	if err := s.auth.Settings.SetArrInstanceSyncOptions(r.Context(), id, options, s.wall.Now().Unix()); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, syncOptionsView(options))
+}
+
+// SyncArrInstanceIndexers syncs a Prowlarr connection's indexers now.
+func (s *Server) SyncArrInstanceIndexers(w http.ResponseWriter, r *http.Request, id int64) {
+	if s.arrConnections == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "*Arr connections are not available")
+		return
+	}
+	result, err := s.arrConnections.SyncIndexers(r.Context(), id)
+	if err != nil {
+		s.writeArrConnectionError(w, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, gen.ProwlarrSyncResult{
+		Added: result.Added, Updated: result.Updated, Paused: result.Paused, Resumed: result.Resumed, Skipped: result.Skipped,
+	})
 }
 
 func (s *Server) routeListArrInstanceIndexers(w http.ResponseWriter, r *http.Request) {

@@ -24,6 +24,7 @@ const (
 	musicCollectionsScheduleCron   = "50 4 * * *"    // daily; a bulk read of Wikidata and at most 120 MusicBrainz requests
 	bookSeriesKeysScheduleCron     = "15 5 * * *"    // daily; one bulk read of Wikidata for the book series
 	importListScheduleCron         = "35 * * * *"    // hourly; each list runs once its own cadence has passed
+	prowlarrSyncScheduleCron       = "5 * * * *"     // hourly; only connections whose sync is automatic
 	arrPushScheduleCron            = "50 */6 * * *"  // every six hours; only connections that send monitoring back
 	picturesScheduleCron           = "10 * * * *"    // hourly; 1,500 series pictures a run until the library's are all kept
 	tagWritebackScheduleCron       = "45 * * * *"    // every hour, paced to 2000 files a run
@@ -141,6 +142,10 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	registry.MustRegister(jobs.Task{
 		Key: "import_lists", Name: "Add what import lists name", DefaultCadence: importListScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Enqueue: p.enqueueImportListSync,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "prowlarr_sync", Name: "Sync Prowlarr indexers", DefaultCadence: prowlarrSyncScheduleCron,
+		Tier: string(settings.TierNormal), Category: jobs.CategoryMetadata, Enqueue: p.enqueueProwlarrSync,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "arr_push", Name: "Send monitoring back to the *Arrs", DefaultCadence: arrPushScheduleCron,

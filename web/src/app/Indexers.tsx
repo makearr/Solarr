@@ -132,6 +132,7 @@ export function Indexers() {
                 <span className="truncate font-mono text-xs text-ink-muted">{indexer.base_url}</span>
                 <span className="ml-auto flex shrink-0 items-center gap-2 text-xs">
                   {/* A public indexer that takes no key has nothing to warn about. */}
+                  {indexer.source && <Badge tone="ok">via Prowlarr</Badge>}
                   {!kindOf(indexer) || kindOf(indexer)?.secret_label !== undefined ? (
                     <Badge tone={indexer.api_key.has_value || kindOf(indexer)?.secret_optional ? "ok" : "warn"}>
                       {indexer.api_key.has_value ? "key set" : "no key"}
@@ -144,7 +145,7 @@ export function Indexers() {
                       disabled={update.isPending}
                       onChange={(event) => update.mutate({ indexer, enabled: event.target.checked, priority: indexer.priority })}
                     />
-                    enabled
+                    {indexer.enabled ? "active" : "paused"}
                   </label>
                   <button
                     type="button"

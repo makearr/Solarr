@@ -45,6 +45,7 @@ type ArrInstance struct {
 	LastSyncError  sql.NullString
 	PushMonitoring int64
 	LastPushedAt   sql.NullInt64
+	SyncJson       sql.NullString
 }
 
 type CalendarFeed struct {

@@ -25,6 +25,10 @@ type ProwlarrIndexer struct {
 	Music bool
 	// BaseURL is Prowlarr's own per-indexer endpoint, the one the *Arrs are given.
 	BaseURL string
+	// Priority is Prowlarr's own, 1 to 50, lower preferred: the scale Solarr uses.
+	Priority int64
+	// Supported reports a category of a media type Solarr serves (movies, audio, TV, books, adult).
+	Supported bool
 }
 
 type prowlarrIndexer struct {
@@ -32,6 +36,7 @@ type prowlarrIndexer struct {
 	Name         string `json:"name"`
 	Protocol     string `json:"protocol"`
 	Enable       bool   `json:"enable"`
+	Priority     int64  `json:"priority"`
 	Capabilities struct {
 		Categories []struct {
 			ID int64 `json:"id"`
@@ -75,10 +80,19 @@ func ListProwlarr(ctx context.Context, client *httpx.Client, baseURL, apiKey str
 				break
 			}
 		}
+		supported := false
+		for _, category := range entry.Capabilities.Categories {
+			supported = supported || SupportedCategory(int(category.ID))
+		}
 		indexers = append(indexers, ProwlarrIndexer{
 			ProwlarrID: entry.ID, Name: entry.Name, Impl: impl, Enabled: entry.Enable, Music: music,
-			BaseURL: base + "/" + strconv.FormatInt(entry.ID, 10),
+			BaseURL:  base + "/" + strconv.FormatInt(entry.ID, 10),
+			Priority: min(max(entry.Priority, 1), 50), Supported: supported,
 		})
 	}
 	return indexers, nil
 }
+
+// SupportedCategory reports whether a Newznab category belongs to a media type Solarr serves: movies (2000), audio (3000),
+// TV (5000), adult (6000), books (7000) and other (8000), but not console (1000) or PC (4000).
+func SupportedCategory(id int) bool { return id >= 2000 && id < 9000 && id/1000 != 4 }

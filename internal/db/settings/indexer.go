@@ -57,7 +57,25 @@ type indexerSettingsJSON struct {
 	// MusicCategories are the Newznab categories music is asked for in (D17); absent is the default.
 	MusicCategories []int `json:"music_categories,omitempty"`
 	// Definition is the catalog entry the indexer was added from ("nzbgeek"); absent for one added before the catalog.
-	Definition string `json:"definition,omitempty"`
+	Definition string         `json:"definition,omitempty"`
+	Source     *IndexerSource `json:"source,omitempty"`
+}
+
+// IndexerSource says an indexer is kept in step with an indexer one connected Prowlarr serves.
+type IndexerSource struct {
+	ArrID      int64 `json:"arr_id"`
+	ExternalID int64 `json:"external_id"`
+	// UpstreamEnabled is Prowlarr's own enabled flag at the last sync: a pause is mirrored only when it changes.
+	UpstreamEnabled bool `json:"upstream_enabled"`
+}
+
+// Source is the Prowlarr indexer this one follows; nil for one added by hand.
+func (i Indexer) Source() *IndexerSource {
+	var parsed indexerSettingsJSON
+	if i.SettingsJSON == "" || json.Unmarshal([]byte(i.SettingsJSON), &parsed) != nil {
+		return nil
+	}
+	return parsed.Source
 }
 
 // DefaultMusicCategories is Newznab's Audio: without a category an indexer's feed is mostly
@@ -90,6 +108,15 @@ func (i Indexer) MusicCategories() []int {
 	return slices.Clone(DefaultMusicCategories)
 }
 
+// StoredMusicCategories are the categories set on the indexer, none when it takes the default.
+func (i Indexer) StoredMusicCategories() []int {
+	var parsed indexerSettingsJSON
+	if i.SettingsJSON == "" || json.Unmarshal([]byte(i.SettingsJSON), &parsed) != nil {
+		return nil
+	}
+	return parsed.MusicCategories
+}
+
 // Egress parses SettingsJSON's own egress block. An empty or unparseable
 // blob answers the zero value -- an indexer with no egress configured (or
 // predating this field) behaves exactly as before ADR-47.
@@ -116,12 +143,12 @@ func (i Indexer) Definition() string {
 // buildIndexerSettingsJSON encodes the request's egress and categories into SettingsJSON, or "" when
 // both are unset, so an indexer nobody configured still reads back with SettingsJSON == "".
 func buildIndexerSettingsJSON(request IndexerRequest) string {
-	if request.EgressProxyURL == "" && len(request.MusicCategories) == 0 && request.Definition == "" {
+	if request.EgressProxyURL == "" && len(request.MusicCategories) == 0 && request.Definition == "" && request.Source == nil {
 		return ""
 	}
 	encoded, err := json.Marshal(indexerSettingsJSON{
 		Egress: IndexerEgress{ProxyURL: request.EgressProxyURL}, MusicCategories: request.MusicCategories,
-		Definition: request.Definition,
+		Definition: request.Definition, Source: request.Source,
 	})
 	if err != nil {
 		return ""
@@ -144,6 +171,8 @@ type IndexerRequest struct {
 	MusicCategories []int
 	// Definition is the catalog entry it is added from; empty for none.
 	Definition string
+	// Source is the Prowlarr indexer it follows; nil for none.
+	Source *IndexerSource
 }
 
 // defaultIndexerPriority is Lidarr's default, what a request without one gets.
