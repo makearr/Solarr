@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/config"
 	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
@@ -319,5 +320,17 @@ func TestIndexerMusicCategories_DefaultRoundTripAndValidation(t *testing.T) {
 		Name: "Geek", Impl: "newznab", BaseURL: "https://indexer.example", Enabled: true, MusicCategories: []int{-3},
 	}, 3); err == nil {
 		t.Error("UpdateIndexer accepted category -3")
+	}
+}
+
+func TestCreateIndexer_RefusesANameAnotherIndexerHas(t *testing.T) {
+	cache, fake := newCache(t)
+	request := settings.IndexerRequest{Name: "EZTV", Impl: "torznab", BaseURL: "http://prowlarr:9697/1", Enabled: true}
+	if _, err := cache.CreateIndexer(t.Context(), request, secrets.Secret(""), fake.Now().Unix()); err != nil {
+		t.Fatalf("first CreateIndexer: %v", err)
+	}
+	var problems config.Problems
+	if _, err := cache.CreateIndexer(t.Context(), request, secrets.Secret(""), fake.Now().Unix()); !errors.As(err, &problems) {
+		t.Fatalf("second CreateIndexer = %v, want a problem naming the duplicate rather than a constraint failure", err)
 	}
 }

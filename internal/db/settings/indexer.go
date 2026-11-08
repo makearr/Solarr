@@ -273,6 +273,12 @@ func (c *Cache) CreateIndexer(ctx context.Context, request IndexerRequest, apiKe
 	if problems := validateIndexer(request.withDefaults()); len(problems) > 0 {
 		return Indexer{}, problems
 	}
+	if problems, err := c.indexerNameTaken(ctx, request.Name, 0); err != nil || len(problems) > 0 {
+		if err != nil {
+			return Indexer{}, err
+		}
+		return Indexer{}, problems
+	}
 	sealed, err := c.sealOptional(apiKey)
 	if err != nil {
 		return Indexer{}, fmt.Errorf("settings: seal indexer api key: %w", err)
@@ -296,6 +302,20 @@ func (c *Cache) CreateIndexer(ctx context.Context, request IndexerRequest, apiKe
 	return convertIndexer(created), nil
 }
 
+// indexerNameTaken reports the name as a problem when another indexer than exceptID already has it (names are unique).
+func (c *Cache) indexerNameTaken(ctx context.Context, name string, exceptID int64) (config.Problems, error) {
+	existing, err := c.Indexers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, one := range existing {
+		if one.Name == name && one.ID != exceptID {
+			return config.Problems{{Path: "name", Value: name, Expectation: "a name no other indexer has; \"" + name + "\" is already added, so edit that one or pick another name"}}, nil
+		}
+	}
+	return nil, nil
+}
+
 // UpdateIndexer changes a connection's own facts -- never its api_key,
 // SetIndexerAPIKey's own job.
 func (c *Cache) UpdateIndexer(ctx context.Context, id int64, request IndexerRequest, at int64) (Indexer, error) {
@@ -303,6 +323,13 @@ func (c *Cache) UpdateIndexer(ctx context.Context, id int64, request IndexerRequ
 		return Indexer{}, err
 	}
 	if problems := validateIndexer(request.withDefaults()); len(problems) > 0 {
+		return Indexer{}, problems
+	}
+
+	if problems, err := c.indexerNameTaken(ctx, request.Name, id); err != nil || len(problems) > 0 {
+		if err != nil {
+			return Indexer{}, err
+		}
 		return Indexer{}, problems
 	}
 

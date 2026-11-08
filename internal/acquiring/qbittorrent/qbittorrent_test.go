@@ -20,6 +20,8 @@ type route struct {
 	status int
 	body   string
 	header http.Header
+	// needsSession answers 403 to a request carrying no cookie, as a host that wants a sign-in does.
+	needsSession bool
 }
 
 type fakeServer struct {
@@ -42,6 +44,9 @@ func (f *fakeServer) RoundTrip(request *http.Request) (*http.Response, error) {
 	}
 	if answer.status == 0 {
 		answer.status = http.StatusOK
+	}
+	if answer.needsSession && len(request.Cookies()) == 0 {
+		answer = route{status: http.StatusForbidden}
 	}
 	header := answer.header
 	if header == nil {
@@ -141,22 +146,46 @@ func TestClient_LogsInWithCredentialsAndSendsTheSessionCookie(t *testing.T) {
 	header.Add("Set-Cookie", "QBT_SID_8086=abc123; HttpOnly")
 	server := &fakeServer{routes: map[string]route{
 		"/api/v2/auth/login":  {body: "Ok.", header: header},
-		"/api/v2/app/version": {body: "v5.2.3"},
+		"/api/v2/app/version": {body: "v5.2.3", needsSession: true},
 	}}
 	version, err := newClient(t, server, "me:secret").Version(t.Context())
 	if err != nil || version != "v5.2.3" {
 		t.Fatalf("Version = %q, %v", version, err)
 	}
-	if cookie, _ := server.requested[1].Cookie("QBT_SID_8086"); cookie == nil || cookie.Value != "abc123" {
+	if cookie, _ := server.requested[2].Cookie("QBT_SID_8086"); cookie == nil || cookie.Value != "abc123" {
 		t.Errorf("the version call carried no session cookie")
 	}
-	if !strings.Contains(server.bodies[0], "username=me") || !strings.Contains(server.bodies[0], "password=secret") {
-		t.Errorf("login body = %q", server.bodies[0])
+	if !strings.Contains(server.bodies[1], "username=me") || !strings.Contains(server.bodies[1], "password=secret") {
+		t.Errorf("login body = %q", server.bodies[1])
 	}
 
 	server.routes["/api/v2/auth/login"] = route{body: "Fails."}
+	server.requested, server.bodies = nil, nil
 	if _, err := newClient(t, server, "me:wrong").Version(t.Context()); !errors.Is(err, qbittorrent.ErrLoginRefused) {
 		t.Errorf("wrong password: %v, want ErrLoginRefused", err)
+	}
+}
+
+func TestClient_AHostThatLetsTheAddressInNeedsNoSignIn(t *testing.T) {
+	server := &fakeServer{routes: map[string]route{
+		"/api/v2/auth/login":  {body: "Fails."},
+		"/api/v2/app/version": {body: "v5.3.0"},
+	}}
+	if version, err := newClient(t, server, "admin:not-the-password").Version(t.Context()); err != nil || version != "v5.3.0" {
+		t.Errorf("Version = %q, %v; want the version without a sign-in", version, err)
+	}
+	if len(server.requested) != 1 {
+		t.Errorf("requests = %d, want the one call and no login", len(server.requested))
+	}
+}
+
+func TestClient_ABannedAddressIsNotARefusedPassword(t *testing.T) {
+	server := &fakeServer{routes: map[string]route{
+		"/api/v2/auth/login":  {status: http.StatusForbidden},
+		"/api/v2/app/version": {needsSession: true},
+	}}
+	if _, err := newClient(t, server, "me:secret").Version(t.Context()); !errors.Is(err, qbittorrent.ErrLoginBanned) {
+		t.Errorf("banned: %v, want ErrLoginBanned", err)
 	}
 }
 

@@ -620,6 +620,11 @@ func (a Prowlarr) syncDownloadClients(ctx context.Context, instance settings.Arr
 			continue
 		}
 		options := settings.DownloaderOptions{Category: client.Category}
+		if string(kind.Protocol) == "torrent" {
+			// A torrent with no seed limit is removed the moment it is imported.
+			ratio := 1.0
+			options.SeedRatio = &ratio
+		}
 		if client.Priority > 0 {
 			priority := min(client.Priority, 50)
 			options.Priority = &priority

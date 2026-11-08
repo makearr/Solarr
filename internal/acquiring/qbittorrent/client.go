@@ -24,6 +24,9 @@ const maxResponseBytes = 8 << 20
 // ErrLoginRefused is qBittorrent refusing the user name or password.
 var ErrLoginRefused = errors.New("qbittorrent: the user name or password was refused")
 
+// ErrLoginBanned is qBittorrent refusing to even look at a sign-in: too many failed ones from this address.
+var ErrLoginBanned = errors.New("qbittorrent: this address is banned for a while after too many failed sign-ins")
+
 // ErrForbidden is qBittorrent answering 403: it wants a login, and none was configured or it expired.
 var ErrForbidden = errors.New("qbittorrent: access refused; set a user name and password")
 
@@ -47,9 +50,12 @@ func NewClient(client *httpx.Client, baseURL, credentials string) Client {
 
 func (c Client) login(ctx context.Context) error {
 	form := url.Values{"username": {c.username}, "password": {c.password}}
-	_, cookies, body, err := c.send(ctx, http.MethodPost, "/api/v2/auth/login", "application/x-www-form-urlencoded", strings.NewReader(form.Encode()), false)
+	status, cookies, body, err := c.send(ctx, http.MethodPost, "/api/v2/auth/login", "application/x-www-form-urlencoded", strings.NewReader(form.Encode()), false)
 	if err != nil {
 		return err
+	}
+	if status == http.StatusForbidden {
+		return ErrLoginBanned
 	}
 	if strings.TrimSpace(string(body)) != "Ok." {
 		return ErrLoginRefused
@@ -96,13 +102,9 @@ func (c Client) send(
 	return response.StatusCode, response.Cookies(), data, nil
 }
 
-// call performs one request, logging in first when credentials are set and again once on a 403.
+// call performs one request and signs in only when qBittorrent answers 403: a host that lets this address in
+// (its whitelist) needs no sign-in, and its login would refuse credentials it never asks for.
 func (c Client) call(ctx context.Context, method, path, contentType string, payload []byte) (int, []byte, error) {
-	if c.username != "" && *c.session == "" {
-		if err := c.login(ctx); err != nil {
-			return 0, nil, err
-		}
-	}
 	for attempt := 0; ; attempt++ {
 		status, _, data, err := c.send(ctx, method, path, contentType, bytes.NewReader(payload), true)
 		if err != nil {

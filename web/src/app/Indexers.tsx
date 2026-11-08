@@ -342,7 +342,7 @@ function AddIndexer({ onAdded, expert }: { onAdded: () => void; expert: boolean 
       >
         {create.isPending ? "Connecting…" : "Connect"}
       </Button>
-      {create.isError && <p className="w-full text-xs text-danger">That connection could not be created.</p>}
+      {create.isError && <p className="w-full text-xs text-danger">{(create.error as { detail?: string } | null)?.detail ?? "That connection could not be created."}</p>}
     </form>
   );
 }

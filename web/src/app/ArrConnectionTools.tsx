@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ok } from "@/api/client";
 import { kindSecret } from "@/lib/downloaderKinds";
 import { useDownloaderKinds } from "@/lib/resources";
+
+import { ClientOptionsForm } from "./Downloaders";
 import type { components } from "@/api/schema";
 
 type ArrApp = components["schemas"]["ArrApp"];
@@ -122,6 +124,39 @@ function UseDownloadClients({ instanceId, app }: { instanceId: number; app: ArrA
   );
 }
 
+/** A client of the connection that is already added here, with an Edit button for its options and password. */
+function ExistingClient({ baseURL }: { baseURL: string }) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const kinds = useDownloaderKinds();
+  const downloaders = useQuery({ queryKey: ["downloaders"], queryFn: () => ok(api.GET("/downloaders")) });
+  const trimmed = baseURL.replace(/\/+$/, "");
+  const here = downloaders.data?.find((one) => one.base_url.replace(/\/+$/, "") === trimmed);
+  return (
+    <>
+      <span className="text-ink-muted">already added</span>
+      {here && (
+        <button type="button" onClick={() => setEditing(!editing)} className={button}>
+          {editing ? "Close" : "Edit"}
+        </button>
+      )}
+      {here && editing && (
+        <div className="basis-full">
+          <ClientOptionsForm
+            downloader={here}
+            kind={kinds.data?.find((one) => one.impl === here.impl)}
+            onDone={() => {
+              setEditing(false);
+              void queryClient.invalidateQueries({ queryKey: ["downloaders"] });
+              void queryClient.invalidateQueries({ queryKey: ["arr-downloadclients"] });
+            }}
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
 function DownloadClientRow({ client, instanceId, keepCategory }: { client: ArrDownloadClient; instanceId: number; keepCategory: boolean }) {
   const queryClient = useQueryClient();
   const [key, setKey] = useState("");
@@ -135,7 +170,9 @@ function DownloadClientRow({ client, instanceId, keepCategory }: { client: ArrDo
       const { error } = await api.POST("/downloaders", {
         body: {
           name: client.name, impl: kind.impl, base_url: client.base_url, protocol: kind.protocol,
-          credentials: kindSecret(kind, username, key) || undefined, enabled: client.enabled,
+          credentials: kindSecret(kind, username, key) || undefined,
+          // Without its password a client that signs in stays switched off; Edit sets the password, then switch it on.
+          enabled: client.enabled && !(kind.secret_label && !key.trim()),
           // Lidarr's category is a music one; Prowlarr's is for its own grabs, so Solarr's default applies.
           options: { category: keepCategory ? client.category : undefined },
         },
@@ -153,7 +190,7 @@ function DownloadClientRow({ client, instanceId, keepCategory }: { client: ArrDo
       <span className="font-mono text-ink-muted">{client.base_url}</span>
       <span className="text-ink-muted">{client.impl}{client.category ? ` · ${client.category}` : ""}</span>
       {client.already_added ? (
-        <span className="text-ink-muted">already added</span>
+        <ExistingClient baseURL={client.base_url} />
       ) : !client.supported || !kind ? (
         <span className="text-warn">not supported yet</span>
       ) : !kind.has_address ? (
@@ -175,7 +212,7 @@ function DownloadClientRow({ client, instanceId, keepCategory }: { client: ArrDo
               type="password"
               autoComplete="off"
               aria-label={`${client.name} ${kind.secret_label}`}
-              placeholder={`Its ${kind.secret_label} (the *Arr hides it)`}
+              placeholder={`${kind.secret_label} (the *Arr hides it; leave empty to add it switched off)`}
               value={key}
               onChange={(event) => setKey(event.target.value)}
               className={`${input} w-64`}
@@ -183,11 +220,11 @@ function DownloadClientRow({ client, instanceId, keepCategory }: { client: ArrDo
           )}
           <button
             type="button"
-            disabled={(!withUser && kind.secret_label !== undefined && !key.trim()) || add.isPending}
+            disabled={add.isPending}
             onClick={() => add.mutate()}
             className={button}
           >
-            {add.isPending ? "Adding…" : "Add"}
+            {add.isPending ? "Adding…" : kind.secret_label && !key.trim() ? "Add without password" : "Add"}
           </button>
           {add.isError && <span className="text-danger">{(add.error as { detail?: string }).detail ?? "It could not be added."}</span>}
         </>
