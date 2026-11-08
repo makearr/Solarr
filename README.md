@@ -266,10 +266,10 @@ and wants the item again. See [library quality](documentation/library-quality.md
 Solarr treats duplicates as something to find and merge, never to delete blindly:
 
 - **One copy, many places.** Imports link reflink, then hardlink, then copy, so a download you keep seeding and the
-  library file take the space once. Two libraries that want the same file, or an episode listed under two series, share
-  **one copy** after a preview.
-- **Same file, different name.** Quality decisions are by content hash: *Remove and block* blocks the exact bytes, and
-  a replacement is recorded and shown side by side with the file it replaced. A file linked at many paths counts as one
+  library file take the space once. Identical copies of one file within a library become **one copy** after a preview, and an episode
+  listed under two series is linked into both folders.
+- **Same file, different name.** *Remove and block* blocks the exact bytes by content hash, so a bad file under another
+  release name is refused, and a replacement is recorded and shown side by side with the file it replaced. A file linked at many paths counts as one
   video.
 - **Similar videos.** The same footage in another encode, resolution, frame rate, container or with black bars is found by
   perceptual hashes of nine moments plus duration, across one library or all of them, at five similarity levels (exact to
@@ -562,7 +562,7 @@ A library can have **any number of root folders**:
 - **One move engine** for every move, rename and drain: copy, verify, repoint, then unlink. Nothing is deleted
   directly; everything goes to a **recycle bin** first.
 - **Links, never symlinks.** Imports link reflink, then hardlink, then copy, with the capability probed per path pair.
-  Two libraries that want the same file share **one copy**, after a preview.
+  Identical copies of one file within a library become **one copy** after a preview (the *Linking identical files* job), and an episode listed under two series is linked into both.
 - **ZFS and NFS.** Designed for ZFS and tested on NFS: file watching is only an accelerator and stale handles
   are retried. The databases themselves belong on local disk.
 

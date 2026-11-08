@@ -72,7 +72,7 @@ episode record, never two episodes that merely share a title or a length.
 |---|---|
 | Size limit | 10 GiB |
 | Age | 90 days |
-| Images / metadata split | |
+| Images / metadata split | 80% / 20% |
 | **Keep disk free** | 10%: when the disk under the cache runs short of that, the next cache maintenance shrinks the cache by the shortfall, below its size limit |
 
 The page shows the disk's size and free space and warns when the size limit is larger than the disk.
@@ -84,7 +84,7 @@ The page also shows every database's file size, how full its cache is and its hi
 picture and provider-response caches (counted since the start). **Shrink** drops pictures unused for seven days and
 provider answers older than that. Layout of the databases: [database-layout.md](../database-layout.md).
 
-**Run from RAM** (expert, off by default): the cache and/or the four databases can run from a RAM directory
+**Keep the cache and databases in RAM** (expert, off by default): the cache and/or the four databases can run from a RAM directory
 (`/dev/shm/solarr`, a tmpfs) and be copied back to disk on an interval. The container needs `shm_size` large enough,
 and a crash loses what changed since the last copy. Details, risks and the memory guard:
 [memory-copies.md](../memory-copies.md).

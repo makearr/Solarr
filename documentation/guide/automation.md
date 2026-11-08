@@ -68,8 +68,7 @@ Why queues hold and in what order: [downloads.md](../downloads.md).
 | **Refresh works** | Re-reads running series twice a day so new episodes and seasons arrive by themselves, and fills in albums' tracklists |
 | **Refresh people**, **Fetch pictures** | The same for people, and for covers and posters; one task each for every kind of library |
 | **Compare discographies** | Weekly; feeds Discover |
-| **Identify waiting files** (05:30) | Asks again about files a scan could not place in music, movies, books, audiobooks and adult libraries: the folders holding them are rescanned through the library's own media type, so a provider outage or an update that fixes a title no longer leaves them in Review for good |
-| **Identify waiting TV files** | The same for TV; see [tv.md](tv.md) |
+| **Identify waiting files** (05:30) | Asks again about files a scan could not place in every library, TV included: the folders holding them are rescanned through the library's own media type, so a provider outage or an update that fixes a title no longer leaves them in Review for good |
 | **Add the new works of monitored franchises** | Every 12 hours; see [libraries.md](libraries.md) |
 
 Any task can be run on demand from the Scheduler. The page has a tab per task category and a green-yellow-red heatmap of

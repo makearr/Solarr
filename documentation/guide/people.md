@@ -45,7 +45,7 @@ library.
 An actor who is also a musician in your music library is one person. Solarr recognises them through their
 Wikidata item, never by name alone: the task **Match people across libraries** asks TMDB for the item of TV
 people who share a name with a music artist, and a refreshed artist records theirs. A name that differs only in
-punctuation (a quoted nickname) is also tried. Their TV page then shows **Also in your other libraries** (their
+punctuation (a quoted nickname) is also tried. Their TV page then shows **Also known for** (their
 albums), with a link to the full profile. An actor who also records lists their MusicBrainz studio albums and
 EPs there too (found through Wikidata), added to the music library.
 

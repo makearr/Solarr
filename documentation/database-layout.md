@@ -10,7 +10,7 @@ Four persistent databases, one disposable cache (ADR-2, revised 2026-10-04 by `s
 | `settings.db` | Configuration and credentials | Small, rarely written, **fully cached in memory** |
 | `library.db` | Everything that scales with the library | Large, written constantly, never cached whole |
 | `jobs.db` | The work queue and the append-only event log | Churns; retention-bounded |
-| `statistics.db` | What was seen and done: download history, and (moving there) candidates, decisions and rollups | Append-mostly; **`library.db` is correct with it empty**: nothing that decides what to download, import, replace or delete reads it |
+| `statistics.db` | What was seen and done: download history, candidates, decisions and rollups | Append-mostly; **`library.db` is correct with it empty**: nothing that decides what to download, import, replace or delete reads it |
 
 Whether an item is fresh because RSS showed it (ADR-55) is `rss_sighting` in `library.db`, written when a decision
 on an RSS-found release is recorded; the planner and the Fresh filter read it, not the candidates.
@@ -32,8 +32,8 @@ and an event is lossy notification data (ADR-9) that must never block one.
 Download history is `statistics.db`'s `history` table: one row per grab, import, failure and removal (taken out of
 the queue by a person), with the library, work, acquisition, release, indexer and client, and the work's title and
 lead as they were then, so a row outlives its work. Activity → History and a work's History tab read it, newest
-first by id; the API filters on the library. It used to be `event_log` rows in `jobs.db`, which is pruned; the first
-start after the move copies them over once (`event_id` remembers each, so an interrupted copy resumes).
+first by id; the API filters on the library. It used to be `event_log` rows in `jobs.db`, which is pruned; `event_id` keeps the
+old event's number.
 Activity → Queue is not stored: `GET /queue` joins the in-flight `acquisition` rows to each
 download client's live answer on every request, as Lidarr's queue does.
 
@@ -50,9 +50,11 @@ A table belongs in `settings.db` only if all three hold:
 Everything else is `library.db`. Applying that test:
 
 **`settings.db`** — `app_user`, `user_category_access`, `user_preference`, `api_key`,
-`root_folder`, `category`, `category_root_folder`, `placement_affinity`, `quality_profile`,
-`naming_profile`, `naming_format`, `consumer_profile`, `language_profile`, `indexer`, `downloader`,
-`metadata_provider`, `discovery_job`, `plugin_state`.
+`user_blocked_tag`, `root_folder`, `category` with its `category_root_folder`, `category_file_management`,
+`category_metadata_source`, `category_quality_profile`, `category_target` and `category_target_auto`, `placement_affinity`,
+`quality_profile`, `quality_target`, `target_profile`, `default_language`, `language_profile`, `naming_profile`,
+`naming_format`, `exclusion_pattern`, `indexer`, `downloader`, `download_folder`, `arr_instance`, `import_list`,
+`calendar_feed`, `discovery_job`, `instance_setting`.
 
 **`library.db`** — identity (`work`, `work_part`, `edition`, titles, external ids), files (`media_object`,
 `library_path`, `media_attributes`), desired state (`desired_item`, `desired_item_file`,
@@ -199,8 +201,8 @@ Both are scheduler tasks (Settings -> Scheduler, Maintenance), since 2026-09-24:
 | Task | Default | What |
 |---|---|---|
 | Database maintenance | Sundays 04:00 | Per database in turn: `integrity_check`, `optimize`, `VACUUM`, `wal_checkpoint(TRUNCATE)` |
-| Backup | daily 01:00 | One verified bundle of the four databases and `config.yml` (below) |
-| Clean old backups | daily 01:30 | Keeps the newest N (default 7) or the last N days; never fewer than 3 |
+| Backup | Sundays 01:00 | One verified bundle of the four databases and `config.yml` (below) |
+| Clean old backups | Sundays 01:30 | Keeps the newest N (default 7) or the last N days; never fewer than 3 |
 | Clean recycling bin | daily 02:30 | Purges recycle bin entries past their library's retention ([file-management.md](file-management.md)) |
 | Clean old search results | daily 03:10 | Decisions older than `retention.decisions_full` (90 days) are counted into `decision_rollup` per item, day and outcome, then deleted. A release past its expiry is deleted once no decision refers to it; a held download carries its own copy of the release. At most 250 pages of 200 a run, so an old backlog is worked off over several nights |
 | Clean old jobs | daily 03:20 | Jobs that finished more than 14 days ago, with their attempts, 200 a transaction; a job another still depends on stays |

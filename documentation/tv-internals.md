@@ -144,9 +144,9 @@ A folder is named in this order: `{tvdb-N}` in the name, a title or alias alread
 accepts the one candidate whose title matches (ignoring TheTVDB's "(2014)" or "(US)" qualifier and TMDB's original title, which
 travels as `Candidate.AltTitles`); when several match, or none does and the folder has at least 8 numbered files, `byEpisodes` fetches the
 top candidates from Skyhook and takes the one that has at least 80 % of the files' season/episode (or absolute) numbers and leads the next
-by 15 points. Anything less sure is queued for a person. A scan only hands over new or changed files, so `RetryJob` (task `tv_retry`, daily,
+by 15 points. Anything less sure is queued for a person. A scan only hands over new or changed files, so `RetryJob` (the shared `identify_retry` task, daily; it replaced `tv_retry`,
 and the Review page's button) feeds the waiting files through `Consumer.Observe` again. Measured on the user's 1,062-series library: 5,553 of
-55,970 series files were waiting before; see inflight.md for what remained.
+55,970 series files were waiting before.
 
 Speed: the season directories of one series are read side by side by the scan (eight directories at once), so `FolderLocks` makes them ask the
 providers once between them, and TVmaze's cast is skipped when a TMDB key is stored (its bucket is the slowest). Measured 2026-10-03 on 60

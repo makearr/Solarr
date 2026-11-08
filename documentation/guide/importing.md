@@ -13,7 +13,7 @@ out what is in it. Every import can be **reverted** from its session.
 | **Preview first** | Places nothing until you commit from the review |
 | **Library** | Limits the import to one library; *Best match* sends each folder to the library its files fit (below); *Decide later* keeps every folder waiting until you assign a library |
 | **Add as a root instead of moving** | Makes the folder itself a root of that library, scanned where it is, instead of moving files out of it |
-| **Add unrecognised albums** (off by default) | A folder no metadata source recognises still becomes an album, named by its tags or folder and marked **Unverified**. It is not searched for; commit it from the review with the right candidate and its files move onto the real album |
+| **Add unrecognised folders** (off by default) | A folder no metadata source recognises still becomes an album, named by its tags or folder and marked **Unverified**. It is not searched for; commit it from the review with the right candidate and its files move onto the real album |
 | **Import extra files** (each library's **File management → Importing**; on for TV, off for music) | Brings files with the listed extensions along: lyrics, cue sheets and logs beside an album, and in a TV library the subtitles named after an episode (`Show.S01E02.en.srt` becomes `Show - S01E02 - Title.en.srt`; subtitles in a release's `Subs/` folder follow the video they are named after, for every media type). Nothing already there is overwritten |
 
 ## Best match (🟡)

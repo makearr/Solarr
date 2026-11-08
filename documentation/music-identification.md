@@ -245,7 +245,7 @@ embedded release group, 46 were identified — all plausible on inspection — a
 
 ## Unverified albums (D6)
 
-An Import-screen run with **Add unrecognised albums** ticked (the default; not in a preview, and never
+An Import-screen run with **Add unrecognised folders** ticked (off unless asked; not in a preview, and never
 for a finished download) still adds a folder nothing identified. It is placed like any album and named
 by its own tags, else by its folder read as a release name. Its identity is `local:album`, keyed by the
 source folder and the album name, so the same folder imported again is the same album and two

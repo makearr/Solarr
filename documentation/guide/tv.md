@@ -22,7 +22,7 @@ disk (the default, so nothing is hunted that you did not ask for), every episode
 
 ## Add a series (🟢)
 
-**Add series** searches TheTVDB (through Sonarr's free proxy) and, with a key, TMDB. Choose what to monitor
+**Add new** (on the Series index) searches TheTVDB (through Sonarr's free proxy) and, with a key, TMDB. Choose what to monitor
 (Sonarr's nine options), the quality profile, the root folder it goes under (with several roots; the first
 file lands there), the series type, whether it uses season folders, tags, and whether to search for missing
 episodes at once. Edit changes the type and the season folders later; **No season folders** puts episodes
@@ -30,7 +30,7 @@ straight in the series folder.
 
 Free metadata is enough to start. For cast, crew and guest stars, networks with logos, artwork and alternative
 titles, add your own **TMDB key** under **Settings → Metadata → TV series** (a free account at themoviedb.org:
-paste the API Read Access Token or the API key). **Test the providers** checks all five sources. Anime also gets
+paste the API Read Access Token or the API key). **Test the series providers** checks all five sources. Anime also gets
 its romaji and synonym titles from AniList, which release groups use.
 
 ## Find your way around (🟢)
@@ -59,20 +59,20 @@ A TV file a scan could not place waits under **Unidentified**. Open it, search t
 episodes when the file name does not say ("3", "2, 3" or "4-6"), and it is placed for good. Ticking "also place
 the other files in this folder" places each by its own name.
 
-Solarr asks again every night (task **Identify waiting TV files**) and on demand with **Try TV files again** on
+Solarr asks again every night (task **Identify waiting files**, 05:30) and on demand with **Identify again** on
 the Review page. A folder named in another language, or a title TheTVDB lists twice, is settled by the episode
 numbers of its files when they clearly fit one series.
 
 ## Removing a series (🟢)
 
-**Edit → Delete series**. Tick "move its files to the recycle bin" to recycle them. Keep "do not add it back"
+**Remove** on the series page. Tick "move its files to the recycle bin" to recycle them. Keep "do not add it back"
 ticked so a scan, a follow or an import list leaves it out; the Series index lists the deleted ones, with
 **Allow again**.
 
 ## Bulk edit (🟡)
 
-**Edit several** on the Series index (manage access) switches to the table with a checkbox per series. The bar
-above applies a monitor choice or a quality profile to every ticked series, or deletes them, after a
+Tick series on the Series index (manage access), or press **Select all matching**. The bar that appears applies a monitor
+choice or **Edit** (quality profile, tags and the rest) to every ticked series, **Move to library**, or **Remove**, after a
 confirmation that says what will happen.
 
 ## Air times (🟡)

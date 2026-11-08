@@ -54,7 +54,7 @@ category once imported with a 204 and attached nothing.
 `schedules` holds each scheduler task's *changed* cadences, enabled flag and run-at-startup, by
 task key; a task absent keeps its defaults, and a field absent keeps what is stored. It exports
 what was changed rather than every task because `settings.db` does not know which tasks exist.
-`import_extra_files` and `import_extra_file_extensions` are in `settings`; absent keeps them.
+`import_extra_files` and `extra_file_extensions` are in the category's `file_management`; absent keeps them.
 A category's `file_management` is present only once saved; absent keeps Sonarr's defaults.
 The backup retention (`backup_retention`, `backup_keep_count`, `backup_keep_days`) is in
 `settings`; absent `backup_retention` leaves all three alone.
