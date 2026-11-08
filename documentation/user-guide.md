@@ -31,7 +31,11 @@ If a screen mentioned is missing, raise the level.
 | 6 | [Connections](guide/connections.md) | 🟡 | Indexers, SABnzbd, qBittorrent, the category rule |
 | 7 | [Libraries](guide/libraries.md) | 🟡 | Which library, moving works, several kinds in one, ratings, tags, collections |
 | 8 | [Import a folder](guide/importing.md) | 🟡 | Messy folders, archives, held reviews |
-| 9 | [Storage](guide/storage.md) | 🟡 / 🔴 | Root folders, offline roots, recycle bin, cache |
+| 9 | [Storage](guide/storage.md) | 🟡 / 🔴 | Root folders, offline roots, recycle bin, similar videos, cache and RAM |
+| 10 | [Favorites](guide/favorites.md) | 🟢 | Hearts, apart from follows |
+
+Books and audiobooks ([books.md](books.md)), the adult type ([adult.md](adult.md)) and the preview player
+([media-player.md](media-player.md)) have their own pages in the [documentation README](README.md).
 
 ## What the colours mean
 

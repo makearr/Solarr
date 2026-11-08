@@ -21,4 +21,4 @@ An older view-only grant ("Read") still works and is shown as *View only (old)* 
 **Hide items tagged.** An administrator can keep an account from the items carrying a tag (or a tag below it), whatever
 its library access: the items leave its lists and their pages answer 404. It is set when the account is created and from
 **Edit** on the account, which shows the same fields as creation (role, libraries, interface levels, new-library grant,
-tags). Lists and work pages honour it; people, collection and search pages are not filtered by it yet.
+tags). Lists, work pages, search results and a person's credit list honour it; collection pages are not filtered by it yet.

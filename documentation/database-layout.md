@@ -199,7 +199,7 @@ Both are scheduler tasks (Settings -> Scheduler, Maintenance), since 2026-09-24:
 | Task | Default | What |
 |---|---|---|
 | Database maintenance | Sundays 04:00 | Per database in turn: `integrity_check`, `optimize`, `VACUUM`, `wal_checkpoint(TRUNCATE)` |
-| Backup | daily 01:00 | A rotation backup of `library.db`, `jobs.db` and `statistics.db` |
+| Backup | daily 01:00 | One verified bundle of the four databases and `config.yml` (below) |
 | Clean old backups | daily 01:30 | Keeps the newest N (default 7) or the last N days; never fewer than 3 |
 | Clean recycling bin | daily 02:30 | Purges recycle bin entries past their library's retention ([file-management.md](file-management.md)) |
 | Clean old search results | daily 03:10 | Decisions older than `retention.decisions_full` (90 days) are counted into `decision_rollup` per item, day and outcome, then deleted. A release past its expiry is deleted once no decision refers to it; a held download carries its own copy of the release. At most 250 pages of 200 a run, so an old backlog is worked off over several nights |

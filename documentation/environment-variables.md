@@ -115,6 +115,11 @@ Any other key is `SOLARR_` plus its path in upper case, dots replaced by undersc
 | `SOLARR_DATABASE_BUSY_TIMEOUT` | `15s` | How long a database waits on a lock |
 | `SOLARR_DATABASE_PAGE_SIZE` | `4096` | SQLite page size; applied only when a database is created |
 | `SOLARR_DATABASE_CACHE_SIZE_KB` | `393216` | One ceiling for the page caches of all databases and connections together |
+| `SOLARR_MEMORY_CACHE_TMPFS` | `false` | Run the cache (`images/`, `metadata.db`) from RAM; Settings → Cache checks the room first. See [memory-copies](memory-copies.md) |
+| `SOLARR_MEMORY_DATABASE_TMPFS` | `false` | Run the four databases from RAM; a crash loses what changed since the last copy |
+| `SOLARR_MEMORY_CACHE_SYNC_INTERVAL` | `10m` | How often the RAM cache is written back |
+| `SOLARR_MEMORY_DATABASE_SYNC_INTERVAL` | `5m` | How often changed RAM databases are written back |
+| `SOLARR_MEMORY_TMPFS_DIR` | `/dev/shm/solarr` | The RAM directory; its size is the runtime's `shm_size` |
 | `SOLARR_DATABASE_WRITE_WARN` | `50ms` | A write transaction longer than this is logged |
 | `SOLARR_DATABASE_WRITE_HARD` | `2s` | A write transaction longer than this is a fault |
 | `SOLARR_BACKUP_SETTINGS_ON_CHANGE` | `true` | Snapshot `settings.db` on every change |

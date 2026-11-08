@@ -261,6 +261,25 @@ a clean 48 kHz just for being larger). Profiles cover formats, codecs, bit depth
 subtitle languages and preferred release groups. **Remove and block** recycles a bad file, blocks its exact bytes
 and wants the item again. See [library quality](documentation/library-quality.md).
 
+### Deduplication
+
+Solarr treats duplicates as something to find and merge, never to delete blindly:
+
+- **One copy, many places.** Imports link reflink, then hardlink, then copy, so a download you keep seeding and the
+  library file take the space once. Two libraries that want the same file, or an episode listed under two series, share
+  **one copy** after a preview.
+- **Same file, different name.** Quality decisions are by content hash: *Remove and block* blocks the exact bytes, and
+  a replacement is recorded and shown side by side with the file it replaced. A file linked at many paths counts as one
+  video.
+- **Similar videos.** The same footage in another encode, resolution, frame rate, container or with black bars is found by
+  perceptual hashes of nine moments plus duration, across one library or all of them, at five similarity levels (exact to
+  lowest). Keep one copy: the others are **merged** (hardlink or reflink, same library) or **recycled**, and delete is
+  offered on every file or a whole group. Hashing costs CPU, so it is **off by default**; previews (a frame and a
+  3x3 sheet) come from the same pass.
+- **Everything recoverable.** Removed copies wait in the recycle bin first.
+
+See [duplicate videos](documentation/duplicate-videos.md) and the [storage guide](documentation/guide/storage.md).
+
 ### And more
 
 - **Similar videos report**: perceptual hashes find the same video in two files; keep one, link or recycle the others.
@@ -313,13 +332,35 @@ and zoneinfo and certificates are copied rather than installed.
 | Library | RAM to plan for |
 |---|---|
 | **Small** (a few thousand items) | **256 MB** is comfortable. A fresh instance idles at about **45 MB** resident (measured) |
-| **Large** (250,000+ files) | **1 GB** is a sensible budget. The database page caches have a designed ceiling of about **354 MiB** in total, enforced by a test, and the rest is Go working memory |
+| **Large** (250,000+ files) | **1 GB** is a sensible budget. The database page caches have a designed ceiling of **384 MiB** in total (default), enforced by a test, and the rest is Go working memory |
 
 The idle figure is measured; the large-library figure is the designed ceiling plus headroom, **not** a
 measurement on a full 250,000-file library yet. Treat it as a budget and tell me what you see.
-*Settings → Cache* shows each database's file size, cache use and hit ratio and has a card to size the cache
-(`database.cache_size_kb`, default 64 MiB). Features that start `ffmpeg` (the player's conversions, video hashing)
-use extra memory and CPU while they run; see [benchmarks and resource use](#benchmarks-and-resource-use).
+
+**More RAM for the cache.** *Settings → Cache* sets one ceiling for the page caches of all four databases
+(`database.cache_size_kb`, default 384 MiB, at least 128 MiB; the library database takes 80%). On a machine with RAM to
+spare, raise it until most of a large library is served from memory; it applies at the next start. The page shows each
+database's file size, cache use and hit ratio, so you can see whether more would help, and a **Shrink** button drops
+pictures and provider answers unused for a week.
+
+**Database and cache on tmpfs / shm (expert, off by default).** Two options run a working copy from RAM and write it
+back on an interval: the **cache** (cover pictures not yet in the library, and the provider-response database; every
+10 minutes) and the **four databases** (every 5 minutes, only those that changed). The RAM directory is `/dev/shm/solarr`;
+its size is Docker's `shm_size`, so give the container room:
+
+```yaml
+    shm_size: 8gb
+    stop_grace_period: 2m
+```
+
+Solarr turns an option on only when the directory is at least 20% larger than what it would hold and the container's
+memory allows it, and it needs "I understand the risk" ticked. Everything is copied to disk at once on shutdown. **A
+crash, kill or power cut loses what changed since the last copy**; backups are unaffected. If the container's free
+memory falls below a twentieth of its limit, Solarr copies to disk, switches the cache (then the databases) off and
+restarts from disk. Details: [RAM copies](documentation/memory-copies.md).
+
+Features that start `ffmpeg` (the player's conversions, video hashing) use extra memory and CPU while they run; see
+[benchmarks and resource use](#benchmarks-and-resource-use).
 
 ### Mounts and permissions
 
@@ -401,7 +442,7 @@ precedence rules: [environment variables](documentation/environment-variables.md
 |---|---|---|
 | `SOLARR_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `SOLARR_LOG_FORMAT` | `json` | `json` or `text` |
-| `SOLARR_MODE` | `normal` | `normal`, `observe` (decide and record, never act) or `shadow` (act except the irreversible steps) |
+| `SOLARR_MODE` | `normal` | `normal`, `read_only` (no writes into a library), `pause_downloads`, `observe` (read-only, no searches, no downloads) or `arr_companion` (observe, plus monitoring sent back to the \*Arrs). See [Solarr mode](documentation/solarr-mode.md) |
 
 **Tuning**
 
@@ -409,7 +450,10 @@ precedence rules: [environment variables](documentation/environment-variables.md
 |---|---|---|
 | `SOLARR_DATABASE_BUSY_TIMEOUT` | `15s` | How long a database waits on a lock |
 | `SOLARR_DATABASE_PAGE_SIZE` | `4096` | SQLite page size (applied only when a database is created) |
-| `SOLARR_DATABASE_CACHE_SIZE_KB` | `65536` | Library database page cache per connection |
+| `SOLARR_DATABASE_CACHE_SIZE_KB` | `393216` | One ceiling (KiB) for the page caches of all databases together; raise it for a large library |
+| `SOLARR_MEMORY_CACHE_TMPFS` / `SOLARR_MEMORY_DATABASE_TMPFS` | `false` | Run the cache / the four databases from RAM (`/dev/shm/solarr`), written back on an interval. Expert; see [RAM copies](documentation/memory-copies.md) |
+| `SOLARR_MEMORY_CACHE_SYNC_INTERVAL` / `SOLARR_MEMORY_DATABASE_SYNC_INTERVAL` | `10m` / `5m` | How often the RAM copies are written back |
+| `SOLARR_MEMORY_TMPFS_DIR` | `/dev/shm/solarr` | The RAM directory; its size is the container's `shm_size` |
 | `SOLARR_DATABASE_WRITE_WARN` | `50ms` | A write transaction longer than this is logged |
 | `SOLARR_DATABASE_WRITE_HARD` | `2s` | A write transaction longer than this is a fault |
 | `SOLARR_BACKUP_SETTINGS_ON_CHANGE` | `true` | Snapshot `settings.db` on every change |
@@ -761,10 +805,21 @@ releases is in [CHANGELOG.md](CHANGELOG.md), and the commit log has every detail
   season folders, tags) and a franchise watch task.
 - **Per-library music provider order**, label, network and organisation logos, and **people and collections editable
   by hand**; one human is one person across every source.
-- **Cache and memory page** (*Settings → Cache*), **statistics** per indexer and files below each library's cutoff,
+- **Cache and memory page** (*Settings → Cache*) with one database cache ceiling, a Shrink button, and an optional
+  **cache and databases in RAM** (tmpfs); **statistics** per indexer and files below each library's cutoff,
   and health that names a paused indexer or download client.
 - **Settings by environment variable**: config folder, port, root folders and API keys; `_FILE` variants for Docker
   secrets. See [environment variables](documentation/environment-variables.md).
+- **Deduplication.** Similar videos are found at five levels across all libraries (hash version 2: time-based sample
+  windows, black-bar crop, scene cuts), with delete on every file, a frame and 3x3 preview sheet per file, and
+  hashing switched off by default.
+- **Requests.** Users with request permission file requests an administrator approves (or an *Add* grant that is
+  approved at once); tags can be hidden per account and **blocked** library-wide.
+- **Target quality.** Libraries aim at a named target with shipped presets, a per-work target, closeness judged
+  against it, and a preview of what a change makes upgradable.
+- **One verified backup bundle** (`tar.zst` of the four databases and `config.yml`) and a Settings → Database page
+  with disk use, a keep rule and maintenance by hand.
+- **Held releases** have a size setting (default 200), and torrents can wait for both ratio and time with a hard stop.
 - **Documentation** split into beginner, advanced and expert levels, with a getting-started page.
 - **Hardening.** The first-run claim race is closed, cross-site writes are refused, a session cookie is `Secure`
   behind a trusted TLS proxy, 6to4 and IPv4-compatible addresses are judged by the IPv4 they carry, symlinks in a

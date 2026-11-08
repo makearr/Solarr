@@ -48,14 +48,18 @@ closest to its library's target is ticked to keep; tick more than one to keep se
 the recycle bin) and **Delete** (recycle bin). Merging needs the same library and the same file kind, otherwise only
 Delete is offered. A warning shows when the file names give different episodes (SxxExx).
 
-How it decides: a background pass at the end of the probe sweep samples seven frames of every video and keeps a
-64-bit perceptual hash of each frame and of their average (a file ffmpeg cannot decode stays unhashed and is
-tried again next sweep). Two files are grouped when:
+How it decides: a background pass at the end of the probe sweep (**off by default**, switch it on under Storage →
+Duplicates) samples nine moments of every video, crops black bars, and keeps a 64-bit perceptual hash of up to five
+frames per moment and of their average (a file ffmpeg cannot decode stays unhashed and is tried again next sweep).
+Two files are grouped when:
 
-- their average frames are within 8 bits,
 - their lengths are within 2% or 5 seconds,
+- their average frames are within the chosen **similarity level** (exact, high, medium, low or lowest),
 - at least two thirds of the moments both files have a usable frame for (at least four; black and flat frames do
-  not count) show the same picture within 10 bits.
+  not count) show the same picture within the level's frame distance (10 bits at medium).
+
+Delete is offered on every file, kept ones too, and a whole group can be deleted at once. The algorithm is in
+[duplicate-videos.md](../duplicate-videos.md).
 
 Groups are listed largest first. The hash is Solarr's own, not StashDB's. **TV Duplicates** are two files on one
 episode record, never two episodes that merely share a title or a length.
@@ -73,10 +77,17 @@ episode record, never two episodes that merely share a title or a length.
 
 The page shows the disk's size and free space and warns when the size limit is larger than the disk.
 
-**Database memory** sets the library database's SQLite page cache (default 64 MB per connection, written to
-`config.yml`, applied at the next start; **Set defaults** restores it). It also shows every database's file
-size, how full its cache is and its hit ratio, beside the hit ratios of the picture and provider-response
-caches (counted since the start). Layout of the databases: [database-layout.md](../database-layout.md).
+**Database memory** sets one ceiling for the SQLite page caches of all databases together (default 384 MiB, at
+least 128 MiB; the library database takes 80% of it). It is written to `config.yml` and applied at the next start;
+**Set defaults** restores it. A bigger ceiling keeps more of a large library in RAM and makes lists and scans faster.
+The page also shows every database's file size, how full its cache is and its hit ratio, beside the hit ratios of the
+picture and provider-response caches (counted since the start). **Shrink** drops pictures unused for seven days and
+provider answers older than that. Layout of the databases: [database-layout.md](../database-layout.md).
+
+**Run from RAM** (expert, off by default): the cache and/or the four databases can run from a RAM directory
+(`/dev/shm/solarr`, a tmpfs) and be copied back to disk on an interval. The container needs `shm_size` large enough,
+and a crash loses what changed since the last copy. Details, risks and the memory guard:
+[memory-copies.md](../memory-copies.md).
 
 ## Moving a configuration (🟡)
 

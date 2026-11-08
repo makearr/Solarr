@@ -53,6 +53,7 @@ merged name keeps leading there when a provider uses it again), adds or deletes 
 
 - One a provider or Solarr made can be renamed, deleted, filled with a work by hand or have a work taken out of
   it. None of that comes back undone on a refresh.
+- Collections of different libraries that a provider puts in one franchise (the same Star Wars in the movie and the book library) are **linked by shared franchise keys**; **Unlink** is sticky, so a pair you separated is not joined again.
 - **Merge duplicates** (administrators) shows the collections that are one said twice and folds each group into its largest; **Link** joins a collection with one of another library so each shows the other's works. Collection posters carry the same coverage bar as artists, and a view (search, order, favorites) can be saved by name.
 - **A show and its films.** A film collection named for a series ("Sex and the City Collection"), or a film titled as
   a show's movie ("Veronica Mars: The Movie"), is linked with a collection holding that series (made if the series is in

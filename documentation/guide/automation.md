@@ -72,4 +72,5 @@ Why queues hold and in what order: [downloads.md](../downloads.md).
 | **Identify waiting TV files** | The same for TV; see [tv.md](tv.md) |
 | **Add the new works of monitored franchises** | Every 12 hours; see [libraries.md](libraries.md) |
 
-Any task can be run on demand from the Scheduler.
+Any task can be run on demand from the Scheduler. The page has a tab per task category and a green-yellow-red heatmap of
+run times (hover for details); it stays green up to 60 seconds and leaves out tasks that last under 20 ms.

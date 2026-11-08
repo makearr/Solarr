@@ -18,26 +18,32 @@ cmd/solarr/            CLI: serve, config check, user, healthcheck, version
 └── adapters/              bridges apiserver/job interfaces to library and settings
 
 internal/
-├── api/        apiserver (+gen)  auth  authz  health  webui
+├── api/        apiserver (+gen, legal: the AGPL §13 texts)  auth  authz  health  webui
 ├── platform/   clock config egress events fsx httpx logthrottle paginate privilege secrets
-│               mediatool archive artwork
-├── db/         store (+gen)  settings  library (+fixture)  recovery
+│               mediatool archive artwork transcode (the player's ffmpeg conversions)
+│               ramcopy (cache and databases run from RAM, memory-copies.md)  previewstore (video preview pictures)
+│               remoteimage (provider pictures in the image cache)  filekind (what a path's extension names)
+│               listfilter (a list's custom filter)  keyedlock  parallel  hitcount  logbuffer
+├── db/         store (+gen)  settings  library (+fixture)  statistics  recovery
 ├── jobs/       the durable queue, executor, dispatcher, task registry
 │               + capacity  cachebudget
 ├── metadata/   musicbrainz  wikidata  acoustid  metacache  metaresolve
-│               skyhook  tvmaze  tmdb  tvdb  thexem  openlibrary  googlebooks  audible  stashbox  whisparr
-├── identify/   model  parse  parsetv  parsebook  parseadult  match  score  priority
+│               skyhook  tvmaze  tmdb  tvdb  thexem  anilist  omdb  mdblist  fanart  radarrmeta  theaudiodb
+│               openlibrary  googlebooks  audible  itunes  fantlab  hardcover  stashbox  theporndb  whisparr
+├── identify/   model  parse  parsetv  parsemovie  parsebook  parseadult  match  score  priority
 ├── scanning/   scan  probe
-├── importing/  inspect  importjob  batch  placer  rules  arrimport  arrmap
-├── moving/     mover  moverjob  drainjob  renamejob  placement  naming  sidecar
+├── importing/  inspect  importjob  batch  placer  rules  unpack (archives into a workspace)  downloadwatch  arrimport  arrmap
+├── moving/     mover  moverjob  drainjob  renamejob  placement  naming  sidecar  linker  linkjob (identical copies become links)
 ├── acquiring/  indexer (Newznab/Torznab client, indexer base and catalog)  download (client interface and bases)
-│               poll  plan  judge  dispatch  rss
+│               poll  plan  judge  releasefacts (what a release name claims)  dispatch  rss  clienttest (fakes the client tests share)
 │               indexers: indexer/thepiratebay  nyaa  yts  knaben  internetarchive  subsplease  gazelle  filelist
 │               hdbits  passthepopcorn  beyondhd  broadcasthenet  soulseek
 │               clients: sabnzbd  nzbget  qbittorrent  transmission (+ Vuze)  deluge  rtorrent  utorrent  flood  aria2
 │               slskd  blackhole (Torrent and Usenet)
 ├── service/    follow (ADR-32)  franchisewatch (monitored franchises gain their later works, 25 a run)  importlist (ADR-38, documentation/import-lists.md): every type alike
+│               franchiselink (collections of different libraries in one provider franchise)
 ├── media/      the media-type registry  +  music  tv  movie  book (books and audiobooks)  adult
+│               +  screen (the genre tree film and TV share)
 │               +  shared by types: works  knownfor  picturesweep  housekeeping
 └── archtest/   layering, access and Invariant-90 checks, as tests
 ```

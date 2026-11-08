@@ -110,3 +110,17 @@ support question in this ecosystem.
 
 Applied by `internal/platform/privilege` before anything logs. An unknown zone is reported and UTC is
 kept, rather than failing to start over a display preference.
+
+## Memory and `/dev/shm`
+
+Solarr's page caches take at most `database.cache_size_kb` (default 384 MiB) in total; raise it for a large library
+(Settings → Cache). The cache folder and the four databases can also run from RAM (`memory.cache_tmpfs`,
+`memory.database_tmpfs`, off by default). A container cannot mount a tmpfs itself, so the RAM directory is
+`memory.tmpfs_dir` (`/dev/shm/solarr`) and its size is the runtime's `shm_size`, 64 MB unless raised:
+
+```yaml
+    shm_size: 8gb
+    stop_grace_period: 2m   # time to copy the RAM databases back to disk at SIGTERM
+```
+
+See [memory-copies.md](memory-copies.md) for the risks, the 20% room rule and the memory guard.

@@ -157,11 +157,12 @@ older ones (ADR-36's ladder: `priority.Compute` with the user-request, RSS, new-
 weights). Within one, the longest waiting goes first. Each is checked again just before it is
 sent: still monitored, not blocklisted, nothing already on its way for the album; otherwise it is
 dropped and the album searched afresh later. One release per album is held; a newer decision
-replaces it. A held release carries what sending it needs (indexer, guid, title, link, protocol, size, score), so it
+replaces it. At most `acquire.ready_queue_limit` releases are held (default 200, 1 to 10000; **Connections → Download clients**,
+`GET/PUT /downloaders/queue-limit`); past it, what would be sent last is dropped. A held release carries what sending it needs (indexer, guid, title, link, protocol, size, score), so it
 goes without reading the search that found it; an acquisition likewise keeps its own guid, title and size.
 
 **Activity → Queue** lists the held releases below the downloads, in send order, with their size,
-who asked, the indexer and how long they have waited. The album page says "Waiting for room in
+who asked, the indexer and how long they have waited. A held release also says what it waits for and until when. The album page says "Waiting for room in
 the download client".
 
 ## Stalled downloads are removed (per client, off by default)

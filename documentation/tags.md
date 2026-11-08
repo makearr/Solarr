@@ -40,6 +40,12 @@ Settings -> Tags (administrator): rename, move under another tag of the same gen
 or merging a provider's tag keeps its old name as an alias, so the provider's next refresh lands on it. Deleting
 moves its children up; a provider's genre comes back with the next refresh unless merged.
 
+## Blocking a tag
+
+**Block** on a tag (administrator) removes it from every item and records its slug and each alias's in `blocked_tag`.
+A provider's genre, a person's tag or the shipped tree then skips it instead of creating it again (adding it by hand
+answers 409). **Settings → Tags → Blocked tags** lists them and unblocks.
+
 ## Filtering
 
 The works list takes `tags=12,-7`: each positive id must be carried by the work or by a tag below it

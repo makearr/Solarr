@@ -7,6 +7,8 @@ implementation into the **image** instead: acoustic fingerprinting and tag writi
 are invoked as batched subprocesses through one `MediaTool` interface
 (`internal/platform/mediatool`).
 
+Every ffmpeg and ffprobe call (probing, hashing, previews, playback conversion, subtitles) runs with `-protocol_whitelist file`, so a playlist disguised as a video cannot read other files or reach internal hosts. Hash and fingerprint frame reads decode on the GPU when one is passed in, with CPU fallback.
+
 `ffmpeg`, `chromaprint` and `py3-mutagen` are in the Dockerfile's runtime stage, with the
 tag writer `solarr-tag` beside them (decided 2026-09-17, revision D3). This page records
 what was verified, so the choice started from measurements rather than from hoping the base
