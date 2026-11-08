@@ -592,6 +592,8 @@ func answerIsHTML(body []byte) bool {
 // row is one release in an answer.
 type row struct {
 	source node
+	// heading is the text of the date heading above the row, empty when the spec has none.
+	heading string
 }
 
 func (d *Driver) rows(kind string, answer page, variables *Variables) ([]row, error) {
@@ -630,10 +632,38 @@ func (d *Driver) rows(kind string, answer page, variables *Variables) ([]row, er
 	var rows []row
 	selection.Each(func(index int, one *goquery.Selection) {
 		if index >= after {
-			rows = append(rows, row{source: htmlNode{one}})
+			rows = append(rows, row{source: htmlNode{one}, heading: d.dateHeading(one, spec.DateHeaders, variables)})
 		}
 	})
 	return rows, nil
+}
+
+// dateHeading finds the nearest heading before the row, climbing out of the row's parents, and runs the spec's filters over its text.
+func (d *Driver) dateHeading(one *goquery.Selection, headers *DateHeaders, variables *Variables) string {
+	if headers == nil || headers.Selector == "" {
+		return ""
+	}
+	selector, err := render(headers.Selector, variables)
+	if err != nil {
+		return ""
+	}
+	for level := one; level.Length() > 0; level = level.Parent() {
+		for earlier := level.Prev(); earlier.Length() > 0; earlier = earlier.Prev() {
+			heading := earlier
+			if !earlier.Is(selector) {
+				heading = earlier.Find(selector).First()
+			}
+			if heading.Length() == 0 {
+				continue
+			}
+			text, err := applyFilters(strings.TrimSpace(heading.Text()), headers.Filters, filterContext{variables: variables, now: d.clock.Now()})
+			if err != nil {
+				return ""
+			}
+			return strings.TrimSpace(text)
+		}
+	}
+	return ""
 }
 
 func (d *Driver) jsonRows(decoded any, selector string, spec Rows) []row {
@@ -709,6 +739,9 @@ func (d *Driver) item(source row, variables *Variables) (indexer.RawItem, bool, 
 		rowVars.Result[name] = value
 	}
 	result := rowVars.Result
+	if result["date"] == "" {
+		result["date"] = source.heading
+	}
 	title := strings.TrimSpace(result["title"])
 	if title == "" {
 		return indexer.RawItem{}, false, nil

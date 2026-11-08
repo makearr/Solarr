@@ -262,3 +262,26 @@ func TestRequestsAreSentInTheSitesCharacterSet(t *testing.T) {
 		t.Errorf("query = %q, want the keywords as windows-1251 bytes", raw)
 	}
 }
+
+func TestRowsTakeTheirDateFromTheHeadingAboveThem(t *testing.T) {
+	page := `<table><tr><td colspan="2"><b>Added 2020-03-05T00:00:00Z</b></td></tr>
+<tr class="r"><td class="n"><a href="/t/1">First</a></td></tr>
+<tr><td colspan="2"><b>Added 2019-01-02T00:00:00Z</b></td></tr>
+<tr class="r"><td class="n"><a href="/t/2">Second</a></td></tr></table>`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(page)) }))
+	defer server.Close()
+	spec := htmlSpec()
+	spec.Search.Rows.DateHeaders = &DateHeaders{Selector: "td[colspan] > b", Filters: []Filter{{Name: "replace", Args: []string{"Added ", ""}}}}
+	spec.Search.Fields = []Extractor{{Name: "title", Selector: "td.n a"}, {Name: "details", Selector: "td.n a", Attribute: "href"}}
+	if reasons := spec.Unsupported(); len(reasons) != 0 {
+		t.Fatalf("Unsupported = %v, want none", reasons)
+	}
+
+	items, err := testDriver(t, spec, server, nil).Search(t.Context(), indexer.SearchRequest{Query: "x"})
+	if err != nil || len(items) != 2 {
+		t.Fatalf("Search = %+v, %v", items, err)
+	}
+	if got := items[0].PublishedAt.UTC().Format(time.DateOnly) + " " + items[1].PublishedAt.UTC().Format(time.DateOnly); got != "2020-03-05 2019-01-02" {
+		t.Errorf("dates = %q, want each row dated by its own heading", got)
+	}
+}

@@ -33,6 +33,12 @@ def filters(node):
     return result
 
 
+def date_headers(node):
+    if not isinstance(node, dict):
+        return None
+    return {"selector": text(node.get("selector", "")), "filters": filters(node.get("filters"))}
+
+
 def extractor(node):
     if not isinstance(node, dict):
         return {"text": text(node)}
@@ -114,7 +120,7 @@ def convert(d):
                 "after": text(search.get("rows", {}).get("after")), "remove": text(search.get("rows", {}).get("remove")),
                 "filters": filters(search.get("rows", {}).get("filters")),
                 "count": scalars(search.get("rows", {}).get("count")) or None,
-                "date_headers": scalars(search.get("rows", {}).get("dateheaders")) or None,
+                "date_headers": date_headers(search.get("rows", {}).get("dateheaders")),
                 "multiple": bool(search.get("rows", {}).get("multiple")),
                 "missing_attribute_equals_no_results": bool(search.get("rows", {}).get("missingAttributeEqualsNoResults")),
             },

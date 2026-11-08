@@ -28,9 +28,6 @@ func (s Spec) Unsupported() []string {
 	if len(s.Search.Paths) == 0 {
 		add("no search path")
 	}
-	if s.Search.Rows.DateHeaders != nil && string(s.Search.Rows.DateHeaders) != "null" {
-		add("results grouped under date headings")
-	}
 	if enc := strings.ToLower(s.Encoding); enc != "" && enc != "utf-8" && enc != "utf8" {
 		if _, err := htmlindex.Get(enc); err != nil {
 			add("the " + s.Encoding + " character set")
@@ -70,6 +67,10 @@ func (s Spec) Unsupported() []string {
 	checkFilters(s.Search.KeywordsFilters)
 	checkFilters(s.Search.PreprocessingFilters)
 	checkFilters(s.Search.Rows.Filters)
+	if headers := s.Search.Rows.DateHeaders; headers != nil {
+		check(headers.Selector)
+		checkFilters(headers.Filters)
+	}
 	for _, path := range s.Search.Paths {
 		check(path.Path)
 		for _, input := range path.Inputs {

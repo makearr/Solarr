@@ -128,9 +128,15 @@ type Rows struct {
 	Remove                          string          `json:"remove"`
 	Filters                         []Filter        `json:"filters"`
 	Count                           json.RawMessage `json:"count"`
-	DateHeaders                     json.RawMessage `json:"date_headers"`
+	DateHeaders                     *DateHeaders    `json:"date_headers"`
 	Multiple                        bool            `json:"multiple"`
 	MissingAttributeEqualsNoResults bool            `json:"missing_attribute_equals_no_results"`
+}
+
+// DateHeaders names the heading element before a group of rows, whose text dates every row of the group.
+type DateHeaders struct {
+	Selector string   `json:"selector"`
+	Filters  []Filter `json:"filters"`
 }
 
 // Extractor reads one value: by selector, attribute and filters, or as a template (Text), or by the first matching case.
@@ -156,6 +162,29 @@ type Case struct {
 type Filter struct {
 	Name string   `json:"name"`
 	Args []string `json:"args"`
+}
+
+// UnmarshalJSON accepts a lone string as the arguments, which the converted data keeps for date headings.
+func (f *Filter) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Name string          `json:"name"`
+		Args json.RawMessage `json:"args"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	f.Name, f.Args = raw.Name, nil
+	if len(raw.Args) == 0 || string(raw.Args) == "null" {
+		return nil
+	}
+	if err := json.Unmarshal(raw.Args, &f.Args); err != nil {
+		var one string
+		if err := json.Unmarshal(raw.Args, &one); err != nil {
+			return err
+		}
+		f.Args = []string{one}
+	}
+	return nil
 }
 
 // Download is how a result's file is found when its link is not the file.
