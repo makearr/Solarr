@@ -32,6 +32,7 @@ type Server interface {
 	Configured() bool
 	SearchScenes(ctx context.Context, term string, limit int) ([]stashbox.Scene, error)
 	ScenesOnDate(ctx context.Context, title, date string, limit int) ([]stashbox.Scene, error)
+	ScenesOnDates(ctx context.Context, queries []stashbox.DayQuery, limit int) ([][]stashbox.Scene, error)
 	FindScene(ctx context.Context, id string) (stashbox.Scene, error)
 	ScenesByFingerprint(ctx context.Context, files [][]stashbox.Fingerprint) ([][]stashbox.Scene, error)
 	FindPerformer(ctx context.Context, id string) (stashbox.Performer, error)
@@ -43,6 +44,7 @@ type Server interface {
 // WhisparrSource is Whisparr's metadata server as the service needs it.
 type WhisparrSource interface {
 	SearchScenes(ctx context.Context, term string) ([]whisparr.Scene, error)
+	SearchSites(ctx context.Context, term string) ([]whisparr.Site, error)
 }
 
 // MovieSource is ThePornDB's REST API as the service needs it: the films the other servers do not hold.
@@ -103,16 +105,23 @@ type Hint struct {
 // FetchFor merges every source the library asks that knows the scene, the first supplying what it holds and each later
 // one only filling what is missing. A failing source is skipped; only all failing is an error.
 func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs, hint Hint) (Scene, error) {
-	return s.fetch(ctx, categoryID, ids, hint, false)
+	return s.fetch(ctx, categoryID, ids, hint, false, nil)
 }
 
 // providerPatience bounds one provider's lookup, its rate limiter's queue included: a flaky one it has slowed must not hold a scan for good.
 const providerPatience = 2 * time.Minute
 
 // fetch is FetchFor; quick stops asking once the scene holds what placing a file needs, leaving the rest to its refresh.
-func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, hint Hint, quick bool) (Scene, error) {
+func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, hint Hint, quick bool, seed *Scene) (Scene, error) {
 	order := s.order(categoryID)
 	answers := map[string]Scene{}
+	if seed != nil && len(seed.Sources) > 0 && slices.Contains(order, seed.Sources[0]) {
+		answers[seed.Sources[0]] = *seed
+		ids = mergeIDs(ids, seed.IDs)
+		if quick && enough(*seed) {
+			return finish(answers, order, ids)
+		}
+	}
 	// A provider early in the order may lack the title a later one teaches it: it is asked again once the first round ran.
 	askedWith := map[string]askedAbout{}
 	type question struct {
@@ -256,7 +265,8 @@ func (s Service) askServer(ctx context.Context, name string, ids IDs, hint Hint)
 	if hint.Title == "" {
 		return Scene{}, false
 	}
-	for _, scene := range s.onDate(ctx, name, server, hint.Title, hint.Date, searchLimit) {
+	onDay, _ := s.onDate(ctx, name, server, hint.Title, hint.Date, searchLimit)
+	for _, scene := range onDay {
 		if sameScene(scene, hint) {
 			return scene, true
 		}
@@ -322,11 +332,31 @@ func (s Service) askWhisparr(ctx context.Context, ids IDs, hint Hint) (Scene, bo
 		for _, candidate := range found {
 			scene := FromWhisparr(candidate)
 			if (ids.ThePornDB != "" && ids.ThePornDB == candidate.ForeignGUID) || (ids.ThePornDB == "" && sameScene(scene, hint)) {
+				s.nameWhisparrSite(ctx, &scene, candidate.SiteID, hint.Studio)
 				return scene, true
 			}
 		}
 	}
 	return Scene{}, false
+}
+
+// nameWhisparrSite gives a scene Whisparr's server answered the studio of its site, which that server names only by number:
+// the site found under the studio's name that holds that number. One lookup serves every scene of the studio.
+func (s Service) nameWhisparrSite(ctx context.Context, scene *Scene, siteID int, studio string) {
+	if siteID == 0 || studio == "" || scene.Studio != "" {
+		return
+	}
+	sites, err := memoized(ctx, s.Memo, sourceWhisparr+":sites", studio, func() ([]whisparr.Site, error) { return s.Whisparr.SearchSites(ctx, studio) })
+	if err != nil {
+		s.warn(sourceWhisparr, studio, err)
+		return
+	}
+	for _, site := range sites {
+		if site.ForeignID == siteID {
+			scene.Studio, scene.Network = strings.TrimSpace(site.Title), strings.TrimSpace(site.Network)
+			return
+		}
+	}
 }
 
 func idOf(ids IDs, provider string) string {
@@ -379,11 +409,23 @@ type Candidate struct {
 	Traits      media.Traits
 	// Rank is the candidate's place in its own provider's answer, from 0.
 	Rank int
+	// Listed is the scene as its provider listed it, which adding the candidate need not ask for again.
+	Listed Scene
 }
 
 // Query is what a search is for: the words and, when known, the studio and day.
 type Query struct {
 	Title, Studio, Date string
+	// DayOnly asks a server that can list the scenes of a day only for that, skipping its slower, flakier text search.
+	DayOnly bool
+	// ScenesOnly leaves out ThePornDB's films, which only a library of whole films wants.
+	ScenesOnly bool
+}
+
+// lookup is one provider's share of a search: the words it is asked, which may carry the studio, and the title and day alone.
+type lookup struct {
+	term, title, date   string
+	dayOnly, scenesOnly bool
 }
 
 // Search finds scenes by their words at every provider of the library's order, each in its own ranking and at most limit of
@@ -408,9 +450,11 @@ func (s Service) SearchUntil(ctx context.Context, categoryID int64, query Query,
 	var found []Candidate
 	for _, name := range s.order(categoryID) {
 		patient, cancel := context.WithTimeout(ctx, providerPatience)
-		scenes, err := s.searchOne(patient, name, strings.TrimSpace(strings.Join([]string{query.Studio, title}, " ")), title, query.Date, limit)
+		question := lookup{term: strings.TrimSpace(strings.Join([]string{query.Studio, title}, " ")), title: title, date: query.Date, dayOnly: query.DayOnly, scenesOnly: query.ScenesOnly}
+		scenes, err := s.searchOne(patient, name, question, limit)
 		if err == nil && len(scenes) == 0 && query.Studio != "" {
-			scenes, err = s.searchOne(patient, name, title, title, query.Date, limit)
+			question.term = title
+			scenes, err = s.searchOne(patient, name, question, limit)
 		}
 		cancel()
 		if err != nil {
@@ -445,7 +489,8 @@ func mergeCandidates(listed, more []Candidate) []Candidate {
 	return listed
 }
 
-func (s Service) searchOne(ctx context.Context, name, term, title, date string, limit int) ([]Scene, error) {
+func (s Service) searchOne(ctx context.Context, name string, asked lookup, limit int) ([]Scene, error) {
+	term, title := asked.term, asked.title
 	if name == sourceWhisparr {
 		if s.Whisparr == nil {
 			return nil, nil
@@ -461,15 +506,15 @@ func (s Service) searchOne(ctx context.Context, name, term, title, date string, 
 	if !ok || server == nil || !server.Configured() {
 		return nil, nil
 	}
-	scenes := s.onDate(ctx, name, server, title, date, limit)
-	if slices.ContainsFunc(scenes, func(scene Scene) bool { return NameKey(scene.Title) == NameKey(title) }) {
+	scenes, listed := s.onDate(ctx, name, server, title, asked.date, limit)
+	if listed && (asked.dayOnly || slices.ContainsFunc(scenes, func(scene Scene) bool { return NameKey(scene.Title) == NameKey(title) })) {
 		return scenes, nil
 	}
 	found, err := memoized(ctx, s.Memo, name, term, func() ([]stashbox.Scene, error) { return server.SearchScenes(ctx, term, limit) })
 	for _, scene := range found {
 		scenes = append(scenes, FromStashBox(name, scene))
 	}
-	if name == ProviderThePornDB && s.Movies != nil && s.Movies.Configured() {
+	if name == ProviderThePornDB && !asked.scenesOnly && s.Movies != nil && s.Movies.Configured() {
 		films, filmErr := memoized(ctx, s.Memo, ProviderThePornDB+":movies", term, func() ([]theporndb.Movie, error) { return s.Movies.SearchMovies(ctx, term, limit) })
 		for _, film := range films {
 			scenes = append(scenes, FromMovie(film))
@@ -479,25 +524,59 @@ func (s Service) searchOne(ctx context.Context, name, term, title, date string, 
 	return scenes, err
 }
 
+// daysPerRequest is how many titles of a day one request asks a server for.
+const daysPerRequest = 20
+
+// PrefetchDays asks the servers of the library's order for the scenes of each title's day, a request to a server for every
+// twenty, and remembers the answers: the lookups of the files that follow then cost the servers nothing.
+func (s Service) PrefetchDays(ctx context.Context, categoryID int64, days []Hint) {
+	for _, name := range s.order(categoryID) {
+		server, ok := s.Servers[name]
+		if !ok || server == nil || !server.Configured() {
+			continue
+		}
+		var missing []stashbox.DayQuery
+		for _, day := range days {
+			if day.Date != "" && !memoHolds(s.Memo, name+":"+day.Date, day.Title) && !slices.Contains(missing, stashbox.DayQuery{Title: day.Title, Date: day.Date}) {
+				missing = append(missing, stashbox.DayQuery{Title: day.Title, Date: day.Date})
+			}
+		}
+		for chunk := range slices.Chunk(missing, daysPerRequest) {
+			patient, cancel := context.WithTimeout(ctx, providerPatience)
+			lists, err := server.ScenesOnDates(patient, chunk, searchLimit)
+			cancel()
+			if err != nil {
+				if !errors.Is(err, stashbox.ErrUnsupported) {
+					s.warn(name, "scenes of a batch's days", err)
+				}
+				break
+			}
+			for i, asked := range chunk {
+				memoStore(s.Memo, name+":"+asked.Date, asked.Title, lists[i])
+			}
+		}
+	}
+}
+
 // onDate lists the scenes the server holds of that day under the words, first in the ranking: a studio's numbered
-// scenes ("Title #04" on twenty days) fill a text search's top ten with the wrong days. A server without the filter or
-// failing is asked by text alone.
-func (s Service) onDate(ctx context.Context, name string, server Server, title, date string, limit int) []Scene {
+// scenes ("Title #04" on twenty days) fill a text search's top ten with the wrong days. listed is false for a server
+// without the filter, one that failed, or no day: it is then asked by text alone.
+func (s Service) onDate(ctx context.Context, name string, server Server, title, date string, limit int) (scenes []Scene, listed bool) {
 	if date == "" {
-		return nil
+		return nil, false
 	}
 	found, err := memoized(ctx, s.Memo, name+":"+date, title, func() ([]stashbox.Scene, error) { return server.ScenesOnDate(ctx, title, date, limit) })
 	if err != nil {
 		if !errors.Is(err, stashbox.ErrUnsupported) {
 			s.warn(name, title, err)
 		}
-		return nil
+		return nil, false
 	}
-	scenes := make([]Scene, 0, len(found))
+	scenes = make([]Scene, 0, len(found))
 	for _, scene := range found {
 		scenes = append(scenes, FromStashBox(name, scene))
 	}
-	return scenes
+	return scenes, true
 }
 
 func candidatesOf(scenes []Scene, limit int) []Candidate {
@@ -506,7 +585,7 @@ func candidatesOf(scenes []Scene, limit int) []Candidate {
 	}
 	out := make([]Candidate, 0, len(scenes))
 	for rank, scene := range scenes {
-		candidate := Candidate{Rank: rank, IDs: scene.IDs, Title: scene.Title, Studio: scene.Studio, Date: scene.Date, Year: scene.Year,
+		candidate := Candidate{Rank: rank, Listed: scene, IDs: scene.IDs, Title: scene.Title, Studio: scene.Studio, Date: scene.Date, Year: scene.Year,
 			Performers: scene.Performers(), DurationSec: scene.DurationSec, Overview: scene.Overview, Traits: media.Traits{Genres: scene.Tags}}
 		if len(scene.Images) > 0 {
 			candidate.Cover = scene.Images[0].URL
@@ -575,6 +654,8 @@ type AddRequest struct {
 	Fallback *Scene
 	// Quick adds what placing a file needs; the scene's refresh asks the remaining providers.
 	Quick bool
+	// Seed is the scene as a provider already listed it, taken for that provider's answer.
+	Seed *Scene
 }
 
 // AddResult is what an add stored.
@@ -595,7 +676,7 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 	if !monitor.Valid() {
 		return AddResult{}, fmt.Errorf("adult: unknown monitor option %q", monitor)
 	}
-	scene, err := s.fetch(ctx, request.CategoryID, request.IDs, request.Hint, request.Quick)
+	scene, err := s.fetch(ctx, request.CategoryID, request.IDs, request.Hint, request.Quick, request.Seed)
 	if errors.Is(err, ErrNoSource) && request.Fallback != nil {
 		scene, err = *request.Fallback, nil
 	}

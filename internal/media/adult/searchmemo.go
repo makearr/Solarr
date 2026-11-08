@@ -77,3 +77,19 @@ func memoized[T any](ctx context.Context, memo *SearchMemo, provider, term strin
 	}
 	return value, err
 }
+
+// memoHolds says the memo has an answer for the words, so asking would cost nothing.
+func memoHolds(memo *SearchMemo, provider, term string) bool {
+	if memo == nil {
+		return false
+	}
+	_, found := memo.get(provider + "\x00" + term)
+	return found
+}
+
+// memoStore keeps an answer fetched elsewhere (a batch's) as if the words had been asked on their own.
+func memoStore[T any](memo *SearchMemo, provider, term string, value T) {
+	if memo != nil {
+		memo.put(provider+"\x00"+term, value)
+	}
+}

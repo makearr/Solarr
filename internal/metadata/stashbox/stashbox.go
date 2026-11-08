@@ -237,13 +237,14 @@ func (c Client) SearchScenes(ctx context.Context, term string, limit int) ([]Sce
 	return found.Scenes, err
 }
 
-// ScenesOnDate finds the scenes of a day whose title holds the words given, which a text search buries when a studio
-// numbers its scenes alike. ThePornDB's filter is shaped otherwise and answers ErrUnsupported.
+// ScenesOnDate finds the scenes of a day that the words match as text, which a plain search buries when a studio numbers
+// its scenes alike. The text filter reads through what file names change in a title (punctuation, accents, case), which
+// the title filter matches letter for letter. ThePornDB's filter is shaped otherwise and answers ErrUnsupported.
 func (c Client) ScenesOnDate(ctx context.Context, title, date string, limit int) ([]Scene, error) {
 	if c.endpoint == ThePornDBEndpoint {
 		return nil, ErrUnsupported
 	}
-	input := map[string]any{"title": strings.TrimSpace(title), "date": map[string]any{"value": date, "modifier": "EQUALS"}, "per_page": max(limit, 1)}
+	input := map[string]any{"text": strings.TrimSpace(title), "date": map[string]any{"value": date, "modifier": "EQUALS"}, "per_page": max(limit, 1)}
 	var found struct {
 		Query struct {
 			Scenes []Scene `json:"scenes"`
@@ -251,6 +252,41 @@ func (c Client) ScenesOnDate(ctx context.Context, title, date string, limit int)
 	}
 	err := c.query(ctx, `query ($i: SceneQueryInput!) { queryScenes(input: $i) { scenes {`+sceneFields+`} } }`, map[string]any{"i": input}, &found)
 	return found.Query.Scenes, err
+}
+
+// DayQuery is a title asked for on a day.
+type DayQuery struct{ Title, Date string }
+
+// ScenesOnDates is ScenesOnDate for many titles in one request, a list for each in the order asked: the servers count
+// requests, and a scan's batch of files is one. ThePornDB's filter is shaped otherwise and answers ErrUnsupported.
+func (c Client) ScenesOnDates(ctx context.Context, queries []DayQuery, limit int) ([][]Scene, error) {
+	if c.endpoint == ThePornDBEndpoint {
+		return nil, ErrUnsupported
+	}
+	if len(queries) == 0 {
+		return nil, nil
+	}
+	declarations := make([]string, len(queries))
+	selections := make([]string, len(queries))
+	variables := make(map[string]any, len(queries))
+	for i, asked := range queries {
+		declarations[i] = fmt.Sprintf("$i%d: SceneQueryInput!", i)
+		selections[i] = fmt.Sprintf("q%d: queryScenes(input: $i%d) { scenes {%s} }", i, i, sceneFields)
+		variables[fmt.Sprintf("i%d", i)] = map[string]any{
+			"text": strings.TrimSpace(asked.Title), "date": map[string]any{"value": asked.Date, "modifier": "EQUALS"}, "per_page": max(limit, 1),
+		}
+	}
+	var found map[string]struct {
+		Scenes []Scene `json:"scenes"`
+	}
+	if err := c.query(ctx, "query ("+strings.Join(declarations, ", ")+") { "+strings.Join(selections, " ")+" }", variables, &found); err != nil {
+		return nil, err
+	}
+	lists := make([][]Scene, len(queries))
+	for i := range queries {
+		lists[i] = found[fmt.Sprintf("q%d", i)].Scenes
+	}
+	return lists, nil
 }
 
 // FindScene reads one scene by id.

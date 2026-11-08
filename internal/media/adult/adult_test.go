@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"reflect"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -40,13 +41,26 @@ func (f *fakeServer) SearchScenes(_ context.Context, term string, _ int) ([]stas
 // ScenesOnDate answers the scenes held under that day, as the real filter does.
 func (f *fakeServer) ScenesOnDate(_ context.Context, title, date string, _ int) ([]stashbox.Scene, error) {
 	f.asked = append(f.asked, "on:"+date+":"+title)
+	return f.heldOn(date), nil
+}
+
+func (f *fakeServer) heldOn(date string) []stashbox.Scene {
 	var out []stashbox.Scene
 	for _, scene := range f.scenes {
 		if scene.ReleaseDate == date {
 			out = append(out, scene)
 		}
 	}
-	return out, nil
+	return out
+}
+
+func (f *fakeServer) ScenesOnDates(_ context.Context, queries []stashbox.DayQuery, _ int) ([][]stashbox.Scene, error) {
+	f.asked = append(f.asked, "batch:"+strconv.Itoa(len(queries)))
+	lists := make([][]stashbox.Scene, len(queries))
+	for i, asked := range queries {
+		lists[i] = f.heldOn(asked.Date)
+	}
+	return lists, nil
 }
 
 func (f *fakeServer) FindScene(_ context.Context, id string) (stashbox.Scene, error) {
@@ -87,10 +101,17 @@ func (f *fakeServer) ScenesOf(_ context.Context, filter stashbox.SceneFilter, _,
 	return f.scenes, nil
 }
 
-type fakeWhisparr struct{ scenes []whisparr.Scene }
+type fakeWhisparr struct {
+	scenes []whisparr.Scene
+	sites  []whisparr.Site
+}
 
 func (f fakeWhisparr) SearchScenes(context.Context, string) ([]whisparr.Scene, error) {
 	return f.scenes, nil
+}
+
+func (f fakeWhisparr) SearchSites(context.Context, string) ([]whisparr.Site, error) {
+	return f.sites, nil
 }
 
 func stashScene() stashbox.Scene {
@@ -130,6 +151,20 @@ func TestFetchForTakesTheFirstSourcesFieldsAndFillsWhatItLacksFromTheNext(t *tes
 	}
 	if want := []string{"Teacher", "Blowjob"}; !reflect.DeepEqual(scene.Tags, want) {
 		t.Errorf("tags = %v, want %v", scene.Tags, want)
+	}
+}
+
+// Whisparr's server names a scene's site by number only; the studio the file sits under tells which site that is.
+func TestFetchForNamesWhisparrsSiteByTheNumberFoundUnderTheFilesStudio(t *testing.T) {
+	scene := whisparrScene()
+	scene.SiteID = 7
+	service := Service{
+		Whisparr: fakeWhisparr{scenes: []whisparr.Scene{scene}, sites: []whisparr.Site{{ForeignID: 3, Title: "Other Studio"}, {ForeignID: 7, Title: "Night Studio", Network: "Night Network"}}},
+		Sources:  []string{sourceWhisparr},
+	}
+	got, err := service.FetchFor(t.Context(), 0, IDs{}, Hint{Title: "Class Two", Studio: "night studio", Date: "2020-05-14"})
+	if err != nil || got.Studio != "Night Studio" || got.Network != "Night Network" {
+		t.Errorf("scene = %q of %q, %v; want Night Studio of Night Network", got.Studio, got.Network, err)
 	}
 }
 
@@ -533,6 +568,16 @@ func TestPickCandidateBridgesADayOrTwoOnlyForAnIdenticalTitle(t *testing.T) {
 	}
 }
 
+func TestTitleMatchesReadsAFileTitleCutShortByTheNameLimit(t *testing.T) {
+	full := "She is always happy when she gets two cocks at the same time"
+	if !titleMatches(full, "She is always happy when she gets two co...", true) {
+		t.Error("a cut title did not match its scene on the same day")
+	}
+	if titleMatches(full, "She is always happy when she gets two co...", false) {
+		t.Error("a cut title matched without the day")
+	}
+}
+
 func TestPickCandidateReadsPastABonusPrefix(t *testing.T) {
 	hit := []Candidate{{IDs: IDs{StashDB: "a"}, Title: "BONUS-Class Two", Date: "2020-08-01"}}
 	if pick, _, ok := pickCandidate(hit, parseadult.Info{Title: "Class Two", Date: "2020-08-01"}); !ok || pick.IDs.StashDB != "a" {
@@ -604,6 +649,45 @@ func TestPickCandidateTellsScenesOfOneTitleAndDayApartByPerformersAndLength(t *t
 	byLength := parseadult.Info{Title: "Back", Studio: "Night Studio", Date: "2009-06-25", DurationSec: 1201}
 	if pick, _, ok := pickCandidate(listed, byLength); !ok || pick.Rank != 1 {
 		t.Errorf("by length picked %+v (%v), want the second", pick, ok)
+	}
+}
+
+// A server that lists a day answers for it alone when the file has one: its text search is slower and, at FansDB, flaky.
+func TestSearchUntilAsksAServerThatListsDaysOnlyForTheDayWhenToldTo(t *testing.T) {
+	server := &fakeServer{scenes: []stashbox.Scene{stashScene()}}
+	service := Service{Servers: map[string]Server{ProviderStashDB: server}, Sources: []string{ProviderStashDB}}
+	found, err := service.SearchUntil(t.Context(), 0, Query{Title: "Class Two", Date: "2020-05-14", DayOnly: true}, 10, nil)
+	if err != nil || len(found) != 1 {
+		t.Fatalf("found = %+v, %v", found, err)
+	}
+	if want := []string{"on:2020-05-14:Class Two"}; !reflect.DeepEqual(server.asked, want) {
+		t.Errorf("asked %v, want only %v", server.asked, want)
+	}
+}
+
+// A batch's days are asked in one request, and the lookups of its files then ask nothing.
+func TestPrefetchDaysAsksOnceForABatchAndTheFilesLookupsAreRemembered(t *testing.T) {
+	server := &fakeServer{scenes: []stashbox.Scene{stashScene()}}
+	service := Service{Servers: map[string]Server{ProviderStashDB: server}, Sources: []string{ProviderStashDB}, Memo: NewSearchMemo(clock.NewFakeAtEpoch())}
+	service.PrefetchDays(t.Context(), 0, []Hint{{Title: "Class Two", Date: "2020-05-14"}, {Title: "Class Two", Date: "2020-05-14"}, {Title: "Other", Date: "2020-05-15"}})
+	found, err := service.SearchUntil(t.Context(), 0, Query{Title: "Class Two", Date: "2020-05-14", DayOnly: true}, 10, nil)
+	if err != nil || len(found) != 1 {
+		t.Fatalf("found = %+v, %v", found, err)
+	}
+	if want := []string{"batch:2"}; !reflect.DeepEqual(server.asked, want) {
+		t.Errorf("asked %v, want one batch of the two distinct titles %v", server.asked, want)
+	}
+}
+
+// A scene a provider listed is that provider's answer: adding it asks no one again when it holds what a file needs.
+func TestFetchTakesTheListedSceneAsItsProvidersAnswer(t *testing.T) {
+	server := &fakeServer{}
+	service := Service{Servers: map[string]Server{ProviderStashDB: server}, Sources: []string{ProviderStashDB}}
+	seed := FromStashBox(ProviderStashDB, stashScene())
+	seed.Images = []Image{{Kind: "poster", URL: "https://example.test/a.jpg"}}
+	got, err := service.fetch(t.Context(), 0, seed.IDs, Hint{}, true, &seed)
+	if err != nil || got.Title != "Class Two" || len(server.asked) != 0 {
+		t.Errorf("scene %q, %v, asked %v; want the listed scene and no request", got.Title, err, server.asked)
 	}
 }
 

@@ -75,7 +75,11 @@ func (r Resolver) ResolveKnown(ctx context.Context, categoryID int64, info parse
 	if r.wantsFilms(categoryID) {
 		settled = nil
 	}
-	candidates, err := r.Service.SearchUntil(ctx, categoryID, Query{Title: info.Title, Studio: info.Studio, Date: info.Date}, searchLimit, settled)
+	candidates, err := r.Service.SearchUntil(ctx, categoryID, Query{Title: info.Title, Studio: info.Studio, Date: info.Date, DayOnly: info.Date != "", ScenesOnly: !r.wantsFilms(categoryID)}, searchLimit, settled)
+	// The text search finds what a day cannot: a listing a day or two off, or a title the filter does not match.
+	if _, _, ok := pickCandidate(candidates, info); err == nil && info.Date != "" && !ok {
+		candidates, err = r.Service.SearchUntil(ctx, categoryID, Query{Title: info.Title, Studio: info.Studio, Date: info.Date, ScenesOnly: !r.wantsFilms(categoryID)}, searchLimit, settled)
+	}
 	if err != nil {
 		r.warn("scene lookup failed", info.Title, err)
 		return 0, nil
@@ -83,7 +87,7 @@ func (r Resolver) ResolveKnown(ctx context.Context, categoryID int64, info parse
 	// A whole film beside its numbered scenes is a person's call, however well one scene's title fits.
 	film, isFilm := filmOf(candidates, info)
 	if pick, confidence, ok := pickCandidate(candidates, info); !isFilm && ok && model.AcceptsFolderMatch(confidence, r.Threshold) {
-		if id := r.add(ctx, categoryID, pick.IDs, Hint{Title: pick.Title, Studio: pick.Studio, Date: pick.Date}); id != 0 {
+		if id := r.add(ctx, categoryID, pick.IDs, Hint{Title: pick.Title, Studio: pick.Studio, Date: pick.Date}, &pick.Listed); id != 0 {
 			return id, nil
 		}
 	}
@@ -116,7 +120,7 @@ func (r Resolver) ByIDs(ctx context.Context, categoryID int64, ids IDs, hint Hin
 	if id, held := r.Service.WorkByIDs(ctx, ids); held {
 		return id
 	}
-	return r.add(ctx, categoryID, ids, hint)
+	return r.add(ctx, categoryID, ids, hint, nil)
 }
 
 // inLibrary finds the one scene the library holds under this title, in a year that agrees when both are known. A file
@@ -148,12 +152,12 @@ func (r Resolver) inLibrary(ctx context.Context, categoryID int64, info parseadu
 	return 0, false
 }
 
-func (r Resolver) add(ctx context.Context, categoryID int64, ids IDs, hint Hint) int64 {
+func (r Resolver) add(ctx context.Context, categoryID int64, ids IDs, hint Hint, seed *Scene) int64 {
 	if r.Service.IsExcluded(ctx, ids) {
 		return Excluded
 	}
 	profile, monitor := r.addChoices(categoryID)
-	result, err := r.Service.Add(ctx, AddRequest{IDs: ids, Hint: hint, CategoryID: categoryID, ProfileID: profile, Monitor: monitor, Quick: true})
+	result, err := r.Service.Add(ctx, AddRequest{IDs: ids, Hint: hint, CategoryID: categoryID, ProfileID: profile, Monitor: monitor, Quick: true, Seed: seed})
 	if err != nil {
 		r.warn("scene could not be added", ids.StashDB+ids.ThePornDB+ids.FansDB, err)
 		return 0
@@ -282,7 +286,19 @@ func titleMatches(found, wanted string, sameDay bool) bool {
 	if foundKey == "" || wantedKey == "" {
 		return false
 	}
+	if sameDay && cutShort(wanted) && len(wantedKey) >= minCutTitleKey && strings.HasPrefix(foundKey, wantedKey) {
+		return true
+	}
 	return foundKey == wantedKey || (sameDay && (strings.Contains(foundKey, wantedKey) || strings.Contains(wantedKey, foundKey)))
+}
+
+// minCutTitleKey is how much of a cut-short title must be left to name a scene.
+const minCutTitleKey = 12
+
+// cutShort says a file's title ends in the ellipsis a file system's name limit leaves.
+func cutShort(title string) bool {
+	trimmed := strings.TrimSpace(title)
+	return strings.HasSuffix(trimmed, "...") || strings.HasSuffix(trimmed, "\u2026")
 }
 
 // identifications are the hits a person picks from in Review, the provider's own ranking kept.

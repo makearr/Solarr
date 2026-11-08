@@ -73,6 +73,13 @@ func (s scanning) Resolve(ctx context.Context, _ settings.RootFolder, categoryID
 		hashes[i] = file.OSHash
 	}
 	known := s.resolver.Service.ByFingerprints(ctx, categoryID, hashes)
+	var days []Hint
+	for _, file := range observed {
+		if info, ok := parseadult.ParsePath(file.File.RelPath); ok && info.Date != "" {
+			days = append(days, Hint{Title: info.Title, Date: info.Date})
+		}
+	}
+	s.resolver.Service.PrefetchDays(ctx, categoryID, days)
 	matches := make([]works.ScanMatch, len(observed))
 	// A file waits on the providers far longer than it works, so a batch's files are placed side by side; each provider's own bucket sets the pace.
 	var placing sync.WaitGroup
