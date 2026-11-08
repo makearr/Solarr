@@ -3,6 +3,62 @@
 Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM.RRR.BBB` before); see `documentation/versioning.md`.
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
+## 2026.11.1.0882 — 2026-11-08
+
+**Upgrading:** databases created by 2026.10.001.515 or earlier are refused at start-up (one baseline migration per database now); import from the *Arrs or start a fresh config folder.
+
+- **Books and audiobooks are real libraries.** Metadata from Open Library, Google Books, Hardcover, FantLab, iTunes and
+  Audible (with Audnexus), covers, one collection per series and the books a series still lacks, **Monitor** on a
+  whole series, **follow an author**, and a **Narrators** level, filter and column for audiobooks.
+- **An adult library type** (optional) over the stash-box providers, ThePornDB and Whisparr's metadata: scenes and
+  films, performers, and a StashDB favourites import list. See [adult](documentation/adult.md).
+- **Import lists for TV.** An AniList season or user list, a TMDB list or TMDB's trending and popular shows add series
+  for you, **previewed before you enable them**. See [import lists](documentation/import-lists.md).
+- **Import from the \*Arrs by choice.** A preview and mapping step, then pick what to bring across; Whisparr is a
+  source too, and monitoring can be **sent back** to the \*Arr.
+- **Merge one library into another** of the same media type, previewed like a move.
+- **Favourites.** A per-user heart on works, parts, people, organisations and collections, with a Favourites filter.
+- **A preview player in the browser**: bar, corner window or full screen, source bitrate, quality menu and **GPU
+  transcoding**. See [media player](documentation/media-player.md).
+- **Similar videos report** across one library or all: perceptual hashes of the frames plus duration, keep one and
+  link or recycle the others. Hashing is **off by default**. See [duplicate videos](documentation/duplicate-videos.md).
+- **More download clients and indexers**: every client Lidarr and Sonarr offer, **Soulseek through slskd**, and
+  **Prowlarr's catalog** to choose indexers from.
+- **Download queue insight**: the dashboard says when the queue will be empty, a deferred release says what it
+  waits for, each client's average speed is shown, a search-budget view shows what the last hour's searches were spent
+  on, and the Add form shows where a request ranks against the automatic searches.
+- **Libraries choose whether existing files are renamed**: never, on request, or automatic. Replacements are
+  recorded and shown side by side. Move jobs can be paused, resumed and cancelled.
+- **TV**: searches and imports by TheXEM's scene numbers, episode titles in the library's profile languages, air moments on the
+  calendar, subtitles that follow the file that replaces an episode, a richer add form (root folder, series type,
+  season folders, tags) and a franchise watch task.
+- **Per-library music provider order**, label, network and organisation logos, and **people and collections editable
+  by hand**; one human is one person across every source.
+- **Cache and memory page** (*Settings → Cache*) with one database cache ceiling, a Shrink button, and an optional
+  **cache and databases in RAM** (tmpfs); **statistics** per indexer and files below each library's cutoff,
+  and health that names a paused indexer or download client.
+- **Settings by environment variable**: config folder, port, root folders and API keys; `_FILE` variants for Docker
+  secrets. See [environment variables](documentation/environment-variables.md).
+- **Deduplication.** Similar videos are found at five levels across all libraries (hash version 2: time-based sample
+  windows, black-bar crop, scene cuts), with delete on every file, a frame and 3x3 preview sheet per file, and
+  hashing switched off by default.
+- **Requests.** Users with request permission file requests an administrator approves (or an *Add* grant that is
+  approved at once); tags can be hidden per account and **blocked** library-wide.
+- **Target quality.** Libraries aim at a named target with shipped presets, a per-work target, closeness judged
+  against it, and a preview of what a change makes upgradable.
+- **One verified backup bundle** (`tar.zst` of the four databases and `config.yml`) and a Settings → Database page
+  with disk use, a keep rule and maintenance by hand.
+- **Held releases** have a size setting (default 200), and torrents can wait for both ratio and time with a hard stop.
+- **Documentation** split into beginner, advanced and expert levels, with a getting-started page.
+- **Hardening.** The first-run claim race is closed, cross-site writes are refused, a session cookie is `Secure`
+  behind a trusted TLS proxy, 6to4 and IPv4-compatible addresses are judged by the IPv4 they carry, symlinks in a
+  download are never followed, a torrent whose name is a path never becomes an import path, and a whole download
+  folder is never imported as one download.
+- **Faster.** Scans read directories ahead of the walk, bulk edit writes only what changed, album decisions are about
+  3x faster, release-name parses are remembered, RSS sync skips a feed that answers 304, and the queue asks all
+  download clients together.
+
+
 ## 2026.10.001.515 — 2026-10-25
 
 **First public release — early alpha.** Use at your own risk, and please report problems as issues.
