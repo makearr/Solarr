@@ -31,7 +31,9 @@ export function IndexerCatalog() {
   const [chosen, setChosen] = useState<string[]>([]);
   const shown = filterCatalog(kinds.data ?? [], filter);
   const scroller = useRef<HTMLDivElement>(null);
-  const rows = useVirtualizer({ count: shown.length, getScrollElement: () => scroller.current, estimateSize: () => 76, overscan: 8 });
+  const list = useRef<HTMLUListElement>(null);
+  const scrollMargin = list.current?.offsetTop ?? 0;
+  const rows = useVirtualizer({ count: shown.length, getScrollElement: () => scroller.current, estimateSize: () => 76, overscan: 8, scrollMargin });
   const toggle = (id: string, on: boolean) => setChosen((current) => (on ? [...current, id] : current.filter((one) => one !== id)));
 
   return (
@@ -79,7 +81,7 @@ export function IndexerCatalog() {
           {shown.length} of {kinds.data.length} indexers
         </p>
       )}
-      <ul className="relative rounded-lg border border-border-subtle bg-surface" style={{ height: rows.getTotalSize() }}>
+      <ul ref={list} className="relative shrink-0 rounded-lg border border-border-subtle bg-surface" style={{ height: rows.getTotalSize() }}>
         {rows.getVirtualItems().map((row) => {
           const kind = shown[row.index];
           if (!kind) return null;
@@ -90,7 +92,7 @@ export function IndexerCatalog() {
               ref={rows.measureElement}
               data-index={row.index}
               className="absolute left-0 w-full border-b border-border-subtle last:border-b-0"
-              style={{ top: 0, transform: `translateY(${row.start}px)` }}
+              style={{ top: 0, transform: `translateY(${row.start - scrollMargin}px)` }}
             >
               <label className={`flex items-start gap-3 p-3 ${added ? "opacity-60" : "cursor-pointer hover:bg-canvas"}`}>
                 <input

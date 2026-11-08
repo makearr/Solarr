@@ -80,8 +80,8 @@ export function Indexers() {
       <header className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold">Indexers</h1>
         <p className="text-sm leading-relaxed text-ink-muted">
-          Where releases are searched for. Choose them from the list of every indexer Solarr can search, add them from
-          Prowlarr, or add one by hand below.
+          Where releases are searched for. Choose them from the list of every indexer Solarr can search, or keep them in step
+          with a Prowlarr under Connections → Arr.
         </p>
         <Link
           to="/connections/indexers/add"
@@ -91,7 +91,6 @@ export function Indexers() {
         </Link>
       </header>
 
-      <AddFromProwlarr onAdded={invalidate} />
       <Proxies />
 
       <div className="flex items-center gap-2">
@@ -344,110 +343,6 @@ function AddIndexer({ onAdded, expert }: { onAdded: () => void; expert: boolean 
       </Button>
       {create.isError && <p className="w-full text-xs text-danger">That connection could not be created.</p>}
     </form>
-  );
-}
-
-type ProwlarrIndexer = components["schemas"]["ProwlarrIndexer"];
-
-/** Lidarr's Prowlarr sync, from this side: point at Prowlarr once, add what it serves. */
-function AddFromProwlarr({ onAdded }: { onAdded: () => void }) {
-  const [baseUrl, setBaseUrl] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [chosen, setChosen] = useState<Set<number>>(new Set());
-
-  const load = useMutation({
-    mutationFn: () => ok(api.POST("/indexers/prowlarr", { body: { base_url: baseUrl, api_key: apiKey } })),
-    // Offered by default: usenet indexers that can find music and are enabled in Prowlarr; torrents are a tick away.
-    onSuccess: (found) =>
-      setChosen(
-        new Set(
-          found
-            .filter((entry) => entry.music && entry.enabled && !entry.already_added && entry.impl === "newznab")
-            .map((entry) => entry.prowlarr_id),
-        ),
-      ),
-  });
-  const add = useMutation({
-    mutationFn: async (entries: ProwlarrIndexer[]) => {
-      for (const entry of entries) {
-        await ok(api.POST("/indexers", {
-          body: { name: entry.name, impl: entry.impl, base_url: entry.base_url, api_key: apiKey, enabled: true, priority: 25 },
-        }));
-      }
-    },
-    onSuccess: () => {
-      onAdded();
-      load.mutate();
-    },
-  });
-
-  const found = load.data ?? [];
-  return (
-    <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3">
-      <h2 className="text-sm font-medium">Prowlarr</h2>
-      <form
-        className="flex flex-wrap items-end gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          load.mutate();
-        }}
-      >
-        <label className="flex min-w-56 flex-1 flex-col gap-1 text-xs text-ink-muted">
-          Address
-          <input className={inputStyle} value={baseUrl} placeholder="http://prowlarr:9696" onChange={(event) => setBaseUrl(event.target.value)} />
-        </label>
-        <label className="flex min-w-48 flex-col gap-1 text-xs text-ink-muted">
-          API key
-          <input className={inputStyle} type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} />
-        </label>
-        <button
-          type="submit"
-          disabled={!baseUrl.trim() || !apiKey.trim() || load.isPending}
-          className="rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted hover:text-ink disabled:opacity-50"
-        >
-          {load.isPending ? "Reading…" : "Show its indexers"}
-        </button>
-      </form>
-      {load.isError && (
-        <p className="text-xs text-danger">{(load.error as { detail?: string }).detail ?? "Prowlarr could not be read."}</p>
-      )}
-      {found.length > 0 && (
-        <>
-          <ul className="flex flex-col gap-1 text-sm">
-            {found.map((entry) => (
-              <li key={entry.prowlarr_id} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  aria-label={`Add ${entry.name}`}
-                  disabled={entry.already_added}
-                  checked={entry.already_added || chosen.has(entry.prowlarr_id)}
-                  onChange={(event) => {
-                    const next = new Set(chosen);
-                    if (event.target.checked) next.add(entry.prowlarr_id);
-                    else next.delete(entry.prowlarr_id);
-                    setChosen(next);
-                  }}
-                />
-                <span>{entry.name}</span>
-                <Badge tone="ok">{entry.impl === "torznab" ? "torrent" : "usenet"}</Badge>
-                {!entry.music && <Badge tone="warn">no music categories</Badge>}
-                {!entry.enabled && <Badge tone="warn">disabled in Prowlarr</Badge>}
-                {entry.already_added && <span className="text-xs text-ink-muted">already added</span>}
-              </li>
-            ))}
-          </ul>
-          <button
-            type="button"
-            disabled={chosen.size === 0 || add.isPending}
-            onClick={() => add.mutate(found.filter((entry) => chosen.has(entry.prowlarr_id)))}
-            className="w-fit rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50"
-          >
-            {add.isPending ? "Adding…" : `Add ${chosen.size} indexer${chosen.size === 1 ? "" : "s"}`}
-          </button>
-          {add.isError && <p className="text-xs text-danger">Not every indexer could be added.</p>}
-        </>
-      )}
-    </section>
   );
 }
 
