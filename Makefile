@@ -88,8 +88,8 @@ HAS_BUILDX  := $(shell docker buildx version >/dev/null 2>&1 && echo yes)
 # container-driver builder.
 BUILDER     ?= solarr
 TOKEN       ?= $(shell grep -oP '(ghp_[A-Za-z0-9]+|github_pat_[A-Za-z0-9_]+)' private/secrets.md 2>/dev/null | head -1)
-hub_field    = $(shell sed -n '/^\#\# Docker Hub/,/^\#\# /s/^| $(1) | `\(.*\)` |$$/\1/p' private/secrets.md 2>/dev/null)
-HUB_USER    ?= $(call hub_field,User)
+hub_field    = $(shell sed -n 's/^| Docker Hub $(1) | `\(.*\)` |$$/\1/p' private/secrets.md 2>/dev/null)
+HUB_USER    ?= $(call hub_field,user)
 SCAN_DIR    ?= /tmp/solarr-release-scan
 comma       := ,
 RELEASE_ARGS = --build-arg VERSION=$(NEXT_VERSION) --build-arg COMMIT=$(COMMIT) \
@@ -216,7 +216,7 @@ image:      ## Release (user's word only): secrets scan, multi-arch, ghcr + Dock
 	  ./scripts/scan-image-secrets.sh $(SCAN_DIR)/$${p##*/}.tar || exit 1; \
 	done; rm -rf $(SCAN_DIR)
 	@echo "$(TOKEN)" | docker login ghcr.io -u makearr --password-stdin
-	@printf '%s' '$(call hub_field,Password)' | docker login docker.io -u '$(HUB_USER)' --password-stdin
+	@printf '%s' '$(call hub_field,password)' | docker login docker.io -u '$(HUB_USER)' --password-stdin
 	docker buildx build --builder $(BUILDER) --push --platform $(PLATFORMS) $(RELEASE_ARGS) \
 	  -t $(IMAGE):$(NEXT_VERSION) -t $(IMAGE):latest \
 	  -t $(HUB_IMAGE):$(NEXT_VERSION) -t $(HUB_IMAGE):latest .
