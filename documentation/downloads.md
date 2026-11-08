@@ -201,3 +201,11 @@ A unit held for a person (a rule refused it) waits on the Import page. A release
 unit skipped, for example **nothing new or better** than the library holds, `batch.ReasonNothingNew`, or failed) is
 failed: blocklisted, removed and searched again. If a retry finds a unit's files gone or nothing new any more, the unit
 is closed, so its download fails instead of waiting forever (user, 2026-10-24).
+
+## Categories
+
+Solarr asks an indexer in the categories its own capabilities (t=caps) list for the media type: the type's parent
+(3000 for music) when listed, else the sub-categories inside the range. The capabilities are read the first time an
+indexer is searched, stored on it, and read again after a week or on Test. An indexer that lists nothing for a type is
+not asked for it; one that lists no categories at all is asked without any. Music categories can still be overridden
+by hand on the indexer; empty means the indexer's own.

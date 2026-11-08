@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -56,7 +55,7 @@ type IndexerEgress struct {
 // same column without colliding with "egress".
 type indexerSettingsJSON struct {
 	Egress IndexerEgress `json:"egress,omitempty"`
-	// MusicCategories are the Newznab categories music is asked for in (D17); absent is the default.
+	// MusicCategories are the Newznab categories music is asked for in when the owner overrides the indexer's own (D17).
 	MusicCategories []int `json:"music_categories,omitempty"`
 	// Definition is the catalog entry the indexer was added from ("nzbgeek"); absent for one added before the catalog.
 	Definition string         `json:"definition,omitempty"`
@@ -91,37 +90,10 @@ func (i Indexer) Source() *IndexerSource {
 	return parsed.Source
 }
 
-// DefaultMusicCategories is Newznab's Audio: without a category an indexer's feed is mostly
-// television (2026-09-30).
-var DefaultMusicCategories = []int{3000}
-
-// DefaultTVCategories is Newznab's TV parent category, which covers its sub-categories.
-var DefaultTVCategories = []int{5000}
-
-// DefaultMovieCategories is Newznab's Movies parent category, which covers its sub-categories.
-var DefaultMovieCategories = []int{2000}
-
-// MovieCategories are the categories movies are searched and read in.
-func (i Indexer) MovieCategories() []int { return slices.Clone(DefaultMovieCategories) }
-
-// TVCategories are the categories TV is searched and read in.
-func (i Indexer) TVCategories() []int { return slices.Clone(DefaultTVCategories) }
-
 // maxMusicCategories bounds the list; a real indexer's music tree has a dozen at most.
 const maxMusicCategories = 32
 
-// MusicCategories are the categories music is searched and read in, DefaultMusicCategories unless set.
-func (i Indexer) MusicCategories() []int {
-	if i.SettingsJSON != "" {
-		var parsed indexerSettingsJSON
-		if err := json.Unmarshal([]byte(i.SettingsJSON), &parsed); err == nil && len(parsed.MusicCategories) > 0 {
-			return parsed.MusicCategories
-		}
-	}
-	return slices.Clone(DefaultMusicCategories)
-}
-
-// StoredMusicCategories are the categories set on the indexer, none when it takes the default.
+// StoredMusicCategories are the categories music is searched in when the owner set them; none means the indexer's own.
 func (i Indexer) StoredMusicCategories() []int {
 	var parsed indexerSettingsJSON
 	if i.SettingsJSON == "" || json.Unmarshal([]byte(i.SettingsJSON), &parsed) != nil {
@@ -180,7 +152,7 @@ type IndexerRequest struct {
 	Enabled        bool
 	Priority       int64
 	EgressProxyURL string
-	// MusicCategories empty means DefaultMusicCategories.
+	// MusicCategories empty means the categories the indexer's own capabilities list for music.
 	MusicCategories []int
 	// Definition is the catalog entry it is added from; empty for none.
 	Definition string

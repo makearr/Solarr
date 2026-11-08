@@ -271,8 +271,9 @@ func indexerView(indexer settings.Indexer) gen.Indexer {
 		view.Source = &gen.IndexerSource{ArrId: source.ArrID, ExternalId: source.ExternalID}
 	}
 	view.ProxyId = indexer.ProxyID()
-	categories := indexer.MusicCategories()
-	view.MusicCategories = &categories
+	if categories := indexer.StoredMusicCategories(); len(categories) > 0 {
+		view.MusicCategories = &categories
+	}
 	if egress := indexer.Egress(); egress.ProxyURL != "" {
 		proxyURL := egress.ProxyURL
 		view.EgressProxyUrl = &proxyURL

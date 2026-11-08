@@ -471,7 +471,7 @@ function parseCategories(text: string): number[] {
 
 /** D17: the Newznab categories music is searched and RSS-read in, editable in place. */
 function MusicCategories({ indexer, onSaved }: { indexer: Indexer; onSaved: () => void }) {
-  const current = (indexer.music_categories ?? [3000]).join(", ");
+  const current = (indexer.music_categories ?? []).join(", ");
   const [text, setText] = useState(current);
   const save = useMutation({
     mutationFn: async () => {
@@ -499,6 +499,7 @@ function MusicCategories({ indexer, onSaved }: { indexer: Indexer; onSaved: () =
         <input
           className={`${inputStyle} w-28`}
           value={text}
+          placeholder="from the indexer"
           title="Newznab category numbers, comma separated: 3000 is Audio, 3040 Audio/Lossless"
           onChange={(event) => setText(event.target.value)}
         />
@@ -509,8 +510,25 @@ function MusicCategories({ indexer, onSaved }: { indexer: Indexer; onSaved: () =
         </button>
       )}
       {save.isError && <span className="text-danger">Refused.</span>}
+      <span>{listedMedia(indexer.categories_json)}</span>
     </form>
   );
+}
+
+const mediaRoots: [string, number][] = [["movies", 2000], ["music", 3000], ["TV", 5000], ["adult", 6000], ["books", 7000]];
+
+/** Which media types the indexer's own capabilities list a category for; asked only for those. */
+function listedMedia(capsJson: string | undefined): string {
+  if (!capsJson) return "capabilities not read yet: Test reads them";
+  try {
+    const caps = JSON.parse(capsJson) as { Categories?: { ID: number; Subcategories?: { ID: number }[] }[] };
+    const ids = (caps.Categories ?? []).flatMap((category) => [category.ID, ...(category.Subcategories ?? []).map((sub) => sub.ID)]);
+    if (ids.length === 0) return "lists no categories: asked for everything";
+    const found = mediaRoots.filter(([, root]) => ids.some((id) => id >= root && id < root + 1000)).map(([name]) => name);
+    return found.length > 0 ? `lists ${found.join(", ")}` : "lists no media type Solarr serves";
+  } catch {
+    return "";
+  }
 }
 
 /** An indexer's priority, saved when it is left or Enter is pressed; 1 to 50, lower preferred. */

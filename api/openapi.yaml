@@ -11303,8 +11303,8 @@ components:
           type: array
           items: { type: integer }
           description: >-
-            Newznab categories music is searched and RSS-read in (D17). Always answered; [3000]
-            (Audio) unless set.
+            Newznab categories music is searched and RSS-read in when the owner overrode them (D17); absent
+            means the categories the indexer's own capabilities list for music.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -11356,7 +11356,7 @@ components:
         music_categories:
           type: array
           items: { type: integer }
-          description: Newznab categories for music; omitted or empty means [3000] (Audio).
+          description: Newznab categories for music; omitted or empty means the indexer's own, read from its capabilities.
 
     UpdateIndexerRequest:
       type: object
@@ -11373,7 +11373,7 @@ components:
         music_categories:
           type: array
           items: { type: integer }
-          description: Newznab categories for music; omitted or empty means [3000] (Audio).
+          description: Newznab categories for music; omitted or empty means the indexer's own, read from its capabilities.
 
     TVProvider:
       type: object

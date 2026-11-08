@@ -1290,7 +1290,7 @@ type AddIndexerRequest struct {
 	Enabled        *bool   `json:"enabled,omitempty"`
 	Impl           string  `json:"impl"`
 
-	// MusicCategories Newznab categories for music; omitted or empty means [3000] (Audio).
+	// MusicCategories Newznab categories for music; omitted or empty means the indexer's own, read from its capabilities.
 	MusicCategories *[]int `json:"music_categories,omitempty"`
 	Name            string `json:"name"`
 
@@ -3457,7 +3457,7 @@ type Indexer struct {
 	// Impl The implementation, one of /indexers/schema's impl values ("newznab", "torznab", "redacted", ...).
 	Impl string `json:"impl"`
 
-	// MusicCategories Newznab categories music is searched and RSS-read in (D17). Always answered; [3000] (Audio) unless set.
+	// MusicCategories Newznab categories music is searched and RSS-read in when the owner overrode them (D17); absent means the categories the indexer's own capabilities list for music.
 	MusicCategories *[]int `json:"music_categories,omitempty"`
 	Name            string `json:"name"`
 	Priority        int64  `json:"priority"`
@@ -6127,7 +6127,7 @@ type UpdateIndexerRequest struct {
 	Enabled        *bool   `json:"enabled,omitempty"`
 	Impl           string  `json:"impl"`
 
-	// MusicCategories Newznab categories for music; omitted or empty means [3000] (Audio).
+	// MusicCategories Newznab categories for music; omitted or empty means the indexer's own, read from its capabilities.
 	MusicCategories *[]int `json:"music_categories,omitempty"`
 	Name            string `json:"name"`
 	Priority        *int64 `json:"priority,omitempty"`

@@ -302,8 +302,8 @@ func TestIndexerMusicCategories_DefaultRoundTripAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateIndexer: %v", err)
 	}
-	if got := created.MusicCategories(); !slices.Equal(got, []int{3000}) {
-		t.Errorf("default MusicCategories = %v, want [3000]", got)
+	if got := created.StoredMusicCategories(); len(got) != 0 {
+		t.Errorf("default music categories = %v, want none (the indexer's own capabilities decide)", got)
 	}
 	updated, err := cache.UpdateIndexer(t.Context(), created.ID, settings.IndexerRequest{
 		Name: "Geek", Impl: "newznab", BaseURL: "https://indexer.example", Enabled: true,
@@ -312,7 +312,7 @@ func TestIndexerMusicCategories_DefaultRoundTripAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpdateIndexer: %v", err)
 	}
-	if got := updated.MusicCategories(); !slices.Equal(got, []int{3010, 3040}) || updated.Egress().ProxyURL != "socks5://proxy.example:1080" {
+	if got := updated.StoredMusicCategories(); !slices.Equal(got, []int{3010, 3040}) || updated.Egress().ProxyURL != "socks5://proxy.example:1080" {
 		t.Errorf("after update: categories %v, proxy %q; want both kept", got, updated.Egress().ProxyURL)
 	}
 	if _, err := cache.UpdateIndexer(t.Context(), created.ID, settings.IndexerRequest{
