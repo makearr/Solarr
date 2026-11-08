@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/url"
 	"slices"
 	"strings"
@@ -387,11 +388,13 @@ func (a Prowlarr) syncProxies(ctx context.Context, instance settings.ArrInstance
 	var usable []tagged
 	for _, one := range listed {
 		request := settings.ProxyRequest{
-			Name: instance.Name + ": " + one.Name, Kind: settings.ProxyKind(one.Kind), URL: one.URL,
+			Name: instance.Name + ": " + one.Name, Kind: settings.ProxyKind(one.Kind), URL: reachableFrom(instance.BaseURL, one.URL),
 			SourceArrID: instance.ID, SourceExternalID: one.ProwlarrID,
 		}
 		existing, found := byExternal[one.ProwlarrID]
 		if found {
+			// An address changed here stays: only Prowlarr's name and kind follow.
+			request.URL = existing.URL
 			if _, err = a.Cache.UpdateProxy(ctx, existing.ID, request, now); err != nil {
 				return none, fmt.Errorf("proxy %s: %w", one.Name, err)
 			}
@@ -462,4 +465,28 @@ func (a Prowlarr) syncDownloadClients(ctx context.Context, instance settings.Arr
 		added++
 	}
 	return added, waiting, nil
+}
+
+// reachableFrom turns an address on Prowlarr's own host ("localhost") into that host as Solarr reaches it, the host of
+// the Prowlarr connection; any other address is kept.
+func reachableFrom(prowlarrURL, address string) string {
+	target, err := url.Parse(address)
+	if err != nil {
+		return address
+	}
+	switch target.Hostname() {
+	case "localhost", "127.0.0.1", "::1":
+	default:
+		return address
+	}
+	base, err := url.Parse(prowlarrURL)
+	if err != nil || base.Hostname() == "" {
+		return address
+	}
+	if port := target.Port(); port != "" {
+		target.Host = net.JoinHostPort(base.Hostname(), port)
+	} else {
+		target.Host = base.Hostname()
+	}
+	return target.String()
 }

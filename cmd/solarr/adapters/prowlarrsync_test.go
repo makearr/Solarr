@@ -112,6 +112,9 @@ func TestProwlarrSyncGivesIndexersTheProxyTheyShareATagWith(t *testing.T) {
 	}
 	proxies, _ := cache.Proxies(t.Context())
 	indexers, _ := cache.Indexers(t.Context())
+	if len(proxies) == 1 && proxies[0].URL != "http://prowlarr:8191/" {
+		t.Errorf("proxy address = %q, want Prowlarr's localhost as Prowlarr's host", proxies[0].URL)
+	}
 	if len(proxies) != 1 || proxies[0].Kind != settings.ProxyFlareSolverr {
 		t.Fatalf("proxies = %+v, want the one FlareSolverr, not duplicated by a second sync", proxies)
 	}
