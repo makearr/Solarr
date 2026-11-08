@@ -37,6 +37,18 @@ func (f *fakeServer) SearchScenes(_ context.Context, term string, _ int) ([]stas
 	return f.scenes, nil
 }
 
+// ScenesOnDate answers the scenes held under that day, as the real filter does.
+func (f *fakeServer) ScenesOnDate(_ context.Context, title, date string, _ int) ([]stashbox.Scene, error) {
+	f.asked = append(f.asked, "on:"+date+":"+title)
+	var out []stashbox.Scene
+	for _, scene := range f.scenes {
+		if scene.ReleaseDate == date {
+			out = append(out, scene)
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeServer) FindScene(_ context.Context, id string) (stashbox.Scene, error) {
 	f.asked = append(f.asked, "find:"+id)
 	for _, scene := range f.scenes {
@@ -543,6 +555,58 @@ func TestByFingerprintsAsksOnceForABatch(t *testing.T) {
 }
 
 // A confident answer ends the search: a scan does not need every provider's list.
+// A studio's scenes numbered alike fill a text search's top ten with other days; the day asked for ranks first.
+func TestSearchUntilRanksTheSceneOfThatDayFirstAmongNumberedScenes(t *testing.T) {
+	var scenes []stashbox.Scene
+	for _, day := range []string{"2012-01-19", "2012-01-21", "2012-01-25"} {
+		scenes = append(scenes, stashbox.Scene{ID: "sb-" + day, Title: "Extras #04", ReleaseDate: day, Studio: &stashbox.Studio{Name: "Night Studio"}})
+	}
+	service := Service{Servers: map[string]Server{ProviderStashDB: &fakeServer{scenes: scenes}}, Sources: []string{ProviderStashDB}}
+	found, err := service.SearchUntil(t.Context(), 0, Query{Title: "Extras #04", Studio: "Night Studio", Date: "2012-01-25"}, 10, nil)
+	if err != nil || len(found) == 0 {
+		t.Fatalf("found = %+v, %v", found, err)
+	}
+	pick, _, ok := pickCandidate(found, parseadult.Info{Title: "Extras #04", Studio: "Night Studio", Date: "2012-01-25"})
+	if !ok || pick.IDs.StashDB != "sb-2012-01-25" {
+		t.Errorf("picked %+v (%v), want the scene of 2012-01-25", pick, ok)
+	}
+}
+
+// The day missing from a provider's list of numbered scenes is not a day or two off: a neighbour is not the file's scene.
+func TestPickCandidateRefusesANeighbouringDayWhenTheStudioNumbersItsScenesAlike(t *testing.T) {
+	info := parseadult.Info{Title: "Extras #04", Studio: "Night Studio", Date: "2012-01-29"}
+	var listed []Candidate
+	for rank, day := range []string{"2012-01-30", "2012-01-31", "2012-02-02"} {
+		listed = append(listed, Candidate{Rank: rank, Title: "Extras #04", Studio: "Night Studio", Date: day})
+	}
+	if pick, _, ok := pickCandidate(listed, info); ok {
+		t.Errorf("picked %+v among three other days", pick)
+	}
+	if pick, _, ok := pickCandidate(listed[:1], info); !ok || pick.Date != "2012-01-30" {
+		t.Errorf("a lone title a day off = %+v, %v; want it taken", pick, ok)
+	}
+	listed = append(listed, Candidate{Rank: 9, Title: "Extras #04", Studio: "Night Studio", Date: "2012-01-29"})
+	if pick, _, ok := pickCandidate(listed, info); !ok || pick.Date != "2012-01-29" {
+		t.Errorf("the day listed past the top three = %+v, %v; want it taken", pick, ok)
+	}
+}
+
+// A studio can list several scenes of one title on one day; the performers and length the file has tell them apart.
+func TestPickCandidateTellsScenesOfOneTitleAndDayApartByPerformersAndLength(t *testing.T) {
+	listed := []Candidate{
+		{Rank: 0, Title: "Back", Studio: "Night Studio", Date: "2009-06-25", Performers: []string{"Ada Vale"}, DurationSec: 1800},
+		{Rank: 1, Title: "Back", Studio: "Night Studio", Date: "2009-06-25", Performers: []string{"Bea Cole", "Cy Dunn"}, DurationSec: 1200},
+	}
+	byPerformers := parseadult.Info{Title: "Back", Studio: "Night Studio", Date: "2009-06-25", Performer: "Bea Cole Cy Dunn"}
+	if pick, _, ok := pickCandidate(listed, byPerformers); !ok || pick.Rank != 1 {
+		t.Errorf("by performers picked %+v (%v), want the second", pick, ok)
+	}
+	byLength := parseadult.Info{Title: "Back", Studio: "Night Studio", Date: "2009-06-25", DurationSec: 1201}
+	if pick, _, ok := pickCandidate(listed, byLength); !ok || pick.Rank != 1 {
+		t.Errorf("by length picked %+v (%v), want the second", pick, ok)
+	}
+}
+
 func TestSearchUntilStopsAtTheFirstProviderThatSettlesIt(t *testing.T) {
 	first, second := &fakeServer{scenes: []stashbox.Scene{stashScene()}}, &fakeServer{}
 	service := Service{Servers: map[string]Server{ProviderStashDB: first, ProviderThePornDB: second}, Sources: []string{ProviderStashDB, ProviderThePornDB}}

@@ -101,7 +101,12 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 	byWork := map[int64][]int64{}
 	var order []int64
 	var queued []library.QueueEntry
-	for i, match := range c.config.Resolver.Resolve(ctx, root, categoryID, readable, files) {
+	matches := c.config.Resolver.Resolve(ctx, root, categoryID, readable, files)
+	// A slice ending mid-lookup cancels the providers: what they did not answer is not unidentified, the batch is read again.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	for i, match := range matches {
 		switch match.WorkID {
 		case Excluded:
 			continue

@@ -237,6 +237,22 @@ func (c Client) SearchScenes(ctx context.Context, term string, limit int) ([]Sce
 	return found.Scenes, err
 }
 
+// ScenesOnDate finds the scenes of a day whose title holds the words given, which a text search buries when a studio
+// numbers its scenes alike. ThePornDB's filter is shaped otherwise and answers ErrUnsupported.
+func (c Client) ScenesOnDate(ctx context.Context, title, date string, limit int) ([]Scene, error) {
+	if c.endpoint == ThePornDBEndpoint {
+		return nil, ErrUnsupported
+	}
+	input := map[string]any{"title": strings.TrimSpace(title), "date": map[string]any{"value": date, "modifier": "EQUALS"}, "per_page": max(limit, 1)}
+	var found struct {
+		Query struct {
+			Scenes []Scene `json:"scenes"`
+		} `json:"queryScenes"`
+	}
+	err := c.query(ctx, `query ($i: SceneQueryInput!) { queryScenes(input: $i) { scenes {`+sceneFields+`} } }`, map[string]any{"i": input}, &found)
+	return found.Query.Scenes, err
+}
+
 // FindScene reads one scene by id.
 func (c Client) FindScene(ctx context.Context, id string) (Scene, error) {
 	var found struct {

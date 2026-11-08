@@ -31,20 +31,28 @@ following a performer or studio uses StashDB and FansDB.
 A scan registers each video file with its oshash (and the quick hash), then resolves it in this order:
 
 1. **Fingerprint**: a server that knows the oshash names the scene (Stash's own method).
-2. **A scene the library holds** under that title, in an agreeing year.
-3. **A search** by studio and title: the one hit of that title (and, where both know the day, that day) in the provider's
-   top three is taken and added. `Title` and `Title - Scene 3` count as one on the same day; a scene a network lists under
-   two sites is one scene.
+2. **A scene the library holds** under that title, in an agreeing year; a file with a day skips this step, since a studio's
+   scenes of one title (`Title #04`) come on twenty days and only the day tells them apart.
+3. **A search** by studio and title. A file with a day asks the stash-box servers for the scenes of that day under the title
+   first (`queryScenes` with a date filter, ten times quicker than their text search and not buried by sibling days); a
+   hit of the plain title settles that server. The scene taken is the one of that title **on that day, wherever the
+   provider ranks it**; among several (one title, one day) the file's studio, then the performers its name ends in, then
+   its measured length (within 3 s or 2 %) choose. A title that only continues the file's (`Title, Scene #01`) counts only when no plain one
+   is listed. A day or two off bridges only a lone identical title, never when the providers list that title on other days.
+   Only an exact pick stops the search at a provider; a looser one lets the next provider answer.
 4. Anything less clear waits in **Review** with the candidates, as for every type.
 
 Names read: `[Studio] Title (2020-05-14).mp4` below a studio folder, `Title (2018).mp4`, a trailing `- Performer`, and a scene
 group's `Studio.20.05.14.Performer.Title.1080p`. Its phash is computed like any video's (`duplicate-videos.md`).
 
 **What a scan costs the providers.** A library of one file per folder is gathered into batches of 40 (`scan.Sweep.GatherFiles`),
-whose oshashes go to each server in one query. A title search stops at the first provider that settles it, except in a movies
-library, where a later provider may hold the film's numbered scenes. Searches are remembered for an hour, empty ones too
-(`searchMemo`), and a provider is asked again only with something new. Whisparr's search gets at most 80 characters, the first
-clause of a long name, and a 10-second timeout.
+whose oshashes go to each server in one query, and eight files of a batch are placed side by side (a file waits on the providers
+far longer than it works; each provider's own rate bucket sets the pace). A title search stops at the first provider that settles it, except in a movies
+library, where a later provider may hold the film's numbered scenes. Adding a scene from a scan asks providers in the library's
+order only until the scene holds a title, day, studio, a performer and a picture; the remaining providers fill the rest at the
+scene's refresh. Searches are remembered for an hour, empty ones too (`searchMemo`), a provider keeps a lookup at most two
+minutes, and Whisparr's search gets at most 80 characters, the first clause of a long name, and a 10-second timeout.
+A slice of the scan ending mid-lookup (the providers are cancelled with it) re-reads the batch rather than queueing it for Review.
 
 ## What is stored
 

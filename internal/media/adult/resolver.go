@@ -70,7 +70,7 @@ func (r Resolver) ResolveKnown(ctx context.Context, categoryID int64, info parse
 	settled := func(found []Candidate) bool {
 		_, isFilm := filmOf(found, info)
 		_, confidence, ok := pickCandidate(found, info)
-		return !isFilm && ok && model.AcceptsFolderMatch(confidence, r.Threshold)
+		return !isFilm && ok && confidence == model.FolderExactMatch && model.AcceptsFolderMatch(confidence, r.Threshold)
 	}
 	if r.wantsFilms(categoryID) {
 		settled = nil
@@ -119,8 +119,12 @@ func (r Resolver) ByIDs(ctx context.Context, categoryID int64, ids IDs, hint Hin
 	return r.add(ctx, categoryID, ids, hint)
 }
 
-// inLibrary finds the one scene the library holds under this title, in a year that agrees when both are known.
+// inLibrary finds the one scene the library holds under this title, in a year that agrees when both are known. A file
+// with a day is left to the providers: a studio's scenes of one title come day after day, which the titles cannot tell apart.
 func (r Resolver) inLibrary(ctx context.Context, categoryID int64, info parseadult.Info) (int64, bool) {
+	if info.Date != "" {
+		return 0, false
+	}
 	titles, err := r.Service.Reader.TitlesOf(ctx, MediaType, categoryID)
 	if err != nil {
 		return 0, false
@@ -149,7 +153,7 @@ func (r Resolver) add(ctx context.Context, categoryID int64, ids IDs, hint Hint)
 		return Excluded
 	}
 	profile, monitor := r.addChoices(categoryID)
-	result, err := r.Service.Add(ctx, AddRequest{IDs: ids, Hint: hint, CategoryID: categoryID, ProfileID: profile, Monitor: monitor})
+	result, err := r.Service.Add(ctx, AddRequest{IDs: ids, Hint: hint, CategoryID: categoryID, ProfileID: profile, Monitor: monitor, Quick: true})
 	if err != nil {
 		r.warn("scene could not be added", ids.StashDB+ids.ThePornDB+ids.FansDB, err)
 		return 0
@@ -160,16 +164,36 @@ func (r Resolver) add(ctx context.Context, categoryID int64, ids IDs, hint Hint)
 // pickCandidate chooses the one of the provider's top few that is the named scene: the same title and, where both
 // know the day, the same day. Two such hits are told apart by the day, and two on one day are one scene listed twice.
 func pickCandidate(candidates []Candidate, info parseadult.Info) (Candidate, float64, bool) {
+	// The title on the day wherever the provider ranks it: a studio's numbered scenes push the right day past the top.
+	// A title that only continues the file's ("Title, Scene #01") is a listing of the same scene, but the plain title is it.
+	var onTheDay, plain []Candidate
+	for _, candidate := range candidates {
+		if info.Date == "" || candidate.Date != info.Date || !titleMatches(candidate.Title, info.Title, true) {
+			continue
+		}
+		onTheDay = append(onTheDay, candidate)
+		if titleMatches(candidate.Title, info.Title, false) {
+			plain = append(plain, candidate)
+		}
+	}
+	if len(plain) > 0 {
+		return ofStudio(plain, info), model.FolderExactMatch, true
+	}
+	if len(onTheDay) > 0 {
+		return ofStudio(onTheDay, info), model.FolderLooseMatch, true
+	}
 	var named []Candidate
 	offByDays := false
+	siblingDays := siblingDays(candidates, info)
 	for _, candidate := range candidates {
 		if candidate.Rank >= rankedWell {
 			continue
 		}
 		near := false
 		if info.Date != "" && candidate.Date != "" && info.Date != candidate.Date {
-			// A site's date and a file's differ by a day or two across time zones; only an identical title may bridge it.
-			if !withinDays(info.Date, candidate.Date, dateToleranceDays) || !titleMatches(candidate.Title, info.Title, false) {
+			// A site's date and a file's differ by a day or two across time zones; only an identical title may bridge it,
+			// and not when the studio has the same title on other days: the file's own day is then missing, not off.
+			if siblingDays || !withinDays(info.Date, candidate.Date, dateToleranceDays) || !titleMatches(candidate.Title, info.Title, false) {
 				continue
 			}
 			near = true
@@ -186,16 +210,6 @@ func pickCandidate(candidates []Candidate, info parseadult.Info) (Candidate, flo
 		}
 		return named[0], model.FolderExactMatch, true
 	}
-	var onTheDay []Candidate
-	for _, candidate := range named {
-		if info.Date != "" && candidate.Date == info.Date {
-			onTheDay = append(onTheDay, candidate)
-		}
-	}
-	// The same title on the same day twice is one scene a network lists under two sites: the provider's best ranked is it.
-	if len(onTheDay) > 0 {
-		return onTheDay[0], model.FolderLooseMatch, true
-	}
 	// With no day, the same title in the same year from the same studio is the same listing again.
 	for _, candidate := range named {
 		if info.Year != 0 && candidate.Year == info.Year && info.Studio != "" && studioKey(candidate.Studio) == studioKey(info.Studio) {
@@ -203,6 +217,57 @@ func pickCandidate(candidates []Candidate, info parseadult.Info) (Candidate, flo
 		}
 	}
 	return Candidate{}, 0, false
+}
+
+// ofStudio is the one of the same title and day that the file most plainly is: the studio it names, then the performers
+// its name ends in, then the length it has, else the provider's best ranked (one scene listed under two sites).
+func ofStudio(candidates []Candidate, info parseadult.Info) Candidate {
+	best, bestScore := candidates[0], -1
+	for _, candidate := range candidates {
+		score := 0
+		if info.Studio != "" && studioKey(candidate.Studio) == studioKey(info.Studio) {
+			score += 1000
+		}
+		score += 10 * namedIn(candidate.Performers, info.Performer)
+		if lengthAgrees(candidate.DurationSec, info.DurationSec) {
+			score++
+		}
+		if score > bestScore {
+			best, bestScore = candidate, score
+		}
+	}
+	return best
+}
+
+// namedIn counts the performers whose names a file's name holds; a file lists them as one run of words.
+func namedIn(performers []string, named string) int {
+	words := " " + NameKey(named) + " "
+	count := 0
+	for _, performer := range performers {
+		if key := NameKey(performer); key != "" && strings.Contains(words, " "+key+" ") {
+			count++
+		}
+	}
+	return count
+}
+
+// lengthAgrees says two lengths in seconds are one scene's: both known and within a few seconds or two percent.
+func lengthAgrees(provider, file int) bool {
+	if provider <= 0 || file <= 0 {
+		return false
+	}
+	return max(provider-file, file-provider) <= max(3, file/50)
+}
+
+// siblingDays says the providers list the file's title on more than one other day, as a studio numbering its scenes alike does.
+func siblingDays(candidates []Candidate, info parseadult.Info) bool {
+	days := map[string]bool{}
+	for _, candidate := range candidates {
+		if candidate.Date != "" && titleMatches(candidate.Title, info.Title, false) {
+			days[candidate.Date] = true
+		}
+	}
+	return len(days) > 1
 }
 
 // studioKey is a studio's name without the apostrophes sites spell differently ("Devil's Film", "Devils Film").

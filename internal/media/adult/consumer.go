@@ -3,6 +3,7 @@ package adult
 import (
 	"context"
 	"log/slog"
+	"sync"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -73,10 +74,25 @@ func (s scanning) Resolve(ctx context.Context, _ settings.RootFolder, categoryID
 	}
 	known := s.resolver.Service.ByFingerprints(ctx, categoryID, hashes)
 	matches := make([]works.ScanMatch, len(observed))
+	// A file waits on the providers far longer than it works, so a batch's files are placed side by side; each provider's own bucket sets the pace.
+	var placing sync.WaitGroup
+	slots := make(chan struct{}, resolveTogether)
 	for i, file := range observed {
-		if info, ok := parseadult.ParsePath(file.File.RelPath); ok || files[i].OSHash != "" {
-			matches[i].WorkID, matches[i].Candidates = s.resolver.ResolveKnown(ctx, categoryID, info, files[i].OSHash, known)
+		info, ok := parseadult.ParsePath(file.File.RelPath)
+		if !ok && files[i].OSHash == "" {
+			continue
 		}
+		info.DurationSec = int(file.Probe.Measured.Duration.Seconds())
+		placing.Add(1)
+		slots <- struct{}{}
+		go func() {
+			defer func() { <-slots; placing.Done() }()
+			matches[i].WorkID, matches[i].Candidates = s.resolver.ResolveKnown(ctx, categoryID, info, files[i].OSHash, known)
+		}()
 	}
+	placing.Wait()
 	return matches
 }
+
+// resolveTogether is how many files of a batch are placed at once.
+const resolveTogether = 8

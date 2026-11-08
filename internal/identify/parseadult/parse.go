@@ -22,6 +22,8 @@ type Info struct {
 	// Performer is the name a library file ends in after its date, when it has one.
 	Performer string
 	Group     string
+	// DurationSec is the file's own length when it was probed; it tells apart scenes that share a title, studio and day.
+	DurationSec int
 }
 
 var (

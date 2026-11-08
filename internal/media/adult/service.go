@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -29,6 +31,7 @@ const searchLimit = 10
 type Server interface {
 	Configured() bool
 	SearchScenes(ctx context.Context, term string, limit int) ([]stashbox.Scene, error)
+	ScenesOnDate(ctx context.Context, title, date string, limit int) ([]stashbox.Scene, error)
 	FindScene(ctx context.Context, id string) (stashbox.Scene, error)
 	ScenesByFingerprint(ctx context.Context, files [][]stashbox.Fingerprint) ([][]stashbox.Scene, error)
 	FindPerformer(ctx context.Context, id string) (stashbox.Performer, error)
@@ -100,11 +103,25 @@ type Hint struct {
 // FetchFor merges every source the library asks that knows the scene, the first supplying what it holds and each later
 // one only filling what is missing. A failing source is skipped; only all failing is an error.
 func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs, hint Hint) (Scene, error) {
+	return s.fetch(ctx, categoryID, ids, hint, false)
+}
+
+// providerPatience bounds one provider's lookup, its rate limiter's queue included: a flaky one it has slowed must not hold a scan for good.
+const providerPatience = 2 * time.Minute
+
+// fetch is FetchFor; quick stops asking once the scene holds what placing a file needs, leaving the rest to its refresh.
+func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, hint Hint, quick bool) (Scene, error) {
 	order := s.order(categoryID)
 	answers := map[string]Scene{}
 	// A provider early in the order may lack the title a later one teaches it: it is asked again once the first round ran.
 	askedWith := map[string]askedAbout{}
+	type question struct {
+		name  string
+		ids   IDs
+		known Hint
+	}
 	for round := 0; round < 2; round++ {
+		var questions []question
 		for _, name := range order {
 			if _, asked := answers[name]; asked {
 				continue
@@ -114,12 +131,49 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs, hint H
 				continue
 			}
 			askedWith[name] = askedAbout{ids, known}
-			if answer, ok := s.ask(ctx, name, ids, known); ok {
-				answers[name] = answer
-				ids = mergeIDs(ids, answer.IDs)
+			questions = append(questions, question{name, ids, known})
+		}
+		scenes := make([]Scene, len(questions))
+		answered := make([]bool, len(questions))
+		ask := func(i int) {
+			asking, cancel := context.WithTimeout(ctx, providerPatience)
+			defer cancel()
+			scenes[i], answered[i] = s.ask(asking, questions[i].name, questions[i].ids, questions[i].known)
+		}
+		if quick {
+			for i, q := range questions {
+				if ask(i); answered[i] {
+					answers[q.name] = scenes[i]
+					ids = mergeIDs(ids, scenes[i].IDs)
+					if enough(mergeAnswers(answers, order)) {
+						return finish(answers, order, ids)
+					}
+				}
+			}
+			continue
+		}
+		// The providers of a round are asked together: each answers by its own bucket.
+		var asking sync.WaitGroup
+		for i := range questions {
+			asking.Add(1)
+			go func() {
+				defer asking.Done()
+				ask(i)
+			}()
+		}
+		asking.Wait()
+		for i, q := range questions {
+			if answered[i] {
+				answers[q.name] = scenes[i]
+				ids = mergeIDs(ids, scenes[i].IDs)
 			}
 		}
 	}
+	return finish(answers, order, ids)
+}
+
+// mergeAnswers is the answers so far as one scene, the first in the order supplying and the later filling.
+func mergeAnswers(answers map[string]Scene, order []string) Scene {
 	var scene Scene
 	found := false
 	for _, name := range order {
@@ -132,7 +186,17 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs, hint H
 			scene = Merge(scene, answer)
 		}
 	}
-	if !found || scene.Title == "" {
+	return scene
+}
+
+// enough says a scene holds what placing its file needs: its title, day, studio, a performer and a picture.
+func enough(scene Scene) bool {
+	return scene.Title != "" && scene.Date != "" && scene.Studio != "" && len(scene.Performers()) > 0 && len(scene.Images) > 0
+}
+
+func finish(answers map[string]Scene, order []string, ids IDs) (Scene, error) {
+	scene := mergeAnswers(answers, order)
+	if scene.Title == "" {
 		return Scene{}, ErrNoSource
 	}
 	scene.IDs = mergeIDs(scene.IDs, ids)
@@ -191,6 +255,11 @@ func (s Service) askServer(ctx context.Context, name string, ids IDs, hint Hint)
 	}
 	if hint.Title == "" {
 		return Scene{}, false
+	}
+	for _, scene := range s.onDate(ctx, name, server, hint.Title, hint.Date, searchLimit) {
+		if sameScene(scene, hint) {
+			return scene, true
+		}
 	}
 	for _, term := range searchTerms(hint) {
 		found, err := memoized(ctx, s.Memo, name, term, func() ([]stashbox.Scene, error) { return server.SearchScenes(ctx, term, searchLimit) })
@@ -303,9 +372,11 @@ type Candidate struct {
 	Date       string
 	Year       int
 	Performers []string
-	Overview   string
-	Cover      string
-	Traits     media.Traits
+	// DurationSec is the scene's length as the provider gives it, 0 when it gives none.
+	DurationSec int
+	Overview    string
+	Cover       string
+	Traits      media.Traits
 	// Rank is the candidate's place in its own provider's answer, from 0.
 	Rank int
 }
@@ -336,10 +407,12 @@ func (s Service) SearchUntil(ctx context.Context, categoryID int64, query Query,
 	asked := 0
 	var found []Candidate
 	for _, name := range s.order(categoryID) {
-		scenes, err := s.searchOne(ctx, name, strings.TrimSpace(strings.Join([]string{query.Studio, title}, " ")), limit)
+		patient, cancel := context.WithTimeout(ctx, providerPatience)
+		scenes, err := s.searchOne(patient, name, strings.TrimSpace(strings.Join([]string{query.Studio, title}, " ")), title, query.Date, limit)
 		if err == nil && len(scenes) == 0 && query.Studio != "" {
-			scenes, err = s.searchOne(ctx, name, title, limit)
+			scenes, err = s.searchOne(patient, name, title, title, query.Date, limit)
 		}
+		cancel()
 		if err != nil {
 			failure = err
 			s.warn(name, title, err)
@@ -372,7 +445,7 @@ func mergeCandidates(listed, more []Candidate) []Candidate {
 	return listed
 }
 
-func (s Service) searchOne(ctx context.Context, name, term string, limit int) ([]Scene, error) {
+func (s Service) searchOne(ctx context.Context, name, term, title, date string, limit int) ([]Scene, error) {
 	if name == sourceWhisparr {
 		if s.Whisparr == nil {
 			return nil, nil
@@ -388,8 +461,11 @@ func (s Service) searchOne(ctx context.Context, name, term string, limit int) ([
 	if !ok || server == nil || !server.Configured() {
 		return nil, nil
 	}
+	scenes := s.onDate(ctx, name, server, title, date, limit)
+	if slices.ContainsFunc(scenes, func(scene Scene) bool { return NameKey(scene.Title) == NameKey(title) }) {
+		return scenes, nil
+	}
 	found, err := memoized(ctx, s.Memo, name, term, func() ([]stashbox.Scene, error) { return server.SearchScenes(ctx, term, limit) })
-	scenes := make([]Scene, 0, len(found))
 	for _, scene := range found {
 		scenes = append(scenes, FromStashBox(name, scene))
 	}
@@ -403,6 +479,27 @@ func (s Service) searchOne(ctx context.Context, name, term string, limit int) ([
 	return scenes, err
 }
 
+// onDate lists the scenes the server holds of that day under the words, first in the ranking: a studio's numbered
+// scenes ("Title #04" on twenty days) fill a text search's top ten with the wrong days. A server without the filter or
+// failing is asked by text alone.
+func (s Service) onDate(ctx context.Context, name string, server Server, title, date string, limit int) []Scene {
+	if date == "" {
+		return nil
+	}
+	found, err := memoized(ctx, s.Memo, name+":"+date, title, func() ([]stashbox.Scene, error) { return server.ScenesOnDate(ctx, title, date, limit) })
+	if err != nil {
+		if !errors.Is(err, stashbox.ErrUnsupported) {
+			s.warn(name, title, err)
+		}
+		return nil
+	}
+	scenes := make([]Scene, 0, len(found))
+	for _, scene := range found {
+		scenes = append(scenes, FromStashBox(name, scene))
+	}
+	return scenes
+}
+
 func candidatesOf(scenes []Scene, limit int) []Candidate {
 	if len(scenes) > limit {
 		scenes = scenes[:limit]
@@ -410,7 +507,7 @@ func candidatesOf(scenes []Scene, limit int) []Candidate {
 	out := make([]Candidate, 0, len(scenes))
 	for rank, scene := range scenes {
 		candidate := Candidate{Rank: rank, IDs: scene.IDs, Title: scene.Title, Studio: scene.Studio, Date: scene.Date, Year: scene.Year,
-			Performers: scene.Performers(), Overview: scene.Overview, Traits: media.Traits{Genres: scene.Tags}}
+			Performers: scene.Performers(), DurationSec: scene.DurationSec, Overview: scene.Overview, Traits: media.Traits{Genres: scene.Tags}}
 		if len(scene.Images) > 0 {
 			candidate.Cover = scene.Images[0].URL
 		}
@@ -476,6 +573,8 @@ type AddRequest struct {
 	AddedBy    *int64
 	// Fallback is stored when no metadata source knows the scene; nil refuses the add then.
 	Fallback *Scene
+	// Quick adds what placing a file needs; the scene's refresh asks the remaining providers.
+	Quick bool
 }
 
 // AddResult is what an add stored.
@@ -496,7 +595,7 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 	if !monitor.Valid() {
 		return AddResult{}, fmt.Errorf("adult: unknown monitor option %q", monitor)
 	}
-	scene, err := s.FetchFor(ctx, request.CategoryID, request.IDs, request.Hint)
+	scene, err := s.fetch(ctx, request.CategoryID, request.IDs, request.Hint, request.Quick)
 	if errors.Is(err, ErrNoSource) && request.Fallback != nil {
 		scene, err = *request.Fallback, nil
 	}
