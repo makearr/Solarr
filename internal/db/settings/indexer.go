@@ -101,6 +101,15 @@ type IndexerSource struct {
 	ExternalID int64 `json:"external_id"`
 	// UpstreamEnabled is Prowlarr's own enabled flag at the last sync: a pause is mirrored only when it changes.
 	UpstreamEnabled bool `json:"upstream_enabled"`
+	// Upstream is the site the Prowlarr indexer searches, searched directly once its key is here; nil when unknown.
+	Upstream *IndexerUpstream `json:"upstream,omitempty"`
+}
+
+// IndexerUpstream is the address and implementation of a site behind a Prowlarr indexer.
+type IndexerUpstream struct {
+	Impl       string `json:"impl"`
+	BaseURL    string `json:"base_url"`
+	Definition string `json:"definition,omitempty"`
 }
 
 // Source is the Prowlarr indexer this one follows; nil for one added by hand.

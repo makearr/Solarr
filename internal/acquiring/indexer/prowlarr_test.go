@@ -41,3 +41,29 @@ func TestSupportedCategory(t *testing.T) {
 		}
 	}
 }
+
+func TestListProwlarr_TheSiteBehindEachIndexer(t *testing.T) {
+	body := `[
+ {"id":1,"name":"NZBgeek","protocol":"usenet","implementation":"Newznab","enable":true,
+  "fields":[{"name":"baseUrl","value":"https://api.nzbgeek.info"},{"name":"apiPath","value":"/api"},{"name":"apiKey","value":"********"}]},
+ {"id":2,"name":"Open","protocol":"usenet","implementation":"Newznab","enable":true,
+  "fields":[{"name":"baseUrl","value":"http://10.0.0.5:5007/"},{"name":"apiPath","value":"/newznab/api"},{"name":"apiKey","value":""}]},
+ {"id":3,"name":"YTS","protocol":"torrent","implementation":"Cardigann","definitionName":"yts","enable":true},
+ {"id":4,"name":"RuTracker","protocol":"torrent","implementation":"RuTracker","enable":true}
+]`
+	got, err := indexer.ListProwlarr(t.Context(), newTestClient(t, &recordingTransport{body: body}), "http://p:9696", "k")
+	if err != nil {
+		t.Fatalf("ListProwlarr: %v", err)
+	}
+	want := []*indexer.UpstreamIndexer{
+		{Impl: "newznab", BaseURL: "https://api.nzbgeek.info", KeyHidden: true},
+		{Impl: "newznab", BaseURL: "http://10.0.0.5:5007/newznab"},
+		{Definition: "yts"},
+		nil,
+	}
+	for i, one := range got {
+		if !reflect.DeepEqual(one.Upstream, want[i]) {
+			t.Errorf("%s upstream = %+v, want %+v", one.Name, one.Upstream, want[i])
+		}
+	}
+}

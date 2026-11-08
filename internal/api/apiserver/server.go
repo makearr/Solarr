@@ -769,6 +769,7 @@ func New(config Config) (*Server, error) {
 			secured.Patch("/indexers/{id}", server.routeUpdateIndexer)
 			secured.Delete("/indexers/{id}", server.routeDeleteIndexer)
 			secured.Post("/indexers/{id}/apikey", server.routeSetIndexerAPIKey)
+			secured.Post("/indexers/{id}/use-upstream", server.routeUseIndexerUpstream)
 			secured.Post("/indexers/{id}/test", server.routeTestIndexer)
 			secured.Get("/downloaders", server.ListDownloaders)
 			secured.Post("/downloaders", server.AddDownloader)

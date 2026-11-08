@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -523,6 +524,7 @@ func syncOptionsView(options settings.ProwlarrSync) gen.ProwlarrSyncOptions {
 	return gen.ProwlarrSyncOptions{
 		ActiveIndexers: options.ActiveIndexers, PausedIndexers: options.PausedIndexers, SupportedOnly: options.SupportedOnly,
 		DownloadClients: options.DownloadClients, Proxies: options.Proxies, Automatic: options.Automatic,
+		ProwlarrAsIndexer: &options.ProwlarrAsIndexer, FlaresolverrUrl: &options.FlareSolverrURL,
 	}
 }
 
@@ -561,6 +563,7 @@ func (s *Server) SetArrInstanceSyncOptions(w http.ResponseWriter, r *http.Reques
 	options := settings.ProwlarrSync{
 		ActiveIndexers: body.ActiveIndexers, PausedIndexers: body.PausedIndexers, SupportedOnly: body.SupportedOnly,
 		DownloadClients: body.DownloadClients, Proxies: body.Proxies, Automatic: body.Automatic,
+		ProwlarrAsIndexer: derefOr(body.ProwlarrAsIndexer, false), FlareSolverrURL: strings.TrimSpace(derefOr(body.FlaresolverrUrl, "")),
 	}
 	if _, err := s.auth.Settings.GetArrInstance(r.Context(), id); err != nil {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such connection")

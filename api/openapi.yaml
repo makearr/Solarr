@@ -3445,6 +3445,37 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /indexers/{id}/use-upstream:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: useIndexerUpstream
+      tags: [settings]
+      summary: >-
+        Search the site behind a Prowlarr indexer directly, with the key given. Administrator only. Prowlarr hides the
+        key of its indexers, so it is asked for once; the address comes from the Prowlarr sync.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                api_key: { type: string }
+      responses:
+        "200":
+          description: The indexer, now addressing the site itself.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Indexer" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /indexers/{id}/apikey:
     parameters:
       - name: id
@@ -10801,6 +10832,8 @@ components:
         download_clients: { type: boolean, description: Offer Prowlarr's active download clients. }
         proxies: { type: boolean, description: Follow the proxies Prowlarr's indexers use (FlareSolverr included). }
         automatic: { type: boolean, description: Sync on the schedule, not only when asked. }
+        prowlarr_as_indexer: { type: boolean, description: Search through Prowlarr's per-indexer address instead of the sites behind it. Off by default. }
+        flaresolverr_url: { type: string, description: A FlareSolverr added to the proxy list, to choose per indexer. Empty adds none. }
 
     ProwlarrSyncResult:
       type: object
@@ -11342,6 +11375,8 @@ components:
       properties:
         arr_id: { type: integer, format: int64 }
         external_id: { type: integer, format: int64 }
+        upstream_base_url: { type: string, description: The site behind the Prowlarr indexer, when Prowlarr's definition names it. }
+        awaiting_key: { type: boolean, description: True while the indexer still searches through Prowlarr because its key was hidden; use-upstream switches it. }
 
     AddIndexerRequest:
       type: object

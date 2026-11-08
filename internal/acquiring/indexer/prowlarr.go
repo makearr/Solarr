@@ -33,6 +33,20 @@ type ProwlarrIndexer struct {
 	Tags []int64
 	// QueriesPerHour is Prowlarr's query limit for the indexer converted to an hour; 0 for none.
 	QueriesPerHour int64
+	// Upstream is the site Prowlarr itself searches, when it can be told; nil for one only Prowlarr can reach.
+	Upstream *UpstreamIndexer
+}
+
+// UpstreamIndexer is the site behind a Prowlarr indexer, as Solarr can search it without Prowlarr.
+type UpstreamIndexer struct {
+	// Impl and BaseURL are set for a Newznab or Torznab indexer; BaseURL ends where Solarr appends /api.
+	Impl, BaseURL string
+	// Key is Prowlarr's API key for the site; empty when the site needs none or Prowlarr hides it.
+	Key string
+	// KeyHidden is set when Prowlarr answered the key masked, so it must be asked for.
+	KeyHidden bool
+	// Definition is the Cardigann definition Prowlarr uses, for the catalog to match.
+	Definition string
 }
 
 type prowlarrIndexer struct {
@@ -42,7 +56,10 @@ type prowlarrIndexer struct {
 	Enable   bool    `json:"enable"`
 	Priority int64   `json:"priority"`
 	Tags     []int64 `json:"tags"`
-	Fields   []struct {
+
+	Implementation string `json:"implementation"`
+	DefinitionName string `json:"definitionName"`
+	Fields         []struct {
 		Name  string `json:"name"`
 		Value any    `json:"value"`
 	} `json:"fields"`
@@ -97,6 +114,7 @@ func ListProwlarr(ctx context.Context, client *httpx.Client, baseURL, apiKey str
 			ProwlarrID: entry.ID, Name: entry.Name, Impl: impl, Enabled: entry.Enable, Music: music,
 			BaseURL:  base + "/" + strconv.FormatInt(entry.ID, 10),
 			Priority: min(max(entry.Priority, 1), 50), Supported: supported, Tags: entry.Tags, QueriesPerHour: queriesPerHour(entry.Fields),
+			Upstream: upstreamOf(entry),
 		})
 	}
 	return indexers, nil
@@ -196,4 +214,36 @@ func queriesPerHour(fields []struct {
 		return int64(limit)
 	}
 	return max(int64(limit/24), 1)
+}
+
+// upstreamOf reads the site a Prowlarr indexer searches: the address and key of a Newznab or Torznab one, the
+// definition name of a Cardigann one.
+func upstreamOf(entry prowlarrIndexer) *UpstreamIndexer {
+	fields := map[string]string{}
+	for _, field := range entry.Fields {
+		if text, ok := field.Value.(string); ok {
+			fields[field.Name] = strings.TrimSpace(text)
+		}
+	}
+	switch strings.ToLower(entry.Implementation) {
+	case "newznab", "torznab":
+		base := strings.TrimRight(fields["baseUrl"], "/")
+		if base == "" {
+			return nil
+		}
+		path := strings.TrimSuffix(strings.TrimRight(fields["apiPath"], "/"), "/api")
+		key := fields["apiKey"]
+		hidden := key != "" && strings.Trim(key, "*") == ""
+		if hidden {
+			key = ""
+		}
+		return &UpstreamIndexer{Impl: strings.ToLower(entry.Implementation), BaseURL: base + path, Key: key, KeyHidden: hidden}
+	case "cardigann":
+		if entry.DefinitionName == "" {
+			return nil
+		}
+		return &UpstreamIndexer{Definition: strings.ToLower(entry.DefinitionName)}
+	default:
+		return nil
+	}
 }

@@ -132,7 +132,7 @@ export function Indexers() {
                 <span className="truncate font-mono text-xs text-ink-muted">{indexer.base_url}</span>
                 <span className="ml-auto flex shrink-0 items-center gap-2 text-xs">
                   {/* A public indexer that takes no key has nothing to warn about. */}
-                  {indexer.source && <Badge tone="ok">via Prowlarr</Badge>}
+                  {indexer.source && <Badge tone="ok">{indexer.source.awaiting_key || !indexer.source.upstream_base_url ? "via Prowlarr" : "from Prowlarr"}</Badge>}
                   {!kindOf(indexer) || kindOf(indexer)?.secret_label !== undefined ? (
                     <Badge tone={indexer.api_key.has_value || kindOf(indexer)?.secret_optional ? "ok" : "warn"}>
                       {indexer.api_key.has_value ? "key set" : "no key"}
@@ -172,6 +172,7 @@ export function Indexers() {
                 {indexer.caps_fetched_at ? ` · capabilities last read ${new Date(indexer.caps_fetched_at).toLocaleString()}` : " · capabilities never read"}
                 {expert && indexer.egress_proxy_url ? ` · FlareSolverr proxy ${indexer.egress_proxy_url}` : ""}
               </span>
+              <UpstreamKey indexer={indexer} onSaved={invalidate} />
               <ProxyPicker indexer={indexer} onSaved={invalidate} />
               <ClientPicker indexer={indexer} onSaved={invalidate} />
               <QueryLimit indexer={indexer} onSaved={invalidate} />
@@ -529,6 +530,41 @@ function Proxies() {
 }
 
 /** Which proxy of the list one indexer's requests go through. */
+/** An indexer taken over from Prowlarr that still searches through it, because Prowlarr hides the site's key. */
+function UpstreamKey({ indexer, onSaved }: { indexer: Indexer; onSaved: () => void }) {
+  const [key, setKey] = useState("");
+  const use = useMutation({
+    mutationFn: () => ok(api.POST("/indexers/{id}/use-upstream", { params: { path: { id: indexer.id } }, body: { api_key: key } })),
+    onSuccess: () => {
+      setKey("");
+      onSaved();
+    },
+  });
+  if (!indexer.source?.awaiting_key || !indexer.source.upstream_base_url) return null;
+  return (
+    <span className="flex flex-wrap items-center gap-2 rounded-md border border-border-subtle p-2 text-xs text-ink-muted">
+      Searches through Prowlarr, which hides the key of {indexer.source.upstream_base_url}. Enter the key to search it directly.
+      <input
+        type="password"
+        autoComplete="off"
+        aria-label={`API key of ${indexer.name}`}
+        value={key}
+        onChange={(event) => setKey(event.target.value)}
+        className={inputStyle}
+      />
+      <button
+        type="button"
+        disabled={use.isPending}
+        onClick={() => use.mutate()}
+        className="rounded-md border border-border-subtle px-2 py-0.5 text-ink hover:border-accent disabled:opacity-50"
+      >
+        Use it directly
+      </button>
+      {use.isError && <span className="text-danger">It could not be changed.</span>}
+    </span>
+  );
+}
+
 function ProxyPicker({ indexer, onSaved }: { indexer: Indexer; onSaved: () => void }) {
   const proxies = useQuery({ queryKey: ["proxies"], queryFn: () => ok(api.GET("/proxies")) });
   const save = useMutation({

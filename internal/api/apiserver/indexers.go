@@ -133,6 +133,50 @@ func (s *Server) UpdateIndexer(w http.ResponseWriter, r *http.Request, id int64)
 	writeJSON(w, s.logger, http.StatusOK, indexerView(updated))
 }
 
+func (s *Server) routeUseIndexerUpstream(w http.ResponseWriter, r *http.Request) {
+	if id, err := parsePathID(w, s, r, "id", "an indexer id must be a number"); err == nil {
+		s.UseIndexerUpstream(w, r, id)
+	}
+}
+
+// UseIndexerUpstream points a Prowlarr indexer at the site behind it, with the key the owner gives.
+func (s *Server) UseIndexerUpstream(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	var body gen.UseIndexerUpstreamJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected the api_key")
+		return
+	}
+	existing, err := s.auth.Settings.GetIndexer(r.Context(), id)
+	if err != nil {
+		writeIndexerError(w, s, err, "The indexer has problems", "Nothing was changed.")
+		return
+	}
+	source := existing.Source()
+	if source == nil || source.Upstream == nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "Prowlarr does not say which site this indexer searches")
+		return
+	}
+	now := s.wall.Now().Unix()
+	updated, err := s.auth.Settings.UpdateIndexer(r.Context(), id, settings.IndexerRequest{
+		Name: existing.Name, Impl: source.Upstream.Impl, BaseURL: source.Upstream.BaseURL, Enabled: existing.Enabled, Priority: existing.Priority,
+		EgressProxyURL: existing.Egress().ProxyURL, MusicCategories: existing.StoredMusicCategories(), Definition: source.Upstream.Definition,
+		Source: source, ProxyID: existing.ProxyID(), DownloadClientID: existing.DownloadClientID(), QueriesPerHour: existing.QueriesPerHour(),
+	}, now)
+	if err != nil {
+		writeIndexerError(w, s, err, "The connection has problems", "Nothing was changed.")
+		return
+	}
+	if err := s.auth.Settings.SetIndexerAPIKey(r.Context(), id, secrets.Secret(derefOr(body.ApiKey, "")), now); err != nil {
+		writeIndexerError(w, s, err, "The connection has problems", "The address changed, the key did not.")
+		return
+	}
+	updated.HasAPIKey = derefOr(body.ApiKey, "") != ""
+	writeJSON(w, s.logger, http.StatusOK, indexerView(updated))
+}
+
 // routeDeleteIndexer parses the id path parameter, mirroring routeDeleteArrInstance.
 func (s *Server) routeDeleteIndexer(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -276,6 +320,11 @@ func indexerView(indexer settings.Indexer) gen.Indexer {
 	}
 	if source := indexer.Source(); source != nil {
 		view.Source = &gen.IndexerSource{ArrId: source.ArrID, ExternalId: source.ExternalID}
+		if source.Upstream != nil {
+			address, waiting := source.Upstream.BaseURL, source.Upstream.BaseURL != indexer.BaseURL
+			view.Source.UpstreamBaseUrl = &address
+			view.Source.AwaitingKey = &waiting
+		}
 	}
 	view.ProxyId = indexer.ProxyID()
 	view.DownloadClientId = indexer.DownloadClientID()

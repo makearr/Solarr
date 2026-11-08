@@ -68,6 +68,10 @@ type ProwlarrSync struct {
 	Proxies         bool `json:"proxies"`
 	// Automatic runs the sync on the schedule; otherwise only when asked.
 	Automatic bool `json:"automatic"`
+	// ProwlarrAsIndexer searches through Prowlarr's per-indexer address; off, each indexer is the site behind it.
+	ProwlarrAsIndexer bool `json:"prowlarr_as_indexer"`
+	// FlareSolverrURL is added to the proxy list, to be chosen per indexer; empty adds none.
+	FlareSolverrURL string `json:"flaresolverr_url,omitempty"`
 }
 
 // DefaultProwlarrSync is a new connection's sync: active, supported indexers, kept up to date.

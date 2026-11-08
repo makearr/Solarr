@@ -17,6 +17,7 @@ import (
 	"github.com/makearr/Solarr/internal/importing/arrimport"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
 // Prowlarr satisfies apiserver.ProwlarrLister and apiserver.ArrConnections: a Prowlarr's indexers, and a
@@ -257,6 +258,9 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 	if err != nil {
 		return SyncResult{}, err
 	}
+	if err := a.mergeDuplicateProxies(ctx, a.Clock.Now().Unix()); err != nil {
+		return SyncResult{}, err
+	}
 	configured, err := a.Cache.Indexers(ctx)
 	if err != nil {
 		return SyncResult{}, err
@@ -274,9 +278,19 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 	if err != nil {
 		return SyncResult{}, err
 	}
+	// taken maps a searched site to the first indexer that has it; a second one for the same site is a duplicate.
+	taken := map[string]int64{}
+	for _, existing := range configured {
+		if first, seen := taken[siteKey(existing.Impl, existing.BaseURL)]; !seen || existing.ID < first {
+			taken[siteKey(existing.Impl, existing.BaseURL)] = existing.ID
+		}
+	}
 	now := a.Clock.Now().Unix()
 	var result SyncResult
 	var failures []error
+	if err := a.ensureFlareSolverr(ctx, options.FlareSolverrURL, now); err != nil {
+		return result, err
+	}
 	proxyOf, err := a.syncProxies(ctx, instance, key, options, now)
 	if err != nil {
 		return result, err
@@ -293,7 +307,8 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 			result.Skipped++
 			continue
 		}
-		source := &settings.IndexerSource{ArrID: instanceID, ExternalID: entry.ProwlarrID, UpstreamEnabled: entry.Enabled}
+		target, ready, upstreamKey := upstreamTarget(entry, options)
+		source := &settings.IndexerSource{ArrID: instanceID, ExternalID: entry.ProwlarrID, UpstreamEnabled: entry.Enabled, Upstream: target}
 		existing, found := bySource[entry.ProwlarrID]
 		if !found {
 			existing, found = byBase[entry.BaseURL]
@@ -305,14 +320,26 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 				name = entry.Name + " (" + instance.Name + ")"
 			}
 			names[name] = true
-			if _, err := a.Cache.CreateIndexer(ctx, settings.IndexerRequest{
+			request := settings.IndexerRequest{
 				Name: name, Impl: entry.Impl, BaseURL: entry.BaseURL, Enabled: entry.Enabled, Priority: entry.Priority,
 				Source: source, ProxyID: proxyOf(entry), QueriesPerHour: entry.QueriesPerHour,
-			}, secret, now); err != nil {
+			}
+			created := secret
+			if ready {
+				request.Impl, request.BaseURL, request.Definition = target.Impl, target.BaseURL, target.Definition
+				created = secrets.Secret(upstreamKey)
+			}
+			// The same site from a second Prowlarr is searched once.
+			if _, duplicate := taken[siteKey(request.Impl, request.BaseURL)]; duplicate {
+				result.Skipped++
+				continue
+			}
+			if _, err := a.Cache.CreateIndexer(ctx, request, created, now); err != nil {
 				failures = append(failures, fmt.Errorf("add %s: %w", entry.Name, err))
 				continue
 			}
 			result.Added++
+			taken[siteKey(request.Impl, request.BaseURL)] = 0
 			continue
 		}
 		enabled := existing.Enabled
@@ -333,13 +360,45 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 		if entry.QueriesPerHour > 0 {
 			queries = entry.QueriesPerHour
 		}
+		// An address that is not Prowlarr's own was chosen here (or by an earlier sync) and stays unless Prowlarr's
+		// site moved; with Prowlarr as the indexer, or a site now ready to search, the address is set afresh.
+		viaProwlarr, impl, baseURL, definition := existing.BaseURL == entry.BaseURL, existing.Impl, existing.BaseURL, existing.Definition()
+		writeKey := viaProwlarr
+		switch {
+		case options.ProwlarrAsIndexer:
+			impl, baseURL, definition, writeKey = entry.Impl, entry.BaseURL, "", true
+		case ready && viaProwlarr:
+			impl, baseURL, definition = target.Impl, target.BaseURL, target.Definition
+			writeKey = false
+			if err := a.Cache.SetIndexerAPIKey(ctx, existing.ID, secrets.Secret(upstreamKey), now); err != nil {
+				failures = append(failures, fmt.Errorf("key of %s: %w", entry.Name, err))
+				continue
+			}
+		case viaProwlarr:
+			impl, baseURL, definition = entry.Impl, entry.BaseURL, ""
+		case target != nil && previousUpstreamAddress(existing) != "" && baseURL == previousUpstreamAddress(existing):
+			baseURL = target.BaseURL
+		}
+		if first, duplicate := taken[siteKey(impl, baseURL)]; duplicate && first != existing.ID {
+			if err := a.Cache.DeleteIndexer(ctx, existing.ID); err != nil {
+				failures = append(failures, fmt.Errorf("remove duplicate %s: %w", entry.Name, err))
+			} else {
+				result.Skipped++
+			}
+			continue
+		}
+		taken[siteKey(impl, baseURL)] = existing.ID
 		request := settings.IndexerRequest{
-			Name: existing.Name, Impl: entry.Impl, BaseURL: entry.BaseURL, Enabled: enabled, Priority: existing.Priority,
+			Name: existing.Name, Impl: impl, BaseURL: baseURL, Enabled: enabled, Priority: existing.Priority,
 			EgressProxyURL: existing.Egress().ProxyURL, MusicCategories: existing.StoredMusicCategories(),
-			Definition: existing.Definition(), Source: source, ProxyID: chosen, DownloadClientID: existing.DownloadClientID(), QueriesPerHour: queries,
+			Definition: definition, Source: source, ProxyID: chosen, DownloadClientID: existing.DownloadClientID(), QueriesPerHour: queries,
 		}
 		if _, err := a.Cache.UpdateIndexer(ctx, existing.ID, request, now); err != nil {
 			failures = append(failures, fmt.Errorf("update %s: %w", entry.Name, err))
+			continue
+		}
+		if !writeKey {
+			result.Updated++
 			continue
 		}
 		if held, err := a.Cache.DecryptedIndexerAPIKey(ctx, existing.ID); err != nil || held.Reveal() != secret.Reveal() {
@@ -351,6 +410,116 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 		result.Updated++
 	}
 	return result, errors.Join(failures...)
+}
+
+// upstreamTarget is the site behind a Prowlarr indexer when the options ask for it. ready is set when Solarr can search
+// it now: its address is known and Prowlarr gave its key (or it needs none). key is that key.
+func upstreamTarget(entry indexer.ProwlarrIndexer, options settings.ProwlarrSync) (target *settings.IndexerUpstream, ready bool, key string) {
+	upstream := entry.Upstream
+	if options.ProwlarrAsIndexer || upstream == nil {
+		return nil, false, ""
+	}
+	if upstream.Impl != "" {
+		return &settings.IndexerUpstream{Impl: upstream.Impl, BaseURL: upstream.BaseURL}, !upstream.KeyHidden, upstream.Key
+	}
+	// A Cardigann definition is the site itself only where Solarr has a public indexer of the same name.
+	for _, definition := range IndexerDefinitions() {
+		if definition.ID == upstream.Definition && definition.Privacy == indexer.PrivacyPublic && len(definition.BaseURLs) > 0 {
+			return &settings.IndexerUpstream{Impl: definition.Impl, BaseURL: definition.BaseURLs[0], Definition: definition.ID}, true, ""
+		}
+	}
+	return nil, false, ""
+}
+
+// previousUpstreamAddress is the site address the last sync stored for the indexer.
+func previousUpstreamAddress(existing settings.Indexer) string {
+	if source := existing.Source(); source != nil && source.Upstream != nil {
+		return source.Upstream.BaseURL
+	}
+	return ""
+}
+
+// sameProxy finds a proxy already held with the request's kind and address.
+func sameProxy(held []settings.Proxy, request settings.ProxyRequest) (settings.Proxy, bool) {
+	want := strings.TrimRight(request.URL, "/")
+	for _, one := range held {
+		if one.Kind == request.Kind && strings.EqualFold(strings.TrimRight(one.URL, "/"), want) {
+			return one, true
+		}
+	}
+	return settings.Proxy{}, false
+}
+
+// siteKey names the site an indexer searches, so the same site added twice is told.
+func siteKey(impl, baseURL string) string {
+	return strings.ToLower(impl) + "|" + strings.ToLower(strings.TrimRight(strings.TrimSpace(baseURL), "/"))
+}
+
+// mergeDuplicateProxies keeps the first proxy of each kind and address, points the indexers of the others at it and
+// removes the others.
+func (a Prowlarr) mergeDuplicateProxies(ctx context.Context, now int64) error {
+	held, err := a.Cache.Proxies(ctx)
+	if err != nil {
+		return err
+	}
+	keeper := map[string]int64{}
+	replaced := map[int64]int64{}
+	for _, one := range held {
+		key := string(one.Kind) + "|" + strings.ToLower(strings.TrimRight(strings.TrimSpace(one.URL), "/"))
+		if first, seen := keeper[key]; seen {
+			replaced[one.ID] = first
+			continue
+		}
+		keeper[key] = one.ID
+	}
+	if len(replaced) == 0 {
+		return nil
+	}
+	indexers, err := a.Cache.Indexers(ctx)
+	if err != nil {
+		return err
+	}
+	for _, one := range indexers {
+		proxyID := one.ProxyID()
+		if proxyID == nil || replaced[*proxyID] == 0 {
+			continue
+		}
+		moved := replaced[*proxyID]
+		if _, err := a.Cache.UpdateIndexer(ctx, one.ID, settings.IndexerRequest{
+			Name: one.Name, Impl: one.Impl, BaseURL: one.BaseURL, Enabled: one.Enabled, Priority: one.Priority,
+			EgressProxyURL: one.Egress().ProxyURL, MusicCategories: one.StoredMusicCategories(), Definition: one.Definition(),
+			Source: one.Source(), ProxyID: &moved, DownloadClientID: one.DownloadClientID(), QueriesPerHour: one.QueriesPerHour(),
+		}, now); err != nil {
+			return fmt.Errorf("merge proxies of %s: %w", one.Name, err)
+		}
+	}
+	for duplicate := range replaced {
+		if err := a.Cache.DeleteProxy(ctx, duplicate); err != nil {
+			return fmt.Errorf("remove duplicate proxy: %w", err)
+		}
+	}
+	return nil
+}
+
+// ensureFlareSolverr puts the connection's own FlareSolverr in the proxy list, for indexers to choose one by one.
+func (a Prowlarr) ensureFlareSolverr(ctx context.Context, address string, now int64) error {
+	address = strings.TrimSpace(address)
+	if address == "" {
+		return nil
+	}
+	held, err := a.Cache.Proxies(ctx)
+	if err != nil {
+		return err
+	}
+	for _, one := range held {
+		if one.Kind == settings.ProxyFlareSolverr && strings.TrimRight(one.URL, "/") == strings.TrimRight(address, "/") {
+			return nil
+		}
+	}
+	if _, err := a.Cache.CreateProxy(ctx, settings.ProxyRequest{Name: "FlareSolverr", Kind: settings.ProxyFlareSolverr, URL: address}, now); err != nil {
+		return fmt.Errorf("flaresolverr: %w", err)
+	}
+	return nil
 }
 
 // followsProxy reports whether the proxy is one this Prowlarr connection's sync made, so the sync may change it.
@@ -398,8 +567,12 @@ func (a Prowlarr) syncProxies(ctx context.Context, instance settings.ArrInstance
 			if _, err = a.Cache.UpdateProxy(ctx, existing.ID, request, now); err != nil {
 				return none, fmt.Errorf("proxy %s: %w", one.Name, err)
 			}
+		} else if same, shared := sameProxy(held, request); shared {
+			existing = same
 		} else if existing, err = a.Cache.CreateProxy(ctx, request, now); err != nil {
 			return none, fmt.Errorf("proxy %s: %w", one.Name, err)
+		} else {
+			held = append(held, existing)
 		}
 		usable = append(usable, tagged{id: existing.ID, kind: one.Kind, tags: one.Tags})
 	}

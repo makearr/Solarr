@@ -205,7 +205,30 @@ const syncChoices: { key: keyof SyncOptions; label: string }[] = [
   { key: "download_clients", label: "Active download clients" },
   { key: "proxies", label: "Proxies the indexers use (FlareSolverr)" },
   { key: "automatic", label: "Keep in step every hour" },
+  { key: "prowlarr_as_indexer", label: "Use Prowlarr itself as the indexer (off: each indexer is the site behind it)" },
 ];
+
+/** A FlareSolverr address added to the proxy list on the next sync; each indexer then picks it under its own proxy. */
+function FlareSolverrField({ value, disabled, onSave }: { value: string; disabled: boolean; onSave: (url: string) => void }) {
+  const [draft, setDraft] = useState(value);
+  return (
+    <label className="flex flex-wrap items-center gap-2 text-xs">
+      FlareSolverr
+      <input
+        type="url"
+        placeholder="http://flaresolverr:8191"
+        value={draft}
+        disabled={disabled}
+        onChange={(event) => setDraft(event.target.value)}
+        className="w-64 rounded-md border border-border-subtle bg-canvas px-2 py-1 font-mono"
+      />
+      <button type="button" disabled={disabled || draft === value} onClick={() => onSave(draft.trim())} className={button}>
+        Save
+      </button>
+      <span className="text-ink-muted">Added as a proxy; choose it per indexer.</span>
+    </label>
+  );
+}
 
 /** What Solarr keeps in step with this Prowlarr, and a button to do it now. */
 function ProwlarrSync({ instanceId }: { instanceId: number }) {
@@ -232,13 +255,19 @@ function ProwlarrSync({ instanceId }: { instanceId: number }) {
         <label key={choice.key} className="flex items-center gap-2 text-xs">
           <input
             type="checkbox"
-            checked={options.data?.[choice.key] ?? false}
+            checked={options.data?.[choice.key] === true}
             disabled={!options.data || save.isPending}
             onChange={(event) => options.data && save.mutate({ ...options.data, [choice.key]: event.target.checked })}
           />
           {choice.label}
         </label>
       ))}
+      <FlareSolverrField
+        key={options.data?.flaresolverr_url ?? ""}
+        value={options.data?.flaresolverr_url ?? ""}
+        disabled={!options.data || save.isPending}
+        onSave={(url) => options.data && save.mutate({ ...options.data, flaresolverr_url: url })}
+      />
       <button type="button" disabled={sync.isPending} onClick={() => sync.mutate()} className={button}>
         {sync.isPending ? "Syncing…" : "Sync now"}
       </button>

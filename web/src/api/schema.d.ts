@@ -2293,6 +2293,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/indexers/{id}/use-upstream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Search the site behind a Prowlarr indexer directly, with the key given. Administrator only. Prowlarr hides the key of its indexers, so it is asked for once; the address comes from the Prowlarr sync. */
+        post: operations["useIndexerUpstream"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/indexers/{id}/apikey": {
         parameters: {
             query?: never;
@@ -7534,6 +7553,10 @@ export interface components {
             proxies: boolean;
             /** @description Sync on the schedule */
             automatic: boolean;
+            /** @description Search through Prowlarr's per-indexer address instead of the sites behind it. Off by default. */
+            prowlarr_as_indexer?: boolean;
+            /** @description A FlareSolverr added to the proxy list */
+            flaresolverr_url?: string;
         };
         ProwlarrSyncResult: {
             /** Format: int64 */
@@ -8038,6 +8061,10 @@ export interface components {
             arr_id: number;
             /** Format: int64 */
             external_id: number;
+            /** @description The site behind the Prowlarr indexer */
+            upstream_base_url?: string;
+            /** @description True while the indexer still searches through Prowlarr because its key was hidden; use-upstream switches it. */
+            awaiting_key?: boolean;
         };
         AddIndexerRequest: {
             name: string;
@@ -14633,6 +14660,38 @@ export interface operations {
                     "application/json": components["schemas"]["ConnectionTestResult"];
                 };
             };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    useIndexerUpstream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    api_key?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The indexer, now addressing the site itself. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Indexer"];
+                };
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

@@ -68,7 +68,12 @@ A Prowlarr connection keeps indexers in step instead of importing a library. Und
 active indexers, paused indexers (added paused), only indexers with a category of a media type Solarr serves (movies,
 audio, TV, adult, books; not console or PC), and whether to sync every hour. **Sync now** runs it at once; the task
 "Sync Prowlarr indexers" runs the automatic ones. The followed indexers appear under Connections > Indexers marked
-"via Prowlarr", searched through Prowlarr's per-indexer address with Prowlarr's key.
+"from Prowlarr". Each is the site behind the Prowlarr indexer (NZBgeek is the NZBgeek indexer itself), so Solarr can
+take over from the *Arrs. Prowlarr hides every indexer's API key, so one with a hidden key stays "via Prowlarr", searched
+through Prowlarr's per-indexer address, until the key is entered on its row ("Use it directly"). Sites without a key, and
+public sites Solarr has its own indexer for, switch at once. The option "Use Prowlarr itself as the indexer" (off by
+default) keeps every indexer on Prowlarr's address and key. The option "FlareSolverr" adds an address to the proxy list;
+each indexer chooses it under its own proxy.
 
 Priority comes from Prowlarr when an indexer is added and is Solarr's after that. A pause follows Prowlarr only when
 Prowlarr's own flag has changed since the last sync, so pausing an indexer here is not undone by the next sync.

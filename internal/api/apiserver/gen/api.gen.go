@@ -3563,8 +3563,14 @@ type IndexerSearchError struct {
 
 // IndexerSource The indexer of a connected Prowlarr that this one follows.
 type IndexerSource struct {
-	ArrId      int64 `json:"arr_id"`
-	ExternalId int64 `json:"external_id"`
+	ArrId int64 `json:"arr_id"`
+
+	// AwaitingKey True while the indexer still searches through Prowlarr because its key was hidden; use-upstream switches it.
+	AwaitingKey *bool `json:"awaiting_key,omitempty"`
+	ExternalId  int64 `json:"external_id"`
+
+	// UpstreamBaseUrl The site behind the Prowlarr indexer
+	UpstreamBaseUrl *string `json:"upstream_base_url,omitempty"`
 }
 
 // Job The job's payload is deliberately absent. It can carry paths and provider identifiers, and a listing is not the place to hand that out.
@@ -5033,8 +5039,14 @@ type ProwlarrSyncOptions struct {
 	// DownloadClients Offer Prowlarr's active download clients.
 	DownloadClients bool `json:"download_clients"`
 
+	// FlaresolverrUrl A FlareSolverr added to the proxy list
+	FlaresolverrUrl *string `json:"flaresolverr_url,omitempty"`
+
 	// PausedIndexers Follow Prowlarr's paused indexers
 	PausedIndexers bool `json:"paused_indexers"`
+
+	// ProwlarrAsIndexer Search through Prowlarr's per-indexer address instead of the sites behind it. Off by default.
+	ProwlarrAsIndexer *bool `json:"prowlarr_as_indexer,omitempty"`
 
 	// Proxies Follow the proxies Prowlarr's indexers use (FlareSolverr included).
 	Proxies bool `json:"proxies"`
@@ -6973,6 +6985,11 @@ type SetIndexerAPIKeyJSONBody struct {
 	ApiKey *string `json:"api_key,omitempty"`
 }
 
+// UseIndexerUpstreamJSONBody defines parameters for UseIndexerUpstream.
+type UseIndexerUpstreamJSONBody struct {
+	ApiKey *string `json:"api_key,omitempty"`
+}
+
 // ListJobsParams defines parameters for ListJobs.
 type ListJobsParams struct {
 	// Cursor From `next_cursor` of the previous page. Absent on the first page. There is no offset parameter and there will not be one.
@@ -7917,6 +7934,9 @@ type UpdateIndexerJSONRequestBody = UpdateIndexerRequest
 // SetIndexerAPIKeyJSONRequestBody defines body for SetIndexerAPIKey for application/json ContentType.
 type SetIndexerAPIKeyJSONRequestBody SetIndexerAPIKeyJSONBody
 
+// UseIndexerUpstreamJSONRequestBody defines body for UseIndexerUpstream for application/json ContentType.
+type UseIndexerUpstreamJSONRequestBody UseIndexerUpstreamJSONBody
+
 // CreateLanguageProfileJSONRequestBody defines body for CreateLanguageProfile for application/json ContentType.
 type CreateLanguageProfileJSONRequestBody = LanguageProfileWrite
 
@@ -8633,6 +8653,9 @@ type ServerInterface interface {
 	// Fetch t=caps against the real indexer (todo 5.2's own "every connection tested before it is accepted"). Records the response via the same path a periodic caps refresh would (ADR-43); never a t=search, so this never counts as an acquisition search.
 	// (POST /indexers/{id}/test)
 	TestIndexer(w http.ResponseWriter, r *http.Request, id int64)
+	// Search the site behind a Prowlarr indexer directly, with the key given. Administrator only. Prowlarr hides the key of its indexers, so it is asked for once; the address comes from the Prowlarr sync.
+	// (POST /indexers/{id}/use-upstream)
+	UseIndexerUpstream(w http.ResponseWriter, r *http.Request, id int64)
 	// A page of jobs the caller may see.
 	// (GET /jobs)
 	ListJobs(w http.ResponseWriter, r *http.Request, params ListJobsParams)
@@ -10217,6 +10240,12 @@ func (_ Unimplemented) AddIndexerCompanion(w http.ResponseWriter, r *http.Reques
 // Fetch t=caps against the real indexer (todo 5.2's own "every connection tested before it is accepted"). Records the response via the same path a periodic caps refresh would (ADR-43); never a t=search, so this never counts as an acquisition search.
 // (POST /indexers/{id}/test)
 func (_ Unimplemented) TestIndexer(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Search the site behind a Prowlarr indexer directly, with the key given. Administrator only. Prowlarr hides the key of its indexers, so it is asked for once; the address comes from the Prowlarr sync.
+// (POST /indexers/{id}/use-upstream)
+func (_ Unimplemented) UseIndexerUpstream(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -16667,6 +16696,39 @@ func (siw *ServerInterfaceWrapper) TestIndexer(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.TestIndexer(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UseIndexerUpstream operation middleware
+func (siw *ServerInterfaceWrapper) UseIndexerUpstream(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UseIndexerUpstream(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -23931,6 +23993,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/indexers/{id}/test", wrapper.TestIndexer)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/indexers/{id}/use-upstream", wrapper.UseIndexerUpstream)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/jobs", wrapper.ListJobs)
