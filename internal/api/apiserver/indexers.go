@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -158,6 +160,18 @@ func (s *Server) UseIndexerUpstream(w http.ResponseWriter, r *http.Request, id i
 	if source == nil || source.Upstream == nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "Prowlarr does not say which site this indexer searches")
 		return
+	}
+	others, err := s.auth.Settings.Indexers(r.Context())
+	if err != nil {
+		writeIndexerError(w, s, err, "The indexer has problems", "Nothing was changed.")
+		return
+	}
+	for _, other := range others {
+		if other.ID != id && other.Impl == source.Upstream.Impl && strings.EqualFold(strings.TrimRight(other.BaseURL, "/"), strings.TrimRight(source.Upstream.BaseURL, "/")) {
+			writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Conflict",
+				fmt.Sprintf("%s already searches %s; remove one of the two", other.Name, source.Upstream.BaseURL))
+			return
+		}
 	}
 	now := s.wall.Now().Unix()
 	updated, err := s.auth.Settings.UpdateIndexer(r.Context(), id, settings.IndexerRequest{

@@ -295,6 +295,9 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 	if err != nil {
 		return result, err
 	}
+	if err := a.mergeDuplicateProxies(ctx, now); err != nil {
+		return result, err
+	}
 	if options.DownloadClients && a.Lidarr != nil {
 		result.ClientsAdded, result.ClientsWaiting, err = a.syncDownloadClients(ctx, instance, key, now)
 		if err != nil {
@@ -423,9 +426,9 @@ func upstreamTarget(entry indexer.ProwlarrIndexer, options settings.ProwlarrSync
 		return &settings.IndexerUpstream{Impl: upstream.Impl, BaseURL: upstream.BaseURL}, !upstream.KeyHidden, upstream.Key
 	}
 	// A Cardigann definition is the site itself only where Solarr has a public indexer of the same name.
-	for _, definition := range IndexerDefinitions() {
-		if definition.ID == upstream.Definition && definition.Privacy == indexer.PrivacyPublic && len(definition.BaseURLs) > 0 {
-			return &settings.IndexerUpstream{Impl: definition.Impl, BaseURL: definition.BaseURLs[0], Definition: definition.ID}, true, ""
+	for _, kind := range (IndexerKinds{}).IndexerKinds() {
+		if kind.ID == upstream.Definition && kind.Privacy == string(indexer.PrivacyPublic) && len(kind.BaseURLs) > 0 && len(kind.Unsupported) == 0 {
+			return &settings.IndexerUpstream{Impl: kind.Impl, BaseURL: kind.BaseURLs[0], Definition: kind.ID}, true, ""
 		}
 	}
 	return nil, false, ""
@@ -562,8 +565,10 @@ func (a Prowlarr) syncProxies(ctx context.Context, instance settings.ArrInstance
 		}
 		existing, found := byExternal[one.ProwlarrID]
 		if found {
-			// An address changed here stays: only Prowlarr's name and kind follow.
-			request.URL = existing.URL
+			// An address changed here stays (one still as Prowlarr gave it is read afresh): only Prowlarr's name and kind follow.
+			if existing.URL != one.URL {
+				request.URL = existing.URL
+			}
 			if _, err = a.Cache.UpdateProxy(ctx, existing.ID, request, now); err != nil {
 				return none, fmt.Errorf("proxy %s: %w", one.Name, err)
 			}
