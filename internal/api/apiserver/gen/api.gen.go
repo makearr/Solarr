@@ -1296,8 +1296,9 @@ type AddIndexerRequest struct {
 	Name            string `json:"name"`
 
 	// Priority Lower is preferred when several indexers list the same release.
-	Priority *int64 `json:"priority,omitempty"`
-	ProxyId  *int64 `json:"proxy_id,omitempty"`
+	Priority       *int64 `json:"priority,omitempty"`
+	ProxyId        *int64 `json:"proxy_id,omitempty"`
+	QueriesPerHour *int64 `json:"queries_per_hour,omitempty"`
 }
 
 // AddWorkRequest defines model for AddWorkRequest.
@@ -3471,6 +3472,9 @@ type Indexer struct {
 
 	// ProxyId The entry of /proxies this indexer's requests go through.
 	ProxyId *int64 `json:"proxy_id,omitempty"`
+
+	// QueriesPerHour The most requests an hour the indexer allows; Solarr stays 20% under it. Absent or 0 means none stated.
+	QueriesPerHour *int64 `json:"queries_per_hour,omitempty"`
 
 	// Source The indexer of a connected Prowlarr that this one follows.
 	Source    *IndexerSource `json:"source,omitempty"`
@@ -6146,6 +6150,7 @@ type UpdateIndexerRequest struct {
 	Name            string `json:"name"`
 	Priority        *int64 `json:"priority,omitempty"`
 	ProxyId         *int64 `json:"proxy_id,omitempty"`
+	QueriesPerHour  *int64 `json:"queries_per_hour,omitempty"`
 }
 
 // UserAccount defines model for UserAccount.

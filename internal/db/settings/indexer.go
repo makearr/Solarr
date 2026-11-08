@@ -64,6 +64,17 @@ type indexerSettingsJSON struct {
 	ProxyID *int64 `json:"proxy_id,omitempty"`
 	// DownloadClientID binds the indexer's releases to one download client, referenced by id.
 	DownloadClientID *int64 `json:"download_client_id,omitempty"`
+	// QueriesPerHour is the most requests an hour the indexer allows; 0 is no stated limit.
+	QueriesPerHour int64 `json:"queries_per_hour,omitempty"`
+}
+
+// QueriesPerHour is the most requests an hour the indexer allows, 0 when none is stated.
+func (i Indexer) QueriesPerHour() int64 {
+	var parsed indexerSettingsJSON
+	if i.SettingsJSON == "" || json.Unmarshal([]byte(i.SettingsJSON), &parsed) != nil {
+		return 0
+	}
+	return parsed.QueriesPerHour
 }
 
 // DownloadClientID is the download client the indexer's releases are bound to; nil for any that takes the protocol.
@@ -139,12 +150,12 @@ func (i Indexer) Definition() string {
 // buildIndexerSettingsJSON encodes the request's egress and categories into SettingsJSON, or "" when
 // both are unset, so an indexer nobody configured still reads back with SettingsJSON == "".
 func buildIndexerSettingsJSON(request IndexerRequest) string {
-	if request.EgressProxyURL == "" && len(request.MusicCategories) == 0 && request.Definition == "" && request.Source == nil && request.ProxyID == nil && request.DownloadClientID == nil {
+	if request.EgressProxyURL == "" && len(request.MusicCategories) == 0 && request.Definition == "" && request.Source == nil && request.ProxyID == nil && request.DownloadClientID == nil && request.QueriesPerHour == 0 {
 		return ""
 	}
 	encoded, err := json.Marshal(indexerSettingsJSON{
 		Egress: IndexerEgress{ProxyURL: request.EgressProxyURL}, MusicCategories: request.MusicCategories,
-		Definition: request.Definition, Source: request.Source, ProxyID: request.ProxyID, DownloadClientID: request.DownloadClientID,
+		Definition: request.Definition, Source: request.Source, ProxyID: request.ProxyID, DownloadClientID: request.DownloadClientID, QueriesPerHour: request.QueriesPerHour,
 	})
 	if err != nil {
 		return ""
@@ -173,6 +184,8 @@ type IndexerRequest struct {
 	ProxyID *int64
 	// DownloadClientID binds releases to a download client; nil for any.
 	DownloadClientID *int64
+	// QueriesPerHour is the limit the indexer states; 0 for none.
+	QueriesPerHour int64
 }
 
 // defaultIndexerPriority is Lidarr's default, what a request without one gets.
@@ -196,6 +209,9 @@ func validateIndexer(request IndexerRequest) config.Problems {
 	}
 	if strings.TrimSpace(request.BaseURL) == "" {
 		problems = append(problems, config.Problem{Path: "base_url", Expectation: "not empty"})
+	}
+	if request.QueriesPerHour < 0 || request.QueriesPerHour > 1_000_000 {
+		problems = append(problems, config.Problem{Path: "queries_per_hour", Value: fmt.Sprint(request.QueriesPerHour), Expectation: "0 (no limit) to 1,000,000"})
 	}
 	// Lidarr's range: lower is preferred when the same release is on several indexers.
 	if request.Priority < 1 || request.Priority > 50 {

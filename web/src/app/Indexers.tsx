@@ -175,6 +175,7 @@ export function Indexers() {
               </span>
               <ProxyPicker indexer={indexer} onSaved={invalidate} />
               <ClientPicker indexer={indexer} onSaved={invalidate} />
+              <QueryLimit indexer={indexer} onSaved={invalidate} />
               <MusicCategories indexer={indexer} onSaved={invalidate} />
               {(() => {
                 const companion = missingDownloader(kindOf(indexer), indexer.base_url, downloaders.data ?? [], clientKinds.data ?? []);
@@ -707,4 +708,41 @@ function kindProtocol(impl: string): string {
   if (impl === "newznab") return "usenet";
   if (impl === "soulseek") return "ddl";
   return "torrent";
+}
+
+/** The most requests an hour the indexer allows, if it states one; Solarr paces itself 20% under it and backs off on a limit error. */
+function QueryLimit({ indexer, onSaved }: { indexer: Indexer; onSaved: () => void }) {
+  const [text, setText] = useState(indexer.queries_per_hour ? String(indexer.queries_per_hour) : "");
+  const save = useMutation({
+    mutationFn: (limit: number) =>
+      ok(api.PATCH("/indexers/{id}", {
+        params: { path: { id: indexer.id } },
+        body: {
+          name: indexer.name, impl: indexer.impl, base_url: indexer.base_url, priority: indexer.priority,
+          enabled: indexer.enabled, egress_proxy_url: indexer.egress_proxy_url, music_categories: indexer.music_categories,
+          queries_per_hour: limit,
+        },
+      })),
+    onSuccess: onSaved,
+  });
+  const current = indexer.queries_per_hour ? String(indexer.queries_per_hour) : "";
+  return (
+    <form
+      className="flex items-center gap-2 text-xs text-ink-muted"
+      onSubmit={(event) => {
+        event.preventDefault();
+        save.mutate(Math.max(0, Math.round(Number(text) || 0)));
+      }}
+    >
+      <label className="flex items-center gap-1.5" title="Requests an hour the indexer allows. Empty: none stated, so Solarr asks gently and slows down when the indexer says it is overloaded.">
+        Requests per hour
+        <input className={`${inputStyle} w-20`} inputMode="numeric" value={text} placeholder="no limit" onChange={(event) => setText(event.target.value)} />
+      </label>
+      {text !== current && (
+        <button type="submit" disabled={save.isPending} className="rounded-md border border-border-subtle px-2 py-0.5 hover:text-ink">
+          Save
+        </button>
+      )}
+    </form>
+  );
 }

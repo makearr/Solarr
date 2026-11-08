@@ -76,6 +76,13 @@ type Answer struct {
 	TooSlow bool
 }
 
+// maxIndexersAtOnce bounds how many indexers one search asks at the same moment.
+const maxIndexersAtOnce = 8
+
+// searches shares one request among identical ones made at the same time (an album and its twin, a retry): bunches of
+// searches cost the indexer one request.
+var searches parallel.Flight[[]indexer.RawItem]
+
 // resultLimit bounds one indexer's response per query.
 const resultLimit = 100
 
@@ -85,13 +92,20 @@ func AskEveryIndexer(ctx context.Context, conns []Conn, queries []Query, deadlin
 	group, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 	answers := make([]Answer, len(conns))
-	asked := parallel.Do(group, len(conns), 0, func(ctx context.Context, index int) error {
+	// Highest priority (lowest number) starts first, so when more indexers than slots are asked the preferred ones are not the ones waiting.
+	order := make([]int, len(conns))
+	for index := range order {
+		order[index] = index
+	}
+	slices.SortStableFunc(order, func(a, b int) int { return cmp.Compare(conns[a].Priority, conns[b].Priority) })
+	asked := parallel.Do(group, len(conns), maxIndexersAtOnce, func(ctx context.Context, position int) error {
+		index := order[position]
 		answers[index] = askIndexer(ctx, conns[index], queries)
 		return nil
 	})
-	for index, err := range asked {
+	for position, err := range asked {
 		if err != nil {
-			answers[index].Err = err
+			answers[order[position]].Err = err
 		}
 	}
 	if err := ctx.Err(); err != nil {
@@ -117,9 +131,10 @@ func askIndexer(ctx context.Context, conn Conn, queries []Query) Answer {
 		if len(categories) > 0 && len(query.MoreCategories) > 0 {
 			categories = append(slices.Clone(categories), query.MoreCategories...)
 		}
-		raws, err := conn.Client.Search(ctx, indexer.SearchRequest{
+		request := indexer.SearchRequest{
 			Function: query.Function, Query: query.Text, Extra: query.Extra, Categories: categories, Limit: cmp.Or(query.Limit, resultLimit),
-		})
+		}
+		raws, _, err := searches.Do(searchKey(conn.ID, request), func() ([]indexer.RawItem, error) { return conn.Client.Search(ctx, request) })
 		if err != nil {
 			answer.Err = err
 			return answer
@@ -132,4 +147,14 @@ func askIndexer(ctx context.Context, conn Conn, queries []Query) Answer {
 		}
 	}
 	return answer
+}
+
+// searchKey names a request to one indexer; two with the same key ask the same question.
+func searchKey(indexerID int64, request indexer.SearchRequest) string {
+	extra := make([]string, 0, len(request.Extra))
+	for key, value := range request.Extra {
+		extra = append(extra, key+"="+value)
+	}
+	slices.Sort(extra)
+	return fmt.Sprint(indexerID, "|", request.Function, "|", request.Query, "|", request.Categories, "|", request.Limit, "|", extra)
 }

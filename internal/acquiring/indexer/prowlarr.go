@@ -31,15 +31,21 @@ type ProwlarrIndexer struct {
 	Supported bool
 	// Tags link the indexer to the proxies of Prowlarr that carry the same tag.
 	Tags []int64
+	// QueriesPerHour is Prowlarr's query limit for the indexer converted to an hour; 0 for none.
+	QueriesPerHour int64
 }
 
 type prowlarrIndexer struct {
-	ID           int64   `json:"id"`
-	Name         string  `json:"name"`
-	Protocol     string  `json:"protocol"`
-	Enable       bool    `json:"enable"`
-	Priority     int64   `json:"priority"`
-	Tags         []int64 `json:"tags"`
+	ID       int64   `json:"id"`
+	Name     string  `json:"name"`
+	Protocol string  `json:"protocol"`
+	Enable   bool    `json:"enable"`
+	Priority int64   `json:"priority"`
+	Tags     []int64 `json:"tags"`
+	Fields   []struct {
+		Name  string `json:"name"`
+		Value any    `json:"value"`
+	} `json:"fields"`
 	Capabilities struct {
 		Categories []struct {
 			ID int64 `json:"id"`
@@ -90,7 +96,7 @@ func ListProwlarr(ctx context.Context, client *httpx.Client, baseURL, apiKey str
 		indexers = append(indexers, ProwlarrIndexer{
 			ProwlarrID: entry.ID, Name: entry.Name, Impl: impl, Enabled: entry.Enable, Music: music,
 			BaseURL:  base + "/" + strconv.FormatInt(entry.ID, 10),
-			Priority: min(max(entry.Priority, 1), 50), Supported: supported, Tags: entry.Tags,
+			Priority: min(max(entry.Priority, 1), 50), Supported: supported, Tags: entry.Tags, QueriesPerHour: queriesPerHour(entry.Fields),
 		})
 	}
 	return indexers, nil
@@ -166,4 +172,28 @@ func ListProwlarrProxies(ctx context.Context, client *httpx.Client, baseURL, api
 		}
 	}
 	return proxies, nil
+}
+
+// queriesPerHour reads Prowlarr's query limit (baseSettings.queryLimit per limitsUnit, 0 a day and 1 an hour).
+func queriesPerHour(fields []struct {
+	Name  string `json:"name"`
+	Value any    `json:"value"`
+}) int64 {
+	var limit, unit float64
+	for _, field := range fields {
+		number, _ := field.Value.(float64)
+		switch field.Name {
+		case "baseSettings.queryLimit":
+			limit = number
+		case "baseSettings.limitsUnit":
+			unit = number
+		}
+	}
+	if limit <= 0 {
+		return 0
+	}
+	if unit == 1 {
+		return int64(limit)
+	}
+	return max(int64(limit/24), 1)
 }

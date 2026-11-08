@@ -11294,6 +11294,7 @@ components:
         api_key: { $ref: "#/components/schemas/SecretMask" }
         proxy_id: { type: integer, format: int64, description: The entry of /proxies this indexer's requests go through. }
         download_client_id: { type: integer, format: int64, description: The download client this indexer's releases go to; absent or 0 means any that takes the protocol. }
+        queries_per_hour: { type: integer, format: int64, minimum: 0, description: The most requests an hour the indexer allows; Solarr stays 20% under it. Absent or 0 means none stated. }
         egress_proxy_url:
           type: string
           description: >-
@@ -11357,6 +11358,7 @@ components:
         egress_proxy_url: { type: string }
         proxy_id: { type: integer, format: int64 }
         download_client_id: { type: integer, format: int64 }
+        queries_per_hour: { type: integer, format: int64, minimum: 0 }
         music_categories:
           type: array
           items: { type: integer }
@@ -11375,6 +11377,7 @@ components:
         egress_proxy_url: { type: string }
         proxy_id: { type: integer, format: int64 }
         download_client_id: { type: integer, format: int64 }
+        queries_per_hour: { type: integer, format: int64, minimum: 0 }
         music_categories:
           type: array
           items: { type: integer }

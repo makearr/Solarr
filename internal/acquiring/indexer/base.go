@@ -203,3 +203,18 @@ func (f *FlexInt) UnmarshalJSON(data []byte) error {
 	*f = FlexInt(value)
 	return nil
 }
+
+// LimitReached reports the start of an answer that is a Newznab "request limit" or "download limit" error (codes 500
+// and 501), which an indexer sends with a 200 status: the caller must back off, not take it for a search with no results.
+func LimitReached(start []byte) bool {
+	text := string(start)
+	i := strings.Index(text, "<error")
+	if i < 0 {
+		return false
+	}
+	head := text[i:]
+	if end := strings.Index(head, ">"); end >= 0 {
+		head = head[:end]
+	}
+	return strings.Contains(head, `code="500"`) || strings.Contains(head, `code="501"`)
+}

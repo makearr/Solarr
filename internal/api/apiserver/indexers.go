@@ -63,7 +63,7 @@ func (s *Server) AddIndexer(w http.ResponseWriter, r *http.Request) {
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
 		Enabled: derefOr(body.Enabled, true), Priority: derefOr(body.Priority, 25),
 		EgressProxyURL: derefOr(body.EgressProxyUrl, ""), MusicCategories: derefOr(body.MusicCategories, nil),
-		Definition: derefOr(body.Definition, ""), ProxyID: proxyFromRequest(body.ProxyId), DownloadClientID: proxyFromRequest(body.DownloadClientId),
+		Definition: derefOr(body.Definition, ""), ProxyID: proxyFromRequest(body.ProxyId), DownloadClientID: proxyFromRequest(body.DownloadClientId), QueriesPerHour: derefOr(body.QueriesPerHour, 0),
 	}, secrets.Secret(derefOr(body.ApiKey, "")), s.wall.Now().Unix())
 	if err != nil {
 		writeIndexerError(w, s, err, "The connection has problems", "Nothing was created.")
@@ -102,7 +102,7 @@ func (s *Server) UpdateIndexer(w http.ResponseWriter, r *http.Request, id int64)
 	// No definition in the request keeps the stored one: editing an indexer must not forget where it came from.
 	definition := derefOr(body.Definition, "")
 	var source *settings.IndexerSource
-	proxyID, clientID := body.ProxyId, body.DownloadClientId
+	proxyID, clientID, queries := body.ProxyId, body.DownloadClientId, body.QueriesPerHour
 	if existing, err := s.auth.Settings.GetIndexer(r.Context(), id); err == nil {
 		source = existing.Source()
 		// Absent keeps the stored proxy; 0 takes it off.
@@ -112,6 +112,10 @@ func (s *Server) UpdateIndexer(w http.ResponseWriter, r *http.Request, id int64)
 		if clientID == nil {
 			clientID = existing.DownloadClientID()
 		}
+		if queries == nil {
+			stored := existing.QueriesPerHour()
+			queries = &stored
+		}
 		if body.Definition == nil {
 			definition = existing.Definition()
 		}
@@ -120,7 +124,7 @@ func (s *Server) UpdateIndexer(w http.ResponseWriter, r *http.Request, id int64)
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
 		Enabled: derefOr(body.Enabled, true), Priority: derefOr(body.Priority, 25),
 		EgressProxyURL: derefOr(body.EgressProxyUrl, ""), MusicCategories: derefOr(body.MusicCategories, nil),
-		Definition: definition, Source: source, ProxyID: proxyFromRequest(proxyID), DownloadClientID: proxyFromRequest(clientID),
+		Definition: definition, Source: source, ProxyID: proxyFromRequest(proxyID), DownloadClientID: proxyFromRequest(clientID), QueriesPerHour: derefOr(queries, 0),
 	}, s.wall.Now().Unix())
 	if err != nil {
 		writeIndexerError(w, s, err, "The connection has problems", "Nothing was changed.")
@@ -275,6 +279,9 @@ func indexerView(indexer settings.Indexer) gen.Indexer {
 	}
 	view.ProxyId = indexer.ProxyID()
 	view.DownloadClientId = indexer.DownloadClientID()
+	if limit := indexer.QueriesPerHour(); limit > 0 {
+		view.QueriesPerHour = &limit
+	}
 	if categories := indexer.StoredMusicCategories(); len(categories) > 0 {
 		view.MusicCategories = &categories
 	}

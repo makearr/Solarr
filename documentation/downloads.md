@@ -220,3 +220,13 @@ bound client that is disabled does not stall the indexer: its releases go to the
 Prowlarr's sync can add its active download clients: those that sign in without a user name and need no API key or
 password are created with Prowlarr's priority and category; the others are counted as waiting and are added from the
 connection's "Use its download clients", which asks for the secret once because Prowlarr hides it.
+
+## How indexers are asked
+
+A search asks every enabled indexer that lists the media type, at most eight at once and highest priority (lowest
+number) first. Two identical requests to one indexer at the same moment (the same album searched twice, a retry) share
+one request. Each indexer has its own request bucket with exponential backoff and a circuit breaker.
+
+An indexer's "Requests per hour" (or the query limit its Prowlarr states, converted to an hour) sets its pace to 20%
+under that limit. Newznab's "request limit reached" and "download limit reached" answers (code 500 or 501, sent with a
+200 status) count as failures and double that indexer's pace, up to sixteen times; the pace halves for every quiet hour.

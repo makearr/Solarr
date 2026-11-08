@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -87,6 +88,11 @@ func paceInterval(perMinute int64) time.Duration { return time.Minute / time.Dur
 
 // livePace answers the pace a person set for the metadata provider behind a bucket (user, 2026-10-23).
 func (p *process) livePace(bucket string) (time.Duration, bool) {
+	if id, found := strings.CutPrefix(bucket, providerIndexerPrefix); found && p.indexerPacing != nil {
+		if indexerID, err := strconv.ParseInt(id, 10, 64); err == nil {
+			return p.indexerPacing.interval(indexerID)
+		}
+	}
 	key := bucket
 	for provider, renamed := range metadataBuckets {
 		if renamed == bucket {

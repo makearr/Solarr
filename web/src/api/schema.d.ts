@@ -7997,6 +7997,11 @@ export interface components {
              * @description The download client this indexer's releases go to; absent or 0 means any that takes the protocol.
              */
             download_client_id?: number;
+            /**
+             * Format: int64
+             * @description The most requests an hour the indexer allows; Solarr stays 20% under it. Absent or 0 means none stated.
+             */
+            queries_per_hour?: number;
             /** @description ADR-47, expert tier: an HTTP/SOCKS5 proxy for this indexer's own requests only. Empty means "use the global egress proxy, if any" -- not "no proxy". FlareSolverr is not yet built. */
             egress_proxy_url?: string;
             source?: components["schemas"]["IndexerSource"];
@@ -8055,6 +8060,8 @@ export interface components {
             proxy_id?: number;
             /** Format: int64 */
             download_client_id?: number;
+            /** Format: int64 */
+            queries_per_hour?: number;
             /** @description Newznab categories for music; omitted or empty means the indexer's own, read from its capabilities. */
             music_categories?: number[];
         };
@@ -8076,6 +8083,8 @@ export interface components {
             proxy_id?: number;
             /** Format: int64 */
             download_client_id?: number;
+            /** Format: int64 */
+            queries_per_hour?: number;
             /** @description Newznab categories for music; omitted or empty means the indexer's own, read from its capabilities. */
             music_categories?: number[];
         };

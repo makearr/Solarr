@@ -80,3 +80,16 @@ func TestNewznabDefinitions_AreUniqueAndAddressed(t *testing.T) {
 		t.Errorf("only %d presets", len(seen))
 	}
 }
+
+func TestLimitReached(t *testing.T) {
+	for body, want := range map[string]bool{
+		`<?xml version="1.0"?><error code="500" description="Request limit reached"/>`: true,
+		`<error code="501" description="Download limit reached"/>`:                     true,
+		`<error code="100" description="Incorrect user credentials"/>`:                 false,
+		`<rss><channel><item/></channel></rss>`:                                        false,
+	} {
+		if got := indexer.LimitReached([]byte(body)); got != want {
+			t.Errorf("LimitReached(%q) = %v, want %v", body, got, want)
+		}
+	}
+}

@@ -222,7 +222,17 @@ func (p *process) indexerLiveProxyPolicy(egress settings.IndexerEgress) httpx.Li
 func (p *process) indexerClientFactory() adapters.IndexerHTTPFactory {
 	return func(indexerID int64, baseURL string, egress settings.IndexerEgress) *httpx.Client {
 		guard := connectionGuard(baseURL)
-		config := httpx.ClientConfig{Proxy: p.indexerLiveProxyPolicy(egress)}
+		config := httpx.ClientConfig{
+			Proxy: p.indexerLiveProxyPolicy(egress),
+			// A 200 that says "request limit reached" is a failure to back off from, and slows the indexer's pace.
+			AnswerFailed: func(start []byte) bool {
+				limited := indexer.LimitReached(start)
+				if limited && p.indexerPacing != nil {
+					p.indexerPacing.limitHit(indexerID)
+				}
+				return limited
+			},
+		}
 		if egress.FlareSolverrURL != "" {
 			config.Transport = p.flareSolverrTransport(guard, egress.FlareSolverrURL, config.Proxy)
 		}
@@ -240,6 +250,9 @@ func (p *process) flareSolverrTransport(site *httpx.Guard, solverURL string, pro
 
 // indexerDriver builds one configured indexer on its implementation; known is false for one Solarr has none of.
 func (p *process) indexerDriver(ctx context.Context, found settings.Indexer, apiKey string) (indexer.Driver, bool) {
+	if p.indexerPacing != nil {
+		p.indexerPacing.setLimit(found.ID, found.QueriesPerHour())
+	}
 	deps := adapters.IndexerDeps{HTTP: p.indexerClientFactory()(found.ID, found.BaseURL, p.cache.ResolveEgress(ctx, found)), Clock: clock.NewSystem()}
 	return adapters.NewIndexer(found.Impl, deps, indexer.Connection{BaseURL: found.BaseURL, APIKey: apiKey})
 }

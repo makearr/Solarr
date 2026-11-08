@@ -297,7 +297,7 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 		if !found {
 			if _, err := a.Cache.CreateIndexer(ctx, settings.IndexerRequest{
 				Name: entry.Name, Impl: entry.Impl, BaseURL: entry.BaseURL, Enabled: entry.Enabled, Priority: entry.Priority,
-				Source: source, ProxyID: proxyOf(entry),
+				Source: source, ProxyID: proxyOf(entry), QueriesPerHour: entry.QueriesPerHour,
 			}, secret, now); err != nil {
 				return result, fmt.Errorf("add %s: %w", entry.Name, err)
 			}
@@ -317,10 +317,15 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 		if chosen == nil || a.followsProxy(ctx, *chosen, instanceID) {
 			chosen = proxyOf(entry)
 		}
+		// Prowlarr's stated limit applies; without one the limit set here stays.
+		queries := existing.QueriesPerHour()
+		if entry.QueriesPerHour > 0 {
+			queries = entry.QueriesPerHour
+		}
 		request := settings.IndexerRequest{
 			Name: entry.Name, Impl: entry.Impl, BaseURL: entry.BaseURL, Enabled: enabled, Priority: existing.Priority,
 			EgressProxyURL: existing.Egress().ProxyURL, MusicCategories: existing.StoredMusicCategories(),
-			Definition: existing.Definition(), Source: source, ProxyID: chosen, DownloadClientID: existing.DownloadClientID(),
+			Definition: existing.Definition(), Source: source, ProxyID: chosen, DownloadClientID: existing.DownloadClientID(), QueriesPerHour: queries,
 		}
 		if _, err := a.Cache.UpdateIndexer(ctx, existing.ID, request, now); err != nil {
 			return result, fmt.Errorf("update %s: %w", entry.Name, err)

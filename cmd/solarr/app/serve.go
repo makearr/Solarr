@@ -104,7 +104,9 @@ type process struct {
 	jobRegistry *jobs.Registry
 	// indexerCaps is what each indexer's music search accepts, fetched once a day.
 	indexerCaps *indexerCapsCache
-	cache       *settings.Cache
+	// indexerPacing is how fast each indexer is asked, from its stated limit and the limit hits seen.
+	indexerPacing *indexerPacing
+	cache         *settings.Cache
 	// tool runs the external media tools (ADR-30); one for the process.
 	tool mediatool.Tool
 	// transcoder converts files for the built-in player; detection runs at start.
@@ -516,6 +518,7 @@ func (p *process) startJobs(ctx context.Context) error {
 
 	p.running, p.jobRegistry = jobs.NewRunning(wall), registry
 	p.indexerCaps = newIndexerCapsCache(wall)
+	p.indexerPacing = newIndexerPacing(wall)
 	// After the queue and the bus exist, which a module's wiring captures; before any job that asks the registry.
 	if err := p.registerMedia(); err != nil {
 		return err
