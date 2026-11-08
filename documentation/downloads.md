@@ -236,7 +236,7 @@ under that limit. Newznab's "request limit reached" and "download limit reached"
 Connections > Indexers > Add indexers lists, besides the native ones, 581 sites described as data: converted from
 Prowlarr's definitions (`scripts/gen-indexer-specs.py`, recorded in ATTRIBUTION.md) and run by Solarr's own engine
 (`internal/acquiring/indexer/spec`). Filter by words, protocol, privacy, media, language; "Searchable only" hides the
-sites the engine cannot do yet (a sign-in captcha, results under date headings). Requests are sent in the character set a site expects.
+sites the engine cannot do yet (a sign-in captcha). Requests are sent in the character set a site expects.
 
 A spec states how to search (a path, inputs written as templates, the rows of the answer and how each field is read), how
 to sign in (none, a pasted cookie, or a form/post/get sign-in; the session cookie is kept for the life of the process and
