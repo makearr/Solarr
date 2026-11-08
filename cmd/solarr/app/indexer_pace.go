@@ -23,6 +23,7 @@ type indexerPacing struct {
 	mutex      sync.Mutex
 	clock      clock.Clock
 	configured map[int64]time.Duration
+	floors     map[int64]time.Duration
 	hits       map[int64]limitHit
 }
 
@@ -32,7 +33,7 @@ type limitHit struct {
 }
 
 func newIndexerPacing(cl clock.Clock) *indexerPacing {
-	return &indexerPacing{clock: cl, configured: map[int64]time.Duration{}, hits: map[int64]limitHit{}}
+	return &indexerPacing{clock: cl, configured: map[int64]time.Duration{}, floors: map[int64]time.Duration{}, hits: map[int64]limitHit{}}
 }
 
 // setLimit records the queries an hour an indexer allows; zero clears it.
@@ -44,6 +45,17 @@ func (x *indexerPacing) setLimit(id, queriesPerHour int64) {
 		return
 	}
 	x.configured[id] = time.Duration(float64(time.Hour) / (float64(queriesPerHour) * indexerLimitMargin))
+}
+
+// setFloor records the least gap a site asks between requests (a spec's request delay); zero clears it.
+func (x *indexerPacing) setFloor(id int64, gap time.Duration) {
+	x.mutex.Lock()
+	defer x.mutex.Unlock()
+	if gap <= 0 {
+		delete(x.floors, id)
+		return
+	}
+	x.floors[id] = gap
 }
 
 // limitHit notes that the indexer answered "limit reached".
@@ -73,11 +85,12 @@ func (x *indexerPacing) interval(id int64) (time.Duration, bool) {
 	defer x.mutex.Unlock()
 	factor := x.factorLocked(id, x.clock.Now())
 	base, limited := x.configured[id]
-	if !limited && factor <= 1 {
+	floor, floored := x.floors[id]
+	if !limited && !floored && factor <= 1 {
 		return 0, false
 	}
 	if !limited {
 		base = indexerBasePace
 	}
-	return time.Duration(float64(base) * factor), true
+	return time.Duration(float64(max(base, floor)) * factor), true
 }

@@ -21,7 +21,20 @@ type IndexerKind struct {
 	UserLabel, SecretLabel                                   string
 	SecretOptional                                           bool
 	CompanionDownloader                                      string
+	// Fields are the settings a spec indexer asks for, besides its address; none for the others.
+	Fields []IndexerField
+	// Unsupported lists why Solarr cannot search the entry yet; empty means it can.
+	Unsupported []string
 }
+
+// IndexerField is one setting of a spec indexer.
+type IndexerField struct {
+	Name, Type, Label, Default string
+	Options                    []IndexerFieldOption
+}
+
+// IndexerFieldOption is one choice of a select setting.
+type IndexerFieldOption struct{ Value, Label string }
 
 // IndexerKinds answers the indexer catalog, in the add list's order.
 type IndexerKinds interface {
@@ -52,13 +65,29 @@ func indexerKindView(kind IndexerKind) gen.IndexerKind {
 	if urls == nil {
 		urls = []string{}
 	}
+	searchable, unsupported, fields := len(kind.Unsupported) == 0, kind.Unsupported, indexerFieldViews(kind.Fields)
+	if unsupported == nil {
+		unsupported = []string{}
+	}
 	return gen.IndexerKind{
 		Id: kind.ID, Name: kind.Name, Description: kind.Description, Impl: kind.Impl,
 		Protocol: gen.IndexerKindProtocol(kind.Protocol), Privacy: gen.IndexerKindPrivacy(kind.Privacy),
 		Language: kind.Language, BaseUrls: urls, MediaTypes: media, UserLabel: strPtr(kind.UserLabel),
 		SecretLabel: strPtr(kind.SecretLabel), SecretOptional: kind.SecretOptional,
-		CompanionDownloader: strPtr(kind.CompanionDownloader),
+		CompanionDownloader: strPtr(kind.CompanionDownloader), Searchable: &searchable, Unsupported: &unsupported, Fields: &fields,
 	}
+}
+
+func indexerFieldViews(fields []IndexerField) []gen.IndexerField {
+	views := make([]gen.IndexerField, len(fields))
+	for i, field := range fields {
+		options := make([]gen.IndexerFieldOption, len(field.Options))
+		for j, option := range field.Options {
+			options[j] = gen.IndexerFieldOption{Value: option.Value, Label: option.Label}
+		}
+		views[i] = gen.IndexerField{Name: field.Name, Type: gen.IndexerFieldType(field.Type), Label: field.Label, Default: strPtr(field.Default), Options: options}
+	}
+	return views
 }
 
 // indexerKind finds a catalog entry by its id, or else the first entry of impl (an indexer added before the catalog).
@@ -107,7 +136,7 @@ func (s *Server) TestIndexerConfig(w http.ResponseWriter, r *http.Request) {
 	if !s.validIndexerKind(w, body.Impl) {
 		return
 	}
-	result, err := s.indexerTester.TestIndexerConfig(r.Context(), body.Impl, body.BaseUrl, derefOr(body.ApiKey, ""))
+	result, err := s.indexerTester.TestIndexerConfig(r.Context(), body.Impl, derefOr(body.Definition, ""), body.BaseUrl, derefOr(body.ApiKey, ""))
 	if err != nil {
 		writeIndexerError(w, s, err, "The connection has problems", "Nothing was tested.")
 		return

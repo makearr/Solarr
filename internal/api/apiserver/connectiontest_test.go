@@ -36,7 +36,7 @@ func (f *fakeConnectionTester) TestIndexer(_ context.Context, id int64) (apiserv
 	return f.result, f.err
 }
 
-func (f *fakeConnectionTester) TestIndexerConfig(_ context.Context, impl, baseURL, apiKey string) (apiserver.ConnectionTestResult, error) {
+func (f *fakeConnectionTester) TestIndexerConfig(_ context.Context, impl, _, baseURL, apiKey string) (apiserver.ConnectionTestResult, error) {
 	f.lastConfig = impl + " " + baseURL + " " + apiKey
 	return f.result, f.err
 }

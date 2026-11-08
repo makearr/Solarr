@@ -45,6 +45,8 @@ const (
 	ImplBeyondHD        = "beyondhd"
 	ImplBroadcastheNet  = "broadcasthenet"
 	ImplSoulseek        = "soulseek"
+	// ImplSpec is any site described by a spec (internal/acquiring/indexer/spec); the catalog entry names which.
+	ImplSpec = "spec"
 )
 
 // ProtocolOf is how the releases of an implementation are downloaded: candidate.protocol's vocabulary.
@@ -54,7 +56,7 @@ func ProtocolOf(impl string) string {
 		return "usenet"
 	case ImplSoulseek:
 		return "ddl"
-	case ImplTorznab, ImplThePirateBay, ImplNyaa, ImplYTS, ImplKnaben, ImplInternetArchive, ImplSubsPlease, ImplRedacted,
+	case ImplTorznab, ImplSpec, ImplThePirateBay, ImplNyaa, ImplYTS, ImplKnaben, ImplInternetArchive, ImplSubsPlease, ImplRedacted,
 		ImplOrpheus, ImplFileList, ImplHDBits, ImplPassThePopcorn, ImplBeyondHD, ImplBroadcastheNet:
 		return "torrent"
 	}
@@ -107,6 +109,8 @@ func (d Definition) Protocol() string { return ProtocolOf(d.Impl) }
 type Connection struct {
 	BaseURL string
 	APIKey  string
+	// Definition is the catalog entry the indexer is made from; a spec indexer needs it to know which site it is.
+	Definition string
 }
 
 // SplitCredentials reads "user:secret" back; a value without a colon is all secret.

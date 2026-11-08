@@ -3,6 +3,7 @@ module github.com/makearr/Solarr
 go 1.27.0
 
 require (
+	github.com/PuerkitoBio/goquery v1.13.0
 	github.com/bodgit/sevenzip v1.6.5
 	github.com/dlclark/regexp2 v1.12.0
 	github.com/go-chi/chi/v5 v5.4.0
@@ -16,12 +17,14 @@ require (
 	github.com/ulikunitz/xz v0.5.16
 	golang.org/x/crypto v0.55.0
 	golang.org/x/image v0.45.0
+	golang.org/x/net v0.58.0
 	golang.org/x/text v0.41.0
 	modernc.org/sqlite v1.57.0
 )
 
 require (
 	github.com/andybalholm/brotli v1.2.2 // indirect
+	github.com/andybalholm/cascadia v1.3.4 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/bodgit/plumbing v1.3.0 // indirect
 	github.com/bodgit/windows v1.0.1 // indirect

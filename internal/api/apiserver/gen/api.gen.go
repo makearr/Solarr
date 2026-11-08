@@ -461,8 +461,18 @@ const (
 	IncompleteWorkStatePARTIAL IncompleteWorkState = "PARTIAL"
 )
 
+// Defines values for IndexerFieldType.
+const (
+	IndexerFieldTypeCheckbox IndexerFieldType = "checkbox"
+	IndexerFieldTypeInfo     IndexerFieldType = "info"
+	IndexerFieldTypePassword IndexerFieldType = "password"
+	IndexerFieldTypeSelect   IndexerFieldType = "select"
+	IndexerFieldTypeText     IndexerFieldType = "text"
+)
+
 // Defines values for IndexerKindMediaTypes.
 const (
+	IndexerKindMediaTypesAdult  IndexerKindMediaTypes = "adult"
 	IndexerKindMediaTypesAnime  IndexerKindMediaTypes = "anime"
 	IndexerKindMediaTypesBooks  IndexerKindMediaTypes = "books"
 	IndexerKindMediaTypesMovies IndexerKindMediaTypes = "movies"
@@ -3481,6 +3491,24 @@ type Indexer struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 }
 
+// IndexerField defines model for IndexerField.
+type IndexerField struct {
+	Default *string              `json:"default,omitempty"`
+	Label   string               `json:"label"`
+	Name    string               `json:"name"`
+	Options []IndexerFieldOption `json:"options"`
+	Type    IndexerFieldType     `json:"type"`
+}
+
+// IndexerFieldType defines model for IndexerField.Type.
+type IndexerFieldType string
+
+// IndexerFieldOption defines model for IndexerFieldOption.
+type IndexerFieldOption struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
 // IndexerKind One entry of the indexer catalog, as Prowlarr's add list describes it.
 type IndexerKind struct {
 	// BaseUrls The addresses it answers at, the default first; empty for a generic entry, which asks for one.
@@ -3489,6 +3517,9 @@ type IndexerKind struct {
 	// CompanionDownloader The download client impl its releases need
 	CompanionDownloader *string `json:"companion_downloader,omitempty"`
 	Description         string  `json:"description"`
+
+	// Fields The settings the entry asks for besides its address (a spec indexer's user name, password, cookie, choices); stored together as the indexer's secret, as JSON.
+	Fields *[]IndexerField `json:"fields,omitempty"`
 
 	// Id The entry's own stable name: "nzbgeek", "thepiratebay".
 	Id         string                  `json:"id"`
@@ -3499,9 +3530,13 @@ type IndexerKind struct {
 	Privacy    IndexerKindPrivacy      `json:"privacy"`
 	Protocol   IndexerKindProtocol     `json:"protocol"`
 
+	// Searchable False when Solarr cannot search the entry yet; unsupported says why.
+	Searchable *bool `json:"searchable,omitempty"`
+
 	// SecretLabel What its secret is called; absent for an indexer that needs none.
-	SecretLabel    *string `json:"secret_label,omitempty"`
-	SecretOptional bool    `json:"secret_optional"`
+	SecretLabel    *string   `json:"secret_label,omitempty"`
+	SecretOptional bool      `json:"secret_optional"`
+	Unsupported    *[]string `json:"unsupported,omitempty"`
 
 	// UserLabel Its credentials' first part ("User name", "API user"), stored as "user:secret"; absent for none.
 	UserLabel *string `json:"user_label,omitempty"`
@@ -6927,7 +6962,10 @@ type ListProwlarrIndexersJSONBody struct {
 type TestIndexerConfigJSONBody struct {
 	ApiKey  *string `json:"api_key,omitempty"`
 	BaseUrl string  `json:"base_url"`
-	Impl    string  `json:"impl"`
+
+	// Definition The catalog entry; a spec indexer needs it.
+	Definition *string `json:"definition,omitempty"`
+	Impl       string  `json:"impl"`
 }
 
 // SetIndexerAPIKeyJSONBody defines parameters for SetIndexerAPIKey.

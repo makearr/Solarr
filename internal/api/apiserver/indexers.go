@@ -205,7 +205,7 @@ func (s *Server) routeTestIndexer(w http.ResponseWriter, r *http.Request) {
 type IndexerTester interface {
 	TestIndexer(ctx context.Context, id int64) (ConnectionTestResult, error)
 	// TestIndexerConfig tests an indexer that is not saved yet.
-	TestIndexerConfig(ctx context.Context, impl, baseURL, apiKey string) (ConnectionTestResult, error)
+	TestIndexerConfig(ctx context.Context, impl, definition, baseURL, apiKey string) (ConnectionTestResult, error)
 }
 
 // ConnectionTestResult is one indexer or downloader connection test's own

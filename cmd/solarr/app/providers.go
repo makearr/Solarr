@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"slices"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/acquiring/indexer/flaresolverr"
+	"github.com/makearr/Solarr/internal/acquiring/indexer/spec"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -223,7 +225,7 @@ func (p *process) indexerClientFactory() adapters.IndexerHTTPFactory {
 	return func(indexerID int64, baseURL string, egress settings.IndexerEgress) *httpx.Client {
 		guard := connectionGuard(baseURL)
 		config := httpx.ClientConfig{
-			Proxy: p.indexerLiveProxyPolicy(egress),
+			Proxy: p.indexerLiveProxyPolicy(egress), Jar: p.indexerJar(indexerID),
 			// A 200 that says "request limit reached" is a failure to back off from, and slows the indexer's pace.
 			AnswerFailed: func(start []byte) bool {
 				limited := indexer.LimitReached(start)
@@ -254,7 +256,12 @@ func (p *process) indexerDriver(ctx context.Context, found settings.Indexer, api
 		p.indexerPacing.setLimit(found.ID, found.QueriesPerHour())
 	}
 	deps := adapters.IndexerDeps{HTTP: p.indexerClientFactory()(found.ID, found.BaseURL, p.cache.ResolveEgress(ctx, found)), Clock: clock.NewSystem()}
-	return adapters.NewIndexer(found.Impl, deps, indexer.Connection{BaseURL: found.BaseURL, APIKey: apiKey})
+	if p.indexerPacing != nil && found.Impl == indexer.ImplSpec {
+		if one, ok := spec.Get(found.Definition()); ok {
+			p.indexerPacing.setFloor(found.ID, time.Duration(one.RequestDelay*float64(time.Second)))
+		}
+	}
+	return adapters.NewIndexer(found.Impl, deps, indexer.Connection{BaseURL: found.BaseURL, APIKey: apiKey, Definition: found.Definition()})
 }
 
 // downloaderClientFactory builds adapters.DownloaderHTTPFactory, one
@@ -671,4 +678,18 @@ func (p *process) stashServers() map[string]importlist.StashServer {
 // mdblistLists is MDBList on the bucket the movie ratings use, for import lists.
 func (p *process) mdblistLists() mdblist.Client {
 	return mdblist.New(p.providerClient(providerMDBList, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceMDBList))
+}
+
+// indexerJar is the cookie jar of one indexer, kept for the life of the process so a sign-in outlasts a search; an
+// indexer not saved yet (id 0) gets a fresh one.
+func (p *process) indexerJar(indexerID int64) http.CookieJar {
+	fresh, err := cookiejar.New(nil)
+	if err != nil {
+		return nil
+	}
+	if indexerID == 0 {
+		return fresh
+	}
+	kept, _ := p.indexerJars.LoadOrStore(indexerID, fresh)
+	return kept.(http.CookieJar)
 }

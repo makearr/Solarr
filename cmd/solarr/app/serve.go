@@ -106,7 +106,9 @@ type process struct {
 	indexerCaps *indexerCapsCache
 	// indexerPacing is how fast each indexer is asked, from its stated limit and the limit hits seen.
 	indexerPacing *indexerPacing
-	cache         *settings.Cache
+	// indexerJars are the cookies of each indexer's sign-in, by id.
+	indexerJars sync.Map
+	cache       *settings.Cache
 	// tool runs the external media tools (ADR-30); one for the process.
 	tool mediatool.Tool
 	// transcoder converts files for the built-in player; detection runs at start.

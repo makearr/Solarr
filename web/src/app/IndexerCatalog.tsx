@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import {
-  NO_FILTER, alreadyAdded, filterCatalog, indexerSecret, missingDownloader, missingIndexerFields, type CatalogFilter,
+  NO_FILTER, alreadyAdded, editableFields, filterCatalog, indexerSecret, missingDownloader, missingIndexerFields, type CatalogFilter,
 } from "@/lib/indexerCatalog";
 import { useDownloaderKinds, useIndexerKinds } from "@/lib/resources";
 import { Button } from "@/ui/Button";
@@ -15,7 +16,7 @@ type IndexerKind = components["schemas"]["IndexerKind"];
 
 const PROTOCOLS = { usenet: "Usenet", torrent: "Torrent", ddl: "Soulseek" } as const;
 const PRIVACY = { public: "Public", "semi-private": "Semi-private", private: "Private" } as const;
-const MEDIA = { music: "Music", tv: "TV", movies: "Movies", anime: "Anime", books: "Books" } as const;
+const MEDIA = { music: "Music", tv: "TV", movies: "Movies", anime: "Anime", books: "Books", adult: "Adult" } as const;
 
 const useIndexers = () => useQuery({ queryKey: ["indexers"], queryFn: () => ok(api.GET("/indexers")) });
 const useDownloaders = () => useQuery({ queryKey: ["downloaders"], queryFn: () => ok(api.GET("/downloaders")) });
@@ -29,10 +30,12 @@ export function IndexerCatalog() {
   const [filter, setFilter] = useState<CatalogFilter>(NO_FILTER);
   const [chosen, setChosen] = useState<string[]>([]);
   const shown = filterCatalog(kinds.data ?? [], filter);
+  const scroller = useRef<HTMLDivElement>(null);
+  const rows = useVirtualizer({ count: shown.length, getScrollElement: () => scroller.current, estimateSize: () => 76, overscan: 8 });
   const toggle = (id: string, on: boolean) => setChosen((current) => (on ? [...current, id] : current.filter((one) => one !== id)));
 
   return (
-    <div className="mx-auto flex h-full max-w-4xl flex-col gap-4 overflow-y-auto p-6">
+    <div ref={scroller} className="mx-auto flex h-full max-w-4xl flex-col gap-4 overflow-y-auto p-6">
       <header className="flex flex-col gap-1">
         <Link to="/connections/indexers" className="text-xs text-accent underline underline-offset-2">← Indexers</Link>
         <h1 className="text-lg font-semibold">Add indexers</h1>
@@ -54,6 +57,19 @@ export function IndexerCatalog() {
         <FilterSelect label="Protocol" value={filter.protocol} options={PROTOCOLS} onChange={(protocol) => setFilter({ ...filter, protocol })} />
         <FilterSelect label="Privacy" value={filter.privacy} options={PRIVACY} onChange={(privacy) => setFilter({ ...filter, privacy })} />
         <FilterSelect label="Media" value={filter.media} options={MEDIA} onChange={(media) => setFilter({ ...filter, media })} />
+        <label className="flex flex-col gap-1 text-ink-muted">
+          Language
+          <select className={inputStyle} value={filter.language} onChange={(event) => setFilter({ ...filter, language: event.target.value })}>
+            <option value="">Any</option>
+            {[...new Set((kinds.data ?? []).map((kind) => kind.language))].sort().map((language) => (
+              <option key={language} value={language}>{language}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-1.5 pb-1.5 text-ink-muted" title="Some sites need something Solarr cannot do yet, such as answering a captcha">
+          <input type="checkbox" checked={filter.searchableOnly} onChange={(event) => setFilter({ ...filter, searchableOnly: event.target.checked })} />
+          Searchable only
+        </label>
       </div>
 
       {kinds.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
@@ -63,17 +79,26 @@ export function IndexerCatalog() {
           {shown.length} of {kinds.data.length} indexers
         </p>
       )}
-      <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
-        {shown.map((kind) => {
+      <ul className="relative rounded-lg border border-border-subtle bg-surface" style={{ height: rows.getTotalSize() }}>
+        {rows.getVirtualItems().map((row) => {
+          const kind = shown[row.index];
+          if (!kind) return null;
           const added = alreadyAdded(kind, indexers.data ?? []);
           return (
-            <li key={kind.id}>
+            <li
+              key={kind.id}
+              ref={rows.measureElement}
+              data-index={row.index}
+              className="absolute left-0 w-full border-b border-border-subtle last:border-b-0"
+              style={{ top: 0, transform: `translateY(${row.start}px)` }}
+            >
               <label className={`flex items-start gap-3 p-3 ${added ? "opacity-60" : "cursor-pointer hover:bg-canvas"}`}>
                 <input
                   type="checkbox"
                   className="mt-1"
                   aria-label={`Add ${kind.name}`}
                   checked={chosen.includes(kind.id)}
+                  disabled={kind.searchable === false}
                   onChange={(event) => toggle(kind.id, event.target.checked)}
                 />
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
@@ -84,8 +109,9 @@ export function IndexerCatalog() {
                     <span className="text-xs text-ink-muted">{kind.media_types.map((media) => MEDIA[media]).join(", ")}</span>
                     <span className="text-xs text-ink-muted">{kind.language}</span>
                     {added && <span className="text-xs text-ink-muted">already added</span>}
+                    {kind.searchable === false && <span className="text-xs text-warn">not yet: {(kind.unsupported ?? []).join("; ")}</span>}
                   </span>
-                  <span className="text-xs text-ink-muted">{kind.description}</span>
+                  <span className="line-clamp-2 text-xs text-ink-muted">{kind.description}</span>
                 </span>
               </label>
             </li>
@@ -142,6 +168,8 @@ interface Draft {
   user: string;
   secret: string;
   companion: boolean;
+  /** A spec indexer's settings by name. */
+  fields: Record<string, string>;
 }
 
 type Outcome = { state: "added" } | { state: "failed"; message: string };
@@ -157,7 +185,7 @@ export function IndexerSetup() {
   const navigate = useNavigate();
   const chosen = ids.map((id) => kinds.data?.find((kind) => kind.id === id)).filter((kind): kind is IndexerKind => kind !== undefined);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
-  const draftOf = (kind: IndexerKind): Draft => drafts[kind.id] ?? { address: kind.base_urls[0] ?? "", user: "", secret: "", companion: false };
+  const draftOf = (kind: IndexerKind): Draft => drafts[kind.id] ?? { address: kind.base_urls[0] ?? "", user: "", secret: "", companion: false, fields: {} };
   const setDraft = (kind: IndexerKind, change: Partial<Draft>) => setDrafts((current) => ({ ...current, [kind.id]: { ...draftOf(kind), ...change } }));
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
 
@@ -178,7 +206,7 @@ export function IndexerSetup() {
         const { data, error } = await api.POST("/indexers", {
           body: {
             name: kind.name, impl: kind.impl, definition: kind.id, base_url: draft.address.trim(), priority: 25, enabled: true,
-            api_key: indexerSecret(kind, draft.user, draft.secret) || undefined,
+            api_key: indexerSecret(kind, draft.user, draft.secret, draft.fields) || undefined,
           },
         });
         if (error || !data) {
@@ -244,7 +272,7 @@ function SetupCard({
 }: { kind: IndexerKind; draft: Draft; onChange: (change: Partial<Draft>) => void; outcome?: Outcome; companion?: string }) {
   const test = useMutation({
     mutationFn: () => ok(api.POST("/indexers/test", {
-      body: { impl: kind.impl, base_url: draft.address.trim(), api_key: indexerSecret(kind, draft.user, draft.secret) || undefined },
+      body: { impl: kind.impl, definition: kind.id, base_url: draft.address.trim(), api_key: indexerSecret(kind, draft.user, draft.secret, draft.fields) || undefined },
     })),
   });
   const missing = missingIndexerFields(kind, draft.address, draft.user, draft.secret);
@@ -303,6 +331,14 @@ function SetupCard({
             />
           </label>
         )}
+        {editableFields(kind).map((field) => (
+          <SpecField
+            key={field.name}
+            field={field}
+            value={draft.fields[field.name] ?? field.default ?? ""}
+            onChange={(value) => onChange({ fields: { ...draft.fields, [field.name]: value } })}
+          />
+        ))}
         <button
           type="button"
           disabled={missing.length > 0 || test.isPending}
@@ -323,5 +359,37 @@ function SetupCard({
       {test.isError && <p className="text-xs text-danger">The test could not run.</p>}
       {outcome?.state === "failed" && <p className="text-xs text-danger">{outcome.message}</p>}
     </section>
+  );
+}
+
+/** One setting a spec indexer asks for: text, password, a tick box or a choice. */
+function SpecField({
+  field, value, onChange,
+}: { field: NonNullable<IndexerKind["fields"]>[number]; value: string; onChange: (value: string) => void }) {
+  if (field.type === "checkbox") {
+    return (
+      <label className="flex items-center gap-1.5 pb-1.5 text-ink-muted">
+        <input type="checkbox" checked={value === "true"} onChange={(event) => onChange(event.target.checked ? "true" : "false")} />
+        {field.label}
+      </label>
+    );
+  }
+  return (
+    <label className="flex min-w-36 flex-col gap-1 text-ink-muted">
+      {field.label}
+      {field.type === "select" ? (
+        <select className={inputStyle} value={value} onChange={(event) => onChange(event.target.value)}>
+          {field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+      ) : (
+        <input
+          className={inputStyle}
+          type={field.type === "password" ? "password" : "text"}
+          value={value}
+          autoComplete="off"
+          onChange={(event) => onChange(event.target.value)}
+        />
+      )}
+    </label>
   );
 }

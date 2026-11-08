@@ -51,7 +51,7 @@ func (c ConnectionTester) TestIndexer(ctx context.Context, id int64) (apiserver.
 		return apiserver.ConnectionTestResult{}, err
 	}
 
-	result := c.testIndexer(ctx, found.Impl, c.Indexer(id, found.BaseURL, c.Cache.ResolveEgress(ctx, found)), found.BaseURL, apiKey.Reveal())
+	result := c.testIndexer(ctx, found.Impl, found.Definition(), c.Indexer(id, found.BaseURL, c.Cache.ResolveEgress(ctx, found)), found.BaseURL, apiKey.Reveal())
 	if result.OK {
 		// Best-effort: a failed write must not turn a successful connection
 		// test into a reported failure -- the caps response itself is what
@@ -62,8 +62,8 @@ func (c ConnectionTester) TestIndexer(ctx context.Context, id int64) (apiserver.
 }
 
 // TestIndexerConfig tests an indexer before it is saved: the add page's "Test" before "Add".
-func (c ConnectionTester) TestIndexerConfig(ctx context.Context, impl, baseURL, apiKey string) (apiserver.ConnectionTestResult, error) {
-	return c.testIndexer(ctx, impl, c.Indexer(0, baseURL, settings.IndexerEgress{}), baseURL, apiKey).ConnectionTestResult, nil
+func (c ConnectionTester) TestIndexerConfig(ctx context.Context, impl, definition, baseURL, apiKey string) (apiserver.ConnectionTestResult, error) {
+	return c.testIndexer(ctx, impl, definition, c.Indexer(0, baseURL, settings.IndexerEgress{}), baseURL, apiKey).ConnectionTestResult, nil
 }
 
 type indexerTest struct {
@@ -73,9 +73,9 @@ type indexerTest struct {
 
 // testIndexer asks any implementation for its capabilities: Newznab's t=caps, or an API indexer's cheapest
 // authenticated call.
-func (c ConnectionTester) testIndexer(ctx context.Context, impl string, client *httpx.Client, baseURL, apiKey string) indexerTest {
+func (c ConnectionTester) testIndexer(ctx context.Context, impl, definition string, client *httpx.Client, baseURL, apiKey string) indexerTest {
 	at := c.Clock.Now()
-	driver, known := NewIndexer(impl, IndexerDeps{HTTP: client, Clock: c.Clock}, indexer.Connection{BaseURL: baseURL, APIKey: apiKey})
+	driver, known := NewIndexer(impl, IndexerDeps{HTTP: client, Clock: c.Clock}, indexer.Connection{BaseURL: baseURL, APIKey: apiKey, Definition: definition})
 	if !known {
 		return indexerTest{ConnectionTestResult: apiserver.ConnectionTestResult{
 			Message: fmt.Sprintf("%q is not an indexer Solarr knows", impl), TestedAt: at,

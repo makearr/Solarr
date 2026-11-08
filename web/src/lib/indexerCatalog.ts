@@ -11,9 +11,12 @@ export interface CatalogFilter {
   protocol: "" | IndexerKind["protocol"];
   privacy: "" | IndexerKind["privacy"];
   media: "" | IndexerKind["media_types"][number];
+  language: string;
+  /** Leave out the entries Solarr cannot search yet. */
+  searchableOnly: boolean;
 }
 
-export const NO_FILTER: CatalogFilter = { text: "", protocol: "", privacy: "", media: "" };
+export const NO_FILTER: CatalogFilter = { text: "", protocol: "", privacy: "", media: "", language: "", searchableOnly: true };
 
 /** The catalog entries a filter keeps, by name and description, in the catalog's order. */
 export function filterCatalog(kinds: IndexerKind[], filter: CatalogFilter): IndexerKind[] {
@@ -23,7 +26,9 @@ export function filterCatalog(kinds: IndexerKind[], filter: CatalogFilter): Inde
     return words.every((word) => haystack.includes(word)) &&
       (filter.protocol === "" || kind.protocol === filter.protocol) &&
       (filter.privacy === "" || kind.privacy === filter.privacy) &&
-      (filter.media === "" || kind.media_types.includes(filter.media));
+      (filter.media === "" || kind.media_types.includes(filter.media)) &&
+      (filter.language === "" || kind.language === filter.language) &&
+      (!filter.searchableOnly || kind.searchable !== false);
   });
 }
 
@@ -38,7 +43,8 @@ export function alreadyAdded(kind: IndexerKind, indexers: Indexer[]): boolean {
 }
 
 /** The secret an entry is stored with: "user:secret" for one with two parts, nothing when both are empty. */
-export function indexerSecret(kind: IndexerKind, user: string, secret: string): string {
+export function indexerSecret(kind: IndexerKind, user: string, secret: string, fields: Record<string, string> = {}): string {
+  if (kind.fields && kind.fields.length > 0) return specSettings(kind, fields);
   if (!kind.secret_label) return "";
   if (!kind.user_label) return secret;
   return user === "" && secret === "" ? "" : `${user.trim()}:${secret}`;
@@ -69,4 +75,20 @@ export function missingIndexer(
   const id = client?.companion_indexer;
   if (!id || indexers.some((indexer) => indexer.definition === id && sameAddress(indexer.base_url, address))) return undefined;
   return kinds.find((kind) => kind.id === id);
+}
+
+/** A spec indexer's settings as the JSON it is stored with: what was typed, else each field's default; nothing for a site that asks none. */
+export function specSettings(kind: IndexerKind, fields: Record<string, string>): string {
+  const values: Record<string, string> = {};
+  for (const field of kind.fields ?? []) {
+    if (field.type === "info" || field.name === "") continue;
+    const value = fields[field.name] ?? field.default ?? "";
+    if (value !== "") values[field.name] = value;
+  }
+  return Object.keys(values).length === 0 ? "" : JSON.stringify(values);
+}
+
+/** The fields of a kind the owner fills in (not the explanatory ones). */
+export function editableFields(kind: IndexerKind): NonNullable<IndexerKind["fields"]> {
+  return (kind.fields ?? []).filter((field) => field.type !== "info" && field.name !== "");
 }

@@ -8131,7 +8131,7 @@ export interface components {
             language: string;
             /** @description The addresses it answers at, the default first; empty for a generic entry, which asks for one. */
             base_urls: string[];
-            media_types: ("music" | "tv" | "movies" | "anime" | "books")[];
+            media_types: ("music" | "tv" | "movies" | "anime" | "books" | "adult")[];
             /** @description Its credentials' first part ("User name", "API user"), stored as "user:secret"; absent for none. */
             user_label?: string;
             /** @description What its secret is called; absent for an indexer that needs none. */
@@ -8139,6 +8139,23 @@ export interface components {
             secret_optional: boolean;
             /** @description The download client impl its releases need */
             companion_downloader?: string;
+            /** @description False when Solarr cannot search the entry yet; unsupported says why. */
+            searchable?: boolean;
+            unsupported?: string[];
+            /** @description The settings the entry asks for besides its address (a spec indexer's user name, password, cookie, choices); stored together as the indexer's secret, as JSON. */
+            fields?: components["schemas"]["IndexerField"][];
+        };
+        IndexerField: {
+            name: string;
+            /** @enum {string} */
+            type: "text" | "password" | "checkbox" | "select" | "info";
+            label: string;
+            default?: string;
+            options: components["schemas"]["IndexerFieldOption"][];
+        };
+        IndexerFieldOption: {
+            value: string;
+            label: string;
         };
         /** @description One kind of download client, as Sonarr's download client schema describes it. */
         DownloaderKind: {
@@ -14464,6 +14481,8 @@ export interface operations {
             content: {
                 "application/json": {
                     impl: string;
+                    /** @description The catalog entry; a spec indexer needs it. */
+                    definition?: string;
                     base_url: string;
                     api_key?: string;
                 };

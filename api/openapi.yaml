@@ -3311,6 +3311,7 @@ paths:
               required: [impl, base_url]
               properties:
                 impl: { type: string, minLength: 1 }
+                definition: { type: string, description: The catalog entry; a spec indexer needs it. }
                 base_url: { type: string, minLength: 1 }
                 api_key: { type: string }
       responses:
@@ -11439,11 +11440,36 @@ components:
           description: The addresses it answers at, the default first; empty for a generic entry, which asks for one.
         media_types:
           type: array
-          items: { type: string, enum: [music, tv, movies, anime, books] }
+          items: { type: string, enum: [music, tv, movies, anime, books, adult] }
         user_label: { type: string, description: 'Its credentials'' first part ("User name", "API user"), stored as "user:secret"; absent for none.' }
         secret_label: { type: string, description: What its secret is called; absent for an indexer that needs none. }
         secret_optional: { type: boolean }
         companion_downloader: { type: string, description: The download client impl its releases need, offered when it is added. }
+        searchable: { type: boolean, description: False when Solarr cannot search the entry yet; unsupported says why. }
+        unsupported: { type: array, items: { type: string } }
+        fields:
+          type: array
+          description: The settings the entry asks for besides its address (a spec indexer's user name, password, cookie, choices); stored together as the indexer's secret, as JSON.
+          items: { $ref: "#/components/schemas/IndexerField" }
+
+    IndexerField:
+      type: object
+      required: [name, type, label, options]
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [text, password, checkbox, select, info] }
+        label: { type: string }
+        default: { type: string }
+        options:
+          type: array
+          items: { $ref: "#/components/schemas/IndexerFieldOption" }
+
+    IndexerFieldOption:
+      type: object
+      required: [value, label]
+      properties:
+        value: { type: string }
+        label: { type: string }
 
     DownloaderKind:
       type: object

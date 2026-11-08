@@ -230,3 +230,16 @@ one request. Each indexer has its own request bucket with exponential backoff an
 An indexer's "Requests per hour" (or the query limit its Prowlarr states, converted to an hour) sets its pace to 20%
 under that limit. Newznab's "request limit reached" and "download limit reached" answers (code 500 or 501, sent with a
 200 status) count as failures and double that indexer's pace, up to sixteen times; the pace halves for every quiet hour.
+
+## Site specs (the long add list)
+
+Connections > Indexers > Add indexers lists, besides the native ones, 581 sites described as data: converted from
+Prowlarr's definitions (`scripts/gen-indexer-specs.py`, recorded in ATTRIBUTION.md) and run by Solarr's own engine
+(`internal/acquiring/indexer/spec`). Filter by words, protocol, privacy, media, language; "Searchable only" hides the
+sites the engine cannot do yet (a sign-in captcha, results under date headings, a site that expects a non-UTF-8 request).
+
+A spec states how to search (a path, inputs written as templates, the rows of the answer and how each field is read), how
+to sign in (none, a pasted cookie, or a form/post/get sign-in; the session cookie is kept for the life of the process and
+the sign-in is repeated once if the site says it was signed out) and how to find the file on a details page. What a site
+asks for (user name, password, cookie, choices) is shown when it is added and stored sealed, as JSON, in the indexer's key.
+A site behind Cloudflare needs a FlareSolverr proxy (Proxies). A spec's request delay becomes the indexer's minimum pace.

@@ -57,6 +57,8 @@ type ClientConfig struct {
 	// AnswerFailed reads the start of a 200 answer and says it is a failure all the same: a GraphQL server reports its
 	// own errors that way, and the breaker has to count them.
 	AnswerFailed func(start []byte) bool
+	// Jar keeps the cookies a site sets, redirects included; nil keeps none.
+	Jar http.CookieJar
 }
 
 // Client is the only way out of the process (Invariant 28). One per provider,
@@ -111,6 +113,7 @@ func NewClient(c clock.Clock, guard *Guard, limiter *Limiter, breaker *Breaker, 
 		proxy:            config.Proxy,
 		inner: &http.Client{
 			Transport: transport,
+			Jar:       config.Jar,
 			CheckRedirect: func(request *http.Request, via []*http.Request) error {
 				// An indexer answers a torrent download with a redirect to a magnet link: not a page to fetch.
 				if request.URL.Scheme == "magnet" {
@@ -146,6 +149,9 @@ func NewTransport(guard *Guard, proxy LiveProxyPolicy) *http.Transport {
 	}
 	return transport
 }
+
+// CookieJar is the jar the client keeps a site's cookies in; nil when it keeps none.
+func (c *Client) CookieJar() http.CookieJar { return c.inner.Jar }
 
 // MagnetRedirect is a server answering with a redirect to a magnet link, which is the release itself rather than an
 // error; the caller takes Link as what it asked to download.

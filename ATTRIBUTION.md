@@ -282,6 +282,16 @@ enters their own supporter key. The images and texts are contributed by TheAudio
 are fetched for the person's own library and cached locally, never redistributed by this project.
 It can be switched off under Settings -> Metadata, and removed from the cover sources.
 
+## Indexer specs — converted from Prowlarr's definitions
+
+- Source: `github.com/Prowlarr/Indexers`, `definitions/v11`, commit `7cb7f2659ca503b956ef154403960a81c395cf5a`, fetched
+  2026-11-08. 581 site definitions (name, addresses, categories, how to sign in and search, how to read a result).
+- Taken: the data of each definition, converted by `scripts/gen-indexer-specs.py` into `internal/acquiring/indexer/spec/data/specs.json.gz`.
+  Regenerate it with that script against a newer checkout. None of Prowlarr's or Jackett's code is used: the engine that
+  runs the specs (`internal/acquiring/indexer/spec`) is Solarr's own.
+- Licence: the repository carries no LICENSE file. The project owner decided on 2026-11-08 to include the converted data;
+  if its maintainers object, remove `data/specs.json.gz` and the spec indexers go with it.
+
 ## Not sanctioned
 
 - Trademarks and branding. The names and logos are not covered by the source licence.
