@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +13,8 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parsetv"
+	"github.com/makearr/Solarr/internal/platform/filekind"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
@@ -35,6 +38,9 @@ type secondLook struct {
 	now        time.Time
 	read       bool
 	detail     library.SeriesDetailRow
+	// fs and root read a file's directory for sidecar subtitles; nil fs looks at none.
+	fs   fsx.FS
+	root string
 }
 
 func (l *secondLook) series(ctx context.Context) library.SeriesDetailRow {
@@ -96,6 +102,39 @@ func (l *secondLook) byTags(ctx context.Context, tags mediatool.Tags) []library.
 		}
 	}
 	return nil
+}
+
+// bySidecar is the episode the subtitle files beside a lone video name: a release folder whose video is named anything
+// but whose subtitles carry the episode number. Several videos in the folder, or subtitles disagreeing, name nothing.
+func (l *secondLook) bySidecar(relPath string, now time.Time) []library.PartKey {
+	if l.fs == nil {
+		return nil
+	}
+	dir := path.Dir(relPath)
+	entries, err := l.fs.ReadDir(path.Join(l.root, dir))
+	if err != nil {
+		return nil
+	}
+	var keys []library.PartKey
+	for _, entry := range entries {
+		if entry.IsDir {
+			continue
+		}
+		name := path.Join(dir, entry.Name)
+		switch {
+		case name == relPath:
+		case filekind.Of(name) == filekind.Video && filekind.IsFeature(name):
+			return nil
+		case filekind.Of(name) == filekind.Subtitle:
+			info, ok := parsetv.ParsePath(strings.TrimSuffix(name, path.Ext(name)), now)
+			found := partKeys(info)
+			if !ok || len(found) == 0 || (keys != nil && !slices.Equal(keys, found)) {
+				return nil
+			}
+			keys = found
+		}
+	}
+	return keys
 }
 
 // runtimeTolerance is how far a file's length may be from an episode's listed runtime and still be that episode.

@@ -3,6 +3,7 @@ package tv
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -298,6 +299,10 @@ func mergeEpisodes(into *Series, other Series) {
 			have.IDs[provider] = id
 		}
 		fillString(&have.Title, match.Title)
+		// A file may be named by the title the other source gives, so it stays beside the basis's.
+		if match.Title != "" && match.Title != have.Title && !slices.Contains(have.AltTitles, AltTitle{Title: match.Title}) {
+			have.AltTitles = append(have.AltTitles, AltTitle{Title: match.Title})
+		}
 		fillString(&have.Overview, match.Overview)
 		fillString(&have.Image, match.Image)
 		fillString(&have.AirDate, match.AirDate)

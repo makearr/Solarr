@@ -156,3 +156,25 @@ func TestScan_EmbeddedTagsAndRuntimePlaceAFileItsNameCannot(t *testing.T) {
 		t.Errorf("waiting = %v, want %v", waitingPaths(t, opened), want)
 	}
 }
+
+// A lone video with an arbitrary name is the episode its neighbouring subtitles are numbered as; a second video beside it
+// makes the subtitles ambiguous.
+func TestScan_ASubtitleBesideALoneVideoNamesItsEpisode(t *testing.T) {
+	series := secondLookSeries()
+	consumer, opened, fsys := newConsumer(t, searchSkyhook{series: series})
+	lone, crowded := series.Title+"/Release/", series.Title+"/Pack/"
+	batch := []scan.Observed{
+		writeVideo(t, fsys, series.Title+"/Season 01/"+series.Title+" - S01E01.mkv"),
+		writeVideo(t, fsys, lone+"abc.mkv"),
+		writeVideo(t, fsys, crowded+"def.mkv"),
+		writeVideo(t, fsys, crowded+"ghi.mkv"),
+	}
+	writeVideo(t, fsys, lone+series.Title+" - S01E02.en.srt")
+	writeVideo(t, fsys, crowded+series.Title+" - S02E01.en.srt")
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: scanRoot, Online: true}, 3, batch); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{crowded + "def.mkv", crowded + "ghi.mkv"}; !slices.Equal(waitingPaths(t, opened), want) {
+		t.Errorf("waiting = %v, want %v", waitingPaths(t, opened), want)
+	}
+}

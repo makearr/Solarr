@@ -61,6 +61,9 @@ func TestMergeKeepsPrimaryFieldsAndTakesTheMoreTrustworthyAirTime(t *testing.T) 
 	if pilot.Title != "Pilot" || !pilot.AirUTC.Equal(wantPilot) || pilot.AirConfidence != tv.ConfidenceHigh || pilot.Absolute != 1 || pilot.IDs["tvdb"] != 2 || pilot.IDs["tvmaze"] != 90 {
 		t.Errorf("pilot = %+v", pilot)
 	}
+	if want := []tv.AltTitle{{Title: "Pilot (tvmaze)"}}; !reflect.DeepEqual(pilot.AltTitles, want) {
+		t.Errorf("pilot alt titles = %v, want the other source's title %v", pilot.AltTitles, want)
+	}
 	second := merged.Episodes[2]
 	if second.AirConfidence != tv.ConfidenceHigh || second.AirUTC.IsZero() {
 		t.Errorf("an episode TVDB only dated gets TVmaze's instant: %+v", second)

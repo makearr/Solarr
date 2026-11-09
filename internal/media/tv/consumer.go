@@ -162,7 +162,7 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 		}
 		var links []library.SeriesFileLink
 		var leftover []int
-		look := secondLook{reader: c.config.Reader, categoryID: categoryID, workID: series, now: now}
+		look := secondLook{reader: c.config.Reader, categoryID: categoryID, workID: series, now: now, fs: c.config.FS, root: root.Path}
 		for _, i := range indexes {
 			info, ok := parsetv.ParsePath(readable[i].File.RelPath, now)
 			keys := partKeys(info)
@@ -170,6 +170,9 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 				probe := readable[i].Probe
 				if keys = look.byTags(ctx, probe.Tags); len(keys) == 0 {
 					keys = look.byTitle(ctx, readable[i].File.RelPath, probe.Tags.First("title"), probe.Measured.Duration)
+				}
+				if len(keys) == 0 {
+					keys = look.bySidecar(readable[i].File.RelPath, now)
 				}
 			}
 			if series == 0 || len(keys) == 0 {
