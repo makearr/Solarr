@@ -53,7 +53,7 @@ type ArrInstance struct {
 	// PushMonitoring sends the monitored flag of what was imported back to the *Arr, when it changes here.
 	PushMonitoring bool
 	LastPushedAt   *int64
-	// SyncJSON holds a Prowlarr connection's ProwlarrSync, empty until set.
+	// SyncJSON holds a Prowlarr connection's ProwlarrSync, or another app's ArrPull, empty until set.
 	SyncJSON string
 }
 
@@ -86,6 +86,60 @@ func (i ArrInstance) Sync() ProwlarrSync {
 		_ = json.Unmarshal([]byte(i.SyncJSON), &options)
 	}
 	return options
+}
+
+// ArrPull is what a content *Arr connection brings into Solarr, on request and, when Automatic, on the schedule.
+type ArrPull struct {
+	// Present brings the items the *Arr holds files for, monitored or not; Monitored and Unmonitored choose by the flag.
+	Present     bool `json:"present"`
+	Monitored   bool `json:"monitored"`
+	Unmonitored bool `json:"unmonitored"`
+	// Indexers, DownloadClients, RootFolders and ImportLists are separate steps, each added once and found by its address.
+	Indexers        bool `json:"indexers"`
+	DownloadClients bool `json:"download_clients"`
+	RootFolders     bool `json:"root_folders"`
+	ImportLists     bool `json:"import_lists"`
+	Automatic       bool `json:"automatic"`
+	// LibraryID takes the root folders and import lists; zero uses the connection's library.
+	LibraryID int64 `json:"library_id,omitempty"`
+	// Albums is "all", "missing" or "complete" (Lidarr only).
+	Albums       string        `json:"albums,omitempty"`
+	PathRewrites []ArrPathRead `json:"path_rewrites,omitempty"`
+}
+
+// ArrPathRead reads an *Arr path prefix as another here.
+type ArrPathRead struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+// DefaultArrPull is a new connection's pull: monitored items, nothing else, only when asked.
+func DefaultArrPull() ArrPull { return ArrPull{Monitored: true, Albums: "all"} }
+
+// Pull is the connection's pull options, the defaults until set.
+func (i ArrInstance) Pull() ArrPull {
+	options := DefaultArrPull()
+	if i.SyncJSON != "" {
+		_ = json.Unmarshal([]byte(i.SyncJSON), &options)
+	}
+	return options
+}
+
+// SetArrInstancePull stores a content connection's pull options.
+func (c *Cache) SetArrInstancePull(ctx context.Context, id int64, options ArrPull, at int64) error {
+	encoded, err := json.Marshal(options)
+	if err != nil {
+		return fmt.Errorf("settings: encode pull options: %w", err)
+	}
+	err = c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		return c.queries.WithTx(tx).SetArrInstanceSyncOptions(ctx, settingsdb.SetArrInstanceSyncOptionsParams{
+			SyncJson: sql.NullString{String: string(encoded), Valid: true}, UpdatedAt: at, ID: id,
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("settings: arr instance %d pull options: %w", id, err)
+	}
+	return nil
 }
 
 // SetArrInstanceSyncOptions stores a Prowlarr connection's sync options.

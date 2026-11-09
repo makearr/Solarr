@@ -66,6 +66,13 @@ const (
 	ArrImportRunStateRUNNING  ArrImportRunState = "RUNNING"
 )
 
+// Defines values for ArrPullOptionsAlbums.
+const (
+	ArrPullOptionsAlbumsAll      ArrPullOptionsAlbums = "all"
+	ArrPullOptionsAlbumsComplete ArrPullOptionsAlbums = "complete"
+	ArrPullOptionsAlbumsMissing  ArrPullOptionsAlbums = "missing"
+)
+
 // Defines values for ArrSyncOptionsAlbums.
 const (
 	ArrSyncOptionsAlbumsAll      ArrSyncOptionsAlbums = "all"
@@ -1539,6 +1546,48 @@ type ArrPreviewSettings struct {
 	} `json:"changes"`
 	LibraryId int64 `json:"library_id"`
 }
+
+// ArrPullOptions What a Sonarr, Radarr, Lidarr or Whisparr connection brings into Solarr, by hand or on the schedule.
+type ArrPullOptions struct {
+	// Albums Lidarr only.
+	Albums *ArrPullOptionsAlbums `json:"albums,omitempty"`
+
+	// Automatic Pull on the schedule
+	Automatic bool `json:"automatic"`
+
+	// DownloadClients Its download clients
+	DownloadClients bool `json:"download_clients"`
+
+	// ImportLists Its TMDb and MDBList import lists
+	ImportLists bool `json:"import_lists"`
+
+	// Indexers Its Newznab and Torznab indexers.
+	Indexers bool `json:"indexers"`
+
+	// LibraryId The library that takes root folders and import lists. Absent uses the connection's library.
+	LibraryId *int64 `json:"library_id,omitempty"`
+
+	// Monitored Items the *Arr monitors.
+	Monitored bool `json:"monitored"`
+
+	// PathRewrites How the *Arr's paths read here; the first matching prefix applies.
+	PathRewrites *[]struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	} `json:"path_rewrites,omitempty"`
+
+	// Present Items the *Arr holds files for
+	Present bool `json:"present"`
+
+	// RootFolders Its root folders
+	RootFolders bool `json:"root_folders"`
+
+	// Unmonitored Items the *Arr does not monitor; they stay unmonitored here.
+	Unmonitored bool `json:"unmonitored"`
+}
+
+// ArrPullOptionsAlbums Lidarr only.
+type ArrPullOptionsAlbums string
 
 // ArrRootFolder defines model for ArrRootFolder.
 type ArrRootFolder struct {
@@ -7769,6 +7818,9 @@ type PreviewArrImportJSONRequestBody = ArrSyncOptions
 // SetArrInstanceSyncOptionsJSONRequestBody defines body for SetArrInstanceSyncOptions for application/json ContentType.
 type SetArrInstanceSyncOptionsJSONRequestBody = ProwlarrSyncOptions
 
+// SetArrInstancePullJSONRequestBody defines body for SetArrInstancePull for application/json ContentType.
+type SetArrInstancePullJSONRequestBody = ArrPullOptions
+
 // SyncArrInstanceJSONRequestBody defines body for SyncArrInstance for application/json ContentType.
 type SyncArrInstanceJSONRequestBody = ArrSyncOptions
 
@@ -8218,6 +8270,15 @@ type ServerInterface interface {
 	// Set what a Prowlarr connection keeps in step with Solarr. Administrator only.
 	// (PUT /arr/instances/{id}/prowlarr-sync)
 	SetArrInstanceSyncOptions(w http.ResponseWriter, r *http.Request, id int64)
+	// What a content *Arr connection brings into Solarr. Administrator only.
+	// (GET /arr/instances/{id}/pull)
+	GetArrInstancePull(w http.ResponseWriter, r *http.Request, id int64)
+	// Pull from the *Arr now, by the stored options. Administrator only.
+	// (POST /arr/instances/{id}/pull)
+	PullArrInstance(w http.ResponseWriter, r *http.Request, id int64)
+	// Set what a content *Arr connection brings into Solarr. Administrator only.
+	// (PUT /arr/instances/{id}/pull)
+	SetArrInstancePull(w http.ResponseWriter, r *http.Request, id int64)
 	// Send the monitored flag of what an import brought in back to this *Arr, now, where it differs. The connection must have push_monitoring on; only items an import matched are touched, and only their monitored flag. Administrator only.
 	// (POST /arr/instances/{id}/push)
 	PushArrMonitoring(w http.ResponseWriter, r *http.Request, id int64)
@@ -9370,6 +9431,24 @@ func (_ Unimplemented) SyncArrInstanceIndexers(w http.ResponseWriter, r *http.Re
 // Set what a Prowlarr connection keeps in step with Solarr. Administrator only.
 // (PUT /arr/instances/{id}/prowlarr-sync)
 func (_ Unimplemented) SetArrInstanceSyncOptions(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What a content *Arr connection brings into Solarr. Administrator only.
+// (GET /arr/instances/{id}/pull)
+func (_ Unimplemented) GetArrInstancePull(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Pull from the *Arr now, by the stored options. Administrator only.
+// (POST /arr/instances/{id}/pull)
+func (_ Unimplemented) PullArrInstance(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Set what a content *Arr connection brings into Solarr. Administrator only.
+// (PUT /arr/instances/{id}/pull)
+func (_ Unimplemented) SetArrInstancePull(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11979,6 +12058,105 @@ func (siw *ServerInterfaceWrapper) SetArrInstanceSyncOptions(w http.ResponseWrit
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetArrInstanceSyncOptions(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArrInstancePull operation middleware
+func (siw *ServerInterfaceWrapper) GetArrInstancePull(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArrInstancePull(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PullArrInstance operation middleware
+func (siw *ServerInterfaceWrapper) PullArrInstance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PullArrInstance(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetArrInstancePull operation middleware
+func (siw *ServerInterfaceWrapper) SetArrInstancePull(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetArrInstancePull(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -23558,6 +23736,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/arr/instances/{id}/prowlarr-sync", wrapper.SetArrInstanceSyncOptions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/arr/instances/{id}/pull", wrapper.GetArrInstancePull)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/arr/instances/{id}/pull", wrapper.PullArrInstance)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/arr/instances/{id}/pull", wrapper.SetArrInstancePull)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/arr/instances/{id}/push", wrapper.PushArrMonitoring)

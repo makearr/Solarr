@@ -61,7 +61,13 @@ type LidarrArtist struct {
 	QualityProfileID  int64   `json:"qualityProfileId"`
 	MetadataProfileID int64   `json:"metadataProfileId"`
 	Tags              []int64 `json:"tags"`
+	Statistics        struct {
+		TrackFileCount int64 `json:"trackFileCount"`
+	} `json:"statistics"`
 }
+
+// HasFiles says Lidarr holds at least one track file of the artist.
+func (a LidarrArtist) HasFiles() bool { return a.Statistics.TrackFileCount > 0 }
 
 // LidarrAlbum is GET /api/v1/album's own shape, trimmed to what todo 4.13
 // imports. ForeignAlbumID is Lidarr's own field name for the release
@@ -443,6 +449,51 @@ func (c LidarrClient) indexers(ctx context.Context, path string) ([]Indexer, err
 			case "categories":
 				_ = json.Unmarshal(field.Value, &found.Categories)
 			}
+		}
+		out[index] = found
+	}
+	return out, nil
+}
+
+// ImportLists answers Lidarr's import lists.
+func (c LidarrClient) ImportLists(ctx context.Context) ([]ImportList, error) {
+	return c.importLists(ctx, "/api/v1/importlist")
+}
+
+// ImportList is one of an *Arr's import lists as a pull reads it: its kind and its settings by field name.
+type ImportList struct {
+	Name           string
+	Implementation string
+	Enabled        bool
+	Fields         map[string]string
+}
+
+type importListWire struct {
+	Name           string `json:"name"`
+	Implementation string `json:"implementation"`
+	Enable         bool   `json:"enable"`
+	EnableAuto     bool   `json:"enableAuto"`
+	Fields         []struct {
+		Name  string          `json:"name"`
+		Value json.RawMessage `json:"value"`
+	} `json:"fields"`
+}
+
+// importLists reads one *Arr's import lists; each field's value is kept as the text it was (a number as its digits).
+func (c LidarrClient) importLists(ctx context.Context, path string) ([]ImportList, error) {
+	var wire []importListWire
+	if err := c.get(ctx, path, &wire); err != nil {
+		return nil, err
+	}
+	out := make([]ImportList, len(wire))
+	for index, entry := range wire {
+		found := ImportList{Name: entry.Name, Implementation: entry.Implementation, Enabled: entry.Enable || entry.EnableAuto, Fields: map[string]string{}}
+		for _, field := range entry.Fields {
+			var text string
+			if json.Unmarshal(field.Value, &text) != nil {
+				text = strings.Trim(string(field.Value), `"`)
+			}
+			found.Fields[field.Name] = text
 		}
 		out[index] = found
 	}

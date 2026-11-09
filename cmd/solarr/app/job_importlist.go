@@ -73,3 +73,19 @@ func (p *process) registerProwlarrSyncJob(registry *jobs.Registry, executor *job
 func (p *process) enqueueProwlarrSync(ctx context.Context) (jobs.EnqueueResult, error) {
 	return p.queue.Enqueue(ctx, jobs.Request{Type: prowlarrSyncJob.Type, ActionKey: string(prowlarrSyncJob.Type), Priority: jobs.PriorityLow, Payload: []byte("{}")})
 }
+
+// arrPullJob pulls from the content *Arr connections whose pull is automatic.
+var arrPullJob = jobs.Definition{Name: "Pulling from the *Arrs", Type: "arr.pull", Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 1}
+
+// registerArrPullJob wires that pull.
+func (p *process) registerArrPullJob(registry *jobs.Registry, executor *jobs.Executor) error {
+	if err := registry.Register(arrPullJob); err != nil {
+		return err
+	}
+	executor.Handle(arrPullJob.Type, adapters.ArrPuller{Sync: p.arrSync(), Logger: p.logger})
+	return nil
+}
+
+func (p *process) enqueueArrPull(ctx context.Context) (jobs.EnqueueResult, error) {
+	return p.queue.Enqueue(ctx, jobs.Request{Type: arrPullJob.Type, ActionKey: string(arrPullJob.Type), Priority: jobs.PriorityLow, Payload: []byte("{}")})
+}

@@ -29,7 +29,7 @@ type whisparrEntry struct {
 func (e whisparrEntry) describe() arrmap.Item {
 	switch e.kind {
 	case entryScene:
-		return arrmap.Item{Name: e.scene.Title, RootFolder: e.scene.RootFolderPath, Monitored: e.scene.Monitored}
+		return arrmap.Item{Name: e.scene.Title, RootFolder: e.scene.RootFolderPath, Monitored: e.scene.Monitored, HasFiles: e.scene.HasFile}
 	case entryPerformer:
 		return arrmap.Item{Name: e.performer.FullName, RootFolder: e.performer.RootFolderPath, Monitored: e.performer.Monitored}
 	}

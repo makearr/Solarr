@@ -33,7 +33,7 @@ func (l LidarrImport) Import(ctx context.Context, run arrmap.Run) (library.ArrIm
 		Connect: func(ctx context.Context) error { _, err := client.SystemStatus(ctx); return err },
 		List:    client.Artists,
 		Describe: func(artist arrimport.LidarrArtist) arrmap.Item {
-			return arrmap.Item{Name: artist.ArtistName, RootFolder: artist.RootFolderPath, Monitored: artist.Monitored}
+			return arrmap.Item{Name: artist.ArtistName, RootFolder: artist.RootFolderPath, Monitored: artist.Monitored, HasFiles: artist.HasFiles()}
 		},
 		Workers: 1,
 		Monitor: func(ctx context.Context, _ int64, artist arrimport.LidarrArtist) (library.ArrImportCounts, error) {
@@ -56,7 +56,7 @@ func (l LidarrImport) Import(ctx context.Context, run arrmap.Run) (library.ArrIm
 			}
 			var failures []string
 			for _, album := range albums {
-				wanted := (album.Monitored && options.Monitored) || (!album.Monitored && options.Unmonitored)
+				wanted := (album.Monitored && options.Monitored) || (!album.Monitored && options.Unmonitored) || (options.Present && album.Statistics.TrackFileCount > 0)
 				if !wanted || !albumWanted(album, options.Albums) {
 					continue
 				}

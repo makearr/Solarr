@@ -20,6 +20,10 @@ import (
 // which albums by what the *Arr holds of them, and how its paths read here.
 type ArrSyncOptions struct {
 	Monitored, Unmonitored bool
+	// Present also brings the items the *Arr holds files for, monitored or not.
+	Present bool
+	// RootFolders and ImportLists also bring the *Arr's own, into NewFoldersLibrary.
+	RootFolders, ImportLists bool
 	// Albums is "all", "missing" (the *Arr lacks a track) or "complete".
 	Albums       string
 	PathRewrites []PathRewrite
@@ -149,6 +153,8 @@ type ArrSync interface {
 	RootFolders(ctx context.Context, instanceID int64) ([]string, error)
 	// PushMonitoring writes Solarr's monitoring of what an import linked back to the *Arr, where it differs.
 	PushMonitoring(ctx context.Context, instanceID int64) (ArrPushResult, error)
+	// Pull runs a sync by the options stored on the connection.
+	Pull(ctx context.Context, instanceID int64) (ArrImportRun, error)
 }
 
 // ArrPushResult is what one send of monitoring did.
@@ -703,4 +709,107 @@ func (s *Server) ListArrInstanceDownloadClients(w http.ResponseWriter, r *http.R
 		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, views)
+}
+
+func pullOptionsView(pull settings.ArrPull) gen.ArrPullOptions {
+	view := gen.ArrPullOptions{
+		Present: pull.Present, Monitored: pull.Monitored, Unmonitored: pull.Unmonitored, Indexers: pull.Indexers,
+		DownloadClients: pull.DownloadClients, RootFolders: pull.RootFolders, ImportLists: pull.ImportLists, Automatic: pull.Automatic,
+	}
+	if pull.LibraryID != 0 {
+		view.LibraryId = &pull.LibraryID
+	}
+	if pull.Albums != "" {
+		albums := gen.ArrPullOptionsAlbums(pull.Albums)
+		view.Albums = &albums
+	}
+	rewrites := make([]struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	}, len(pull.PathRewrites))
+	for index, rewrite := range pull.PathRewrites {
+		rewrites[index].From, rewrites[index].To = rewrite.From, rewrite.To
+	}
+	view.PathRewrites = &rewrites
+	return view
+}
+
+func (s *Server) routeArrInstancePull(w http.ResponseWriter, r *http.Request) {
+	id, err := parsePathID(w, s, r, "id", "an instance id must be a number")
+	if err != nil || !s.requireAdministrator(w, r) {
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		s.GetArrInstancePull(w, r, id)
+	case http.MethodPut:
+		s.SetArrInstancePull(w, r, id)
+	default:
+		s.PullArrInstance(w, r, id)
+	}
+}
+
+// GetArrInstancePull answers what a content connection brings in.
+func (s *Server) GetArrInstancePull(w http.ResponseWriter, r *http.Request, id int64) {
+	instance, err := s.auth.Settings.GetArrInstance(r.Context(), id)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such connection")
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, pullOptionsView(instance.Pull()))
+}
+
+// SetArrInstancePull stores what a content connection brings in.
+func (s *Server) SetArrInstancePull(w http.ResponseWriter, r *http.Request, id int64) {
+	var body gen.SetArrInstancePullJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected the pull options")
+		return
+	}
+	pull := settings.ArrPull{
+		Present: body.Present, Monitored: body.Monitored, Unmonitored: body.Unmonitored, Indexers: body.Indexers,
+		DownloadClients: body.DownloadClients, RootFolders: body.RootFolders, ImportLists: body.ImportLists, Automatic: body.Automatic,
+		LibraryID: derefOr(body.LibraryId, 0), Albums: "all",
+	}
+	if body.Albums != nil {
+		pull.Albums = string(*body.Albums)
+	}
+	for _, rewrite := range derefOr(body.PathRewrites, nil) {
+		if strings.TrimSpace(rewrite.From) != "" && strings.TrimSpace(rewrite.To) != "" {
+			pull.PathRewrites = append(pull.PathRewrites, settings.ArrPathRead{From: strings.TrimSpace(rewrite.From), To: strings.TrimSpace(rewrite.To)})
+		}
+	}
+	instance, err := s.auth.Settings.GetArrInstance(r.Context(), id)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such connection")
+		return
+	}
+	if (pull.RootFolders || pull.ImportLists) && pull.LibraryID == 0 && instance.CategoryID == nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Choose a library", "root folders and import lists are added to a library; choose which")
+		return
+	}
+	if err := s.auth.Settings.SetArrInstancePull(r.Context(), id, pull, s.wall.Now().Unix()); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, pullOptionsView(pull))
+}
+
+// PullArrInstance pulls from the *Arr now, by the stored options.
+func (s *Server) PullArrInstance(w http.ResponseWriter, r *http.Request, id int64) {
+	if s.arrSync == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "*Arr import is not available")
+		return
+	}
+	run, err := s.arrSync.Pull(r.Context(), id)
+	switch {
+	case errors.Is(err, ErrArrAppNotYetSupported):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Not for this app", "this app has nothing to pull from")
+	case errors.Is(err, ErrArrSyncAlreadyRunning):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Already running", "this instance already has a sync in progress")
+	case err != nil:
+		writeError(w, s.logger, err)
+	default:
+		writeJSON(w, s.logger, http.StatusOK, arrImportRunView(run))
+	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
@@ -17,6 +18,8 @@ import (
 type ArrSetup struct {
 	Cache *settings.Cache
 	Clock clock.Clock
+	// FS checks a root folder exists here before it is added.
+	FS fsx.FS
 }
 
 // importSetup brings the *Arr's indexers and download clients the options name; each is added once, found by its address.

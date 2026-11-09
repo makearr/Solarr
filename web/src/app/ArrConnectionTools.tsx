@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
 import { kindSecret } from "@/lib/downloaderKinds";
-import { useDownloaderKinds } from "@/lib/resources";
+import { useLibraryLabel } from "@/lib/libraryLabel";
+import { useDownloaderKinds, useLibraries } from "@/lib/resources";
 
 import { ClientOptionsForm } from "./Downloaders";
 import type { components } from "@/api/schema";
@@ -22,6 +23,7 @@ export function ArrConnectionTools({ instanceId, app }: { instanceId: number; ap
   return (
     <div className="flex flex-col gap-3 border-t border-border-subtle pt-2">
       {app === "prowlarr" && <ProwlarrSync instanceId={instanceId} />}
+      {app !== "prowlarr" && app !== "readarr" && <ArrPull instanceId={instanceId} app={app} />}
       {app === "prowlarr" && <UseIndexers instanceId={instanceId} />}
       {(app === "prowlarr" || app === "lidarr") && <UseDownloadClients instanceId={instanceId} app={app} />}
     </div>
@@ -317,6 +319,131 @@ function ProwlarrSync({ instanceId }: { instanceId: number }) {
         </p>
       )}
       {sync.isError && <p className="text-xs text-danger">{(sync.error as { detail?: string }).detail ?? "The sync failed."}</p>}
+    </section>
+  );
+}
+
+type PullOptions = components["schemas"]["ArrPullOptions"];
+type PullKey = "present" | "monitored" | "unmonitored" | "indexers" | "download_clients" | "root_folders" | "import_lists" | "automatic";
+
+const PULL_CONTENT: { key: PullKey; label: string; hint: string }[] = [
+  { key: "present", label: "Present", hint: "Items the *Arr holds files for, monitored or not." },
+  { key: "monitored", label: "Monitored", hint: "Items the *Arr monitors." },
+  { key: "unmonitored", label: "Unmonitored", hint: "Items the *Arr does not monitor; they stay unmonitored here." },
+];
+const PULL_SETTINGS: { key: PullKey; label: string; hint: string }[] = [
+  { key: "download_clients", label: "Download clients", hint: "Added switched off, because the *Arr hides their passwords." },
+  { key: "indexers", label: "Indexers", hint: "Its Newznab and Torznab indexers, found by address." },
+  { key: "root_folders", label: "Root folders", hint: "Added to the library below, read through the path rewrites." },
+  { key: "import_lists", label: "Import lists", hint: "Its TMDb and MDBList lists, added switched off to the library below; other kinds are named, not copied." },
+];
+
+/** What this connection brings in (asked 2026-09-30, three times since): items by present, monitored and unmonitored,
+ *  and its download clients, indexers, root folders and import lists as separate steps, pulled now or on the schedule. */
+function ArrPull({ instanceId, app }: { instanceId: number; app: ArrApp }) {
+  const queryClient = useQueryClient();
+  const libraryLabel = useLibraryLabel();
+  const libraries = useLibraries();
+  const options = useQuery({
+    queryKey: ["arr-pull", instanceId],
+    queryFn: () => ok(api.GET("/arr/instances/{id}/pull", { params: { path: { id: instanceId } } })),
+  });
+  const save = useMutation({
+    mutationFn: async (body: PullOptions) => ok(api.PUT("/arr/instances/{id}/pull", { params: { path: { id: instanceId } }, body })),
+    onSuccess: (stored) => queryClient.setQueryData(["arr-pull", instanceId], stored),
+  });
+  const pull = useMutation({
+    mutationFn: () => ok(api.POST("/arr/instances/{id}/pull", { params: { path: { id: instanceId } } })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["arr-imports", instanceId] });
+      void queryClient.invalidateQueries({ queryKey: ["arr-instances"] });
+    },
+  });
+  const current = options.data;
+  const change = (patch: Partial<PullOptions>) => current && save.mutate({ ...current, ...patch });
+  const rewrites = current?.path_rewrites ?? [];
+  const needsLibrary = current?.root_folders || current?.import_lists;
+  const box = (choice: { key: PullKey; label: string; hint: string }) => (
+    <label key={choice.key} className="flex items-center gap-1.5" title={choice.hint}>
+      <input
+        type="checkbox"
+        checked={current?.[choice.key] === true}
+        disabled={!current || save.isPending}
+        onChange={(event) => change({ [choice.key]: event.target.checked })}
+      />
+      {choice.label}
+    </label>
+  );
+  return (
+    <section className="flex flex-col gap-1.5 text-xs">
+      <h3 className="font-medium text-ink-muted">Pull from this connection</h3>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span className="text-ink-muted">Content</span>
+        {PULL_CONTENT.map(box)}
+        {app === "lidarr" && (
+          <label className="flex items-center gap-1.5">
+            Albums
+            <select
+              className={input}
+              value={current?.albums ?? "all"}
+              disabled={!current || save.isPending}
+              onChange={(event) => change({ albums: event.target.value as PullOptions["albums"] })}
+            >
+              <option value="all">All</option>
+              <option value="missing">Missing tracks in Lidarr</option>
+              <option value="complete">Complete in Lidarr</option>
+            </select>
+          </label>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span className="text-ink-muted">Also</span>
+        {PULL_SETTINGS.map(box)}
+      </div>
+      {needsLibrary && (
+        <label className="flex items-center gap-1.5">
+          Root folders and import lists go to
+          <select
+            className={input}
+            value={current?.library_id ?? ""}
+            disabled={save.isPending}
+            onChange={(event) => change({ library_id: event.target.value ? Number(event.target.value) : undefined })}
+          >
+            <option value="">The connection's library</option>
+            {(libraries.data ?? []).map((library) => (
+              <option key={library.id} value={library.id}>{libraryLabel(library)}</option>
+            ))}
+          </select>
+        </label>
+      )}
+      <div className="flex flex-col gap-1">
+        <span className="text-ink-muted">Its paths read here as (a folder that is /media/tv there and /mnt/media/tv here, say)</span>
+        {rewrites.map((entry, index) => (
+          <div key={`${index}-${entry.from}-${entry.to}`} className="flex items-center gap-1">
+            <input className={input} defaultValue={entry.from} aria-label="Path in the *Arr"
+              onBlur={(event) => change({ path_rewrites: rewrites.map((old, i) => (i === index ? { ...old, from: event.target.value } : old)) })} />
+            <span className="text-ink-muted">→</span>
+            <input className={input} defaultValue={entry.to} aria-label="Path here"
+              onBlur={(event) => change({ path_rewrites: rewrites.map((old, i) => (i === index ? { ...old, to: event.target.value } : old)) })} />
+            <button type="button" className={button} onClick={() => change({ path_rewrites: rewrites.filter((_, i) => i !== index) })}>Remove</button>
+          </div>
+        ))}
+        <button type="button" className={button} disabled={!current}
+          onClick={() => change({ path_rewrites: [...rewrites, { from: "/", to: "/" }] })}>
+          Add a path
+        </button>
+      </div>
+      <label className="flex items-center gap-1.5" title="Pull every hour; otherwise only when you press Pull now.">
+        <input type="checkbox" checked={current?.automatic === true} disabled={!current || save.isPending}
+          onChange={(event) => change({ automatic: event.target.checked })} />
+        Pull automatically
+      </label>
+      <button type="button" disabled={!current || pull.isPending} onClick={() => pull.mutate()} className={button}>
+        {pull.isPending ? "Starting…" : "Pull now"}
+      </button>
+      {pull.isSuccess && <p className="text-ink-muted">Started. Progress and result are in this connection's history (the arrow on the left).</p>}
+      {pull.isError && <p className="text-danger">{(pull.error as { detail?: string }).detail ?? "The pull could not start."}</p>}
+      {save.isError && <p className="text-danger">{(save.error as { detail?: string }).detail ?? "That could not be saved."}</p>}
     </section>
   );
 }

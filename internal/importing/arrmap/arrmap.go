@@ -21,6 +21,8 @@ import (
 // Options are the per-run choices a mapping reads.
 type Options struct {
 	Monitored, Unmonitored bool
+	// Present also chooses the items the *Arr holds files for, whatever their monitored flag.
+	Present bool
 	// Albums is "all", "missing" (the *Arr lacks a track) or "complete".
 	Albums string
 	// ProfileMap gives each *Arr quality profile's items a Solarr profile; nil keeps the library's, an unnamed one
@@ -114,6 +116,8 @@ type Source[T any] struct {
 type Item struct {
 	Name, RootFolder string
 	Monitored        bool
+	// HasFiles says the *Arr holds a file of the item.
+	HasFiles bool
 }
 
 // Walk syncs every item the options want, best-effort per item: one that fails or belongs to no library does not stop
@@ -131,9 +135,10 @@ func Walk[T any](ctx context.Context, run Run, source Source[T]) (library.ArrImp
 	}
 	var chosen []T
 	for _, item := range all {
-		monitored := source.Describe(item).Monitored
+		described := source.Describe(item)
+		monitored := described.Monitored
 		// Monitoring only follows the flag both ways, so every item counts.
-		if run.Options.MonitoringOnly || (monitored && run.Options.Monitored) || (!monitored && run.Options.Unmonitored) {
+		if run.Options.MonitoringOnly || (monitored && run.Options.Monitored) || (!monitored && run.Options.Unmonitored) || (described.HasFiles && run.Options.Present) {
 			chosen = append(chosen, item)
 		}
 	}

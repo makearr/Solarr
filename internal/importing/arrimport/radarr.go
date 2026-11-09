@@ -82,6 +82,11 @@ func (c RadarrClient) MediaManagement(ctx context.Context) (MediaManagement, err
 	return settings, nil
 }
 
+// ImportLists answers the instance's import lists.
+func (c RadarrClient) ImportLists(ctx context.Context) ([]ImportList, error) {
+	return c.inner.importLists(ctx, "/api/v3/importlist")
+}
+
 // Indexers answers the instance's indexers.
 func (c RadarrClient) Indexers(ctx context.Context) ([]Indexer, error) {
 	return c.inner.indexers(ctx, "/api/v3/indexer")

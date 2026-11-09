@@ -60,7 +60,7 @@ func (r RadarrImport) source(run arrmap.Run) arrmap.Source[arrimport.RadarrMovie
 			r.Warm(ctx, ids)
 		},
 		Describe: func(radarr arrimport.RadarrMovie) arrmap.Item {
-			return arrmap.Item{Name: radarr.Title, RootFolder: radarr.RootFolderPath, Monitored: radarr.Monitored}
+			return arrmap.Item{Name: radarr.Title, RootFolder: radarr.RootFolderPath, Monitored: radarr.Monitored, HasFiles: radarr.HasFile}
 		},
 		Workers: 4,
 		Monitor: func(ctx context.Context, _ int64, radarr arrimport.RadarrMovie) (library.ArrImportCounts, error) {

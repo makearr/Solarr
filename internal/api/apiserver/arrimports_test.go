@@ -321,3 +321,7 @@ func TestRevertArrImport_NotDoneAnswers409(t *testing.T) {
 		t.Errorf("status = %d, want 409 for a non-revertible import (%s)", recorder.Code, recorder.Body)
 	}
 }
+
+func (f *fakeArrSync) Pull(_ context.Context, _ int64) (apiserver.ArrImportRun, error) {
+	return apiserver.ArrImportRun{}, nil
+}

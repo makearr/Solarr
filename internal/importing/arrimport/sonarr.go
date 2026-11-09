@@ -26,7 +26,13 @@ type SonarrSeries struct {
 	LanguageProfileID int64          `json:"languageProfileId"`
 	Seasons           []SonarrSeason `json:"seasons"`
 	Tags              []int64        `json:"tags"`
+	Statistics        struct {
+		EpisodeFileCount int64 `json:"episodeFileCount"`
+	} `json:"statistics"`
 }
+
+// HasFiles says Sonarr holds at least one episode file of the series.
+func (s SonarrSeries) HasFiles() bool { return s.Statistics.EpisodeFileCount > 0 }
 
 // Sonarr reads the same instance as a Sonarr: the transport and key are shared, only the API version differs.
 func (c LidarrClient) Sonarr() SonarrClient { return SonarrClient{inner: c} }
@@ -105,6 +111,11 @@ func (c SonarrClient) MediaManagement(ctx context.Context) (MediaManagement, err
 		return MediaManagement{}, err
 	}
 	return settings, nil
+}
+
+// ImportLists answers the instance's import lists.
+func (c SonarrClient) ImportLists(ctx context.Context) ([]ImportList, error) {
+	return c.inner.importLists(ctx, "/api/v3/importlist")
 }
 
 // Indexers answers the instance's indexers.

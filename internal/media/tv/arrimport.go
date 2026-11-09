@@ -64,7 +64,7 @@ func (s SonarrImport) Import(ctx context.Context, run arrmap.Run) (library.ArrIm
 			s.Warm(ctx, ids)
 		},
 		Describe: func(series arrimport.SonarrSeries) arrmap.Item {
-			return arrmap.Item{Name: series.Title, RootFolder: series.RootFolderPath, Monitored: series.Monitored}
+			return arrmap.Item{Name: series.Title, RootFolder: series.RootFolderPath, Monitored: series.Monitored, HasFiles: series.HasFiles()}
 		},
 		Workers: 4,
 		Monitor: func(ctx context.Context, _ int64, series arrimport.SonarrSeries) (library.ArrImportCounts, error) {

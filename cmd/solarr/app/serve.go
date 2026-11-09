@@ -569,6 +569,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerArrPushJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerArrPullJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerProwlarrSyncJob(registry, executor); err != nil {
 		return err
 	}
@@ -1100,7 +1103,12 @@ func (p *process) arrSync() adapters.ArrSync {
 			library.NewPeople(p.library), library.NewSubscriptions(p.library),
 		),
 		Clock: clock.NewSystem(), Lidarr: p.arrClientFactory(),
-		Setup: adapters.ArrSetup{Cache: p.cache, Clock: clock.NewSystem()}, Links: library.NewArrLinks(p.library), Logger: p.logger,
+		Setup: adapters.ArrSetup{Cache: p.cache, Clock: clock.NewSystem(), FS: p.fsys}, Links: library.NewArrLinks(p.library), Logger: p.logger,
+		AfterFolders: func(ctx context.Context) {
+			if _, err := p.enqueueLibraryScans(ctx); err != nil {
+				p.logger.Warn("scan after a pull added root folders not started", slog.Any("error", err))
+			}
+		},
 	}
 }
 

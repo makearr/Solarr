@@ -143,6 +143,29 @@ func (q *Queries) CountVanishingPaths(ctx context.Context, arg CountVanishingPat
 	return i, err
 }
 
+const countVideoWithoutFrameHashes = `-- name: CountVideoWithoutFrameHashes :one
+SELECT CAST(count(*) AS INTEGER) AS total
+FROM media_object o
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+WHERE o.kind = 'video'
+  AND (NOT EXISTS (SELECT 1 FROM video_frame_hash f WHERE f.media_object_id = o.id AND f.algorithm_version = ?1)
+       OR (CAST(?2 AS INTEGER) = 1
+           AND NOT EXISTS (SELECT 1 FROM video_preview v WHERE v.media_object_id = o.id AND v.algorithm_version = ?1)))
+`
+
+type CountVideoWithoutFrameHashesParams struct {
+	Version      int64
+	WantPreviews int64
+}
+
+// The same videos as ListVideoWithoutFrameHashes, counted, for the progress of the pass.
+func (q *Queries) CountVideoWithoutFrameHashes(ctx context.Context, arg CountVideoWithoutFrameHashesParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countVideoWithoutFrameHashes, arg.Version, arg.WantPreviews)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const createMediaObject = `-- name: CreateMediaObject :execlastid
 INSERT INTO media_object (size_bytes, quick_hash, content_hash, oshash, phash,
                           audio_fp, audio_fp_prefix, fingerprinted_at,

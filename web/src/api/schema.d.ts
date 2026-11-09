@@ -2119,6 +2119,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/arr/instances/{id}/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** What a content *Arr connection brings into Solarr. Administrator only. */
+        get: operations["getArrInstancePull"];
+        /** Set what a content *Arr connection brings into Solarr. Administrator only. */
+        put: operations["setArrInstancePull"];
+        /**
+         * Pull from the *Arr now, by the stored options. Administrator only.
+         * @description Starts an import run like POST sync does, with the stored options.
+         */
+        post: operations["pullArrInstance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/arr/instances/{id}/downloadclients": {
         parameters: {
             query?: never;
@@ -7557,6 +7581,40 @@ export interface components {
             prowlarr_as_indexer?: boolean;
             /** @description A FlareSolverr added to the proxy list */
             flaresolverr_url?: string;
+        };
+        /** @description What a Sonarr, Radarr, Lidarr or Whisparr connection brings into Solarr, by hand or on the schedule. */
+        ArrPullOptions: {
+            /** @description Items the *Arr holds files for */
+            present: boolean;
+            /** @description Items the *Arr monitors. */
+            monitored: boolean;
+            /** @description Items the *Arr does not monitor; they stay unmonitored here. */
+            unmonitored: boolean;
+            /** @description Its Newznab and Torznab indexers. */
+            indexers: boolean;
+            /** @description Its download clients */
+            download_clients: boolean;
+            /** @description Its root folders */
+            root_folders: boolean;
+            /** @description Its TMDb and MDBList import lists */
+            import_lists: boolean;
+            /** @description Pull on the schedule */
+            automatic: boolean;
+            /**
+             * Format: int64
+             * @description The library that takes root folders and import lists. Absent uses the connection's library.
+             */
+            library_id?: number;
+            /**
+             * @description Lidarr only.
+             * @enum {string}
+             */
+            albums?: "all" | "missing" | "complete";
+            /** @description How the *Arr's paths read here; the first matching prefix applies. */
+            path_rewrites?: {
+                from: string;
+                to: string;
+            }[];
         };
         ProwlarrSyncResult: {
             /** Format: int64 */
@@ -14373,6 +14431,84 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
+        };
+    };
+    getArrInstancePull: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The options, the defaults until set. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArrPullOptions"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setArrInstancePull: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArrPullOptions"];
+            };
+        };
+        responses: {
+            /** @description The options as stored. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArrPullOptions"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    pullArrInstance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run, still going. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArrImportRun"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     listArrInstanceDownloadClients: {

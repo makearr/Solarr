@@ -263,6 +263,19 @@ func (p Physical) SetOshash(ctx context.Context, mediaObjectID int64, oshash str
 	return nil
 }
 
+// CountVideoWithoutHashOrPreview counts the videos ListVideoWithoutHashOrPreview would page through, for a sweep's progress.
+func (p Physical) CountVideoWithoutHashOrPreview(ctx context.Context, wantPreviews bool) (int64, error) {
+	want := int64(0)
+	if wantPreviews {
+		want = 1
+	}
+	total, err := librarydb.New(p.store.Read()).CountVideoWithoutFrameHashes(ctx, librarydb.CountVideoWithoutFrameHashesParams{Version: VideoHashVersion, WantPreviews: want})
+	if err != nil {
+		return 0, fmt.Errorf("library: count video without frame hashes: %w", err)
+	}
+	return total, nil
+}
+
 // ListVideoWithoutFrameHashes pages through the video files with no per-frame hash of the current algorithm yet, oldest id first.
 func (p Physical) ListVideoWithoutFrameHashes(ctx context.Context, afterID int64, pageSize int64) ([]UnmeasuredFile, error) {
 	return p.ListVideoWithoutHashOrPreview(ctx, afterID, pageSize, false)

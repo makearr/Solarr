@@ -164,6 +164,16 @@ WHERE o.kind = 'video' AND o.id > sqlc.arg(after_id)
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
 
+-- The same videos as ListVideoWithoutFrameHashes, counted, for the progress of the pass.
+-- name: CountVideoWithoutFrameHashes :one
+SELECT CAST(count(*) AS INTEGER) AS total
+FROM media_object o
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+WHERE o.kind = 'video'
+  AND (NOT EXISTS (SELECT 1 FROM video_frame_hash f WHERE f.media_object_id = o.id AND f.algorithm_version = sqlc.arg(version))
+       OR (CAST(sqlc.arg(want_previews) AS INTEGER) = 1
+           AND NOT EXISTS (SELECT 1 FROM video_preview v WHERE v.media_object_id = o.id AND v.algorithm_version = sqlc.arg(version))));
+
 -- name: SetVideoPreview :exec
 INSERT INTO video_preview (media_object_id, algorithm_version, has_frame, has_sheet, made_at) VALUES (?, ?, ?, ?, ?)
 ON CONFLICT (media_object_id) DO UPDATE SET algorithm_version = excluded.algorithm_version, has_frame = excluded.has_frame,

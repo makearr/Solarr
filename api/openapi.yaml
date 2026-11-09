@@ -3180,6 +3180,57 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         "502": { $ref: "#/components/responses/Problem" }
 
+  /arr/instances/{id}/pull:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getArrInstancePull
+      tags: [settings]
+      summary: What a content *Arr connection brings into Solarr. Administrator only.
+      responses:
+        "200":
+          description: The options, the defaults until set.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ArrPullOptions" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setArrInstancePull
+      tags: [settings]
+      summary: Set what a content *Arr connection brings into Solarr. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ArrPullOptions" }
+      responses:
+        "200":
+          description: The options as stored.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ArrPullOptions" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: pullArrInstance
+      tags: [settings]
+      summary: Pull from the *Arr now, by the stored options. Administrator only.
+      description: Starts an import run like POST sync does, with the stored options.
+      responses:
+        "200":
+          description: The run, still going.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ArrImportRun" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
   /arr/instances/{id}/downloadclients:
     parameters:
       - name: id
@@ -10834,6 +10885,31 @@ components:
         automatic: { type: boolean, description: Sync on the schedule, not only when asked. }
         prowlarr_as_indexer: { type: boolean, description: Search through Prowlarr's per-indexer address instead of the sites behind it. Off by default. }
         flaresolverr_url: { type: string, description: A FlareSolverr added to the proxy list, to choose per indexer. Empty adds none. }
+
+    ArrPullOptions:
+      type: object
+      description: What a Sonarr, Radarr, Lidarr or Whisparr connection brings into Solarr, by hand or on the schedule.
+      required: [present, monitored, unmonitored, indexers, download_clients, root_folders, import_lists, automatic]
+      properties:
+        present: { type: boolean, description: Items the *Arr holds files for, whatever their monitored flag. }
+        monitored: { type: boolean, description: Items the *Arr monitors. }
+        unmonitored: { type: boolean, description: Items the *Arr does not monitor; they stay unmonitored here. }
+        indexers: { type: boolean, description: Its Newznab and Torznab indexers. }
+        download_clients: { type: boolean, description: Its download clients, switched off until credentials are entered. }
+        root_folders: { type: boolean, description: Its root folders, added to the library below. }
+        import_lists: { type: boolean, description: Its TMDb and MDBList import lists, added switched off to the library below. }
+        automatic: { type: boolean, description: Pull on the schedule, not only when asked. }
+        library_id: { type: integer, format: int64, description: The library that takes root folders and import lists. Absent uses the connection's library. }
+        albums: { type: string, enum: [all, missing, complete], description: Lidarr only. }
+        path_rewrites:
+          type: array
+          description: How the *Arr's paths read here; the first matching prefix applies.
+          items:
+            type: object
+            required: [from, to]
+            properties:
+              from: { type: string }
+              to: { type: string }
 
     ProwlarrSyncResult:
       type: object

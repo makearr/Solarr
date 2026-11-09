@@ -110,7 +110,7 @@ func NewJob(config Config) *Job {
 // corrupted file) does not spin the batch forever; the next scheduled run
 // (there is no scheduler yet, so today that means the next process restart)
 // simply asks the same question again.
-func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
+func (j *Job) Run(ctx context.Context, request jobs.Job) error {
 	started := j.clock.Now()
 	total, failed := 0, 0
 	// Unmeasured files first; then those measured before the probe read lyrics languages.
@@ -150,7 +150,7 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 			}
 		}
 	}
-	if err := j.backfill(ctx, started, oshashPass, "oshash", j.physical.ListVideoWithoutOshash, j.hashFile); err != nil {
+	if err := j.backfill(ctx, started, oshashPass, "oshash", j.physical.ListVideoWithoutOshash, j.hashFile, nil); err != nil {
 		return err
 	}
 	previews := j.previews != nil && j.previews() && j.previewsDir != ""
@@ -161,7 +161,7 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 		err := j.backfill(ctx, started, phashPass, "phash", list,
 			func(ctx context.Context, file library.UnmeasuredFile) error {
 				return j.perceptualHash(ctx, hasher, file, previews)
-			})
+			}, j.pictureProgress(ctx, request.Progress, previews))
 		if err != nil {
 			return err
 		}
@@ -200,7 +200,7 @@ type PreviewMaker interface {
 func (j *Job) backfill(
 	ctx context.Context, started time.Time, pass int, name string,
 	list func(context.Context, int64, int64) ([]library.UnmeasuredFile, error),
-	hash func(context.Context, library.UnmeasuredFile) error,
+	hash func(context.Context, library.UnmeasuredFile) error, progress *jobs.Progress,
 ) error {
 	if j.fs == nil {
 		return nil
@@ -216,6 +216,11 @@ func (j *Job) backfill(
 			return fmt.Errorf("probe: %w", err)
 		}
 		for _, file := range batch {
+			// A shutdown must release the job, not finish it with the files it cut short still unhashed.
+			if err := ctx.Err(); err != nil {
+				return jobs.Retryablef("probe.context", string(JobType), err)
+			}
+			progress.Add(1)
 			if err := hash(ctx, file); err != nil {
 				j.logger.WarnContext(ctx, name+" failed", slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", err))
 			} else {
@@ -452,10 +457,10 @@ func (p *PicturesJob) Run(ctx context.Context, request jobs.Job) error {
 	if err := json.Unmarshal(request.Payload, &payload); err != nil {
 		return fmt.Errorf("probe: pictures payload: %w", err)
 	}
-	return p.job.sweepPictures(ctx, payload.Mode)
+	return p.job.sweepPictures(ctx, payload.Mode, request.Progress)
 }
 
-func (j *Job) sweepPictures(ctx context.Context, mode PicturesMode) error {
+func (j *Job) sweepPictures(ctx context.Context, mode PicturesMode, progress *jobs.Progress) error {
 	hasher, ok := j.tool.(PerceptualHasher)
 	if !ok {
 		return fmt.Errorf("probe: this tool cannot hash video")
@@ -474,7 +479,18 @@ func (j *Job) sweepPictures(ctx context.Context, mode PicturesMode) error {
 	return j.backfill(ctx, j.clock.Now(), pass, "phash", list,
 		func(ctx context.Context, file library.UnmeasuredFile) error {
 			return j.perceptualHash(ctx, hasher, file, previews)
-		})
+		}, j.pictureProgress(ctx, progress, previews))
+}
+
+// pictureProgress sets the total of the videos still to do, so the status bar can say how long is left; nil when it cannot count.
+func (j *Job) pictureProgress(ctx context.Context, progress *jobs.Progress, previews bool) *jobs.Progress {
+	total, err := j.physical.CountVideoWithoutHashOrPreview(ctx, previews)
+	if err != nil {
+		j.logger.WarnContext(ctx, "count videos to hash failed", slog.Any("error", err))
+		return progress
+	}
+	progress.Set(0, total)
+	return progress
 }
 
 // EnqueuePictures submits one on-demand sweep, deduplicated per mode.

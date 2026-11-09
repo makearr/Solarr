@@ -155,3 +155,37 @@ func TestWalk_LimitCountsOnlyChosenItems(t *testing.T) {
 		t.Errorf("prepared %v, want only what the limit keeps", prepared)
 	}
 }
+
+// Present chooses what the *Arr holds files for whatever its monitored flag, beside the monitored and unmonitored choices.
+func TestWalk_PresentChoosesItemsWithFilesWhateverTheirFlag(t *testing.T) {
+	type entry struct {
+		name               string
+		monitored, hasFile bool
+	}
+	items := []entry{{"Kept", false, true}, {"Wanted", true, false}, {"Empty", false, false}}
+	var synced []string
+	source := Source[entry]{
+		Connect: func(context.Context) error { return nil },
+		List:    func(context.Context) ([]entry, error) { return items, nil },
+		Describe: func(item entry) Item {
+			return Item{Name: item.name, RootFolder: "/a", Monitored: item.monitored, HasFiles: item.hasFile}
+		},
+		Workers: 1,
+		Sync: func(_ context.Context, _ int64, item entry) (library.ArrImportCounts, error) {
+			synced = append(synced, item.name)
+			return library.ArrImportCounts{}, nil
+		},
+	}
+	run := Run{
+		Options:  Options{Present: true},
+		Progress: func(int64, int64) {},
+		Place:    func(string) (int64, bool) { return 1, true },
+		Record:   func(context.Context, library.NewArrImportItem) error { return nil },
+	}
+	if _, err := Walk(context.Background(), run, source); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"Kept"}; !slices.Equal(synced, want) {
+		t.Fatalf("present only synced %v, want %v", synced, want)
+	}
+}

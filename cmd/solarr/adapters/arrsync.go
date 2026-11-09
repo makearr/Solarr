@@ -53,6 +53,8 @@ type ArrSync struct {
 	Links library.ArrLinks
 	// Setup adds the *Arr's indexers and download clients an import brings; nil brings none.
 	Setup ArrSetup
+	// AfterFolders runs after a pull added root folders, to scan them; nil does nothing.
+	AfterFolders func(ctx context.Context)
 	// Registry answers each media type's defaults a preview compares against; nil compares against none.
 	Registry *media.Registry
 	// Progress holds the live figure of running imports; nil keeps none.
@@ -155,11 +157,13 @@ func (a ArrSync) runAndFinish(
 	options apiserver.ArrSyncOptions,
 ) {
 	settingsErr := a.takeSettings(ctx, instance.App, client, options.SettingsInto)
+	foldersErr := a.rootFolders(ctx, instance, client, options)
 	counts, syncErr := a.Importers[instance.App].Import(ctx, a.run(importID, instance, client, options))
 	defer a.Progress.clear(importID)
 	if setupErr := a.importSetup(ctx, instance, client, options); setupErr != nil {
 		syncErr = errors.Join(syncErr, setupErr)
 	}
+	listsErr := a.importLists(ctx, instance, client, options)
 
 	finishedAt := a.Clock.Now().Unix()
 	errMsg := ""
@@ -168,6 +172,12 @@ func (a ArrSync) runAndFinish(
 	}
 	if settingsErr != nil {
 		errMsg = strings.TrimPrefix(errMsg+"; settings: "+settingsErr.Error(), "; ")
+	}
+	if foldersErr != nil {
+		errMsg = strings.TrimPrefix(errMsg+"; "+foldersErr.Error(), "; ")
+	}
+	if listsErr != nil {
+		errMsg = strings.TrimPrefix(errMsg+"; "+listsErr.Error(), "; ")
 	}
 	// A connection or artist-listing failure leaves every count at zero --
 	// the run never got started, FAILED rather than a DONE with nothing to
@@ -199,7 +209,7 @@ func (a ArrSync) run(importID int64, instance settings.ArrInstance, client arrim
 	return arrmap.Run{
 		Client: client,
 		Options: arrmap.Options{
-			Monitored: options.Monitored, Unmonitored: options.Unmonitored, Albums: options.Albums, ProfileMap: options.ProfileMap,
+			Monitored: options.Monitored, Unmonitored: options.Unmonitored, Present: options.Present, Albums: options.Albums, ProfileMap: options.ProfileMap,
 			MonitoringOnly: options.MonitoringOnly, Limit: options.Limit,
 		},
 		Place: func(rootFolder string) (int64, bool) {
@@ -281,17 +291,7 @@ func (a ArrSync) RootFolders(ctx context.Context, instanceID int64) ([]string, e
 	}
 
 	client := a.Lidarr(instance.BaseURL, apiKey.Reveal())
-	var folders []arrimport.LidarrRootFolder
-	switch instance.App {
-	case settings.ArrAppSonarr:
-		folders, err = client.Sonarr().RootFolders(ctx)
-	case settings.ArrAppRadarr:
-		folders, err = client.Radarr().RootFolders(ctx)
-	case settings.ArrAppWhisparr:
-		folders, err = client.Whisparr().RootFolders(ctx)
-	default:
-		folders, err = client.RootFolders(ctx)
-	}
+	folders, err := arrRootFolders(ctx, instance.App, client)
 	if err != nil {
 		return nil, err
 	}

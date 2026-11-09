@@ -167,6 +167,8 @@ type Querier interface {
 	CountUnidentified(ctx context.Context, arg CountUnidentifiedParams) (int64, error)
 	// What a full sweep would mark missing, against everything the root holds, before it marks anything.
 	CountVanishingPaths(ctx context.Context, arg CountVanishingPathsParams) (CountVanishingPathsRow, error)
+	// The same videos as ListVideoWithoutFrameHashes, counted, for the progress of the pass.
+	CountVideoWithoutFrameHashes(ctx context.Context, arg CountVideoWithoutFrameHashesParams) (int64, error)
 	// The Wanted page's total for one category: the works CountWorksVisibleToCategory counts that
 	// have a monitored item not yet complete and a tracklist, the wanted list's own condition.
 	CountWantedWorksVisibleToCategory(ctx context.Context, arg CountWantedWorksVisibleToCategoryParams) (int64, error)
