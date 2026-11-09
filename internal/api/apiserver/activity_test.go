@@ -44,9 +44,9 @@ func TestActivity_NamesRunningJobsAndHidesOtherLibraries(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []map[string]any{
-		{"job_id": 1.0, "type": "music.enrich", "name": "Enriching metadata", "started_at": "2020-01-01T00:00:00Z",
+		{"job_id": 1.0, "type": "music.enrich", "name": "Enriching metadata", "pool": "metadata", "started_at": "2020-01-01T00:00:00Z",
 			"done": 3.0, "total": 10.0},
-		{"job_id": 3.0, "type": "import.inspect", "name": "Importing", "started_at": "2020-01-01T00:00:00Z",
+		{"job_id": 3.0, "type": "import.inspect", "name": "Importing", "pool": "import", "started_at": "2020-01-01T00:00:00Z",
 			"done": 0.0},
 	}
 	if !reflect.DeepEqual(body.Running, want) {

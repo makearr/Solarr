@@ -5628,7 +5628,10 @@ type RunningJob struct {
 	Name string `json:"name"`
 
 	// PerMinute Items a minute over the last one to five minutes; absent until measured.
-	PerMinute *float32  `json:"per_minute,omitempty"`
+	PerMinute *float32 `json:"per_minute,omitempty"`
+
+	// Pool The worker pool the job runs in; the scheduler screen rates CPU and IO load by it.
+	Pool      string    `json:"pool"`
 	StartedAt time.Time `json:"started_at"`
 
 	// Total How much there is; absent when the job does not know.

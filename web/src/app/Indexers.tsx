@@ -65,7 +65,10 @@ export function Indexers() {
       if (error) throw error;
       return { id, result: data! };
     },
-    onSuccess: ({ id, result }) => setTestResults((prev) => ({ ...prev, [id]: result })),
+    onSuccess: ({ id, result }) => {
+      setTestResults((prev) => ({ ...prev, [id]: result }));
+      void invalidate();
+    },
   });
 
   const remove = useMutation({

@@ -54,7 +54,7 @@ export function LibraryTargetSelect({ categoryId, name }: { categoryId: number; 
           const choice = event.target.value;
           save.mutate({ target_id: choice === "" || choice === "auto" ? undefined : Number(choice), target_auto: choice === "auto" });
         }}
-        className={selectStyle}
+        className={`${selectStyle} min-w-0 flex-1`}
       >
         <option value="">
           {quality.target_inherited && quality.target ? `Type default: ${targetTitle(quality.target)}` : "None, or the type's default"}
@@ -86,7 +86,7 @@ export function LibraryLanguageSelect({ categoryId, name }: { categoryId: number
         value={quality.language_inherited ? "" : String(quality.language_profile_id ?? "")}
         disabled={save.isPending}
         onChange={(event) => save.mutate({ language_profile_id: Number(event.target.value) || 0 })}
-        className={selectStyle}
+        className={`${selectStyle} min-w-0 flex-1`}
       >
         <option value="">
           {quality.language_inherited ? `Type default: ${languages.find((language) => language.id === quality.language_profile_id)?.name ?? "set"}` : "No preference, or the type's default"}

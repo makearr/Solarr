@@ -7660,6 +7660,8 @@ export interface components {
             /** Format: int64 */
             job_id: number;
             type: string;
+            /** @description The worker pool the job runs in; the scheduler screen rates CPU and IO load by it. */
+            pool: string;
             /** @description What the job is doing, as the status bar says it. */
             name: string;
             /** Format: date-time */

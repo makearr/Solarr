@@ -10961,10 +10961,13 @@ components:
 
     RunningJob:
       type: object
-      required: [job_id, type, name, started_at, done]
+      required: [job_id, type, name, pool, started_at, done]
       properties:
         job_id: { type: integer, format: int64 }
         type: { type: string }
+        pool:
+          type: string
+          description: The worker pool the job runs in; the scheduler screen rates CPU and IO load by it.
         name:
           type: string
           description: What the job is doing, as the status bar says it.

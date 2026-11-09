@@ -112,3 +112,53 @@ export function sortTasks<T extends Sortable>(tasks: readonly T[], key: SortKey 
   });
   return sorted;
 }
+
+export type RunningSortKey = "runtime" | "started" | "remaining" | "cpu" | "io";
+
+/** Rough load of a job by its worker pool (0-3): nothing measures a job's own CPU or disk use, so the pool stands in. */
+const POOL_LOAD: Readonly<Record<string, { cpu: number; io: number }>> = {
+  files: { cpu: 3, io: 3 },
+  scan: { cpu: 1, io: 3 },
+  rescan: { cpu: 1, io: 3 },
+  move: { cpu: 1, io: 3 },
+  import: { cpu: 1, io: 2 },
+  maintenance: { cpu: 2, io: 2 },
+  metadata: { cpu: 1, io: 1 },
+  search: { cpu: 1, io: 0 },
+  acquire: { cpu: 0, io: 1 },
+  housekeeping: { cpu: 0, io: 1 },
+};
+
+export function poolLoad(pool: string, kind: "cpu" | "io"): number {
+  return POOL_LOAD[pool]?.[kind] ?? 0;
+}
+
+type SortableRun = { started_at: string; eta_seconds?: number | null; pool: string; job_id: number };
+
+/** Orders running jobs; longest running (oldest start) first by default, an unknown time left sorts last. */
+export function sortRunning<T extends SortableRun>(jobs: readonly T[], key: RunningSortKey, direction: SortDirection): T[] {
+  const sign = direction === "asc" ? 1 : -1;
+  const started = (job: T) => Date.parse(job.started_at);
+  const rank = (job: T): number => {
+    switch (key) {
+      case "runtime":
+        return started(job);
+      case "started":
+        return -started(job);
+      case "remaining":
+        return job.eta_seconds ?? Number.POSITIVE_INFINITY;
+      case "cpu":
+        return -poolLoad(job.pool, "cpu");
+      case "io":
+        return -poolLoad(job.pool, "io");
+    }
+  };
+  return [...jobs].sort((a, b) => {
+    const ra = rank(a);
+    const rb = rank(b);
+    if (ra === rb) return started(a) - started(b) || a.job_id - b.job_id;
+    if (!Number.isFinite(ra)) return 1;
+    if (!Number.isFinite(rb)) return -1;
+    return sign * (ra - rb);
+  });
+}

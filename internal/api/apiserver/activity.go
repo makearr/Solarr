@@ -30,7 +30,7 @@ func (s *Server) GetActivity(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		view := gen.RunningJob{
-			JobId: job.JobID, Type: string(job.Type), Name: definition.Name, StartedAt: job.StartedAt, Done: job.Done,
+			JobId: job.JobID, Type: string(job.Type), Name: definition.Name, Pool: string(definition.Pool), StartedAt: job.StartedAt, Done: job.Done,
 		}
 		if job.Total > 0 {
 			view.Total = &job.Total

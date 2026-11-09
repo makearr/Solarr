@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { expectedDurations, formatRuntime, heatColor, parseSortKey, sortTasks, taskLoad, weekLoad, WEEK_HOURS } from "./schedulerLoad";
+import { expectedDurations, formatRuntime, heatColor, parseSortKey, sortRunning, sortTasks, taskLoad, weekLoad, WEEK_HOURS } from "./schedulerLoad";
 
 const total = (load: number[]) => load.reduce((sum, runs) => sum + runs, 0);
 
@@ -78,4 +78,16 @@ test("tasks sort by last run and by last duration", () => {
 test("sort keys parse strictly", () => {
   expect(parseSortKey("next")).toBe("next");
   expect(parseSortKey("bogus")).toBeUndefined();
+});
+
+const run = (job_id: number, started_at: string, pool: string, eta_seconds?: number) => ({ job_id, started_at, pool, eta_seconds });
+
+test("running jobs: longest running first by default, unknown time left last", () => {
+  const jobs = [run(1, "2026-11-09T05:00:00Z", "metadata", 60), run(2, "2026-11-09T01:00:00Z", "files"), run(3, "2026-11-09T03:00:00Z", "scan", 30)];
+  expect(sortRunning(jobs, "runtime", "asc").map((job) => job.job_id)).toEqual([2, 3, 1]);
+  expect(sortRunning(jobs, "started", "asc").map((job) => job.job_id)).toEqual([1, 3, 2]);
+  expect(sortRunning(jobs, "remaining", "asc").map((job) => job.job_id)).toEqual([3, 1, 2]);
+  expect(sortRunning(jobs, "remaining", "desc").map((job) => job.job_id)).toEqual([1, 3, 2]);
+  expect(sortRunning(jobs, "cpu", "asc").map((job) => job.job_id)).toEqual([2, 3, 1]);
+  expect(sortRunning(jobs, "io", "asc")[0]!.job_id).toBe(2);
 });

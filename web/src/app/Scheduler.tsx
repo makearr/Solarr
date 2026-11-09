@@ -8,9 +8,10 @@ import type { components } from "@/api/schema";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import { SubTabs } from "@/ui/SubTabs";
 
-import { expectedDurations, formatRuntime, heatColor, NEGLIGIBLE_TASK_MS, parseSortKey, sortTasks, taskLoad, WEEK_HOURS, type SortDirection, type SortKey } from "./schedulerLoad";
+import { expectedDurations, formatRuntime, heatColor, NEGLIGIBLE_TASK_MS, parseSortKey, poolLoad, sortRunning, sortTasks, taskLoad, WEEK_HOURS, type RunningSortKey, type SortDirection, type SortKey } from "./schedulerLoad";
 
 type Schedule = components["schemas"]["Schedule"];
+type RunningJob = components["schemas"]["RunningJob"];
 type BackupRetention = components["schemas"]["BackupRetention"];
 
 /** A cadence expressed the way a person thinks about it, not as a five-field cron string (asked
@@ -200,6 +201,106 @@ function Heatmap({ schedules }: { schedules: readonly Schedule[] }) {
   );
 }
 
+const RUNNING_SORTS: readonly { key: RunningSortKey; label: string }[] = [
+  { key: "runtime", label: "Runtime" },
+  { key: "started", label: "Start time" },
+  { key: "remaining", label: "Remaining time" },
+  { key: "cpu", label: "CPU load" },
+  { key: "io", label: "IO load" },
+];
+
+const LOAD_WORDS = ["none", "low", "medium", "high"];
+
+function formatSpan(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 1) return "under 1 min";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  return minutes % 60 === 0 ? `${hours} h` : `${hours} h ${minutes % 60} min`;
+}
+
+/** Every job running now, oldest start first: the live counterpart of the heatmap above it. */
+function RunningJobs() {
+  const [sort, setSort] = useState<RunningSortKey>("runtime");
+  const [direction, setDirection] = useState<SortDirection>("asc");
+  const [now, setNow] = useState(() => Date.now());
+  const activity = useQuery({
+    queryKey: ["activity"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/system/activity");
+      if (error) throw error;
+      setNow(Date.now());
+      return data.running;
+    },
+    refetchInterval: 3_000,
+    retry: false,
+  });
+  const jobs = sortRunning(activity.data ?? [], sort, direction);
+  const choose = (key: RunningSortKey) => {
+    setDirection(sort === key && direction === "asc" ? "desc" : "asc");
+    setSort(key);
+  };
+  return (
+    <section className="flex flex-col gap-2" aria-label="Running now">
+      <h2 className="text-sm font-medium">Running now</h2>
+      <div role="group" aria-label="Sort running jobs" className="flex flex-wrap items-center gap-1.5 text-xs text-ink-muted">
+        Sort by
+        {RUNNING_SORTS.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={sort === key}
+            onClick={() => choose(key)}
+            className={`rounded-md border px-2 py-0.5 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+              sort === key ? "border-accent text-ink" : "border-border-subtle"
+            }`}
+          >
+            {label}
+            {sort === key && (direction === "asc" ? " \u2191" : " \u2193")}
+          </button>
+        ))}
+      </div>
+      {jobs.length === 0 ? (
+        <p className="rounded-lg border border-border-subtle bg-surface p-3 text-xs text-ink-muted">Nothing is running.</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {jobs.map((job) => (
+            <RunningJobRow key={job.job_id} job={job} now={now} />
+          ))}
+        </ul>
+      )}
+      <p className="text-xs text-ink-muted">CPU and IO load are estimated from the kind of work, not measured.</p>
+    </section>
+  );
+}
+
+function RunningJobRow({ job, now }: { job: RunningJob; now: number }) {
+  const started = new Date(job.started_at);
+  const runningFor = Math.max(0, Math.round((now - started.getTime()) / 1000));
+  const known = job.total != null && job.total >= job.done;
+  const percent = known && job.total! > 0 ? Math.min(100, (job.done / job.total!) * 100) : null;
+  const progress = known ? `${job.done.toLocaleString()}/${job.total!.toLocaleString()}` : job.done > 0 ? `${job.done.toLocaleString()} done` : "working";
+  return (
+    <li className="flex flex-col gap-1.5 rounded-lg border border-border-subtle bg-surface p-3">
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-ink-muted">
+        <span className="text-sm font-medium text-ink">{job.name}</span>
+        <span>{progress}</span>
+        <span>running for {formatSpan(runningFor)}</span>
+        <span>{job.eta_seconds != null ? `${formatSpan(job.eta_seconds)} left` : "time left unknown"}</span>
+        <span>since {started.toLocaleString([], { hour: "2-digit", minute: "2-digit", ...(runningFor > 12 * 3600 ? { month: "short", day: "numeric" } : {}) })}</span>
+        <span>
+          CPU {LOAD_WORDS[poolLoad(job.pool, "cpu")]}, IO {LOAD_WORDS[poolLoad(job.pool, "io")]}
+        </span>
+      </div>
+      {percent !== null && (
+        <div role="progressbar" aria-label={`${job.name} progress`} aria-valuenow={Math.round(percent)} aria-valuemin={0} aria-valuemax={100} className="h-1.5 overflow-hidden rounded-full bg-border-subtle">
+          <div className="h-full bg-accent" style={{ width: `${percent}%` }} />
+        </div>
+      )}
+    </li>
+  );
+}
+
 const SORT_LABELS: readonly { key: SortKey; label: string }[] = [
   { key: "next", label: "Next run" },
   { key: "last", label: "Last run" },
@@ -306,7 +407,13 @@ export function Scheduler() {
   return (
     <SubTabs
       tabs={[
-        { key: "overview", label: "Overview", content: <Heatmap schedules={visible} /> },
+        { key: "overview", label: "Overview", content: (
+            <div className="flex flex-col gap-6">
+              <Heatmap schedules={visible} />
+              <RunningJobs />
+            </div>
+          ),
+        },
         ...CATEGORIES.map((category) => ({
           key: category.id,
           label: category.label,
