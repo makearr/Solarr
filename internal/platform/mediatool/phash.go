@@ -8,6 +8,7 @@ import (
 	"math/bits"
 	"slices"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -28,6 +29,9 @@ const (
 	windowFrames = 5
 	windowRate   = 8
 	windowStep   = time.Second / windowRate
+	// windowReaders is how many moments of one video are read at once: 3 halved the time per file on the NAS, while 9 only
+	// raised its read latency fivefold (measured 2026-11-09).
+	windowReaders = 3
 )
 
 // ErrNoFrames means the video gave too few frames to hash: a file ffmpeg cannot decode, or one with no video stream.
@@ -316,22 +320,37 @@ func (s *Subprocess) HashAndPreview(ctx context.Context, path string, previews b
 	display := displaySize(probe.Measured)
 	cell := display.fitted(cellBoxWidth, cellBoxHeight)
 	moments := make([]moment, phashSamples)
-	read := 0
+	var running sync.WaitGroup
+	readers := make(chan struct{}, windowReaders)
 	for sample := range phashSamples {
 		at := length * time.Duration(sample+1) / (phashSamples + 1)
 		size := cell
 		if previews && sample == singleSlot {
 			size = display.fitted(singleBoxWidth, singleBoxHeight)
 		}
-		frames, err := s.windowAt(ctx, path, at, size)
-		if err != nil {
-			if ctx.Err() != nil {
-				return VideoHash{}, Preview{}, ctx.Err()
-			}
-			continue
+		// A few reads overlap so a network mount's seek latency is not paid nine times in a row.
+		select {
+		case readers <- struct{}{}:
+		case <-ctx.Done():
+			running.Wait()
+			return VideoHash{}, Preview{}, ctx.Err()
 		}
-		moments[sample] = moment{size: size, frames: frames}
-		read++
+		running.Go(func() {
+			defer func() { <-readers }()
+			if frames, err := s.windowAt(ctx, path, at, size); err == nil {
+				moments[sample] = moment{size: size, frames: frames}
+			}
+		})
+	}
+	running.Wait()
+	if err := ctx.Err(); err != nil {
+		return VideoHash{}, Preview{}, err
+	}
+	read := 0
+	for _, one := range moments {
+		if len(one.frames) > 0 {
+			read++
+		}
 	}
 	if read <= phashSamples/2 {
 		return VideoHash{}, Preview{}, ErrNoFrames
