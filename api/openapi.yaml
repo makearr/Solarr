@@ -10146,6 +10146,14 @@ components:
         part_scoped: { type: boolean, description: Credited per part rather than per work. }
         character: { type: boolean, description: Carries the name of who was played. }
 
+    WorkScore:
+      type: object
+      description: One metadata provider's rating of a work, normalised to 0 to 10.
+      required: [provider, score, votes]
+      properties:
+        provider: { type: string, example: tmdb }
+        score: { type: number, format: double }
+        votes: { type: integer, format: int64, description: Votes behind the score; 0 when the provider gave none. }
     TagRef:
       type: object
       required: [id, name]
@@ -12791,6 +12799,10 @@ components:
             text: { type: string, example: PG-13 }
             age: { type: integer, format: int64, description: The youngest age it admits; -1 when not understood. }
             above_limit: { type: boolean, description: A library holding the work does not admit it, so it is never searched there. }
+        scores:
+          type: array
+          items: { $ref: "#/components/schemas/WorkScore" }
+          description: Ratings the metadata providers gave the work, on a 0 to 10 scale; absent when none.
         part_count:
           type: integer
           format: int64

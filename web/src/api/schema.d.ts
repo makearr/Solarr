@@ -6944,6 +6944,18 @@ export interface components {
             /** @description Carries the name of who was played. */
             character: boolean;
         };
+        /** @description One metadata provider's rating of a work, normalised to 0 to 10. */
+        WorkScore: {
+            /** @example tmdb */
+            provider: string;
+            /** Format: double */
+            score: number;
+            /**
+             * Format: int64
+             * @description Votes behind the score; 0 when the provider gave none.
+             */
+            votes: number;
+        };
         TagRef: {
             /** Format: int64 */
             id: number;
@@ -9345,6 +9357,8 @@ export interface components {
                 /** @description A library holding the work does not admit it */
                 above_limit: boolean;
             };
+            /** @description Ratings the metadata providers gave the work, on a 0 to 10 scale; absent when none. */
+            scores?: components["schemas"]["WorkScore"][];
             /**
              * Format: int64
              * @description How many parts the work has; the parts themselves are paged from GET /works/{id}/parts.

@@ -174,9 +174,11 @@ type WorkDetailRow struct {
 	Tags []TagRef
 	// Rating is the work's certification ("" for none), RatingAge its youngest age (-1 unrated), AboveLimit whether a
 	// library holding it does not admit it.
-	Rating        string
-	RatingAge     int64
-	AboveLimit    bool
+	Rating     string
+	RatingAge  int64
+	AboveLimit bool
+	// Scores are provider ratings on a 0..10 scale.
+	Scores        []ScoreRow
 	RootFolderIDs []int64
 	CategoryIDs   []int64
 	// Wanted is nil when nothing has ever wanted this album.
@@ -767,6 +769,13 @@ func buildWorkDetailView(row WorkDetailRow) gen.WorkDetail {
 			Text       string `json:"text"`
 		}{AboveLimit: row.AboveLimit, Age: row.RatingAge, Text: row.Rating}
 	}
+	if len(row.Scores) > 0 {
+		scores := make([]gen.WorkScore, len(row.Scores))
+		for i, score := range row.Scores {
+			scores[i] = gen.WorkScore{Provider: score.Provider, Score: score.Score, Votes: score.Votes}
+		}
+		view.Scores = &scores
+	}
 	if row.Wanted != nil {
 		wanted := buildWantedView(*row.Wanted)
 		view.Wanted = &wanted
@@ -1123,6 +1132,13 @@ func groupView(group GroupRow) gen.WorkGroup {
 		view.NextOut = &at
 	}
 	return view
+}
+
+// ScoreRow is one provider's rating of a work on a 0..10 scale.
+type ScoreRow struct {
+	Provider string
+	Score    float64
+	Votes    int64
 }
 
 // TagRef is one tag of a work: its id, which filters a library's list, and its name.

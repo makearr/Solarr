@@ -50,6 +50,9 @@ func (a WorkDetail) GetWorkDetail(ctx context.Context, id int64) (apiserver.Work
 		RootFolderIDs: detail.RootFolderIDs,
 		CategoryIDs:   detail.CategoryIDs,
 	}
+	for _, score := range detail.Scores {
+		row.Scores = append(row.Scores, apiserver.ScoreRow(score))
+	}
 	for _, tag := range detail.Tags {
 		row.Tags = append(row.Tags, apiserver.TagRef(tag))
 	}

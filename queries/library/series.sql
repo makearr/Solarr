@@ -63,6 +63,9 @@ WHERE c.age IS NULL ORDER BY c.work_id, c.system LIMIT ?;
 SELECT rating, CAST(COALESCE(age, -1) AS INTEGER) AS age FROM work_certification WHERE work_id = ?
 ORDER BY COALESCE(age, -1) DESC, system LIMIT 1;
 
+-- name: ListWorkRatings :many
+SELECT provider, score, CAST(COALESCE(votes, 0) AS INTEGER) AS votes FROM work_rating WHERE work_id = ? ORDER BY provider;
+
 -- name: GetCertificationAge :one
 SELECT age FROM work_certification WHERE work_id = ? AND system = ?;
 

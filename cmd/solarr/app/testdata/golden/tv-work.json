@@ -102,6 +102,13 @@
     "text": "TV-14"
   },
   "runtime_ms": 2700000,
+  "scores": [
+    {
+      "provider": "skyhook",
+      "score": 7.9,
+      "votes": 120
+    }
+  ],
   "sort_title": "marble stations",
   "tags": [
     {

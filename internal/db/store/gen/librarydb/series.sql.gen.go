@@ -678,6 +678,39 @@ func (q *Queries) ListWorkPartTitlesForWork(ctx context.Context, workID int64) (
 	return items, nil
 }
 
+const listWorkRatings = `-- name: ListWorkRatings :many
+SELECT provider, score, CAST(COALESCE(votes, 0) AS INTEGER) AS votes FROM work_rating WHERE work_id = ? ORDER BY provider
+`
+
+type ListWorkRatingsRow struct {
+	Provider string
+	Score    float64
+	Votes    int64
+}
+
+func (q *Queries) ListWorkRatings(ctx context.Context, workID int64) ([]ListWorkRatingsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkRatings, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkRatingsRow{}
+	for rows.Next() {
+		var i ListWorkRatingsRow
+		if err := rows.Scan(&i.Provider, &i.Score, &i.Votes); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorksOfFolder = `-- name: ListWorksOfFolder :many
 SELECT DISTINCT wf.work_id
 FROM library_path lp

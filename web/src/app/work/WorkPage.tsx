@@ -306,6 +306,11 @@ function WorkHeader({
                   Rated {work.rating.text || "unrated"}
                 </Chip>
               )}
+              {work.scores?.map((score) => (
+                <Chip key={score.provider} title={score.votes > 0 ? `${score.votes.toLocaleString()} votes` : undefined}>
+                  ★ {score.score.toFixed(1)} {score.provider.toUpperCase()}
+                </Chip>
+              ))}
               {work.rating?.above_limit && (
                 <Chip tone="warn" title="Its library's maximum rating does not admit it: it stays, but is never searched there. Move it to another library or raise the limit.">
                   Above this library's rating

@@ -113,8 +113,10 @@ type WorkDetail struct {
 	// Tags are the work's tags, genres and free labels, by name, each once.
 	Tags []TagName
 	// Rating is the work's certification ("PG-13"), "" when it has none; RatingAge its youngest age, -1 unrated.
-	Rating        string
-	RatingAge     int64
+	Rating    string
+	RatingAge int64
+	// Scores are the provider ratings on a 0..10 scale, by provider.
+	Scores        []WorkScore
 	RootFolderIDs []int64
 	CategoryIDs   []int64
 	// HasFiles is whether one of its files is still on disk.
@@ -128,6 +130,13 @@ type WorkDetail struct {
 	Organisations []WorkOrganisation
 	// Groups are the work's SET items: an album's one, with no ref, or a series' seasons.
 	Groups []GroupStatus
+}
+
+// WorkScore is one provider's rating of a work, normalised to 0..10.
+type WorkScore struct {
+	Provider string
+	Score    float64
+	Votes    int64
 }
 
 // WorkOrganisation is one organisation a work belongs to, in its role there.
@@ -314,8 +323,17 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 		rating.Age = -1
 	}
 
+	scoreRows, err := queries.ListWorkRatings(ctx, id)
+	if err != nil {
+		return WorkDetail{}, fmt.Errorf("library: work detail: ratings: %w", err)
+	}
+	var scores []WorkScore
+	for _, row := range scoreRows {
+		scores = append(scores, WorkScore{Provider: row.Provider, Score: row.Score, Votes: row.Votes})
+	}
+
 	return WorkDetail{
-		Rating: rating.Rating, RatingAge: rating.Age, Tags: tags,
+		Scores: scores, Rating: rating.Rating, RatingAge: rating.Age, Tags: tags,
 		Files: wholeFiles, Organisations: named,
 		Work: work, ExternalIDs: externalIDs, Editions: editionDetails,
 		Parts: partDetails, Credits: credits, Genres: genres, RootFolderIDs: rootFolderIDs,

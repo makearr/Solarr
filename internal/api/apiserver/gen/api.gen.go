@@ -6491,7 +6491,10 @@ type WorkDetail struct {
 		Text string `json:"text"`
 	} `json:"rating,omitempty"`
 	RuntimeMs *int64 `json:"runtime_ms,omitempty"`
-	SortTitle string `json:"sort_title"`
+
+	// Scores Ratings the metadata providers gave the work, on a 0 to 10 scale; absent when none.
+	Scores    *[]WorkScore `json:"scores,omitempty"`
+	SortTitle string       `json:"sort_title"`
 
 	// Tags The work's tags, genres and free labels, each once; a tag's id filters a library's list by it.
 	Tags      *[]TagRef `json:"tags,omitempty"`
@@ -6662,6 +6665,15 @@ type WorkPartAvailableConfidence string
 type WorkPartPage struct {
 	Items      []WorkPart `json:"items"`
 	NextCursor *string    `json:"next_cursor,omitempty"`
+}
+
+// WorkScore One metadata provider's rating of a work, normalised to 0 to 10.
+type WorkScore struct {
+	Provider string  `json:"provider"`
+	Score    float64 `json:"score"`
+
+	// Votes Votes behind the score; 0 when the provider gave none.
+	Votes int64 `json:"votes"`
 }
 
 // SearchGroup defines model for SearchGroup.
