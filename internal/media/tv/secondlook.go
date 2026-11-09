@@ -3,6 +3,7 @@ package tv
 import (
 	"context"
 	"fmt"
+	"math"
 	"path"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parsetv"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // ProviderContinued names a Review choice for a file numbered past its season's end: its external id is the series'
@@ -46,32 +48,80 @@ func (l *secondLook) series(ctx context.Context) library.SeriesDetailRow {
 	return l.detail
 }
 
-// byTitle is the episode an unnumbered file's name is the exact, unique title of (ADR-41: a folder of documentaries
-// named after their episodes), nothing otherwise.
-func (l *secondLook) byTitle(ctx context.Context, relPath string) []library.PartKey {
+// byTitle is the episode an unnumbered file's name, or the title tag inside it, is the exact, unique title of (ADR-41:
+// a folder of documentaries named after their episodes); a title several episodes share is settled by the file's
+// runtime when exactly one of them runs that long. Nothing otherwise.
+func (l *secondLook) byTitle(ctx context.Context, relPath, tagTitle string, duration time.Duration) []library.PartKey {
 	episodes := l.series(ctx).Episodes
 	stem := strings.TrimSuffix(path.Base(relPath), path.Ext(relPath))
 	names := []string{stem}
 	if at := strings.LastIndex(stem, " - "); at >= 0 {
 		names = append(names, stem[at+3:])
 	}
+	if tagTitle != "" {
+		names = append(names, tagTitle)
+	}
 	for _, name := range names {
 		key := episodeKey(name)
 		if len(key) < shortestTitleKey {
 			continue
 		}
-		var found []library.PartKey
+		var found []library.SeriesEpisode
 		for _, episode := range episodes {
 			if episodeTitled(episode, key) {
-				found = append(found, library.PartKey{MediaRef: MediaRef(episode.Season, episode.Number)})
+				found = append(found, episode)
 			}
 		}
+		if len(found) > 1 {
+			found = nearRuntime(found, duration)
+		}
 		if len(found) == 1 {
-			return found
+			return []library.PartKey{{MediaRef: MediaRef(found[0].Season, found[0].Number)}}
 		}
 	}
 	return nil
 }
+
+// byTags is the episode a file's own season and episode tags name, when the series has it.
+func (l *secondLook) byTags(ctx context.Context, tags mediatool.Tags) []library.PartKey {
+	seasonText, episodeText := tags.First("season_number", "season"), tags.First("episode_sort", "episode_id", "episode")
+	season, seasonErr := strconv.Atoi(seasonText)
+	number, numberErr := strconv.Atoi(episodeText)
+	if seasonErr != nil || numberErr != nil || season < 0 || number <= 0 {
+		return nil
+	}
+	for _, episode := range l.series(ctx).Episodes {
+		if episode.Season == season && episode.Number == number {
+			return []library.PartKey{{MediaRef: MediaRef(season, number)}}
+		}
+	}
+	return nil
+}
+
+// runtimeTolerance is how far a file's length may be from an episode's listed runtime and still be that episode.
+const runtimeTolerance = 0.15
+
+// nearRuntime keeps the episodes whose listed runtime the file's length is within the tolerance of, when exactly one
+// does; all of them otherwise, since a runtime that cannot tell them apart must not pick one.
+func nearRuntime(episodes []library.SeriesEpisode, duration time.Duration) []library.SeriesEpisode {
+	if duration <= 0 {
+		return episodes
+	}
+	var near []library.SeriesEpisode
+	for _, episode := range episodes {
+		listed := float64(episode.RuntimeMs)
+		if listed > 0 && math.Abs(float64(duration.Milliseconds())-listed) <= listed*runtimeTolerance {
+			near = append(near, episode)
+		}
+	}
+	if len(near) == 1 {
+		return near
+	}
+	return episodes
+}
+
+// sampleRuntime is the length under which an unplaced video is a sample or a trailer, not an episode of anything.
+const sampleRuntime = 2 * time.Minute
 
 // episodeTitled is whether an episode's title, or one it has in another language, normalises to the key.
 func episodeTitled(episode library.SeriesEpisode, key string) bool {

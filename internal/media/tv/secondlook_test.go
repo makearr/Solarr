@@ -4,11 +4,14 @@ import (
 	"reflect"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 	"github.com/makearr/Solarr/internal/platform/paginate"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
@@ -109,5 +112,47 @@ func TestReadContinued(t *testing.T) {
 		if _, _, _, ok := tv.ReadContinued(bad); ok {
 			t.Errorf("%q was read", bad)
 		}
+	}
+}
+
+func waitingPaths(t *testing.T, opened *store.Store) []string {
+	t.Helper()
+	queue, err := library.NewUnidentified(opened).List(t.Context(), []int64{1}, paginate.Cursor{}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var waiting []string
+	for _, row := range queue {
+		waiting = append(waiting, row.RelPath)
+	}
+	return sorted(waiting)
+}
+
+// The file's own tags and length decide what its name cannot: season and episode tags, a title tag, a runtime between
+// two episodes of one title; a clip of seconds is a sample and is not queued.
+func TestScan_EmbeddedTagsAndRuntimePlaceAFileItsNameCannot(t *testing.T) {
+	series := secondLookSeries()
+	series.Episodes[3].Runtime, series.Episodes[4].Runtime = 25, 50
+	consumer, opened, fsys := newConsumer(t, searchSkyhook{series: series})
+	folder := series.Title + "/Archive/"
+	withProbe := func(name string, tags mediatool.Tags, duration time.Duration) scan.Observed {
+		observed := writeVideo(t, fsys, folder+name)
+		observed.Probe.Tags, observed.Probe.Measured.Duration = tags, duration
+		return observed
+	}
+	batch := []scan.Observed{
+		writeVideo(t, fsys, series.Title+"/Season 01/"+series.Title+" - S01E01.mkv"),
+		withProbe("one.mkv", mediatool.Tags{"season_number": "1", "episode_sort": "2"}, time.Hour),
+		withProbe("two.mkv", mediatool.Tags{"title": "A Quiet Night"}, time.Hour),
+		withProbe("Same Name.mkv", nil, 49*time.Minute),
+		withProbe("Same Name copy.mkv", mediatool.Tags{"title": "Same Name"}, 37*time.Minute),
+		withProbe("unknown.mkv", mediatool.Tags{"season_number": "9", "episode_sort": "9"}, time.Hour),
+		withProbe("clip.mkv", nil, 40*time.Second),
+	}
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: scanRoot, Online: true}, 3, batch); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{folder + "Same Name copy.mkv", folder + "unknown.mkv"}; !slices.Equal(waitingPaths(t, opened), want) {
+		t.Errorf("waiting = %v, want %v", waitingPaths(t, opened), want)
 	}
 }

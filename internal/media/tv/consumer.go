@@ -167,7 +167,10 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 			info, ok := parsetv.ParsePath(readable[i].File.RelPath, now)
 			keys := partKeys(info)
 			if series != 0 && (!ok || len(keys) == 0) && model.AcceptsFolderMatch(model.FolderExactMatch, c.resolver.Threshold) {
-				keys = look.byTitle(ctx, readable[i].File.RelPath)
+				probe := readable[i].Probe
+				if keys = look.byTags(ctx, probe.Tags); len(keys) == 0 {
+					keys = look.byTitle(ctx, readable[i].File.RelPath, probe.Tags.First("title"), probe.Measured.Duration)
+				}
 			}
 			if series == 0 || len(keys) == 0 {
 				leftover = append(leftover, i)
@@ -205,6 +208,9 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 			}
 		}
 		for _, i := range leftover {
+			if duration := readable[i].Probe.Measured.Duration; duration > 0 && duration < sampleRuntime {
+				continue
+			}
 			own := candidates
 			if continued, found := look.continued(ctx, readable[i].File.RelPath); found {
 				own = []model.Identification{continued}
