@@ -73,3 +73,12 @@ func TestCreateUser_TheChosenAccessIsWhatTheAccountSees(t *testing.T) {
 		t.Errorf("raising past the maximum: status %d, want 400", response.Code)
 	}
 }
+
+// A name already taken is a conflict the person can fix, not an internal error.
+func TestCreateUser_ATakenNameIsAConflict(t *testing.T) {
+	fixture := newAuthFixture(t, apiserver.AuthLocal)
+
+	if response := fixture.as(t, "avs", http.MethodPost, "/api/v1/users", `{"username":"housemate","password":"pw","role":"readonly"}`); response.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409: %s", response.Code, response.Body)
+	}
+}

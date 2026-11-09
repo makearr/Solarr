@@ -64,6 +64,10 @@ func (s *Server) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if _, taken := s.auth.Settings.Snapshot().UserByUsername(username); taken {
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Name taken", "an account with that name exists already")
+		return
+	}
 	hashed, err := auth.HashPassword(request.Password)
 	if err != nil {
 		writeError(w, s.logger, err)
