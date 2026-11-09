@@ -248,6 +248,12 @@ func (s *Server) databaseMemoryView(ctx context.Context) gen.DatabaseMemory {
 	}
 	return gen.DatabaseMemory{
 		ConfiguredKb: configured, RunningKb: running, DefaultKb: config.DefaultCacheSizeKB,
-		RestartRequired: running != 0 && running != configured, Databases: rows,
+		RestartRequired: running != 0 && !sameCeiling(running, configured), Databases: rows,
 	}
+}
+
+// sameCeiling is whether the shares the pools were given add up to the configured ceiling; integer division per
+// connection loses a few KB, which is not a pending change.
+func sameCeiling(running, configured int64) bool {
+	return max(running-configured, configured-running) < max(configured/100, 1)
 }
