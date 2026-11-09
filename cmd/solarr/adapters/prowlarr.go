@@ -258,7 +258,7 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 	if err != nil {
 		return SyncResult{}, err
 	}
-	if err := a.mergeDuplicateProxies(ctx, a.Clock.Now().Unix()); err != nil {
+	if _, err := a.mergeDuplicateProxies(ctx, a.Clock.Now().Unix()); err != nil {
 		return SyncResult{}, err
 	}
 	configured, err := a.Cache.Indexers(ctx)
@@ -295,9 +295,13 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 	if err != nil {
 		return result, err
 	}
-	if err := a.mergeDuplicateProxies(ctx, now); err != nil {
+	merged, err := a.mergeDuplicateProxies(ctx, now)
+	if err != nil {
 		return result, err
 	}
+	// Proxies merged away are gone: what the lookup answers and what an indexer holds is read through the merge.
+	chooseProxy := proxyOf
+	proxyOf = func(entry indexer.ProwlarrIndexer) *int64 { return survivingProxy(merged, chooseProxy(entry)) }
 	if options.DownloadClients && a.Lidarr != nil {
 		result.ClientsAdded, result.ClientsWaiting, err = a.syncDownloadClients(ctx, instance, key, now)
 		if err != nil {
@@ -354,7 +358,7 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 				result.Paused++
 			}
 		}
-		chosen := existing.ProxyID()
+		chosen := survivingProxy(merged, existing.ProxyID())
 		if chosen == nil || a.followsProxy(ctx, *chosen, instanceID) {
 			chosen = proxyOf(entry)
 		}
@@ -460,10 +464,10 @@ func siteKey(impl, baseURL string) string {
 
 // mergeDuplicateProxies keeps the first proxy of each kind and address, points the indexers of the others at it and
 // removes the others.
-func (a Prowlarr) mergeDuplicateProxies(ctx context.Context, now int64) error {
+func (a Prowlarr) mergeDuplicateProxies(ctx context.Context, now int64) (map[int64]int64, error) {
 	held, err := a.Cache.Proxies(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	keeper := map[string]int64{}
 	replaced := map[int64]int64{}
@@ -476,11 +480,11 @@ func (a Prowlarr) mergeDuplicateProxies(ctx context.Context, now int64) error {
 		keeper[key] = one.ID
 	}
 	if len(replaced) == 0 {
-		return nil
+		return replaced, nil
 	}
 	indexers, err := a.Cache.Indexers(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, one := range indexers {
 		proxyID := one.ProxyID()
@@ -493,15 +497,24 @@ func (a Prowlarr) mergeDuplicateProxies(ctx context.Context, now int64) error {
 			EgressProxyURL: one.Egress().ProxyURL, MusicCategories: one.StoredMusicCategories(), Definition: one.Definition(),
 			Source: one.Source(), ProxyID: &moved, DownloadClientID: one.DownloadClientID(), QueriesPerHour: one.QueriesPerHour(),
 		}, now); err != nil {
-			return fmt.Errorf("merge proxies of %s: %w", one.Name, err)
+			return nil, fmt.Errorf("merge proxies of %s: %w", one.Name, err)
 		}
 	}
 	for duplicate := range replaced {
 		if err := a.Cache.DeleteProxy(ctx, duplicate); err != nil {
-			return fmt.Errorf("remove duplicate proxy: %w", err)
+			return nil, fmt.Errorf("remove duplicate proxy: %w", err)
 		}
 	}
-	return nil
+	return replaced, nil
+}
+
+// survivingProxy follows a proxy merged into another to the one that was kept.
+func survivingProxy(replaced map[int64]int64, proxyID *int64) *int64 {
+	if proxyID == nil || replaced[*proxyID] == 0 {
+		return proxyID
+	}
+	kept := replaced[*proxyID]
+	return &kept
 }
 
 // ensureFlareSolverr puts the connection's own FlareSolverr in the proxy list, for indexers to choose one by one.
