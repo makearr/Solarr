@@ -27,6 +27,7 @@ type Store interface {
 	LinkCandidates(ctx context.Context) ([]library.LinkCandidate, error)
 	LinkState(ctx context.Context) (map[[2]int64]bool, map[[2]string]bool, error)
 	AutoLink(ctx context.Context, link library.PlannedLink) (bool, error)
+	PruneCollectionLinks(ctx context.Context) (int64, error)
 }
 
 // ShowFilmStore is what the show rule reads and writes: the films that are a series' movies.
@@ -85,6 +86,9 @@ func (s Service) LinkShows(ctx context.Context) (int, error) {
 
 // Link declares the keyword keys, applies the rule once and answers how many pairs it linked.
 func (s Service) Link(ctx context.Context) (int, error) {
+	if _, err := s.Store.PruneCollectionLinks(ctx); err != nil {
+		return 0, err
+	}
 	candidates, err := s.Store.LinkCandidates(ctx)
 	if err != nil {
 		return 0, err

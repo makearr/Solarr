@@ -29,6 +29,8 @@ func (f *fakeStore) AutoLink(_ context.Context, link library.PlannedLink) (bool,
 	return true, nil
 }
 
+func (f *fakeStore) PruneCollectionLinks(context.Context) (int64, error) { return 0, nil }
+
 func TestLink_LinksSeriesFilmsAndSoundtracksOfOneFranchiseAndSkipsWhatWasUndone(t *testing.T) {
 	store := &fakeStore{candidates: []library.LinkCandidate{
 		{ID: 1, MediaType: "tv", Members: 2, Keys: []string{"wikidata:Q462"}, Identity: []string{"wikidata:Q462"}},

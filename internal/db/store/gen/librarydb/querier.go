@@ -264,6 +264,8 @@ type Querier interface {
 	DeleteCrossoverMissingParts(ctx context.Context, collectionID int64) error
 	DeleteCrossoverNotSame(ctx context.Context, arg DeleteCrossoverNotSameParams) error
 	DeleteCustomCollection(ctx context.Context, id int64) (int64, error)
+	// Links whose collection is gone; the origin rows go with the collection by cascade.
+	DeleteDanglingCollectionLinks(ctx context.Context) (int64, error)
 	DeleteDesiredItemsForWork(ctx context.Context, workID int64) error
 	// Import revert's own use (todo 4.9): only ever called for an edition
 	// CommitUnit itself created (import_unit.edition_created), and only after
@@ -300,6 +302,8 @@ type Querier interface {
 	DeleteStaleDestinationPath(ctx context.Context, arg DeleteStaleDestinationPathParams) error
 	DeleteSubscription(ctx context.Context, id int64) error
 	DeleteTag(ctx context.Context, id int64) (int64, error)
+	// Links nothing explains: no recorded origin and no provider id the two collections share.
+	DeleteUnexplainedCollectionLinks(ctx context.Context) (int64, error)
 	// A file that resolves on a later sweep leaves the queue entirely -- there is no
 	// "resolved" state to keep around.
 	DeleteUnidentified(ctx context.Context, mediaObjectID int64) error

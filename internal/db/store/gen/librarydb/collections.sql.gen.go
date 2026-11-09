@@ -444,6 +444,22 @@ func (q *Queries) DeleteCustomCollection(ctx context.Context, id int64) (int64, 
 	return result.RowsAffected()
 }
 
+const deleteDanglingCollectionLinks = `-- name: DeleteDanglingCollectionLinks :execrows
+DELETE FROM relationship
+WHERE kind = 'linked_collection' AND from_type = 'collection' AND to_type = 'collection'
+  AND (NOT EXISTS (SELECT 1 FROM collection c WHERE c.id = relationship.from_id)
+    OR NOT EXISTS (SELECT 1 FROM collection c WHERE c.id = relationship.to_id))
+`
+
+// Links whose collection is gone; the origin rows go with the collection by cascade.
+func (q *Queries) DeleteDanglingCollectionLinks(ctx context.Context) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteDanglingCollectionLinks)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteRelationship = `-- name: DeleteRelationship :exec
 DELETE FROM relationship WHERE from_type = ? AND from_id = ? AND to_type = ? AND to_id = ? AND kind = ?
 `
@@ -474,6 +490,25 @@ DELETE FROM relationship WHERE kind = 'linked_collection' AND from_type = 'colle
 func (q *Queries) DeleteSelfCollectionLinks(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, deleteSelfCollectionLinks)
 	return err
+}
+
+const deleteUnexplainedCollectionLinks = `-- name: DeleteUnexplainedCollectionLinks :execrows
+DELETE FROM relationship
+WHERE kind = 'linked_collection' AND from_type = 'collection' AND to_type = 'collection'
+  AND NOT EXISTS (SELECT 1 FROM collection_link_origin o
+                  WHERE o.low_id = MIN(relationship.from_id, relationship.to_id) AND o.high_id = MAX(relationship.from_id, relationship.to_id))
+  AND NOT EXISTS (SELECT 1 FROM collection_external_id a JOIN collection_external_id b
+                  ON b.provider = a.provider AND b.external_id = a.external_id
+                  WHERE a.collection_id = relationship.from_id AND b.collection_id = relationship.to_id)
+`
+
+// Links nothing explains: no recorded origin and no provider id the two collections share.
+func (q *Queries) DeleteUnexplainedCollectionLinks(ctx context.Context) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteUnexplainedCollectionLinks)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const dequeueReady = `-- name: DequeueReady :exec

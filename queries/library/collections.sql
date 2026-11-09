@@ -552,6 +552,23 @@ WHERE kind = 'linked_collection' AND ((from_type = 'collection' AND from_id = sq
 -- name: DeleteSelfCollectionLinks :exec
 DELETE FROM relationship WHERE kind = 'linked_collection' AND from_type = 'collection' AND to_type = 'collection' AND from_id = to_id;
 
+-- Links whose collection is gone; the origin rows go with the collection by cascade.
+-- name: DeleteDanglingCollectionLinks :execrows
+DELETE FROM relationship
+WHERE kind = 'linked_collection' AND from_type = 'collection' AND to_type = 'collection'
+  AND (NOT EXISTS (SELECT 1 FROM collection c WHERE c.id = relationship.from_id)
+    OR NOT EXISTS (SELECT 1 FROM collection c WHERE c.id = relationship.to_id));
+
+-- Links nothing explains: no recorded origin and no provider id the two collections share.
+-- name: DeleteUnexplainedCollectionLinks :execrows
+DELETE FROM relationship
+WHERE kind = 'linked_collection' AND from_type = 'collection' AND to_type = 'collection'
+  AND NOT EXISTS (SELECT 1 FROM collection_link_origin o
+                  WHERE o.low_id = MIN(relationship.from_id, relationship.to_id) AND o.high_id = MAX(relationship.from_id, relationship.to_id))
+  AND NOT EXISTS (SELECT 1 FROM collection_external_id a JOIN collection_external_id b
+                  ON b.provider = a.provider AND b.external_id = a.external_id
+                  WHERE a.collection_id = relationship.from_id AND b.collection_id = relationship.to_id);
+
 -- name: AddCollectionLinkOrigin :exec
 INSERT INTO collection_link_origin (low_id, high_id, reason, detail, created_at) VALUES (?, ?, ?, ?, ?)
 ON CONFLICT (low_id, high_id) DO UPDATE SET reason = excluded.reason, detail = excluded.detail;

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	librarydb "github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 func TestPlanCollectionLinks_LinksDifferentMediaTypesThatShareAFranchiseKey(t *testing.T) {
@@ -230,5 +231,35 @@ func TestLinkedCountsAddUpWhatTheOtherEndHoldsFromBothSides(t *testing.T) {
 	want := map[int64]library.LinkedCounts{tv: {Held: 1, Total: 1}, films: {Held: 1, Total: 1}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("counts = %+v, want %+v", got, want)
+	}
+}
+
+func TestPruneCollectionLinksKeepsExplainedLinksAndDropsTheRest(t *testing.T) {
+	opened, queries := newLibrary(t)
+	series := library.NewSeries(opened)
+	franchises := library.NewFranchises(opened)
+	result, err := series.Upsert(t.Context(), seriesAt, sampleSeries())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tv, _ := franchises.Join(t.Context(), "tv", "wikidata", "Q42", "MacGyver", result.WorkID)
+	films, _ := franchises.Join(t.Context(), "movie", "wikidata", "Q42", "MacGyver", result.WorkID)
+	stranger, _ := franchises.Join(t.Context(), "tv", "wikidata", "Q99", "Other", result.WorkID)
+	if err := franchises.LinkCollections(t.Context(), tv, films); err != nil {
+		t.Fatal(err)
+	}
+	for _, to := range []int64{stranger, 987654} {
+		err := queries.AddRelationship(t.Context(), librarydb.AddRelationshipParams{FromType: "collection", FromID: films, ToType: "collection", ToID: to, Kind: library.CollectionLinkKind})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	pruned, err := franchises.PruneCollectionLinks(t.Context())
+	if err != nil || pruned != 2 {
+		t.Fatalf("pruned = %d, %v; want 2", pruned, err)
+	}
+	links, err := franchises.Links(t.Context(), films)
+	if err != nil || len(links) != 1 || links[0].OtherID != tv {
+		t.Errorf("links after prune = %+v, %v; want only the one to %d", links, err, tv)
 	}
 }

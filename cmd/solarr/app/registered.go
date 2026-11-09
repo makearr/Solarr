@@ -121,7 +121,7 @@ func (p *process) musicModule() music.Module {
 		}),
 		// Enrichment follows at once, not at the next hourly run: a new library had no tracklists,
 		// photos or Wanted for up to an hour (found 2026-09-28).
-		OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx); _, _ = p.enrichmentPass(ctx, false) },
+		OnSwept: func(ctx context.Context) { p.afterSweep(ctx); _, _ = p.enrichmentPass(ctx, false) },
 	},
 		Wiring: media.Wiring{Hunt: p.musicHunt, Refresh: refresh, Adder: p.musicAdder(), Pictures: p.musicPictures()},
 	}
@@ -138,7 +138,7 @@ func (p *process) tvModule() tv.Module {
 	return tv.Module{Registrations: p.tvJobs(), SourcesPaused: p.tvSourcesPaused, SceneNumberingDown: p.sceneNumberingDown, TMDBConfigured: func() bool { return p.cache.Snapshot().TMDBConfigured() },
 		Sweep: scan.Sweep{
 			Consumer: consumer, Include: tv.IsVideo,
-			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+			OnSwept: p.afterSweep,
 			Housekeeping: housekeeping.Sweep{
 				Categories: adapters.Categories{Cache: p.cache}, Desired: library.NewDesired(p.library),
 				Grain: tv.Module{}.Descriptor().WantedGrain, FS: p.fsys, Logger: p.logger,
@@ -414,7 +414,7 @@ func (p *process) movieModule() movie.Module {
 				Categories: adapters.Categories{Cache: p.cache}, Desired: library.NewDesired(p.library),
 				Grain: movie.Module{}.Descriptor().WantedGrain, FS: p.fsys, Logger: p.logger,
 			},
-			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+			OnSwept: p.afterSweep,
 		}, Franchise: catalog,
 		Rename:    &movie.RenameConfig{Movies: library.NewSeriesReader(p.library)},
 		Profiling: knownfor.Profiling{People: library.NewPeople(p.library), Reader: library.NewSeriesReader(p.library), Source: p.tmdbShared, Albums: p.knownAlbums()},
@@ -581,7 +581,7 @@ func (p *process) bookModule(format book.Format) book.Module {
 				Categories: adapters.Categories{Cache: p.cache}, Desired: library.NewDesired(p.library),
 				Grain: module.Descriptor().WantedGrain, FS: p.fsys, Logger: p.logger,
 			},
-			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+			OnSwept: p.afterSweep,
 		},
 		Files:   book.NewFiles(resolver, library.NewUnidentified(p.library), clock.NewSystem(), catalog.AllowAgain),
 		Rename:  &book.RenameConfig{Format: format, Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},
@@ -686,7 +686,7 @@ func (p *process) adultModule() adult.Module {
 				Categories: adapters.Categories{Cache: p.cache}, Desired: library.NewDesired(p.library),
 				Grain: adult.Module{}.Descriptor().WantedGrain, FS: p.fsys, Logger: p.logger,
 			},
-			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+			OnSwept: p.afterSweep,
 		},
 		Files:  adult.NewFiles(resolver, library.NewUnidentified(p.library), clock.NewSystem(), catalog.AllowAgain),
 		Rename: &adult.RenameConfig{Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},

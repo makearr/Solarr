@@ -63,3 +63,9 @@ func (v videoPictures) Generate(ctx context.Context, withPreviews bool) error {
 	_, err := probe.EnqueuePictures(ctx, v.process.queue, mode)
 	return err
 }
+
+// afterSweep catches counts up and measures newly registered files now rather than at the next 02:00 sweep.
+func (p *process) afterSweep(ctx context.Context) {
+	_, _ = p.enqueueCategoryCounts(ctx)
+	_, _ = p.enqueueProbe(ctx)
+}

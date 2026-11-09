@@ -375,3 +375,22 @@ func (f Franchises) MemberOrigins(ctx context.Context, collectionID int64) (map[
 	}
 	return out, nil
 }
+
+// PruneCollectionLinks removes links to collections that are gone and links nothing explains, and answers how many.
+func (f Franchises) PruneCollectionLinks(ctx context.Context) (int64, error) {
+	var pruned int64
+	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		dangling, err := queries.DeleteDanglingCollectionLinks(ctx)
+		if err != nil {
+			return err
+		}
+		unexplained, err := queries.DeleteUnexplainedCollectionLinks(ctx)
+		pruned = dangling + unexplained
+		return err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("library: prune collection links: %w", err)
+	}
+	return pruned, nil
+}
