@@ -177,6 +177,16 @@ func withTargetCloseness(decision model.Decision, profiles []RankedProfile, fact
 	return decision
 }
 
+// unmeasuredTier names the first dimension the profile ranks but the release does not state, so "fits" is only a hope.
+func unmeasuredTier(rules score.Profile, decision model.Decision) string {
+	for _, tier := range decision.Quality.Tiers {
+		if _, listed := rules.Tiers[tier.Dimension]; listed && tier.Label == "unmeasured" {
+			return strings.ReplaceAll(tier.Dimension, "_", " ")
+		}
+	}
+	return ""
+}
+
 func evaluateInOrder(profiles []RankedProfile, facts score.Facts, languagePolicy *score.LanguagePolicy) model.Decision {
 	evaluate := func(rules score.Profile) model.Decision {
 		if languagePolicy != nil {
@@ -191,6 +201,9 @@ func evaluateInOrder(profiles []RankedProfile, facts score.Facts, languagePolicy
 			continue
 		}
 		if fits, _ := score.Fits(profile.Rules, facts); fits {
+			if unmeasured := unmeasuredTier(profile.Rules, decision); unmeasured != "" {
+				return rankedBy(decision, index, profile.Name, "fits so far, "+unmeasured+" not stated")
+			}
 			return rankedBy(decision, index, profile.Name, "fits")
 		}
 		if fallbackIndex < 0 {

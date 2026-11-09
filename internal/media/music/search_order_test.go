@@ -56,6 +56,23 @@ func TestEvaluateInOrder_TheEarliestFittingProfileRanksFirst(t *testing.T) {
 	}
 }
 
+func TestEvaluateInOrder_AReleaseThatStatesNoCodecOnlyFitsSoFar(t *testing.T) {
+	rules, err := score.Parse([]byte(lossy320Rules))
+	if err != nil {
+		t.Fatal(err)
+	}
+	decision := judge.EvaluateInOrder([]judge.RankedProfile{{Name: "Lossy 320", Rules: rules}}, score.Facts{}, nil)
+	var got string
+	for _, component := range decision.Components {
+		if component.Rule == "profile-priority" {
+			got = component.Label
+		}
+	}
+	if want := "Wanted by Lossy 320 (fits so far, audio codec not stated)"; got != want {
+		t.Errorf("label = %q, want %q", got, want)
+	}
+}
+
 // Sonarr's "Propers and Repacks": a proper of the same quality wins, a proper of worse quality
 // does not, and with "Do not Prefer" the revision decides nothing.
 func TestWithRevision_APreferredProperBreaksOnlyASameQualityTie(t *testing.T) {
