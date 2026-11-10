@@ -796,6 +796,8 @@ type Querier interface {
 	// The planner's facts for one page of items (section 9.1): the dirty set, or with dirty_only 0
 	// the paced sweep. Absent hunt columns read as zero.
 	ListPlanInputs(ctx context.Context, arg ListPlanInputsParams) ([]ListPlanInputsRow, error)
+	// One root's present files by name, paged on the unique (root_folder_id, rel_path) index so no page sorts the root.
+	ListPresentRelPathsInRoot(ctx context.Context, arg ListPresentRelPathsInRootParams) ([]ListPresentRelPathsInRootRow, error)
 	// Parts nothing holds on to: no file covers them, no event across series lists them, and no broadcast is shared through them.
 	ListPrunableWorkParts(ctx context.Context, workID int64) ([]ListPrunableWorkPartsRow, error)
 	// One page of queued files with what their newest attempt concluded. The caller

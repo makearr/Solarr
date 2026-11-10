@@ -226,6 +226,14 @@ WHERE root_folder_id = sqlc.arg(root_folder_id) AND id > sqlc.arg(after_id)
 ORDER BY id
 LIMIT sqlc.arg(page_size);
 
+-- One root's present files by name, paged on the unique (root_folder_id, rel_path) index so no page sorts the root.
+-- name: ListPresentRelPathsInRoot :many
+SELECT rel_path, created_at
+FROM library_path
+WHERE root_folder_id = sqlc.arg(root_folder_id) AND rel_path > sqlc.arg(after_rel_path) AND missing_since IS NULL
+ORDER BY rel_path
+LIMIT sqlc.arg(page_size);
+
 -- ADR-51's drain: every real file to evacuate, with its size for
 -- mover.PlanDrain's own affinity-group byte totals. Primary paths only,
 -- the same convention ListUnmeasured already uses -- a secondary,

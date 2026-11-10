@@ -926,6 +926,49 @@ func (q *Queries) ListPathsInRoot(ctx context.Context, arg ListPathsInRootParams
 	return items, nil
 }
 
+const listPresentRelPathsInRoot = `-- name: ListPresentRelPathsInRoot :many
+SELECT rel_path, created_at
+FROM library_path
+WHERE root_folder_id = ?1 AND rel_path > ?2 AND missing_since IS NULL
+ORDER BY rel_path
+LIMIT ?3
+`
+
+type ListPresentRelPathsInRootParams struct {
+	RootFolderID int64
+	AfterRelPath string
+	PageSize     int64
+}
+
+type ListPresentRelPathsInRootRow struct {
+	RelPath   string
+	CreatedAt int64
+}
+
+// One root's present files by name, paged on the unique (root_folder_id, rel_path) index so no page sorts the root.
+func (q *Queries) ListPresentRelPathsInRoot(ctx context.Context, arg ListPresentRelPathsInRootParams) ([]ListPresentRelPathsInRootRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPresentRelPathsInRoot, arg.RootFolderID, arg.AfterRelPath, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPresentRelPathsInRootRow{}
+	for rows.Next() {
+		var i ListPresentRelPathsInRootRow
+		if err := rows.Scan(&i.RelPath, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRenameFilesOnRoot = `-- name: ListRenameFilesOnRoot :many
 SELECT lp.media_object_id, lp.rel_path, o.size_bytes, d.work_id, CAST(COALESCE(d.edition_id, 0) AS INTEGER) AS edition_id,
        f.media_ref
