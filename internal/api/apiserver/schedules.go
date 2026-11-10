@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -45,6 +46,20 @@ type Scheduler interface {
 	// or manual -- is already in flight, jobs.ErrNoFullMode if full is true
 	// for a task that never registered one.
 	RunNow(ctx context.Context, key string, full bool) error
+	// Pause holds one task, or every task when key is jobs.AllTasks; Resume lifts it.
+	Pause(ctx context.Context, key string) error
+	Resume(ctx context.Context, key string) error
+	// PauseState answers a task's hold: Paused is in effect, ByAll is the every-task pause, Since is when it began.
+	PauseState(key string) PauseState
+	// HeldJobs counts the jobs waiting in the queue per task key.
+	HeldJobs(ctx context.Context) (map[string]int64, error)
+}
+
+// PauseState is what a task's hold looks like on the scheduler screen.
+type PauseState struct {
+	Paused bool
+	ByAll  bool
+	Since  *time.Time
 }
 
 // ListSchedules answers every registered task, its effective settings and
@@ -60,10 +75,15 @@ func (s *Server) ListSchedules(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	held, err := s.scheduler.HeldJobs(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
 	tasks := s.scheduler.Tasks()
 	views := make([]gen.Schedule, len(tasks))
 	for index, task := range tasks {
-		view, err := s.scheduleView(r.Context(), task)
+		view, err := s.scheduleView(r.Context(), task, held)
 		if err != nil {
 			writeError(w, s.logger, err)
 			return
@@ -122,6 +142,16 @@ func (s *Server) UpdateSchedule(w http.ResponseWriter, r *http.Request, key stri
 			return
 		}
 	}
+	if body.Paused != nil {
+		pause := s.scheduler.Resume
+		if *body.Paused {
+			pause = s.scheduler.Pause
+		}
+		if err := pause(r.Context(), key); err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
+	}
 	if body.Enabled != nil {
 		if err := s.scheduler.SetEnabled(r.Context(), key, *body.Enabled); err != nil {
 			writeError(w, s.logger, err)
@@ -129,7 +159,12 @@ func (s *Server) UpdateSchedule(w http.ResponseWriter, r *http.Request, key stri
 		}
 	}
 
-	view, err := s.scheduleView(r.Context(), task)
+	held, err := s.scheduler.HeldJobs(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	view, err := s.scheduleView(r.Context(), task, held)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -177,6 +212,32 @@ func (s *Server) RunSchedule(w http.ResponseWriter, r *http.Request, key string,
 	w.WriteHeader(http.StatusAccepted)
 }
 
+// SetAllSchedulesPaused pauses or resumes every task. Administrator only.
+func (s *Server) SetAllSchedulesPaused(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.scheduler == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "the scheduler is not available")
+		return
+	}
+	var body gen.SetAllSchedulesPausedJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a JSON object with paused")
+		return
+	}
+	pause := s.scheduler.Resume
+	if body.Paused {
+		pause = s.scheduler.Pause
+	}
+	if err := pause(r.Context(), jobs.AllTasks); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) findTask(key string) jobs.Task {
 	for _, task := range s.scheduler.Tasks() {
 		if task.Key == key {
@@ -186,7 +247,7 @@ func (s *Server) findTask(key string) jobs.Task {
 	return jobs.Task{}
 }
 
-func (s *Server) scheduleView(ctx context.Context, task jobs.Task) (gen.Schedule, error) {
+func (s *Server) scheduleView(ctx context.Context, task jobs.Task, held map[string]int64) (gen.Schedule, error) {
 	state, _, err := s.scheduler.State(ctx, task.Key)
 	if err != nil {
 		return gen.Schedule{}, err
@@ -202,6 +263,8 @@ func (s *Server) scheduleView(ctx context.Context, task jobs.Task) (gen.Schedule
 		RunAtStartup:   s.scheduler.RunAtStartup(task.Key, task.Startup == jobs.StartupOn),
 		LastDurationMs: state.LastDurationMs, LastRunAt: state.LastRunAt, NextRunAt: state.NextRunAt,
 	}
+	pause := s.scheduler.PauseState(task.Key)
+	view.Paused, view.PausedByAll, view.PausedAt, view.HeldJobs = pause.Paused, pause.ByAll, pause.Since, held[task.Key]
 	if state.LastOutcome != "" {
 		outcome := gen.ScheduleLastOutcome(state.LastOutcome)
 		view.LastOutcome = &outcome

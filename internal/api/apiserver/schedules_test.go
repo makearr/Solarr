@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/config"
@@ -20,6 +21,7 @@ type fakeScheduler struct {
 	cadences map[string][]string
 	disabled map[string]bool
 	startup  map[string]bool
+	paused   map[string]bool
 
 	setCadenceErr error
 	runNowErr     error
@@ -86,6 +88,25 @@ func (f *fakeScheduler) RunNow(_ context.Context, key string, full bool) error {
 	return f.runNowErr
 }
 
+func (f *fakeScheduler) Pause(_ context.Context, key string) error {
+	if f.paused == nil {
+		f.paused = map[string]bool{}
+	}
+	f.paused[key] = true
+	return nil
+}
+
+func (f *fakeScheduler) Resume(_ context.Context, key string) error {
+	delete(f.paused, key)
+	return nil
+}
+
+func (f *fakeScheduler) PauseState(key string) apiserver.PauseState {
+	return apiserver.PauseState{Paused: f.paused[key] || f.paused[jobs.AllTasks], ByAll: f.paused[jobs.AllTasks]}
+}
+
+func (f *fakeScheduler) HeldJobs(context.Context) (map[string]int64, error) { return nil, nil }
+
 func containsTask(tasks []jobs.Task, key string) bool {
 	for _, task := range tasks {
 		if task.Key == key {
@@ -106,6 +127,8 @@ type scheduleBody struct {
 	LastOutcome    string   `json:"last_outcome"`
 	Category       string   `json:"category"`
 	RunAtStartup   bool     `json:"run_at_startup"`
+	Paused         bool     `json:"paused"`
+	PausedByAll    bool     `json:"paused_by_all"`
 }
 
 func TestListSchedules_ReturnsEveryTaskWithItsEffectiveSettings(t *testing.T) {
@@ -366,5 +389,67 @@ func TestUpdateSchedule_RunAtStartupCanBeSetOnEveryTask(t *testing.T) {
 	}
 	if !reflect.DeepEqual(updated, want) {
 		t.Errorf("updated = %+v\nwant      %+v", updated, want)
+	}
+}
+
+func TestUpdateSchedule_PausesAndResumesOneTask(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.scheduler.tasks = []jobs.Task{{Key: "scan", DefaultCadence: "*/30 * * * *"}, {Key: "probe", DefaultCadence: "*/30 * * * *"}}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/schedules/scan", `{"paused":true}`))
+	var updated scheduleBody
+	if recorder.Code != http.StatusOK || json.Unmarshal(recorder.Body.Bytes(), &updated) != nil || !updated.Paused || updated.PausedByAll {
+		t.Fatalf("pause: status = %d, body = %s, want scan paused on its own", recorder.Code, recorder.Body)
+	}
+	if fixture.scheduler.paused["probe"] {
+		t.Error("pausing scan paused probe too")
+	}
+
+	recorder = fixture.do(authedPatch(t, cookies, "/api/v1/schedules/scan", `{"paused":false}`))
+	if recorder.Code != http.StatusOK || json.Unmarshal(recorder.Body.Bytes(), &updated) != nil || updated.Paused {
+		t.Errorf("resume: status = %d, body = %s, want scan running again", recorder.Code, recorder.Body)
+	}
+}
+
+func TestSetAllSchedulesPaused_HoldsEveryTaskAndNeedsAnAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.scheduler.tasks = []jobs.Task{{Key: "scan", DefaultCadence: "*/30 * * * *"}}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	fixture.createUser(t, "reader", settings.RoleUser)
+
+	reader := fixture.signIn(t, "reader")
+	if recorder := fixture.do(authedPut(t, reader, "/api/v1/schedules/paused", `{"paused":true}`)); recorder.Code != http.StatusForbidden {
+		t.Errorf("status for a non-administrator = %d, want 403", recorder.Code)
+	}
+
+	admin := fixture.signIn(t, "admin")
+	if recorder := fixture.do(authedPut(t, admin, "/api/v1/schedules/paused", `{"paused":true}`)); recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	var listed []scheduleBody
+	recorder := fixture.do(authedGet(t, admin, "/api/v1/schedules"))
+	if err := json.Unmarshal(recorder.Body.Bytes(), &listed); err != nil || len(listed) != 1 || !listed[0].Paused || !listed[0].PausedByAll {
+		t.Errorf("listed = %+v (%v), want scan paused by the every-task pause", listed, err)
+	}
+
+	if recorder := fixture.do(authedPut(t, admin, "/api/v1/schedules/paused", `{"paused":false}`)); recorder.Code != http.StatusNoContent {
+		t.Fatalf("resume status = %d", recorder.Code)
+	}
+	if fixture.scheduler.paused[jobs.AllTasks] {
+		t.Error("the every-task pause is still in place")
+	}
+}
+
+func TestRunSchedule_MapsAPausedTaskTo409(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.scheduler.tasks = []jobs.Task{{Key: "scan", DefaultCadence: "*/30 * * * *"}}
+	fixture.scheduler.runNowErr = jobs.ErrTaskPaused
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/schedules/scan/run", ``)); recorder.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409 (%s)", recorder.Code, recorder.Body)
 	}
 }

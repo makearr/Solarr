@@ -1119,6 +1119,26 @@ paths:
               schema: { $ref: "#/components/schemas/TaskHistory" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /schedules/paused:
+    put:
+      operationId: setAllSchedulesPaused
+      tags: [settings]
+      summary: Pause or resume every task. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paused]
+              properties:
+                paused: { type: boolean }
+      responses:
+        "204": { description: Done. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /schedules/{key}:
     parameters:
       - name: key
@@ -1145,6 +1165,11 @@ paths:
                   items: { type: string }
                 enabled: { type: boolean }
                 run_at_startup: { type: boolean }
+                paused:
+                  type: boolean
+                  description: >-
+                    true holds the task: its fires are skipped, its running jobs stop and wait in the queue, and
+                    it cannot be run until false resumes it where it stopped.
       responses:
         "200":
           description: Updated.
@@ -9242,7 +9267,7 @@ components:
     Schedule:
       type: object
       description: One registered periodic task (ADR-59), its effective settings and run-state.
-      required: [key, name, tier, category, default_cadence, cadences, enabled, supports_full, run_at_startup]
+      required: [key, name, tier, category, default_cadence, cadences, enabled, supports_full, run_at_startup, paused, paused_by_all, held_jobs]
       properties:
         key: { type: string }
         name: { type: string }
@@ -9271,6 +9296,17 @@ components:
             Whether POST /schedules/{key}/run?full=true does something different
             from an ordinary run for this task -- library scan's full rescan is
             the only one today (private/questions.md).
+        paused:
+          type: boolean
+          description: Held, by its own pause or by pausing every task.
+        paused_by_all:
+          type: boolean
+          description: Every task is paused, this one included; resuming one task does not lift it.
+        paused_at: { type: string, format: date-time }
+        held_jobs:
+          type: integer
+          format: int64
+          description: Jobs of this task waiting in the queue, among them the ones a pause interrupted.
         last_run_at: { type: string, format: date-time }
         last_duration_ms: { type: integer, format: int64 }
         last_outcome:

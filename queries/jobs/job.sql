@@ -41,6 +41,9 @@ WHERE id IN (
   WHERE candidate.pool = sqlc.arg(target_pool)
     AND candidate.state IN ('PENDING', 'PENDING_RETRY')
     AND candidate.run_after <= sqlc.arg(now)
+    AND NOT EXISTS (SELECT 1 FROM job_task AS origin
+                    JOIN task_pause ON task_pause.scope IN (origin.task_key, '*')
+                    WHERE origin.job_id = candidate.id)
     AND (candidate.depends_on IS NULL
          OR EXISTS (SELECT 1 FROM job AS parent
                     WHERE parent.id = candidate.depends_on AND parent.state = 'SUCCEEDED'))
@@ -82,12 +85,12 @@ SET state = 'PENDING_RETRY', lease_owner = NULL, lease_expires_at = NULL,
     run_after = ?, last_error = ?, updated_at = ?
 WHERE id = ? AND lease_owner = ?;
 
--- A run cut short by shutdown goes back to the queue without losing the attempt it never got to finish.
+-- A run cut short by shutdown or a pause goes back to the queue without losing the attempt it never got to finish.
 -- name: ReleaseInterruptedJob :execrows
 UPDATE job
 SET state = 'PENDING', attempts = CASE WHEN attempts > 0 THEN attempts - 1 ELSE 0 END,
     lease_owner = NULL, lease_expires_at = NULL, run_after = sqlc.arg(now),
-    last_error = 'interrupted by shutdown', updated_at = sqlc.arg(now)
+    last_error = sqlc.arg(reason), updated_at = sqlc.arg(now)
 WHERE id = sqlc.arg(id) AND lease_owner = sqlc.arg(lease_owner);
 
 -- name: CancelJob :execrows
@@ -227,4 +230,7 @@ WHERE id IN (
 -- name: CountClaimableInPool :one
 SELECT CAST(count(*) AS INTEGER) AS total
 FROM job
-WHERE pool = sqlc.arg(target_pool) AND state IN ('PENDING', 'PENDING_RETRY') AND run_after <= sqlc.arg(now);
+WHERE pool = sqlc.arg(target_pool) AND state IN ('PENDING', 'PENDING_RETRY') AND run_after <= sqlc.arg(now)
+  AND NOT EXISTS (SELECT 1 FROM job_task AS origin
+                  JOIN task_pause ON task_pause.scope IN (origin.task_key, '*')
+                  WHERE origin.job_id = job.id);

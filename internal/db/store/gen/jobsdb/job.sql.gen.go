@@ -77,6 +77,9 @@ WHERE id IN (
   WHERE candidate.pool = ?4
     AND candidate.state IN ('PENDING', 'PENDING_RETRY')
     AND candidate.run_after <= ?3
+    AND NOT EXISTS (SELECT 1 FROM job_task AS origin
+                    JOIN task_pause ON task_pause.scope IN (origin.task_key, '*')
+                    WHERE origin.job_id = candidate.id)
     AND (candidate.depends_on IS NULL
          OR EXISTS (SELECT 1 FROM job AS parent
                     WHERE parent.id = candidate.depends_on AND parent.state = 'SUCCEEDED'))
@@ -190,6 +193,9 @@ const countClaimableInPool = `-- name: CountClaimableInPool :one
 SELECT CAST(count(*) AS INTEGER) AS total
 FROM job
 WHERE pool = ?1 AND state IN ('PENDING', 'PENDING_RETRY') AND run_after <= ?2
+  AND NOT EXISTS (SELECT 1 FROM job_task AS origin
+                  JOIN task_pause ON task_pause.scope IN (origin.task_key, '*')
+                  WHERE origin.job_id = job.id)
 `
 
 type CountClaimableInPoolParams struct {
@@ -914,19 +920,25 @@ const releaseInterruptedJob = `-- name: ReleaseInterruptedJob :execrows
 UPDATE job
 SET state = 'PENDING', attempts = CASE WHEN attempts > 0 THEN attempts - 1 ELSE 0 END,
     lease_owner = NULL, lease_expires_at = NULL, run_after = ?1,
-    last_error = 'interrupted by shutdown', updated_at = ?1
-WHERE id = ?2 AND lease_owner = ?3
+    last_error = ?2, updated_at = ?1
+WHERE id = ?3 AND lease_owner = ?4
 `
 
 type ReleaseInterruptedJobParams struct {
 	Now        int64
+	Reason     sql.NullString
 	ID         int64
 	LeaseOwner sql.NullString
 }
 
-// A run cut short by shutdown goes back to the queue without losing the attempt it never got to finish.
+// A run cut short by shutdown or a pause goes back to the queue without losing the attempt it never got to finish.
 func (q *Queries) ReleaseInterruptedJob(ctx context.Context, arg ReleaseInterruptedJobParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, releaseInterruptedJob, arg.Now, arg.ID, arg.LeaseOwner)
+	result, err := q.db.ExecContext(ctx, releaseInterruptedJob,
+		arg.Now,
+		arg.Reason,
+		arg.ID,
+		arg.LeaseOwner,
+	)
 	if err != nil {
 		return 0, err
 	}

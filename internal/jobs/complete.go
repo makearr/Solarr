@@ -144,11 +144,20 @@ func (q *Queue) Fail(ctx context.Context, job Job, owner string, attempt Attempt
 
 // Release puts a job whose run shutdown cut short back in the queue, its attempt given back.
 func (q *Queue) Release(ctx context.Context, job Job, owner string, attempt Attempt) error {
+	return q.release(ctx, job, owner, attempt, "interrupted by shutdown")
+}
+
+// ReleasePaused puts a job a pause interrupted back in the queue, its attempt given back; it waits there until resumed.
+func (q *Queue) ReleasePaused(ctx context.Context, job Job, owner string, attempt Attempt) error {
+	return q.release(ctx, job, owner, attempt, "paused")
+}
+
+func (q *Queue) release(ctx context.Context, job Job, owner string, attempt Attempt, reason string) error {
 	now := q.clock.Now()
 	var affected int64
 	err := q.store.Write(ctx, store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
 		queries := q.queries.WithTx(tx)
-		rows, err := queries.ReleaseInterruptedJob(ctx, jobsdb.ReleaseInterruptedJobParams{Now: now.Unix(), ID: job.ID, LeaseOwner: nullString(owner)})
+		rows, err := queries.ReleaseInterruptedJob(ctx, jobsdb.ReleaseInterruptedJobParams{Now: now.Unix(), ID: job.ID, LeaseOwner: nullString(owner), Reason: nullString(reason)})
 		if err != nil {
 			return err
 		}
@@ -159,7 +168,7 @@ func (q *Queue) Release(ctx context.Context, job Job, owner string, attempt Atte
 		return queries.RecordAttemptFinish(ctx, jobsdb.RecordAttemptFinishParams{
 			FinishedAt: sql.NullInt64{Int64: now.Unix(), Valid: true},
 			Outcome:    nullString(string(OutcomeInterrupted)),
-			Error:      nullString("interrupted by shutdown"),
+			Error:      nullString(reason),
 			ID:         attempt.ID,
 		})
 	})

@@ -86,6 +86,9 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	case errors.Is(err, jobs.ErrAlreadyRunning):
 		writeProblem(w, logger, http.StatusConflict, TypeConflict, "Already running", err.Error())
 
+	case errors.Is(err, jobs.ErrTaskPaused):
+		writeProblem(w, logger, http.StatusConflict, TypeConflict, "Paused", err.Error())
+
 	case errors.Is(err, authz.ErrInsufficientPermission):
 		writeProblem(w, logger, http.StatusForbidden, TypeForbidden, "Forbidden", err.Error())
 

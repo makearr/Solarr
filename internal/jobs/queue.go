@@ -79,6 +79,7 @@ func (q *Queue) Enqueue(ctx context.Context, request Request) (EnqueueResult, er
 		priority = PriorityNormal
 	}
 
+	taskKey := TaskKeyFrom(ctx)
 	var result EnqueueResult
 	err := q.store.Write(ctx, store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
 		queries := q.queries.WithTx(tx)
@@ -125,6 +126,11 @@ func (q *Queue) Enqueue(ctx context.Context, request Request) (EnqueueResult, er
 		})
 		if err != nil {
 			return fmt.Errorf("insert: %w", err)
+		}
+		if taskKey != "" {
+			if err := queries.RecordJobTask(ctx, jobsdb.RecordJobTaskParams{JobID: created.ID, TaskKey: taskKey}); err != nil {
+				return fmt.Errorf("record task: %w", err)
+			}
 		}
 		result = EnqueueResult{Job: convertJob(created)}
 		return nil

@@ -5789,8 +5789,11 @@ type Schedule struct {
 	Category ScheduleCategory `json:"category"`
 
 	// DefaultCadence The registry's own fallback cadence.
-	DefaultCadence string  `json:"default_cadence"`
-	Enabled        bool    `json:"enabled"`
+	DefaultCadence string `json:"default_cadence"`
+	Enabled        bool   `json:"enabled"`
+
+	// HeldJobs Jobs of this task waiting in the queue, among them the ones a pause interrupted.
+	HeldJobs       int64   `json:"held_jobs"`
 	Key            string  `json:"key"`
 	LastDurationMs *int64  `json:"last_duration_ms,omitempty"`
 	LastError      *string `json:"last_error,omitempty"`
@@ -5800,6 +5803,13 @@ type Schedule struct {
 	LastRunAt   *time.Time           `json:"last_run_at,omitempty"`
 	Name        string               `json:"name"`
 	NextRunAt   *time.Time           `json:"next_run_at,omitempty"`
+
+	// Paused Held, by its own pause or by pausing every task.
+	Paused   bool       `json:"paused"`
+	PausedAt *time.Time `json:"paused_at,omitempty"`
+
+	// PausedByAll Every task is paused, this one included; resuming one task does not lift it.
+	PausedByAll bool `json:"paused_by_all"`
 
 	// RunAtStartup Whether it runs once when Solarr starts. A heavy task (database maintenance, backup) waits a few minutes and is skipped when it last ran within its own interval.
 	RunAtStartup bool `json:"run_at_startup"`
@@ -7502,11 +7512,19 @@ type RenameRootFolderJSONBody struct {
 	Preview *bool `json:"preview,omitempty"`
 }
 
+// SetAllSchedulesPausedJSONBody defines parameters for SetAllSchedulesPaused.
+type SetAllSchedulesPausedJSONBody struct {
+	Paused bool `json:"paused"`
+}
+
 // UpdateScheduleJSONBody defines parameters for UpdateSchedule.
 type UpdateScheduleJSONBody struct {
-	Cadences     *[]string `json:"cadences,omitempty"`
-	Enabled      *bool     `json:"enabled,omitempty"`
-	RunAtStartup *bool     `json:"run_at_startup,omitempty"`
+	Cadences *[]string `json:"cadences,omitempty"`
+	Enabled  *bool     `json:"enabled,omitempty"`
+
+	// Paused true holds the task: its fires are skipped, its running jobs stop and wait in the queue, and it cannot be run until false resumes it where it stopped.
+	Paused       *bool `json:"paused,omitempty"`
+	RunAtStartup *bool `json:"run_at_startup,omitempty"`
 }
 
 // RunScheduleParams defines parameters for RunSchedule.
@@ -8264,6 +8282,9 @@ type SetRootFolderOnlineJSONRequestBody SetRootFolderOnlineJSONBody
 
 // RenameRootFolderJSONRequestBody defines body for RenameRootFolder for application/json ContentType.
 type RenameRootFolderJSONRequestBody RenameRootFolderJSONBody
+
+// SetAllSchedulesPausedJSONRequestBody defines body for SetAllSchedulesPaused for application/json ContentType.
+type SetAllSchedulesPausedJSONRequestBody SetAllSchedulesPausedJSONBody
 
 // UpdateScheduleJSONRequestBody defines body for UpdateSchedule for application/json ContentType.
 type UpdateScheduleJSONRequestBody UpdateScheduleJSONBody
@@ -9218,6 +9239,9 @@ type ServerInterface interface {
 	// How long each kind of job ran in each hour of the last seven days.
 	// (GET /schedules/history)
 	GetTaskHistory(w http.ResponseWriter, r *http.Request)
+	// Pause or resume every task. Administrator only.
+	// (PUT /schedules/paused)
+	SetAllSchedulesPaused(w http.ResponseWriter, r *http.Request)
 	// Override a task's schedules, enabled flag or startup run. Administrator only.
 	// (PATCH /schedules/{key})
 	UpdateSchedule(w http.ResponseWriter, r *http.Request, key string)
@@ -11183,6 +11207,12 @@ func (_ Unimplemented) ListSchedules(w http.ResponseWriter, r *http.Request) {
 // How long each kind of job ran in each hour of the last seven days.
 // (GET /schedules/history)
 func (_ Unimplemented) GetTaskHistory(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Pause or resume every task. Administrator only.
+// (PUT /schedules/paused)
+func (_ Unimplemented) SetAllSchedulesPaused(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -20821,6 +20851,28 @@ func (siw *ServerInterfaceWrapper) GetTaskHistory(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// SetAllSchedulesPaused operation middleware
+func (siw *ServerInterfaceWrapper) SetAllSchedulesPaused(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAllSchedulesPaused(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // UpdateSchedule operation middleware
 func (siw *ServerInterfaceWrapper) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 
@@ -24839,6 +24891,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/schedules/history", wrapper.GetTaskHistory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/schedules/paused", wrapper.SetAllSchedulesPaused)
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/schedules/{key}", wrapper.UpdateSchedule)

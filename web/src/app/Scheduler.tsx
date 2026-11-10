@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Play, Plus, X } from "lucide-react";
+import { Pause, Play, Plus, X } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -336,11 +336,18 @@ export function Scheduler() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["schedules"] });
 
   const update = useMutation({
-    mutationFn: async (args: { key: string; cadences?: string[]; enabled?: boolean; runAtStartup?: boolean }) => {
+    mutationFn: async (args: { key: string; cadences?: string[]; enabled?: boolean; runAtStartup?: boolean; paused?: boolean }) => {
       await ok(api.PATCH("/schedules/{key}", {
         params: { path: { key: args.key } },
-        body: { cadences: args.cadences, enabled: args.enabled, run_at_startup: args.runAtStartup },
+        body: { cadences: args.cadences, enabled: args.enabled, run_at_startup: args.runAtStartup, paused: args.paused },
       }));
+    },
+    onSuccess: invalidate,
+  });
+
+  const pauseAll = useMutation({
+    mutationFn: async (paused: boolean) => {
+      await ok(api.PUT("/schedules/paused", { body: { paused } }));
     },
     onSuccess: invalidate,
   });
@@ -360,6 +367,24 @@ export function Scheduler() {
   const sort = parseSortKey(search.sort) ?? "name";
   const direction: SortDirection = search.dir === "desc" ? "desc" : "asc";
 
+  const allPaused = (schedules.data ?? []).some((schedule) => schedule.paused_by_all);
+  const pauseBar = (
+    <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+      <button
+        type="button"
+        onClick={() => pauseAll.mutate(!allPaused)}
+        disabled={pauseAll.isPending}
+        className="flex shrink-0 items-center gap-1 rounded-md border border-border-subtle px-2 py-1 hover:text-ink
+                   disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      >
+        {allPaused ? <Play aria-hidden className="size-3.5" /> : <Pause aria-hidden className="size-3.5" />}
+        {allPaused ? "Resume all tasks" : "Pause all tasks"}
+      </button>
+      {allPaused && <span>Every task is paused; running jobs stopped and wait in the queue where they were.</span>}
+      {pauseAll.isError && <span className="text-danger">That change was refused.</span>}
+    </div>
+  );
+
   const categoryTab = (category: (typeof CATEGORIES)[number]) => {
     const tasks = sortTasks(
       visible.filter((schedule) => schedule.category === category.id),
@@ -368,6 +393,7 @@ export function Scheduler() {
     );
     return (
       <section className="flex flex-col gap-3">
+        {pauseBar}
         <p className="text-xs text-ink-muted">
           A task can run at several times; Run now fires at once and is refused, not queued twice, while it is already running.
         </p>
@@ -380,6 +406,7 @@ export function Scheduler() {
               onSaveCadences={(cadences) => update.mutate({ key: schedule.key, cadences })}
               onToggleEnabled={() => update.mutate({ key: schedule.key, enabled: !schedule.enabled })}
               onToggleStartup={() => update.mutate({ key: schedule.key, runAtStartup: !schedule.run_at_startup })}
+              onTogglePaused={() => update.mutate({ key: schedule.key, paused: !schedule.paused })}
               onRunNow={() => run.mutate({ key: schedule.key })}
               onRunFull={() => run.mutate({ key: schedule.key, full: true })}
               busy={update.isPending || run.isPending}
@@ -396,6 +423,7 @@ export function Scheduler() {
       tabs={[
         { key: "overview", label: "Overview", content: (
             <div className="flex flex-col gap-6">
+              {pauseBar}
               <Heatmap />
               <RunningJobs />
             </div>
@@ -417,6 +445,7 @@ function ScheduleRow({
   onSaveCadences,
   onToggleEnabled,
   onToggleStartup,
+  onTogglePaused,
   onRunNow,
   onRunFull,
   busy,
@@ -425,6 +454,7 @@ function ScheduleRow({
   onSaveCadences: (cadences: string[]) => void;
   onToggleEnabled: () => void;
   onToggleStartup: () => void;
+  onTogglePaused: () => void;
   onRunNow: () => void;
   onRunFull: () => void;
   busy: boolean;
@@ -452,14 +482,37 @@ function ScheduleRow({
           </span>
         )}
 
+        {schedule.paused && (
+          <span className="rounded-full border border-warn px-1.5 py-px text-[0.6875rem] text-warn">
+            paused{schedule.held_jobs > 0 ? ` · ${schedule.held_jobs} waiting` : ""}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={onTogglePaused}
+          disabled={busy || schedule.paused_by_all}
+          title={
+            schedule.paused_by_all
+              ? "Every task is paused; resume them all from the top of the screen."
+              : schedule.paused
+                ? "Lets the task's jobs run again, from where they were stopped."
+                : "Stops the task's running jobs and holds its queued ones until it is resumed."
+          }
+          className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-border-subtle
+                     px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50
+                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          {schedule.paused ? <Play aria-hidden className="size-3.5" /> : <Pause aria-hidden className="size-3.5" />}
+          {schedule.paused ? "Resume" : "Pause"}
+        </button>
         {schedule.supports_full && (
           <button
             type="button"
             onClick={onRunFull}
-            disabled={busy}
+            disabled={busy || schedule.paused}
             title="Re-reads every directory regardless of when it last changed, rather than only
                    what the incremental sweep would have picked up on its own."
-            className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-border-subtle
+            className="flex shrink-0 items-center gap-1 rounded-md border border-border-subtle
                        px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50
                        focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
@@ -470,11 +523,10 @@ function ScheduleRow({
         <button
           type="button"
           onClick={onRunNow}
-          disabled={busy}
-          className={`flex shrink-0 items-center gap-1 rounded-md border border-border-subtle
+          disabled={busy || schedule.paused}
+          className="flex shrink-0 items-center gap-1 rounded-md border border-border-subtle
                      px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50
-                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent
-                     ${schedule.supports_full ? "" : "ml-auto"}`}
+                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           <Play aria-hidden className="size-3.5" />
           Run now

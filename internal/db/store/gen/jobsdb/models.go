@@ -54,6 +54,11 @@ type JobAttempt struct {
 	Error      sql.NullString
 }
 
+type JobTask struct {
+	JobID   int64
+	TaskKey string
+}
+
 type RetentionState struct {
 	Stream        string
 	PrunedThrough int64
@@ -66,4 +71,9 @@ type ScheduleState struct {
 	LastOutcome    sql.NullString
 	LastError      sql.NullString
 	NextRunAt      sql.NullInt64
+}
+
+type TaskPause struct {
+	Scope    string
+	PausedAt int64
 }

@@ -20,6 +20,8 @@ type Querier interface {
 	CompleteJob(ctx context.Context, arg CompleteJobParams) (int64, error)
 	// Jobs of a pool that could be started now, for a long job deciding whether to give up its slot.
 	CountClaimableInPool(ctx context.Context, arg CountClaimableInPoolParams) (int64, error)
+	// Jobs a pause is holding or has interrupted: waiting in the queue, not yet finished.
+	CountHeldJobsByTask(ctx context.Context) ([]CountHeldJobsByTaskRow, error)
 	CountJobsByState(ctx context.Context) ([]CountJobsByStateRow, error)
 	// One bounded page of retention (Invariant 2); a job another depends on stays, or its delete fails the whole page.
 	DeleteFinishedJobsBefore(ctx context.Context, arg DeleteFinishedJobsBeforeParams) (int64, error)
@@ -31,6 +33,7 @@ type Querier interface {
 	FailUnfinishedJobsBatch(ctx context.Context, arg FailUnfinishedJobsBatchParams) (int64, error)
 	FindActiveJobByActionKey(ctx context.Context, actionKey sql.NullString) (Job, error)
 	GetJob(ctx context.Context, id int64) (Job, error)
+	GetJobTask(ctx context.Context, jobID int64) (string, error)
 	GetRetentionState(ctx context.Context, stream string) (RetentionState, error)
 	GetScheduleState(ctx context.Context, taskKey string) (ScheduleState, error)
 	ListAttempts(ctx context.Context, jobID int64) ([]JobAttempt, error)
@@ -45,6 +48,8 @@ type Querier interface {
 	// updated_at is not unique. A zero cursor is the start, hence the guarded comparison.
 	ListJobsPage(ctx context.Context, arg ListJobsPageParams) ([]Job, error)
 	ListScheduleStates(ctx context.Context) ([]ScheduleState, error)
+	ListTaskPauses(ctx context.Context) ([]TaskPause, error)
+	PauseTask(ctx context.Context, arg PauseTaskParams) error
 	// Pruning is bounded per pass and resumable, so retention never becomes one enormous
 	// transaction (Invariant 2).
 	PruneEventsBefore(ctx context.Context, arg PruneEventsBeforeParams) (int64, error)
@@ -56,11 +61,13 @@ type Querier interface {
 	ReclaimExpiredLeases(ctx context.Context, arg ReclaimExpiredLeasesParams) ([]ReclaimExpiredLeasesRow, error)
 	RecordAttemptFinish(ctx context.Context, arg RecordAttemptFinishParams) error
 	RecordAttemptStart(ctx context.Context, arg RecordAttemptStartParams) (JobAttempt, error)
-	// A run cut short by shutdown goes back to the queue without losing the attempt it never got to finish.
+	RecordJobTask(ctx context.Context, arg RecordJobTaskParams) error
+	// A run cut short by shutdown or a pause goes back to the queue without losing the attempt it never got to finish.
 	ReleaseInterruptedJob(ctx context.Context, arg ReleaseInterruptedJobParams) (int64, error)
 	// Renewal is conditional on still owning the lease. A worker whose lease was
 	// reaped must not be able to take it back and race the worker that has it now.
 	RenewLease(ctx context.Context, arg RenewLeaseParams) (int64, error)
+	ResumeTask(ctx context.Context, scope string) error
 	RetryJob(ctx context.Context, arg RetryJobParams) (int64, error)
 	SetRetentionState(ctx context.Context, arg SetRetentionStateParams) error
 	StartJob(ctx context.Context, arg StartJobParams) (int64, error)

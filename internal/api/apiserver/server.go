@@ -918,6 +918,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/storage/browse", server.routeBrowsePath)
 			secured.Get("/settings/registry", server.ListSettingDefinitions)
 			secured.Get("/schedules", server.ListSchedules)
+			secured.Put("/schedules/paused", server.SetAllSchedulesPaused)
 			secured.Patch("/schedules/{key}", server.routeUpdateSchedule)
 			secured.Post("/schedules/{key}/run", server.routeRunSchedule)
 			secured.Get("/network", server.GetNetworkSettings)

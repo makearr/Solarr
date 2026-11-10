@@ -749,6 +749,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schedules/paused": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Pause or resume every task. Administrator only. */
+        put: operations["setAllSchedulesPaused"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schedules/{key}": {
         parameters: {
             query?: never;
@@ -5952,6 +5969,17 @@ export interface components {
             run_at_startup: boolean;
             /** @description Whether POST /schedules/{key}/run?full=true does something different from an ordinary run for this task -- library scan's full rescan is the only one today (private/questions.md). */
             supports_full: boolean;
+            /** @description Held, by its own pause or by pausing every task. */
+            paused: boolean;
+            /** @description Every task is paused, this one included; resuming one task does not lift it. */
+            paused_by_all: boolean;
+            /** Format: date-time */
+            paused_at?: string;
+            /**
+             * Format: int64
+             * @description Jobs of this task waiting in the queue, among them the ones a pause interrupted.
+             */
+            held_jobs: number;
             /** Format: date-time */
             last_run_at?: string;
             /** Format: int64 */
@@ -12258,6 +12286,33 @@ export interface operations {
             401: components["responses"]["Problem"];
         };
     };
+    setAllSchedulesPaused: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    paused: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
     updateSchedule: {
         parameters: {
             query?: never;
@@ -12273,6 +12328,8 @@ export interface operations {
                     cadences?: string[];
                     enabled?: boolean;
                     run_at_startup?: boolean;
+                    /** @description true holds the task: its fires are skipped, its running jobs stop and wait in the queue, and it cannot be run until false resumes it where it stopped. */
+                    paused?: boolean;
                 };
             };
         };

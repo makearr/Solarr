@@ -46,6 +46,12 @@ func (f *fakeScheduleSource) Enabled(taskKey string) bool { return !f.disabled[t
 
 func newScheduleStates(t *testing.T) (*jobs.ScheduleStates, *clock.Fake) {
 	t.Helper()
+	states, _, fake := newScheduleStatesWithStore(t)
+	return states, fake
+}
+
+func newScheduleStatesWithStore(t *testing.T) (*jobs.ScheduleStates, *store.Store, *clock.Fake) {
+	t.Helper()
 	directory := t.TempDir()
 	backups := filepath.Join(directory, "backups")
 	if err := os.MkdirAll(backups, 0o755); err != nil {
@@ -68,7 +74,7 @@ func newScheduleStates(t *testing.T) (*jobs.ScheduleStates, *clock.Fake) {
 	if err := store.Migrate(t.Context(), opened, backups, owner); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	return jobs.NewScheduleStates(opened), fake
+	return jobs.NewScheduleStates(opened), opened, fake
 }
 
 func TestTaskRunner_FiresAndRecordsAnEnqueuedOutcome(t *testing.T) {
@@ -572,5 +578,33 @@ func TestTaskRunner_ACadenceChangedWhileAsleepTakesEffect(t *testing.T) {
 	case <-fired:
 	case <-time.After(5 * time.Second):
 		t.Fatal("the task kept sleeping toward its old weekly time")
+	}
+}
+
+func TestTaskRunner_APausedTaskRefusesRunNowAndFiresAgainOnceResumed(t *testing.T) {
+	states, opened, fake := newScheduleStatesWithStore(t)
+	pauses := jobs.NewPauses(opened, fake)
+	var keys []string
+	task := jobs.Task{Key: "scan", DefaultCadence: "* * * * *", Enqueue: func(ctx context.Context) (jobs.EnqueueResult, error) {
+		keys = append(keys, jobs.TaskKeyFrom(ctx))
+		return jobs.EnqueueResult{}, nil
+	}}
+	runner := jobs.NewTaskRunner(task, newFakeScheduleSource(), states, fake, quietLogger())
+	runner.UsePauses(pauses)
+
+	if err := pauses.Pause(t.Context(), "scan"); err != nil {
+		t.Fatalf("Pause: %v", err)
+	}
+	if err := runner.RunNow(t.Context()); !errors.Is(err, jobs.ErrTaskPaused) {
+		t.Fatalf("RunNow while paused = %v, want ErrTaskPaused", err)
+	}
+	if err := pauses.Resume(t.Context(), "scan"); err != nil {
+		t.Fatalf("Resume: %v", err)
+	}
+	if err := runner.RunNow(t.Context()); err != nil {
+		t.Fatalf("RunNow after Resume: %v", err)
+	}
+	if len(keys) != 1 || keys[0] != "scan" {
+		t.Errorf("the enqueue saw task keys %v, want [scan] only from the run after Resume", keys)
 	}
 }

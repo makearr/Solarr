@@ -61,6 +61,7 @@ type Executor struct {
 	diskGate DiskGate
 	watchdog Watchdog
 	runLog   RunLog
+	pauses   *Pauses
 
 	mu       sync.RWMutex
 	handlers map[Type]Handler
@@ -82,6 +83,8 @@ type ExecutorConfig struct {
 	Watchdog Watchdog
 	// RunLog is optional: told how long every job ran, for the scheduler's history.
 	RunLog RunLog
+	// Pauses is optional: a job of a paused task is put back in the queue, and a pause interrupts a running one.
+	Pauses *Pauses
 }
 
 // RunLog keeps a record of when each kind of job ran and for how long.
@@ -111,6 +114,7 @@ func NewExecutor(queue *Queue, cl clock.Clock, config ExecutorConfig) *Executor 
 		diskGate: config.DiskGate,
 		watchdog: config.Watchdog,
 		runLog:   config.RunLog,
+		pauses:   config.Pauses,
 		handlers: make(map[Type]Handler),
 	}
 }
@@ -153,17 +157,31 @@ func (e *Executor) Execute(ctx context.Context, job Job) {
 		return
 	}
 
-	running, stopRenewing := context.WithCancel(ctx)
-	renewalDone := e.renewUntilDone(running, stopRenewing, job, logger)
+	taskKey := e.pauses.taskOf(ctx, job.ID)
+	running, cancelRun := context.WithCancelCause(ctx)
+	stopRenewing := func() { cancelRun(nil) }
+	renewalDone := e.renewUntilDone(running, func() { cancelRun(ErrLeaseLost) }, job, logger)
+	untrack := e.pauses.track(job.ID, taskKey, cancelRun)
+	// Checked after tracking, so a pause between the claim and here is not missed.
+	if e.pauses.IsPaused(taskKey) {
+		cancelRun(ErrPaused)
+	}
 
 	job.Progress = e.running.Start(job)
 	ranFrom := e.clock.Now()
-	runErr := e.runWatched(running, handler, job)
+	var runErr error
+	if cause := context.Cause(running); errors.Is(cause, ErrPaused) {
+		runErr = cause
+	} else {
+		runErr = e.runWatched(WithTaskKey(running, taskKey), handler, job)
+	}
 	e.running.Finish(job.ID)
 	if e.runLog != nil && ctx.Err() == nil {
 		e.runLog.RecordRun(string(job.Type), ranFrom, e.clock.Now())
 	}
 
+	paused := errors.Is(context.Cause(running), ErrPaused)
+	untrack()
 	stopRenewing()
 	<-renewalDone
 
@@ -176,7 +194,14 @@ func (e *Executor) Execute(ctx context.Context, job Job) {
 			return
 		}
 		if runErr != nil {
-			e.continueAfterYield(ctx, job, logger)
+			e.continueAfterYield(WithTaskKey(ctx, taskKey), job, logger)
+		}
+		return
+	}
+
+	if paused {
+		if err := e.queue.ReleasePaused(ctx, job, e.owner, attempt); err != nil {
+			logger.Warn("could not put a paused job back", slog.Any("error", err))
 		}
 		return
 	}

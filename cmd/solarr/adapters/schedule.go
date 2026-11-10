@@ -3,6 +3,8 @@ package adapters
 import (
 	"context"
 
+	"github.com/makearr/Solarr/internal/api/apiserver"
+
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -13,6 +15,7 @@ type Schedule struct {
 	Registry *jobs.TaskRegistry
 	States   *jobs.ScheduleStates
 	Runners  map[string]*jobs.TaskRunner
+	Pauses   *jobs.Pauses
 	Cache    *settings.Cache
 	Clock    clock.Clock
 }
@@ -65,4 +68,34 @@ func (a Schedule) RunNow(ctx context.Context, key string, full bool) error {
 		return runner.RunNowFull(ctx)
 	}
 	return runner.RunNow(ctx)
+}
+
+func (a Schedule) Pause(ctx context.Context, key string) error {
+	if _, found := a.Registry.Lookup(key); !found && key != jobs.AllTasks {
+		return jobs.ErrUnknownTask
+	}
+	return a.Pauses.Pause(ctx, key)
+}
+
+func (a Schedule) Resume(ctx context.Context, key string) error {
+	if _, found := a.Registry.Lookup(key); !found && key != jobs.AllTasks {
+		return jobs.ErrUnknownTask
+	}
+	return a.Pauses.Resume(ctx, key)
+}
+
+func (a Schedule) HeldJobs(ctx context.Context) (map[string]int64, error) { return a.Pauses.Held(ctx) }
+
+func (a Schedule) PauseState(key string) apiserver.PauseState {
+	state := apiserver.PauseState{Paused: a.Pauses.IsPaused(key)}
+	if at, own := a.Pauses.PausedAt(key); own {
+		state.Since = &at
+	}
+	if at, all := a.Pauses.PausedAt(jobs.AllTasks); all {
+		state.ByAll = true
+		if state.Since == nil {
+			state.Since = &at
+		}
+	}
+	return state
 }

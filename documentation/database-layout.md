@@ -9,7 +9,7 @@ Four persistent databases, one disposable cache (ADR-2, revised 2026-10-04 by `s
 |---|---|---|
 | `settings.db` | Configuration and credentials | Small, rarely written, **fully cached in memory** |
 | `library.db` | Everything that scales with the library | Large, written constantly, never cached whole |
-| `jobs.db` | The work queue and the append-only event log | Churns; retention-bounded |
+| `jobs.db` | The work queue, the append-only event log and the task pauses | Churns; retention-bounded |
 | `statistics.db` | What was seen and done: download history, candidates, decisions and rollups | Append-mostly; **`library.db` is correct with it empty**: nothing that decides what to download, import, replace or delete reads it |
 
 Whether an item is fresh because RSS showed it (ADR-55) is `rss_sighting` in `library.db`, written when a decision

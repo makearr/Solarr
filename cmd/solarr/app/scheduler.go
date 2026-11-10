@@ -296,6 +296,7 @@ func (p *process) startSchedulers(ctx context.Context) {
 
 	for _, task := range p.taskRegistry.InRegistrationOrder() {
 		runner := jobs.NewTaskRunner(task, source, p.scheduleStates, wall, p.logger)
+		runner.UsePauses(p.pauses)
 		p.taskRunners[task.Key] = runner
 		if task.StartupDelay > 0 {
 			go runner.Startup(ctx)

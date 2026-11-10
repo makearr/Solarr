@@ -138,6 +138,7 @@ type process struct {
 	taskRegistry   *jobs.TaskRegistry
 	scheduleStates *jobs.ScheduleStates
 	taskRunners    map[string]*jobs.TaskRunner
+	pauses         *jobs.Pauses
 	// settingsRegistry is ADR-26's own registry of every scalar setting
 	// (todo 4.14), built once alongside cache -- write paths refuse a key
 	// this does not know about (settings.ErrSettingNotRegistered).
@@ -534,6 +535,10 @@ func (p *process) startJobs(ctx context.Context) error {
 	owner := fmt.Sprintf("%s-%d-%d", hostname(), os.Getpid(), wall.Now().UnixNano())
 
 	p.running, p.jobRegistry = jobs.NewRunning(wall), registry
+	p.pauses = jobs.NewPauses(p.jobs, wall)
+	if err := p.pauses.Load(ctx); err != nil {
+		return err
+	}
 	p.indexerCaps = newIndexerCapsCache(wall)
 	p.indexerPacing = newIndexerPacing(wall)
 	// After the queue and the bus exist, which a module's wiring captures; before any job that asks the registry.
@@ -554,6 +559,7 @@ func (p *process) startJobs(ctx context.Context) error {
 		DiskGate: p.diskTurns,
 		Watchdog: p.diskTurns,
 		RunLog:   p.taskHours,
+		Pauses:   p.pauses,
 	})
 	if err := p.registerScanJob(ctx, registry, executor); err != nil {
 		return err
@@ -790,7 +796,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		Roots:         apiserver.FilesystemRoots{FS: p.fsys},
 		DownloadRoots: apiserver.FilesystemRoots{FS: p.fsys},
 		Scheduler: adapters.Schedule{
-			Registry: p.taskRegistry, States: p.scheduleStates, Runners: p.taskRunners,
+			Registry: p.taskRegistry, States: p.scheduleStates, Runners: p.taskRunners, Pauses: p.pauses,
 			Cache: p.cache, Clock: clock.NewSystem(),
 		},
 		CacheManager: adapters.CacheManager{

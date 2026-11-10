@@ -57,8 +57,12 @@ type TaskRunner struct {
 	states  *ScheduleStates
 	clock   clock.Clock
 	logger  *slog.Logger
+	pauses  *Pauses
 	running sync.Mutex
 }
+
+// UsePauses makes the runner skip its fires, and refuse manual ones, while its task is paused.
+func (r *TaskRunner) UsePauses(pauses *Pauses) { r.pauses = pauses }
 
 // NewTaskRunner builds a runner for one task.
 func NewTaskRunner(task Task, source ScheduleSource, states *ScheduleStates, cl clock.Clock, logger *slog.Logger) *TaskRunner {
@@ -82,6 +86,11 @@ func (r *TaskRunner) Run(ctx context.Context) {
 		}
 		if !r.source.Enabled(r.task.Key) {
 			r.logger.Debug("schedule tick skipped: disabled", slog.String("task", r.task.Key))
+			continue
+		}
+
+		if r.pauses.IsPaused(r.task.Key) {
+			r.logger.Debug("schedule tick skipped: paused", slog.String("task", r.task.Key))
 			continue
 		}
 
@@ -129,6 +138,9 @@ func (r *TaskRunner) RunNow(ctx context.Context) error {
 }
 
 func (r *TaskRunner) runOnce(ctx context.Context, enqueue func(context.Context) (EnqueueResult, error)) error {
+	if r.pauses.IsPaused(r.task.Key) {
+		return ErrTaskPaused
+	}
 	if !r.running.TryLock() {
 		return ErrAlreadyRunning
 	}
@@ -144,6 +156,9 @@ func (r *TaskRunner) runOnce(ctx context.Context, enqueue func(context.Context) 
 func (r *TaskRunner) RunNowFull(ctx context.Context) error {
 	if r.task.RunFull == nil {
 		return ErrNoFullMode
+	}
+	if r.pauses.IsPaused(r.task.Key) {
+		return ErrTaskPaused
 	}
 	if !r.running.TryLock() {
 		return ErrAlreadyRunning
@@ -253,7 +268,7 @@ func (e earliest) Next(after time.Time) time.Time {
 
 func (r *TaskRunner) fireAndRecord(ctx context.Context, enqueue func(context.Context) (EnqueueResult, error)) {
 	start := r.clock.Now()
-	result, err := enqueue(ctx)
+	result, err := enqueue(WithTaskKey(ctx, r.task.Key))
 	duration := r.clock.Since(start)
 
 	outcome, errMsg := "enqueued", ""
