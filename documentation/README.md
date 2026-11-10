@@ -62,6 +62,7 @@ interface levels *normal / advanced / expert* in Settings → User.
 | [database-layout.md](database-layout.md) | Which database a table belongs in, and why |
 | [memory-copies.md](memory-copies.md) | Running the cache or the databases from RAM, and the guard when memory runs out |
 | [solarr-mode.md](solarr-mode.md) | Normal, read only, pause downloads, observe and *Arr companion mode |
+| [disk-io.md](disk-io.md) | Disk groups, the per-disk IO gate and its priorities, latency probing, ionice |
 | [users-and-access.md](users-and-access.md) | Roles, the per-library grants (request, add, manage) and hiding tagged items from an account |
 | [benchmarks.md](benchmarks.md) | The 500k corpus, the performance targets as tests |
 | [duplicate-videos.md](duplicate-videos.md) | Perceptual hashing of videos, the finder's levels, why not Stash's method, merging |
