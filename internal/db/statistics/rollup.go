@@ -68,17 +68,26 @@ func (r Rollup) Set(ctx context.Context, figures []Figure, computedAt int64) err
 
 // ReplaceCategory rebuilds one library's rows of one metric.
 func (r Rollup) ReplaceCategory(ctx context.Context, metric string, categoryID int64, figures []Figure, computedAt int64) error {
+	return r.replaceUnder(ctx, metric, Dimension(categoryID, ""), figures, computedAt)
+}
+
+// ReplaceKeyed rebuilds the rows of one metric whose key starts with keyPrefix, in one library.
+func (r Rollup) ReplaceKeyed(ctx context.Context, metric string, categoryID int64, keyPrefix string, figures []Figure, computedAt int64) error {
+	return r.replaceUnder(ctx, metric, Dimension(categoryID, keyPrefix), figures, computedAt)
+}
+
+func (r Rollup) replaceUnder(ctx context.Context, metric, prefix string, figures []Figure, computedAt int64) error {
 	err := r.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := statisticsdb.New(tx)
 		if err := queries.DeleteStatRollupMetricForCategory(ctx, statisticsdb.DeleteStatRollupMetricForCategoryParams{
-			Metric: metric, Prefix: Dimension(categoryID, ""),
+			Metric: metric, Prefix: prefix,
 		}); err != nil {
 			return err
 		}
 		return setFigures(ctx, queries, figures, computedAt)
 	})
 	if err != nil {
-		return fmt.Errorf("statistics: replace %s of library %d: %w", metric, categoryID, err)
+		return fmt.Errorf("statistics: replace %s under %q: %w", metric, prefix, err)
 	}
 	return nil
 }

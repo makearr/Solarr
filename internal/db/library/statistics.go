@@ -51,6 +51,12 @@ const (
 	// StatFilesBelowCutoff: per library and media type (key), value the files that miss the library's cutoff and count
 	// the files judged; written by the cutoff check, not by the rollup.
 	StatFilesBelowCutoff = "files_below_cutoff"
+	// StatFilesBelowTarget: per library and media type (key), value the files that miss the library's target and count
+	// the files judged; written by the cutoff check.
+	StatFilesBelowTarget = "files_below_target"
+	// StatWorstFiles: per library, key "<media type>|<work id>|<media ref>|<percent>|<title>" (the title last as it may
+	// hold "|"), value the percent; the files furthest from the target, written by the cutoff check.
+	StatWorstFiles = "worst_files"
 	// StatMostSearched: the wanted items searched most that are still missing, key "<work id>|<title>", value the
 	// searches, count when the last ran (Unix seconds).
 	StatMostSearched = "most_searched"

@@ -2043,6 +2043,9 @@ type CategoryStatistics struct {
 	// WindowDays How many days back the download figures reach.
 	WindowDays   int               `json:"window_days"`
 	WorksByState []StatisticsCount `json:"works_by_state"`
+
+	// WorstFiles The files furthest from the library's target, the furthest first; written by the cutoff check.
+	WorstFiles *[]StatisticsWorstFile `json:"worst_files,omitempty"`
 }
 
 // CategoryTargetSize defines model for CategoryTargetSize.
@@ -5926,10 +5929,25 @@ type StatisticsSeries struct {
 // StatisticsTarget defines model for StatisticsTarget.
 type StatisticsTarget struct {
 	BelowCutoff int64 `json:"below_cutoff"`
+
+	// BelowTarget The judged files that miss the library's target; 0 when it has none.
+	BelowTarget int64 `json:"below_target"`
 	Judged      int64 `json:"judged"`
 
 	// Key The media type.
 	Key string `json:"key"`
+}
+
+// StatisticsWorstFile defines model for StatisticsWorstFile.
+type StatisticsWorstFile struct {
+	// MediaRef The episode or part the file covers; absent for a whole work.
+	MediaRef  *string `json:"media_ref,omitempty"`
+	MediaType string  `json:"media_type"`
+
+	// Percent How close the file is to the target
+	Percent int64  `json:"percent"`
+	Title   string `json:"title"`
+	WorkId  int64  `json:"work_id"`
 }
 
 // StreamingEncoder defines model for StreamingEncoder.

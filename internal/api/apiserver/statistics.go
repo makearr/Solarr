@@ -41,6 +41,8 @@ type StatisticsView struct {
 	MostSearched       []StatisticsFigure
 	Indexers           []StatisticsFigure
 	BelowCutoff        []StatisticsFigure
+	BelowTarget        []StatisticsFigure
+	WorstFiles         []StatisticsFigure
 	Unidentified       []StatisticsFigure
 }
 
@@ -103,9 +105,15 @@ func (s *Server) GetCategoryStatistics(w http.ResponseWriter, r *http.Request, i
 		targets := make([]gen.StatisticsTarget, len(view.BelowCutoff))
 		for index, figure := range view.BelowCutoff {
 			targets[index] = gen.StatisticsTarget{Key: figure.Key, Judged: figure.Count, BelowCutoff: int64(figure.Value)}
+			for _, below := range view.BelowTarget {
+				if below.Key == figure.Key {
+					targets[index].BelowTarget = int64(below.Value)
+				}
+			}
 		}
 		out.QualityVsTarget = &targets
 	}
+	out.WorstFiles = worstFiles(view.WorstFiles)
 	out.FilesByVideoCodec, out.FilesByResolution = files(view.FilesByVideoCodec), files(view.FilesByResolution)
 	out.FilesByHdr, out.FilesByAudio = files(view.FilesByHDR), files(view.FilesByAudio)
 	out.SeriesBySize, out.SeriesGaps = seriesFigures(view.SeriesSize, false), seriesFigures(view.SeriesGaps, true)
@@ -253,5 +261,30 @@ func mostSearched(figures []StatisticsFigure) *[]gen.StatisticsSearchedItem {
 		out = append(out, item)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Searches > out[j].Searches })
+	return &out
+}
+
+// worstFiles reads StatWorstFiles keys, "<media type>|<work id>|<media ref>|<percent>|<title>", the closest to the target last.
+func worstFiles(figures []StatisticsFigure) *[]gen.StatisticsWorstFile {
+	if len(figures) == 0 {
+		return nil
+	}
+	out := make([]gen.StatisticsWorstFile, 0, len(figures))
+	for _, figure := range figures {
+		parts := strings.SplitN(figure.Key, "|", 5)
+		if len(parts) != 5 {
+			continue
+		}
+		workID, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			continue
+		}
+		file := gen.StatisticsWorstFile{MediaType: parts[0], WorkId: workID, Title: parts[4], Percent: int64(figure.Value)}
+		if parts[2] != "" {
+			file.MediaRef = &parts[2]
+		}
+		out = append(out, file)
+	}
+	sort.SliceStable(out, func(a, b int) bool { return out[a].Percent < out[b].Percent })
 	return &out
 }

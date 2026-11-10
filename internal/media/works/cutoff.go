@@ -96,7 +96,8 @@ func (c Cutoff) CheckCutoff(ctx context.Context, snapshot *settings.Snapshot, it
 	if err != nil {
 		return cutoff.Outcome{}, err
 	}
-	return cutoff.Outcome{Replaced: settled, State: state, Decided: decided, Judged: tally.Judged, BelowCutoff: tally.BelowCutoff}, nil
+	return cutoff.Outcome{Replaced: settled, State: state, Decided: decided, Judged: tally.Judged, BelowCutoff: tally.BelowCutoff,
+		BelowTarget: tally.BelowTarget, Worst: tally.Worst}, nil
 }
 
 // StateUnder is the state the item would have if its library were the given category, writing nothing; decided is
@@ -241,7 +242,7 @@ func (c Cutoff) stateFor(
 	}
 	if !category.QualityUpgrades {
 		// Counted for the statistics page; the item stays complete because the library never upgrades.
-		return StateComplete, true, c.tally(snapshot, category, files), nil
+		return StateComplete, true, c.tally(snapshot, category, item, files), nil
 	}
 	if len(files) == 0 || !allMeasured(files) {
 		return "", false, cutoff.Tally{}, nil
@@ -264,6 +265,7 @@ func (c Cutoff) stateFor(
 		}
 		judgedAny = true
 		tally.Judged++
+		countTarget(&tally, item, file, judgement, category)
 	}
 	switch {
 	case c.Versions:
@@ -278,7 +280,7 @@ func (c Cutoff) stateFor(
 }
 
 // tally counts the monitored files the profile can judge and those that miss the cutoff.
-func (c Cutoff) tally(snapshot *settings.Snapshot, category settings.Category, files []File) cutoff.Tally {
+func (c Cutoff) tally(snapshot *settings.Snapshot, category settings.Category, item library.CutoffItem, files []File) cutoff.Tally {
 	var tally cutoff.Tally
 	if c.Versions {
 		return tally
@@ -292,6 +294,7 @@ func (c Cutoff) tally(snapshot *settings.Snapshot, category settings.Category, f
 			if !judgement.MeetsCutoff {
 				tally.BelowCutoff++
 			}
+			countTarget(&tally, item, file, judgement, category)
 		}
 	}
 	return tally
@@ -347,4 +350,17 @@ func VersionedCutoff(mediaType string, desired library.Desired, reader library.S
 		},
 		Files: func(ctx context.Context, itemID int64) ([]File, error) { return ItemFiles(ctx, reader, itemID) },
 	}
+}
+
+// countTarget adds a file that misses the library's target to the tally, with how close it is.
+func countTarget(tally *cutoff.Tally, item library.CutoffItem, file File, judgement quality.File, category settings.Category) {
+	if category.QualityTarget == nil || judgement.MeetsTarget {
+		return
+	}
+	tally.BelowTarget++
+	percent := 0
+	if judgement.Target != nil {
+		percent = judgement.Target.Percent
+	}
+	tally.Worst = append(tally.Worst, cutoff.WorstFile{WorkID: item.WorkID, Ref: file.Ref, Percent: percent})
 }

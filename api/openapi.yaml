@@ -14476,6 +14476,10 @@ components:
         files_by_codec:
           type: array
           items: { $ref: "#/components/schemas/StatisticsFiles" }
+        worst_files:
+          type: array
+          description: The files furthest from the library's target, the furthest first; written by the cutoff check.
+          items: { $ref: "#/components/schemas/StatisticsWorstFile" }
         quality_vs_target:
           type: array
           description: Per media type of the library, the files judged against the library's cutoff and those that miss it; written by the cutoff check.
@@ -14581,11 +14585,22 @@ components:
 
     StatisticsTarget:
       type: object
-      required: [key, judged, below_cutoff]
+      required: [key, judged, below_cutoff, below_target]
       properties:
         key: { type: string, description: The media type. }
         judged: { type: integer, format: int64 }
         below_cutoff: { type: integer, format: int64 }
+        below_target: { type: integer, format: int64, description: The judged files that miss the library's target; 0 when it has none. }
+
+    StatisticsWorstFile:
+      type: object
+      required: [media_type, work_id, title, percent]
+      properties:
+        media_type: { type: string }
+        work_id: { type: integer, format: int64 }
+        title: { type: string }
+        media_ref: { type: string, description: The episode or part the file covers; absent for a whole work. }
+        percent: { type: integer, format: int64, description: How close the file is to the target, 0 to 100. }
 
     StatisticsCount:
       type: object

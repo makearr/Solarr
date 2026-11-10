@@ -273,17 +273,33 @@ export function Statistics() {
           {(data.quality_vs_target ?? []).length > 0 && (
             <section className="flex flex-col gap-2">
               <h2 className="text-sm font-medium">Quality against the target</h2>
-              <p className="text-xs text-ink-muted">Monitored files the quality profile judged, and how many miss the library&apos;s cutoff. Updated by the cutoff check.</p>
+              <p className="text-xs text-ink-muted">Monitored files the quality profile judged, against the library&apos;s target and its cutoff. Updated by the cutoff check.</p>
               <ul className="flex flex-col gap-1.5">
                 {(data.quality_vs_target ?? []).map((row) => (
                   <li key={row.key} className="flex items-center gap-3 text-sm">
                     <span className="w-28 shrink-0 capitalize">{row.key}</span>
                     <span className="flex-1 text-xs tabular-nums text-ink-muted">
-                      {row.judged - row.below_cutoff} of {row.judged} meet the cutoff · {row.below_cutoff} below
+                      {row.judged - row.below_target} of {row.judged} meet the target · {row.below_target} below it, {row.below_cutoff} below the cutoff
                     </span>
                   </li>
                 ))}
               </ul>
+              {(data.worst_files ?? []).length > 0 && (
+                <>
+                  <h3 className="mt-1 text-xs font-medium text-ink-muted">Furthest from the target</h3>
+                  <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
+                    {(data.worst_files ?? []).map((file) => (
+                      <li key={`${file.work_id}|${file.media_ref ?? ""}`} className="flex items-center gap-3 px-3 py-1.5 text-sm">
+                        <Link to="/works/$id" params={{ id: String(file.work_id) }} className="min-w-0 flex-1 truncate hover:underline">
+                          {file.title}
+                          {file.media_ref ? <span className="text-ink-muted"> · {file.media_ref}</span> : null}
+                        </Link>
+                        <Chip tone={file.percent < 50 ? "danger" : "warn"}>{file.percent}% of the target</Chip>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </section>
           )}
           <TargetSize categoryId={categoryId ?? ""} />

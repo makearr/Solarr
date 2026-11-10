@@ -322,35 +322,55 @@ func (s *Server) GetWork(w http.ResponseWriter, r *http.Request, id int64) {
 	requestRoots, requestCategories := s.visibleAt(access, settings.PermissionRequest)
 	view.CanRequest = workDetailVisible(requestRoots, requestCategories, row)
 	if view.Files != nil {
-		annotateWholeFiles(access, row.CategoryIDs, *view.Files)
+		annotateWholeFiles(access, row.CategoryIDs, s.ownTarget(r.Context(), access, id), *view.Files)
 	}
 	writeJSON(w, s.logger, http.StatusOK, view)
 }
 
+// ownTarget is the quality target a work was given of its own, nil when it follows its library's.
+func (s *Server) ownTarget(ctx context.Context, access authz.Access, workID int64) *settings.QualityTarget {
+	if s.workEditor == nil {
+		return nil
+	}
+	row, err := s.workEditor.GetWorkEdit(ctx, workID)
+	if err != nil || row.TargetID == nil {
+		return nil
+	}
+	target, found := access.Snapshot().QualityTarget(*row.TargetID)
+	if !found {
+		return nil
+	}
+	return &target
+}
+
 // annotateFileQuality marks each file against the target and cutoff of the work's first library
 // the caller can see (2026-09-19: "items show whether a file satisfies the target or cutoff").
-func annotateFileQuality(access authz.Access, categoryIDs []int64, parts []gen.WorkPart) {
+func annotateFileQuality(access authz.Access, categoryIDs []int64, own *settings.QualityTarget, parts []gen.WorkPart) {
 	files := make([]*gen.PartFile, len(parts))
 	for index := range parts {
 		files[index] = parts[index].File
 	}
-	annotateFiles(access, categoryIDs, files)
+	annotateFiles(access, categoryIDs, own, files)
 }
 
 // annotateWholeFiles marks the files of a work with no parts the same way.
-func annotateWholeFiles(access authz.Access, categoryIDs []int64, files []gen.PartFile) {
+func annotateWholeFiles(access authz.Access, categoryIDs []int64, own *settings.QualityTarget, files []gen.PartFile) {
 	pointers := make([]*gen.PartFile, len(files))
 	for index := range files {
 		pointers[index] = &files[index]
 	}
-	annotateFiles(access, categoryIDs, pointers)
+	annotateFiles(access, categoryIDs, own, pointers)
 }
 
-func annotateFiles(access authz.Access, categoryIDs []int64, files []*gen.PartFile) {
+// own is the work's target of its own, which replaces its library's.
+func annotateFiles(access authz.Access, categoryIDs []int64, own *settings.QualityTarget, files []*gen.PartFile) {
 	for _, id := range categoryIDs {
 		category, err := access.Category(id, settings.PermissionRead)
 		if err != nil {
 			continue
+		}
+		if own != nil {
+			category.QualityTarget = own
 		}
 		for _, file := range files {
 			// A file the probe has not measured yet is not judged, rather than shown as failing.
@@ -867,7 +887,7 @@ func (s *Server) ListWorkParts(w http.ResponseWriter, r *http.Request, id int64,
 		rows = rows[:limit]
 	}
 	page.Items = buildPartViews(rows)
-	annotateFileQuality(access, categories, page.Items)
+	annotateFileQuality(access, categories, s.ownTarget(r.Context(), access, id), page.Items)
 	writeJSON(w, s.logger, http.StatusOK, page)
 }
 

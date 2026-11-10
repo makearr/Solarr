@@ -159,7 +159,7 @@ func (s *Server) writeSimilarReport(w http.ResponseWriter, r *http.Request, fold
 		view := groupView{MaxDistance: group.MaxDistance, Videos: make([]videoView, 0, len(group.Videos))}
 		for _, video := range group.Videos {
 			file := partFileView(video.File)
-			annotateFiles(access, []int64{rootCategory[video.RootFolderID]}, []*gen.PartFile{file})
+			annotateFiles(access, []int64{rootCategory[video.RootFolderID]}, nil, []*gen.PartFile{file})
 			view.Videos = append(view.Videos, videoView{
 				MediaObjectID: video.MediaObjectID, SizeBytes: video.SizeBytes, Path: path.Join(rootPath[video.RootFolderID], video.RelPath),
 				DurationMs: video.DurationMs, Width: video.Width, Height: video.Height, CategoryID: rootCategory[video.RootFolderID], PathCount: video.PathCount,

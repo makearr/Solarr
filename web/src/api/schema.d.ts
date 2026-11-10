@@ -10642,6 +10642,8 @@ export interface components {
             /** @description The wanted items searched most that are still missing, most first; at most ten. */
             most_searched?: components["schemas"]["StatisticsSearchedItem"][];
             files_by_codec: components["schemas"]["StatisticsFiles"][];
+            /** @description The files furthest from the library's target, the furthest first; written by the cutoff check. */
+            worst_files?: components["schemas"]["StatisticsWorstFile"][];
             /** @description Per media type of the library, the files judged against the library's cutoff and those that miss it; written by the cutoff check. */
             quality_vs_target?: components["schemas"]["StatisticsTarget"][];
             /** @description Video libraries only; the measured video codec of each file. */
@@ -10736,6 +10738,24 @@ export interface components {
             judged: number;
             /** Format: int64 */
             below_cutoff: number;
+            /**
+             * Format: int64
+             * @description The judged files that miss the library's target; 0 when it has none.
+             */
+            below_target: number;
+        };
+        StatisticsWorstFile: {
+            media_type: string;
+            /** Format: int64 */
+            work_id: number;
+            title: string;
+            /** @description The episode or part the file covers; absent for a whole work. */
+            media_ref?: string;
+            /**
+             * Format: int64
+             * @description How close the file is to the target
+             */
+            percent: number;
         };
         StatisticsCount: {
             key: string;

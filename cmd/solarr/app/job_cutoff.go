@@ -120,16 +120,39 @@ func (p *process) enqueueCutoff(ctx context.Context) (jobs.EnqueueResult, error)
 	})
 }
 
-// recordCutoffTally stores how many files each library holds below its cutoff, for the statistics page.
+// recordCutoffTally stores how many files each library holds below its cutoff and its target, and the files furthest
+// from the target, for the statistics page.
 func (p *process) recordCutoffTally(ctx context.Context, source string, tallies map[int64]cutoff.Tally) error {
-	figures := make([]statistics.Figure, 0, len(tallies))
+	now := clock.NewSystem().Now().Unix()
+	rollup := statistics.NewRollup(p.statistics)
+	works := library.NewWorks(p.library)
+	figures := make([]statistics.Figure, 0, 2*len(tallies))
 	for categoryID, tally := range tallies {
-		figures = append(figures, statistics.Figure{
-			Metric: library.StatFilesBelowCutoff, Dimension: statistics.Dimension(categoryID, source),
-			Value: float64(tally.BelowCutoff), Count: tally.Judged,
-		})
+		dimension := statistics.Dimension(categoryID, source)
+		figures = append(figures,
+			statistics.Figure{Metric: library.StatFilesBelowCutoff, Dimension: dimension, Value: float64(tally.BelowCutoff), Count: tally.Judged},
+			statistics.Figure{Metric: library.StatFilesBelowTarget, Dimension: dimension, Value: float64(tally.BelowTarget), Count: tally.Judged})
 	}
-	return statistics.NewRollup(p.statistics).Set(ctx, figures, clock.NewSystem().Now().Unix())
+	if err := rollup.Set(ctx, figures, now); err != nil {
+		return err
+	}
+	for categoryID, tally := range tallies {
+		worst := make([]statistics.Figure, 0, len(tally.Worst))
+		for _, file := range tally.Worst {
+			title, err := works.TitleOf(ctx, file.WorkID)
+			if err != nil {
+				continue
+			}
+			key := fmt.Sprintf("%s|%d|%s|%d|%s", source, file.WorkID, file.Ref, file.Percent, title)
+			worst = append(worst, statistics.Figure{
+				Metric: library.StatWorstFiles, Dimension: statistics.Dimension(categoryID, key), Value: float64(file.Percent),
+			})
+		}
+		if err := rollup.ReplaceKeyed(ctx, library.StatWorstFiles, categoryID, source+"|", worst, now); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // handOverSidecars moves the subtitles beside a replaced episode file to the file replacing it.

@@ -3,9 +3,11 @@
 package cutoff
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"log/slog"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -48,6 +50,16 @@ type Outcome struct {
 	// Judged and BelowCutoff count the item's monitored files the profile could judge and those that miss the cutoff;
 	// Judged is 0 when the type does not count.
 	Judged, BelowCutoff int64
+	// BelowTarget counts the judged files that miss the library's target, and Worst names them with how close each is.
+	BelowTarget int64
+	Worst       []WorstFile
+}
+
+// WorstFile is a file that misses its library's target; Percent is how close it is to it.
+type WorstFile struct {
+	WorkID  int64
+	Ref     string
+	Percent int
 }
 
 // Check is a media type's part: which items it checks, and how one is settled and judged.
@@ -82,7 +94,23 @@ type Config struct {
 }
 
 // Tally is one library's files judged against its cutoff.
-type Tally struct{ Judged, BelowCutoff int64 }
+type Tally struct {
+	Judged, BelowCutoff, BelowTarget int64
+	// Worst is the files furthest from the target, at most WorstKept, the furthest first.
+	Worst []WorstFile
+}
+
+// WorstKept is how many files below the target a library's tally names.
+const WorstKept = 10
+
+func (t *Tally) add(outcome Outcome) {
+	t.Judged, t.BelowCutoff, t.BelowTarget = t.Judged+outcome.Judged, t.BelowCutoff+outcome.BelowCutoff, t.BelowTarget+outcome.BelowTarget
+	t.Worst = append(t.Worst, outcome.Worst...)
+	slices.SortStableFunc(t.Worst, func(a, b WorstFile) int { return cmp.Compare(a.Percent, b.Percent) })
+	if len(t.Worst) > WorstKept {
+		t.Worst = t.Worst[:WorstKept]
+	}
+}
 
 // Job walks every media type's checkable items once.
 type Job struct{ config Config }
@@ -133,7 +161,7 @@ func (j Job) runSource(ctx context.Context, job jobs.Job, source Source, snapsho
 			replaced += outcome.Replaced
 			if outcome.Judged > 0 {
 				tally := tallies[item.CategoryID]
-				tally.Judged, tally.BelowCutoff = tally.Judged+outcome.Judged, tally.BelowCutoff+outcome.BelowCutoff
+				tally.add(outcome)
 				tallies[item.CategoryID] = tally
 			}
 			job.Progress.Add(1)

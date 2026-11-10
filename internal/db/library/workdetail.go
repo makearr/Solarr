@@ -541,6 +541,15 @@ func (w Works) MediaTypeOf(ctx context.Context, workID int64) (string, error) {
 	return work.MediaType, nil
 }
 
+// TitleOf answers a work's canonical title; sql.ErrNoRows for no such work.
+func (w Works) TitleOf(ctx context.Context, workID int64) (string, error) {
+	work, err := librarydb.New(w.store.Read()).GetWork(ctx, workID)
+	if err != nil {
+		return "", fmt.Errorf("library: title of work %d: %w", workID, err)
+	}
+	return work.CanonicalTitle, nil
+}
+
 // SetManualField gives a work field a value of the user's own, which every provider's value gives way to; an empty
 // value returns the field to the providers'.
 func (w Works) SetManualField(ctx context.Context, at time.Time, workID int64, field, value string) error {
