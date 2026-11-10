@@ -10,6 +10,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/iogate"
 )
 
 func quietLogger() *slog.Logger { return slog.New(slog.DiscardHandler) }
@@ -330,6 +331,13 @@ type recordingGate struct {
 	err    error
 }
 
+func (g recordingGate) TurnsFor(jobs.Job) iogate.Turns { return g }
+
+func (g recordingGate) AcquirePaths(_ context.Context, _ string, paths []string) (func(), error) {
+	*g.events = append(*g.events, fmt.Sprint("turn", paths))
+	return func() { *g.events = append(*g.events, "turn over") }, nil
+}
+
 func (g recordingGate) Acquire(context.Context, jobs.Job) (func(), error) {
 	if g.err != nil {
 		return nil, g.err
@@ -370,5 +378,26 @@ func TestExecute_AJobThatNeverGetsItsTurnDoesNotRun(t *testing.T) {
 
 	if ran {
 		t.Fatal("the handler ran although the gate refused")
+	}
+}
+
+func TestOnDisk_AJobWaitsForTheDisksOfAOneBatchAndOutsideTheExecutorJustRuns(t *testing.T) {
+	queue, fake := newQueue(t)
+	var events []string
+	executor := jobs.NewExecutor(queue, fake, jobs.ExecutorConfig{
+		Owner: "worker-1", LeaseTTL: time.Minute, Logger: quietLogger(), DiskGate: recordingGate{events: &events},
+	})
+	executor.Handle(typeBackup, jobs.HandlerFunc(func(ctx context.Context, _ jobs.Job) error {
+		return iogate.OnDisk(ctx, "", []string{"/b", "/a"}, func() error { events = append(events, "batch"); return nil })
+	}))
+	mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
+	executor.Execute(t.Context(), claimOne(t, queue, jobs.PoolMaintenance, "worker-1"))
+	if got := fmt.Sprint(events); got != "[acquired turn[/a /b] batch turn over released]" {
+		t.Fatalf("events = %s, want the batch inside the job's turn, paths sorted", got)
+	}
+
+	ran := false
+	if err := iogate.OnDisk(t.Context(), "", []string{"/a"}, func() error { ran = true; return nil }); err != nil || !ran {
+		t.Fatalf("outside the executor: ran %v err %v, want it to just run", ran, err)
 	}
 }

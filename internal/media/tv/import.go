@@ -419,7 +419,7 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 			destRel = i.placer.FreeName(destRoot.Path, destRel)
 		}
 		destAbs := path.Join(destRoot.Path, destRel)
-		method, err := mover.PlaceOne(i.config.FS, sourceAbs, destAbs, file.media.SizeBytes, methods)
+		method, err := mover.PlaceOneOnDisk(ctx, i.config.FS, sourceAbs, destAbs, file.media.SizeBytes, methods)
 		if err != nil {
 			return undo(fmt.Errorf("place %q: %w", file.media.RelPath, err))
 		}

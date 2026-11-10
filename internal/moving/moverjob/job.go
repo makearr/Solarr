@@ -21,6 +21,7 @@ import (
 	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/iogate"
 )
 
 // JobType is the registered type of one Apply run over an accepted move plan.
@@ -180,7 +181,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 			return fmt.Errorf("moverjob: next pending item for job %d: %w", moveJob.ID, err)
 		}
 
-		if err := j.applyItem(ctx, item, permissions, planned[item.MediaObjectID]); err != nil {
+		if err := j.applyItem(ctx, item, diskKind(moveJob.Reason), permissions, planned[item.MediaObjectID]); err != nil {
 			j.logger.Warn("move item failed",
 				slog.Int64("move_job_id", moveJob.ID), slog.Int64("media_object_id", item.MediaObjectID),
 				slog.String("error", err.Error()))
@@ -215,13 +216,23 @@ func stopped(state string) bool {
 	return state == library.MoveJobPaused || state == library.MoveJobCancelled
 }
 
+// DiskKindRename is the disk-turn kind of a move that only renames; every other reason is a drain's kind of work.
+const DiskKindRename = "rename"
+
+func diskKind(reason string) string {
+	if reason == string(mover.ReasonRename) {
+		return DiskKindRename
+	}
+	return ""
+}
+
 // applyItem moves one file: locate its current path, copy/verify or rename
 // it into place (mover.ApplyOne), RECORD the new location, UNLINK the old
 // one, then TIDY now-empty source directories -- ADR-51's own
 // copy-verify-repoint-unlink order (Invariant 77), repoint and unlink both
 // the caller's job since ApplyOne imports no store.
 func (j *Job) applyItem(
-	ctx context.Context, item library.Item, permissions *mover.Permissions, planned mover.PlannedMove,
+	ctx context.Context, item library.Item, kind string, permissions *mover.Permissions, planned mover.PlannedMove,
 ) error {
 	paths, err := j.physical.PathsForObject(ctx, item.MediaObjectID)
 	if err != nil {
@@ -253,7 +264,10 @@ func (j *Job) applyItem(
 		return fmt.Errorf("source root %d has no known path", primary.RootFolderID)
 	}
 	if item.KeepSource {
-		return j.copyItem(ctx, item, primary.RootFolderID, primary.RelPath, sourceRoot, permissions)
+		copyRoot, _ := j.roots.RootFolder(item.DestRootID)
+		return iogate.OnDisk(ctx, kind, []string{sourceRoot.Path, copyRoot.Path}, func() error {
+			return j.copyItem(ctx, item, primary.RootFolderID, primary.RelPath, sourceRoot, permissions)
+		})
 	}
 	destRoot, ok := j.roots.RootFolder(item.DestRootID)
 	if !ok {
@@ -270,7 +284,9 @@ func (j *Job) applyItem(
 		root, ok := j.roots.RootFolder(rootFolderID)
 		return root.Path, ok
 	}
-	if err := mover.ApplyOne(j.fsys, move, rootPath); err != nil {
+	if err := iogate.OnDisk(ctx, kind, []string{sourceRoot.Path, destRoot.Path}, func() error {
+		return mover.ApplyOne(j.fsys, move, rootPath)
+	}); err != nil {
 		return fmt.Errorf("apply: %w", err)
 	}
 	if permissions != nil {

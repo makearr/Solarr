@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/iogate"
 )
 
 // Mode is the dry-run level (ADR-20).
@@ -75,11 +76,6 @@ type ExecutorConfig struct {
 	Running *Running
 	// DiskGate is optional: a job that uses a disk waits here for its turn on that disk.
 	DiskGate DiskGate
-}
-
-// DiskGate lets a job that reads or writes a disk wait for its turn. The release function is never nil on success.
-type DiskGate interface {
-	Acquire(ctx context.Context, job Job) (release func(), err error)
 }
 
 // NewExecutor builds an executor.
@@ -191,6 +187,7 @@ func (e *Executor) runOnDisk(ctx context.Context, handler Handler, job Job) erro
 	if e.diskGate == nil {
 		return runWithRecovery(ctx, handler, job)
 	}
+	ctx = iogate.WithTurns(ctx, e.diskGate.TurnsFor(job))
 	release, err := e.diskGate.Acquire(ctx, job)
 	if err != nil {
 		return err

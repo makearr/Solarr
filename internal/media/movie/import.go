@@ -158,7 +158,7 @@ func (p placing) Place(ctx context.Context, request batch.Request, unit inspect.
 	}
 	destAbs := path.Join(destRoot.Path, destRel)
 	methods := p.config.Placer.Methods(request.Ladder)
-	method, err := mover.PlaceOne(p.config.FS, sourceAbs, destAbs, file.SizeBytes, methods)
+	method, err := mover.PlaceOneOnDisk(ctx, p.config.FS, sourceAbs, destAbs, file.SizeBytes, methods)
 	if err != nil {
 		return nil, fmt.Errorf("place %q: %w", file.RelPath, err)
 	}

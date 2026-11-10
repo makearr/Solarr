@@ -23,6 +23,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/filekind"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/iogate"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 	"github.com/makearr/Solarr/internal/platform/previewstore"
 )
@@ -246,12 +247,14 @@ func (j *Job) perceptualHash(ctx context.Context, hasher PerceptualHasher, file 
 	absolute := path.Join(root.Path, file.RelPath)
 	var hash mediatool.VideoHash
 	var preview mediatool.Preview
-	var err error
-	if maker, ok := hasher.(PreviewMaker); ok && previews {
-		hash, preview, err = maker.HashAndPreview(ctx, absolute, true)
-	} else {
-		hash, err = hasher.PerceptualHash(ctx, absolute)
-	}
+	err := iogate.OnDisk(ctx, "", []string{absolute}, func() (readErr error) {
+		if maker, ok := hasher.(PreviewMaker); ok && previews {
+			hash, preview, readErr = maker.HashAndPreview(ctx, absolute, true)
+		} else {
+			hash, readErr = hasher.PerceptualHash(ctx, absolute)
+		}
+		return readErr
+	})
 	if err != nil {
 		return err
 	}
@@ -309,11 +312,16 @@ func (j *Job) hashFile(ctx context.Context, file library.UnmeasuredFile) error {
 		return fmt.Errorf("root folder %d is not configured", file.RootFolderID)
 	}
 	absolute := path.Join(root.Path, file.RelPath)
-	info, err := j.fs.Stat(absolute)
-	if err != nil {
-		return err
-	}
-	oshash, err := library.OSHash(j.fs, absolute, info.Size)
+	var oshash string
+	err := iogate.OnDisk(ctx, "", []string{absolute}, func() error {
+		info, statErr := j.fs.Stat(absolute)
+		if statErr != nil {
+			return statErr
+		}
+		var hashErr error
+		oshash, hashErr = library.OSHash(j.fs, absolute, info.Size)
+		return hashErr
+	})
 	if err != nil || oshash == "" {
 		return err
 	}
@@ -339,7 +347,11 @@ func (j *Job) probeBatch(ctx context.Context, files []library.UnmeasuredFile) fu
 		paths = append(paths, path.Join(root.Path, file.RelPath))
 		asked = append(asked, file)
 	}
-	probes, err := j.tool.ReadTags(ctx, paths)
+	var probes []mediatool.Probe
+	err := iogate.OnDisk(ctx, "", paths, func() (readErr error) {
+		probes, readErr = j.tool.ReadTags(ctx, paths)
+		return readErr
+	})
 	for index, file := range asked {
 		switch {
 		case err != nil:

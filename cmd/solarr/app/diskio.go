@@ -3,11 +3,13 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"slices"
+	"sort"
 	"time"
 
-	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/moving/moverjob"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/disklatency"
 	"github.com/makearr/Solarr/internal/platform/iogate"
@@ -29,9 +31,8 @@ const (
 var jobClasses = map[jobs.Type]iogate.Class{
 	"import.run": iogate.ClassImport, "import.inspect": iogate.ClassImport,
 	"import.place_unplaced": iogate.ClassImport, "import.download_watch": iogate.ClassImport,
-	"library.rename_automatic": iogate.ClassRename, "tv.rename_titled": iogate.ClassRename,
 	"music.tag_writeback": iogate.ClassTagWriteback,
-	"move.apply":          iogate.ClassDrain, "link.identical": iogate.ClassDrain,
+	"move.apply":          iogate.ClassDrain, "link.identical": iogate.ClassProbe,
 	"library.scan": iogate.ClassScan, "library.rescan": iogate.ClassScan,
 	"library.probe":               iogate.ClassProbe,
 	"library.statistics":          iogate.ClassStatistics,
@@ -39,29 +40,90 @@ var jobClasses = map[jobs.Type]iogate.Class{
 	"library.video_pictures":      iogate.ClassPreviews, "library.preview_cleanup": iogate.ClassPreviews,
 }
 
+// kindClasses overrides a job type's class for a batch that says what it is.
+var kindClasses = map[string]iogate.Class{moverjob.DiskKindRename: iogate.ClassRename}
+
+// diskLayout says which disk group a path or root folder is in; adapters.DiskManager answers it.
+type diskLayout interface {
+	GroupOfPath(path string) string
+	GroupOfRoot(rootFolderID int64) (group, path string, found bool)
+	PathOfGroup(group string) (string, bool)
+}
+
 // diskTurns makes each disk-bound job wait for its turn on its disk.
 type diskTurns struct {
 	gate    *iogate.Gate
-	disks   *adapters.DiskManager
+	disks   diskLayout
 	monitor *disklatency.Monitor
 }
 
-func newDiskTurns(disks *adapters.DiskManager, monitor *disklatency.Monitor, c clock.Clock) *diskTurns {
+func newDiskTurns(disks diskLayout, monitor *disklatency.Monitor, c clock.Clock) *diskTurns {
 	turns := &diskTurns{disks: disks, monitor: monitor}
 	turns.gate = iogate.New(c, iogate.Options{Capacity: turns.slots, OnWait: turns.measure})
 	return turns
 }
 
-// Acquire is jobs.DiskGate.
+// wholeRun are the job types that hold their disk for the entire run; every other listed type takes turns per batch.
+var wholeRun = map[jobs.Type]bool{
+	"library.scan": true, "library.rescan": true, "library.statistics": true,
+	"library.recycle_bin_cleanup": true, "library.preview_cleanup": true,
+}
+
+// Acquire is jobs.DiskGate: the turn of a job that holds one disk for its whole run.
 func (d *diskTurns) Acquire(ctx context.Context, job jobs.Job) (func(), error) {
 	class, gated := jobClasses[job.Type]
-	if !gated {
+	if !gated || !wholeRun[job.Type] {
 		return func() {}, nil
 	}
 	return d.gate.Acquire(ctx, d.groupOf(job), class)
 }
 
-// groupOf is the disk a job works on: its root folder's group when the payload names one.
+// TurnsFor is jobs.DiskGate.
+func (d *diskTurns) TurnsFor(job jobs.Job) iogate.Turns { return jobTurns{d: d, job: job} }
+
+type jobTurns struct {
+	d   *diskTurns
+	job jobs.Job
+}
+
+// AcquirePaths takes one batch's turn on every disk under the paths, in group order so two batches that need the
+// same pair of disks cannot each hold one and wait for the other.
+func (t jobTurns) AcquirePaths(ctx context.Context, kind string, paths []string) (func(), error) {
+	d, job := t.d, t.job
+	class, gated := jobClasses[job.Type]
+	if !gated {
+		return func() {}, nil
+	}
+	if kindClass, named := kindClasses[kind]; named {
+		class = kindClass
+	}
+	seen := map[string]bool{}
+	var groups []string
+	for _, path := range paths {
+		if group := d.disks.GroupOfPath(path); !seen[group] {
+			seen[group] = true
+			groups = append(groups, group)
+		}
+	}
+	sort.Strings(groups)
+	var releases []func()
+	releaseAll := func() {
+		for _, release := range slices.Backward(releases) {
+			release()
+		}
+	}
+	for _, group := range groups {
+		release, err := d.gate.Acquire(ctx, group, class)
+		if err != nil {
+			releaseAll()
+			return nil, err
+		}
+		releases = append(releases, release)
+	}
+	return releaseAll, nil
+}
+
+// groupOf is the disk a whole-run job works on: its root folder's group when the payload names one.
 func (d *diskTurns) groupOf(job jobs.Job) string {
 	var named struct {
 		RootFolderID int64 `json:"root_folder_id"`

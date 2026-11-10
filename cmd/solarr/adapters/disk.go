@@ -33,6 +33,8 @@ type DiskManager struct {
 	mu       sync.Mutex
 	cached   []apiserver.DiskPath
 	cachedAt time.Time
+	// pathGroups remembers paths outside every root folder.
+	pathGroups map[string]pathGroup
 }
 
 // layoutTTL is how long a detected layout is reused by the per-job lookups; mounts rarely change.
@@ -57,6 +59,36 @@ func (a *DiskManager) GroupOfRoot(rootFolderID int64) (group, path string, found
 	return "", "", false
 }
 
+// GroupOfPath is the disk group of any path: a root folder's group when the path lies under one, otherwise detected
+// on the spot (a download folder, a recycle bin) and remembered for a layoutTTL.
+func (a *DiskManager) GroupOfPath(path string) string {
+	best, bestLength := "", -1
+	for _, row := range a.cachedLayouts() {
+		if (path == row.Path || strings.HasPrefix(path, strings.TrimSuffix(row.Path, "/")+"/")) && len(row.Path) > bestLength {
+			best, bestLength = row.Group, len(row.Path)
+		}
+	}
+	if bestLength >= 0 {
+		return best
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if known, ok := a.pathGroups[path]; ok && a.Clock.Now().Sub(known.at) <= layoutTTL {
+		return known.group
+	}
+	group := disktopo.Detect(a.FS, []string{path})[0].Group()
+	if a.pathGroups == nil {
+		a.pathGroups = map[string]pathGroup{}
+	}
+	a.pathGroups[path] = pathGroup{group: group, at: a.Clock.Now()}
+	return group
+}
+
+type pathGroup struct {
+	group string
+	at    time.Time
+}
+
 // PathOfGroup is a path that lives in the group, to probe its disk with.
 func (a *DiskManager) PathOfGroup(group string) (string, bool) {
 	for _, row := range a.cachedLayouts() {
@@ -79,7 +111,7 @@ func (a *DiskManager) cachedLayouts() []apiserver.DiskPath {
 // Forget drops the cached layout, after a correction.
 func (a *DiskManager) Forget() {
 	a.mu.Lock()
-	a.cached = nil
+	a.cached, a.pathGroups = nil, nil
 	a.mu.Unlock()
 }
 

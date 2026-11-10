@@ -14,6 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/moving/linker"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/iogate"
 )
 
 // JobType is the registered type of one linking run over a library.
@@ -119,7 +120,11 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		method, err := linker.Apply(j.config.FS, link)
+		var method linker.Method
+		err := iogate.OnDisk(ctx, "", []string{link.Replace.Abs}, func() (applyErr error) {
+			method, applyErr = linker.Apply(j.config.FS, link)
+			return applyErr
+		})
 		if err == nil {
 			err = j.config.Links.MarkLinked(ctx, link.Replace.PathID, string(method))
 		}

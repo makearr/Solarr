@@ -190,7 +190,7 @@ func (p placing) Place(ctx context.Context, request batch.Request, unit inspect.
 			destRel = p.config.Placer.FreeName(destRoot.Path, destRel)
 		}
 		sourceAbs, destAbs := path.Join(request.SourcePath, file.RelPath), path.Join(destRoot.Path, destRel)
-		method, err := mover.PlaceOne(p.config.FS, sourceAbs, destAbs, file.SizeBytes, methods)
+		method, err := mover.PlaceOneOnDisk(ctx, p.config.FS, sourceAbs, destAbs, file.SizeBytes, methods)
 		if err != nil {
 			return undo(fmt.Errorf("place %q: %w", file.RelPath, err))
 		}

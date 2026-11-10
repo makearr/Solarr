@@ -19,6 +19,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/artwork"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/iogate"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
@@ -191,8 +192,15 @@ func (j *TagWritebackJob) writePage(ctx context.Context, run *tagRun, candidates
 		return nil
 	}
 
-	results, err := j.config.Tool.WriteTags(ctx, edits)
-	if err != nil {
+	editPaths := make([]string, len(edits))
+	for k, edit := range edits {
+		editPaths[k] = edit.Path
+	}
+	var results []mediatool.TagResult
+	if err := iogate.OnDisk(ctx, "", editPaths, func() (writeErr error) {
+		results, writeErr = j.config.Tool.WriteTags(ctx, edits)
+		return writeErr
+	}); err != nil {
 		return err
 	}
 	run.progress.Add(int64(len(results)))

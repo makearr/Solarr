@@ -148,7 +148,7 @@ func (s SharedFiles) placeOne(ctx context.Context, category settings.Category, w
 	if category.FileManagement.SharedFileFallback == settings.SharedFileSymlink {
 		fallback = mover.PlaceSymlink
 	}
-	method, err := mover.PlaceOne(s.FS, sourceAbs, destAbs, size, []mover.PlaceMethod{mover.PlaceReflink, mover.PlaceHardlink, fallback})
+	method, err := mover.PlaceOneOnDisk(ctx, s.FS, sourceAbs, destAbs, size, []mover.PlaceMethod{mover.PlaceReflink, mover.PlaceHardlink, fallback})
 	if err != nil {
 		return err
 	}

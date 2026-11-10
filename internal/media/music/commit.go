@@ -439,7 +439,7 @@ func (c Committer) CommitMatchedUnit(
 
 		sourceAbs := path.Join(sourceRoot, media.RelPath)
 		destAbs := path.Join(destRoot.Path, destRelPath)
-		method, err := mover.PlaceOne(c.fsys, sourceAbs, destAbs, media.SizeBytes, methods)
+		method, err := mover.PlaceOneOnDisk(ctx, c.fsys, sourceAbs, destAbs, media.SizeBytes, methods)
 		if err != nil {
 			return undo(fmt.Errorf("music: place %q: %w", media.RelPath, err))
 		}

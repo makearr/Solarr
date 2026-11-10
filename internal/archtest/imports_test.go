@@ -86,6 +86,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/platform/httpx":       {"internal/platform/clock"},
 	"internal/api/health":           {"internal/db/store"},
 	"internal/jobs": {
+		"internal/platform/iogate",
 		"internal/platform/clock", "internal/platform/paginate", "internal/db/store", "internal/db/store/gen/jobsdb",
 	},
 	// Builds a library.db at ADR-22 scale for the ADR-28 and ADR-5 benchmarks.
@@ -155,10 +156,11 @@ var allowedInternalImports = map[string][]string{
 	// job orchestration layer (persistence, resumability) is its own,
 	// separate package when it lands, the same split internal/importing/inspect
 	// keeps from internal/importing/importjob.
-	"internal/moving/mover": {"internal/platform/fsx", "internal/moving/placement"},
+	"internal/moving/mover": {"internal/platform/iogate", "internal/platform/fsx", "internal/moving/placement"},
 	// Replaces the second path of a media object with a link to the first; file I/O only, no database.
 	"internal/moving/linker": {"internal/platform/fsx"},
 	"internal/moving/linkjob": {
+		"internal/platform/iogate",
 		"internal/db/library", "internal/jobs", "internal/moving/linker", "internal/platform/fsx",
 	},
 	// ADR-48's import inspection: walk, classify, group. No media-type
@@ -278,7 +280,7 @@ var allowedInternalImports = map[string][]string{
 	// The cutoff check of every media type: paging, state writes and counting once, each type judging its own.
 	"internal/acquiring/cutoff":   {"internal/db/library", "internal/db/settings", "internal/jobs"},
 	"internal/acquiring/dispatch": {"internal/db/statistics", "internal/acquiring/download", "internal/db/library", "internal/identify/model", "internal/identify/priority"},
-	"internal/media/music": {"internal/platform/httpx", "internal/platform/filekind", "internal/importing/arrmap", "internal/importing/arrimport", "internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/acquiring/judge", "internal/platform/parallel",
+	"internal/media/music": {"internal/platform/iogate", "internal/platform/httpx", "internal/platform/filekind", "internal/importing/arrmap", "internal/importing/arrimport", "internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/acquiring/judge", "internal/platform/parallel",
 		"internal/media", "internal/acquiring/plan", "internal/acquiring/dispatch",
 		"internal/acquiring/indexer", "internal/acquiring/download", "internal/identify/priority",
 		"internal/platform/artwork", "internal/platform/clock", "internal/platform/fsx",
@@ -306,6 +308,7 @@ var allowedInternalImports = map[string][]string{
 	// from internal/scanning/scan (todo 4.2, confirmed with the user), so it imports
 	// no more than scan itself does.
 	"internal/scanning/probe": {
+		"internal/platform/iogate",
 		"internal/platform/clock", "internal/platform/filekind", "internal/jobs", "internal/db/library", "internal/platform/mediatool",
 		"internal/db/settings", "internal/platform/fsx", "internal/identify/parsetv", "internal/platform/previewstore",
 	},
@@ -329,6 +332,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/fsx",
 	},
 	"internal/moving/moverjob": {
+		"internal/platform/iogate",
 		"internal/platform/clock", "internal/platform/fsx", "internal/jobs", "internal/db/library", "internal/moving/mover",
 	},
 	// ADR-51's POST /rootfolders/{id}/drain: gathers real facts, calls
