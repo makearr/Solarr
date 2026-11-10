@@ -119,6 +119,52 @@ func (q *Queries) CountMeasuredByRootFolder(ctx context.Context) ([]CountMeasure
 	return items, nil
 }
 
+const countStaleProbes = `-- name: CountStaleProbes :one
+SELECT CAST(count(*) AS INTEGER) AS total
+FROM media_probe mp
+JOIN media_object o ON o.id = mp.media_object_id
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+WHERE mp.probe_version < ?1 AND o.measured_attributes_id IS NOT NULL
+`
+
+func (q *Queries) CountStaleProbes(ctx context.Context, belowVersion int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countStaleProbes, belowVersion)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
+const countStaleVideoProbes = `-- name: CountStaleVideoProbes :one
+SELECT CAST(count(*) AS INTEGER) AS total
+FROM media_probe mp
+JOIN media_object o ON o.id = mp.media_object_id
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+WHERE mp.probe_version < ?1 AND o.measured_attributes_id IS NOT NULL AND o.kind = 'video'
+`
+
+func (q *Queries) CountStaleVideoProbes(ctx context.Context, belowVersion int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countStaleVideoProbes, belowVersion)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
+const countUnmeasured = `-- name: CountUnmeasured :one
+SELECT CAST(count(*) AS INTEGER) AS total
+FROM media_object o
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+WHERE o.measured_attributes_id IS NULL
+`
+
+// The files the probe sweep still has to read, counted for its progress: ListUnmeasured, ListStaleProbes,
+// ListStaleVideoProbes and ListVideoWithoutOshash without their page.
+func (q *Queries) CountUnmeasured(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countUnmeasured)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const countVanishingPaths = `-- name: CountVanishingPaths :one
 SELECT CAST(COALESCE(SUM(CASE WHEN missing_since IS NULL AND last_seen_at < ?1 THEN 1 ELSE 0 END), 0) AS INTEGER) AS vanishing,
        CAST(COUNT(*) AS INTEGER) AS total
@@ -161,6 +207,20 @@ type CountVideoWithoutFrameHashesParams struct {
 // The same videos as ListVideoWithoutFrameHashes, counted, for the progress of the pass.
 func (q *Queries) CountVideoWithoutFrameHashes(ctx context.Context, arg CountVideoWithoutFrameHashesParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countVideoWithoutFrameHashes, arg.Version, arg.WantPreviews)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
+const countVideoWithoutOshash = `-- name: CountVideoWithoutOshash :one
+SELECT CAST(count(*) AS INTEGER) AS total
+FROM media_object o
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+WHERE o.oshash IS NULL AND o.kind = 'video' AND o.size_bytes >= 65536
+`
+
+func (q *Queries) CountVideoWithoutOshash(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countVideoWithoutOshash)
 	var total int64
 	err := row.Scan(&total)
 	return total, err

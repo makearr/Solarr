@@ -32,7 +32,12 @@ func (p *process) registerProbeJob(registry *jobs.Registry, executor *jobs.Execu
 		PreviewsDir:       filepath.Join(p.config.Paths.ConfigDir, "previews"),
 		Clock:             clock.NewSystem(),
 		Logger:            p.logger,
+		OthersWaiting: func(ctx context.Context) bool {
+			waiting, err := p.queue.ClaimableIn(ctx, jobs.PoolFiles)
+			return err != nil || waiting > 0
+		},
 	})
+	p.probeJob = job
 	executor.Handle(probe.JobType, job)
 	if err := registry.Register(probe.PicturesDefinition); err != nil {
 		return err
@@ -60,7 +65,7 @@ func (v videoPictures) Generate(ctx context.Context, withPreviews bool) error {
 	if withPreviews {
 		mode = probe.PicturesWithPreviews
 	}
-	_, err := probe.EnqueuePictures(ctx, v.process.queue, mode)
+	_, err := v.process.probeJob.RequestPictures(ctx, v.process.queue, mode)
 	return err
 }
 

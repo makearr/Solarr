@@ -7,8 +7,9 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import { SubTabs } from "@/ui/SubTabs";
+import { ToolbarSort } from "@/ui/Toolbar";
 
-import { expectedDurations, formatRuntime, heatColor, NEGLIGIBLE_TASK_MS, parseSortKey, poolLoad, sortRunning, sortTasks, taskLoad, WEEK_HOURS, type RunningSortKey, type SortDirection, type SortKey } from "./schedulerLoad";
+import { formatRuntime, greenLimit, heatColor, heatSlots, parseSortKey, poolLoad, slotOf, sortRunning, sortTasks, type RunningSortKey, type SortDirection, type SortKey } from "./schedulerLoad";
 
 type Schedule = components["schemas"]["Schedule"];
 type RunningJob = components["schemas"]["RunningJob"];
@@ -124,26 +125,32 @@ export function SchedulerPage() {
 
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
-/** What runs when: a week of hours, white when idle, green to red by the run time the hour's tasks add up to. */
-function Heatmap({ schedules }: { schedules: readonly Schedule[] }) {
+/** What ran when: the last seven days hour by hour, white when idle, green to red by the run time of the hour's jobs. */
+function Heatmap() {
   const [active, setActive] = useState<number | null>(null);
-  const enabled = schedules.filter((schedule) => schedule.enabled && !(typeof schedule.last_duration_ms === "number" && schedule.last_duration_ms > 0 && schedule.last_duration_ms < NEGLIGIBLE_TASK_MS));
-  const durations = expectedDurations(enabled);
-  const tasks = enabled.map((schedule, index) => ({ name: schedule.name, load: taskLoad(schedule.cadences), duration: durations[index]! }));
-  const names = (slot: number) => tasks.filter((task) => task.load[slot]! > 0).map((task) => task.name);
-  const runtimes = Array.from({ length: WEEK_HOURS }, (_, slot) => tasks.reduce((sum, task) => sum + task.load[slot]! * task.duration, 0));
+  const history = useQuery({
+    queryKey: ["task-history"],
+    queryFn: () => ok(api.GET("/schedules/history")),
+    refetchInterval: 60_000,
+    retry: false,
+  });
+  const slots = heatSlots(history.data?.hours ?? []);
+  const runtimes = slots.map((slot) => slot?.runtimeMs ?? 0);
   const busiest = Math.max(0, ...runtimes);
+  const green = greenLimit(runtimes);
+  const current = slotOf(new Date());
   const describe = (slot: number) => {
-    const here = names(slot);
-    const label = `${WEEKDAYS[Math.floor(slot / 24)]} ${String(slot % 24).padStart(2, "0")}:00`;
-    return here.length === 0
-      ? `${label}: nothing runs`
-      : `${label}, ${here.length} ${here.length === 1 ? "task" : "tasks"}, ${formatRuntime(runtimes[slot]!)} total: ${here.join(", ")}`;
+    const here = slots[slot];
+    const when = here ? new Date(here.hourStart * 1000) : null;
+    const label = `${WEEKDAYS[Math.floor(slot / 24)]} ${String(slot % 24).padStart(2, "0")}:00${when ? ` (${when.toLocaleDateString([], { day: "numeric", month: "short" })})` : ""}${slot === current ? ", this hour" : ""}`;
+    return !here || here.runtimeMs <= 0
+      ? `${label}: nothing ran`
+      : `${label}, ${here.names.length} ${here.names.length === 1 ? "kind of job" : "kinds of job"}, ${formatRuntime(here.runtimeMs)} total: ${here.names.join(", ")}`;
   };
   return (
     <section className="flex flex-col gap-2" aria-label="Schedule heatmap">
       <p className="text-xs text-ink-muted">
-        Run time per hour across a week, all enabled tasks together, from each task's last duration; tasks under 20 ms are left out. Hover or focus an hour to list its tasks.
+        Run time per hour over the last seven days, all jobs together, as the workers did it; the frame marks this hour. Hover or focus an hour to list what ran.
       </p>
       <div className="overflow-x-auto">
         <table className="border-separate border-spacing-0.5 text-[10px] text-ink-muted">
@@ -168,13 +175,15 @@ function Heatmap({ schedules }: { schedules: readonly Schedule[] }) {
                       key={hour}
                       tabIndex={0}
                       aria-label={describe(slot)}
+                      aria-current={slot === current ? "time" : undefined}
                       onMouseEnter={() => setActive(slot)}
                       onMouseLeave={() => setActive(null)}
                       onFocus={() => setActive(slot)}
                       onBlur={() => setActive(null)}
                       className="h-5 w-6 rounded-sm border border-border-subtle focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
                       title={describe(slot)}
-                      style={{ background: heatColor(runtimes[slot]!, busiest) }}
+                      // An outline is drawn inside the box without moving it, so the grid keeps its size and lines.
+                      style={{ background: heatColor(runtimes[slot]!, busiest, green), ...(slot === current ? { outline: "2px solid #000", outlineOffset: "-2px" } : {}) }}
                     />
                   );
                 })}
@@ -184,18 +193,18 @@ function Heatmap({ schedules }: { schedules: readonly Schedule[] }) {
         </table>
       </div>
       <p role="status" className="min-h-8 rounded-md border border-border-subtle bg-surface px-2 py-1 text-xs text-ink">
-        {active === null ? "Hover or focus an hour to see its tasks." : describe(active)}
+        {active === null ? "Hover or focus an hour to see what ran." : describe(active)}
       </p>
       <div className="flex items-center gap-2 text-xs text-ink-muted" role="group" aria-label="Legend">
         <span className="size-3 rounded-sm border border-border-subtle bg-white" aria-hidden />
-        <span>Nothing runs</span>
+        <span>Nothing ran</span>
         <span className="ml-2">Light</span>
         <span
           aria-hidden
           className="h-3 w-24 rounded-sm border border-border-subtle"
           style={{ background: "linear-gradient(to right, hsl(120 75% 50%), hsl(120 75% 50%) 20%, hsl(60 75% 50%) 60%, hsl(0 75% 50%))" }}
         />
-        <span>{formatRuntime(busiest)} (busiest hour); green up to 1 min</span>
+        <span>{formatRuntime(busiest)} (busiest hour); green up to {formatRuntime(green)}</span>
       </div>
     </section>
   );
@@ -236,29 +245,17 @@ function RunningJobs() {
     retry: false,
   });
   const jobs = sortRunning(activity.data ?? [], sort, direction);
-  const choose = (key: RunningSortKey) => {
-    setDirection(sort === key && direction === "asc" ? "desc" : "asc");
-    setSort(key);
-  };
   return (
     <section className="flex flex-col gap-2" aria-label="Running now">
       <h2 className="text-sm font-medium">Running now</h2>
-      <div role="group" aria-label="Sort running jobs" className="flex flex-wrap items-center gap-1.5 text-xs text-ink-muted">
-        Sort by
-        {RUNNING_SORTS.map(({ key, label }) => (
-          <button
-            key={key}
-            type="button"
-            aria-pressed={sort === key}
-            onClick={() => choose(key)}
-            className={`rounded-md border px-2 py-0.5 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-              sort === key ? "border-accent text-ink" : "border-border-subtle"
-            }`}
-          >
-            {label}
-            {sort === key && (direction === "asc" ? " \u2191" : " \u2193")}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <ToolbarSort
+          sort={sort}
+          descending={direction === "desc"}
+          choices={RUNNING_SORTS.map(({ key, label }) => [key, label] as const)}
+          onSort={(key) => setSort(key as RunningSortKey)}
+          onTurn={() => setDirection(direction === "asc" ? "desc" : "asc")}
+        />
       </div>
       {jobs.length === 0 ? (
         <p className="rounded-lg border border-border-subtle bg-surface p-3 text-xs text-ink-muted">Nothing is running.</p>
@@ -301,37 +298,27 @@ function RunningJobRow({ job, now }: { job: RunningJob; now: number }) {
   );
 }
 
-const SORT_LABELS: readonly { key: SortKey; label: string }[] = [
-  { key: "next", label: "Next run" },
-  { key: "last", label: "Last run" },
-  { key: "duration", label: "Last duration" },
+const SORT_CHOICES: readonly (readonly [SortKey, string])[] = [
+  ["name", "Name"],
+  ["next", "Next run"],
+  ["last", "Last run"],
+  ["duration", "Last duration"],
 ];
 
-/** Sort control for a task list; the choice lives in the address (`?sort=&dir=`). */
-function SortBar({ sort, direction }: { sort: SortKey | undefined; direction: SortDirection }) {
+/** Sort control for a task list, as the libraries have it; the choice lives in the address (`?sort=&dir=`). */
+function SortBar({ sort, direction }: { sort: SortKey; direction: SortDirection }) {
   const navigate = useNavigate();
-  const choose = (key: SortKey) => {
-    const next: SortDirection = sort === key && direction === "asc" ? "desc" : "asc";
-    void navigate({ to: ".", replace: true, search: (previous: Record<string, unknown>) => ({ ...previous, sort: key, dir: next }) });
-  };
+  const change = (next: { sort?: SortKey; dir?: SortDirection }) =>
+    void navigate({ to: ".", replace: true, search: (previous: Record<string, unknown>) => ({ ...previous, ...next }) });
   return (
-    <div role="group" aria-label="Sort tasks" className="flex flex-wrap items-center gap-1.5 text-xs text-ink-muted">
-      Sort by
-      {SORT_LABELS.map(({ key, label }) => (
-        <button
-          key={key}
-          type="button"
-          aria-pressed={sort === key}
-          aria-label={sort === key ? `${label}, ${direction === "asc" ? "ascending" : "descending"}` : label}
-          onClick={() => choose(key)}
-          className={`rounded-md border px-2 py-0.5 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-            sort === key ? "border-accent text-ink" : "border-border-subtle"
-          }`}
-        >
-          {label}
-          {sort === key && (direction === "asc" ? " \u2191" : " \u2193")}
-        </button>
-      ))}
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      <ToolbarSort
+        sort={sort}
+        descending={direction === "desc"}
+        choices={SORT_CHOICES}
+        onSort={(key) => change({ sort: parseSortKey(key) ?? "name" })}
+        onTurn={() => change({ dir: direction === "asc" ? "desc" : "asc" })}
+      />
     </div>
   );
 }
@@ -370,7 +357,7 @@ export function Scheduler() {
   if (schedules.error !== null) return null;
   const visible = (schedules.data ?? []).filter((schedule) => isTierVisible(tier, schedule.tier));
 
-  const sort = parseSortKey(search.sort);
+  const sort = parseSortKey(search.sort) ?? "name";
   const direction: SortDirection = search.dir === "desc" ? "desc" : "asc";
 
   const categoryTab = (category: (typeof CATEGORIES)[number]) => {
@@ -409,7 +396,7 @@ export function Scheduler() {
       tabs={[
         { key: "overview", label: "Overview", content: (
             <div className="flex flex-col gap-6">
-              <Heatmap schedules={visible} />
+              <Heatmap />
               <RunningJobs />
             </div>
           ),

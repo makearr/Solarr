@@ -93,6 +93,7 @@ type worksFixture struct {
 	scheduler            *fakeScheduler
 	cacheManager         *fakeCacheManager
 	diskManager          *fakeDiskManager
+	taskHistory          *fakeTaskHistory
 	memoryCopies         *fakeMemoryCopies
 	workAdder            *fakeWorkAdder
 	requests             *fakeRequests
@@ -267,6 +268,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	scheduler := &fakeScheduler{states: map[string]jobs.ScheduleRun{}}
 	cacheManager := &fakeCacheManager{}
 	diskManager := &fakeDiskManager{}
+	taskHistory := &fakeTaskHistory{}
 	memoryCopies := &fakeMemoryCopies{}
 	workAdder := &fakeWorkAdder{}
 	requests := &fakeRequests{}
@@ -323,6 +325,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		Scheduler:            scheduler,
 		CacheManager:         cacheManager,
 		DiskManager:          diskManager,
+		TaskHistory:          taskHistory,
 		MemoryCopies:         memoryCopies,
 		WorkAdder:            workAdder,
 		Requests:             requests,
@@ -367,7 +370,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		drainStarter:       drainStarter, moveJobs: moveJobs, renameStarter: renameStarter, namingSchemes: namingSchemes, calendar: calendar,
 		history:       history,
 		queue:         queue,
-		libraryTracks: libraryTracks, scheduler: scheduler, cacheManager: cacheManager, diskManager: diskManager, memoryCopies: memoryCopies, workAdder: workAdder, requests: requests, releaseFilters: releaseFilters,
+		libraryTracks: libraryTracks, scheduler: scheduler, cacheManager: cacheManager, diskManager: diskManager, taskHistory: taskHistory, memoryCopies: memoryCopies, workAdder: workAdder, requests: requests, releaseFilters: releaseFilters,
 		arrSync: arrSync, indexerTester: indexerTester, downloaderTester: downloaderTester,
 		candidateSearcher: candidateSearcher, fsys: fsys, clock: fake,
 	}

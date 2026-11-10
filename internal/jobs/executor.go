@@ -60,6 +60,7 @@ type Executor struct {
 	running  *Running
 	diskGate DiskGate
 	watchdog Watchdog
+	runLog   RunLog
 
 	mu       sync.RWMutex
 	handlers map[Type]Handler
@@ -79,6 +80,13 @@ type ExecutorConfig struct {
 	DiskGate DiskGate
 	// Watchdog is optional: it names the jobs to cancel and start again when they hang.
 	Watchdog Watchdog
+	// RunLog is optional: told how long every job ran, for the scheduler's history.
+	RunLog RunLog
+}
+
+// RunLog keeps a record of when each kind of job ran and for how long.
+type RunLog interface {
+	RecordRun(jobType string, start, end time.Time)
 }
 
 // NewExecutor builds an executor.
@@ -102,6 +110,7 @@ func NewExecutor(queue *Queue, cl clock.Clock, config ExecutorConfig) *Executor 
 		running:  config.Running,
 		diskGate: config.DiskGate,
 		watchdog: config.Watchdog,
+		runLog:   config.RunLog,
 		handlers: make(map[Type]Handler),
 	}
 }
@@ -148,8 +157,12 @@ func (e *Executor) Execute(ctx context.Context, job Job) {
 	renewalDone := e.renewUntilDone(running, stopRenewing, job, logger)
 
 	job.Progress = e.running.Start(job)
+	ranFrom := e.clock.Now()
 	runErr := e.runWatched(running, handler, job)
 	e.running.Finish(job.ID)
+	if e.runLog != nil && ctx.Err() == nil {
+		e.runLog.RecordRun(string(job.Type), ranFrom, e.clock.Now())
+	}
 
 	stopRenewing()
 	<-renewalDone

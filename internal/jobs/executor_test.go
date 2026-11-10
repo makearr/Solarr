@@ -484,3 +484,30 @@ func TestExecute_AJobThatKeepsReportingProgressIsNeverCancelled(t *testing.T) {
 		t.Fatalf("state %q, want the job still running: it kept reporting progress", job.State)
 	}
 }
+
+type recordedRun struct {
+	jobType    string
+	start, end time.Time
+}
+
+type runLogSpy struct{ runs []recordedRun }
+
+func (l *runLogSpy) RecordRun(jobType string, start, end time.Time) {
+	l.runs = append(l.runs, recordedRun{jobType, start, end})
+}
+
+func TestExecute_EveryRunIsLoggedWithItsType(t *testing.T) {
+	queue, fake := newQueue(t)
+	spy := &runLogSpy{}
+	executor := jobs.NewExecutor(queue, fake, jobs.ExecutorConfig{Owner: "worker-1", LeaseTTL: time.Minute, Logger: quietLogger(), RunLog: spy})
+	executor.Handle(typeBackup, jobs.HandlerFunc(func(context.Context, jobs.Job) error {
+		fake.Advance(3 * time.Second)
+		return errors.New("fails after three seconds")
+	}))
+	mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
+	executor.Execute(t.Context(), claimOne(t, queue, jobs.PoolMaintenance, "worker-1"))
+
+	if len(spy.runs) != 1 || spy.runs[0].jobType != string(typeBackup) || spy.runs[0].end.Sub(spy.runs[0].start) != 3*time.Second {
+		t.Fatalf("runs = %+v, want one run of %s lasting 3s (failures count too)", spy.runs, typeBackup)
+	}
+}

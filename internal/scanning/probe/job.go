@@ -49,9 +49,18 @@ var Definition = jobs.Definition{
 // one batch's worth of otherwise-committed progress.
 const batchSize = 100
 
-// yieldAfter bounds one run: the maintenance pool has one slot, and a first sweep of a 200,000-file
-// library held it for hours while download polling and rescans waited (found 2026-09-28).
+// yieldAfter is how long a sweep runs before it gives up its slot to jobs waiting in the pool: a first sweep of a
+// 200,000-file library held it for hours while download polling and rescans waited (found 2026-09-28). With nothing
+// waiting it keeps going, so the run is one honest task rather than a new one every two minutes.
 const yieldAfter = 2 * time.Minute
+
+// shouldYield is whether the sweep, running since started, must make way for another job.
+func (j *Job) shouldYield(ctx context.Context, started time.Time) bool {
+	if j.clock.Now().Sub(started) < yieldAfter {
+		return false
+	}
+	return j.waiting == nil || j.waiting(ctx)
+}
 
 // Roots resolves a root folder by id. They are settings.db policy (ADR-25),
 // so the job asks rather than reading the table -- the same interface
@@ -73,6 +82,9 @@ type Job struct {
 	previewsDir string
 	clock       clock.Clock
 	logger      *slog.Logger
+	waiting     func(ctx context.Context) bool
+	// forced is the pictures a person asked for from Settings (a PicturesMode), made whatever the settings say.
+	forced atomic.Value
 	// resumeAt is each list's place when a run yielded, so the continuation does not re-read the files that failed first.
 	resumeAt [7]atomic.Int64
 }
@@ -92,6 +104,8 @@ type Config struct {
 	PreviewsDir   string
 	Clock         clock.Clock
 	Logger        *slog.Logger
+	// OthersWaiting says whether other jobs of the pool are queued behind this one; nil means always, so the sweep yields as it always did.
+	OthersWaiting func(ctx context.Context) bool
 }
 
 // NewJob builds the handler.
@@ -102,7 +116,7 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		physical: config.Physical, coverage: config.Coverage, roots: config.Roots,
-		tool: config.Tool, fs: config.FS, hashing: config.PerceptualHashing, previews: config.VideoPreviews, previewsDir: config.PreviewsDir, clock: config.Clock, logger: logger,
+		tool: config.Tool, fs: config.FS, hashing: config.PerceptualHashing, previews: config.VideoPreviews, previewsDir: config.PreviewsDir, clock: config.Clock, logger: logger, waiting: config.OthersWaiting,
 	}
 }
 
@@ -114,6 +128,16 @@ func NewJob(config Config) *Job {
 func (j *Job) Run(ctx context.Context, request jobs.Job) error {
 	started := j.clock.Now()
 	total, failed := 0, 0
+	forced, _ := j.forced.Load().(PicturesMode)
+	previews := (j.previews != nil && j.previews() && j.previewsDir != "") || (forced == PicturesWithPreviews && j.previewsDir != "")
+	hashing := j.hashing == nil || j.hashing() || previews || forced != ""
+	hasher, canHash := j.tool.(PerceptualHasher)
+	hashPictures := canHash && hashing
+	if remaining, err := j.physical.CountProbeWork(ctx, hashPictures, previews); err == nil {
+		request.Progress.Set(0, remaining)
+	} else {
+		j.logger.WarnContext(ctx, "count the probe work failed", slog.Any("error", err))
+	}
 	// Unmeasured files first; then those measured before the probe read lyrics languages.
 	for index, list := range []func(context.Context, int64, int64) ([]library.UnmeasuredFile, error){
 		j.physical.ListUnmeasured, j.physical.ListStaleProbes, j.physical.ListStaleVideoProbes,
@@ -134,6 +158,7 @@ func (j *Job) Run(ctx context.Context, request jobs.Job) error {
 
 			afterID = batch[len(batch)-1].MediaObjectID
 			total += len(batch)
+			request.Progress.Add(int64(len(batch)))
 			for file, err := range j.probeBatch(ctx, batch) {
 				failed++
 				// One file failing (an unmounted root, a corrupted file, a
@@ -144,28 +169,28 @@ func (j *Job) Run(ctx context.Context, request jobs.Job) error {
 			if len(batch) < batchSize {
 				break
 			}
-			if j.clock.Now().Sub(started) >= yieldAfter {
+			if j.shouldYield(ctx, started) {
 				j.resumeAt[index].Store(afterID)
 				j.logger.Info("probe sweep yielding", slog.Int("processed", total), slog.Int("failed", failed))
 				return fmt.Errorf("probe: %d files in %s: %w", total, yieldAfter, jobs.ErrYield)
 			}
 		}
 	}
-	if err := j.backfill(ctx, started, oshashPass, "oshash", j.physical.ListVideoWithoutOshash, j.hashFile, nil); err != nil {
+	if err := j.backfill(ctx, started, oshashPass, "oshash", j.physical.ListVideoWithoutOshash, j.hashFile, request.Progress); err != nil {
 		return err
 	}
-	previews := j.previews != nil && j.previews() && j.previewsDir != ""
-	if hasher, ok := j.tool.(PerceptualHasher); ok && (j.hashing == nil || j.hashing() || previews) {
+	if hashPictures {
 		list := func(ctx context.Context, afterID, pageSize int64) ([]library.UnmeasuredFile, error) {
 			return j.physical.ListVideoWithoutHashOrPreview(ctx, afterID, pageSize, previews)
 		}
 		err := j.backfill(ctx, started, phashPass, "phash", list,
 			func(ctx context.Context, file library.UnmeasuredFile) error {
 				return j.perceptualHash(ctx, hasher, file, previews)
-			}, j.pictureProgress(ctx, request.Progress, previews))
+			}, request.Progress)
 		if err != nil {
 			return err
 		}
+		j.forced.Store(PicturesMode(""))
 	}
 	j.logger.Info("probe sweep finished", slog.Int("processed", total), slog.Int("failed", failed))
 
@@ -227,7 +252,7 @@ func (j *Job) backfill(
 			} else {
 				hashed++
 			}
-			if j.clock.Now().Sub(started) >= yieldAfter {
+			if j.shouldYield(ctx, started) {
 				j.resumeAt[pass].Store(file.MediaObjectID)
 				return fmt.Errorf("probe: %d %s hashes in %s: %w", hashed, name, yieldAfter, jobs.ErrYield)
 			}
@@ -437,28 +462,30 @@ func Enqueue(ctx context.Context, queue *jobs.Queue) (jobs.EnqueueResult, error)
 	})
 }
 
-// PicturesJobType is the on-demand sweep behind Settings, General's "generate" buttons.
+// PicturesJobType is the old on-demand sweep behind Settings, General's "generate" buttons. Those buttons now ask the
+// probe sweep to make the pictures (RequestPictures), so reading file details and making pictures are one task and never
+// run side by side; the type stays registered for jobs queued before.
 const PicturesJobType = jobs.Type("library.video_pictures")
 
-// PicturesDefinition declares the on-demand sweep: background, retried, the same pool as the probe.
+// PicturesDefinition declares the old sweep: the same pool as the probe.
 var PicturesDefinition = jobs.Definition{
-	Name: "Making video pictures",
+	Name: "Reading file details and making video pictures",
 	Type: PicturesJobType, Pool: jobs.PoolFiles, Mutating: true, MaxAttempts: 3,
 }
 
-// PicturesMode is what an on-demand sweep makes; both hash, whatever the settings say.
+// PicturesMode is what an on-demand request makes; both hash, whatever the settings say.
 type PicturesMode string
 
-// The two on-demand sweeps.
+// The two on-demand requests.
 const (
 	PicturesWithPreviews PicturesMode = "previews"
 	PicturesHashesOnly   PicturesMode = "hashes"
 )
 
-// PicturesJob hashes (and, in previews mode, makes the pictures of) every video still lacking them, ignoring the settings.
+// PicturesJob runs a job queued under the old type as the one sweep.
 type PicturesJob struct{ job *Job }
 
-// NewPicturesJob wraps a probe job so the on-demand sweep reads the same roots, tool and previews folder.
+// NewPicturesJob wraps a probe job.
 func NewPicturesJob(job *Job) *PicturesJob { return &PicturesJob{job: job} }
 
 // Run implements jobs.Handler.
@@ -469,49 +496,16 @@ func (p *PicturesJob) Run(ctx context.Context, request jobs.Job) error {
 	if err := json.Unmarshal(request.Payload, &payload); err != nil {
 		return fmt.Errorf("probe: pictures payload: %w", err)
 	}
-	return p.job.sweepPictures(ctx, payload.Mode, request.Progress)
+	p.job.forced.Store(payload.Mode)
+	return p.job.Run(ctx, request)
 }
 
-func (j *Job) sweepPictures(ctx context.Context, mode PicturesMode, progress *jobs.Progress) error {
-	hasher, ok := j.tool.(PerceptualHasher)
-	if !ok {
-		return fmt.Errorf("probe: this tool cannot hash video")
+// RequestPictures makes the next (or the running) sweep hash and, for previews, picture every video still lacking them,
+// whatever the settings say, and queues the sweep; one already queued or running takes the request up itself.
+func (j *Job) RequestPictures(ctx context.Context, queue *jobs.Queue, mode PicturesMode) (jobs.EnqueueResult, error) {
+	if mode == PicturesWithPreviews && j.previewsDir == "" {
+		return jobs.EnqueueResult{}, fmt.Errorf("probe: no previews folder is configured")
 	}
-	previews := mode == PicturesWithPreviews
-	if previews && j.previewsDir == "" {
-		return fmt.Errorf("probe: no previews folder is configured")
-	}
-	pass := 5
-	if previews {
-		pass = 6
-	}
-	list := func(ctx context.Context, afterID, pageSize int64) ([]library.UnmeasuredFile, error) {
-		return j.physical.ListVideoWithoutHashOrPreview(ctx, afterID, pageSize, previews)
-	}
-	return j.backfill(ctx, j.clock.Now(), pass, "phash", list,
-		func(ctx context.Context, file library.UnmeasuredFile) error {
-			return j.perceptualHash(ctx, hasher, file, previews)
-		}, j.pictureProgress(ctx, progress, previews))
-}
-
-// pictureProgress sets the total of the videos still to do, so the status bar can say how long is left; nil when it cannot count.
-func (j *Job) pictureProgress(ctx context.Context, progress *jobs.Progress, previews bool) *jobs.Progress {
-	total, err := j.physical.CountVideoWithoutHashOrPreview(ctx, previews)
-	if err != nil {
-		j.logger.WarnContext(ctx, "count videos to hash failed", slog.Any("error", err))
-		return progress
-	}
-	progress.Set(0, total)
-	return progress
-}
-
-// EnqueuePictures submits one on-demand sweep, deduplicated per mode.
-func EnqueuePictures(ctx context.Context, queue *jobs.Queue, mode PicturesMode) (jobs.EnqueueResult, error) {
-	payload, err := json.Marshal(map[string]PicturesMode{"mode": mode})
-	if err != nil {
-		return jobs.EnqueueResult{}, err
-	}
-	return queue.Enqueue(ctx, jobs.Request{
-		Type: PicturesJobType, ActionKey: "library.video_pictures." + string(mode), Priority: jobs.PriorityLow, Payload: payload,
-	})
+	j.forced.Store(mode)
+	return Enqueue(ctx, queue)
 }

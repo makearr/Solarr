@@ -162,13 +162,19 @@ type Querier interface {
 	// A client's queue as Solarr fills it: sent and not finished downloading (ADR-57).
 	CountQueuedOnDownloader(ctx context.Context, downloaderID int64) (int64, error)
 	CountRecycleBin(ctx context.Context) (int64, error)
+	CountStaleProbes(ctx context.Context, belowVersion int64) (int64, error)
+	CountStaleVideoProbes(ctx context.Context, belowVersion int64) (int64, error)
 	// Library health's own "unmatched files" figure (todo 4.8) -- same filter
 	// shape as ListUnidentified below, a count rather than a page.
 	CountUnidentified(ctx context.Context, arg CountUnidentifiedParams) (int64, error)
+	// The files the probe sweep still has to read, counted for its progress: ListUnmeasured, ListStaleProbes,
+	// ListStaleVideoProbes and ListVideoWithoutOshash without their page.
+	CountUnmeasured(ctx context.Context) (int64, error)
 	// What a full sweep would mark missing, against everything the root holds, before it marks anything.
 	CountVanishingPaths(ctx context.Context, arg CountVanishingPathsParams) (CountVanishingPathsRow, error)
 	// The same videos as ListVideoWithoutFrameHashes, counted, for the progress of the pass.
 	CountVideoWithoutFrameHashes(ctx context.Context, arg CountVideoWithoutFrameHashesParams) (int64, error)
+	CountVideoWithoutOshash(ctx context.Context) (int64, error)
 	// The Wanted page's total for one category: the works CountWorksVisibleToCategory counts that
 	// have a monitored item not yet complete and a tracklist, the wanted list's own condition.
 	CountWantedWorksVisibleToCategory(ctx context.Context, arg CountWantedWorksVisibleToCategoryParams) (int64, error)

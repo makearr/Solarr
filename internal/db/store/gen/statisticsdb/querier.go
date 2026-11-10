@@ -9,6 +9,8 @@ import (
 )
 
 type Querier interface {
+	// Adds to what an hour already holds.
+	AddTaskHour(ctx context.Context, arg AddTaskHourParams) error
 	// Release decisions since a time, per library and outcome.
 	AggregateDecisionsByCategoryAndOutcome(ctx context.Context, since int64) ([]AggregateDecisionsByCategoryAndOutcomeRow, error)
 	// Downloads, bytes and seconds per client since a time.
@@ -25,6 +27,7 @@ type Querier interface {
 	DeleteSearchLogBefore(ctx context.Context, arg DeleteSearchLogBeforeParams) (int64, error)
 	DeleteStatRollupMetric(ctx context.Context, metric string) error
 	DeleteStatRollupMetricForCategory(ctx context.Context, arg DeleteStatRollupMetricForCategoryParams) error
+	DeleteTaskHoursBefore(ctx context.Context, before int64) (int64, error)
 	// A candidate goes once it expired and no decision refers to it; a held release carries its own copy.
 	DeleteUnreferencedExpiredCandidates(ctx context.Context, arg DeleteUnreferencedExpiredCandidatesParams) (int64, error)
 	GetCandidate(ctx context.Context, id int64) (Candidate, error)
@@ -39,6 +42,7 @@ type Querier interface {
 	ListHistory(ctx context.Context, arg ListHistoryParams) ([]History, error)
 	// One library's current figures of a metric.
 	ListStatRollupForCategory(ctx context.Context, arg ListStatRollupForCategoryParams) ([]StatRollup, error)
+	ListTaskHoursSince(ctx context.Context, since int64) ([]TaskHour, error)
 	MoveHistoryToWork(ctx context.Context, arg MoveHistoryToWorkParams) error
 	RecordDecision(ctx context.Context, arg RecordDecisionParams) (CandidateDecision, error)
 	RollUpDecisions(ctx context.Context, arg RollUpDecisionsParams) error

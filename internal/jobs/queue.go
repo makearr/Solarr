@@ -190,6 +190,15 @@ func (q *Queue) Claim(ctx context.Context, pool Pool, owner string, capacity int
 	return jobs, nil
 }
 
+// ClaimableIn is how many jobs of a pool could be started now.
+func (q *Queue) ClaimableIn(ctx context.Context, pool Pool) (int64, error) {
+	total, err := q.queries.CountClaimableInPool(ctx, jobsdb.CountClaimableInPoolParams{TargetPool: string(pool), Now: q.clock.Now().Unix()})
+	if err != nil {
+		return 0, fmt.Errorf("jobs: count claimable in %s: %w", pool, err)
+	}
+	return total, nil
+}
+
 // Start moves a claimed job to running and records the attempt.
 func (q *Queue) Start(ctx context.Context, job Job, owner string) (Attempt, error) {
 	now := q.clock.Now()

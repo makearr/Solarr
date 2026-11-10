@@ -263,6 +263,33 @@ func (p Physical) SetOshash(ctx context.Context, mediaObjectID int64, oshash str
 	return nil
 }
 
+// CountProbeWork is how many files a probe sweep has to read now: unmeasured, measured before the probe read more,
+// video without an oshash, and (when pictures are made) video without a hash or preview.
+func (p Physical) CountProbeWork(ctx context.Context, hashPictures, previews bool) (int64, error) {
+	queries := librarydb.New(p.store.Read())
+	var total int64
+	for _, count := range []func() (int64, error){
+		func() (int64, error) { return queries.CountUnmeasured(ctx) },
+		func() (int64, error) { return queries.CountStaleProbes(ctx, ProbeVersionLyrics) },
+		func() (int64, error) { return queries.CountStaleVideoProbes(ctx, ProbeVersionVideo) },
+		func() (int64, error) { return queries.CountVideoWithoutOshash(ctx) },
+	} {
+		n, err := count()
+		if err != nil {
+			return 0, fmt.Errorf("library: count probe work: %w", err)
+		}
+		total += n
+	}
+	if hashPictures {
+		n, err := p.CountVideoWithoutHashOrPreview(ctx, previews)
+		if err != nil {
+			return 0, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
 // CountVideoWithoutHashOrPreview counts the videos ListVideoWithoutHashOrPreview would page through, for a sweep's progress.
 func (p Physical) CountVideoWithoutHashOrPreview(ctx context.Context, wantPreviews bool) (int64, error) {
 	want := int64(0)

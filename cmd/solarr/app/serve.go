@@ -60,6 +60,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/remoteimage"
 	"github.com/makearr/Solarr/internal/platform/secrets"
 	"github.com/makearr/Solarr/internal/platform/transcode"
+	"github.com/makearr/Solarr/internal/scanning/probe"
 	"github.com/makearr/Solarr/internal/scanning/watch"
 	"github.com/makearr/Solarr/migrations"
 )
@@ -148,6 +149,10 @@ type process struct {
 	disks *adapters.DiskManager
 	// watch keeps the inotify watches on the library folders; nil when watching is off.
 	watch *watch.Service
+	// taskHours keeps how long each kind of job ran in each hour, for the scheduler's heatmap.
+	taskHours *statistics.TaskHours
+	// probeJob is the one sweep that reads file details and makes video pictures.
+	probeJob *probe.Job
 	// scanStarted is true once the first scheduled scan after start has been asked for.
 	scanStarted atomic.Bool
 	diskTurns   *diskTurns
@@ -541,12 +546,14 @@ func (p *process) startJobs(ctx context.Context) error {
 	}
 	p.disks.ScanRoots = p.diskScanRoots
 	p.diskTurns = newDiskTurns(p.disks, p.disks.Monitor, wall)
+	p.taskHours = statistics.NewTaskHours(p.statistics)
 	executor := jobs.NewExecutor(queue, wall, jobs.ExecutorConfig{
 		Owner:    owner,
 		Logger:   p.logger,
 		Running:  p.running,
 		DiskGate: p.diskTurns,
 		Watchdog: p.diskTurns,
+		RunLog:   p.taskHours,
 	})
 	if err := p.registerScanJob(ctx, registry, executor); err != nil {
 		return err
@@ -671,6 +678,7 @@ func (p *process) startServer(ctx context.Context) error {
 	p.applyImageSettings()
 	defer stopBackground()
 	// Startup runs are per task and switchable on the Scheduler screen (2026-09-19 review).
+	p.startTaskHistory(background)
 	p.startLibraryWatch(background)
 	p.startSchedulers(background)
 	if err := p.seedAuthPolicy(ctx); err != nil {
@@ -790,6 +798,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Images: &p.imageLookups, Metadata: &p.metadataLookups,
 		},
 		DiskManager:    p.disks,
+		TaskHistory:    adapters.TaskHistory{Log: p.taskHours},
 		PlaybackTurns:  p.diskTurns.PlaybackTurns(),
 		DatabaseMemory: adapters.DatabaseMemory{Stores: []*store.Store{p.library, p.settings, p.jobs, p.statistics, p.metadata}},
 		LibrarySize:    library.NewCounters(p.library),

@@ -6243,6 +6243,27 @@ type TargetSizeFile struct {
 	WorkId  int64  `json:"work_id"`
 }
 
+// TaskHistory defines model for TaskHistory.
+type TaskHistory struct {
+	Hours []TaskHour `json:"hours"`
+}
+
+// TaskHour defines model for TaskHour.
+type TaskHour struct {
+	// HourStart Unix seconds of the start of the hour.
+	HourStart int64  `json:"hour_start"`
+	JobType   string `json:"job_type"`
+
+	// Name What the job is called to a person.
+	Name string `json:"name"`
+
+	// RunMs Milliseconds the job ran in this hour.
+	RunMs int64 `json:"run_ms"`
+
+	// Runs Runs that began in this hour.
+	Runs int64 `json:"runs"`
+}
+
 // TestDownloaderRequest defines model for TestDownloaderRequest.
 type TestDownloaderRequest struct {
 	// BaseUrl Empty for a blackhole.
@@ -9194,6 +9215,9 @@ type ServerInterface interface {
 	// Every registered periodic task (ADR-59).
 	// (GET /schedules)
 	ListSchedules(w http.ResponseWriter, r *http.Request)
+	// How long each kind of job ran in each hour of the last seven days.
+	// (GET /schedules/history)
+	GetTaskHistory(w http.ResponseWriter, r *http.Request)
 	// Override a task's schedules, enabled flag or startup run. Administrator only.
 	// (PATCH /schedules/{key})
 	UpdateSchedule(w http.ResponseWriter, r *http.Request, key string)
@@ -11153,6 +11177,12 @@ func (_ Unimplemented) ListScans(w http.ResponseWriter, r *http.Request) {
 // Every registered periodic task (ADR-59).
 // (GET /schedules)
 func (_ Unimplemented) ListSchedules(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// How long each kind of job ran in each hour of the last seven days.
+// (GET /schedules/history)
+func (_ Unimplemented) GetTaskHistory(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -20769,6 +20799,28 @@ func (siw *ServerInterfaceWrapper) ListSchedules(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// GetTaskHistory operation middleware
+func (siw *ServerInterfaceWrapper) GetTaskHistory(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTaskHistory(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // UpdateSchedule operation middleware
 func (siw *ServerInterfaceWrapper) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 
@@ -24784,6 +24836,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/schedules", wrapper.ListSchedules)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/schedules/history", wrapper.GetTaskHistory)
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/schedules/{key}", wrapper.UpdateSchedule)

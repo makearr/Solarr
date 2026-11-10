@@ -18,6 +18,8 @@ type Querier interface {
 	ClaimJobs(ctx context.Context, arg ClaimJobsParams) ([]Job, error)
 	CloseReclaimedAttempts(ctx context.Context, arg CloseReclaimedAttemptsParams) error
 	CompleteJob(ctx context.Context, arg CompleteJobParams) (int64, error)
+	// Jobs of a pool that could be started now, for a long job deciding whether to give up its slot.
+	CountClaimableInPool(ctx context.Context, arg CountClaimableInPoolParams) (int64, error)
 	CountJobsByState(ctx context.Context) ([]CountJobsByStateRow, error)
 	// One bounded page of retention (Invariant 2); a job another depends on stays, or its delete fails the whole page.
 	DeleteFinishedJobsBefore(ctx context.Context, arg DeleteFinishedJobsBeforeParams) (int64, error)

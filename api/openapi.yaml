@@ -1106,6 +1106,19 @@ paths:
                 items: { $ref: "#/components/schemas/Schedule" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /schedules/history:
+    get:
+      operationId: getTaskHistory
+      tags: [settings]
+      summary: How long each kind of job ran in each hour of the last seven days.
+      responses:
+        "200":
+          description: One row per hour and kind of job that ran; hours are UTC starts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskHistory" }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /schedules/{key}:
     parameters:
       - name: key
@@ -9428,6 +9441,20 @@ components:
         max_user_watches: { type: integer, format: int64, description: The host's fs.inotify.max_user_watches; 0 when unreadable. }
         budget_watches: { type: integer, format: int64, description: Half of the limit, the most Solarr will use. }
         used_by_us: { type: integer, format: int64 }
+    TaskHour:
+      type: object
+      required: [hour_start, job_type, name, run_ms, runs]
+      properties:
+        hour_start: { type: integer, format: int64, description: Unix seconds of the start of the hour. }
+        job_type: { type: string }
+        name: { type: string, description: What the job is called to a person. }
+        run_ms: { type: integer, format: int64, description: Milliseconds the job ran in this hour. }
+        runs: { type: integer, format: int64, description: Runs that began in this hour. }
+    TaskHistory:
+      type: object
+      required: [hours]
+      properties:
+        hours: { type: array, items: { $ref: "#/components/schemas/TaskHour" } }
     DiskScanRoot:
       type: object
       required: [root_folder_id, path, watching, covered_depth, due, why]

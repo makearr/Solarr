@@ -1,68 +1,57 @@
-/** How often each hour of a week is a task's turn, from its five-field cron cadences: the data of the scheduler's heatmap. */
+/** The scheduler's heatmap: the run time of each hour of the last seven days, from what the workers actually did. */
 
 export const WEEK_HOURS = 7 * 24;
 
-function expand(field: string, low: number, high: number): Set<number> | null {
-  const values = new Set<number>();
-  for (const part of field.split(",")) {
-    const [range = "", step = "1"] = part.split("/");
-    const every = Number(step);
-    if (!Number.isInteger(every) || every < 1) return null;
-    let from = low;
-    let to = high;
-    if (range !== "*") {
-      const [start = "", end] = range.split("-");
-      from = Number(start);
-      to = end === undefined ? (part.includes("/") ? high : from) : Number(end);
-    }
-    if (!Number.isInteger(from) || !Number.isInteger(to) || from < low || to > high || from > to) return null;
-    for (let value = from; value <= to; value += every) values.add(value);
-  }
-  return values;
-}
-
-/** Runs per hour for each slot of a week, Sunday first (cron's own numbering); a monthly or yearly cadence counts as its share of a week. Empty when the cadence is unreadable. */
-export function weekLoad(cadence: string): number[] {
-  const load = new Array<number>(WEEK_HOURS).fill(0);
-  const fields = cadence.trim().split(/\s+/);
-  if (fields.length !== 5) return load;
-  const minutes = expand(fields[0]!, 0, 59);
-  const hours = expand(fields[1]!, 0, 23);
-  const days = expand(fields[2]!, 1, 31);
-  const months = expand(fields[3]!, 1, 12);
-  const weekdays = expand(fields[4]!.replace(/7/g, "0"), 0, 6);
-  if (!minutes || !hours || !days || !months || !weekdays) return load;
-  const share = (fields[2] === "*" ? 1 : days.size / 31) * (fields[3] === "*" ? 1 : months.size / 12);
-  for (const weekday of weekdays) {
-    for (const hour of hours) load[weekday * 24 + hour]! += minutes.size * share;
-  }
-  return load;
-}
-
-/** The sum over several cadences of one task. */
-export function taskLoad(cadences: readonly string[]): number[] {
-  const total = new Array<number>(WEEK_HOURS).fill(0);
-  for (const cadence of cadences) weekLoad(cadence).forEach((runs, slot) => (total[slot]! += runs));
-  return total;
-}
-
 export const GREEN_BELOW_MS = 60_000;
-/** A task that recorded a run faster than this is left off the heatmap. */
-export const NEGLIGIBLE_TASK_MS = 20;
 
-/** Nothing running is white; up to a minute of run time stays green, then it turns yellow to red at the busiest slot. */
-export function heatColor(runtimeMs: number, busiestMs: number): string {
-  if (runtimeMs <= 0) return "#ffffff";
-  if (runtimeMs <= GREEN_BELOW_MS || busiestMs <= GREEN_BELOW_MS) return "hsl(120 75% 50%)";
-  const share = Math.min(1, (runtimeMs - GREEN_BELOW_MS) / (busiestMs - GREEN_BELOW_MS));
-  return `hsl(${Math.round(120 * (1 - share))} 75% 50%)`;
+export interface HistoryHour {
+  hour_start: number;
+  name: string;
+  run_ms: number;
 }
 
-/** What a run of each task is expected to take: its last recorded duration, else the mean of the recorded ones, else a second. */
-export function expectedDurations(tasks: readonly { last_duration_ms?: number | null }[]): number[] {
-  const recorded = tasks.flatMap((task) => (typeof task.last_duration_ms === "number" && task.last_duration_ms > 0 ? [task.last_duration_ms] : []));
-  const fallback = recorded.length > 0 ? recorded.reduce((sum, ms) => sum + ms, 0) / recorded.length : 1000;
-  return tasks.map((task) => (typeof task.last_duration_ms === "number" && task.last_duration_ms > 0 ? task.last_duration_ms : fallback));
+/** What one weekday-and-hour slot of the grid shows: the latest hour of the week that fell in it. */
+export interface HeatSlot {
+  hourStart: number;
+  runtimeMs: number;
+  names: string[];
+}
+
+/** The slot of a time on the grid: Sunday first, local hour. */
+export function slotOf(when: Date): number {
+  return when.getDay() * 24 + when.getHours();
+}
+
+/** The week's hours laid onto the 168 slots; where two hours fall in one slot (a clock change) the later wins. */
+export function heatSlots(hours: readonly HistoryHour[]): (HeatSlot | undefined)[] {
+  const byHour = new Map<number, HeatSlot>();
+  for (const hour of hours) {
+    const slot = byHour.get(hour.hour_start) ?? { hourStart: hour.hour_start, runtimeMs: 0, names: [] };
+    slot.runtimeMs += hour.run_ms;
+    if (hour.run_ms > 0 && !slot.names.includes(hour.name)) slot.names.push(hour.name);
+    byHour.set(hour.hour_start, slot);
+  }
+  const slots = new Array<HeatSlot | undefined>(WEEK_HOURS).fill(undefined);
+  for (const slot of byHour.values()) {
+    const index = slotOf(new Date(slot.hourStart * 1000));
+    const held = slots[index];
+    if (!held || held.hourStart < slot.hourStart) slots[index] = slot;
+  }
+  return slots;
+}
+
+/** Where green ends: a minute, or the least run time any hour had when that is less, so something is always green. */
+export function greenLimit(runtimes: readonly number[]): number {
+  const running = runtimes.filter((ms) => ms > 0);
+  return running.length === 0 ? GREEN_BELOW_MS : Math.min(GREEN_BELOW_MS, ...running);
+}
+
+/** Nothing running is white; up to the green limit stays green, then it turns yellow to red at the busiest slot. */
+export function heatColor(runtimeMs: number, busiestMs: number, greenMs: number = GREEN_BELOW_MS): string {
+  if (runtimeMs <= 0) return "#ffffff";
+  if (runtimeMs <= greenMs || busiestMs <= greenMs) return "hsl(120 75% 50%)";
+  const share = Math.min(1, (runtimeMs - greenMs) / (busiestMs - greenMs));
+  return `hsl(${Math.round(120 * (1 - share))} 75% 50%)`;
 }
 
 /** "850 ms", "12.4 s", "3.5 min" for a total run time. */
@@ -72,10 +61,10 @@ export function formatRuntime(ms: number): string {
   return `${(ms / 60_000).toFixed(1)} min`;
 }
 
-export type SortKey = "next" | "last" | "duration";
+export type SortKey = "name" | "next" | "last" | "duration";
 export type SortDirection = "asc" | "desc";
 
-export const SORT_KEYS: readonly SortKey[] = ["next", "last", "duration"];
+export const SORT_KEYS: readonly SortKey[] = ["name", "next", "last", "duration"];
 
 export function parseSortKey(value: unknown): SortKey | undefined {
   return SORT_KEYS.find((key) => key === value);
@@ -99,7 +88,7 @@ function sortValue(task: Sortable, key: SortKey): number | undefined {
 export function sortTasks<T extends Sortable>(tasks: readonly T[], key: SortKey | undefined, direction: SortDirection): T[] {
   const sorted = [...tasks];
   sorted.sort((a, b) => {
-    if (key !== undefined) {
+    if (key !== undefined && key !== "name") {
       const left = sortValue(a, key);
       const right = sortValue(b, key);
       if (left !== right) {
@@ -108,7 +97,8 @@ export function sortTasks<T extends Sortable>(tasks: readonly T[], key: SortKey 
         return direction === "asc" ? left - right : right - left;
       }
     }
-    return a.name.localeCompare(b.name);
+    const byName = a.name.localeCompare(b.name);
+    return key === "name" && direction === "desc" ? -byName : byName;
   });
   return sorted;
 }

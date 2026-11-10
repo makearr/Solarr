@@ -89,3 +89,10 @@ type StatRollup struct {
 	Count      int64
 	ComputedAt int64
 }
+
+type TaskHour struct {
+	JobType   string
+	HourStart int64
+	RunMs     int64
+	Runs      int64
+}

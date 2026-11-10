@@ -186,6 +186,25 @@ func (q *Queries) CompleteJob(ctx context.Context, arg CompleteJobParams) (int64
 	return result.RowsAffected()
 }
 
+const countClaimableInPool = `-- name: CountClaimableInPool :one
+SELECT CAST(count(*) AS INTEGER) AS total
+FROM job
+WHERE pool = ?1 AND state IN ('PENDING', 'PENDING_RETRY') AND run_after <= ?2
+`
+
+type CountClaimableInPoolParams struct {
+	TargetPool string
+	Now        int64
+}
+
+// Jobs of a pool that could be started now, for a long job deciding whether to give up its slot.
+func (q *Queries) CountClaimableInPool(ctx context.Context, arg CountClaimableInPoolParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countClaimableInPool, arg.TargetPool, arg.Now)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const countJobsByState = `-- name: CountJobsByState :many
 SELECT state, pool, count(*) AS total FROM job GROUP BY state, pool
 `

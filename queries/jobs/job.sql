@@ -222,3 +222,9 @@ WHERE id IN (
   WHERE j.state IN ('PENDING', 'PENDING_RETRY', 'LEASED', 'RUNNING')
   LIMIT sqlc.arg(batch_size)
 );
+
+-- Jobs of a pool that could be started now, for a long job deciding whether to give up its slot.
+-- name: CountClaimableInPool :one
+SELECT CAST(count(*) AS INTEGER) AS total
+FROM job
+WHERE pool = sqlc.arg(target_pool) AND state IN ('PENDING', 'PENDING_RETRY') AND run_after <= sqlc.arg(now);

@@ -218,6 +218,45 @@ func TestJob_RunYieldsOnceItsTimeIsSpent(t *testing.T) {
 	}
 }
 
+// With nothing waiting in the pool the sweep runs on past its time budget: one long task, not a new one every two minutes.
+func TestJob_RunKeepsGoingWhileNothingWaitsForItsSlot(t *testing.T) {
+	opened := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	root := t.TempDir()
+	files := make([]library.PhysicalFile, 150)
+	for index := range files {
+		name := fmt.Sprintf("track-%03d.flac", index)
+		if err := os.WriteFile(filepath.Join(root, name), []byte("faked"), 0o644); err != nil {
+			t.Fatalf("write fixture file: %v", err)
+		}
+		files[index] = library.PhysicalFile{RelPath: name, SizeBytes: 5, QuickHash: name, FirstSeenAt: time.Unix(0, 0)}
+	}
+	if _, err := physical.RegisterBatch(t.Context(), 1, files); err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	fake := clock.NewFakeAtEpoch()
+	waiting := false
+	job := probe.NewJob(probe.Config{
+		Physical: physical,
+		Coverage: library.NewProbeCoverage(opened, fake),
+		Roots:    fakeRoots{1: settings.RootFolder{ID: 1, Path: root, Online: true}},
+		Tool: &slowTool{clock: fake, fakeTool: fakeTool{measured: mediatool.Measured{
+			FormatName: "flac", AudioCodec: "flac", SampleRate: 44100, Duration: time.Second,
+		}}},
+		Clock:         fake,
+		Logger:        slog.New(slog.DiscardHandler),
+		OthersWaiting: func(context.Context) bool { return waiting },
+	})
+	progress := jobs.NewRunning(fake).Start(jobs.Job{ID: 1})
+	if err := job.Run(t.Context(), jobs.Job{Progress: progress}); err != nil {
+		t.Fatalf("Run = %v, want it to finish: nobody waits for the slot", err)
+	}
+	left, err := physical.ListUnmeasured(t.Context(), 0, 200)
+	if err != nil || len(left) != 0 {
+		t.Fatalf("left unmeasured %d, %v; want none", len(left), err)
+	}
+}
+
 // A file measured before the probe read lyrics languages is read again, once.
 func TestJob_RunReadsAgainAFileMeasuredBeforeLyricsLanguages(t *testing.T) {
 	opened := newLibrary(t)

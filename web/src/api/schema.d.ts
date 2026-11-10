@@ -732,6 +732,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schedules/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How long each kind of job ran in each hour of the last seven days. */
+        get: operations["getTaskHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schedules/{key}": {
         parameters: {
             query?: never;
@@ -6129,6 +6146,29 @@ export interface components {
             budget_watches: number;
             /** Format: int64 */
             used_by_us: number;
+        };
+        TaskHour: {
+            /**
+             * Format: int64
+             * @description Unix seconds of the start of the hour.
+             */
+            hour_start: number;
+            job_type: string;
+            /** @description What the job is called to a person. */
+            name: string;
+            /**
+             * Format: int64
+             * @description Milliseconds the job ran in this hour.
+             */
+            run_ms: number;
+            /**
+             * Format: int64
+             * @description Runs that began in this hour.
+             */
+            runs: number;
+        };
+        TaskHistory: {
+            hours: components["schemas"]["TaskHour"][];
         };
         DiskScanRoot: {
             /** Format: int64 */
@@ -12192,6 +12232,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Schedule"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    getTaskHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One row per hour and kind of job that ran; hours are UTC starts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskHistory"];
                 };
             };
             401: components["responses"]["Problem"];

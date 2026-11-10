@@ -250,6 +250,8 @@ type Config struct {
 	DatabaseAdmin DatabaseAdmin
 	// DiskManager serves the expert Disk page. Optional: nil answers 503.
 	DiskManager DiskManager
+	// TaskHistory answers the scheduler's heatmap of the last seven days. Optional.
+	TaskHistory TaskHistory
 	// PlaybackTurns makes each read of a file served to a viewer a turn on its disk. Optional.
 	PlaybackTurns iogate.Turns
 	// ArrCompanion is told of each add when Solarr runs as an *Arr's companion. Optional.
@@ -409,6 +411,7 @@ type Server struct {
 	cacheManager            CacheManager
 	diskManager             DiskManager
 	playbackTurns           iogate.Turns
+	taskHistory             TaskHistory
 	databaseAdmin           DatabaseAdmin
 	arrCompanion            ArrCompanion
 	memoryCopies            MemoryCopies
@@ -556,6 +559,7 @@ func New(config Config) (*Server, error) {
 		cacheManager:            config.CacheManager,
 		diskManager:             config.DiskManager,
 		playbackTurns:           config.PlaybackTurns,
+		taskHistory:             config.TaskHistory,
 		databaseAdmin:           config.DatabaseAdmin,
 		arrCompanion:            config.ArrCompanion,
 		memoryCopies:            config.MemoryCopies,
@@ -926,6 +930,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/streaming", server.GetStreaming)
 			secured.Patch("/streaming", server.UpdateStreaming)
 			secured.Post("/streaming/detect", server.DetectStreamingHardware)
+			secured.Get("/schedules/history", server.GetTaskHistory)
 			secured.Get("/settings/disk", server.GetDiskSettings)
 			secured.Put("/settings/disk", server.SetDiskOverrides)
 			secured.Post("/settings/disk/measure", server.MeasureDisks)

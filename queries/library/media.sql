@@ -148,6 +148,34 @@ WHERE o.oshash IS NULL AND o.kind = 'video' AND o.size_bytes >= 65536 AND o.id >
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
 
+-- The files the probe sweep still has to read, counted for its progress: ListUnmeasured, ListStaleProbes,
+-- ListStaleVideoProbes and ListVideoWithoutOshash without their page.
+-- name: CountUnmeasured :one
+SELECT CAST(count(*) AS INTEGER) AS total
+FROM media_object o
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+WHERE o.measured_attributes_id IS NULL;
+
+-- name: CountStaleProbes :one
+SELECT CAST(count(*) AS INTEGER) AS total
+FROM media_probe mp
+JOIN media_object o ON o.id = mp.media_object_id
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+WHERE mp.probe_version < sqlc.arg(below_version) AND o.measured_attributes_id IS NOT NULL;
+
+-- name: CountStaleVideoProbes :one
+SELECT CAST(count(*) AS INTEGER) AS total
+FROM media_probe mp
+JOIN media_object o ON o.id = mp.media_object_id
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+WHERE mp.probe_version < sqlc.arg(below_version) AND o.measured_attributes_id IS NOT NULL AND o.kind = 'video';
+
+-- name: CountVideoWithoutOshash :one
+SELECT CAST(count(*) AS INTEGER) AS total
+FROM media_object o
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+WHERE o.oshash IS NULL AND o.kind = 'video' AND o.size_bytes >= 65536;
+
 -- name: SetOshash :exec
 UPDATE media_object SET oshash = ? WHERE id = ?;
 
