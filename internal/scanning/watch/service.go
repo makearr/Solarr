@@ -122,13 +122,19 @@ func (s *Service) Replan(ctx context.Context) error {
 	chosen, _ := Plan(all, budget)
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	now := s.config.Clock.Now()
+	s.directories, s.budgetShort = len(all), len(chosen) < len(all)
+	s.mu.Unlock()
+
+	// Registering is a round trip to the disk for each directory on a network share, minutes for a large library:
+	// the lock is held only to record, so events and the Disk page are not kept waiting.
 	added := map[int64]bool{}
 	limitHit := false
 	for _, dir := range chosen {
 		absolute := path.Join(roots[dir.RootFolderID].Path, dir.Rel)
-		if _, held := s.watched[absolute]; held {
+		s.mu.Lock()
+		_, held := s.watched[absolute]
+		s.mu.Unlock()
+		if held {
 			continue
 		}
 		if err := s.config.Notifier.Add(absolute); err != nil {
@@ -139,10 +145,18 @@ func (s *Service) Replan(ctx context.Context) error {
 			s.logger.DebugContext(ctx, "directory not watched", slog.String("path", absolute), slog.Any("error", err))
 			continue
 		}
+		s.mu.Lock()
 		s.watched[absolute] = watchedDir{root: dir.RootFolderID, rel: dir.Rel}
+		s.mu.Unlock()
 		added[dir.RootFolderID] = true
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 	}
-	s.directories, s.budgetShort = len(all), limitHit || len(chosen) < len(all)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.config.Clock.Now()
+	s.budgetShort = s.budgetShort || limitHit
 	for id := range roots {
 		if added[id] {
 			s.registeredAt[id] = now

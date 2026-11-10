@@ -40,10 +40,10 @@ export function heatSlots(hours: readonly HistoryHour[]): (HeatSlot | undefined)
   return slots;
 }
 
-/** Where green ends: a minute, or the least run time any hour had when that is less, so something is always green. */
+/** Where green ends: a minute, or the least run time any hour had when that is more, so something is always green. */
 export function greenLimit(runtimes: readonly number[]): number {
   const running = runtimes.filter((ms) => ms > 0);
-  return running.length === 0 ? GREEN_BELOW_MS : Math.min(GREEN_BELOW_MS, ...running);
+  return running.length === 0 ? GREEN_BELOW_MS : Math.max(GREEN_BELOW_MS, Math.min(...running));
 }
 
 /** Nothing running is white; up to the green limit stays green, then it turns yellow to red at the busiest slot. */

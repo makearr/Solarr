@@ -20,6 +20,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/platform/paginate"
 	"github.com/makearr/Solarr/internal/platform/previewstore"
 	"github.com/makearr/Solarr/internal/scanning/probe"
 	"github.com/makearr/Solarr/migrations"
@@ -545,7 +546,7 @@ func TestJob_RunKeepsPreviewPicturesBesideTheHashWhenPreviewsAreOn(t *testing.T)
 }
 
 // The on-demand sweep hashes whatever the settings say, and makes the pictures only in previews mode.
-func TestPicturesJob_HashesAndMakesPicturesWhateverTheSettingsSay(t *testing.T) {
+func TestJob_ForcedPicturesAreMadeWhateverTheSettingsSay(t *testing.T) {
 	for _, mode := range []probe.PicturesMode{probe.PicturesHashesOnly, probe.PicturesWithPreviews} {
 		t.Run(string(mode), func(t *testing.T) {
 			opened := newLibrary(t)
@@ -569,8 +570,10 @@ func TestPicturesJob_HashesAndMakesPicturesWhateverTheSettingsSay(t *testing.T) 
 				Clock:             clock.NewFakeAtEpoch(),
 				Logger:            slog.New(slog.DiscardHandler),
 			})
-			payload := []byte(`{"mode":"` + string(mode) + `"}`)
-			if err := probe.NewPicturesJob(job).Run(t.Context(), jobs.Job{Payload: payload}); err != nil {
+			if err := job.Force(mode); err != nil {
+				t.Fatal(err)
+			}
+			if err := job.Run(t.Context(), jobs.Job{}); err != nil {
 				t.Fatalf("Run: %v", err)
 			}
 			rows, err := librarydb.New(opened.Read()).ListHashedVideos(t.Context(), library.VideoHashVersion)
@@ -582,5 +585,50 @@ func TestPicturesJob_HashesAndMakesPicturesWhateverTheSettingsSay(t *testing.T) 
 				t.Errorf("frame made = %v in mode %s", made, mode)
 			}
 		})
+	}
+}
+
+// A job still queued under the old pictures type does not run a second copy of the sweep: it asks the one sweep to
+// make the pictures, and that is all.
+func TestPicturesJob_HandsOverToTheOneSweepInsteadOfRunningIt(t *testing.T) {
+	directory := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(directory, "backups"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fake := clock.NewFakeAtEpoch()
+	jobsStore, err := store.Open(t.Context(), fake, store.Config{Name: "jobs", Path: filepath.Join(directory, "jobs.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = jobsStore.Close() })
+	owner, err := migrations.Jobs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Migrate(t.Context(), jobsStore, filepath.Join(directory, "backups"), owner); err != nil {
+		t.Fatal(err)
+	}
+	registry := jobs.NewRegistry()
+	registry.MustRegister(probe.Definition)
+	queue := jobs.NewQueue(jobsStore, fake, registry, jobs.NoJitter)
+
+	opened := newLibrary(t)
+	job := probe.NewJob(probe.Config{
+		Physical: library.NewPhysical(opened), Coverage: library.NewProbeCoverage(opened, fake),
+		Roots: fakeRoots{}, Tool: &fakeTool{}, PreviewsDir: t.TempDir(), Clock: fake, Logger: slog.New(slog.DiscardHandler),
+	})
+	handover := probe.NewPicturesJob(job, queue)
+	if err := handover.Run(t.Context(), jobs.Job{Payload: []byte(`{"mode":"previews"}`)}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if err := handover.Run(t.Context(), jobs.Job{Payload: []byte(`{"mode":"hashes"}`)}); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+	page, err := queue.ListPage(t.Context(), jobs.Visibility{System: true}, "", paginate.Cursor{}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 || page.Items[0].Type != probe.JobType {
+		t.Fatalf("queued %+v, want exactly one probe sweep, however often the old type is handed over", page.Items)
 	}
 }

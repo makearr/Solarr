@@ -38,7 +38,7 @@ const ActionKey = "library.probe"
 // Definition declares how probing behaves: background, lowest priority,
 // retried on transient failure, never blocking anything a user is waiting on.
 var Definition = jobs.Definition{
-	Name: "Reading audio details",
+	Name: "Reading file details and making video pictures",
 	Type: JobType, Pool: jobs.PoolFiles, Mutating: true, MaxAttempts: 3,
 }
 
@@ -469,7 +469,6 @@ const PicturesJobType = jobs.Type("library.video_pictures")
 
 // PicturesDefinition declares the old sweep: the same pool as the probe.
 var PicturesDefinition = jobs.Definition{
-	Name: "Reading file details and making video pictures",
 	Type: PicturesJobType, Pool: jobs.PoolFiles, Mutating: true, MaxAttempts: 3,
 }
 
@@ -482,11 +481,17 @@ const (
 	PicturesHashesOnly   PicturesMode = "hashes"
 )
 
-// PicturesJob runs a job queued under the old type as the one sweep.
-type PicturesJob struct{ job *Job }
+// PicturesJob hands a job queued under the old type over to the one sweep, which runs it instead; running it here too
+// would be a second copy of the sweep beside the first.
+type PicturesJob struct {
+	job   *Job
+	queue *jobs.Queue
+}
 
-// NewPicturesJob wraps a probe job.
-func NewPicturesJob(job *Job) *PicturesJob { return &PicturesJob{job: job} }
+// NewPicturesJob wraps a probe job and the queue its sweep is submitted to.
+func NewPicturesJob(job *Job, queue *jobs.Queue) *PicturesJob {
+	return &PicturesJob{job: job, queue: queue}
+}
 
 // Run implements jobs.Handler.
 func (p *PicturesJob) Run(ctx context.Context, request jobs.Job) error {
@@ -496,16 +501,24 @@ func (p *PicturesJob) Run(ctx context.Context, request jobs.Job) error {
 	if err := json.Unmarshal(request.Payload, &payload); err != nil {
 		return fmt.Errorf("probe: pictures payload: %w", err)
 	}
-	p.job.forced.Store(payload.Mode)
-	return p.job.Run(ctx, request)
+	_, err := p.job.RequestPictures(ctx, p.queue, payload.Mode)
+	return err
 }
 
 // RequestPictures makes the next (or the running) sweep hash and, for previews, picture every video still lacking them,
 // whatever the settings say, and queues the sweep; one already queued or running takes the request up itself.
 func (j *Job) RequestPictures(ctx context.Context, queue *jobs.Queue, mode PicturesMode) (jobs.EnqueueResult, error) {
+	if err := j.Force(mode); err != nil {
+		return jobs.EnqueueResult{}, err
+	}
+	return Enqueue(ctx, queue)
+}
+
+// Force makes the next sweep make the pictures of mode, whatever the settings say.
+func (j *Job) Force(mode PicturesMode) error {
 	if mode == PicturesWithPreviews && j.previewsDir == "" {
-		return jobs.EnqueueResult{}, fmt.Errorf("probe: no previews folder is configured")
+		return fmt.Errorf("probe: no previews folder is configured")
 	}
 	j.forced.Store(mode)
-	return Enqueue(ctx, queue)
+	return nil
 }

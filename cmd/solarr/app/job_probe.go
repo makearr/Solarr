@@ -42,7 +42,7 @@ func (p *process) registerProbeJob(registry *jobs.Registry, executor *jobs.Execu
 	if err := registry.Register(probe.PicturesDefinition); err != nil {
 		return err
 	}
-	executor.Handle(probe.PicturesJobType, probe.NewPicturesJob(job))
+	executor.Handle(probe.PicturesJobType, probe.NewPicturesJob(job, p.queue))
 	return nil
 }
 

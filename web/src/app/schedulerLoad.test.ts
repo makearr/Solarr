@@ -13,10 +13,11 @@ test("heat colour: white when idle, green up to the limit, then yellow to red at
 
 test("the green limit follows the history so that something is always green", () => {
   expect(greenLimit([0, 0])).toBe(60_000);
-  expect(greenLimit([0, 400_000, 900_000])).toBe(60_000);
-  expect(greenLimit([0, 5_000, 900_000])).toBe(5_000);
-  const runtimes = [0, 5_000, 900_000];
-  expect(heatColor(5_000, 900_000, greenLimit(runtimes))).toBe("hsl(120 75% 50%)");
+  expect(greenLimit([0, 5_000, 900_000])).toBe(60_000);
+  expect(greenLimit([0, 400_000, 900_000])).toBe(400_000);
+  const busy = [0, 400_000, 900_000];
+  expect(heatColor(400_000, 900_000, greenLimit(busy))).toBe("hsl(120 75% 50%)");
+  expect(heatColor(900_000, 900_000, greenLimit(busy))).toBe("hsl(0 75% 50%)");
 });
 
 test("hours land on the weekday-and-hour grid, the later week winning a shared slot, and an hour lists what ran", () => {
