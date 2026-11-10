@@ -2296,6 +2296,68 @@ type Deferral struct {
 	RetryAfter *time.Time `json:"retry_after,omitempty"`
 }
 
+// DiskInotify defines model for DiskInotify.
+type DiskInotify struct {
+	// BudgetWatches Half of the limit
+	BudgetWatches int64 `json:"budget_watches"`
+
+	// MaxUserWatches The host's fs.inotify.max_user_watches; 0 when unreadable.
+	MaxUserWatches int64 `json:"max_user_watches"`
+	UsedByUs       int64 `json:"used_by_us"`
+}
+
+// DiskLatency defines model for DiskLatency.
+type DiskLatency struct {
+	Error  string  `json:"error"`
+	Group  string  `json:"group"`
+	LastMs float64 `json:"last_ms"`
+	MeanMs float64 `json:"mean_ms"`
+
+	// MeasuredAt Unix seconds; absent when never measured.
+	MeasuredAt *int64 `json:"measured_at,omitempty"`
+	Samples    int    `json:"samples"`
+}
+
+// DiskOverrides defines model for DiskOverrides.
+type DiskOverrides struct {
+	// Groups Absolute path to group label; paths with the same label share one disk's IO budget.
+	Groups map[string]string `json:"groups"`
+}
+
+// DiskPath Where one path lives and which disk group it was placed in.
+type DiskPath struct {
+	DetectedGroup string `json:"detected_group"`
+
+	// Disk Physical disk name; empty when unknown.
+	Disk string `json:"disk"`
+
+	// Evidence Why the group was chosen.
+	Evidence string `json:"evidence"`
+
+	// Filesystem The mount's device number; equal values share a filesystem.
+	Filesystem string `json:"filesystem"`
+	FreeBytes  int64  `json:"free_bytes"`
+	FsType     string `json:"fs_type"`
+
+	// Group The group in force
+	Group      string `json:"group"`
+	MountPoint string `json:"mount_point"`
+	Overridden bool   `json:"overridden"`
+	Path       string `json:"path"`
+
+	// Pool Pool or server the filesystem belongs to (zfs:tank, net:nas); empty when none.
+	Pool       string `json:"pool"`
+	Source     string `json:"source"`
+	TotalBytes int64  `json:"total_bytes"`
+}
+
+// DiskReport defines model for DiskReport.
+type DiskReport struct {
+	Inotify   DiskInotify   `json:"inotify"`
+	Latencies []DiskLatency `json:"latencies"`
+	Paths     []DiskPath    `json:"paths"`
+}
+
 // DownloadFolder One upstream-download destination (todo 4.18). Watched: each entry is imported once it has settled, once only.
 type DownloadFolder struct {
 	// CategoryId The library hint; absent means any library.
@@ -8157,6 +8219,9 @@ type SetAuthPolicyJSONRequestBody SetAuthPolicyJSONBody
 // SetBackupRetentionJSONRequestBody defines body for SetBackupRetention for application/json ContentType.
 type SetBackupRetentionJSONRequestBody = BackupRetention
 
+// SetDiskOverridesJSONRequestBody defines body for SetDiskOverrides for application/json ContentType.
+type SetDiskOverridesJSONRequestBody = DiskOverrides
+
 // PatchGeneralSettingsJSONRequestBody defines body for PatchGeneralSettings for application/json ContentType.
 type PatchGeneralSettingsJSONRequestBody = GeneralSettings
 
@@ -9113,6 +9178,15 @@ type ServerInterface interface {
 	// Change the backup retention rule. Administrator only.
 	// (PUT /settings/backups)
 	SetBackupRetention(w http.ResponseWriter, r *http.Request)
+	// The detected disk layout of every root, the latest latency per disk group and the inotify budget.
+	// (GET /settings/disk)
+	GetDiskSettings(w http.ResponseWriter, r *http.Request)
+	// Replace the corrections to the detected layout (path to group label; blank drops one). Administrator only.
+	// (PUT /settings/disk)
+	SetDiskOverrides(w http.ResponseWriter, r *http.Request)
+	// Probe every disk group once now. Administrator only; the only probe not driven by waiting work.
+	// (POST /settings/disk/measure)
+	MeasureDisks(w http.ResponseWriter, r *http.Request)
 	// Configuration as round-tripping YAML (F9).
 	// (GET /settings/export)
 	ExportSettings(w http.ResponseWriter, r *http.Request)
@@ -11084,6 +11158,24 @@ func (_ Unimplemented) GetBackupRetention(w http.ResponseWriter, r *http.Request
 // Change the backup retention rule. Administrator only.
 // (PUT /settings/backups)
 func (_ Unimplemented) SetBackupRetention(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The detected disk layout of every root, the latest latency per disk group and the inotify budget.
+// (GET /settings/disk)
+func (_ Unimplemented) GetDiskSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace the corrections to the detected layout (path to group label; blank drops one). Administrator only.
+// (PUT /settings/disk)
+func (_ Unimplemented) SetDiskOverrides(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Probe every disk group once now. Administrator only; the only probe not driven by waiting work.
+// (POST /settings/disk/measure)
+func (_ Unimplemented) MeasureDisks(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -20865,6 +20957,72 @@ func (siw *ServerInterfaceWrapper) SetBackupRetention(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// GetDiskSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetDiskSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDiskSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetDiskOverrides operation middleware
+func (siw *ServerInterfaceWrapper) SetDiskOverrides(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetDiskOverrides(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MeasureDisks operation middleware
+func (siw *ServerInterfaceWrapper) MeasureDisks(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MeasureDisks(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ExportSettings operation middleware
 func (siw *ServerInterfaceWrapper) ExportSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -24579,6 +24737,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/settings/backups", wrapper.SetBackupRetention)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/settings/disk", wrapper.GetDiskSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/settings/disk", wrapper.SetDiskOverrides)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/settings/disk/measure", wrapper.MeasureDisks)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/settings/export", wrapper.ExportSettings)

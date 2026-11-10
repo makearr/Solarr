@@ -223,6 +223,12 @@ func NewDefaultRegistry() *Registry {
 		Default: string(ModeNormal),
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyDiskGroupOverrides, Kind: KindString, Tier: TierExpert,
+		Name:     "Disk group corrections",
+		HelpText: "JSON object of path to disk group label; paths with the same label share one disk's IO budget. Edited on Settings -> Disk.",
+		Default:  "{}",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyUsersNewLibraryPermission, Kind: KindString, Tier: TierNormal,
 		Name:     "New libraries",
 		HelpText: "What a new account is granted on libraries created after it: none, read, request or manage.",

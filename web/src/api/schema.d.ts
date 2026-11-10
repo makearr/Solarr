@@ -4426,6 +4426,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/disk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The detected disk layout of every root, the latest latency per disk group and the inotify budget. */
+        get: operations["getDiskSettings"];
+        /** Replace the corrections to the detected layout (path to group label; blank drops one). Administrator only. */
+        put: operations["setDiskOverrides"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/disk/measure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Probe every disk group once now. Administrator only; the only probe not driven by waiting work. */
+        post: operations["measureDisks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/general": {
         parameters: {
             query?: never;
@@ -6016,6 +6051,68 @@ export interface components {
                 note?: string;
             };
             active_sessions: number;
+        };
+        /** @description Where one path lives and which disk group it was placed in. */
+        DiskPath: {
+            path: string;
+            mount_point: string;
+            fs_type: string;
+            source: string;
+            /** @description The mount's device number; equal values share a filesystem. */
+            filesystem: string;
+            /** @description Pool or server the filesystem belongs to (zfs:tank, net:nas); empty when none. */
+            pool: string;
+            /** @description Physical disk name; empty when unknown. */
+            disk: string;
+            /** @description Why the group was chosen. */
+            evidence: string;
+            detected_group: string;
+            /** @description The group in force */
+            group: string;
+            overridden: boolean;
+            /** Format: int64 */
+            total_bytes: number;
+            /** Format: int64 */
+            free_bytes: number;
+        };
+        DiskLatency: {
+            group: string;
+            /** Format: double */
+            last_ms: number;
+            /** Format: double */
+            mean_ms: number;
+            samples: number;
+            /**
+             * Format: int64
+             * @description Unix seconds; absent when never measured.
+             */
+            measured_at?: number;
+            error: string;
+        };
+        DiskInotify: {
+            /**
+             * Format: int64
+             * @description The host's fs.inotify.max_user_watches; 0 when unreadable.
+             */
+            max_user_watches: number;
+            /**
+             * Format: int64
+             * @description Half of the limit
+             */
+            budget_watches: number;
+            /** Format: int64 */
+            used_by_us: number;
+        };
+        DiskReport: {
+            paths: components["schemas"]["DiskPath"][];
+            latencies: components["schemas"]["DiskLatency"][];
+            inotify: components["schemas"]["DiskInotify"];
+        };
+        DiskOverrides: {
+            /** @description Absolute path to group label; paths with the same label share one disk's IO budget. */
+            groups: {
+                [key: string]: string;
+            };
         };
         /** @description The cache's own budgets and last-measured size per namespace (ADR-60). */
         CacheReport: {
@@ -18638,6 +18735,79 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getDiskSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The layout, with the admin's corrections applied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiskReport"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    setDiskOverrides: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiskOverrides"];
+            };
+        };
+        responses: {
+            /** @description The layout now in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiskReport"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    measureDisks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The layout with the fresh readings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiskReport"];
+                };
+            };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             503: components["responses"]["Problem"];

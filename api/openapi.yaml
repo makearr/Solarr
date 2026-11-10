@@ -6947,6 +6947,54 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "503": { $ref: "#/components/responses/Problem" }
 
+  /settings/disk:
+    get:
+      operationId: getDiskSettings
+      tags: [settings]
+      summary: The detected disk layout of every root, the latest latency per disk group and the inotify budget.
+      responses:
+        "200":
+          description: The layout, with the admin's corrections applied.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiskReport" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setDiskOverrides
+      tags: [settings]
+      summary: Replace the corrections to the detected layout (path to group label; blank drops one). Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DiskOverrides" }
+      responses:
+        "200":
+          description: The layout now in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiskReport" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
+  /settings/disk/measure:
+    post:
+      operationId: measureDisks
+      tags: [settings]
+      summary: Probe every disk group once now. Administrator only; the only probe not driven by waiting work.
+      responses:
+        "200":
+          description: The layout with the fresh readings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiskReport" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
   /settings/general:
     get:
       operationId: getGeneralSettings
@@ -9322,6 +9370,56 @@ components:
             note: { type: string, description: Present when the setting could not be met as written. }
         active_sessions: { type: integer }
 
+    DiskPath:
+      type: object
+      description: Where one path lives and which disk group it was placed in.
+      required: [path, mount_point, fs_type, source, filesystem, pool, disk, evidence, detected_group, group, overridden, total_bytes, free_bytes]
+      properties:
+        path: { type: string }
+        mount_point: { type: string }
+        fs_type: { type: string }
+        source: { type: string }
+        filesystem: { type: string, description: The mount's device number; equal values share a filesystem. }
+        pool: { type: string, description: "Pool or server the filesystem belongs to (zfs:tank, net:nas); empty when none." }
+        disk: { type: string, description: Physical disk name; empty when unknown. }
+        evidence: { type: string, description: Why the group was chosen. }
+        detected_group: { type: string }
+        group: { type: string, description: The group in force, the detected one unless corrected. }
+        overridden: { type: boolean }
+        total_bytes: { type: integer, format: int64 }
+        free_bytes: { type: integer, format: int64 }
+    DiskLatency:
+      type: object
+      required: [group, last_ms, mean_ms, samples, error]
+      properties:
+        group: { type: string }
+        last_ms: { type: number, format: double }
+        mean_ms: { type: number, format: double }
+        samples: { type: integer }
+        measured_at: { type: integer, format: int64, description: Unix seconds; absent when never measured. }
+        error: { type: string }
+    DiskInotify:
+      type: object
+      required: [max_user_watches, budget_watches, used_by_us]
+      properties:
+        max_user_watches: { type: integer, format: int64, description: The host's fs.inotify.max_user_watches; 0 when unreadable. }
+        budget_watches: { type: integer, format: int64, description: Half of the limit, the most Solarr will use. }
+        used_by_us: { type: integer, format: int64 }
+    DiskReport:
+      type: object
+      required: [paths, latencies, inotify]
+      properties:
+        paths: { type: array, items: { $ref: "#/components/schemas/DiskPath" } }
+        latencies: { type: array, items: { $ref: "#/components/schemas/DiskLatency" } }
+        inotify: { $ref: "#/components/schemas/DiskInotify" }
+    DiskOverrides:
+      type: object
+      required: [groups]
+      properties:
+        groups:
+          type: object
+          description: Absolute path to group label; paths with the same label share one disk's IO budget.
+          additionalProperties: { type: string }
     CacheReport:
       type: object
       description: The cache's own budgets and last-measured size per namespace (ADR-60).

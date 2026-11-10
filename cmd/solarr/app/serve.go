@@ -47,6 +47,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/artwork"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
+	"github.com/makearr/Solarr/internal/platform/disklatency"
 	"github.com/makearr/Solarr/internal/platform/egress"
 	"github.com/makearr/Solarr/internal/platform/events"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -770,6 +771,10 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Sweep: p.cacheSweep, Cache: p.cache, Registry: p.settingsRegistry, Clock: clock.NewSystem(),
 			Images: &p.imageLookups, Metadata: &p.metadataLookups,
 		},
+		DiskManager: adapters.DiskManager{
+			FS: p.fsys, Cache: p.cache, Clock: clock.NewSystem(), Monitor: disklatency.New(p.fsys, clock.NewSystem(), diskProbeInterval),
+			ExtraPaths: []string{p.config.Paths.ConfigDir},
+		},
 		DatabaseMemory: adapters.DatabaseMemory{Stores: []*store.Store{p.library, p.settings, p.jobs, p.statistics, p.metadata}},
 		LibrarySize:    library.NewCounters(p.library),
 		Works: adapters.Works{
@@ -1164,3 +1169,6 @@ func (p *process) applyImageSettings() {
 	artwork.Configure(artwork.Options{FullEdge: int(images.CoverMaxEdge), Quality: int(images.CoverQuality)})
 	mediatool.ConfigurePreview(mediatool.PreviewOptions{MaxEdge: int(images.PreviewMaxEdge), Quality: int(images.PreviewQuality)})
 }
+
+// diskProbeInterval is the least time between two latency probes of one disk group.
+const diskProbeInterval = 5 * time.Second

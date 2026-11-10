@@ -36,10 +36,10 @@ var allowedInternalImports = map[string][]string{
 		"internal/moving/linkjob", "internal/moving/mover", "internal/moving/moverjob", "internal/moving/renamejob", "internal/platform/clock", "internal/platform/config",
 		"internal/platform/egress", "internal/platform/events", "internal/platform/fsx",
 		"internal/platform/httpx", "internal/platform/logbuffer", "internal/platform/logthrottle", "internal/platform/mediatool", "internal/platform/transcode",
-		"internal/platform/privilege", "internal/platform/previewstore", "internal/platform/ramcopy", "internal/platform/artwork",
+		"internal/platform/privilege", "internal/platform/previewstore", "internal/platform/ramcopy", "internal/platform/artwork", "internal/platform/disktopo", "internal/platform/disklatency",
 		"internal/platform/secrets", "internal/scanning/probe", "internal/scanning/scan", "migrations",
 	},
-	"cmd/solarr/adapters": {"internal/acquiring/indexer/spec", "internal/acquiring/cutoff", "internal/importing/arrmap", "internal/db/store", "internal/platform/secrets", "internal/media/works",
+	"cmd/solarr/adapters": {"internal/platform/disklatency", "internal/platform/disktopo", "internal/acquiring/indexer/spec", "internal/acquiring/cutoff", "internal/importing/arrmap", "internal/db/store", "internal/platform/secrets", "internal/media/works",
 		"internal/importing/batch", "internal/moving/renamejob",
 		"internal/db/statistics", "internal/platform/parallel", "internal/service/follow", "internal/service/importlist", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/qbittorrent",
 		"internal/acquiring/sabnzbd", "internal/acquiring/nzbget", "internal/acquiring/deluge", "internal/acquiring/aria2",
@@ -69,6 +69,10 @@ var allowedInternalImports = map[string][]string{
 	"internal/platform/previewstore": {},
 	// A RAM-backed working copy of a folder and the container's memory headroom: filesystem only.
 	"internal/platform/ramcopy": {"internal/platform/fsx"},
+	// Which paths share a filesystem, pool or disk, read from mountinfo and /sys: filesystem only.
+	"internal/platform/disktopo": {"internal/platform/fsx"},
+	// Latency per disk group, probed only on demand: clock and filesystem.
+	"internal/platform/disklatency": {"internal/platform/clock", "internal/platform/fsx"},
 	// A bounded in-memory slog handler (revision 7.16). Stdlib only: it wraps
 	// whatever handler it is given and knows nothing about this codebase.
 	"internal/platform/logbuffer": {},

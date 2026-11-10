@@ -247,6 +247,8 @@ type Config struct {
 	CacheManager CacheManager
 	// DatabaseAdmin serves the expert Database page. Optional: nil answers 503.
 	DatabaseAdmin DatabaseAdmin
+	// DiskManager serves the expert Disk page. Optional: nil answers 503.
+	DiskManager DiskManager
 	// ArrCompanion is told of each add when Solarr runs as an *Arr's companion. Optional.
 	ArrCompanion ArrCompanion
 	// MemoryCopies serves the Cache page's RAM options. Optional: nil answers 503.
@@ -402,6 +404,7 @@ type Server struct {
 	downloadRoots           DownloadFolderChecker
 	scheduler               Scheduler
 	cacheManager            CacheManager
+	diskManager             DiskManager
 	databaseAdmin           DatabaseAdmin
 	arrCompanion            ArrCompanion
 	memoryCopies            MemoryCopies
@@ -547,6 +550,7 @@ func New(config Config) (*Server, error) {
 		downloadRoots:           config.DownloadRoots,
 		scheduler:               config.Scheduler,
 		cacheManager:            config.CacheManager,
+		diskManager:             config.DiskManager,
 		databaseAdmin:           config.DatabaseAdmin,
 		arrCompanion:            config.ArrCompanion,
 		memoryCopies:            config.MemoryCopies,
@@ -917,6 +921,9 @@ func New(config Config) (*Server, error) {
 			secured.Get("/streaming", server.GetStreaming)
 			secured.Patch("/streaming", server.UpdateStreaming)
 			secured.Post("/streaming/detect", server.DetectStreamingHardware)
+			secured.Get("/settings/disk", server.GetDiskSettings)
+			secured.Put("/settings/disk", server.SetDiskOverrides)
+			secured.Post("/settings/disk/measure", server.MeasureDisks)
 			secured.Get("/cache", server.GetCache)
 			secured.Patch("/cache", server.UpdateCacheBudget)
 			secured.Get("/cache/memory-copies", server.GetMemoryCopies)
