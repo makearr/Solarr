@@ -3,32 +3,33 @@
 
 -- name: CreateImportList :one
 INSERT INTO import_list (category_id, name, type, url, cadence_hours, monitor,
-                          quality_profile_id, exclusions, enabled, options, monitor_option)
+                          quality_profile_id, exclusions, enabled, options, monitor_option, root_folder_id, search_on_add)
 VALUES (sqlc.arg(category_id), sqlc.arg(name), sqlc.arg(type), sqlc.arg(url),
         sqlc.arg(cadence_hours), sqlc.arg(monitor), sqlc.arg(quality_profile_id),
-        sqlc.arg(exclusions), sqlc.arg(enabled), sqlc.arg(options), sqlc.arg(monitor_option))
+        sqlc.arg(exclusions), sqlc.arg(enabled), sqlc.arg(options), sqlc.arg(monitor_option),
+        sqlc.arg(root_folder_id), sqlc.arg(search_on_add))
 RETURNING id, category_id, name, type, url, cadence_hours, monitor,
-          quality_profile_id, exclusions, enabled, options, monitor_option;
+          quality_profile_id, exclusions, enabled, options, monitor_option, root_folder_id, search_on_add;
 
 -- name: GetImportList :one
 SELECT id, category_id, name, type, url, cadence_hours, monitor,
-       quality_profile_id, exclusions, enabled, options, monitor_option
+       quality_profile_id, exclusions, enabled, options, monitor_option, root_folder_id, search_on_add
 FROM import_list WHERE id = ?;
 
 -- name: ListImportListsForCategory :many
 SELECT id, category_id, name, type, url, cadence_hours, monitor,
-       quality_profile_id, exclusions, enabled, options, monitor_option
+       quality_profile_id, exclusions, enabled, options, monitor_option, root_folder_id, search_on_add
 FROM import_list WHERE category_id = ? ORDER BY name;
 
 -- name: ListEnabledImportLists :many
 SELECT id, category_id, name, type, url, cadence_hours, monitor,
-       quality_profile_id, exclusions, enabled, options, monitor_option
+       quality_profile_id, exclusions, enabled, options, monitor_option, root_folder_id, search_on_add
 FROM import_list WHERE enabled = 1 ORDER BY id;
 
 -- name: UpdateImportList :exec
 UPDATE import_list SET name = ?, type = ?, url = ?, cadence_hours = ?, monitor = ?,
                         quality_profile_id = ?, exclusions = ?, enabled = ?,
-                        options = ?, monitor_option = ?
+                        options = ?, monitor_option = ?, root_folder_id = ?, search_on_add = ?
 WHERE id = ?;
 
 -- name: DeleteImportList :exec

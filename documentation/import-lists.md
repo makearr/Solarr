@@ -52,7 +52,7 @@ call another host. A link to any other host is refused when the list is saved.
 
 `settings.db` `import_list` holds a list's configuration only: its library, type, settings by field key as JSON
 (`options`, migration 0057), cadence, monitoring (`monitor`, and the media type's `monitor_option`, empty for the type's
-default), quality profile (empty for the library's) and exclusions. Exclusions are titles or `provider:id` (such as
+default), quality profile (empty for the library's), `root_folder_id` (a root attached to the library; empty leaves the choice to the type's placement), `search_on_add` (search for each addition at once; migration 0074) and exclusions. Exclusions are titles or `provider:id` (such as
 `tmdb:1399` or `anilist:21`), separated by commas or lines; a matching entry is left out. What a list did lives in
 `library.db` (migration 0099): `import_list_entry` and `import_list_state`, keyed by the list's id without a foreign
 key, as every settings id is.

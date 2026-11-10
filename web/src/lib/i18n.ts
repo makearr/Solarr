@@ -280,6 +280,7 @@ const catalogue = {
   "importLists.form.monitor": "Monitor what it adds",
   "importLists.form.monitorOption": "Monitor",
   "importLists.form.monitorDefault": "The default",
+  "importLists.form.searchOnAdd": "Search as soon as an entry is added",
   "importLists.form.profile": "Quality profile",
   "importLists.form.profileDefault": "The library's default",
   "importLists.form.exclusions": "Leave out",

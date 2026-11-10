@@ -6,7 +6,7 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t } from "@/lib/i18n";
 import { keepsEnabled as staysEnabled, sameOptions, toggleChoice, VERDICT_ORDER } from "@/lib/importLists";
-import { useQualityProfiles } from "@/lib/resources";
+import { useQualityProfiles, useRootFolders } from "@/lib/resources";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
 import { inputStyle, labelStyle } from "@/ui/form";
@@ -22,8 +22,8 @@ type Verdict = PreviewEntry["verdict"];
 export function writeOf(list: ImportList): ImportListWrite {
   return {
     name: list.name, type: list.type, options: list.options, cadence_hours: list.cadence_hours, monitor: list.monitor,
-    monitor_option: list.monitor_option, quality_profile_id: list.quality_profile_id, exclusions: list.exclusions,
-    enabled: list.enabled,
+    monitor_option: list.monitor_option, root_folder_id: list.root_folder_id, search_on_add: list.search_on_add,
+    quality_profile_id: list.quality_profile_id, exclusions: list.exclusions, enabled: list.enabled,
   };
 }
 
@@ -51,7 +51,10 @@ export function ImportListForm({
   const [monitorOption, setMonitorOption] = useState(list?.monitor_option ?? "");
   const [profileId, setProfileId] = useState(list?.quality_profile_id ?? 0);
   const [exclusions, setExclusions] = useState(list?.exclusions ?? "");
+  const [rootFolderId, setRootFolderId] = useState(list?.root_folder_id ?? 0);
+  const [searchOnAdd, setSearchOnAdd] = useState(list?.search_on_add ?? false);
   const profiles = useQualityProfiles();
+  const libraryRoots = (useRootFolders().data ?? []).filter((root) => (root.categories ?? []).some((category) => category.id === libraryId));
   const kind = types.types.find((candidate) => candidate.type === type);
 
   // New settings are previewed again before the list adds anything (ADR-38), so such an edit is saved disabled.
@@ -67,7 +70,7 @@ export function ImportListForm({
       }
       const body: ImportListWrite = {
         name: name.trim(), type, options: kept, cadence_hours: cadence, monitor, monitor_option: monitorOption,
-        quality_profile_id: profileId || undefined, exclusions, enabled: keepsEnabled,
+        root_folder_id: rootFolderId || undefined, search_on_add: searchOnAdd, quality_profile_id: profileId || undefined, exclusions, enabled: keepsEnabled,
       };
       if (list === undefined) {
         return ok(api.POST("/libraries/{id}/import-lists", { params: { path: { id: libraryId } }, body }));
@@ -164,6 +167,21 @@ export function ImportListForm({
             </select>
           </label>
         )}
+        {libraryRoots.length > 1 && (
+          <label className={labelStyle}>
+            {t("addDialog.rootFolder")}
+            <select className={inputStyle} value={rootFolderId} onChange={(event) => setRootFolderId(Number(event.target.value))}>
+              <option value={0}>{t("addDialog.rootAutomatic")}</option>
+              {libraryRoots.map((root) => (
+                <option key={root.id} value={root.id}>{root.path}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label className="flex items-center gap-2 self-end text-xs text-ink-muted">
+          <input type="checkbox" checked={searchOnAdd} onChange={(event) => setSearchOnAdd(event.target.checked)} />
+          {t("importLists.form.searchOnAdd")}
+        </label>
         <label className={`${labelStyle} md:col-span-2`}>
           {t("importLists.form.exclusions")}
           <textarea className={inputStyle} rows={2} value={exclusions} onChange={(event) => setExclusions(event.target.value)} />

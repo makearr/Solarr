@@ -14191,7 +14191,7 @@ components:
     ImportList:
       type: object
       description: A library's import list (ADR-38), with its last preview and run.
-      required: [id, category_id, name, type, options, cadence_hours, monitor, monitor_option, exclusions, enabled, previewed, last_run_added, last_run_failure]
+      required: [id, category_id, name, type, options, cadence_hours, monitor, monitor_option, search_on_add, exclusions, enabled, previewed, last_run_added, last_run_failure]
       properties:
         id: { type: integer, format: int64 }
         category_id: { type: integer, format: int64 }
@@ -14205,6 +14205,8 @@ components:
         cadence_hours: { type: integer }
         monitor: { type: boolean }
         monitor_option: { type: string, description: The media type's monitor option; empty is its default. }
+        root_folder_id: { type: integer, format: int64, description: The root folder additions are placed under; absent leaves it to the library. }
+        search_on_add: { type: boolean, description: Search for each addition as soon as it is added. }
         quality_profile_id: { type: integer, format: int64 }
         exclusions:
           type: string
@@ -14231,6 +14233,8 @@ components:
         cadence_hours: { type: integer, minimum: 1 }
         monitor: { type: boolean, default: true }
         monitor_option: { type: string }
+        root_folder_id: { type: integer, format: int64 }
+        search_on_add: { type: boolean, default: false }
         quality_profile_id: { type: integer, format: int64 }
         exclusions: { type: string }
         enabled: { type: boolean, default: false }

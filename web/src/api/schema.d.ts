@@ -10447,6 +10447,13 @@ export interface components {
             monitor: boolean;
             /** @description The media type's monitor option; empty is its default. */
             monitor_option: string;
+            /**
+             * Format: int64
+             * @description The root folder additions are placed under; absent leaves it to the library.
+             */
+            root_folder_id?: number;
+            /** @description Search for each addition as soon as it is added. */
+            search_on_add: boolean;
             /** Format: int64 */
             quality_profile_id?: number;
             /** @description Titles or provider:id, separated by commas or lines; a matching entry is left out. */
@@ -10474,6 +10481,10 @@ export interface components {
             /** @default true */
             monitor: boolean;
             monitor_option?: string;
+            /** Format: int64 */
+            root_folder_id?: number;
+            /** @default false */
+            search_on_add: boolean;
             /** Format: int64 */
             quality_profile_id?: number;
             exclusions?: string;

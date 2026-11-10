@@ -144,7 +144,7 @@ func newSyncFixture(t *testing.T, items ...tmdb.ListItem) *syncFixture {
 	opened := openLibrary(t)
 	f := &syncFixture{
 		lists: memoryLists{1: {ID: 1, CategoryID: 7, Name: "Shows", Type: string(media.ListTMDBList), Options: `{"list":"8"}`,
-			CadenceHours: 12, Monitor: true, MonitorOption: "future", QualityProfileID: ptr(int64(3)), Enabled: true}},
+			CadenceHours: 12, Monitor: true, MonitorOption: "future", QualityProfileID: ptr(int64(3)), RootFolderID: ptr(int64(5)), SearchOnAdd: true, Enabled: true}},
 		held: heldWorks{}, tmdb: &fakeTMDB{pages: []tmdb.ListPage{{TotalPages: 1, Items: items}}},
 		records: library.NewImportLists(opened), exclusions: library.NewExclusions(opened), clock: clock.NewFake(syncStart),
 	}
@@ -262,7 +262,7 @@ func TestARunAddsWithTheListsChoicesAndNeverTheSameEntryTwice(t *testing.T) {
 	f := newSyncFixture(t, show(1, "New Show"), show(2, "Held Show"), show(6, "unknown"))
 	f.held[media.ProviderID{Provider: "tmdb", ExternalID: "2"}] = 52
 	f.run(t, 1)
-	want := []media.AddRequest{{CategoryID: 7, Kind: "show", Provider: "tmdb", ExternalID: "1", Monitored: true, Option: "future", ProfileID: ptr(int64(3))}}
+	want := []media.AddRequest{{CategoryID: 7, Kind: "show", Provider: "tmdb", ExternalID: "1", Monitored: true, Option: "future", ProfileID: ptr(int64(3)), RootFolderID: ptr(int64(5)), Search: true}}
 	if !reflect.DeepEqual(f.added, want) {
 		t.Errorf("added %+v, want %+v", f.added, want)
 	}

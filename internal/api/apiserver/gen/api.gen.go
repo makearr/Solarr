@@ -3390,6 +3390,12 @@ type ImportList struct {
 	Previewed        bool   `json:"previewed"`
 	QualityProfileId *int64 `json:"quality_profile_id,omitempty"`
 
+	// RootFolderId The root folder additions are placed under; absent leaves it to the library.
+	RootFolderId *int64 `json:"root_folder_id,omitempty"`
+
+	// SearchOnAdd Search for each addition as soon as it is added.
+	SearchOnAdd bool `json:"search_on_add"`
+
 	// Type One of the library's import list types.
 	Type string  `json:"type"`
 	Url  *string `json:"url,omitempty"`
@@ -3463,6 +3469,8 @@ type ImportListWrite struct {
 	Name             string             `json:"name"`
 	Options          *map[string]string `json:"options,omitempty"`
 	QualityProfileId *int64             `json:"quality_profile_id,omitempty"`
+	RootFolderId     *int64             `json:"root_folder_id,omitempty"`
+	SearchOnAdd      *bool              `json:"search_on_add,omitempty"`
 	Type             string             `json:"type"`
 	Url              *string            `json:"url,omitempty"`
 }

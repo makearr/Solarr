@@ -201,6 +201,8 @@ type ImportList struct {
 	Enabled          int64
 	Options          string
 	MonitorOption    string
+	RootFolderID     sql.NullInt64
+	SearchOnAdd      int64
 }
 
 type Indexer struct {

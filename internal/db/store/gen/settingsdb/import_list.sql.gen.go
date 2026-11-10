@@ -13,12 +13,13 @@ import (
 const createImportList = `-- name: CreateImportList :one
 
 INSERT INTO import_list (category_id, name, type, url, cadence_hours, monitor,
-                          quality_profile_id, exclusions, enabled, options, monitor_option)
+                          quality_profile_id, exclusions, enabled, options, monitor_option, root_folder_id, search_on_add)
 VALUES (?1, ?2, ?3, ?4,
         ?5, ?6, ?7,
-        ?8, ?9, ?10, ?11)
+        ?8, ?9, ?10, ?11,
+        ?12, ?13)
 RETURNING id, category_id, name, type, url, cadence_hours, monitor,
-          quality_profile_id, exclusions, enabled, options, monitor_option
+          quality_profile_id, exclusions, enabled, options, monitor_option, root_folder_id, search_on_add
 `
 
 type CreateImportListParams struct {
@@ -33,6 +34,8 @@ type CreateImportListParams struct {
 	Enabled          int64
 	Options          string
 	MonitorOption    string
+	RootFolderID     sql.NullInt64
+	SearchOnAdd      int64
 }
 
 // Per-library import lists (migration 0009, todo 4.16, ADR-38). Column
@@ -50,6 +53,8 @@ func (q *Queries) CreateImportList(ctx context.Context, arg CreateImportListPara
 		arg.Enabled,
 		arg.Options,
 		arg.MonitorOption,
+		arg.RootFolderID,
+		arg.SearchOnAdd,
 	)
 	var i ImportList
 	err := row.Scan(
@@ -65,6 +70,8 @@ func (q *Queries) CreateImportList(ctx context.Context, arg CreateImportListPara
 		&i.Enabled,
 		&i.Options,
 		&i.MonitorOption,
+		&i.RootFolderID,
+		&i.SearchOnAdd,
 	)
 	return i, err
 }
@@ -80,7 +87,7 @@ func (q *Queries) DeleteImportList(ctx context.Context, id int64) error {
 
 const getImportList = `-- name: GetImportList :one
 SELECT id, category_id, name, type, url, cadence_hours, monitor,
-       quality_profile_id, exclusions, enabled, options, monitor_option
+       quality_profile_id, exclusions, enabled, options, monitor_option, root_folder_id, search_on_add
 FROM import_list WHERE id = ?
 `
 
@@ -100,13 +107,15 @@ func (q *Queries) GetImportList(ctx context.Context, id int64) (ImportList, erro
 		&i.Enabled,
 		&i.Options,
 		&i.MonitorOption,
+		&i.RootFolderID,
+		&i.SearchOnAdd,
 	)
 	return i, err
 }
 
 const listEnabledImportLists = `-- name: ListEnabledImportLists :many
 SELECT id, category_id, name, type, url, cadence_hours, monitor,
-       quality_profile_id, exclusions, enabled, options, monitor_option
+       quality_profile_id, exclusions, enabled, options, monitor_option, root_folder_id, search_on_add
 FROM import_list WHERE enabled = 1 ORDER BY id
 `
 
@@ -132,6 +141,8 @@ func (q *Queries) ListEnabledImportLists(ctx context.Context) ([]ImportList, err
 			&i.Enabled,
 			&i.Options,
 			&i.MonitorOption,
+			&i.RootFolderID,
+			&i.SearchOnAdd,
 		); err != nil {
 			return nil, err
 		}
@@ -148,7 +159,7 @@ func (q *Queries) ListEnabledImportLists(ctx context.Context) ([]ImportList, err
 
 const listImportListsForCategory = `-- name: ListImportListsForCategory :many
 SELECT id, category_id, name, type, url, cadence_hours, monitor,
-       quality_profile_id, exclusions, enabled, options, monitor_option
+       quality_profile_id, exclusions, enabled, options, monitor_option, root_folder_id, search_on_add
 FROM import_list WHERE category_id = ? ORDER BY name
 `
 
@@ -174,6 +185,8 @@ func (q *Queries) ListImportListsForCategory(ctx context.Context, categoryID int
 			&i.Enabled,
 			&i.Options,
 			&i.MonitorOption,
+			&i.RootFolderID,
+			&i.SearchOnAdd,
 		); err != nil {
 			return nil, err
 		}
@@ -191,7 +204,7 @@ func (q *Queries) ListImportListsForCategory(ctx context.Context, categoryID int
 const updateImportList = `-- name: UpdateImportList :exec
 UPDATE import_list SET name = ?, type = ?, url = ?, cadence_hours = ?, monitor = ?,
                         quality_profile_id = ?, exclusions = ?, enabled = ?,
-                        options = ?, monitor_option = ?
+                        options = ?, monitor_option = ?, root_folder_id = ?, search_on_add = ?
 WHERE id = ?
 `
 
@@ -206,6 +219,8 @@ type UpdateImportListParams struct {
 	Enabled          int64
 	Options          string
 	MonitorOption    string
+	RootFolderID     sql.NullInt64
+	SearchOnAdd      int64
 	ID               int64
 }
 
@@ -221,6 +236,8 @@ func (q *Queries) UpdateImportList(ctx context.Context, arg UpdateImportListPara
 		arg.Enabled,
 		arg.Options,
 		arg.MonitorOption,
+		arg.RootFolderID,
+		arg.SearchOnAdd,
 		arg.ID,
 	)
 	return err

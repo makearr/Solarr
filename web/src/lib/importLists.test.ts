@@ -6,7 +6,7 @@ import { keepsEnabled, toggleChoice } from "./importLists";
 
 const enabled: components["schemas"]["ImportList"] = {
   id: 1, category_id: 2, name: "Mine", type: "anilist_user", options: { username: "someone" }, cadence_hours: 24,
-  monitor: true, monitor_option: "", exclusions: "", enabled: true, previewed: true, last_run_added: 0, last_run_failure: "",
+  monitor: true, monitor_option: "", search_on_add: false, exclusions: "", enabled: true, previewed: true, last_run_added: 0, last_run_failure: "",
 };
 
 describe("keepsEnabled", () => {

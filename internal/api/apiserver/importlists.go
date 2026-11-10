@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -221,6 +222,13 @@ func (s *Server) CreateImportList(w http.ResponseWriter, r *http.Request, id int
 
 // checkImportList answers false, having written the problem, for a list the library cannot take.
 func (s *Server) checkImportList(w http.ResponseWriter, categoryID int64, request settings.ImportListRequest, closing string) bool {
+	if request.RootFolderID != nil && !slices.ContainsFunc(s.auth.Settings.Snapshot().RootFoldersForCategory(categoryID), func(folder settings.RootFolder) bool {
+		return folder.ID == *request.RootFolderID
+	}) {
+		problems := config.Problems{{Path: "root_folder_id", Value: strconv.FormatInt(*request.RootFolderID, 10), Expectation: "a root folder of this library"}}
+		s.writeImportListError(w, problems, "no such library", closing)
+		return false
+	}
 	if s.importLists == nil {
 		return true
 	}
@@ -412,6 +420,7 @@ func importListView(list settings.ImportList, status ImportListStatus) gen.Impor
 	view := gen.ImportList{
 		Id: list.ID, CategoryId: list.CategoryID, Name: list.Name, Type: list.Type, Options: importListOptions(list.Options),
 		CadenceHours: int(list.CadenceHours), Monitor: list.Monitor, MonitorOption: list.MonitorOption,
+		RootFolderId: list.RootFolderID, SearchOnAdd: list.SearchOnAdd,
 		QualityProfileId: list.QualityProfileID, Exclusions: list.Exclusions, Enabled: list.Enabled,
 		Previewed: status.Previewed, LastRunAdded: status.LastRunAdded, LastRunFailure: gen.ImportListLastRunFailure(status.LastRunFailure),
 	}
@@ -439,7 +448,7 @@ func importListOptions(stored string) map[string]string {
 func importListRequestFromWrite(body gen.ImportListWrite) settings.ImportListRequest {
 	request := settings.ImportListRequest{
 		Name: body.Name, Type: body.Type, CadenceHours: int64(body.CadenceHours),
-		QualityProfileID: body.QualityProfileId, Monitor: true,
+		QualityProfileID: body.QualityProfileId, Monitor: true, RootFolderID: body.RootFolderId,
 	}
 	if body.Url != nil {
 		request.URL = *body.Url
@@ -452,6 +461,9 @@ func importListRequestFromWrite(body gen.ImportListWrite) settings.ImportListReq
 	}
 	if body.MonitorOption != nil {
 		request.MonitorOption = *body.MonitorOption
+	}
+	if body.SearchOnAdd != nil {
+		request.SearchOnAdd = *body.SearchOnAdd
 	}
 	if body.Enabled != nil {
 		request.Enabled = *body.Enabled

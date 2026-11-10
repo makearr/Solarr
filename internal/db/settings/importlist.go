@@ -27,6 +27,9 @@ type ImportList struct {
 	// Options are the list type's own settings as stored JSON; MonitorOption is the media type's, empty its default.
 	Options       string
 	MonitorOption string
+	// RootFolderID is the root the list's additions are placed under (nil: the library's choice); SearchOnAdd starts a search per addition.
+	RootFolderID *int64
+	SearchOnAdd  bool
 }
 
 // ImportListRequest is what CreateImportList/UpdateImportList accept --
@@ -43,6 +46,8 @@ type ImportListRequest struct {
 	Enabled          bool
 	Options          string
 	MonitorOption    string
+	RootFolderID     *int64
+	SearchOnAdd      bool
 }
 
 func validateImportList(request ImportListRequest) config.Problems {
@@ -92,6 +97,7 @@ func (c *Cache) CreateImportList(ctx context.Context, categoryID int64, request 
 			CadenceHours: request.CadenceHours, Monitor: boolToInt(request.Monitor),
 			QualityProfileID: nullInt64(request.QualityProfileID), Exclusions: request.Exclusions,
 			Enabled: boolToInt(request.Enabled), Options: request.Options, MonitorOption: request.MonitorOption,
+			RootFolderID: nullInt64(request.RootFolderID), SearchOnAdd: boolToInt(request.SearchOnAdd),
 		})
 		return err
 	})
@@ -120,7 +126,8 @@ func (c *Cache) UpdateImportList(ctx context.Context, id int64, request ImportLi
 			Name: request.Name, Type: request.Type, Url: request.URL,
 			CadenceHours: request.CadenceHours, Monitor: boolToInt(request.Monitor),
 			QualityProfileID: nullInt64(request.QualityProfileID), Exclusions: request.Exclusions,
-			Enabled: boolToInt(request.Enabled), Options: request.Options, MonitorOption: request.MonitorOption, ID: id,
+			Enabled: boolToInt(request.Enabled), Options: request.Options, MonitorOption: request.MonitorOption,
+			RootFolderID: nullInt64(request.RootFolderID), SearchOnAdd: boolToInt(request.SearchOnAdd), ID: id,
 		})
 	})
 	if err != nil {
@@ -152,6 +159,7 @@ func convertImportList(row settingsdb.ImportList) ImportList {
 		CadenceHours: row.CadenceHours, Monitor: row.Monitor != 0,
 		QualityProfileID: int64Ptr(row.QualityProfileID), Exclusions: row.Exclusions,
 		Enabled: row.Enabled != 0, Options: row.Options, MonitorOption: row.MonitorOption,
+		RootFolderID: int64Ptr(row.RootFolderID), SearchOnAdd: row.SearchOnAdd != 0,
 	}
 }
 

@@ -196,6 +196,7 @@ func (s Service) add(ctx context.Context, aimed target, adding media.Adding, mat
 	request := media.AddRequest{
 		CategoryID: aimed.category.ID, Provider: match.Provider, ExternalID: match.ExternalID,
 		Monitored: aimed.list.Monitor, Option: aimed.list.MonitorOption, ProfileID: aimed.list.QualityProfileID,
+		RootFolderID: aimed.list.RootFolderID, Search: aimed.list.SearchOnAdd,
 	}
 	if module, ok := s.Media.Module(media.Key(aimed.category.MediaType)); ok {
 		if kinds := module.Descriptor().AddKinds; len(kinds) > 0 {
