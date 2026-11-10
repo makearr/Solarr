@@ -249,6 +249,7 @@ type Querier interface {
 	DeleteAcquisitionStall(ctx context.Context, acquisitionID int64) error
 	// A refresh rewrites the numbers one provider gave a part, so a mapping it dropped goes too.
 	DeleteAltNumberingByProvider(ctx context.Context, arg DeleteAltNumberingByProviderParams) error
+	DeleteClassificationValue(ctx context.Context, arg DeleteClassificationValueParams) error
 	DeleteCollection(ctx context.Context, id int64) error
 	DeleteCollectionDeclaredKeys(ctx context.Context, arg DeleteCollectionDeclaredKeysParams) error
 	DeleteCollectionLink(ctx context.Context, arg DeleteCollectionLinkParams) error
@@ -310,6 +311,7 @@ type Querier interface {
 	// What ties an album to a provider, leaving the local name an unverified album goes by.
 	DeleteVerifiedWorkExternalIDs(ctx context.Context, workID int64) error
 	DeleteWork(ctx context.Context, id int64) error
+	DeleteWorkClassification(ctx context.Context, arg DeleteWorkClassificationParams) error
 	DeleteWorkExclusion(ctx context.Context, arg DeleteWorkExclusionParams) error
 	DeleteWorkFieldByProvider(ctx context.Context, arg DeleteWorkFieldByProviderParams) error
 	DeleteWorkPart(ctx context.Context, id int64) error

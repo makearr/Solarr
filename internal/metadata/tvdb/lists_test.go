@@ -37,3 +37,22 @@ func TestSeriesListsAndListEntriesReadTheExtendedAnswers(t *testing.T) {
 		t.Errorf("entries = %v, want %v", got, want)
 	}
 }
+
+// A film's short record as read live 2026-11-06 carries its remote ids; the ids here are invented.
+func TestMovieRemoteIDsReadsTheShortRecord(t *testing.T) {
+	transport := &routed{answers: map[string]string{
+		"/v4/login": loginAnswer,
+		"/v4/movies/900001/extended?short=true": `{"data":{"id":900001,"name":"Example Film","year":"2008","remoteIds":[
+			{"id":"tt0000001","type":2,"sourceName":"IMDB"},{"id":"4242","type":12,"sourceName":"TheMovieDB.com"}]}}`,
+	}}
+	movie, err := newClient(t, transport, "project-key").MovieRemoteIDs(t.Context(), 900001)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := tvdb.Movie{ID: 900001, Name: "Example Film", Year: "2008", RemoteIDs: []tvdb.RemoteID{
+		{ID: "tt0000001", Type: 2, SourceName: "IMDB"}, {ID: "4242", Type: 12, SourceName: "TheMovieDB.com"},
+	}}
+	if !reflect.DeepEqual(movie, want) {
+		t.Errorf("movie = %+v, want %+v", movie, want)
+	}
+}

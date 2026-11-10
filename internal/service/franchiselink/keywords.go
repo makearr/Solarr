@@ -15,6 +15,9 @@ const ProviderKeyword = "keyword"
 // keywordKind is the classification a provider's keywords are stored under.
 const keywordKind = "keyword"
 
+// ProviderList is the namespace of a franchise key a provider's official list gives ("list:tvdb:<id>").
+const ProviderList = "list"
+
 // KeywordStore is what the keyword step reads of a media type's collections and declares on them.
 type KeywordStore interface {
 	Summaries(ctx context.Context, mediaType string) ([]library.FranchiseSummary, error)
@@ -23,9 +26,9 @@ type KeywordStore interface {
 	DeclareKeys(ctx context.Context, collectionID int64, provider string, externalIDs []string) error
 }
 
-// declareKeywords gives each collection of the media types the keyword key its own name is, when most of its works
-// carry that keyword: TMDB tags the films and the shows of one franchise alike, so the two collections share the key.
-func (s Service) declareKeywords(ctx context.Context, mediaTypes []string) error {
+// declareKeys gives each collection of the media types the keyword key its own name is, when most of its works carry that
+// keyword (TMDB tags a franchise's films and shows alike), and the key of each official list most of its works are on.
+func (s Service) declareKeys(ctx context.Context, mediaTypes []string) error {
 	if s.Keywords == nil {
 		return nil
 	}
@@ -42,6 +45,10 @@ func (s Service) declareKeywords(ctx context.Context, mediaTypes []string) error
 		if err != nil {
 			return err
 		}
+		lists, err := s.Keywords.Classifications(ctx, mediaType, library.FranchiseListKind)
+		if err != nil {
+			return err
+		}
 		members := map[int64][]int64{}
 		for _, membership := range memberships {
 			members[membership.CollectionID] = append(members[membership.CollectionID], membership.WorkID)
@@ -52,6 +59,9 @@ func (s Service) declareKeywords(ctx context.Context, mediaTypes []string) error
 				keys = []string{key}
 			}
 			if err := s.Keywords.DeclareKeys(ctx, summary.ID, ProviderKeyword, keys); err != nil {
+				return err
+			}
+			if err := s.Keywords.DeclareKeys(ctx, summary.ID, ProviderList, mostlyOn(members[summary.ID], lists)); err != nil {
 				return err
 			}
 		}
@@ -88,4 +98,23 @@ func franchiseName(name string) string {
 		words = words[1:]
 	}
 	return strings.Join(words, " ")
+}
+
+// mostlyOn are the lists more than half a collection's works are on, sorted: one series of a loose family on a list says
+// nothing of the rest, a film collection whose films a franchise list names is that franchise's.
+func mostlyOn(members []int64, lists map[int64][]string) []string {
+	counts := map[string]int{}
+	for _, workID := range members {
+		for _, list := range lists[workID] {
+			counts[list]++
+		}
+	}
+	var on []string
+	for list, carrying := range counts {
+		if carrying*2 > len(members) {
+			on = append(on, list)
+		}
+	}
+	slices.Sort(on)
+	return on
 }

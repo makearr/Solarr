@@ -197,6 +197,7 @@ func (p *process) tvModule() tv.Module {
 		FranchisePass: &tv.FranchisePass{
 			Source: p.wikidataFetcher(), Anime: p.aniListClient(), Franchises: library.NewFranchises(p.library), Crossovers: library.NewCrossovers(p.library),
 			Series: p.tvService().Series, Logger: p.logger, Episodes: p.tvService(), Lists: p.tvdbClient(), Clock: clock.NewSystem(),
+			Films: p.tvdbClient(), FilmType: movie.MediaType,
 			Again: func(ctx context.Context) {
 				_, _ = p.queue.Enqueue(ctx, jobs.Request{
 					Type: tv.FranchisePassJobType, ActionKey: "tv.franchises.continue", Priority: jobs.PriorityLow, RunAfter: clock.NewSystem().Now().Add(5 * time.Minute),

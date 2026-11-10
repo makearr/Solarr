@@ -207,13 +207,25 @@ without being asked: a series' Wikidata franchise and the same Wikidata franchis
 (`collection_declared_key`: the franchises, and their parents, most of a TMDB collection's films are in, written by the movie
 universe pass), a book series or soundtrack grouping that carries the same id, and a collection's own name as a TMDB keyword
 (`keyword:<name>`, declared by the link pass itself when more than half its works carry the keyword its name is: TMDB tags a
-franchise's films and shows alike; a keyword that is not the collection's name declares nothing). When two media types name one franchise id, the
+franchise's films and shows alike; a keyword that is not the collection's name declares nothing), and an official TheTVDB list
+(`list:tvdb:<id>`, declared by the link pass on a collection when more than half its works carry the list as a `franchise_list`
+classification; the TV franchise pass writes those, below). When two media types name one franchise id, the
 second keeps a sibling collection under `provider@media_type` so each library lists its own. A link shows the other collection's
 works and what its library type lacks (add with the one Add dialog into that library), the reason it was made (a shared
 `provider:id`, or by hand) and **Unlink**, which is remembered under the two collections' own ids (`collection_link_refusal`),
 so no pass links them again; linking by hand forgets it. A work is in as many collections as name it. A series that joins a
 family only by a crossover episode it shares is marked with that episode (`collection_member_origin`); taking it out of the
 collection sticks like any dismissal.
+
+**TheTVDB lists with films.** TheTVDB keeps one official list per franchise, and a list names films beside series. The TV
+franchise pass (`FranchisePass.recordListFilms`) reads the official lists of up to 60 held series a pass, each again after a
+month (`work_collection_check` source `tvdb-movies`), and resolves each film of a list holding 1 to 40 of them with one
+TheTVDB lookup (`/movies/{id}/extended?short=true`: its TMDB id, else its IMDb id, names the library's film). The list is then
+written whole: exactly its held series and films carry `franchise_list` value `tvdb:<id>`; the series read also loses the
+lists it is no longer on. A pass starts no further series after 120 film lookups (the series begun is finished, so no series
+waits on a budget it can never meet); a list a lookup failed on is not written and its series is asked again next pass. A
+series or film in no collection is not linked this way (`franchiselink.Service.LinkShows` still links a film collection named for a series).
+Undo is **Unlink**, remembered as for every provider link.
 
 A film the library holds that TMDB lists in a collection, but whose own record does not name it, joins the collection the next
 time the collection is opened (it was listed as missing before).

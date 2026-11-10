@@ -74,3 +74,9 @@ func (c Client) MovieByRemoteID(ctx context.Context, remoteID string) (int64, bo
 	}
 	return 0, false, nil
 }
+
+// MovieRemoteIDs reads a film's short record, which carries its ids at other sites and nothing heavy.
+func (c Client) MovieRemoteIDs(ctx context.Context, id int64) (Movie, error) {
+	var movie Movie
+	return movie, c.get(ctx, "/movies/"+strconv.FormatInt(id, 10)+"/extended", url.Values{"short": {"true"}}, &movie)
+}

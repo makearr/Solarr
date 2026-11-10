@@ -292,7 +292,7 @@ func crossoverFamilies(known wikidataKnowledge, titles map[int64]string) []cross
 // findProviderCrossovers compares the providers' episode lists of each family of series Wikidata or TheTVDB's franchise
 // lists tie together, those the library lacks included, so the events found list their missing parts. A family is
 // compared once a month.
-func (p FranchisePass) findProviderCrossovers(ctx context.Context, known *wikidataKnowledge) error {
+func (p FranchisePass) findProviderCrossovers(ctx context.Context, known *wikidataKnowledge, reads *listReads) error {
 	if p.Episodes == nil || p.Clock == nil {
 		return nil
 	}
@@ -313,7 +313,7 @@ func (p FranchisePass) findProviderCrossovers(ctx context.Context, known *wikida
 	if known != nil {
 		families = crossoverFamilies(*known, titles)
 	}
-	fromLists, err := p.listFamilies(ctx)
+	fromLists, err := p.listFamilies(ctx, reads)
 	if err != nil {
 		return err
 	}
@@ -386,7 +386,7 @@ const (
 
 // listFamilies reads the lists of the series due and answers a family for each official list among them: TheTVDB keeps
 // one per franchise ("one city's emergency services", a spin-off line), a user's own lists say nothing.
-func (p FranchisePass) listFamilies(ctx context.Context) ([]crossoverFamily, error) {
+func (p FranchisePass) listFamilies(ctx context.Context, reads *listReads) ([]crossoverFamily, error) {
 	if p.Lists == nil {
 		return nil, nil
 	}
@@ -402,7 +402,7 @@ func (p FranchisePass) listFamilies(ctx context.Context) ([]crossoverFamily, err
 		if err != nil || id <= 0 {
 			continue
 		}
-		lists, err := p.Lists.SeriesLists(ctx, id)
+		lists, err := reads.seriesLists(ctx, id)
 		if err != nil {
 			p.Logger.Debug("series lists not read", slog.Int64("tvdb", id), slog.Any("error", err))
 			continue
@@ -412,7 +412,7 @@ func (p FranchisePass) listFamilies(ctx context.Context) ([]crossoverFamily, err
 			if !list.IsOfficial || read[list.ID] {
 				continue
 			}
-			entries, err := p.Lists.ListEntries(ctx, list.ID)
+			entries, err := reads.listEntries(ctx, list.ID)
 			if err != nil {
 				complete = false
 				continue

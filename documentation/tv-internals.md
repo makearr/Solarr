@@ -245,7 +245,8 @@ a deleted one is remembered (`crossover_event_dismissed`).
 **Provider detection** (`FranchisePass.findProviderCrossovers`, in the franchise pass): for each family Wikidata ties together (a
 franchise, spin-off and sequel claims; the series the library lacks included), and the series of each official TheTVDB list a held
 series is on (`listFamilies`: TheTVDB keeps one per franchise, users' own lists are ignored; 60 series' lists a pass, each series
-asked again after a month, `work_collection_check` source `tvdb-lists`), the episode lists are read through the TV service and
+asked again after a month, `work_collection_check` source `tvdb-lists`; the films of those lists are recorded for the cross-library
+links by `recordListFilms`, source `tvdb-movies`, `documentation/metadata-providers.md`), the episode lists are read through the TV service and
 compared (`findCrossoverEvents`): one title in two or more series within 60 days, an episode whose title names another series of the
 family aired within a week of one of its own, and a spin-off's first episode with the parent's episode within two weeks before it that
 names it. `Crossovers.RecordProviderEvent` keeps what the library holds as members and the rest as `crossover_missing_part`, shown on

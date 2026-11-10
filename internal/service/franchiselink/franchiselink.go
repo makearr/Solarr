@@ -42,7 +42,7 @@ type Service struct {
 	// Shows, with FilmType and SeriesType, also links a series with the film collection named for it; nil does not.
 	Shows                ShowFilmStore
 	FilmType, SeriesType string
-	// Keywords declares the keyword keys before the links are made; nil declares none.
+	// Keywords declares the keyword and official list keys before the links are made; nil declares none.
 	Keywords KeywordStore
 	Logger   *slog.Logger
 }
@@ -84,7 +84,7 @@ func (s Service) LinkShows(ctx context.Context) (int, error) {
 	return made, nil
 }
 
-// Link declares the keyword keys, applies the rule once and answers how many pairs it linked.
+// Link declares the keyword and list keys, applies the rule once and answers how many pairs it linked.
 func (s Service) Link(ctx context.Context) (int, error) {
 	if _, err := s.Store.PruneCollectionLinks(ctx); err != nil {
 		return 0, err
@@ -101,7 +101,7 @@ func (s Service) Link(ctx context.Context) (int, error) {
 			}
 		}
 		slices.Sort(mediaTypes)
-		if err := s.declareKeywords(ctx, mediaTypes); err != nil {
+		if err := s.declareKeys(ctx, mediaTypes); err != nil {
 			return 0, err
 		}
 		if candidates, err = s.Store.LinkCandidates(ctx); err != nil {

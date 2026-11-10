@@ -651,6 +651,12 @@ LIMIT sqlc.arg(page_size);
 INSERT INTO work_collection_check (work_id, source, checked_at) VALUES (?, ?, ?)
 ON CONFLICT (work_id, source) DO UPDATE SET checked_at = excluded.checked_at;
 
+-- name: DeleteClassificationValue :exec
+DELETE FROM work_classification WHERE kind = sqlc.arg(kind) AND value = sqlc.arg(value);
+
+-- name: DeleteWorkClassification :exec
+DELETE FROM work_classification WHERE work_id = sqlc.arg(work_id) AND kind = sqlc.arg(kind) AND value = sqlc.arg(value);
+
 -- name: ListClassificationsOfType :many
 SELECT c.work_id, c.value FROM work_classification c JOIN work w ON w.id = c.work_id
 WHERE w.media_type = sqlc.arg(media_type) AND c.kind = sqlc.arg(kind)

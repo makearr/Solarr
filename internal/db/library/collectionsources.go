@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -71,4 +72,56 @@ func (f Franchises) Classifications(ctx context.Context, mediaType, kind string)
 		out[row.WorkID] = append(out[row.WorkID], row.Value)
 	}
 	return out, nil
+}
+
+// FranchiseListKind is the classification a work carries for each provider's official franchise list it is on ("tvdb:<id>").
+const FranchiseListKind = "franchise_list"
+
+// SetClassificationMembers makes exactly these works carry one classification value: a list read whole names all its titles.
+func (f Franchises) SetClassificationMembers(ctx context.Context, kind, value, source string, workIDs []int64) error {
+	for start := 0; start == 0 || start < len(workIDs); start += 200 {
+		batch := workIDs[start:min(start+200, len(workIDs))]
+		err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			queries := librarydb.New(tx)
+			if start == 0 {
+				if err := queries.DeleteClassificationValue(ctx, librarydb.DeleteClassificationValueParams{Kind: kind, Value: value}); err != nil {
+					return err
+				}
+			}
+			for _, workID := range batch {
+				if err := queries.SetWorkClassification(ctx, librarydb.SetWorkClassificationParams{WorkID: workID, Kind: kind, Value: value, Source: source}); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("library: works with %s %q: %w", kind, value, err)
+		}
+	}
+	return nil
+}
+
+// KeepClassifications takes from a work the values of one kind that are not among keep.
+func (f Franchises) KeepClassifications(ctx context.Context, workID int64, kind string, keep []string) error {
+	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		held, err := queries.ListWorkClassifications(ctx, workID)
+		if err != nil {
+			return err
+		}
+		for _, row := range held {
+			if row.Kind != kind || slices.Contains(keep, row.Value) {
+				continue
+			}
+			if err := queries.DeleteWorkClassification(ctx, librarydb.DeleteWorkClassificationParams{WorkID: workID, Kind: kind, Value: row.Value}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("library: keep %s of work %d: %w", kind, workID, err)
+	}
+	return nil
 }

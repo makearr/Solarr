@@ -331,6 +331,20 @@ func (q *Queries) CreateCustomCollection(ctx context.Context, arg CreateCustomCo
 	return id, err
 }
 
+const deleteClassificationValue = `-- name: DeleteClassificationValue :exec
+DELETE FROM work_classification WHERE kind = ?1 AND value = ?2
+`
+
+type DeleteClassificationValueParams struct {
+	Kind  string
+	Value string
+}
+
+func (q *Queries) DeleteClassificationValue(ctx context.Context, arg DeleteClassificationValueParams) error {
+	_, err := q.db.ExecContext(ctx, deleteClassificationValue, arg.Kind, arg.Value)
+	return err
+}
+
 const deleteCollection = `-- name: DeleteCollection :exec
 DELETE FROM collection WHERE id = ?
 `
@@ -509,6 +523,21 @@ func (q *Queries) DeleteUnexplainedCollectionLinks(ctx context.Context) (int64, 
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const deleteWorkClassification = `-- name: DeleteWorkClassification :exec
+DELETE FROM work_classification WHERE work_id = ?1 AND kind = ?2 AND value = ?3
+`
+
+type DeleteWorkClassificationParams struct {
+	WorkID int64
+	Kind   string
+	Value  string
+}
+
+func (q *Queries) DeleteWorkClassification(ctx context.Context, arg DeleteWorkClassificationParams) error {
+	_, err := q.db.ExecContext(ctx, deleteWorkClassification, arg.WorkID, arg.Kind, arg.Value)
+	return err
 }
 
 const dequeueReady = `-- name: DequeueReady :exec

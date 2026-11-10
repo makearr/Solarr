@@ -59,7 +59,10 @@ type FranchisePass struct {
 	Episodes EpisodeLists
 	// Lists reads TheTVDB's franchise lists as further families to compare; nil reads none.
 	Lists SeriesLists
-	Clock clock.Clock
+	// Films, with FilmType, records which of the library's films those lists hold, so franchiselink can join their collections; nil records none.
+	Films    FilmRemoteIDs
+	FilmType string
+	Clock    clock.Clock
 	// Again asks for another pass soon, when AniList's time ran out with entries still unread; nil asks none.
 	Again func(ctx context.Context)
 }
@@ -92,7 +95,11 @@ func (p FranchisePass) Run(ctx context.Context, _ jobs.Job) error {
 			return err
 		}
 	}
-	if err := p.findProviderCrossovers(ctx, known); err != nil {
+	reads := newListReads(p.Lists)
+	if err := p.findProviderCrossovers(ctx, known, reads); err != nil {
+		return err
+	}
+	if err := p.recordListFilms(ctx, reads); err != nil {
 		return err
 	}
 	if err := p.readAnime(ctx); err != nil {
