@@ -23,6 +23,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/events"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/platform/iogate"
 	"github.com/makearr/Solarr/internal/platform/transcode"
 )
 
@@ -249,6 +250,8 @@ type Config struct {
 	DatabaseAdmin DatabaseAdmin
 	// DiskManager serves the expert Disk page. Optional: nil answers 503.
 	DiskManager DiskManager
+	// PlaybackTurns makes each read of a file served to a viewer a turn on its disk. Optional.
+	PlaybackTurns iogate.Turns
 	// ArrCompanion is told of each add when Solarr runs as an *Arr's companion. Optional.
 	ArrCompanion ArrCompanion
 	// MemoryCopies serves the Cache page's RAM options. Optional: nil answers 503.
@@ -405,6 +408,7 @@ type Server struct {
 	scheduler               Scheduler
 	cacheManager            CacheManager
 	diskManager             DiskManager
+	playbackTurns           iogate.Turns
 	databaseAdmin           DatabaseAdmin
 	arrCompanion            ArrCompanion
 	memoryCopies            MemoryCopies
@@ -551,6 +555,7 @@ func New(config Config) (*Server, error) {
 		scheduler:               config.Scheduler,
 		cacheManager:            config.CacheManager,
 		diskManager:             config.DiskManager,
+		playbackTurns:           config.PlaybackTurns,
 		databaseAdmin:           config.DatabaseAdmin,
 		arrCompanion:            config.ArrCompanion,
 		memoryCopies:            config.MemoryCopies,

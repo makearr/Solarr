@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -338,4 +339,96 @@ type waitingPiper struct{}
 func (waitingPiper) Pipe(ctx context.Context, _ io.Writer, _ string, _ ...string) error {
 	<-ctx.Done()
 	return nil
+}
+
+// scriptedPiper plays what each call does: write sends bytes first, hang then blocks until its context ends.
+type scriptedPiper struct {
+	write []string
+	hang  []bool
+	calls int
+}
+
+func (p *scriptedPiper) Pipe(ctx context.Context, w io.Writer, _ string, _ ...string) error {
+	call := p.calls
+	p.calls++
+	if call < len(p.write) && p.write[call] != "" {
+		if _, err := w.Write([]byte(p.write[call])); err != nil {
+			return err
+		}
+	}
+	if call < len(p.hang) && p.hang[call] {
+		<-ctx.Done()
+	}
+	return nil
+}
+
+// advanceUntil moves the fake clock in steps until done reports true, so the watchdog's ticker fires.
+func advanceUntil(t *testing.T, fake *clock.Fake, done func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !done() {
+		if time.Now().After(deadline) {
+			t.Fatal("the condition never came true")
+		}
+		fake.Advance(5 * time.Second)
+		time.Sleep(2 * time.Millisecond)
+	}
+}
+
+func TestStream_AHungConversionIsEndedAndTheNextStepTriesAtOnce(t *testing.T) {
+	fake := clock.NewFakeAtEpoch()
+	piper := &scriptedPiper{hang: []bool{true, false}, write: []string{"", "data"}}
+	service := transcode.NewService(fakeRunner{}, piper, nil).WithStallWatch(fake, 40*time.Second)
+	spec := transcode.Spec{Kind: transcode.Video, Path: "/m/a.mkv", Accel: transcode.NVENC, Device: "d", MaxHeight: 720, VideoKbps: 4000}
+
+	result := make(chan error, 1)
+	go func() { result <- service.Stream(t.Context(), io.Discard, spec, 2) }()
+	advanceUntil(t, fake, func() bool { return len(result) == 1 })
+	if err := <-result; err != nil {
+		t.Fatalf("Stream = %v, want the next step to finish the stream", err)
+	}
+	if piper.calls != 2 {
+		t.Fatalf("calls = %d, want the hung step and the one after it", piper.calls)
+	}
+}
+
+func TestStream_AHungConversionAfterBytesWentOutEndsWithErrStalled(t *testing.T) {
+	fake := clock.NewFakeAtEpoch()
+	piper := &scriptedPiper{hang: []bool{true}, write: []string{"data"}}
+	service := transcode.NewService(fakeRunner{}, piper, nil).WithStallWatch(fake, 40*time.Second)
+	spec := transcode.Spec{Kind: transcode.Video, Path: "/m/a.mkv", Accel: transcode.Software, MaxHeight: 720, VideoKbps: 4000}
+
+	result := make(chan error, 1)
+	go func() { result <- service.Stream(t.Context(), io.Discard, spec, 2) }()
+	advanceUntil(t, fake, func() bool { return len(result) == 1 })
+	if err := <-result; !errors.Is(err, transcode.ErrStalled) {
+		t.Fatalf("Stream = %v, want ErrStalled", err)
+	}
+}
+
+// pausedWriter is a viewer who stopped reading: Write does not return until released.
+type pausedWriter struct{ release chan struct{} }
+
+func (p pausedWriter) Write(b []byte) (int, error) { <-p.release; return len(b), nil }
+
+func TestStream_AViewerWhoPausedIsNotAStall(t *testing.T) {
+	fake := clock.NewFakeAtEpoch()
+	release := make(chan struct{})
+	piper := &scriptedPiper{write: []string{"data"}}
+	service := transcode.NewService(fakeRunner{}, piper, nil).WithStallWatch(fake, 40*time.Second)
+	spec := transcode.Spec{Kind: transcode.Video, Path: "/m/a.mkv", Accel: transcode.Software, MaxHeight: 720, VideoKbps: 4000}
+
+	result := make(chan error, 1)
+	go func() { result <- service.Stream(t.Context(), pausedWriter{release}, spec, 2) }()
+	for range 40 {
+		fake.Advance(5 * time.Second)
+		time.Sleep(2 * time.Millisecond)
+	}
+	if len(result) != 0 {
+		t.Fatal("a paused viewer ended the stream")
+	}
+	close(release)
+	if err := <-result; err != nil {
+		t.Fatalf("Stream = %v after the viewer resumed, want nil", err)
+	}
 }

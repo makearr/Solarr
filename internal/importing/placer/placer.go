@@ -262,7 +262,7 @@ type Owner struct{ SourceRel, DestRel string }
 // Radarr's rule): each keeps what follows the file's name (".en.srt") under the file's new name. A file already there is
 // left, and one that cannot be placed is logged, never the import's failure.
 func (p Placer) Extras(
-	extensions []string, sourceRoot string, destRoot settings.RootFolder, others []inspect.File, owners []Owner, methods []mover.PlaceMethod,
+	ctx context.Context, extensions []string, sourceRoot string, destRoot settings.RootFolder, others []inspect.File, owners []Owner, methods []mover.PlaceMethod,
 ) []library.UnitExtra {
 	wanted := map[string]bool{}
 	for _, extension := range extensions {
@@ -285,7 +285,7 @@ func (p Placer) Extras(
 		if _, err := p.config.FS.Stat(destAbs); err == nil {
 			continue
 		}
-		if _, err := mover.PlaceOne(p.config.FS, path.Join(sourceRoot, other.RelPath), destAbs, other.SizeBytes, methods); err != nil {
+		if _, err := mover.PlaceOneOnDisk(ctx, p.config.FS, path.Join(sourceRoot, other.RelPath), destAbs, other.SizeBytes, methods); err != nil {
 			p.logger.Warn("import: could not bring an extra file along", slog.String("file", other.RelPath), slog.Any("error", err))
 			continue
 		}

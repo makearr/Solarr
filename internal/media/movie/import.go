@@ -183,7 +183,7 @@ func (p placing) Place(ctx context.Context, request batch.Request, unit inspect.
 	}
 	if p.config.ExtraFiles != nil {
 		owners := []placer.Owner{{SourceRel: file.RelPath, DestRel: destRel}}
-		placement.Extras = p.config.Placer.Extras(p.config.ExtraFiles(request.CategoryID), request.SourcePath, destRoot, unit.Other, owners, methods)
+		placement.Extras = p.config.Placer.Extras(ctx, p.config.ExtraFiles(request.CategoryID), request.SourcePath, destRoot, unit.Other, owners, methods)
 	}
 	return placement, nil
 }

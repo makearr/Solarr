@@ -36,7 +36,7 @@ func TestExtrasFollowTheirVideoOutOfASubsFolder(t *testing.T) {
 		{RelPath: "Rel/Subs/Other.srt", SizeBytes: 1},
 	}
 	owners := []placer.Owner{{SourceRel: "Rel/Show.S01E01.mkv", DestRel: "Show/Season 1/Show - S01E01.mkv"}}
-	got := p.Extras([]string{"srt"}, "/in", settings.RootFolder{ID: 7, Path: "/lib"}, others, owners, []mover.PlaceMethod{mover.PlaceCopy})
+	got := p.Extras(t.Context(), []string{"srt"}, "/in", settings.RootFolder{ID: 7, Path: "/lib"}, others, owners, []mover.PlaceMethod{mover.PlaceCopy})
 	want := []library.UnitExtra{
 		{RootFolderID: 7, RelPath: "Show/Season 1/Show - S01E01.en.srt"},
 		{RootFolderID: 7, RelPath: "Show/Season 1/Show - S01E01.de.forced.srt"},

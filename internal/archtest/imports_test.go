@@ -56,7 +56,7 @@ var allowedInternalImports = map[string][]string{
 	},
 	"internal/api/auth":  {"internal/platform/clock", "internal/platform/secrets"},
 	"internal/api/authz": {"internal/db/settings"},
-	"internal/api/apiserver": {
+	"internal/api/apiserver": {"internal/platform/iogate",
 		"internal/platform/remoteimage", "internal/api/apiserver/gen", "internal/api/apiserver/legal", "internal/api/auth", "internal/api/authz",
 		"internal/platform/clock", "internal/platform/config", "internal/platform/events", "internal/platform/fsx",
 		"internal/jobs", "internal/identify/model", "internal/platform/paginate", "internal/identify/parse",
@@ -137,7 +137,7 @@ var allowedInternalImports = map[string][]string{
 	// touches no database and no filesystem of ours.
 	"internal/platform/mediatool": {"internal/platform/artwork"},
 	// The player's ffmpeg conversion: encoder detection reads device nodes through fsx.
-	"internal/platform/transcode": {"internal/platform/fsx", "internal/platform/mediatool"},
+	"internal/platform/transcode": {"internal/platform/fsx", "internal/platform/mediatool", "internal/platform/clock"},
 	// Section 21.6's resize-and-encode step: pure image processing (stdlib image
 	// package plus a pure-Go WebP encoder dependency), no I/O of its own.
 	"internal/platform/artwork":     {},
@@ -172,7 +172,7 @@ var allowedInternalImports = map[string][]string{
 	// segment plausibility are both injected functions, so this never
 	// imports internal/platform/mediatool, internal/identify/parse or internal/media/music. fsx is
 	// the one dependency, for the walk itself.
-	"internal/importing/inspect": {"internal/importing/rules", "internal/platform/filekind", "internal/platform/fsx"},
+	"internal/importing/inspect": {"internal/platform/iogate", "internal/importing/rules", "internal/platform/filekind", "internal/platform/fsx"},
 	"internal/importing/unpack":  {"internal/importing/inspect", "internal/platform/archive", "internal/platform/fsx"},
 	// Watches download folders: lists, checks an entry has settled, enqueues an import.
 	"internal/importing/downloadwatch": {

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/iogate"
 )
 
 // WalkState is one resumable Walk's persisted progress -- the same role
@@ -164,7 +165,11 @@ func (w *walkerRun) visit(ctx context.Context, relative string) (clusterFiles, e
 	if relative != "" {
 		absolute = path.Join(w.root, relative)
 	}
-	entries, err := w.fsys.ReadDir(absolute)
+	var entries []fsx.DirEntry
+	err := iogate.OnDisk(ctx, "", []string{absolute}, func() (readErr error) {
+		entries, readErr = w.fsys.ReadDir(absolute)
+		return readErr
+	})
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return clusterFiles{}, nil
@@ -249,7 +254,13 @@ func (w *walkerRun) visit(ctx context.Context, relative string) (clusterFiles, e
 	if len(bubbled.children) > 0 {
 		extra = &Signal{Kind: SignalDiscSubfolder, Detail: strings.Join(bubbled.children, ", ")}
 	}
-	units := splitByEvidence(relative, allMedia, w.opts.Tags, extra)
+	var units []Unit
+	if err := iogate.OnDisk(ctx, "", []string{absolute}, func() error {
+		units = splitByEvidence(relative, allMedia, w.opts.Tags, extra)
+		return nil
+	}); err != nil {
+		return clusterFiles{}, err
+	}
 	for i := range units {
 		units[i].Other = ownOther
 	}

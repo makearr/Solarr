@@ -460,7 +460,7 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		}
 	}
 
-	placement := &library.Placement{WorkID: workID, Extras: i.placeExtras(request.CategoryID, request.SourcePath, destRoot, unit, placed, methods)}
+	placement := &library.Placement{WorkID: workID, Extras: i.placeExtras(ctx, request.CategoryID, request.SourcePath, destRoot, unit, placed, methods)}
 	for index, p := range placed {
 		placement.MediaObjectIDs = append(placement.MediaObjectIDs, registered[index].MediaObjectID)
 		placement.LibraryPathIDs = append(placement.LibraryPathIDs, registered[index].LibraryPathID)
@@ -529,7 +529,7 @@ func (i Importer) heldCopy(ctx context.Context, categoryID, workID int64, source
 
 // placeExtras brings along the unit's other files that are named after a placed episode file (package placer).
 func (i Importer) placeExtras(
-	categoryID int64, sourceRoot string, destRoot settings.RootFolder, unit inspect.Unit, placed []placedEpisode, methods []mover.PlaceMethod,
+	ctx context.Context, categoryID int64, sourceRoot string, destRoot settings.RootFolder, unit inspect.Unit, placed []placedEpisode, methods []mover.PlaceMethod,
 ) []library.UnitExtra {
 	if i.config.ExtraFiles == nil {
 		return nil
@@ -538,7 +538,7 @@ func (i Importer) placeExtras(
 	for index, one := range placed {
 		owners[index] = placer.Owner{SourceRel: one.file.media.RelPath, DestRel: one.Rel}
 	}
-	return i.placer.Extras(i.config.ExtraFiles(categoryID), sourceRoot, destRoot, unit.Other, owners, methods)
+	return i.placer.Extras(ctx, i.config.ExtraFiles(categoryID), sourceRoot, destRoot, unit.Other, owners, methods)
 }
 
 func placedFiles(placed []placedEpisode) []placer.Placed {

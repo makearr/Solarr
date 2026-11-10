@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"time"
@@ -76,7 +77,12 @@ func (q *Queue) Fail(ctx context.Context, job Job, owner string, attempt Attempt
 	resolution := Resolution{Class: class}
 	// job.Attempts is the count before this attempt; Start incremented the row.
 	attemptsUsed := job.Attempts + 1
-	if class == ClassRetryable && attemptsUsed < job.MaxAttempts {
+	var stalled interface{ RetryAfter() time.Duration }
+	switch {
+	case errors.As(cause, &stalled) && attemptsUsed < job.MaxAttempts+extraStallAttempts:
+		resolution.Retrying = true
+		resolution.RunAfter = now.Add(stalled.RetryAfter())
+	case class == ClassRetryable && attemptsUsed < job.MaxAttempts:
 		resolution.Retrying = true
 		resolution.RunAfter = now.Add(q.jitter(backoffFor(attemptsUsed)))
 	}

@@ -43,6 +43,32 @@ var jobClasses = map[jobs.Type]iogate.Class{
 // kindClasses overrides a job type's class for a batch that says what it is.
 var kindClasses = map[string]iogate.Class{moverjob.DiskKindRename: iogate.ClassRename}
 
+// stallPolicies is when a job of each class counts as hung and how long it waits before running again. The delays
+// are the user's (2026-11-10): imports 15 s, drains 60 s, scans 5 min, thumbnails and hashes 15 min; the classes the
+// brief did not name sit between their neighbours. The floors are generous on purpose: a copy of a large file reports
+// nothing until it ends, and cancelling it would only start it again from nothing.
+var stallPolicies = map[iogate.Class]jobs.StallPolicy{
+	iogate.ClassImport:       {Floor: 45 * time.Minute, Restart: 15 * time.Second},
+	iogate.ClassRename:       {Floor: 30 * time.Minute, Restart: 30 * time.Second},
+	iogate.ClassTagWriteback: {Floor: 20 * time.Minute, Restart: 60 * time.Second},
+	iogate.ClassDrain:        {Floor: 60 * time.Minute, Restart: 60 * time.Second},
+	iogate.ClassScan:         {Floor: 30 * time.Minute, Restart: 5 * time.Minute},
+	iogate.ClassProbe:        {Floor: 20 * time.Minute, Restart: 5 * time.Minute},
+	iogate.ClassStatistics:   {Floor: 20 * time.Minute, Restart: 5 * time.Minute},
+	iogate.ClassRecycleBin:   {Floor: 20 * time.Minute, Restart: 5 * time.Minute},
+	iogate.ClassPreviews:     {Floor: 30 * time.Minute, Restart: 15 * time.Minute},
+}
+
+// StallPolicy is jobs.Watchdog: every job with a disk class is watched.
+func (d *diskTurns) StallPolicy(job jobs.Job) (jobs.StallPolicy, bool) {
+	class, gated := jobClasses[job.Type]
+	if !gated {
+		return jobs.StallPolicy{}, false
+	}
+	policy, watched := stallPolicies[class]
+	return policy, watched
+}
+
 // diskLayout says which disk group a path or root folder is in; adapters.DiskManager answers it.
 type diskLayout interface {
 	GroupOfPath(path string) string
@@ -86,17 +112,30 @@ type jobTurns struct {
 	job jobs.Job
 }
 
-// AcquirePaths takes one batch's turn on every disk under the paths, in group order so two batches that need the
-// same pair of disks cannot each hold one and wait for the other.
+// AcquirePaths takes one batch's turn on every disk under the paths.
 func (t jobTurns) AcquirePaths(ctx context.Context, kind string, paths []string) (func(), error) {
-	d, job := t.d, t.job
-	class, gated := jobClasses[job.Type]
+	class, gated := jobClasses[t.job.Type]
 	if !gated {
 		return func() {}, nil
 	}
 	if kindClass, named := kindClasses[kind]; named {
 		class = kindClass
 	}
+	return t.d.acquireGroups(ctx, class, paths)
+}
+
+// PlaybackTurns is what a viewer's requests take their turns with: always the most urgent class, no job around.
+func (d *diskTurns) PlaybackTurns() iogate.Turns { return playbackTurns{d: d} }
+
+type playbackTurns struct{ d *diskTurns }
+
+func (t playbackTurns) AcquirePaths(ctx context.Context, _ string, paths []string) (func(), error) {
+	return t.d.acquireGroups(ctx, iogate.ClassPlayback, paths)
+}
+
+// acquireGroups takes a slot on every disk group under the paths, in group order so two batches that need the same
+// pair of disks cannot each hold one and wait for the other.
+func (d *diskTurns) acquireGroups(ctx context.Context, class iogate.Class, paths []string) (func(), error) {
 	seen := map[string]bool{}
 	var groups []string
 	for _, path := range paths {

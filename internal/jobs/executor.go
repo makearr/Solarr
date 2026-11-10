@@ -59,6 +59,7 @@ type Executor struct {
 	leaseTTL time.Duration
 	running  *Running
 	diskGate DiskGate
+	watchdog Watchdog
 
 	mu       sync.RWMutex
 	handlers map[Type]Handler
@@ -76,6 +77,8 @@ type ExecutorConfig struct {
 	Running *Running
 	// DiskGate is optional: a job that uses a disk waits here for its turn on that disk.
 	DiskGate DiskGate
+	// Watchdog is optional: it names the jobs to cancel and start again when they hang.
+	Watchdog Watchdog
 }
 
 // NewExecutor builds an executor.
@@ -98,6 +101,7 @@ func NewExecutor(queue *Queue, cl clock.Clock, config ExecutorConfig) *Executor 
 		leaseTTL: config.LeaseTTL,
 		running:  config.Running,
 		diskGate: config.DiskGate,
+		watchdog: config.Watchdog,
 		handlers: make(map[Type]Handler),
 	}
 }
@@ -144,7 +148,7 @@ func (e *Executor) Execute(ctx context.Context, job Job) {
 	renewalDone := e.renewUntilDone(running, stopRenewing, job, logger)
 
 	job.Progress = e.running.Start(job)
-	runErr := e.runOnDisk(running, handler, job)
+	runErr := e.runWatched(running, handler, job)
 	e.running.Finish(job.ID)
 
 	stopRenewing()
@@ -182,13 +186,84 @@ func (e *Executor) Execute(ctx context.Context, job Job) {
 		slog.Any("error", runErr))
 }
 
+// runWatched runs the job in its turn on its disk; a job the watchdog names that shows no sign of life for too long is
+// cancelled and fails with a StalledError, which the queue retries after the job's own restart delay.
+func (e *Executor) runWatched(ctx context.Context, handler Handler, job Job) error {
+	policy, watched := StallPolicy{}, false
+	if e.watchdog != nil {
+		policy, watched = e.watchdog.StallPolicy(job)
+	}
+	if !watched {
+		return e.runOnDisk(ctx, handler, job)
+	}
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- e.runOnDisk(runCtx, handler, job) }()
+
+	ticker := e.clock.NewTicker(watchEvery)
+	defer ticker.Stop()
+	var stalled *StalledError
+	var stalledAt time.Time
+	for {
+		select {
+		case err := <-done:
+			if stalled != nil && (err == nil || errors.Is(err, context.Canceled)) {
+				return stalled
+			}
+			return err
+		case <-ticker.C():
+			now := e.clock.Now()
+			if stalled != nil {
+				if now.Sub(stalledAt) >= abandonGrace {
+					e.logger.Warn("a hung job did not stop when cancelled; no longer waiting for it",
+						slog.Int64("job_id", job.ID), slog.String("type", string(job.Type)))
+					return stalled
+				}
+				continue
+			}
+			if idle := e.hungFor(job, policy, now); idle > 0 {
+				stalled = &StalledError{Type: job.Type, Idle: idle, RestartAfter: policy.Restart}
+				stalledAt = now
+				e.logger.Warn("job made no progress and is being cancelled",
+					slog.Int64("job_id", job.ID), slog.String("type", string(job.Type)),
+					slog.Duration("idle", idle), slog.Duration("restart_after", policy.Restart))
+				cancel()
+			}
+		}
+	}
+}
+
+// hungFor is how long the job has been quiet when that is too long, else 0.
+func (e *Executor) hungFor(job Job, policy StallPolicy, now time.Time) time.Duration {
+	progress := e.running.progressOf(job.ID)
+	if progress == nil {
+		return 0
+	}
+	idle, waiting, perUnit := progress.quiet(now)
+	if waiting {
+		return 0
+	}
+	if idle > max(policy.Floor, stallFactor*perUnit) {
+		return idle
+	}
+	return 0
+}
+
 // runOnDisk waits for the job's turn on its disk, when it has one, then runs it; the lease is renewed meanwhile.
 func (e *Executor) runOnDisk(ctx context.Context, handler Handler, job Job) error {
 	if e.diskGate == nil {
 		return runWithRecovery(ctx, handler, job)
 	}
-	ctx = iogate.WithTurns(ctx, e.diskGate.TurnsFor(job))
+	turns := e.diskGate.TurnsFor(job)
+	if progress := e.running.progressOf(job.ID); progress != nil {
+		turns = beatingTurns{inner: turns, progress: progress}
+	}
+	ctx = iogate.WithTurns(ctx, turns)
+	progress := e.running.progressOf(job.ID)
+	progress.setWaiting(true)
 	release, err := e.diskGate.Acquire(ctx, job)
+	progress.setWaiting(false)
 	if err != nil {
 		return err
 	}

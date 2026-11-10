@@ -501,7 +501,7 @@ func (c Committer) CommitMatchedUnit(
 	if c.extraFiles != nil {
 		extensions = c.extraFiles(categoryID)
 	}
-	extras, extrasSkipped := c.placeExtras(sourceRoot, destRoot.Path, unit, destRelPaths, extensions, methods)
+	extras, extrasSkipped := c.placeExtras(ctx, sourceRoot, destRoot.Path, unit, destRelPaths, extensions, methods)
 
 	return Placed{
 		WorkID: resolution.WorkID, WorkCreated: resolution.WorkCreated,
@@ -516,7 +516,7 @@ func (c Committer) CommitMatchedUnit(
 // follows that track's new name (Lidarr's rule), any other goes to the folder of the tracks it
 // sat beside. An existing file is never overwritten, and a failure skips the file, not the album.
 func (c Committer) placeExtras(
-	sourceRoot, destRootPath string, unit inspect.Unit, destRelPaths, extensions []string, methods []mover.PlaceMethod,
+	ctx context.Context, sourceRoot, destRootPath string, unit inspect.Unit, destRelPaths, extensions []string, methods []mover.PlaceMethod,
 ) (placed, skipped []string) {
 	if len(extensions) == 0 {
 		return nil, nil
@@ -555,7 +555,7 @@ func (c Committer) placeExtras(
 			skipped = append(skipped, other.RelPath+": "+destRelPath+" already exists")
 			continue
 		}
-		if _, err := mover.PlaceOne(c.fsys, path.Join(sourceRoot, other.RelPath), destAbs, other.SizeBytes, methods); err != nil {
+		if _, err := mover.PlaceOneOnDisk(ctx, c.fsys, path.Join(sourceRoot, other.RelPath), destAbs, other.SizeBytes, methods); err != nil {
 			skipped = append(skipped, other.RelPath+": "+err.Error())
 			continue
 		}

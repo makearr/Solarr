@@ -81,3 +81,25 @@ func TestAcquire_OnlyWholeRunJobsHoldADiskForTheirRunAndUnlistedJobsAreNeverHeld
 }
 
 var _ iogate.Turns = jobTurns{}
+
+func TestStallPolicy_EveryDiskClassWaitsItsOwnTimeBeforeRestarting(t *testing.T) {
+	turns := newTestTurns(fakeLayout{})
+	want := map[jobs.Type]time.Duration{
+		"import.run": 15 * time.Second, "move.apply": 60 * time.Second, "library.scan": 5 * time.Minute,
+		"library.video_pictures": 15 * time.Minute,
+	}
+	for jobType, restart := range want {
+		policy, watched := turns.StallPolicy(jobs.Job{Type: jobType})
+		if !watched || policy.Restart != restart || policy.Floor <= 0 {
+			t.Errorf("%s: policy %+v watched %v, want a restart after %s", jobType, policy, watched, restart)
+		}
+	}
+	for jobType := range jobClasses {
+		if _, watched := turns.StallPolicy(jobs.Job{Type: jobType}); !watched {
+			t.Errorf("%s has a disk class but no stall policy", jobType)
+		}
+	}
+	if _, watched := turns.StallPolicy(jobs.Job{Type: "acquire.hunt"}); watched {
+		t.Error("a job that never touches a library disk must not be watched")
+	}
+}

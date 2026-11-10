@@ -31,6 +31,49 @@ type Progress struct {
 	done    int64
 	total   int64
 	samples []progressSample
+	started time.Time
+	// lastBeat is the last sign of life, and waiting is how many callers wait for a disk turn (not hanging).
+	lastBeat time.Time
+	waiting  int
+}
+
+// Beat records a sign of life without counting any work.
+func (p *Progress) Beat() {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.lastBeat = p.clock.Now()
+}
+
+func (p *Progress) setWaiting(waiting bool) {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if waiting {
+		p.waiting++
+		return
+	}
+	p.waiting--
+	p.lastBeat = p.clock.Now()
+}
+
+// quiet is how long the job has shown no sign of life, whether it is waiting for a disk turn, and the mean time it
+// spent per unit of work done (0 when none is done).
+func (p *Progress) quiet(now time.Time) (idle time.Duration, waiting bool, perUnit time.Duration) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	last := p.lastBeat
+	if last.IsZero() {
+		last = p.started
+	}
+	if p.done > 0 {
+		perUnit = now.Sub(p.started) / time.Duration(p.done)
+	}
+	return now.Sub(last), p.waiting > 0, perUnit
 }
 
 // Set records done of total; a total of 0 means unknown.
@@ -41,6 +84,7 @@ func (p *Progress) Set(done, total int64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.done, p.total = done, total
+	p.lastBeat = p.clock.Now()
 	p.sample()
 }
 
@@ -52,6 +96,7 @@ func (p *Progress) Add(n int64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.done += n
+	p.lastBeat = p.clock.Now()
 	p.sample()
 }
 
@@ -63,6 +108,7 @@ func (p *Progress) SetTotal(total int64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.total = total
+	p.lastBeat = p.clock.Now()
 }
 
 // sample keeps one point per sampleEvery, dropping those older than rateWindow; the lock is held.
@@ -118,11 +164,21 @@ func (r *Running) Start(job Job) *Progress {
 	if r == nil {
 		return nil
 	}
-	progress := &Progress{clock: r.clock}
+	progress := &Progress{clock: r.clock, started: r.clock.Now()}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.jobs[job.ID] = runningEntry{job: job, started: r.clock.Now(), progress: progress}
 	return progress
+}
+
+// progressOf is where a running job reports; nil when it is not listed.
+func (r *Running) progressOf(jobID int64) *Progress {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.jobs[jobID].progress
 }
 
 // Finish takes a job off the list.

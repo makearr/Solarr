@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -20,6 +21,7 @@ import (
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/config"
+	"github.com/makearr/Solarr/internal/platform/iogate"
 	"github.com/makearr/Solarr/internal/platform/transcode"
 )
 
@@ -289,7 +291,11 @@ func (s *Server) routeStreamFile(w http.ResponseWriter, r *http.Request) {
 	}
 	s.clearWriteDeadline(w)
 	w.Header().Set("Cache-Control", "private, no-store")
-	http.ServeContent(w, r, filepath.Base(file.AbsolutePath), info.ModTime, opened)
+	var body io.ReadSeeker = opened
+	if s.playbackTurns != nil {
+		body = iogate.Reader(iogate.WithTurns(r.Context(), s.playbackTurns), "", file.AbsolutePath, opened)
+	}
+	http.ServeContent(w, r, filepath.Base(file.AbsolutePath), info.ModTime, body)
 }
 
 // routeTranscodeFile streams ffmpeg's output as it is made; the viewer leaving cancels the request context and with it ffmpeg.

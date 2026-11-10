@@ -11,13 +11,19 @@ import (
 	"os/exec"
 	"path"
 	"sync"
+	"sync/atomic"
+	"time"
 
+	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // ErrBusy is a conversion refused because the configured number already run.
 var ErrBusy = errors.New("transcode: every conversion slot is in use")
+
+// ErrStalled is a conversion that stopped sending and was ended.
+var ErrStalled = errors.New("transcode: the conversion stopped sending and was ended")
 
 // ErrUnavailable is a conversion asked for on a machine without ffmpeg.
 var ErrUnavailable = errors.New("transcode: ffmpeg is not installed")
@@ -74,6 +80,10 @@ type Service struct {
 	piper  Piper
 	fsys   fsx.FS
 
+	// stall ends a conversion that makes no output while the viewer is reading; zero turns it off.
+	stall      time.Duration
+	stallClock clock.Clock
+
 	mu     sync.RWMutex
 	found  []Capability
 	active int
@@ -89,6 +99,13 @@ type ownedStream struct {
 // NewService builds it; nothing is detected until Detect runs.
 func NewService(runner Runner, piper Piper, fsys fsx.FS) *Service {
 	return &Service{runner: runner, piper: piper, fsys: fsys, owned: map[string]ownedStream{}}
+}
+
+// WithStallWatch makes a conversion that sends nothing for after, while the viewer is not holding it up, end at once so
+// the viewer's player asks again and gets a fresh one. A viewer who paused is not a stall: the writer is then busy.
+func (s *Service) WithStallWatch(c clock.Clock, after time.Duration) *Service {
+	s.stallClock, s.stall = c, after
+	return s
 }
 
 // ClearScratch removes what a conversion that was cut off left in dir; ffmpeg deletes its own files otherwise.
@@ -191,13 +208,51 @@ func (s *Service) Stream(ctx context.Context, w io.Writer, spec Spec, maxSession
 
 	counted := &countingWriter{w: w}
 	var err error
+	stalled := false
 	for _, attempt := range attempts(spec) {
-		err = s.piper.Pipe(ctx, counted, ffmpeg, Args(attempt)...)
-		if err == nil || counted.written > 0 || ctx.Err() != nil {
+		stalled, err = s.pipeWatched(ctx, counted, attempt)
+		if stalled && counted.written > 0 {
+			return ErrStalled
+		}
+		if (err == nil && !stalled) || (!stalled && counted.written > 0) || ctx.Err() != nil {
 			return err
 		}
 	}
+	if stalled {
+		return ErrStalled
+	}
 	return err
+}
+
+// pipeWatched runs one conversion, cancelling it when it sends nothing for the stall time while no write is pending.
+func (s *Service) pipeWatched(ctx context.Context, counted *countingWriter, spec Spec) (stalled bool, err error) {
+	if s.stall <= 0 || s.stallClock == nil {
+		return false, s.piper.Pipe(ctx, counted, ffmpeg, Args(spec)...)
+	}
+	counted.watch(s.stallClock)
+	attemptCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	done := make(chan struct{})
+	var hung atomic.Bool
+	go func() {
+		ticker := s.stallClock.NewTicker(s.stall / 4)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C():
+				if counted.quietFor(s.stallClock.Now()) >= s.stall {
+					hung.Store(true)
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	err = s.piper.Pipe(attemptCtx, counted, ffmpeg, Args(spec)...)
+	close(done)
+	return hung.Load(), err
 }
 
 // attempts is spec first, then each simpler way to do the same job.
@@ -270,10 +325,41 @@ func (s *Service) Active() int {
 type countingWriter struct {
 	w       io.Writer
 	written int64
+
+	mu      sync.Mutex
+	clock   clock.Clock
+	last    time.Time
+	writing bool
+}
+
+// watch starts timing the quiet between writes.
+func (c *countingWriter) watch(cl clock.Clock) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.clock, c.last, c.writing = cl, cl.Now(), false
+}
+
+// quietFor is how long nothing was written, zero while a write is waiting on the viewer.
+func (c *countingWriter) quietFor(now time.Time) time.Duration {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.writing {
+		return 0
+	}
+	return now.Sub(c.last)
 }
 
 func (c *countingWriter) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	c.writing = true
+	c.mu.Unlock()
 	n, err := c.w.Write(p)
+	c.mu.Lock()
+	c.writing = false
+	if c.clock != nil {
+		c.last = c.clock.Now()
+	}
 	c.written += int64(n)
+	c.mu.Unlock()
 	return n, err
 }

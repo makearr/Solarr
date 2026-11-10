@@ -239,7 +239,7 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 	running := &process{
 		build: build, config: loaded, env: env, fsys: fsys, logger: logger, logRing: logRing,
 		timezone: timezone, configPath: configPath, tool: mediatool.New(nil, 0),
-		transcoder: transcode.NewService(mediatool.ExecRunner{}, transcode.ExecPiper{Dir: filepath.Join(loaded.Paths.CacheDir, "transcode"), IONice: mediatool.IONice{Class: 2, Level: 0}}, fsys),
+		transcoder: transcode.NewService(mediatool.ExecRunner{}, transcode.ExecPiper{Dir: filepath.Join(loaded.Paths.CacheDir, "transcode"), IONice: mediatool.IONice{Class: 2, Level: 0}}, fsys).WithStallWatch(clock.NewSystem(), playbackStallAfter),
 	}
 	defer running.close()
 	running.tool = mediatool.New(nil, 0).WithHardwareDecode(running.frameDecodeArgs)
@@ -546,6 +546,7 @@ func (p *process) startJobs(ctx context.Context) error {
 		Logger:   p.logger,
 		Running:  p.running,
 		DiskGate: p.diskTurns,
+		Watchdog: p.diskTurns,
 	})
 	if err := p.registerScanJob(ctx, registry, executor); err != nil {
 		return err
@@ -789,6 +790,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Images: &p.imageLookups, Metadata: &p.metadataLookups,
 		},
 		DiskManager:    p.disks,
+		PlaybackTurns:  p.diskTurns.PlaybackTurns(),
 		DatabaseMemory: adapters.DatabaseMemory{Stores: []*store.Store{p.library, p.settings, p.jobs, p.statistics, p.metadata}},
 		LibrarySize:    library.NewCounters(p.library),
 		Works: adapters.Works{
@@ -1186,3 +1188,6 @@ func (p *process) applyImageSettings() {
 
 // diskProbeInterval is the least time between two latency probes of one disk group.
 const diskProbeInterval = 5 * time.Second
+
+// playbackStallAfter is how long a conversion may send nothing, while the viewer is reading, before it is ended.
+const playbackStallAfter = 45 * time.Second

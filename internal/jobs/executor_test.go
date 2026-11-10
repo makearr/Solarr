@@ -401,3 +401,86 @@ func TestOnDisk_AJobWaitsForTheDisksOfAOneBatchAndOutsideTheExecutorJustRuns(t *
 		t.Fatalf("outside the executor: ran %v err %v, want it to just run", ran, err)
 	}
 }
+
+type fixedWatchdog jobs.StallPolicy
+
+func (w fixedWatchdog) StallPolicy(jobs.Job) (jobs.StallPolicy, bool) {
+	return jobs.StallPolicy(w), true
+}
+
+// runHungJob runs a job whose handler does what handler says, on a fake clock the test advances in 15-second steps.
+func runHungJob(t *testing.T, policy jobs.StallPolicy, handler jobs.HandlerFunc, quietFor time.Duration, afterAdvance func()) (jobs.Job, *clock.Fake, time.Time) {
+	t.Helper()
+	queue, fake := newQueue(t)
+	running := jobs.NewRunning(fake)
+	executor := jobs.NewExecutor(queue, fake, jobs.ExecutorConfig{
+		Owner: "worker-1", LeaseTTL: 24 * time.Hour, Logger: quietLogger(), Running: running, Watchdog: fixedWatchdog(policy),
+	})
+	executor.Handle(typeBackup, handler)
+	enqueued := mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
+	claimed := claimOne(t, queue, jobs.PoolMaintenance, "worker-1")
+	finished := make(chan struct{})
+	go func() { executor.Execute(t.Context(), claimed); close(finished) }()
+	// Let the executor start its watchdog before time moves.
+	time.Sleep(50 * time.Millisecond)
+	startedAt := fake.Now()
+	for elapsed := time.Duration(0); elapsed < quietFor; elapsed += 15 * time.Second {
+		fake.Advance(15 * time.Second)
+		time.Sleep(2 * time.Millisecond)
+	}
+	var stateWhileRunning jobs.State
+	if afterAdvance != nil {
+		if current, err := queue.Get(t.Context(), enqueued.ID); err == nil {
+			stateWhileRunning = current.State
+		}
+		afterAdvance()
+	}
+	select {
+	case <-finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the executor never returned")
+	}
+	job, err := queue.Get(t.Context(), enqueued.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stateWhileRunning != "" {
+		job.State = stateWhileRunning
+	}
+	return job, fake, startedAt
+}
+
+func TestExecute_AJobThatShowsNoLifeForTheFloorIsCancelledAndStartedAgainAfterItsDelay(t *testing.T) {
+	policy := jobs.StallPolicy{Floor: 10 * time.Minute, Restart: 5 * time.Minute}
+	job, fake, _ := runHungJob(t, policy, func(ctx context.Context, _ jobs.Job) error {
+		<-ctx.Done()
+		return ctx.Err()
+	}, 11*time.Minute, nil)
+
+	if job.State == jobs.StateFailed || job.Attempts != 1 {
+		t.Fatalf("state %q attempts %d, want it queued for another try", job.State, job.Attempts)
+	}
+	if want := fake.Now().Add(5 * time.Minute); job.RunAfter.Before(want.Add(-time.Minute)) || job.RunAfter.After(want.Add(time.Minute)) {
+		t.Fatalf("RunAfter = %v, want about %v: the restart delay of its class", job.RunAfter, want)
+	}
+}
+
+func TestExecute_AJobThatKeepsReportingProgressIsNeverCancelled(t *testing.T) {
+	policy := jobs.StallPolicy{Floor: 5 * time.Minute, Restart: time.Minute}
+	stop := make(chan struct{})
+	job, _, _ := runHungJob(t, policy, func(ctx context.Context, job jobs.Job) error {
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-stop:
+				return nil
+			case <-time.After(time.Millisecond):
+				job.Progress.Add(1)
+			}
+		}
+	}, 30*time.Minute, func() { close(stop) })
+	if job.State != jobs.StateRunning {
+		t.Fatalf("state %q, want the job still running: it kept reporting progress", job.State)
+	}
+}

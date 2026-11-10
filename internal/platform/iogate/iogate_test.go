@@ -2,6 +2,8 @@ package iogate
 
 import (
 	"context"
+	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -137,5 +139,29 @@ func TestAcquire_ACancelledWaiterLeavesTheQueueAndIdleFollows(t *testing.T) {
 	fake.Advance(2 * time.Minute)
 	if !g.Idle("d", time.Minute) {
 		t.Fatal("a group untouched for the window is idle")
+	}
+}
+
+type countingTurns struct{ taken, given int }
+
+func (c *countingTurns) AcquirePaths(context.Context, string, []string) (func(), error) {
+	c.taken++
+	return func() { c.given++ }, nil
+}
+
+func TestReader_EveryReadIsATurnAndNothingIsHeldBetweenReads(t *testing.T) {
+	turns := &countingTurns{}
+	ctx := WithTurns(context.Background(), turns)
+	reader := Reader(ctx, "playback", "/lib/a.mkv", strings.NewReader("abcdef"))
+	buffer := make([]byte, 4)
+	n, err := reader.Read(buffer)
+	if err != nil || n != 4 || string(buffer[:n]) != "abcd" {
+		t.Fatalf("read %q err %v", buffer[:n], err)
+	}
+	if turns.taken != 1 || turns.given != 1 {
+		t.Fatalf("turns taken %d given %d, want 1 and 1: the turn ends with the read", turns.taken, turns.given)
+	}
+	if _, err := reader.Seek(0, io.SeekStart); err != nil || turns.taken != 1 {
+		t.Fatalf("a seek reads nothing and takes no turn: err %v taken %d", err, turns.taken)
 	}
 }
