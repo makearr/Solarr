@@ -152,3 +152,40 @@ func TestJob_RunContinuesPastOneFailedRootToRefreshTheRest(t *testing.T) {
 		t.Error("good root: Writable = false, want true -- one bad root must not block the rest of the sweep")
 	}
 }
+
+func TestJob_AnIdleDiskIsLeftAloneByBothScheduledChecks(t *testing.T) {
+	cache := newCache(t)
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	if err := fsys.MkdirAll("/media/music", 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	root, err := cache.CreateRootFolder(t.Context(), "/media/music", "")
+	if err != nil {
+		t.Fatalf("CreateRootFolder: %v", err)
+	}
+	config := capacity.Config{
+		FS: fsys, Cache: cache, Clock: clock.NewFakeAtEpoch(), Logger: slog.New(slog.DiscardHandler),
+		Idle: func(settings.RootFolder) bool { return true },
+	}
+	if err := capacity.NewJob(config).Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatalf("capacity Run: %v", err)
+	}
+	if err := capacity.NewReachJob(config).Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatalf("reach Run: %v", err)
+	}
+	untouched, _ := cache.Snapshot().RootFolder(root.ID)
+	if untouched.CapacityCheckedAt != nil {
+		t.Fatalf("CapacityCheckedAt = %v, want nil: an idle disk must not be probed", *untouched.CapacityCheckedAt)
+	}
+	if _, err := fsys.Stat("/media/music/.mnx-write-probe"); err == nil {
+		t.Fatal("a write probe was left behind")
+	}
+	config.Idle = func(settings.RootFolder) bool { return false }
+	if err := capacity.NewJob(config).Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatalf("capacity Run: %v", err)
+	}
+	probed, _ := cache.Snapshot().RootFolder(root.ID)
+	if probed.CapacityCheckedAt == nil {
+		t.Fatal("a busy disk must be probed")
+	}
+}

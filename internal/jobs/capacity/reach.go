@@ -26,6 +26,7 @@ type ReachJob struct {
 	fsys       fsx.FS
 	cache      *settings.Cache
 	holdsFiles func(ctx context.Context, rootFolderID int64) (bool, error)
+	idle       func(root settings.RootFolder) bool
 	logger     *slog.Logger
 }
 
@@ -35,7 +36,7 @@ func NewReachJob(config Config) *ReachJob {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &ReachJob{fsys: config.FS, cache: config.Cache, holdsFiles: config.HoldsFiles, logger: logger}
+	return &ReachJob{fsys: config.FS, cache: config.Cache, holdsFiles: config.HoldsFiles, idle: config.Idle, logger: logger}
 }
 
 // Run checks every root once.
@@ -43,6 +44,9 @@ func (j *ReachJob) Run(ctx context.Context, _ jobs.Job) error {
 	for _, root := range j.cache.Snapshot().RootFolders() {
 		if err := ctx.Err(); err != nil {
 			return jobs.Retryablef("reach.context", string(ReachJobType), err)
+		}
+		if j.idle != nil && j.idle(root) {
+			continue
 		}
 		reached, reason, entries := Reach(j.fsys, root)
 		// A root Solarr emptied itself (a move to another library, a drain) is empty, not unmounted.

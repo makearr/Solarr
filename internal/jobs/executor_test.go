@@ -324,3 +324,51 @@ func TestExecute_AShutdownGivesTheAttemptBack(t *testing.T) {
 		t.Errorf("after a shutdown: state %q, attempts %d; want PENDING with 0", released.State, released.Attempts)
 	}
 }
+
+type recordingGate struct {
+	events *[]string
+	err    error
+}
+
+func (g recordingGate) Acquire(context.Context, jobs.Job) (func(), error) {
+	if g.err != nil {
+		return nil, g.err
+	}
+	*g.events = append(*g.events, "acquired")
+	return func() { *g.events = append(*g.events, "released") }, nil
+}
+
+func TestExecute_AJobRunsOnlyInsideItsTurnOnTheDisk(t *testing.T) {
+	queue, fake := newQueue(t)
+	var events []string
+	executor := jobs.NewExecutor(queue, fake, jobs.ExecutorConfig{
+		Owner: "worker-1", LeaseTTL: time.Minute, Logger: quietLogger(), DiskGate: recordingGate{events: &events},
+	})
+	executor.Handle(typeBackup, jobs.HandlerFunc(func(context.Context, jobs.Job) error {
+		events = append(events, "ran")
+		return nil
+	}))
+	mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
+	executor.Execute(t.Context(), claimOne(t, queue, jobs.PoolMaintenance, "worker-1"))
+
+	if got := fmt.Sprint(events); got != "[acquired ran released]" {
+		t.Fatalf("events = %s, want [acquired ran released]", got)
+	}
+}
+
+func TestExecute_AJobThatNeverGetsItsTurnDoesNotRun(t *testing.T) {
+	queue, fake := newQueue(t)
+	var events []string
+	executor := jobs.NewExecutor(queue, fake, jobs.ExecutorConfig{
+		Owner: "worker-1", LeaseTTL: time.Minute, Logger: quietLogger(),
+		DiskGate: recordingGate{events: &events, err: context.Canceled},
+	})
+	ran := false
+	executor.Handle(typeBackup, jobs.HandlerFunc(func(context.Context, jobs.Job) error { ran = true; return nil }))
+	mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
+	executor.Execute(t.Context(), claimOne(t, queue, jobs.PoolMaintenance, "worker-1"))
+
+	if ran {
+		t.Fatal("the handler ran although the gate refused")
+	}
+}

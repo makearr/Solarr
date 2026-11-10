@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // ErrBusy is a conversion refused because the configured number already run.
@@ -30,10 +31,14 @@ type Piper interface {
 }
 
 // ExecPiper runs the real thing; Dir is where ffmpeg runs and keeps its temporary files.
-type ExecPiper struct{ Dir string }
+type ExecPiper struct {
+	Dir    string
+	IONice mediatool.IONice
+}
 
 // Pipe returns nil when ctx ended the command: a viewer who closed the player is not a failure.
 func (e ExecPiper) Pipe(ctx context.Context, w io.Writer, name string, args ...string) error {
+	name, args = e.IONice.Wrap(name, args)
 	command := exec.CommandContext(ctx, name, args...)
 	if e.Dir != "" {
 		command.Dir = e.Dir

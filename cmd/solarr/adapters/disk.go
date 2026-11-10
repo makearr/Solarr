@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -28,10 +29,62 @@ type DiskManager struct {
 	ExtraPaths []string
 	// WatchesInUse says how many inotify watches Solarr holds; nil means none are taken.
 	WatchesInUse func() int64
+
+	mu       sync.Mutex
+	cached   []apiserver.DiskPath
+	cachedAt time.Time
+}
+
+// layoutTTL is how long a detected layout is reused by the per-job lookups; mounts rarely change.
+const layoutTTL = time.Minute
+
+// GroupOfRoot is the disk group and path of a root folder, from a layout at most layoutTTL old.
+func (a *DiskManager) GroupOfRoot(rootFolderID int64) (group, path string, found bool) {
+	var rootPath string
+	for _, root := range a.Cache.Snapshot().RootFolders() {
+		if root.ID == rootFolderID {
+			rootPath = root.Path
+		}
+	}
+	if rootPath == "" {
+		return "", "", false
+	}
+	for _, row := range a.cachedLayouts() {
+		if row.Path == rootPath {
+			return row.Group, row.Path, true
+		}
+	}
+	return "", "", false
+}
+
+// PathOfGroup is a path that lives in the group, to probe its disk with.
+func (a *DiskManager) PathOfGroup(group string) (string, bool) {
+	for _, row := range a.cachedLayouts() {
+		if row.Group == group {
+			return row.Path, true
+		}
+	}
+	return "", false
+}
+
+func (a *DiskManager) cachedLayouts() []apiserver.DiskPath {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.cached == nil || a.Clock.Now().Sub(a.cachedAt) > layoutTTL {
+		a.cached, a.cachedAt = a.layouts(), a.Clock.Now()
+	}
+	return a.cached
+}
+
+// Forget drops the cached layout, after a correction.
+func (a *DiskManager) Forget() {
+	a.mu.Lock()
+	a.cached = nil
+	a.mu.Unlock()
 }
 
 // layouts detects every root folder and extra path, with the admin's corrections applied.
-func (a DiskManager) layouts() []apiserver.DiskPath {
+func (a *DiskManager) layouts() []apiserver.DiskPath {
 	var paths []string
 	for _, root := range a.Cache.Snapshot().RootFolders() {
 		paths = append(paths, root.Path)
@@ -55,7 +108,7 @@ func (a DiskManager) layouts() []apiserver.DiskPath {
 }
 
 // Report answers the page.
-func (a DiskManager) Report(_ context.Context) (apiserver.DiskReport, error) {
+func (a *DiskManager) Report(_ context.Context) (apiserver.DiskReport, error) {
 	rows := a.layouts()
 	report := apiserver.DiskReport{Paths: rows, Latencies: []apiserver.DiskLatency{}}
 	seen := map[string]bool{}
@@ -90,7 +143,7 @@ func (a DiskManager) Report(_ context.Context) (apiserver.DiskReport, error) {
 
 func milliseconds(d time.Duration) float64 { return float64(d.Microseconds()) / 1000 }
 
-func (a DiskManager) maxWatches() int64 {
+func (a *DiskManager) maxWatches() int64 {
 	file, err := a.FS.Open(inotifyLimitFile)
 	if err != nil {
 		return 0
@@ -105,12 +158,13 @@ func (a DiskManager) maxWatches() int64 {
 }
 
 // SetOverrides stores the corrections.
-func (a DiskManager) SetOverrides(ctx context.Context, overrides map[string]string) error {
+func (a *DiskManager) SetOverrides(ctx context.Context, overrides map[string]string) error {
+	defer a.Forget()
 	return a.Cache.SetDiskGroupOverrides(ctx, a.Clock, overrides)
 }
 
 // Measure probes the first path of every group once.
-func (a DiskManager) Measure(_ context.Context) error {
+func (a *DiskManager) Measure(_ context.Context) error {
 	probed := map[string]bool{}
 	for _, row := range a.layouts() {
 		if probed[row.Group] {

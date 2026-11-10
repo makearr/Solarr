@@ -142,6 +142,9 @@ type process struct {
 	// cacheSweep is ADR-60's own measure/enforce/clear (todo 4.19), built once
 	// in registerCacheJob and reused by the API adapter in startServer.
 	cacheSweep *cachebudget.Sweep
+	// disks is the detected disk layout and its latency readings, shared by the job gate and the Disk page.
+	disks     *adapters.DiskManager
+	diskTurns *diskTurns
 	// effectivePort is ADR-58's own resolution, computed once here and shown
 	// by the Network screen as "in effect" -- a port change needs a restart.
 	effectivePort int
@@ -230,7 +233,7 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 	running := &process{
 		build: build, config: loaded, env: env, fsys: fsys, logger: logger, logRing: logRing,
 		timezone: timezone, configPath: configPath, tool: mediatool.New(nil, 0),
-		transcoder: transcode.NewService(mediatool.ExecRunner{}, transcode.ExecPiper{Dir: filepath.Join(loaded.Paths.CacheDir, "transcode")}, fsys),
+		transcoder: transcode.NewService(mediatool.ExecRunner{}, transcode.ExecPiper{Dir: filepath.Join(loaded.Paths.CacheDir, "transcode"), IONice: mediatool.IONice{Class: 2, Level: 0}}, fsys),
 	}
 	defer running.close()
 	running.tool = mediatool.New(nil, 0).WithHardwareDecode(running.frameDecodeArgs)
@@ -526,10 +529,16 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerMedia(); err != nil {
 		return err
 	}
+	p.disks = &adapters.DiskManager{
+		FS: p.fsys, Cache: p.cache, Clock: wall, Monitor: disklatency.New(p.fsys, wall, diskProbeInterval),
+		ExtraPaths: []string{p.config.Paths.ConfigDir},
+	}
+	p.diskTurns = newDiskTurns(p.disks, p.disks.Monitor, wall)
 	executor := jobs.NewExecutor(queue, wall, jobs.ExecutorConfig{
-		Owner:   owner,
-		Logger:  p.logger,
-		Running: p.running,
+		Owner:    owner,
+		Logger:   p.logger,
+		Running:  p.running,
+		DiskGate: p.diskTurns,
 	})
 	if err := p.registerScanJob(ctx, registry, executor); err != nil {
 		return err
@@ -771,10 +780,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Sweep: p.cacheSweep, Cache: p.cache, Registry: p.settingsRegistry, Clock: clock.NewSystem(),
 			Images: &p.imageLookups, Metadata: &p.metadataLookups,
 		},
-		DiskManager: adapters.DiskManager{
-			FS: p.fsys, Cache: p.cache, Clock: clock.NewSystem(), Monitor: disklatency.New(p.fsys, clock.NewSystem(), diskProbeInterval),
-			ExtraPaths: []string{p.config.Paths.ConfigDir},
-		},
+		DiskManager:    p.disks,
 		DatabaseMemory: adapters.DatabaseMemory{Stores: []*store.Store{p.library, p.settings, p.jobs, p.statistics, p.metadata}},
 		LibrarySize:    library.NewCounters(p.library),
 		Works: adapters.Works{

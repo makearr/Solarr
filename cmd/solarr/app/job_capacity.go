@@ -17,14 +17,14 @@ func (p *process) registerCapacityJob(registry *jobs.Registry, executor *jobs.Ex
 		return err
 	}
 	job := capacity.NewJob(capacity.Config{
-		FS: p.fsys, Cache: p.cache, Clock: clock.NewSystem(), Logger: p.logger,
+		FS: p.fsys, Cache: p.cache, Clock: clock.NewSystem(), Logger: p.logger, Idle: p.diskTurns.rootIdle,
 	})
 	executor.Handle(capacity.JobType, job)
 	if err := registry.Register(capacity.ReachDefinition); err != nil {
 		return err
 	}
 	executor.Handle(capacity.ReachJobType, capacity.NewReachJob(capacity.Config{
-		FS: p.fsys, Cache: p.cache, Logger: p.logger, HoldsFiles: library.NewPhysical(p.library).HoldsFiles,
+		FS: p.fsys, Cache: p.cache, Logger: p.logger, HoldsFiles: library.NewPhysical(p.library).HoldsFiles, Idle: p.diskTurns.rootIdle,
 	}))
 	return nil
 }

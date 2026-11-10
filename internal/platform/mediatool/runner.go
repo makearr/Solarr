@@ -18,12 +18,13 @@ type Runner interface {
 }
 
 // ExecRunner runs the real thing.
-type ExecRunner struct{}
+type ExecRunner struct{ IONice IONice }
 
 // Run executes name and returns its standard output. Standard error is folded into
 // the error, because a tool that fails silently is the harder failure to diagnose.
-func (ExecRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
-	command := exec.CommandContext(ctx, name, args...)
+func (e ExecRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	wrappedName, wrappedArgs := e.IONice.Wrap(name, args)
+	command := exec.CommandContext(ctx, wrappedName, wrappedArgs...)
 	var stdout, stderr bytes.Buffer
 	command.Stdout = &stdout
 	command.Stderr = &stderr

@@ -57,6 +57,7 @@ type Executor struct {
 	mode     Mode
 	leaseTTL time.Duration
 	running  *Running
+	diskGate DiskGate
 
 	mu       sync.RWMutex
 	handlers map[Type]Handler
@@ -72,6 +73,13 @@ type ExecutorConfig struct {
 	Logger   *slog.Logger
 	// Running is optional: told of every job while it runs, with its progress.
 	Running *Running
+	// DiskGate is optional: a job that uses a disk waits here for its turn on that disk.
+	DiskGate DiskGate
+}
+
+// DiskGate lets a job that reads or writes a disk wait for its turn. The release function is never nil on success.
+type DiskGate interface {
+	Acquire(ctx context.Context, job Job) (release func(), err error)
 }
 
 // NewExecutor builds an executor.
@@ -93,6 +101,7 @@ func NewExecutor(queue *Queue, cl clock.Clock, config ExecutorConfig) *Executor 
 		mode:     config.Mode,
 		leaseTTL: config.LeaseTTL,
 		running:  config.Running,
+		diskGate: config.DiskGate,
 		handlers: make(map[Type]Handler),
 	}
 }
@@ -139,7 +148,7 @@ func (e *Executor) Execute(ctx context.Context, job Job) {
 	renewalDone := e.renewUntilDone(running, stopRenewing, job, logger)
 
 	job.Progress = e.running.Start(job)
-	runErr := runWithRecovery(running, handler, job)
+	runErr := e.runOnDisk(running, handler, job)
 	e.running.Finish(job.ID)
 
 	stopRenewing()
@@ -175,6 +184,19 @@ func (e *Executor) Execute(ctx context.Context, job Job) {
 		slog.String("class", string(resolution.Class)),
 		slog.Bool("retrying", resolution.Retrying),
 		slog.Any("error", runErr))
+}
+
+// runOnDisk waits for the job's turn on its disk, when it has one, then runs it; the lease is renewed meanwhile.
+func (e *Executor) runOnDisk(ctx context.Context, handler Handler, job Job) error {
+	if e.diskGate == nil {
+		return runWithRecovery(ctx, handler, job)
+	}
+	release, err := e.diskGate.Acquire(ctx, job)
+	if err != nil {
+		return err
+	}
+	defer release()
+	return runWithRecovery(ctx, handler, job)
 }
 
 // continueAfterYield queues the rest of a yielded job; its action key is free again once it succeeded.

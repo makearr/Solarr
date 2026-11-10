@@ -23,6 +23,9 @@ const (
 	tagBinary = "solarr-tag"
 )
 
+// BackgroundIONice is the disk priority of the probes, fingerprints and extractions that run in the background: last in best effort, so playback and imports go first without this ever starving.
+var BackgroundIONice = IONice{Class: 2, Level: 7}
+
 // maxEmbeddedPictureBytes bounds one extracted picture, the same ceiling the
 // artwork jobs put on a downloaded image.
 const maxEmbeddedPictureBytes = 20 << 20
@@ -54,7 +57,7 @@ func (s *Subprocess) WithHardwareDecode(args func() []string) *Subprocess {
 // the measured default.
 func New(runner Runner, parallelism int) *Subprocess {
 	if runner == nil {
-		runner = ExecRunner{}
+		runner = ExecRunner{IONice: BackgroundIONice}
 	}
 	if parallelism <= 0 {
 		parallelism = defaultParallelism

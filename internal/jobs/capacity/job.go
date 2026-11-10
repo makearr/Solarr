@@ -47,6 +47,7 @@ type Job struct {
 	cache  *settings.Cache
 	clock  clock.Clock
 	logger *slog.Logger
+	idle   func(root settings.RootFolder) bool
 }
 
 // Config is what a Job needs. Every field is required except Logger.
@@ -57,6 +58,9 @@ type Config struct {
 	Logger *slog.Logger
 	// HoldsFiles says the library still has files on a root; nil takes any root once seen full and now empty offline.
 	HoldsFiles func(ctx context.Context, rootFolderID int64) (bool, error)
+	// Idle says nothing has used the root's disk lately and the root has a reading already, so touching the disk
+	// would only keep it spinning; nil never skips.
+	Idle func(root settings.RootFolder) bool
 }
 
 // NewJob builds the handler.
@@ -65,7 +69,7 @@ func NewJob(config Config) *Job {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Job{fsys: config.FS, cache: config.Cache, clock: config.Clock, logger: logger}
+	return &Job{fsys: config.FS, cache: config.Cache, clock: config.Clock, logger: logger, idle: config.Idle}
 }
 
 // Run refreshes every configured root folder once. One root failing (an
@@ -80,6 +84,9 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 		}
 		if !root.Online && root.OfflineAuto {
 			// Unreachable: an unmounted mount point would report its parent filesystem's space.
+			continue
+		}
+		if j.idle != nil && j.idle(root) {
 			continue
 		}
 		if err := j.refreshOne(ctx, root); err != nil {
