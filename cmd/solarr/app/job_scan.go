@@ -79,7 +79,13 @@ func reportToolReadiness(ctx context.Context, tool mediatool.Tool, logger *slog.
 // internal/jobs.TaskRunner (todo 4.19), so it also fires on its own
 // schedule, not only once at startup.
 func (p *process) enqueueLibraryScans(ctx context.Context) (jobs.EnqueueResult, error) {
-	return p.enqueueScans(ctx, false)
+	return p.enqueueScans(ctx, false, false, !p.scanStarted.Swap(true))
+}
+
+// enqueueManualLibraryScans is "Run now": every root, whatever the schedule thinks it is due.
+func (p *process) enqueueManualLibraryScans(ctx context.Context) (jobs.EnqueueResult, error) {
+	p.scanStarted.Store(true)
+	return p.enqueueScans(ctx, false, true, false)
 }
 
 // enqueueFullLibraryScans is scan's own jobs.Task.RunFull: every directory is
@@ -90,7 +96,8 @@ func (p *process) enqueueLibraryScans(ctx context.Context) (jobs.EnqueueResult, 
 // it, since re-reading everything on a timer would defeat the point of the
 // incremental sweep the ordinary schedule already runs.
 func (p *process) enqueueFullLibraryScans(ctx context.Context) (jobs.EnqueueResult, error) {
-	return p.enqueueScans(ctx, true)
+	p.scanStarted.Store(true)
+	return p.enqueueScans(ctx, true, true, false)
 }
 
 // enqueueScans fans out to several jobs, one per online root, unlike
@@ -99,7 +106,7 @@ func (p *process) enqueueFullLibraryScans(ctx context.Context) (jobs.EnqueueResu
 // every root's own error (each still logged individually below) rather than
 // reporting only the first, so the scheduler's own recorded outcome does not
 // hide a partial failure across several roots.
-func (p *process) enqueueScans(ctx context.Context, full bool) (jobs.EnqueueResult, error) {
+func (p *process) enqueueScans(ctx context.Context, full, manual, startup bool) (jobs.EnqueueResult, error) {
 	snapshot := p.cache.Snapshot()
 	var errs []error
 	attempted, duplicates := 0, 0
@@ -111,7 +118,12 @@ func (p *process) enqueueScans(ctx context.Context, full bool) (jobs.EnqueueResu
 			if !root.Online {
 				continue
 			}
+			if decision := p.scanDecision(ctx, root.ID, manual, startup, true); !decision.Due {
+				p.logger.Debug("library scan not due", slog.Int64("root_folder_id", root.ID), slog.String("why", string(decision.Why)))
+				continue
+			}
 			attempted++
+			p.rememberFingerprint(ctx, root)
 			result, err := scan.Enqueue(ctx, p.queue, root.ID, category.ID, full)
 			if err != nil {
 				p.logger.Warn("enqueue library scan",

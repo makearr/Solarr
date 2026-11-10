@@ -15,6 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/disklatency"
 	"github.com/makearr/Solarr/internal/platform/disktopo"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/scanning/watch"
 )
 
 const inotifyLimitFile = "/proc/sys/fs/inotify/max_user_watches"
@@ -27,8 +28,10 @@ type DiskManager struct {
 	Monitor *disklatency.Monitor
 	// ExtraPaths are folders that are not root folders but still use a disk (the config folder).
 	ExtraPaths []string
-	// WatchesInUse says how many inotify watches Solarr holds; nil means none are taken.
-	WatchesInUse func() int64
+	// ScanRoots says how each root stands with the scan schedule; nil means none.
+	ScanRoots func(ctx context.Context) []apiserver.DiskScanRoot
+	// WatchInUse says how many inotify watches Solarr holds and how many directories they were chosen from; nil means none.
+	WatchInUse func() (watches, directories int64)
 
 	mu       sync.Mutex
 	cached   []apiserver.DiskPath
@@ -140,7 +143,7 @@ func (a *DiskManager) layouts() []apiserver.DiskPath {
 }
 
 // Report answers the page.
-func (a *DiskManager) Report(_ context.Context) (apiserver.DiskReport, error) {
+func (a *DiskManager) Report(ctx context.Context) (apiserver.DiskReport, error) {
 	rows := a.layouts()
 	report := apiserver.DiskReport{Paths: rows, Latencies: []apiserver.DiskLatency{}}
 	seen := map[string]bool{}
@@ -165,11 +168,16 @@ func (a *DiskManager) Report(_ context.Context) (apiserver.DiskReport, error) {
 		}
 		report.Latencies = append(report.Latencies, latency)
 	}
+	report.Scan.IntervalHours = int64(a.Cache.Snapshot().ScanInterval() / time.Hour)
+	if a.ScanRoots != nil {
+		report.Scan.Roots = a.ScanRoots(ctx)
+	}
 	report.Inotify.MaxUserWatches = a.maxWatches()
 	report.Inotify.BudgetWatches = report.Inotify.MaxUserWatches / 2
-	if a.WatchesInUse != nil {
-		report.Inotify.UsedByUs = a.WatchesInUse()
+	if a.WatchInUse != nil {
+		report.Inotify.UsedByUs, report.Inotify.Directories = a.WatchInUse()
 	}
+	report.Inotify.RecommendedWatches = watch.RecommendedWatches(int(report.Inotify.Directories))
 	return report, nil
 }
 
@@ -189,10 +197,29 @@ func (a *DiskManager) maxWatches() int64 {
 	return value
 }
 
+// SetScanInterval stores the hours between scans.
+func (a *DiskManager) SetScanInterval(ctx context.Context, hours int64) error {
+	return a.Cache.SetScanIntervalHours(ctx, a.Clock, hours)
+}
+
 // SetOverrides stores the corrections.
 func (a *DiskManager) SetOverrides(ctx context.Context, overrides map[string]string) error {
 	defer a.Forget()
 	return a.Cache.SetDiskGroupOverrides(ctx, a.Clock, overrides)
+}
+
+// WatchBudget is how many inotify watches Solarr may hold: half of the host's limit, 0 when that is unreadable.
+func (a *DiskManager) WatchBudget() int { return int(a.maxWatches() / 2) }
+
+// WatchSeesChanges is whether inotify on this path reports every change: not on a network share or a FUSE mount,
+// where another machine or process changes files without the kernel here hearing of it.
+func (a *DiskManager) WatchSeesChanges(path string) bool {
+	for _, row := range a.cachedLayouts() {
+		if row.Path == path {
+			return !strings.HasPrefix(row.Pool, "net:") && !strings.HasPrefix(row.FSType, "fuse") && row.FSType != "" && !strings.HasPrefix(row.FSType, "nfs") && !strings.HasPrefix(row.FSType, "cifs")
+		}
+	}
+	return false
 }
 
 // Measure probes the first path of every group once.

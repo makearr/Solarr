@@ -924,6 +924,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/settings/disk", server.GetDiskSettings)
 			secured.Put("/settings/disk", server.SetDiskOverrides)
 			secured.Post("/settings/disk/measure", server.MeasureDisks)
+			secured.Put("/settings/disk/scan", server.SetDiskScan)
 			secured.Get("/cache", server.GetCache)
 			secured.Patch("/cache", server.UpdateCacheBudget)
 			secured.Get("/cache/memory-copies", server.GetMemoryCopies)

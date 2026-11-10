@@ -14,6 +14,7 @@ import (
 type fakeDiskManager struct {
 	overrides map[string]string
 	measured  int
+	scanHours int64
 }
 
 func (f *fakeDiskManager) Report(context.Context) (apiserver.DiskReport, error) {
@@ -25,6 +26,11 @@ func (f *fakeDiskManager) Report(context.Context) (apiserver.DiskReport, error) 
 
 func (f *fakeDiskManager) SetOverrides(_ context.Context, overrides map[string]string) error {
 	f.overrides = overrides
+	return nil
+}
+
+func (f *fakeDiskManager) SetScanInterval(_ context.Context, hours int64) error {
+	f.scanHours = hours
 	return nil
 }
 
@@ -61,5 +67,19 @@ func TestDiskSettings_ReadByAnyoneWrittenOnlyByAnAdministrator(t *testing.T) {
 	}
 	if recorder := fixture.do(authedPost(t, admin, "/api/v1/settings/disk/measure", "")); recorder.Code != http.StatusOK || fixture.diskManager.measured != 1 {
 		t.Fatalf("measure: status %d measured %d, want 200 and 1", recorder.Code, fixture.diskManager.measured)
+	}
+}
+
+func TestDiskScan_OnlyAnAdministratorSetsTheInterval(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	listener, admin := fixture.signIn(t, "listener"), fixture.signIn(t, "admin")
+
+	if recorder := fixture.do(authedPut(t, listener, "/api/v1/settings/disk/scan", `{"interval_hours":12}`)); recorder.Code != http.StatusForbidden {
+		t.Fatalf("a listener: status %d, want 403", recorder.Code)
+	}
+	if recorder := fixture.do(authedPut(t, admin, "/api/v1/settings/disk/scan", `{"interval_hours":12}`)); recorder.Code != http.StatusOK || fixture.diskManager.scanHours != 12 {
+		t.Fatalf("an administrator: status %d hours %d, want 200 and 12", recorder.Code, fixture.diskManager.scanHours)
 	}
 }

@@ -15,6 +15,27 @@ type DiskReport = components["schemas"]["DiskReport"];
 const RAISE_WATCHES_HELP =
   "On the host (not in the container): sudo sysctl fs.inotify.max_user_watches=<number>, and the same line without sudo in /etc/sysctl.d/99-inotify.conf to keep it after a reboot.";
 
+const SCAN_CHOICES = [
+  { hours: 0, label: "Automatic" },
+  { hours: 6, label: "Every 6 hours" },
+  { hours: 24, label: "Daily" },
+  { hours: 168, label: "Weekly" },
+];
+
+const DEPTH_NAMES: Record<number, string> = { 0: "the root folder", 1: "artist, series or movie folders", 2: "season or album folders" };
+
+const WHY: Record<string, string> = {
+  manual: "asked for",
+  never_scanned: "never scanned",
+  startup_stale: "last scan over 12 hours old at start",
+  startup_recent: "scanned within 12 hours of start",
+  watcher_lost: "the watcher lost events",
+  interval_passed: "the interval has passed",
+  within_interval: "within the interval",
+  size_or_count_changed: "its size or entry count changed",
+  size_and_count_unchanged: "size and entry count unchanged",
+};
+
 /** Settings -> Disk: what Solarr found about the disks under its folders, what a probe of each costs, and the inotify
  *  budget. Expert tier: the page exists to correct a wrong guess. */
 export function DiskSettingsPage() {
@@ -48,6 +69,10 @@ function DiskSettings() {
   const store = (data: DiskReport) => queryClient.setQueryData(["disk"], data);
   const save = useMutation({
     mutationFn: (overrides: Record<string, string>) => ok(api.PUT("/settings/disk", { body: { groups: overrides } })),
+    onSuccess: store,
+  });
+  const setScan = useMutation({
+    mutationFn: (hours: number) => ok(api.PUT("/settings/disk/scan", { body: { interval_hours: hours } })),
     onSuccess: store,
   });
   const measure = useMutation({ mutationFn: () => ok(api.POST("/settings/disk/measure")), onSuccess: store });
@@ -142,6 +167,49 @@ function DiskSettings() {
         </div>
       </Card>
 
+      <Card
+        title="Library scans"
+        help="Solarr scans a root when it has reason to: right after start if the last scan is over 12 hours old, then weekly where its folders are watched, daily while its size and entry count are unchanged, every 6 hours otherwise. Changes inside watched folders are rescanned as they happen."
+      >
+        <label className="flex items-center gap-3 text-xs">
+          Time between scans
+          <select
+            aria-label="Time between scans"
+            className="rounded border border-border-subtle bg-surface px-2 py-1"
+            value={SCAN_CHOICES.some((choice) => choice.hours === data.scan.interval_hours) ? data.scan.interval_hours : -1}
+            disabled={setScan.isPending}
+            onChange={(event) => setScan.mutate(Number(event.target.value))}
+          >
+            {SCAN_CHOICES.map((choice) => (
+              <option key={choice.hours} value={choice.hours}>{choice.label}</option>
+            ))}
+            {!SCAN_CHOICES.some((choice) => choice.hours === data.scan.interval_hours) && (
+              <option value={-1} disabled>{data.scan.interval_hours} hours</option>
+            )}
+          </select>
+        </label>
+        <table className="w-full text-left text-xs">
+          <thead className="text-ink-muted">
+            <tr>
+              <th className="py-1 pr-3 font-medium">Root</th>
+              <th className="py-1 pr-3 font-medium">Last scan</th>
+              <th className="py-1 pr-3 font-medium">Watched</th>
+              <th className="py-1 font-medium">Now</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.scan.roots.map((row) => (
+              <tr key={row.root_folder_id} className="border-t border-border-subtle">
+                <td className="py-1.5 pr-3 font-mono">{row.path}</td>
+                <td className="py-1.5 pr-3">{row.last_scan ? new Date(row.last_scan * 1000).toLocaleString() : "never"}</td>
+                <td className="py-1.5 pr-3">{row.watching ? `yes, down to ${DEPTH_NAMES[row.covered_depth] ?? `level ${row.covered_depth}`}` : "no"}</td>
+                <td className="py-1.5">{row.due ? "due" : "up to date"} <span className="text-ink-muted">({WHY[row.why] ?? row.why})</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+
       <Card title="Inotify watches" help="Solarr watches folders for changes so it does not have to rescan; it never takes more than half of what the host allows.">
         <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1 text-xs">
           <dt className="text-ink-muted">Host limit</dt>
@@ -149,7 +217,14 @@ function DiskSettings() {
           <dt className="text-ink-muted">Solarr's budget (50%)</dt>
           <dd>{data.inotify.budget_watches.toLocaleString()}</dd>
           <dt className="text-ink-muted">Held by Solarr</dt>
-          <dd>{data.inotify.used_by_us.toLocaleString()}</dd>
+          <dd>{data.inotify.used_by_us.toLocaleString()} of {data.inotify.directories.toLocaleString()} folders with files</dd>
+          <dt className="text-ink-muted">Recommended host limit</dt>
+          <dd title={RAISE_WATCHES_HELP}>
+            {data.inotify.recommended_watches.toLocaleString()}
+            {data.inotify.max_user_watches > 0 && data.inotify.max_user_watches < data.inotify.recommended_watches && (
+              <span className="ml-2 text-warn">higher than the host allows: the deepest folders are not all watched</span>
+            )}
+          </dd>
         </dl>
         <p className="text-xs text-ink-muted">{RAISE_WATCHES_HELP}</p>
       </Card>

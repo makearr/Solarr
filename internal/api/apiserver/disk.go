@@ -29,9 +29,28 @@ type DiskLatency struct {
 
 // DiskInotify is the host's watch limit and Solarr's share of it.
 type DiskInotify struct {
-	MaxUserWatches int64
-	BudgetWatches  int64
-	UsedByUs       int64
+	MaxUserWatches     int64
+	BudgetWatches      int64
+	UsedByUs           int64
+	Directories        int64
+	RecommendedWatches int64
+}
+
+// DiskScanRoot is what the scan schedule thinks of one root folder.
+type DiskScanRoot struct {
+	RootFolderID int64
+	Path         string
+	LastScanUnix int64
+	Watching     bool
+	CoveredDepth int
+	Due          bool
+	Why          string
+}
+
+// DiskScan is the scan schedule: the person's interval (0 is automatic) and each root's standing.
+type DiskScan struct {
+	IntervalHours int64
+	Roots         []DiskScanRoot
 }
 
 // DiskReport is the Settings -> Disk page.
@@ -39,6 +58,7 @@ type DiskReport struct {
 	Paths     []DiskPath
 	Latencies []DiskLatency
 	Inotify   DiskInotify
+	Scan      DiskScan
 }
 
 // DiskManager serves the expert Disk page.
@@ -48,6 +68,8 @@ type DiskManager interface {
 	SetOverrides(ctx context.Context, overrides map[string]string) error
 	// Measure probes every disk group once, now, whatever the minimum interval.
 	Measure(ctx context.Context) error
+	// SetScanInterval stores the hours between scans; 0 is automatic.
+	SetScanInterval(ctx context.Context, hours int64) error
 }
 
 func (s *Server) diskManagerOrProblem(w http.ResponseWriter) (DiskManager, bool) {
@@ -118,6 +140,32 @@ func (s *Server) MeasureDisks(w http.ResponseWriter, r *http.Request) {
 	s.writeDiskReport(w, r, manager)
 }
 
+// SetDiskScan changes the hours between library scans. Administrator only.
+func (s *Server) SetDiskScan(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	manager, ok := s.diskManagerOrProblem(w)
+	if !ok {
+		return
+	}
+	var body gen.DiskScanChange
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected {\"interval_hours\": number}")
+		return
+	}
+	if err := manager.SetScanInterval(r.Context(), body.IntervalHours); err != nil {
+		var problems config.Problems
+		if errors.As(err, &problems) {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", problems.Report("the scan interval", "Nothing was changed."))
+			return
+		}
+		writeError(w, s.logger, err)
+		return
+	}
+	s.writeDiskReport(w, r, manager)
+}
+
 func diskReportView(report DiskReport) gen.DiskReport {
 	paths := make([]gen.DiskPath, 0, len(report.Paths))
 	for _, p := range report.Paths {
@@ -136,8 +184,23 @@ func diskReportView(report DiskReport) gen.DiskReport {
 		}
 		latencies = append(latencies, latency)
 	}
+	roots := make([]gen.DiskScanRoot, 0, len(report.Scan.Roots))
+	for _, r := range report.Scan.Roots {
+		root := gen.DiskScanRoot{
+			RootFolderId: r.RootFolderID, Path: r.Path, Watching: r.Watching, CoveredDepth: r.CoveredDepth, Due: r.Due, Why: r.Why,
+		}
+		if r.LastScanUnix != 0 {
+			at := r.LastScanUnix
+			root.LastScan = &at
+		}
+		roots = append(roots, root)
+	}
 	return gen.DiskReport{
 		Paths: paths, Latencies: latencies,
-		Inotify: gen.DiskInotify{MaxUserWatches: report.Inotify.MaxUserWatches, BudgetWatches: report.Inotify.BudgetWatches, UsedByUs: report.Inotify.UsedByUs},
+		Inotify: gen.DiskInotify{
+			MaxUserWatches: report.Inotify.MaxUserWatches, BudgetWatches: report.Inotify.BudgetWatches, UsedByUs: report.Inotify.UsedByUs,
+			Directories: report.Inotify.Directories, RecommendedWatches: report.Inotify.RecommendedWatches,
+		},
+		Scan: gen.DiskScan{IntervalHours: report.Scan.IntervalHours, Roots: roots},
 	}
 }

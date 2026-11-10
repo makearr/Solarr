@@ -6980,6 +6980,27 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "503": { $ref: "#/components/responses/Problem" }
 
+  /settings/disk/scan:
+    put:
+      operationId: setDiskScan
+      tags: [settings]
+      summary: Set the hours between library scans; 0 lets Solarr decide. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DiskScanChange" }
+      responses:
+        "200":
+          description: The report with the new interval.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiskReport" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
   /settings/disk/measure:
     post:
       operationId: measureDisks
@@ -9400,15 +9421,40 @@ components:
         error: { type: string }
     DiskInotify:
       type: object
-      required: [max_user_watches, budget_watches, used_by_us]
+      required: [max_user_watches, budget_watches, used_by_us, directories, recommended_watches]
       properties:
+        directories: { type: integer, format: int64, description: Directories that hold library files, watched or not. }
+        recommended_watches: { type: integer, format: int64, description: What the host limit should be for every directory to be watched within half of it (next power of two, doubled). }
         max_user_watches: { type: integer, format: int64, description: The host's fs.inotify.max_user_watches; 0 when unreadable. }
         budget_watches: { type: integer, format: int64, description: Half of the limit, the most Solarr will use. }
         used_by_us: { type: integer, format: int64 }
+    DiskScanRoot:
+      type: object
+      required: [root_folder_id, path, watching, covered_depth, due, why]
+      properties:
+        root_folder_id: { type: integer, format: int64 }
+        path: { type: string }
+        last_scan: { type: integer, format: int64, description: Unix seconds; absent when never scanned. }
+        watching: { type: boolean, description: A watcher has seen every change since the last scan. }
+        covered_depth: { type: integer, description: Deepest folder level watched completely (0 root, 1 artist or series folders); -1 none. }
+        due: { type: boolean }
+        why: { type: string, description: "Reason code: manual, never_scanned, startup_stale, startup_recent, watcher_lost, interval_passed, within_interval, size_or_count_changed, size_and_count_unchanged." }
+    DiskScan:
+      type: object
+      required: [interval_hours, roots]
+      properties:
+        interval_hours: { type: integer, format: int64, description: The person's hours between scans; 0 is automatic. }
+        roots: { type: array, items: { $ref: "#/components/schemas/DiskScanRoot" } }
+    DiskScanChange:
+      type: object
+      required: [interval_hours]
+      properties:
+        interval_hours: { type: integer, format: int64, minimum: 0, maximum: 8760 }
     DiskReport:
       type: object
-      required: [paths, latencies, inotify]
+      required: [paths, latencies, inotify, scan]
       properties:
+        scan: { $ref: "#/components/schemas/DiskScan" }
         paths: { type: array, items: { $ref: "#/components/schemas/DiskPath" } }
         latencies: { type: array, items: { $ref: "#/components/schemas/DiskLatency" } }
         inotify: { $ref: "#/components/schemas/DiskInotify" }

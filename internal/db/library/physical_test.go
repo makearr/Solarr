@@ -527,3 +527,37 @@ func TestListVideoWithoutFrameHashes_ListsAnOldVersionAgain(t *testing.T) {
 		t.Errorf("current version: listed %s, want none", got)
 	}
 }
+
+func TestDirectoriesOfRoot_ListsEveryDirectoryAboveAFileWithItsNewestArrival(t *testing.T) {
+	opened, _ := newLibrary(t)
+	one := createObject(t, opened, "dirs-1", 1)
+	two := createObject(t, opened, "dirs-2", 1)
+	elsewhere := createObject(t, opened, "dirs-3", 1)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		for _, file := range []struct {
+			object, root, at int64
+			rel              string
+		}{
+			{one.ID, 5, 10, "Artist/Album/01.flac"}, {two.ID, 5, 30, "Artist/Album/02.flac"}, {elsewhere.ID, 6, 99, "Other/x.flac"},
+		} {
+			if _, err := q.AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
+				MediaObjectID: file.object, RootFolderID: file.root, RelPath: file.rel, LinkKind: "primary", IsPrimary: 1, CreatedAt: file.at,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	records, err := library.NewPhysical(opened).DirectoriesOfRoot(t.Context(), 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]int64{}
+	for _, record := range records {
+		got[record.Rel] = record.Changed
+	}
+	if len(got) != 2 || got["Artist"] != 30 || got["Artist/Album"] != 30 {
+		t.Fatalf("directories = %v, want Artist and Artist/Album at 30 and nothing of the other root", got)
+	}
+}

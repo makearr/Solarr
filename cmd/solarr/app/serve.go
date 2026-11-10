@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -59,6 +60,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/remoteimage"
 	"github.com/makearr/Solarr/internal/platform/secrets"
 	"github.com/makearr/Solarr/internal/platform/transcode"
+	"github.com/makearr/Solarr/internal/scanning/watch"
 	"github.com/makearr/Solarr/migrations"
 )
 
@@ -143,8 +145,12 @@ type process struct {
 	// in registerCacheJob and reused by the API adapter in startServer.
 	cacheSweep *cachebudget.Sweep
 	// disks is the detected disk layout and its latency readings, shared by the job gate and the Disk page.
-	disks     *adapters.DiskManager
-	diskTurns *diskTurns
+	disks *adapters.DiskManager
+	// watch keeps the inotify watches on the library folders; nil when watching is off.
+	watch *watch.Service
+	// scanStarted is true once the first scheduled scan after start has been asked for.
+	scanStarted atomic.Bool
+	diskTurns   *diskTurns
 	// effectivePort is ADR-58's own resolution, computed once here and shown
 	// by the Network screen as "in effect" -- a port change needs a restart.
 	effectivePort int
@@ -533,6 +539,7 @@ func (p *process) startJobs(ctx context.Context) error {
 		FS: p.fsys, Cache: p.cache, Clock: wall, Monitor: disklatency.New(p.fsys, wall, diskProbeInterval),
 		ExtraPaths: []string{p.config.Paths.ConfigDir},
 	}
+	p.disks.ScanRoots = p.diskScanRoots
 	p.diskTurns = newDiskTurns(p.disks, p.disks.Monitor, wall)
 	executor := jobs.NewExecutor(queue, wall, jobs.ExecutorConfig{
 		Owner:    owner,
@@ -663,6 +670,7 @@ func (p *process) startServer(ctx context.Context) error {
 	p.applyImageSettings()
 	defer stopBackground()
 	// Startup runs are per task and switchable on the Scheduler screen (2026-09-19 review).
+	p.startLibraryWatch(background)
 	p.startSchedulers(background)
 	if err := p.seedAuthPolicy(ctx); err != nil {
 		return err

@@ -4444,6 +4444,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/disk/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set the hours between library scans; 0 lets Solarr decide. Administrator only. */
+        put: operations["setDiskScan"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/disk/measure": {
         parameters: {
             query?: never;
@@ -6092,6 +6109,16 @@ export interface components {
         DiskInotify: {
             /**
              * Format: int64
+             * @description Directories that hold library files
+             */
+            directories: number;
+            /**
+             * Format: int64
+             * @description What the host limit should be for every directory to be watched within half of it (next power of two
+             */
+            recommended_watches: number;
+            /**
+             * Format: int64
              * @description The host's fs.inotify.max_user_watches; 0 when unreadable.
              */
             max_user_watches: number;
@@ -6103,7 +6130,37 @@ export interface components {
             /** Format: int64 */
             used_by_us: number;
         };
+        DiskScanRoot: {
+            /** Format: int64 */
+            root_folder_id: number;
+            path: string;
+            /**
+             * Format: int64
+             * @description Unix seconds; absent when never scanned.
+             */
+            last_scan?: number;
+            /** @description A watcher has seen every change since the last scan. */
+            watching: boolean;
+            /** @description Deepest folder level watched completely (0 root */
+            covered_depth: number;
+            due: boolean;
+            /** @description Reason code: manual, never_scanned, startup_stale, startup_recent, watcher_lost, interval_passed, within_interval, size_or_count_changed, size_and_count_unchanged. */
+            why: string;
+        };
+        DiskScan: {
+            /**
+             * Format: int64
+             * @description The person's hours between scans; 0 is automatic.
+             */
+            interval_hours: number;
+            roots: components["schemas"]["DiskScanRoot"][];
+        };
+        DiskScanChange: {
+            /** Format: int64 */
+            interval_hours: number;
+        };
         DiskReport: {
+            scan: components["schemas"]["DiskScan"];
             paths: components["schemas"]["DiskPath"][];
             latencies: components["schemas"]["DiskLatency"][];
             inotify: components["schemas"]["DiskInotify"];
@@ -18776,6 +18833,34 @@ export interface operations {
         };
         responses: {
             /** @description The layout now in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiskReport"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    setDiskScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiskScanChange"];
+            };
+        };
+        responses: {
+            /** @description The report with the new interval. */
             200: {
                 headers: {
                     [name: string]: unknown;

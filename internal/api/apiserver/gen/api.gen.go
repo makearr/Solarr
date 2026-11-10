@@ -2301,9 +2301,15 @@ type DiskInotify struct {
 	// BudgetWatches Half of the limit
 	BudgetWatches int64 `json:"budget_watches"`
 
+	// Directories Directories that hold library files
+	Directories int64 `json:"directories"`
+
 	// MaxUserWatches The host's fs.inotify.max_user_watches; 0 when unreadable.
 	MaxUserWatches int64 `json:"max_user_watches"`
-	UsedByUs       int64 `json:"used_by_us"`
+
+	// RecommendedWatches What the host limit should be for every directory to be watched within half of it (next power of two
+	RecommendedWatches int64 `json:"recommended_watches"`
+	UsedByUs           int64 `json:"used_by_us"`
 }
 
 // DiskLatency defines model for DiskLatency.
@@ -2356,6 +2362,37 @@ type DiskReport struct {
 	Inotify   DiskInotify   `json:"inotify"`
 	Latencies []DiskLatency `json:"latencies"`
 	Paths     []DiskPath    `json:"paths"`
+	Scan      DiskScan      `json:"scan"`
+}
+
+// DiskScan defines model for DiskScan.
+type DiskScan struct {
+	// IntervalHours The person's hours between scans; 0 is automatic.
+	IntervalHours int64          `json:"interval_hours"`
+	Roots         []DiskScanRoot `json:"roots"`
+}
+
+// DiskScanChange defines model for DiskScanChange.
+type DiskScanChange struct {
+	IntervalHours int64 `json:"interval_hours"`
+}
+
+// DiskScanRoot defines model for DiskScanRoot.
+type DiskScanRoot struct {
+	// CoveredDepth Deepest folder level watched completely (0 root
+	CoveredDepth int  `json:"covered_depth"`
+	Due          bool `json:"due"`
+
+	// LastScan Unix seconds; absent when never scanned.
+	LastScan     *int64 `json:"last_scan,omitempty"`
+	Path         string `json:"path"`
+	RootFolderId int64  `json:"root_folder_id"`
+
+	// Watching A watcher has seen every change since the last scan.
+	Watching bool `json:"watching"`
+
+	// Why Reason code: manual, never_scanned, startup_stale, startup_recent, watcher_lost, interval_passed, within_interval, size_or_count_changed, size_and_count_unchanged.
+	Why string `json:"why"`
 }
 
 // DownloadFolder One upstream-download destination (todo 4.18). Watched: each entry is imported once it has settled, once only.
@@ -8222,6 +8259,9 @@ type SetBackupRetentionJSONRequestBody = BackupRetention
 // SetDiskOverridesJSONRequestBody defines body for SetDiskOverrides for application/json ContentType.
 type SetDiskOverridesJSONRequestBody = DiskOverrides
 
+// SetDiskScanJSONRequestBody defines body for SetDiskScan for application/json ContentType.
+type SetDiskScanJSONRequestBody = DiskScanChange
+
 // PatchGeneralSettingsJSONRequestBody defines body for PatchGeneralSettings for application/json ContentType.
 type PatchGeneralSettingsJSONRequestBody = GeneralSettings
 
@@ -9187,6 +9227,9 @@ type ServerInterface interface {
 	// Probe every disk group once now. Administrator only; the only probe not driven by waiting work.
 	// (POST /settings/disk/measure)
 	MeasureDisks(w http.ResponseWriter, r *http.Request)
+	// Set the hours between library scans; 0 lets Solarr decide. Administrator only.
+	// (PUT /settings/disk/scan)
+	SetDiskScan(w http.ResponseWriter, r *http.Request)
 	// Configuration as round-tripping YAML (F9).
 	// (GET /settings/export)
 	ExportSettings(w http.ResponseWriter, r *http.Request)
@@ -11176,6 +11219,12 @@ func (_ Unimplemented) SetDiskOverrides(w http.ResponseWriter, r *http.Request) 
 // Probe every disk group once now. Administrator only; the only probe not driven by waiting work.
 // (POST /settings/disk/measure)
 func (_ Unimplemented) MeasureDisks(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Set the hours between library scans; 0 lets Solarr decide. Administrator only.
+// (PUT /settings/disk/scan)
+func (_ Unimplemented) SetDiskScan(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -21023,6 +21072,28 @@ func (siw *ServerInterfaceWrapper) MeasureDisks(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// SetDiskScan operation middleware
+func (siw *ServerInterfaceWrapper) SetDiskScan(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetDiskScan(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ExportSettings operation middleware
 func (siw *ServerInterfaceWrapper) ExportSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -24746,6 +24817,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/settings/disk/measure", wrapper.MeasureDisks)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/settings/disk/scan", wrapper.SetDiskScan)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/settings/export", wrapper.ExportSettings)

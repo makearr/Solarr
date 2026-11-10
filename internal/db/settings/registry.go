@@ -223,6 +223,18 @@ func NewDefaultRegistry() *Registry {
 		Default: string(ModeNormal),
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyScanIntervalHours, Kind: KindInt, Tier: TierAdvanced,
+		Name:     "Hours between library scans",
+		HelpText: "0 lets Solarr decide: weekly for a root whose folders are watched, daily for one whose size and entry count have not changed, every 6 hours otherwise. A scan also runs at start when the last is over 12 hours old.",
+		Default:  "0",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyScanFingerprints, Kind: KindString, Tier: TierExpert,
+		Name:     "Root fingerprints at the last scan",
+		HelpText: "Kept by Solarr: used space and top-level entry count of each root when it was last scanned.",
+		Default:  "{}",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyDiskGroupOverrides, Kind: KindString, Tier: TierExpert,
 		Name:     "Disk group corrections",
 		HelpText: "JSON object of path to disk group label; paths with the same label share one disk's IO budget. Edited on Settings -> Disk.",

@@ -23,7 +23,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/db/store", "internal/platform/clock", "internal/platform/config", "internal/platform/fsx",
 		"migrations",
 	},
-	"cmd/solarr/app": {"internal/platform/iogate", "internal/platform/disklatency", "internal/acquiring/indexer/flaresolverr", "internal/acquiring/indexer/spec", "internal/service/franchisewatch", "internal/service/franchiselink", "internal/importing/arrmap", "internal/platform/hitcount", "internal/media/adult", "internal/media/book", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/itunes", "internal/metadata/fantlab", "internal/metadata/hardcover", "internal/metadata/stashbox", "internal/metadata/theporndb", "internal/metadata/whisparr", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow", "internal/service/importlist",
+	"cmd/solarr/app": {"internal/platform/iogate", "internal/platform/fswatch", "internal/scanning/watch", "internal/platform/disklatency", "internal/acquiring/indexer/flaresolverr", "internal/acquiring/indexer/spec", "internal/service/franchisewatch", "internal/service/franchiselink", "internal/importing/arrmap", "internal/platform/hitcount", "internal/media/adult", "internal/media/book", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/itunes", "internal/metadata/fantlab", "internal/metadata/hardcover", "internal/metadata/stashbox", "internal/metadata/theporndb", "internal/metadata/whisparr", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow", "internal/service/importlist",
 		"internal/media", "internal/platform/remoteimage", "cmd/solarr/adapters", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/plan",
 		"internal/acquiring/poll", "internal/acquiring/qbittorrent", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
@@ -39,7 +39,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/privilege", "internal/platform/previewstore", "internal/platform/ramcopy", "internal/platform/artwork", "internal/platform/disktopo", "internal/platform/disklatency", "internal/platform/iogate",
 		"internal/platform/secrets", "internal/scanning/probe", "internal/scanning/scan", "migrations",
 	},
-	"cmd/solarr/adapters": {"internal/platform/disklatency", "internal/platform/disktopo", "internal/acquiring/indexer/spec", "internal/acquiring/cutoff", "internal/importing/arrmap", "internal/db/store", "internal/platform/secrets", "internal/media/works",
+	"cmd/solarr/adapters": {"internal/scanning/watch", "internal/platform/disklatency", "internal/platform/disktopo", "internal/acquiring/indexer/spec", "internal/acquiring/cutoff", "internal/importing/arrmap", "internal/db/store", "internal/platform/secrets", "internal/media/works",
 		"internal/importing/batch", "internal/moving/renamejob",
 		"internal/db/statistics", "internal/platform/parallel", "internal/service/follow", "internal/service/importlist", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/qbittorrent",
 		"internal/acquiring/sabnzbd", "internal/acquiring/nzbget", "internal/acquiring/deluge", "internal/acquiring/aria2",
@@ -73,6 +73,10 @@ var allowedInternalImports = map[string][]string{
 	"internal/platform/disktopo": {"internal/platform/fsx"},
 	// Per-disk-group slots with priority and ageing: clock only.
 	"internal/platform/iogate": {"internal/platform/clock"},
+	// inotify: standard library only.
+	"internal/platform/fswatch": {},
+	// Which directories to watch and when a root is due: pure decisions, plus the service that runs the watcher.
+	"internal/scanning/watch": {"internal/platform/fswatch", "internal/platform/clock"},
 	// Latency per disk group, probed only on demand: clock and filesystem.
 	"internal/platform/disklatency": {"internal/platform/clock", "internal/platform/fsx"},
 	// A bounded in-memory slog handler (revision 7.16). Stdlib only: it wraps

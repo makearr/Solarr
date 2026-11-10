@@ -73,7 +73,7 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	registry.MustRegister(jobs.Task{
 		Key: "scan", Name: "Library scan", DefaultCadence: scanScheduleCron,
 		Tier: string(settings.TierNormal), Category: jobs.CategoryLibrary, Startup: jobs.StartupOn,
-		Enqueue: p.enqueueLibraryScans, RunFull: p.enqueueFullLibraryScans,
+		Enqueue: p.enqueueLibraryScans, RunFull: p.enqueueFullLibraryScans, EnqueueManual: p.enqueueManualLibraryScans,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "refresh_works", Name: "Refresh works", DefaultCadence: refreshWorksScheduleCron,
