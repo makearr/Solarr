@@ -207,3 +207,12 @@ ON CONFLICT (acquisition_id) DO UPDATE SET
 
 -- name: DeleteAcquisitionStall :exec
 DELETE FROM acquisition_stall WHERE acquisition_id = ?;
+
+-- name: GetAcquisitionMissingSince :one
+SELECT since FROM acquisition_missing WHERE acquisition_id = ?;
+
+-- name: MarkAcquisitionMissing :exec
+INSERT OR IGNORE INTO acquisition_missing (acquisition_id, since) VALUES (?, ?);
+
+-- name: DeleteAcquisitionMissing :exec
+DELETE FROM acquisition_missing WHERE acquisition_id = ?;

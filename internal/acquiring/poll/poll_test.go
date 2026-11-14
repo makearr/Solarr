@@ -305,11 +305,32 @@ func TestPoll_AFailedDownloadIsBlocklistedAndSearchedAgain(t *testing.T) {
 	}
 }
 
+// A download that comes back after a gap is not removed later on the strength of the old gap.
+func TestPoll_AReappearingDownloadForgetsItsGap(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	e.run(t)
+	e.clock.Advance(8 * time.Minute)
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "nzo-1", State: download.StateDownloading}}
+	e.run(t)
+	e.client.downloads = nil
+	e.clock.Advance(8 * time.Minute)
+	e.run(t)
+	if got := e.state(t, sent.ID); got.State == poll.StateFailed {
+		t.Errorf("= %s, want the second gap to start its own clock", got.State)
+	}
+}
+
 // A person removing a download is respected: failed, never sent again. Losing most at once is a
 // client that lost its queue: nothing is concluded.
 func TestPoll_VanishedAndMassVanished(t *testing.T) {
 	e := newEnv(t)
 	one := e.send(t, "nzo-1")
+	e.run(t)
+	if got := e.state(t, one.ID); got.State != poll.StateQueued {
+		t.Fatalf("one unlisted poll: %s, want it left alone", got.State)
+	}
+	e.clock.Advance(11 * time.Minute)
 	e.run(t)
 	if got := e.state(t, one.ID); got.State != poll.StateFailed || len(e.searched) != 0 {
 		t.Errorf("one vanished: %s, searched %v; want FAILED and no new search", got.State, e.searched)
@@ -476,6 +497,14 @@ func TestPoll_AnImportedTorrentSeedsUntilItsGoalIsMet(t *testing.T) {
 		}
 		e.client.downloads = step.downloads
 		e.run(t)
+		if step.downloads == nil {
+			// One poll that does not list it proves nothing: a client restarting answers the same.
+			if got := e.state(t, sent.ID); got.State != poll.StateImported {
+				t.Fatalf("%s: after one unlisted poll: %s, want it kept", name, got.State)
+			}
+			e.clock.Advance(11 * time.Minute)
+			e.run(t)
+		}
 		if got := e.state(t, sent.ID); got.State != step.state || !slices.Equal(e.client.removed, step.removed) {
 			t.Errorf("%s: %s, removed %v; want %s, %v", name, got.State, e.client.removed, step.state, step.removed)
 		}

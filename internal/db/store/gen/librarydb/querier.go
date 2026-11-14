@@ -252,6 +252,7 @@ type Querier interface {
 	// two admins, or a retried request -- reports that nothing changed rather than
 	// silently overwriting who decided it and when.
 	DecideRequest(ctx context.Context, arg DecideRequestParams) (int64, error)
+	DeleteAcquisitionMissing(ctx context.Context, acquisitionID int64) error
 	DeleteAcquisitionStall(ctx context.Context, acquisitionID int64) error
 	// A refresh rewrites the numbers one provider gave a part, so a mapping it dropped goes too.
 	DeleteAltNumberingByProvider(ctx context.Context, arg DeleteAltNumberingByProviderParams) error
@@ -401,6 +402,7 @@ type Querier interface {
 	GetAcquisition(ctx context.Context, id int64) (Acquisition, error)
 	// The download a placed file came in with, nothing when a person imported it by hand.
 	GetAcquisitionIDOfMediaObject(ctx context.Context, mediaObjectID int64) (sql.NullInt64, error)
+	GetAcquisitionMissingSince(ctx context.Context, acquisitionID int64) (int64, error)
 	// Retention: decisions age into decision_rollup, then go; a candidate goes once nothing refers to it.
 	GetAcquisitionStall(ctx context.Context, acquisitionID int64) (AcquisitionStall, error)
 	// Checked before CreateAcquisition so a caller gets a clean, mapped refusal
@@ -986,6 +988,7 @@ type Querier interface {
 	ListWorksToCheckForCollections(ctx context.Context, arg ListWorksToCheckForCollectionsParams) ([]ListWorksToCheckForCollectionsRow, error)
 	// The works holding a file one sweep found gone, so their counts can follow.
 	ListWorksWithPathsMissingSince(ctx context.Context, arg ListWorksWithPathsMissingSinceParams) ([]int64, error)
+	MarkAcquisitionMissing(ctx context.Context, arg MarkAcquisitionMissingParams) error
 	MarkAnimeChecked(ctx context.Context, arg MarkAnimeCheckedParams) error
 	// A library's rating limit changed: its items are planned again, a batch at a time.
 	MarkCategoryItemsDirtyBatch(ctx context.Context, arg MarkCategoryItemsDirtyBatchParams) (int64, error)

@@ -42,6 +42,11 @@ type AcquisitionFile struct {
 	ImportedAt    sql.NullInt64
 }
 
+type AcquisitionMissing struct {
+	AcquisitionID int64
+	Since         int64
+}
+
 type AcquisitionStall struct {
 	AcquisitionID     int64
 	Strikes           int64

@@ -179,6 +179,15 @@ func (q *Queries) CreateAcquisition(ctx context.Context, arg CreateAcquisitionPa
 	return i, err
 }
 
+const deleteAcquisitionMissing = `-- name: DeleteAcquisitionMissing :exec
+DELETE FROM acquisition_missing WHERE acquisition_id = ?
+`
+
+func (q *Queries) DeleteAcquisitionMissing(ctx context.Context, acquisitionID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteAcquisitionMissing, acquisitionID)
+	return err
+}
+
 const deleteAcquisitionStall = `-- name: DeleteAcquisitionStall :exec
 DELETE FROM acquisition_stall WHERE acquisition_id = ?
 `
@@ -234,6 +243,17 @@ func (q *Queries) GetAcquisition(ctx context.Context, id int64) (Acquisition, er
 		&i.SizeBytes,
 	)
 	return i, err
+}
+
+const getAcquisitionMissingSince = `-- name: GetAcquisitionMissingSince :one
+SELECT since FROM acquisition_missing WHERE acquisition_id = ?
+`
+
+func (q *Queries) GetAcquisitionMissingSince(ctx context.Context, acquisitionID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getAcquisitionMissingSince, acquisitionID)
+	var since int64
+	err := row.Scan(&since)
+	return since, err
 }
 
 const getAcquisitionStall = `-- name: GetAcquisitionStall :one
@@ -730,6 +750,20 @@ func (q *Queries) ListImportedAcquisitions(ctx context.Context) ([]Acquisition, 
 		return nil, err
 	}
 	return items, nil
+}
+
+const markAcquisitionMissing = `-- name: MarkAcquisitionMissing :exec
+INSERT OR IGNORE INTO acquisition_missing (acquisition_id, since) VALUES (?, ?)
+`
+
+type MarkAcquisitionMissingParams struct {
+	AcquisitionID int64
+	Since         int64
+}
+
+func (q *Queries) MarkAcquisitionMissing(ctx context.Context, arg MarkAcquisitionMissingParams) error {
+	_, err := q.db.ExecContext(ctx, markAcquisitionMissing, arg.AcquisitionID, arg.Since)
+	return err
 }
 
 const markRecycleBinRestored = `-- name: MarkRecycleBinRestored :execrows

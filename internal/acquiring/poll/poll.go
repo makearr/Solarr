@@ -219,7 +219,19 @@ func (j *Job) sweepSeeding(ctx context.Context, clients map[int64]Client, import
 		for _, acquisition := range acquisitions {
 			found, present := byRef[acquisition.DownloadClientRef]
 			if present && !client.seedGoalMet(found) {
+				if err := j.forgetMissing(ctx, acquisition.ID); err != nil {
+					failures = append(failures, err)
+				}
 				continue
+			}
+			if !present {
+				gone, err := j.goneLongEnough(ctx, acquisition.ID, now)
+				if err != nil {
+					failures = append(failures, err)
+				}
+				if err != nil || !gone {
+					continue
+				}
 			}
 			if present {
 				if err := client.Client.Remove(ctx, acquisition.DownloadClientRef, true); err != nil {
@@ -298,6 +310,27 @@ func (j *Job) massVanish(acquisitions []library.Acquisition, byRef map[string]do
 	return missing >= massVanishFloor && missing*2 >= watched
 }
 
+// missingGrace is how long a download must stay unlisted before it counts as removed: a client restarting or still
+// loading its session answers with a list that lacks it.
+const missingGrace = 10 * time.Minute
+
+// goneLongEnough marks a download the client did not list and says whether it has been missing for missingGrace.
+func (j *Job) goneLongEnough(ctx context.Context, acquisitionID, now int64) (bool, error) {
+	since, err := j.config.Acquisitions.MarkMissing(ctx, acquisitionID, now)
+	if err != nil {
+		return false, err
+	}
+	return time.Duration(now-since)*time.Second >= missingGrace, nil
+}
+
+// forgetMissing clears the mark of a download the client lists again.
+func (j *Job) forgetMissing(ctx context.Context, acquisitionID int64) error {
+	if _, marked, err := j.config.Acquisitions.MissingSince(ctx, acquisitionID); err != nil || !marked {
+		return err
+	}
+	return j.config.Acquisitions.ClearMissing(ctx, acquisitionID)
+}
+
 func (j *Job) advance(
 	ctx context.Context, client Client, acquisition library.Acquisition, entry download.Download, found, massVanish bool,
 ) error {
@@ -309,8 +342,15 @@ func (j *Job) advance(
 		if massVanish {
 			return nil
 		}
+		gone, err := j.goneLongEnough(ctx, acquisition.ID, now)
+		if err != nil || !gone {
+			return err
+		}
 		// A person removed it: record that, never send it again on our own (section 10.9).
 		return j.setFailed(ctx, acquisition, "removed from the download client")
+	}
+	if err := j.forgetMissing(ctx, acquisition.ID); err != nil {
+		return err
 	}
 	if reused, err := j.checkFingerprint(ctx, acquisition, entry); err != nil || reused {
 		return err
