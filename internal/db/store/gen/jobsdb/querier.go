@@ -45,7 +45,8 @@ type Querier interface {
 	// list one parameter.
 	ListEventsOfKinds(ctx context.Context, arg ListEventsOfKindsParams) ([]EventLog, error)
 	// Cursor pagination, never OFFSET (Invariant 32). The id tie-break is not optional:
-	// updated_at is not unique. A zero cursor is the start, hence the guarded comparison.
+	// updated_at is not unique. The first page passes Cursor.Bounds, so the range bound is a plain
+	// comparison the index can seek on.
 	ListJobsPage(ctx context.Context, arg ListJobsPageParams) ([]Job, error)
 	ListScheduleStates(ctx context.Context) ([]ScheduleState, error)
 	ListTaskPauses(ctx context.Context) ([]TaskPause, error)

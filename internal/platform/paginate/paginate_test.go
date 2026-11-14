@@ -2,6 +2,7 @@ package paginate_test
 
 import (
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/platform/paginate"
@@ -150,5 +151,24 @@ func TestBuild_EmptyResult(t *testing.T) {
 	page := paginate.Build([]row{}, 10, cursorOf)
 	if len(page.Items) != 0 || page.NextCursor != "" {
 		t.Errorf("empty result produced %+v", page)
+	}
+}
+
+func TestCursor_BoundsTurnTheStartIntoTheFarEndOfTheOrder(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		cursor     paginate.Cursor
+		descending bool
+		wantSort   int64
+		wantID     int64
+	}{
+		{"start, newest first", paginate.Cursor{}, true, math.MaxInt64, math.MaxInt64},
+		{"start, oldest first", paginate.Cursor{}, false, 0, -1},
+		{"inside the list", paginate.Cursor{Sort: 7, ID: 3}, true, 7, 3},
+	} {
+		sort, id := test.cursor.Bounds(test.descending)
+		if sort != test.wantSort || id != test.wantID {
+			t.Errorf("%s: Bounds = %d, %d; want %d, %d", test.name, sort, id, test.wantSort, test.wantID)
+		}
 	}
 }

@@ -119,7 +119,8 @@ UPDATE job_attempt SET finished_at = sqlc.arg(now), outcome = 'reclaimed', error
 WHERE finished_at IS NULL AND job_id IN (SELECT value FROM json_each(sqlc.arg(job_ids)));
 
 -- Cursor pagination, never OFFSET (Invariant 32). The id tie-break is not optional:
--- updated_at is not unique. A zero cursor is the start, hence the guarded comparison.
+-- updated_at is not unique. The first page passes Cursor.Bounds, so the range bound is a plain
+-- comparison the index can seek on.
 
 -- name: ListJobsPage :many
 SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
@@ -131,9 +132,8 @@ WHERE (sqlc.arg(state) = '' OR state = sqlc.arg(state))
   -- breaks the cursor (Invariant 36).
   AND ((category_id IS NULL AND sqlc.arg(include_system) = 1)
        OR category_id IN (SELECT value FROM json_each(sqlc.arg(visible_categories))))
-  AND (sqlc.arg(after_sort) = 0
-       OR updated_at < sqlc.arg(after_sort)
-       OR (updated_at = sqlc.arg(after_sort) AND id < sqlc.arg(after_id)))
+  AND updated_at <= sqlc.arg(after_sort)
+  AND (updated_at < sqlc.arg(after_sort) OR id < sqlc.arg(after_id))
 ORDER BY updated_at DESC, id DESC
 LIMIT sqlc.arg(page_size);
 

@@ -690,9 +690,8 @@ WHERE (?1 = '' OR state = ?1)
   -- breaks the cursor (Invariant 36).
   AND ((category_id IS NULL AND ?2 = 1)
        OR category_id IN (SELECT value FROM json_each(?3)))
-  AND (?4 = 0
-       OR updated_at < ?4
-       OR (updated_at = ?4 AND id < ?5))
+  AND updated_at <= ?4
+  AND (updated_at < ?4 OR id < ?5)
 ORDER BY updated_at DESC, id DESC
 LIMIT ?6
 `
@@ -701,13 +700,14 @@ type ListJobsPageParams struct {
 	State             interface{}
 	IncludeSystem     interface{}
 	VisibleCategories interface{}
-	AfterSort         interface{}
+	AfterSort         int64
 	AfterID           int64
 	PageSize          int64
 }
 
 // Cursor pagination, never OFFSET (Invariant 32). The id tie-break is not optional:
-// updated_at is not unique. A zero cursor is the start, hence the guarded comparison.
+// updated_at is not unique. The first page passes Cursor.Bounds, so the range bound is a plain
+// comparison the index can seek on.
 func (q *Queries) ListJobsPage(ctx context.Context, arg ListJobsPageParams) ([]Job, error) {
 	rows, err := q.db.QueryContext(ctx, listJobsPage,
 		arg.State,

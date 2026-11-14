@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -27,6 +28,18 @@ type Cursor struct {
 
 // Zero reports the start of the list.
 func (c Cursor) Zero() bool { return c.Sort == 0 && c.ID == 0 }
+
+// Bounds is the cursor as range bounds that stand on their own in a WHERE clause: the start of the list
+// becomes the far end of the order, so the index can seek instead of walking from its first row.
+func (c Cursor) Bounds(descending bool) (sort, id int64) {
+	if !c.Zero() {
+		return c.Sort, c.ID
+	}
+	if descending {
+		return math.MaxInt64, math.MaxInt64
+	}
+	return 0, -1
+}
 
 // Encode renders a cursor for a client (Invariant 36).
 func (c Cursor) Encode() string {

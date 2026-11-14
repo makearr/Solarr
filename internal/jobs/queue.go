@@ -301,14 +301,15 @@ func (q *Queue) ListPage(ctx context.Context, visibility Visibility, state State
 		return paginate.Page[Job]{}, fmt.Errorf("jobs: encode visible categories: %w", err)
 	}
 
+	afterSort, afterID := after.Bounds(true)
 	// One more row than asked for, so the last page is recognisable without a
 	// second counting query.
 	rows, err := q.queries.ListJobsPage(ctx, jobsdb.ListJobsPageParams{
 		State:             string(state),
 		IncludeSystem:     boolToInt(visibility.System),
 		VisibleCategories: string(categories),
-		AfterSort:         after.Sort,
-		AfterID:           after.ID,
+		AfterSort:         afterSort,
+		AfterID:           afterID,
 		PageSize:          int64(limit + 1),
 	})
 	if err != nil {
