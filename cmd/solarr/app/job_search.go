@@ -214,7 +214,7 @@ func (p *process) dispatchFor(mediaType string) music.Dispatch {
 		BoundClient: p.boundClient,
 		Fetch:       p.fetchRelease, History: p.recordDownloadHistory, Ready: &ready, Blocklist: &blocklist,
 		ReadyLimit: func() int64 { return p.cache.Snapshot().ReadyQueueLimit() }, Admits: p.ratingAdmits,
-		Paused: func() bool { return p.solarrMode().DownloadsPaused() },
+		Paused: func() bool { return p.solarrMode().DownloadsPaused() }, Locks: &p.sendLocks,
 	}
 }
 

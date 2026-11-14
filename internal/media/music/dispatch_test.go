@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/platform/keyedlock"
 )
 
 // fakeSabnzbdSender answers a canned client ref (or error) to every Add, recording what it was
@@ -19,11 +21,27 @@ type fakeSabnzbdSender struct {
 	clientRef string
 	err       error
 	refuse    map[string]bool
+	mu        sync.Mutex
 	requests  []download.AddRequest
+	removed   []string
+	// afterAdd runs once the client has accepted a release: another sender winning the race, in a test.
+	afterAdd func()
+}
+
+func (f *fakeSabnzbdSender) Remove(_ context.Context, clientRef string, _ bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.removed = append(f.removed, clientRef)
+	return nil
 }
 
 func (f *fakeSabnzbdSender) Add(_ context.Context, request download.AddRequest) (string, error) {
+	f.mu.Lock()
 	f.requests = append(f.requests, request)
+	f.mu.Unlock()
+	if f.afterAdd != nil {
+		f.afterAdd()
+	}
 	if f.refuse[request.Name] {
 		return "", fmt.Errorf("fake: %w", download.ErrRefused)
 	}
@@ -110,6 +128,65 @@ func TestDispatch_RecordsTheGrab(t *testing.T) {
 	}
 	if want := []string{"download.grabbed nzo-1"}; !reflect.DeepEqual(recorded, want) {
 		t.Errorf("history = %q, want %q", recorded, want)
+	}
+}
+
+// Two senders for one item (a hunt and a click) must not both put the release in the client.
+func TestDispatch_TwoSendersOfOneItemSendOnce(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	detail := env.recordDecision(t, item.ID, "ACCEPT")
+	sender := &fakeSabnzbdSender{clientRef: "nzo-1"}
+	dispatch := env.dispatch([]music.DownloaderConn{{ID: 5, Protocol: "usenet", Client: sender}})
+	dispatch.Locks = &keyedlock.Locks{}
+
+	var wait sync.WaitGroup
+	errs := make([]error, 8)
+	for i := range errs {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			_, errs[i] = dispatch.Send(t.Context(), item.ID, detail.Decision.ID, env.clock.Now())
+		}()
+	}
+	wait.Wait()
+	sent := 0
+	for _, err := range errs {
+		if err == nil {
+			sent++
+		} else if !errors.Is(err, library.ErrAcquisitionAlreadyInFlight) {
+			t.Errorf("err = %v, want nil or already in flight", err)
+		}
+	}
+	if sent != 1 || len(sender.requests) != 1 {
+		t.Errorf("%d sends succeeded and the client was asked %d times, want exactly one", sent, len(sender.requests))
+	}
+}
+
+// A release the client accepted but no row records would never be followed: it is taken back out.
+func TestDispatch_ARowThatCannotBeRecordedTakesTheReleaseBackOutOfTheClient(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	detail := env.recordDecision(t, item.ID, "ACCEPT")
+	sender := &fakeSabnzbdSender{clientRef: "nzo-late"}
+	// Another sender records its own download between this one's check and its row.
+	sender.afterAdd = func() {
+		itemID := item.ID
+		if _, err := env.acquisitions.Create(t.Context(), library.NewAcquisition{
+			DesiredItemID: &itemID, DownloaderID: 5, DownloadClientRef: "nzo-other", Protocol: "usenet", State: "QUEUED",
+			CreatedAt: env.clock.Now().Unix(), UpdatedAt: env.clock.Now().Unix(),
+		}); err != nil {
+			t.Error(err)
+		}
+	}
+
+	_, err := env.dispatch([]music.DownloaderConn{{ID: 5, Protocol: "usenet", Client: sender}}).
+		Send(t.Context(), item.ID, detail.Decision.ID, env.clock.Now())
+	if err == nil {
+		t.Fatal("Send succeeded, want the failed row to be reported")
+	}
+	if want := []string{"nzo-late"}; !reflect.DeepEqual(sender.removed, want) {
+		t.Errorf("removed %v, want %v", sender.removed, want)
 	}
 }
 

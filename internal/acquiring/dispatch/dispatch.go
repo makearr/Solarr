@@ -11,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/statistics"
+	"github.com/makearr/Solarr/internal/platform/keyedlock"
 )
 
 // ErrDecisionNotFound reports a decision id that does not belong to the
@@ -112,6 +113,9 @@ type Dispatch struct {
 	Admits func(categoryID, age int64) bool
 	// Paused is optional: true while the mode sends nothing to a download client.
 	Paused func() bool
+	// Locks is optional: one send per item at a time, shared by every Dispatch of the process, so two senders cannot
+	// both pass the in-flight check and put the same release in the client twice.
+	Locks *keyedlock.Locks
 }
 
 // Send dispatches one decision, previously recorded against itemID by
@@ -143,6 +147,9 @@ func (d Dispatch) SendRelease(ctx context.Context, itemID int64, release library
 		return library.Acquisition{}, fmt.Errorf("dispatch: %w", err)
 	}
 
+	if d.Locks != nil {
+		defer d.Locks.Lock(fmt.Sprintf("send:%d", itemID))()
+	}
 	// Before the client is involved: refusing after the send leaves a duplicate in its queue.
 	if _, inFlight, err := d.Acquisitions.InFlightForItem(ctx, itemID); err != nil {
 		return library.Acquisition{}, fmt.Errorf("dispatch: %w", err)
@@ -195,7 +202,8 @@ func (d Dispatch) SendRelease(ctx context.Context, itemID int64, release library
 	desiredItemID := itemID
 	candidateID := detail.ReleaseCandidate.ID
 	indexerID := detail.ReleaseCandidate.IndexerID
-	created, err := d.Acquisitions.Create(ctx, library.NewAcquisition{
+	// Not cancelled with the caller: between the client accepting the release and this row, a stop would orphan it.
+	created, err := d.Acquisitions.Create(context.WithoutCancel(ctx), library.NewAcquisition{
 		DesiredItemID: &desiredItemID, CandidateID: &candidateID, IndexerID: &indexerID,
 		CandidateGUID: detail.ReleaseCandidate.GUID, CandidateTitle: detail.ReleaseCandidate.Title,
 		DownloaderID: downloader.ID, DownloadClientRef: clientRef, ClientCategory: category,
@@ -211,7 +219,9 @@ func (d Dispatch) SendRelease(ctx context.Context, itemID int64, release library
 		CreatedAt: at.Unix(), UpdatedAt: at.Unix(), ContentHash: contentHash, SizeBytes: size,
 	})
 	if err != nil {
-		return library.Acquisition{}, fmt.Errorf("dispatch: %w", err)
+		// In the client with no row it would never be followed, imported or removed.
+		removeErr := downloader.Client.Remove(context.WithoutCancel(ctx), clientRef, true)
+		return library.Acquisition{}, errors.Join(fmt.Errorf("dispatch: %w", err), removeErr)
 	}
 	if d.History != nil {
 		d.History(ctx, download.HistoryGrabbed, created, "")

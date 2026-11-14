@@ -53,6 +53,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/events"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/hitcount"
+	"github.com/makearr/Solarr/internal/platform/keyedlock"
 	"github.com/makearr/Solarr/internal/platform/logbuffer"
 	"github.com/makearr/Solarr/internal/platform/logthrottle"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
@@ -72,6 +73,8 @@ type Build struct {
 
 // process is everything the server owns, so shutdown has one place to look.
 type process struct {
+	// sendLocks makes a release go to a download client once per item at a time, across every media type's dispatch.
+	sendLocks keyedlock.Locks
 	// hunt is the search hunt, kept for the budget view.
 	hunt *plan.HuntJob
 	// extraMedia are media types a test registers beside the built-in ones (revision 2's R1.9 proof).
