@@ -928,6 +928,32 @@ func TestPoll_ADownloadTheClientDroppedIsNotBlocklistedOrSearchedAgain(t *testin
 	}
 }
 
+// cancellingClient has a person cancel the download in the middle of a pass, after the pass read its rows.
+type cancellingClient struct {
+	*fakeClient
+	cancel func()
+}
+
+func (c *cancellingClient) Downloads(ctx context.Context, category string) ([]download.Download, error) {
+	c.cancel()
+	return c.fakeClient.Downloads(ctx, category)
+}
+
+func TestPoll_ADownloadCancelledDuringThePassIsNotWrittenBack(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "nzo-1", State: download.StateDownloading}}
+	e.driver = &cancellingClient{fakeClient: e.client, cancel: func() {
+		if err := e.acquisitions.SetState(t.Context(), sent.ID, poll.StateCancelled, "removed from the queue", e.clock.Now().Unix()); err != nil {
+			t.Error(err)
+		}
+	}}
+	e.run(t)
+	if got := e.state(t, sent.ID); got.State != poll.StateCancelled {
+		t.Errorf("= %s, want CANCELLED: the pass must not resurrect what a person removed", got.State)
+	}
+}
+
 // A client that answers by reference is asked for these downloads alone, so a finished one cannot fall out of a window.
 type referencingClient struct {
 	*fakeClient

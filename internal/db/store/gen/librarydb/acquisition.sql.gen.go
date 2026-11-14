@@ -1052,3 +1052,31 @@ func (q *Queries) SumRecycledBytes(ctx context.Context) (int64, error) {
 	err := row.Scan(&held)
 	return held, err
 }
+
+const transitionAcquisitionState = `-- name: TransitionAcquisitionState :execrows
+UPDATE acquisition SET state = ?1, last_error = ?2, updated_at = ?3
+WHERE id = ?4 AND state = ?5
+`
+
+type TransitionAcquisitionStateParams struct {
+	ToState   string
+	LastError sql.NullString
+	UpdatedAt int64
+	ID        int64
+	FromState string
+}
+
+// A transition names the state the caller read, so a row the user cancelled meanwhile is not written back.
+func (q *Queries) TransitionAcquisitionState(ctx context.Context, arg TransitionAcquisitionStateParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, transitionAcquisitionState,
+		arg.ToState,
+		arg.LastError,
+		arg.UpdatedAt,
+		arg.ID,
+		arg.FromState,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}

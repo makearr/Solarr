@@ -40,7 +40,11 @@ func (j *Job) Remove(ctx context.Context, acquisitionID int64, blocklist bool) e
 		}
 		detail, historyDetail = "removed from the queue and blocklisted", "blocklisted"
 	}
-	if err := j.config.Acquisitions.SetState(ctx, acquisition.ID, StateCancelled, detail, now); err != nil {
+	// Against the state just read: one that moved on meanwhile (the poll started its import) is no longer removable.
+	if err := j.transition(ctx, acquisition, StateCancelled, detail, now); err != nil {
+		if errors.Is(err, library.ErrStateChanged) {
+			return ErrNotRemovable
+		}
 		return err
 	}
 
@@ -94,5 +98,5 @@ func (j *Job) SetPaused(ctx context.Context, downloaderID int64, paused bool) er
 
 // uncancel puts a download whose removal failed back in the state it had.
 func (j *Job) uncancel(ctx context.Context, acquisition library.Acquisition) error {
-	return j.config.Acquisitions.SetState(ctx, acquisition.ID, acquisition.State, acquisition.LastError, j.config.Clock.Now().Unix())
+	return j.config.Acquisitions.Transition(ctx, acquisition.ID, StateCancelled, acquisition.State, acquisition.LastError, j.config.Clock.Now().Unix())
 }

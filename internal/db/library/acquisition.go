@@ -227,6 +227,29 @@ func (a Acquisitions) SetState(ctx context.Context, id int64, state, lastError s
 	return nil
 }
 
+// ErrStateChanged is a transition refused because the acquisition is no longer in the state the caller read.
+var ErrStateChanged = errors.New("library: the acquisition changed state since it was read")
+
+// Transition moves an acquisition from the state the caller read to another; a row that moved meanwhile (a person
+// cancelled it while a poll ran) is left alone and ErrStateChanged answered.
+func (a Acquisitions) Transition(ctx context.Context, id int64, from, to, lastError string, at int64) error {
+	var changed int64
+	err := a.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		rows, err := librarydb.New(tx).TransitionAcquisitionState(ctx, librarydb.TransitionAcquisitionStateParams{
+			ToState: to, LastError: nullString(lastError), UpdatedAt: at, ID: id, FromState: from,
+		})
+		changed = rows
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("library: move acquisition %d from %s to %s: %w", id, from, to, err)
+	}
+	if changed == 0 {
+		return fmt.Errorf("%w: acquisition %d was not %s", ErrStateChanged, id, from)
+	}
+	return nil
+}
+
 func acquisitionFromRow(row librarydb.Acquisition) Acquisition {
 	return Acquisition{
 		ID: row.ID, DesiredItemID: int64Ptr(row.DesiredItemID), CandidateID: int64Ptr(row.CandidateID),

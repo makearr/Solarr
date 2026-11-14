@@ -1280,6 +1280,8 @@ type Querier interface {
 	// missing mark (section 10.4): a file coming back is exactly the case this exists
 	// for.
 	TouchLibraryPath(ctx context.Context, arg TouchLibraryPathParams) error
+	// A transition names the state the caller read, so a row the user cancelled meanwhile is not written back.
+	TransitionAcquisitionState(ctx context.Context, arg TransitionAcquisitionStateParams) (int64, error)
 	// The queue holds at most keep entries: what would be sent last goes first (section 10.5).
 	TrimReady(ctx context.Context, keep int64) error
 	UnblockTagSlugs(ctx context.Context, arg UnblockTagSlugsParams) error

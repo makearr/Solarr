@@ -240,7 +240,7 @@ func (j *Job) sweepSeeding(ctx context.Context, clients map[int64]Client, import
 					continue
 				}
 			}
-			if err := j.config.Acquisitions.SetState(ctx, acquisition.ID, StateCleaned, "", now); err != nil {
+			if err := j.transition(ctx, acquisition, StateCleaned, "", now); err != nil && !errors.Is(err, library.ErrStateChanged) {
 				failures = append(failures, err)
 			}
 		}
@@ -291,7 +291,12 @@ func (j *Job) pollClient(ctx context.Context, client Client, acquisitions []libr
 	var failures []error
 	for _, acquisition := range acquisitions {
 		entry, found := byRef[acquisition.DownloadClientRef]
-		if err := j.advance(ctx, client, acquisition, entry, found, massVanish); err != nil {
+		err := j.advance(ctx, client, acquisition, entry, found, massVanish)
+		if errors.Is(err, library.ErrStateChanged) {
+			j.config.Logger.Debug("acquisition changed during the poll; left for the next", slog.Int64("acquisition_id", acquisition.ID))
+			continue
+		}
+		if err != nil {
 			failures = append(failures, fmt.Errorf("acquisition %d: %w", acquisition.ID, err))
 		}
 	}
@@ -336,6 +341,12 @@ func (j *Job) massVanish(acquisitions []library.Acquisition, byRef map[string]do
 		}
 	}
 	return missing >= massVanishFloor && missing*2 >= watched
+}
+
+// transition moves an acquisition on from the state this pass read it in; a row a person changed meanwhile comes back
+// as library.ErrStateChanged, which the pass drops: the next one reads the truth.
+func (j *Job) transition(ctx context.Context, acquisition library.Acquisition, to, note string, at int64) error {
+	return j.config.Acquisitions.Transition(ctx, acquisition.ID, acquisition.State, to, note, at)
 }
 
 // missingGrace is how long a download must stay unlisted before it counts as removed: a client restarting or still
@@ -393,7 +404,7 @@ func (j *Job) advance(
 		return j.failed(ctx, client, acquisition, library.BlocklistDownloadFailed, entry.Error)
 	case download.StateDownloading, download.StateProcessing:
 		if acquisition.State == StateQueued {
-			if err := j.config.Acquisitions.SetState(ctx, acquisition.ID, StateDownloading, "", now); err != nil {
+			if err := j.transition(ctx, acquisition, StateDownloading, "", now); err != nil {
 				return err
 			}
 		}
@@ -491,7 +502,7 @@ func (j *Job) importFinished(
 	}
 	j.config.Logger.Info("stalled download: importing what finished", slog.Int64("acquisition_id", acquisition.ID),
 		slog.String("release", acquisition.CandidateTitle), slog.Int("files", len(files)))
-	return true, "", j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting,
+	return true, "", j.transition(ctx, acquisition, StateImporting,
 		fmt.Sprintf("%s; importing the %d finished %s, the rest is searched for again", detail, len(files), plural(len(files), "file", "files")), now)
 }
 
@@ -525,7 +536,7 @@ func (j *Job) checkFingerprint(ctx context.Context, acquisition library.Acquisit
 
 // setFailed is the one way a download becomes FAILED, so every failure reaches History.
 func (j *Job) setFailed(ctx context.Context, acquisition library.Acquisition, detail string) error {
-	if err := j.config.Acquisitions.SetState(ctx, acquisition.ID, StateFailed, detail, j.config.Clock.Now().Unix()); err != nil {
+	if err := j.transition(ctx, acquisition, StateFailed, detail, j.config.Clock.Now().Unix()); err != nil {
 		return err
 	}
 	j.config.History(ctx, download.HistoryFailed, acquisition, detail)
@@ -548,13 +559,13 @@ func (j *Job) completed(ctx context.Context, client Client, acquisition library.
 	}
 	if problem := j.checkPath(ctx, localPath); problem != "" {
 		// Reported and kept: the next poll tries again once the folders or the mapping are right.
-		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateCompleted, problem, now)
+		return j.transition(ctx, acquisition, StateCompleted, problem, now)
 	}
 	acquisition.DownloadDir = localPath
 	if err := j.config.Import(ctx, acquisition, localPath, nil); err != nil {
-		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateCompleted, "import could not start: "+err.Error(), now)
+		return j.transition(ctx, acquisition, StateCompleted, "import could not start: "+err.Error(), now)
 	}
-	return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, "", now)
+	return j.transition(ctx, acquisition, StateImporting, "", now)
 }
 
 // jobFolder is the folder a download lives in: a client that names the one file it produced (SABnzbd does for a
@@ -649,14 +660,14 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 	switch {
 	case noRoom > 0:
 		// A library-side failure is never the release's: kept, not blocklisted, until the import retry places it.
-		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, WaitingForRoom, now)
+		return j.transition(ctx, acquisition, StateImporting, WaitingForRoom, now)
 	case waiting > 0 && placed > 0:
 		// Units still held for a person need the downloaded files, so nothing is cleaned up yet.
-		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, WaitingForReview, now)
+		return j.transition(ctx, acquisition, StateImporting, WaitingForReview, now)
 	case placed > 0 && stall.ImportingFinished:
 		return j.finishedImported(ctx, client, acquisition)
 	case placed > 0:
-		if err := j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImported, "", now); err != nil {
+		if err := j.transition(ctx, acquisition, StateImported, "", now); err != nil {
 			return err
 		}
 		acquisition.State = StateImported
@@ -666,12 +677,12 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 		}
 		return j.cleanUp(ctx, client, acquisition)
 	case waiting > 0:
-		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, WaitingForReview, now)
+		return j.transition(ctx, acquisition, StateImporting, WaitingForReview, now)
 	case session.Error != "":
 		// The library failed to place it (permissions, I/O), which says nothing about the release: kept, not blocklisted.
 		note := "the library could not place it: " + session.Error
 		if acquisition.LastError != note {
-			return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, note, now)
+			return j.transition(ctx, acquisition, StateImporting, note, now)
 		}
 		// A transient failure heals without a person: the import runs again, at most once per importRetryEvery.
 		if time.Duration(now-acquisition.UpdatedAt)*time.Second < importRetryEvery || acquisition.DownloadDir == "" {
@@ -680,7 +691,7 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 		if err := j.config.Import(ctx, acquisition, acquisition.DownloadDir, nil); err != nil {
 			j.config.Logger.Warn("import retry did not start", slog.Int64("acquisition_id", acquisition.ID), slog.Any("error", err))
 		}
-		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, note, now)
+		return j.transition(ctx, acquisition, StateImporting, note, now)
 	case duplicates > 0:
 		return j.duplicate(ctx, client, acquisition)
 	default:
@@ -706,7 +717,7 @@ func (j *Job) duplicate(ctx context.Context, client Client, acquisition library.
 // so the rest is never fetched from it again, removed from the client with what it still held, and searched for again.
 func (j *Job) finishedImported(ctx context.Context, client Client, acquisition library.Acquisition) error {
 	now := j.config.Clock.Now()
-	if err := j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImported, "stalled; its finished files were imported", now.Unix()); err != nil {
+	if err := j.transition(ctx, acquisition, StateImported, "stalled; its finished files were imported", now.Unix()); err != nil {
 		return err
 	}
 	acquisition.State = StateImported
@@ -719,7 +730,7 @@ func (j *Job) finishedImported(ctx context.Context, client Client, acquisition l
 	}
 	if err := client.Client.Remove(ctx, acquisition.DownloadClientRef, true); err != nil {
 		j.config.Logger.Warn("stalled download could not be removed from the client", slog.Int64("acquisition_id", acquisition.ID), slog.Any("error", err))
-	} else if err := j.config.Acquisitions.SetState(ctx, acquisition.ID, StateCleaned, "stalled; its finished files were imported", now.Unix()); err != nil {
+	} else if err := j.transition(ctx, acquisition, StateCleaned, "stalled; its finished files were imported", now.Unix()); err != nil {
 		return err
 	}
 	if acquisition.DesiredItemID != nil {
@@ -754,7 +765,7 @@ func (j *Job) cleanUp(ctx context.Context, client Client, acquisition library.Ac
 	if err := client.Client.Remove(ctx, acquisition.DownloadClientRef, true); err != nil {
 		return err
 	}
-	return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateCleaned, "", j.config.Clock.Now().Unix())
+	return j.transition(ctx, acquisition, StateCleaned, "", j.config.Clock.Now().Unix())
 }
 
 // failed blocklists the release for 30 days, removes it from the client and searches again

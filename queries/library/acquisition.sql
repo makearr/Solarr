@@ -65,6 +65,11 @@ WHERE downloader_id = ? AND state IN ('QUEUED', 'DOWNLOADING');
 -- name: SetAcquisitionState :exec
 UPDATE acquisition SET state = ?, last_error = ?, updated_at = ? WHERE id = ?;
 
+-- A transition names the state the caller read, so a row the user cancelled meanwhile is not written back.
+-- name: TransitionAcquisitionState :execrows
+UPDATE acquisition SET state = sqlc.arg(to_state), last_error = sqlc.arg(last_error), updated_at = sqlc.arg(updated_at)
+WHERE id = sqlc.arg(id) AND state = sqlc.arg(from_state);
+
 -- name: SetAcquisitionPath :exec
 UPDATE acquisition SET download_dir = ?, updated_at = ? WHERE id = ?;
 

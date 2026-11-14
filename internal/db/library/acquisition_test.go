@@ -73,6 +73,26 @@ func TestATerminalAcquisitionReleasesTheItem(t *testing.T) {
 	}
 }
 
+// A poll works from the state it read: a row a person cancelled meanwhile must not be written back by its later statement.
+func TestTransition_RefusesARowThatMovedSinceItWasRead(t *testing.T) {
+	opened, _ := newLibrary(t)
+	work := createWork(t, opened, "movie", "Cige")
+	item := createDesired(t, opened, work.ID, "SINGLE", 1)
+	acquisition := createAcquisition(t, opened, item.ID, "nzo-1", "DOWNLOADING")
+	acquisitions := library.NewAcquisitions(opened)
+
+	if err := acquisitions.Transition(t.Context(), acquisition.ID, "DOWNLOADING", "CANCELLED", "removed", 2); err != nil {
+		t.Fatalf("first Transition: %v", err)
+	}
+	err := acquisitions.Transition(t.Context(), acquisition.ID, "DOWNLOADING", "IMPORTING", "", 3)
+	if !errors.Is(err, library.ErrStateChanged) {
+		t.Fatalf("second Transition = %v, want ErrStateChanged", err)
+	}
+	if got, err := acquisitions.Get(t.Context(), acquisition.ID); err != nil || got.State != "CANCELLED" {
+		t.Errorf("state = %q (%v), want CANCELLED left alone", got.State, err)
+	}
+}
+
 // Section 10.11: the guid identifies a listing on one indexer, the content hash
 // identifies the payload wherever it appears. Blocking by guid alone means the
 // same dead torrent is re-grabbed from four other indexers carrying it.
