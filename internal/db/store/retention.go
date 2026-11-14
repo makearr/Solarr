@@ -107,7 +107,7 @@ func parseBackupName(name, prefix string) (BackupInfo, bool) {
 // outside the rotation entirely -- and keep is raised to minBackupsKept if it is
 // configured lower.
 func (s *Store) PruneBackups(directory string, keep int) ([]string, error) {
-	return s.pruneRotation(directory, func(index int, _ BackupInfo) bool {
+	return s.pruneKind(directory, BackupRotation, func(index int, _ BackupInfo) bool {
 		return index >= max(keep, minBackupsKept)
 	})
 }
@@ -115,13 +115,25 @@ func (s *Store) PruneBackups(directory string, keep int) ([]string, error) {
 // PruneBackupsOlderThan deletes rotation backups taken before cutoff, but never the newest
 // minBackupsKept, so a long outage cannot age every backup away.
 func (s *Store) PruneBackupsOlderThan(directory string, cutoff time.Time) ([]string, error) {
-	return s.pruneRotation(directory, func(index int, backup BackupInfo) bool {
+	return s.pruneKind(directory, BackupRotation, func(index int, backup BackupInfo) bool {
 		return index >= minBackupsKept && backup.At.Before(cutoff)
 	})
 }
 
-// pruneRotation removes each rotation backup, newest first by index, that remove selects.
-func (s *Store) pruneRotation(directory string, remove func(index int, backup BackupInfo) bool) ([]string, error) {
+// minPreMigrationAge protects a copy taken before a migration: a bad migration is often noticed days later.
+const minPreMigrationAge = 7 * 24 * time.Hour
+
+// PrunePreMigration deletes copies taken before a migration beyond the newest keep (at least 1, which
+// an older build's refusal points at), except any younger than a week.
+func (s *Store) PrunePreMigration(directory string, keep int) ([]string, error) {
+	now := s.clock.Now()
+	return s.pruneKind(directory, BackupPreMigration, func(index int, backup BackupInfo) bool {
+		return index >= max(keep, 1) && now.Sub(backup.At) >= minPreMigrationAge
+	})
+}
+
+// pruneKind removes each backup of the kind, newest first by index, that remove selects.
+func (s *Store) pruneKind(directory string, kind BackupKind, remove func(index int, backup BackupInfo) bool) ([]string, error) {
 	all, err := s.ListBackups(directory)
 	if err != nil {
 		return nil, err
@@ -129,7 +141,7 @@ func (s *Store) pruneRotation(directory string, remove func(index int, backup Ba
 	var removed []string
 	index := 0
 	for _, backup := range all {
-		if backup.Kind != BackupRotation {
+		if backup.Kind != kind {
 			continue
 		}
 		if remove(index, backup) {

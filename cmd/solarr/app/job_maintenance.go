@@ -188,8 +188,10 @@ func (j backupJob) Run(ctx context.Context, _ jobs.Job) error {
 
 // backupCleanupJob applies the configured retention to the backup bundles and each database's older single copies.
 type backupCleanupJob struct {
-	fs        fsx.FS
-	stores    []*store.Store
+	fs     fsx.FS
+	stores []*store.Store
+	// migrated are the databases whose copies from before a migration are pruned; settings.db keeps its own on-change copies.
+	migrated  []*store.Store
 	directory string
 	cache     *settings.Cache
 	clock     clock.Clock
@@ -227,8 +229,20 @@ func (j backupCleanupJob) Run(_ context.Context, _ jobs.Job) error {
 			j.logger.Info("old backups removed", slog.String("database", target.Name()), slog.Int("count", len(removed)))
 		}
 	}
+	for _, target := range j.migrated {
+		removed, err := target.PrunePreMigration(j.directory, preMigrationCopiesKept)
+		if err != nil {
+			return fmt.Errorf("clean pre-migration copies of %s: %w", target.Name(), err)
+		}
+		if len(removed) > 0 {
+			j.logger.Info("old pre-migration copies removed", slog.String("database", target.Name()), slog.Int("count", len(removed)))
+		}
+	}
 	return nil
 }
+
+// preMigrationCopiesKept is the copy from before the last migration run and the one before it.
+const preMigrationCopiesKept = 2
 
 // registerMaintenanceJobs wires the maintenance jobs into the registry and the executor.
 func (p *process) registerMaintenanceJobs(registry *jobs.Registry, executor *jobs.Executor) error {
@@ -261,7 +275,7 @@ func (p *process) registerMaintenanceJobs(registry *jobs.Registry, executor *job
 		logger: p.logger,
 	})
 	executor.Handle(backupCleanupJobType, backupCleanupJob{
-		fs: p.fsys, stores: backedUp, directory: p.config.Paths.BackupDir, cache: p.cache, clock: clock.NewSystem(), logger: p.logger,
+		fs: p.fsys, stores: backedUp, migrated: []*store.Store{p.settings, p.jobs, p.library, p.statistics, p.metadata}, directory: p.config.Paths.BackupDir, cache: p.cache, clock: clock.NewSystem(), logger: p.logger,
 	})
 	return nil
 }

@@ -191,3 +191,45 @@ func TestPruneBackupsOlderThan_KeepsTheNewestThreeWhateverTheirAge(t *testing.T)
 		t.Errorf("removed %v with only three left, want none", removed)
 	}
 }
+
+func TestPrunePreMigration_KeepsTheNewestAndAnythingYoungerThanAWeek(t *testing.T) {
+	fixture := newMigrationFixture(t)
+	day := 24 * time.Hour
+	taken := map[int]string{}
+	previous := 0
+	for _, age := range []int{30, 20, 10, 3, 1} {
+		fixture.clock.Advance(time.Duration(previous-age) * day)
+		previous = age
+		path, err := fixture.store.Backup(t.Context(), fixture.backupDir, store.BackupPreMigration)
+		if err != nil {
+			t.Fatalf("Backup: %v", err)
+		}
+		taken[age] = path
+	}
+	rotation, err := fixture.store.Backup(t.Context(), fixture.backupDir, store.BackupRotation)
+	if err != nil {
+		t.Fatalf("Backup: %v", err)
+	}
+	fixture.clock.Advance(day)
+
+	removed, err := fixture.store.PrunePreMigration(fixture.backupDir, 0)
+	if err != nil {
+		t.Fatalf("PrunePreMigration: %v", err)
+	}
+	if want := []string{taken[10], taken[20], taken[30]}; !slices.Equal(sorted(removed), sorted(want)) {
+		t.Errorf("removed %v, want the copies older than a week beyond the newest %v", removed, want)
+	}
+	remaining, err := fixture.store.ListBackups(fixture.backupDir)
+	if err != nil {
+		t.Fatalf("ListBackups: %v", err)
+	}
+	if want := []string{rotation, taken[1], taken[3]}; !slices.Equal(sorted(listNames(t, remaining)), sorted(want)) {
+		t.Errorf("remaining %v, want %v", listNames(t, remaining), want)
+	}
+}
+
+func sorted(items []string) []string {
+	copied := slices.Clone(items)
+	slices.Sort(copied)
+	return copied
+}
