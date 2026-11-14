@@ -227,13 +227,13 @@ func (q *Queries) CountVideoWithoutOshash(ctx context.Context) (int64, error) {
 }
 
 const createMediaObject = `-- name: CreateMediaObject :execlastid
-INSERT INTO media_object (size_bytes, quick_hash, content_hash, oshash, phash,
+INSERT INTO media_object (id, size_bytes, quick_hash, content_hash, oshash, phash,
                           audio_fp, audio_fp_prefix, fingerprinted_at,
                           claimed_attributes_id, measured_attributes_id,
                           attribute_mismatch_json, duration_ms, width, height,
                           video_bitrate, audio_bitrate, overall_bitrate,
                           probe_json, first_seen_at, verified_at, kind)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES ((SELECT MAX(COALESCE((SELECT MAX(id) FROM media_object), 0), COALESCE((SELECT value FROM id_high_water WHERE name = 'media_object'), 0)) + 1), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateMediaObjectParams struct {

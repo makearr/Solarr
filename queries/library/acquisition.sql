@@ -1,13 +1,13 @@
 -- Candidates, decisions and provenance. Column lists follow table order.
 
 -- name: CreateAcquisition :one
-INSERT INTO acquisition (desired_item_id, candidate_id, indexer_id, candidate_guid,
+INSERT INTO acquisition (id, desired_item_id, candidate_id, indexer_id, candidate_guid,
                          candidate_title, search_terms, downloader_id,
                          download_client_ref, download_dir, client_category,
                          client_fingerprint, protocol, ddl_resolved_url,
                          ddl_bytes_done, ddl_resumable, state, last_error,
                          created_at, updated_at, content_hash, size_bytes)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES ((SELECT MAX(COALESCE((SELECT MAX(id) FROM acquisition), 0), COALESCE((SELECT value FROM id_high_water WHERE name = 'acquisition'), 0)) + 1), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, desired_item_id, candidate_id, indexer_id, candidate_guid,
           candidate_title, search_terms, downloader_id, download_client_ref,
           download_dir, client_category, client_fingerprint, protocol,

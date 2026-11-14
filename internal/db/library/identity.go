@@ -326,7 +326,8 @@ func findOrCreateWorks(
 		// One writer per database (ADR-3): inside this transaction nothing else can take these ids,
 		// and explicit ids keep links and rows paired, which RETURNING's order does not promise.
 		var maxID int64
-		if err := tx.QueryRowContext(ctx, "SELECT COALESCE(MAX(id), 0) FROM work").Scan(&maxID); err != nil {
+		if err := tx.QueryRowContext(ctx, "SELECT MAX(COALESCE((SELECT MAX(id) FROM work), 0),"+
+			" COALESCE((SELECT value FROM id_high_water WHERE name = 'work'), 0))").Scan(&maxID); err != nil {
 			return nil, nil, fmt.Errorf("library: next work id: %w", err)
 		}
 		for start := 0; start < len(fresh); start += insertChunk {

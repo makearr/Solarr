@@ -1,11 +1,11 @@
 -- Desired state. Column lists follow table order, or sqlc stops reusing models.
 
 -- name: CreateDesiredItem :one
-INSERT INTO desired_item (work_id, edition_id, media_ref, media_sort_key, category_id,
+INSERT INTO desired_item (id, work_id, edition_id, media_ref, media_sort_key, category_id,
                           profile_id, monitored, satisfaction_kind, required_count,
                           present_count, state, available_from, available_confidence,
                           available_basis, dirty, generation, last_planned_at, added_by)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES ((SELECT MAX(COALESCE((SELECT MAX(id) FROM desired_item), 0), COALESCE((SELECT value FROM id_high_water WHERE name = 'desired_item'), 0)) + 1), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, work_id, edition_id, media_ref, media_sort_key, category_id, profile_id,
           monitored, satisfaction_kind, required_count, present_count, state,
           available_from, available_confidence, available_basis, dirty, generation,

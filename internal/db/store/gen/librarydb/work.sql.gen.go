@@ -361,9 +361,9 @@ func (q *Queries) CreateEdition(ctx context.Context, arg CreateEditionParams) (E
 
 const createWork = `-- name: CreateWork :one
 
-INSERT INTO work (media_type, canonical_title, sort_title, original_language,
+INSERT INTO work (id, media_type, canonical_title, sort_title, original_language,
                   year, runtime_ms, added_at, updated_at, added_by, subtype)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES ((SELECT MAX(COALESCE((SELECT MAX(id) FROM work), 0), COALESCE((SELECT value FROM id_high_water WHERE name = 'work'), 0)) + 1), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, media_type, canonical_title, sort_title, original_language,
           year, runtime_ms, added_at, updated_at, added_by, description,
           lead_person_id, lead_person_sort_name, subtype

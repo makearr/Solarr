@@ -249,6 +249,36 @@ func TestDeletingAWorkCascades(t *testing.T) {
 	}
 }
 
+// Jobs and open pages outside library.db keep ids, so a deleted top row's id must not come back.
+func TestDeletedWorkIDIsNeverReused(t *testing.T) {
+	opened, _ := newLibrary(t)
+	createWork(t, opened, "movie", "Alpha")
+	createWork(t, opened, "movie", "Beta")
+	top := createWork(t, opened, "movie", "Gamma")
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.DeleteWork(ctx, top.ID)
+	})
+
+	next := createWork(t, opened, "movie", "Delta")
+	if next.ID != top.ID+1 {
+		t.Errorf("new work id %d, want %d: the deleted work's id %d was handed out again", next.ID, top.ID+1, top.ID)
+	}
+}
+
+// Every table that hands out ids must record the highest one it deleted.
+func TestEveryIDHighWaterTableHasItsTrigger(t *testing.T) {
+	opened, _ := newLibrary(t)
+	for _, table := range []string{"work", "media_object", "desired_item", "acquisition"} {
+		var triggers int
+		err := opened.Read().QueryRowContext(t.Context(),
+			"SELECT count(*) FROM sqlite_schema WHERE type = 'trigger' AND tbl_name = ? AND name = ?",
+			table, table+"_high_water").Scan(&triggers)
+		if err != nil || triggers != 1 {
+			t.Errorf("%s: %d high-water triggers (err %v), want 1", table, triggers, err)
+		}
+	}
+}
+
 // ADR-8, Invariant 13: providers disagree, and each keeps its own value so a
 // manual override can win without the losing value being destroyed.
 func TestFieldsAreStoredPerProvider(t *testing.T) {

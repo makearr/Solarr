@@ -395,6 +395,11 @@ type HuntQueue struct {
 	AfterFailure   int64
 }
 
+type IDHighWater struct {
+	Name  string
+	Value int64
+}
+
 type IdentificationAttempt struct {
 	ID            int64
 	MediaObjectID int64
