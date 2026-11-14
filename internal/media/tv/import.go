@@ -123,6 +123,9 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 	var upgrade bool
 	if request.AcquisitionID != nil {
 		seeded, upgrade = i.seedSeries(ctx, *request.AcquisitionID)
+		if request.ReleaseTitle == "" {
+			request.ReleaseTitle = i.releaseTitle(ctx, *request.AcquisitionID)
+		}
 	}
 	for index, unit := range request.Units {
 		decision := library.UnitDecision{UnitID: request.UnitIDs[index], Decision: library.UnitQueue, Reason: "no episode of a known series was found in it"}
@@ -155,6 +158,11 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 			result.Decisions[index] = decision
 		case errors.Is(err, errDuplicate):
 			decision.Decision, decision.Reason = library.UnitSkip, batch.ReasonDuplicate
+			result.Decisions[index] = decision
+		case errors.Is(err, errUnnamed):
+			// Held for a person: the files are good, only the episode cannot be told from any name.
+			decision.WorkID = &workID
+			decision.Reason = "which episode this is could not be told from its name"
 			result.Decisions[index] = decision
 		case errors.As(err, &refused):
 			// Held for a person with the rule that refused it, as Sonarr leaves such a file in the download folder.
@@ -217,9 +225,11 @@ func (i Importer) CommitHeld(ctx context.Context, request batch.HeldRequest) (li
 		seeded, upgradable := i.seedSeries(ctx, *request.AcquisitionID)
 		upgrade = upgradable && workID == seeded
 	}
-	placed, err := i.placeUnit(ctx, batch.Request{
-		SessionID: request.SessionID, CategoryID: request.CategoryID, SourcePath: request.SourcePath,
-	}, request.Unit, workID, upgrade)
+	placeRequest := batch.Request{SessionID: request.SessionID, CategoryID: request.CategoryID, SourcePath: request.SourcePath}
+	if request.AcquisitionID != nil {
+		placeRequest.ReleaseTitle = i.releaseTitle(ctx, *request.AcquisitionID)
+	}
+	placed, err := i.placeUnit(ctx, placeRequest, request.Unit, workID, upgrade)
 	if errors.Is(err, errNothingToPlace) || errors.Is(err, errDuplicate) {
 		return library.Placement{}, batch.ErrNothingToPlace
 	}
@@ -241,6 +251,15 @@ func firstMedia(unit inspect.Unit) string {
 		return unit.Media[0].RelPath
 	}
 	return ""
+}
+
+// releaseTitle is the release name a download was grabbed as, empty when the acquisition cannot be read.
+func (i Importer) releaseTitle(ctx context.Context, acquisitionID int64) string {
+	acquisition, err := i.config.Acquisitions.Get(ctx, acquisitionID)
+	if err != nil {
+		return ""
+	}
+	return acquisition.CandidateTitle
 }
 
 // seedSeries is the series a download was grabbed for: its desired item's work; upgrade says the item was below its
@@ -292,6 +311,9 @@ func (i Importer) screen(ctx context.Context, sourceAbs string, info parsetv.Inf
 // defaultEpisodeMinutes is what Sonarr assumes an episode runs when nothing says.
 const defaultEpisodeMinutes = 45
 
+// errUnnamed is a unit whose files are wanted but whose episode no name, folder or release title tells.
+var errUnnamed = errors.New("tv: the episode of the unit's files cannot be told from any name")
+
 var errNothingToPlace = errors.New("tv: no file of the unit covers an episode that is wanted")
 
 // errDuplicate is a unit whose files all show pictures the series holds already, in a file that needs no replacing.
@@ -306,6 +328,31 @@ type fileEpisodes struct {
 	replacing bool
 	// hash is the file's pictures when the duplicate check read them, kept with the placed file for the next download.
 	hash *mediatool.VideoHash
+}
+
+func countVideos(unit inspect.Unit) int {
+	videos := 0
+	for _, media := range unit.Media {
+		if media.SizeBytes >= batch.VideoSizeFloorBytes {
+			videos++
+		}
+	}
+	return videos
+}
+
+// nameFromRelease reads the episode of an unnamed file from the download's folder, then from the release title it was grabbed as.
+func (i Importer) nameFromRelease(request batch.Request, media inspect.File, now time.Time) (parsetv.Info, bool) {
+	if info, ok := parsetv.ParsePath(path.Join(path.Base(request.SourcePath), media.RelPath), now); ok {
+		i.logger.Info("tv import: episode named by the download folder", slog.String("file", media.RelPath))
+		return info, true
+	}
+	if request.ReleaseTitle != "" {
+		if info, ok := parsetv.Parse(request.ReleaseTitle, now); ok {
+			i.logger.Info("tv import: episode named by the release title", slog.String("file", media.RelPath))
+			return info, true
+		}
+	}
+	return parsetv.Info{}, false
 }
 
 func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit inspect.Unit, workID int64, upgrade bool) (*library.Placement, error) {
@@ -332,10 +379,17 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 	var files []fileEpisodes
 	var rejections []model.Rejection
 	var totalBytes int64
-	duplicates := 0
+	duplicates, unparsed := 0, 0
+	// Only a unit with a single video file can take its episode from the job folder or the release name; for a
+	// season pack of obfuscated files nothing can be inferred.
+	single := countVideos(unit) == 1 || len(unit.Media) == 1
 	for _, media := range unit.Media {
 		info, ok := parsetv.ParsePath(media.RelPath, now)
+		if !ok && single {
+			info, ok = i.nameFromRelease(request, media, now)
+		}
 		if !ok {
+			unparsed++
 			continue
 		}
 		parts, _, err := i.config.Series.ResolveParts(ctx, workID, scene.partKeys(info))
@@ -381,6 +435,9 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		}
 		if duplicates > 0 {
 			return nil, errDuplicate
+		}
+		if unparsed > 0 {
+			return nil, errUnnamed
 		}
 		return nil, errNothingToPlace
 	}

@@ -50,7 +50,10 @@ type Request struct {
 	// AcquisitionID is the download this import brings in, nil for a folder a person pointed at.
 	AcquisitionID *int64
 	SourcePath    string
-	Units         []inspect.Unit
+	// ReleaseTitle is the release name the download was grabbed as, the one place an obfuscated download keeps it;
+	// empty for a folder a person pointed at.
+	ReleaseTitle string
+	Units        []inspect.Unit
 	// UnitIDs is parallel to Units: the import_unit rows already recorded for them.
 	UnitIDs []int64
 	// Preview holds every unit that would commit for a person instead.

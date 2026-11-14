@@ -354,3 +354,61 @@ func TestImportTakesTheSeriesFromATvshowNfoInTheDownload(t *testing.T) {
 		t.Fatalf("import with the nfo: %+v, %v", result.Decisions, err)
 	}
 }
+
+// An obfuscated download keeps its release name in the job folder and in the title it was grabbed as; the file name says nothing.
+func TestImportNamesAnObfuscatedFileFromItsFolderOrItsReleaseTitle(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		folder       string
+		releaseTitle string
+		wantDecision string
+		wantPlaced   bool
+	}{
+		{"the job folder names the episode", "Example.Show.S01E01.1080p.WEB-DL.DDP5.1.H.264-GRP", "", library.UnitCommit, true},
+		{"the release title names the episode", "Example Show", "Example.Show.S01E01.1080p.WEB-DL.DDP5.1.H.264-GRP", library.UnitCommit, true},
+		{"nothing names the episode and it is held for a person", "Example Show", "", library.UnitQueue, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			service, opened := newService(t, searchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
+			fake := clock.NewFakeAtEpoch()
+			fake.Set(addNow)
+			fsys := fsx.NewMem(fake)
+			source := path.Join("/downloads", test.folder)
+			for _, dir := range []string{source, "/library"} {
+				if err := fsys.MkdirAll(dir, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			file, err := fsys.Create(path.Join(source, "a8f3e9c1d2.mkv"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _ = file.Write([]byte("episode"))
+			_ = file.Close()
+			unit := inspect.Unit{Media: []inspect.File{{RelPath: "a8f3e9c1d2.mkv", SizeBytes: 7, Class: inspect.ClassMedia}}}
+
+			free, total := int64(1<<40), int64(1<<40)
+			reader := library.NewSeriesReader(opened)
+			importer := tv.NewImporter(tv.ImporterConfig{
+				FS: fsys, Roots: oneRoot{settings.RootFolder{ID: 9, Path: "/library", Online: true, Writable: true, FreeBytes: &free, TotalBytes: &total}},
+				Affinity: memoryAffinity{}, Physical: library.NewPhysical(opened), Series: service.Series, Reader: reader,
+				Identity: library.NewIdentity(opened), Desired: library.NewDesired(opened), Acquisitions: noAcquisition{},
+				Resolver:   tv.Resolver{Service: service, Reader: reader, Clock: fake, DefaultProfileID: 1, Categories: categories{}},
+				Categories: categories{}, Clock: fake,
+			})
+			result, err := importer.ImportBatch(t.Context(), batch.Request{
+				SessionID: 1, CategoryID: 3, SourcePath: source, ReleaseTitle: test.releaseTitle,
+				Units: []inspect.Unit{unit}, UnitIDs: []int64{1},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := result.Decisions[0].Decision; got != test.wantDecision || (result.Placements[0] != nil) != test.wantPlaced {
+				t.Errorf("decision %q placed %v (%+v), want %q placed %v", got, result.Placements[0] != nil, result.Decisions[0], test.wantDecision, test.wantPlaced)
+			}
+			if !test.wantPlaced && result.Decisions[0].WorkID == nil {
+				t.Error("the held unit lost its series")
+			}
+		})
+	}
+}
