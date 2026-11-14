@@ -70,8 +70,17 @@ CREATE TABLE IF NOT EXISTS schema_migration (
   PRIMARY KEY (owner, version)
 ) WITHOUT ROWID`
 
-// Migrate applies every owner's pending migrations, in version order per owner (§4.4).
+// Migrate applies every owner's pending migrations, in version order per owner (§4.4),
+// then refreshes the planner statistics: they go stale when a migration fills a table, and
+// a process killed before shutdown never ran the shutdown pass.
 func Migrate(ctx context.Context, s *Store, backupDirectory string, owners ...Owner) error {
+	if err := applyPending(ctx, s, backupDirectory, owners); err != nil {
+		return err
+	}
+	return s.Analyze(ctx)
+}
+
+func applyPending(ctx context.Context, s *Store, backupDirectory string, owners []Owner) error {
 	if err := validateOwners(owners); err != nil {
 		return err
 	}

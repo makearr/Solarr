@@ -273,11 +273,12 @@ func (s *Store) Close() error {
 // shutdownMaintenance truncates the WAL and updates the query planner's statistics on a
 // clean shutdown (section 15.2 step 6).
 func (s *Store) shutdownMaintenance() {
-	for _, statement := range []string{"PRAGMA wal_checkpoint(TRUNCATE)", "PRAGMA optimize"} {
-		if _, err := s.write.Exec(statement); err != nil {
-			s.logger.Warn("shutdown maintenance",
-				slog.String("statement", statement), slog.Any("error", err))
-		}
+	if _, err := s.write.Exec("PRAGMA wal_checkpoint(TRUNCATE)"); err != nil {
+		s.logger.Warn("shutdown maintenance",
+			slog.String("statement", "PRAGMA wal_checkpoint(TRUNCATE)"), slog.Any("error", err))
+	}
+	if err := optimizeAll(context.Background(), s.write); err != nil {
+		s.logger.Warn("shutdown maintenance", slog.String("statement", "optimize"), slog.Any("error", err))
 	}
 }
 
