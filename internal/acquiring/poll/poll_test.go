@@ -910,6 +910,24 @@ func TestPoll_ADownloadFirstSeenFinishedMeasuresNothing(t *testing.T) {
 	}
 }
 
+// A job a person deleted in the client is theirs to have deleted: recorded, not blocklisted, not searched again.
+func TestPoll_ADownloadTheClientDroppedIsNotBlocklistedOrSearchedAgain(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "nzo-1", State: download.StateRemoved, Error: "NZBGet reports DELETED/MANUAL"}}
+	e.run(t)
+	if got := e.state(t, sent.ID); got.State != poll.StateFailed || got.LastError != "NZBGet reports DELETED/MANUAL" {
+		t.Errorf("= %s %q, want FAILED with the client's reason", got.State, got.LastError)
+	}
+	indexerID := int64(3)
+	if blocked, err := e.blocklist.IsBlocked(t.Context(), &indexerID, "guid-nzo-1", "", e.clock.Now().Unix()); err != nil || blocked {
+		t.Errorf("blocklisted = %v, %v; want the release left alone", blocked, err)
+	}
+	if len(e.searched) != 0 {
+		t.Errorf("searched %v, want no new search", e.searched)
+	}
+}
+
 // A client that answers by reference is asked for these downloads alone, so a finished one cannot fall out of a window.
 type referencingClient struct {
 	*fakeClient

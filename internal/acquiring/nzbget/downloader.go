@@ -68,7 +68,7 @@ func (d Downloader) Downloads(ctx context.Context, _ string) ([]download.Downloa
 			if entry.Path == "" {
 				entry.Path = item.DestDir
 			}
-		case download.StateFailed:
+		case download.StateFailed, download.StateRemoved:
 			entry.Error = "NZBGet reports " + item.Status
 		}
 		downloads = append(downloads, entry)
@@ -99,6 +99,9 @@ func historyState(status string) download.State {
 	switch {
 	case kind == "SUCCESS", kind == "WARNING" && detail == "SCRIPT":
 		return download.StateCompleted
+	case kind == "DELETED" && (detail == "MANUAL" || detail == "DUPE" || detail == "COPY" || detail == "GOOD"):
+		// A person's deletion, or NZBGet's own duplicate check: not a bad release, so not a failure to blocklist.
+		return download.StateRemoved
 	}
 	return download.StateFailed
 }

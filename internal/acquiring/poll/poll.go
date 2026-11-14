@@ -386,6 +386,9 @@ func (j *Job) advance(
 	switch entry.State {
 	case download.StateCompleted:
 		return j.completed(ctx, client, acquisition, entry)
+	case download.StateRemoved:
+		// The client dropped it (a person, or its own duplicate check): recorded, never sent again on our own.
+		return j.setFailed(ctx, acquisition, entry.Error)
 	case download.StateFailed:
 		return j.failed(ctx, client, acquisition, library.BlocklistDownloadFailed, entry.Error)
 	case download.StateDownloading, download.StateProcessing:

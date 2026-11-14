@@ -20,6 +20,9 @@ const (
 	StateProcessing State = "processing"
 	StateCompleted  State = "completed"
 	StateFailed     State = "failed"
+	// StateRemoved is a download the client dropped for a reason that is not the release's fault: a person deleted
+	// it, or the client already had that release. It is neither blocklisted nor searched for again.
+	StateRemoved State = "removed"
 )
 
 // HistoryKind is what happened to a download, as History and an album's page show it (section 5.7).
