@@ -279,7 +279,7 @@ func TestGetForPerson_ReportsAReadFailure(t *testing.T) {
 func TestGetForWork_ReportsTheCategoriesWantingTheWork(t *testing.T) {
 	opened, _ := newLibrary(t)
 	artworks := library.NewArtworks(opened)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 	if _, err := library.NewDesired(opened).EnsureAlbumItem(t.Context(), library.AlbumRequest{
 		WorkID: work.ID, CategoryID: 7, ProfileID: 1, Monitored: true,
 	}); err != nil {

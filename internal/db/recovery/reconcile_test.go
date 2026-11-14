@@ -73,7 +73,7 @@ func (f fixture) desiredItem(t *testing.T, categoryID int64) {
 	err := f.library.Write(t.Context(), store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(f.library.Read()).WithTx(tx)
 		work, err := queries.CreateWork(ctx, librarydb.CreateWorkParams{
-			MediaType: "music", CanonicalTitle: "Tender Prey", SortTitle: "Tender Prey",
+			MediaType: "music", CanonicalTitle: "Quiet Harbour", SortTitle: "Quiet Harbour",
 			AddedAt: 1, UpdatedAt: 1,
 		})
 		if err != nil {

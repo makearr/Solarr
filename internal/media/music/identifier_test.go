@@ -92,7 +92,7 @@ func TestIdentify_FallsBackThroughTheLevelsWithFallingConfidence(t *testing.T) {
 // Not an error: a file with no MusicBrainz identity is exactly what the later,
 // more expensive strategies exist for (ADR-24).
 func TestIdentify_SaysNothingRatherThanFailingWhenThereIsNoMBID(t *testing.T) {
-	if found := identify(t, mediatool.Tags{"artist": "Nick Cave"}); found != nil {
+	if found := identify(t, mediatool.Tags{"artist": "Vessa Lund"}); found != nil {
 		t.Errorf("got %+v for an untagged file, want nothing", found)
 	}
 }

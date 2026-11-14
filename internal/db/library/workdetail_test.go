@@ -275,7 +275,7 @@ func TestWorkDetail_MissingWorkReportsNoRows(t *testing.T) {
 func TestWorkDetail_ReportsWhichPartsHaveAFile(t *testing.T) {
 	opened, _ := newLibrary(t)
 	works := library.NewWorks(opened)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 
 	var present, absent librarydb.WorkPart
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {

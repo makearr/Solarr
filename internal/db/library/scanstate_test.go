@@ -59,7 +59,7 @@ func TestScanFinish_MovesTheWatermarkAndClearsTheCursor(t *testing.T) {
 	if err := scans.Start(t.Context(), 1, sweepStart, library.ScanRun{StartedAt: sweepStart}); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if err := scans.Advance(t.Context(), 1, "Nick Cave/Tender Prey", 1); err != nil {
+	if err := scans.Advance(t.Context(), 1, "Vessa Lund/Quiet Harbour", 1); err != nil {
 		t.Fatalf("Advance: %v", err)
 	}
 	err := scans.Finish(t.Context(), 1, library.FinishedScan{
@@ -128,7 +128,7 @@ func TestScanStart_KeepsTheCursorOfAnInterruptedSweep(t *testing.T) {
 	if err := scans.Start(t.Context(), 1, sweepStart, library.ScanRun{StartedAt: sweepStart}); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if err := scans.Advance(t.Context(), 1, "Nick Cave", 1); err != nil {
+	if err := scans.Advance(t.Context(), 1, "Vessa Lund", 1); err != nil {
 		t.Fatalf("Advance: %v", err)
 	}
 	restarted := sweepStart.Add(time.Hour)
@@ -140,7 +140,7 @@ func TestScanStart_KeepsTheCursorOfAnInterruptedSweep(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Progress: %v", err)
 	}
-	if progress.Cursor != "Nick Cave" {
+	if progress.Cursor != "Vessa Lund" {
 		t.Errorf("Cursor = %q, want the interrupted run's resume point", progress.Cursor)
 	}
 	if !progress.StartedAt.Equal(restarted) {

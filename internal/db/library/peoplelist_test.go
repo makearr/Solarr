@@ -197,14 +197,14 @@ func TestPeopleGet_IncludesAliasesBiographyAndLibraries(t *testing.T) {
 
 	personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
 		Provider: "musicbrainz:artist", ExternalID: "artist-1",
-		Person: library.PersonIdentity{Name: "Nick Cave", Biography: "Australian musician."},
+		Person: library.PersonIdentity{Name: "Vessa Lund", Biography: "A musician."},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
 	}
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
 		return q.AddPersonAlias(ctx, librarydb.AddPersonAliasParams{
-			PersonID: personID, Alias: "Nick Cave and the Bad Seeds", Normalized: "nick cave and the bad seeds", Source: "musicbrainz",
+			PersonID: personID, Alias: "Vessa Lund and the Low Tides", Normalized: "vessa lund and the low tides", Source: "musicbrainz",
 		})
 	})
 	workID := newWorkForCredits(t, identity, queries, "rg-detail-1")
@@ -217,10 +217,10 @@ func TestPeopleGet_IncludesAliasesBiographyAndLibraries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if profile.Name != "Nick Cave" || profile.Biography != "Australian musician." || profile.IDs["musicbrainz:artist"] != "artist-1" {
+	if profile.Name != "Vessa Lund" || profile.Biography != "A musician." || profile.IDs["musicbrainz:artist"] != "artist-1" {
 		t.Errorf("profile = %+v, want the name, the decoded biography and the artist id", profile)
 	}
-	if !slices.Equal(profile.Aliases, []string{"Nick Cave and the Bad Seeds"}) {
+	if !slices.Equal(profile.Aliases, []string{"Vessa Lund and the Low Tides"}) {
 		t.Errorf("Aliases = %+v, want the one alias", profile.Aliases)
 	}
 	if want := []library.PersonLibrary{{CategoryID: 3, Role: "artist", Works: 1}}; !slices.Equal(profile.Libraries, want) {

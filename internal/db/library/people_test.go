@@ -216,15 +216,15 @@ func TestPersonDetail_GenresAreTheUnionOfDiscographyTags(t *testing.T) {
 // release to a person (ADR-32).
 func TestAliasesResolveToThePerson(t *testing.T) {
 	opened, queries := newLibrary(t)
-	person := createPerson(t, opened, "Nicholas Edward Cave")
+	person := createPerson(t, opened, "Valerie Anne Lund")
 
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
 		return q.AddPersonAlias(ctx, librarydb.AddPersonAliasParams{
-			PersonID: person.ID, Alias: "Nick Cave", Normalized: "nick cave", Source: "musicbrainz",
+			PersonID: person.ID, Alias: "Vessa Lund", Normalized: "vessa lund", Source: "musicbrainz",
 		})
 	})
 
-	found, err := queries.FindPeopleByAlias(t.Context(), "nick cave")
+	found, err := queries.FindPeopleByAlias(t.Context(), "vessa lund")
 	if err != nil {
 		t.Fatalf("FindPeopleByAlias: %v", err)
 	}
@@ -327,7 +327,7 @@ func TestAProviderRefreshLeavesUserTagsAlone(t *testing.T) {
 // (ADR-8), or a subscription follows half a filmography.
 func TestPersonExternalIDResolves(t *testing.T) {
 	opened, queries := newLibrary(t)
-	person := createPerson(t, opened, "Nick Cave")
+	person := createPerson(t, opened, "Vessa Lund")
 
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
 		return q.LinkPersonExternalID(ctx, librarydb.LinkPersonExternalIDParams{
@@ -348,7 +348,7 @@ func TestPersonExternalIDResolves(t *testing.T) {
 // One subscription per subject, user and library, or a double-click follows a person twice.
 func TestSubscriptionsAreUniquePerSubjectUserAndLibrary(t *testing.T) {
 	opened, _ := newLibrary(t)
-	person := createPerson(t, opened, "Nick Cave")
+	person := createPerson(t, opened, "Vessa Lund")
 
 	subscribe := func() error {
 		return opened.Write(t.Context(), store.PrioInteractive,
@@ -373,8 +373,8 @@ func TestSubscriptionsAreUniquePerSubjectUserAndLibrary(t *testing.T) {
 // Removing a person takes their credits and aliases with them.
 func TestDeletingAPersonCascades(t *testing.T) {
 	opened, queries := newLibrary(t)
-	person := createPerson(t, opened, "Nick Cave")
-	work := createWork(t, opened, "music", "Tender Prey")
+	person := createPerson(t, opened, "Vessa Lund")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
 		if err := q.AddCredit(ctx, librarydb.AddCreditParams{
@@ -383,7 +383,7 @@ func TestDeletingAPersonCascades(t *testing.T) {
 			return err
 		}
 		return q.AddPersonAlias(ctx, librarydb.AddPersonAliasParams{
-			PersonID: person.ID, Alias: "Nick", Normalized: "nick", Source: "user",
+			PersonID: person.ID, Alias: "Val", Normalized: "val", Source: "user",
 		})
 	})
 
@@ -398,7 +398,7 @@ func TestDeletingAPersonCascades(t *testing.T) {
 	if len(credits) != 0 {
 		t.Errorf("%d credits survived the person", len(credits))
 	}
-	aliases, err := queries.FindPeopleByAlias(t.Context(), "nick")
+	aliases, err := queries.FindPeopleByAlias(t.Context(), "val")
 	if err != nil {
 		t.Fatalf("FindPeopleByAlias: %v", err)
 	}

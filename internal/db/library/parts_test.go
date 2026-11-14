@@ -33,7 +33,7 @@ func createPart(t *testing.T, opened *store.Store, workID int64, mediaRef, sortK
 // order by media_ref would return exactly the wrong answer.
 func TestPartsOrderByTheirSortKeyNotTheirReference(t *testing.T) {
 	opened, queries := newLibrary(t)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 
 	createPart(t, opened, work.ID, "disc1:track09", "0003", "Mercy")
 	createPart(t, opened, work.ID, "disc1:track01", "0009", "The Furab Keke")
@@ -60,7 +60,7 @@ func TestPartsOrderByTheirSortKeyNotTheirReference(t *testing.T) {
 // recording and two parts. Finding both is what makes the duplicate answerable.
 func TestOneRecordingOnTwoAlbumsResolvesToBothParts(t *testing.T) {
 	opened, queries := newLibrary(t)
-	album := createWork(t, opened, "music", "Tender Prey")
+	album := createWork(t, opened, "music", "Quiet Harbour")
 	compilation := createWork(t, opened, "music", "The Best Of")
 
 	onAlbum := createPart(t, opened, album.ID, "disc1:track01", "0001", "The Furab Keke")
@@ -310,7 +310,7 @@ func TestTheSameRoleSurvivesAtTwoScopes(t *testing.T) {
 	opened, queries := newLibrary(t)
 	work := createWork(t, opened, "music", "Grinderman")
 	part := createPart(t, opened, work.ID, "disc1:track03", "0003", "No Tepen Blues")
-	person := createPerson(t, opened, "Nick Cave")
+	person := createPerson(t, opened, "Vessa Lund")
 
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
 		if err := q.AddCredit(ctx, librarydb.AddCreditParams{
@@ -414,7 +414,7 @@ func TestAnUnmonitoredPartKeepsItsAirDate(t *testing.T) {
 // and the numbering with it rather than leaving them to accumulate.
 func TestDeletingAWorkTakesItsPartsWithIt(t *testing.T) {
 	opened, queries := newLibrary(t)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 	part := createPart(t, opened, work.ID, "disc1:track01", "0001", "The Furab Keke")
 
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {

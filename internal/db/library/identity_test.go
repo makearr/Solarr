@@ -87,7 +87,7 @@ func addTrack(t *testing.T, opened *store.Store, workID int64) {
 // Resolving one back to its work is the first step of the Identifier chain.
 func TestExternalIDResolvesToItsWork(t *testing.T) {
 	opened, queries := newLibrary(t)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
 		return q.LinkWorkExternalID(ctx, librarydb.LinkWorkExternalIDParams{
@@ -138,7 +138,7 @@ func TestExternalIDCanBeRepointed(t *testing.T) {
 // and identifying from embedded tags depends on both resolving separately.
 func TestEditionAndWorkResolveIndependently(t *testing.T) {
 	opened, queries := newLibrary(t)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 
 	var edition librarydb.Edition
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
@@ -357,7 +357,7 @@ func TestForeignKeysAreEnforced(t *testing.T) {
 // not live"), so the classification has to be a value to filter on.
 func TestClassificationSelectsWorks(t *testing.T) {
 	opened, queries := newLibrary(t)
-	studio := createWork(t, opened, "music", "Tender Prey")
+	studio := createWork(t, opened, "music", "Quiet Harbour")
 	live := createWork(t, opened, "music", "Live Seeds")
 
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {

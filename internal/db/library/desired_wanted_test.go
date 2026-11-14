@@ -13,7 +13,7 @@ import (
 func TestEnsureAlbumItem_CreatesASetItemWithNoRequiredCountBeforeAnyPartsExist(t *testing.T) {
 	opened, _ := newLibrary(t)
 	desired := library.NewDesired(opened)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 
 	item, err := desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{
 		WorkID: work.ID, CategoryID: 1, ProfileID: 1, Monitored: true,
@@ -35,7 +35,7 @@ func TestEnsureAlbumItem_CreatesASetItemWithNoRequiredCountBeforeAnyPartsExist(t
 func TestEnsureAlbumItem_IsIdempotentAndNeverOverwritesAnExistingItemsPolicy(t *testing.T) {
 	opened, queries := newLibrary(t)
 	desired := library.NewDesired(opened)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 
 	first, err := desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{
 		WorkID: work.ID, CategoryID: 1, ProfileID: 1, Monitored: true,
@@ -72,7 +72,7 @@ func TestEnsureAlbumItem_IsIdempotentAndNeverOverwritesAnExistingItemsPolicy(t *
 func TestRecordAlignment_NineOfTwelveTracksIsARealFactNotABadge(t *testing.T) {
 	opened, _ := newLibrary(t)
 	desired := library.NewDesired(opened)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 
 	for track := 1; track <= 12; track++ {
 		createPart(t, opened, work.ID, mediaRefFor(track), sortKeyFor(track), titleFor(track))
@@ -156,7 +156,7 @@ func TestRecordAlignment_CompletesWhenEveryPartIsCovered(t *testing.T) {
 func TestSetPartMonitored_UnmonitoringATrackShrinksRequiredCount(t *testing.T) {
 	opened, _ := newLibrary(t)
 	desired := library.NewDesired(opened)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 	createPart(t, opened, work.ID, "disc1:track1", "00010001", "Track One")
 	bonus := createPart(t, opened, work.ID, "disc1:track2", "00010002", "Bonus Track")
 
@@ -213,7 +213,7 @@ func TestSetPartMonitored_RejectsAMissingPart(t *testing.T) {
 func TestEnsureTrackItem_ResolvesAgainstARealPartNeverAGuessedIndex(t *testing.T) {
 	opened, _ := newLibrary(t)
 	desired := library.NewDesired(opened)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 	createPart(t, opened, work.ID, "disc1:track5", "00010005", "Deanna")
 
 	item, err := desired.EnsureTrackItem(t.Context(), library.TrackRequest{
@@ -239,7 +239,7 @@ func TestEnsureTrackItem_ResolvesAgainstARealPartNeverAGuessedIndex(t *testing.T
 func TestEnsureTrackItemByPart_ResolvesThePartIDToItsOwnMediaRef(t *testing.T) {
 	opened, _ := newLibrary(t)
 	desired := library.NewDesired(opened)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 	part := createPart(t, opened, work.ID, "disc1:track5", "00010005", "Deanna")
 
 	item, err := desired.EnsureTrackItemByPart(t.Context(), work.ID, part.ID, 1, 1, nil)

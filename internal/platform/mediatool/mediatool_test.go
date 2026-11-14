@@ -69,8 +69,8 @@ const flacProbe = `{
   "streams": [{"codec_name":"flac","codec_type":"audio","bit_rate":"705600",
                "sample_rate":"44100","channels":2,"duration":"215.000000"}],
   "format": {"format_name":"flac","duration":"215.000000","bit_rate":"705600",
-             "tags":{"MUSICBRAINZ_TRACKID":"track-mbid","ARTIST":"Nick Cave",
-                     "ALBUM":"Tender Prey"}}
+             "tags":{"MUSICBRAINZ_TRACKID":"track-mbid","ARTIST":"Vessa Lund",
+                     "ALBUM":"Quiet Harbour"}}
 }`
 
 func probeReplying(output string) func(string, string) ([]byte, error) {
@@ -88,8 +88,8 @@ func TestReadTags_LowercasesKeysSoTheContainerDoesNotLeak(t *testing.T) {
 	}
 
 	// Vorbis spells it ARTIST and ID3 spells it artist. A caller reads one name.
-	if got := probes[0].Tags["artist"]; got != "Nick Cave" {
-		t.Errorf("tags[artist] = %q, want Nick Cave", got)
+	if got := probes[0].Tags["artist"]; got != "Vessa Lund" {
+		t.Errorf("tags[artist] = %q, want Vessa Lund", got)
 	}
 	if got := probes[0].Tags.First("musicbrainz_trackid"); got != "track-mbid" {
 		t.Errorf("First(musicbrainz_trackid) = %q, want track-mbid", got)
@@ -408,9 +408,9 @@ func TestTagsFirst_IgnoresHowTheNameIsPunctuated(t *testing.T) {
 }
 
 func TestTagsFirst_TakesTheFirstNameThatIsPresentAndNotEmpty(t *testing.T) {
-	tags := mediatool.Tags{"albumartist": "", "artist": "Nick Cave"}
-	if got := tags.First("AlbumArtist", "Artist"); got != "Nick Cave" {
-		t.Errorf("First = %q, want Nick Cave: an empty tag is not a value", got)
+	tags := mediatool.Tags{"albumartist": "", "artist": "Vessa Lund"}
+	if got := tags.First("AlbumArtist", "Artist"); got != "Vessa Lund" {
+		t.Errorf("First = %q, want Vessa Lund: an empty tag is not a value", got)
 	}
 	if got := tags.First("composer"); got != "" {
 		t.Errorf("First(absent) = %q, want empty", got)

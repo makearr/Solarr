@@ -21,9 +21,9 @@ func searchOne(t *testing.T, results []library.SearchResult) librarydb.Work {
 
 func TestSearch_MatchesCanonicalTitle(t *testing.T) {
 	opened, _ := newLibrary(t)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 
-	results, err := library.NewSearch(opened).Works(t.Context(), "tender", "", nil, nil, 10)
+	results, err := library.NewSearch(opened).Works(t.Context(), "quiet", "", nil, nil, 10)
 	if err != nil {
 		t.Fatalf("Works: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestSearch_MatchesAnAlias(t *testing.T) {
 
 func TestSearch_MatchesAPartTitle(t *testing.T) {
 	opened, _ := newLibrary(t)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
 		_, err := q.CreateWorkPart(ctx, librarydb.CreateWorkPartParams{
 			WorkID: work.ID, MediaRef: "1:1", SortKey: "0001",
@@ -104,9 +104,9 @@ func TestSearch_MatchesAPartAltTitle(t *testing.T) {
 // still-being-typed query must match as a prefix, not only a complete word.
 func TestSearch_MatchesAsYouType(t *testing.T) {
 	opened, _ := newLibrary(t)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 
-	results, err := library.NewSearch(opened).Works(t.Context(), "tender pr", "", nil, nil, 10)
+	results, err := library.NewSearch(opened).Works(t.Context(), "quiet har", "", nil, nil, 10)
 	if err != nil {
 		t.Fatalf("Works: %v", err)
 	}

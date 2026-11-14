@@ -60,7 +60,7 @@ func TestReadMBIDs_RejectsAnythingThatIsNotAnMBID(t *testing.T) {
 		"too long":          releaseGroupMBID + "1",
 		"not hexadecimal":   "5b11f4ce-a62d-471e-81fc-a69a8278c75z",
 		"hyphens misplaced": "5b11f4cea-62d-471e-81fc-a69a8278c751",
-		"a title":           "Tender Prey",
+		"a title":           "Quiet Harbour",
 		"empty":             "",
 	} {
 		tags := mediatool.Tags{"musicbrainz_releasegroupid": value}
@@ -99,7 +99,7 @@ func TestReadMBIDs_SplitsAMultiValuedArtistTag(t *testing.T) {
 }
 
 func TestMBIDsEmpty_IsTrueOnlyWhenNothingWasFound(t *testing.T) {
-	if !music.ReadMBIDs(mediatool.Tags{"artist": "Nick Cave"}).Empty() {
+	if !music.ReadMBIDs(mediatool.Tags{"artist": "Vessa Lund"}).Empty() {
 		t.Error("tags with no MusicBrainz ids did not report empty")
 	}
 	if music.ReadMBIDs(mediatool.Tags{"musicbrainz_artistid": artistMBID}).Empty() {

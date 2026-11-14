@@ -13,7 +13,7 @@ import (
 func workDetailFixture() library.WorkDetail {
 	return library.WorkDetail{
 		Work: librarydb.Work{
-			ID: 1, CanonicalTitle: "Tender Prey", Year: sql.NullInt64{Int64: 1988, Valid: true},
+			ID: 1, CanonicalTitle: "Quiet Harbour", Year: sql.NullInt64{Int64: 1988, Valid: true},
 		},
 		Editions: []library.EditionDetail{
 			{Edition: librarydb.Edition{
@@ -27,7 +27,7 @@ func workDetailFixture() library.WorkDetail {
 				Title: sql.NullString{String: "The Furab Keke", Valid: true},
 			}},
 		},
-		Credits: []library.Credit{{PersonName: "Nick Cave and the Bad Seeds", Role: music.CreditRoleArtist}},
+		Credits: []library.Credit{{PersonName: "Vessa Lund and the Low Tides", Role: music.CreditRoleArtist}},
 	}
 }
 
@@ -39,7 +39,7 @@ func TestRenameTargetFor_RendersUnderTheDefaultTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenameTargetFor: %v", err)
 	}
-	want := "Nick Cave and the Bad Seeds/Tender Prey (1988)/Nick Cave and the Bad Seeds - 03 - The Furab Keke.flac"
+	want := "Vessa Lund and the Low Tides/Quiet Harbour (1988)/Vessa Lund and the Low Tides - 03 - The Furab Keke.flac"
 	if target.ProposedRelPath != want {
 		t.Errorf("ProposedRelPath = %q, want %q", target.ProposedRelPath, want)
 	}
@@ -62,7 +62,7 @@ func TestRenameTargetFor_FallsBackToWorkYearWithNoEdition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenameTargetFor: %v", err)
 	}
-	if target.ProposedRelPath != "Nick Cave and the Bad Seeds/Tender Prey (1988)/Nick Cave and the Bad Seeds - 03 - The Furab Keke.flac" {
+	if target.ProposedRelPath != "Vessa Lund and the Low Tides/Quiet Harbour (1988)/Vessa Lund and the Low Tides - 03 - The Furab Keke.flac" {
 		t.Errorf("ProposedRelPath = %q, want the work's own 1988 year, not the edition's 2010", target.ProposedRelPath)
 	}
 }
@@ -78,7 +78,7 @@ func TestRenameTargetFor_PrefersThePinnedEditionYear(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenameTargetFor: %v", err)
 	}
-	if target.ProposedRelPath != "Nick Cave and the Bad Seeds/Tender Prey (2010)/Nick Cave and the Bad Seeds - 03 - The Furab Keke.flac" {
+	if target.ProposedRelPath != "Vessa Lund and the Low Tides/Quiet Harbour (2010)/Vessa Lund and the Low Tides - 03 - The Furab Keke.flac" {
 		t.Errorf("ProposedRelPath = %q, want the pinned edition's own 2010 year", target.ProposedRelPath)
 	}
 }
@@ -88,7 +88,7 @@ func TestRenameTargetFor_PrefersThePinnedEditionYear(t *testing.T) {
 func TestRenameTargetFor_ReportsUnchangedWhenAlreadyCorrect(t *testing.T) {
 	detail := workDetailFixture()
 	identity := library.FileIdentity{WorkID: 1, MediaRef: "disc1:track3"}
-	current := "Nick Cave and the Bad Seeds/Tender Prey (1988)/Nick Cave and the Bad Seeds - 03 - The Furab Keke.flac"
+	current := "Vessa Lund and the Low Tides/Quiet Harbour (1988)/Vessa Lund and the Low Tides - 03 - The Furab Keke.flac"
 
 	target, err := music.RenameTargetFor(music.NamingFor(nil), detail, identity, 42, 4096, current)
 	if err != nil {

@@ -62,9 +62,9 @@ func TestCompile_ConditionalBlockOmittedWhenAbsent(t *testing.T) {
 func TestCompile_FallbackChainFirstNonEmptyWins(t *testing.T) {
 	segments := mustCompile(t, "{Album Title|Work Title}")
 
-	rendered, _ := naming.Render(segments, naming.Context{"Album Title": "Tender Prey"}, naming.DefaultOptions)
-	if rendered != "Tender Prey" {
-		t.Errorf("rendered = %q, want \"Tender Prey\" (first alternative present)", rendered)
+	rendered, _ := naming.Render(segments, naming.Context{"Album Title": "Quiet Harbour"}, naming.DefaultOptions)
+	if rendered != "Quiet Harbour" {
+		t.Errorf("rendered = %q, want \"Quiet Harbour\" (first alternative present)", rendered)
 	}
 
 	rendered, _ = naming.Render(segments, naming.Context{"Work Title": "Fallback Title"}, naming.DefaultOptions)
@@ -153,15 +153,15 @@ func TestRender_ASlashInAValueIsReplacedOrRemoved(t *testing.T) {
 }
 
 func TestRender_SpellingVariants(t *testing.T) {
-	ctx := naming.Context{"Artist Name": "Nick Cave", "track": "5"}
+	ctx := naming.Context{"Artist Name": "Vessa Lund", "track": "5"}
 	for spec, want := range map[string]string{
-		"{Artist Name}": "Nick Cave",
-		"{Artist.Name}": "Nick.Cave",
-		"{Artist_Name}": "Nick_Cave",
-		"{Artist-Name}": "Nick-Cave",
-		"{ARTIST NAME}": "NICK CAVE",
-		"{artist name}": "nick cave",
-		"{artist.name}": "nick.cave",
+		"{Artist Name}": "Vessa Lund",
+		"{Artist.Name}": "Vessa.Lund",
+		"{Artist_Name}": "Vessa_Lund",
+		"{Artist-Name}": "Vessa-Lund",
+		"{ARTIST NAME}": "VESSA LUND",
+		"{artist name}": "vessa lund",
+		"{artist.name}": "vessa.lund",
 		"{track:00}":    "05",
 		"{Track:00}":    "05",
 	} {

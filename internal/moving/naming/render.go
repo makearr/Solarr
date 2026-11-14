@@ -117,7 +117,7 @@ func lookup(ctx Context, name string) string {
 	return ""
 }
 
-// spell applies a token's spelling variant: {Artist.Name} writes "Nick.Cave", {ARTIST NAME} upper case.
+// spell applies a token's spelling variant: {Artist.Name} writes "Vessa.Lund", {ARTIST NAME} upper case.
 func spell(value string, seg Segment) string {
 	if seg.wordSeparator != 0 {
 		value = strings.ReplaceAll(value, " ", string(seg.wordSeparator))

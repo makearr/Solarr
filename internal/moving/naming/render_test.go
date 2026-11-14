@@ -19,23 +19,23 @@ func renderPath(t *testing.T, template string, ctx naming.Context, opts naming.O
 // The user's own default reproduces the test library's layout byte for byte.
 func TestRenderPath_TheUsersDefault(t *testing.T) {
 	ctx := naming.Context{
-		"Artist Name": "Nick Cave and The Bad Seeds", "Album Title": "Tender Prey",
+		"Artist Name": "Vessa Lund and The Low Tides", "Album Title": "Quiet Harbour",
 		"Release Year": "1988", "track": "5", "Track Title": "The Furab Keke",
 	}
 	got := renderPath(t, "{Artist Name}/{Album Title} ({Release Year})/{Artist Name} - {track:00} - {Track Title}",
 		ctx, naming.DefaultOptions)
-	want := "Nick Cave and The Bad Seeds/Tender Prey (1988)/Nick Cave and The Bad Seeds - 05 - The Furab Keke.flac"
+	want := "Vessa Lund and The Low Tides/Quiet Harbour (1988)/Vessa Lund and The Low Tides - 05 - The Furab Keke.flac"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
 
-// An album whose year is not known yet is "Tender Prey", never a "Tender Prey ()" folder beside the real one.
+// An album whose year is not known yet is "Quiet Harbour", never a "Quiet Harbour ()" folder beside the real one.
 func TestRenderPath_AnUnknownYearLeavesNoEmptyBrackets(t *testing.T) {
-	ctx := naming.Context{"Artist Name": "Heka", "Album Title": "Tender Prey", "track": "5", "Track Title": "Pihudoc Zaze"}
+	ctx := naming.Context{"Artist Name": "Heka", "Album Title": "Quiet Harbour", "track": "5", "Track Title": "Pihudoc Zaze"}
 	got := renderPath(t, "{Album Title} ({Release Year})/{Artist Name} - {track:00} - {Track Title} [{Release Year}]",
 		ctx, naming.DefaultOptions)
-	want := "Tender Prey/Heka - 05 - Pihudoc Zaze.flac"
+	want := "Quiet Harbour/Heka - 05 - Pihudoc Zaze.flac"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

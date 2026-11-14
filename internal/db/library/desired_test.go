@@ -44,7 +44,7 @@ func attach(t *testing.T, opened *store.Store, itemID, objectID int64, role, med
 // intent runs through acquisition, and a scan acquires nothing.
 func TestAFileFoundByScanningKnowsWhatItBelongsTo(t *testing.T) {
 	opened, queries := newLibrary(t)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 	item := createDesired(t, opened, work.ID, "SINGLE", 1)
 	object := createObject(t, opened, "quick-1", 4096)
 
@@ -367,7 +367,7 @@ func TestHuntQueueSkipsWhatIsNotYetEligible(t *testing.T) {
 // pressing" SET) reported as a nil EditionID rather than a fabricated one.
 func TestIdentityForFile_ResolvesWorkAndMediaRefFromPrimaryCoverage(t *testing.T) {
 	opened, _ := newLibrary(t)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 	item := createDesired(t, opened, work.ID, "SET", 3)
 	object := createObject(t, opened, "quick-1", 4096)
 	attach(t, opened, item.ID, object.ID, "primary", "disc1:track3")
@@ -390,7 +390,7 @@ func TestIdentityForFile_ResolvesWorkAndMediaRefFromPrimaryCoverage(t *testing.T
 // to satisfaction.
 func TestIdentityForFile_IgnoresNonPrimaryCoverage(t *testing.T) {
 	opened, _ := newLibrary(t)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 	item := createDesired(t, opened, work.ID, "SET", 3)
 	object := createObject(t, opened, "quick-bonus", 4096)
 	attach(t, opened, item.ID, object.ID, "bonus", "disc1:track99")

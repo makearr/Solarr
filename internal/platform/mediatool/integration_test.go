@@ -34,7 +34,7 @@ func generate(t *testing.T, directory, name, codec string) string {
 		"-f", "lavfi", "-i", "sine=frequency=440:duration=2",
 		"-c:a", codec,
 		"-metadata", "MUSICBRAINZ_TRACKID=track-mbid",
-		"-metadata", "artist=Nick Cave",
+		"-metadata", "artist=Vessa Lund",
 		path)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("generate %s: %v: %s", name, err, output)
@@ -63,8 +63,8 @@ func TestReadTags_AgainstRealFFprobe(t *testing.T) {
 	if m4aProbe[0].Err != nil || m4aProbe[0].Measured.AudioCodec == "" {
 		t.Errorf("m4a probe = %+v, want a codec and no error", m4aProbe[0])
 	}
-	if got := m4aProbe[0].Tags.First("artist"); got != "Nick Cave" {
-		t.Errorf("m4a artist = %q, want Nick Cave: standard tags do survive", got)
+	if got := m4aProbe[0].Tags.First("artist"); got != "Vessa Lund" {
+		t.Errorf("m4a artist = %q, want Vessa Lund: standard tags do survive", got)
 	}
 
 	probes, err := mediatool.New(nil, 4).ReadTags(t.Context(), paths)
@@ -78,8 +78,8 @@ func TestReadTags_AgainstRealFFprobe(t *testing.T) {
 		if got := probe.Tags.First("musicbrainz_trackid"); got != "track-mbid" {
 			t.Errorf("%s: MBID = %q, want track-mbid", filepath.Base(paths[index]), got)
 		}
-		if got := probe.Tags.First("artist"); got != "Nick Cave" {
-			t.Errorf("%s: artist = %q, want Nick Cave", filepath.Base(paths[index]), got)
+		if got := probe.Tags.First("artist"); got != "Vessa Lund" {
+			t.Errorf("%s: artist = %q, want Vessa Lund", filepath.Base(paths[index]), got)
 		}
 		if probe.Measured.Duration < time.Second || probe.Measured.Duration > 3*time.Second {
 			t.Errorf("%s: duration = %s, want about 2s", filepath.Base(paths[index]), probe.Measured.Duration)

@@ -223,16 +223,16 @@ type NamingExample struct {
 
 var (
 	singleDiscExample = TrackNaming{
-		ArtistName: "Nick Cave & The Bad Seeds", AlbumTitle: "Tender Prey", AlbumType: "Album",
-		AlbumGenre: "Rock", AlbumMbID: "58628005-ea1d-4199-8734-1dd41eaa12b6", ReleaseYear: 1988,
+		ArtistName: "Vessa Lund & The Low Tides", AlbumTitle: "Quiet Harbour", AlbumType: "Album",
+		AlbumGenre: "Rock", AlbumMbID: "3f6b1c2e-8d4a-4b7e-9a15-6c2d7e0f4a81", ReleaseYear: 1988,
 		Medium: 1, MediumFormat: "CD", Track: 1, TrackTitle: "The Furab Keke",
-		AudioCodec: "flac", AudioBitRateKbps: 1011, OriginalFilename: "01 - the mercy seat",
+		AudioCodec: "flac", AudioBitRateKbps: 1011, OriginalFilename: "01 - wait then go",
 	}
 	multiDiscExample = TrackNaming{
-		ArtistName: "Nick Cave & The Bad Seeds", AlbumTitle: "Abattoir Blues / The Lyre of Orpheus",
-		AlbumType: "Album", AlbumGenre: "Rock", AlbumMbID: "cfc64505-10a0-4237-8828-42f165e388fd",
-		ReleaseYear: 2004, Medium: 2, MediumFormat: "CD", Track: 3, TrackTitle: "Babe, You Turn Me On",
-		AudioCodec: "flac", AudioBitRateKbps: 987, OriginalFilename: "2-03 babe you turn me on",
+		ArtistName: "Vessa Lund & The Low Tides", AlbumTitle: "Harbour Songs / The Salt Road",
+		AlbumType: "Album", AlbumGenre: "Rock", AlbumMbID: "a9d2e7b4-51c3-4f68-b0e9-2d7c8a1f3e56",
+		ReleaseYear: 2004, Medium: 2, MediumFormat: "CD", Track: 3, TrackTitle: "Wait, Then Go",
+		AudioCodec: "flac", AudioBitRateKbps: 987, OriginalFilename: "2-03 wait then go",
 	}
 )
 

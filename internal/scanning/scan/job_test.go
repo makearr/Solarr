@@ -157,7 +157,7 @@ func newJobFixture(t *testing.T, files ...string) *jobFixture {
 
 	fixture := &jobFixture{
 		root: mediaRoot, fsys: memory, store: opened, clock: fake,
-		tool:     &fakeTool{tags: mediatool.Tags{"artist": "Nick Cave"}},
+		tool:     &fakeTool{tags: mediatool.Tags{"artist": "Vessa Lund"}},
 		recorder: &recorder{},
 		roots:    fakeRoots{1: {ID: 1, Path: mediaRoot, Label: "music", Online: true}},
 	}
@@ -262,8 +262,8 @@ func (f *jobFixture) progress(t *testing.T) library.ScanProgress {
 
 func TestJob_SweepsProbesAndRecordsTheWatermark(t *testing.T) {
 	fixture := newJobFixture(t,
-		"Nick Cave/Tender Prey/01.flac",
-		"Nick Cave/Tender Prey/02.flac",
+		"Vessa Lund/Quiet Harbour/01.flac",
+		"Vessa Lund/Quiet Harbour/02.flac",
 		"Bokuf Lipad/Rupe of Fofu/01.flac",
 	)
 	handler := fixture.job(t, scan.IsAudio)
@@ -280,7 +280,7 @@ func TestJob_SweepsProbesAndRecordsTheWatermark(t *testing.T) {
 		if observed.Probe.Err != nil {
 			t.Errorf("%s carried a probe error: %v", observed.File.RelPath, observed.Probe.Err)
 		}
-		if observed.Probe.Tags["artist"] != "Nick Cave" {
+		if observed.Probe.Tags["artist"] != "Vessa Lund" {
 			t.Errorf("%s carried no tags", observed.File.RelPath)
 		}
 		if !strings.HasSuffix(observed.Probe.Path, observed.File.RelPath) {
@@ -299,7 +299,7 @@ func TestJob_SweepsProbesAndRecordsTheWatermark(t *testing.T) {
 
 // A finished sweep says so, so the library's counts catch up without waiting for their daily task.
 func TestJob_TellsOnSweptAfterASweep(t *testing.T) {
-	fixture := newJobFixture(t, "Nick Cave/Tender Prey/01.flac")
+	fixture := newJobFixture(t, "Vessa Lund/Quiet Harbour/01.flac")
 	told := 0
 	handler := scan.NewJob(scan.Config{
 		FS: fixture.fsys, Scans: library.NewScans(fixture.store), Roots: fixture.roots,
@@ -320,7 +320,7 @@ func TestJob_TellsOnSweptAfterASweep(t *testing.T) {
 // batch -- todo 4.4's desired-item discovery needs it to know which policy
 // (category.monitor_discovered) governs what it finds.
 func TestJob_CarriesTheCategoryIDThroughToTheConsumer(t *testing.T) {
-	fixture := newJobFixture(t, "Nick Cave/Tender Prey/01.flac")
+	fixture := newJobFixture(t, "Vessa Lund/Quiet Harbour/01.flac")
 	handler := fixture.job(t, scan.IsAudio)
 
 	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1, CategoryID: 7, Full: true}); err != nil {
@@ -341,7 +341,7 @@ func TestJob_CarriesTheCategoryIDThroughToTheConsumer(t *testing.T) {
 // an answer.
 func TestJob_SecondRunSeesOnlyWhatChanged(t *testing.T) {
 	fixture := newJobFixture(t,
-		"Nick Cave/Tender Prey/01.flac",
+		"Vessa Lund/Quiet Harbour/01.flac",
 		"Bokuf Lipad/Rupe of Fofu/01.flac",
 	)
 	handler := fixture.job(t, scan.IsAudio)
@@ -350,7 +350,7 @@ func TestJob_SecondRunSeesOnlyWhatChanged(t *testing.T) {
 	}
 
 	fixture.recorder.seen = nil
-	fixture.write(t, "Nick Cave/Tender Prey/02.flac")
+	fixture.write(t, "Vessa Lund/Quiet Harbour/02.flac")
 	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1}); err != nil {
 		t.Fatalf("second Run: %v", err)
 	}
@@ -358,8 +358,8 @@ func TestJob_SecondRunSeesOnlyWhatChanged(t *testing.T) {
 	// The whole changed directory comes back: the mtime says the listing moved,
 	// not which entry.
 	want := map[string]bool{
-		"Nick Cave/Tender Prey/01.flac": true,
-		"Nick Cave/Tender Prey/02.flac": true,
+		"Vessa Lund/Quiet Harbour/01.flac": true,
+		"Vessa Lund/Quiet Harbour/02.flac": true,
 	}
 	if len(fixture.recorder.seen) != len(want) {
 		t.Fatalf("second run saw %v, want %v", fixture.recorder.paths(), want)

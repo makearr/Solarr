@@ -51,7 +51,7 @@ func TestCalendarFeed_TokenLifecycle(t *testing.T) {
 	}
 	cookies := fixture.signIn(t, "listener")
 	fixture.calendar.rows = []apiserver.CalendarRow{
-		{WorkID: 7, Title: "Tender Prey", Artist: "Nick Cave", ReleaseDate: "2026-06-01"},
+		{WorkID: 7, Title: "Quiet Harbour", Artist: "Vessa Lund", ReleaseDate: "2026-06-01"},
 	}
 
 	if token := feedToken(t, fixture.do(authedGet(t, cookies, "/api/v1/me/calendar-feed"))); token != "" {
@@ -69,7 +69,7 @@ func TestCalendarFeed_TokenLifecycle(t *testing.T) {
 	if feed.Code != http.StatusOK || !strings.HasPrefix(feed.Header().Get("Content-Type"), "text/calendar") {
 		t.Fatalf("feed: status %d, type %q, %s", feed.Code, feed.Header().Get("Content-Type"), feed.Body)
 	}
-	if !strings.Contains(feed.Body.String(), "SUMMARY:Nick Cave - Tender Prey\r\n") {
+	if !strings.Contains(feed.Body.String(), "SUMMARY:Vessa Lund - Quiet Harbour\r\n") {
 		t.Errorf("feed lacks the release:\n%s", feed.Body)
 	}
 	if want := []int64{visible.ID}; !reflect.DeepEqual(fixture.calendar.entriesCategories, want) {

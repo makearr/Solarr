@@ -82,8 +82,8 @@ func TestOneObjectCarriesManyPaths(t *testing.T) {
 			path string
 			kind string
 		}{
-			{1, "Music/Nick Cave/Tender Prey/01.flac", "primary"},
-			{2, "Backup/Tender Prey/01.flac", "hardlink"},
+			{1, "Music/Vessa Lund/Quiet Harbour/01.flac", "primary"},
+			{2, "Backup/Quiet Harbour/01.flac", "hardlink"},
 		} {
 			_, err := q.AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
 				MediaObjectID: object.ID, RootFolderID: location.root,

@@ -13,7 +13,7 @@ import (
 
 func TestPlanInputsReadTheDirtySetWithReleaseDateAndSearchRecord(t *testing.T) {
 	opened, _ := newLibrary(t)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
 		return q.SetWorkDate(ctx, librarydb.SetWorkDateParams{
 			WorkID: work.ID, Kind: library.WorkDateStreet, Region: "", Date: "1988-05-02", Source: "test",
@@ -40,7 +40,7 @@ func TestPlanInputsReadTheDirtySetWithReleaseDateAndSearchRecord(t *testing.T) {
 
 func TestApplyPlanClearsDirtyAndKeepsTheSearchRecord(t *testing.T) {
 	opened, queries := newLibrary(t)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 	item := createDesired(t, opened, work.ID, "SET", 12)
 	hunt, desired := library.NewHunt(opened), library.NewDesired(opened)
 	if err := desired.RecordSearched(t.Context(), item.ID, 4_000); err != nil {
@@ -77,7 +77,7 @@ func TestApplyPlanClearsDirtyAndKeepsTheSearchRecord(t *testing.T) {
 // A state change between the read and the write means the plan is stale: it is not written.
 func TestApplyPlanSkipsAnItemChangedSinceItWasRead(t *testing.T) {
 	opened, queries := newLibrary(t)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 	item := createDesired(t, opened, work.ID, "SET", 12)
 	hunt := library.NewHunt(opened)
 	inputs, err := hunt.PlanInputs(t.Context(), true, 0, 10, library.ImportsSince{})
@@ -103,7 +103,7 @@ func TestApplyPlanSkipsAnItemChangedSinceItWasRead(t *testing.T) {
 
 func TestPostponeKeepsTheHuntAwayUntilThen(t *testing.T) {
 	opened, _ := newLibrary(t)
-	work := createWork(t, opened, "music", "Tender Prey")
+	work := createWork(t, opened, "music", "Quiet Harbour")
 	item := createDesired(t, opened, work.ID, "SET", 12)
 	hunt := library.NewHunt(opened)
 	inputs, _ := hunt.PlanInputs(t.Context(), true, 0, 10, library.ImportsSince{})
