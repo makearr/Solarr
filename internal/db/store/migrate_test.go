@@ -549,3 +549,37 @@ func TestBackup_TwoBackupsInTheSameSecondBothSucceed(t *testing.T) {
 func quietLogger() *slog.Logger {
 	return slog.New(slog.DiscardHandler)
 }
+
+// Rolling the image back must stop, not run old queries against a schema a newer build changed.
+func TestMigrate_RefusesADatabaseANewerBuildMigrated(t *testing.T) {
+	one := store.Migration{Version: 1, Up: "CREATE TABLE work (id INTEGER PRIMARY KEY)"}
+	two := store.Migration{Version: 2, Up: "ALTER TABLE work ADD COLUMN title TEXT"}
+	three := store.Migration{Version: 3, Up: "ALTER TABLE work ADD COLUMN year INTEGER"}
+	fixture := newMigrationFixture(t)
+	if err := store.Migrate(t.Context(), fixture.store, fixture.backupDir, coreOwner(one, two, three)); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+
+	err := store.Migrate(t.Context(), fixture.store, fixture.backupDir, coreOwner(one, two))
+	if !errors.Is(err, store.ErrDatabaseNewer) {
+		t.Fatalf("Migrate with an older build = %v, want ErrDatabaseNewer", err)
+	}
+	backups, listErr := fixture.store.ListBackups(fixture.backupDir)
+	if listErr != nil || len(backups) == 0 || !strings.Contains(err.Error(), backups[0].Path) {
+		t.Errorf("error %q does not name the pre-migration copy %v (%v)", err, backups, listErr)
+	}
+}
+
+func TestMigrate_IgnoresRowsOfAnOwnerThisBuildDoesNotName(t *testing.T) {
+	fixture := newMigrationFixture(t)
+	plugin := store.Owner{Name: "plugin", TablePrefix: "plugin_", Migrations: []store.Migration{
+		{Version: 1, Up: "CREATE TABLE plugin_item (id INTEGER PRIMARY KEY)"},
+	}}
+	core := coreOwner(store.Migration{Version: 1, Up: "CREATE TABLE work (id INTEGER PRIMARY KEY)"})
+	if err := store.Migrate(t.Context(), fixture.store, fixture.backupDir, core, plugin); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+	if err := store.Migrate(t.Context(), fixture.store, fixture.backupDir, core); err != nil {
+		t.Errorf("Migrate without the plugin = %v, want no error", err)
+	}
+}

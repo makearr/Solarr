@@ -194,6 +194,9 @@ A database already at the old last version takes the baseline as applied, so onl
 Every migration is preceded by a backup, and a failure restores from it rather than leaving a
 half-applied schema (Invariant 7).
 
+Going back to an older build is refused: a database a newer build migrated stops start-up with "database was migrated by a
+newer build" and the path of the newest pre-migration copy. Start the newer build again, or restore that copy.
+
 ## Maintenance and backups
 
 Both are scheduler tasks (Settings -> Scheduler, Maintenance), since 2026-09-24:

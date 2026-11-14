@@ -27,6 +27,10 @@ var (
 	// which no longer exist to finish it.
 	ErrPredatesBaseline = errors.New("store: database predates the squashed baseline migration")
 
+	// ErrDatabaseNewer reports a database a newer build migrated, opened by an older one that would
+	// run its queries against a schema it does not know.
+	ErrDatabaseNewer = errors.New("store: database was migrated by a newer build")
+
 	// ErrBackupDirRequired reports migrations attempted with nowhere to back up to (Invariant 7,
 	// ADR-15).
 	ErrBackupDirRequired = errors.New("store: a backup directory is required before migrating")
@@ -88,7 +92,7 @@ func applyPending(ctx context.Context, s *Store, backupDirectory string, owners 
 		return err
 	}
 
-	pending, err := s.pendingMigrations(ctx, owners)
+	pending, err := s.pendingMigrations(ctx, owners, backupDirectory)
 	if err != nil {
 		return err
 	}
@@ -185,7 +189,7 @@ func (s *Store) ensureMigrationTable(ctx context.Context) error {
 
 // pendingMigrations returns what has not been applied, verifying the checksum of
 // everything that has.
-func (s *Store) pendingMigrations(ctx context.Context, owners []Owner) ([]pendingMigration, error) {
+func (s *Store) pendingMigrations(ctx context.Context, owners []Owner, backupDirectory string) ([]pendingMigration, error) {
 	applied, err := s.appliedChecksums(ctx)
 	if err != nil {
 		return nil, err
@@ -214,8 +218,44 @@ func (s *Store) pendingMigrations(ctx context.Context, owners []Owner) ([]pendin
 					ErrMigrationChanged, owner.Name, migration.Version, previous[:12], checksum[:12])
 			}
 		}
+		if newest := highestAppliedAbove(applied, owner.Name, sorted); newest > 0 {
+			return nil, fmt.Errorf("%w: %s is at version %d, this build knows up to %d; start the newer build again%s",
+				ErrDatabaseNewer, owner.Name, newest, sorted[len(sorted)-1].Version, s.restoreHint(backupDirectory))
+		}
 	}
 	return pending, nil
+}
+
+// highestAppliedAbove is the highest version recorded for owner beyond the last migration this build knows, or 0.
+func highestAppliedAbove(applied map[migrationKey]string, owner string, known []Migration) int {
+	last := 0
+	if len(known) > 0 {
+		last = known[len(known)-1].Version
+	}
+	highest := 0
+	for key := range applied {
+		if key.owner == owner && key.version > last {
+			highest = max(highest, key.version)
+		}
+	}
+	return highest
+}
+
+// restoreHint names the newest copy taken before a migration, which is what going back to an older build needs.
+func (s *Store) restoreHint(backupDirectory string) string {
+	if backupDirectory == "" {
+		return ""
+	}
+	backups, err := s.ListBackups(backupDirectory)
+	if err != nil {
+		return ""
+	}
+	for _, backup := range backups {
+		if backup.Kind == BackupPreMigration {
+			return " or restore the pre-migration copy " + backup.Path
+		}
+	}
+	return ""
 }
 
 func appliedBelow(applied map[migrationKey]string, owner string, version int) bool {
