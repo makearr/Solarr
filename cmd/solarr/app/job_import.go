@@ -54,6 +54,7 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 		OnCommitted: func(ctx context.Context) {
 			_, _ = p.enrichmentPass(ctx, false)
 			_, _ = p.enqueueCategoryCounts(ctx)
+			p.enqueueAnalyze(ctx)
 		},
 		Clock:  clock.NewSystem(),
 		Logger: p.logger,

@@ -3,12 +3,14 @@ package app
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/poll"
 	"github.com/makearr/Solarr/internal/importing/downloadwatch"
 	"github.com/makearr/Solarr/internal/importing/importjob"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/moving/moverjob"
+	"github.com/makearr/Solarr/internal/platform/paginate"
 	"github.com/makearr/Solarr/internal/scanning/probe"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
@@ -60,5 +62,27 @@ func TestLongLibraryWorkDoesNotShareOnePool(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("pools = %v\nwant %v", got, want)
+	}
+}
+
+// A burst of sweeps and imports asks for fresh statistics many times; the library gets one job, a few minutes out.
+func TestEnqueueAnalyze_FoldsABurstIntoOneJobFiveMinutesOut(t *testing.T) {
+	server := newGoldenServer(t)
+	before := time.Now()
+	server.process.enqueueAnalyze(t.Context())
+	server.process.enqueueAnalyze(t.Context())
+
+	page, err := server.process.queue.ListPage(t.Context(), jobs.Visibility{System: true}, "", paginate.Cursor{}, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found []jobs.Job
+	for _, job := range page.Items {
+		if job.Type == databaseAnalyzeJobType {
+			found = append(found, job)
+		}
+	}
+	if len(found) != 1 || found[0].RunAfter.Before(before.Add(analyzeDelay-time.Minute)) {
+		t.Errorf("statistics jobs = %+v, want one run no sooner than %v", found, analyzeDelay)
 	}
 }

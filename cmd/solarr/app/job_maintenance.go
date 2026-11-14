@@ -20,6 +20,7 @@ import (
 // Database maintenance, backups and their cleanup, all scheduler tasks since 2026-09-24.
 const (
 	databaseMaintenanceJobType = jobs.Type("database.maintenance")
+	databaseAnalyzeJobType     = jobs.Type("database.analyze")
 	backupJobType              = jobs.Type("database.backup")
 	backupCleanupJobType       = jobs.Type("database.backup_cleanup")
 	recycleBinCleanupJobType   = jobs.Type("library.recycle_bin_cleanup")
@@ -44,6 +45,7 @@ const (
 
 var maintenanceDefinitions = []jobs.Definition{
 	{Type: databaseMaintenanceJobType, Name: "Maintaining the databases", Pool: jobs.PoolMaintenance, Mutating: false, MaxAttempts: 1},
+	{Type: databaseAnalyzeJobType, Name: "Refreshing query statistics", Pool: jobs.PoolMaintenance, Mutating: false, MaxAttempts: 1},
 	{Type: backupJobType, Name: "Backing up", Pool: jobs.PoolMaintenance, Mutating: false, MaxAttempts: 3},
 	{Type: backupCleanupJobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3},
 	{Type: recycleBinCleanupJobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3},
@@ -253,6 +255,7 @@ func (p *process) registerMaintenanceJobs(registry *jobs.Registry, executor *job
 	}
 	// settings.db backs itself up on every change and prunes by keep_settings, so it is left out.
 	backedUp := []*store.Store{p.library, p.jobs, p.statistics}
+	executor.Handle(databaseAnalyzeJobType, databaseAnalyzeJob{store: p.library, logger: p.logger})
 	executor.Handle(databaseMaintenanceJobType, databaseMaintenanceJob{
 		stores: []*store.Store{p.settings, p.jobs, p.library, p.statistics, p.metadata}, logger: p.logger,
 	})
@@ -288,6 +291,34 @@ func (p *process) enqueueMaintenanceJob(ctx context.Context, jobType jobs.Type) 
 		p.logger.Warn("enqueue maintenance", slog.String("type", string(jobType)), slog.Any("error", err))
 	}
 	return result, err
+}
+
+// analyzeDelay lets a burst of sweeps and imports end before the statistics are taken once.
+const analyzeDelay = 5 * time.Minute
+
+// databaseAnalyzeJob refreshes the planner statistics of the library after its tables changed size by orders of magnitude.
+type databaseAnalyzeJob struct {
+	store  *store.Store
+	logger *slog.Logger
+}
+
+func (j databaseAnalyzeJob) Run(ctx context.Context, _ jobs.Job) error {
+	if err := j.store.Analyze(ctx); err != nil {
+		return err
+	}
+	j.logger.Info("query statistics refreshed", slog.String("database", j.store.Name()))
+	return nil
+}
+
+// enqueueAnalyze asks for the library's statistics to be refreshed in a few minutes; a burst folds into one job.
+func (p *process) enqueueAnalyze(ctx context.Context) {
+	_, err := p.queue.Enqueue(ctx, jobs.Request{
+		Type: databaseAnalyzeJobType, ActionKey: string(databaseAnalyzeJobType) + ":library", Priority: jobs.PriorityLow,
+		Payload: []byte("{}"), RunAfter: clock.NewSystem().Now().Add(analyzeDelay),
+	})
+	if err != nil {
+		p.logger.Warn("enqueue statistics refresh", slog.Any("error", err))
+	}
 }
 
 func (p *process) enqueueDatabaseMaintenance(ctx context.Context) (jobs.EnqueueResult, error) {
