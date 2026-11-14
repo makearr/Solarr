@@ -56,7 +56,7 @@ func ApplyFilters(decision model.Decision, filters []ReleaseFilter, title, group
 	var allowed []ReleaseFilter
 	var required []ReleaseFilter
 	for _, filter := range filters {
-		if !strings.HasPrefix(mediaRef, filter.Prefix) {
+		if !refUnder(mediaRef, filter.Prefix) {
 			continue
 		}
 		switch filter.Kind {
@@ -153,4 +153,9 @@ func rejectBy(decision model.Decision, gate, wanted, got string) model.Decision 
 	decision.Rejections = append(decision.Rejections, model.Rejection{Rule: gate, Field: gate, Wanted: wanted, Got: got})
 	decision.Outcome = model.OutcomeReject
 	return decision
+}
+
+// refUnder reports whether mediaRef is the prefix itself or sits below it; the colon boundary keeps "s20" from matching "s2024:e05".
+func refUnder(mediaRef, prefix string) bool {
+	return prefix == "" || mediaRef == prefix || strings.HasPrefix(mediaRef, prefix+":")
 }

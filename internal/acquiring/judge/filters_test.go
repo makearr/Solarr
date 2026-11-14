@@ -1,6 +1,7 @@
 package judge_test
 
 import (
+	"cmp"
 	"reflect"
 	"testing"
 
@@ -33,11 +34,13 @@ func TestApplyFilters_Rules(t *testing.T) {
 		{name: "no group when groups are required", filters: []judge.ReleaseFilter{{Kind: judge.FilterGroupAllow, Value: "MeGusta"}}, reject: "release_filter_allowed_group"},
 		{name: "preferred word scores", filters: []judge.ReleaseFilter{{Kind: judge.FilterPrefer, Value: "WEB", Score: 7}}, delta: 7},
 		{name: "a rule for another season is skipped", filters: []judge.ReleaseFilter{{Prefix: "s02", Kind: judge.FilterMustNotContain, Value: "H264"}}},
+		{name: "season 20 does not reach a show numbered 2024", ref: "s2024:e05", filters: []judge.ReleaseFilter{{Prefix: "s20", Kind: judge.FilterMustNotContain, Value: "H264"}}},
+		{name: "season 20 reaches its own episode", ref: "s20:e01", filters: []judge.ReleaseFilter{{Prefix: "s20", Kind: judge.FilterMustNotContain, Value: "H264"}}, reject: "release_filter_denied_word"},
 		{name: "a rule for this season applies", filters: []judge.ReleaseFilter{{Prefix: "s01", Kind: judge.FilterMustNotContain, Value: "H264"}}, reject: "release_filter_denied_word"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := judge.ApplyFilters(accepted(), c.filters, title, c.group, "s01")
+			got := judge.ApplyFilters(accepted(), c.filters, title, c.group, cmp.Or(c.ref, "s01"))
 			if c.reject == "" {
 				if got.Outcome != model.OutcomeAccept || got.Score() != c.delta {
 					t.Errorf("outcome %s score %v, want ACCEPT %v (%+v)", got.Outcome, got.Score(), c.delta, got.Rejections)

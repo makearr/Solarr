@@ -47,6 +47,14 @@ const recentWindow = 90 * 24 * time.Hour
 // MediaRef is a part's reference: season and episode, with the colon that scopes it below its season item.
 func MediaRef(season, episode int) string { return fmt.Sprintf("s%02d:e%02d", season, episode) }
 
+// ParseMediaRef reads a part's reference back into its season and episode.
+func ParseMediaRef(ref string) (season, episode int, ok bool) {
+	if _, err := fmt.Sscanf(ref, "s%d:e%d", &season, &episode); err != nil {
+		return 0, 0, false
+	}
+	return season, episode, true
+}
+
 // SeasonRef is a season item's reference.
 func SeasonRef(season int) string { return fmt.Sprintf("s%02d", season) }
 

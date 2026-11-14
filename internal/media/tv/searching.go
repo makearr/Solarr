@@ -34,8 +34,8 @@ func (s Searching) GrabWanted(ctx context.Context, search media.WantedSearch) (j
 
 // episodeOf reads the episode a part ref names ("s1:e5").
 func episodeOf(ref string) (int, error) {
-	var season, episode int
-	if _, err := fmt.Sscanf(ref, "s%d:e%d", &season, &episode); err != nil || episode <= 0 {
+	_, episode, ok := ParseMediaRef(ref)
+	if !ok || episode <= 0 {
 		return 0, fmt.Errorf("tv: search: %q is not an episode", ref)
 	}
 	return episode, nil

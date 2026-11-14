@@ -598,7 +598,12 @@ func episodeNaming(detail library.SeriesDetailRow, file fileEpisodes) EpisodeNam
 		OriginalFilename: strings.TrimSuffix(path.Base(file.media.RelPath), path.Ext(file.media.RelPath)),
 	}
 	parts := slices.Clone(file.parts)
-	slices.SortFunc(parts, func(a, b library.ResolvedPart) int { return cmp.Compare(a.MediaRef, b.MediaRef) })
+	// By number: as text, episode 100 would sort before episode 99.
+	slices.SortFunc(parts, func(a, b library.ResolvedPart) int {
+		aSeason, aEpisode := splitRef(a.MediaRef)
+		bSeason, bEpisode := splitRef(b.MediaRef)
+		return cmp.Or(cmp.Compare(aSeason, bSeason), cmp.Compare(aEpisode, bEpisode))
+	})
 	for _, part := range parts {
 		season, number := splitRef(part.MediaRef)
 		naming.Season = season

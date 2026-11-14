@@ -296,8 +296,8 @@ func (Module) NamingExamples(profile settings.NamingProfile) []media.NamingExamp
 
 // PartPosition implements media.Numbering: "s03:e07" is episode 7, its season being the group.
 func (Module) PartPosition(ref string) (section, number string) {
-	var season, episode int
-	if _, err := fmt.Sscanf(ref, "s%d:e%d", &season, &episode); err != nil {
+	_, episode, ok := ParseMediaRef(ref)
+	if !ok {
 		return "", ref
 	}
 	return "", strconv.Itoa(episode)
