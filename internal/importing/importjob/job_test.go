@@ -530,6 +530,72 @@ func TestJob_ResumesRatherThanDuplicatingOnARetry(t *testing.T) {
 	}
 }
 
+// The executor gives up after the last attempt; the session must say so, or the Import page and the download wait for ever.
+func TestJob_ClosesTheSessionAsFailedOnTheLastAttempt(t *testing.T) {
+	fx := newFixture(t, "Artist/Album1/01.flac", "Artist/Album2/01.flac")
+	fx.tool.failBatchOnce = "Album2"
+	job := fx.job(t, 0.90)
+	data, err := json.Marshal(importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = job.Run(t.Context(), jobs.Job{Type: importjob.JobType, Payload: data, Attempts: 2, MaxAttempts: 3})
+	if err == nil {
+		t.Fatal("Run succeeded, want the injected failure")
+	}
+	failed, listErr := fx.sessions().List(t.Context(), library.ImportFailed, false)
+	if listErr != nil || len(failed) != 1 || failed[0].Error != err.Error() {
+		t.Errorf("failed sessions = %+v (%v), want one carrying %q", failed, listErr, err)
+	}
+}
+
+// A session no job carries any more (a crash on the last attempt, an older build) is closed at start-up; one with a job is left.
+func TestCloseOrphanedSessions_FailsOnlyTheSessionsNoJobCarries(t *testing.T) {
+	fx := newFixture(t, "Artist/Album1/01.flac", "Artist/Album2/01.flac")
+	fx.tool.failBatchOnce = "Album2"
+	job := fx.job(t, 0.90)
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err == nil {
+		t.Fatal("Run succeeded, want the injected failure")
+	}
+
+	carried := func(context.Context, string) (bool, error) { return true, nil }
+	if closed, err := importjob.CloseOrphanedSessions(t.Context(), fx.sessions(), carried, fx.clock.Now()); err != nil || closed != 0 {
+		t.Fatalf("with a job carrying it: closed %d, %v; want 0", closed, err)
+	}
+	orphaned := func(_ context.Context, key string) (bool, error) { return key != importjob.ActionKeyFor(root), nil }
+	if closed, err := importjob.CloseOrphanedSessions(t.Context(), fx.sessions(), orphaned, fx.clock.Now()); err != nil || closed != 1 {
+		t.Fatalf("with no job: closed %d, %v; want 1", closed, err)
+	}
+	failed, err := fx.sessions().List(t.Context(), library.ImportFailed, false)
+	if err != nil || len(failed) != 1 || failed[0].Error == "" {
+		t.Errorf("failed sessions = %+v (%v), want the orphan with a reason", failed, err)
+	}
+}
+
+// A re-grab of the same release lands in the same folder; its new acquisition must not resume the old session.
+func TestJob_ASessionOfAnotherDownloadIsNotResumed(t *testing.T) {
+	fx := newFixture(t, "Artist/Album1/01.flac", "Artist/Album2/01.flac")
+	fx.tool.failBatchOnce = "Album2"
+	job := fx.job(t, 0.90)
+	first, second := int64(1), int64(2)
+
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual, AcquisitionID: &first}); err == nil {
+		t.Fatal("first Run succeeded, want the injected failure")
+	}
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual, AcquisitionID: &second}); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+	superseded, err := fx.sessions().List(t.Context(), library.ImportFailed, false)
+	if err != nil || len(superseded) != 1 || superseded[0].AcquisitionID == nil || *superseded[0].AcquisitionID != first {
+		t.Errorf("failed sessions = %+v (%v), want the first download's, closed", superseded, err)
+	}
+	done, err := fx.sessions().List(t.Context(), library.ImportDone, false)
+	if err != nil || len(done) != 1 || done[0].AcquisitionID == nil || *done[0].AcquisitionID != second {
+		t.Errorf("done sessions = %+v (%v), want one for the second download", done, err)
+	}
+}
+
 // A resumed run keeps what its session was started with (answered 2026-09-24): an interrupted
 // preview retried as a plain import still holds every unit for review.
 func TestJob_AResumedPreviewStaysAPreview(t *testing.T) {

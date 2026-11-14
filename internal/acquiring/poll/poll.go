@@ -598,7 +598,18 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, WaitingForReview, now)
 	case session.Error != "":
 		// The library failed to place it (permissions, I/O), which says nothing about the release: kept, not blocklisted.
-		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, "the library could not place it: "+session.Error, now)
+		note := "the library could not place it: " + session.Error
+		if acquisition.LastError != note {
+			return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, note, now)
+		}
+		// A transient failure heals without a person: the import runs again, at most once per importRetryEvery.
+		if time.Duration(now-acquisition.UpdatedAt)*time.Second < importRetryEvery || acquisition.DownloadDir == "" {
+			return nil
+		}
+		if err := j.config.Import(ctx, acquisition, acquisition.DownloadDir, nil); err != nil {
+			j.config.Logger.Warn("import retry did not start", slog.Int64("acquisition_id", acquisition.ID), slog.Any("error", err))
+		}
+		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, note, now)
 	case duplicates > 0:
 		return j.duplicate(ctx, client, acquisition)
 	default:
@@ -648,6 +659,9 @@ func (j *Job) finishedImported(ctx context.Context, client Client, acquisition l
 	}
 	return nil
 }
+
+// importRetryEvery spaces the automatic retries of an import the library failed to place.
+const importRetryEvery = 30 * time.Minute
 
 // WaitingForReview is the note of a download whose import is held for a person: nothing is moving, so it may be removed.
 const WaitingForReview = "waiting for you to identify it on the Import page"

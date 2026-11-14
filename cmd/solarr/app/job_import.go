@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"log/slog"
 	"os/user"
 	"path/filepath"
 	"strconv"
@@ -61,6 +62,18 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 	}
 	executor.Handle(importjob.RetryJobType, importjob.NewRetryJob(library.NewImportSessions(p.library), p.manualCommitter(), p.logger))
 	return nil
+}
+
+// closeOrphanedImportSessions fails the import sessions no job carries any more, so their downloads are not held for ever.
+func (p *process) closeOrphanedImportSessions(ctx context.Context) {
+	closed, err := importjob.CloseOrphanedSessions(ctx, library.NewImportSessions(p.library), p.queue.HasActive, clock.NewSystem().Now())
+	if err != nil {
+		p.logger.Warn("orphaned import sessions not closed", slog.Any("error", err))
+		return
+	}
+	if closed > 0 {
+		p.logger.Info("closed import sessions no job was carrying", slog.Int("count", closed))
+	}
 }
 
 // importRetryTask is the registered sweep that places what a library could not take when it was imported.

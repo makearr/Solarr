@@ -684,6 +684,7 @@ func (p *process) startServer(ctx context.Context) error {
 	p.applyImageSettings()
 	defer stopBackground()
 	// Startup runs are per task and switchable on the Scheduler screen (2026-09-19 review).
+	p.closeOrphanedImportSessions(ctx)
 	p.startTaskHistory(background)
 	p.startLibraryWatch(background)
 	p.startSchedulers(background)

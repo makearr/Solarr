@@ -141,6 +141,18 @@ func (q *Queue) Enqueue(ctx context.Context, request Request) (EnqueueResult, er
 	return result, nil
 }
 
+// HasActive reports whether a job with this action key is waiting or running.
+func (q *Queue) HasActive(ctx context.Context, actionKey string) (bool, error) {
+	_, err := q.queries.FindActiveJobByActionKey(ctx, sql.NullString{String: actionKey, Valid: true})
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("jobs: look up action key: %w", err)
+	}
+	return true, nil
+}
+
 // Get reads one job.
 func (q *Queue) Get(ctx context.Context, id int64) (Job, error) {
 	row, err := q.queries.GetJob(ctx, id)

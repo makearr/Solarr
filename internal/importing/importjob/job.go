@@ -333,7 +333,7 @@ func (j *Job) runSession(ctx context.Context, job jobs.Job, payload Payload) err
 		return j.sessions.Finish(ctx, sessionID, library.ImportCancelled, j.clock.Now().Unix(), "")
 	}
 	if err != nil {
-		return err
+		return j.failSessionIfFinal(ctx, job, sessionID, err)
 	}
 	j.logger.Info("import inspection finished",
 		slog.Int64("session_id", sessionID), slog.String("source_path", payload.SourcePath),
@@ -347,6 +347,23 @@ func (j *Job) runSession(ctx context.Context, job jobs.Job, payload Payload) err
 	j.publishProgress(ctx, sessionID, importPhaseDone, "")
 	j.notifyCommitted(ctx, sessionID)
 	return nil
+}
+
+// failSessionIfFinal closes the session as failed when the executor will not run this job again, so the Import page
+// and the download's poll see the failure instead of an inspection that never ends.
+func (j *Job) failSessionIfFinal(ctx context.Context, job jobs.Job, sessionID int64, cause error) error {
+	if errors.Is(cause, context.Canceled) || errors.Is(cause, context.DeadlineExceeded) {
+		return cause
+	}
+	last := job.MaxAttempts > 0 && job.Attempts+1 >= job.MaxAttempts
+	if !last && jobs.Classify(cause) == jobs.ClassRetryable {
+		return cause
+	}
+	if err := j.sessions.Finish(context.WithoutCancel(ctx), sessionID, library.ImportFailed, j.clock.Now().Unix(), cause.Error()); err != nil {
+		j.logger.Warn("import session not closed as failed", slog.Int64("session_id", sessionID), slog.Any("error", err))
+	}
+	j.publishProgress(context.WithoutCancel(ctx), sessionID, importPhaseFailed, "")
+	return cause
 }
 
 func (j *Job) notifyCommitted(ctx context.Context, sessionID int64) {
@@ -379,6 +396,17 @@ func (j *Job) resumeOrCreate(
 			if session.SourcePath != payload.SourcePath {
 				continue
 			}
+			if !sameAcquisition(session.AcquisitionID, payload.AcquisitionID) {
+				// A re-grab lands in the same folder: resuming the old session would skip its units and keep its acquisition.
+				finished := library.ImportFailed
+				if state == library.ImportCancelling {
+					finished = library.ImportCancelled
+				}
+				if err := j.sessions.Finish(ctx, session.ID, finished, j.clock.Now().Unix(), "superseded by a newer import of the same folder"); err != nil {
+					return 0, "", 0, false, fmt.Errorf("importjob: close superseded session %d: %w", session.ID, err)
+				}
+				continue
+			}
 			if state == library.ImportCancelling {
 				return session.ID, "", session.Threshold, true, nil
 			}
@@ -404,6 +432,45 @@ func (j *Job) resumeOrCreate(
 		return 0, "", 0, false, fmt.Errorf("importjob: create session: %w", err)
 	}
 	return id, "", threshold, false, nil
+}
+
+// CloseOrphanedSessions finishes the sessions that are still walking or cancelling with no job left to carry them on
+// (a crash on the last attempt, or an older build that never closed them); it returns how many it closed.
+func CloseOrphanedSessions(
+	ctx context.Context, sessions library.ImportSessions, hasActiveJob func(ctx context.Context, actionKey string) (bool, error), at time.Time,
+) (int, error) {
+	closed := 0
+	for _, state := range []string{library.ImportInspecting, library.ImportCancelling} {
+		stuck, err := sessions.List(ctx, state, true)
+		if err != nil {
+			return closed, fmt.Errorf("importjob: list %s sessions: %w", state, err)
+		}
+		for _, session := range stuck {
+			active, err := hasActiveJob(ctx, ActionKeyFor(session.SourcePath))
+			if err != nil {
+				return closed, err
+			}
+			if active {
+				continue
+			}
+			finished, reason := library.ImportFailed, "the import was interrupted and not resumed"
+			if state == library.ImportCancelling {
+				finished, reason = library.ImportCancelled, ""
+			}
+			if err := sessions.Finish(ctx, session.ID, finished, at.Unix(), reason); err != nil {
+				return closed, fmt.Errorf("importjob: close orphaned session %d: %w", session.ID, err)
+			}
+			closed++
+		}
+	}
+	return closed, nil
+}
+
+func sameAcquisition(a, b *int64) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 // estimateOnce runs inspect.EstimateUnits and persists it, the first time
@@ -647,6 +714,7 @@ const (
 	importPhaseWalking   = "walking"
 	importPhaseDone      = "done"
 	importPhaseCancelled = "cancelled"
+	importPhaseFailed    = "failed"
 )
 
 // ImportProgress is one session's live update, published on topic "job",

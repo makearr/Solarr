@@ -541,6 +541,31 @@ func TestPoll_APlacementErrorKeepsTheDownloadAndDoesNotBlocklist(t *testing.T) {
 	}
 }
 
+// The library failing to place a download is often transient: the import runs again, but only once per half hour.
+func TestPoll_AFailedPlacementIsRetriedAtMostEveryHalfHour(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	sessionID, _ := e.finishImport(t, sent, false, library.UnitSkip)
+	if err := e.sessions.Finish(t.Context(), sessionID, library.ImportFailed, 4, "rename: input/output error"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.acquisitions.SetPath(t.Context(), sent.ID, "/downloads/Album", e.clock.Now().Unix()); err != nil {
+		t.Fatal(err)
+	}
+	e.run(t)
+	started := len(e.imported)
+	e.clock.Advance(10 * time.Minute)
+	e.run(t)
+	if len(e.imported) != started {
+		t.Fatalf("imports = %v, want no retry after 10 minutes", e.imported)
+	}
+	e.clock.Advance(25 * time.Minute)
+	e.run(t)
+	if len(e.imported) != started+1 {
+		t.Errorf("imports = %v, want one retry after 35 minutes", e.imported)
+	}
+}
+
 // One unit placed while another waits for a person: the download still holds the waiting unit's files (Invariants 74, 79).
 func TestPoll_APlacedUnitDoesNotCleanUpADownloadWithAUnitStillWaiting(t *testing.T) {
 	e := newEnv(t)
