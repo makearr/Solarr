@@ -19,7 +19,10 @@ func (p *process) registerDownloadWatchJob(registry *jobs.Registry, executor *jo
 	executor.Handle(downloadwatch.JobType, downloadwatch.NewJob(downloadwatch.Config{
 		Folders: p.cache, FS: p.fsys, Sessions: library.NewImportSessions(p.library),
 		Enqueue: func(ctx context.Context, payload importjob.Payload) error {
-			_, err := importjob.Enqueue(ctx, p.queue, payload)
+			result, err := importjob.Enqueue(ctx, p.queue, payload)
+			if err == nil && result.Duplicate {
+				p.logger.Debug("watched folder import already queued", slog.String("source_path", payload.SourcePath))
+			}
 			return err
 		},
 		Clock: clock.NewSystem(), Settle: downloadwatch.DefaultSettle, Logger: p.logger,

@@ -45,6 +45,15 @@ func ActionKeyFor(sourcePath string) string {
 	return fmt.Sprintf("%s:%s", JobType, sourcePath)
 }
 
+// ActionKeyOf keys a job by what it imports: a tracked download has its own key, so a watcher's import of the same
+// folder cannot absorb it and strip the link to the download.
+func ActionKeyOf(payload Payload) string {
+	if payload.AcquisitionID != nil {
+		return fmt.Sprintf("%s.acquisition:%d", JobType, *payload.AcquisitionID)
+	}
+	return ActionKeyFor(payload.SourcePath)
+}
+
 // Payload is what an import job carries.
 type Payload struct {
 	SourcePath    string `json:"source_path"`
@@ -84,6 +93,7 @@ type Policy interface {
 
 // Job runs one import.inspect execution: walk, identify, shape, decide, record.
 type Job struct {
+	tracked       func(ctx context.Context, sourcePath string) (int64, bool)
 	workspace     string
 	archiveLimits archive.Limits
 	fsys          fsx.FS
@@ -119,6 +129,9 @@ type Config struct {
 	Unassigned  string
 	// Libraries are the ones a Best match import may route a unit to; nil routes none, so every unit is skipped.
 	Libraries func() []Library
+	// Tracked answers the download a folder belongs to while that download is still being followed; the folder watcher
+	// leaves such a folder to the download's own import. Nil tracks nothing.
+	Tracked func(ctx context.Context, sourcePath string) (acquisitionID int64, tracked bool)
 	// Workspace is where archives are opened (outside every library root); empty leaves archives unopened.
 	Workspace string
 	// ArchiveLimits bounds an expansion; zero is archive.DefaultLimits.
@@ -139,7 +152,7 @@ func NewJob(config Config) *Job {
 		fsys: config.FS, sessions: config.Sessions, policy: config.Policy, packs: config.Packs,
 		workspace: config.Workspace, archiveLimits: config.ArchiveLimits,
 		importers: config.Importers, mediaTypeOf: config.MediaTypeOf, unassigned: config.Unassigned, libraries: config.Libraries,
-		events: config.Events, onCommitted: config.OnCommitted, clock: config.Clock, logger: logger,
+		tracked: config.Tracked, events: config.Events, onCommitted: config.OnCommitted, clock: config.Clock, logger: logger,
 	}
 }
 
@@ -156,6 +169,13 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	var payload Payload
 	if err := json.Unmarshal(job.Payload, &payload); err != nil {
 		return jobs.Terminalf("importjob.payload", string(job.Type), err)
+	}
+	if payload.Origin == library.ImportOriginWatched && j.tracked != nil {
+		if id, tracked := j.tracked(ctx, payload.SourcePath); tracked {
+			j.logger.Info("watched folder left to its tracked download",
+				slog.String("source_path", payload.SourcePath), slog.Int64("acquisition_id", id))
+			return nil
+		}
 	}
 	// An archive is a folder (ADR-49): its contents are opened into a workspace and imported as one, then the
 	// source's own loose files, if it has any.
@@ -446,7 +466,7 @@ func CloseOrphanedSessions(
 			return closed, fmt.Errorf("importjob: list %s sessions: %w", state, err)
 		}
 		for _, session := range stuck {
-			active, err := hasActiveJob(ctx, ActionKeyFor(session.SourcePath))
+			active, err := hasActiveJob(ctx, ActionKeyOf(Payload{SourcePath: session.SourcePath, AcquisitionID: session.AcquisitionID}))
 			if err != nil {
 				return closed, err
 			}
@@ -780,7 +800,7 @@ func Enqueue(ctx context.Context, queue *jobs.Queue, payload Payload) (jobs.Enqu
 	}
 	return queue.Enqueue(ctx, jobs.Request{
 		Type:      JobType,
-		ActionKey: ActionKeyFor(payload.SourcePath),
+		ActionKey: ActionKeyOf(payload),
 		Priority:  jobs.PriorityLow,
 		Payload:   data,
 	})

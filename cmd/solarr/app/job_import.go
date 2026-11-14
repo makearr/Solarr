@@ -22,6 +22,7 @@ import (
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/keyedlock"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
@@ -46,6 +47,7 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 			return ""
 		},
 		Libraries: p.suggester().ImportLibraries,
+		Tracked:   p.trackedDownloadAt,
 		Workspace: filepath.Join(p.config.Paths.CacheDir, "import-workspace"),
 		Events:    p.bus,
 		// A new edition's tracklist is what lets the placed files count towards the album.
@@ -62,6 +64,20 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 	}
 	executor.Handle(importjob.RetryJobType, importjob.NewRetryJob(library.NewImportSessions(p.library), p.manualCommitter(), p.logger))
 	return nil
+}
+
+// trackedDownloadAt is the download still being followed whose folder is, or holds, sourcePath.
+func (p *process) trackedDownloadAt(ctx context.Context, sourcePath string) (int64, bool) {
+	active, err := library.NewAcquisitions(p.library).ListActive(ctx)
+	if err != nil {
+		return 0, false
+	}
+	for _, acquisition := range active {
+		if acquisition.DownloadDir != "" && fsx.Within(acquisition.DownloadDir, sourcePath) {
+			return acquisition.ID, true
+		}
+	}
+	return 0, false
 }
 
 // closeOrphanedImportSessions fails the import sessions no job carries any more, so their downloads are not held for ever.

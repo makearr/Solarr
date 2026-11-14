@@ -1045,6 +1045,41 @@ func TestJob_SkipsPackDetectionForAdoption(t *testing.T) {
 	}
 }
 
+// A watcher's import of a folder must not absorb the tracked download's own import of it, which carries the link.
+func TestActionKeyOf_ATrackedDownloadHasItsOwnKey(t *testing.T) {
+	id := int64(7)
+	watched := importjob.ActionKeyOf(importjob.Payload{SourcePath: "/a", Origin: library.ImportOriginWatched})
+	tracked := importjob.ActionKeyOf(importjob.Payload{SourcePath: "/a", Origin: library.ImportOriginAcquisition, AcquisitionID: &id})
+	if watched == tracked {
+		t.Errorf("the watched and the tracked import of one folder share the key %q", watched)
+	}
+}
+
+// The folder watcher leaves a folder to the download that is still being followed.
+func TestJob_AWatchedFolderOfATrackedDownloadIsLeftToIt(t *testing.T) {
+	fx := newFixture(t, "Artist/Album/01.flac")
+	job := importjob.NewJob(importjob.Config{
+		FS: fx.fsys, Sessions: library.NewImportSessions(fx.store), Policy: fixedPolicy(0.90),
+		Importers: musicImporters(fx.tool, nil, nil), Unassigned: "music", Packs: library.NewPacks(fx.store), Clock: fx.clock,
+		Logger:  slog.New(slog.DiscardHandler),
+		Tracked: func(context.Context, string) (int64, bool) { return 9, true },
+	})
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginWatched}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	for _, state := range []string{library.ImportInspecting, library.ImportDone} {
+		if sessions, err := fx.sessions().List(t.Context(), state, true); err != nil || len(sessions) != 0 {
+			t.Errorf("%s sessions = %+v (%v), want none: the tracked download imports this folder", state, sessions, err)
+		}
+	}
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
+		t.Fatalf("manual Run: %v", err)
+	}
+	if done, err := fx.sessions().List(t.Context(), library.ImportDone, true); err != nil || len(done) != 1 {
+		t.Errorf("done sessions = %+v (%v), want the person's own import to run", done, err)
+	}
+}
+
 func TestActionKeyFor_IsPerSourcePath(t *testing.T) {
 	if importjob.ActionKeyFor("/a") == importjob.ActionKeyFor("/b") {
 		t.Error("ActionKeyFor gave the same key for two different source paths")

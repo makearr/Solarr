@@ -120,7 +120,10 @@ func (p *process) importAcquisition(ctx context.Context, acquisition library.Acq
 		}
 		payload.CategoryID = &item.CategoryID
 	}
-	_, err := importjob.Enqueue(ctx, p.queue, payload)
+	result, err := importjob.Enqueue(ctx, p.queue, payload)
+	if err == nil && result.Duplicate {
+		p.logger.Debug("download import already queued", slog.Int64("acquisition_id", acquisition.ID), slog.String("source_path", localPath))
+	}
 	return err
 }
 
