@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/statisticsdb"
@@ -48,6 +49,9 @@ func (h History) Append(ctx context.Context, entry HistoryEntry) (int64, error) 
 
 // List answers one page, newest first, of one work's history or of all with workID 0, cursored by id.
 func (h History) List(ctx context.Context, workID, beforeID int64, limit int) ([]HistoryEntry, error) {
+	if beforeID == 0 {
+		beforeID = math.MaxInt64 // the newest page: a bound the id index can seek to
+	}
 	rows, err := statisticsdb.New(h.store.Read()).ListHistory(ctx, statisticsdb.ListHistoryParams{
 		WorkID: workID, BeforeID: beforeID, PageSize: int64(limit),
 	})

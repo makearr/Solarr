@@ -150,13 +150,13 @@ const listPendingRequests = `-- name: ListPendingRequests :many
 SELECT id, user_id, work_id, external_ref, media_type, category_id, scope_json,
        state, decided_by, decided_at, decline_reason, created_at
 FROM request
-WHERE state = 'PENDING' AND (?1 = 0 OR id > ?1)
+WHERE state = 'PENDING' AND id > ?1
 ORDER BY id
 LIMIT ?2
 `
 
 type ListPendingRequestsParams struct {
-	AfterID  interface{}
+	AfterID  int64
 	PageSize int64
 }
 
@@ -204,7 +204,7 @@ SELECT id, user_id, work_id, external_ref, media_type, category_id, scope_json,
 FROM request
 WHERE (?1 = 0 OR user_id = ?1)
   AND (?2 = '' OR state = ?2)
-  AND (?3 = 0 OR id < ?3)
+  AND id < ?3
 ORDER BY id DESC
 LIMIT ?4
 `
@@ -212,7 +212,7 @@ LIMIT ?4
 type ListRequestsParams struct {
 	UserID   interface{}
 	State    interface{}
-	BeforeID interface{}
+	BeforeID int64
 	PageSize int64
 }
 

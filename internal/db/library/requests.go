@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -81,6 +82,9 @@ func (r Requests) Get(ctx context.Context, id int64) (Request, error) {
 
 // List pages requests newest first; a zero userID or an empty state does not filter, a zero beforeID starts at the newest.
 func (r Requests) List(ctx context.Context, userID int64, state string, beforeID, limit int64) ([]Request, error) {
+	if beforeID == 0 {
+		beforeID = math.MaxInt64 // the newest page: a bound the id index can seek to
+	}
 	rows, err := librarydb.New(r.store.Read()).ListRequests(ctx, librarydb.ListRequestsParams{
 		UserID: userID, State: state, BeforeID: beforeID, PageSize: limit,
 	})

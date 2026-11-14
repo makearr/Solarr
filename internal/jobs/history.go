@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/jobsdb"
@@ -79,6 +80,14 @@ type HistoryQuery struct {
 	Limit       int
 }
 
+// beforeOrNewest turns the first page's zero into a bound the id index can seek to.
+func beforeOrNewest(id int64) int64 {
+	if id == 0 {
+		return math.MaxInt64
+	}
+	return id
+}
+
 // List reads one page of history, newest first, cursored by id (Invariant 32).
 func (h History) List(ctx context.Context, query HistoryQuery) ([]StoredEvent, error) {
 	kinds, err := json.Marshal(query.Kinds)
@@ -87,7 +96,7 @@ func (h History) List(ctx context.Context, query HistoryQuery) ([]StoredEvent, e
 	}
 	rows, err := jobsdb.New(h.store.Read()).ListEventsOfKinds(ctx, jobsdb.ListEventsOfKindsParams{
 		Kinds: string(kinds), SubjectID: query.SubjectID, SubjectType: nullableText(query.SubjectType),
-		BeforeID: query.BeforeID, PageSize: int64(query.Limit),
+		BeforeID: beforeOrNewest(query.BeforeID), PageSize: int64(query.Limit),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("jobs: list history: %w", err)

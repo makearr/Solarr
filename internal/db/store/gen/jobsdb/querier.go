@@ -47,7 +47,10 @@ type Querier interface {
 	// Cursor pagination, never OFFSET (Invariant 32). The id tie-break is not optional:
 	// updated_at is not unique. The first page passes Cursor.Bounds, so the range bound is a plain
 	// comparison the index can seek on.
+	// In the query, not afterwards: filtering results returns short pages and
 	ListJobsPage(ctx context.Context, arg ListJobsPageParams) ([]Job, error)
+	// In the query, not afterwards: filtering results returns short pages and
+	ListJobsPageInState(ctx context.Context, arg ListJobsPageInStateParams) ([]Job, error)
 	ListScheduleStates(ctx context.Context) ([]ScheduleState, error)
 	ListTaskPauses(ctx context.Context) ([]TaskPause, error)
 	PauseTask(ctx context.Context, arg PauseTaskParams) error

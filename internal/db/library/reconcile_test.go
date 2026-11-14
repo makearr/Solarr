@@ -178,3 +178,36 @@ func TestReconciler_ScopesToOneCategory(t *testing.T) {
 			missing, ok)
 	}
 }
+
+// A copy into another library must not take the id of a desired item that was deleted last.
+func TestCopyWorkItemsToCategory_NeverReusesADeletedItemID(t *testing.T) {
+	opened, queries := newLibrary(t)
+	kept := createWork(t, opened, "music", "Invented Album")
+	other := createWork(t, opened, "music", "Other Album")
+	original := createDesiredInCategory(t, opened, kept.ID, 1)
+	doomed := createDesiredInCategory(t, opened, other.ID, 1)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.DeleteDesiredItemsForWork(ctx, other.ID)
+	})
+
+	var copied int64
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		rows, err := q.CopyWorkItemsToCategory(ctx, librarydb.CopyWorkItemsToCategoryParams{
+			ToCategoryID: 2, ProfileID: 1, WorkID: kept.ID, FromCategoryID: 1,
+		})
+		copied = rows
+		return err
+	})
+	if copied != 1 {
+		t.Fatalf("copied %d items, want 1", copied)
+	}
+	items, err := queries.ListDesiredItemsForWork(t.Context(), kept.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range items {
+		if item.ID == doomed.ID {
+			t.Errorf("the copy took id %d, a desired item deleted before it (original %d)", item.ID, original.ID)
+		}
+	}
+}

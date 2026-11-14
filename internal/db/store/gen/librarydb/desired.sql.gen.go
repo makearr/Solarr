@@ -83,11 +83,13 @@ func (q *Queries) CopyWorkItemFilesToCategory(ctx context.Context, arg CopyWorkI
 }
 
 const copyWorkItemsToCategory = `-- name: CopyWorkItemsToCategory :execrows
-INSERT INTO desired_item (work_id, edition_id, media_ref, media_sort_key, category_id,
+INSERT INTO desired_item (id, work_id, edition_id, media_ref, media_sort_key, category_id,
                           profile_id, monitored, satisfaction_kind, required_count,
                           present_count, state, available_from, available_confidence,
                           available_basis, dirty, generation, last_planned_at, added_by)
-SELECT s.work_id, s.edition_id, s.media_ref, s.media_sort_key, ?1,
+SELECT (SELECT MAX(COALESCE((SELECT MAX(id) FROM desired_item), 0), COALESCE((SELECT value FROM id_high_water WHERE name = 'desired_item'), 0)))
+       + ROW_NUMBER() OVER (ORDER BY s.id),
+       s.work_id, s.edition_id, s.media_ref, s.media_sort_key, ?1,
        ?2, 0, s.satisfaction_kind, s.required_count,
        s.present_count, s.state, s.available_from, s.available_confidence,
        s.available_basis, 1, 0, NULL, s.added_by

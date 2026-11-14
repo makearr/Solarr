@@ -98,7 +98,7 @@ const listHistory = `-- name: ListHistory :many
 SELECT id, at, kind, category_id, work_id, acquisition_id, release_title, work_title, lead_name, indexer, client, detail, event_id
 FROM history
 WHERE (CAST(?1 AS INTEGER) = 0 OR work_id = ?1)
-  AND (CAST(?2 AS INTEGER) = 0 OR id < ?2)
+  AND id < ?2
 ORDER BY id DESC
 LIMIT ?3
 `

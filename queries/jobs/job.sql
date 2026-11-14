@@ -127,9 +127,23 @@ SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
        attempts, max_attempts, run_after, lease_owner, lease_expires_at,
        depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id, reclaims
 FROM job
-WHERE (sqlc.arg(state) = '' OR state = sqlc.arg(state))
-  -- In the query, not afterwards: filtering results returns short pages and
+-- In the query, not afterwards: filtering results returns short pages and
   -- breaks the cursor (Invariant 36).
+WHERE ((category_id IS NULL AND sqlc.arg(include_system) = 1)
+       OR category_id IN (SELECT value FROM json_each(sqlc.arg(visible_categories))))
+  AND updated_at <= sqlc.arg(after_sort)
+  AND (updated_at < sqlc.arg(after_sort) OR id < sqlc.arg(after_id))
+ORDER BY updated_at DESC, id DESC
+LIMIT sqlc.arg(page_size);
+
+-- name: ListJobsPageInState :many
+SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
+       attempts, max_attempts, run_after, lease_owner, lease_expires_at,
+       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id, reclaims
+FROM job
+-- In the query, not afterwards: filtering results returns short pages and
+  -- breaks the cursor (Invariant 36).
+WHERE state = sqlc.arg(state)
   AND ((category_id IS NULL AND sqlc.arg(include_system) = 1)
        OR category_id IN (SELECT value FROM json_each(sqlc.arg(visible_categories))))
   AND updated_at <= sqlc.arg(after_sort)
@@ -193,7 +207,7 @@ FROM event_log
 WHERE kind IN (SELECT value FROM json_each(CAST(sqlc.arg(kinds) AS TEXT)))
   AND (CAST(sqlc.arg(subject_id) AS INTEGER) = 0
        OR (subject_type = sqlc.arg(subject_type) AND subject_id = sqlc.arg(subject_id)))
-  AND (CAST(sqlc.arg(before_id) AS INTEGER) = 0 OR id < sqlc.arg(before_id))
+  AND id < sqlc.arg(before_id)
 ORDER BY id DESC
 LIMIT sqlc.arg(page_size);
 

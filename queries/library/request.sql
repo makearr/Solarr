@@ -20,7 +20,7 @@ FROM request WHERE id = ?;
 SELECT id, user_id, work_id, external_ref, media_type, category_id, scope_json,
        state, decided_by, decided_at, decline_reason, created_at
 FROM request
-WHERE state = 'PENDING' AND (sqlc.arg(after_id) = 0 OR id > sqlc.arg(after_id))
+WHERE state = 'PENDING' AND id > sqlc.arg(after_id)
 ORDER BY id
 LIMIT sqlc.arg(page_size);
 
@@ -48,6 +48,6 @@ SELECT id, user_id, work_id, external_ref, media_type, category_id, scope_json,
 FROM request
 WHERE (sqlc.arg(user_id) = 0 OR user_id = sqlc.arg(user_id))
   AND (sqlc.arg(state) = '' OR state = sqlc.arg(state))
-  AND (sqlc.arg(before_id) = 0 OR id < sqlc.arg(before_id))
+  AND id < sqlc.arg(before_id)
 ORDER BY id DESC
 LIMIT sqlc.arg(page_size);

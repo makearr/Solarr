@@ -626,7 +626,7 @@ FROM event_log
 WHERE kind IN (SELECT value FROM json_each(CAST(?1 AS TEXT)))
   AND (CAST(?2 AS INTEGER) = 0
        OR (subject_type = ?3 AND subject_id = ?2))
-  AND (CAST(?4 AS INTEGER) = 0 OR id < ?4)
+  AND id < ?4
 ORDER BY id DESC
 LIMIT ?5
 `
@@ -685,19 +685,16 @@ SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
        attempts, max_attempts, run_after, lease_owner, lease_expires_at,
        depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id, reclaims
 FROM job
-WHERE (?1 = '' OR state = ?1)
-  -- In the query, not afterwards: filtering results returns short pages and
   -- breaks the cursor (Invariant 36).
-  AND ((category_id IS NULL AND ?2 = 1)
-       OR category_id IN (SELECT value FROM json_each(?3)))
-  AND updated_at <= ?4
-  AND (updated_at < ?4 OR id < ?5)
+WHERE ((category_id IS NULL AND ?1 = 1)
+       OR category_id IN (SELECT value FROM json_each(?2)))
+  AND updated_at <= ?3
+  AND (updated_at < ?3 OR id < ?4)
 ORDER BY updated_at DESC, id DESC
-LIMIT ?6
+LIMIT ?5
 `
 
 type ListJobsPageParams struct {
-	State             interface{}
 	IncludeSystem     interface{}
 	VisibleCategories interface{}
 	AfterSort         int64
@@ -708,8 +705,85 @@ type ListJobsPageParams struct {
 // Cursor pagination, never OFFSET (Invariant 32). The id tie-break is not optional:
 // updated_at is not unique. The first page passes Cursor.Bounds, so the range bound is a plain
 // comparison the index can seek on.
+// In the query, not afterwards: filtering results returns short pages and
 func (q *Queries) ListJobsPage(ctx context.Context, arg ListJobsPageParams) ([]Job, error) {
 	rows, err := q.db.QueryContext(ctx, listJobsPage,
+		arg.IncludeSystem,
+		arg.VisibleCategories,
+		arg.AfterSort,
+		arg.AfterID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Job{}
+	for rows.Next() {
+		var i Job
+		if err := rows.Scan(
+			&i.ID,
+			&i.Type,
+			&i.Pool,
+			&i.ActionKey,
+			&i.Priority,
+			&i.PayloadJson,
+			&i.State,
+			&i.Mutating,
+			&i.Attempts,
+			&i.MaxAttempts,
+			&i.RunAfter,
+			&i.LeaseOwner,
+			&i.LeaseExpiresAt,
+			&i.DependsOn,
+			&i.CorrelationID,
+			&i.UserID,
+			&i.LastError,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CategoryID,
+			&i.Reclaims,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listJobsPageInState = `-- name: ListJobsPageInState :many
+SELECT id, type, pool, action_key, priority, payload_json, state, mutating,
+       attempts, max_attempts, run_after, lease_owner, lease_expires_at,
+       depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id, reclaims
+FROM job
+  -- breaks the cursor (Invariant 36).
+WHERE state = ?1
+  AND ((category_id IS NULL AND ?2 = 1)
+       OR category_id IN (SELECT value FROM json_each(?3)))
+  AND updated_at <= ?4
+  AND (updated_at < ?4 OR id < ?5)
+ORDER BY updated_at DESC, id DESC
+LIMIT ?6
+`
+
+type ListJobsPageInStateParams struct {
+	State             string
+	IncludeSystem     interface{}
+	VisibleCategories interface{}
+	AfterSort         int64
+	AfterID           int64
+	PageSize          int64
+}
+
+// In the query, not afterwards: filtering results returns short pages and
+func (q *Queries) ListJobsPageInState(ctx context.Context, arg ListJobsPageInStateParams) ([]Job, error) {
+	rows, err := q.db.QueryContext(ctx, listJobsPageInState,
 		arg.State,
 		arg.IncludeSystem,
 		arg.VisibleCategories,

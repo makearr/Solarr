@@ -8,7 +8,7 @@ RETURNING id;
 SELECT id, at, kind, category_id, work_id, acquisition_id, release_title, work_title, lead_name, indexer, client, detail, event_id
 FROM history
 WHERE (CAST(sqlc.arg(work_id) AS INTEGER) = 0 OR work_id = sqlc.arg(work_id))
-  AND (CAST(sqlc.arg(before_id) AS INTEGER) = 0 OR id < sqlc.arg(before_id))
+  AND id < sqlc.arg(before_id)
 ORDER BY id DESC
 LIMIT sqlc.arg(page_size);
 
