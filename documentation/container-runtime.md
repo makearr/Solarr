@@ -123,4 +123,7 @@ Solarr's page caches take at most `database.cache_size_kb` (default 384 MiB) in 
     stop_grace_period: 2m   # time to copy the RAM databases back to disk at SIGTERM
 ```
 
+A stop copies the RAM databases first, then waits up to 25 seconds for running jobs; a job that ignores the stop is named in
+the log ("job still running at shutdown; abandoned") and left to the next start to reclaim.
+
 See [memory-copies.md](memory-copies.md) for the risks, the 20% room rule and the memory guard.

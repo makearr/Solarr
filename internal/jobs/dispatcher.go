@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -27,6 +28,15 @@ type workerPool struct {
 	slots    chan struct{}
 	executor *Executor
 	running  sync.WaitGroup
+
+	activeMu sync.Mutex
+	active   map[int64]poolJob
+}
+
+// poolJob is what a pool reports about a job it still runs when the shutdown deadline passes.
+type poolJob struct {
+	job     Job
+	started time.Time
 }
 
 func newWorkerPool(pool Pool, capacity int, executor *Executor) *workerPool {
@@ -36,7 +46,7 @@ func newWorkerPool(pool Pool, capacity int, executor *Executor) *workerPool {
 	if capacity < 1 {
 		capacity = 1
 	}
-	return &workerPool{pool: pool, slots: make(chan struct{}, capacity), executor: executor}
+	return &workerPool{pool: pool, slots: make(chan struct{}, capacity), executor: executor, active: map[int64]poolJob{}}
 }
 
 // freeCapacity reports how many jobs this pool could take right now.
@@ -52,16 +62,42 @@ func (w *workerPool) submit(ctx context.Context, job Job) bool {
 	}
 
 	w.running.Add(1)
+	w.activeMu.Lock()
+	w.active[job.ID] = poolJob{job: job, started: w.executor.clock.Now()}
+	w.activeMu.Unlock()
 	go func() {
 		defer w.running.Done()
 		defer func() { <-w.slots }()
+		defer func() {
+			w.activeMu.Lock()
+			delete(w.active, job.ID)
+			w.activeMu.Unlock()
+		}()
 		w.executor.Execute(ctx, job)
 	}()
 	return true
 }
 
-// wait blocks until every running job in this pool has finished.
-func (w *workerPool) wait() { w.running.Wait() }
+// stillRunning lists the jobs this pool has not seen finish.
+func (w *workerPool) stillRunning() []poolJob {
+	w.activeMu.Lock()
+	defer w.activeMu.Unlock()
+	jobs := make([]poolJob, 0, len(w.active))
+	for _, running := range w.active {
+		jobs = append(jobs, running)
+	}
+	return jobs
+}
+
+// finished is closed once every running job in this pool has finished.
+func (w *workerPool) finished() <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		w.running.Wait()
+		close(done)
+	}()
+	return done
+}
 
 // DispatcherConfig wires the dispatch loop.
 type DispatcherConfig struct {
@@ -70,9 +106,14 @@ type DispatcherConfig struct {
 	Sizes []PoolSize
 	// Tick is how often to look for work. The loop never blocks on a job, so
 	// this is a polling interval rather than a latency floor.
-	Tick   time.Duration
-	Logger *slog.Logger
+	Tick time.Duration
+	// ShutdownGrace is how long a stop waits for running jobs before it gives up on them (DefaultShutdownGrace when zero).
+	ShutdownGrace time.Duration
+	Logger        *slog.Logger
 }
+
+// DefaultShutdownGrace stays under a container runtime's usual stop allowance once the server's own shutdown is counted.
+const DefaultShutdownGrace = 25 * time.Second
 
 // Dispatcher claims work and hands it to worker pools (Invariant 23).
 type Dispatcher struct {
@@ -84,12 +125,18 @@ type Dispatcher struct {
 	tick     time.Duration
 	leaseTTL time.Duration
 	owner    string
+	grace    time.Duration
+
+	abandoned atomic.Int64
 }
 
 // NewDispatcher builds a dispatcher over an executor's pools.
 func NewDispatcher(queue *Queue, cl clock.Clock, executor *Executor, config DispatcherConfig) *Dispatcher {
 	if config.Tick <= 0 {
 		config.Tick = DefaultTick
+	}
+	if config.ShutdownGrace <= 0 {
+		config.ShutdownGrace = DefaultShutdownGrace
 	}
 	if config.Logger == nil {
 		config.Logger = slog.Default()
@@ -112,6 +159,7 @@ func NewDispatcher(queue *Queue, cl clock.Clock, executor *Executor, config Disp
 		pools:  pools,
 		order:  order,
 		tick:   config.Tick,
+		grace:  config.ShutdownGrace,
 		// Taken from the executor rather than configured again: the value that
 		// claims a lease must be the value that renews it.
 		leaseTTL: executor.LeaseTTL(),
@@ -182,11 +230,35 @@ func (d *Dispatcher) reclaim(ctx context.Context) {
 	}
 }
 
+// drain waits for the running jobs until the grace period ends, then names the ones that ignored
+// their cancelled context and abandons them: their leases expire and the next start reclaims them.
 func (d *Dispatcher) drain() {
+	timer := d.clock.NewTimer(d.grace)
+	defer timer.Stop()
 	for _, pool := range d.order {
-		d.pools[pool].wait()
+		select {
+		case <-d.pools[pool].finished():
+		case <-timer.C():
+			d.abandon()
+			return
+		}
 	}
 }
+
+func (d *Dispatcher) abandon() {
+	for _, pool := range d.order {
+		for _, running := range d.pools[pool].stillRunning() {
+			d.abandoned.Add(1)
+			d.logger.Warn("job still running at shutdown; abandoned",
+				slog.Int64("job_id", running.job.ID), slog.String("type", string(running.job.Type)),
+				slog.String("pool", string(pool)), slog.Time("started_at", running.started),
+				slog.Int("attempts", running.job.Attempts))
+		}
+	}
+}
+
+// Abandoned counts the jobs a stop gave up waiting for; their goroutines may still touch the databases.
+func (d *Dispatcher) Abandoned() int { return int(d.abandoned.Load()) }
 
 // InFlight reports how many jobs are running in each pool, for the dashboard
 // and for tests that need to wait for quiet.

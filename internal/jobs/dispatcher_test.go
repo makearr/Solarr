@@ -276,3 +276,49 @@ func waitForQuiet(t *testing.T, dispatcher *jobs.Dispatcher) {
 	}
 	t.Fatal("jobs were still running after 3s")
 }
+
+// A job that ignores its cancelled context must not keep the process from stopping.
+func TestDispatcher_RunAbandonsAJobStillRunningAfterTheShutdownGrace(t *testing.T) {
+	queue, fake := newQueue(t)
+	executor := newExecutor(t, queue, fake, jobs.ModeNormal)
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	executor.Handle(typeBackup, jobs.HandlerFunc(func(context.Context, jobs.Job) error {
+		close(started)
+		<-release
+		return nil
+	}))
+	dispatcher := jobs.NewDispatcher(queue, fake, executor, jobs.DispatcherConfig{
+		Sizes: []jobs.PoolSize{{Pool: jobs.PoolMaintenance, Capacity: 1}},
+		Tick:  time.Second, ShutdownGrace: 10 * time.Second, Logger: quietLogger(),
+	})
+	mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	go func() {
+		dispatcher.Run(ctx)
+		close(stopped)
+	}()
+	fake.BlockUntilWaiters(1)
+	fake.Advance(time.Second)
+	<-started
+	cancel()
+
+	deadline := time.After(5 * time.Second)
+	for stopped != nil {
+		select {
+		case <-stopped:
+			stopped = nil
+		case <-deadline:
+			t.Fatal("Run did not return after the shutdown grace")
+		case <-time.After(5 * time.Millisecond):
+			fake.Advance(time.Second)
+		}
+	}
+	if got := dispatcher.Abandoned(); got != 1 {
+		t.Errorf("Abandoned = %d, want 1", got)
+	}
+}

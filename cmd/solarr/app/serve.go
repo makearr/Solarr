@@ -756,6 +756,7 @@ func (p *process) startServer(ctx context.Context) error {
 
 	// Before the jobs drain, which can outlast a runtime's grace period: what runs from RAM goes to disk at once,
 	// and again once the databases are idle (p.close).
+	server.MarkNotReady()
 	signalCopy, cancelCopy := context.WithTimeout(context.Background(), 2*time.Minute)
 	p.memory.finalSync(signalCopy)
 	cancelCopy()
@@ -770,6 +771,9 @@ func (p *process) startServer(ctx context.Context) error {
 		p.logger.Warn("server shutdown", slog.Any("error", err))
 	}
 	<-dispatcherDone
+	if abandoned := p.dispatcher.Abandoned(); abandoned > 0 {
+		p.logger.Warn("exiting with jobs abandoned", slog.Int("count", abandoned))
+	}
 	return nil
 }
 
@@ -1023,6 +1027,10 @@ func (p *process) close() {
 	finalCopy, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	p.memory.finalSync(finalCopy)
 	cancel()
+	if p.dispatcher != nil && p.dispatcher.Abandoned() > 0 {
+		// A stuck job may still write; closing under it would hang, and the leases are reclaimed on the next start.
+		return
+	}
 	for _, opened := range []*store.Store{p.library, p.jobs, p.settings, p.statistics, p.metadata} {
 		if opened == nil {
 			continue

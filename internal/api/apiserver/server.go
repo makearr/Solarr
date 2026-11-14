@@ -1038,6 +1038,9 @@ func (s *Server) Address() string { return s.address }
 // that must precede serving traffic (section 15.1).
 func (s *Server) MarkReady() { s.ready.Store(true) }
 
+// MarkNotReady flips /ready to 503 when a stop begins, before the slow copy of the RAM databases.
+func (s *Server) MarkNotReady() { s.ready.Store(false) }
+
 // Serve listens and blocks until the server stops. A closed server returns nil
 // rather than http.ErrServerClosed, because an orderly stop is not an error.
 func (s *Server) Serve(listener net.Listener) error {
