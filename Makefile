@@ -118,8 +118,8 @@ license-check: ## Fail if the About page's embedded LICENSE/ATTRIBUTION copies d
 build: cache-init  ## Build the binary (CGO_ENABLED=0, per ADR-30)
 	$(RUN_GO) go build -trimpath -ldflags "$(LDFLAGS)" -o /src/solarr ./cmd/solarr
 
-test: cache-init  ## Unit tests
-	$(RUN_GO) go test -count=1 ./...
+test: cache-init  ## Unit tests. One package or test: make test PKG=./internal/jobs/... [RUN=TestName]
+	$(RUN_GO) go test -count=1 $(if $(RUN),-run '$(RUN)') $(or $(PKG),./...)
 
 race: cache-init  ## Tests with the race detector (needs CGO)
 	docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) $(CACHE) -e GOCACHE=/.cache/go-build -e HOME=/tmp \
