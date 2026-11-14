@@ -453,3 +453,20 @@ func TestDeletingAWorkTakesItsPartsWithIt(t *testing.T) {
 		t.Errorf("%d alternate titles outlived the work", len(remaining))
 	}
 }
+
+// A special is s00:e01; the statistic once matched a ref format that does not exist and counted it as a missing episode.
+func TestAggregateSeriesGaps_LeavesSpecialsOut(t *testing.T) {
+	opened, queries := newLibrary(t)
+	series := createWork(t, opened, "tv", "Invented Show")
+	createPart(t, opened, series.ID, "s00:e01", "0:001", "A Special")
+	createPart(t, opened, series.ID, "s01:e01", "1:001", "Pilot")
+	createDesired(t, opened, series.ID, "SET", 2)
+
+	rows, err := queries.AggregateSeriesGaps(t.Context(), sql.NullString{String: "2000-01-01", Valid: true})
+	if err != nil {
+		t.Fatalf("AggregateSeriesGaps: %v", err)
+	}
+	if len(rows) != 1 || rows[0].Missing+rows[0].Unaired != 1 {
+		t.Errorf("gaps = %+v, want one series with one episode owed (the special does not count)", rows)
+	}
+}

@@ -95,7 +95,7 @@ SELECT d.category_id, wp.work_id, w.canonical_title AS title,
 FROM work_part wp
 JOIN work w ON w.id = wp.work_id AND w.media_type = 'tv'
 JOIN (SELECT DISTINCT work_id, category_id FROM desired_item) d ON d.work_id = wp.work_id
-WHERE wp.monitored = 1 AND wp.media_ref NOT LIKE 's00e%'
+WHERE wp.monitored = 1 AND wp.media_ref NOT LIKE 's00:%'
   AND NOT EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item di ON di.id = f.desired_item_id
                   WHERE di.work_id = wp.work_id AND f.role = 'primary' AND f.media_ref = wp.media_ref)
 GROUP BY d.category_id, wp.work_id
