@@ -88,23 +88,38 @@ func (c Candidates) ListDecisionsForItem(ctx context.Context, itemID, limit int6
 	}
 	details := make([]library.DecisionDetail, len(rows))
 	for i, row := range rows {
-		details[i] = library.DecisionDetail{
-			Decision: library.Decision{
-				ID: row.ID, CandidateID: row.CandidateID, DesiredItemID: row.DesiredItemID,
-				Outcome: row.Outcome, Score: row.Score, ComponentsJSON: row.ComponentsJson,
-				RejectionsJSON: row.RejectionsJson.String, DeferralsJSON: row.DeferralsJson.String,
-				MatchConfidence: floatPtr(row.MatchConfidence), DecidedAt: row.DecidedAt,
-			},
-			ReleaseCandidate: library.ReleaseCandidate{
-				ID: row.CandidateID, IndexerID: row.IndexerID, GUID: row.Guid, Title: row.Title,
-				SizeBytes: intPtr(row.SizeBytes), Seeders: intPtr(row.Seeders), Leechers: intPtr(row.Leechers),
-				PublishedAt: intPtr(row.PublishedAt), Protocol: row.Protocol, DownloadURL: row.DownloadUrl,
-				ParseConfidence: floatPtr(row.ParseConfidence), Source: row.Source,
-				FirstSeenAt: row.FirstSeenAt, ExpiresAt: row.ExpiresAt,
-			},
-		}
+		details[i] = decisionDetailOf(row)
 	}
 	return details, nil
+}
+
+// DecisionForItem answers one decision of an item with its release, wherever it sits in the item's history;
+// sql.ErrNoRows when the item has no such decision.
+func (c Candidates) DecisionForItem(ctx context.Context, itemID, decisionID int64) (library.DecisionDetail, error) {
+	row, err := statisticsdb.New(c.store.Read()).GetDecisionForItemWithCandidate(ctx,
+		statisticsdb.GetDecisionForItemWithCandidateParams{DesiredItemID: itemID, ID: decisionID})
+	if err != nil {
+		return library.DecisionDetail{}, fmt.Errorf("statistics: decision %d of item %d: %w", decisionID, itemID, err)
+	}
+	return decisionDetailOf(statisticsdb.ListDecisionsForItemWithCandidateRow(row)), nil
+}
+
+func decisionDetailOf(row statisticsdb.ListDecisionsForItemWithCandidateRow) library.DecisionDetail {
+	return library.DecisionDetail{
+		Decision: library.Decision{
+			ID: row.ID, CandidateID: row.CandidateID, DesiredItemID: row.DesiredItemID,
+			Outcome: row.Outcome, Score: row.Score, ComponentsJSON: row.ComponentsJson,
+			RejectionsJSON: row.RejectionsJson.String, DeferralsJSON: row.DeferralsJson.String,
+			MatchConfidence: floatPtr(row.MatchConfidence), DecidedAt: row.DecidedAt,
+		},
+		ReleaseCandidate: library.ReleaseCandidate{
+			ID: row.CandidateID, IndexerID: row.IndexerID, GUID: row.Guid, Title: row.Title,
+			SizeBytes: intPtr(row.SizeBytes), Seeders: intPtr(row.Seeders), Leechers: intPtr(row.Leechers),
+			PublishedAt: intPtr(row.PublishedAt), Protocol: row.Protocol, DownloadURL: row.DownloadUrl,
+			ParseConfidence: floatPtr(row.ParseConfidence), Source: row.Source,
+			FirstSeenAt: row.FirstSeenAt, ExpiresAt: row.ExpiresAt,
+		},
+	}
 }
 
 // DecisionsByOutcome counts the decisions since a time, per library and outcome, for the statistics.

@@ -38,6 +38,15 @@ FROM candidate_decision cd
 JOIN candidate c ON c.id = cd.candidate_id
 WHERE cd.desired_item_id = ? ORDER BY cd.decided_at DESC, cd.id ASC LIMIT ?;
 
+-- name: GetDecisionForItemWithCandidate :one
+SELECT cd.id, cd.candidate_id, cd.desired_item_id, cd.outcome, cd.score, cd.components_json,
+       cd.rejections_json, cd.deferrals_json, cd.match_confidence, cd.decided_at,
+       c.indexer_id, c.guid, c.title, c.size_bytes, c.seeders, c.leechers, c.published_at,
+       c.protocol, c.download_url, c.parse_confidence, c.source, c.first_seen_at, c.expires_at
+FROM candidate_decision cd
+JOIN candidate c ON c.id = cd.candidate_id
+WHERE cd.desired_item_id = ? AND cd.id = ?;
+
 -- Ids rise with time, so the oldest page holds the oldest decisions; a page with none past the line ends the pass.
 -- name: ListDecisionsToRetire :many
 SELECT cd.id, cd.desired_item_id, cd.outcome, cd.score, cd.rejections_json, cd.decided_at

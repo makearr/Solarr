@@ -31,6 +31,7 @@ type Querier interface {
 	// A candidate goes once it expired and no decision refers to it; a held release carries its own copy.
 	DeleteUnreferencedExpiredCandidates(ctx context.Context, arg DeleteUnreferencedExpiredCandidatesParams) (int64, error)
 	GetCandidate(ctx context.Context, id int64) (Candidate, error)
+	GetDecisionForItemWithCandidate(ctx context.Context, arg GetDecisionForItemWithCandidateParams) (GetDecisionForItemWithCandidateRow, error)
 	InsertDownloadSpeed(ctx context.Context, arg InsertDownloadSpeedParams) error
 	InsertSearchLog(ctx context.Context, arg InsertSearchLogParams) error
 	ListDecisionRollup(ctx context.Context, desiredItemID int64) ([]DecisionRollup, error)

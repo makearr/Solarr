@@ -191,6 +191,23 @@ func TestDispatch_ARowThatCannotBeRecordedTakesTheReleaseBackOutOfTheClient(t *t
 	}
 }
 
+// A busy item (many RSS rounds) has more decisions than one listing holds; any of them can still be sent.
+func TestDispatch_SendsADecisionPastTheNewestHundred(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	var last library.DecisionDetail
+	for range 101 {
+		last = env.recordDecision(t, item.ID, "ACCEPT")
+	}
+	sender := &fakeSabnzbdSender{clientRef: "nzo-1"}
+
+	acquisition, err := env.dispatch([]music.DownloaderConn{{ID: 5, Protocol: "usenet", Client: sender}}).
+		Send(t.Context(), item.ID, last.Decision.ID, env.clock.Now())
+	if err != nil || acquisition.DownloadClientRef != "nzo-1" {
+		t.Errorf("Send = %+v, %v; want the 101st decision found and sent", acquisition, err)
+	}
+}
+
 func TestDispatch_RefusesANonAcceptDecision(t *testing.T) {
 	env := newSearchTestEnv(t)
 	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)

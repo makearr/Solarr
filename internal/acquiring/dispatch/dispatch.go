@@ -4,6 +4,7 @@ package dispatch
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -132,10 +133,6 @@ type Dispatch struct {
 // Search.SearchItem, to whichever configured downloader matches its own
 // protocol.
 func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Time) (library.Acquisition, error) {
-	if _, err := d.Desired.Get(ctx, itemID); err != nil {
-		return library.Acquisition{}, fmt.Errorf("dispatch: %w", err)
-	}
-
 	detail, err := d.findDecision(ctx, itemID, decisionID)
 	if err != nil {
 		return library.Acquisition{}, err
@@ -252,19 +249,16 @@ func (d Dispatch) SendRelease(ctx context.Context, itemID int64, release library
 }
 
 func (d Dispatch) findDecision(ctx context.Context, itemID, decisionID int64) (library.DecisionDetail, error) {
-	details, err := d.Candidates.ListDecisionsForItem(ctx, itemID, DecisionLookupLimit)
+	detail, err := d.Candidates.DecisionForItem(ctx, itemID, decisionID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return library.DecisionDetail{}, ErrDecisionNotFound
+	}
 	if err != nil {
-		return library.DecisionDetail{}, fmt.Errorf("dispatch: list decisions: %w", err)
+		return library.DecisionDetail{}, fmt.Errorf("dispatch: %w", err)
 	}
-	for _, detail := range details {
-		if detail.Decision.ID == decisionID {
-			return detail, nil
-		}
-	}
-	return library.DecisionDetail{}, ErrDecisionNotFound
+	return detail, nil
 }
 
-// DecisionLookupLimit bounds findDecision's own lookup -- generous
-// for a manual, low-frequency action; the same ceiling
-// adapters.CandidateSearch's own history listing already uses.
+// DecisionLookupLimit bounds a listing of an item's recent decisions; the same ceiling adapters.CandidateSearch's own
+// history listing uses.
 const DecisionLookupLimit = 100

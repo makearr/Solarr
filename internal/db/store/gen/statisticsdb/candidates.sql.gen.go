@@ -114,6 +114,78 @@ func (q *Queries) GetCandidate(ctx context.Context, id int64) (Candidate, error)
 	return i, err
 }
 
+const getDecisionForItemWithCandidate = `-- name: GetDecisionForItemWithCandidate :one
+SELECT cd.id, cd.candidate_id, cd.desired_item_id, cd.outcome, cd.score, cd.components_json,
+       cd.rejections_json, cd.deferrals_json, cd.match_confidence, cd.decided_at,
+       c.indexer_id, c.guid, c.title, c.size_bytes, c.seeders, c.leechers, c.published_at,
+       c.protocol, c.download_url, c.parse_confidence, c.source, c.first_seen_at, c.expires_at
+FROM candidate_decision cd
+JOIN candidate c ON c.id = cd.candidate_id
+WHERE cd.desired_item_id = ? AND cd.id = ?
+`
+
+type GetDecisionForItemWithCandidateParams struct {
+	DesiredItemID int64
+	ID            int64
+}
+
+type GetDecisionForItemWithCandidateRow struct {
+	ID              int64
+	CandidateID     int64
+	DesiredItemID   int64
+	Outcome         string
+	Score           float64
+	ComponentsJson  string
+	RejectionsJson  sql.NullString
+	DeferralsJson   sql.NullString
+	MatchConfidence sql.NullFloat64
+	DecidedAt       int64
+	IndexerID       int64
+	Guid            string
+	Title           string
+	SizeBytes       sql.NullInt64
+	Seeders         sql.NullInt64
+	Leechers        sql.NullInt64
+	PublishedAt     sql.NullInt64
+	Protocol        string
+	DownloadUrl     string
+	ParseConfidence sql.NullFloat64
+	Source          string
+	FirstSeenAt     int64
+	ExpiresAt       int64
+}
+
+func (q *Queries) GetDecisionForItemWithCandidate(ctx context.Context, arg GetDecisionForItemWithCandidateParams) (GetDecisionForItemWithCandidateRow, error) {
+	row := q.db.QueryRowContext(ctx, getDecisionForItemWithCandidate, arg.DesiredItemID, arg.ID)
+	var i GetDecisionForItemWithCandidateRow
+	err := row.Scan(
+		&i.ID,
+		&i.CandidateID,
+		&i.DesiredItemID,
+		&i.Outcome,
+		&i.Score,
+		&i.ComponentsJson,
+		&i.RejectionsJson,
+		&i.DeferralsJson,
+		&i.MatchConfidence,
+		&i.DecidedAt,
+		&i.IndexerID,
+		&i.Guid,
+		&i.Title,
+		&i.SizeBytes,
+		&i.Seeders,
+		&i.Leechers,
+		&i.PublishedAt,
+		&i.Protocol,
+		&i.DownloadUrl,
+		&i.ParseConfidence,
+		&i.Source,
+		&i.FirstSeenAt,
+		&i.ExpiresAt,
+	)
+	return i, err
+}
+
 const listDecisionRollup = `-- name: ListDecisionRollup :many
 SELECT desired_item_id, period, outcome, count, best_score, top_reason
 FROM decision_rollup
