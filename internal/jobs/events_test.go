@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -177,5 +178,18 @@ func TestRetentionState_RemembersHowFarItGot(t *testing.T) {
 	if state.PrunedThrough != 250 {
 		t.Errorf("pruned_through = %d, want 250: the second pass must replace the first",
 			state.PrunedThrough)
+	}
+}
+
+// A page of a rare event kind must come from the kind's own index, not from a walk of the whole log.
+func TestListEventsOfKinds_UsesTheKindIndex(t *testing.T) {
+	_, opened, _ := newQueueWithStore(t)
+	plan, err := opened.ExplainQueryPlan(t.Context(), `SELECT id FROM event_log
+		WHERE kind IN (SELECT value FROM json_each('["download.failed"]')) AND id < 100 ORDER BY id DESC LIMIT 50`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(plan, "event_kind_id") {
+		t.Errorf("plan %q does not use event_kind_id", plan)
 	}
 }
