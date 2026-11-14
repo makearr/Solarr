@@ -8,9 +8,8 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/download"
 )
 
-// historyLimit bounds how much of SABnzbd's history one poll reads: enough for every download
-// finished since the last poll on any real setup.
-const historyLimit = 200
+// historyLimit bounds how much of SABnzbd's history one listing reads when it cannot ask for named jobs.
+const historyLimit = 1000
 
 // Definition is SABnzbd as the settings screen offers it.
 func Definition() download.Definition {
@@ -57,6 +56,26 @@ func (d Downloader) Downloads(ctx context.Context, category string) ([]download.
 	if err != nil {
 		return nil, err
 	}
+	return downloadsOf(queue, history, category), nil
+}
+
+// DownloadsByRef implements download.ByReference: the named jobs from the queue and from history, wherever they sit in it.
+func (d Downloader) DownloadsByRef(ctx context.Context, clientRefs []string) ([]download.Download, error) {
+	if len(clientRefs) == 0 {
+		return nil, nil
+	}
+	queue, err := d.Client.QueueOf(ctx, clientRefs)
+	if err != nil {
+		return nil, err
+	}
+	history, err := d.Client.HistoryOf(ctx, clientRefs)
+	if err != nil {
+		return nil, err
+	}
+	return downloadsOf(queue, history, ""), nil
+}
+
+func downloadsOf(queue QueueState, history []HistorySlot, category string) []download.Download {
 	var downloads []download.Download
 	for _, slot := range queue.Slots {
 		if category != "" && !strings.EqualFold(slot.Category, category) {
@@ -82,7 +101,7 @@ func (d Downloader) Downloads(ctx context.Context, category string) ([]download.
 		}
 		downloads = append(downloads, entry)
 	}
-	return downloads, nil
+	return downloads
 }
 
 // QueueStatus answers the queue's totals.

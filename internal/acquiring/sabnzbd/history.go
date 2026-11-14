@@ -48,6 +48,15 @@ func (c Client) History(ctx context.Context, category string, limit int) ([]Hist
 	if limit > 0 {
 		params.Set("limit", strconv.Itoa(limit))
 	}
+	return c.history(ctx, params)
+}
+
+// HistoryOf answers the named jobs from history, however long ago they finished.
+func (c Client) HistoryOf(ctx context.Context, clientRefs []string) ([]HistorySlot, error) {
+	return c.history(ctx, url.Values{"nzo_ids": {strings.Join(clientRefs, ",")}})
+}
+
+func (c Client) history(ctx context.Context, params url.Values) ([]HistorySlot, error) {
 	var parsed historyResponse
 	if err := c.getJSON(ctx, c.apiURL("history", params), &parsed); err != nil {
 		return nil, fmt.Errorf("sabnzbd: history: %w", err)

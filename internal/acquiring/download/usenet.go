@@ -41,6 +41,14 @@ func (b usenetBase) Downloads(ctx context.Context, category string) ([]Download,
 	return b.client.Downloads(ctx, category)
 }
 
+// DownloadsByRef implements ByReference when the client underneath does.
+func (b usenetBase) DownloadsByRef(ctx context.Context, clientRefs []string) ([]Download, error) {
+	if by, ok := b.client.(ByReference); ok {
+		return by.DownloadsByRef(ctx, clientRefs)
+	}
+	return nil, ErrByRefUnsupported
+}
+
 func (b usenetBase) QueueStatus(ctx context.Context) (QueueStatus, error) {
 	return b.client.QueueStatus(ctx)
 }

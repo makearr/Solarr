@@ -65,6 +65,22 @@ func (d Downloader) Downloads(ctx context.Context, category string) ([]download.
 	if err != nil {
 		return nil, err
 	}
+	return downloadsOf(torrents), nil
+}
+
+// DownloadsByRef implements download.ByReference: only the torrents named, whatever else the client holds.
+func (d Downloader) DownloadsByRef(ctx context.Context, clientRefs []string) ([]download.Download, error) {
+	if len(clientRefs) == 0 {
+		return nil, nil
+	}
+	torrents, err := d.Client.TorrentsOf(ctx, clientRefs)
+	if err != nil {
+		return nil, err
+	}
+	return downloadsOf(torrents), nil
+}
+
+func downloadsOf(torrents []Torrent) []download.Download {
 	downloads := make([]download.Download, len(torrents))
 	for i, torrent := range torrents {
 		downloads[i] = download.Download{
@@ -79,7 +95,7 @@ func (d Downloader) Downloads(ctx context.Context, category string) ([]download.
 			downloads[i].Error = "qBittorrent reports " + torrent.State
 		}
 	}
-	return downloads, nil
+	return downloads
 }
 
 // FinishedFiles implements download.FinishedFiles: the files of a torrent that are fully downloaded and wanted, below

@@ -3,7 +3,9 @@ package sabnzbd
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
+	"strings"
 )
 
 // QueueState is SABnzbd's own current queue -- ADR-12's queue and bandwidth
@@ -62,9 +64,16 @@ type queueSlot struct {
 }
 
 // Queue fetches the current queue state.
-func (c Client) Queue(ctx context.Context) (QueueState, error) {
+func (c Client) Queue(ctx context.Context) (QueueState, error) { return c.queue(ctx, nil) }
+
+// QueueOf fetches only the named jobs of the queue.
+func (c Client) QueueOf(ctx context.Context, clientRefs []string) (QueueState, error) {
+	return c.queue(ctx, url.Values{"nzo_ids": {strings.Join(clientRefs, ",")}})
+}
+
+func (c Client) queue(ctx context.Context, params url.Values) (QueueState, error) {
 	var parsed queueResponse
-	requestURL := c.apiURL("queue", nil)
+	requestURL := c.apiURL("queue", params)
 	if err := c.getJSON(ctx, requestURL, &parsed); err != nil {
 		return QueueState{}, fmt.Errorf("sabnzbd: queue: %w", err)
 	}

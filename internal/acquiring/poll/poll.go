@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"path"
 	"slices"
 	"strconv"
@@ -206,7 +207,7 @@ func (j *Job) sweepSeeding(ctx context.Context, clients map[int64]Client, import
 	var failures []error
 	for clientID, acquisitions := range byClient {
 		client := clients[clientID]
-		reported, err := client.Client.Downloads(ctx, "")
+		reported, err := listDownloads(ctx, client.Client, acquisitions)
 		if err != nil {
 			failures = append(failures, fmt.Errorf("download client %d: %w", clientID, err))
 			continue
@@ -247,8 +248,35 @@ func (j *Job) sweepSeeding(ctx context.Context, clients map[int64]Client, import
 	return errors.Join(failures...)
 }
 
+// listDownloads asks a client for the downloads of these acquisitions alone. A client that can answer by reference does;
+// any other is listed once per category the acquisitions were sent in, never as a whole, since a shared client's
+// category-less listing is only a window and a finished download falls out of it.
+func listDownloads(ctx context.Context, client download.Client, acquisitions []library.Acquisition) ([]download.Download, error) {
+	refs := make([]string, 0, len(acquisitions))
+	categories := map[string]bool{}
+	for _, acquisition := range acquisitions {
+		refs = append(refs, acquisition.DownloadClientRef)
+		categories[acquisition.ClientCategory] = true
+	}
+	if by, ok := client.(download.ByReference); ok {
+		listed, err := by.DownloadsByRef(ctx, refs)
+		if !errors.Is(err, download.ErrByRefUnsupported) {
+			return listed, err
+		}
+	}
+	var listed []download.Download
+	for _, category := range slices.Sorted(maps.Keys(categories)) {
+		part, err := client.Downloads(ctx, category)
+		if err != nil {
+			return nil, err
+		}
+		listed = append(listed, part...)
+	}
+	return listed, nil
+}
+
 func (j *Job) pollClient(ctx context.Context, client Client, acquisitions []library.Acquisition) error {
-	reported, err := client.Client.Downloads(ctx, "")
+	reported, err := listDownloads(ctx, client.Client, acquisitions)
 	if err != nil {
 		return err
 	}

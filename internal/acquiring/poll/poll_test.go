@@ -66,7 +66,9 @@ func (f *fakeClient) Remove(_ context.Context, clientRef string, deleteFiles boo
 }
 
 type env struct {
-	store        *store.Store
+	store *store.Store
+	// driver replaces client in the job when a test needs a different capability set.
+	driver       download.Client
 	acquisitions library.Acquisitions
 	sessions     library.ImportSessions
 	blocklist    library.BlocklistStore
@@ -121,11 +123,15 @@ func newEnv(t *testing.T) *env {
 }
 
 func (e *env) job() *poll.Job {
+	var driver download.Client = e.client
+	if e.driver != nil {
+		driver = e.driver
+	}
 	return poll.NewJob(poll.Config{
 		Acquisitions: e.acquisitions, Sessions: e.sessions, Blocklist: e.blocklist, FS: e.fsys,
 		BlocklistDuplicates: func() bool { return e.blockDuplicates },
 		Clients: func(context.Context) (map[int64]poll.Client, error) {
-			return map[int64]poll.Client{1: {Name: "Home SABnzbd", Client: e.client, RemoveCompleted: e.removeDone, SeedRatio: e.seedRatio, SeedMinutes: e.seedMinutes, SeedBoth: e.seedBoth, MaxSeedMinutes: e.maxSeedMinutes,
+			return map[int64]poll.Client{1: {Name: "Home SABnzbd", Client: driver, RemoveCompleted: e.removeDone, SeedRatio: e.seedRatio, SeedMinutes: e.seedMinutes, SeedBoth: e.seedBoth, MaxSeedMinutes: e.maxSeedMinutes,
 				LocalPath: func(reported string) string { return reported }, Stall: e.stall}}, nil
 		},
 		DownloadFolders: func(context.Context) ([]string, error) { return []string{"/downloads"}, nil },
@@ -901,5 +907,31 @@ func TestPoll_ADownloadFirstSeenFinishedMeasuresNothing(t *testing.T) {
 	e.run(t)
 	if len(e.speeds) != 0 {
 		t.Errorf("speeds = %v, want none: the download was never seen running", e.speeds)
+	}
+}
+
+// A client that answers by reference is asked for these downloads alone, so a finished one cannot fall out of a window.
+type referencingClient struct {
+	*fakeClient
+	asked [][]string
+}
+
+func (r *referencingClient) DownloadsByRef(_ context.Context, refs []string) ([]download.Download, error) {
+	r.asked = append(r.asked, refs)
+	return r.downloads, nil
+}
+
+func TestPoll_AsksAClientThatCanForTheDownloadsItTracks(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	tracking := &referencingClient{fakeClient: e.client}
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "nzo-1", State: download.StateDownloading}}
+	e.driver = tracking
+	e.run(t)
+	if len(tracking.asked) != 1 || !slices.Equal(tracking.asked[0], []string{"nzo-1"}) {
+		t.Errorf("asked %v, want exactly the tracked reference", tracking.asked)
+	}
+	if got := e.state(t, sent.ID); got.State != poll.StateDownloading {
+		t.Errorf("= %s, want DOWNLOADING", got.State)
 	}
 }

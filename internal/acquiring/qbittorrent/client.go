@@ -200,6 +200,15 @@ func (c Client) Torrents(ctx context.Context, category string) ([]Torrent, error
 	return torrents, nil
 }
 
+// TorrentsOf answers only the torrents with these hashes.
+func (c Client) TorrentsOf(ctx context.Context, hashes []string) ([]Torrent, error) {
+	var torrents []Torrent
+	if err := c.getJSON(ctx, "/api/v2/torrents/info", url.Values{"hashes": {strings.Join(hashes, "|")}}, &torrents); err != nil {
+		return nil, err
+	}
+	return torrents, nil
+}
+
 // TorrentFile is one file of a torrent: its path below the torrent's folder, and how much of it is done.
 type TorrentFile struct {
 	Name     string  `json:"name"`

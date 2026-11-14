@@ -228,3 +228,16 @@ func TestDownloader_FinishedFilesAreTheCompleteOnesBelowTheTorrentsFolder(t *tes
 		t.Errorf("loose files = %q %q, %v; want none", folder, files, err)
 	}
 }
+
+// Only the torrents a caller tracks are asked for, whatever else the client holds in any category.
+func TestDownloader_AsksForNamedTorrentsByHash(t *testing.T) {
+	server := &fakeServer{routes: map[string]route{"/api/v2/torrents/info": {body: `[
+	 {"hash":"a","name":"seeding","category":"c","state":"stalledUP","size":10,"amount_left":0,"content_path":"/downloads/x"}]`}}}
+	got, err := qbittorrent.Downloader{Client: newClient(t, server, "")}.DownloadsByRef(t.Context(), []string{"a", "b"})
+	if err != nil || len(got) != 1 || got[0].ClientRef != "a" {
+		t.Fatalf("DownloadsByRef = %+v, %v; want torrent a", got, err)
+	}
+	if server.requested[0].URL.RawQuery != "hashes=a%7Cb" {
+		t.Errorf("query = %q, want both hashes joined with a pipe", server.requested[0].URL.RawQuery)
+	}
+}

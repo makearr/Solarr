@@ -99,6 +99,16 @@ type FinishedFiles interface {
 	FinishedFiles(ctx context.Context, clientRef string) (folder string, files []string, err error)
 }
 
+// ByReference is a client that can answer for named downloads alone. Asking it is exact where listing a category is
+// not: a category lists only a window of a shared client's history, and a finished download can drop out of it.
+type ByReference interface {
+	// DownloadsByRef answers the downloads with these references; one the client no longer has is simply absent.
+	DownloadsByRef(ctx context.Context, clientRefs []string) ([]Download, error)
+}
+
+// ErrByRefUnsupported is a driver whose underlying client cannot answer by reference; the caller lists by category instead.
+var ErrByRefUnsupported = errors.New("download: the client cannot list downloads by reference")
+
 // Client is one configured download client.
 type Client interface {
 	// Add sends a release and answers the client's reference for it.

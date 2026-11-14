@@ -64,3 +64,33 @@ func TestDownloader_AGrabbingJobHasNoNameYet(t *testing.T) {
 		t.Errorf("downloads = %+v, want %+v", downloads, want)
 	}
 }
+
+// A finished download that has left the newest history entries is still found, because the job is asked for by id.
+func TestDownloader_AsksForNamedJobsInTheQueueAndInHistory(t *testing.T) {
+	var asked []string
+	transport := askedTransport{bodies: modeTransport{"queue": `{"queue":{"slots":[]}}`, "history": historyFixtureJSON}, asked: &asked}
+	client := sabnzbd.NewClient(newTestClient(t, transport), "http://sabnzbd.local:8080", "key")
+
+	downloads, err := sabnzbd.Downloader{Client: client}.DownloadsByRef(t.Context(), []string{"SABnzbd_nzo_abc123", "SABnzbd_nzo_def456"})
+	if err != nil {
+		t.Fatalf("DownloadsByRef: %v", err)
+	}
+	want := []string{"queue nzo_ids=SABnzbd_nzo_abc123,SABnzbd_nzo_def456", "history nzo_ids=SABnzbd_nzo_abc123,SABnzbd_nzo_def456"}
+	if !reflect.DeepEqual(asked, want) {
+		t.Errorf("asked %q, want %q", asked, want)
+	}
+	if len(downloads) == 0 {
+		t.Error("no downloads came back")
+	}
+}
+
+type askedTransport struct {
+	bodies modeTransport
+	asked  *[]string
+}
+
+func (r askedTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	query := request.URL.Query()
+	*r.asked = append(*r.asked, query.Get("mode")+" nzo_ids="+query.Get("nzo_ids"))
+	return r.bodies.RoundTrip(request)
+}

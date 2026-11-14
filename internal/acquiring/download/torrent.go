@@ -53,6 +53,14 @@ func (b torrentBase) Downloads(ctx context.Context, category string) ([]Download
 }
 
 // QueueStatus answers the totals over every torrent still downloading.
+// DownloadsByRef implements ByReference when the client underneath does.
+func (b torrentBase) DownloadsByRef(ctx context.Context, clientRefs []string) ([]Download, error) {
+	if by, ok := b.client.(ByReference); ok {
+		return by.DownloadsByRef(ctx, clientRefs)
+	}
+	return nil, ErrByRefUnsupported
+}
+
 func (b torrentBase) QueueStatus(ctx context.Context) (QueueStatus, error) {
 	downloads, err := b.client.Downloads(ctx, "")
 	if err != nil {
