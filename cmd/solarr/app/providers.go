@@ -226,13 +226,13 @@ func (p *process) indexerClientFactory() adapters.IndexerHTTPFactory {
 		guard := connectionGuard(baseURL)
 		config := httpx.ClientConfig{
 			Proxy: p.indexerLiveProxyPolicy(egress), Jar: p.indexerJar(indexerID),
-			// A 200 that says "request limit reached" is a failure to back off from, and slows the indexer's pace.
+			// A 200 that says "request limit reached", or that the key is refused, is a failure to back off from; a limit also slows the pace.
 			AnswerFailed: func(start []byte) bool {
 				limited := indexer.LimitReached(start)
 				if limited && p.indexerPacing != nil {
 					p.indexerPacing.limitHit(indexerID)
 				}
-				return limited
+				return limited || indexer.AccountRefused(start)
 			},
 		}
 		if egress.FlareSolverrURL != "" {

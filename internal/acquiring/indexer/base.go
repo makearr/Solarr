@@ -204,17 +204,39 @@ func (f *FlexInt) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// LimitReached reports the start of an answer that is a Newznab "request limit" or "download limit" error (codes 500
-// and 501), which an indexer sends with a 200 status: the caller must back off, not take it for a search with no results.
-func LimitReached(start []byte) bool {
+// answerCode is the code of a Newznab error answer that begins an answer, 0 when the answer is none.
+func answerCode(start []byte) int {
 	text := string(start)
 	i := strings.Index(text, "<error")
 	if i < 0 {
-		return false
+		return 0
 	}
 	head := text[i:]
 	if end := strings.Index(head, ">"); end >= 0 {
 		head = head[:end]
 	}
-	return strings.Contains(head, `code="500"`) || strings.Contains(head, `code="501"`)
+	_, after, found := strings.Cut(head, `code="`)
+	if !found {
+		return 0
+	}
+	digits, _, _ := strings.Cut(after, `"`)
+	code, err := strconv.Atoi(digits)
+	if err != nil {
+		return 0
+	}
+	return code
+}
+
+// LimitReached reports the start of an answer that is a Newznab "request limit" or "download limit" error (codes 500
+// and 501), which an indexer sends with a 200 status: the caller must back off, not take it for a search with no results.
+func LimitReached(start []byte) bool {
+	code := answerCode(start)
+	return code == 500 || code == 501
+}
+
+// AccountRefused reports an answer that says the key is wrong or suspended or the API is off (codes 100 to 102 and
+// 910): the indexer is unhealthy until someone fixes it, which the breaker must see rather than an empty result.
+func AccountRefused(start []byte) bool {
+	code := answerCode(start)
+	return (code >= 100 && code <= 102) || code == 910
 }

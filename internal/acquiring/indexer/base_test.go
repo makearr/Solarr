@@ -93,3 +93,19 @@ func TestLimitReached(t *testing.T) {
 		}
 	}
 }
+
+func TestAccountRefused(t *testing.T) {
+	for body, want := range map[string]bool{
+		`<error code="100" description="Incorrect user credentials"/>`: true,
+		`<error code="101" description="Account suspended"/>`:          true,
+		`<error code="102" description="Insufficient privileges"/>`:    true,
+		`<error code="910" description="API disabled"/>`:               true,
+		`<error code="500" description="Request limit reached"/>`:      false,
+		`<error code="300" description="No such item"/>`:               false,
+		`<rss><channel><item/></channel></rss>`:                        false,
+	} {
+		if got := indexer.AccountRefused([]byte(body)); got != want {
+			t.Errorf("AccountRefused(%q) = %v, want %v", body, got, want)
+		}
+	}
+}
