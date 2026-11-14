@@ -216,6 +216,7 @@ func TestParse_ValueRules(t *testing.T) {
 		{"free percent over 100", "version: 1\nstorage:\n  min_free_percent: 150\n", "storage.min_free_percent"},
 		{"zero workers", "version: 1\nworkers:\n  search: 0\n", "workers.search"},
 		{"import concurrency changed", "version: 1\nworkers:\n  import: 4\n", "workers.import"},
+		{"no time to stop", "version: 1\nworkers:\n  shutdown_grace: 0s\n", "workers.shutdown_grace"},
 		{"unknown log level", "version: 1\nlogging:\n  level: verbose\n", "logging.level"},
 		{"unknown log format", "version: 1\nlogging:\n  format: xml\n", "logging.format"},
 		{"unknown mode", "version: 1\nmode: pretend\n", "mode"},

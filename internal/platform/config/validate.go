@@ -257,6 +257,10 @@ func (w Workers) validate() Problems {
 		problems = append(problems, newProblem("workers.import", strconv.Itoa(w.Import),
 			"fixed at 1 and not configurable"))
 	}
+	if w.ShutdownGrace <= 0 {
+		problems = append(problems, newProblem("workers.shutdown_grace", w.ShutdownGrace.String(),
+			"expected a positive duration such as 25s"))
+	}
 	return problems
 }
 

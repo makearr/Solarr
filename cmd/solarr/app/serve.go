@@ -634,6 +634,7 @@ func (p *process) startJobs(ctx context.Context) error {
 		return err
 	}
 	p.dispatcher = jobs.NewDispatcher(queue, wall, executor, jobs.DispatcherConfig{
+		ShutdownGrace: p.config.Workers.ShutdownGrace.AsDuration(),
 		Sizes: []jobs.PoolSize{
 			{Pool: jobs.PoolSearch, Capacity: p.config.Workers.Search},
 			{Pool: jobs.PoolAcquire, Capacity: p.config.Workers.Acquire},

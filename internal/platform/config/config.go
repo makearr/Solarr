@@ -168,6 +168,9 @@ type Workers struct {
 	// Import is fixed at 1 and is not configurable (ADR-3). It is present so
 	// that setting it is a clear error rather than a silently ignored key.
 	Import int `yaml:"import"`
+	// ShutdownGrace is how long a stop waits for running jobs before it abandons them; a job stuck on a stalled mount
+	// would otherwise hold the process until the runtime kills it.
+	ShutdownGrace Duration `yaml:"shutdown_grace"`
 }
 
 // Logging controls the slog handler.
@@ -219,7 +222,7 @@ func Default() Config {
 		Memory: Memory{
 			CacheSyncInterval: Duration(10 * time.Minute), DatabaseSyncInterval: Duration(5 * time.Minute), TmpfsDir: "/dev/shm/solarr",
 		},
-		Workers: Workers{Search: 4, Acquire: 2, Metadata: 4, Import: 1},
+		Workers: Workers{Search: 4, Acquire: 2, Metadata: 4, Import: 1, ShutdownGrace: Duration(25 * time.Second)},
 		Logging: Logging{Level: LevelInfo, Format: FormatJSON},
 		Network: Network{PublicIPCheck: PublicIPCheck{
 			Enabled:  false,

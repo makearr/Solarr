@@ -183,6 +183,8 @@ workers:
   metadata: 4
   # Fixed at 1. One importer at a time is what keeps write latency bounded.
   import: 1
+  # How long a stop waits for running jobs before it gives up on them and exits.
+  shutdown_grace: 25s
 
 network:
   # Asks a third party what address this host connects from, which tells you
