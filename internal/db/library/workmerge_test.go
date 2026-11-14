@@ -123,3 +123,88 @@ func TestSuggestWorkMerge_IsReadBackAndGoesWithTheWork(t *testing.T) {
 		t.Errorf("a suggestion outlived its work: %v, %v", found, err)
 	}
 }
+
+func countRows(t *testing.T, opened interface {
+	Read() *sql.DB
+}, query string, arguments ...any) int {
+	t.Helper()
+	var rows int
+	if err := opened.Read().QueryRowContext(t.Context(), query, arguments...).Scan(&rows); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+	return rows
+}
+
+// Rows that name a work only by type and id have no foreign key; deleting the work must remove them itself.
+func TestDeleteWork_RemovesTagsFavoritesAndArtworkNamingIt(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	doomed := createWork(t, opened, "music", "Invented Album")
+	tag := createTag(t, opened, "invented", 0)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		if err := q.AssignTag(ctx, librarydb.AssignTagParams{TagID: tag.ID, SubjectType: "work", SubjectID: doomed.ID, Source: "user"}); err != nil {
+			return err
+		}
+		if err := q.AddFavorite(ctx, librarydb.AddFavoriteParams{UserID: 1, SubjectType: "work", SubjectID: doomed.ID, CreatedAt: 1}); err != nil {
+			return err
+		}
+		if err := q.UpsertArtwork(ctx, librarydb.UpsertArtworkParams{SubjectType: "work", SubjectID: doomed.ID, Kind: "poster", CacheKey: "k"}); err != nil {
+			return err
+		}
+		return q.RecordArtworkMiss(ctx, librarydb.RecordArtworkMissParams{SubjectID: doomed.ID, Source: "fanart", MissedAt: 1})
+	})
+
+	if err := identity.DeleteWork(t.Context(), doomed.ID); err != nil {
+		t.Fatalf("DeleteWork: %v", err)
+	}
+	for _, table := range []string{"tag_assignment", "favorite", "artwork", "artwork_miss"} {
+		if rows := countRows(t, opened, "SELECT count(*) FROM "+table+" WHERE subject_type = 'work' AND subject_id = ?", doomed.ID); rows != 0 {
+			t.Errorf("%s: %d rows still name the deleted work", table, rows)
+		}
+	}
+}
+
+// A favourite, a release rule and a hand-made collection place are the user's own input and follow the merge.
+func TestMergeWork_KeepsWhatTheUserDidToTheDroppedAlbum(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	keep := createWork(t, opened, "music", "Invented Album")
+	drop := createWork(t, opened, "music", "Invented Album (Deluxe)")
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.AddFavorite(ctx, librarydb.AddFavoriteParams{UserID: 1, SubjectType: "work", SubjectID: drop.ID, CreatedAt: 1})
+	})
+	err := opened.Write(t.Context(), 0, func(ctx context.Context, tx *sql.Tx) error {
+		for _, statement := range []struct {
+			sql  string
+			args []any
+		}{
+			{"INSERT INTO work_release_filter (work_id, kind, value, created_at) VALUES (?, 'must_contain', 'invented', 1)", []any{drop.ID}},
+			{"INSERT INTO collection (media_type, name, kind, source, added_at) VALUES ('music', 'Invented Set', 'manual', 'user', 1)", nil},
+			{"INSERT INTO collection_member (collection_id, work_id, by_hand) VALUES (1, ?, 1)", []any{drop.ID}},
+		} {
+			if _, err := tx.ExecContext(ctx, statement.sql, statement.args...); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := identity.MergeWork(t.Context(), drop.ID, keep.ID); err != nil {
+		t.Fatalf("MergeWork: %v", err)
+	}
+	for name, query := range map[string]string{
+		"favorite":      "SELECT count(*) FROM favorite WHERE subject_type = 'work' AND subject_id = ?",
+		"release rule":  "SELECT count(*) FROM work_release_filter WHERE work_id = ?",
+		"hand-made set": "SELECT count(*) FROM collection_member WHERE by_hand = 1 AND work_id = ?",
+	} {
+		if rows := countRows(t, opened, query, keep.ID); rows != 1 {
+			t.Errorf("%s: %d rows on the kept work, want 1", name, rows)
+		}
+		if rows := countRows(t, opened, query, drop.ID); rows != 0 {
+			t.Errorf("%s: %d rows still on the dropped work", name, rows)
+		}
+	}
+}

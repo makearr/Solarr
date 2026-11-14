@@ -187,7 +187,7 @@ func (i Identity) DeleteWork(ctx context.Context, workID int64) error {
 		if err != nil {
 			return err
 		}
-		if err := queries.DeleteWork(ctx, workID); err != nil {
+		if err := deleteWorkRow(ctx, queries, workID); err != nil {
 			return err
 		}
 		return members.refresh(ctx, queries)
@@ -637,10 +637,24 @@ func deleteFilelessWork(ctx context.Context, queries *librarydb.Queries, workID 
 	if err := queries.DetachPackItemsFromWork(ctx, sql.NullInt64{Int64: workID, Valid: true}); err != nil {
 		return fmt.Errorf("detach pack items: %w", err)
 	}
-	if err := queries.DeleteWork(ctx, workID); err != nil {
+	if err := deleteWorkRow(ctx, queries, workID); err != nil {
 		return fmt.Errorf("delete work: %w", err)
 	}
 	return members.refresh(ctx, queries)
+}
+
+// deleteWorkRow is the one place a work row is removed: tags, favourites and artwork name it without a
+// foreign key and would otherwise outlive it. Cover files go with the cache budget's eviction.
+func deleteWorkRow(ctx context.Context, queries *librarydb.Queries, workID int64) error {
+	for _, remove := range []func(context.Context, int64) error{
+		queries.DeleteWorkTags, queries.DeleteWorkFavorites, queries.DeleteWorkArtwork, queries.DeleteWorkArtworkMisses,
+		queries.DeleteWork,
+	} {
+		if err := remove(ctx, workID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RemoveWorkResult is what removing an album actually did.
@@ -692,7 +706,7 @@ func (i Identity) RemoveWork(ctx context.Context, workID int64, withFiles bool) 
 		if err := queries.DetachPackItemsFromWork(ctx, sql.NullInt64{Int64: workID, Valid: true}); err != nil {
 			return fmt.Errorf("detach pack items: %w", err)
 		}
-		if err := queries.DeleteWork(ctx, workID); err != nil {
+		if err := deleteWorkRow(ctx, queries, workID); err != nil {
 			return fmt.Errorf("delete work: %w", err)
 		}
 		result.WorkDeleted = true

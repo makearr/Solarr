@@ -41,6 +41,34 @@ func (q *Queries) CountWorkMerge(ctx context.Context, dropID int64) (CountWorkMe
 	return i, err
 }
 
+const deleteWorkArtwork = `-- name: DeleteWorkArtwork :exec
+DELETE FROM artwork WHERE subject_type = 'work' AND subject_id = ?
+`
+
+func (q *Queries) DeleteWorkArtwork(ctx context.Context, subjectID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteWorkArtwork, subjectID)
+	return err
+}
+
+const deleteWorkArtworkMisses = `-- name: DeleteWorkArtworkMisses :exec
+DELETE FROM artwork_miss WHERE subject_type = 'work' AND subject_id = ?
+`
+
+func (q *Queries) DeleteWorkArtworkMisses(ctx context.Context, subjectID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteWorkArtworkMisses, subjectID)
+	return err
+}
+
+const deleteWorkFavorites = `-- name: DeleteWorkFavorites :exec
+DELETE FROM favorite WHERE subject_type = 'work' AND subject_id = ?
+`
+
+// Rows that name a work by (subject_type, subject_id) have no foreign key, so deleting the work does not reach them.
+func (q *Queries) DeleteWorkFavorites(ctx context.Context, subjectID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteWorkFavorites, subjectID)
+	return err
+}
+
 const deleteWorkTags = `-- name: DeleteWorkTags :exec
 DELETE FROM tag_assignment WHERE subject_type = 'work' AND subject_id = ?
 `
@@ -139,6 +167,22 @@ func (q *Queries) MergeWorkArrImportItems(ctx context.Context, arg MergeWorkArrI
 	return err
 }
 
+const mergeWorkCollectionMembersByHand = `-- name: MergeWorkCollectionMembersByHand :exec
+INSERT OR IGNORE INTO collection_member (collection_id, work_id, part_id, ord, by_hand)
+SELECT m.collection_id, ?1, m.part_id, m.ord, 1 FROM collection_member m
+WHERE m.work_id = ?2 AND m.by_hand = 1
+`
+
+type MergeWorkCollectionMembersByHandParams struct {
+	KeepID int64
+	DropID int64
+}
+
+func (q *Queries) MergeWorkCollectionMembersByHand(ctx context.Context, arg MergeWorkCollectionMembersByHandParams) error {
+	_, err := q.db.ExecContext(ctx, mergeWorkCollectionMembersByHand, arg.KeepID, arg.DropID)
+	return err
+}
+
 const mergeWorkExternalIDs = `-- name: MergeWorkExternalIDs :exec
 UPDATE work_external_id SET work_id = ?1, confidence = MIN(confidence, CAST(?2 AS REAL))
 WHERE work_id = ?3
@@ -153,6 +197,22 @@ type MergeWorkExternalIDsParams struct {
 // The dropped work's ids keep resolving, to the kept work, as aliases.
 func (q *Queries) MergeWorkExternalIDs(ctx context.Context, arg MergeWorkExternalIDsParams) error {
 	_, err := q.db.ExecContext(ctx, mergeWorkExternalIDs, arg.KeepID, arg.Confidence, arg.DropID)
+	return err
+}
+
+const mergeWorkFavorites = `-- name: MergeWorkFavorites :exec
+INSERT OR IGNORE INTO favorite (user_id, subject_type, subject_id, created_at)
+SELECT f.user_id, f.subject_type, ?1, f.created_at FROM favorite f
+WHERE f.subject_type = 'work' AND f.subject_id = ?2
+`
+
+type MergeWorkFavoritesParams struct {
+	KeepID int64
+	DropID int64
+}
+
+func (q *Queries) MergeWorkFavorites(ctx context.Context, arg MergeWorkFavoritesParams) error {
+	_, err := q.db.ExecContext(ctx, mergeWorkFavorites, arg.KeepID, arg.DropID)
 	return err
 }
 
@@ -214,6 +274,23 @@ type MergeWorkPackItemsParams struct {
 
 func (q *Queries) MergeWorkPackItems(ctx context.Context, arg MergeWorkPackItemsParams) error {
 	_, err := q.db.ExecContext(ctx, mergeWorkPackItems, arg.KeepID, arg.DropID)
+	return err
+}
+
+const mergeWorkReleaseFilters = `-- name: MergeWorkReleaseFilters :exec
+INSERT OR IGNORE INTO work_release_filter (work_id, media_ref_prefix, kind, value, is_regex, score, created_at)
+SELECT ?1, r.media_ref_prefix, r.kind, r.value, r.is_regex, r.score, r.created_at FROM work_release_filter r
+WHERE r.work_id = ?2
+`
+
+type MergeWorkReleaseFiltersParams struct {
+	KeepID int64
+	DropID int64
+}
+
+// Per-work release rules are the user's own input; a cascade would lose them with the dropped work.
+func (q *Queries) MergeWorkReleaseFilters(ctx context.Context, arg MergeWorkReleaseFiltersParams) error {
+	_, err := q.db.ExecContext(ctx, mergeWorkReleaseFilters, arg.KeepID, arg.DropID)
 	return err
 }
 

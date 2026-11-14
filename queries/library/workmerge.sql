@@ -64,6 +64,32 @@ WHERE a.subject_type = 'work' AND a.subject_id = sqlc.arg(drop_id);
 -- name: DeleteWorkTags :exec
 DELETE FROM tag_assignment WHERE subject_type = 'work' AND subject_id = ?;
 
+-- name: MergeWorkFavorites :exec
+INSERT OR IGNORE INTO favorite (user_id, subject_type, subject_id, created_at)
+SELECT f.user_id, f.subject_type, sqlc.arg(keep_id), f.created_at FROM favorite f
+WHERE f.subject_type = 'work' AND f.subject_id = sqlc.arg(drop_id);
+
+-- Per-work release rules are the user's own input; a cascade would lose them with the dropped work.
+-- name: MergeWorkReleaseFilters :exec
+INSERT OR IGNORE INTO work_release_filter (work_id, media_ref_prefix, kind, value, is_regex, score, created_at)
+SELECT sqlc.arg(keep_id), r.media_ref_prefix, r.kind, r.value, r.is_regex, r.score, r.created_at FROM work_release_filter r
+WHERE r.work_id = sqlc.arg(drop_id);
+
+-- name: MergeWorkCollectionMembersByHand :exec
+INSERT OR IGNORE INTO collection_member (collection_id, work_id, part_id, ord, by_hand)
+SELECT m.collection_id, sqlc.arg(keep_id), m.part_id, m.ord, 1 FROM collection_member m
+WHERE m.work_id = sqlc.arg(drop_id) AND m.by_hand = 1;
+
+-- Rows that name a work by (subject_type, subject_id) have no foreign key, so deleting the work does not reach them.
+-- name: DeleteWorkFavorites :exec
+DELETE FROM favorite WHERE subject_type = 'work' AND subject_id = ?;
+
+-- name: DeleteWorkArtwork :exec
+DELETE FROM artwork WHERE subject_type = 'work' AND subject_id = ?;
+
+-- name: DeleteWorkArtworkMisses :exec
+DELETE FROM artwork_miss WHERE subject_type = 'work' AND subject_id = ?;
+
 -- The dropped work's ids keep resolving, to the kept work, as aliases.
 -- name: MergeWorkExternalIDs :exec
 UPDATE work_external_id SET work_id = sqlc.arg(keep_id), confidence = MIN(confidence, CAST(sqlc.arg(confidence) AS REAL))

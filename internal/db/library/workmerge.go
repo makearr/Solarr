@@ -111,13 +111,17 @@ func (i Identity) MergeWork(ctx context.Context, dropID, keepID int64) (WorkMerg
 				return queries.MergeWorkManualIdentifications(ctx, librarydb.MergeWorkManualIdentificationsParams(ids))
 			}},
 			{"tags", func() error { return queries.MergeWorkTags(ctx, librarydb.MergeWorkTagsParams(ids)) }},
+			{"favorites", func() error { return queries.MergeWorkFavorites(ctx, librarydb.MergeWorkFavoritesParams(ids)) }},
+			{"release filters", func() error {
+				return queries.MergeWorkReleaseFilters(ctx, librarydb.MergeWorkReleaseFiltersParams(ids))
+			}},
+			{"hand-made collection members", func() error {
+				return queries.MergeWorkCollectionMembersByHand(ctx, librarydb.MergeWorkCollectionMembersByHandParams(ids))
+			}},
 		} {
 			if err := move.run(); err != nil {
 				return fmt.Errorf("%s: %w", move.name, err)
 			}
-		}
-		if err := queries.DeleteWorkTags(ctx, dropID); err != nil {
-			return fmt.Errorf("tags: %w", err)
 		}
 		if err := queries.MergeWorkExternalIDs(ctx, librarydb.MergeWorkExternalIDsParams{
 			KeepID: keepID, Confidence: aliasConfidence, DropID: dropID,
@@ -132,7 +136,7 @@ func (i Identity) MergeWork(ctx context.Context, dropID, keepID int64) (WorkMerg
 				return fmt.Errorf("title alias: %w", err)
 			}
 		}
-		if err := queries.DeleteWork(ctx, dropID); err != nil {
+		if err := deleteWorkRow(ctx, queries, dropID); err != nil {
 			return fmt.Errorf("delete work: %w", err)
 		}
 		if err := recomputeWorkItemsTx(ctx, queries, keepID, i.store.Now()); err != nil {

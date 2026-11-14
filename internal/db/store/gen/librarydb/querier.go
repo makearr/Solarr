@@ -317,8 +317,12 @@ type Querier interface {
 	// What ties an album to a provider, leaving the local name an unverified album goes by.
 	DeleteVerifiedWorkExternalIDs(ctx context.Context, workID int64) error
 	DeleteWork(ctx context.Context, id int64) error
+	DeleteWorkArtwork(ctx context.Context, subjectID int64) error
+	DeleteWorkArtworkMisses(ctx context.Context, subjectID int64) error
 	DeleteWorkClassification(ctx context.Context, arg DeleteWorkClassificationParams) error
 	DeleteWorkExclusion(ctx context.Context, arg DeleteWorkExclusionParams) error
+	// Rows that name a work by (subject_type, subject_id) have no foreign key, so deleting the work does not reach them.
+	DeleteWorkFavorites(ctx context.Context, subjectID int64) error
 	DeleteWorkFieldByProvider(ctx context.Context, arg DeleteWorkFieldByProviderParams) error
 	DeleteWorkPart(ctx context.Context, id int64) error
 	// A refresh rewrites the alternative titles its provider gave, leaving any other source's.
@@ -1017,12 +1021,16 @@ type Querier interface {
 	MergeSubscriptionsInto(ctx context.Context, arg MergeSubscriptionsIntoParams) error
 	MergeTagAssignmentsInto(ctx context.Context, arg MergeTagAssignmentsIntoParams) error
 	MergeWorkArrImportItems(ctx context.Context, arg MergeWorkArrImportItemsParams) error
+	MergeWorkCollectionMembersByHand(ctx context.Context, arg MergeWorkCollectionMembersByHandParams) error
 	// The dropped work's ids keep resolving, to the kept work, as aliases.
 	MergeWorkExternalIDs(ctx context.Context, arg MergeWorkExternalIDsParams) error
+	MergeWorkFavorites(ctx context.Context, arg MergeWorkFavoritesParams) error
 	MergeWorkFiles(ctx context.Context, arg MergeWorkFilesParams) error
 	MergeWorkImportUnits(ctx context.Context, arg MergeWorkImportUnitsParams) error
 	MergeWorkManualIdentifications(ctx context.Context, arg MergeWorkManualIdentificationsParams) error
 	MergeWorkPackItems(ctx context.Context, arg MergeWorkPackItemsParams) error
+	// Per-work release rules are the user's own input; a cascade would lose them with the dropped work.
+	MergeWorkReleaseFilters(ctx context.Context, arg MergeWorkReleaseFiltersParams) error
 	MergeWorkRequests(ctx context.Context, arg MergeWorkRequestsParams) error
 	MergeWorkRootFolders(ctx context.Context, arg MergeWorkRootFoldersParams) error
 	MergeWorkTags(ctx context.Context, arg MergeWorkTagsParams) error
