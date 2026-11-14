@@ -1055,6 +1055,19 @@ func TestActionKeyOf_ATrackedDownloadHasItsOwnKey(t *testing.T) {
 	}
 }
 
+// A preview must not absorb the real import of the same folder, or the real one silently never runs.
+func TestActionKeyOf_APreviewDoesNotAbsorbARealImport(t *testing.T) {
+	preview := importjob.ActionKeyOf(importjob.Payload{SourcePath: "/a", Preview: true})
+	whole := importjob.ActionKeyOf(importjob.Payload{SourcePath: "/a"})
+	again := importjob.ActionKeyOf(importjob.Payload{SourcePath: "/a", CategoryID: new(int64)})
+	if preview == whole {
+		t.Errorf("a preview and a real import of one folder share the key %q", whole)
+	}
+	if whole != again {
+		t.Errorf("two real imports of one folder have keys %q and %q, want them to fold", whole, again)
+	}
+}
+
 // The folder watcher leaves a folder to the download that is still being followed.
 func TestJob_AWatchedFolderOfATrackedDownloadIsLeftToIt(t *testing.T) {
 	fx := newFixture(t, "Artist/Album/01.flac")

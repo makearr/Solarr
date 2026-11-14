@@ -51,6 +51,10 @@ func ActionKeyOf(payload Payload) string {
 	if payload.AcquisitionID != nil {
 		return fmt.Sprintf("%s.acquisition:%d", JobType, *payload.AcquisitionID)
 	}
+	if payload.Preview {
+		// A preview never absorbs a real import of the folder, and the other way round.
+		return ActionKeyFor(payload.SourcePath) + ":preview"
+	}
 	return ActionKeyFor(payload.SourcePath)
 }
 
@@ -466,7 +470,7 @@ func CloseOrphanedSessions(
 			return closed, fmt.Errorf("importjob: list %s sessions: %w", state, err)
 		}
 		for _, session := range stuck {
-			active, err := hasActiveJob(ctx, ActionKeyOf(Payload{SourcePath: session.SourcePath, AcquisitionID: session.AcquisitionID}))
+			active, err := hasActiveJob(ctx, ActionKeyOf(Payload{SourcePath: session.SourcePath, AcquisitionID: session.AcquisitionID, Preview: session.Preview}))
 			if err != nil {
 				return closed, err
 			}

@@ -119,7 +119,8 @@ type ImportPlacementResult struct {
 // want reads without the write (or the reverse).
 type ImportInspector interface {
 	// addUnverified is D6: a folder nothing identified still becomes an unverified album.
-	InspectImport(ctx context.Context, sourcePath, origin string, categoryID *int64, preview, addUnverified, bestMatch bool) error
+	// InspectImport reports alreadyQueued when an identical import of the path is waiting or running, which absorbs this one.
+	InspectImport(ctx context.Context, sourcePath, origin string, categoryID *int64, preview, addUnverified, bestMatch bool) (alreadyQueued bool, err error)
 }
 
 // ImportSessionRow is one import_session row.
@@ -212,12 +213,13 @@ func (s *Server) InspectImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	preview := body.Preview != nil && *body.Preview
-	if err := s.importInspector.InspectImport(r.Context(), body.SourcePath, origin, body.CategoryId, preview,
-		derefOr(body.AddUnverified, false), derefOr(body.BestMatch, false)); err != nil {
+	alreadyQueued, err := s.importInspector.InspectImport(r.Context(), body.SourcePath, origin, body.CategoryId, preview,
+		derefOr(body.AddUnverified, false), derefOr(body.BestMatch, false))
+	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
-	writeJSON(w, s.logger, http.StatusAccepted, gen.ImportInspectResult{Enqueued: true})
+	writeJSON(w, s.logger, http.StatusAccepted, gen.ImportInspectResult{Enqueued: true, AlreadyQueued: alreadyQueued})
 }
 
 // routeListImportSessions parses the state query parameter, mirroring

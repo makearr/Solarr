@@ -3360,7 +3360,9 @@ type ImportInspectRequestOrigin string
 
 // ImportInspectResult defines model for ImportInspectResult.
 type ImportInspectResult struct {
-	Enqueued bool `json:"enqueued"`
+	// AlreadyQueued An identical import of this folder was already waiting or running, so no new one was queued.
+	AlreadyQueued bool `json:"already_queued"`
+	Enqueued      bool `json:"enqueued"`
 }
 
 // ImportList A library's import list (ADR-38), with its last preview and run.

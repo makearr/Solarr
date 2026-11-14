@@ -524,7 +524,7 @@ function InspectForm() {
 
   const inspect = useMutation({
     mutationFn: async () => {
-      await ok(api.POST("/import/inspect", {
+      return await ok(api.POST("/import/inspect", {
         body: {
           source_path: sourcePath,
           origin,
@@ -641,6 +641,11 @@ function InspectForm() {
       {addRoot.isError && (
         <p className="w-full text-xs text-danger">
           {(addRoot.error as { detail?: string }).detail ?? "That folder could not be added as a root."}
+        </p>
+      )}
+      {inspect.isSuccess && inspect.data?.already_queued && (
+        <p className="w-full text-xs text-ink-muted">
+          An identical import of that folder is already waiting or running, so none was added.
         </p>
       )}
       {inspect.isError && (

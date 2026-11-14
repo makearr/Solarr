@@ -10066,6 +10066,8 @@ export interface components {
         };
         ImportInspectResult: {
             enqueued: boolean;
+            /** @description An identical import of this folder was already waiting or running, so no new one was queued. */
+            already_queued: boolean;
         };
         /** @description Which held units to commit. An empty or absent list means all of them. */
         ImportCommitHeldRequest: {

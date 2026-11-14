@@ -13707,9 +13707,12 @@ components:
 
     ImportInspectResult:
       type: object
-      required: [enqueued]
+      required: [enqueued, already_queued]
       properties:
         enqueued: { type: boolean }
+        already_queued:
+          type: boolean
+          description: An identical import of this folder was already waiting or running, so no new one was queued.
 
     ImportCommitHeldRequest:
       type: object

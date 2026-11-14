@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -133,6 +134,8 @@ func (f *fakeImportSessionLister) ListImportUnits(
 
 type fakeImportInspector struct {
 	err error
+	// alreadyQueued is what the fake answers: an identical import was waiting.
+	alreadyQueued bool
 
 	lastSourcePath, lastOrigin string
 	lastCategoryID             *int64
@@ -142,11 +145,11 @@ type fakeImportInspector struct {
 
 func (f *fakeImportInspector) InspectImport(
 	_ context.Context, sourcePath, origin string, categoryID *int64, preview, _, bestMatch bool,
-) error {
+) (bool, error) {
 	f.calls++
 	f.lastSourcePath, f.lastOrigin, f.lastCategoryID, f.lastPreview = sourcePath, origin, categoryID, preview
 	f.lastBestMatch = bestMatch
-	return f.err
+	return f.alreadyQueued, f.err
 }
 
 func TestListImportSessions_RequiresAuthentication(t *testing.T) {
@@ -321,6 +324,22 @@ func TestInspectImport_EnqueuesAndDefaultsOriginToManual(t *testing.T) {
 	}
 	if fixture.importInspector.lastCategoryID != nil {
 		t.Errorf("lastCategoryID = %v, want nil when omitted", fixture.importInspector.lastCategoryID)
+	}
+}
+
+// The screen must say what happened: an import absorbed by an identical one waiting is not "started".
+func TestInspectImport_SaysWhenAnIdenticalImportWasAlreadyQueued(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	fixture.importInspector.alreadyQueued = true
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/inspect", `{"source_path":"/downloads/incoming"}`))
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202 (%s)", recorder.Code, recorder.Body)
+	}
+	if !strings.Contains(recorder.Body.String(), `"already_queued":true`) {
+		t.Errorf("body = %s, want already_queued true", recorder.Body)
 	}
 }
 
