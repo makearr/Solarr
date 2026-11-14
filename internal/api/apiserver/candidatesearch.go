@@ -35,6 +35,9 @@ var ErrDecisionNotAccepted = errors.New("apiserver: decision is not ACCEPT")
 // ErrContentBlocklisted is a release whose content failed before under another listing.
 var ErrContentBlocklisted = errors.New("apiserver: the same content failed before")
 
+// ErrReleaseNotFetched is a release its indexer did not hand over (gone, or an error answer); the wrapped text says what.
+var ErrReleaseNotFetched = errors.New("apiserver: the release could not be fetched from its indexer")
+
 // ErrDownloadClientRefused is the client declining the release it was sent; the wrapped text says why.
 var ErrDownloadClientRefused = errors.New("apiserver: the download client refused the release")
 
@@ -453,6 +456,9 @@ func writeCandidateSearchError(w http.ResponseWriter, s *Server, err error) {
 	case errors.Is(err, ErrContentBlocklisted):
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Blocklisted content",
 			"this release is the same download as one that failed before, listed again; pick another")
+	case errors.Is(err, ErrReleaseNotFetched):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Release not available",
+			strings.TrimPrefix(err.Error(), ErrReleaseNotFetched.Error()+": "))
 	case errors.Is(err, ErrDownloadClientRefused):
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Refused by the download client",
 			strings.TrimPrefix(err.Error(), ErrDownloadClientRefused.Error()+": "))

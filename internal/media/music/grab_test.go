@@ -2,16 +2,20 @@ package music_test
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/acquiring/clienttest"
 	"github.com/makearr/Solarr/internal/acquiring/dispatch"
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 const losslessFirstRules = `{"quality_profile":"lossless-first","compare":["audio_codec","score"],` +
@@ -116,12 +120,12 @@ func TestGrab_ContentThatFailedBeforeIsRefusedUnderANewListing(t *testing.T) {
 	}}
 	sender := &fakeSabnzbdSender{clientRef: "nzo-1"}
 	dispatch := env.dispatch([]music.DownloaderConn{{ID: 5, Protocol: "usenet", Client: sender}})
-	failed := []byte(`<nzb><segment bytes="1" number="1">failed@x</segment></nzb>`)
+	failed := []byte(`<nzb xmlns="x"><file><segments><segment bytes="1" number="1">failed@x</segment></segments></file></nzb>`)
 	dispatch.Fetch = func(_ context.Context, _ int64, link string) ([]byte, error) {
 		if strings.Contains(link, "guid-flac") {
 			return failed, nil
 		}
-		return []byte(`<nzb><segment bytes="1" number="1">fine@x</segment></nzb>`), nil
+		return []byte(`<nzb xmlns="x"><file><segments><segment bytes="1" number="1">fine@x</segment></segments></file></nzb>`), nil
 	}
 	blocklist := library.NewBlocklistStore(env.library)
 	dispatch.Blocklist = &blocklist
@@ -332,5 +336,75 @@ func TestGrab_AlreadyInFlightSurvivesStatisticsEmptied(t *testing.T) {
 	second, err := grab.SearchAndSend(t.Context(), item.ID, indexers, music.GrabAutomatic, env.clock.Now())
 	if err != nil || !second.AlreadyInFlight || len(searcher.requests) != calls {
 		t.Errorf("second = %+v, %v after %d more indexer calls; want AlreadyInFlight and no search", second, err, len(searcher.requests)-calls)
+	}
+}
+
+// A dead link (404), an HTML page and a timeout each leave the item with its next release instead of stuck on the best one.
+func TestGrab_PassesOverAReleaseTheIndexerDoesNotHandOver(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		first         func() ([]byte, error)
+		wantSent      bool
+		wantBlocklist bool
+	}{
+		{"a 404 is gone for a day", func() ([]byte, error) { return nil, &httpx.StatusError{Status: http.StatusNotFound} }, true, true},
+		{"an HTML page is not a release", func() ([]byte, error) { return []byte("<html>sign in</html>"), nil }, true, false},
+		{"a timeout leaves it a candidate", func() ([]byte, error) { return nil, errors.New("timeout") }, true, false},
+		{"an item-gone answer blocks it", func() ([]byte, error) {
+			return []byte(`<?xml version="1.0"?><error code="300" description="no such item"/>`), nil
+		}, true, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			env := newSearchTestEnv(t)
+			item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, losslessFirstRules)
+			searcher := &fakeIndexerSearcher{responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+				return []indexer.RawItem{
+					rawItem("guid-flac", "Nosi Zada-Discovery-2001-FLAC-GROUP"),
+					rawItem("guid-mp3", "Nosi Zada-Discovery-2001-MP3-320-GROUP"),
+				}, nil
+			}}
+			sender := &fakeSabnzbdSender{clientRef: "nzo-1"}
+			dispatch := env.dispatch([]music.DownloaderConn{{ID: 5, Protocol: "usenet", Client: sender}})
+			dispatch.Fetch = func(_ context.Context, _ int64, link string) ([]byte, error) {
+				if strings.Contains(link, "guid-flac") {
+					return test.first()
+				}
+				return clienttest.NZB(), nil
+			}
+			blocklist := library.NewBlocklistStore(env.library)
+			dispatch.Blocklist = &blocklist
+
+			result, err := music.Grab{Search: env.search(), Dispatch: dispatch}.SearchAndSend(t.Context(), item.ID,
+				[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}, music.GrabAutomatic, env.clock.Now())
+			if err != nil {
+				t.Fatalf("SearchAndSend: %v", err)
+			}
+			if (result.Sent != nil) != test.wantSent || (result.Sent != nil && result.Sent.CandidateTitle != "Nosi Zada-Discovery-2001-MP3-320-GROUP") {
+				t.Errorf("sent %+v, want the MP3 release", result.Sent)
+			}
+			indexerID := int64(1)
+			blocked, err := blocklist.IsBlocked(t.Context(), &indexerID, "guid-flac", "", env.clock.Now().Unix())
+			if err != nil || blocked != test.wantBlocklist {
+				t.Errorf("blocklisted = %v (%v), want %v", blocked, err, test.wantBlocklist)
+			}
+		})
+	}
+}
+
+// Nothing fetchable at all is still reported as a failure, so the hunt backs off as before.
+func TestGrab_EveryReleaseFailingToFetchIsStillAnError(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, losslessFirstRules)
+	searcher := &fakeIndexerSearcher{responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+		return []indexer.RawItem{rawItem("guid-flac", "Nosi Zada-Discovery-2001-FLAC-GROUP"), rawItem("guid-mp3", "Nosi Zada-Discovery-2001-MP3-320-GROUP")}, nil
+	}}
+	sender := &fakeSabnzbdSender{clientRef: "nzo-1"}
+	dispatch := env.dispatch([]music.DownloaderConn{{ID: 5, Protocol: "usenet", Client: sender}})
+	dispatch.Fetch = func(context.Context, int64, string) ([]byte, error) { return nil, errors.New("timeout") }
+
+	_, err := music.Grab{Search: env.search(), Dispatch: dispatch}.SearchAndSend(t.Context(), item.ID,
+		[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}, music.GrabAutomatic, env.clock.Now())
+	if !errors.Is(err, music.ErrReleaseFetchFailed) || len(sender.requests) != 0 {
+		t.Errorf("err = %v, sent %d; want ErrReleaseFetchFailed and nothing sent", err, len(sender.requests))
 	}
 }

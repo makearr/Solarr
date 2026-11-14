@@ -31,4 +31,6 @@ var (
 	ErrContentBlocklisted      = dispatch.ErrContentBlocklisted
 	ErrNoDownloaderForProtocol = dispatch.ErrNoDownloaderForProtocol
 	ErrDownloadsPaused         = dispatch.ErrDownloadsPaused
+	ErrReleaseUnavailable      = dispatch.ErrReleaseUnavailable
+	ErrReleaseFetchFailed      = dispatch.ErrReleaseFetchFailed
 )

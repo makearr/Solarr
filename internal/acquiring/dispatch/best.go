@@ -64,6 +64,7 @@ func (d Dispatch) SendBest(
 	ctx context.Context, itemID int64, decisions []library.DecisionDetail, room Headroom, origin GrabOrigin, at time.Time,
 ) (Best, error) {
 	var best Best
+	var firstFetchFailure error
 	for _, detail := range decisions {
 		if detail.Decision.Outcome != string(model.OutcomeAccept) {
 			continue
@@ -97,11 +98,42 @@ func (d Dispatch) SendBest(
 			best.Refused++
 			best.Refusals = append(best.Refusals, detail.ReleaseCandidate.Title+": "+err.Error())
 			continue
+		// The indexer no longer has it: kept out for a day, and the next is tried.
+		case errors.Is(err, ErrReleaseUnavailable):
+			if blockErr := d.blocklistUnavailable(ctx, itemID, detail.ReleaseCandidate, at); blockErr != nil {
+				return best, blockErr
+			}
+			best.Refused++
+			best.Refusals = append(best.Refusals, detail.ReleaseCandidate.Title+": "+err.Error())
+			continue
+		// Fetching failed this time: the next is tried, and the failure is reported if nothing else is sent.
+		case errors.Is(err, ErrReleaseFetchFailed):
+			if firstFetchFailure == nil {
+				firstFetchFailure = err
+			}
+			best.Refusals = append(best.Refusals, detail.ReleaseCandidate.Title+": "+err.Error())
+			continue
 		case err != nil:
 			return best, err
 		}
 		best.Sent = &sent
 		return best, nil
 	}
-	return best, nil
+	return best, firstFetchFailure
+}
+
+// unavailableMemory is how long a release its indexer stopped serving stays out; a day lets a re-upload through.
+const unavailableMemory = 24 * time.Hour
+
+func (d Dispatch) blocklistUnavailable(ctx context.Context, itemID int64, release library.ReleaseCandidate, at time.Time) error {
+	if d.Blocklist == nil || release.GUID == "" {
+		return nil
+	}
+	expires := at.Add(unavailableMemory).Unix()
+	_, err := d.Blocklist.Create(ctx, library.NewBlocklistEntry{
+		IndexerID: &release.IndexerID, GUID: release.GUID, Title: release.Title, DesiredItemID: &itemID,
+		Reason: library.BlocklistDownloadFailed, DetailJSON: `{"cause":"unavailable"}`, Source: library.BlocklistSourceAuto,
+		ExpiresAt: &expires, CreatedAt: at.Unix(),
+	})
+	return err
 }

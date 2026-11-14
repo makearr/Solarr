@@ -135,7 +135,7 @@ func (d Dispatch) SendHeld(ctx context.Context, at time.Time) (int, error) {
 		// Declined by the client: dropped, and the album searched afresh on its next turn.
 		// Kept for its next turn, and no reason to hold back the releases behind it (an expired link fails every time).
 		if err != nil && !errors.Is(err, library.ErrAcquisitionAlreadyInFlight) && !errors.Is(err, download.ErrRefused) &&
-			!errors.Is(err, ErrContentBlocklisted) {
+			!errors.Is(err, ErrContentBlocklisted) && !errors.Is(err, ErrReleaseUnavailable) {
 			failures = append(failures, fmt.Errorf("music: send held release %d: %w", entry.CandidateID, err))
 			continue
 		}

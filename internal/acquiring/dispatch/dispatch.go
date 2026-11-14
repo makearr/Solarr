@@ -6,11 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/statistics"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 	"github.com/makearr/Solarr/internal/platform/keyedlock"
 )
 
@@ -26,6 +28,14 @@ var ErrDecisionNotAccepted = errors.New("dispatch: decision is not ACCEPT")
 // ErrContentBlocklisted is a release whose content failed before, found again under another
 // listing (section 10.11); refused before the client sees it, and the next best is tried.
 var ErrContentBlocklisted = errors.New("dispatch: the same content failed before and is blocklisted")
+
+// ErrReleaseUnavailable is a release its indexer no longer serves (404, 410, an item-gone answer): it will not come back,
+// so the next release is tried and this one is left out for a day.
+var ErrReleaseUnavailable = errors.New("dispatch: the indexer no longer serves this release")
+
+// ErrReleaseFetchFailed is a release that could not be fetched this time (a timeout, a 5xx, an error answer that is the
+// indexer's own trouble): the next release is tried, and this one stays a candidate.
+var ErrReleaseFetchFailed = errors.New("dispatch: the release could not be fetched")
 
 // ErrDownloadsPaused is a send refused because the instance's mode keeps downloads paused.
 var ErrDownloadsPaused = errors.New("dispatch: downloads are paused by the mode")
@@ -172,7 +182,19 @@ func (d Dispatch) SendRelease(ctx context.Context, itemID int64, release library
 	category := downloader.Category
 	file, err := d.Fetch(ctx, detail.ReleaseCandidate.IndexerID, detail.ReleaseCandidate.DownloadURL)
 	if err != nil {
-		return library.Acquisition{}, fmt.Errorf("dispatch: fetch release: %w", err)
+		var status *httpx.StatusError
+		if errors.As(err, &status) && (status.Status == http.StatusNotFound || status.Status == http.StatusGone) {
+			return library.Acquisition{}, fmt.Errorf("%w: %w", ErrReleaseUnavailable, err)
+		}
+		return library.Acquisition{}, fmt.Errorf("%w: %w", ErrReleaseFetchFailed, err)
+	}
+	if err := download.CheckRelease(detail.ReleaseCandidate.Protocol, file); err != nil {
+		// What came back is not a release, so no client is bothered with it.
+		var notRelease *download.NotAReleaseError
+		if errors.As(err, &notRelease) && notRelease.Gone() {
+			return library.Acquisition{}, fmt.Errorf("%w: %w", ErrReleaseUnavailable, err)
+		}
+		return library.Acquisition{}, fmt.Errorf("%w: %w", ErrReleaseFetchFailed, err)
 	}
 	contentHash := ""
 	switch detail.ReleaseCandidate.Protocol {

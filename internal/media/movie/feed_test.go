@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/acquiring/clienttest"
 	"github.com/makearr/Solarr/internal/acquiring/dispatch"
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
@@ -35,7 +36,7 @@ func movieGrab(t *testing.T, opened *store.Store, search movie.Search, clients .
 	return movie.Grab{Search: search, Automatic: dispatch.Automatic{Name: "movie", Dispatch: dispatch.Dispatch{
 		Candidates: search.Candidates, Acquisitions: library.NewAcquisitions(opened), Desired: search.Desired,
 		Downloaders: func(context.Context) ([]dispatch.DownloaderConn, error) { return clients, nil },
-		Fetch:       func(context.Context, int64, string) ([]byte, error) { return []byte("nzb"), nil },
+		Fetch:       func(context.Context, int64, string) ([]byte, error) { return clienttest.NZB(), nil },
 	}}}
 }
 

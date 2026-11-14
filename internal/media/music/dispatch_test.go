@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/acquiring/clienttest"
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/media/music"
@@ -54,8 +55,8 @@ func (env *searchTestEnv) dispatch(downloaders []music.DownloaderConn) music.Dis
 		Downloaders: func(context.Context) ([]music.DownloaderConn, error) {
 			return downloaders, nil
 		},
-		Fetch: func(_ context.Context, indexerID int64, link string) ([]byte, error) {
-			return []byte(fmt.Sprintf("nzb from indexer %d at %s", indexerID, link)), nil
+		Fetch: func(context.Context, int64, string) ([]byte, error) {
+			return clienttest.NZB(), nil
 		},
 	}
 }
@@ -104,7 +105,7 @@ func TestDispatch_SendCreatesAQueuedAcquisition(t *testing.T) {
 	}
 	// The NZB is fetched from the listing indexer and sent under the release's own name.
 	want := []download.AddRequest{{
-		Name: "Nosi Zada-Discovery-2001-FLAC-GROUP", File: []byte("nzb from indexer 1 at https://indexer.example/nzb/1"),
+		Name: "Nosi Zada-Discovery-2001-FLAC-GROUP", File: clienttest.NZB(),
 		Category: "music",
 	}}
 	if !reflect.DeepEqual(sender.requests, want) {
