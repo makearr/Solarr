@@ -27,7 +27,7 @@ func (a ArtistActions) SearchMissing(ctx context.Context, personID int64, catego
 	}
 	duplicate := true
 	for _, categoryID := range categoryIDs {
-		result, err := music.EnqueueSearchArtist(ctx, a.Queue, categoryID, personID)
+		result, err := music.EnqueueSearchArtist(ctx, a.Queue, jobs.PriorityInteractive, categoryID, personID)
 		if err != nil {
 			return false, err
 		}

@@ -2,10 +2,14 @@ package music
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
+	"strconv"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -47,36 +51,48 @@ type SearchCategoryPayload struct {
 }
 
 // EnqueueSearchCategory submits one category's own search run.
-func EnqueueSearchCategory(ctx context.Context, queue *jobs.Queue, categoryID int64) (jobs.EnqueueResult, error) {
-	return enqueueSearch(ctx, queue, SearchCategoryPayload{CategoryID: categoryID}, SearchCategoryActionKey(categoryID))
+func EnqueueSearchCategory(ctx context.Context, queue *jobs.Queue, priority jobs.Priority, categoryID int64) (jobs.EnqueueResult, error) {
+	return enqueueSearch(ctx, queue, priority, SearchCategoryPayload{CategoryID: categoryID}, SearchCategoryActionKey(categoryID))
 }
 
 // EnqueueSearchCutoffUnmet searches every monitored album of one library that falls short of its cutoff.
-func EnqueueSearchCutoffUnmet(ctx context.Context, queue *jobs.Queue, categoryID int64) (jobs.EnqueueResult, error) {
-	return enqueueSearch(ctx, queue, SearchCategoryPayload{CategoryID: categoryID, CutoffUnmet: true},
+func EnqueueSearchCutoffUnmet(ctx context.Context, queue *jobs.Queue, priority jobs.Priority, categoryID int64) (jobs.EnqueueResult, error) {
+	return enqueueSearch(ctx, queue, priority, SearchCategoryPayload{CategoryID: categoryID, CutoffUnmet: true},
 		fmt.Sprintf("%s:%d:cutoff", SearchCategoryJobType, categoryID))
 }
 
 // EnqueueSearchItems searches exactly these albums of one library, one after another.
-func EnqueueSearchItems(ctx context.Context, queue *jobs.Queue, categoryID int64, itemIDs []int64) (jobs.EnqueueResult, error) {
-	return enqueueSearch(ctx, queue, SearchCategoryPayload{CategoryID: categoryID, ItemIDs: itemIDs},
-		fmt.Sprintf("%s:%d:items:%v", SearchCategoryJobType, categoryID, itemIDs))
+func EnqueueSearchItems(ctx context.Context, queue *jobs.Queue, priority jobs.Priority, categoryID int64, itemIDs []int64) (jobs.EnqueueResult, error) {
+	return enqueueSearch(ctx, queue, priority, SearchCategoryPayload{CategoryID: categoryID, ItemIDs: itemIDs},
+		fmt.Sprintf("%s:%d:items:%s", SearchCategoryJobType, categoryID, itemsKey(itemIDs)))
 }
 
 // EnqueueSearchArtist searches one artist's missing albums; zero categoryID means every library.
-func EnqueueSearchArtist(ctx context.Context, queue *jobs.Queue, categoryID, personID int64) (jobs.EnqueueResult, error) {
-	return enqueueSearch(ctx, queue, SearchCategoryPayload{CategoryID: categoryID, PersonID: personID},
+func EnqueueSearchArtist(ctx context.Context, queue *jobs.Queue, priority jobs.Priority, categoryID, personID int64) (jobs.EnqueueResult, error) {
+	return enqueueSearch(ctx, queue, priority, SearchCategoryPayload{CategoryID: categoryID, PersonID: personID},
 		fmt.Sprintf("%s:%d:person:%d", SearchCategoryJobType, categoryID, personID))
 }
 
-func enqueueSearch(ctx context.Context, queue *jobs.Queue, payload SearchCategoryPayload, actionKey string) (jobs.EnqueueResult, error) {
+// itemsKey names a set of items for an action key: a bulk search over thousands of albums must not make a key of its own size.
+func itemsKey(itemIDs []int64) string {
+	sorted := slices.Clone(itemIDs)
+	slices.Sort(sorted)
+	sum := sha256.New()
+	for _, id := range sorted {
+		sum.Write(strconv.AppendInt(nil, id, 10))
+		sum.Write([]byte{','})
+	}
+	return hex.EncodeToString(sum.Sum(nil)[:12])
+}
+
+func enqueueSearch(ctx context.Context, queue *jobs.Queue, priority jobs.Priority, payload SearchCategoryPayload, actionKey string) (jobs.EnqueueResult, error) {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return jobs.EnqueueResult{}, fmt.Errorf("music: encode search category payload: %w", err)
 	}
 	return queue.Enqueue(ctx, jobs.Request{
 		Type: SearchCategoryJobType, ActionKey: actionKey,
-		Priority: jobs.PriorityLow, Payload: data, CategoryID: payload.CategoryID,
+		Priority: priority, Payload: data, CategoryID: payload.CategoryID,
 	})
 }
 

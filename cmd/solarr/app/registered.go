@@ -89,7 +89,7 @@ func (p *process) musicModule() music.Module {
 		Categories:  adapters.Categories{Cache: p.cache},
 		Discography: provider, DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(),
 		Search: func(ctx context.Context, categoryID, personID int64) error {
-			_, err := music.EnqueueSearchArtist(ctx, p.queue, categoryID, personID)
+			_, err := music.EnqueueSearchArtist(ctx, p.queue, jobs.PriorityLow, categoryID, personID)
 			return err
 		},
 	}
@@ -293,7 +293,7 @@ func (p *process) musicAdder() music.Adder {
 		// A failed enqueue is logged by enrichmentPass; the hourly sweep still picks the album up.
 		Enrich: func(ctx context.Context) { _, _ = p.enrichmentPass(ctx, false) },
 		SearchAlbum: func(ctx context.Context, categoryID, itemID int64) {
-			if _, err := music.EnqueueSearchItems(ctx, p.queue, categoryID, []int64{itemID}); err != nil {
+			if _, err := music.EnqueueSearchItems(ctx, p.queue, jobs.PriorityInteractive, categoryID, []int64{itemID}); err != nil {
 				p.logger.Warn("search added album", slog.Any("error", err))
 			}
 		},

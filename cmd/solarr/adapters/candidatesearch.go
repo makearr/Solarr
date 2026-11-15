@@ -276,7 +276,9 @@ func acquisitionView(acquisition library.Acquisition) apiserver.Acquisition {
 
 // SearchCategory enqueues music.SearchCategoryJob for categoryID.
 func (c CandidateSearch) SearchCategory(ctx context.Context, categoryID int64, workIDs []int64) (bool, error) {
-	enqueue := func() (jobs.EnqueueResult, error) { return music.EnqueueSearchCategory(ctx, c.Queue, categoryID) }
+	enqueue := func() (jobs.EnqueueResult, error) {
+		return music.EnqueueSearchCategory(ctx, c.Queue, jobs.PriorityInteractive, categoryID)
+	}
 	if len(workIDs) > 0 {
 		itemIDs := make([]int64, 0, len(workIDs))
 		for _, workID := range workIDs {
@@ -293,7 +295,9 @@ func (c CandidateSearch) SearchCategory(ctx context.Context, categoryID int64, w
 		if len(itemIDs) == 0 {
 			return false, nil
 		}
-		enqueue = func() (jobs.EnqueueResult, error) { return music.EnqueueSearchItems(ctx, c.Queue, categoryID, itemIDs) }
+		enqueue = func() (jobs.EnqueueResult, error) {
+			return music.EnqueueSearchItems(ctx, c.Queue, jobs.PriorityInteractive, categoryID, itemIDs)
+		}
 	}
 	result, err := enqueue()
 	if err != nil {
@@ -304,7 +308,7 @@ func (c CandidateSearch) SearchCategory(ctx context.Context, categoryID int64, w
 
 // SearchCutoffUnmet enqueues the search of every album of categoryID that is below its cutoff.
 func (c CandidateSearch) SearchCutoffUnmet(ctx context.Context, categoryID int64) (bool, error) {
-	result, err := music.EnqueueSearchCutoffUnmet(ctx, c.Queue, categoryID)
+	result, err := music.EnqueueSearchCutoffUnmet(ctx, c.Queue, jobs.PriorityInteractive, categoryID)
 	if err != nil {
 		return false, err
 	}
