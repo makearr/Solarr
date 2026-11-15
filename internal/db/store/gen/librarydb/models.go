@@ -31,6 +31,7 @@ type Acquisition struct {
 	UpdatedAt         int64
 	ContentHash       sql.NullString
 	SizeBytes         sql.NullInt64
+	PartsJson         string
 }
 
 type AcquisitionFile struct {

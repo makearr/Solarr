@@ -3,8 +3,10 @@ package library
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -36,6 +38,8 @@ type Acquisition struct {
 	ContentHash string
 	// SizeBytes is the release's size as sent; 0 when unknown.
 	SizeBytes int64
+	// Parts are the media refs the download covers; empty is the whole item.
+	Parts []string
 }
 
 // NewAcquisition is what Create needs to record one dispatch (ADR-57's own
@@ -59,6 +63,8 @@ type NewAcquisition struct {
 	ContentHash       string
 	// SizeBytes is the release's size, what the free-space gate counts while it is on its way; 0 when unknown.
 	SizeBytes int64
+	// Parts are the media refs the release was judged to cover; empty is the whole item.
+	Parts []string
 }
 
 // ErrAcquisitionAlreadyInFlight reports a desired item that already has a
@@ -83,13 +89,19 @@ func (a Acquisitions) Create(ctx context.Context, req NewAcquisition) (Acquisiti
 	err := a.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
 		if req.DesiredItemID != nil {
-			_, err := queries.GetActiveAcquisitionForItem(ctx, nullInt64(req.DesiredItemID))
-			if err == nil {
-				return ErrAcquisitionAlreadyInFlight
-			}
-			if !errors.Is(err, sql.ErrNoRows) {
+			open, err := queries.ListActiveAcquisitionsForItem(ctx, nullInt64(req.DesiredItemID))
+			if err != nil {
 				return fmt.Errorf("check in-flight: %w", err)
 			}
+			for _, row := range open {
+				if partsOverlap(partsOf(row.PartsJson), req.Parts) {
+					return ErrAcquisitionAlreadyInFlight
+				}
+			}
+		}
+		parts, err := json.Marshal(append([]string{}, req.Parts...))
+		if err != nil {
+			return fmt.Errorf("encode parts: %w", err)
 		}
 
 		created, err := queries.CreateAcquisition(ctx, librarydb.CreateAcquisitionParams{
@@ -100,7 +112,7 @@ func (a Acquisitions) Create(ctx context.Context, req NewAcquisition) (Acquisiti
 			ClientCategory: nullString(req.ClientCategory), ClientFingerprint: nullString(req.ClientFingerprint),
 			Protocol: req.Protocol, State: req.State,
 			CreatedAt: req.CreatedAt, UpdatedAt: req.UpdatedAt, ContentHash: nullString(req.ContentHash),
-			SizeBytes: sql.NullInt64{Int64: req.SizeBytes, Valid: req.SizeBytes > 0},
+			SizeBytes: sql.NullInt64{Int64: req.SizeBytes, Valid: req.SizeBytes > 0}, PartsJson: string(parts),
 		})
 		row = created
 		return err
@@ -118,6 +130,20 @@ func (a Acquisitions) Get(ctx context.Context, id int64) (Acquisition, error) {
 		return Acquisition{}, fmt.Errorf("library: get acquisition %d: %w", id, err)
 	}
 	return acquisitionFromRow(row), nil
+}
+
+// partsOf reads a stored parts list; an unreadable one is the whole item.
+func partsOf(stored string) []string {
+	var parts []string
+	if err := json.Unmarshal([]byte(stored), &parts); err != nil {
+		return nil
+	}
+	return parts
+}
+
+// partsOverlap says two downloads of one item would bring the same thing: either is the whole item, or they share a part.
+func partsOverlap(a, b []string) bool {
+	return len(a) == 0 || len(b) == 0 || slices.ContainsFunc(a, func(part string) bool { return slices.Contains(b, part) })
 }
 
 // OfMediaObject is the download a placed file came in with; found is false for a file a person imported by hand.
@@ -163,6 +189,37 @@ func (a Acquisitions) InFlightForItem(ctx context.Context, desiredItemID int64) 
 		return Acquisition{}, false, fmt.Errorf("library: in-flight acquisition for item %d: %w", desiredItemID, err)
 	}
 	return acquisitionFromRow(row), true, nil
+}
+
+// Conflicts says whether a download covering parts (empty: the whole item) would overlap one of the item's in flight.
+func (a Acquisitions) Conflicts(ctx context.Context, desiredItemID int64, parts []string) (bool, error) {
+	open, err := librarydb.New(a.store.Read()).ListActiveAcquisitionsForItem(ctx, nullInt64(&desiredItemID))
+	if err != nil {
+		return false, fmt.Errorf("library: in-flight acquisitions for item %d: %w", desiredItemID, err)
+	}
+	for _, row := range open {
+		if partsOverlap(partsOf(row.PartsJson), parts) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// InFlightParts answers the media refs the item's downloads on their way cover, and whether one of them is the whole item.
+func (a Acquisitions) InFlightParts(ctx context.Context, desiredItemID int64) (parts map[string]bool, whole bool, err error) {
+	open, err := librarydb.New(a.store.Read()).ListActiveAcquisitionsForItem(ctx, nullInt64(&desiredItemID))
+	if err != nil {
+		return nil, false, fmt.Errorf("library: in-flight acquisitions for item %d: %w", desiredItemID, err)
+	}
+	parts = map[string]bool{}
+	for _, row := range open {
+		covered := partsOf(row.PartsJson)
+		whole = whole || len(covered) == 0
+		for _, part := range covered {
+			parts[part] = true
+		}
+	}
+	return parts, whole, nil
 }
 
 // QueuedOn counts what Solarr has in one client's queue: sent and not finished downloading.
@@ -282,6 +339,6 @@ func acquisitionFromRow(row librarydb.Acquisition) Acquisition {
 		DownloadDir: row.DownloadDir.String, ClientCategory: row.ClientCategory.String,
 		ClientFingerprint: row.ClientFingerprint.String, Protocol: row.Protocol, State: row.State,
 		LastError: row.LastError.String, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
-		ContentHash: row.ContentHash.String, SizeBytes: row.SizeBytes.Int64,
+		ContentHash: row.ContentHash.String, SizeBytes: row.SizeBytes.Int64, Parts: partsOf(row.PartsJson),
 	}
 }

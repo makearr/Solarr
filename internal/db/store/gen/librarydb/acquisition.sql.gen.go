@@ -178,13 +178,13 @@ INSERT INTO acquisition (id, desired_item_id, candidate_id, indexer_id, candidat
                          download_client_ref, download_dir, client_category,
                          client_fingerprint, protocol, ddl_resolved_url,
                          ddl_bytes_done, ddl_resumable, state, last_error,
-                         created_at, updated_at, content_hash, size_bytes)
-VALUES ((SELECT MAX(COALESCE((SELECT MAX(id) FROM acquisition), 0), COALESCE((SELECT value FROM id_high_water WHERE name = 'acquisition'), 0)) + 1), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         created_at, updated_at, content_hash, size_bytes, parts_json)
+VALUES ((SELECT MAX(COALESCE((SELECT MAX(id) FROM acquisition), 0), COALESCE((SELECT value FROM id_high_water WHERE name = 'acquisition'), 0)) + 1), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, desired_item_id, candidate_id, indexer_id, candidate_guid,
           candidate_title, search_terms, downloader_id, download_client_ref,
           download_dir, client_category, client_fingerprint, protocol,
           ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-          created_at, updated_at, content_hash, size_bytes
+          created_at, updated_at, content_hash, size_bytes, parts_json
 `
 
 type CreateAcquisitionParams struct {
@@ -209,6 +209,7 @@ type CreateAcquisitionParams struct {
 	UpdatedAt         int64
 	ContentHash       sql.NullString
 	SizeBytes         sql.NullInt64
+	PartsJson         string
 }
 
 // Candidates, decisions and provenance. Column lists follow table order.
@@ -235,6 +236,7 @@ func (q *Queries) CreateAcquisition(ctx context.Context, arg CreateAcquisitionPa
 		arg.UpdatedAt,
 		arg.ContentHash,
 		arg.SizeBytes,
+		arg.PartsJson,
 	)
 	var i Acquisition
 	err := row.Scan(
@@ -260,6 +262,7 @@ func (q *Queries) CreateAcquisition(ctx context.Context, arg CreateAcquisitionPa
 		&i.UpdatedAt,
 		&i.ContentHash,
 		&i.SizeBytes,
+		&i.PartsJson,
 	)
 	return i, err
 }
@@ -296,7 +299,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash, size_bytes
+       created_at, updated_at, content_hash, size_bytes, parts_json
 FROM acquisition WHERE id = ?
 `
 
@@ -326,6 +329,7 @@ func (q *Queries) GetAcquisition(ctx context.Context, id int64) (Acquisition, er
 		&i.UpdatedAt,
 		&i.ContentHash,
 		&i.SizeBytes,
+		&i.PartsJson,
 	)
 	return i, err
 }
@@ -366,7 +370,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash, size_bytes
+       created_at, updated_at, content_hash, size_bytes, parts_json
 FROM acquisition
 WHERE desired_item_id = ? AND state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED')
 `
@@ -401,6 +405,7 @@ func (q *Queries) GetActiveAcquisitionForItem(ctx context.Context, desiredItemID
 		&i.UpdatedAt,
 		&i.ContentHash,
 		&i.SizeBytes,
+		&i.PartsJson,
 	)
 	return i, err
 }
@@ -499,7 +504,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash, size_bytes
+       created_at, updated_at, content_hash, size_bytes, parts_json
 FROM acquisition
 WHERE state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED')
 ORDER BY id
@@ -538,6 +543,65 @@ func (q *Queries) ListActiveAcquisitions(ctx context.Context) ([]Acquisition, er
 			&i.UpdatedAt,
 			&i.ContentHash,
 			&i.SizeBytes,
+			&i.PartsJson,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listActiveAcquisitionsForItem = `-- name: ListActiveAcquisitionsForItem :many
+SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
+       candidate_title, search_terms, downloader_id, download_client_ref,
+       download_dir, client_category, client_fingerprint, protocol,
+       ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
+       created_at, updated_at, content_hash, size_bytes, parts_json
+FROM acquisition
+WHERE desired_item_id = ? AND state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED')
+`
+
+// Every download of an item still on its way, with the parts each covers (several may run at once).
+func (q *Queries) ListActiveAcquisitionsForItem(ctx context.Context, desiredItemID sql.NullInt64) ([]Acquisition, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveAcquisitionsForItem, desiredItemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Acquisition{}
+	for rows.Next() {
+		var i Acquisition
+		if err := rows.Scan(
+			&i.ID,
+			&i.DesiredItemID,
+			&i.CandidateID,
+			&i.IndexerID,
+			&i.CandidateGuid,
+			&i.CandidateTitle,
+			&i.SearchTerms,
+			&i.DownloaderID,
+			&i.DownloadClientRef,
+			&i.DownloadDir,
+			&i.ClientCategory,
+			&i.ClientFingerprint,
+			&i.Protocol,
+			&i.DdlResolvedUrl,
+			&i.DdlBytesDone,
+			&i.DdlResumable,
+			&i.State,
+			&i.LastError,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ContentHash,
+			&i.SizeBytes,
+			&i.PartsJson,
 		); err != nil {
 			return nil, err
 		}
@@ -794,7 +858,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash, size_bytes
+       created_at, updated_at, content_hash, size_bytes, parts_json
 FROM acquisition
 WHERE state = 'IMPORTED'
 ORDER BY id
@@ -833,6 +897,7 @@ func (q *Queries) ListImportedAcquisitions(ctx context.Context) ([]Acquisition, 
 			&i.UpdatedAt,
 			&i.ContentHash,
 			&i.SizeBytes,
+			&i.PartsJson,
 		); err != nil {
 			return nil, err
 		}

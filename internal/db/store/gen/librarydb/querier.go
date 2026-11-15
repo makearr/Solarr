@@ -540,6 +540,8 @@ type Querier interface {
 	LinkWorkRootFolder(ctx context.Context, arg LinkWorkRootFolderParams) error
 	// Startup reconciliation polls every non-terminal acquisition (section 10.9).
 	ListActiveAcquisitions(ctx context.Context) ([]Acquisition, error)
+	// Every download of an item still on its way, with the parts each covers (several may run at once).
+	ListActiveAcquisitionsForItem(ctx context.Context, desiredItemID sql.NullInt64) ([]Acquisition, error)
 	// The per-root counterpart, for the max_percent_of_root guard.
 	ListActiveRecycleBinByRootOldestFirst(ctx context.Context, arg ListActiveRecycleBinByRootOldestFirstParams) ([]RecycleBin, error)
 	ListActiveRecycleBinNewestFirst(ctx context.Context, limit int64) ([]RecycleBin, error)

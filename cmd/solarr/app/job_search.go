@@ -138,14 +138,18 @@ func (p *process) searchConns(ctx context.Context, root int, wanted []int, funct
 // tvGrab builds the TV module's automatic search over the real stores.
 func (p *process) tvGrab() tv.Grab {
 	blocklist, sightings, filters := library.NewBlocklistStore(p.library), library.NewSightings(p.library), library.NewReleaseFilters(p.library)
-	return tv.Grab{
-		Search: tv.Search{
-			Desired: library.NewDesired(p.library), Series: library.NewSeriesReader(p.library),
-			Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist,
-			Sightings: &sightings, ReleaseFilters: &filters,
+	search := tv.Search{
+		Desired: library.NewDesired(p.library), Series: library.NewSeriesReader(p.library),
+		Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist,
+		Sightings: &sightings, ReleaseFilters: &filters,
+		InFlight: func(ctx context.Context, itemID int64) (map[string]bool, error) {
+			parts, _, err := library.NewAcquisitions(p.library).InFlightParts(ctx, itemID)
+			return parts, err
 		},
-		Dispatch: p.dispatchFor(tv.MediaType),
 	}
+	dispatch := p.dispatchFor(tv.MediaType)
+	dispatch.PartsOf = search.ReleaseParts
+	return tv.Grab{Search: search, Dispatch: dispatch}
 }
 
 // musicSearch builds internal/media/music.Search over the real stores.

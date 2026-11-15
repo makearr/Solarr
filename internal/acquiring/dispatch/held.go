@@ -168,7 +168,7 @@ func (d Dispatch) stillSendable(ctx context.Context, entry library.ReadyEntry, a
 	if item.State == string(model.ItemStateComplete) || (entry.ItemState != "" && entry.ItemState != item.State) {
 		return false, nil
 	}
-	if _, inFlight, err := d.Acquisitions.InFlightForItem(ctx, entry.DesiredItemID); err != nil || inFlight {
+	if conflict, err := d.Acquisitions.Conflicts(ctx, entry.DesiredItemID, d.partsOf(ctx, entry.DesiredItemID, heldRelease(entry))); err != nil || conflict {
 		return false, err
 	}
 	if d.Blocklist != nil {

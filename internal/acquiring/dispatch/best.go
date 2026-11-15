@@ -3,6 +3,7 @@ package dispatch
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
@@ -19,6 +20,8 @@ type Best struct {
 	Held bool
 	// TooBigAfterFailure counts releases passed over for being far larger than one of the item's that just failed.
 	TooBigAfterFailure int
+	// AlsoSent counts the further releases sent in the same turn, for a set whose parts they hold apart from the first.
+	AlsoSent int
 	// Refused counts releases the client declined before one was taken, or none was.
 	Refused int
 	// NoRoom counts releases passed over because the library has no root with space for them.
@@ -36,6 +39,13 @@ type Headroom struct {
 	Gated bool
 	// RetryCeiling is the largest release an automatic retry may send after a failure; 0 means no failure to guard against.
 	RetryCeiling int64
+}
+
+// maxSendsPerTurn bounds the downloads of one item started in one turn.
+const maxSendsPerTurn = 5
+
+func partsOverlap(a, b []string) bool {
+	return slices.ContainsFunc(a, func(part string) bool { return slices.Contains(b, part) })
 }
 
 // retryGrowthFactor is how many times larger than a failed release the next automatic one may be.
@@ -65,8 +75,14 @@ func (d Dispatch) SendBest(
 ) (Best, error) {
 	var best Best
 	var firstFetchFailure error
+	var sentParts []string
 	for _, detail := range decisions {
 		if detail.Decision.Outcome != string(model.OutcomeAccept) {
+			continue
+		}
+		parts := d.partsOf(ctx, itemID, detail.ReleaseCandidate)
+		// After the first send, only a release of parts nothing sent holds is worth another download.
+		if best.Sent != nil && (len(parts) == 0 || partsOverlap(parts, sentParts)) {
 			continue
 		}
 		if size := detail.ReleaseCandidate.SizeBytes; room.Gated && size != nil && *size > room.Bytes {
@@ -89,7 +105,11 @@ func (d Dispatch) SendBest(
 			return best, nil
 		case errors.Is(err, library.ErrAcquisitionAlreadyInFlight):
 			best.AlreadyInFlight = true
-			return best, nil
+			// A release of parts may clash with one already on its way while another does not.
+			if len(parts) == 0 {
+				return best, nil
+			}
+			continue
 		// A torrent with no torrent client yet: the next best release may still be sendable.
 		case errors.Is(err, ErrNoDownloaderForProtocol):
 			continue
@@ -116,7 +136,18 @@ func (d Dispatch) SendBest(
 		case err != nil:
 			return best, err
 		}
-		best.Sent = &sent
+		if best.Sent == nil {
+			best.Sent = &sent
+		} else {
+			best.AlsoSent++
+		}
+		sentParts = append(sentParts, parts...)
+		// A release of the whole item, or the cap, ends the turn.
+		if len(parts) == 0 || len(sentParts) == 0 || best.AlsoSent+1 >= maxSendsPerTurn {
+			return best, nil
+		}
+	}
+	if best.Sent != nil {
 		return best, nil
 	}
 	return best, firstFetchFailure

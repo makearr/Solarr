@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/acquiring/clienttest"
+	"github.com/makearr/Solarr/internal/acquiring/dispatch"
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/media/music"
@@ -20,11 +21,13 @@ import (
 type fakeSabnzbdSender struct {
 	download.Client
 	clientRef string
-	err       error
-	refuse    map[string]bool
-	mu        sync.Mutex
-	requests  []download.AddRequest
-	removed   []string
+	// refs are answered in turn before clientRef, for a test that sends several releases.
+	refs     []string
+	err      error
+	refuse   map[string]bool
+	mu       sync.Mutex
+	requests []download.AddRequest
+	removed  []string
 	// afterAdd runs once the client has accepted a release: another sender winning the race, in a test.
 	afterAdd func()
 }
@@ -45,6 +48,13 @@ func (f *fakeSabnzbdSender) Add(_ context.Context, request download.AddRequest) 
 	}
 	if f.refuse[request.Name] {
 		return "", fmt.Errorf("fake: %w", download.ErrRefused)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.refs) > 0 {
+		ref := f.refs[0]
+		f.refs = f.refs[1:]
+		return ref, f.err
 	}
 	return f.clientRef, f.err
 }
@@ -327,5 +337,62 @@ func TestDispatch_ASecondSendNeverReachesTheClient(t *testing.T) {
 	}
 	if len(sender.requests) != 1 {
 		t.Errorf("client received %d releases, want 1", len(sender.requests))
+	}
+}
+
+// decide records one decision for a release called title, best first when recorded first.
+func (env *searchTestEnv) decide(t *testing.T, itemID int64, title, outcome string) library.DecisionDetail {
+	t.Helper()
+	candidate, err := env.candidates.Upsert(t.Context(), library.NewReleaseCandidate{
+		IndexerID: 1, GUID: "guid-" + title, Title: title, Protocol: "usenet", DownloadURL: "https://indexer.example/nzb/" + title,
+		Source: "search", FirstSeenAt: env.clock.Now().Unix(), ExpiresAt: env.clock.Now().Unix() + 1_000_000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	decision, err := env.candidates.RecordDecision(t.Context(), library.NewDecision{
+		CandidateID: candidate.ID, DesiredItemID: itemID, Outcome: outcome, Score: 10,
+		ComponentsJSON: "[]", RejectionsJSON: "[]", DeferralsJSON: "[]", DecidedAt: env.clock.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return library.DecisionDetail{Decision: decision, ReleaseCandidate: candidate}
+}
+
+// SRCH-5: an item that is a set may have several downloads on their way when their parts do not overlap; a pack of
+// every part ends the turn.
+func TestSendBest_SendsEachReleaseOfPartsNothingSentHolds(t *testing.T) {
+	partsByTitle := map[string][]string{"ep3": {"e3"}, "ep4": {"e4"}, "ep4-again": {"e4"}, "pack": {"e3", "e4"}}
+	for name, tc := range map[string]struct {
+		decisions []string
+		want      []string
+	}{
+		"episodes when the pack is not accepted": {[]string{"ep3", "ep4", "ep4-again"}, []string{"ep3", "ep4"}},
+		"the pack alone when it ranks first":     {[]string{"pack", "ep3", "ep4"}, []string{"pack"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			env := newSearchTestEnv(t)
+			item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+			sender := &fakeSabnzbdSender{refs: []string{"nzo-1", "nzo-2", "nzo-3"}}
+			dispatcher := env.dispatch([]music.DownloaderConn{{ID: 5, Protocol: "usenet", Client: sender}})
+			dispatcher.PartsOf = func(_ context.Context, _ int64, release library.ReleaseCandidate) []string {
+				return partsByTitle[release.Title]
+			}
+			var decisions []library.DecisionDetail
+			for _, title := range tc.decisions {
+				decisions = append(decisions, env.decide(t, item.ID, title, "ACCEPT"))
+			}
+			if _, err := dispatcher.SendBest(t.Context(), item.ID, decisions, dispatch.Headroom{}, music.GrabAutomatic, env.clock.Now()); err != nil {
+				t.Fatal(err)
+			}
+			var sent []string
+			for _, request := range sender.requests {
+				sent = append(sent, request.Name)
+			}
+			if !reflect.DeepEqual(sent, tc.want) {
+				t.Errorf("sent %v, want %v", sent, tc.want)
+			}
+		})
 	}
 }

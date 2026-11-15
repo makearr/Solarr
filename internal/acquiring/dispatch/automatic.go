@@ -24,9 +24,10 @@ type Automatic struct {
 func (a Automatic) Run(
 	ctx context.Context, itemID int64, origin GrabOrigin, at time.Time, search func(ctx context.Context) ([]library.DecisionDetail, error),
 ) (Best, error) {
-	if _, inFlight, err := a.Dispatch.Acquisitions.InFlightForItem(ctx, itemID); err != nil {
+	// Downloads of parts of the item leave room for others; the whole item on its way leaves none.
+	if _, whole, err := a.Dispatch.Acquisitions.InFlightParts(ctx, itemID); err != nil {
 		return Best{}, fmt.Errorf("%s: grab item %d: %w", a.Name, itemID, err)
-	} else if inFlight {
+	} else if whole {
 		return Best{AlreadyInFlight: true}, nil
 	}
 	if held, err := a.aboveRating(ctx, itemID, origin); err != nil || held {

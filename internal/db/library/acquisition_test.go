@@ -30,27 +30,39 @@ func createAcquisition(t *testing.T, opened *store.Store, itemID int64, ref, sta
 	return acquisition
 }
 
-// Invariant 15. Without it a retry while the first download is still running
-// downloads the same thing twice and races itself on import.
-func TestOnlyOneAcquisitionIsInFlightPerItem(t *testing.T) {
-	opened, _ := newLibrary(t)
-	work := createWork(t, opened, "movie", "Cige")
-	item := createDesired(t, opened, work.ID, "SINGLE", 1)
-
-	createAcquisition(t, opened, item.ID, "nzo-1", "DOWNLOADING")
-
-	err := opened.Write(t.Context(), store.PrioInteractive,
-		func(ctx context.Context, tx *sql.Tx) error {
-			q := librarydb.New(opened.Read()).WithTx(tx)
-			_, err := q.CreateAcquisition(ctx, librarydb.CreateAcquisitionParams{
-				DesiredItemID: sql.NullInt64{Int64: item.ID, Valid: true},
-				DownloaderID:  1, DownloadClientRef: "nzo-2",
-				Protocol: "usenet", State: "DOWNLOADING", CreatedAt: 1, UpdatedAt: 1,
-			})
-			return err
+// Invariant 15, as parts: a whole-item download excludes every other, and part downloads may run together while
+// their parts do not overlap. Without it a retry while the first download is still running downloads the same thing
+// twice and races itself on import.
+func TestDownloadsOfOneItemMayNotOverlap(t *testing.T) {
+	for name, tc := range map[string]struct {
+		first, second []string
+		refused       bool
+	}{
+		"whole then whole":     {nil, nil, true},
+		"whole then part":      {nil, []string{"s01e01"}, true},
+		"part then whole":      {[]string{"s01e01"}, nil, true},
+		"parts that overlap":   {[]string{"s01e01", "s01e02"}, []string{"s01e02"}, true},
+		"parts that are apart": {[]string{"s01e01"}, []string{"s01e02"}, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			opened, _ := newLibrary(t)
+			work := createWork(t, opened, "movie", "Cige")
+			item := createDesired(t, opened, work.ID, "SINGLE", 1)
+			acquisitions := library.NewAcquisitions(opened)
+			create := func(ref string, parts []string) error {
+				_, err := acquisitions.Create(t.Context(), library.NewAcquisition{
+					DesiredItemID: &item.ID, DownloaderID: 1, DownloadClientRef: ref, Protocol: "usenet", State: "DOWNLOADING",
+					CreatedAt: 1, UpdatedAt: 1, Parts: parts,
+				})
+				return err
+			}
+			if err := create("nzo-1", tc.first); err != nil {
+				t.Fatal(err)
+			}
+			if err := create("nzo-2", tc.second); errors.Is(err, library.ErrAcquisitionAlreadyInFlight) != tc.refused || (err != nil && !tc.refused) {
+				t.Errorf("second create = %v, want refused = %v", err, tc.refused)
+			}
 		})
-	if err == nil {
-		t.Error("a second acquisition started while the first was still in flight")
 	}
 }
 

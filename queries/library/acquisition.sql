@@ -6,20 +6,20 @@ INSERT INTO acquisition (id, desired_item_id, candidate_id, indexer_id, candidat
                          download_client_ref, download_dir, client_category,
                          client_fingerprint, protocol, ddl_resolved_url,
                          ddl_bytes_done, ddl_resumable, state, last_error,
-                         created_at, updated_at, content_hash, size_bytes)
-VALUES ((SELECT MAX(COALESCE((SELECT MAX(id) FROM acquisition), 0), COALESCE((SELECT value FROM id_high_water WHERE name = 'acquisition'), 0)) + 1), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         created_at, updated_at, content_hash, size_bytes, parts_json)
+VALUES ((SELECT MAX(COALESCE((SELECT MAX(id) FROM acquisition), 0), COALESCE((SELECT value FROM id_high_water WHERE name = 'acquisition'), 0)) + 1), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, desired_item_id, candidate_id, indexer_id, candidate_guid,
           candidate_title, search_terms, downloader_id, download_client_ref,
           download_dir, client_category, client_fingerprint, protocol,
           ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-          created_at, updated_at, content_hash, size_bytes;
+          created_at, updated_at, content_hash, size_bytes, parts_json;
 
 -- name: GetAcquisition :one
 SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash, size_bytes
+       created_at, updated_at, content_hash, size_bytes, parts_json
 FROM acquisition WHERE id = ?;
 
 -- Checked before CreateAcquisition so a caller gets a clean, mapped refusal
@@ -31,7 +31,17 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash, size_bytes
+       created_at, updated_at, content_hash, size_bytes, parts_json
+FROM acquisition
+WHERE desired_item_id = ? AND state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED');
+
+-- Every download of an item still on its way, with the parts each covers (several may run at once).
+-- name: ListActiveAcquisitionsForItem :many
+SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
+       candidate_title, search_terms, downloader_id, download_client_ref,
+       download_dir, client_category, client_fingerprint, protocol,
+       ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
+       created_at, updated_at, content_hash, size_bytes, parts_json
 FROM acquisition
 WHERE desired_item_id = ? AND state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED');
 
@@ -41,7 +51,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash, size_bytes
+       created_at, updated_at, content_hash, size_bytes, parts_json
 FROM acquisition
 WHERE state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED')
 ORDER BY id;
@@ -52,7 +62,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash, size_bytes
+       created_at, updated_at, content_hash, size_bytes, parts_json
 FROM acquisition
 WHERE state = 'IMPORTED'
 ORDER BY id;

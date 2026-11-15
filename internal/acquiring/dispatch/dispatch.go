@@ -124,6 +124,9 @@ type Dispatch struct {
 	Admits func(categoryID, age int64) bool
 	// Paused is optional: true while the mode sends nothing to a download client.
 	Paused func() bool
+	// PartsOf is optional: the media refs of the item a release holds, for a media type whose items are sets (a TV season),
+	// so several downloads of one item may run together while they do not overlap. Without it, or empty, a release is the whole item.
+	PartsOf func(ctx context.Context, itemID int64, release library.ReleaseCandidate) []string
 	// Locks is optional: one send per item at a time, shared by every Dispatch of the process, so two senders cannot
 	// both pass the in-flight check and put the same release in the client twice.
 	Locks *keyedlock.Locks
@@ -158,9 +161,10 @@ func (d Dispatch) SendRelease(ctx context.Context, itemID int64, release library
 		defer d.Locks.Lock(fmt.Sprintf("send:%d", itemID))()
 	}
 	// Before the client is involved: refusing after the send leaves a duplicate in its queue.
-	if _, inFlight, err := d.Acquisitions.InFlightForItem(ctx, itemID); err != nil {
+	parts := d.partsOf(ctx, itemID, release)
+	if conflict, err := d.Acquisitions.Conflicts(ctx, itemID, parts); err != nil {
 		return library.Acquisition{}, fmt.Errorf("dispatch: %w", err)
-	} else if inFlight {
+	} else if conflict {
 		return library.Acquisition{}, library.ErrAcquisitionAlreadyInFlight
 	}
 
@@ -235,7 +239,7 @@ func (d Dispatch) SendRelease(ctx context.Context, itemID int64, release library
 		// that distinction needs client polling (section 10.9), not built
 		// this pass.
 		State:     "QUEUED",
-		CreatedAt: at.Unix(), UpdatedAt: at.Unix(), ContentHash: contentHash, SizeBytes: size,
+		CreatedAt: at.Unix(), UpdatedAt: at.Unix(), ContentHash: contentHash, SizeBytes: size, Parts: parts,
 	})
 	if err != nil {
 		// In the client with no row it would never be followed, imported or removed.
@@ -246,6 +250,14 @@ func (d Dispatch) SendRelease(ctx context.Context, itemID int64, release library
 		d.History(ctx, download.HistoryGrabbed, created, "")
 	}
 	return created, nil
+}
+
+// partsOf is what a release holds of the item; nil is the whole item.
+func (d Dispatch) partsOf(ctx context.Context, itemID int64, release library.ReleaseCandidate) []string {
+	if d.PartsOf == nil {
+		return nil
+	}
+	return d.PartsOf(ctx, itemID, release)
 }
 
 func (d Dispatch) findDecision(ctx context.Context, itemID, decisionID int64) (library.DecisionDetail, error) {

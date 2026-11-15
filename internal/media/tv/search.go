@@ -49,6 +49,8 @@ type Search struct {
 	ReleaseFilters *library.ReleaseFilters
 	// IndexerDeadline bounds each tier's fan-out; zero is judge.GroupDeadline.
 	IndexerDeadline time.Duration
+	// InFlight, when set, answers the media refs of a season's episodes already being downloaded, which are not asked for again.
+	InFlight func(ctx context.Context, itemID int64) (map[string]bool, error)
 }
 
 // wanted is what a season item is missing: the monitored episodes that have aired and have no file.
@@ -91,6 +93,13 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 		return wanted{}, ErrNotSearchable
 	}
 	now := s.Clock.Now()
+	var inFlight map[string]bool
+	if s.InFlight != nil {
+		var err error
+		if inFlight, err = s.InFlight(ctx, item.ID); err != nil {
+			return wanted{}, fmt.Errorf("series %d: %w", item.WorkID, err)
+		}
+	}
 	detail, err := s.Series.Get(ctx, item.CategoryID, item.WorkID, now)
 	if err != nil {
 		return wanted{}, fmt.Errorf("series %d: %w", item.WorkID, err)
@@ -116,6 +125,9 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 		// An episode with neither a time nor a date is not asked for, whatever its row says of being announced.
 		aired := (episode.AvailableAt > 0 || episode.Date != "") &&
 			library.PartOut(episode.AvailableAt, episode.AvailableGrace, episode.Date, "", now)
+		if inFlight[MediaRef(season, episode.Number)] {
+			continue
+		}
 		switch {
 		case only > 0:
 			if episode.Number == only {
@@ -125,8 +137,11 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 			w.missing[episode.Number] = episode
 		}
 	}
-	if err := s.addUpgrades(ctx, item, only, detail, &w); err != nil {
-		return wanted{}, err
+	// What is still downloading is the season's gap being filled, not a season with nothing left to fetch.
+	if len(inFlight) == 0 {
+		if err := s.addUpgrades(ctx, item, only, detail, &w); err != nil {
+			return wanted{}, err
+		}
 	}
 	w.names = parsetv.CleanTitleSet(w.title, w.aliases)
 	switch {
@@ -136,6 +151,32 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 		w.runtimeMs = detail.RuntimeMs
 	}
 	return w, nil
+}
+
+// ReleaseParts are the media refs of the wanted episodes a release holds, so a download can be told from another of the
+// same season; empty when it holds none that can be named.
+func (s Search) ReleaseParts(ctx context.Context, itemID int64, release library.ReleaseCandidate) []string {
+	item, err := s.Desired.Get(ctx, itemID)
+	if err != nil {
+		return nil
+	}
+	w, err := s.wantedFor(ctx, item, 0)
+	if err != nil {
+		return nil
+	}
+	info, ok := parsetv.Parse(release.Title, s.Clock.Now())
+	if !ok {
+		return nil
+	}
+	numbers, covered := w.coverage(info)
+	if !covered {
+		return nil
+	}
+	refs := make([]string, len(numbers))
+	for i, number := range numbers {
+		refs[i] = MediaRef(w.season, number)
+	}
+	return refs
 }
 
 // addUpgrades makes the monitored episodes whose file misses the library's cutoff the wanted ones when the season has
