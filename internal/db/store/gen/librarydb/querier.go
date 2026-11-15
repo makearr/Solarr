@@ -168,6 +168,7 @@ type Querier interface {
 	// A client's queue as Solarr fills it: sent and not finished downloading (ADR-57).
 	CountQueuedOnDownloader(ctx context.Context, downloaderID int64) (int64, error)
 	CountRecycleBin(ctx context.Context) (int64, error)
+	CountRunningArrImports(ctx context.Context, instanceID int64) (int64, error)
 	CountStaleProbes(ctx context.Context, belowVersion int64) (int64, error)
 	CountStaleVideoProbes(ctx context.Context, belowVersion int64) (int64, error)
 	// Library health's own "unmatched files" figure (todo 4.8) -- same filter

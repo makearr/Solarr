@@ -325,3 +325,15 @@ func TestRevertArrImport_NotDoneAnswers409(t *testing.T) {
 func (f *fakeArrSync) Pull(_ context.Context, _ int64) (apiserver.ArrImportRun, error) {
 	return apiserver.ArrImportRun{}, nil
 }
+
+// SEC-9: the import runs and the titles they touched are for administrators.
+func TestArrImportReads_RequireAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "viewer", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "viewer")
+	for _, path := range []string{"/api/v1/arr/imports?instance_id=3", "/api/v1/arr/imports/9"} {
+		if recorder := fixture.do(authedGet(t, cookies, path)); recorder.Code != http.StatusForbidden {
+			t.Errorf("GET %s = %d, want 403 for a readonly account", path, recorder.Code)
+		}
+	}
+}

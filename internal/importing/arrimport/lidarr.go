@@ -506,3 +506,8 @@ func (c LidarrClient) importLists(ctx context.Context, path string) ([]ImportLis
 func (c LidarrClient) Indexers(ctx context.Context) ([]Indexer, error) {
 	return c.indexers(ctx, "/api/v1/indexer")
 }
+
+// Masked says a secret came back as the *Arr's mask (all asterisks), which is not the secret: current *Arrs hide every key.
+func Masked(secret string) bool {
+	return secret != "" && strings.Trim(secret, "*") == ""
+}

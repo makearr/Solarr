@@ -6,6 +6,9 @@ VALUES (?, ?, ?, ?)
 RETURNING id, instance_id, app, state, started_at, finished_at, error,
           artists_created, artists_matched, albums_created, albums_matched, items_parked;
 
+-- name: CountRunningArrImports :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM arr_import WHERE instance_id = ? AND state = 'RUNNING';
+
 -- name: FinishArrImport :exec
 UPDATE arr_import
 SET state = ?, finished_at = ?, error = ?,

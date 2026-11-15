@@ -3033,15 +3033,16 @@ paths:
         have push_monitoring on; only items an import matched are touched, and only their monitored flag. Administrator only.
       responses:
         "200":
-          description: How many items were compared and how many changed at the *Arr.
+          description: How many items were compared, how many changed at the *Arr, and how many were left alone because Solarr holds no wanted item of them.
           content:
             application/json:
               schema:
                 type: object
-                required: [checked, changed]
+                required: [checked, changed, unknown]
                 properties:
                   checked: { type: integer, format: int64 }
                   changed: { type: integer, format: int64 }
+                  unknown: { type: integer, format: int64 }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }

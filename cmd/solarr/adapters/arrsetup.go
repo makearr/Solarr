@@ -2,8 +2,10 @@ package adapters
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -63,18 +65,71 @@ func (s ArrSetup) indexers(ctx context.Context, app settings.ArrApp, client arri
 	for _, existing := range have {
 		known[strings.TrimRight(existing.BaseURL, "/")] = true
 	}
-	var failures []error
+	prowlarr := s.prowlarrKeys(ctx)
+	var failures, keyless []error
 	for _, entry := range found {
 		impl := strings.ToLower(entry.Implementation)
 		if (impl != "newznab" && impl != "torznab") || entry.BaseURL == "" || known[strings.TrimRight(entry.BaseURL, "/")] {
 			continue
 		}
 		request := settings.IndexerRequest{Name: entry.Name, Impl: impl, BaseURL: entry.BaseURL, Enabled: entry.Enabled}
-		if _, err := s.Cache.CreateIndexer(ctx, request, secrets.Secret(entry.APIKey), s.Clock.Now().Unix()); err != nil {
+		key := entry.APIKey
+		// The *Arr hides its keys: with none to copy the indexer is added switched off, except one that reaches Prowlarr,
+		// which a connection here already holds the key of.
+		if arrimport.Masked(key) || key == "" {
+			if prowlarrKey, viaProwlarr := prowlarr[hostOf(entry.BaseURL)]; viaProwlarr {
+				key = prowlarrKey
+			} else {
+				key, request.Enabled = "", false
+				keyless = append(keyless, errors.New(entry.Name))
+			}
+		}
+		if app == settings.ArrAppLidarr && len(entry.Categories) > 0 {
+			request.MusicCategories = entry.Categories[:min(len(entry.Categories), maxIndexerCategories)]
+		}
+		if _, err := s.Cache.CreateIndexer(ctx, request, secrets.Secret(key), s.Clock.Now().Unix()); err != nil {
 			failures = append(failures, fmt.Errorf("add indexer %s: %w", entry.Name, err))
 		}
 	}
+	if len(keyless) > 0 {
+		names := make([]string, len(keyless))
+		for i, err := range keyless {
+			names[i] = err.Error()
+		}
+		failures = append(failures, fmt.Errorf("indexers added switched off, enter their API keys: %s", strings.Join(names, ", ")))
+	}
 	return errors.Join(failures...)
+}
+
+// maxIndexerCategories bounds the categories carried over from one indexer.
+const maxIndexerCategories = 32
+
+// hostOf is the host and port of an address, lower-cased, to tell whether two addresses reach one server.
+func hostOf(address string) string {
+	parsed, err := url.Parse(address)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(parsed.Host)
+}
+
+// prowlarrKeys are the API keys of the Prowlarr connections, by host: an indexer an *Arr reaches through Prowlarr talks
+// to it with Prowlarr's key.
+func (s ArrSetup) prowlarrKeys(ctx context.Context) map[string]string {
+	keys := map[string]string{}
+	instances, err := s.Cache.ArrInstances(ctx)
+	if err != nil {
+		return keys
+	}
+	for _, instance := range instances {
+		if instance.App != settings.ArrAppProwlarr {
+			continue
+		}
+		if key, err := s.Cache.DecryptedAPIKey(ctx, instance.ID); err == nil {
+			keys[hostOf(instance.BaseURL)] = key.Reveal()
+		}
+	}
+	return keys
 }
 
 // downloadClients adds the *Arr's download clients Solarr has a client for, found by address. An *Arr hides a client's
@@ -111,6 +166,16 @@ func (s ArrSetup) downloadClients(ctx context.Context, app settings.ArrApp, clie
 			continue
 		}
 		request := settings.DownloaderRequest{Name: entry.Name, Impl: impl, BaseURL: entry.BaseURL(), Enabled: false, Protocol: string(definition.Protocol)}
+		// Its priority carries over; its category does not, since two apps sharing one category fight over the files.
+		if entry.Priority >= 1 && entry.Priority <= 50 {
+			priority := entry.Priority
+			if encoded, err := json.Marshal(settings.DownloaderOptions{Priority: &priority}); err == nil {
+				request.SettingsJSON = string(encoded)
+			}
+		}
+		if entry.Category != "" {
+			failures = append(failures, fmt.Errorf("%s: %s uses category %q; give Solarr its own category before enabling it", entry.Name, app, entry.Category))
+		}
 		if _, err := s.Cache.CreateDownloader(ctx, request, "", s.Clock.Now().Unix()); err != nil {
 			failures = append(failures, fmt.Errorf("add download client %s: %w", entry.Name, err))
 		}

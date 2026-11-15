@@ -27,7 +27,7 @@ func TestRadarrClient_AddMovieAsksRadarrToSearchAndAnswersItsId(t *testing.T) {
 	}}
 	radarr := arrimport.NewRadarrClient(newTestClient(t, transport), "http://radarr.local", "key")
 
-	id, err := radarr.AddMovie(t.Context(), arrimport.RadarrAdd{Title: "Lonavi", TMDBID: 603, QualityProfileID: 4, RootFolderPath: "/movies"})
+	id, err := radarr.AddMovie(t.Context(), arrimport.RadarrAdd{Title: "Lonavi", TMDBID: 603, QualityProfileID: 4, RootFolderPath: "/movies", Monitored: true, Search: true})
 	if err != nil || id != 42 {
 		t.Fatalf("AddMovie = %d, %v; want 42", id, err)
 	}
@@ -59,7 +59,7 @@ func TestSonarrClient_AddSeriesMonitorsAllAndSearchesForMissingEpisodes(t *testi
 		"http://sonarr.local/api/v3/series": {status: 201, body: `{"id":7}`},
 	}}
 	sonarr := arrimport.NewLidarrClient(newTestClient(t, transport), "http://sonarr.local", "key").Sonarr()
-	id, err := sonarr.AddSeries(t.Context(), arrimport.SonarrAdd{Title: "Zurafo", TVDBID: 81189, QualityProfileID: 3, LanguageProfileID: 1, RootFolderPath: "/series"})
+	id, err := sonarr.AddSeries(t.Context(), arrimport.SonarrAdd{Title: "Zurafo", TVDBID: 81189, QualityProfileID: 3, LanguageProfileID: 1, RootFolderPath: "/series", Monitored: true, Monitor: "all", Search: true})
 	if err != nil || id != 7 {
 		t.Fatalf("AddSeries = %d, %v; want 7", id, err)
 	}
@@ -76,7 +76,7 @@ func TestLidarrClient_AddArtistPostsTheLookupResultUnderTheDefaultsWithASearch(t
 	}}
 	lidarr := arrimport.NewLidarrClient(newTestClient(t, transport), "http://lidarr.local", "key")
 	id, err := lidarr.AddArtist(t.Context(), map[string]any{"id": 0, "artistName": "Vutu Doci", "foreignArtistId": "b7ff"},
-		arrimport.AddDefaults{QualityProfileID: 1, MetadataProfileID: 2, RootFolderPath: "/music"})
+		arrimport.AddDefaults{QualityProfileID: 1, MetadataProfileID: 2, RootFolderPath: "/music", Monitored: true, Monitor: "all", Search: true})
 	if err != nil || id != 261 {
 		t.Fatalf("AddArtist = %d, %v", id, err)
 	}
@@ -99,7 +99,7 @@ func TestWhisparrClient_LookupsAreByTitleAndAddSearchesForTheScene(t *testing.T)
 	if err != nil || len(found) != 1 || found[0]["foreignId"] != "tpdbId:84833799" {
 		t.Fatalf("LookupScenes = %v, %v", found, err)
 	}
-	id, err := whisparr.AddScene(t.Context(), found[0], arrimport.AddDefaults{QualityProfileID: 4, RootFolderPath: "/porn"})
+	id, err := whisparr.AddScene(t.Context(), found[0], arrimport.AddDefaults{QualityProfileID: 4, RootFolderPath: "/porn", Monitored: true, Search: true})
 	if err != nil || id != 9 {
 		t.Fatalf("AddScene = %d, %v", id, err)
 	}

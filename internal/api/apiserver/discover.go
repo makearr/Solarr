@@ -52,6 +52,11 @@ type AddWorkResult struct {
 type AddedWork struct {
 	WorkID, CategoryID                int64
 	Kind, Provider, ExternalID, Title string
+	// Monitored, MonitorOption, Specials and Search are what the add dialog chose, which the *Arr is told the same.
+	Monitored     bool
+	MonitorOption string
+	Specials      bool
+	Search        bool
 }
 
 // ArrCompanion tells the connected *Arr about an item just added, when Solarr runs as its companion. Best effort:
@@ -200,6 +205,8 @@ func (s *Server) tellCompanion(ctx context.Context, result AddWorkResult, body g
 	added := AddedWork{
 		WorkID: result.WorkID, CategoryID: body.CategoryId, Kind: result.Kind, Provider: body.Provider,
 		ExternalID: body.ExternalId, Title: derefOr(body.Title, ""),
+		Monitored: derefOr(body.Monitored, true), MonitorOption: derefOr(body.MonitorOption, ""),
+		Specials: derefOr(body.Specials, false), Search: derefOr(body.Search, false),
 	}
 	background := context.WithoutCancel(ctx)
 	go func() {

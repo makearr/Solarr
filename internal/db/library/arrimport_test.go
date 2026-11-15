@@ -279,3 +279,25 @@ func TestAbandonRunningMarksOnlyTheRunsARestartCutShort(t *testing.T) {
 		}
 	}
 }
+
+// RACE-6: a second start for an instance with a run going is refused, and one is allowed again once it finished.
+func TestArrImports_OneRunningPerInstance(t *testing.T) {
+	opened, _ := newLibrary(t)
+	imports := library.NewArrImports(opened)
+	first, err := imports.Start(t.Context(), 7, "lidarr", 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := imports.Start(t.Context(), 7, "lidarr", 1001); !errors.Is(err, library.ErrArrImportRunning) {
+		t.Errorf("second start = %v, want ErrArrImportRunning", err)
+	}
+	if _, err := imports.Start(t.Context(), 8, "sonarr", 1001); err != nil {
+		t.Errorf("another instance = %v, want it side by side", err)
+	}
+	if err := imports.Finish(t.Context(), first, library.ArrImportDone, 1002, "", library.ArrImportCounts{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := imports.Start(t.Context(), 7, "lidarr", 1003); err != nil {
+		t.Errorf("start after finish = %v", err)
+	}
+}

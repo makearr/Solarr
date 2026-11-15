@@ -97,11 +97,12 @@ type ArrImportItem struct {
 }
 
 type ArrLink struct {
-	InstanceID int64
-	SourceKind string
-	SourceID   string
-	LocalKind  string
-	LocalID    int64
+	InstanceID      int64
+	SourceKind      string
+	SourceID        string
+	LocalKind       string
+	LocalID         int64
+	SyncedMonitored sql.NullInt64
 }
 
 type Artwork struct {

@@ -11,7 +11,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
-	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
@@ -157,8 +156,8 @@ type ArrSync interface {
 	Pull(ctx context.Context, instanceID int64) (ArrImportRun, error)
 }
 
-// ArrPushResult is what one send of monitoring did.
-type ArrPushResult struct{ Checked, Changed int64 }
+// ArrPushResult is what one send of monitoring did; Unknown counts linked items Solarr holds no wanted item of, left alone.
+type ArrPushResult struct{ Checked, Changed, Unknown int64 }
 
 // routePushArrMonitoring parses the id path parameter.
 func (s *Server) routePushArrMonitoring(w http.ResponseWriter, r *http.Request) {
@@ -186,7 +185,7 @@ func (s *Server) PushArrMonitoring(w http.ResponseWriter, r *http.Request, id in
 	case err != nil:
 		writeProblem(w, s.logger, http.StatusBadGateway, TypeUnavailable, "The *Arr could not be written", httpx.Explain(err))
 	default:
-		writeJSON(w, s.logger, http.StatusOK, map[string]int64{"checked": result.Checked, "changed": result.Changed})
+		writeJSON(w, s.logger, http.StatusOK, map[string]int64{"checked": result.Checked, "changed": result.Changed, "unknown": result.Unknown})
 	}
 }
 
@@ -386,8 +385,7 @@ func (s *Server) routeListArrImports(w http.ResponseWriter, r *http.Request) {
 
 // ListArrImports answers every run for one instance, newest first.
 func (s *Server) ListArrImports(w http.ResponseWriter, r *http.Request, params gen.ListArrImportsParams) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	if !s.requireAdministrator(w, r) {
 		return
 	}
 	if s.arrSync == nil {
@@ -419,8 +417,7 @@ func (s *Server) routeGetArrImport(w http.ResponseWriter, r *http.Request) {
 
 // GetArrImport answers one run's own detail, including every item it touched.
 func (s *Server) GetArrImport(w http.ResponseWriter, r *http.Request, id int64) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	if !s.requireAdministrator(w, r) {
 		return
 	}
 	if s.arrSync == nil {

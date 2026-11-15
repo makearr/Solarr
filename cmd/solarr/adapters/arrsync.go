@@ -122,18 +122,11 @@ func (a ArrSync) Sync(ctx context.Context, instanceID int64, options apiserver.A
 		return apiserver.ArrImportRun{}, err
 	}
 
-	existing, err := a.Imports.ListForInstance(ctx, instanceID)
-	if err != nil {
-		return apiserver.ArrImportRun{}, err
-	}
-	for _, run := range existing {
-		if run.State == library.ArrImportRunning {
-			return apiserver.ArrImportRun{}, apiserver.ErrArrSyncAlreadyRunning
-		}
-	}
-
 	now := a.Clock.Now()
 	importID, err := a.Imports.Start(ctx, instanceID, string(instance.App), now.Unix())
+	if errors.Is(err, library.ErrArrImportRunning) {
+		return apiserver.ArrImportRun{}, apiserver.ErrArrSyncAlreadyRunning
+	}
 	if err != nil {
 		return apiserver.ArrImportRun{}, err
 	}

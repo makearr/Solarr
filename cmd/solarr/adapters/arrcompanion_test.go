@@ -1,10 +1,17 @@
 package adapters
 
 import (
+	"io"
+	"net/http"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/importing/arrimport"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 func TestCompanionTarget_SendsMoviesByTMDBToRadarrAndSeriesByTVDBToSonarrOnly(t *testing.T) {
@@ -64,5 +71,78 @@ func TestSceneHasID_MatchesTheForeignIdByItsSuffixOrAFieldOfItsOwn(t *testing.T)
 	scene := map[string]any{"foreignId": "tpdbId:84833799", "title": "x"}
 	if !sceneHasID(scene, "84833799") || sceneHasID(scene, "other") || !sceneHasID(map[string]any{"stashId": "abc"}, "abc") {
 		t.Error("scene id matching is wrong")
+	}
+}
+
+// recordingArr answers what an *Arr's list and add endpoints would and records every write.
+type recordingArr struct {
+	movies string
+	writes []string
+}
+
+func (r *recordingArr) RoundTrip(request *http.Request) (*http.Response, error) {
+	body := "[]"
+	if request.Method == http.MethodGet && strings.HasSuffix(request.URL.Path, "/movie") {
+		body = r.movies
+	}
+	if request.Method == http.MethodGet && strings.HasSuffix(request.URL.Path, "/qualityprofile") {
+		body = `[{"id":1,"name":"Any"}]`
+	}
+	if request.Method == http.MethodGet && strings.HasSuffix(request.URL.Path, "/rootfolder") {
+		body = `[{"path":"/movies"}]`
+	}
+	if request.Method != http.MethodGet {
+		payload, _ := io.ReadAll(request.Body)
+		r.writes = append(r.writes, request.Method+" "+request.URL.Path+" "+string(payload))
+		body = `{"id":5}`
+	}
+	return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body))}, nil
+}
+
+func radarrOver(transport http.RoundTripper) arrimport.RadarrClient {
+	fake := clock.NewFakeAtEpoch()
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter)
+	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute})
+	return arrimport.NewLidarrClient(httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), limiter, breaker, httpx.ClientConfig{
+		Provider: "companion-test", UserAgent: "test", Transport: transport,
+	}), "http://radarr.local", "key").Radarr()
+}
+
+// SYNC-3: what the add dialog chose reaches the *Arr; an unmonitored add is not monitored or searched there.
+func TestCompanionMovie_FollowsTheAddDialog(t *testing.T) {
+	for name, tc := range map[string]struct {
+		movies string
+		added  apiserver.AddedWork
+		want   []string
+	}{
+		"unmonitored add":          {"[]", apiserver.AddedWork{Title: "Lonavi"}, []string{`"monitored":false`, `"searchForMovie":false`}},
+		"monitored, no search":     {"[]", apiserver.AddedWork{Monitored: true}, []string{`"monitored":true`, `"searchForMovie":false`}},
+		"monitored and searched":   {"[]", apiserver.AddedWork{Monitored: true, Search: true}, []string{`"monitored":true`, `"searchForMovie":true`}},
+		"held, not monitored here": {`[{"id":9,"tmdbId":603,"monitored":false}]`, apiserver.AddedWork{}, nil},
+	} {
+		arr := &recordingArr{movies: tc.movies}
+		if _, err := (ArrSync{}).companionMovie(t.Context(), radarrOver(arr), 603, tc.added); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		joined := strings.Join(arr.writes, "\n")
+		if tc.want == nil && joined != "" {
+			t.Errorf("%s: wrote %s, want nothing", name, joined)
+		}
+		for _, want := range tc.want {
+			if !strings.Contains(joined, want) {
+				t.Errorf("%s: writes = %s, want %s", name, joined, want)
+			}
+		}
+	}
+}
+
+func TestSonarrMonitor_MapsTheAddDialogsOptions(t *testing.T) {
+	for option, want := range map[string]string{"": "future", "future": "future", "all": "all", "first_season": "firstSeason", "last_season": "lastSeason", "none": "none", "pilot": "pilot", "missing": "missing", "existing": "existing"} {
+		if got, warning := sonarrMonitor(option); got != want || warning != "" {
+			t.Errorf("sonarrMonitor(%q) = %q, %q, want %q", option, got, warning, want)
+		}
+	}
+	if got, warning := sonarrMonitor("recent"); got != "none" || warning == "" {
+		t.Errorf("an option Sonarr lacks = %q, %q, want none with a warning", got, warning)
 	}
 }

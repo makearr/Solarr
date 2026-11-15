@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -82,11 +83,20 @@ type ArrImports struct{ store *store.Store }
 // NewArrImports builds one over an open library store.
 func NewArrImports(opened *store.Store) ArrImports { return ArrImports{store: opened} }
 
+// ErrArrImportRunning says the instance already has a run going; checked and started in one write.
+var ErrArrImportRunning = errors.New("library: this *Arr instance already has an import running")
+
 // Start records a new run, state RUNNING.
 func (a ArrImports) Start(ctx context.Context, instanceID int64, app string, startedAt int64) (int64, error) {
 	var id int64
 	err := a.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		row, err := librarydb.New(tx).CreateArrImport(ctx, librarydb.CreateArrImportParams{
+		queries := librarydb.New(tx)
+		if running, err := queries.CountRunningArrImports(ctx, instanceID); err != nil {
+			return err
+		} else if running > 0 {
+			return ErrArrImportRunning
+		}
+		row, err := queries.CreateArrImport(ctx, librarydb.CreateArrImportParams{
 			InstanceID: instanceID, App: app, State: ArrImportRunning, StartedAt: startedAt,
 		})
 		if err != nil {

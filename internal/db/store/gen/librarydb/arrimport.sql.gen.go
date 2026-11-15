@@ -86,6 +86,17 @@ func (q *Queries) AddArrImportItem(ctx context.Context, arg AddArrImportItemPara
 	return i, err
 }
 
+const countRunningArrImports = `-- name: CountRunningArrImports :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM arr_import WHERE instance_id = ? AND state = 'RUNNING'
+`
+
+func (q *Queries) CountRunningArrImports(ctx context.Context, instanceID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countRunningArrImports, instanceID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createArrImport = `-- name: CreateArrImport :one
 
 INSERT INTO arr_import (instance_id, app, state, started_at)

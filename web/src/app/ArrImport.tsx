@@ -284,7 +284,7 @@ function EditInstance({ instance, onDone }: { instance: ArrInstance; onDone: () 
 
 /** Whether this connection sends the monitoring of what an import brought in back to its *Arr, and a send now. */
 function PushMonitoring({ instance, onChanged }: { instance: ArrInstance; onChanged: () => void }) {
-  const [result, setResult] = useState<{ checked: number; changed: number } | null>(null);
+  const [result, setResult] = useState<{ checked: number; changed: number; unknown: number } | null>(null);
   const toggle = useMutation({
     mutationFn: async (on: boolean) => {
       await ok(api.PATCH("/arr/instances/{id}", {
@@ -316,7 +316,12 @@ function PushMonitoring({ instance, onChanged }: { instance: ArrInstance; onChan
         </button>
       )}
       {on && instance.last_pushed_at && <span>Last sent {new Date(instance.last_pushed_at).toLocaleString()}</span>}
-      {result && <span>{result.checked} compared, {result.changed} changed there.</span>}
+      {result && (
+        <span>
+          {result.checked} compared, {result.changed} changed there
+          {result.unknown > 0 && `, ${result.unknown} left alone (Solarr holds nothing wanted of them)`}.
+        </span>
+      )}
       {(toggle.isError || send.isError) && <span className="text-danger">{((send.error ?? toggle.error) as { detail?: string })?.detail ?? "That did not work."}</span>}
     </div>
   );

@@ -29,13 +29,14 @@ func (a ArrSync) Run(ctx context.Context, _ jobs.Job) error {
 		if !instance.Enabled || !mode.PushesMonitoring(instance.PushMonitoring) || !a.supported(instance.App) {
 			continue
 		}
-		if _, err := a.PushMonitoring(ctx, instance.ID); err != nil {
-			failures = append(failures, fmt.Errorf("%s: %w", instance.Name, err))
-		}
+		// Pull first: a change made in the *Arr since the last run is taken in before Solarr's older value is sent.
 		if mode == settings.ModeArrCompanion {
 			if err := a.pullMonitored(ctx, instance); err != nil {
 				failures = append(failures, fmt.Errorf("%s: %w", instance.Name, err))
 			}
+		}
+		if _, err := a.PushMonitoring(ctx, instance.ID); err != nil {
+			failures = append(failures, fmt.Errorf("%s: %w", instance.Name, err))
 		}
 	}
 	return errors.Join(failures...)
@@ -95,7 +96,7 @@ func (a ArrSync) PushMonitoring(ctx context.Context, instanceID int64) (apiserve
 		byKind[link.SourceKind][link.SourceID] = link
 	}
 	client := a.Lidarr(instance.BaseURL, apiKey.Reveal())
-	push := pusher{sync: a, client: client, links: byKind}
+	push := pusher{sync: a, instanceID: instanceID, client: client, links: byKind}
 	switch instance.App {
 	case settings.ArrAppSonarr:
 		err = push.series(ctx)
@@ -114,48 +115,71 @@ func (a ArrSync) PushMonitoring(ctx context.Context, instanceID int64) (apiserve
 
 // pusher sends one connection's differences.
 type pusher struct {
-	sync   ArrSync
-	client arrimport.LidarrClient
-	links  map[string]map[string]library.ArrLink
-	result apiserver.ArrPushResult
+	sync       ArrSync
+	instanceID int64
+	client     arrimport.LidarrClient
+	links      map[string]map[string]library.ArrLink
+	result     apiserver.ArrPushResult
 }
 
 // local says whether Solarr monitors what a link names: a work when any of its wanted items is monitored, a person or a
-// studio when someone follows them.
-func (p pusher) local(ctx context.Context, link library.ArrLink) (bool, error) {
+// studio when someone follows them. known is false for a work with no wanted item, which says nothing either way.
+func (p pusher) local(ctx context.Context, link library.ArrLink) (monitored, known bool, err error) {
 	switch link.LocalKind {
 	case "work":
 		items, err := p.sync.Desired.AlbumItemsForWork(ctx, link.LocalID)
-		if err != nil {
-			return false, err
+		if err != nil || len(items) == 0 {
+			return false, false, err
 		}
 		for _, item := range items {
 			if item.Monitored == 1 {
-				return true, nil
+				return true, true, nil
 			}
 		}
-		return false, nil
+		return false, true, nil
 	default:
-		return p.sync.Subscriptions.Followed(ctx, library.Subject{Type: link.LocalKind, ID: link.LocalID})
+		followed, err := p.sync.Subscriptions.Followed(ctx, library.Subject{Type: link.LocalKind, ID: link.LocalID})
+		return followed, true, err
 	}
 }
 
-// send compares one linked item's flag at the *Arr with Solarr's and writes the difference.
+// send compares one linked item's flag at the *Arr with Solarr's and writes what changed here. The value both sides last
+// agreed on says which side moved: only the *Arr's change is left for the pull, only Solarr's is sent, and when both
+// moved Solarr's stands. Nothing is written for an item Solarr holds no wanted item of.
 func (p *pusher) send(ctx context.Context, kind string, sourceID int64, upstream bool, path string, write func(context.Context, string, int64, bool) error) error {
 	link, linked := p.links[kind][strconv.FormatInt(sourceID, 10)]
 	if !linked {
 		return nil
 	}
 	p.result.Checked++
-	here, err := p.local(ctx, link)
-	if err != nil || here == upstream {
+	here, known, err := p.local(ctx, link)
+	if err != nil {
 		return err
+	}
+	if !known {
+		p.result.Unknown++
+		return nil
+	}
+	if here == upstream {
+		return p.remember(ctx, link, here)
+	}
+	if link.SyncedMonitored != nil && here == *link.SyncedMonitored {
+		// Solarr did not change and the *Arr did: its value is not overwritten, the pull takes it.
+		return nil
 	}
 	if err := write(ctx, path, sourceID, here); err != nil {
 		return fmt.Errorf("%s %d: %w", kind, sourceID, err)
 	}
 	p.result.Changed++
-	return nil
+	return p.remember(ctx, link, here)
+}
+
+// remember records the value both sides now hold, when it is not the one already recorded.
+func (p *pusher) remember(ctx context.Context, link library.ArrLink, monitored bool) error {
+	if link.SyncedMonitored != nil && *link.SyncedMonitored == monitored {
+		return nil
+	}
+	return p.sync.Links.SetSynced(ctx, p.instanceID, link, monitored)
 }
 
 func (p *pusher) movies(ctx context.Context) error {

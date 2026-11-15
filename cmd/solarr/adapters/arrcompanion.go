@@ -41,10 +41,10 @@ func (a ArrSync) Added(ctx context.Context, added apiserver.AddedWork) error {
 	var kind string
 	switch app {
 	case settings.ArrAppRadarr:
-		arrID, err = a.companionMovie(ctx, client.Radarr(), sourceID, added.Title)
+		arrID, err = a.companionMovie(ctx, client.Radarr(), sourceID, added)
 		kind = arrmap.LinkMovie
 	default:
-		arrID, err = a.companionSeries(ctx, client.Sonarr(), sourceID, added.Title)
+		arrID, err = a.companionSeries(ctx, client.Sonarr(), sourceID, added)
 		kind = arrmap.LinkSeries
 	}
 	if err != nil {
@@ -94,7 +94,7 @@ func (a ArrSync) companionInstance(ctx context.Context, app settings.ArrApp, cat
 }
 
 // companionMovie monitors a movie at Radarr and has it search, adding it first when Radarr lacks it; it answers Radarr's id.
-func (a ArrSync) companionMovie(ctx context.Context, radarr arrimport.RadarrClient, tmdbID int64, title string) (int64, error) {
+func (a ArrSync) companionMovie(ctx context.Context, radarr arrimport.RadarrClient, tmdbID int64, added apiserver.AddedWork) (int64, error) {
 	movies, err := radarr.Movies(ctx)
 	if err != nil {
 		return 0, err
@@ -103,10 +103,17 @@ func (a ArrSync) companionMovie(ctx context.Context, radarr arrimport.RadarrClie
 		if movie.TMDBID != tmdbID {
 			continue
 		}
+		// An item added here as not monitored leaves the *Arr's own as it is.
+		if !added.Monitored {
+			return movie.ID, nil
+		}
 		if !movie.Monitored {
 			if err := radarr.SetMonitored(ctx, "/api/v3/movie", movie.ID, true); err != nil {
 				return 0, err
 			}
+		}
+		if !added.Search {
+			return movie.ID, nil
 		}
 		return movie.ID, radarr.SearchMovie(ctx, movie.ID)
 	}
@@ -114,7 +121,9 @@ func (a ArrSync) companionMovie(ctx context.Context, radarr arrimport.RadarrClie
 	if err != nil {
 		return 0, err
 	}
-	return radarr.AddMovie(ctx, arrimport.RadarrAdd{Title: title, TMDBID: tmdbID, QualityProfileID: profile, RootFolderPath: root})
+	return radarr.AddMovie(ctx, arrimport.RadarrAdd{
+		Title: added.Title, TMDBID: tmdbID, QualityProfileID: profile, RootFolderPath: root, Monitored: added.Monitored, Search: added.Monitored && added.Search,
+	})
 }
 
 // radarrDefaults are the quality profile and root folder most of Radarr's movies use, else its first of each.
@@ -143,7 +152,7 @@ func (a ArrSync) radarrDefaults(ctx context.Context, radarr arrimport.RadarrClie
 }
 
 // companionSeries is companionMovie for Sonarr.
-func (a ArrSync) companionSeries(ctx context.Context, sonarr arrimport.SonarrClient, tvdbID int64, title string) (int64, error) {
+func (a ArrSync) companionSeries(ctx context.Context, sonarr arrimport.SonarrClient, tvdbID int64, added apiserver.AddedWork) (int64, error) {
 	series, err := sonarr.Series(ctx)
 	if err != nil {
 		return 0, err
@@ -152,10 +161,16 @@ func (a ArrSync) companionSeries(ctx context.Context, sonarr arrimport.SonarrCli
 		if one.TVDBID != tvdbID {
 			continue
 		}
+		if !added.Monitored {
+			return one.ID, nil
+		}
 		if !one.Monitored {
 			if err := sonarr.SetMonitored(ctx, "/api/v3/series", one.ID, true); err != nil {
 				return 0, err
 			}
+		}
+		if !added.Search {
+			return one.ID, nil
 		}
 		return one.ID, sonarr.SearchSeries(ctx, one.ID)
 	}
@@ -180,9 +195,39 @@ func (a ArrSync) companionSeries(ctx context.Context, sonarr arrimport.SonarrCli
 		}
 		root = folders[0].Path
 	}
-	return sonarr.AddSeries(ctx, arrimport.SonarrAdd{
-		Title: title, TVDBID: tvdbID, QualityProfileID: profile, LanguageProfileID: mostUsed(languages), RootFolderPath: root,
+	monitor, warning := sonarrMonitor(added.MonitorOption)
+	id, err := sonarr.AddSeries(ctx, arrimport.SonarrAdd{
+		Title: added.Title, TVDBID: tvdbID, QualityProfileID: profile, LanguageProfileID: mostUsed(languages), RootFolderPath: root,
+		Monitored: added.Monitored, Monitor: monitor, Search: added.Monitored && added.Search,
 	})
+	if err == nil && warning != "" {
+		err = errors.New(warning)
+	}
+	return id, err
+}
+
+// sonarrMonitor is Sonarr's addOptions.monitor word for a monitor option of Solarr's add dialog. An option Sonarr has no
+// counterpart for becomes "none", and the warning says so; the series is still added, as the person did not ask for more.
+func sonarrMonitor(option string) (word, warning string) {
+	switch option {
+	case "", "future":
+		return "future", ""
+	case "all":
+		return "all", ""
+	case "missing":
+		return "missing", ""
+	case "existing":
+		return "existing", ""
+	case "first_season":
+		return "firstSeason", ""
+	case "last_season":
+		return "lastSeason", ""
+	case "pilot":
+		return "pilot", ""
+	case "none":
+		return "none", ""
+	}
+	return "none", fmt.Sprintf("Sonarr has no %q monitor option: the series was added with none monitored", option)
 }
 
 // mostUsed is the key counted most; the zero value of the key when nothing was counted, ties to the smaller key.
@@ -233,9 +278,9 @@ func (a ArrSync) companionMedia(ctx context.Context, added apiserver.AddedWork, 
 	client := a.Lidarr(instance.BaseURL, apiKey.Reveal())
 	var arrID int64
 	if target.app == settings.ArrAppLidarr {
-		arrID, err = a.companionMusic(ctx, client, target)
+		arrID, err = a.companionMusic(ctx, client, target, added)
 	} else {
-		arrID, err = a.companionScene(ctx, client.Whisparr(), target.ref, added.Title)
+		arrID, err = a.companionScene(ctx, client.Whisparr(), target.ref, added)
 	}
 	if err != nil {
 		return fmt.Errorf("%s: %w", instance.Name, err)
@@ -245,7 +290,7 @@ func (a ArrSync) companionMedia(ctx context.Context, added apiserver.AddedWork, 
 }
 
 // companionMusic monitors an artist or album at Lidarr and has it search, adding it first when Lidarr lacks it.
-func (a ArrSync) companionMusic(ctx context.Context, lidarr arrimport.LidarrClient, target mediaRef) (int64, error) {
+func (a ArrSync) companionMusic(ctx context.Context, lidarr arrimport.LidarrClient, target mediaRef, added apiserver.AddedWork) (int64, error) {
 	artist := target.linkKind == arrmap.LinkArtist
 	var resource map[string]any
 	var id int64
@@ -267,8 +312,14 @@ func (a ArrSync) companionMusic(ctx context.Context, lidarr arrimport.LidarrClie
 		path = "/api/v1/artist"
 	}
 	if id != 0 {
+		if !added.Monitored {
+			return id, nil
+		}
 		if err := lidarr.SetMonitored(ctx, path, id, true); err != nil {
 			return 0, err
+		}
+		if !added.Search {
+			return id, nil
 		}
 		if artist {
 			return id, lidarr.SearchArtist(ctx, id)
@@ -279,10 +330,20 @@ func (a ArrSync) companionMusic(ctx context.Context, lidarr arrimport.LidarrClie
 	if err != nil {
 		return 0, err
 	}
+	defaults.Monitored, defaults.Monitor, defaults.Search = added.Monitored, lidarrMonitor(added.MonitorOption), added.Monitored && added.Search
 	if artist {
 		return lidarr.AddArtist(ctx, resource, defaults)
 	}
 	return lidarr.AddAlbum(ctx, resource, defaults)
+}
+
+// lidarrMonitor is Lidarr's addOptions.monitor word: what Solarr's add dialog calls an artist's back catalogue is all of it.
+func lidarrMonitor(option string) string {
+	switch option {
+	case "none", "future", "missing", "existing", "latest", "first":
+		return option
+	}
+	return "all"
 }
 
 // lidarrDefaults are the profiles and root folder most of Lidarr's artists use, else its first of each.
@@ -324,8 +385,8 @@ func (a ArrSync) lidarrDefaults(ctx context.Context, lidarr arrimport.LidarrClie
 
 // companionScene monitors a scene at Whisparr and has it search, adding it first when Whisparr lacks it. Whisparr
 // finds a scene by its title only, so the one whose id is the provider's is picked from what the title finds.
-func (a ArrSync) companionScene(ctx context.Context, whisparr arrimport.WhisparrClient, ref, title string) (int64, error) {
-	found, err := whisparr.LookupScenes(ctx, title)
+func (a ArrSync) companionScene(ctx context.Context, whisparr arrimport.WhisparrClient, ref string, added apiserver.AddedWork) (int64, error) {
+	found, err := whisparr.LookupScenes(ctx, added.Title)
 	if err != nil {
 		return 0, err
 	}
@@ -334,8 +395,14 @@ func (a ArrSync) companionScene(ctx context.Context, whisparr arrimport.Whisparr
 			continue
 		}
 		if id, _ := scene["id"].(float64); id > 0 {
+			if !added.Monitored {
+				return int64(id), nil
+			}
 			if err := whisparr.SetMonitored(ctx, arrimport.WhisparrScenePath, int64(id), true); err != nil {
 				return 0, err
+			}
+			if !added.Search {
+				return int64(id), nil
 			}
 			return int64(id), whisparr.SearchScene(ctx, int64(id))
 		}
@@ -347,7 +414,9 @@ func (a ArrSync) companionScene(ctx context.Context, whisparr arrimport.Whisparr
 		if err != nil || len(folders) == 0 {
 			return 0, errors.Join(err, errors.New("the Whisparr has no root folder to add into"))
 		}
-		return whisparr.AddScene(ctx, scene, arrimport.AddDefaults{QualityProfileID: profiles[0].ID, RootFolderPath: folders[0].Path})
+		return whisparr.AddScene(ctx, scene, arrimport.AddDefaults{
+			QualityProfileID: profiles[0].ID, RootFolderPath: folders[0].Path, Monitored: added.Monitored, Search: added.Monitored && added.Search,
+		})
 	}
 	return 0, errors.New("the Whisparr found no scene with that id under that title")
 }

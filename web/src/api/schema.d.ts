@@ -14506,7 +14506,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description How many items were compared and how many changed at the *Arr. */
+            /** @description How many items were compared, how many changed at the *Arr, and how many were left alone because Solarr holds no wanted item of them. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14517,6 +14517,8 @@ export interface operations {
                         checked: number;
                         /** Format: int64 */
                         changed: number;
+                        /** Format: int64 */
+                        unknown: number;
                     };
                 };
             };

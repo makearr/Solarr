@@ -52,18 +52,20 @@ func created(body []byte) (int64, error) {
 
 // RadarrAdd is a movie to add: the TMDB id is the identity, the profile and folder are the *Arr's own.
 type RadarrAdd struct {
-	Title            string
-	TMDBID           int64
-	QualityProfileID int64
-	RootFolderPath   string
+	// Monitored and Search are what the person chose in Solarr's add dialog.
+	Monitored, Search bool
+	Title             string
+	TMDBID            int64
+	QualityProfileID  int64
+	RootFolderPath    string
 }
 
-// AddMovie adds a monitored movie and has Radarr search for it; it answers Radarr's id of it.
+// AddMovie adds a movie as chosen (monitored or not, searched or not); it answers Radarr's id of it.
 func (c RadarrClient) AddMovie(ctx context.Context, movie RadarrAdd) (int64, error) {
 	body, err := c.inner.post(ctx, "/api/v3/movie", map[string]any{
 		"title": movie.Title, "tmdbId": movie.TMDBID, "qualityProfileId": movie.QualityProfileID,
-		"rootFolderPath": movie.RootFolderPath, "monitored": true, "minimumAvailability": "released",
-		"addOptions": map[string]any{"searchForMovie": true},
+		"rootFolderPath": movie.RootFolderPath, "monitored": movie.Monitored, "minimumAvailability": "released",
+		"addOptions": map[string]any{"searchForMovie": movie.Search},
 	})
 	if err != nil {
 		return 0, err
@@ -83,14 +85,18 @@ type SonarrAdd struct {
 	QualityProfileID  int64
 	LanguageProfileID int64
 	RootFolderPath    string
+	// Monitored, Monitor (Sonarr's addOptions.monitor word) and Search are what the person chose in Solarr's add dialog.
+	Monitored bool
+	Monitor   string
+	Search    bool
 }
 
-// AddSeries adds a monitored series and has Sonarr search for its missing episodes; it answers Sonarr's id of it.
+// AddSeries adds a series as chosen: which episodes are monitored, and whether Sonarr searches for them; it answers Sonarr's id of it.
 func (c SonarrClient) AddSeries(ctx context.Context, series SonarrAdd) (int64, error) {
 	payload := map[string]any{
 		"title": series.Title, "tvdbId": series.TVDBID, "qualityProfileId": series.QualityProfileID,
-		"rootFolderPath": series.RootFolderPath, "monitored": true, "seasonFolder": true, "seriesType": "standard",
-		"addOptions": map[string]any{"monitor": "all", "searchForMissingEpisodes": true},
+		"rootFolderPath": series.RootFolderPath, "monitored": series.Monitored, "seasonFolder": true, "seriesType": "standard",
+		"addOptions": map[string]any{"monitor": series.Monitor, "searchForMissingEpisodes": series.Search},
 	}
 	if series.LanguageProfileID != 0 {
 		payload["languageProfileId"] = series.LanguageProfileID
@@ -112,6 +118,10 @@ type AddDefaults struct {
 	QualityProfileID  int64
 	MetadataProfileID int64
 	RootFolderPath    string
+	// Monitored, Monitor (the *Arr's addOptions.monitor word, where it has one) and Search are what the person chose.
+	Monitored bool
+	Monitor   string
+	Search    bool
 }
 
 // lookup answers the resources an *Arr's lookup finds for a term; one already in the library carries its id.
@@ -143,12 +153,12 @@ func (c LidarrClient) LookupArtist(ctx context.Context, mbid string) (map[string
 	return found[0], idOf(found[0]), true, nil
 }
 
-// AddArtist adds the looked-up artist monitored and has Lidarr search for its albums; it answers Lidarr's id.
+// AddArtist adds the looked-up artist as chosen; it answers Lidarr's id.
 func (c LidarrClient) AddArtist(ctx context.Context, artist map[string]any, defaults AddDefaults) (int64, error) {
 	delete(artist, "id")
 	artist["qualityProfileId"], artist["metadataProfileId"] = defaults.QualityProfileID, defaults.MetadataProfileID
-	artist["rootFolderPath"], artist["monitored"], artist["monitorNewItems"] = defaults.RootFolderPath, true, "all"
-	artist["addOptions"] = map[string]any{"monitor": "all", "searchForMissingAlbums": true}
+	artist["rootFolderPath"], artist["monitored"], artist["monitorNewItems"] = defaults.RootFolderPath, defaults.Monitored, "all"
+	artist["addOptions"] = map[string]any{"monitor": defaults.Monitor, "searchForMissingAlbums": defaults.Search}
 	body, err := c.post(ctx, "/api/v1/artist", artist)
 	if err != nil {
 		return 0, err
@@ -170,7 +180,7 @@ func (c LidarrClient) LookupAlbum(ctx context.Context, mbid string) (map[string]
 	return found[0], idOf(found[0]), true, nil
 }
 
-// AddAlbum adds the looked-up album, and its artist when Lidarr lacks it, monitored with a search for it; it answers Lidarr's id.
+// AddAlbum adds the looked-up album, and its artist when Lidarr lacks it, as chosen; it answers Lidarr's id.
 func (c LidarrClient) AddAlbum(ctx context.Context, album map[string]any, defaults AddDefaults) (int64, error) {
 	delete(album, "id")
 	artist, _ := album["artist"].(map[string]any)
@@ -180,8 +190,8 @@ func (c LidarrClient) AddAlbum(ctx context.Context, album map[string]any, defaul
 	delete(artist, "id")
 	artist["qualityProfileId"], artist["metadataProfileId"] = defaults.QualityProfileID, defaults.MetadataProfileID
 	artist["rootFolderPath"], artist["monitored"], artist["monitorNewItems"] = defaults.RootFolderPath, true, "none"
-	album["artist"], album["monitored"], album["anyReleaseOk"] = artist, true, true
-	album["addOptions"] = map[string]any{"addType": "automatic", "searchForNewAlbum": true}
+	album["artist"], album["monitored"], album["anyReleaseOk"] = artist, defaults.Monitored, true
+	album["addOptions"] = map[string]any{"addType": "automatic", "searchForNewAlbum": defaults.Search}
 	body, err := c.post(ctx, "/api/v1/album", album)
 	if err != nil {
 		return 0, err
@@ -199,11 +209,11 @@ func (c WhisparrClient) LookupScenes(ctx context.Context, title string) ([]map[s
 	return c.inner.lookup(ctx, "/api/v3/movie/lookup", title)
 }
 
-// AddScene adds the looked-up scene monitored and has Whisparr search for it; it answers Whisparr's id.
+// AddScene adds the looked-up scene as chosen; it answers Whisparr's id.
 func (c WhisparrClient) AddScene(ctx context.Context, scene map[string]any, defaults AddDefaults) (int64, error) {
 	delete(scene, "id")
-	scene["qualityProfileId"], scene["rootFolderPath"], scene["monitored"] = defaults.QualityProfileID, defaults.RootFolderPath, true
-	scene["addOptions"] = map[string]any{"searchForMovie": true}
+	scene["qualityProfileId"], scene["rootFolderPath"], scene["monitored"] = defaults.QualityProfileID, defaults.RootFolderPath, defaults.Monitored
+	scene["addOptions"] = map[string]any{"searchForMovie": defaults.Search}
 	body, err := c.inner.post(ctx, "/api/v3/movie", scene)
 	if err != nil {
 		return 0, err
