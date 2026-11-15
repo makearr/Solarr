@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/makearr/Solarr/internal/metadata/metacache"
@@ -59,11 +60,23 @@ type Client struct {
 	http  Doer
 	cache Cache
 	clock clock.Clock
+	// docs keeps the two whole-site documents decoded, shared by every copy of the client.
+	docs *siteDocs
+}
+
+// siteDocs holds havemap and allNames decoded with the time each was fetched, so a lookup for one series does not
+// read and decode a multi-megabyte document again; the mutex is held across a decode so one caller decodes for all.
+type siteDocs struct {
+	mu        sync.Mutex
+	haveMap   map[int64]bool
+	haveMapAt time.Time
+	names     map[int64][]string
+	namesAt   time.Time
 }
 
 // New builds a client over an httpx client carrying TheXEM's own rate bucket.
 func New(client Doer, cache Cache, clk clock.Clock) Client {
-	return Client{http: client, cache: cache, clock: clk}
+	return Client{http: client, cache: cache, clock: clk, docs: &siteDocs{}}
 }
 
 // envelope is every TheXEM answer: result is "success" or "failure", data its payload.
@@ -83,7 +96,7 @@ func (c Client) Mappings(ctx context.Context, tvdbID int64) ([]Mapping, error) {
 		return nil, nil
 	}
 	id := strconv.FormatInt(tvdbID, 10)
-	data, err := c.cached(ctx, kindMap, id, "/map/all?origin=tvdb&id="+id)
+	data, _, err := c.cached(ctx, kindMap, id, "/map/all?origin=tvdb&id="+id)
 	if errors.Is(err, ErrRefused) {
 		return nil, nil
 	}
@@ -95,18 +108,23 @@ func (c Client) Mappings(ctx context.Context, tvdbID int64) ([]Mapping, error) {
 
 // Names are the scene names of a TheTVDB series that hold for every season.
 func (c Client) Names(ctx context.Context, tvdbID int64) ([]string, error) {
-	data, err := c.cached(ctx, kindNames, "tvdb", "/map/allNames?origin=tvdb&seasonNumbers=1")
-	if errors.Is(err, ErrRefused) {
-		return nil, nil
+	c.docs.mu.Lock()
+	defer c.docs.mu.Unlock()
+	if c.docs.names == nil || c.clock.Since(c.docs.namesAt) >= FreshFor {
+		data, fetchedAt, err := c.cached(ctx, kindNames, "tvdb", "/map/allNames?origin=tvdb&seasonNumbers=1")
+		if errors.Is(err, ErrRefused) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		all, err := decodeNames(data)
+		if err != nil {
+			return nil, err
+		}
+		c.docs.names, c.docs.namesAt = all, fetchedAt
 	}
-	if err != nil {
-		return nil, err
-	}
-	all, err := decodeNames(data)
-	if err != nil {
-		return nil, err
-	}
-	names := all[tvdbID]
+	names := slices.Clone(c.docs.names[tvdbID])
 	slices.Sort(names)
 	return slices.Compact(names), nil
 }
@@ -123,35 +141,49 @@ func (c Client) Ping(ctx context.Context) error {
 
 // mapped is the set of TheTVDB series TheXEM holds a map for: one call saves a call for every series it does not.
 func (c Client) mapped(ctx context.Context) (map[int64]bool, error) {
-	data, err := c.cached(ctx, kindHaveMap, "tvdb", "/map/havemap?origin=tvdb")
+	c.docs.mu.Lock()
+	defer c.docs.mu.Unlock()
+	if c.docs.haveMap != nil && c.clock.Since(c.docs.haveMapAt) < FreshFor {
+		return c.docs.haveMap, nil
+	}
+	data, fetchedAt, err := c.cached(ctx, kindHaveMap, "tvdb", "/map/havemap?origin=tvdb")
 	if err != nil {
 		return nil, err
 	}
-	return decodeIDs(data)
+	ids, err := decodeIDs(data)
+	if err != nil {
+		return nil, err
+	}
+	c.docs.haveMap, c.docs.haveMapAt = ids, fetchedAt
+	return ids, nil
 }
 
 // cached answers the data of a cached call while it is fresh, else asks; a failed ask falls back to what is cached.
-func (c Client) cached(ctx context.Context, kind, id, path string) (json.RawMessage, error) {
+// fetchedAt is when the answer was fetched, so a stale fallback does not look fresh.
+func (c Client) cached(ctx context.Context, kind, id, path string) (data json.RawMessage, fetchedAt time.Time, err error) {
 	entry, cacheErr := c.cache.Get(ctx, kind, id)
 	if cacheErr == nil && c.clock.Since(entry.FetchedAt) < FreshFor {
-		return unwrap([]byte(entry.Body))
+		data, err = unwrap([]byte(entry.Body))
+		return data, entry.FetchedAt, err
 	}
 	body, err := c.fetchBody(ctx, path)
 	if err == nil {
 		data, decodeErr := unwrap(body)
 		// A refusal is an answer too: TheXEM saying it maps nothing is kept as long as a map would be.
 		if decodeErr == nil || errors.Is(decodeErr, ErrRefused) {
-			if setErr := c.cache.Set(ctx, kind, id, metacache.Entry{Source: source, Body: string(body), FetchedAt: c.clock.Now()}); setErr != nil {
-				return nil, fmt.Errorf("thexem: cache %s: %w", kind, setErr)
+			now := c.clock.Now()
+			if setErr := c.cache.Set(ctx, kind, id, metacache.Entry{Source: source, Body: string(body), FetchedAt: now}); setErr != nil {
+				return nil, time.Time{}, fmt.Errorf("thexem: cache %s: %w", kind, setErr)
 			}
-			return data, decodeErr
+			return data, now, decodeErr
 		}
 		err = decodeErr
 	}
 	if cacheErr == nil {
-		return unwrap([]byte(entry.Body))
+		data, err = unwrap([]byte(entry.Body))
+		return data, entry.FetchedAt, err
 	}
-	return nil, err
+	return nil, time.Time{}, err
 }
 
 func (c Client) fetch(ctx context.Context, path string) (json.RawMessage, error) {

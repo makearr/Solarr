@@ -169,3 +169,41 @@ func TestPingReportsARefusal(t *testing.T) {
 		t.Errorf("ping = %v, want nil", err)
 	}
 }
+
+// countingCache counts the reads of the whole-site documents, which are megabytes at the real site.
+type countingCache struct {
+	memoryCache
+	gets map[string]int
+}
+
+func (c *countingCache) Get(ctx context.Context, kind, id string) (metacache.Entry, error) {
+	c.gets[kind]++
+	return c.memoryCache.Get(ctx, kind, id)
+}
+
+// PERF-7: a hundred lookups read each document once, and again only after it went stale.
+func TestWholeSiteDocumentsAreReadOncePerFreshness(t *testing.T) {
+	fake, cache := clock.NewFakeAtEpoch(), &countingCache{memoryCache: memoryCache{}, gets: map[string]int{}}
+	client := thexem.New(httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil),
+		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100}),
+		httpx.ClientConfig{Provider: "thexem-test", UserAgent: "test", Transport: standard()}), cache, fake)
+	for range 100 {
+		if _, err := client.Names(t.Context(), 70001); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := client.Mappings(t.Context(), 70002); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if cache.gets["thexem:names"] != 1 || cache.gets["thexem:havemap"] != 1 {
+		t.Errorf("reads = %v, want one of each document", cache.gets)
+	}
+	fake.Advance(thexem.FreshFor + time.Minute)
+	if _, err := client.Names(t.Context(), 70001); err != nil {
+		t.Fatal(err)
+	}
+	if cache.gets["thexem:names"] != 2 {
+		t.Errorf("names read %d times after going stale, want 2", cache.gets["thexem:names"])
+	}
+}
