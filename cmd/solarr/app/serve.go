@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
+	"github.com/makearr/Solarr/internal/acquiring/blackhole"
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/api/auth"
@@ -78,6 +79,8 @@ type process struct {
 	sendLocks keyedlock.Locks
 	// hunt is the search hunt, kept for the budget view.
 	hunt *plan.HuntJob
+	// blackholes keeps what blackhole downloads measured, because every poll builds its clients anew.
+	blackholes blackhole.Memo
 	// extraMedia are media types a test registers beside the built-in ones (revision 2's R1.9 proof).
 	extraMedia []media.Module
 	build      Build

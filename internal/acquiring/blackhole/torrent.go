@@ -34,11 +34,14 @@ var _ download.TorrentClient = Torrent{}
 
 // AddTorrentFile writes the torrent file into the drop folder.
 func (t Torrent) AddTorrentFile(_ context.Context, _ string, request download.AddRequest) (string, error) {
-	ref := t.reference(request)
-	if err := t.write(cleanName(ref)+".torrent", request.File); err != nil {
+	name, key, err := t.reference(request)
+	if err != nil {
 		return "", err
 	}
-	return ref, nil
+	if err := t.write(cleanName(name)+".torrent", request.File); err != nil {
+		return "", err
+	}
+	return key, nil
 }
 
 // AddMagnet writes the magnet link into the drop folder, when the blackhole is set to.
@@ -46,37 +49,55 @@ func (t Torrent) AddMagnet(_ context.Context, _, magnet string, request download
 	if !t.SaveMagnetFiles {
 		return "", fmt.Errorf("%w: the blackhole saves no magnet links", download.ErrRefused)
 	}
-	ref := t.reference(request)
-	if err := t.write(cleanName(ref)+magnetExtension, []byte(magnet)); err != nil {
+	name, key, err := t.reference(request)
+	if err != nil {
 		return "", err
 	}
-	return ref, nil
+	if err := t.write(cleanName(name)+magnetExtension, []byte(magnet)); err != nil {
+		return "", err
+	}
+	return key, nil
 }
 
-func (t Torrent) reference(request download.AddRequest) string {
+// reference answers the name the torrent is written under and its refKey, refusing one already in the blackhole.
+func (t Torrent) reference(request download.AddRequest) (name, key string, err error) {
 	// The torrent's own name is what the client saves its content under, but it comes from the indexer: one that is not
 	// a single plain file name ("../..", "a/b") is cleaned like a release name, or removing the download would reach
 	// outside the watch folder.
-	if name := download.TorrentName(request.File); name != "" {
-		if download.PlainName(name) {
-			return name
-		}
-		if cleaned := cleanName(name); cleaned != "" {
-			return cleaned
+	name = cleanName(request.Name)
+	if own := download.TorrentName(request.File); own != "" {
+		if download.PlainName(own) {
+			name = own
+		} else if cleaned := cleanName(own); cleaned != "" {
+			name = cleaned
 		}
 	}
-	return cleanName(request.Name)
+	if key = refKey(name); key == "" {
+		return "", "", fmt.Errorf("blackhole: the release has no usable name")
+	}
+	return name, key, t.refuseTaken(key, false)
 }
 
-// Downloads answers what is in the watch folder, each under its own name.
+// Downloads answers what is in the watch folder, each under the refKey of its name.
 func (t Torrent) Downloads(context.Context, string) ([]download.Download, error) {
-	return t.downloads(func(found entry) string { return found.name })
+	return t.downloads(func(found entry) string { return refKey(found.name) })
 }
 
 // Remove deletes one download and the torrent file still waiting for it, if any.
 func (t Torrent) Remove(_ context.Context, clientRef string, deleteFiles bool) error {
-	drop := cleanName(clientRef)
-	return t.remove([]string{clientRef}, []string{drop + ".torrent", drop + magnetExtension}, deleteFiles)
+	key := refKey(clientRef)
+	if key == "" {
+		return fmt.Errorf("blackhole: %q is not a download", clientRef)
+	}
+	watched, err := t.namesOf(t.Watch, key, false)
+	if err != nil {
+		return err
+	}
+	waiting, err := t.namesOf(t.Drop, key, true)
+	if err != nil {
+		return err
+	}
+	return t.remove(watched, waiting, deleteFiles)
 }
 
 // Pause is not something a blackhole can do.

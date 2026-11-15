@@ -178,7 +178,7 @@ func (p *process) downloaderConnsFor(ctx context.Context, mediaType string) ([]m
 			return nil, err
 		}
 		client, known := adapters.NewDownloadClient(downloader.Impl,
-			adapters.DownloadClientDeps{HTTP: factory(downloader.ID, downloader.BaseURL), FS: p.fsys, Clock: clock.NewSystem()},
+			adapters.DownloadClientDeps{HTTP: factory(downloader.ID, downloader.BaseURL), FS: p.fsys, Clock: clock.NewSystem(), Blackholes: &p.blackholes},
 			adapters.DownloadConnection(downloader.BaseURL, credentials.Reveal(), downloader.Options()))
 		if !known {
 			continue

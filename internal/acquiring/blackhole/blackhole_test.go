@@ -50,7 +50,7 @@ func TestTorrent_AddWritesTheTorrentFileUnderItsContentName(t *testing.T) {
 	driver := download.NewTorrent(blackhole.Torrent{Folders: base})
 	file := clienttest.TorrentFile("Heka - Zanuvode")
 	ref, err := driver.Add(t.Context(), download.AddRequest{Name: "Heka-Zanuvode-1988-FLAC", File: file})
-	if err != nil || ref != "Heka - Zanuvode" {
+	if err != nil || ref != "hekazanuvode" {
 		t.Fatalf("Add = %q, %v", ref, err)
 	}
 	if got := read(t, mem, "/drop/Heka - Zanuvode.torrent"); got != string(file) {
@@ -65,7 +65,7 @@ func TestTorrent_AMagnetIsRefusedUnlessMagnetFilesAreSaved(t *testing.T) {
 		t.Errorf("Add = %v, want ErrRefused", err)
 	}
 	ref, err := download.NewTorrent(blackhole.Torrent{Folders: base, SaveMagnetFiles: true}).Add(t.Context(), download.AddRequest{File: []byte(magnet)})
-	if err != nil || ref != "Album" || read(t, mem, "/drop/Album.magnet") != magnet {
+	if err != nil || ref != "album" || read(t, mem, "/drop/Album.magnet") != magnet {
 		t.Errorf("Add = %q, %v", ref, err)
 	}
 }
@@ -89,9 +89,9 @@ func TestUsenet_DownloadsAreFinishedOnceTheirFilesSettle(t *testing.T) {
 		t.Fatalf("Downloads: %v", err)
 	}
 	want := []download.Download{
-		{ClientRef: "New Album", Name: "New Album", State: download.StateDownloading, SizeBytes: 1},
-		{ClientRef: "Old Album", Name: "Old Album", State: download.StateCompleted, SizeBytes: 5, Path: "/done/Old Album"},
-		{ClientRef: "Single", Name: "Single.flac", State: download.StateCompleted, SizeBytes: 3, Path: "/done/Single.flac"},
+		{ClientRef: "newalbum", Name: "New Album", State: download.StateDownloading, SizeBytes: 1},
+		{ClientRef: "oldalbum", Name: "Old Album", State: download.StateCompleted, SizeBytes: 5, Path: "/done/Old Album"},
+		{ClientRef: "single", Name: "Single.flac", State: download.StateCompleted, SizeBytes: 3, Path: "/done/Single.flac"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Downloads =\n%+v\nwant\n%+v", got, want)
@@ -102,7 +102,7 @@ func TestUsenet_AddWritesTheNZBAndRemoveDeletesEverything(t *testing.T) {
 	base, mem, _ := folders(t)
 	driver := download.NewUsenet(blackhole.Usenet{Folders: base})
 	ref, err := driver.Add(t.Context(), download.AddRequest{Name: "Heka: Zanuvode", File: clienttest.NZB()})
-	if err != nil || ref != "Heka Zanuvode" || read(t, mem, "/drop/Heka Zanuvode.nzb") != string(clienttest.NZB()) {
+	if err != nil || ref != "hekazanuvode" || read(t, mem, "/drop/Heka Zanuvode.nzb") != string(clienttest.NZB()) {
 		t.Fatalf("Add = %q, %v", ref, err)
 	}
 	if err := mem.MkdirAll("/done/Heka Zanuvode/CD1", 0o755); err != nil {
@@ -151,10 +151,92 @@ func TestTorrent_ANameThatClimbsOutIsNeverFollowed(t *testing.T) {
 	if err != nil || ref != "library" {
 		t.Fatalf("Add = %q, %v", ref, err)
 	}
-	if err := driver.Remove(t.Context(), "../library", true); err == nil {
-		t.Error("Remove of a reference outside the watch folder succeeded")
+	if err := driver.Remove(t.Context(), "../library", true); err != nil {
+		t.Errorf("Remove of a reference that climbs out = %v, want it reduced to its key", err)
 	}
 	if _, err := mem.Stat("/library/Album/01.flac"); err != nil {
 		t.Errorf("a file outside the blackhole's folders was deleted: %v", err)
+	}
+}
+
+// SABnzbd and NZBGet rename a job as they like: punctuation dropped, ".1" for a name taken, a password suffix stripped.
+func TestUsenet_ARenamedFolderIsStillTheDownload(t *testing.T) {
+	base, mem, fake := folders(t)
+	driver := download.NewUsenet(blackhole.Usenet{Folders: base})
+	ref, err := driver.Add(t.Context(), download.AddRequest{Name: "A+B: Zanuvode (2020){{secret}}", File: clienttest.NZB()})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if err := mem.MkdirAll("/done/A B Zanuvode (2020).1", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, mem, "/done/A B Zanuvode (2020).1/01.flac", "1")
+	fake.Advance(2 * time.Minute)
+
+	got, err := driver.Downloads(t.Context(), "")
+	if err != nil || len(got) != 1 || got[0].ClientRef != ref || got[0].State != download.StateCompleted {
+		t.Fatalf("Downloads = %+v, %v; want one finished download referenced %q", got, err, ref)
+	}
+}
+
+func TestRefKey_TellsDifferentReleasesApart(t *testing.T) {
+	base, _, _ := folders(t)
+	driver := download.NewUsenet(blackhole.Usenet{Folders: base})
+	first, err := driver.Add(t.Context(), download.AddRequest{Name: "Heka Zanuvode 1988", File: clienttest.NZB()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := driver.Add(t.Context(), download.AddRequest{Name: "Heka Zanuvode 1989", File: clienttest.NZB()})
+	if err != nil || first == second {
+		t.Fatalf("keys %q and %q, %v; want two different downloads", first, second, err)
+	}
+	// The same release again would be one job to the client.
+	if _, err := driver.Add(t.Context(), download.AddRequest{Name: "Heka: Zanuvode 1988", File: clienttest.NZB()}); !errors.Is(err, download.ErrRefused) {
+		t.Errorf("a second send of one release = %v, want ErrRefused", err)
+	}
+}
+
+// countingFS counts Lstat calls, the cost of a poll over a share.
+type countingFS struct {
+	fsx.FS
+	lstats int
+}
+
+func (c *countingFS) Lstat(name string) (fsx.FileInfo, error) {
+	c.lstats++
+	return c.FS.Lstat(name)
+}
+
+func TestScan_ASettledDownloadIsNotWalkedAgain(t *testing.T) {
+	base, mem, fake := folders(t)
+	for _, album := range []string{"One", "Two"} {
+		if err := mem.MkdirAll("/done/"+album+"/CD1", 0o755); err != nil {
+			t.Fatal(err)
+		}
+		write(t, mem, "/done/"+album+"/CD1/01.flac", "1")
+		write(t, mem, "/done/"+album+"/CD1/02.flac", "1")
+	}
+	fake.Advance(2 * time.Minute)
+	counted := &countingFS{FS: mem}
+	base.FS, base.Memo = counted, &blackhole.Memo{}
+	driver := download.NewTorrent(blackhole.Torrent{Folders: base})
+
+	if _, err := driver.Downloads(t.Context(), ""); err != nil {
+		t.Fatal(err)
+	}
+	counted.lstats = 0
+	if _, err := driver.Downloads(t.Context(), ""); err != nil {
+		t.Fatal(err)
+	}
+	if counted.lstats != 2 {
+		t.Errorf("second scan made %d Lstat calls, want 2 (one per download)", counted.lstats)
+	}
+
+	write(t, mem, "/done/One/03.flac", "1")
+	got, _ := driver.Downloads(t.Context(), "")
+	for _, one := range got {
+		if one.ClientRef == "one" && one.SizeBytes != 3 {
+			t.Errorf("a changed download measured %d bytes, want 3", one.SizeBytes)
+		}
 	}
 }

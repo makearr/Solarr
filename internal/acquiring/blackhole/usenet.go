@@ -2,8 +2,7 @@ package blackhole
 
 import (
 	"context"
-	"path"
-	"strings"
+	"fmt"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
 )
@@ -17,27 +16,35 @@ func UsenetDefinition() download.Definition {
 }
 
 // Usenet is the Usenet Blackhole's part of download.UsenetClient; download.NewUsenet supplies the rest. A job's
-// reference is the release's name, which the NZB is named with and a usenet client names its folder after.
+// reference is the release name's refKey: the NZB is named with the name and a usenet client names its folder after it,
+// changing it as it likes.
 type Usenet struct{ Folders }
 
 var _ download.UsenetClient = Usenet{}
 
 // AddNZB writes the NZB into the drop folder.
 func (u Usenet) AddNZB(_ context.Context, request download.AddRequest) (string, error) {
-	ref := cleanName(request.Name)
-	if err := u.write(ref+".nzb", request.File); err != nil {
+	name := cleanName(request.Name)
+	key := refKey(name)
+	if key == "" {
+		return "", fmt.Errorf("blackhole: the release has no usable name")
+	}
+	if err := u.refuseTaken(key, true); err != nil {
 		return "", err
 	}
-	return ref, nil
+	if err := u.write(name+".nzb", request.File); err != nil {
+		return "", err
+	}
+	return key, nil
 }
 
 // Downloads answers what is in the watch folder; a loose file is known by its name without the extension.
 func (u Usenet) Downloads(context.Context, string) ([]download.Download, error) {
 	return u.downloads(func(found entry) string {
 		if found.isDir {
-			return found.name
+			return refKey(found.name)
 		}
-		return strings.TrimSuffix(found.name, path.Ext(found.name))
+		return refKey(withoutExtension(found.name))
 	})
 }
 
@@ -57,18 +64,20 @@ func (u Usenet) QueueStatus(ctx context.Context) (download.QueueStatus, error) {
 }
 
 // Remove deletes one job's files and the NZB still waiting for it, if any.
-func (u Usenet) Remove(ctx context.Context, clientRef string, deleteFiles bool) error {
-	downloads, err := u.Downloads(ctx, "")
+func (u Usenet) Remove(_ context.Context, clientRef string, deleteFiles bool) error {
+	key := refKey(clientRef)
+	if key == "" {
+		return fmt.Errorf("blackhole: %q is not a download", clientRef)
+	}
+	watched, err := u.namesOf(u.Watch, key, true)
 	if err != nil {
 		return err
 	}
-	var names []string
-	for _, one := range downloads {
-		if one.ClientRef == clientRef {
-			names = append(names, one.Name)
-		}
+	waiting, err := u.namesOf(u.Drop, key, true)
+	if err != nil {
+		return err
 	}
-	return u.remove(names, []string{clientRef + ".nzb"}, deleteFiles)
+	return u.remove(watched, waiting, deleteFiles)
 }
 
 // Pause is not something a blackhole can do.

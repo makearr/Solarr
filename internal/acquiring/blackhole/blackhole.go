@@ -10,9 +10,12 @@ import (
 	"io"
 	"io/fs"
 	"path"
+	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
+	"unicode"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -32,6 +35,103 @@ type Folders struct {
 	// Drop is where Solarr writes what it is sent; Watch is where the finished downloads appear.
 	Drop  string
 	Watch string
+	// Memo keeps what a finished download measured at, so a poll does not walk every settled folder again; optional.
+	Memo *Memo
+}
+
+// Memo remembers the measured downloads of each watch folder between polls, which build their client anew each time.
+type Memo struct {
+	mu       sync.Mutex
+	measured map[string]map[string]entry
+}
+
+func (m *Memo) recall(watch string) map[string]entry {
+	if m == nil {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.measured[watch]
+}
+
+// keep replaces a watch folder's memory with the entries this scan saw settled, so a removed download is forgotten.
+func (m *Memo) keep(watch string, settled map[string]entry) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.measured == nil {
+		m.measured = map[string]map[string]entry{}
+	}
+	m.measured[watch] = settled
+}
+
+var (
+	// duplicateSuffix is what a client appends to the folder of a download whose name is taken: ".1" to ".99".
+	duplicateSuffix = regexp.MustCompile(`\.\d{1,2}$`)
+	// passwordSuffix is the "{{password}}" an NZB name may end with, which a client strips.
+	passwordSuffix = regexp.MustCompile(`\{\{[^}]*\}\}$`)
+)
+
+// refKey is the reference of a download: its name's letters and digits, lower-cased, without a duplicate or password
+// suffix. A client renames freely (punctuation, ".1" for a name taken, a stripped password), so the name it reports
+// and the name Solarr sent only agree in this key.
+func refKey(name string) string {
+	name = passwordSuffix.ReplaceAllString(strings.TrimSpace(name), "")
+	name = duplicateSuffix.ReplaceAllString(name, "")
+	return strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return unicode.ToLower(r)
+		}
+		return -1
+	}, name)
+}
+
+// withoutExtension is a loose file's name as a client names its job.
+func withoutExtension(name string) string { return strings.TrimSuffix(name, path.Ext(name)) }
+
+// namesOf lists the entries of a folder whose reference is key; a file is compared without its extension when
+// extensionless says so, which is how a drop file or a usenet result names its job.
+func (f Folders) namesOf(folder, key string, extensionless bool) ([]string, error) {
+	listed, err := f.FS.ReadDir(folder)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("blackhole: read %s: %w", folder, err)
+	}
+	var names []string
+	for _, item := range listed {
+		if fsx.IsTemporary(item.Name) || strings.HasPrefix(item.Name, ".") {
+			continue
+		}
+		name := item.Name
+		if extensionless && !item.IsDir {
+			name = withoutExtension(name)
+		}
+		if refKey(name) == key {
+			names = append(names, item.Name)
+		}
+	}
+	return names, nil
+}
+
+// refuseTaken refuses a release whose reference is already in either folder: the client could not tell the two apart.
+func (f Folders) refuseTaken(key string, extensionlessWatch bool) error {
+	for _, folder := range []struct {
+		path          string
+		extensionless bool
+	}{{f.Drop, true}, {f.Watch, extensionlessWatch}} {
+		names, err := f.namesOf(folder.path, key, folder.extensionless)
+		if err != nil {
+			return err
+		}
+		if len(names) > 0 {
+			return fmt.Errorf("%w: %q is already in the blackhole", download.ErrRefused, names[0])
+		}
+	}
+	return nil
 }
 
 // cleanName makes a release name safe as a file name.
@@ -65,9 +165,13 @@ type entry struct {
 	isDir  bool
 	size   int64
 	newest time.Time
+	// topModTime and topSize are the entry's own, which tell a settled download that changed from one that did not.
+	topModTime time.Time
+	topSize    int64
 }
 
-// scan lists the watch folder's downloads, each with its total size and last change.
+// scan lists the watch folder's downloads, each with its total size and last change. A settled download that has
+// not changed since the last scan is not walked again.
 func (f Folders) scan() ([]entry, error) {
 	if f.Watch == "" {
 		return nil, ErrNoFolder
@@ -76,28 +180,41 @@ func (f Folders) scan() ([]entry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("blackhole: read the watch folder: %w", err)
 	}
+	remembered := f.Memo.recall(f.Watch)
+	settledBefore := f.Clock.Now().Add(-settledAfter)
+	settled := map[string]entry{}
 	var entries []entry
 	for _, item := range listed {
 		if fsx.IsTemporary(item.Name) || strings.HasPrefix(item.Name, ".") {
 			continue
 		}
-		found := entry{name: item.Name, isDir: item.IsDir}
-		if err := f.measure(path.Join(f.Watch, item.Name), &found); err != nil {
+		at := path.Join(f.Watch, item.Name)
+		info, err := f.FS.Lstat(at)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("blackhole: stat %s: %w", item.Name, err)
+		}
+		if known, ok := remembered[item.Name]; ok && known.topModTime.Equal(info.ModTime) && known.topSize == info.Size {
+			entries = append(entries, known)
+			settled[item.Name] = known
+			continue
+		}
+		found := entry{name: item.Name, isDir: item.IsDir, topModTime: info.ModTime, topSize: info.Size}
+		if err := f.measure(at, info, &found); err != nil {
 			return nil, err
 		}
 		entries = append(entries, found)
+		if !found.newest.After(settledBefore) {
+			settled[item.Name] = found
+		}
 	}
+	f.Memo.keep(f.Watch, settled)
 	return entries, nil
 }
 
-func (f Folders) measure(at string, into *entry) error {
-	info, err := f.FS.Lstat(at)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("blackhole: stat %s: %w", path.Base(at), err)
-	}
+func (f Folders) measure(at string, info fsx.FileInfo, into *entry) error {
 	if info.ModTime.After(into.newest) {
 		into.newest = info.ModTime
 	}
@@ -110,7 +227,15 @@ func (f Folders) measure(at string, into *entry) error {
 		return fmt.Errorf("blackhole: read %s: %w", path.Base(at), err)
 	}
 	for _, child := range children {
-		if err := f.measure(path.Join(at, child.Name), into); err != nil {
+		childPath := path.Join(at, child.Name)
+		childInfo, err := f.FS.Lstat(childPath)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("blackhole: stat %s: %w", path.Base(childPath), err)
+		}
+		if err := f.measure(childPath, childInfo, into); err != nil {
 			return err
 		}
 	}

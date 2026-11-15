@@ -33,6 +33,8 @@ type DownloadClientDeps struct {
 	HTTP  *httpx.Client
 	FS    fsx.FS
 	Clock clock.Clock
+	// Blackholes remembers what a blackhole's settled downloads measured, across the polls that rebuild the client.
+	Blackholes *blackhole.Memo
 }
 
 // downloadClientKind is one kind the user may pick, and how a connection of it is built on its base.
@@ -44,7 +46,7 @@ type downloadClientKind struct {
 // downloadClientKinds are every kind Solarr offers, usenet first, in the order the settings screen lists them.
 func downloadClientKinds() []downloadClientKind {
 	folders := func(deps DownloadClientDeps, connection download.Connection) blackhole.Folders {
-		return blackhole.Folders{FS: deps.FS, Clock: deps.Clock, Drop: connection.DropFolder, Watch: connection.WatchFolder}
+		return blackhole.Folders{FS: deps.FS, Clock: deps.Clock, Drop: connection.DropFolder, Watch: connection.WatchFolder, Memo: deps.Blackholes}
 	}
 	return []downloadClientKind{
 		{sabnzbd.Definition(), func(deps DownloadClientDeps, connection download.Connection) download.Driver {

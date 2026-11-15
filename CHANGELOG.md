@@ -3,6 +3,13 @@
 Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM.RRR.BBB` before); see `documentation/versioning.md`.
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
+## Unreleased
+
+- **Blackhole downloads survive a client that renames them.** A finished folder is matched by its letters and digits,
+  not its exact name, so `.1` duplicate suffixes, dropped punctuation and a stripped `{{password}}` no longer strand
+  it, and settled folders are not walked again every minute. Downloads sent through a blackhole before this change
+  are no longer followed: remove them from Activity > Queue and search again.
+
 ## 2026.11.1.0882 — 2026-11-08
 
 **Upgrading:** databases created by 2026.10.001.515 or earlier are refused at start-up (one baseline migration per database now); import from the *Arrs or start a fresh config folder.
