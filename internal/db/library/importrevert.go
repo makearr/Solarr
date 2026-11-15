@@ -71,15 +71,10 @@ func NewImportRevert(
 // nothing to undo and is left exactly as it was -- only WorkID != nil marks
 // a unit this needs to act on.
 //
-// Two passes over the session's own units, deliberately not one: the first
-// recycles every file and clears every unit's own work_id/edition_id
-// (ClearImportUnitPlacement), the second deletes the work/edition rows
-// themselves. A work two units in the same session both resolved to (one
-// created it, the second only matched it) would foreign-key-violate if the
-// first unit tried to delete "its own" work while the second unit's own
-// import_unit row still pointed at it -- clearing every unit's reference
-// first, before any row is deleted, is what makes deletion order not
-// matter.
+// Two passes over the session's own units: the first recycles every file, the second recounts or deletes the
+// work/edition rows and only then clears the unit's placement, so a revert that stops part-way finds on a retry
+// what each unit made. A work two units resolved to (one created it, the second only matched it) is released from
+// the second unit before it is deleted.
 func (r ImportRevert) Revert(ctx context.Context, sessionID int64, recycling Recycling, at int64) (RevertResult, error) {
 	session, err := r.sessions.Get(ctx, sessionID)
 	if err != nil {
@@ -104,55 +99,101 @@ func (r ImportRevert) Revert(ctx context.Context, sessionID int64, recycling Rec
 
 	var result RevertResult
 	var placed []Unit
+	var firstFailure error
+	fail := func(unit Unit, err error) {
+		if firstFailure == nil {
+			firstFailure = fmt.Errorf("library: revert unit %d: %w", unit.ID, err)
+		}
+	}
+	// A unit that fails keeps its placement, which is what a retry finds it by; the others go on.
 	for _, unit := range units {
 		if unit.WorkID == nil {
 			continue
 		}
+		if err := ctx.Err(); err != nil {
+			return result, fmt.Errorf("library: revert session %d: %w", sessionID, err)
+		}
+		if err := r.recycleUnit(ctx, unit, unitFiles[unit.ID], unitExtras[unit.ID], recycling, &result); err != nil {
+			fail(unit, err)
+			continue
+		}
 		placed = append(placed, unit)
-
-		for _, file := range unitFiles[unit.ID] {
-			if err := r.recycleObject(ctx, file, recycling, &result); err != nil {
-				return result, fmt.Errorf("library: revert unit %d: %w", unit.ID, err)
-			}
-		}
-		for _, extra := range unitExtras[unit.ID] {
-			if err := r.recycleExtra(ctx, extra, recycling, &result); err != nil {
-				return result, fmt.Errorf("library: revert unit %d: %w", unit.ID, err)
-			}
-		}
-		if err := r.sessions.DeleteUnitExtras(ctx, unit.ID); err != nil {
-			return result, fmt.Errorf("library: revert unit %d: %w", unit.ID, err)
-		}
-		if err := r.sessions.ClearUnitPlacement(ctx, unit.ID); err != nil {
-			return result, fmt.Errorf("library: revert unit %d: clear placement: %w", unit.ID, err)
-		}
-		result.UnitsReverted++
 	}
 
 	for _, unit := range placed {
-		if !unit.WorkCreated {
-			if err := r.physical.RecomputeWorkItems(ctx, *unit.WorkID); err != nil {
-				return result, fmt.Errorf("library: revert unit %d: %w", unit.ID, err)
-			}
+		if err := r.closeUnit(ctx, unit, placed, &result); err != nil {
+			fail(unit, err)
 		}
-		if unit.EditionCreated && unit.EditionID != nil {
-			if err := r.identity.DeleteEdition(ctx, *unit.EditionID); err != nil {
-				return result, fmt.Errorf("library: revert unit %d: %w", unit.ID, err)
-			}
-			result.EditionsDeleted++
-		}
-		if unit.WorkCreated {
-			if err := r.identity.DeleteWork(ctx, *unit.WorkID); err != nil {
-				return result, fmt.Errorf("library: revert unit %d: %w", unit.ID, err)
-			}
-			result.WorksDeleted++
-		}
+	}
+	if firstFailure != nil {
+		return result, firstFailure
 	}
 
 	if err := r.sessions.Finish(ctx, sessionID, ImportReverted, at, ""); err != nil {
 		return result, fmt.Errorf("library: revert session %d: mark reverted: %w", sessionID, err)
 	}
 	return result, nil
+}
+
+// recycleUnit moves a unit's files and extras into the recycle bin; safe to repeat, a file already gone is skipped.
+func (r ImportRevert) recycleUnit(
+	ctx context.Context, unit Unit, files []UnitFile, extras []UnitExtra, recycling Recycling, result *RevertResult,
+) error {
+	for _, file := range files {
+		if err := r.recycleObject(ctx, file, recycling, result); err != nil {
+			return err
+		}
+	}
+	for _, extra := range extras {
+		if err := r.recycleExtra(ctx, extra, recycling, result); err != nil {
+			return err
+		}
+	}
+	return r.sessions.DeleteUnitExtras(ctx, unit.ID)
+}
+
+// closeUnit recounts or deletes what the unit placed into and, last, forgets its placement: until then a retry still
+// knows which work the unit made. Units of the session that point at a work or edition about to be deleted are
+// released first (their own recount is done or tolerates the work being gone).
+func (r ImportRevert) closeUnit(ctx context.Context, unit Unit, placed []Unit, result *RevertResult) error {
+	if !unit.WorkCreated {
+		if err := r.physical.RecomputeWorkItems(ctx, *unit.WorkID); err != nil {
+			return err
+		}
+	}
+	if !unit.EditionCreated && !unit.WorkCreated {
+		if err := r.sessions.ClearUnitPlacement(ctx, unit.ID); err != nil {
+			return fmt.Errorf("clear placement: %w", err)
+		}
+		result.UnitsReverted++
+		return nil
+	}
+	release := []int64{unit.ID}
+	for _, other := range placed {
+		sharesWork := unit.WorkCreated && *other.WorkID == *unit.WorkID
+		sharesEdition := unit.EditionCreated && unit.EditionID != nil && other.EditionID != nil && *other.EditionID == *unit.EditionID
+		if other.ID != unit.ID && (sharesWork || sharesEdition) {
+			release = append(release, other.ID)
+		}
+	}
+	var editionID, workID *int64
+	if unit.EditionCreated {
+		editionID = unit.EditionID
+	}
+	if unit.WorkCreated {
+		workID = unit.WorkID
+	}
+	if err := r.sessions.ReleaseAndDelete(ctx, release, editionID, workID); err != nil {
+		return err
+	}
+	if editionID != nil {
+		result.EditionsDeleted++
+	}
+	if workID != nil {
+		result.WorksDeleted++
+	}
+	result.UnitsReverted++
+	return nil
 }
 
 // recycleObject recycles exactly the one library_path row this unit's own

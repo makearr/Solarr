@@ -364,3 +364,97 @@ func TestImportRevert_TwoUnitsSharingAWorkDeletesItExactlyOnce(t *testing.T) {
 		t.Errorf("GetWork after revert: err=%v, want sql.ErrNoRows", err)
 	}
 }
+
+// failingRename is a file system that cannot move one named file, as a busy NAS cannot.
+type failingRename struct {
+	fsx.FS
+	path    string
+	enabled bool
+}
+
+func (f *failingRename) Rename(from, to string) error {
+	if f.enabled && from == f.path {
+		return errors.New("input/output error")
+	}
+	return f.FS.Rename(from, to)
+}
+
+// A revert that fails on one unit finishes the others and can be repeated: the failed unit still knows its work (REVERT-1).
+func TestImportRevert_AFailedUnitKeepsItsWorkForTheRetry(t *testing.T) {
+	opened, _ := newLibrary(t)
+	fake := clock.NewFakeAtEpoch()
+	mem := fsx.NewMem(fake)
+	sessions := library.NewImportSessions(opened)
+	ctx := t.Context()
+	categoryID := int64(7)
+	sessionID, err := sessions.Create(ctx, library.NewSession{
+		SourcePath: "/downloads/x", Origin: library.ImportOriginManual, CategoryID: &categoryID, Threshold: 0.9, StartedAt: 100,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var units []library.NewUnit
+	for _, name := range []string{"One", "Two", "Three"} {
+		units = append(units, library.NewUnit{RelPath: "Artist/" + name, Shape: library.UnitSet, FileCount: 1, Bytes: 4, EvidenceJSON: "{}"})
+	}
+	unitIDs, err := sessions.AddUnits(ctx, sessionID, units)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var works []int64
+	for index, name := range []string{"One", "Two", "Three"} {
+		putTestFile(t, mem, "/media/root/Artist/"+name+"/track.flac", []byte("fake"))
+		work := createWork(t, opened, "music", "Album "+name)
+		item := createDesired(t, opened, work.ID, "SET", 1)
+		object := createObject(t, opened, "quick-"+name, 4)
+		addPath(t, opened, object.ID, 1, "Artist/"+name+"/track.flac")
+		attach(t, opened, item.ID, object.ID, "primary", "disc1:track1")
+		works = append(works, work.ID)
+		if err := sessions.SetUnitDecisions(ctx, sessionID, []library.UnitDecision{{UnitID: unitIDs[index], Decision: library.UnitCommit, Confidence: 0.95}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := sessions.RecordPlacement(ctx, unitIDs[index], library.Placement{WorkID: work.ID, WorkCreated: true, MediaObjectIDs: []int64{object.ID}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := sessions.Finish(ctx, sessionID, library.ImportDone, 150, ""); err != nil {
+		t.Fatal(err)
+	}
+	fsys := &failingRename{FS: mem, path: "/media/root/Artist/Two/track.flac", enabled: true}
+	revert := library.NewImportRevert(
+		sessions, library.NewPhysical(opened), library.NewIdentity(opened),
+		library.NewRecycleBin(opened, fsys, fake), rootPathLookup(map[int64]string{1: "/media/root"}),
+	)
+	recycling := library.Recycling{Retain: time.Hour}
+
+	first, err := revert.Revert(ctx, sessionID, recycling, 200)
+	if err == nil {
+		t.Fatal("Revert succeeded though a file could not be moved")
+	}
+	if first.UnitsReverted != 2 || first.WorksDeleted != 2 {
+		t.Fatalf("first revert = %+v, want the two other units done", first)
+	}
+	reader := librarydb.New(opened.Read())
+	for index, want := range []bool{false, true, false} {
+		_, err := reader.GetWork(ctx, works[index])
+		if exists := err == nil; exists != want {
+			t.Fatalf("work %d exists = %v, want %v", index+1, exists, want)
+		}
+	}
+	listed, err := sessions.ListUnits(ctx, sessionID)
+	if err != nil || listed[1].WorkID == nil || !listed[1].WorkCreated || listed[0].WorkID != nil || listed[2].WorkID != nil {
+		t.Fatalf("units after the failed revert = %+v, %v; want only the second still carrying its work", listed, err)
+	}
+
+	fsys.enabled = false
+	second, err := revert.Revert(ctx, sessionID, recycling, 300)
+	if err != nil || second.UnitsReverted != 1 || second.WorksDeleted != 1 {
+		t.Fatalf("second revert = %+v, %v; want the failed unit finished", second, err)
+	}
+	if _, err := reader.GetWork(ctx, works[1]); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("work 2 after the retry: %v, want gone", err)
+	}
+	if session, err := sessions.Get(ctx, sessionID); err != nil || session.State != library.ImportReverted {
+		t.Errorf("session = %+v, %v; want REVERTED", session, err)
+	}
+}

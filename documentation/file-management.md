@@ -76,3 +76,7 @@ saved, and hourly.
 - An album showing its artist's photo has no cover of its own; nothing is embedded for it.
 - A run writes at most 2,000 files; a large library is written over successive runs.
 - The written file keeps its identity: a known path keeps its `media_object`.
+
+## Reverting an import
+
+A revert recycles every file the session placed, then removes the works and editions it created, and only then forgets each unit's placement: a revert that stops part-way (a busy disk, a shutdown) finishes the other units and can simply be run again. Sessions reverted before this was so can have left works with no files behind; a work with no files and no request is removed from the library screen.

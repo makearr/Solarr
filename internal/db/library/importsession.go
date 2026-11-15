@@ -383,6 +383,39 @@ func (s ImportSessions) ClearUnitPlacement(ctx context.Context, unitID int64) er
 	return nil
 }
 
+// ReleaseAndDelete forgets the placement of the units and deletes the edition and work they made, in one transaction:
+// the units point at the rows, so neither can go first, and a stop between would lose what the unit made.
+func (s ImportSessions) ReleaseAndDelete(ctx context.Context, unitIDs []int64, editionID, workID *int64) error {
+	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		for _, unitID := range unitIDs {
+			if err := queries.ClearImportUnitPlacement(ctx, unitID); err != nil {
+				return err
+			}
+		}
+		if editionID != nil {
+			if err := queries.DeleteEdition(ctx, *editionID); err != nil {
+				return err
+			}
+		}
+		if workID == nil {
+			return nil
+		}
+		members, err := membersOfWork(ctx, queries, *workID)
+		if err != nil {
+			return err
+		}
+		if err := deleteWorkRow(ctx, queries, *workID); err != nil {
+			return err
+		}
+		return members.refresh(ctx, queries)
+	})
+	if err != nil {
+		return fmt.Errorf("library: release units %v and delete what they made: %w", unitIDs, err)
+	}
+	return nil
+}
+
 // UnitFile is one media_object row a unit's own CommitUnit produced, with the
 // specific library_path row that placement created for it when known
 // (LibraryPathID is nil for a row written before migration 0029, or one whose
