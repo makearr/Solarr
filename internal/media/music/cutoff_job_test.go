@@ -308,7 +308,7 @@ func runReplacement(t *testing.T, env *searchTestEnv, item librarydb.DesiredItem
 	recycled := map[int64]bool{}
 	job := music.CutoffJob{
 		Desired: desired, Settings: env.settings, Logger: slog.New(slog.DiscardHandler), Clock: env.clock,
-		Recycle: func(ctx context.Context, object, _ int64, replaced bool) error {
+		Recycle: func(ctx context.Context, object, _, _ int64, replaced bool) error {
 			recycled[object] = replaced
 			return desired.DetachAndRecompute(ctx, item.ID, item.WorkID, object, []string{"primary"})
 		},

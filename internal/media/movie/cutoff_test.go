@@ -93,7 +93,7 @@ func cutoffFilm(t *testing.T, files ...versionFile) (movie.CutoffJob, library.Cu
 	recycled := map[int64]bool{}
 	job := movie.CutoffJob{
 		Desired: desired, Reader: library.NewSeriesReader(opened), Settings: cache,
-		Recycle: func(ctx context.Context, object, _ int64, replaced bool) error {
+		Recycle: func(ctx context.Context, object, _, _ int64, replaced bool) error {
 			recycled[object] = replaced
 			return desired.DetachAndRecompute(ctx, added.ItemID, added.WorkID, object, []string{"primary"})
 		},

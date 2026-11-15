@@ -458,3 +458,67 @@ func TestImportRevert_AFailedUnitKeepsItsWorkForTheRetry(t *testing.T) {
 		t.Errorf("session = %+v, %v; want REVERTED", session, err)
 	}
 }
+
+// Reverting an import that replaced a file brings the replaced file back (REVERT-2).
+func TestImportRevert_RestoresWhatTheRevertedFileHadReplaced(t *testing.T) {
+	opened, _ := newLibrary(t)
+	fake := clock.NewFakeAtEpoch()
+	fsys := fsx.NewMem(fake)
+	bin := library.NewRecycleBin(opened, fsys, fake)
+	putTestFile(t, fsys, "/media/root/Artist/Album/old.flac", []byte("old"))
+	putTestFile(t, fsys, "/media/root/Artist/Album/new.flac", []byte("better"))
+
+	work := createWork(t, opened, "music", "Replaced Album")
+	item := createDesired(t, opened, work.ID, "SET", 1)
+	better := createObject(t, opened, "quick-better", 6)
+	addPath(t, opened, better.ID, 1, "Artist/Album/new.flac")
+	attach(t, opened, item.ID, better.ID, "primary", "disc1:track1")
+	// The cutoff settle recycled the old file in favour of the better one.
+	replacedBy := better.ID
+	displaced, err := bin.Put(t.Context(), library.PutRequest{
+		RootPath: "/media/root", OriginalPath: "/media/root/Artist/Album/old.flac", Reason: library.ReasonReplaced,
+		Retain: time.Hour, ReplacedByObjectID: &replacedBy,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sessions := library.NewImportSessions(opened)
+	ctx := t.Context()
+	categoryID := int64(7)
+	sessionID, err := sessions.Create(ctx, library.NewSession{
+		SourcePath: "/downloads/x", Origin: library.ImportOriginManual, CategoryID: &categoryID, Threshold: 0.9, StartedAt: 100,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unitIDs, err := sessions.AddUnits(ctx, sessionID, []library.NewUnit{{RelPath: "Artist/Album", Shape: library.UnitSet, FileCount: 1, Bytes: 6, EvidenceJSON: "{}"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sessions.SetUnitDecisions(ctx, sessionID, []library.UnitDecision{{UnitID: unitIDs[0], Decision: library.UnitCommit, Confidence: 0.95}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := sessions.RecordPlacement(ctx, unitIDs[0], library.Placement{WorkID: work.ID, MediaObjectIDs: []int64{better.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := sessions.Finish(ctx, sessionID, library.ImportDone, 150, ""); err != nil {
+		t.Fatal(err)
+	}
+	revert := library.NewImportRevert(
+		sessions, library.NewPhysical(opened), library.NewIdentity(opened), bin, rootPathLookup(map[int64]string{1: "/media/root"}),
+	)
+	result, err := revert.Revert(ctx, sessionID, library.Recycling{Retain: time.Hour}, 200)
+	if err != nil {
+		t.Fatalf("Revert: %v", err)
+	}
+	if len(result.Restored) != 1 || result.Restored[0].ID != displaced.ID || len(result.NotRestored) != 0 {
+		t.Fatalf("result = %+v, want the old file restored", result)
+	}
+	if _, err := fsys.Stat("/media/root/Artist/Album/old.flac"); err != nil {
+		t.Errorf("the replaced file is not back: %v", err)
+	}
+	if _, err := fsys.Stat("/media/root/Artist/Album/new.flac"); err == nil {
+		t.Error("the reverted file is still in the library")
+	}
+}

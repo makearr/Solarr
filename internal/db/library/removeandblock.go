@@ -34,6 +34,8 @@ type RemoveAndBlockRequest struct {
 	RecycleRetain time.Duration
 	// RemoveEmptyFolders is the library's "Delete empty folders" for what recycle bin leaves behind.
 	RemoveEmptyFolders bool
+	// ReplacedBy is the media_object that took this file's place (an upgrade, a duplicate resolved); zero when none did.
+	ReplacedBy int64
 
 	// Block is step 2: block the file's own hashes so the bytes never enter
 	// the library again (blocked_content).
@@ -162,6 +164,10 @@ func (r RemoveAndBlock) doRecycle(ctx context.Context, req RemoveAndBlockRequest
 	}
 
 	objectID := req.MediaObjectID
+	var replacedBy *int64
+	if req.ReplacedBy != 0 {
+		replacedBy = &req.ReplacedBy
+	}
 	for _, p := range paths {
 		rootPath, ok := r.rootPath(p.RootFolderID)
 		if !ok {
@@ -172,6 +178,7 @@ func (r RemoveAndBlock) doRecycle(ctx context.Context, req RemoveAndBlockRequest
 			RootPath: rootPath, OriginalPath: path.Join(rootPath, p.RelPath),
 			RootFolderID: &rootFolderID, MediaObjectID: &objectID,
 			Reason: req.RecycleReason, Retain: req.RecycleRetain, RemoveEmptyFolders: req.RemoveEmptyFolders,
+			ReplacedByObjectID: replacedBy,
 		})
 		if err != nil {
 			// A copy a scan already found gone has nothing to recycle; stopping here would leave the block half done.

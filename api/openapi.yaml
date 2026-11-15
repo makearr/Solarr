@@ -13760,7 +13760,7 @@ components:
 
     ImportRevertResult:
       type: object
-      required: [units_reverted, works_deleted, editions_deleted, recycled_paths]
+      required: [units_reverted, works_deleted, editions_deleted, recycled_paths, restored_paths, not_restored_paths]
       properties:
         units_reverted: { type: integer, format: int64 }
         works_deleted:
@@ -13770,6 +13770,14 @@ components:
         editions_deleted: { type: integer, format: int64 }
         recycled_paths:
           type: array
+          items: { type: string }
+        restored_paths:
+          type: array
+          description: Files an upgrade had displaced that the revert brought back.
+          items: { type: string }
+        not_restored_paths:
+          type: array
+          description: Displaced files that could not be brought back (the path is taken, or the bin no longer holds them); they stay in the bin.
           items: { type: string }
 
     ImportSession:

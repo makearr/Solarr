@@ -43,7 +43,7 @@ type Cutoff struct {
 	Files func(ctx context.Context, itemID int64) ([]File, error)
 	// Recycle moves a file to the recycle bin; replaced is true for an owned file an upgrade superseded, false for a
 	// download that measured no better. Nil leaves every file in place.
-	Recycle func(ctx context.Context, mediaObjectID, categoryID int64, replaced bool) error
+	Recycle func(ctx context.Context, mediaObjectID, categoryID, keeperID int64, replaced bool) error
 	// HandOver runs before an owned file is recycled as replaced, so what sits beside it (subtitles) can follow the file that replaces it.
 	HandOver func(ctx context.Context, fromMediaObjectID, toMediaObjectID int64) error
 	// Versions says a part's files are versions of it (a film's cuts, a book's formats): two held on purpose are no
@@ -202,7 +202,7 @@ func (c Cutoff) settle(ctx context.Context, snapshot *settings.Snapshot, item li
 				return recycled, err
 			}
 		}
-		if err := c.Recycle(ctx, loser.file.MediaObjectID, item.CategoryID, replaced); err != nil {
+		if err := c.Recycle(ctx, loser.file.MediaObjectID, item.CategoryID, loser.keeper.MediaObjectID, replaced); err != nil {
 			return recycled, err
 		}
 		recycled++
@@ -341,7 +341,7 @@ func ItemFiles(ctx context.Context, reader library.SeriesReader, itemID int64) (
 // VersionedCutoff is the cutoff check of a type whose files are versions of one item (a film, a scene): two held on
 // purpose are no contest and one at the cutoff completes the item.
 func VersionedCutoff(mediaType string, desired library.Desired, reader library.SeriesReader,
-	recycle func(ctx context.Context, mediaObjectID, categoryID int64, replaced bool) error,
+	recycle func(ctx context.Context, mediaObjectID, categoryID, keeperID int64, replaced bool) error,
 ) Cutoff {
 	return Cutoff{
 		Desired: desired, Recycle: recycle, Versions: true,

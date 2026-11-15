@@ -10107,6 +10107,10 @@ export interface components {
             /** Format: int64 */
             editions_deleted: number;
             recycled_paths: string[];
+            /** @description Files an upgrade had displaced that the revert brought back. */
+            restored_paths: string[];
+            /** @description Displaced files that could not be brought back (the path is taken, or the bin no longer holds them); they stay in the bin. */
+            not_restored_paths: string[];
         };
         /** @description One inspection-and-import run over one source path (ADR-48). */
         ImportSession: {

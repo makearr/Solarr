@@ -740,17 +740,18 @@ type ReadyQueue struct {
 }
 
 type RecycleBin struct {
-	ID            int64
-	OriginalPath  string
-	RecycledPath  string
-	RootFolderID  sql.NullInt64
-	MediaObjectID sql.NullInt64
-	AcquisitionID sql.NullInt64
-	Reason        string
-	SizeBytes     int64
-	RecycledAt    int64
-	ExpiresAt     int64
-	RestoredAt    sql.NullInt64
+	ID                      int64
+	OriginalPath            string
+	RecycledPath            string
+	RootFolderID            sql.NullInt64
+	MediaObjectID           sql.NullInt64
+	AcquisitionID           sql.NullInt64
+	Reason                  string
+	SizeBytes               int64
+	RecycledAt              int64
+	ExpiresAt               int64
+	RestoredAt              sql.NullInt64
+	ReplacedByMediaObjectID sql.NullInt64
 }
 
 type Relationship struct {

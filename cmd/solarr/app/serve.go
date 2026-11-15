@@ -62,6 +62,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/secrets"
 	"github.com/makearr/Solarr/internal/platform/transcode"
 	"github.com/makearr/Solarr/internal/scanning/probe"
+	"github.com/makearr/Solarr/internal/scanning/scan"
 	"github.com/makearr/Solarr/internal/scanning/watch"
 	"github.com/makearr/Solarr/migrations"
 )
@@ -971,7 +972,10 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 				library.NewImportSessions(p.library), library.NewPhysical(p.library), library.NewIdentity(p.library),
 				library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()), adapters.RootFolderPath(p.cache),
 			),
-			Manual: p.manualCommitter(), Libraries: adapters.Categories{Cache: p.cache},
+			Manual: p.manualCommitter(), Libraries: adapters.Categories{Cache: p.cache}, RootPath: adapters.RootFolderPath(p.cache),
+			Rescan: func(ctx context.Context, rootFolderID, categoryID int64, directories []string) {
+				_, _ = scan.EnqueueDirectories(ctx, p.queue, rootFolderID, categoryID, directories)
+			},
 			CommitsHeld: adapters.MediaTypes{Registry: p.media}.CommitsHeldImports,
 			Clock:       clock.NewSystem(),
 		},

@@ -121,7 +121,7 @@ func (f upgradeFixture) job(recycled map[int64]bool) tv.CutoffJob {
 	desired := library.NewDesired(f.opened)
 	return tv.CutoffJob{
 		Desired: desired, Series: library.NewSeriesReader(f.opened), Settings: f.cache, Logger: slog.New(slog.DiscardHandler),
-		Recycle: func(ctx context.Context, object, _ int64, replaced bool) error {
+		Recycle: func(ctx context.Context, object, _, _ int64, replaced bool) error {
 			recycled[object] = replaced
 			return desired.DetachAndRecompute(ctx, f.season1, f.workID, object, []string{"primary"})
 		},

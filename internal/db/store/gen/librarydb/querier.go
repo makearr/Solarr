@@ -820,6 +820,8 @@ type Querier interface {
 	// in a WHERE, and decoding one bounded page in Go is the same discipline every
 	// cross-database composition here already uses.
 	ListQueuedWithNewestAttempt(ctx context.Context, arg ListQueuedWithNewestAttemptParams) ([]ListQueuedWithNewestAttemptRow, error)
+	// What an upgrade displaced in favour of this file and the bin still holds.
+	ListRecycledInFavourOf(ctx context.Context, replacedByMediaObjectID sql.NullInt64) ([]RecycleBin, error)
 	// Pairs of works a provider says are related (an anime's sequel, its spin-off).
 	ListRelatedWorkPairs(ctx context.Context, mediaType string) ([]ListRelatedWorkPairsRow, error)
 	// A rename's files: each primary file on a root still there, with every part of one library it covers, a page of

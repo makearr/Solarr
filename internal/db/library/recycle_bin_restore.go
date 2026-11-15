@@ -22,6 +22,19 @@ func (q RecycleBin) Get(ctx context.Context, id int64) (Entry, error) {
 	return recycleBinEntryFromRow(row), nil
 }
 
+// ReplacedBy lists what the bin still holds that mediaObjectID took the place of.
+func (q RecycleBin) ReplacedBy(ctx context.Context, mediaObjectID int64) ([]Entry, error) {
+	rows, err := librarydb.New(q.store.Read()).ListRecycledInFavourOf(ctx, sql.NullInt64{Int64: mediaObjectID, Valid: true})
+	if err != nil {
+		return nil, fmt.Errorf("recycle bin: replaced by object %d: %w", mediaObjectID, err)
+	}
+	entries := make([]Entry, len(rows))
+	for index, row := range rows {
+		entries[index] = recycleBinEntryFromRow(row)
+	}
+	return entries, nil
+}
+
 // Restore puts a recycled file back where it came from. Refused if it was
 // already restored, and refused -- rather than silently overwriting -- if
 // something now occupies the original path (section 10.8: "restoring an item

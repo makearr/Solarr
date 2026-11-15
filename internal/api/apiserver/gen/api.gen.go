@@ -3492,9 +3492,15 @@ type ImportRevertRequest struct {
 
 // ImportRevertResult defines model for ImportRevertResult.
 type ImportRevertResult struct {
-	EditionsDeleted int64    `json:"editions_deleted"`
-	RecycledPaths   []string `json:"recycled_paths"`
-	UnitsReverted   int64    `json:"units_reverted"`
+	EditionsDeleted int64 `json:"editions_deleted"`
+
+	// NotRestoredPaths Displaced files that could not be brought back (the path is taken, or the bin no longer holds them); they stay in the bin.
+	NotRestoredPaths []string `json:"not_restored_paths"`
+	RecycledPaths    []string `json:"recycled_paths"`
+
+	// RestoredPaths Files an upgrade had displaced that the revert brought back.
+	RestoredPaths []string `json:"restored_paths"`
+	UnitsReverted int64    `json:"units_reverted"`
 
 	// WorksDeleted Only a work this session's own CommitUnit created, never one it matched.
 	WorksDeleted int64 `json:"works_deleted"`

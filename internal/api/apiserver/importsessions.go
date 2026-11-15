@@ -104,6 +104,8 @@ var ErrBlockedContent = errors.New("apiserver: this content is blocked and canno
 type ImportRevertResult struct {
 	UnitsReverted, WorksDeleted, EditionsDeleted int64
 	RecycledPaths                                []string
+	// RestoredPaths are files an upgrade had displaced that the revert brought back; NotRestoredPaths could not be.
+	RestoredPaths, NotRestoredPaths []string
 }
 
 // ImportPlacementResult is AssignImportCategory's own outcome: every unit
@@ -660,6 +662,7 @@ func importRevertResultView(result ImportRevertResult) gen.ImportRevertResult {
 	return gen.ImportRevertResult{
 		UnitsReverted: result.UnitsReverted, WorksDeleted: result.WorksDeleted,
 		EditionsDeleted: result.EditionsDeleted, RecycledPaths: paths,
+		RestoredPaths: nonNil(result.RestoredPaths), NotRestoredPaths: nonNil(result.NotRestoredPaths),
 	}
 }
 

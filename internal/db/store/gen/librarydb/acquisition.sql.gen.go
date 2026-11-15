@@ -371,7 +371,8 @@ func (q *Queries) GetActiveAcquisitionForItem(ctx context.Context, desiredItemID
 
 const getRecycleBin = `-- name: GetRecycleBin :one
 SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
-       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at,
+       replaced_by_media_object_id
 FROM recycle_bin WHERE id = ?
 `
 
@@ -390,6 +391,7 @@ func (q *Queries) GetRecycleBin(ctx context.Context, id int64) (RecycleBin, erro
 		&i.RecycledAt,
 		&i.ExpiresAt,
 		&i.RestoredAt,
+		&i.ReplacedByMediaObjectID,
 	)
 	return i, err
 }
@@ -516,7 +518,8 @@ func (q *Queries) ListActiveAcquisitions(ctx context.Context) ([]Acquisition, er
 
 const listActiveRecycleBinByRootOldestFirst = `-- name: ListActiveRecycleBinByRootOldestFirst :many
 SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
-       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at,
+       replaced_by_media_object_id
 FROM recycle_bin
 WHERE restored_at IS NULL AND root_folder_id = ?1
 ORDER BY recycled_at LIMIT ?2
@@ -549,6 +552,7 @@ func (q *Queries) ListActiveRecycleBinByRootOldestFirst(ctx context.Context, arg
 			&i.RecycledAt,
 			&i.ExpiresAt,
 			&i.RestoredAt,
+			&i.ReplacedByMediaObjectID,
 		); err != nil {
 			return nil, err
 		}
@@ -565,7 +569,8 @@ func (q *Queries) ListActiveRecycleBinByRootOldestFirst(ctx context.Context, arg
 
 const listActiveRecycleBinNewestFirst = `-- name: ListActiveRecycleBinNewestFirst :many
 SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
-       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at,
+       replaced_by_media_object_id
 FROM recycle_bin
 WHERE restored_at IS NULL ORDER BY recycled_at DESC, id DESC LIMIT ?
 `
@@ -591,6 +596,7 @@ func (q *Queries) ListActiveRecycleBinNewestFirst(ctx context.Context, limit int
 			&i.RecycledAt,
 			&i.ExpiresAt,
 			&i.RestoredAt,
+			&i.ReplacedByMediaObjectID,
 		); err != nil {
 			return nil, err
 		}
@@ -607,7 +613,8 @@ func (q *Queries) ListActiveRecycleBinNewestFirst(ctx context.Context, limit int
 
 const listActiveRecycleBinOldestFirst = `-- name: ListActiveRecycleBinOldestFirst :many
 SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
-       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at,
+       replaced_by_media_object_id
 FROM recycle_bin
 WHERE restored_at IS NULL ORDER BY recycled_at LIMIT ?
 `
@@ -635,6 +642,7 @@ func (q *Queries) ListActiveRecycleBinOldestFirst(ctx context.Context, limit int
 			&i.RecycledAt,
 			&i.ExpiresAt,
 			&i.RestoredAt,
+			&i.ReplacedByMediaObjectID,
 		); err != nil {
 			return nil, err
 		}
@@ -698,7 +706,8 @@ func (q *Queries) ListBlocklist(ctx context.Context, arg ListBlocklistParams) ([
 
 const listExpiredRecycleBin = `-- name: ListExpiredRecycleBin :many
 SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
-       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at,
+       replaced_by_media_object_id
 FROM recycle_bin
 WHERE restored_at IS NULL AND expires_at <= ? ORDER BY expires_at LIMIT ?
 `
@@ -729,6 +738,7 @@ func (q *Queries) ListExpiredRecycleBin(ctx context.Context, arg ListExpiredRecy
 			&i.RecycledAt,
 			&i.ExpiresAt,
 			&i.RestoredAt,
+			&i.ReplacedByMediaObjectID,
 		); err != nil {
 			return nil, err
 		}
@@ -787,6 +797,51 @@ func (q *Queries) ListImportedAcquisitions(ctx context.Context) ([]Acquisition, 
 			&i.UpdatedAt,
 			&i.ContentHash,
 			&i.SizeBytes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRecycledInFavourOf = `-- name: ListRecycledInFavourOf :many
+SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at, replaced_by_media_object_id
+FROM recycle_bin
+WHERE replaced_by_media_object_id = ? AND restored_at IS NULL
+ORDER BY id
+`
+
+// What an upgrade displaced in favour of this file and the bin still holds.
+func (q *Queries) ListRecycledInFavourOf(ctx context.Context, replacedByMediaObjectID sql.NullInt64) ([]RecycleBin, error) {
+	rows, err := q.db.QueryContext(ctx, listRecycledInFavourOf, replacedByMediaObjectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RecycleBin{}
+	for rows.Next() {
+		var i RecycleBin
+		if err := rows.Scan(
+			&i.ID,
+			&i.OriginalPath,
+			&i.RecycledPath,
+			&i.RootFolderID,
+			&i.MediaObjectID,
+			&i.AcquisitionID,
+			&i.Reason,
+			&i.SizeBytes,
+			&i.RecycledAt,
+			&i.ExpiresAt,
+			&i.RestoredAt,
+			&i.ReplacedByMediaObjectID,
 		); err != nil {
 			return nil, err
 		}
@@ -935,23 +990,24 @@ func (q *Queries) RecordAcquiredFile(ctx context.Context, arg RecordAcquiredFile
 const recycleBin = `-- name: RecycleBin :one
 INSERT INTO recycle_bin (original_path, recycled_path, root_folder_id,
                         media_object_id, acquisition_id, reason, size_bytes,
-                        recycled_at, expires_at, restored_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        recycled_at, expires_at, restored_at, replaced_by_media_object_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, original_path, recycled_path, root_folder_id, media_object_id,
-          acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+          acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at, replaced_by_media_object_id
 `
 
 type RecycleBinParams struct {
-	OriginalPath  string
-	RecycledPath  string
-	RootFolderID  sql.NullInt64
-	MediaObjectID sql.NullInt64
-	AcquisitionID sql.NullInt64
-	Reason        string
-	SizeBytes     int64
-	RecycledAt    int64
-	ExpiresAt     int64
-	RestoredAt    sql.NullInt64
+	OriginalPath            string
+	RecycledPath            string
+	RootFolderID            sql.NullInt64
+	MediaObjectID           sql.NullInt64
+	AcquisitionID           sql.NullInt64
+	Reason                  string
+	SizeBytes               int64
+	RecycledAt              int64
+	ExpiresAt               int64
+	RestoredAt              sql.NullInt64
+	ReplacedByMediaObjectID sql.NullInt64
 }
 
 func (q *Queries) RecycleBin(ctx context.Context, arg RecycleBinParams) (RecycleBin, error) {
@@ -966,6 +1022,7 @@ func (q *Queries) RecycleBin(ctx context.Context, arg RecycleBinParams) (Recycle
 		arg.RecycledAt,
 		arg.ExpiresAt,
 		arg.RestoredAt,
+		arg.ReplacedByMediaObjectID,
 	)
 	var i RecycleBin
 	err := row.Scan(
@@ -980,6 +1037,7 @@ func (q *Queries) RecycleBin(ctx context.Context, arg RecycleBinParams) (Recycle
 		&i.RecycledAt,
 		&i.ExpiresAt,
 		&i.RestoredAt,
+		&i.ReplacedByMediaObjectID,
 	)
 	return i, err
 }

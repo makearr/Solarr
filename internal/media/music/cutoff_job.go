@@ -22,7 +22,7 @@ type CutoffJob struct {
 	Settings *settings.Cache
 	// Recycle moves a file to the recycle bin; replaced is true for an owned file an upgrade superseded,
 	// false for a download that measured no better. Nil leaves every file in place.
-	Recycle func(ctx context.Context, mediaObjectID, categoryID int64, replaced bool) error
+	Recycle func(ctx context.Context, mediaObjectID, categoryID, keeperID int64, replaced bool) error
 	Clock   clock.Clock
 	Logger  *slog.Logger
 }
@@ -140,7 +140,7 @@ func (j CutoffJob) replaceSuperseded(ctx context.Context, snapshot *settings.Sna
 			if err := j.Desired.RecordImportDecision(ctx, decision); err != nil {
 				return recycled, err
 			}
-			if err := j.Recycle(ctx, file.MediaObjectID, item.CategoryID, replaced); err != nil {
+			if err := j.Recycle(ctx, file.MediaObjectID, item.CategoryID, keeper.MediaObjectID, replaced); err != nil {
 				return recycled, err
 			}
 			recycled++

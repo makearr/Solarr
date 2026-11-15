@@ -27,10 +27,13 @@ type Recycling struct {
 
 // RevertResult is what one session's revert actually did.
 type RevertResult struct {
-	RecycledPaths   []Entry
-	UnitsReverted   int
-	WorksDeleted    int
-	EditionsDeleted int
+	RecycledPaths []Entry
+	// Restored are the files an upgrade had displaced that the revert brought back; NotRestored could not be (the path is
+	// taken again, or the bin no longer has the file), and stay in the bin.
+	Restored, NotRestored []Entry
+	UnitsReverted         int
+	WorksDeleted          int
+	EditionsDeleted       int
 	// SkippedSharedObjects are media_object ids revert left untouched: bytes
 	// this unit shares with a path from outside this session (ADR-11's
 	// quick-hash dedupe), recorded before migration 0029 gave revert a way to
@@ -239,10 +242,28 @@ func (r ImportRevert) recycleObject(ctx context.Context, file UnitFile, recyclin
 		result.RecycledPaths = append(result.RecycledPaths, entry)
 	}
 
+	r.restoreDisplaced(ctx, file.MediaObjectID, result)
+
 	if len(paths) == 1 {
 		return r.physical.DeleteObject(ctx, file.MediaObjectID)
 	}
 	return r.physical.DeleteLibraryPathRow(ctx, target.ID)
+}
+
+// restoreDisplaced brings back what the file being reverted had replaced, after the file itself is out of the way.
+// Not being able to is reported, never an error: the revert is of the new file.
+func (r ImportRevert) restoreDisplaced(ctx context.Context, mediaObjectID int64, result *RevertResult) {
+	displaced, err := r.recycleBin.ReplacedBy(ctx, mediaObjectID)
+	if err != nil {
+		return
+	}
+	for _, entry := range displaced {
+		if restored, err := r.recycleBin.Restore(ctx, entry.ID); err != nil {
+			result.NotRestored = append(result.NotRestored, entry)
+		} else {
+			result.Restored = append(result.Restored, restored)
+		}
+	}
 }
 
 // recycleExtra moves one extra file the unit placed into the recycle bin; one already gone is skipped.

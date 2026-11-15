@@ -55,6 +55,8 @@ type Entry struct {
 	RecycledAt    int64
 	ExpiresAt     int64
 	RestoredAt    *int64
+	// ReplacedByObjectID is the media_object that took the file's place; nil when none did.
+	ReplacedByObjectID *int64
 }
 
 // PutRequest is one file to the recycle bin.
@@ -75,6 +77,8 @@ type PutRequest struct {
 	// RemoveEmptyFolders removes the folders the move left empty, up to the root (a library's
 	// "Delete empty folders", Sonarr's).
 	RemoveEmptyFolders bool
+	// ReplacedByObjectID is the media_object that took the file's place, so reverting its import can bring this one back.
+	ReplacedByObjectID *int64
 }
 
 // RecycleBin is section 10.8: nothing is deleted directly. Every destructive
@@ -122,6 +126,7 @@ func (q RecycleBin) Put(ctx context.Context, req PutRequest) (Entry, error) {
 			RootFolderID: nullInt64(req.RootFolderID), MediaObjectID: nullInt64(req.MediaObjectID),
 			AcquisitionID: nullInt64(req.AcquisitionID), Reason: string(req.Reason),
 			SizeBytes: info.Size, RecycledAt: now.Unix(), ExpiresAt: now.Add(req.Retain).Unix(),
+			ReplacedByMediaObjectID: nullInt64(req.ReplacedByObjectID),
 		})
 		if writeErr != nil {
 			return writeErr
@@ -224,6 +229,6 @@ func recycleBinEntryFromRow(row librarydb.RecycleBin) Entry {
 		RootFolderID: int64Ptr(row.RootFolderID), MediaObjectID: int64Ptr(row.MediaObjectID),
 		AcquisitionID: int64Ptr(row.AcquisitionID), Reason: Reason(row.Reason),
 		SizeBytes: row.SizeBytes, RecycledAt: row.RecycledAt, ExpiresAt: row.ExpiresAt,
-		RestoredAt: int64Ptr(row.RestoredAt),
+		RestoredAt: int64Ptr(row.RestoredAt), ReplacedByObjectID: int64Ptr(row.ReplacedByMediaObjectID),
 	}
 }

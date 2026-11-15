@@ -54,8 +54,8 @@ func (p *process) cutoffSources(categoryID int64) []cutoff.Source {
 }
 
 // recycleSuperseded moves a file an upgrade replaced, or a download that measured no better, to the
-// recycle bin under its library's retention.
-func (p *process) recycleSuperseded(ctx context.Context, mediaObjectID, categoryID int64, replaced bool) error {
+// recycle bin under its library's retention; keeperID is the file that replaced it, remembered so a revert can bring it back.
+func (p *process) recycleSuperseded(ctx context.Context, mediaObjectID, categoryID, keeperID int64, replaced bool) error {
 	reason := library.ReasonRejectedWorse
 	if replaced {
 		reason = library.ReasonReplaced
@@ -64,7 +64,7 @@ func (p *process) recycleSuperseded(ctx context.Context, mediaObjectID, category
 	if !replaced && p.cache.Snapshot().ImportDuplicateBlocklist() {
 		p.blocklistRelease(ctx, mediaObjectID)
 	}
-	return p.fileRemover().RecycleFor(ctx, mediaObjectID, recycling, reason)
+	return p.fileRemover().RecycleFor(ctx, mediaObjectID, recycling, reason, keeperID)
 }
 
 // blocklistRelease keeps out the release a file came in with, for a download that measured no better than what the

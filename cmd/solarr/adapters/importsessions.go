@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"time"
 
@@ -31,6 +32,10 @@ type ImportSessions struct {
 	Clock    clock.Clock
 	// Libraries gives a revert its library's recycling bin.
 	Libraries LibraryLookup
+	// RootPath answers a root folder's filesystem path.
+	RootPath library.RootFolderPath
+	// Rescan looks again at folders where a revert put files back, so their items are counted from them.
+	Rescan func(ctx context.Context, rootFolderID, categoryID int64, directories []string)
 	// CommitsHeld says whether a media type commits a held unit by hand; its committer is music's.
 	CommitsHeld func(mediaType string) bool
 }
@@ -133,9 +138,37 @@ func (a ImportSessions) RevertImportSession(ctx context.Context, id int64, retai
 	for i, entry := range result.RecycledPaths {
 		paths[i] = entry.RecycledPath
 	}
+	restored := make([]string, len(result.Restored))
+	byRoot := map[int64][]string{}
+	for i, entry := range result.Restored {
+		restored[i] = entry.OriginalPath
+		if entry.RootFolderID != nil {
+			byRoot[*entry.RootFolderID] = append(byRoot[*entry.RootFolderID], filepath.Dir(entry.OriginalPath))
+		}
+	}
+	if a.Rescan != nil && len(categoryIDs) > 0 {
+		for rootFolderID, directories := range byRoot {
+			rootPath, ok := a.RootPath(rootFolderID)
+			if !ok {
+				continue
+			}
+			relative := make([]string, 0, len(directories))
+			for _, directory := range directories {
+				if rel, err := filepath.Rel(rootPath, directory); err == nil {
+					relative = append(relative, rel)
+				}
+			}
+			a.Rescan(ctx, rootFolderID, categoryIDs[0], relative)
+		}
+	}
+	notRestored := make([]string, len(result.NotRestored))
+	for i, entry := range result.NotRestored {
+		notRestored[i] = entry.OriginalPath
+	}
 	return apiserver.ImportRevertResult{
 		UnitsReverted: int64(result.UnitsReverted), WorksDeleted: int64(result.WorksDeleted),
 		EditionsDeleted: int64(result.EditionsDeleted), RecycledPaths: paths,
+		RestoredPaths: restored, NotRestoredPaths: notRestored,
 	}, nil
 }
 

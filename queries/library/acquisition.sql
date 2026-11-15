@@ -110,10 +110,18 @@ DELETE FROM blocklisted_release WHERE expires_at IS NOT NULL AND expires_at <= ?
 -- name: RecycleBin :one
 INSERT INTO recycle_bin (original_path, recycled_path, root_folder_id,
                         media_object_id, acquisition_id, reason, size_bytes,
-                        recycled_at, expires_at, restored_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        recycled_at, expires_at, restored_at, replaced_by_media_object_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, original_path, recycled_path, root_folder_id, media_object_id,
-          acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at;
+          acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at, replaced_by_media_object_id;
+
+-- What an upgrade displaced in favour of this file and the bin still holds.
+-- name: ListRecycledInFavourOf :many
+SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at, replaced_by_media_object_id
+FROM recycle_bin
+WHERE replaced_by_media_object_id = ? AND restored_at IS NULL
+ORDER BY id;
 
 -- name: SetRecycleBinPath :exec
 UPDATE recycle_bin SET recycled_path = ? WHERE id = ?;
@@ -135,13 +143,15 @@ WHERE root_folder_id = ? AND restored_at IS NULL;
 
 -- name: ListExpiredRecycleBin :many
 SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
-       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at,
+       replaced_by_media_object_id
 FROM recycle_bin
 WHERE restored_at IS NULL AND expires_at <= ? ORDER BY expires_at LIMIT ?;
 
 -- name: GetRecycleBin :one
 SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
-       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at,
+       replaced_by_media_object_id
 FROM recycle_bin WHERE id = ?;
 
 -- The global counterpart to RecycledBytesForRoot, for the config.max_bytes
@@ -154,7 +164,8 @@ WHERE restored_at IS NULL;
 -- ListExpiredRecycleBin, which is age-of-expiry, not age-of-entry.
 -- name: ListActiveRecycleBinOldestFirst :many
 SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
-       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at,
+       replaced_by_media_object_id
 FROM recycle_bin
 WHERE restored_at IS NULL ORDER BY recycled_at LIMIT ?;
 
@@ -163,14 +174,16 @@ SELECT CAST(COUNT(*) AS INTEGER) AS held FROM recycle_bin WHERE restored_at IS N
 
 -- name: ListActiveRecycleBinNewestFirst :many
 SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
-       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at,
+       replaced_by_media_object_id
 FROM recycle_bin
 WHERE restored_at IS NULL ORDER BY recycled_at DESC, id DESC LIMIT ?;
 
 -- The per-root counterpart, for the max_percent_of_root guard.
 -- name: ListActiveRecycleBinByRootOldestFirst :many
 SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
-       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at,
+       replaced_by_media_object_id
 FROM recycle_bin
 WHERE restored_at IS NULL AND root_folder_id = sqlc.arg(root_folder_id)
 ORDER BY recycled_at LIMIT sqlc.arg(limit);

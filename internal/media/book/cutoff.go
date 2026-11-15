@@ -26,7 +26,7 @@ type CutoffJob struct {
 	Settings *settings.Cache
 	// Recycle moves a file to the recycle bin; replaced is true for an owned file an upgrade superseded. Nil leaves
 	// every file in place.
-	Recycle func(ctx context.Context, mediaObjectID, categoryID int64, replaced bool) error
+	Recycle func(ctx context.Context, mediaObjectID, categoryID, keeperID int64, replaced bool) error
 	Logger  *slog.Logger
 }
 
