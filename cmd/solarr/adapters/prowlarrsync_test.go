@@ -344,3 +344,71 @@ func TestProwlarrSyncSearchesOneSiteOnce(t *testing.T) {
 		t.Errorf("proxies = %d, want FlareSolverr once", len(proxies))
 	}
 }
+
+// An indexer deleted in Prowlarr is paused here, not left searching a dead address (SYNC-1); an empty answer pauses nothing.
+func TestProwlarrSyncPausesWhatProwlarrNoLongerLists(t *testing.T) {
+	cache := newSweepCache(t)
+	cipher, err := secrets.New(make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache.EnableSecrets(cipher)
+	instance, err := cache.CreateArrInstance(t.Context(), settings.ArrInstanceRequest{
+		App: settings.ArrAppProwlarr, Name: "Prowlarr", BaseURL: "http://prowlarr:9697", Enabled: true,
+	}, secrets.Secret("key"), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := []indexer.ProwlarrIndexer{
+		{ProwlarrID: 1, Name: "Stays", Impl: "newznab", Enabled: true, Supported: true, BaseURL: "http://prowlarr:9697/1", Priority: 10},
+		{ProwlarrID: 2, Name: "Removed", Impl: "newznab", Enabled: true, Supported: true, BaseURL: "http://prowlarr:9697/2", Priority: 20},
+	}
+	prowlarr := adapters.Prowlarr{
+		Cache: cache, Clock: clock.NewFakeAtEpoch(),
+		List: func(context.Context, string, string) ([]indexer.ProwlarrIndexer, error) { return listed, nil },
+	}
+	enabled := func() map[string]bool {
+		t.Helper()
+		found, err := cache.Indexers(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		state := map[string]bool{}
+		for _, one := range found {
+			state[one.Name] = one.Enabled
+		}
+		return state
+	}
+	if result, err := prowlarr.SyncIndexers(t.Context(), instance.ID); err != nil || result.Added != 2 {
+		t.Fatalf("first sync = %+v, %v; want both added", result, err)
+	}
+
+	original := listed
+	listed = nil
+	if _, err := prowlarr.SyncIndexers(t.Context(), instance.ID); err == nil {
+		t.Error("an empty list was taken for an answer; want an error and nothing paused")
+	}
+	if state := enabled(); !state["Stays"] || !state["Removed"] {
+		t.Fatalf("enabled after an empty answer = %v, want both still searching", state)
+	}
+
+	listed = original[:1]
+	result, err := prowlarr.SyncIndexers(t.Context(), instance.ID)
+	if err != nil || result.Gone != 1 {
+		t.Fatalf("sync after removal = %+v, %v; want Gone 1", result, err)
+	}
+	if state := enabled(); !state["Stays"] || state["Removed"] {
+		t.Fatalf("enabled = %v, want the removed one paused and the other untouched", state)
+	}
+	if again, err := prowlarr.SyncIndexers(t.Context(), instance.ID); err != nil || again.Gone != 0 {
+		t.Fatalf("second sync after removal = %+v, %v; want nothing more to pause", again, err)
+	}
+
+	listed = original
+	if back, err := prowlarr.SyncIndexers(t.Context(), instance.ID); err != nil || back.Resumed != 1 {
+		t.Fatalf("sync after it came back = %+v, %v; want it resumed", back, err)
+	}
+	if state := enabled(); !state["Removed"] {
+		t.Fatalf("enabled = %v, want the returned indexer searching again", state)
+	}
+}

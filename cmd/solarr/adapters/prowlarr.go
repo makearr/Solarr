@@ -237,6 +237,8 @@ func SameClientAddress(a, b string) bool {
 // SyncResult counts what one Prowlarr sync did.
 type SyncResult struct {
 	Added, Updated, Paused, Resumed, Skipped int64
+	// Gone counts the indexers synced earlier that Prowlarr no longer lists: they are paused here, not deleted.
+	Gone int64
 	// ClientsAdded were created from Prowlarr's download clients; ClientsWaiting need a secret Prowlarr will not give.
 	ClientsAdded, ClientsWaiting int64
 }
@@ -308,7 +310,9 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 			return result, err
 		}
 	}
+	listedHere := make(map[int64]bool, len(listed))
 	for _, entry := range listed {
+		listedHere[entry.ProwlarrID] = true
 		if (entry.Enabled && !options.ActiveIndexers) || (!entry.Enabled && !options.PausedIndexers) ||
 			(options.SupportedOnly && !entry.Supported) {
 			result.Skipped++
@@ -416,7 +420,39 @@ func (a Prowlarr) syncIndexers(ctx context.Context, instanceID int64) (SyncResul
 		}
 		result.Updated++
 	}
+	if len(listed) == 0 && len(bySource) > 0 {
+		// A Prowlarr that is starting up answers an empty list; pausing every indexer on that is worse than leaving them.
+		failures = append(failures, errors.New("Prowlarr listed no indexers; nothing was paused"))
+	} else {
+		result.Gone, failures = a.pauseGone(ctx, bySource, listedHere, now, failures)
+	}
 	return result, errors.Join(failures...)
+}
+
+// pauseGone pauses the indexers this connection synced that Prowlarr no longer has. They stay: acquisitions, candidates
+// and the blocklist refer to them by id. One that reappears is resumed by the next sync's comparison of Prowlarr's flag.
+func (a Prowlarr) pauseGone(ctx context.Context, bySource map[int64]settings.Indexer, listed map[int64]bool, now int64, failures []error) (int64, []error) {
+	var gone int64
+	for externalID, existing := range bySource {
+		source := existing.Source()
+		if listed[externalID] || source == nil || (!existing.Enabled && !source.UpstreamEnabled) {
+			continue
+		}
+		pausedSource := *source
+		pausedSource.UpstreamEnabled = false
+		request := settings.IndexerRequest{
+			Name: existing.Name, Impl: existing.Impl, BaseURL: existing.BaseURL, Enabled: false, Priority: existing.Priority,
+			EgressProxyURL: existing.Egress().ProxyURL, MusicCategories: existing.StoredMusicCategories(),
+			Definition: existing.Definition(), Source: &pausedSource, ProxyID: existing.ProxyID(),
+			DownloadClientID: existing.DownloadClientID(), QueriesPerHour: existing.QueriesPerHour(),
+		}
+		if _, err := a.Cache.UpdateIndexer(ctx, existing.ID, request, now); err != nil {
+			failures = append(failures, fmt.Errorf("pause %s, gone from Prowlarr: %w", existing.Name, err))
+			continue
+		}
+		gone++
+	}
+	return gone, failures
 }
 
 // upstreamTarget is the site behind a Prowlarr indexer when the options ask for it. ready is set when Solarr can search

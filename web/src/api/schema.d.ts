@@ -7863,6 +7863,11 @@ export interface components {
             skipped: number;
             /**
              * Format: int64
+             * @description Indexers synced earlier that Prowlarr no longer lists; they are paused here
+             */
+            gone?: number;
+            /**
+             * Format: int64
              * @description Download clients created from Prowlarr's
              */
             clients_added?: number;

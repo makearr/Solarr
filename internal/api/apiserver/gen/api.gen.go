@@ -5225,10 +5225,13 @@ type ProwlarrSyncResult struct {
 
 	// ClientsWaiting Download clients that need a secret Prowlarr hides; add them under the connection's download clients.
 	ClientsWaiting *int64 `json:"clients_waiting,omitempty"`
-	Paused         int64  `json:"paused"`
-	Resumed        int64  `json:"resumed"`
-	Skipped        int64  `json:"skipped"`
-	Updated        int64  `json:"updated"`
+
+	// Gone Indexers synced earlier that Prowlarr no longer lists; they are paused here
+	Gone    *int64 `json:"gone,omitempty"`
+	Paused  int64  `json:"paused"`
+	Resumed int64  `json:"resumed"`
+	Skipped int64  `json:"skipped"`
+	Updated int64  `json:"updated"`
 }
 
 // Proxy defines model for Proxy.
