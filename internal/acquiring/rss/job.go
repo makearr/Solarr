@@ -75,9 +75,9 @@ type conditionalSearcher interface {
 type Job struct {
 	config Config
 	mu     sync.Mutex
-	// newest is the latest release each feed was read up to; a restart reads it all again, which only judges
+	// seen remembers which releases each feed has offered; a restart reads it all again, which only judges
 	// again what was judged before.
-	newest map[readMark]time.Time
+	seen map[readMark]*seenReleases
 	// validators are what each feed last answered, sent back so an indexer that honours them answers 304.
 	validators map[readMark]indexer.Validators
 }
@@ -87,7 +87,7 @@ func NewJob(config Config) *Job {
 	if config.Logger == nil {
 		config.Logger = slog.Default()
 	}
-	return &Job{config: config, newest: map[readMark]time.Time{}, validators: map[readMark]indexer.Validators{}}
+	return &Job{config: config, seen: map[readMark]*seenReleases{}, validators: map[readMark]indexer.Validators{}}
 }
 
 // Run reads each media type's feed from each of its indexers and offers the releases not read before. One indexer
@@ -123,10 +123,12 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 				read = append(read, conn.Name+" not modified")
 				continue
 			}
-			unread := j.unread(mark, raws)
+			unread := j.unread(source.Name, conn.Name, mark, raws)
 			releases += len(unread)
 			read = append(read, fmt.Sprintf("%s %d new of %d", conn.Name, len(unread), len(raws)))
 			tally := source.Feed.OfferFeed(ctx, conn, unread, j.config.Clock.Now())
+			// Remembered only once offered, so a cancelled sync offers them again.
+			j.seenOf(mark).add(unread)
 			total.Judged, total.Sent, total.Held = total.Judged+tally.Judged, total.Sent+tally.Sent, total.Held+tally.Held
 		}
 		// Logged when nothing matched too: the feed being read is what tells a working RSS from a broken one.
@@ -150,17 +152,64 @@ func (j *Job) fetch(ctx context.Context, mark readMark, conn judge.Conn, request
 	return raws, unchanged, err
 }
 
-// unread keeps the releases newer than the last sync read from this feed, and moves its mark.
-func (j *Job) unread(mark readMark, raws []indexer.RawItem) []indexer.RawItem {
-	readTo := j.newest[mark]
+// unread keeps the releases this feed has not offered before. The feed is ordered by when the indexer listed a
+// release, not by its post date, so a release posted earlier than the newest one seen is still new.
+func (j *Job) unread(source, indexerName string, mark readMark, raws []indexer.RawItem) []indexer.RawItem {
+	seen := j.seenOf(mark)
 	kept := raws[:0:0]
 	for _, raw := range raws {
-		if raw.PublishedAt.IsZero() || raw.PublishedAt.After(readTo) {
+		if !seen.has(raw) {
 			kept = append(kept, raw)
 		}
-		if raw.PublishedAt.After(j.newest[mark]) {
-			j.newest[mark] = raw.PublishedAt
-		}
+	}
+	if len(seen.order) > 0 && len(raws) >= FeedLimit && len(kept) == len(raws) {
+		j.config.Logger.Warn("rss sync: feed moved further than one page between syncs", "media_type", source, "indexer", indexerName)
 	}
 	return kept
+}
+
+func (j *Job) seenOf(mark readMark) *seenReleases {
+	seen, ok := j.seen[mark]
+	if !ok {
+		seen = &seenReleases{keys: map[string]struct{}{}}
+		j.seen[mark] = seen
+	}
+	return seen
+}
+
+// maxSeenReleases bounds what one feed remembers: ten pages of it.
+const maxSeenReleases = 10 * FeedLimit
+
+// seenReleases is a bounded set of release keys, oldest forgotten first.
+type seenReleases struct {
+	keys  map[string]struct{}
+	order []string
+}
+
+// releaseKey names a release across syncs: its GUID, else its title and link.
+func releaseKey(raw indexer.RawItem) string {
+	if raw.GUID != "" {
+		return raw.GUID
+	}
+	return raw.Title + "|" + raw.Link
+}
+
+func (s *seenReleases) has(raw indexer.RawItem) bool {
+	_, found := s.keys[releaseKey(raw)]
+	return found
+}
+
+func (s *seenReleases) add(raws []indexer.RawItem) {
+	for _, raw := range raws {
+		key := releaseKey(raw)
+		if _, found := s.keys[key]; found {
+			continue
+		}
+		s.keys[key] = struct{}{}
+		s.order = append(s.order, key)
+	}
+	for len(s.order) > maxSeenReleases {
+		delete(s.keys, s.order[0])
+		s.order = s.order[1:]
+	}
 }

@@ -3,6 +3,7 @@ package rss_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -91,5 +92,87 @@ func TestJob_AFeedAnswering304IsNotJudgedAgain(t *testing.T) {
 	}
 	if !strings.Contains(logged.String(), `indexers="Usenet one not modified"`) {
 		t.Errorf("log lacks the not-modified feed: %s", logged.String())
+	}
+}
+
+// switching is a feed whose answer the test changes between syncs.
+type switching struct{ items *[]indexer.RawItem }
+
+func (s switching) Search(context.Context, indexer.SearchRequest) ([]indexer.RawItem, error) {
+	return *s.items, nil
+}
+
+// offering records the GUIDs each sync offered.
+type offering struct {
+	conns   []judge.Conn
+	offered *[][]string
+}
+
+func (o offering) FeedIndexers(context.Context) ([]judge.Conn, error) { return o.conns, nil }
+func (offering) FeedRequest() indexer.SearchRequest {
+	return indexer.SearchRequest{Function: "music"}
+}
+func (o offering) OfferFeed(_ context.Context, _ judge.Conn, raws []indexer.RawItem, _ time.Time) rss.Tally {
+	var guids []string
+	for _, raw := range raws {
+		guids = append(guids, raw.GUID)
+	}
+	*o.offered = append(*o.offered, guids)
+	return rss.Tally{}
+}
+
+// A release posted before the newest one seen is still new when the indexer lists it late (RSS-1).
+func TestJob_AReleaseListedLateButPostedEarlierIsOffered(t *testing.T) {
+	var logged bytes.Buffer
+	var offered [][]string
+	at := func(seconds int64) time.Time { return time.Unix(1_700_000_000+seconds, 0) }
+	items := []indexer.RawItem{{GUID: "A", PublishedAt: at(10)}, {GUID: "B", PublishedAt: at(20)}}
+	feed := offering{conns: []judge.Conn{{ID: 1, Name: "Usenet", Client: switching{&items}}}, offered: &offered}
+	job := rss.NewJob(rss.Config{
+		Sources: func() []rss.Source { return []rss.Source{{Name: "music", Feed: feed}} },
+		Clock:   clock.NewFakeAtEpoch(),
+		Logger:  slog.New(slog.NewTextHandler(&logged, nil)),
+	})
+	run := func() {
+		t.Helper()
+		if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	}
+	run()
+	items = []indexer.RawItem{{GUID: "C", PublishedAt: at(15)}, items[0], items[1]}
+	run()
+	run()
+	want := [][]string{{"A", "B"}, {"C"}, nil}
+	if fmt.Sprint(offered) != fmt.Sprint(want) {
+		t.Errorf("offered per sync = %v, want %v", offered, want)
+	}
+}
+
+func TestJob_WarnsWhenAFullPageHoldsNothingSeen(t *testing.T) {
+	var logged bytes.Buffer
+	var offered [][]string
+	page := func(prefix string) []indexer.RawItem {
+		items := make([]indexer.RawItem, rss.FeedLimit)
+		for index := range items {
+			items[index] = indexer.RawItem{GUID: fmt.Sprintf("%s-%d", prefix, index)}
+		}
+		return items
+	}
+	items := page("old")
+	feed := offering{conns: []judge.Conn{{ID: 1, Name: "Usenet", Client: switching{&items}}}, offered: &offered}
+	job := rss.NewJob(rss.Config{
+		Sources: func() []rss.Source { return []rss.Source{{Name: "music", Feed: feed}} },
+		Clock:   clock.NewFakeAtEpoch(),
+		Logger:  slog.New(slog.NewTextHandler(&logged, nil)),
+	})
+	for range 2 {
+		if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+			t.Fatal(err)
+		}
+		items = page("new")
+	}
+	if got := strings.Count(logged.String(), "feed moved further than one page between syncs"); got != 1 {
+		t.Errorf("warnings = %d, want one (the first sync has nothing to compare with): %s", got, logged.String())
 	}
 }
