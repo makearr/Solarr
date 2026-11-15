@@ -145,3 +145,23 @@ func TestBlocklist_RemoveAndPurgeExpired(t *testing.T) {
 		t.Errorf("entries after Remove = %+v, want empty", entries)
 	}
 }
+
+// A result list is checked in one read: only this indexer's unexpired guids come back (JUDGE-3).
+func TestBlocklist_BlockedAmongAnswersAWholeListInOneRead(t *testing.T) {
+	opened, _ := newLibrary(t)
+	blocklist := library.NewBlocklistStore(opened)
+	indexerID, other, expiresAt := int64(7), int64(8), int64(50)
+	for _, entry := range []library.NewBlocklistEntry{
+		{IndexerID: &indexerID, GUID: "blocked", Title: "A", Reason: library.BlocklistManual, Source: library.BlocklistSourceUser, CreatedAt: 1},
+		{IndexerID: &indexerID, GUID: "expired", Title: "B", Reason: library.BlocklistStalled, Source: library.BlocklistSourceAuto, CreatedAt: 1, ExpiresAt: &expiresAt},
+		{IndexerID: &other, GUID: "elsewhere", Title: "C", Reason: library.BlocklistManual, Source: library.BlocklistSourceUser, CreatedAt: 1},
+	} {
+		if _, err := blocklist.Create(t.Context(), entry); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := blocklist.BlockedAmong(t.Context(), indexerID, []string{"blocked", "expired", "elsewhere", "fine", ""}, 100)
+	if err != nil || len(got) != 1 || !got["blocked"] {
+		t.Fatalf("BlockedAmong = %v, %v; want only \"blocked\" (expired, other indexer's and unknown ones pass)", got, err)
+	}
+}

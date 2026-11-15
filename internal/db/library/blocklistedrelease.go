@@ -118,6 +118,30 @@ func (b BlocklistStore) IsBlocked(ctx context.Context, indexerID *int64, guid, c
 	return blocked > 0, nil
 }
 
+// BlockedAmong answers which of guids indexerID has blocklisted, unexpired only: the pipeline's check for a whole result list.
+func (b BlocklistStore) BlockedAmong(ctx context.Context, indexerID int64, guids []string, now int64) (map[string]bool, error) {
+	blocked := map[string]bool{}
+	asked := make([]sql.NullString, 0, len(guids))
+	for _, guid := range guids {
+		if guid != "" {
+			asked = append(asked, sql.NullString{String: guid, Valid: true})
+		}
+	}
+	if len(asked) == 0 {
+		return blocked, nil
+	}
+	found, err := librarydb.New(b.store.Read()).BlockedGuidsAmong(ctx, librarydb.BlockedGuidsAmongParams{
+		IndexerID: sql.NullInt64{Int64: indexerID, Valid: true}, Guids: asked, Now: sql.NullInt64{Int64: now, Valid: true},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("blocklisted_release: blocked among: %w", err)
+	}
+	for _, guid := range found {
+		blocked[guid.String] = true
+	}
+	return blocked, nil
+}
+
 // List pages through every entry, oldest first.
 func (b BlocklistStore) List(ctx context.Context, afterID, pageSize int64) ([]BlocklistEntry, error) {
 	rows, err := librarydb.New(b.store.Read()).ListBlocklist(ctx, librarydb.ListBlocklistParams{

@@ -61,13 +61,19 @@ const duplicateSizeTolerance = 0.01
 // punctuation are ignored, size within 1%. Indexers are searched in priority order, so the first find is kept.
 func WithoutCrossIndexerDuplicates(finds []Find) []Find {
 	kept := finds[:0:0]
+	keptTitles := make([]string, 0, len(finds))
 	for _, find := range finds {
-		duplicate := slices.ContainsFunc(kept, func(earlier Find) bool {
-			return cleanTitle(earlier.Raw.Title) == cleanTitle(find.Raw.Title) &&
-				sameSize(earlier.Raw.SizeBytes, find.Raw.SizeBytes)
-		})
+		title := cleanTitle(find.Raw.Title)
+		duplicate := false
+		for position, earlier := range kept {
+			if keptTitles[position] == title && sameSize(earlier.Raw.SizeBytes, find.Raw.SizeBytes) {
+				duplicate = true
+				break
+			}
+		}
 		if !duplicate {
 			kept = append(kept, find)
+			keptTitles = append(keptTitles, title)
 		}
 	}
 	return kept

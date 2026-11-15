@@ -88,6 +88,12 @@ WHERE (expires_at IS NULL OR expires_at > sqlc.arg(now))
   AND ((indexer_id = sqlc.arg(indexer_id) AND guid = sqlc.arg(guid))
        OR (content_hash IS NOT NULL AND content_hash = sqlc.arg(content_hash)));
 
+-- Which of a result list's guids an indexer has blocklisted: one read for the list.
+-- name: BlockedGuidsAmong :many
+SELECT guid FROM blocklisted_release
+WHERE indexer_id = sqlc.arg(indexer_id) AND guid IN (sqlc.slice('guids'))
+  AND (expires_at IS NULL OR expires_at > sqlc.arg(now));
+
 -- name: ListBlocklist :many
 SELECT id, indexer_id, guid, content_hash, title, desired_item_id, reason,
        detail_json, source, expires_at, created_at

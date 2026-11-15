@@ -73,6 +73,8 @@ type Querier interface {
 	// had a source, not a refresh (a manual override must always win, ADR-8).
 	BackfillPersonDetails(ctx context.Context, arg BackfillPersonDetailsParams) error
 	BlockTagSlug(ctx context.Context, arg BlockTagSlugParams) error
+	// Which of a result list's guids an indexer has blocklisted: one read for the list.
+	BlockedGuidsAmong(ctx context.Context, arg BlockedGuidsAmongParams) ([]sql.NullString, error)
 	BlocklistRelease(ctx context.Context, arg BlocklistReleaseParams) (BlocklistedRelease, error)
 	CancelMoveJob(ctx context.Context, arg CancelMoveJobParams) (int64, error)
 	ClearClassificationGenres(ctx context.Context, workID int64) error

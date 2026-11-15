@@ -189,13 +189,17 @@ func (p Pipeline) withoutBlocklisted(ctx context.Context, indexerID int64, raws 
 	if p.Blocklist == nil {
 		return raws, nil
 	}
+	guids := make([]string, 0, len(raws))
+	for _, raw := range raws {
+		guids = append(guids, raw.GUID)
+	}
+	blocked, err := p.Blocklist.BlockedAmong(ctx, indexerID, guids, at.Unix())
+	if err != nil {
+		return nil, err
+	}
 	kept := raws[:0:0]
 	for _, raw := range raws {
-		blocked, err := p.Blocklist.IsBlocked(ctx, &indexerID, raw.GUID, "", at.Unix())
-		if err != nil {
-			return nil, err
-		}
-		if !blocked {
+		if !blocked[raw.GUID] {
 			kept = append(kept, raw)
 		}
 	}

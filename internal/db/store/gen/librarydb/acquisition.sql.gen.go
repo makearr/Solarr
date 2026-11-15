@@ -8,7 +8,56 @@ package librarydb
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
+
+const blockedGuidsAmong = `-- name: BlockedGuidsAmong :many
+SELECT guid FROM blocklisted_release
+WHERE indexer_id = ?1 AND guid IN (/*SLICE:guids*/?)
+  AND (expires_at IS NULL OR expires_at > ?3)
+`
+
+type BlockedGuidsAmongParams struct {
+	IndexerID sql.NullInt64
+	Guids     []sql.NullString
+	Now       sql.NullInt64
+}
+
+// Which of a result list's guids an indexer has blocklisted: one read for the list.
+func (q *Queries) BlockedGuidsAmong(ctx context.Context, arg BlockedGuidsAmongParams) ([]sql.NullString, error) {
+	query := blockedGuidsAmong
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.IndexerID)
+	if len(arg.Guids) > 0 {
+		for _, v := range arg.Guids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:guids*/?", strings.Repeat(",?", len(arg.Guids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:guids*/?", "NULL", 1)
+	}
+	queryParams = append(queryParams, arg.Now)
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []sql.NullString{}
+	for rows.Next() {
+		var guid sql.NullString
+		if err := rows.Scan(&guid); err != nil {
+			return nil, err
+		}
+		items = append(items, guid)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const blocklistRelease = `-- name: BlocklistRelease :one
 INSERT INTO blocklisted_release (indexer_id, guid, content_hash, title,
