@@ -144,6 +144,7 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 		var named FolderGuess
 		if folder != "" {
 			named = ShowNFOIDs(c.config.FS, path.Join(root.Path, folder))
+			named.Path = path.Join(root.Path, folder)
 		}
 		var series int64
 		var candidates []model.Identification

@@ -42,11 +42,23 @@ func TestADirectoryOfSpecialsIsPlacedOnTheSeriesItsFolderWasPlacedOn(t *testing.
 	if placed == 0 {
 		t.Fatal("the folder was not placed")
 	}
-	elsewhere, other := newService(t, noSearchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: errors.New("down")})
-	later := tv.Resolver{Service: elsewhere, Reader: library.NewSeriesReader(other), Clock: first.Clock, DefaultProfileID: 1, Categories: categories{}, Resolved: memory}
+	later := tv.Resolver{Service: first, Reader: library.NewSeriesReader(opened), Clock: first.Clock, DefaultProfileID: 1, Categories: categories{}, Resolved: memory}
 	got, _ := later.ResolveFolder(t.Context(), 3, "Example Show", []string{"Example Show/Specials/Example Show - S00E01.mp4"}, tv.FolderGuess{})
 	if got != placed {
 		t.Errorf("specials resolved to %d, want the folder's series %d", got, placed)
+	}
+
+	// RES-1/RES-2: a series the library no longer holds is not answered from memory, and a folder of the same name at
+	// another path is another folder.
+	elsewhere, other := newService(t, noSearchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: errors.New("down")})
+	gone := tv.Resolver{Logger: slog.Default(), Service: elsewhere, Reader: library.NewSeriesReader(other), Clock: first.Clock, DefaultProfileID: 1, Categories: categories{}, Resolved: memory}
+	if got, _ := gone.ResolveFolder(t.Context(), 3, "Example Show", []string{"Example Show/Specials/x - S00E01.mp4"}, tv.FolderGuess{}); got == placed {
+		t.Errorf("a series the library lacks was answered from memory (%d)", got)
+	}
+	other1 := tv.FolderGuess{Path: "/downloads/a/Example Show"}
+	later.ResolveFolder(t.Context(), 3, "Example Show", []string{"Example Show/Season 1/Example Show - S01E01.mp4"}, tv.FolderGuess{Path: "/downloads/b/Example Show"})
+	if got, _ := gone.ResolveFolder(t.Context(), 3, "Example Show", []string{"Example Show/Season 1/x - S01E01.mp4"}, other1); got == placed {
+		t.Errorf("a folder of another path took the first folder's series (%d)", got)
 	}
 }
 

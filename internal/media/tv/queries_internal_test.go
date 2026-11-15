@@ -3,6 +3,7 @@ package tv
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/db/library"
@@ -92,5 +93,35 @@ func TestAirDateCoversADoubleBillAndAOneDayDrift(t *testing.T) {
 	}
 	if got := w.airedOn("2024-05-02"); got != nil {
 		t.Errorf("two candidates a day away = %v, want none", got)
+	}
+}
+
+// TRACK-1 step 4: an episode the grabbed release was not judged to hold is refused; an unnamed expectation allows anything.
+func TestNotInGrabbedReleaseRefusesOtherEpisodes(t *testing.T) {
+	found := []library.ResolvedPart{{MediaRef: MediaRef(1, 5)}}
+	if rejection := notInGrabbedRelease([]string{MediaRef(1, 5), MediaRef(1, 6)}, found); rejection != nil {
+		t.Errorf("an episode of the release was refused: %+v", rejection)
+	}
+	if rejection := notInGrabbedRelease([]string{MediaRef(1, 6)}, found); rejection == nil {
+		t.Error("an episode of another release was accepted")
+	}
+	if rejection := notInGrabbedRelease([]string{MediaRef(2, 5)}, found); rejection == nil {
+		t.Error("the same number in another season was accepted")
+	}
+	if rejection := notInGrabbedRelease(nil, found); rejection != nil {
+		t.Errorf("no expectation refused %+v", rejection)
+	}
+}
+
+// RES-2: a folder's series is remembered for one run, not for the life of the process.
+func TestFolderMemoryForgetsAnOldEntry(t *testing.T) {
+	var memory FolderMemory
+	start := time.Unix(1_000_000, 0)
+	memory.remember("3|show", 7, start)
+	if id, known := memory.recall("3|show", start.Add(time.Minute)); !known || id != 7 {
+		t.Errorf("a fresh entry = %d, %v, want 7", id, known)
+	}
+	if _, known := memory.recall("3|show", start.Add(time.Hour)); known {
+		t.Error("an hour-old entry was still remembered")
 	}
 }

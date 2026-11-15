@@ -124,7 +124,7 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 	if request.AcquisitionID != nil {
 		seeded, upgrade = i.seedSeries(ctx, *request.AcquisitionID)
 		if request.ReleaseTitle == "" {
-			request.ReleaseTitle = i.releaseTitle(ctx, *request.AcquisitionID)
+			request.ReleaseTitle, request.ExpectedParts = i.grabbed(ctx, *request.AcquisitionID)
 		}
 	}
 	for index, unit := range request.Units {
@@ -136,6 +136,11 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 				folder = path.Base(unit.Directory)
 			}
 			named := ShowNFOIDs(i.config.FS, path.Join(request.SourcePath, unit.Directory))
+			// A season or specials folder is placed with the series folder above it, so the two share one memory.
+			named.Path = path.Join(request.SourcePath, unit.Directory)
+			if seasonFolder.MatchString(path.Base(unit.Directory)) {
+				named.Path = path.Dir(named.Path)
+			}
 			workID, candidates = i.config.Resolver.ResolveFolder(ctx, request.CategoryID, folder, []string{firstMedia(unit)}, named)
 		}
 		if workID <= 0 {
@@ -227,7 +232,7 @@ func (i Importer) CommitHeld(ctx context.Context, request batch.HeldRequest) (li
 	}
 	placeRequest := batch.Request{SessionID: request.SessionID, CategoryID: request.CategoryID, SourcePath: request.SourcePath}
 	if request.AcquisitionID != nil {
-		placeRequest.ReleaseTitle = i.releaseTitle(ctx, *request.AcquisitionID)
+		placeRequest.ReleaseTitle, placeRequest.ExpectedParts = i.grabbed(ctx, *request.AcquisitionID)
 	}
 	placed, err := i.placeUnit(ctx, placeRequest, request.Unit, workID, upgrade)
 	if errors.Is(err, errNothingToPlace) || errors.Is(err, errDuplicate) {
@@ -253,13 +258,14 @@ func firstMedia(unit inspect.Unit) string {
 	return ""
 }
 
-// releaseTitle is the release name a download was grabbed as, empty when the acquisition cannot be read.
-func (i Importer) releaseTitle(ctx context.Context, acquisitionID int64) string {
+// grabbed is the release name a download was grabbed as and the episodes it was judged to hold; both empty when the
+// acquisition cannot be read.
+func (i Importer) grabbed(ctx context.Context, acquisitionID int64) (title string, parts []string) {
 	acquisition, err := i.config.Acquisitions.Get(ctx, acquisitionID)
 	if err != nil {
-		return ""
+		return "", nil
 	}
-	return acquisition.CandidateTitle
+	return acquisition.CandidateTitle, acquisition.Parts
 }
 
 // seedSeries is the series a download was grabbed for: its desired item's work; upgrade says the item was below its
@@ -419,6 +425,10 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		// are measured.
 		fresh := slices.DeleteFunc(slices.Clone(parts), func(part library.ResolvedPart) bool { return present[part.MediaRef] && !replaceableHere[part.MediaRef] })
 		if len(fresh) == 0 {
+			continue
+		}
+		if rejection := notInGrabbedRelease(request.ExpectedParts, fresh); rejection != nil {
+			rejections = append(rejections, *rejection)
 			continue
 		}
 		replacing := slices.ContainsFunc(fresh, func(part library.ResolvedPart) bool { return present[part.MediaRef] })
@@ -690,4 +700,24 @@ func idsOf(ids map[string]string) IDs {
 	out.TMDB, _ = strconv.ParseInt(ids[ProviderTMDB], 10, 64)
 	out.IMDb = ids[ProviderIMDb]
 	return out
+}
+
+// notInGrabbedRelease says no to episodes the grabbed release was not judged to hold; a download that names no
+// episodes (a manual import, an old row) expects anything.
+func notInGrabbedRelease(expected []string, found []library.ResolvedPart) *model.Rejection {
+	if len(expected) == 0 {
+		return nil
+	}
+	var grabbed, got []int
+	for _, ref := range expected {
+		if season, number, ok := ParseMediaRef(ref); ok {
+			grabbed = append(grabbed, season*1000+number)
+		}
+	}
+	for _, part := range found {
+		if season, number, ok := ParseMediaRef(part.MediaRef); ok {
+			got = append(got, season*1000+number)
+		}
+	}
+	return rules.NotInRelease(grabbed, got, false)
 }

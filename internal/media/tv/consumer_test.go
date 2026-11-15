@@ -281,9 +281,16 @@ func TestIsVideoSkipsSamplesAndExtras(t *testing.T) {
 }
 
 // namedSkyhook searches to a fixed list and answers each id with its own series.
-type namedSkyhook struct{ shows []skyhook.Series }
+type namedSkyhook struct {
+	shows []skyhook.Series
+	// failing are the ids whose episode list cannot be read.
+	failing map[int64]bool
+}
 
 func (n namedSkyhook) Series(_ context.Context, id int64) (skyhook.Series, error) {
+	if n.failing[id] {
+		return skyhook.Series{}, errors.New("provider timed out")
+	}
 	for _, show := range n.shows {
 		if show.TVDBID == id {
 			return show, nil
@@ -357,6 +364,21 @@ func TestScanSettlesNamesakesTheEpisodesTieByEachSeasonsEpisodeCount(t *testing.
 	list := scanOne(t, namedSkyhook{shows: []skyhook.Series{showWith(1, "Example Show", "2001-01-01", 12), showWith(2, "Example Show", "2004-01-01", 10)}}, files...)
 	if len(list) != 1 || list[0].Counts.Total != 10 || list[0].Counts.Present != 10 {
 		t.Fatalf("list = %+v, want the 10-episode series, whose season the folder holds whole", list)
+	}
+}
+
+// RES-3: when the rival's episodes cannot be read the comparison is not decided, so nothing is picked on a guess.
+func TestScanLeavesNamesakesToAPersonWhenARivalCannotBeRead(t *testing.T) {
+	var files []string
+	for number := 1; number <= 10; number++ {
+		files = append(files, fmt.Sprintf("Example Show/Season 1/Example Show - S01E%02d.mkv", number))
+	}
+	list := scanOne(t, namedSkyhook{
+		shows:   []skyhook.Series{showWith(1, "Example Show", "2001-01-01", 10), showWith(2, "Example Show", "2004-01-01", 12)},
+		failing: map[int64]bool{2: true},
+	}, files...)
+	if len(list) != 0 {
+		t.Fatalf("list = %+v, want nothing added: the other series could not be compared", list)
 	}
 }
 

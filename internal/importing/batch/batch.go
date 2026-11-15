@@ -53,7 +53,9 @@ type Request struct {
 	// ReleaseTitle is the release name the download was grabbed as, the one place an obfuscated download keeps it;
 	// empty for a folder a person pointed at.
 	ReleaseTitle string
-	Units        []inspect.Unit
+	// ExpectedParts are the media refs the grabbed release was judged to hold; empty expects anything (a manual import, or a whole item).
+	ExpectedParts []string
+	Units         []inspect.Unit
 	// UnitIDs is parallel to Units: the import_unit rows already recorded for them.
 	UnitIDs []int64
 	// Preview holds every unit that would commit for a person instead.

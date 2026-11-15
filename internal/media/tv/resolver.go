@@ -1,6 +1,7 @@
 package tv
 
 import (
+	"cmp"
 	"context"
 	"log/slog"
 	"path"
@@ -57,6 +58,9 @@ type FolderGuess struct {
 	TVDBID int64
 	TMDBID int64
 	IMDbID string
+	// Path is the folder's full path, which keys what was remembered of it: two folders of one name in different places
+	// are different series. Empty keys by the folder name alone.
+	Path string
 }
 
 var (
@@ -106,50 +110,92 @@ func (c Resolver) ResolveFiles(ctx context.Context, categoryID int64, folder str
 
 // ResolveFolder is ResolveFiles with the ids the folder's own tvshow.nfo names; an id in the folder's name wins over them.
 func (c Resolver) ResolveFolder(ctx context.Context, categoryID int64, folder string, relPaths []string, named FolderGuess) (int64, []model.Identification) {
-	key := strconv.FormatInt(categoryID, 10) + "|" + strings.ToLower(folder)
+	key := strconv.FormatInt(categoryID, 10) + "|" + strings.ToLower(cmp.Or(named.Path, folder))
 	if c.Locks != nil {
 		defer c.Locks.Lock(key)()
 	}
 	if folder == "" {
 		return c.resolveFolder(ctx, categoryID, folder, relPaths, named)
 	}
-	if id, known := c.Resolved.recall(key); known {
+	if id, known := c.recall(ctx, key); known {
 		return id, nil
 	}
 	id, candidates := c.resolveFolder(ctx, categoryID, folder, relPaths, named)
-	if id != 0 {
-		c.Resolved.remember(key, id)
+	// An excluded series is no place to put files, and removing the exclusion must take effect at once.
+	if id > 0 {
+		c.Resolved.remember(key, id, c.now())
 	}
 	return id, candidates
 }
+
+func (c Resolver) now() time.Time {
+	if c.Clock == nil {
+		return time.Time{}
+	}
+	return c.Clock.Now()
+}
+
+// recall answers the series a folder was placed on, unless the memory is stale or the series is gone.
+func (c Resolver) recall(ctx context.Context, key string) (int64, bool) {
+	id, known := c.Resolved.recall(key, c.now())
+	if !known {
+		return 0, false
+	}
+	if _, err := c.Reader.Basics(ctx, id); err != nil {
+		c.Resolved.forget(key)
+		return 0, false
+	}
+	return id, true
+}
+
+// folderMemoryLife is how long a folder's series is remembered: one scan or import run, not the life of the process.
+const folderMemoryLife = 10 * time.Minute
 
 // FolderMemory is the series each folder was placed on, so a directory of specials that alone cannot tell the series
 // (its episodes were what decided the rest of the folder) is placed with the others.
 type FolderMemory struct {
 	mu     sync.Mutex
-	series map[string]int64
+	series map[string]rememberedSeries
 }
 
-func (m *FolderMemory) recall(key string) (int64, bool) {
+type rememberedSeries struct {
+	id int64
+	at time.Time
+}
+
+func (m *FolderMemory) recall(key string, now time.Time) (int64, bool) {
 	if m == nil {
 		return 0, false
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	id, known := m.series[key]
-	return id, known
+	found, known := m.series[key]
+	if known && now.Sub(found.at) > folderMemoryLife {
+		delete(m.series, key)
+		return 0, false
+	}
+	return found.id, known
 }
 
-func (m *FolderMemory) remember(key string, id int64) {
+func (m *FolderMemory) remember(key string, id int64, now time.Time) {
 	if m == nil {
 		return
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.series == nil {
-		m.series = map[string]int64{}
+		m.series = map[string]rememberedSeries{}
 	}
-	m.series[key] = id
+	m.series[key] = rememberedSeries{id: id, at: now}
+}
+
+func (m *FolderMemory) forget(key string) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.series, key)
 }
 
 func (c Resolver) resolveFolder(ctx context.Context, categoryID int64, folder string, relPaths []string, named FolderGuess) (int64, []model.Identification) {
@@ -495,14 +541,18 @@ func (c Resolver) byEpisodes(ctx context.Context, candidates []Candidate, relPat
 		return Candidate{}, false
 	}
 	best, second, bestAt, bestNumbers := -1.0, -1.0, -1, 0.0
+	judged := 0
 	for index, candidate := range candidates {
 		if candidate.TVDBID == 0 {
 			continue
 		}
 		show, err := c.Service.Skyhook.Series(ctx, candidate.TVDBID)
 		if err != nil {
-			continue
+			// A namesake that cannot be judged leaves the others looking like the only fit.
+			c.undecided(ctx, candidate, err)
+			return Candidate{}, false
 		}
+		judged++
 		seen := make(map[numbering]bool, len(show.Episodes))
 		titleOf := make(map[numbering]string, len(show.Episodes))
 		seenAbsolute := map[int]bool{}
@@ -543,7 +593,7 @@ func (c Resolver) byEpisodes(ctx context.Context, candidates []Candidate, relPat
 			second = fit
 		}
 	}
-	if bestAt < 0 || bestNumbers < episodeFit || best-max(second, 0) < episodeLead {
+	if judged < 2 || bestAt < 0 || bestNumbers < episodeFit || best-max(second, 0) < episodeLead {
 		return Candidate{}, false
 	}
 	return candidates[bestAt], true
@@ -579,7 +629,8 @@ func (c Resolver) bySeasonCounts(ctx context.Context, candidates []Candidate, re
 		}
 		show, err := c.Service.Skyhook.Series(ctx, candidate.TVDBID)
 		if err != nil {
-			continue
+			c.undecided(ctx, candidate, err)
+			return Candidate{}, false
 		}
 		listed := map[int]int{}
 		for _, episode := range show.Episodes {
@@ -593,6 +644,14 @@ func (c Resolver) bySeasonCounts(ctx context.Context, candidates []Candidate, re
 		return Candidate{}, false
 	}
 	return fitting[0], true
+}
+
+// undecided says a comparison of namesakes was abandoned because one could not be read; the folder goes to Review and
+// the next scan tries again.
+func (c Resolver) undecided(ctx context.Context, candidate Candidate, err error) {
+	if ctx.Err() == nil && c.Logger != nil {
+		c.Logger.Warn("namesakes not compared: a series could not be read", "tvdb_id", candidate.TVDBID, "error", err)
+	}
 }
 
 // seasonCountsMatch is true when the folder has at least one numbered season and each has the listed episode count.
