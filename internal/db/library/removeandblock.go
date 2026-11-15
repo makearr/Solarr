@@ -56,9 +56,8 @@ type RemoveAndBlockRequest struct {
 	BlocklistTitle string
 	DesiredItemID  *int64
 
-	// Reopen is step 4: every desired_item this file satisfied is detached
-	// from it and recomputed, so it returns to wanting the real thing rather
-	// than silently under-reporting what it already has.
+	// Reopen detaches the file from every desired_item it satisfied and recomputes them even when the file stays;
+	// a recycled file always does, so no item keeps counting a file that is gone.
 	Reopen bool
 
 	At int64
@@ -99,32 +98,25 @@ func NewRemoveAndBlock(
 }
 
 // Do runs every requested step. Membership (which desired_item this file
-// satisfies) is read before anything is deleted, since Recycle bin's own
-// media_object cleanup would otherwise cascade it away first -- Reopen then
-// explicitly detaches each one regardless, which is a harmless no-op for
-// whatever the cascade already removed and the only path for whatever it
-// did not (Recycle bin not requested).
+// satisfies) is read before anything is deleted, since the media_object's removal
+// cascades it away; each item is then detached and recounted.
 func (r RemoveAndBlock) Do(ctx context.Context, req RemoveAndBlockRequest) (RemoveAndBlockResult, error) {
 	var result RemoveAndBlockResult
 
-	var membership []FileMembership
-	if req.Reopen {
-		var err error
-		membership, err = r.desired.ItemsForFile(ctx, req.MediaObjectID)
+	membership, err := r.desired.ItemsForFile(ctx, req.MediaObjectID)
+	if err != nil {
+		return result, fmt.Errorf("library: remove and block: %w", err)
+	}
+
+	// What the person asked to be blocked is written before anything moves: a later failure then still leaves the
+	// block in place, and a retry that finds the file gone has nothing left to repeat.
+	if req.Block {
+		size, err := r.physical.ObjectSize(ctx, req.MediaObjectID)
 		if err != nil {
 			return result, fmt.Errorf("library: remove and block: %w", err)
 		}
-	}
-
-	if req.RecycleBin {
-		if err := r.doRecycle(ctx, req, &result); err != nil {
-			return result, err
-		}
-	}
-
-	if req.Block {
 		block, err := r.blocks.Create(ctx, NewBlock{
-			OSHash: req.OSHash, QuickHash: req.QuickHash, SizeBytes: totalBytes(result.RecycledPaths),
+			OSHash: req.OSHash, QuickHash: req.QuickHash, SizeBytes: size,
 			Reason: req.BlockReason, Note: req.BlockNote, Title: req.BlockTitle,
 			ReleaseGroup: req.ReleaseGroup, Source: req.BlockSource, UserID: req.BlockUserID,
 			CreatedAt: req.At,
@@ -147,7 +139,14 @@ func (r RemoveAndBlock) Do(ctx context.Context, req RemoveAndBlockRequest) (Remo
 		result.Blocklisted = &entry
 	}
 
-	if req.Reopen {
+	if req.RecycleBin {
+		if err := r.doRecycle(ctx, req, &result); err != nil {
+			return result, err
+		}
+	}
+
+	// A file that left the library always leaves the counts true; Reopen asks for the same of a file that stays.
+	if req.RecycleBin || req.Reopen {
 		if err := r.doReopen(ctx, req.MediaObjectID, membership, &result); err != nil {
 			return result, err
 		}

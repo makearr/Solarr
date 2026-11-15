@@ -293,3 +293,54 @@ func TestRemoveAndBlock_MissingRootPathIsAnError(t *testing.T) {
 		t.Fatal("Do succeeded, want it refused: no known path for root folder 999")
 	}
 }
+
+func removalFixture(t *testing.T) (library.RemoveAndBlock, *fsx.Mem, librarydb.DesiredItem, librarydb.MediaObject, *store.Store) {
+	t.Helper()
+	opened, _ := newLibrary(t)
+	fake := clock.NewFakeAtEpoch()
+	fsys := fsx.NewMem(fake)
+	putTestFile(t, fsys, "/media/root/Artist/Album/track.flac", []byte("fake audio"))
+	work := createWork(t, opened, "music", "Fake Album")
+	item := createDesired(t, opened, work.ID, "SET", 1)
+	object := createObject(t, opened, "quick-1", 4096)
+	addPath(t, opened, object.ID, 1, "Artist/Album/track.flac")
+	attach(t, opened, item.ID, object.ID, "primary", "disc1:track1")
+	if err := library.NewDesired(opened).RecomputeAlbum(t.Context(), item.ID, work.ID); err != nil {
+		t.Fatal(err)
+	}
+	action := library.NewRemoveAndBlock(
+		library.NewRecycleBin(opened, fsys, fake), library.NewBlockedContentStore(opened), library.NewBlocklistStore(opened),
+		library.NewDesired(opened), library.NewPhysical(opened), rootPathLookup(map[int64]string{1: "/media/root"}),
+	)
+	return action, fsys, item, object, opened
+}
+
+// A recycled file always leaves the counts true, whether or not a search was asked for (REMOVE-1).
+func TestRemoveAndBlock_ARecycledFileIsNeverStillCounted(t *testing.T) {
+	action, _, item, object, opened := removalFixture(t)
+	if _, err := action.Do(t.Context(), library.RemoveAndBlockRequest{
+		MediaObjectID: object.ID, RecycleBin: true, RecycleReason: library.ReasonUserDelete, RecycleRetain: time.Hour, At: 100,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	after, err := librarydb.New(opened.Read()).GetDesiredItem(t.Context(), item.ID)
+	if err != nil || after.PresentCount != 0 || after.State != "MISSING" {
+		t.Fatalf("item after = present %d state %s, %v; want 0 and MISSING", after.PresentCount, after.State, err)
+	}
+}
+
+// The block and the blocklist entry are written before the file moves: if one fails the file stays where it is.
+func TestRemoveAndBlock_AFailingBlocklistLeavesTheFileInPlace(t *testing.T) {
+	action, fsys, _, object, _ := removalFixture(t)
+	_, err := action.Do(t.Context(), library.RemoveAndBlockRequest{
+		MediaObjectID: object.ID, RecycleBin: true, RecycleReason: library.ReasonJunk, RecycleRetain: time.Hour,
+		Blocklist: true, // no guid and no content hash: nothing to blocklist by
+		At:        100,
+	})
+	if err == nil {
+		t.Fatal("Do succeeded with a blocklist entry that cannot be written")
+	}
+	if _, statErr := fsys.Stat("/media/root/Artist/Album/track.flac"); statErr != nil {
+		t.Errorf("the file moved though the blocklist failed: %v", statErr)
+	}
+}

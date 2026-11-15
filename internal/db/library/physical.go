@@ -479,6 +479,15 @@ func (p Physical) Exists(ctx context.Context, mediaObjectID int64) (bool, error)
 	return true, nil
 }
 
+// ObjectSize answers a media_object's size in bytes.
+func (p Physical) ObjectSize(ctx context.Context, mediaObjectID int64) (int64, error) {
+	object, err := librarydb.New(p.store.Read()).GetMediaObject(ctx, mediaObjectID)
+	if err != nil {
+		return 0, fmt.Errorf("library: size of object %d: %w", mediaObjectID, err)
+	}
+	return object.SizeBytes, nil
+}
+
 // PathsForObject answers every library_path row for one media_object,
 // primary first -- ADR-11 cross-entry hardlinking means one set of bytes can
 // have more than one path, which a caller removing a file everywhere those
