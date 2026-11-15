@@ -3,7 +3,9 @@ package library
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
@@ -51,25 +53,28 @@ func (q RecycleBin) Sweep(
 	ctx context.Context, cfg RecycleBinConfig, capacity RootCapacity, rootFolderIDs []int64,
 ) (RecycleBinSweepResult, error) {
 	var result RecycleBinSweepResult
+	// Entries that could not be purged this run (an I/O error, a root that is offline) are passed over, not retried
+	// and not allowed to hold up the entries behind them.
+	skipped := map[int64]bool{}
 
-	if err := q.sweepExpired(ctx, &result); err != nil {
+	if err := q.sweepExpired(ctx, &result, skipped); err != nil {
 		return result, err
 	}
 	if cfg.MaxBytes > 0 {
-		if err := q.sweepGlobalBudget(ctx, &result, cfg.MaxBytes); err != nil {
+		if err := q.sweepGlobalBudget(ctx, &result, skipped, cfg.MaxBytes); err != nil {
 			return result, err
 		}
 	}
 	if cfg.MaxPercentOfRoot > 0 && capacity != nil {
 		for _, rootFolderID := range rootFolderIDs {
-			if err := q.sweepRootBudget(ctx, &result, rootFolderID, cfg.MaxPercentOfRoot, capacity); err != nil {
+			if err := q.sweepRootBudget(ctx, &result, skipped, rootFolderID, cfg.MaxPercentOfRoot, capacity); err != nil {
 				return result, err
 			}
 		}
 	}
 	if (cfg.MinFreeBytes > 0 || cfg.MinFreePercent > 0) && cfg.Free != nil {
 		for _, rootFolderID := range rootFolderIDs {
-			if err := q.sweepRootFloor(ctx, &result, rootFolderID, cfg); err != nil {
+			if err := q.sweepRootFloor(ctx, &result, skipped, rootFolderID, cfg); err != nil {
 				return result, err
 			}
 		}
@@ -89,57 +94,47 @@ func freeFloor(minBytes int64, minPercent float64, totalBytes int64) int64 {
 }
 
 // sweepRootFloor empties a root's bin, oldest first, until the root has its minimum free space or the bin is empty.
-func (q RecycleBin) sweepRootFloor(ctx context.Context, result *RecycleBinSweepResult, rootFolderID int64, cfg RecycleBinConfig) error {
+func (q RecycleBin) sweepRootFloor(
+	ctx context.Context, result *RecycleBinSweepResult, skipped map[int64]bool, rootFolderID int64, cfg RecycleBinConfig,
+) error {
 	free, total, ok := cfg.Free(rootFolderID)
 	if !ok {
 		return nil
 	}
 	floor := freeFloor(cfg.MinFreeBytes, cfg.MinFreePercent, total)
 	for free < floor {
-		oldest, err := librarydb.New(q.store.Read()).ListActiveRecycleBinByRootOldestFirst(ctx,
-			librarydb.ListActiveRecycleBinByRootOldestFirstParams{
-				RootFolderID: sql.NullInt64{Int64: rootFolderID, Valid: true}, Limit: 1,
-			})
+		oldest, err := q.oldestOfRoot(ctx, rootFolderID, skipped)
 		if err != nil {
-			return fmt.Errorf("recycle bin: list oldest for root %d: %w", rootFolderID, err)
+			return err
 		}
-		if len(oldest) == 0 {
+		if oldest == nil {
 			return nil
 		}
 		before := result.BytesFreed
-		q.purgeRecycleBinRows(ctx, result, oldest)
-		if result.BytesFreed == before {
-			return nil // this entry failed to purge or held nothing -- stop rather than retry it forever
-		}
+		q.purgeRecycleBinRows(ctx, result, skipped, []librarydb.RecycleBin{*oldest})
 		free += result.BytesFreed - before
 	}
 	return nil
 }
 
-func (q RecycleBin) sweepExpired(ctx context.Context, result *RecycleBinSweepResult) error {
+func (q RecycleBin) sweepExpired(ctx context.Context, result *RecycleBinSweepResult, skipped map[int64]bool) error {
 	now := q.clock.Now().Unix()
 	for {
 		expired, err := librarydb.New(q.store.Read()).ListExpiredRecycleBin(ctx, librarydb.ListExpiredRecycleBinParams{
-			ExpiresAt: now, Limit: recycleBinSweepBatchSize,
+			ExpiresAt: now, Limit: recycleBinSweepBatchSize + int64(len(skipped)),
 		})
 		if err != nil {
 			return fmt.Errorf("recycle bin: list expired: %w", err)
 		}
+		expired = slices.DeleteFunc(expired, func(row librarydb.RecycleBin) bool { return skipped[row.ID] })
 		if len(expired) == 0 {
 			return nil
 		}
-		before := result.Purged
-		q.purgeRecycleBinRows(ctx, result, expired)
-		if result.Purged == before {
-			return nil // the whole batch failed to purge -- stop rather than retry the same rows forever
-		}
-		if len(expired) < recycleBinSweepBatchSize {
-			return nil
-		}
+		q.purgeRecycleBinRows(ctx, result, skipped, expired)
 	}
 }
 
-func (q RecycleBin) sweepGlobalBudget(ctx context.Context, result *RecycleBinSweepResult, maxBytes int64) error {
+func (q RecycleBin) sweepGlobalBudget(ctx context.Context, result *RecycleBinSweepResult, skipped map[int64]bool, maxBytes int64) error {
 	for {
 		held, err := librarydb.New(q.store.Read()).SumRecycledBytes(ctx)
 		if err != nil {
@@ -150,23 +145,43 @@ func (q RecycleBin) sweepGlobalBudget(ctx context.Context, result *RecycleBinSwe
 		}
 		// One at a time, re-checking the budget after each -- a whole batch
 		// can easily overshoot a small budget, purging more than necessary.
-		oldest, err := librarydb.New(q.store.Read()).ListActiveRecycleBinOldestFirst(ctx, 1)
+		oldest, err := q.oldestOfRoot(ctx, 0, skipped)
 		if err != nil {
-			return fmt.Errorf("recycle bin: list oldest: %w", err)
+			return err
 		}
-		if len(oldest) == 0 {
+		if oldest == nil {
 			return nil // held > maxBytes but nothing left to evict -- report and stop, not loop forever
 		}
-		before := result.Purged
-		q.purgeRecycleBinRows(ctx, result, oldest)
-		if result.Purged == before {
-			return nil // this entry failed to purge -- stop rather than retry it forever
-		}
+		q.purgeRecycleBinRows(ctx, result, skipped, []librarydb.RecycleBin{*oldest})
 	}
 }
 
+// oldestOfRoot is the oldest active entry of the root (every root for zero) that this run has not already passed over.
+func (q RecycleBin) oldestOfRoot(ctx context.Context, rootFolderID int64, skipped map[int64]bool) (*librarydb.RecycleBin, error) {
+	reader := librarydb.New(q.store.Read())
+	limit := int64(len(skipped)) + 1
+	var rows []librarydb.RecycleBin
+	var err error
+	if rootFolderID == 0 {
+		rows, err = reader.ListActiveRecycleBinOldestFirst(ctx, limit)
+	} else {
+		rows, err = reader.ListActiveRecycleBinByRootOldestFirst(ctx, librarydb.ListActiveRecycleBinByRootOldestFirstParams{
+			RootFolderID: sql.NullInt64{Int64: rootFolderID, Valid: true}, Limit: limit,
+		})
+	}
+	if err != nil {
+		return nil, fmt.Errorf("recycle bin: list oldest: %w", err)
+	}
+	for _, row := range rows {
+		if !skipped[row.ID] {
+			return &row, nil
+		}
+	}
+	return nil, nil
+}
+
 func (q RecycleBin) sweepRootBudget(
-	ctx context.Context, result *RecycleBinSweepResult, rootFolderID int64, maxPercent float64, capacity RootCapacity,
+	ctx context.Context, result *RecycleBinSweepResult, skipped map[int64]bool, rootFolderID int64, maxPercent float64, capacity RootCapacity,
 ) error {
 	totalBytes, ok := capacity(rootFolderID)
 	if !ok || totalBytes <= 0 {
@@ -198,32 +213,31 @@ func (q RecycleBin) sweepRootBudget(
 			return nil
 		}
 		// One at a time, same reasoning as sweepGlobalBudget.
-		oldest, err := librarydb.New(q.store.Read()).ListActiveRecycleBinByRootOldestFirst(ctx,
-			librarydb.ListActiveRecycleBinByRootOldestFirstParams{
-				RootFolderID: sql.NullInt64{Int64: rootFolderID, Valid: true}, Limit: 1,
-			})
+		oldest, err := q.oldestOfRoot(ctx, rootFolderID, skipped)
 		if err != nil {
-			return fmt.Errorf("recycle bin: list oldest for root %d: %w", rootFolderID, err)
+			return err
 		}
-		if len(oldest) == 0 {
+		if oldest == nil {
 			return nil
 		}
-		before := result.Purged
-		q.purgeRecycleBinRows(ctx, result, oldest)
-		if result.Purged == before {
-			return nil // this entry failed to purge -- stop rather than retry it forever
-		}
+		q.purgeRecycleBinRows(ctx, result, skipped, []librarydb.RecycleBin{*oldest})
 	}
 }
 
-// purgeRecycleBinRows purges a batch, isolating one entry's failure from the rest.
-func (q RecycleBin) purgeRecycleBinRows(ctx context.Context, result *RecycleBinSweepResult, rows []librarydb.RecycleBin) {
+// purgeRecycleBinRows purges a batch, isolating one entry's failure from the rest. A failure or an offline root puts
+// the entry in skipped for the rest of the run; only a failure is an error.
+func (q RecycleBin) purgeRecycleBinRows(ctx context.Context, result *RecycleBinSweepResult, skipped map[int64]bool, rows []librarydb.RecycleBin) {
 	for _, row := range rows {
-		if err := q.Purge(ctx, row.ID); err != nil {
+		err := q.Purge(ctx, row.ID)
+		switch {
+		case errors.Is(err, ErrRootOffline):
+			skipped[row.ID] = true
+		case err != nil:
+			skipped[row.ID] = true
 			result.Errors = append(result.Errors, fmt.Errorf("recycle bin: purge %d: %w", row.ID, err))
-			continue
+		default:
+			result.Purged++
+			result.BytesFreed += row.SizeBytes
 		}
-		result.Purged++
-		result.BytesFreed += row.SizeBytes
 	}
 }

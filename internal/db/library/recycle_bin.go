@@ -95,6 +95,18 @@ type RecycleBin struct {
 	store *store.Store
 	fsys  fsx.FS
 	clock clock.Clock
+	// online says whether a root folder is reachable; nil takes every root for online.
+	online func(rootFolderID int64) bool
+}
+
+// ErrRootOffline reports an entry whose root folder is not reachable (a disk not mounted, a share down): its file may
+// well still be there, so it is neither purged nor forgotten.
+var ErrRootOffline = errors.New("recycle bin: the entry's root folder is offline")
+
+// WithOnline returns the bin refusing to purge entries of roots online reports as unreachable.
+func (q RecycleBin) WithOnline(online func(rootFolderID int64) bool) RecycleBin {
+	q.online = online
+	return q
 }
 
 // NewRecycleBin builds it over an open library store.

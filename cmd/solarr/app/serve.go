@@ -923,7 +923,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Store: library.NewDuplicates(p.library), Settings: p.cache, ByName: adapters.MediaTypes{Registry: p.media}.DuplicatesByName,
 		},
 		SimilarVideos:      adapters.SimilarVideos{Store: p.similarVideos()},
-		RecycleBinContents: adapters.RecycleBinContents{Bin: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem())},
+		RecycleBinContents: adapters.RecycleBinContents{Bin: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()).WithOnline(p.rootOnline)},
 		DuplicateResolver: adapters.DuplicateResolver{
 			FS: p.fsys, Physical: library.NewPhysical(p.library), Recycle: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()),
 			Recycler: p.fileRemover(), Settings: p.cache,

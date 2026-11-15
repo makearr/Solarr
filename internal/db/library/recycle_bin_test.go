@@ -520,3 +520,74 @@ func TestRecycleBinPut_ALongNameKeepsItsExtensionAndFits(t *testing.T) {
 		t.Fatalf("entry = %+v, %v; want a name under 255 bytes ending .flac", entry.RecycledPath, err)
 	}
 }
+
+// failingRemove is a file system that cannot delete one named file.
+type failingRemove struct {
+	fsx.FS
+	path string
+}
+
+func (f failingRemove) Remove(path string) error {
+	if path == f.path {
+		return errors.New("permission denied")
+	}
+	return f.FS.Remove(path)
+}
+
+// One entry that cannot be deleted does not switch the size limits off (REC-2).
+func TestRecycleBinSweep_AnEntryThatWillNotPurgeDoesNotStopTheBudget(t *testing.T) {
+	opened, _ := newLibrary(t)
+	fake := clock.NewFakeAtEpoch()
+	mem := fsx.NewMem(fake)
+	plain := library.NewRecycleBin(opened, mem, fake)
+	var entries []library.Entry
+	for _, name := range []string{"a", "b", "c"} {
+		putTestFile(t, mem, "/media/root/"+name+".flac", []byte("xxxx"))
+		fake.Advance(time.Minute)
+		entry, err := plain.Put(t.Context(), library.PutRequest{RootPath: "/media/root", OriginalPath: "/media/root/" + name + ".flac", Reason: library.ReasonJunk, Retain: 168 * time.Hour})
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries = append(entries, entry)
+	}
+	stuck := library.NewRecycleBin(opened, failingRemove{FS: mem, path: entries[0].RecycledPath}, fake)
+
+	result, err := stuck.Sweep(t.Context(), library.RecycleBinConfig{MaxBytes: 4}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Purged != 2 || len(result.Errors) != 1 {
+		t.Fatalf("result = %+v, want the two behind the stuck oldest purged and one error reported", result)
+	}
+	if _, err := plain.Get(t.Context(), entries[0].ID); err != nil {
+		t.Errorf("the entry that could not be purged lost its row: %v", err)
+	}
+}
+
+// A root that is not mounted answers 'no such file' for everything; its entries keep their rows and files (REC-2).
+func TestRecycleBin_AnOfflineRootsEntriesAreNeitherPurgedNorForgotten(t *testing.T) {
+	opened, _ := newLibrary(t)
+	fake := clock.NewFakeAtEpoch()
+	fsys := fsx.NewMem(fake)
+	q := library.NewRecycleBin(opened, fsys, fake).WithOnline(func(int64) bool { return false })
+	putTestFile(t, fsys, "/media/root/a.flac", []byte("xxxx"))
+	rootID := int64(1)
+	entry, err := q.Put(t.Context(), library.PutRequest{RootPath: "/media/root", OriginalPath: "/media/root/a.flac", RootFolderID: &rootID, Reason: library.ReasonJunk, Retain: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake.Advance(2 * time.Hour)
+	result, err := q.Sweep(t.Context(), library.RecycleBinConfig{}, nil, nil)
+	if err != nil || result.Purged != 0 || len(result.Errors) != 0 {
+		t.Fatalf("sweep = %+v, %v; want the expired entry of an offline root left alone and no error", result, err)
+	}
+	if err := q.Purge(t.Context(), entry.ID); !errors.Is(err, library.ErrRootOffline) {
+		t.Errorf("Purge = %v, want ErrRootOffline", err)
+	}
+	if _, err := q.Get(t.Context(), entry.ID); err != nil {
+		t.Errorf("row gone: %v", err)
+	}
+	if _, err := fsys.Stat(entry.RecycledPath); err != nil {
+		t.Errorf("file gone: %v", err)
+	}
+}

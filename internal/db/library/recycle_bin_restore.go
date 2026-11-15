@@ -100,6 +100,10 @@ func (q RecycleBin) Purge(ctx context.Context, id int64) error {
 	if entry.RestoredAt != nil {
 		return fmt.Errorf("recycle bin: %d was already restored, nothing to purge", id)
 	}
+	// A root that is not mounted answers "no such file" for everything: dropping the row would lose the file.
+	if entry.RootFolderID != nil && q.online != nil && !q.online(*entry.RootFolderID) {
+		return fmt.Errorf("%w: root folder %d, entry %d", ErrRootOffline, *entry.RootFolderID, id)
+	}
 
 	if err := q.fsys.Remove(entry.RecycledPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("recycle bin: remove %q: %w", entry.RecycledPath, err)

@@ -260,7 +260,7 @@ func (p *process) registerMaintenanceJobs(registry *jobs.Registry, executor *job
 		stores: []*store.Store{p.settings, p.jobs, p.library, p.statistics, p.metadata}, logger: p.logger,
 	})
 	executor.Handle(recycleBinCleanupJobType, recycleBinCleanupJob{
-		recycleBin: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()), cache: p.cache, logger: p.logger,
+		recycleBin: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()).WithOnline(p.rootOnline), cache: p.cache, logger: p.logger,
 	})
 	executor.Handle(decisionRetentionJobType, decisionRetentionJob{
 		candidates: statistics.NewCandidates(p.statistics), speeds: statistics.NewDownloadSpeeds(p.statistics), keepFull: p.config.Retention.DecisionsFull.AsDuration(),
@@ -343,4 +343,10 @@ func (p *process) enqueueJobRetention(ctx context.Context) (jobs.EnqueueResult, 
 
 func (p *process) enqueueBackupCleanup(ctx context.Context) (jobs.EnqueueResult, error) {
 	return p.enqueueMaintenanceJob(ctx, backupCleanupJobType)
+}
+
+// rootOnline says whether a root folder is reachable; one the settings do not know is taken for online.
+func (p *process) rootOnline(rootFolderID int64) bool {
+	root, found := p.cache.Snapshot().RootFolder(rootFolderID)
+	return !found || root.Online
 }
