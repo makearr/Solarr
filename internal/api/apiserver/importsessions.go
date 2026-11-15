@@ -7,7 +7,10 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"path"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -185,6 +188,13 @@ type TransferMethodCount struct {
 	Files  int64
 }
 
+// ErrImportSourceRefused is a source folder an import must not walk (a library root, the folder holding one, Solarr's own
+// workspace); answered as 409 naming it.
+var ErrImportSourceRefused = errors.New("apiserver: import source refused")
+
+// importOrigins are the origins a person may start an import with; "acquisition" and "watched" are Solarr's own.
+var importOrigins = []string{"manual", "adoption"}
+
 // InspectImport enqueues ADR-48's own inspection job. Administrator only --
 // it points a real filesystem walk at whatever path the caller names, the
 // same trust boundary a root folder's own path already carries.
@@ -213,6 +223,19 @@ func (s *Server) InspectImport(w http.ResponseWriter, r *http.Request) {
 	if body.Origin != nil {
 		origin = string(*body.Origin)
 	}
+	if !slices.Contains(importOrigins, origin) {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "origin must be one of "+strings.Join(importOrigins, ", "))
+		return
+	}
+	// Cleaned here, so the job and its action key see one spelling of the folder.
+	source := path.Clean(body.SourcePath)
+	if !path.IsAbs(source) || source == "/" || slices.Contains(strings.Split(body.SourcePath, "/"), "..") {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "source_path must be an absolute folder path, not the root of the file system and without '..'")
+		return
+	}
+	body.SourcePath = source
 
 	preview := body.Preview != nil && *body.Preview
 	alreadyQueued, err := s.importInspector.InspectImport(r.Context(), body.SourcePath, origin, body.CategoryId, preview,

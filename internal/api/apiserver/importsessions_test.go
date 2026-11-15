@@ -793,3 +793,27 @@ func TestCommitHeldImportUnits_AnswersNotFoundForAnUnknownSession(t *testing.T) 
 		t.Errorf("status = %d, want 404 (%s)", recorder.Code, recorder.Body)
 	}
 }
+
+// A source that is not an absolute folder, and an origin Solarr sets itself, never reach the job (API-2).
+func TestInspectImport_RefusesPathsAndOriginsThatSteerTheJobWrong(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	for _, body := range []string{
+		`{"source_path":"/"}`, `{"source_path":"downloads/incoming"}`, `{"source_path":"/downloads/../etc"}`, `{"source_path":"//"}`,
+		`{"source_path":"/downloads/incoming","origin":"watched"}`, `{"source_path":"/downloads/incoming","origin":"acquisition"}`,
+		`{"source_path":"/downloads/incoming","origin":"anything"}`,
+	} {
+		recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/inspect", body))
+		if recorder.Code != http.StatusBadRequest {
+			t.Errorf("%s: status = %d, want 400 (%s)", body, recorder.Code, recorder.Body)
+		}
+	}
+	if fixture.importInspector.calls != 0 {
+		t.Errorf("the inspector ran %d times for refused requests", fixture.importInspector.calls)
+	}
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/inspect", `{"source_path":"/downloads//incoming/","origin":"adoption"}`))
+	if recorder.Code != http.StatusAccepted || fixture.importInspector.lastSourcePath != "/downloads/incoming" {
+		t.Errorf("a cleaned adoption path: status %d, source %q; want 202 and the cleaned path", recorder.Code, fixture.importInspector.lastSourcePath)
+	}
+}

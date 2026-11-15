@@ -980,7 +980,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			CommitsHeld: adapters.MediaTypes{Registry: p.media}.CommitsHeldImports,
 			Clock:       clock.NewSystem(),
 		},
-		ImportInspector:    adapters.ImportInspector{Queue: p.queue},
+		ImportInspector:    adapters.ImportInspector{Queue: p.queue, Settings: p.cache, FS: p.fsys, Workspace: p.config.Paths.CacheDir},
 		FingerprintRetrier: fingerprintRetrier{p: p},
 		DrainStarter: adapters.Drain{
 			Config: drainjob.Config{

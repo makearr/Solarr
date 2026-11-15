@@ -12,6 +12,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/importjob"
@@ -21,6 +22,7 @@ import (
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // ImportSessions implements apiserver.ImportSessionLister over
@@ -397,11 +399,42 @@ func importCandidatesFrom(candidates []model.Identification) []apiserver.ImportC
 // duplicating, importjob.Job's own concern, not this adapter's).
 type ImportInspector struct {
 	Queue *jobs.Queue
+	// Settings gives the library roots; FS checks the folder; Workspace is Solarr's own working folder, never a source.
+	Settings  *settings.Cache
+	FS        fsx.FS
+	Workspace string
+}
+
+// CheckSource refuses a folder an import must not walk: one that is missing, a library root, the folder holding a
+// root (it would import the library into itself) or Solarr's own workspace.
+func (a ImportInspector) CheckSource(sourcePath string) error {
+	if _, err := a.FS.Stat(sourcePath); err != nil {
+		return fmt.Errorf("%w: %s does not exist", apiserver.ErrInvalidChoice, sourcePath)
+	}
+	if a.Workspace != "" && fsx.Within(a.Workspace, sourcePath) {
+		return fmt.Errorf("%w: %s is Solarr's own working folder", apiserver.ErrImportSourceRefused, sourcePath)
+	}
+	if a.Settings == nil {
+		return nil
+	}
+	for _, root := range a.Settings.Snapshot().RootFolders() {
+		switch {
+		case filepath.Clean(root.Path) == sourcePath:
+			return fmt.Errorf("%w: %s is a library root folder itself", apiserver.ErrImportSourceRefused, sourcePath)
+		case fsx.Within(sourcePath, root.Path):
+			return fmt.Errorf("%w: %s holds the library root folder %s, so importing from it would import the library into itself",
+				apiserver.ErrImportSourceRefused, sourcePath, root.Path)
+		}
+	}
+	return nil
 }
 
 func (a ImportInspector) InspectImport(
 	ctx context.Context, sourcePath, origin string, categoryID *int64, preview, addUnverified, bestMatch bool,
 ) (bool, error) {
+	if err := a.CheckSource(sourcePath); err != nil {
+		return false, err
+	}
 	result, err := importjob.Enqueue(ctx, a.Queue, importjob.Payload{
 		SourcePath: sourcePath, Origin: origin, CategoryID: categoryID, Preview: preview, NoUnverified: !addUnverified,
 		BestMatch: bestMatch,
