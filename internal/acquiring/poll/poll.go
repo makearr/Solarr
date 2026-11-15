@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"math"
 	"path"
 	"slices"
 	"strconv"
@@ -531,7 +532,22 @@ func (j *Job) checkFingerprint(ctx context.Context, acquisition library.Acquisit
 	if acquisition.ClientFingerprint == fingerprint {
 		return false, nil
 	}
+	// A person (or the client) can rename a job; only a name and a size that both differ mean another download.
+	if sameSize(acquisition.SizeBytes, entry.SizeBytes) {
+		return false, j.config.Acquisitions.SetFingerprint(ctx, acquisition.ID, fingerprint, now)
+	}
 	return true, j.setFailed(ctx, acquisition, "the download client reused this reference for another download")
+}
+
+// renameSizeTolerance is how far the client's size may be from the release's before they are different downloads.
+const renameSizeTolerance = 0.02
+
+// sameSize says two sizes may be one download; an unknown size (0) cannot tell them apart.
+func sameSize(sent, reported int64) bool {
+	if sent == 0 || reported == 0 {
+		return true
+	}
+	return math.Abs(float64(sent-reported)) <= renameSizeTolerance*float64(max(sent, reported))
 }
 
 // setFailed is the one way a download becomes FAILED, so every failure reaches History.

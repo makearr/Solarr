@@ -173,6 +173,11 @@ func (e *env) run(t *testing.T) {
 // send records one acquisition as dispatch does, for a wanted album.
 func (e *env) send(t *testing.T, ref string) library.Acquisition {
 	t.Helper()
+	return e.sendSized(t, ref, 0)
+}
+
+func (e *env) sendSized(t *testing.T, ref string, sizeBytes int64) library.Acquisition {
+	t.Helper()
 	identity := library.NewIdentity(e.store)
 	workIDs, err := identity.ResolveWorks(t.Context(), e.clock.Now(), []library.WorkLink{{
 		Provider: "musicbrainz:release-group", ExternalID: "rg-" + ref, Confidence: 1,
@@ -191,7 +196,7 @@ func (e *env) send(t *testing.T, ref string) library.Acquisition {
 	acquisition, err := e.acquisitions.Create(t.Context(), library.NewAcquisition{
 		DesiredItemID: &item.ID, IndexerID: &indexerID, CandidateGUID: "guid-" + ref, CandidateTitle: "Heka - Zanuvode",
 		DownloaderID: 1, DownloadClientRef: ref, Protocol: "usenet", State: poll.StateQueued,
-		CreatedAt: 1, UpdatedAt: 1, ContentHash: "nzb:content-" + ref,
+		CreatedAt: 1, UpdatedAt: 1, ContentHash: "nzb:content-" + ref, SizeBytes: sizeBytes,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -359,17 +364,30 @@ func TestPoll_VanishedAndMassVanished(t *testing.T) {
 	}
 }
 
-// A reference that later names another download is a different download.
+// A reference that later names another download, of another size, is a different download.
 func TestPoll_AReusedReferenceIsNotAdopted(t *testing.T) {
 	e := newEnv(t)
-	sent := e.send(t, "nzo-1")
-	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka-Zanuvode", State: download.StateDownloading}}
+	sent := e.sendSized(t, "nzo-1", 1_000_000)
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka-Zanuvode", State: download.StateDownloading, SizeBytes: 1_000_000}}
 	e.run(t)
-	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Something Else", State: download.StateCompleted,
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Something Else", State: download.StateCompleted, SizeBytes: 5_000_000,
 		Path: "/downloads/complete/Heka-Zanuvode"}}
 	e.run(t)
 	if got := e.state(t, sent.ID); got.State != poll.StateFailed || len(e.imported) != 0 {
 		t.Errorf("= %s, imported %v; want FAILED and nothing imported", got.State, e.imported)
+	}
+}
+
+// A job renamed in the client keeps its size: it is still the same download, under its new name.
+func TestPoll_ARenamedJobOfTheSameSizeIsFollowed(t *testing.T) {
+	e := newEnv(t)
+	sent := e.sendSized(t, "nzo-1", 1_000_000)
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka-Zanuvode", State: download.StateDownloading, SizeBytes: 1_000_000}}
+	e.run(t)
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka Zanuvode renamed", State: download.StateDownloading, SizeBytes: 1_010_000}}
+	e.run(t)
+	if got := e.state(t, sent.ID); got.State != poll.StateDownloading || got.ClientFingerprint != "client:Heka Zanuvode renamed" {
+		t.Errorf("= %s %q, want DOWNLOADING under the new name", got.State, got.ClientFingerprint)
 	}
 }
 

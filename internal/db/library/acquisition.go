@@ -34,6 +34,8 @@ type Acquisition struct {
 	UpdatedAt         int64
 	// ContentHash identifies what was sent wherever it is listed; empty when unknown.
 	ContentHash string
+	// SizeBytes is the release's size as sent; 0 when unknown.
+	SizeBytes int64
 }
 
 // NewAcquisition is what Create needs to record one dispatch (ADR-57's own
@@ -280,6 +282,6 @@ func acquisitionFromRow(row librarydb.Acquisition) Acquisition {
 		DownloadDir: row.DownloadDir.String, ClientCategory: row.ClientCategory.String,
 		ClientFingerprint: row.ClientFingerprint.String, Protocol: row.Protocol, State: row.State,
 		LastError: row.LastError.String, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
-		ContentHash: row.ContentHash.String,
+		ContentHash: row.ContentHash.String, SizeBytes: row.SizeBytes.Int64,
 	}
 }
