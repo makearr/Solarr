@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io/fs"
+	"math/rand/v2"
 	"path/filepath"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -76,11 +77,6 @@ type PutRequest struct {
 	RemoveEmptyFolders bool
 }
 
-// maxRecycleBinDisambiguation caps the search for an unused recycle bin path,
-// the same bound store.unusedBackupPath already uses for the identical
-// problem.
-const maxRecycleBinDisambiguation = 100
-
 // RecycleBin is section 10.8: nothing is deleted directly. Every destructive
 // operation moves a file into a recycle bin directory first -- same
 // filesystem as its source, time- and space-bounded, restorable with its
@@ -109,27 +105,34 @@ func (q RecycleBin) Put(ctx context.Context, req PutRequest) (Entry, error) {
 		return Entry{}, fmt.Errorf("recycle bin: stat %q: %w", req.OriginalPath, err)
 	}
 
-	recycledPath, err := q.reserveRecycledPath(req.RootPath, req.OriginalPath)
+	dir, err := q.recycleDirectory(req.RootPath)
 	if err != nil {
 		return Entry{}, err
 	}
 
-	// The row first: a file moved without one would never expire and no screen would show it.
+	// The row first, and its id names the file: no search for a free name, nothing two recyclers can both pick. A file
+	// moved without a row would never expire and no screen would show it.
 	now := q.clock.Now()
 	var row librarydb.RecycleBin
 	err = q.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
 		var writeErr error
-		row, writeErr = librarydb.New(tx).RecycleBin(ctx, librarydb.RecycleBinParams{
-			OriginalPath: req.OriginalPath, RecycledPath: recycledPath,
+		row, writeErr = queries.RecycleBin(ctx, librarydb.RecycleBinParams{
+			OriginalPath: req.OriginalPath, RecycledPath: fmt.Sprintf("pending-%016x", rand.Uint64()),
 			RootFolderID: nullInt64(req.RootFolderID), MediaObjectID: nullInt64(req.MediaObjectID),
 			AcquisitionID: nullInt64(req.AcquisitionID), Reason: string(req.Reason),
 			SizeBytes: info.Size, RecycledAt: now.Unix(), ExpiresAt: now.Add(req.Retain).Unix(),
 		})
-		return writeErr
+		if writeErr != nil {
+			return writeErr
+		}
+		row.RecycledPath = filepath.Join(dir, fmt.Sprintf("%d-%s", row.ID, recycledBaseName(req.OriginalPath)))
+		return queries.SetRecycleBinPath(ctx, librarydb.SetRecycleBinPathParams{RecycledPath: row.RecycledPath, ID: row.ID})
 	})
 	if err != nil {
 		return Entry{}, fmt.Errorf("recycle bin: record %q: %w", req.OriginalPath, err)
 	}
+	recycledPath := row.RecycledPath
 
 	if err := relocate(q.fsys, req.OriginalPath, recycledPath, info.Size); err != nil {
 		_ = q.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
@@ -179,31 +182,40 @@ const RecycleBinDirectory = "recycle-bin"
 // LegacyRecycleBinDirectory is the name before 2026-09-25; files recycled then still live there.
 const LegacyRecycleBinDirectory = "quarantine"
 
-// reserveRecycledPath finds an unused path under rootPath's own recycle bin
-// directory, dated today -- the same stat-and-retry shape
-// store.unusedBackupPath already uses for an identical problem (an unused
-// name, not an unused id).
-func (q RecycleBin) reserveRecycledPath(rootPath, originalPath string) (string, error) {
+// recycleDirectory is today's folder in rootPath's own recycle bin, made if needed.
+func (q RecycleBin) recycleDirectory(rootPath string) (string, error) {
 	day := q.clock.Now().UTC().Format("2006-01-02")
 	dir := filepath.Join(rootPath, RecycleBinDirectory, day)
 	if err := q.fsys.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("recycle bin: create %q: %w", dir, err)
 	}
+	return dir, nil
+}
 
+// maxRecycledBaseBytes keeps "<id>-<name>" inside the 255-byte component limit.
+const maxRecycledBaseBytes = 120
+
+// recycledBaseName is the file's name cut to fit, its extension kept.
+func recycledBaseName(originalPath string) string {
 	base := filepath.Base(originalPath)
-	for attempt := range maxRecycleBinDisambiguation {
-		name := base
-		if attempt > 0 {
-			name = fmt.Sprintf("%d-%s", attempt, base)
-		}
-		candidate := filepath.Join(dir, name)
-		if _, err := q.fsys.Lstat(candidate); errors.Is(err, fs.ErrNotExist) {
-			return candidate, nil
-		} else if err != nil {
-			return "", fmt.Errorf("recycle bin: check %q: %w", candidate, err)
-		}
+	if len(base) <= maxRecycledBaseBytes {
+		return base
 	}
-	return "", fmt.Errorf("recycle bin: %d entries already exist for %q in %q", maxRecycleBinDisambiguation, base, dir)
+	extension := filepath.Ext(base)
+	if len(extension) > 16 {
+		extension = ""
+	}
+	return truncateUTF8(base[:len(base)-len(extension)], maxRecycledBaseBytes-len(extension)) + extension
+}
+
+func truncateUTF8(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+	for limit > 0 && !utf8.RuneStart(s[limit]) {
+		limit--
+	}
+	return s[:limit]
 }
 
 func recycleBinEntryFromRow(row librarydb.RecycleBin) Entry {

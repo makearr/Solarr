@@ -1250,6 +1250,7 @@ type Querier interface {
 	SetPersonImageURL(ctx context.Context, arg SetPersonImageURLParams) error
 	SetPersonMonitored(ctx context.Context, arg SetPersonMonitoredParams) error
 	SetPhash(ctx context.Context, arg SetPhashParams) error
+	SetRecycleBinPath(ctx context.Context, arg SetRecycleBinPathParams) error
 	// Progress mid-sweep: the cursor advances, the watermark does not.
 	SetScanCursor(ctx context.Context, arg SetScanCursorParams) error
 	SetSeasonPartsMonitored(ctx context.Context, arg SetSeasonPartsMonitoredParams) error

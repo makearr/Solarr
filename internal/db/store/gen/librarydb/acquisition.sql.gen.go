@@ -1088,6 +1088,20 @@ func (q *Queries) SetAcquisitionState(ctx context.Context, arg SetAcquisitionSta
 	return err
 }
 
+const setRecycleBinPath = `-- name: SetRecycleBinPath :exec
+UPDATE recycle_bin SET recycled_path = ? WHERE id = ?
+`
+
+type SetRecycleBinPathParams struct {
+	RecycledPath string
+	ID           int64
+}
+
+func (q *Queries) SetRecycleBinPath(ctx context.Context, arg SetRecycleBinPathParams) error {
+	_, err := q.db.ExecContext(ctx, setRecycleBinPath, arg.RecycledPath, arg.ID)
+	return err
+}
+
 const sumRecycledBytes = `-- name: SumRecycledBytes :one
 SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS held FROM recycle_bin
 WHERE restored_at IS NULL

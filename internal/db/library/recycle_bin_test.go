@@ -2,8 +2,11 @@ package library_test
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -450,5 +453,70 @@ func TestRecycleBinPut_AFailedMoveLeavesNoRow(t *testing.T) {
 	}
 	if got := readTestFile(t, mem, "/media/root/track.flac"); got != "audio bytes" {
 		t.Errorf("original = %q, want it untouched", got)
+	}
+}
+
+// Files named alike by design (cover.jpg) are recycled by the hundred in one revert: each gets its own name, none is
+// overwritten, even from two recyclers at once (REC-1).
+func TestRecycleBinPut_ManySameNamedFilesAndConcurrentRecyclersKeepEveryFile(t *testing.T) {
+	opened, _ := newLibrary(t)
+	fake := clock.NewFakeAtEpoch()
+	fsys := fsx.NewMem(fake)
+	q := library.NewRecycleBin(opened, fsys, fake)
+	const albums = 250
+	for index := range albums {
+		putTestFile(t, fsys, fmt.Sprintf("/media/root/album%03d/cover.jpg", index), fmt.Appendf(nil, "bytes %d", index))
+	}
+	var group sync.WaitGroup
+	paths := make([]string, albums)
+	failures := make(chan error, albums)
+	for worker := range 2 {
+		group.Go(func() {
+			for index := worker; index < albums; index += 2 {
+				entry, err := q.Put(t.Context(), library.PutRequest{
+					RootPath: "/media/root", OriginalPath: fmt.Sprintf("/media/root/album%03d/cover.jpg", index),
+					Reason: library.ReasonReplaced, Retain: time.Hour,
+				})
+				if err != nil {
+					failures <- err
+					return
+				}
+				paths[index] = entry.RecycledPath
+			}
+		})
+	}
+	group.Wait()
+	close(failures)
+	for err := range failures {
+		t.Fatalf("Put: %v", err)
+	}
+	seen := map[string]bool{}
+	for index, path := range paths {
+		if seen[path] {
+			t.Fatalf("recycled path %q handed out twice", path)
+		}
+		seen[path] = true
+		file, err := fsys.Open(path)
+		if err != nil {
+			t.Fatalf("open %q: %v", path, err)
+		}
+		got, _ := io.ReadAll(file)
+		_ = file.Close()
+		if string(got) != fmt.Sprintf("bytes %d", index) {
+			t.Fatalf("%q holds %q, want the bytes of album %d", path, got, index)
+		}
+	}
+}
+
+func TestRecycleBinPut_ALongNameKeepsItsExtensionAndFits(t *testing.T) {
+	opened, _ := newLibrary(t)
+	fake := clock.NewFakeAtEpoch()
+	fsys := fsx.NewMem(fake)
+	q := library.NewRecycleBin(opened, fsys, fake)
+	long := strings.Repeat("x", 250) + ".flac"
+	putTestFile(t, fsys, "/media/root/"+long, []byte("a"))
+	entry, err := q.Put(t.Context(), library.PutRequest{RootPath: "/media/root", OriginalPath: "/media/root/" + long, Reason: library.ReasonJunk, Retain: time.Hour})
+	if err != nil || len(filepath.Base(entry.RecycledPath)) > 255 || !strings.HasSuffix(entry.RecycledPath, ".flac") {
+		t.Fatalf("entry = %+v, %v; want a name under 255 bytes ending .flac", entry.RecycledPath, err)
 	}
 }

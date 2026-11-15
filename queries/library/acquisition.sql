@@ -115,6 +115,9 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, original_path, recycled_path, root_folder_id, media_object_id,
           acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at;
 
+-- name: SetRecycleBinPath :exec
+UPDATE recycle_bin SET recycled_path = ? WHERE id = ?;
+
 -- :execrows so a caller can tell "already restored" (0 rows) from "restored
 -- just now" (1 row) without a separate read first -- nothing calls this yet,
 -- so tightening it here does not touch a working caller.
