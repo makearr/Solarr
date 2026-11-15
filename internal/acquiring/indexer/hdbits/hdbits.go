@@ -52,9 +52,9 @@ type query struct {
 }
 
 type idSearch struct {
-	ID      int `json:"id"`
-	Season  int `json:"season,omitempty"`
-	Episode int `json:"episode,omitempty"`
+	ID      int  `json:"id"`
+	Season  *int `json:"season,omitempty"`
+	Episode *int `json:"episode,omitempty"`
 }
 
 type answer struct {
@@ -97,12 +97,18 @@ func (i Indexer) Capabilities(ctx context.Context) (indexer.Capabilities, error)
 // Search asks by IMDb or TVDB id when the request has one, else by words.
 func (i Indexer) Search(ctx context.Context, request indexer.SearchRequest) ([]indexer.RawItem, error) {
 	ask := query{Limit: 100}
-	season, _ := strconv.Atoi(request.Extra["season"])
-	episode, _ := strconv.Atoi(request.Extra["ep"])
+	numbering := indexer.NumberingOf(request)
 	if imdb, err := strconv.Atoi(strings.TrimPrefix(request.Extra["imdbid"], "tt")); err == nil {
 		ask.IMDb = &idSearch{ID: imdb}
 	} else if tvdb, err := strconv.Atoi(request.Extra["tvdbid"]); err == nil {
-		ask.TVDB = &idSearch{ID: tvdb, Season: season, Episode: episode}
+		ask.TVDB = &idSearch{ID: tvdb}
+		// A daily episode has no number to send; a season of 0 is sent as the specials.
+		if numbering.HasSeason && numbering.Daily == "" {
+			ask.TVDB.Season = &numbering.Season
+			if numbering.Episode > 0 {
+				ask.TVDB.Episode = &numbering.Episode
+			}
+		}
 	} else {
 		ask.Search = indexer.Text(request)
 	}

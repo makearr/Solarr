@@ -109,3 +109,24 @@ func TestAccountRefused(t *testing.T) {
 		}
 	}
 }
+
+// IDX-6: a special is asked for by number, a season alone by its pack name, a daily episode by its date.
+func TestText_SpellsSpecialsSeasonsAndDailyEpisodes(t *testing.T) {
+	for name, tc := range map[string]struct {
+		extra map[string]string
+		want  string
+	}{
+		"special":        {map[string]string{"q": "Show", "season": "0", "ep": "5"}, "Show S00E05"},
+		"episode":        {map[string]string{"q": "Show", "season": "2", "ep": "3"}, "Show S02E03"},
+		"season pack":    {map[string]string{"q": "Show", "season": "2"}, "Show S02"},
+		"all specials":   {map[string]string{"q": "Show", "season": "0"}, "Show S00"},
+		"episode zero":   {map[string]string{"q": "Show", "season": "2", "ep": "0"}, "Show S02"},
+		"daily":          {map[string]string{"q": "Show", "season": "2024", "ep": "05/01"}, "Show 2024 05 01"},
+		"no numbering":   {map[string]string{"q": "Show"}, "Show"},
+		"episode no key": {map[string]string{"q": "Show", "ep": "3"}, "Show"},
+	} {
+		if got := indexer.Text(indexer.SearchRequest{Extra: tc.extra}); got != tc.want {
+			t.Errorf("%s: Text = %q, want %q", name, got, tc.want)
+		}
+	}
+}

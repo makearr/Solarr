@@ -103,6 +103,33 @@ func (b Base) Fetch(ctx context.Context, link string) ([]byte, error) {
 	return body, nil
 }
 
+// Numbering is the season and episode a request names. A daily episode carries its air date as "MM/DD" with the year as
+// the season (Newznab's convention); a season of 0 is the specials and is a real season.
+type Numbering struct {
+	Season, Episode int
+	// HasSeason says the request names a season at all, 0 included.
+	HasSeason bool
+	// Daily is the "MM/DD" of a daily episode, empty otherwise.
+	Daily string
+}
+
+// NumberingOf reads a request's season and episode; an episode that does not parse counts as none.
+func NumberingOf(request SearchRequest) Numbering {
+	var numbering Numbering
+	season, err := strconv.Atoi(request.Extra["season"])
+	numbering.Season, numbering.HasSeason = season, err == nil && season >= 0
+	if day := request.Extra["ep"]; strings.Contains(day, "/") {
+		if numbering.HasSeason {
+			numbering.Daily = day
+		}
+		return numbering
+	}
+	if episode, err := strconv.Atoi(request.Extra["ep"]); err == nil && episode > 0 {
+		numbering.Episode = episode
+	}
+	return numbering
+}
+
 // Text is a request's words: its query, or what its structured parameters spell (artist and album, a title with its
 // season and episode) for an indexer that only takes words.
 func Text(request SearchRequest) string {
@@ -115,13 +142,14 @@ func Text(request SearchRequest) string {
 			words = append(words, value)
 		}
 	}
-	season, _ := strconv.Atoi(request.Extra["season"])
-	episode, _ := strconv.Atoi(request.Extra["ep"])
+	numbering := NumberingOf(request)
 	switch {
-	case season > 0 && episode > 0:
-		words = append(words, fmt.Sprintf("S%02dE%02d", season, episode))
-	case season > 0:
-		words = append(words, fmt.Sprintf("S%02d", season))
+	case numbering.Daily != "":
+		words = append(words, fmt.Sprintf("%d %s", numbering.Season, strings.ReplaceAll(numbering.Daily, "/", " ")))
+	case numbering.HasSeason && numbering.Episode > 0:
+		words = append(words, fmt.Sprintf("S%02dE%02d", numbering.Season, numbering.Episode))
+	case numbering.HasSeason:
+		words = append(words, fmt.Sprintf("S%02d", numbering.Season))
 	}
 	return strings.Join(words, " ")
 }

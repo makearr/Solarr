@@ -30,6 +30,36 @@ func TestSearch_AsksByTVDBSeasonAndEpisode(t *testing.T) {
 	}
 }
 
+// IDX-6: a special is asked for by number, season 0 alone as episodes only, a daily episode by its date.
+func TestSearch_SpecialsAndDailyEpisodes(t *testing.T) {
+	for name, tc := range map[string]struct {
+		extra map[string]string
+		want  []string
+		not   string
+	}{
+		"special":      {map[string]string{"season": "0", "ep": "5"}, []string{`"name":"S00E05"`, `"category":"Episode"`}, ""},
+		"all specials": {map[string]string{"season": "0"}, []string{`"category":"Episode"`}, `"name"`},
+		"daily":        {map[string]string{"season": "2024", "ep": "05/01"}, []string{`"name":"2024.05.01"`, `"category":"Episode"`}, ""},
+		"season pack":  {map[string]string{"season": "2"}, []string{`"name":"Season 2"`, `"category":"Season"`}, ""},
+	} {
+		server := &clienttest.Server{Routes: map[string]clienttest.Route{"POST /": {Body: `{"id":1,"result":{"results":"0","torrents":{}}}`}}}
+		tc.extra["tvdbid"] = "123"
+		if _, err := broadcasthenet.New(httpClient(t, server), "https://api.broadcasthe.net", "key").Search(t.Context(),
+			indexer.SearchRequest{Function: "tvsearch", Extra: tc.extra, Categories: []int{5000}}); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		body := server.Seen[0].Body
+		for _, want := range tc.want {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s: body = %s, want %s", name, body, want)
+			}
+		}
+		if tc.not != "" && strings.Contains(body, tc.not) {
+			t.Errorf("%s: body = %s, must not hold %s", name, body, tc.not)
+		}
+	}
+}
+
 // httpClient is an httpx.Client over server, with limits no test reaches.
 func httpClient(t *testing.T, server *clienttest.Server) *httpx.Client {
 	t.Helper()

@@ -32,6 +32,29 @@ func TestSearch_AsksByIMDbIDAndLinksWithThePasskey(t *testing.T) {
 	}
 }
 
+// IDX-6: season 0 is sent as the specials, not dropped as "any season".
+func TestSearch_SendsSeasonZeroForSpecials(t *testing.T) {
+	for name, tc := range map[string]struct {
+		extra map[string]string
+		want  string
+	}{
+		"special": {map[string]string{"season": "0", "ep": "5"}, `"tvdb":{"id":123,"season":0,"episode":5}`},
+		"season":  {map[string]string{"season": "2"}, `"tvdb":{"id":123,"season":2}`},
+		"series":  {map[string]string{}, `"tvdb":{"id":123}`},
+		"daily":   {map[string]string{"season": "2024", "ep": "05/01"}, `"tvdb":{"id":123}`},
+	} {
+		server := &clienttest.Server{Routes: map[string]clienttest.Route{"POST /api/torrents": {Body: `{"status":0,"data":[]}`}}}
+		tc.extra["tvdbid"] = "123"
+		if _, err := hdbits.New(httpClient(t, server), "https://hdbits.org", "me:pk").Search(t.Context(),
+			indexer.SearchRequest{Function: "tvsearch", Extra: tc.extra, Categories: []int{5000}}); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if body := server.Seen[0].Body; !strings.Contains(body, tc.want) {
+			t.Errorf("%s: body = %s, want %s", name, body, tc.want)
+		}
+	}
+}
+
 // httpClient is an httpx.Client over server, with limits no test reaches.
 func httpClient(t *testing.T, server *clienttest.Server) *httpx.Client {
 	t.Helper()

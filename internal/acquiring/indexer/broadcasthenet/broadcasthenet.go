@@ -107,13 +107,17 @@ func (i Indexer) Search(ctx context.Context, request indexer.SearchRequest) ([]i
 	filter := map[string]string{}
 	if tvdb := request.Extra["tvdbid"]; tvdb != "" {
 		filter["tvdb"] = tvdb
-		season, _ := strconv.Atoi(request.Extra["season"])
-		episode, _ := strconv.Atoi(request.Extra["ep"])
+		numbering := indexer.NumberingOf(request)
 		switch {
-		case season > 0 && episode > 0:
-			filter["category"], filter["name"] = "Episode", fmt.Sprintf("S%02dE%02d", season, episode)
-		case season > 0:
-			filter["category"], filter["name"] = "Season", fmt.Sprintf("Season %d", season)
+		case numbering.Daily != "":
+			filter["category"], filter["name"] = "Episode", fmt.Sprintf("%d.%s", numbering.Season, strings.ReplaceAll(numbering.Daily, "/", "."))
+		case numbering.HasSeason && numbering.Episode > 0:
+			filter["category"], filter["name"] = "Episode", fmt.Sprintf("S%02dE%02d", numbering.Season, numbering.Episode)
+		case numbering.HasSeason && numbering.Season == 0:
+			// The tracker has no pack for the specials; its episodes are what a season 0 holds.
+			filter["category"] = "Episode"
+		case numbering.HasSeason:
+			filter["category"], filter["name"] = "Season", fmt.Sprintf("Season %d", numbering.Season)
 		}
 	} else if text := indexer.Text(request); text != "" {
 		filter["search"] = text
