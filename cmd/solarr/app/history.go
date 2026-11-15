@@ -45,40 +45,77 @@ func historyEntry(at int64, kind string, workID int64, data download.HistoryData
 	}
 }
 
+// describedItem is what one desired item and its work contribute to every download description of it.
+type describedItem struct {
+	workID, categoryID int64
+	mediaRef           string
+	upgrade            bool
+	workFound          bool
+	title, artist      string
+	mediaType          string
+}
+
 // describeAcquisition names what a download is for: its album, artist and library, and the indexer
 // and client by name. Best-effort: whatever cannot be read is left empty.
 func (p *process) describeAcquisition(ctx context.Context, acquisition library.Acquisition) (download.HistoryData, int64) {
-	data := download.HistoryData{AcquisitionID: acquisition.ID, ReleaseTitle: acquisition.CandidateTitle}
-	if indexers, err := p.cache.Indexers(ctx); err == nil && acquisition.IndexerID != nil {
+	return p.newDescriber(ctx)(acquisition)
+}
+
+// newDescriber answers describeAcquisition for many downloads of one read: the indexer and client names are read once
+// and an item (several held releases belong to one) is looked up once.
+func (p *process) newDescriber(ctx context.Context) func(library.Acquisition) (download.HistoryData, int64) {
+	indexerNames, clientNames := map[int64]string{}, map[int64]string{}
+	if indexers, err := p.cache.Indexers(ctx); err == nil {
 		for _, indexer := range indexers {
-			if indexer.ID == *acquisition.IndexerID {
-				data.Indexer = indexer.Name
-			}
+			indexerNames[indexer.ID] = indexer.Name
 		}
 	}
 	if clients, err := p.cache.Downloaders(ctx); err == nil {
 		for _, client := range clients {
-			if client.ID == acquisition.DownloaderID {
-				data.Client = client.Name
-			}
+			clientNames[client.ID] = client.Name
 		}
 	}
-	var workID int64
-	if acquisition.DesiredItemID != nil {
-		if item, err := library.NewDesired(p.library).Get(ctx, *acquisition.DesiredItemID); err == nil {
-			workID, data.CategoryID = item.WorkID, item.CategoryID
-			data.Upgrade = replacesFiles(item.RequiredCount, item.PresentCount)
-			if work, err := library.NewWorks(p.library).Detail(ctx, workID); err == nil {
-				data.Album = work.Work.CanonicalTitle
+	items := map[int64]*describedItem{}
+	desired, works := library.NewDesired(p.library), library.NewWorks(p.library)
+	describedItemOf := func(itemID int64) *describedItem {
+		if found, ok := items[itemID]; ok {
+			return found
+		}
+		var described *describedItem
+		if item, err := desired.Get(ctx, itemID); err == nil {
+			described = &describedItem{
+				workID: item.WorkID, categoryID: item.CategoryID, mediaRef: item.MediaRef, upgrade: replacesFiles(item.RequiredCount, item.PresentCount),
+			}
+			if work, err := works.Detail(ctx, item.WorkID); err == nil {
 				key := media.Key(work.Work.MediaType)
-				if labelling, ok := media.Capability[media.Labelling](p.media, key); ok && item.MediaRef != "" {
-					data.Album += " " + labelling.ReleaseLabel(acquisition.CandidateTitle, item.MediaRef, clock.NewSystem().Now())
-				}
-				data.Artist = leadName(p.media, key, work.Credits)
+				described.workFound, described.title, described.mediaType = true, work.Work.CanonicalTitle, work.Work.MediaType
+				described.artist = leadName(p.media, key, work.Credits)
 			}
 		}
+		items[itemID] = described
+		return described
 	}
-	return data, workID
+	return func(acquisition library.Acquisition) (download.HistoryData, int64) {
+		data := download.HistoryData{AcquisitionID: acquisition.ID, ReleaseTitle: acquisition.CandidateTitle, Client: clientNames[acquisition.DownloaderID]}
+		if acquisition.IndexerID != nil {
+			data.Indexer = indexerNames[*acquisition.IndexerID]
+		}
+		if acquisition.DesiredItemID == nil {
+			return data, 0
+		}
+		described := describedItemOf(*acquisition.DesiredItemID)
+		if described == nil {
+			return data, 0
+		}
+		data.CategoryID, data.Upgrade = described.categoryID, described.upgrade
+		if described.workFound {
+			data.Album, data.Artist = described.title, described.artist
+			if labelling, ok := media.Capability[media.Labelling](p.media, media.Key(described.mediaType)); ok && described.mediaRef != "" {
+				data.Album += " " + labelling.ReleaseLabel(acquisition.CandidateTitle, described.mediaRef, clock.NewSystem().Now())
+			}
+		}
+		return data, described.workID
+	}
 }
 
 // replacesFiles is true when an item already holds all it requires, so a download for it can only upgrade.

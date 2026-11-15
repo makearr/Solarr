@@ -17,8 +17,8 @@ type Queue struct {
 	Poll  *poll.Job
 	Ready library.ReadyQueue
 	Clock clock.Clock
-	// Describe names a download's album, artist, library, indexer and client.
-	Describe func(ctx context.Context, acquisition library.Acquisition) (download.HistoryData, int64)
+	// Describer starts one read's naming of downloads: their album, artist, library, indexer and client.
+	Describer func(ctx context.Context) func(library.Acquisition) (download.HistoryData, int64)
 }
 
 // heldShown bounds the held releases one queue read lists.
@@ -46,8 +46,9 @@ func (a Queue) List(ctx context.Context) (apiserver.QueueSnapshot, error) {
 		}
 	}
 	rows := make([]apiserver.QueueRow, len(entries))
+	describe := a.Describer(ctx)
 	for i, entry := range entries {
-		data, workID := a.Describe(ctx, entry.Acquisition)
+		data, workID := describe(entry.Acquisition)
 		row := apiserver.QueueRow{
 			ID: entry.Acquisition.ID, CategoryID: data.CategoryID, Album: data.Album, Artist: data.Artist,
 			ReleaseTitle: entry.Acquisition.CandidateTitle, Indexer: data.Indexer, Client: entry.ClientName,
@@ -71,14 +72,14 @@ func (a Queue) List(ctx context.Context) (apiserver.QueueSnapshot, error) {
 		}
 		rows[i] = row
 	}
-	held, err := a.held(ctx)
+	held, err := a.held(ctx, describe)
 	if err != nil {
 		return apiserver.QueueSnapshot{}, err
 	}
 	return apiserver.QueueSnapshot{Rows: rows, Clients: clients, Held: held}, nil
 }
 
-func (a Queue) held(ctx context.Context) ([]apiserver.HeldRow, error) {
+func (a Queue) held(ctx context.Context, describe func(library.Acquisition) (download.HistoryData, int64)) ([]apiserver.HeldRow, error) {
 	entries, err := a.Ready.Next(ctx, a.Clock.Now().Unix(), heldShown)
 	if err != nil {
 		return nil, err
@@ -86,7 +87,7 @@ func (a Queue) held(ctx context.Context) ([]apiserver.HeldRow, error) {
 	rows := make([]apiserver.HeldRow, 0, len(entries))
 	for _, entry := range entries {
 		itemID, indexerID := entry.DesiredItemID, entry.IndexerID
-		data, workID := a.Describe(ctx, library.Acquisition{
+		data, workID := describe(library.Acquisition{
 			DesiredItemID: &itemID, IndexerID: &indexerID, CandidateTitle: entry.Title,
 		})
 		row := apiserver.HeldRow{
