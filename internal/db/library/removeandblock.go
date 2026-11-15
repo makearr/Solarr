@@ -211,11 +211,3 @@ func (r RemoveAndBlock) doReopen(ctx context.Context, mediaObjectID int64, membe
 	}
 	return nil
 }
-
-func totalBytes(entries []Entry) int64 {
-	var total int64
-	for _, e := range entries {
-		total += e.SizeBytes
-	}
-	return total
-}
