@@ -137,8 +137,13 @@ func (p *process) searchConns(ctx context.Context, root int, wanted []int, funct
 
 // tvGrab builds the TV module's automatic search over the real stores.
 func (p *process) tvGrab() tv.Grab {
+	return tv.Grab{Search: p.tvSearch(), Dispatch: p.dispatchOf(tv.MediaType)}
+}
+
+// tvSearch is the TV module's search over the real stores; what is already downloading is not asked for again.
+func (p *process) tvSearch() tv.Search {
 	blocklist, sightings, filters := library.NewBlocklistStore(p.library), library.NewSightings(p.library), library.NewReleaseFilters(p.library)
-	search := tv.Search{
+	return tv.Search{
 		Desired: library.NewDesired(p.library), Series: library.NewSeriesReader(p.library),
 		Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist,
 		Sightings: &sightings, ReleaseFilters: &filters,
@@ -147,9 +152,16 @@ func (p *process) tvGrab() tv.Grab {
 			return parts, err
 		},
 	}
-	dispatch := p.dispatchFor(tv.MediaType)
-	dispatch.PartsOf = search.ReleaseParts
-	return tv.Grab{Search: search, Dispatch: dispatch}
+}
+
+// dispatchOf is dispatchFor with what a media type adds: a TV season names the episodes a release holds, so several
+// downloads of it may run together.
+func (p *process) dispatchOf(mediaType string) music.Dispatch {
+	dispatch := p.dispatchFor(mediaType)
+	if mediaType == tv.MediaType {
+		dispatch.PartsOf = p.tvSearch().ReleaseParts
+	}
+	return dispatch
 }
 
 // musicSearch builds internal/media/music.Search over the real stores.
@@ -270,6 +282,6 @@ func (p *process) candidateSearcher() adapters.CandidateSearch {
 	return adapters.CandidateSearch{
 		Works: library.NewWorks(p.library), Desired: library.NewDesired(p.library), Searching: adapters.MediaTypes{Registry: p.media}.SearchingOf,
 		Recognising: adapters.MediaTypes{Registry: p.media}.RecognisingOf,
-		Search:      p.musicSearch(), Dispatch: p.musicDispatch(), Queue: p.queue, Clock: clock.NewSystem(),
+		Search:      p.musicSearch(), Dispatch: p.musicDispatch(), DispatchFor: p.dispatchOf, Queue: p.queue, Clock: clock.NewSystem(),
 	}
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/identify/parsetv"
 )
 
 func missingOf(numbers ...int) map[int]library.SeriesEpisode {
@@ -123,5 +124,17 @@ func TestFolderMemoryForgetsAnOldEntry(t *testing.T) {
 	}
 	if _, known := memory.recall("3|show", start.Add(time.Hour)); known {
 		t.Error("an hour-old entry was still remembered")
+	}
+}
+
+// A release found by the indexer's ids need not name the series as the library does ("Shameless.U.S." for "Shameless (US)").
+func TestCoverageKnownBySeriesIDHoldsTheEpisodeWhateverTheTitle(t *testing.T) {
+	w := wanted{season: 1, title: "Example Show (US)", missing: missingOf(1, 2)}
+	info, ok := parsetv.Parse("Example.U.S.S01E02.480p.WEB-DL-GRP", time.Unix(1_700_000_000, 0))
+	if !ok {
+		t.Fatal("the release did not parse")
+	}
+	if numbers, covered := w.coverageOf(info, true); !covered || !reflect.DeepEqual(numbers, []int{2}) {
+		t.Errorf("coverage = %v, %v, want episode 2", numbers, covered)
 	}
 }

@@ -168,7 +168,8 @@ func (s Search) ReleaseParts(ctx context.Context, itemID int64, release library.
 	if !ok {
 		return nil
 	}
-	numbers, covered := w.coverage(info)
+	// The release was judged for this season, often by the indexer's ids, so its title need not name the series.
+	numbers, covered := w.coverageOf(info, true)
 	if !covered {
 		return nil
 	}

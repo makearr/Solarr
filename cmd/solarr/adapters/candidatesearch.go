@@ -31,8 +31,10 @@ type CandidateSearch struct {
 	// Search carries the stores decision rows and blocklisting read; any type's will do.
 	Search   music.Search
 	Dispatch music.Dispatch
-	Queue    *jobs.Queue
-	Clock    clock.Clock
+	// DispatchFor is the dispatch of one media type (its client category and how it names a release's parts); nil uses Dispatch.
+	DispatchFor func(mediaType string) music.Dispatch
+	Queue       *jobs.Queue
+	Clock       clock.Clock
 }
 
 // recogniser is how the work's media type reads a release title, nil when it reads none.
@@ -231,7 +233,11 @@ func (c CandidateSearch) SendCandidate(ctx context.Context, workID int64, scope 
 	if err != nil {
 		return apiserver.Acquisition{}, err
 	}
-	acquisition, err := c.Dispatch.Send(ctx, itemID, decisionID, c.Clock.Now())
+	dispatch := c.Dispatch
+	if mediaType, err := c.Works.MediaTypeOf(ctx, workID); c.DispatchFor != nil && err == nil {
+		dispatch = c.DispatchFor(mediaType)
+	}
+	acquisition, err := dispatch.Send(ctx, itemID, decisionID, c.Clock.Now())
 	if err != nil {
 		return apiserver.Acquisition{}, translateDispatchError(err)
 	}
