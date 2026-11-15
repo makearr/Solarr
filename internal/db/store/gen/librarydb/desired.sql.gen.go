@@ -462,7 +462,7 @@ func (q *Queries) GetDesiredItem(ctx context.Context, id int64) (DesiredItem, er
 
 const getHuntEntry = `-- name: GetHuntEntry :one
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count, queued_since, after_failure
+       eligible_after, search_count, queued_since, after_failure, postponed_until
 FROM hunt_queue WHERE desired_item_id = ?
 `
 
@@ -480,6 +480,7 @@ func (q *Queries) GetHuntEntry(ctx context.Context, desiredItemID int64) (HuntQu
 		&i.SearchCount,
 		&i.QueuedSince,
 		&i.AfterFailure,
+		&i.PostponedUntil,
 	)
 	return i, err
 }
@@ -1777,7 +1778,7 @@ func (q *Queries) MoveWorkItemsToCategory(ctx context.Context, arg MoveWorkItems
 
 const nextHuntByNewestRelease = `-- name: NextHuntByNewestRelease :many
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count, queued_since, after_failure
+       eligible_after, search_count, queued_since, after_failure, postponed_until
 FROM hunt_queue
 WHERE class = ?1 AND eligible_after <= ?2
   AND (CAST(?3 AS INTEGER) = 0 OR release_date >= ?3)
@@ -1824,6 +1825,7 @@ func (q *Queries) NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNew
 			&i.SearchCount,
 			&i.QueuedSince,
 			&i.AfterFailure,
+			&i.PostponedUntil,
 		); err != nil {
 			return nil, err
 		}
@@ -1840,7 +1842,7 @@ func (q *Queries) NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNew
 
 const nextHuntByNewestSearched = `-- name: NextHuntByNewestSearched :many
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count, queued_since, after_failure
+       eligible_after, search_count, queued_since, after_failure, postponed_until
 FROM hunt_queue
 WHERE class = ?1 AND eligible_after <= ?2
   AND (CAST(?3 AS INTEGER) = 0 OR release_date >= ?3)
@@ -1887,6 +1889,7 @@ func (q *Queries) NextHuntByNewestSearched(ctx context.Context, arg NextHuntByNe
 			&i.SearchCount,
 			&i.QueuedSince,
 			&i.AfterFailure,
+			&i.PostponedUntil,
 		); err != nil {
 			return nil, err
 		}
@@ -1903,7 +1906,7 @@ func (q *Queries) NextHuntByNewestSearched(ctx context.Context, arg NextHuntByNe
 
 const nextHuntByOldestRelease = `-- name: NextHuntByOldestRelease :many
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count, queued_since, after_failure
+       eligible_after, search_count, queued_since, after_failure, postponed_until
 FROM hunt_queue
 WHERE class = ?1 AND eligible_after <= ?2
   AND (CAST(?3 AS INTEGER) = 0 OR release_date >= ?3)
@@ -1950,6 +1953,7 @@ func (q *Queries) NextHuntByOldestRelease(ctx context.Context, arg NextHuntByOld
 			&i.SearchCount,
 			&i.QueuedSince,
 			&i.AfterFailure,
+			&i.PostponedUntil,
 		); err != nil {
 			return nil, err
 		}
@@ -1967,7 +1971,7 @@ func (q *Queries) NextHuntByOldestRelease(ctx context.Context, arg NextHuntByOld
 const nextHuntByOldestSearched = `-- name: NextHuntByOldestSearched :many
 
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count, queued_since, after_failure
+       eligible_after, search_count, queued_since, after_failure, postponed_until
 FROM hunt_queue
 WHERE class = ?1 AND eligible_after <= ?2
   AND (CAST(?3 AS INTEGER) = 0 OR release_date >= ?3)
@@ -2017,6 +2021,7 @@ func (q *Queries) NextHuntByOldestSearched(ctx context.Context, arg NextHuntByOl
 			&i.SearchCount,
 			&i.QueuedSince,
 			&i.AfterFailure,
+			&i.PostponedUntil,
 		); err != nil {
 			return nil, err
 		}
@@ -2054,7 +2059,7 @@ func (q *Queries) RecomputePresentCount(ctx context.Context, id int64) error {
 const recordItemDownloadFailed = `-- name: RecordItemDownloadFailed :exec
 INSERT INTO hunt_queue (desired_item_id, class, priority, last_searched_at, search_count, after_failure)
 VALUES (?, 'missing', 0, 0, 0, 1)
-ON CONFLICT (desired_item_id) DO UPDATE SET after_failure = 1
+ON CONFLICT (desired_item_id) DO UPDATE SET after_failure = 1, postponed_until = 0
 `
 
 func (q *Queries) RecordItemDownloadFailed(ctx context.Context, desiredItemID int64) error {
@@ -2084,7 +2089,8 @@ INSERT INTO hunt_queue (desired_item_id, class, priority, last_searched_at, sear
 VALUES (?, 'missing', 0, ?, 1)
 ON CONFLICT (desired_item_id) DO UPDATE SET
   last_searched_at = excluded.last_searched_at,
-  search_count = hunt_queue.search_count + 1
+  search_count = hunt_queue.search_count + 1,
+  postponed_until = 0
 `
 
 type RecordItemSearchedParams struct {
@@ -2222,6 +2228,22 @@ func (q *Queries) SetHuntEligibleAfter(ctx context.Context, arg SetHuntEligibleA
 	return err
 }
 
+const setHuntPostponed = `-- name: SetHuntPostponed :exec
+UPDATE hunt_queue SET eligible_after = ?1, postponed_until = ?1
+WHERE desired_item_id = ?2
+`
+
+type SetHuntPostponedParams struct {
+	PostponedUntil int64
+	DesiredItemID  int64
+}
+
+// The hunt looks at an item again at a time the planner keeps (until a search is recorded).
+func (q *Queries) SetHuntPostponed(ctx context.Context, arg SetHuntPostponedParams) error {
+	_, err := q.db.ExecContext(ctx, setHuntPostponed, arg.PostponedUntil, arg.DesiredItemID)
+	return err
+}
+
 const unmonitorDesiredItemsWithMissingFiles = `-- name: UnmonitorDesiredItemsWithMissingFiles :execrows
 UPDATE desired_item SET monitored = 0, dirty = 1
 WHERE id IN (
@@ -2324,7 +2346,7 @@ ON CONFLICT (desired_item_id) DO UPDATE SET
   class = excluded.class,
   priority = excluded.priority,
   release_date = excluded.release_date,
-  eligible_after = excluded.eligible_after,
+  eligible_after = MAX(excluded.eligible_after, hunt_queue.postponed_until),
   queued_since = excluded.queued_since
 `
 

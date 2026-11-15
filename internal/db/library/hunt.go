@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"strconv"
 
@@ -215,9 +216,12 @@ func huntIDs(rows []librarydb.HuntQueue) []int64 {
 // Postpone keeps the hunt away from itemID until at.
 func (h Hunt) Postpone(ctx context.Context, itemID, at int64) error {
 	err := h.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		return librarydb.New(tx).SetHuntEligibleAfter(ctx, librarydb.SetHuntEligibleAfterParams{
-			EligibleAfter: at, DesiredItemID: itemID,
-		})
+		queries := librarydb.New(tx)
+		// "Never" is the planner's to lift when the item is wanted again, so it is not remembered as a postponement.
+		if at == math.MaxInt64 {
+			return queries.SetHuntEligibleAfter(ctx, librarydb.SetHuntEligibleAfterParams{EligibleAfter: at, DesiredItemID: itemID})
+		}
+		return queries.SetHuntPostponed(ctx, librarydb.SetHuntPostponedParams{PostponedUntil: at, DesiredItemID: itemID})
 	})
 	if err != nil {
 		return fmt.Errorf("library: postpone hunt for item %d: %w", itemID, err)

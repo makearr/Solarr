@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"testing"
 
@@ -237,5 +238,80 @@ func TestPlanInputs_CountsImportsOverEachLibrarysWindow(t *testing.T) {
 	}
 	if want := map[int64]int64{short.ID: 0, long.ID: 1}; !maps.Equal(counts, want) {
 		t.Errorf("RecentImports = %v, want %v", counts, want)
+	}
+}
+
+// The planner re-plans an in-flight item often; its backoff must not undo the hunt's "look again in an hour" (HUNT-2).
+func TestAPostponementSurvivesReplanningUntilASearchIsRecorded(t *testing.T) {
+	opened, _ := newLibrary(t)
+	work := createWork(t, opened, "music", "Quiet Harbour")
+	item := createDesired(t, opened, work.ID, "SET", 12)
+	hunt, desired := library.NewHunt(opened), library.NewDesired(opened)
+	replan := func(eligibleAfter int64) {
+		t.Helper()
+		write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+			return q.MarkDesiredItemDirty(ctx, item.ID)
+		})
+		inputs, err := hunt.PlanInputs(t.Context(), true, 0, 10, library.ImportsSince{})
+		if err != nil || len(inputs) != 1 {
+			t.Fatalf("PlanInputs = %v, %v", inputs, err)
+		}
+		if _, err := hunt.ApplyPlan(t.Context(), []library.PlannedHunt{{Input: inputs[0], Class: "missing", EligibleAfter: eligibleAfter}}, 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	eligibleAfter := func() int64 {
+		t.Helper()
+		entry, _, err := hunt.Entry(t.Context(), item.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return entry.EligibleAfter
+	}
+	replan(100)
+	if err := hunt.Postpone(t.Context(), item.ID, 9_000); err != nil {
+		t.Fatal(err)
+	}
+	replan(100)
+	if got := eligibleAfter(); got != 9_000 {
+		t.Fatalf("eligible_after = %d after re-planning, want the postponement 9000 to stand", got)
+	}
+	replan(20_000)
+	if got := eligibleAfter(); got != 20_000 {
+		t.Fatalf("eligible_after = %d, want the planner's later time 20000", got)
+	}
+	replan(100)
+	if err := hunt.Postpone(t.Context(), item.ID, 9_000); err != nil {
+		t.Fatal(err)
+	}
+	if err := desired.RecordSearched(t.Context(), item.ID, 5_000); err != nil {
+		t.Fatal(err)
+	}
+	replan(100)
+	if got := eligibleAfter(); got != 100 {
+		t.Fatalf("eligible_after = %d after a recorded search, want the planner's 100", got)
+	}
+}
+
+func TestNeverIsNotRememberedAsAPostponement(t *testing.T) {
+	opened, _ := newLibrary(t)
+	work := createWork(t, opened, "music", "Quiet Harbour")
+	item := createDesired(t, opened, work.ID, "SET", 12)
+	hunt := library.NewHunt(opened)
+	inputs, _ := hunt.PlanInputs(t.Context(), true, 0, 10, library.ImportsSince{})
+	if _, err := hunt.ApplyPlan(t.Context(), []library.PlannedHunt{{Input: inputs[0], Class: "missing"}}, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := hunt.Postpone(t.Context(), item.ID, math.MaxInt64); err != nil {
+		t.Fatal(err)
+	}
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error { return q.MarkDesiredItemDirty(ctx, item.ID) })
+	inputs, _ = hunt.PlanInputs(t.Context(), true, 0, 10, library.ImportsSince{})
+	if _, err := hunt.ApplyPlan(t.Context(), []library.PlannedHunt{{Input: inputs[0], Class: "missing", EligibleAfter: 50}}, 2); err != nil {
+		t.Fatal(err)
+	}
+	entry, _, err := hunt.Entry(t.Context(), item.ID)
+	if err != nil || entry.EligibleAfter != 50 {
+		t.Fatalf("entry = %+v, %v; want the planner able to make the item eligible again at 50", entry, err)
 	}
 }

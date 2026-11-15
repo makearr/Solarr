@@ -1204,6 +1204,8 @@ type Querier interface {
 	SetGenreTreeSeed(ctx context.Context, arg SetGenreTreeSeedParams) error
 	SetGroupReputation(ctx context.Context, arg SetGroupReputationParams) error
 	SetHuntEligibleAfter(ctx context.Context, arg SetHuntEligibleAfterParams) error
+	// The hunt looks at an item again at a time the planner keeps (until a search is recorded).
+	SetHuntPostponed(ctx context.Context, arg SetHuntPostponedParams) error
 	// From no category, or a no-op onto the same one -- the second form is what
 	// makes re-running the placement catch-up idempotent (a caller retrying
 	// after a transient placement failure, e.g. capacity not probed yet, sends

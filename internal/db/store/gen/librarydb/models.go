@@ -398,6 +398,7 @@ type HuntQueue struct {
 	SearchCount    int64
 	QueuedSince    int64
 	AfterFailure   int64
+	PostponedUntil int64
 }
 
 type IDHighWater struct {

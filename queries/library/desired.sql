@@ -196,7 +196,8 @@ INSERT INTO hunt_queue (desired_item_id, class, priority, last_searched_at, sear
 VALUES (?, 'missing', 0, ?, 1)
 ON CONFLICT (desired_item_id) DO UPDATE SET
   last_searched_at = excluded.last_searched_at,
-  search_count = hunt_queue.search_count + 1;
+  search_count = hunt_queue.search_count + 1,
+  postponed_until = 0;
 
 -- A search no indexer answered keeps the count: last_searched_at is set by the caller so the item is due again soon.
 -- name: RecordItemSearchUnanswered :exec
@@ -207,7 +208,7 @@ ON CONFLICT (desired_item_id) DO UPDATE SET last_searched_at = excluded.last_sea
 -- name: RecordItemDownloadFailed :exec
 INSERT INTO hunt_queue (desired_item_id, class, priority, last_searched_at, search_count, after_failure)
 VALUES (?, 'missing', 0, 0, 0, 1)
-ON CONFLICT (desired_item_id) DO UPDATE SET after_failure = 1;
+ON CONFLICT (desired_item_id) DO UPDATE SET after_failure = 1, postponed_until = 0;
 
 -- The hunt's five modes (section 9.3), each within a class and, for the new-release and gap shares, a release-date range:
 -- release_from and release_before are Unix seconds, zero for no bound; an unknown release date counts as a gap.
@@ -216,7 +217,7 @@ ON CONFLICT (desired_item_id) DO UPDATE SET after_failure = 1;
 -- oldest_searched, the default.
 -- name: NextHuntByOldestSearched :many
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count, queued_since, after_failure
+       eligible_after, search_count, queued_since, after_failure, postponed_until
 FROM hunt_queue
 WHERE class = sqlc.arg(class) AND eligible_after <= sqlc.arg(now)
   AND (CAST(sqlc.arg(release_from) AS INTEGER) = 0 OR release_date >= sqlc.arg(release_from))
@@ -229,7 +230,7 @@ LIMIT sqlc.arg(page_size);
 -- newest_searched.
 -- name: NextHuntByNewestSearched :many
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count, queued_since, after_failure
+       eligible_after, search_count, queued_since, after_failure, postponed_until
 FROM hunt_queue
 WHERE class = sqlc.arg(class) AND eligible_after <= sqlc.arg(now)
   AND (CAST(sqlc.arg(release_from) AS INTEGER) = 0 OR release_date >= sqlc.arg(release_from))
@@ -242,7 +243,7 @@ LIMIT sqlc.arg(page_size);
 -- oldest_release.
 -- name: NextHuntByOldestRelease :many
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count, queued_since, after_failure
+       eligible_after, search_count, queued_since, after_failure, postponed_until
 FROM hunt_queue
 WHERE class = sqlc.arg(class) AND eligible_after <= sqlc.arg(now)
   AND (CAST(sqlc.arg(release_from) AS INTEGER) = 0 OR release_date >= sqlc.arg(release_from))
@@ -255,7 +256,7 @@ LIMIT sqlc.arg(page_size);
 -- newest_release.
 -- name: NextHuntByNewestRelease :many
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count, queued_since, after_failure
+       eligible_after, search_count, queued_since, after_failure, postponed_until
 FROM hunt_queue
 WHERE class = sqlc.arg(class) AND eligible_after <= sqlc.arg(now)
   AND (CAST(sqlc.arg(release_from) AS INTEGER) = 0 OR release_date >= sqlc.arg(release_from))
@@ -426,11 +427,16 @@ ON CONFLICT (desired_item_id) DO UPDATE SET
   class = excluded.class,
   priority = excluded.priority,
   release_date = excluded.release_date,
-  eligible_after = excluded.eligible_after,
+  eligible_after = MAX(excluded.eligible_after, hunt_queue.postponed_until),
   queued_since = excluded.queued_since;
 
 -- name: SetHuntEligibleAfter :exec
 UPDATE hunt_queue SET eligible_after = ? WHERE desired_item_id = ?;
+
+-- The hunt looks at an item again at a time the planner keeps (until a search is recorded).
+-- name: SetHuntPostponed :exec
+UPDATE hunt_queue SET eligible_after = sqlc.arg(postponed_until), postponed_until = sqlc.arg(postponed_until)
+WHERE desired_item_id = sqlc.arg(desired_item_id);
 
 -- RSS sync: the monitored, incomplete albums credited to an artist of this name or alias, ignoring case.
 -- name: ListWantedAlbumsByArtistName :many
@@ -447,7 +453,7 @@ LIMIT sqlc.arg(page_size);
 -- An album's page says when it is next searched, and why not (F2).
 -- name: GetHuntEntry :one
 SELECT desired_item_id, class, priority, last_searched_at, release_date,
-       eligible_after, search_count, queued_since, after_failure
+       eligible_after, search_count, queued_since, after_failure, postponed_until
 FROM hunt_queue WHERE desired_item_id = ?;
 
 -- ready_queue is bounded (section 10.5), so no index is needed to ask this.
