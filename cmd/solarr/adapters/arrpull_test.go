@@ -3,6 +3,8 @@ package adapters
 import (
 	"testing"
 
+	"github.com/makearr/Solarr/internal/db/settings"
+
 	"github.com/makearr/Solarr/internal/importing/arrimport"
 	"github.com/makearr/Solarr/internal/media"
 )
@@ -28,5 +30,21 @@ func TestMapArrImportList_OnlyTheKindsSolarrReadsAreMapped(t *testing.T) {
 				t.Fatalf("got (%q, %q, %q, %v), want (%q, %q, %q, %v)", listType, key, value, ok, test.want, test.key, test.value, test.ok)
 			}
 		})
+	}
+}
+
+// SYNC-4: a pull leaves an attached root as the user set it, and attaches a new one last.
+func TestArrRootAttachmentKeepsWhatIsAttachedAndSortsANewOneLast(t *testing.T) {
+	attached := []settings.CategoryRoot{
+		{CategoryID: 1, RootFolderID: 10, Order: 0, Weight: 5, AcceptsNew: false},
+		{CategoryID: 1, RootFolderID: 11, Order: 3, Weight: 1, AcceptsNew: true},
+		{CategoryID: 2, RootFolderID: 12, Order: 9, Weight: 1, AcceptsNew: true},
+	}
+	if got, found := arrRootAttachment(attached, 1, 10); !found || got.Weight != 5 || got.AcceptsNew {
+		t.Errorf("attached root = %+v, %v, want it untouched", got, found)
+	}
+	got, found := arrRootAttachment(attached, 1, 13)
+	if found || got.Order != 4 || got.Weight != 1 || !got.AcceptsNew {
+		t.Errorf("new root = %+v, %v, want order 4, weight 1, accepting", got, found)
 	}
 }

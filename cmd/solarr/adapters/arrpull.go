@@ -128,7 +128,12 @@ func (a ArrSync) rootFolders(ctx context.Context, instance settings.ArrInstance,
 			}
 			rootID = created.ID
 		}
-		if err := a.Cache.AttachRootFolder(ctx, settings.CategoryRoot{CategoryID: libraryID, RootFolderID: rootID, Weight: 1, AcceptsNew: true}); err != nil {
+		attachment, attached := arrRootAttachment(a.Cache.Snapshot().CategoryRoots(), libraryID, rootID)
+		// An attached root keeps the order, weight and "accepts new files" the user gave it: the attach is an upsert.
+		if attached {
+			continue
+		}
+		if err := a.Cache.AttachRootFolder(ctx, attachment); err != nil {
 			failures = append(failures, fmt.Errorf("root folder %s: %w", path, err))
 		}
 	}
@@ -136,6 +141,21 @@ func (a ArrSync) rootFolders(ctx context.Context, instance settings.ArrInstance,
 		a.AfterFolders(ctx)
 	}
 	return errors.Join(failures...)
+}
+
+// arrRootAttachment is the attachment a pulled root folder gets: the one it already has, else a new one that sorts last.
+func arrRootAttachment(attachments []settings.CategoryRoot, libraryID, rootID int64) (attachment settings.CategoryRoot, attached bool) {
+	last := int64(-1)
+	for _, existing := range attachments {
+		if existing.CategoryID != libraryID {
+			continue
+		}
+		if existing.RootFolderID == rootID {
+			return existing, true
+		}
+		last = max(last, existing.Order)
+	}
+	return settings.CategoryRoot{CategoryID: libraryID, RootFolderID: rootID, Order: last + 1, Weight: 1, AcceptsNew: true}, false
 }
 
 // importLists adds the *Arr's TMDb and MDBList lists to the library, each switched off to be previewed first; a list of
