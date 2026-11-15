@@ -173,14 +173,20 @@ func (item rssItemXML) toRawItem() RawItem {
 }
 
 // pubDate layouts seen in the wild, tried in order -- RFC1123Z (numeric
-// offset) is the common case, RFC1123 (named zone) the fallback.
-var pubDateLayouts = []string{time.RFC1123Z, time.RFC1123}
+// offset) is the common case, then a named zone, a one-digit day, no weekday, RFC 822, ISO 8601.
+var pubDateLayouts = []string{
+	time.RFC1123Z, time.RFC1123,
+	"Mon, 2 Jan 2006 15:04:05 -0700", "Mon, 2 Jan 2006 15:04:05 MST",
+	"2 Jan 2006 15:04:05 -0700", "02 Jan 2006 15:04:05 -0700", "2 Jan 2006 15:04:05 MST",
+	time.RFC822Z, time.RFC822, time.RFC3339, time.DateTime,
+}
 
 // parsePubDate returns the zero time for a date it cannot parse -- a
 // malformed pubDate is not a reason to fail the whole search, and the
 // candidate pipeline's own dedupe/expiry logic already tolerates a zero
 // PublishedAt the same way it tolerates any other missing fact.
 func parsePubDate(raw string) time.Time {
+	raw = strings.TrimSpace(raw)
 	for _, layout := range pubDateLayouts {
 		if parsed, err := time.Parse(layout, raw); err == nil {
 			return parsed
