@@ -28,6 +28,8 @@ type InUseError struct {
 	Entity     string
 	ID         int64
 	References []Reference
+	// Hint says what to do instead, when there is something.
+	Hint string
 }
 
 func (e *InUseError) Error() string {
@@ -35,7 +37,11 @@ func (e *InUseError) Error() string {
 	for _, reference := range e.References {
 		parts = append(parts, fmt.Sprintf("%d %s", reference.Count, reference.Kind))
 	}
-	return fmt.Sprintf("settings: %s %d is still referenced by %s", e.Entity, e.ID, strings.Join(parts, " and "))
+	message := fmt.Sprintf("settings: %s %d is still referenced by %s", e.Entity, e.ID, strings.Join(parts, " and "))
+	if e.Hint != "" {
+		message += "; " + e.Hint
+	}
+	return message
 }
 
 func (e *InUseError) Unwrap() error { return ErrInUse }

@@ -235,7 +235,8 @@ func (c *Cache) DeleteDownloader(ctx context.Context, id int64) error {
 			return fmt.Errorf("settings: count downloads of client %d: %w", id, err)
 		}
 		if open > 0 {
-			return &InUseError{Entity: "download client", ID: id, References: []Reference{{Kind: "running downloads", Count: open}}}
+			return &InUseError{Entity: "download client", ID: id, References: []Reference{{Kind: "running downloads", Count: open}},
+				Hint: "wait for them, or disable the client instead"}
 		}
 	}
 	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
