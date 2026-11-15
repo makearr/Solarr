@@ -34,11 +34,14 @@ var templates sync.Map
 var templateFuncs = template.FuncMap{
 	"join": strings.Join,
 	"re_replace": func(input, pattern, replacement string) string {
-		compiled, err := regexp.Compile(pattern)
+		re, err := compiled(pattern)
 		if err != nil {
 			return input
 		}
-		return compiled.ReplaceAllString(input, dotNetReplacement(replacement))
+		if replaced, ok := replace(re, input, replacement); ok {
+			return replaced
+		}
+		return input
 	},
 }
 
@@ -61,13 +64,6 @@ func render(text string, variables *Variables) (string, error) {
 		return "", fmt.Errorf("spec: template %q: %w", text, err)
 	}
 	return strings.ReplaceAll(out.String(), "<no value>", ""), nil
-}
-
-// dotNetReplacement turns .NET's $1 and ${name} into Go's ${1} and ${name}.
-var dollarGroup = regexp.MustCompile(`\$(\d+)`)
-
-func dotNetReplacement(replacement string) string {
-	return dollarGroup.ReplaceAllString(replacement, "${$1}")
 }
 
 var (

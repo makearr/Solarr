@@ -48,6 +48,11 @@ func (s Spec) Unsupported() []string {
 			for _, arg := range filter.Args {
 				check(arg)
 			}
+			if (filter.Name == "regexp" || filter.Name == "re_replace") && len(filter.Args) > 0 && !strings.Contains(filter.Args[0], "{{") {
+				if _, err := compiled(filter.Args[0]); err != nil {
+					add("a regular expression Solarr cannot read")
+				}
+			}
 		}
 	}
 	checkExtractor := func(extractor Extractor) {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"html"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -65,29 +64,19 @@ func applyFilter(value, name string, args []string, context filterContext) (stri
 	case "replace":
 		return strings.ReplaceAll(value, arg(args, 0), arg(args, 1)), nil
 	case "re_replace":
-		compiled, err := regexp.Compile(arg(args, 0))
+		re, err := compiled(arg(args, 0))
 		if err != nil {
-			return "", fmt.Errorf("spec: re_replace %q: %w", arg(args, 0), err)
+			return "", err
 		}
-		return compiled.ReplaceAllString(value, dotNetReplacement(arg(args, 1))), nil
+		// A pattern that runs out of time costs the field, not the search.
+		replaced, _ := replace(re, value, arg(args, 1))
+		return replaced, nil
 	case "regexp":
-		compiled, err := regexp.Compile(arg(args, 0))
+		re, err := compiled(arg(args, 0))
 		if err != nil {
-			return "", fmt.Errorf("spec: regexp %q: %w", arg(args, 0), err)
+			return "", err
 		}
-		match := compiled.FindStringSubmatch(value)
-		switch {
-		case match == nil:
-			return "", nil
-		case len(match) == 1:
-			return match[0], nil
-		}
-		for _, group := range match[1:] {
-			if group != "" {
-				return group, nil
-			}
-		}
-		return "", nil
+		return firstGroup(re, value), nil
 	case "trim":
 		if cutset := arg(args, 0); cutset != "" {
 			return strings.Trim(value, cutset), nil

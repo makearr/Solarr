@@ -519,13 +519,14 @@ func (d *Driver) searchPath(ctx context.Context, path SearchPath, variables *Var
 		return nil, err
 	}
 	var items []indexer.RawItem
+	var firstFailure error
 	for _, row := range rows {
 		item, ok, err := d.item(row, variables)
 		if err != nil {
-			if errors.Is(err, errFieldMissing) {
-				continue
+			if !errors.Is(err, errFieldMissing) && firstFailure == nil {
+				firstFailure = err
 			}
-			return items, err
+			continue
 		}
 		if ok {
 			items = append(items, item)
@@ -533,6 +534,10 @@ func (d *Driver) searchPath(ctx context.Context, path SearchPath, variables *Var
 		if len(items) >= maxRows || (limit > 0 && len(items) >= limit) {
 			break
 		}
+	}
+	// One row a filter cannot read is skipped; a page none could be read from is an error.
+	if len(items) == 0 && firstFailure != nil {
+		return nil, firstFailure
 	}
 	return items, nil
 }
