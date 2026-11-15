@@ -452,21 +452,47 @@ func smallFormat(title string) bool { return smallFormatRe.MatchString(title) }
 // videoRelease reports a release name that is a video, not an album.
 func videoRelease(title string) bool { return videoMarkerRe.MatchString(title) }
 
-// minArtistSimilarity is how alike a release's artist must be to the album's; the combined
-// "artist album" distance alone let another artist's same-named single through (2026-09-29).
-const minArtistSimilarity = 0.5
+// maxArtistTypo is the edit distance, as a share of the longer name, under which two whole names are one artist
+// (a dropped "The", a punctuation mark an indexer files as a letter).
+const maxArtistTypo = 0.3
 
-// sameArtist: a release naming no artist, or an album without one, passes; so does a
-// compilation, and an artist named inside the other ("feat.", "&").
+// sameArtist: a release naming no artist, or an album without one, passes; so does a compilation. Otherwise the
+// release must credit the wanted artist by name: a part of either credit equals a part of the other (in any spelling
+// the search itself asks for), the whole names are a typo apart, or the wanted name is followed by "and the ..." (a band's backing group). A shared
+// substring is not a name: "Air" is not "Air Supply".
 func sameArtist(released, wanted string) bool {
 	if released == "" || wanted == "" || strings.EqualFold(strings.TrimSpace(wanted), "Various Artists") {
 		return true
 	}
-	a, b := strings.ToLower(released), strings.ToLower(wanted)
-	if strings.Contains(a, b) || strings.Contains(b, a) {
+	if match.EditPenalty(withoutLeadingThe(released), withoutLeadingThe(wanted)) <= maxArtistTypo {
 		return true
 	}
-	return match.TitleSimilarity(released, wanted) >= minArtistSimilarity
+	for _, credited := range splitArtists(released) {
+		for _, asked := range splitArtists(wanted) {
+			if namesTheBandOf(credited, asked) || namesTheBandOf(asked, credited) {
+				return true
+			}
+			for _, spelling := range searchTextVariants(asked) {
+				if match.EditPenalty(withoutLeadingThe(credited), withoutLeadingThe(spelling)) == 0 {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// namesTheBandOf is "Name and the Band" credited for "Name".
+func namesTheBandOf(credit, name string) bool {
+	return strings.HasPrefix(strings.ToLower(credit), strings.ToLower(name)+" and the ")
+}
+
+func withoutLeadingThe(name string) string {
+	name = strings.TrimSpace(name)
+	if len(name) > 4 && strings.EqualFold(name[:4], "the ") {
+		return name[4:]
+	}
+	return name
 }
 
 // targetIdentity builds the album's own claimed-against identity once per

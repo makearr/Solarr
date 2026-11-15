@@ -991,3 +991,29 @@ func TestJudgeFeed_AReleaseWithNoParsedAlbumIsJudgedByWhatFollowsTheArtist(t *te
 		}
 	}
 }
+
+// A name inside another artist's name is not the artist: another act's album of the same title is no match (SRCH-3).
+func TestSearchItem_AnArtistWhoseNameContainsTheWantedOneIsNoMatch(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Zanu", "Greatest Hits", 1981, alwaysAcceptRules)
+	searcher := &fakeIndexerSearcher{
+		responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+			return []indexer.RawItem{
+				rawItem("guid-other", "Zanuvode Supply-Greatest Hits-2010-FLAC-GROUP"),
+				rawItem("guid-own", "Zanu-Greatest Hits-1981-FLAC-GROUP"),
+			}, nil
+		},
+	}
+	result, err := env.search().SearchItem(t.Context(), item.ID,
+		[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}, env.clock.Now())
+	if err != nil {
+		t.Fatalf("SearchItem: %v", err)
+	}
+	var guids []string
+	for _, decision := range result.Decisions {
+		guids = append(guids, decision.ReleaseCandidate.GUID)
+	}
+	if want := []string{"guid-own"}; !slices.Equal(guids, want) {
+		t.Errorf("decided on %v, want %v", guids, want)
+	}
+}
