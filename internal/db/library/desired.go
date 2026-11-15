@@ -187,6 +187,17 @@ func (d Desired) SetItemMonitored(ctx context.Context, itemID int64, monitored b
 	return nil
 }
 
+// UnmonitorWork stops every item of the work being searched for, ahead of removing it.
+func (d Desired) UnmonitorWork(ctx context.Context, workID int64) error {
+	err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).UnmonitorItemsOfWork(ctx, workID)
+	})
+	if err != nil {
+		return fmt.Errorf("library: unmonitor work %d: %w", workID, err)
+	}
+	return nil
+}
+
 // RecordSearched notes that itemID was searched at, found anything or not, and has the planner
 // work out when to search it next.
 func (d Desired) RecordSearched(ctx context.Context, itemID, at int64) error {

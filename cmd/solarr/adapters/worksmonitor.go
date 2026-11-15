@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
@@ -346,11 +347,17 @@ func boolToInt64(value bool) int64 {
 	return 0
 }
 
+// removeWorkTimeout bounds a removal that has been cut loose from its request.
+const removeWorkTimeout = 30 * time.Minute
+
 // RemoveWork stops wanting a work and, with exclude, keeps follows, import lists and a type's scan that honours it from
 // adding it back. A missing id answers sql.ErrNoRows rather than silently succeeding on nothing.
 func (a WorksMonitor) RemoveWork(
 	ctx context.Context, workID int64, deleteFiles, exclude bool,
 ) (apiserver.RemoveWorkResult, error) {
+	// A closed browser tab must not stop the removal half-way, with the files moved and the work still there.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), removeWorkTimeout)
+	defer cancel()
 	detail, err := a.Works.Detail(ctx, workID)
 	if err != nil {
 		return apiserver.RemoveWorkResult{}, err
@@ -358,7 +365,11 @@ func (a WorksMonitor) RemoveWork(
 
 	var recycled int64
 	if deleteFiles {
-		files, err := a.Identity.WorkFiles(ctx, workID)
+		// Unwanted first: a monitored item left missing while its files are moved would be searched and grabbed again.
+		if err := a.Desired.UnmonitorWork(ctx, workID); err != nil {
+			return apiserver.RemoveWorkResult{}, err
+		}
+		files, err := a.Identity.WorkFilesNotShared(ctx, workID)
 		if err != nil {
 			return apiserver.RemoveWorkResult{}, err
 		}
@@ -416,13 +427,7 @@ func (a WorksMonitor) RemovePart(
 	}
 
 	var result apiserver.RemovePartResult
-	if deleteFiles && part.File != nil {
-		recycling := RecyclingFor(a.Libraries, detail.CategoryIDs)
-		if err := a.Remover.RecycleFile(ctx, part.File.MediaObjectID, recycling); err != nil {
-			return apiserver.RemovePartResult{}, err
-		}
-		result.FilesRecycled = 1
-	}
+	// Unwanted before the file moves, so the recount that follows it is not a reason to search.
 	if err := a.Desired.SetPartMonitored(ctx, workID, partID, false); err != nil {
 		return apiserver.RemovePartResult{}, err
 	}
@@ -430,6 +435,13 @@ func (a WorksMonitor) RemovePart(
 		if err := a.Desired.SetItemMonitored(ctx, part.Wanted.ID, false); err != nil {
 			return apiserver.RemovePartResult{}, err
 		}
+	}
+	if deleteFiles && part.File != nil {
+		recycling := RecyclingFor(a.Libraries, detail.CategoryIDs)
+		if err := a.Remover.RecycleFile(ctx, part.File.MediaObjectID, recycling); err != nil {
+			return apiserver.RemovePartResult{}, err
+		}
+		result.FilesRecycled = 1
 	}
 	return result, nil
 }

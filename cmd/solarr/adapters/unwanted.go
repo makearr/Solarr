@@ -103,7 +103,7 @@ func (a RemoveAndBlock) RemoveAndBlockFile(
 
 // RecycleFile is RemoveAndBlockFile's own first step alone: the bytes
 // leave the library and stay recoverable, nothing is blocked, and every
-// desired_item that file satisfied is reopened so the album reports what it
+// desired_item that file satisfied is recounted so the album reports what it
 // really has.
 func (a RemoveAndBlock) RecycleFile(ctx context.Context, mediaObjectID int64, recycling library.Recycling) error {
 	return a.RecycleFor(ctx, mediaObjectID, recycling, library.ReasonUserDelete)
@@ -115,7 +115,7 @@ func (a RemoveAndBlock) RecycleFor(
 ) error {
 	_, err := a.Action.Do(ctx, library.RemoveAndBlockRequest{
 		MediaObjectID: mediaObjectID, RecycleBin: true,
-		RecycleReason: reason, Reopen: true,
+		RecycleReason: reason,
 		RecycleRetain: recycling.Retain, RemoveEmptyFolders: recycling.RemoveEmptyFolders,
 		At: a.Clock.Now().Unix(),
 	})

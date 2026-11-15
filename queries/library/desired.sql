@@ -430,6 +430,10 @@ ON CONFLICT (desired_item_id) DO UPDATE SET
   eligible_after = MAX(excluded.eligible_after, hunt_queue.postponed_until),
   queued_since = excluded.queued_since;
 
+-- Every automatic search needs monitored = 1, so this is what keeps a work being removed from being grabbed again.
+-- name: UnmonitorItemsOfWork :exec
+UPDATE desired_item SET monitored = 0, dirty = 1 WHERE work_id = ? AND monitored = 1;
+
 -- name: SetHuntEligibleAfter :exec
 UPDATE hunt_queue SET eligible_after = ? WHERE desired_item_id = ?;
 

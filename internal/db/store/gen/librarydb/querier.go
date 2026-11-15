@@ -930,6 +930,8 @@ type Querier interface {
 	ListWorkFilePaths(ctx context.Context, workID int64) ([]ListWorkFilePathsRow, error)
 	// Every file of one work, for deleting an album's files along with it.
 	ListWorkFiles(ctx context.Context, workID int64) ([]int64, error)
+	// The files only this work holds: one a crossover episode shares with another work stays with it.
+	ListWorkFilesNotShared(ctx context.Context, workID int64) ([]int64, error)
 	ListWorkGenreTreesInCategory(ctx context.Context, categoryID int64) ([]ListWorkGenreTreesInCategoryRow, error)
 	// The works a file counts towards.
 	ListWorkIDsOfObject(ctx context.Context, mediaObjectID int64) ([]int64, error)
@@ -1296,6 +1298,8 @@ type Querier interface {
 	UnlinkWorkFiles(ctx context.Context, workID int64) error
 	// A library's "Unmonitor Deleted Tracks": items holding a file a full scan just found gone.
 	UnmonitorDesiredItemsWithMissingFiles(ctx context.Context, arg UnmonitorDesiredItemsWithMissingFilesParams) (int64, error)
+	// Every automatic search needs monitored = 1, so this is what keeps a work being removed from being grabbed again.
+	UnmonitorItemsOfWork(ctx context.Context, workID int64) error
 	UnmonitorWorkItems(ctx context.Context, workID int64) error
 	UpdateEdition(ctx context.Context, arg UpdateEditionParams) error
 	UpdateSubscriptionScope(ctx context.Context, arg UpdateSubscriptionScopeParams) error

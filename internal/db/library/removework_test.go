@@ -117,3 +117,36 @@ func TestRemoveWork_WithFilesDeletesTheWorkAndKeepsTheFiles(t *testing.T) {
 		t.Errorf("the file's record went with the work: %v", err)
 	}
 }
+
+// Removing a work with its files must not let the work be searched meanwhile, and a file another work holds too
+// is not taken from it (RACE-7).
+func TestRemoveWork_UnmonitorsFirstAndLeavesSharedFilesAlone(t *testing.T) {
+	opened, queries := newLibrary(t)
+	ctx := t.Context()
+	work := createWork(t, opened, "music", "Going Away")
+	other := createWork(t, opened, "music", "Stays")
+	item := createDesired(t, opened, work.ID, "SET", 2)
+	own, shared := createObject(t, opened, "quick-own", 10), createObject(t, opened, "quick-shared", 10)
+	for _, link := range []librarydb.LinkWorkFileParams{
+		{WorkID: work.ID, MediaObjectID: own.ID, FirstSeenAt: 1},
+		{WorkID: work.ID, MediaObjectID: shared.ID, FirstSeenAt: 1},
+		{WorkID: other.ID, MediaObjectID: shared.ID, FirstSeenAt: 1},
+	} {
+		if err := queries.LinkWorkFile(ctx, link); err != nil {
+			t.Fatal(err)
+		}
+	}
+	identity, desired := library.NewIdentity(opened), library.NewDesired(opened)
+
+	files, err := identity.WorkFilesNotShared(ctx, work.ID)
+	if err != nil || len(files) != 1 || files[0] != own.ID {
+		t.Fatalf("WorkFilesNotShared = %v, %v; want only the file this work alone holds", files, err)
+	}
+	if err := desired.UnmonitorWork(ctx, work.ID); err != nil {
+		t.Fatal(err)
+	}
+	after, err := queries.GetDesiredItem(ctx, item.ID)
+	if err != nil || after.Monitored != 0 {
+		t.Fatalf("item monitored = %d, %v; want 0 so no search or RSS grab can take it while its files move", after.Monitored, err)
+	}
+}

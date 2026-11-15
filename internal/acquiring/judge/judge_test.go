@@ -3,8 +3,8 @@ package judge_test
 import (
 	"context"
 	"errors"
-	"runtime"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -279,10 +279,11 @@ func TestDuplicatesFromOneIndexerKeepTheFirst(t *testing.T) {
 type gatedSearcher struct {
 	started, release chan struct{}
 	items            []indexer.RawItem
+	once             sync.Once
 }
 
 func (g *gatedSearcher) Search(ctx context.Context, _ indexer.SearchRequest) ([]indexer.RawItem, error) {
-	close(g.started)
+	g.once.Do(func() { close(g.started) })
 	select {
 	case <-g.release:
 		return g.items, nil
@@ -308,9 +309,8 @@ func TestAskEveryIndexerSharedRequestOutlivesTheCallerThatStartedIt(t *testing.T
 		answers, _ := judge.AskEveryIndexer(t.Context(), conns, queries, time.Minute)
 		joiner <- answers[0]
 	}()
-	for range 1000 {
-		runtime.Gosched()
-	}
+	// Let the joiner reach the shared request before the leader goes.
+	time.Sleep(100 * time.Millisecond)
 	cancelLeader()
 	if err := <-leader; !errors.Is(err, context.Canceled) {
 		t.Fatalf("leader = %v, want its own cancellation", err)

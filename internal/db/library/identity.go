@@ -675,6 +675,15 @@ func (i Identity) WorkFiles(ctx context.Context, workID int64) ([]int64, error) 
 	return files, nil
 }
 
+// WorkFilesNotShared is WorkFiles without the files another work holds too (a crossover episode filed under two series).
+func (i Identity) WorkFilesNotShared(ctx context.Context, workID int64) ([]int64, error) {
+	files, err := librarydb.New(i.store.Read()).ListWorkFilesNotShared(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: work files not shared %d: %w", workID, err)
+	}
+	return files, nil
+}
+
 // RemoveWork drops every desired item of a work, and the work itself when it has no files or withFiles says its
 // type's scan will not add it back; files are never touched (deleting bytes is the recycle bin's, section 10.8).
 func (i Identity) RemoveWork(ctx context.Context, workID int64, withFiles bool) (RemoveWorkResult, error) {

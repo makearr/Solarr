@@ -357,6 +357,13 @@ SELECT CAST(COUNT(*) AS INTEGER) AS total FROM work_file WHERE work_id = ?;
 -- name: ListWorkFiles :many
 SELECT media_object_id FROM work_file WHERE work_id = ? ORDER BY media_object_id;
 
+-- The files only this work holds: one a crossover episode shares with another work stays with it.
+-- name: ListWorkFilesNotShared :many
+SELECT wf.media_object_id FROM work_file wf
+WHERE wf.work_id = ?
+  AND NOT EXISTS (SELECT 1 FROM work_file other WHERE other.media_object_id = wf.media_object_id AND other.work_id <> wf.work_id)
+ORDER BY wf.media_object_id;
+
 -- Releases in a date window that this library has a reason to care about:
 -- either something wants the work, or an artist credited on it is monitored.
 -- A work with several dates of the same kind in different regions would repeat,

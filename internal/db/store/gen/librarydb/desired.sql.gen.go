@@ -2277,6 +2277,16 @@ func (q *Queries) UnmonitorDesiredItemsWithMissingFiles(ctx context.Context, arg
 	return result.RowsAffected()
 }
 
+const unmonitorItemsOfWork = `-- name: UnmonitorItemsOfWork :exec
+UPDATE desired_item SET monitored = 0, dirty = 1 WHERE work_id = ? AND monitored = 1
+`
+
+// Every automatic search needs monitored = 1, so this is what keeps a work being removed from being grabbed again.
+func (q *Queries) UnmonitorItemsOfWork(ctx context.Context, workID int64) error {
+	_, err := q.db.ExecContext(ctx, unmonitorItemsOfWork, workID)
+	return err
+}
+
 const upsertFileTrackClaim = `-- name: UpsertFileTrackClaim :exec
 INSERT INTO file_track_claim (media_object_id, disc, track, title, recording_mbid)
 VALUES (?, ?, ?, ?, ?)

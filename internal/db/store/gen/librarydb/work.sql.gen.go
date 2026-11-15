@@ -1835,6 +1835,37 @@ func (q *Queries) ListWorkFiles(ctx context.Context, workID int64) ([]int64, err
 	return items, nil
 }
 
+const listWorkFilesNotShared = `-- name: ListWorkFilesNotShared :many
+SELECT wf.media_object_id FROM work_file wf
+WHERE wf.work_id = ?
+  AND NOT EXISTS (SELECT 1 FROM work_file other WHERE other.media_object_id = wf.media_object_id AND other.work_id <> wf.work_id)
+ORDER BY wf.media_object_id
+`
+
+// The files only this work holds: one a crossover episode shares with another work stays with it.
+func (q *Queries) ListWorkFilesNotShared(ctx context.Context, workID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkFilesNotShared, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var media_object_id int64
+		if err := rows.Scan(&media_object_id); err != nil {
+			return nil, err
+		}
+		items = append(items, media_object_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkPartExternalIDs = `-- name: ListWorkPartExternalIDs :many
 SELECT provider, external_id, part_id, confidence
 FROM work_part_external_id WHERE part_id = ? ORDER BY provider, external_id
