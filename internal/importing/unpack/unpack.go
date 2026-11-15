@@ -252,40 +252,26 @@ func SweepOlderThan(fsys fsx.FS, dir string, cutoff time.Time) (int, error) {
 	return removed, nil
 }
 
-// Retire moves every archive set of source into the source's own recycle folder, keeping its relative path: a rename
-// on the source's filesystem, so nothing is copied and the bytes stay recoverable until SweepRecycled ages them out.
-func Retire(ctx context.Context, fsys fsx.FS, source string) (int, error) {
+// ArchiveFiles lists every file of every archive set under source (all volumes of each), by absolute path.
+func ArchiveFiles(ctx context.Context, fsys fsx.FS, source string) ([]string, error) {
 	archives, err := Find(ctx, fsys, source)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	moved := 0
+	var files []string
 	for _, relative := range archives {
 		directory := path.Dir(path.Join(source, relative))
 		entries, err := fsys.ReadDir(directory)
 		if err != nil {
-			return moved, err
+			return files, err
 		}
 		names := make([]string, len(entries))
 		for index, entry := range entries {
 			names[index] = entry.Name
 		}
-		volumes := volumesOf(names, path.Base(relative))
-		target := path.Join(source, inspect.RecycleFolder, path.Dir(relative))
-		if err := fsys.MkdirAll(target, 0o755); err != nil {
-			return moved, err
+		for _, name := range volumesOf(names, path.Base(relative)) {
+			files = append(files, path.Join(directory, name))
 		}
-		for _, name := range volumes {
-			if err := fsys.Rename(path.Join(directory, name), path.Join(target, name)); err != nil {
-				return moved, err
-			}
-		}
-		moved++
 	}
-	return moved, nil
-}
-
-// SweepRecycled removes what source's recycle folder holds from before cutoff, top-level entries first seen by age.
-func SweepRecycled(fsys fsx.FS, source string, cutoff time.Time) (int, error) {
-	return SweepOlderThan(fsys, path.Join(source, inspect.RecycleFolder), cutoff)
+	return files, nil
 }

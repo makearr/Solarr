@@ -17,8 +17,12 @@ func ListFiles(ctx context.Context, fsys fsx.FS, root string, sizeFloor int64) (
 	return walk(ctx, fsys, root, sizeFloor, false)
 }
 
-// RecycleFolder is where a source archive goes once it has been imported; the walk never enters it.
+// RecycleFolder is where source archives were kept before they went to the recycle bin; the walk never enters it.
 const RecycleFolder = ".solarr-recycle"
+
+// recycleBinFolder is a recycle bin's folder in a download folder (library.RecycleBinDirectory); archives imported from
+// there are in it, and the walk never enters it.
+const recycleBinFolder = "recycle-bin"
 
 // walk recurses to arbitrary depth under root and classifies every file it finds.
 // An archive is classified, not opened here: importing/unpack expands them into a workspace first (ADR-49).
@@ -48,7 +52,7 @@ func walkDir(ctx context.Context, fsys fsx.FS, root, relative string, sizeFloor 
 	for _, entry := range entries {
 		childRelative := path.Join(relative, entry.Name)
 		if entry.IsDir {
-			if entry.Name == RecycleFolder {
+			if entry.Name == RecycleFolder || entry.Name == recycleBinFolder {
 				continue
 			}
 			if err := walkDir(ctx, fsys, root, childRelative, sizeFloor, books, files); err != nil {

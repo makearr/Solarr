@@ -97,12 +97,13 @@ type Policy interface {
 
 // Job runs one import.inspect execution: walk, identify, shape, decide, record.
 type Job struct {
-	tracked       func(ctx context.Context, sourcePath string) (int64, bool)
-	workspace     string
-	archiveLimits archive.Limits
-	fsys          fsx.FS
-	sessions      library.ImportSessions
-	policy        Policy
+	tracked        func(ctx context.Context, sourcePath string) (int64, bool)
+	workspace      string
+	recycleArchive func(ctx context.Context, categoryID *int64, sourcePath, file string) error
+	archiveLimits  archive.Limits
+	fsys           fsx.FS
+	sessions       library.ImportSessions
+	policy         Policy
 	// packs is todo 4.11's own detection sink: detection needs no category, so it runs whether or not anything was placed.
 	packs library.Packs
 	// importers identify and place a batch, by media type; unassigned names the one a session without a library uses.
@@ -136,6 +137,8 @@ type Config struct {
 	// Tracked answers the download a folder belongs to while that download is still being followed; the folder watcher
 	// leaves such a folder to the download's own import. Nil tracks nothing.
 	Tracked func(ctx context.Context, sourcePath string) (acquisitionID int64, tracked bool)
+	// RecycleArchive moves one archive file of an imported source to the recycle bin; nil keeps the archives in place.
+	RecycleArchive func(ctx context.Context, categoryID *int64, sourcePath, file string) error
 	// Workspace is where archives are opened (outside every library root); empty leaves archives unopened.
 	Workspace string
 	// ArchiveLimits bounds an expansion; zero is archive.DefaultLimits.
@@ -154,7 +157,7 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		fsys: config.FS, sessions: config.Sessions, policy: config.Policy, packs: config.Packs,
-		workspace: config.Workspace, archiveLimits: config.ArchiveLimits,
+		workspace: config.Workspace, recycleArchive: config.RecycleArchive, archiveLimits: config.ArchiveLimits,
 		importers: config.Importers, mediaTypeOf: config.MediaTypeOf, unassigned: config.Unassigned, libraries: config.Libraries,
 		tracked: config.Tracked, events: config.Events, onCommitted: config.OnCommitted, clock: config.Clock, logger: logger,
 	}
@@ -198,7 +201,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 			if err := unpack.RemoveTree(j.fsys, workspace); err != nil {
 				j.logger.Warn("import workspace not removed", slog.String("workspace", workspace), slog.Any("error", err))
 			} else if payload.Origin == library.ImportOriginManual && !payload.Preview && j.placedAll(ctx, workspace) {
-				j.retireArchives(ctx, payload.SourcePath)
+				j.retireArchives(ctx, payload.SourcePath, payload.CategoryID)
 			}
 		}
 		if !j.hasMedia(ctx, payload.SourcePath) {
@@ -255,18 +258,26 @@ func (j *Job) placedAll(ctx context.Context, sourcePath string) bool {
 	return false
 }
 
-// retireArchives moves a folder the user pointed at past its archives once their contents are in the library; a
-// source that cannot be written to (a read-only download mount) simply keeps them.
-func (j *Job) retireArchives(ctx context.Context, sourcePath string) {
-	if _, err := unpack.SweepRecycled(j.fsys, sourcePath, j.clock.Now().Add(-workspaceLifetime)); err != nil {
-		j.logger.Warn("old recycled archives not removed", slog.String("source_path", sourcePath), slog.Any("error", err))
+// retireArchives sends the archives of a folder the user pointed at to the recycle bin once their contents are in the
+// library; a source that cannot be written to (a read-only download mount) simply keeps them.
+func (j *Job) retireArchives(ctx context.Context, sourcePath string, categoryID *int64) {
+	if j.recycleArchive == nil {
+		return
 	}
-	moved, err := unpack.Retire(ctx, j.fsys, sourcePath)
+	files, err := unpack.ArchiveFiles(ctx, j.fsys, sourcePath)
 	if err != nil {
 		j.logger.Info("source archives kept in place", slog.String("source_path", sourcePath), slog.Any("error", err))
 		return
 	}
-	j.logger.Info("source archives recycled", slog.String("source_path", sourcePath), slog.Int("archives", moved))
+	recycled := 0
+	for _, file := range files {
+		if err := j.recycleArchive(ctx, categoryID, sourcePath, file); err != nil {
+			j.logger.Info("source archive kept in place", slog.String("file", file), slog.Any("error", err))
+			continue
+		}
+		recycled++
+	}
+	j.logger.Info("source archives recycled", slog.String("source_path", sourcePath), slog.Int("files", recycled))
 }
 
 // workspaceLifetime is how long a workspace kept for a review waits before it is swept.

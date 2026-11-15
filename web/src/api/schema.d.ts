@@ -6641,7 +6641,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             original_path: string;
-            /** @description replaced, rejected_worse, junk, user_delete or failed_import. */
+            /** @description replaced, rejected_worse, junk, user_delete, failed_import or imported (a source archive whose contents are in the library). */
             reason: string;
             /** Format: int64 */
             size_bytes: number;
@@ -9773,7 +9773,7 @@ export interface components {
              * @default user_delete
              * @enum {string}
              */
-            recycle_reason: "rejected_worse" | "replaced" | "junk" | "user_delete" | "failed_import";
+            recycle_reason: "rejected_worse" | "replaced" | "junk" | "user_delete" | "failed_import" | "imported";
             /**
              * @description How long the recycled copy survives before Sweep purges it.
              * @default 168

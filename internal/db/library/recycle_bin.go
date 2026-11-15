@@ -22,13 +22,15 @@ import (
 // column).
 type Reason string
 
-// The five reasons recycle bin.reason accepts.
+// The reasons recycle bin.reason accepts.
 const (
 	ReasonRejectedWorse Reason = "rejected_worse"
 	ReasonReplaced      Reason = "replaced"
 	ReasonJunk          Reason = "junk"
 	ReasonUserDelete    Reason = "user_delete"
 	ReasonFailedImport  Reason = "failed_import"
+	// ReasonImported is a source archive whose contents are in the library.
+	ReasonImported Reason = "imported"
 )
 
 // ErrAlreadyRestored reports that a recycle bin entry was already restored

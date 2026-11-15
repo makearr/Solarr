@@ -9804,7 +9804,7 @@ components:
       properties:
         id: { type: integer, format: int64 }
         original_path: { type: string }
-        reason: { type: string, description: "replaced, rejected_worse, junk, user_delete or failed_import." }
+        reason: { type: string, description: "replaced, rejected_worse, junk, user_delete, failed_import or imported (a source archive whose contents are in the library)." }
         size_bytes: { type: integer, format: int64 }
         recycled_at: { type: integer, format: int64, description: Unix seconds. }
         expires_at: { type: integer, format: int64, description: Unix seconds. }
@@ -13285,7 +13285,7 @@ components:
         recycle_bin: { type: boolean, default: false }
         recycle_reason:
           type: string
-          enum: [rejected_worse, replaced, junk, user_delete, failed_import]
+          enum: [rejected_worse, replaced, junk, user_delete, failed_import, imported]
           default: user_delete
         recycle_retain_hours:
           type: integer

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os/user"
+	"path"
 	"path/filepath"
 	"strconv"
 
@@ -49,7 +50,9 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 		Libraries: p.suggester().ImportLibraries,
 		Tracked:   p.trackedDownloadAt,
 		Workspace: filepath.Join(p.config.Paths.CacheDir, "import-workspace"),
-		Events:    p.bus,
+		// The bin sits on the source's own disk, so an archive is renamed into it, never copied.
+		RecycleArchive: p.recycleSourceArchive,
+		Events:         p.bus,
 		// A new edition's tracklist is what lets the placed files count towards the album.
 		OnCommitted: func(ctx context.Context) {
 			_, _ = p.enrichmentPass(ctx, false)
@@ -362,4 +365,27 @@ func (p *process) adultImporter() adult.Importer {
 		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
 		RenameOnImport: p.renameOnImport, ExtraFiles: p.extraFileExtensions, Probe: p.probeMeasured,
 	})
+}
+
+// recycleSourceArchive moves one archive file of an imported source into the recycle bin of the download folder that
+// holds it (the source's parent when no download folder does), under its library's retention.
+func (p *process) recycleSourceArchive(ctx context.Context, categoryID *int64, sourcePath, file string) error {
+	root := path.Dir(sourcePath)
+	if folders, err := p.cache.DownloadFolders(ctx); err == nil {
+		for _, folder := range folders {
+			if fsx.Within(folder.Path, file) {
+				root = folder.Path
+				break
+			}
+		}
+	}
+	var categoryIDs []int64
+	if categoryID != nil {
+		categoryIDs = []int64{*categoryID}
+	}
+	recycling := adapters.RecyclingFor(adapters.Categories{Cache: p.cache}, categoryIDs)
+	_, err := library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()).WithOnline(p.rootOnline).Put(ctx, library.PutRequest{
+		RootPath: root, OriginalPath: file, Reason: library.ReasonImported, Retain: recycling.Retain,
+	})
+	return err
 }

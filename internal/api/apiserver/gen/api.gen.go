@@ -838,6 +838,7 @@ const (
 // Defines values for RemoveAndBlockRequestRecycleReason.
 const (
 	RemoveAndBlockRequestRecycleReasonFailedImport  RemoveAndBlockRequestRecycleReason = "failed_import"
+	RemoveAndBlockRequestRecycleReasonImported      RemoveAndBlockRequestRecycleReason = "imported"
 	RemoveAndBlockRequestRecycleReasonJunk          RemoveAndBlockRequestRecycleReason = "junk"
 	RemoveAndBlockRequestRecycleReasonRejectedWorse RemoveAndBlockRequestRecycleReason = "rejected_worse"
 	RemoveAndBlockRequestRecycleReasonReplaced      RemoveAndBlockRequestRecycleReason = "replaced"
@@ -5475,7 +5476,7 @@ type RecycleBinEntry struct {
 	Id           int64  `json:"id"`
 	OriginalPath string `json:"original_path"`
 
-	// Reason replaced, rejected_worse, junk, user_delete or failed_import.
+	// Reason replaced, rejected_worse, junk, user_delete, failed_import or imported (a source archive whose contents are in the library).
 	Reason string `json:"reason"`
 
 	// RecycledAt Unix seconds.
