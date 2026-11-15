@@ -219,7 +219,9 @@ export function Indexers() {
       )}
 
       {(update.isError || remove.isError) && (
-        <p className="text-xs text-danger">That change was refused.</p>
+        <p className="text-xs text-danger">
+          {((remove.error ?? update.error) as { detail?: string } | null)?.detail ?? "That change was refused."}
+        </p>
       )}
 
       <details className="rounded-lg border border-border-subtle bg-surface p-3">

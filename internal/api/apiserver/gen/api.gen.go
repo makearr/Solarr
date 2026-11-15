@@ -7012,6 +7012,12 @@ type ListIncompleteDiscographiesParams struct {
 	Limit      *int  `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// UpdateDownloaderParams defines parameters for UpdateDownloader.
+type UpdateDownloaderParams struct {
+	// ConfirmMoved The new base_url is the same client at a new address, so its running downloads stay.
+	ConfirmMoved *bool `form:"confirm_moved,omitempty" json:"confirm_moved,omitempty"`
+}
+
 // SetDownloaderCredentialsJSONBody defines parameters for SetDownloaderCredentials.
 type SetDownloaderCredentialsJSONBody struct {
 	Credentials *string `json:"credentials,omitempty"`
@@ -8713,12 +8719,12 @@ type ServerInterface interface {
 	// Test a download client before it is added, and read its download folder. Administrator only.
 	// (POST /downloaders/test)
 	TestDownloaderConfig(w http.ResponseWriter, r *http.Request)
-	// Remove a connection. Administrator only.
+	// Remove a connection. Administrator only. Refused (409, settings.ErrInUse) while downloads run through it.
 	// (DELETE /downloaders/{id})
 	DeleteDownloader(w http.ResponseWriter, r *http.Request, id int64)
-	// Change a connection's own facts. Administrator only. Never touches credentials -- see /downloaders/{id}/credentials.
+	// Change a connection's own facts. Administrator only. Never touches credentials -- see /downloaders/{id}/credentials. While downloads run through the client a changed impl or protocol is refused (409), and a changed base_url needs confirm_moved=true (409 otherwise).
 	// (PATCH /downloaders/{id})
-	UpdateDownloader(w http.ResponseWriter, r *http.Request, id int64)
+	UpdateDownloader(w http.ResponseWriter, r *http.Request, id int64, params UpdateDownloaderParams)
 	// Add the indexer that searches for a download client's releases (Soulseek for slskd), at the client's address and with its key. Administrator only; optional, the user is only offered it.
 	// (POST /downloaders/{id}/companion)
 	AddDownloaderCompanion(w http.ResponseWriter, r *http.Request, id int64)
@@ -8899,7 +8905,7 @@ type ServerInterface interface {
 	// Test an indexer before it is added. Administrator only.
 	// (POST /indexers/test)
 	TestIndexerConfig(w http.ResponseWriter, r *http.Request)
-	// Remove a connection. Administrator only.
+	// Remove a connection. Administrator only. Refused (409) while downloads or held releases came from it.
 	// (DELETE /indexers/{id})
 	DeleteIndexer(w http.ResponseWriter, r *http.Request, id int64)
 	// Change a connection's own facts. Administrator only. Never touches api_key -- see /indexers/{id}/apikey.
@@ -10138,15 +10144,15 @@ func (_ Unimplemented) TestDownloaderConfig(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Remove a connection. Administrator only.
+// Remove a connection. Administrator only. Refused (409, settings.ErrInUse) while downloads run through it.
 // (DELETE /downloaders/{id})
 func (_ Unimplemented) DeleteDownloader(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Change a connection's own facts. Administrator only. Never touches credentials -- see /downloaders/{id}/credentials.
+// Change a connection's own facts. Administrator only. Never touches credentials -- see /downloaders/{id}/credentials. While downloads run through the client a changed impl or protocol is refused (409), and a changed base_url needs confirm_moved=true (409 otherwise).
 // (PATCH /downloaders/{id})
-func (_ Unimplemented) UpdateDownloader(w http.ResponseWriter, r *http.Request, id int64) {
+func (_ Unimplemented) UpdateDownloader(w http.ResponseWriter, r *http.Request, id int64, params UpdateDownloaderParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10510,7 +10516,7 @@ func (_ Unimplemented) TestIndexerConfig(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Remove a connection. Administrator only.
+// Remove a connection. Administrator only. Refused (409) while downloads or held releases came from it.
 // (DELETE /indexers/{id})
 func (_ Unimplemented) DeleteIndexer(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -14845,8 +14851,19 @@ func (siw *ServerInterfaceWrapper) UpdateDownloader(w http.ResponseWriter, r *ht
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateDownloaderParams
+
+	// ------------- Optional query parameter "confirm_moved" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "confirm_moved", r.URL.Query(), &params.ConfirmMoved)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "confirm_moved", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateDownloader(w, r, id)
+		siw.Handler.UpdateDownloader(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {

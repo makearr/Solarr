@@ -197,7 +197,9 @@ export function Downloaders() {
       )}
 
       {(setEnabled.isError || remove.isError) && (
-        <p className="text-xs text-danger">That change was refused.</p>
+        <p className="text-xs text-danger">
+          {((remove.error ?? setEnabled.error) as { detail?: string } | null)?.detail ?? "That change was refused."}
+        </p>
       )}
 
       {downloaders.data && downloaders.data.length > 0 && <ReadyQueueLimitEditor />}

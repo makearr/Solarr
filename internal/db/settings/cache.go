@@ -19,6 +19,9 @@ import (
 // ErrInUse reports a configuration entity that something still references (Invariant 41).
 var ErrInUse = errors.New("settings: entity is still referenced")
 
+// ErrMovedUnconfirmed reports a client's address changed while downloads run through it, without the user saying it is the same client.
+var ErrMovedUnconfirmed = errors.New("settings: client address changed under running downloads")
+
 // ErrInvalidNaming wraps a naming profile's media type refusing it.
 var ErrInvalidNaming = errors.New("settings: invalid naming")
 
@@ -49,7 +52,20 @@ type Cache struct {
 	// validateNaming is optional (EnableNamingValidation): the media type owns the token
 	// vocabulary, which this package cannot import.
 	validateNaming NamingValidator
-	logger         *slog.Logger
+	// downloadUsage is optional (EnableDownloadUsage): without it a client or indexer is deleted without asking who uses it.
+	downloadUsage DownloadUsage
+	logger        *slog.Logger
+}
+
+// DownloadUsage tells settings which unfinished downloads and held releases depend on a connection; library.db owns the rows.
+type DownloadUsage interface {
+	OpenOnDownloader(ctx context.Context, downloaderID int64) (int64, error)
+	OpenFromIndexer(ctx context.Context, indexerID int64) (open, held int64, err error)
+}
+
+// EnableDownloadUsage makes deleting or re-pointing a connection that downloads still run through refuse.
+func (c *Cache) EnableDownloadUsage(usage DownloadUsage) {
+	c.downloadUsage = usage
 }
 
 // NamingValidator refuses a naming profile its media type cannot render, naming every problem.

@@ -132,6 +132,7 @@ type Querier interface {
 	CountGroupOutcomes(ctx context.Context, arg CountGroupOutcomesParams) ([]CountGroupOutcomesRow, error)
 	// ready_queue is bounded (section 10.5), so no index is needed to ask this.
 	CountHeldForItem(ctx context.Context, desiredItemID int64) (int64, error)
+	CountHeldFromIndexer(ctx context.Context, indexerID int64) (int64, error)
 	// A download folder imports each entry once: any session, finished or dismissed, counts.
 	CountImportSessionsForSource(ctx context.Context, sourcePath string) (int64, error)
 	// One row per (unit, method) for a whole session, so the import screen can
@@ -148,6 +149,9 @@ type Querier interface {
 	// What a SET requires follows the monitored parts, so unmonitoring an episode
 	// shrinks the season rather than leaving it permanently incomplete (Appendix E, D3).
 	CountMonitoredParts(ctx context.Context, workID int64) (int64, error)
+	CountOpenFromIndexer(ctx context.Context, indexerID sql.NullInt64) (int64, error)
+	// Everything not finished through one client: a delete or a change of address would orphan these (DEL-1).
+	CountOpenOnDownloader(ctx context.Context, downloaderID int64) (int64, error)
 	// A person added this album (Discover, the add dialog), rather than a scan or an artist's expansion.
 	CountPersonAddedItems(ctx context.Context, workID int64) (int64, error)
 	// kind='unknown' is the cross-media-type placeholder marker an Identifier chain

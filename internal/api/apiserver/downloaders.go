@@ -105,12 +105,13 @@ func (s *Server) routeUpdateDownloader(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a downloader id must be a number")
 		return
 	}
-	s.UpdateDownloader(w, r, id)
+	confirmMoved := r.URL.Query().Get("confirm_moved") == "true"
+	s.UpdateDownloader(w, r, id, gen.UpdateDownloaderParams{ConfirmMoved: &confirmMoved})
 }
 
 // UpdateDownloader changes a connection's own facts. Administrator only.
 // Never touches credentials -- SetDownloaderCredentials's own job.
-func (s *Server) UpdateDownloader(w http.ResponseWriter, r *http.Request, id int64) {
+func (s *Server) UpdateDownloader(w http.ResponseWriter, r *http.Request, id int64, params gen.UpdateDownloaderParams) {
 	if !s.requireAdministrator(w, r) {
 		return
 	}
@@ -125,14 +126,14 @@ func (s *Server) UpdateDownloader(w http.ResponseWriter, r *http.Request, id int
 	if !s.validOptions(w, body.Options) {
 		return
 	}
-	// No options in the request keeps the stored ones: switching a client off must not wipe them.
+	// What the request leaves out keeps its stored value: switching a client off must not wipe its options, a rename must not re-enable it.
+	existing, err := s.auth.Settings.GetDownloader(r.Context(), id)
+	if err != nil {
+		writeDownloaderError(w, s, err, "The connection has problems", "Nothing was changed.")
+		return
+	}
 	settingsJSON := optionsJSON(body.Options)
 	if body.Options == nil {
-		existing, err := s.auth.Settings.GetDownloader(r.Context(), id)
-		if err != nil {
-			writeDownloaderError(w, s, err, "The connection has problems", "Nothing was changed.")
-			return
-		}
 		settingsJSON = existing.SettingsJSON
 	}
 	var stored settings.DownloaderOptions
@@ -142,7 +143,8 @@ func (s *Server) UpdateDownloader(w http.ResponseWriter, r *http.Request, id int
 	}
 	updated, err := s.auth.Settings.UpdateDownloader(r.Context(), id, settings.DownloaderRequest{
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
-		Enabled: derefOr(body.Enabled, true), Protocol: string(body.Protocol), SettingsJSON: settingsJSON,
+		Enabled: derefOr(body.Enabled, existing.Enabled), Protocol: string(body.Protocol), SettingsJSON: settingsJSON,
+		ConfirmMoved: derefOr(params.ConfirmMoved, false),
 	}, s.wall.Now().Unix())
 	if err != nil {
 		writeDownloaderError(w, s, err, "The connection has problems", "Nothing was changed.")
@@ -309,6 +311,8 @@ func writeDownloaderError(w http.ResponseWriter, s *Server, err error, title, cl
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, title, problems.Report("the connection", closing))
 	case errors.Is(err, settings.ErrNotFound):
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such downloader")
+	case errors.Is(err, settings.ErrMovedUnconfirmed):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Same client at a new address?", err.Error())
 	case errors.Is(err, settings.ErrSecretsUnavailable):
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
 			"Unavailable", "no encryption key is configured; credentials cannot be stored")

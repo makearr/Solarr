@@ -111,6 +111,42 @@ func (q *Queries) BlocklistRelease(ctx context.Context, arg BlocklistReleasePara
 	return i, err
 }
 
+const countHeldFromIndexer = `-- name: CountHeldFromIndexer :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM ready_queue WHERE indexer_id = ?
+`
+
+func (q *Queries) CountHeldFromIndexer(ctx context.Context, indexerID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countHeldFromIndexer, indexerID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countOpenFromIndexer = `-- name: CountOpenFromIndexer :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM acquisition
+WHERE indexer_id = ? AND state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED')
+`
+
+func (q *Queries) CountOpenFromIndexer(ctx context.Context, indexerID sql.NullInt64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countOpenFromIndexer, indexerID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countOpenOnDownloader = `-- name: CountOpenOnDownloader :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM acquisition
+WHERE downloader_id = ? AND state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED')
+`
+
+// Everything not finished through one client: a delete or a change of address would orphan these (DEL-1).
+func (q *Queries) CountOpenOnDownloader(ctx context.Context, downloaderID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countOpenOnDownloader, downloaderID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countQueuedOnDownloader = `-- name: CountQueuedOnDownloader :one
 SELECT CAST(COUNT(*) AS INTEGER) FROM acquisition
 WHERE downloader_id = ? AND state IN ('QUEUED', 'DOWNLOADING')

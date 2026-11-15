@@ -2324,7 +2324,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove a connection. Administrator only. */
+        /** Remove a connection. Administrator only. Refused (409) while downloads or held releases came from it. */
         delete: operations["deleteIndexer"];
         options?: never;
         head?: never;
@@ -2496,11 +2496,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove a connection. Administrator only. */
+        /** Remove a connection. Administrator only. Refused (409, settings.ErrInUse) while downloads run through it. */
         delete: operations["deleteDownloader"];
         options?: never;
         head?: never;
-        /** Change a connection's own facts. Administrator only. Never touches credentials -- see /downloaders/{id}/credentials. */
+        /** Change a connection's own facts. Administrator only. Never touches credentials -- see /downloaders/{id}/credentials. While downloads run through the client a changed impl or protocol is refused (409), and a changed base_url needs confirm_moved=true (409 otherwise). */
         patch: operations["updateDownloader"];
         trace?: never;
     };
@@ -15074,6 +15074,7 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     updateIndexer: {
@@ -15384,11 +15385,15 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     updateDownloader: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The new base_url is the same client at a new address, so its running downloads stay. */
+                confirm_moved?: boolean;
+            };
             header?: never;
             path: {
                 id: number;
@@ -15414,6 +15419,7 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     testDownloader: {

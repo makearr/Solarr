@@ -1,7 +1,9 @@
 package settings_test
 
 import (
+	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -145,5 +147,91 @@ func TestDeleteDownloader_RemovesIt(t *testing.T) {
 	}
 	if _, err := cache.GetDownloader(t.Context(), created.ID); err == nil {
 		t.Error("GetDownloader succeeded after delete, want an error")
+	}
+}
+
+// openUsage is a library.db stand-in: a fixed number of unfinished downloads and held releases.
+type openUsage struct{ open, held int64 }
+
+func (u openUsage) OpenOnDownloader(context.Context, int64) (int64, error) { return u.open, nil }
+func (u openUsage) OpenFromIndexer(context.Context, int64) (int64, int64, error) {
+	return u.open, u.held, nil
+}
+
+func createUsedDownloader(t *testing.T, usage openUsage) (*settings.Cache, settings.Downloader, int64) {
+	t.Helper()
+	cache, fake := newCache(t)
+	created, err := cache.CreateDownloader(t.Context(), settings.DownloaderRequest{
+		Name: "SABnzbd", Impl: "sabnzbd", BaseURL: "http://10.0.1.134:8080", Enabled: true, Protocol: "usenet",
+	}, secrets.Secret(""), fake.Now().Unix())
+	if err != nil {
+		t.Fatalf("CreateDownloader: %v", err)
+	}
+	cache.EnableDownloadUsage(usage)
+	return cache, created, fake.Now().Unix()
+}
+
+func TestDeleteDownloader_RefusedWhileDownloadsRun(t *testing.T) {
+	cache, created, _ := createUsedDownloader(t, openUsage{open: 3})
+
+	err := cache.DeleteDownloader(t.Context(), created.ID)
+	var inUse *settings.InUseError
+	if !errors.As(err, &inUse) || !errors.Is(err, settings.ErrInUse) {
+		t.Fatalf("DeleteDownloader = %v, want an InUseError", err)
+	}
+	if want := []settings.Reference{{Kind: "running downloads", Count: 3}}; !slices.Equal(inUse.References, want) {
+		t.Errorf("References = %+v, want %+v", inUse.References, want)
+	}
+	if _, err := cache.GetDownloader(t.Context(), created.ID); err != nil {
+		t.Errorf("the refused client is gone: %v", err)
+	}
+}
+
+func TestUpdateDownloader_ChangingKindOrAddressUnderRunningDownloads(t *testing.T) {
+	cache, created, at := createUsedDownloader(t, openUsage{open: 2})
+	request := func(edit func(*settings.DownloaderRequest)) settings.DownloaderRequest {
+		r := settings.DownloaderRequest{Name: created.Name, Impl: created.Impl, BaseURL: created.BaseURL, Enabled: true, Protocol: created.Protocol}
+		edit(&r)
+		return r
+	}
+
+	if _, err := cache.UpdateDownloader(t.Context(), created.ID, request(func(r *settings.DownloaderRequest) { r.Impl = "nzbget" }), at); !errors.Is(err, settings.ErrInUse) {
+		t.Errorf("kind change = %v, want ErrInUse", err)
+	}
+	if _, err := cache.UpdateDownloader(t.Context(), created.ID, request(func(r *settings.DownloaderRequest) { r.BaseURL = "http://10.0.1.135:8080" }), at); !errors.Is(err, settings.ErrMovedUnconfirmed) {
+		t.Errorf("unconfirmed move = %v, want ErrMovedUnconfirmed", err)
+	}
+	moved, err := cache.UpdateDownloader(t.Context(), created.ID, request(func(r *settings.DownloaderRequest) {
+		r.BaseURL = "http://10.0.1.135:8080"
+		r.ConfirmMoved = true
+	}), at)
+	if err != nil || moved.BaseURL != "http://10.0.1.135:8080" {
+		t.Errorf("confirmed move = %+v, %v, want the new address", moved, err)
+	}
+	if _, err := cache.UpdateDownloader(t.Context(), created.ID, request(func(r *settings.DownloaderRequest) { r.Name = "Renamed"; r.BaseURL = moved.BaseURL }), at); err != nil {
+		t.Errorf("a rename under running downloads = %v, want it allowed", err)
+	}
+}
+
+func TestDeleteIndexer_RefusedWhileDownloadsOrHeldReleasesCameFromIt(t *testing.T) {
+	cache, fake := newCache(t)
+	created, err := cache.CreateIndexer(t.Context(), settings.IndexerRequest{Name: "Usenet one", Impl: "newznab", BaseURL: "http://idx.example", Enabled: true}, secrets.Secret(""), fake.Now().Unix())
+	if err != nil {
+		t.Fatalf("CreateIndexer: %v", err)
+	}
+	cache.EnableDownloadUsage(openUsage{held: 1})
+
+	err = cache.DeleteIndexer(t.Context(), created.ID)
+	var inUse *settings.InUseError
+	if !errors.As(err, &inUse) {
+		t.Fatalf("DeleteIndexer = %v, want an InUseError", err)
+	}
+	if want := []settings.Reference{{Kind: "held releases", Count: 1}}; !slices.Equal(inUse.References, want) {
+		t.Errorf("References = %+v, want %+v", inUse.References, want)
+	}
+
+	cache.EnableDownloadUsage(openUsage{})
+	if err := cache.DeleteIndexer(t.Context(), created.ID); err != nil {
+		t.Errorf("DeleteIndexer with nothing in use = %v", err)
 	}
 }

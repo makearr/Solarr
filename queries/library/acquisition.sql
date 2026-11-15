@@ -62,6 +62,18 @@ ORDER BY id;
 SELECT CAST(COUNT(*) AS INTEGER) FROM acquisition
 WHERE downloader_id = ? AND state IN ('QUEUED', 'DOWNLOADING');
 
+-- Everything not finished through one client: a delete or a change of address would orphan these (DEL-1).
+-- name: CountOpenOnDownloader :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM acquisition
+WHERE downloader_id = ? AND state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED');
+
+-- name: CountOpenFromIndexer :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM acquisition
+WHERE indexer_id = ? AND state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED');
+
+-- name: CountHeldFromIndexer :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM ready_queue WHERE indexer_id = ?;
+
 -- name: SetAcquisitionState :exec
 UPDATE acquisition SET state = ?, last_error = ?, updated_at = ? WHERE id = ?;
 

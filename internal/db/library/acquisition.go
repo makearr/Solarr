@@ -169,6 +169,27 @@ func (a Acquisitions) QueuedOn(ctx context.Context, downloaderID int64) (int, er
 	return int(count), err
 }
 
+// OpenOnDownloader counts the downloads sent through one client and not finished (DEL-1).
+func (a Acquisitions) OpenOnDownloader(ctx context.Context, downloaderID int64) (int64, error) {
+	count, err := librarydb.New(a.store.Read()).CountOpenOnDownloader(ctx, downloaderID)
+	if err != nil {
+		return 0, fmt.Errorf("library: open downloads on client %d: %w", downloaderID, err)
+	}
+	return count, nil
+}
+
+// OpenFromIndexer counts the unfinished downloads and the held releases that came from one indexer (DEL-1).
+func (a Acquisitions) OpenFromIndexer(ctx context.Context, indexerID int64) (open, held int64, err error) {
+	queries := librarydb.New(a.store.Read())
+	if open, err = queries.CountOpenFromIndexer(ctx, nullInt64(&indexerID)); err != nil {
+		return 0, 0, fmt.Errorf("library: open downloads from indexer %d: %w", indexerID, err)
+	}
+	if held, err = queries.CountHeldFromIndexer(ctx, indexerID); err != nil {
+		return 0, 0, fmt.Errorf("library: held releases from indexer %d: %w", indexerID, err)
+	}
+	return open, held, nil
+}
+
 // ListActive answers every non-terminal acquisition -- startup
 // reconciliation's own future job (section 10.9), not built yet.
 func (a Acquisitions) ListActive(ctx context.Context) ([]Acquisition, error) {

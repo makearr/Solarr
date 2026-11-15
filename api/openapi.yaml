@@ -3497,12 +3497,13 @@ paths:
     delete:
       operationId: deleteIndexer
       tags: [settings]
-      summary: Remove a connection. Administrator only.
+      summary: Remove a connection. Administrator only. Refused (409) while downloads or held releases came from it.
       responses:
         "204": { description: Removed. }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
 
   /indexers/{id}/test:
     parameters:
@@ -3733,7 +3734,15 @@ paths:
       tags: [settings]
       summary: >-
         Change a connection's own facts. Administrator only. Never touches
-        credentials -- see /downloaders/{id}/credentials.
+        credentials -- see /downloaders/{id}/credentials. While downloads run
+        through the client a changed impl or protocol is refused (409), and a
+        changed base_url needs confirm_moved=true (409 otherwise).
+      parameters:
+        - name: confirm_moved
+          in: query
+          required: false
+          description: The new base_url is the same client at a new address, so its running downloads stay.
+          schema: { type: boolean }
       requestBody:
         required: true
         content:
@@ -3749,15 +3758,19 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
     delete:
       operationId: deleteDownloader
       tags: [settings]
-      summary: Remove a connection. Administrator only.
+      summary: >-
+        Remove a connection. Administrator only. Refused (409, settings.ErrInUse)
+        while downloads run through it.
       responses:
         "204": { description: Removed. }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
 
   /downloaders/{id}/test:
     parameters:

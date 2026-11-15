@@ -52,7 +52,8 @@ func (p *process) enqueuePoll(ctx context.Context) (jobs.EnqueueResult, error) {
 	})
 }
 
-// pollClients answers every enabled download connection with its options, fresh each poll.
+// pollClients answers every download connection with its options, fresh each poll; a disabled one is still followed
+// so what it already holds finishes (disabling only stops new sends).
 func (p *process) pollClients(ctx context.Context) (map[int64]poll.Client, error) {
 	configured, err := p.cache.Downloaders(ctx)
 	if err != nil {
@@ -61,9 +62,6 @@ func (p *process) pollClients(ctx context.Context) (map[int64]poll.Client, error
 	factory := p.downloaderClientFactory()
 	clients := make(map[int64]poll.Client, len(configured))
 	for _, downloader := range configured {
-		if !downloader.Enabled {
-			continue
-		}
 		credentials, err := p.cache.DecryptedDownloaderCredentials(ctx, downloader.ID)
 		if err != nil {
 			return nil, err

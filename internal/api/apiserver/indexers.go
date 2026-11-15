@@ -103,10 +103,12 @@ func (s *Server) UpdateIndexer(w http.ResponseWriter, r *http.Request, id int64)
 	}
 	// No definition in the request keeps the stored one: editing an indexer must not forget where it came from.
 	definition := derefOr(body.Definition, "")
+	enabled, priority := derefOr(body.Enabled, true), derefOr(body.Priority, 25)
 	var source *settings.IndexerSource
 	proxyID, clientID, queries := body.ProxyId, body.DownloadClientId, body.QueriesPerHour
 	if existing, err := s.auth.Settings.GetIndexer(r.Context(), id); err == nil {
 		source = existing.Source()
+		enabled, priority = derefOr(body.Enabled, existing.Enabled), derefOr(body.Priority, existing.Priority)
 		// Absent keeps the stored proxy; 0 takes it off.
 		if proxyID == nil {
 			proxyID = existing.ProxyID()
@@ -124,7 +126,7 @@ func (s *Server) UpdateIndexer(w http.ResponseWriter, r *http.Request, id int64)
 	}
 	updated, err := s.auth.Settings.UpdateIndexer(r.Context(), id, settings.IndexerRequest{
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
-		Enabled: derefOr(body.Enabled, true), Priority: derefOr(body.Priority, 25),
+		Enabled: enabled, Priority: priority,
 		EgressProxyURL: derefOr(body.EgressProxyUrl, ""), MusicCategories: derefOr(body.MusicCategories, nil),
 		Definition: definition, Source: source, ProxyID: proxyFromRequest(proxyID), DownloadClientID: proxyFromRequest(clientID), QueriesPerHour: derefOr(queries, 0),
 	}, s.wall.Now().Unix())

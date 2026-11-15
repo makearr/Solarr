@@ -186,7 +186,7 @@ func (j *Job) poll(ctx context.Context) error {
 	for clientID, acquisitions := range byClient {
 		client, ok := clients[clientID]
 		if !ok {
-			continue // Disabled or removed: nothing to ask, nothing concluded.
+			continue // Removed: nothing to ask, nothing concluded.
 		}
 		if err := j.pollClient(ctx, client, acquisitions); err != nil {
 			failures = append(failures, fmt.Errorf("download client %d: %w", clientID, err))

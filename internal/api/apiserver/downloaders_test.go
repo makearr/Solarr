@@ -289,3 +289,25 @@ func TestAddDownloader_RegistersTheFolderItReportsOnce(t *testing.T) {
 		t.Errorf("folders = %+v, want only /downloads/sabnzbd", folders)
 	}
 }
+
+func TestUpdateDownloader_WithoutEnabledKeepsItDisabled(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	created, err := fixture.cache.CreateDownloader(t.Context(), settings.DownloaderRequest{
+		Name: "SABnzbd", Impl: "sabnzbd", BaseURL: "http://sabnzbd.local:8080", Enabled: false, Protocol: "usenet",
+	}, secrets.Secret(""), fixture.clock.Now().Unix())
+	if err != nil {
+		t.Fatalf("CreateDownloader: %v", err)
+	}
+
+	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/downloaders/"+itoa(created.ID),
+		`{"name":"SABnzbd Renamed","impl":"sabnzbd","base_url":"http://sabnzbd.local:8080","protocol":"usenet"}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	stored, err := fixture.cache.GetDownloader(t.Context(), created.ID)
+	if err != nil || stored.Enabled {
+		t.Errorf("stored = %+v, %v, want the client still disabled", stored, err)
+	}
+}

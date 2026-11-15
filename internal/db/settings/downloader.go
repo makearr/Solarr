@@ -45,6 +45,8 @@ type DownloaderRequest struct {
 	Enabled      bool
 	Protocol     string
 	SettingsJSON string
+	// ConfirmMoved says a changed BaseURL is the same client at a new address, so its running downloads are kept.
+	ConfirmMoved bool
 }
 
 // validateDownloader checks what every client row needs; whether a kind needs an address (a blackhole has none) is
@@ -133,6 +135,10 @@ func (c *Cache) UpdateDownloader(ctx context.Context, id int64, request Download
 		return Downloader{}, problems
 	}
 
+	if err := c.checkDownloaderChange(ctx, id, request); err != nil {
+		return Downloader{}, err
+	}
+
 	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		return c.queries.WithTx(tx).UpdateDownloader(ctx, settingsdb.UpdateDownloaderParams{
 			Name: request.Name, Impl: request.Impl, BaseUrl: request.BaseURL,
@@ -145,6 +151,34 @@ func (c *Cache) UpdateDownloader(ctx context.Context, id int64, request Download
 		return Downloader{}, fmt.Errorf("settings: update downloader %d: %w", id, err)
 	}
 	return c.GetDownloader(ctx, id)
+}
+
+// checkDownloaderChange refuses a new kind, and an unconfirmed new address, while downloads run through the client:
+// their references belong to the old server and would otherwise read as vanished (TRACK-19).
+func (c *Cache) checkDownloaderChange(ctx context.Context, id int64, request DownloaderRequest) error {
+	if c.downloadUsage == nil {
+		return nil
+	}
+	stored, err := c.GetDownloader(ctx, id)
+	if err != nil {
+		return err
+	}
+	kindChanged := stored.Impl != request.Impl || stored.Protocol != request.Protocol
+	moved := stored.BaseURL != request.BaseURL && !request.ConfirmMoved
+	if !kindChanged && !moved {
+		return nil
+	}
+	open, err := c.downloadUsage.OpenOnDownloader(ctx, id)
+	if err != nil {
+		return fmt.Errorf("settings: count downloads of client %d: %w", id, err)
+	}
+	switch {
+	case open == 0:
+		return nil
+	case kindChanged:
+		return &InUseError{Entity: "download client", ID: id, References: []Reference{{Kind: "running downloads", Count: open}}}
+	}
+	return fmt.Errorf("%w: %d downloads are running through client %d", ErrMovedUnconfirmed, open, id)
 }
 
 // SetDownloaderCredentials reseals one connection's own credential, or
@@ -195,6 +229,15 @@ func (c *Cache) DecryptedDownloaderCredentials(ctx context.Context, id int64) (s
 // DeleteDownloader removes one connection. Deleting one that does not exist
 // is not an error -- DELETE already answers "gone" either way.
 func (c *Cache) DeleteDownloader(ctx context.Context, id int64) error {
+	if c.downloadUsage != nil {
+		open, err := c.downloadUsage.OpenOnDownloader(ctx, id)
+		if err != nil {
+			return fmt.Errorf("settings: count downloads of client %d: %w", id, err)
+		}
+		if open > 0 {
+			return &InUseError{Entity: "download client", ID: id, References: []Reference{{Kind: "running downloads", Count: open}}}
+		}
+	}
 	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		return c.queries.WithTx(tx).DeleteDownloader(ctx, id)
 	})

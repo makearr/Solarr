@@ -413,6 +413,22 @@ func (c *Cache) SetIndexerCaps(ctx context.Context, id int64, categoriesJSON str
 // DeleteIndexer removes one connection. Deleting one that does not exist is
 // not an error -- DELETE already answers "gone" either way.
 func (c *Cache) DeleteIndexer(ctx context.Context, id int64) error {
+	if c.downloadUsage != nil {
+		open, held, err := c.downloadUsage.OpenFromIndexer(ctx, id)
+		if err != nil {
+			return fmt.Errorf("settings: count downloads from indexer %d: %w", id, err)
+		}
+		var references []Reference
+		if open > 0 {
+			references = append(references, Reference{Kind: "running downloads", Count: open})
+		}
+		if held > 0 {
+			references = append(references, Reference{Kind: "held releases", Count: held})
+		}
+		if len(references) > 0 {
+			return &InUseError{Entity: "indexer", ID: id, References: references}
+		}
+	}
 	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		return c.queries.WithTx(tx).DeleteIndexer(ctx, id)
 	})
