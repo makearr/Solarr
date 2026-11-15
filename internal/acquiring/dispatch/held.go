@@ -9,6 +9,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/priority"
 )
 
@@ -47,6 +48,10 @@ func (d Dispatch) HoldIfFull(
 	if release.SizeBytes != nil {
 		size = *release.SizeBytes
 	}
+	item, err := d.Desired.Get(ctx, itemID)
+	if err != nil {
+		return false, err
+	}
 	limit := int64(DefaultReadyLimit)
 	if d.ReadyLimit != nil {
 		limit = d.ReadyLimit()
@@ -55,7 +60,7 @@ func (d Dispatch) HoldIfFull(
 		CandidateID: release.ID, DesiredItemID: itemID, Priority: rank,
 		QueuedAt: at.Unix(), ExpiresAt: release.ExpiresAt, Origin: string(origin),
 		IndexerID: release.IndexerID, GUID: release.GUID, Title: release.Title, DownloadURL: release.DownloadURL,
-		Protocol: release.Protocol, SizeBytes: size, Score: detail.Decision.Score,
+		Protocol: release.Protocol, SizeBytes: size, Score: detail.Decision.Score, ItemState: item.State,
 	}, limit)
 }
 
@@ -158,6 +163,10 @@ func (d Dispatch) stillSendable(ctx context.Context, entry library.ReadyEntry, a
 	}
 	if err != nil || item.Monitored == 0 {
 		return false, err
+	}
+	// Decided against the state it was held in: once the item needs nothing, or something else changed it, the hunt judges afresh.
+	if item.State == string(model.ItemStateComplete) || (entry.ItemState != "" && entry.ItemState != item.State) {
+		return false, nil
 	}
 	if _, inFlight, err := d.Acquisitions.InFlightForItem(ctx, entry.DesiredItemID); err != nil || inFlight {
 		return false, err

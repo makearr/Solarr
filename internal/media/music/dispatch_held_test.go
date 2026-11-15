@@ -1,12 +1,15 @@
 package music_test
 
 import (
+	"context"
+	"database/sql"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/media/music"
 )
@@ -224,5 +227,31 @@ func TestHeld_AHeldReleaseGoesWithStatisticsEmpty(t *testing.T) {
 	}
 	if last := e.sender.requests[len(e.sender.requests)-1]; last.Name != "Nosi Zada-Pasulo-2003-FLAC-GROUP" {
 		t.Errorf("sent %q, want the held release", last.Name)
+	}
+}
+
+// HELD-1: a release held for an item that was satisfied meanwhile, or whose state moved since, is dropped and searched afresh.
+func TestHeld_AnItemThatChangedStateWhileWaitingIsNotSent(t *testing.T) {
+	for _, state := range []string{"COMPLETE", "UPGRADABLE"} {
+		t.Run(state, func(t *testing.T) {
+			e := newHeldEnv(t, true)
+			sent := e.grabItem(t, e.first.ID).Sent
+			if !e.grabItem(t, e.second.ID).Held {
+				t.Fatal("not held")
+			}
+			err := e.library.Write(t.Context(), store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+				return librarydb.New(tx).SetDesiredItemState(ctx, librarydb.SetDesiredItemStateParams{State: state, PresentCount: 1, ID: e.second.ID})
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := e.acquisitions.SetState(t.Context(), sent.ID, "COMPLETED", "", 2); err != nil {
+				t.Fatal(err)
+			}
+
+			if got := e.sendHeld(t); got != 0 || len(e.sender.requests) != 1 {
+				t.Errorf("sent %d (%d requests), want nothing sent", got, len(e.sender.requests))
+			}
+		})
 	}
 }

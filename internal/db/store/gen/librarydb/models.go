@@ -737,6 +737,7 @@ type ReadyQueue struct {
 	DownloadUrl   string
 	Protocol      string
 	Score         sql.NullFloat64
+	ItemState     string
 }
 
 type RecycleBin struct {

@@ -22,6 +22,8 @@ type ReadyEntry struct {
 	GUID, Title, DownloadURL, Protocol string
 	SizeBytes                          int64
 	Score                              float64
+	// ItemState is the item's state when the release was held; empty when unknown.
+	ItemState string
 }
 
 // ReadyQueue is section 10.5's ready queue: held releases, sent the moment a client has room.
@@ -43,7 +45,7 @@ func (r ReadyQueue) Hold(ctx context.Context, entry ReadyEntry, limit int64) err
 			QueuedAt: entry.QueuedAt, ExpiresAt: entry.ExpiresAt, Origin: entry.Origin,
 			SizeBytes: sql.NullInt64{Int64: entry.SizeBytes, Valid: entry.SizeBytes > 0},
 			IndexerID: entry.IndexerID, Guid: entry.GUID, Title: entry.Title, DownloadUrl: entry.DownloadURL,
-			Protocol: entry.Protocol, Score: sql.NullFloat64{Float64: entry.Score, Valid: true},
+			Protocol: entry.Protocol, Score: sql.NullFloat64{Float64: entry.Score, Valid: true}, ItemState: entry.ItemState,
 		}); err != nil {
 			return err
 		}
@@ -63,7 +65,7 @@ func (r ReadyQueue) Next(ctx context.Context, now int64, limit int) ([]ReadyEntr
 			CandidateID: row.CandidateID, DesiredItemID: row.DesiredItemID, Priority: row.Priority,
 			QueuedAt: row.QueuedAt, ExpiresAt: row.ExpiresAt, Origin: row.Origin,
 			IndexerID: row.IndexerID, GUID: row.Guid, Title: row.Title, DownloadURL: row.DownloadUrl, Protocol: row.Protocol,
-			SizeBytes: row.SizeBytes.Int64, Score: row.Score.Float64,
+			SizeBytes: row.SizeBytes.Int64, Score: row.Score.Float64, ItemState: row.ItemState,
 		}
 	}
 	return entries, nil

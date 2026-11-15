@@ -561,12 +561,13 @@ func (q *Queries) DequeueReadyForItem(ctx context.Context, desiredItemID int64) 
 
 const enqueueReady = `-- name: EnqueueReady :exec
 INSERT INTO ready_queue (candidate_id, desired_item_id, priority, queued_at, expires_at, size_bytes, origin,
-                         indexer_id, guid, title, download_url, protocol, score)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         indexer_id, guid, title, download_url, protocol, score, item_state)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (candidate_id) DO UPDATE SET
   priority = excluded.priority,
   expires_at = excluded.expires_at,
-  origin = excluded.origin
+  origin = excluded.origin,
+  item_state = excluded.item_state
 `
 
 type EnqueueReadyParams struct {
@@ -583,6 +584,7 @@ type EnqueueReadyParams struct {
 	DownloadUrl   string
 	Protocol      string
 	Score         sql.NullFloat64
+	ItemState     string
 }
 
 // Primed so something dispatches the instant a slot frees (section 10.5).
@@ -601,6 +603,7 @@ func (q *Queries) EnqueueReady(ctx context.Context, arg EnqueueReadyParams) erro
 		arg.DownloadUrl,
 		arg.Protocol,
 		arg.Score,
+		arg.ItemState,
 	)
 	return err
 }
@@ -2791,7 +2794,7 @@ func (q *Queries) MoveCollectionMembers(ctx context.Context, arg MoveCollectionM
 
 const nextReady = `-- name: NextReady :many
 SELECT candidate_id, desired_item_id, priority, queued_at, expires_at, size_bytes, origin,
-       indexer_id, guid, title, download_url, protocol, score
+       indexer_id, guid, title, download_url, protocol, score, item_state
 FROM ready_queue
 WHERE expires_at > ?1
 ORDER BY priority DESC, queued_at ASC
@@ -2827,6 +2830,7 @@ func (q *Queries) NextReady(ctx context.Context, arg NextReadyParams) ([]ReadyQu
 			&i.DownloadUrl,
 			&i.Protocol,
 			&i.Score,
+			&i.ItemState,
 		); err != nil {
 			return nil, err
 		}
