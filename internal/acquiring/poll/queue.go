@@ -115,8 +115,8 @@ func (j *Job) readClients(ctx context.Context, active []library.Acquisition, cli
 			client := clients[id]
 			status := ClientStatus{ID: id, Name: client.Name}
 			status.Status, status.Err = client.Client.QueueStatus(ctx)
-			if status.Err == nil && hasActive(active, id) {
-				listed, err := client.Client.Downloads(ctx, "")
+			if open := activeOn(active, id); status.Err == nil && len(open) > 0 {
+				listed, err := listDownloads(ctx, client.Client, open)
 				status.Err = err
 				byRef := make(map[string]download.Download, len(listed))
 				for _, entry := range listed {
@@ -159,8 +159,8 @@ func (j *Job) now() time.Time {
 	return j.config.Clock.Now()
 }
 
-func hasActive(active []library.Acquisition, clientID int64) bool {
-	return slices.ContainsFunc(active, func(acquisition library.Acquisition) bool {
-		return acquisition.DownloaderID == clientID
+func activeOn(active []library.Acquisition, clientID int64) []library.Acquisition {
+	return slices.DeleteFunc(slices.Clone(active), func(acquisition library.Acquisition) bool {
+		return acquisition.DownloaderID != clientID
 	})
 }

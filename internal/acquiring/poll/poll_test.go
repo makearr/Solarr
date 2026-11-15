@@ -997,3 +997,23 @@ func TestPoll_AsksAClientThatCanForTheDownloadsItTracks(t *testing.T) {
 		t.Errorf("= %s, want DOWNLOADING", got.State)
 	}
 }
+
+// The Queue screen reads a shared client for the downloads Solarr sent, not for everything the client holds.
+func TestQueue_AsksAClientThatCanForTheDownloadsItTracks(t *testing.T) {
+	e := newEnv(t)
+	e.send(t, "nzo-1")
+	tracking := &referencingClient{fakeClient: e.client}
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka-Zanuvode", State: download.StateDownloading}}
+	job := poll.NewJob(poll.Config{
+		Acquisitions: e.acquisitions, Clock: e.clock,
+		Clients: func(context.Context) (map[int64]poll.Client, error) {
+			return map[int64]poll.Client{1: {Name: "SABnzbd", Client: tracking}}, nil
+		},
+	})
+	if _, _, err := job.Queue(t.Context()); err != nil {
+		t.Fatalf("Queue: %v", err)
+	}
+	if len(tracking.asked) != 1 || !slices.Equal(tracking.asked[0], []string{"nzo-1"}) {
+		t.Errorf("asked %v, want exactly the tracked reference", tracking.asked)
+	}
+}
