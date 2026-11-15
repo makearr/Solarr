@@ -666,8 +666,19 @@ func (j *Job) commitCluster(
 		}
 		groups = addToGroup(groups, route, i)
 	}
-	placements := make([]*library.Placement, len(routes))
-	for _, group := range groups {
+	// What needs no importer is recorded at once; each group is recorded the moment its files are placed, so a later
+	// group failing cannot make the session forget a unit that is already in the library.
+	var skipped []library.UnitDecision
+	for _, decision := range decisions {
+		if decision.UnitID != 0 {
+			skipped = append(skipped, decision)
+		}
+	}
+	if err := j.sessions.SetUnitDecisions(ctx, sessionID, skipped); err != nil {
+		return fmt.Errorf("importjob: record decisions: %w", err)
+	}
+	recordedAny := len(skipped) > 0
+	for position, group := range groups {
 		request := importbatch.Request{
 			SessionID: sessionID, AcquisitionID: session.AcquisitionID, SourcePath: sourcePath,
 			Preview: preview, Ladder: ladder, Threshold: threshold, AddUnidentified: unverified,
@@ -681,30 +692,54 @@ func (j *Job) commitCluster(
 		}
 		result, err := group.importer.ImportBatch(ctx, request)
 		if err != nil {
-			// A retry resumes after the last unit recorded: this cluster's rows go, so it is inspected again.
-			if deleteErr := j.sessions.DeleteUnits(ctx, sessionID, ids); deleteErr != nil {
-				j.logger.Warn("import: could not forget an unfinished cluster", slog.Int64("session_id", sessionID), slog.Any("error", deleteErr))
-			}
+			j.abandonUnrecorded(ctx, sessionID, ids, groups[position:], recordedAny, err)
 			return fmt.Errorf("importjob: import batch: %w", err)
 		}
+		groupDecisions := make([]library.UnitDecision, len(group.members))
+		for k := range group.members {
+			groupDecisions[k] = result.Decisions[k]
+		}
+		if err := j.sessions.SetUnitDecisions(ctx, sessionID, groupDecisions); err != nil {
+			return fmt.Errorf("importjob: record decisions: %w", err)
+		}
+		recordedAny = true
 		for k, i := range group.members {
-			decisions[i] = result.Decisions[k]
-			placements[i] = result.Placements[k]
-		}
-	}
-	if err := j.sessions.SetUnitDecisions(ctx, sessionID, decisions); err != nil {
-		return fmt.Errorf("importjob: record decisions: %w", err)
-	}
-	for i, placement := range placements {
-		if placement == nil {
-			continue
-		}
-		if err := j.sessions.RecordPlacement(ctx, ids[i], *placement); err != nil {
-			j.logger.Warn("import commit: could not record placement", slog.Int64("unit_id", ids[i]), slog.Any("error", err))
+			if result.Placements[k] == nil {
+				continue
+			}
+			// A placement that is not recorded is a unit in the library the session cannot revert: not a thing to log and go on.
+			if err := j.sessions.RecordPlacement(ctx, ids[i], *result.Placements[k]); err != nil {
+				return fmt.Errorf("importjob: record placement of unit %d: %w", ids[i], err)
+			}
 		}
 	}
 	j.publishProgress(ctx, sessionID, importPhaseWalking, batch[len(batch)-1].Directory)
 	return nil
+}
+
+// abandonUnrecorded handles a group whose import failed. When nothing of the cluster is recorded yet, every unit row goes so
+// the retry inspects the cluster again; when an earlier group is already recorded those rows must stay (their files are
+// placed), and the units of the failed and later groups are held for a person, since a retry would skip past them.
+func (j *Job) abandonUnrecorded(
+	ctx context.Context, sessionID int64, ids []int64, failed []importGroup, recordedAny bool, cause error,
+) {
+	if !recordedAny {
+		if err := j.sessions.DeleteUnits(ctx, sessionID, ids); err != nil {
+			j.logger.Warn("import: could not forget an unfinished cluster", slog.Int64("session_id", sessionID), slog.Any("error", err))
+		}
+		return
+	}
+	var held []library.UnitDecision
+	for _, group := range failed {
+		for _, i := range group.members {
+			held = append(held, library.UnitDecision{
+				UnitID: ids[i], Decision: library.UnitQueue, Reason: "the import stopped before this unit: " + cause.Error(),
+			})
+		}
+	}
+	if err := j.sessions.SetUnitDecisions(ctx, sessionID, held); err != nil {
+		j.logger.Warn("import: could not hold the units a failed group left", slog.Int64("session_id", sessionID), slog.Any("error", err))
+	}
 }
 
 // importGroup is the units of a cluster one importer places into one library, as positions in the cluster.
