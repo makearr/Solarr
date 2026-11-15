@@ -183,3 +183,17 @@ func TestFollow_RefusesWhatTheLibraryCannotTake(t *testing.T) {
 		}
 	}
 }
+
+// SYNC-6: a follow with no library, or whose library is gone, expands nothing rather than landing in the first library.
+func TestFollow_RunSkipsAFollowWithoutALibrary(t *testing.T) {
+	f := newFixture(t)
+	if _, err := f.service.Subscriptions.Follow(t.Context(), time.Unix(1, 0), f.subject, 7, library.FollowRequest{CategoryID: 99, MediaType: "fake"}); err != nil {
+		t.Skipf("fixture cannot hold a follow of an unknown library: %v", err)
+	}
+	if err := f.service.Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.added) != 0 {
+		t.Errorf("a follow without a library added %v", f.added)
+	}
+}

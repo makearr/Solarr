@@ -67,8 +67,8 @@ func (s SonarrImport) Import(ctx context.Context, run arrmap.Run) (library.ArrIm
 			return arrmap.Item{Name: series.Title, RootFolder: series.RootFolderPath, Monitored: series.Monitored, HasFiles: series.HasFiles()}
 		},
 		Workers: 4,
-		Monitor: func(ctx context.Context, _ int64, series arrimport.SonarrSeries) (library.ArrImportCounts, error) {
-			return s.monitorSeries(ctx, run, series, client)
+		Monitor: func(ctx context.Context, categoryID int64, series arrimport.SonarrSeries) (library.ArrImportCounts, error) {
+			return s.monitorSeries(ctx, run, categoryID, series, client)
 		},
 		Sync: func(ctx context.Context, categoryID int64, series arrimport.SonarrSeries) (library.ArrImportCounts, error) {
 			return arrmap.Tally(s.syncSeries(ctx, run, categoryID, series, client, profileNames))
@@ -170,7 +170,7 @@ func (s SonarrImport) carryOverProfile(
 }
 
 // monitorSeries gives the series Solarr holds under its TheTVDB id the monitoring Sonarr holds, episode by episode.
-func (s SonarrImport) monitorSeries(ctx context.Context, run arrmap.Run, series arrimport.SonarrSeries, client sonarrEpisodes) (library.ArrImportCounts, error) {
+func (s SonarrImport) monitorSeries(ctx context.Context, run arrmap.Run, categoryID int64, series arrimport.SonarrSeries, client sonarrEpisodes) (library.ArrImportCounts, error) {
 	if series.TVDBID == 0 {
 		return arrmap.Skipped, nil
 	}
@@ -182,8 +182,16 @@ func (s SonarrImport) monitorSeries(ctx context.Context, run arrmap.Run, series 
 	if err != nil || len(items) == 0 {
 		return arrmap.Found(false, err)
 	}
+	// A series held in two libraries takes Sonarr's monitoring in the one its root folder belongs to.
+	item := items[0]
+	for _, candidate := range items {
+		if candidate.CategoryID == categoryID {
+			item = candidate
+			break
+		}
+	}
 	run.Link(ctx, arrmap.LinkSeries, series.ID, "work", workID)
-	return arrmap.Found(true, s.carryOverMonitoring(ctx, items[0].CategoryID, workID, series, client))
+	return arrmap.Found(true, s.carryOverMonitoring(ctx, item.CategoryID, workID, series, client))
 }
 
 // Preview reads Sonarr's series.

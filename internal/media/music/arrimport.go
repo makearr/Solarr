@@ -36,12 +36,12 @@ func (l LidarrImport) Import(ctx context.Context, run arrmap.Run) (library.ArrIm
 			return arrmap.Item{Name: artist.ArtistName, RootFolder: artist.RootFolderPath, Monitored: artist.Monitored, HasFiles: artist.HasFiles()}
 		},
 		Workers: 1,
-		Monitor: func(ctx context.Context, _ int64, artist arrimport.LidarrArtist) (library.ArrImportCounts, error) {
-			return l.monitorArtist(ctx, run, artist)
+		Monitor: func(ctx context.Context, categoryID int64, artist arrimport.LidarrArtist) (library.ArrImportCounts, error) {
+			return l.monitorArtist(ctx, run, categoryID, artist)
 		},
 		Sync: func(ctx context.Context, categoryID int64, artist arrimport.LidarrArtist) (library.ArrImportCounts, error) {
 			var counts library.ArrImportCounts
-			personID, created, err := l.adoptArtist(ctx, run, artist)
+			personID, created, err := l.adoptArtist(ctx, run, categoryID, artist)
 			if err != nil {
 				return counts, err
 			}
@@ -80,7 +80,7 @@ func (l LidarrImport) Import(ctx context.Context, run arrmap.Run) (library.ArrIm
 
 // adoptArtist resolves-or-creates the person behind the artist's MusicBrainz id and ensures their subscription,
 // recording one item either way. A brand-new person cannot have had a subscription, so one is created exactly with them.
-func (l LidarrImport) adoptArtist(ctx context.Context, run arrmap.Run, artist arrimport.LidarrArtist) (personID int64, created bool, err error) {
+func (l LidarrImport) adoptArtist(ctx context.Context, run arrmap.Run, categoryID int64, artist arrimport.LidarrArtist) (personID int64, created bool, err error) {
 	if artist.ForeignArtistID == "" {
 		return 0, false, errors.New("no MusicBrainz artist id")
 	}
@@ -98,9 +98,14 @@ func (l LidarrImport) adoptArtist(ctx context.Context, run arrmap.Run, artist ar
 
 	// An unmonitored artist arrives as an artist in the library, not one followed for new albums.
 	var subscription *int64
-	if artist.Monitored {
+	// Lidarr's "monitor new items: none" keeps the artist's albums as they are and follows nothing.
+	if artist.Monitored && artist.MonitorNewItems != "none" {
+		filtersJSON, err := l.followFilters(categoryID)
+		if err != nil {
+			return 0, false, err
+		}
 		subscriptionID, err := l.People.Subscribe(ctx, now, personID, 0, library.SubscriptionRequest{
-			MediaTypes: []string{string(MediaType)}, Roles: []string{CreditRoleArtist},
+			MediaTypes: []string{string(MediaType)}, Roles: []string{CreditRoleArtist}, CategoryID: categoryID, FiltersJSON: filtersJSON,
 		})
 		if err != nil {
 			return 0, false, err
@@ -116,6 +121,15 @@ func (l LidarrImport) adoptArtist(ctx context.Context, run arrmap.Run, artist ar
 	}
 	run.Link(ctx, arrmap.LinkArtist, artist.ID, "person", personID)
 	return personID, created, nil
+}
+
+// followFilters are the release types the library brings in, fixed onto the follow as adding an artist does.
+func (l LidarrImport) followFilters(categoryID int64) (string, error) {
+	category, found := l.Categories.Category(categoryID)
+	if !found {
+		return "", fmt.Errorf("library %d not found", categoryID)
+	}
+	return LibraryFollowFilters(category)
 }
 
 // adoptAlbum resolves-or-creates the work behind the album's release-group id and ensures its album-level item, recording
@@ -166,8 +180,15 @@ func (l LidarrImport) adoptAlbum(
 }
 
 // monitorArtist gives the artist and the albums Solarr holds under their MusicBrainz ids the monitoring Lidarr holds.
-func (l LidarrImport) monitorArtist(ctx context.Context, run arrmap.Run, artist arrimport.LidarrArtist) (library.ArrImportCounts, error) {
-	personID, held, err := l.Monitors.Person(ctx, ProviderArtist, artist.ForeignArtistID, string(MediaType), CreditRoleArtist, 0, artist.Monitored)
+func (l LidarrImport) monitorArtist(ctx context.Context, run arrmap.Run, categoryID int64, artist arrimport.LidarrArtist) (library.ArrImportCounts, error) {
+	filtersJSON := ""
+	if artist.Monitored {
+		var err error
+		if filtersJSON, err = l.followFilters(categoryID); err != nil {
+			return library.ArrImportCounts{}, err
+		}
+	}
+	personID, held, err := l.Monitors.Person(ctx, ProviderArtist, artist.ForeignArtistID, string(MediaType), CreditRoleArtist, categoryID, filtersJSON, artist.Monitored)
 	if err != nil || !held {
 		return arrmap.Found(held, err)
 	}
@@ -178,7 +199,7 @@ func (l LidarrImport) monitorArtist(ctx context.Context, run arrmap.Run, artist 
 		return counts, fmt.Errorf("list albums: %w", err)
 	}
 	for _, album := range albums {
-		workID, albumHeld, err := l.Monitors.Work(ctx, string(MediaType), ProviderReleaseGroup, album.ForeignAlbumID, album.Monitored)
+		workID, albumHeld, err := l.Monitors.Work(ctx, categoryID, string(MediaType), ProviderReleaseGroup, album.ForeignAlbumID, album.Monitored)
 		if err != nil {
 			return counts, fmt.Errorf("%s: %w", album.Title, err)
 		}

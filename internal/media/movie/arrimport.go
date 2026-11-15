@@ -63,8 +63,8 @@ func (r RadarrImport) source(run arrmap.Run) arrmap.Source[arrimport.RadarrMovie
 			return arrmap.Item{Name: radarr.Title, RootFolder: radarr.RootFolderPath, Monitored: radarr.Monitored, HasFiles: radarr.HasFile}
 		},
 		Workers: 4,
-		Monitor: func(ctx context.Context, _ int64, radarr arrimport.RadarrMovie) (library.ArrImportCounts, error) {
-			workID, held, err := r.Monitors.Work(ctx, MediaType, tmdb.KeyMovie, strconv.FormatInt(radarr.TMDBID, 10), radarr.Monitored)
+		Monitor: func(ctx context.Context, categoryID int64, radarr arrimport.RadarrMovie) (library.ArrImportCounts, error) {
+			workID, held, err := r.Monitors.Work(ctx, categoryID, MediaType, tmdb.KeyMovie, strconv.FormatInt(radarr.TMDBID, 10), radarr.Monitored)
 			if held && err == nil {
 				run.Link(ctx, arrmap.LinkMovie, radarr.ID, "work", workID)
 			}

@@ -207,7 +207,7 @@ func (a ArrSync) runAndFinish(
 // run is one import as a mapping sees it: what a walk records and links, the walk's place and progress.
 func (a ArrSync) run(importID int64, instance settings.ArrInstance, client arrimport.LidarrClient, options apiserver.ArrSyncOptions) arrmap.Run {
 	return arrmap.Run{
-		Client: client,
+		Client: client, Logger: a.Logger,
 		Options: arrmap.Options{
 			Monitored: options.Monitored, Unmonitored: options.Unmonitored, Present: options.Present, Albums: options.Albums, ProfileMap: options.ProfileMap,
 			MonitoringOnly: options.MonitoringOnly, Limit: options.Limit,

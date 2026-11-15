@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,6 +48,8 @@ type Run struct {
 	Record func(ctx context.Context, item library.NewArrImportItem) error
 	// Link remembers what an *Arr item is here, for sending monitoring back.
 	Link func(ctx context.Context, sourceKind string, sourceID int64, localKind string, localID int64)
+	// Logger, when set, gets every per-item failure, which the run's message only summarises.
+	Logger *slog.Logger
 }
 
 // Importer is one app's mapping onto a media type.
@@ -155,34 +159,72 @@ func Walk[T any](ctx context.Context, run Run, source Source[T]) (library.ArrImp
 		mu       sync.Mutex
 		walked   int64
 		counts   library.ArrImportCounts
-		failures []string
+		failures = map[string][]string{}
+		unmapped = map[string]int{}
 	)
 	parallel.Do(ctx, len(chosen), max(1, source.Workers), func(ctx context.Context, index int) error {
 		item := chosen[index]
 		described := source.Describe(item)
 		var got library.ArrImportCounts
 		categoryID, placed := run.Place(described.RootFolder)
-		err := fmt.Errorf("no category matches root folder %q", described.RootFolder)
+		var err error
 		switch {
+		case !placed:
+			// A root folder the user has not mapped to a library is not a failure: the item is left alone.
+			got = Skipped
 		case run.Options.MonitoringOnly:
 			got, err = source.Monitor(ctx, categoryID, item)
-		case placed:
+		default:
 			got, err = source.Sync(ctx, categoryID, item)
 		}
 		mu.Lock()
 		defer mu.Unlock()
 		counts = addCounts(counts, got)
-		if err != nil {
-			failures = append(failures, fmt.Sprintf("%s: %v", described.Name, err))
+		switch {
+		case !placed:
+			unmapped[described.RootFolder]++
+		case err != nil:
+			failures[err.Error()] = append(failures[err.Error()], described.Name)
+			if run.Logger != nil {
+				run.Logger.WarnContext(ctx, "arr import: item failed", slog.String("item", described.Name), slog.Any("error", err))
+			}
 		}
 		walked++
 		run.Progress(walked, total)
 		return nil
 	})
-	if len(failures) > 0 {
-		return counts, errors.New(strings.Join(failures, "; "))
+	if message := summarise(unmapped, failures); message != "" {
+		return counts, errors.New(message)
 	}
 	return counts, nil
+}
+
+// maxMessageBytes caps the text a run stores of what went wrong; every failure is in the log.
+const maxMessageBytes = 4096
+
+// namesListed is how many item names a group of identical failures lists.
+const namesListed = 10
+
+// summarise is the run's message: one line per root folder with no library, then the failures grouped by their text.
+func summarise(unmapped map[string]int, failures map[string][]string) string {
+	var lines []string
+	for _, root := range slices.Sorted(maps.Keys(unmapped)) {
+		lines = append(lines, fmt.Sprintf("%s: %d items skipped, the folder is not mapped to a library", root, unmapped[root]))
+	}
+	for _, text := range slices.Sorted(maps.Keys(failures)) {
+		names := failures[text]
+		shown := names[:min(len(names), namesListed)]
+		line := fmt.Sprintf("%s: %s", strings.Join(shown, ", "), text)
+		if more := len(names) - len(shown); more > 0 {
+			line += fmt.Sprintf(" (and %d more)", more)
+		}
+		lines = append(lines, line)
+	}
+	message := strings.Join(lines, "; ")
+	if len(message) > maxMessageBytes {
+		message = strings.ToValidUTF8(message[:maxMessageBytes], "") + "..."
+	}
+	return message
 }
 
 func addCounts(a, b library.ArrImportCounts) library.ArrImportCounts {

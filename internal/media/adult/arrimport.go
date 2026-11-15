@@ -159,13 +159,13 @@ func (w WhisparrImport) syncEntry(ctx context.Context, run arrmap.Run, categoryI
 func (w WhisparrImport) monitorEntry(ctx context.Context, run arrmap.Run, categoryID int64, entry whisparrEntry) (library.ArrImportCounts, error) {
 	switch entry.kind {
 	case entryScene:
-		workID, held, err := w.Monitors.Work(ctx, MediaType, ProviderStashDB, entry.scene.Identifier(), entry.scene.Monitored)
+		workID, held, err := w.Monitors.Work(ctx, categoryID, MediaType, ProviderStashDB, entry.scene.Identifier(), entry.scene.Monitored)
 		if held && err == nil {
 			run.Link(ctx, arrmap.LinkScene, entry.scene.ID, "work", workID)
 		}
 		return arrmap.Found(held, err)
 	case entryPerformer:
-		personID, held, err := w.Monitors.Person(ctx, whisparrPerformerProvider, entry.performer.ForeignID, MediaType, RolePerformer, categoryID, entry.performer.Monitored)
+		personID, held, err := w.Monitors.Person(ctx, whisparrPerformerProvider, entry.performer.ForeignID, MediaType, RolePerformer, categoryID, "", entry.performer.Monitored)
 		if held && err == nil {
 			run.Link(ctx, arrmap.LinkPerformer, entry.performer.ID, "person", personID)
 		}

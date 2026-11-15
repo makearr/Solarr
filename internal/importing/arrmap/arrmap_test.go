@@ -61,7 +61,7 @@ func TestWalkArr_SyncsWhatTheOptionsWantAndKeepsGoing(t *testing.T) {
 	}
 
 	counts, err := Walk(t.Context(), walk, source)
-	want := library.ArrImportCounts{ArtistsCreated: 2, ArtistsMatched: 1, AlbumsCreated: 5}
+	want := library.ArrImportCounts{ArtistsCreated: 2, ArtistsMatched: 1, AlbumsCreated: 5, ItemsParked: 1}
 	if counts != want {
 		t.Errorf("counts = %+v, want %+v", counts, want)
 	}
@@ -69,9 +69,9 @@ func TestWalkArr_SyncsWhatTheOptionsWantAndKeepsGoing(t *testing.T) {
 	if !slices.Equal(synced, []string{"Alpha", "Delta", "Echo"}) {
 		t.Errorf("synced %v, want the monitored ones under a library's root", synced)
 	}
-	if err == nil || !strings.Contains(err.Error(), `Charlie: no category matches root folder "/elsewhere/Charlie"`) ||
+	if err == nil || !strings.Contains(err.Error(), "/elsewhere/Charlie: 1 items skipped, the folder is not mapped to a library") ||
 		!strings.Contains(err.Error(), "Delta: one album failed") {
-		t.Errorf("error = %v, want Charlie's and Delta's failures by name", err)
+		t.Errorf("error = %v, want the unmapped root and Delta's failure by name", err)
 	}
 	if figure != [2]int64{4, 4} {
 		t.Errorf("progress = %v, want 4 of 4", figure)
@@ -83,7 +83,7 @@ func TestWalkArr_SyncsWhatTheOptionsWantAndKeepsGoing(t *testing.T) {
 	}
 }
 
-// A monitoring-only walk takes every item whatever its flag, needs no library for its root folder, and never syncs.
+// A monitoring-only walk takes every item whatever its flag, applies it in the library of its root folder, and never syncs.
 func TestWalkArr_MonitoringOnlyTakesEveryItemAndAddsNothing(t *testing.T) {
 	items := []walked{{"Alpha", "/nowhere/Alpha", true}, {"Bravo", "/nowhere/Bravo", false}}
 	var mu sync.Mutex
@@ -109,7 +109,7 @@ func TestWalkArr_MonitoringOnlyTakesEveryItemAndAddsNothing(t *testing.T) {
 			return library.ArrImportCounts{ArtistsMatched: 1}, nil
 		},
 	}
-	walk := Run{Options: Options{MonitoringOnly: true}, Progress: func(int64, int64) {}, Place: func(string) (int64, bool) { return 0, false }}
+	walk := Run{Options: Options{MonitoringOnly: true}, Progress: func(int64, int64) {}, Place: func(string) (int64, bool) { return 4, true }}
 	counts, err := Walk(t.Context(), walk, source)
 	if err != nil || counts != (library.ArrImportCounts{ArtistsMatched: 1, ItemsParked: 1}) {
 		t.Errorf("counts = %+v, err = %v; want one matched and one skipped", counts, err)
@@ -187,5 +187,45 @@ func TestWalk_PresentChoosesItemsWithFilesWhateverTheirFlag(t *testing.T) {
 	}
 	if want := []string{"Kept"}; !slices.Equal(synced, want) {
 		t.Fatalf("present only synced %v, want %v", synced, want)
+	}
+}
+
+// SYNC-5: an unmapped root with hundreds of items is one line, not a failed run.
+func TestWalk_AnUnmappedRootIsOneLineAndFailuresAreGroupedAndCapped(t *testing.T) {
+	var items []walked
+	for i := range 500 {
+		items = append(items, walked{name: "Artist" + strings.Repeat("x", 20) + string(rune('a'+i%26)), root: "/other/music", monitored: true})
+	}
+	for i := range 30 {
+		items = append(items, walked{name: "Broken" + string(rune('A'+i%26)) + string(rune('a'+i/26)), root: "/arr/music/x", monitored: true})
+	}
+	source := Source[walked]{
+		Connect:  func(context.Context) error { return nil },
+		List:     func(context.Context) ([]walked, error) { return items, nil },
+		Describe: func(item walked) Item { return Item{Name: item.name, RootFolder: item.root, Monitored: true} },
+		Workers:  1,
+		Sync: func(context.Context, int64, walked) (library.ArrImportCounts, error) {
+			return library.ArrImportCounts{}, errors.New("no MusicBrainz artist id")
+		},
+	}
+	run := Run{Options: Options{Monitored: true}, Progress: func(int64, int64) {}, Place: func(root string) (int64, bool) { return 4, root == "/arr/music/x" }}
+	counts, err := Walk(t.Context(), run, source)
+	if counts.ItemsParked != 500 {
+		t.Errorf("parked %d, want 500", counts.ItemsParked)
+	}
+	if err == nil || len(err.Error()) > 4200 ||
+		!strings.Contains(err.Error(), "/other/music: 500 items skipped, the folder is not mapped to a library") ||
+		!strings.Contains(err.Error(), "(and 20 more)") {
+		t.Errorf("message = %v (%d bytes), want one unmapped line and the failures grouped with 20 more", err, len(err.Error()))
+	}
+}
+
+// SYNC-5: a monitoring change with no library is refused, never applied to every library.
+func TestMonitorsRefuseWhenThereIsNoLibrary(t *testing.T) {
+	if _, _, err := (Monitors{}).Person(t.Context(), "p", "id", "music", "artist", 0, "", false); err == nil {
+		t.Error("a person's monitoring was applied with no library")
+	}
+	if _, _, err := (Monitors{}).Organisation(t.Context(), "p", "id", "adult", 0, false); err == nil {
+		t.Error("an organisation's monitoring was applied with no library")
 	}
 }

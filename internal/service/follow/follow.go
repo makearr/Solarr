@@ -224,12 +224,17 @@ func (s Service) Run(ctx context.Context, job jobs.Job) error {
 	if err != nil {
 		return fmt.Errorf("follow: sweep: %w", err)
 	}
-	added, failed := 0, 0
+	added, failed, unplaced := 0, 0, 0
 	for _, subscription := range subscriptions {
 		if err := ctx.Err(); err != nil {
 			return jobs.Retryablef("follow.context", string(JobType), err)
 		}
 		if payload.SubscriptionID != 0 && subscription.ID != payload.SubscriptionID {
+			continue
+		}
+		// A follow with no library, or one that is gone, has nowhere to put what it finds: it waits for a library.
+		if _, found := s.Libraries.Category(subscription.CategoryID); !found {
+			unplaced++
 			continue
 		}
 		count, err := s.expand(ctx, subscription, payload.Search)
@@ -239,7 +244,10 @@ func (s Service) Run(ctx context.Context, job jobs.Job) error {
 			s.logger().WarnContext(ctx, "follow failed", slog.Int64("subscription_id", subscription.ID), slog.Any("error", err))
 		}
 	}
-	s.logger().Info("follow sweep finished", slog.Int("added", added), slog.Int("failed", failed))
+	if unplaced > 0 {
+		s.logger().WarnContext(ctx, "follows without a library skipped", slog.Int("follows", unplaced))
+	}
+	s.logger().Info("follow sweep finished", slog.Int("added", added), slog.Int("failed", failed), slog.Int("without_library", unplaced))
 	return nil
 }
 

@@ -2,12 +2,16 @@ package arrmap
 
 import (
 	"context"
+	"errors"
 	"slices"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
+
+// errNoLibrary refuses a monitoring change that has no library to apply to: it would reach every library the subject is in.
+var errNoLibrary = errors.New("arrmap: no library for the item")
 
 // Skipped is the tally of an item a monitoring-only import found no counterpart of here: nothing was added.
 var Skipped = library.ArrImportCounts{ItemsParked: 1}
@@ -63,7 +67,7 @@ func MonitorChoice(descriptor media.Descriptor, monitored bool) (string, bool) {
 
 // Work sets the monitoring of the work of the media type that the provider names by id, through the type's own monitor
 // option, else item by item; false when Solarr holds no such work.
-func (m Monitors) Work(ctx context.Context, mediaType, provider, externalID string, monitored bool) (int64, bool, error) {
+func (m Monitors) Work(ctx context.Context, categoryID int64, mediaType, provider, externalID string, monitored bool) (int64, bool, error) {
 	if externalID == "" || externalID == "0" {
 		return 0, false, nil
 	}
@@ -74,6 +78,13 @@ func (m Monitors) Work(ctx context.Context, mediaType, provider, externalID stri
 	items, err := m.Desired.AlbumItemsForWork(ctx, workID)
 	if err != nil || len(items) == 0 {
 		return 0, false, err
+	}
+	// A work held in two libraries is set in the one the *Arr's root folder belongs to.
+	for at := range items {
+		if items[at].CategoryID == categoryID {
+			items = items[at : at+1]
+			break
+		}
 	}
 	if m.Registry != nil {
 		if module, ok := m.Registry.Module(media.Key(mediaType)); ok {
@@ -94,25 +105,31 @@ func (m Monitors) Work(ctx context.Context, mediaType, provider, externalID stri
 
 // Person follows the person the provider names by id in the media type's libraries, or stops following them; false when
 // Solarr holds no such person.
-func (m Monitors) Person(ctx context.Context, provider, externalID, mediaType, role string, categoryID int64, monitored bool) (int64, bool, error) {
+func (m Monitors) Person(ctx context.Context, provider, externalID, mediaType, role string, categoryID int64, filtersJSON string, monitored bool) (int64, bool, error) {
 	if externalID == "" {
 		return 0, false, nil
+	}
+	if categoryID == 0 {
+		return 0, false, errNoLibrary
 	}
 	personID, held, err := m.People.FindByExternalID(ctx, provider, externalID)
 	if err != nil || !held {
 		return 0, false, err
 	}
 	if monitored {
-		_, err := m.People.Subscribe(ctx, m.Clock.Now(), personID, 0, library.SubscriptionRequest{MediaTypes: []string{mediaType}, Roles: []string{role}, CategoryID: categoryID})
+		_, err := m.People.Subscribe(ctx, m.Clock.Now(), personID, 0, library.SubscriptionRequest{MediaTypes: []string{mediaType}, Roles: []string{role}, CategoryID: categoryID, FiltersJSON: filtersJSON})
 		return personID, true, err
 	}
-	return personID, true, m.unfollow(ctx, library.Subject{Type: "person", ID: personID})
+	return personID, true, m.unfollow(ctx, library.Subject{Type: "person", ID: personID}, categoryID)
 }
 
 // Organisation is Person for a studio.
 func (m Monitors) Organisation(ctx context.Context, provider, externalID, mediaType string, categoryID int64, monitored bool) (int64, bool, error) {
 	if externalID == "" {
 		return 0, false, nil
+	}
+	if categoryID == 0 {
+		return 0, false, errNoLibrary
 	}
 	organisationID, held, err := m.Organisations.FindByExternalID(ctx, provider, externalID)
 	if err != nil || !held {
@@ -123,15 +140,19 @@ func (m Monitors) Organisation(ctx context.Context, provider, externalID, mediaT
 		_, err := m.Subscriptions.Follow(ctx, m.Clock.Now(), subject, 0, library.FollowRequest{CategoryID: categoryID, MediaType: mediaType})
 		return organisationID, true, err
 	}
-	return organisationID, true, m.unfollow(ctx, subject)
+	return organisationID, true, m.unfollow(ctx, subject, categoryID)
 }
 
-func (m Monitors) unfollow(ctx context.Context, subject library.Subject) error {
+// unfollow stops following the subject in one library; the follows it has in others are not the *Arr's to remove.
+func (m Monitors) unfollow(ctx context.Context, subject library.Subject, categoryID int64) error {
 	follows, err := m.Subscriptions.FollowsOf(ctx, subject, 0)
 	if err != nil {
 		return err
 	}
 	for _, follow := range follows {
+		if follow.CategoryID != categoryID {
+			continue
+		}
 		if err := m.Subscriptions.Unfollow(ctx, subject, 0, follow.CategoryID); err != nil {
 			return err
 		}

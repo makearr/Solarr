@@ -176,9 +176,6 @@ func (f Following) AddFollowed(ctx context.Context, follow media.Follow, candida
 	}
 	category, ok := f.Categories.Category(follow.CategoryID)
 	if !ok {
-		category, ok = f.Categories.CategoryForMediaType(string(MediaType))
-	}
-	if !ok {
 		return fmt.Errorf("music: no library for the follow")
 	}
 	profileID := f.DefaultProfileID
