@@ -17,6 +17,7 @@ import (
 func testDriver(t *testing.T, spec Spec, server *httptest.Server, settings map[string]string) *Driver {
 	t.Helper()
 	fake := clock.NewFakeAtEpoch()
+	fake.Set(time.Date(2026, 11, 8, 12, 0, 0, 0, time.UTC))
 	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter)
 	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute})
 	jar, err := cookiejar.New(nil)
@@ -283,5 +284,36 @@ func TestRowsTakeTheirDateFromTheHeadingAboveThem(t *testing.T) {
 	}
 	if got := items[0].PublishedAt.UTC().Format(time.DateOnly) + " " + items[1].PublishedAt.UTC().Format(time.DateOnly); got != "2020-03-05 2019-01-02" {
 		t.Errorf("dates = %q, want each row dated by its own heading", got)
+	}
+}
+
+// A date the page does not give, or gives wrongly, is unknown, not "published now" (IDX-10).
+func TestParseDateGivesZeroWhenNoDateCanBeRight(t *testing.T) {
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	instant := time.Unix(1767225600, 0)
+	for text, want := range map[string]time.Time{
+		"":                          {},
+		"soon":                      {},
+		"1767225600":                instant,
+		"1767225600000":             instant,
+		"17672256000000000":         {},
+		"12345":                     {},
+		"2026-01-11T12:00:00Z":      {},
+		"2026-01-02T00:00:00+02:00": time.Date(2026, 1, 1, 22, 0, 0, 0, time.UTC),
+	} {
+		if got := parseDate(text, now); !got.Equal(want) {
+			t.Errorf("parseDate(%q) = %v, want %v", text, got, want)
+		}
+	}
+}
+
+func TestSearchLeavesAnUndatedReleaseUndated(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(htmlResults)) }))
+	defer server.Close()
+	spec := htmlSpec()
+	spec.Search.Fields = spec.Search.Fields[:len(spec.Search.Fields)-1]
+	items, err := testDriver(t, spec, server, nil).Search(t.Context(), indexer.SearchRequest{Query: "x", Categories: []int{3000}})
+	if err != nil || len(items) != 2 || !items[0].PublishedAt.IsZero() || !items[1].PublishedAt.IsZero() {
+		t.Fatalf("items = %+v, %v; want two releases without a date", items, err)
 	}
 }

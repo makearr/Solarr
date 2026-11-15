@@ -371,18 +371,36 @@ func parseCount(text string) int {
 	return count
 }
 
+// futureSlack is how far past now a release date may read before it is taken for a misread (clock skew, zone offsets).
+const futureSlack = 48 * time.Hour
+
+// parseDate reads a release date; the zero time means the page gave none, or none that can be right.
 func parseDate(text string, now time.Time) time.Time {
 	text = strings.TrimSpace(text)
+	parsed, ok := readDate(text, now)
+	if !ok || parsed.After(now.Add(futureSlack)) {
+		return time.Time{}
+	}
+	return parsed
+}
+
+func readDate(text string, now time.Time) (time.Time, bool) {
 	if parsed, err := time.Parse(time.RFC3339, text); err == nil {
-		return parsed
+		return parsed, true
 	}
 	if parsed, ok := parseFuzzyTime(text, now); ok {
-		return parsed
+		return parsed, true
 	}
-	if seconds, err := strconv.ParseInt(text, 10, 64); err == nil && seconds > 100000000 {
-		return time.Unix(seconds, 0)
+	number, err := strconv.ParseInt(text, 10, 64)
+	switch {
+	case err != nil:
+		return time.Time{}, false
+	case number >= 1e8 && number < 1e11:
+		return time.Unix(number, 0), true
+	case number >= 1e11 && number < 1e14:
+		return time.UnixMilli(number), true
 	}
-	return now
+	return time.Time{}, false
 }
 
 // Search runs the spec's search paths for the request.
