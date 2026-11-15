@@ -7,12 +7,19 @@ INSERT INTO candidate (indexer_id, guid, title, attributes_id, size_bytes, seede
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (indexer_id, guid) DO UPDATE SET
   title = excluded.title,
+  download_url = excluded.download_url,
+  size_bytes = COALESCE(excluded.size_bytes, candidate.size_bytes),
   seeders = excluded.seeders,
   leechers = excluded.leechers,
   expires_at = excluded.expires_at
 RETURNING id, indexer_id, guid, title, attributes_id, size_bytes, seeders, leechers,
           published_at, protocol, download_url, parse_confidence, source,
           first_seen_at, expires_at;
+
+-- When each release was first seen, for the ones a search lists again: an undated release waits its delay from then.
+-- name: CandidateFirstSeen :many
+SELECT guid, first_seen_at FROM candidate
+WHERE indexer_id = sqlc.arg(indexer_id) AND guid IN (sqlc.slice('guids'));
 
 -- name: GetCandidate :one
 SELECT id, indexer_id, guid, title, attributes_id, size_bytes, seeders, leechers,

@@ -8,6 +8,7 @@ package statisticsdb
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const aggregateDecisionsByCategoryAndOutcome = `-- name: AggregateDecisionsByCategoryAndOutcome :many
@@ -35,6 +36,56 @@ func (q *Queries) AggregateDecisionsByCategoryAndOutcome(ctx context.Context, si
 	for rows.Next() {
 		var i AggregateDecisionsByCategoryAndOutcomeRow
 		if err := rows.Scan(&i.CategoryID, &i.Outcome, &i.Decisions); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const candidateFirstSeen = `-- name: CandidateFirstSeen :many
+SELECT guid, first_seen_at FROM candidate
+WHERE indexer_id = ?1 AND guid IN (/*SLICE:guids*/?)
+`
+
+type CandidateFirstSeenParams struct {
+	IndexerID int64
+	Guids     []string
+}
+
+type CandidateFirstSeenRow struct {
+	Guid        string
+	FirstSeenAt int64
+}
+
+// When each release was first seen, for the ones a search lists again: an undated release waits its delay from then.
+func (q *Queries) CandidateFirstSeen(ctx context.Context, arg CandidateFirstSeenParams) ([]CandidateFirstSeenRow, error) {
+	query := candidateFirstSeen
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.IndexerID)
+	if len(arg.Guids) > 0 {
+		for _, v := range arg.Guids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:guids*/?", strings.Repeat(",?", len(arg.Guids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:guids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CandidateFirstSeenRow{}
+	for rows.Next() {
+		var i CandidateFirstSeenRow
+		if err := rows.Scan(&i.Guid, &i.FirstSeenAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -455,6 +506,8 @@ INSERT INTO candidate (indexer_id, guid, title, attributes_id, size_bytes, seede
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (indexer_id, guid) DO UPDATE SET
   title = excluded.title,
+  download_url = excluded.download_url,
+  size_bytes = COALESCE(excluded.size_bytes, candidate.size_bytes),
   seeders = excluded.seeders,
   leechers = excluded.leechers,
   expires_at = excluded.expires_at

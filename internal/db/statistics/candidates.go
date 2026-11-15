@@ -46,6 +46,22 @@ func (c Candidates) Upsert(ctx context.Context, req library.NewReleaseCandidate)
 	return releaseFromRow(row), nil
 }
 
+// FirstSeen answers when each of the guids was first seen by indexerID; a release never seen is absent.
+func (c Candidates) FirstSeen(ctx context.Context, indexerID int64, guids []string) (map[string]time.Time, error) {
+	seen := make(map[string]time.Time, len(guids))
+	if len(guids) == 0 {
+		return seen, nil
+	}
+	rows, err := statisticsdb.New(c.store.Read()).CandidateFirstSeen(ctx, statisticsdb.CandidateFirstSeenParams{IndexerID: indexerID, Guids: guids})
+	if err != nil {
+		return nil, fmt.Errorf("statistics: first seen: %w", err)
+	}
+	for _, row := range rows {
+		seen[row.Guid] = time.Unix(row.FirstSeenAt, 0)
+	}
+	return seen, nil
+}
+
 // Get answers one release by id.
 func (c Candidates) Get(ctx context.Context, id int64) (library.ReleaseCandidate, error) {
 	row, err := statisticsdb.New(c.store.Read()).GetCandidate(ctx, id)

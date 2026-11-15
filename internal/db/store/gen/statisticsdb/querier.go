@@ -20,6 +20,8 @@ type Querier interface {
 	// Searches and finds per library since a time.
 	AggregateSearchesByCategory(ctx context.Context, since int64) ([]AggregateSearchesByCategoryRow, error)
 	AppendHistory(ctx context.Context, arg AppendHistoryParams) (int64, error)
+	// When each release was first seen, for the ones a search lists again: an undated release waits its delay from then.
+	CandidateFirstSeen(ctx context.Context, arg CandidateFirstSeenParams) ([]CandidateFirstSeenRow, error)
 	DeleteDecisionsByID(ctx context.Context, ids interface{}) (int64, error)
 	// The oldest page of rows before a time, removed.
 	DeleteDownloadSpeedBefore(ctx context.Context, arg DeleteDownloadSpeedBeforeParams) (int64, error)

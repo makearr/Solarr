@@ -43,3 +43,34 @@ func TestProtocolDelay_HoldsTheOtherProtocolUntilTheWindowEnds(t *testing.T) {
 		t.Errorf("no preference or no window must delay nothing, got %v", none[0].Decision.Outcome)
 	}
 }
+
+// A release with no date waits its window from the first time it was seen, not from every search (JUDGE-1).
+func TestProtocolDelay_AnUndatedReleaseWaitsFromItsFirstSighting(t *testing.T) {
+	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
+	undated := func(guid string) judge.Find {
+		return judge.Find{Conn: judge.Conn{ID: 7, Impl: "torznab"}, Raw: indexer.RawItem{GUID: guid}, Decision: model.Decision{Outcome: model.OutcomeAccept}}
+	}
+	var asked []string
+	delay := judge.ProtocolDelay{
+		Preferred: "usenet", Window: 2 * time.Hour, Now: now,
+		FirstSeen: func(_ int64, guids []string) map[string]time.Time {
+			asked = append(asked, guids...)
+			return map[string]time.Time{"old": now.Add(-3 * time.Hour), "recent": now.Add(-30 * time.Minute)}
+		},
+	}
+	finds := []judge.Find{undated("old"), undated("recent"), undated("never-seen")}
+	delay.Apply(finds)
+	got := []model.Outcome{finds[0].Decision.Outcome, finds[1].Decision.Outcome, finds[2].Decision.Outcome}
+	want := []model.Outcome{model.OutcomeAccept, model.OutcomeDefer, model.OutcomeDefer}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("outcomes = %v, want %v", got, want)
+		}
+	}
+	if retry := finds[1].Decision.Deferrals[0].RetryAfter; !retry.Equal(now.Add(90 * time.Minute)) {
+		t.Errorf("recent release retries at %v, want 90 minutes on (first seen 30 minutes ago + 2 h)", retry)
+	}
+	if len(asked) != 3 {
+		t.Errorf("first-seen lookups = %v, want one batch of the three undated guids", asked)
+	}
+}

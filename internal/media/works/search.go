@@ -118,6 +118,17 @@ func (s Search[W]) SearchPart(ctx context.Context, itemID int64, part int, conns
 	return result, s.recordSearched(ctx, itemID, at, result.Answered > 0)
 }
 
+// firstSeen is the delay profile's lookup of when the candidate store first saw a release; a store that fails knows none.
+func (s Search[W]) firstSeen(ctx context.Context) func(int64, []string) map[string]time.Time {
+	return func(indexerID int64, guids []string) map[string]time.Time {
+		seen, err := s.Candidates.FirstSeen(ctx, indexerID, guids)
+		if err != nil {
+			return nil
+		}
+		return seen
+	}
+}
+
 // recordSearched keeps the item's retry pace for a search that was answered, and brings an unanswered one back soon.
 func (s Search[W]) recordSearched(ctx context.Context, itemID int64, at time.Time, answered bool) error {
 	var err error
@@ -202,7 +213,10 @@ func (s Search[W]) yardstick(ctx context.Context, item librarydb.DesiredItem, wa
 	}
 	if category, found := snapshot.Category(item.CategoryID); found {
 		built.preferPropers = category.FileManagement.PropersRepacks != settings.PropersDoNotPrefer
-		built.delay = judge.ProtocolDelay{Preferred: category.PreferredProtocol, Window: time.Duration(category.ProtocolDelayMinutes) * time.Minute, Now: built.now}
+		built.delay = judge.ProtocolDelay{
+			Preferred: category.PreferredProtocol, Window: time.Duration(category.ProtocolDelayMinutes) * time.Minute, Now: built.now,
+			FirstSeen: s.firstSeen(ctx),
+		}
 	}
 	return built, nil
 }

@@ -248,6 +248,13 @@ func (s Search) yardstickFor(ctx context.Context, item librarydb.DesiredItem) (y
 	if category, found := snapshot.Category(item.CategoryID); found {
 		delay = judge.ProtocolDelay{
 			Preferred: category.PreferredProtocol, Window: time.Duration(category.ProtocolDelayMinutes) * time.Minute, Now: s.Clock.Now(),
+			FirstSeen: func(indexerID int64, guids []string) map[string]time.Time {
+				seen, err := s.Candidates.FirstSeen(ctx, indexerID, guids)
+				if err != nil {
+					return nil
+				}
+				return seen
+			},
 		}
 	}
 	target := targetIdentity(detail, item, artistName, aliases)

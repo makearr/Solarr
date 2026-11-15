@@ -105,6 +105,8 @@ type ProtocolDelay struct {
 	Preferred string
 	Window    time.Duration
 	Now       time.Time
+	// FirstSeen answers when an indexer's releases were first seen, for the ones that carry no date; nil knows none.
+	FirstSeen func(indexerID int64, guids []string) map[string]time.Time
 }
 
 // Apply defers the non-preferred protocol's accepted finds that are still inside the window.
@@ -112,14 +114,16 @@ func (d ProtocolDelay) Apply(finds []Find) {
 	if d.Preferred == "" || d.Window <= 0 {
 		return
 	}
+	firstSeen := d.firstSeen(finds)
 	for index := range finds {
 		find := &finds[index]
 		if find.Decision.Outcome != model.OutcomeAccept || ProtocolFor(find.Conn.Impl) == d.Preferred {
 			continue
 		}
+		// An undated release is as old as its first sighting, so its wait ends; one never seen waits one window.
 		posted := find.Raw.PublishedAt
 		if posted.IsZero() {
-			posted = d.Now
+			posted = cmp.Or(firstSeen[find.Conn.ID][find.Raw.GUID], d.Now)
 		}
 		releasedAt := posted.Add(d.Window)
 		if !d.Now.Before(releasedAt) {
@@ -131,6 +135,24 @@ func (d ProtocolDelay) Apply(finds []Find) {
 			Detail: map[string]any{"preferred_protocol": d.Preferred, "minutes": int64(d.Window / time.Minute)},
 		})
 	}
+}
+
+// firstSeen looks up the first sighting of every undated release a delay could hold, one lookup per indexer.
+func (d ProtocolDelay) firstSeen(finds []Find) map[int64]map[string]time.Time {
+	if d.FirstSeen == nil {
+		return nil
+	}
+	guids := map[int64][]string{}
+	for _, find := range finds {
+		if find.Decision.Outcome == model.OutcomeAccept && ProtocolFor(find.Conn.Impl) != d.Preferred && find.Raw.PublishedAt.IsZero() && find.Raw.GUID != "" {
+			guids[find.Conn.ID] = append(guids[find.Conn.ID], find.Raw.GUID)
+		}
+	}
+	seen := make(map[int64]map[string]time.Time, len(guids))
+	for indexerID, list := range guids {
+		seen[indexerID] = d.FirstSeen(indexerID, list)
+	}
+	return seen
 }
 
 // Persist upserts the release and records the decision against itemID; a release RSS showed is also a sighting.

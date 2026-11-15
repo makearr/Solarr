@@ -98,3 +98,43 @@ func TestCandidates_RetireRollsUpAndDeletes(t *testing.T) {
 		t.Errorf("rollup = %+v, want one day of two REJECTs for too-small", rollup)
 	}
 }
+
+// A release found again keeps the time it was first seen; one never seen is absent (JUDGE-1).
+func TestCandidates_FirstSeenSurvivesASecondSighting(t *testing.T) {
+	candidates := statistics.NewCandidates(openStatistics(t))
+	ctx := t.Context()
+	for _, firstSeen := range []int64{10, 99} {
+		if _, err := candidates.Upsert(ctx, release("a", firstSeen, 1_000)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := candidates.FirstSeen(ctx, 1, []string{"a", "never"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]time.Time{"a": time.Unix(10, 0)}; !reflect.DeepEqual(got, want) {
+		t.Errorf("FirstSeen = %v, want %v", got, want)
+	}
+	if other, _ := candidates.FirstSeen(ctx, 2, []string{"a"}); len(other) != 0 {
+		t.Errorf("another indexer's FirstSeen = %v, want none", other)
+	}
+}
+
+// A release found again carries the link of the latest sighting: links with a session or a changed key go stale (JUDGE-2).
+func TestCandidates_ASecondSightingRefreshesTheDownloadLink(t *testing.T) {
+	candidates := statistics.NewCandidates(openStatistics(t))
+	ctx := t.Context()
+	first := release("a", 10, 1_000)
+	if _, err := candidates.Upsert(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	again := release("a", 20, 2_000)
+	again.DownloadURL, again.SizeBytes = "https://x/a?token=new", nil
+	stored, err := candidates.Upsert(ctx, again)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.DownloadURL != "https://x/a?token=new" || stored.SizeBytes == nil || *stored.SizeBytes != 500_000_000 {
+		t.Errorf("stored = %+v, want the new link and the size kept when the second sighting has none", stored)
+	}
+}
