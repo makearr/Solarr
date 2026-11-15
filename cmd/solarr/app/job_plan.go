@@ -155,13 +155,32 @@ func upgradeWindows(snapshot *settings.Snapshot) map[int64]time.Duration {
 	return windows
 }
 
-// searchesPerHour is the hunt's budget; with no indexer enabled there is nothing to spend it on.
+// searchesPerHour is the hunt's budget; with no indexer enabled there is nothing to spend it on. It counts settings rows,
+// not connections: a media type no indexer serves costs no budget in its own hunt.
 func (p *process) searchesPerHour(ctx context.Context) (int, error) {
-	indexers, err := p.indexerConns(ctx)
-	if err != nil || len(indexers) == 0 {
+	if p.solarrMode().SearchesStopped() {
+		return 0, nil
+	}
+	enabled, err := p.enabledIndexers(ctx)
+	if err != nil || enabled == 0 {
 		return 0, err
 	}
 	return int(*p.cache.Snapshot().PrioritySettings().SearchesPerHour), nil
+}
+
+// enabledIndexers counts the enabled indexers from settings; building their connections asks every one for its capabilities.
+func (p *process) enabledIndexers(ctx context.Context) (int, error) {
+	configured, err := p.cache.Indexers(ctx)
+	if err != nil {
+		return 0, err
+	}
+	enabled := 0
+	for _, indexer := range configured {
+		if indexer.Enabled {
+			enabled++
+		}
+	}
+	return enabled, nil
 }
 
 // huntSearch hands one item the hunt chose to its library's media type, if it is still wanted and there is room.
@@ -206,16 +225,9 @@ func (p *process) searchStatus(ctx context.Context, itemID int64) (apiserver.Wan
 	if err != nil {
 		return apiserver.WantedRow{}, err
 	}
-	// Counted from settings: building the connections asks every indexer for its capabilities, on every page view.
-	configured, err := p.cache.Indexers(ctx)
+	enabled, err := p.enabledIndexers(ctx)
 	if err != nil {
 		return apiserver.WantedRow{}, err
-	}
-	enabled := 0
-	for _, indexer := range configured {
-		if indexer.Enabled {
-			enabled++
-		}
 	}
 	snapshot := p.cache.Snapshot()
 	room, measured := snapshot.AcquisitionHeadroom(item.CategoryID)
