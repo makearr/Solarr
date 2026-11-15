@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -73,7 +74,10 @@ type LibraryShare struct {
 // HuntJob searches the most urgent eligible items, within the hourly budget.
 type HuntJob struct {
 	config HuntConfig
-	mu     sync.Mutex
+	// running keeps a second Run out while one searches.
+	running atomic.Bool
+	// mu guards searched and credit only: a run holds it for moments, never across a search.
+	mu sync.Mutex
 	// searched is each search of the last window; a restart forgets it, costing one window at most.
 	searched []spentSearch
 	// credit is each library's standing in splitByShare's round robin.
@@ -127,15 +131,16 @@ func NewHuntJob(config HuntConfig) *HuntJob {
 
 // Run searches as many eligible items as the budget has left this window.
 func (j *HuntJob) Run(ctx context.Context, job jobs.Job) error {
-	j.mu.Lock()
-	defer j.mu.Unlock()
+	if !j.running.CompareAndSwap(false, true) {
+		return nil
+	}
+	defer j.running.Store(false)
 	perHour, err := j.config.PerHour(ctx)
 	if err != nil {
 		return fmt.Errorf("plan: hunt budget: %w", err)
 	}
 	now := j.config.Clock.Now()
-	j.forgetBefore(now.Add(-budgetWindow))
-	left := min(perHour-len(j.searched), j.perRun(perHour))
+	left := min(perHour-j.spentSince(now.Add(-budgetWindow)), j.perRun(perHour))
 	if left <= 0 {
 		return nil
 	}
@@ -236,6 +241,8 @@ func (j *HuntJob) perRun(perHour int) int {
 // splitByShare deals budget out one search at a time by smooth weighted round robin over the libraries' shares; the
 // credits carry over between runs, so even a budget of one per run comes out in proportion over time.
 func (j *HuntJob) splitByShare(budget int, libraries []LibraryShare) []int {
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	parts := make([]int, len(libraries))
 	var total int64
 	for _, library := range libraries {
@@ -323,7 +330,9 @@ func (j *HuntJob) huntOne(ctx context.Context, itemID int64, shareName string) i
 		next, spent = Never, 0
 	}
 	if spent > 0 {
+		j.mu.Lock()
 		j.searched = append(j.searched, spentSearch{at: now, share: shareName})
+		j.mu.Unlock()
 	}
 	if err := j.config.Hunt.Postpone(ctx, itemID, next); err != nil {
 		j.config.Logger.Warn("plan: hunt: postpone failed", "item_id", itemID, "error", err)
@@ -331,6 +340,15 @@ func (j *HuntJob) huntOne(ctx context.Context, itemID int64, shareName string) i
 	return spent
 }
 
+// spentSince forgets the searches before cutoff and counts the rest.
+func (j *HuntJob) spentSince(cutoff time.Time) int {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.forgetBefore(cutoff)
+	return len(j.searched)
+}
+
+// forgetBefore drops the searches before cutoff; the caller holds mu.
 func (j *HuntJob) forgetBefore(cutoff time.Time) {
 	kept := j.searched[:0]
 	for _, search := range j.searched {

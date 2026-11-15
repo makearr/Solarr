@@ -409,3 +409,39 @@ func TestHuntDoesNotChargeTheBudgetForASearchNoIndexerAnswered(t *testing.T) {
 		t.Fatalf("looked at %v after the recheck, want all three again", e.searched)
 	}
 }
+
+// The budget page answers while a hunt is inside a slow search (HUNT-1); a second run starts nothing.
+func TestBudgetAnswersWhileAHuntRuns(t *testing.T) {
+	e := newEnv(t)
+	e.album(t, "A", true)
+	e.planPass(t)
+	inSearch, release := make(chan struct{}), make(chan struct{})
+	hunt := plan.NewHuntJob(plan.HuntConfig{
+		Hunt: library.NewHunt(e.store), Clock: e.clock, Logger: slog.New(slog.DiscardHandler),
+		PerHour: func(context.Context) (int, error) { return e.perHour, nil },
+		Search: func(context.Context, int64) (plan.Outcome, error) {
+			close(inSearch)
+			<-release
+			return plan.OutcomeSearched, nil
+		},
+	})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		run(t, hunt)
+	}()
+	<-inSearch
+	answered := make(chan error, 1)
+	go func() { _, err := hunt.Budget(t.Context()); answered <- err }()
+	select {
+	case err := <-answered:
+		if err != nil {
+			t.Fatalf("Budget: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Budget waited for the running hunt")
+	}
+	run(t, hunt) // a second run while one searches returns at once
+	close(release)
+	<-done
+}
