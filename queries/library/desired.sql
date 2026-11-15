@@ -198,6 +198,12 @@ ON CONFLICT (desired_item_id) DO UPDATE SET
   last_searched_at = excluded.last_searched_at,
   search_count = hunt_queue.search_count + 1;
 
+-- A search no indexer answered keeps the count: last_searched_at is set by the caller so the item is due again soon.
+-- name: RecordItemSearchUnanswered :exec
+INSERT INTO hunt_queue (desired_item_id, class, priority, last_searched_at, search_count)
+VALUES (?, 'missing', 0, ?, 0)
+ON CONFLICT (desired_item_id) DO UPDATE SET last_searched_at = excluded.last_searched_at;
+
 -- name: RecordItemDownloadFailed :exec
 INSERT INTO hunt_queue (desired_item_id, class, priority, last_searched_at, search_count, after_failure)
 VALUES (?, 'missing', 0, 0, 0, 1)

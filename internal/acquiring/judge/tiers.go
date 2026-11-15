@@ -32,6 +32,8 @@ type Result struct {
 	TierUsed      *int
 	Decisions     []library.DecisionDetail
 	IndexerErrors []IndexerError
+	// Answered counts the indexer calls that returned a response, an empty one included; zero means nothing was asked of anyone.
+	Answered int
 }
 
 // Evaluate is a media type's part of a search: which of one indexer's releases are for the wanted item, and how
@@ -82,7 +84,7 @@ func (p Pipeline) search(ctx context.Context, itemID int64, conns []Conn, tiers 
 		}
 		return evaluate(kept, conn), nil
 	})
-	result := Result{TierUsed: walk.TierUsed, IndexerErrors: walk.IndexerErrors}
+	result := Result{TierUsed: walk.TierUsed, IndexerErrors: walk.IndexerErrors, Answered: walk.Answered}
 	if err != nil || len(walk.Finds) == 0 {
 		return result, err
 	}
@@ -96,6 +98,8 @@ type TierWalk struct {
 	Finds         []Find
 	TierUsed      *int
 	IndexerErrors []IndexerError
+	// Answered counts the indexer calls that returned a response across the tiers walked.
+	Answered int
 }
 
 // AskThroughTiers widens each indexer on its own (Sonarr's per-indexer search): a tier asks the indexers still looking
@@ -134,6 +138,8 @@ func AskThroughTiers(
 					IndexerID: conn.ID, IndexerName: conn.Name, Error: answer.Err.Error(), TooSlow: answer.TooSlow,
 				})
 				looking[index] = false
+			} else {
+				walk.Answered++
 			}
 			finds, err := evaluate(conn, answer.Raws)
 			if err != nil {

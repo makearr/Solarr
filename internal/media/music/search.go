@@ -161,9 +161,6 @@ func (s Search) SearchItemWithTerms(
 	if !plan.SearchedOnItsOwn(item.SatisfactionKind) {
 		return ItemSearchResult{}, ErrTrackSearchNotSupported
 	}
-	if err := s.Desired.RecordSearched(ctx, itemID, at.Unix()); err != nil {
-		return ItemSearchResult{}, fmt.Errorf("music: search item %d: %w", itemID, err)
-	}
 
 	measure, err := s.yardstickFor(ctx, item)
 	if err != nil {
@@ -185,6 +182,14 @@ func (s Search) SearchItemWithTerms(
 		queries[index] = queriesFor(terms)
 	}
 	result, err := s.pipeline().Search(ctx, itemID, indexers, queries, measure.evaluate, at)
+	if err != nil {
+		return result, fmt.Errorf("music: search item %d: %w", itemID, err)
+	}
+	if result.Answered > 0 {
+		err = s.Desired.RecordSearched(ctx, itemID, at.Unix())
+	} else {
+		err = s.Desired.RecordSearchUnanswered(ctx, itemID, at.Unix(), plan.RetryDelay, plan.UnansweredRetry)
+	}
 	if err != nil {
 		return result, fmt.Errorf("music: search item %d: %w", itemID, err)
 	}

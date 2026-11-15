@@ -1108,6 +1108,8 @@ type Querier interface {
 	RecordImportListPreview(ctx context.Context, arg RecordImportListPreviewParams) error
 	RecordImportListRun(ctx context.Context, arg RecordImportListRunParams) error
 	RecordItemDownloadFailed(ctx context.Context, desiredItemID int64) error
+	// A search no indexer answered keeps the count: last_searched_at is set by the caller so the item is due again soon.
+	RecordItemSearchUnanswered(ctx context.Context, arg RecordItemSearchUnansweredParams) error
 	// Every search records when it ran, whoever started it (Wanted's "last searched"). The planner's
 	// own upsert sets priority and class and never touches these two columns.
 	RecordItemSearched(ctx context.Context, arg RecordItemSearchedParams) error

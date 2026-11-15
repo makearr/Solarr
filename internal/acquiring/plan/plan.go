@@ -152,11 +152,8 @@ const (
 	maxBackoffAfterFailure = 24 * time.Hour
 )
 
-// RetryAfter is when an item searched searchCount times, last at lastSearchedAt, may be searched again.
-func RetryAfter(lastSearchedAt, searchCount int64, afterFailure bool) int64 {
-	if searchCount <= 0 || lastSearchedAt <= 0 {
-		return 0
-	}
+// RetryDelay is how long an item searched searchCount times waits before the next search.
+func RetryDelay(searchCount int64) time.Duration {
 	delay := firstBackoff
 	for range searchCount - 1 {
 		if delay >= maxBackoff {
@@ -164,11 +161,22 @@ func RetryAfter(lastSearchedAt, searchCount int64, afterFailure bool) int64 {
 		}
 		delay *= 2
 	}
+	return min(delay, maxBackoff)
+}
+
+// UnansweredRetry is how soon an item whose search no indexer answered is searched again.
+const UnansweredRetry = 15 * time.Minute
+
+// RetryAfter is when an item searched searchCount times, last at lastSearchedAt, may be searched again.
+func RetryAfter(lastSearchedAt, searchCount int64, afterFailure bool) int64 {
+	if searchCount <= 0 || lastSearchedAt <= 0 {
+		return 0
+	}
 	limit := maxBackoff
 	if afterFailure {
 		limit = maxBackoffAfterFailure
 	}
-	return lastSearchedAt + int64(min(delay, limit)/time.Second)
+	return lastSearchedAt + int64(min(RetryDelay(searchCount), limit)/time.Second)
 }
 
 // EarliestRelease reads a street date at whatever precision it has, as the first day it could mean.

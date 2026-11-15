@@ -2062,6 +2062,23 @@ func (q *Queries) RecordItemDownloadFailed(ctx context.Context, desiredItemID in
 	return err
 }
 
+const recordItemSearchUnanswered = `-- name: RecordItemSearchUnanswered :exec
+INSERT INTO hunt_queue (desired_item_id, class, priority, last_searched_at, search_count)
+VALUES (?, 'missing', 0, ?, 0)
+ON CONFLICT (desired_item_id) DO UPDATE SET last_searched_at = excluded.last_searched_at
+`
+
+type RecordItemSearchUnansweredParams struct {
+	DesiredItemID  int64
+	LastSearchedAt int64
+}
+
+// A search no indexer answered keeps the count: last_searched_at is set by the caller so the item is due again soon.
+func (q *Queries) RecordItemSearchUnanswered(ctx context.Context, arg RecordItemSearchUnansweredParams) error {
+	_, err := q.db.ExecContext(ctx, recordItemSearchUnanswered, arg.DesiredItemID, arg.LastSearchedAt)
+	return err
+}
+
 const recordItemSearched = `-- name: RecordItemSearched :exec
 INSERT INTO hunt_queue (desired_item_id, class, priority, last_searched_at, search_count)
 VALUES (?, 'missing', 0, ?, 1)

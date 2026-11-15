@@ -204,6 +204,36 @@ func (d Desired) RecordSearched(ctx context.Context, itemID, at int64) error {
 	return nil
 }
 
+// RecordSearchUnanswered notes that itemID's search at was never answered (every indexer failed, or none was asked): the
+// search count stays, and the item is due again retryIn from now rather than after its backoff.
+func (d Desired) RecordSearchUnanswered(ctx context.Context, itemID, at int64, backoff func(searchCount int64) time.Duration, retryIn time.Duration) error {
+	err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		var count int64
+		entry, err := queries.GetHuntEntry(ctx, itemID)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+		case err != nil:
+			return err
+		default:
+			count = entry.SearchCount
+		}
+		due := at
+		if count > 0 {
+			due = at - int64((backoff(count)-retryIn)/time.Second)
+		}
+		if err := queries.RecordItemSearchUnanswered(ctx,
+			librarydb.RecordItemSearchUnansweredParams{DesiredItemID: itemID, LastSearchedAt: due}); err != nil {
+			return err
+		}
+		return queries.MarkDesiredItemDirty(ctx, itemID)
+	})
+	if err != nil {
+		return fmt.Errorf("library: record search unanswered: %w", err)
+	}
+	return nil
+}
+
 // RecordDownloadFailed caps itemID's search backoff at a day from now on.
 func (d Desired) RecordDownloadFailed(ctx context.Context, itemID int64) error {
 	err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {

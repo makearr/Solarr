@@ -383,3 +383,29 @@ func TestHuntSkipsOldMissingItemsWhenGapsAreOff(t *testing.T) {
 		t.Fatalf("searched %v with gaps on, want the album", e.searched)
 	}
 }
+
+func TestHuntDoesNotChargeTheBudgetForASearchNoIndexerAnswered(t *testing.T) {
+	e := newEnv(t)
+	e.perHour = 1
+	e.album(t, "A", true)
+	e.album(t, "B", true)
+	e.album(t, "C", true)
+	e.planPass(t)
+	e.outcome = plan.OutcomeNoAnswer
+	hunt := e.huntJob()
+
+	run(t, hunt)
+	if len(e.searched) != 3 {
+		t.Fatalf("looked at %v, want all three: nothing was asked of an indexer, so no budget is spent", e.searched)
+	}
+	e.clock.Advance(30 * time.Minute)
+	run(t, hunt)
+	if len(e.searched) != 3 {
+		t.Fatalf("looked at %v within the hour, want them left alone until the recheck", e.searched)
+	}
+	e.clock.Advance(31 * time.Minute)
+	run(t, hunt)
+	if len(e.searched) != 6 {
+		t.Fatalf("looked at %v after the recheck, want all three again", e.searched)
+	}
+}

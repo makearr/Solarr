@@ -26,12 +26,13 @@ var HuntDefinition = jobs.Definition{
 type Outcome int
 
 // The outcomes: a search ran, a download is already on its way, the item is not to be searched,
-// or its library has no room for a download (ADR-12).
+// its library has no room for a download (ADR-12), or no indexer answered.
 const (
 	OutcomeSearched Outcome = iota
 	OutcomeInFlight
 	OutcomeNotWanted
 	OutcomeNoRoom
+	OutcomeNoAnswer
 )
 
 // budgetWindow is section 9.4's window; inFlightRecheck is how soon an item with a download on its way is looked at again.
@@ -316,7 +317,7 @@ func (j *HuntJob) huntOne(ctx context.Context, itemID int64, shareName string) i
 	case err != nil:
 		j.config.Logger.Warn("plan: hunt: search failed", "item_id", itemID, "error", err)
 		next = now.Add(inFlightRecheck).Unix()
-	case outcome == OutcomeInFlight, outcome == OutcomeNoRoom:
+	case outcome == OutcomeInFlight, outcome == OutcomeNoRoom, outcome == OutcomeNoAnswer:
 		next, spent = now.Add(inFlightRecheck).Unix(), 0
 	case outcome == OutcomeNotWanted:
 		next, spent = Never, 0

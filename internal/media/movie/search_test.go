@@ -2,6 +2,7 @@ package movie_test
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -130,5 +131,48 @@ func TestSearchWidensToTextWhenTheIDQueryFindsNothing(t *testing.T) {
 	last := fake.requests[len(fake.requests)-1]
 	if last.Query != "The Example Film 1999" {
 		t.Errorf("last query = %q, want the title with its year", last.Query)
+	}
+}
+
+type failingIndexer struct{}
+
+func (failingIndexer) Search(context.Context, indexer.SearchRequest) ([]indexer.RawItem, error) {
+	return nil, errors.New("connection refused")
+}
+
+// A search no indexer answered must not count as "searched, found nothing" (SRCH-6).
+func TestSearchOutageKeepsTheCountAndAnEmptyAnswerRaisesIt(t *testing.T) {
+	cache := settingsCache(t)
+	service, opened := newService(t, fakeTMDB{configured: true, movie: theExample()}, nil)
+	added, err := service.Add(t.Context(), movie.AddRequest{IDs: movie.IDs{TMDB: 603}, CategoryID: 5, ProfileID: movieProfile(t, cache, "Movie Any"), Monitor: movie.MonitorMovieOnly})
+	if err != nil {
+		t.Fatal(err)
+	}
+	search := movie.Search{
+		Desired: library.NewDesired(opened), Reader: library.NewSeriesReader(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)),
+		Settings: cache, Clock: atAddNow(),
+	}
+	hunt := library.NewHunt(opened)
+	count := func() int64 {
+		entry, _, err := hunt.Entry(t.Context(), added.ItemID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return entry.SearchCount
+	}
+	for _, conns := range [][]judge.Conn{{{ID: 1, Impl: "newznab", Client: failingIndexer{}}}, nil} {
+		if _, err := search.SearchItem(t.Context(), added.ItemID, conns, addNow); err != nil {
+			t.Fatal(err)
+		}
+		if got := count(); got != 0 {
+			t.Fatalf("search_count = %d after a search nobody answered, want 0", got)
+		}
+	}
+	empty := &fakeIndexer{}
+	if _, err := search.SearchItem(t.Context(), added.ItemID, []judge.Conn{{ID: 1, Impl: "newznab", Client: empty}}, addNow); err != nil {
+		t.Fatal(err)
+	}
+	if got := count(); got != 1 {
+		t.Fatalf("search_count = %d after an empty answer, want 1", got)
 	}
 }

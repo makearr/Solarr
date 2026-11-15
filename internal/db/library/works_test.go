@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store"
@@ -1027,5 +1028,33 @@ func TestListWorks_CreditFacetFiltersAndReadsNarrators(t *testing.T) {
 	}
 	if want := []string{"Heka Bokaru"}; !reflect.DeepEqual(values[book.ID]["narrator"], want) {
 		t.Errorf("narrator values = %v, want %v", values[book.ID]["narrator"], want)
+	}
+}
+
+func TestRecordSearchUnansweredKeepsTheCountAndDuesTheItemSoon(t *testing.T) {
+	opened, _ := newLibrary(t)
+	desired := library.NewDesired(opened)
+	hunt := library.NewHunt(opened)
+	work := createWork(t, opened, "music", "Unanswered")
+	addTrack(t, opened, work.ID)
+	item := createDesired(t, opened, work.ID, "SET", 10)
+	backoff := func(count int64) time.Duration { return time.Duration(count) * time.Hour }
+
+	if err := desired.RecordSearchUnanswered(t.Context(), item.ID, 100_000, backoff, 15*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	entry, _, err := hunt.Entry(t.Context(), item.ID)
+	if err != nil || entry.SearchCount != 0 || entry.LastSearchedAt != 100_000 {
+		t.Fatalf("first unanswered: %+v, %v; want count 0, searched at 100000", entry, err)
+	}
+	mustRecordSearched(t, desired, item.ID, 100_000)
+	mustRecordSearched(t, desired, item.ID, 100_000)
+	if err := desired.RecordSearchUnanswered(t.Context(), item.ID, 200_000, backoff, 15*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	entry, _, err = hunt.Entry(t.Context(), item.ID)
+	// A backoff of 2 h from last_searched_at ends 15 minutes after the unanswered search.
+	if err != nil || entry.SearchCount != 2 || entry.LastSearchedAt != 200_000+900-2*3600 {
+		t.Fatalf("after two answered searches: %+v, %v; want count 2, searched at %d", entry, err, 200_000+900-2*3600)
 	}
 }

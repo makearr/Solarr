@@ -8,6 +8,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/acquiring/judge"
+	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/statistics"
@@ -103,11 +104,8 @@ func (s Search[W]) SearchPart(ctx context.Context, itemID int64, part int, conns
 	if err != nil {
 		return judge.Result{}, err
 	}
-	if err := s.Desired.RecordSearched(ctx, itemID, at.Unix()); err != nil {
-		return judge.Result{}, fmt.Errorf("%s: search item %d: %w", s.Name, itemID, err)
-	}
 	if !needed {
-		return judge.Result{}, nil
+		return judge.Result{}, s.recordSearched(ctx, itemID, at, true)
 	}
 	measure, err := s.yardstick(ctx, item, wanted)
 	if err != nil {
@@ -117,7 +115,21 @@ func (s Search[W]) SearchPart(ctx context.Context, itemID int64, part int, conns
 	if err != nil {
 		return result, fmt.Errorf("%s: search item %d: %w", s.Name, itemID, err)
 	}
-	return result, nil
+	return result, s.recordSearched(ctx, itemID, at, result.Answered > 0)
+}
+
+// recordSearched keeps the item's retry pace for a search that was answered, and brings an unanswered one back soon.
+func (s Search[W]) recordSearched(ctx context.Context, itemID int64, at time.Time, answered bool) error {
+	var err error
+	if answered {
+		err = s.Desired.RecordSearched(ctx, itemID, at.Unix())
+	} else {
+		err = s.Desired.RecordSearchUnanswered(ctx, itemID, at.Unix(), plan.RetryDelay, plan.UnansweredRetry)
+	}
+	if err != nil {
+		return fmt.Errorf("%s: search item %d: %w", s.Name, itemID, err)
+	}
+	return nil
 }
 
 // JudgeFeed judges releases a feed listed against one wanted item, exactly as a search's would be; nothing is searched

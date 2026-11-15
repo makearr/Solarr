@@ -234,8 +234,11 @@ func (p *process) knownAlbums() music.KnownAlbums {
 // musicHunt searches one album the hunt chose and sends the best release.
 func (p *process) musicHunt(ctx context.Context, itemID int64) (plan.Outcome, error) {
 	indexers, err := p.indexerConns(ctx)
-	if err != nil || len(indexers) == 0 {
+	if err != nil {
 		return plan.OutcomeSearched, err
+	}
+	if len(indexers) == 0 {
+		return plan.OutcomeNoAnswer, nil
 	}
 	result, err := p.musicGrab().SearchAndSend(ctx, itemID, indexers, music.GrabAutomatic, clock.NewSystem().Now())
 	switch {
@@ -245,6 +248,8 @@ func (p *process) musicHunt(ctx context.Context, itemID int64) (plan.Outcome, er
 		return plan.OutcomeSearched, err
 	case result.AlreadyInFlight:
 		return plan.OutcomeInFlight, nil
+	case result.Search.Answered == 0:
+		return plan.OutcomeNoAnswer, nil
 	}
 	if result.Sent != nil || result.Held {
 		p.logger.Info("hunt: release chosen", slog.Int64("item_id", itemID), slog.Bool("held", result.Held))
@@ -269,6 +274,8 @@ func (p *process) tvHunt(ctx context.Context, itemID int64) (plan.Outcome, error
 		return plan.OutcomeSearched, err
 	case result.AlreadyInFlight:
 		return plan.OutcomeInFlight, nil
+	case result.Search.Answered == 0:
+		return plan.OutcomeNoAnswer, nil
 	}
 	if result.Sent != nil || result.Held {
 		p.logger.Info("hunt: release chosen", slog.Int64("item_id", itemID), slog.Bool("held", result.Held))
@@ -516,6 +523,8 @@ func (p *process) movieHunt(ctx context.Context, itemID int64) (plan.Outcome, er
 		return plan.OutcomeSearched, err
 	case result.AlreadyInFlight:
 		return plan.OutcomeInFlight, nil
+	case result.Search.Answered == 0:
+		return plan.OutcomeNoAnswer, nil
 	}
 	if result.Sent != nil || result.Held {
 		p.logger.Info("hunt: release chosen", slog.Int64("item_id", itemID), slog.Bool("held", result.Held))
@@ -623,6 +632,8 @@ func (p *process) bookModule(format book.Format) book.Module {
 				return plan.OutcomeSearched, err
 			case result.AlreadyInFlight:
 				return plan.OutcomeInFlight, nil
+			case result.Search.Answered == 0:
+				return plan.OutcomeNoAnswer, nil
 			}
 			if result.Sent != nil || result.Held {
 				p.logger.Info("hunt: release chosen", slog.Int64("item_id", itemID), slog.Bool("held", result.Held))
@@ -731,6 +742,8 @@ func (p *process) adultModule() adult.Module {
 				return plan.OutcomeSearched, err
 			case result.AlreadyInFlight:
 				return plan.OutcomeInFlight, nil
+			case result.Search.Answered == 0:
+				return plan.OutcomeNoAnswer, nil
 			}
 			if result.Sent != nil || result.Held {
 				p.logger.Info("hunt: release chosen", slog.Int64("item_id", itemID), slog.Bool("held", result.Held))
