@@ -73,7 +73,8 @@ func (d Duplicates) Groups(ctx context.Context, categoryID int64, rootFolderIDs 
 		if !inRoots[row.RootFolderID] || row.DurationMs <= 0 {
 			continue
 		}
-		k := key{artist: normaliseTrackText(row.Artist), title: normaliseTrackText(row.TrackTitle), editionID: row.EditionID}
+		// By name the same song on two albums is a duplicate whatever editions they are: the edition scopes only a part record.
+		k := key{artist: normaliseTrackText(row.Artist), title: normaliseTrackText(row.TrackTitle)}
 		if !byName {
 			k = key{partID: row.PartID, editionID: row.EditionID}
 		} else if k.title == "" {

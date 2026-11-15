@@ -158,3 +158,38 @@ func TestDuplicates_EditionsOfAWorkAreNotDuplicates(t *testing.T) {
 		t.Fatalf("Groups = %+v, %v; want none", groups, err)
 	}
 }
+
+// One song on the original album (edition 5) and on a compilation (edition 9) is still one song twice by name (DUP-2).
+func TestDuplicates_ByNameFindsTheSameSongOnTwoEditions(t *testing.T) {
+	opened, _ := newLibrary(t)
+	for index, album := range []string{"Original", "Compilation"} {
+		work := createWork(t, opened, "music", album).ID
+		item := createDesired(t, opened, work, "SET", 1).ID
+		ref := "1:1"
+		createPart(t, opened, work, ref, "001", "Song")
+		object := createObject(t, opened, fmt.Sprintf("s%d", index), 1000+int64(index))
+		err := opened.Write(t.Context(), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			if _, err := librarydb.New(tx).AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
+				MediaObjectID: object.ID, RootFolderID: 1, RelPath: fmt.Sprintf("%s/01.flac", album), LinkKind: "primary", IsPrimary: 1, CreatedAt: 1,
+			}); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO edition (id, work_id, kind, label) VALUES (?, ?, 'release', ?)`, 5+4*index, work, album); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `UPDATE desired_item SET edition_id = ? WHERE id = ?`, 5+4*index, item); err != nil {
+				return err
+			}
+			_, err := tx.ExecContext(ctx, `UPDATE media_object SET duration_ms = 200000 WHERE id = ?`, object.ID)
+			return err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		attach(t, opened, item, object.ID, "primary", ref)
+	}
+	groups, err := library.NewDuplicates(opened).Groups(t.Context(), 1, []int64{1}, 50, true)
+	if err != nil || len(groups) != 1 || len(groups[0].Copies) != 2 {
+		t.Fatalf("Groups = %+v, %v; want one group of the two copies", groups, err)
+	}
+}
