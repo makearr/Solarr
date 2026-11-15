@@ -317,3 +317,20 @@ func TestSearchLeavesAnUndatedReleaseUndated(t *testing.T) {
 		t.Fatalf("items = %+v, %v; want two releases without a date", items, err)
 	}
 }
+
+func TestSearchCarriesTheIDsAPageGives(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(htmlResults)) }))
+	defer server.Close()
+	spec := htmlSpec()
+	spec.Search.Fields = []Extractor{
+		{Name: "title", Selector: "td.n a"}, {Name: "download", Selector: "a.dl", Attribute: "href"},
+		{Name: "tvdbid", Text: str("123")}, {Name: "imdbid", Text: str("7654321")}, {Name: "tmdbid", Text: str("0")},
+	}
+	items, err := testDriver(t, spec, server, nil).Search(t.Context(), indexer.SearchRequest{Query: "x", Categories: []int{3000}})
+	if err != nil || len(items) != 2 {
+		t.Fatalf("Search = %+v, %v", items, err)
+	}
+	if got := items[0].IDs; len(got) != 2 || got["tvdb"] != "123" || got["imdb"] != "tt7654321" {
+		t.Errorf("IDs = %v, want tvdb 123 and imdb tt7654321 (zero dropped)", got)
+	}
+}

@@ -164,12 +164,50 @@ func (item rssItemXML) toRawItem() RawItem {
 	seeders, _ := strconv.Atoi(item.attr("seeders"))
 	peers, _ := strconv.Atoi(item.attr("peers"))
 
+	grabs, _ := strconv.Atoi(item.attr("grabs"))
+	minimumRatio, _ := strconv.ParseFloat(item.attr("minimumratio"), 64)
+	seedSeconds, _ := strconv.ParseFloat(item.attr("minimumseedtime"), 64)
+	var volumeFactor *float64
+	if factor, err := strconv.ParseFloat(item.attr("downloadvolumefactor"), 64); err == nil {
+		volumeFactor = &factor
+	}
+
 	return RawItem{
 		Title: html.UnescapeString(item.Title), GUID: item.GUID, Link: link,
 		Categories: categories, SizeBytes: sizeBytes,
 		PublishedAt: parsePubDate(item.PubDate),
 		Seeders:     seeders, Peers: peers, InfoHash: item.attr("infohash"),
+		IDs: item.providerIDs(), Season: item.attr("season"), Episode: item.attr("episode"),
+		Passworded: item.attr("password") == "1", PostedAt: parsePubDate(item.attr("usenetdate")),
+		Grabs: grabs, MagnetURL: item.attr("magneturl"),
+		// Torznab states the seed time in seconds.
+		MinimumSeedTime: time.Duration(seedSeconds * float64(time.Second)), MinimumRatio: minimumRatio,
+		DownloadVolumeFactor: volumeFactor,
 	}
+}
+
+// providerIDs reads the ids the indexer attached; "0" and empty mean none.
+func (item rssItemXML) providerIDs() map[string]string {
+	var ids map[string]string
+	for provider, names := range map[string][]string{
+		"tvdb": {"tvdbid", "tvdb"}, "tvmaze": {"tvmazeid", "tvmaze"}, "tmdb": {"tmdbid", "tmdb"}, "imdb": {"imdbid", "imdb"},
+	} {
+		for _, name := range names {
+			value := strings.TrimSpace(item.attr(name))
+			if value == "" || strings.Trim(value, "0") == "" {
+				continue
+			}
+			if provider == "imdb" && !strings.HasPrefix(value, "tt") {
+				value = "tt" + value
+			}
+			if ids == nil {
+				ids = map[string]string{}
+			}
+			ids[provider] = value
+			break
+		}
+	}
+	return ids
 }
 
 // pubDate layouts seen in the wild, tried in order -- RFC1123Z (numeric

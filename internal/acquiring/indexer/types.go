@@ -33,6 +33,25 @@ type RawItem struct {
 	Peers   int
 	// InfoHash is Torznab only, empty for Newznab.
 	InfoHash string
+	// IDs are the ids the indexer says the release is for, by provider ("tvdb", "tvmaze", "imdb" as "tt1234567", "tmdb");
+	// zero and empty values are dropped.
+	IDs map[string]string
+	// Season and Episode are as the indexer wrote them; a daily show puts a date in Episode.
+	Season, Episode string
+	// Passworded is the indexer saying the release needs a password (Newznab password=1); an inner archive that may
+	// hold one (2) is not.
+	Passworded bool
+	// PostedAt is when the release was posted (usenetdate), which PublishedAt is not on every indexer; zero when not given.
+	PostedAt time.Time
+	// Grabs counts the indexer's downloads of the release.
+	Grabs int
+	// MagnetURL is a magnet link besides the enclosure, for when the .torrent link is dead.
+	MagnetURL string
+	// MinimumSeedTime and MinimumRatio are the tracker's seeding obligation; zero when it states none.
+	MinimumSeedTime time.Duration
+	MinimumRatio    float64
+	// DownloadVolumeFactor is 0 for freeleech, 1 for a normal download; nil when the indexer does not say.
+	DownloadVolumeFactor *float64
 }
 
 // Category is one entry from the indexer's own t=caps categories block --

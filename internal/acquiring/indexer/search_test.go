@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -195,5 +196,45 @@ func TestSearch_DecodesTitleEntitiesProwlarrEscapesTwice(t *testing.T) {
 	}
 	if len(items) != 1 || items[0].Title != "Angel Miners & The Lightning Riders" {
 		t.Errorf("items = %+v, want the title with a plain ampersand", items)
+	}
+}
+
+// What the indexer says a release is travels with it: ids, numbering, password flag, post date and the tracker's terms (IDX-1).
+func TestSearch_CarriesWhatTheIndexerSaysAboutTheRelease(t *testing.T) {
+	const attributed = `<?xml version="1.0"?>
+<rss xmlns:newznab="http://www.newznab.com/DTD/2010/feeds/attributes/"><channel><item>
+  <title>Local.Name.S02E05.1080p</title>
+  <guid>g1</guid>
+  <pubDate>Mon, 01 Jan 2024 12:00:00 +0000</pubDate>
+  <enclosure url="https://indexer.example/nzb" length="1000"/>
+  <newznab:attr name="tvdbid" value="123"/>
+  <newznab:attr name="tvmazeid" value="0"/>
+  <newznab:attr name="imdb" value="7654321"/>
+  <newznab:attr name="season" value="S02"/>
+  <newznab:attr name="episode" value="E05"/>
+  <newznab:attr name="password" value="1"/>
+  <newznab:attr name="usenetdate" value="Sun, 31 Dec 2023 23:00:00 +0000"/>
+  <newznab:attr name="grabs" value="17"/>
+  <newznab:attr name="magneturl" value="magnet:?xt=urn:btih:abc"/>
+  <newznab:attr name="minimumratio" value="1.5"/>
+  <newznab:attr name="minimumseedtime" value="172800"/>
+  <newznab:attr name="downloadvolumefactor" value="0"/>
+</item></channel></rss>`
+	client := indexer.NewClient(newTestClient(t, &recordingTransport{body: attributed}), "http://indexer.local", "")
+	items, err := client.Search(context.Background(), indexer.SearchRequest{Query: "x"})
+	if err != nil || len(items) != 1 {
+		t.Fatalf("Search = %+v, %v", items, err)
+	}
+	free := 0.0
+	want := indexer.RawItem{
+		Title: "Local.Name.S02E05.1080p", GUID: "g1", Link: "https://indexer.example/nzb", SizeBytes: 1000,
+		PublishedAt: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC), PostedAt: time.Date(2023, 12, 31, 23, 0, 0, 0, time.UTC),
+		IDs: map[string]string{"tvdb": "123", "imdb": "tt7654321"}, Season: "S02", Episode: "E05", Passworded: true,
+		Grabs: 17, MagnetURL: "magnet:?xt=urn:btih:abc", MinimumSeedTime: 48 * time.Hour, MinimumRatio: 1.5, DownloadVolumeFactor: &free,
+	}
+	got := items[0]
+	got.PublishedAt, got.PostedAt = got.PublishedAt.UTC(), got.PostedAt.UTC()
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("item = %+v, want %+v", got, want)
 	}
 }

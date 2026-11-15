@@ -371,6 +371,25 @@ func parseCount(text string) int {
 	return count
 }
 
+// idsOf reads the provider ids a row's fields gave, as the indexer protocols name them.
+func idsOf(result map[string]string) map[string]string {
+	var ids map[string]string
+	for provider, field := range map[string]string{"tvdb": "tvdbid", "tvmaze": "tvmazeid", "tmdb": "tmdbid", "imdb": "imdbid"} {
+		value := strings.TrimSpace(result[field])
+		if value == "" || strings.Trim(value, "0") == "" {
+			continue
+		}
+		if provider == "imdb" && !strings.HasPrefix(value, "tt") {
+			value = "tt" + value
+		}
+		if ids == nil {
+			ids = map[string]string{}
+		}
+		ids[provider] = value
+	}
+	return ids
+}
+
 // futureSlack is how far past now a release date may read before it is taken for a misread (clock skew, zone offsets).
 const futureSlack = 48 * time.Hour
 
@@ -795,6 +814,14 @@ func (d *Driver) item(source row, variables *Variables) (indexer.RawItem, bool, 
 	item.Seeders = parseCount(result["seeders"])
 	item.Peers = item.Seeders + parseCount(result["leechers"])
 	item.PublishedAt = parseDate(result["date"], d.clock.Now())
+	item.IDs = idsOf(result)
+	item.Grabs = parseCount(result["grabs"])
+	item.MinimumRatio, _ = strconv.ParseFloat(strings.TrimSpace(result["minimumratio"]), 64)
+	seedSeconds, _ := strconv.ParseFloat(strings.TrimSpace(result["minimumseedtime"]), 64)
+	item.MinimumSeedTime = time.Duration(seedSeconds * float64(time.Second))
+	if factor, err := strconv.ParseFloat(strings.TrimSpace(result["downloadvolumefactor"]), 64); err == nil {
+		item.DownloadVolumeFactor = &factor
+	}
 	if id, ok := d.spec.categoryOf(result["category"]); ok {
 		item.Categories = []int{id}
 	} else if id, ok := d.spec.categoryOf(result["categorydesc"]); ok {
