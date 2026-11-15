@@ -176,3 +176,31 @@ func TestSearchOutageKeepsTheCountAndAnEmptyAnswerRaisesIt(t *testing.T) {
 		t.Fatalf("search_count = %d after an empty answer, want 1", got)
 	}
 }
+
+// The indexer's own ids outrank the title (IDX-1): the film under a translated title is found, a namesake is not.
+func TestSearchTrustsTheIDsAnIndexerAttached(t *testing.T) {
+	cache := settingsCache(t)
+	service, opened := newService(t, fakeTMDB{configured: true, movie: theExample()}, nil)
+	added, err := service.Add(t.Context(), movie.AddRequest{IDs: movie.IDs{TMDB: 603}, CategoryID: 5, ProfileID: movieProfile(t, cache, "Movie Any"), Monitor: movie.MonitorMovieOnly})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := func(title, guid, imdb string) indexer.RawItem {
+		return indexer.RawItem{Title: title, GUID: guid, Link: "https://example.test/" + guid, SizeBytes: 9e9, IDs: map[string]string{"imdb": imdb}}
+	}
+	fake := &fakeIndexer{byFunction: map[string][]indexer.RawItem{"movie": {
+		raw("Translated.Name.1999.1080p.BluRay.x264-GRP", "tagged", "tt0000001"),
+		raw("The.Example.Film.1999.1080p.BluRay.x264-GRP", "namesake", "tt7777777"),
+	}}}
+	search := movie.Search{
+		Desired: library.NewDesired(opened), Reader: library.NewSeriesReader(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)),
+		Settings: cache, Clock: atAddNow(),
+	}
+	result, err := search.SearchItem(t.Context(), added.ItemID, []judge.Conn{{ID: 1, Impl: "newznab", Client: fake}}, addNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Decisions) != 1 || result.Decisions[0].ReleaseCandidate.GUID != "tagged" {
+		t.Fatalf("decisions = %+v, want only the release tagged with the film's id", result.Decisions)
+	}
+}

@@ -133,8 +133,17 @@ func (movieSpec) Queries(w wanted) [][]judge.Query { return w.queries() }
 // Read implements works.Spec: a release is the movie when it names one of its titles in its year, give or take one.
 func (movieSpec) Read(w wanted, raw indexer.RawItem, conn judge.Conn, _ time.Time) (works.Release, bool) {
 	info, ok := parsemovie.Parse(raw.Title)
-	if !ok || isExtra(raw.Title) || !w.isTheMovie(info) {
+	if !ok || isExtra(raw.Title) {
 		return works.Release{}, false
+	}
+	// The indexer's own ids outrank the title: the same id is the film whatever the release calls it, another is not.
+	switch works.CompareIDs(raw.IDs, map[string]string{"imdb": w.imdb, "tmdb": w.tmdb}) {
+	case works.IDsDiffer:
+		return works.Release{}, false
+	case works.IDsUnknown:
+		if !w.isTheMovie(info) {
+			return works.Release{}, false
+		}
 	}
 	facts := releasefacts.FromRelease(info.Claims, info.ReleaseGroup, raw, conn.Impl)
 	releasefacts.EstimateBitrate(&facts, raw.SizeBytes, 1, w.runtimeMs)

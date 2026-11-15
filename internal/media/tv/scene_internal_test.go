@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/parsetv"
 )
@@ -94,6 +96,31 @@ func TestACoverageNamesTheSeriesAndItsYear(t *testing.T) {
 	for name, want := range map[string]bool{"Doctor.Who.2005.S01E01.720p-GRP": true, "Doctor.Who.1963.S01E01.720p-GRP": false} {
 		if _, ok := doctor.coverage(parsed(t, name)); ok != want {
 			t.Errorf("%s: covered = %v, want %v", name, ok, want)
+		}
+	}
+}
+
+// The ids an indexer attached outrank the title: the same id is the series, another id is not (IDX-1).
+func TestAReleaseTaggedWithTheSeriesIDIsIt(t *testing.T) {
+	w := wanted{
+		season: 1, title: "Example Show", tvdb: "123", year: 2011,
+		missing: map[int]library.SeriesEpisode{3: {Season: 1, Number: 3}},
+	}
+	w.names = parsetv.CleanTitleSet(w.title, w.aliases)
+	for _, test := range []struct {
+		name string
+		ids  map[string]string
+		want bool
+	}{
+		{"Local.Title.S01E03.720p.HDTV-GRP", map[string]string{"tvdb": "123"}, true},
+		{"Example.Show.S01E03.720p.HDTV-GRP", map[string]string{"tvdb": "999"}, false},
+		{"Example.Show.S01E03.720p.HDTV-GRP", nil, true},
+		{"Local.Title.S01E03.720p.HDTV-GRP", nil, false},
+		{"Example.Show.2004.S01E03.720p.HDTV-GRP", nil, false},
+	} {
+		_, ok := seasonSpec{}.Read(w, indexer.RawItem{Title: test.name, IDs: test.ids}, judge.Conn{}, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+		if ok != test.want {
+			t.Errorf("%s with %v: read = %v, want %v", test.name, test.ids, ok, test.want)
 		}
 	}
 }

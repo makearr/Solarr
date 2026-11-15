@@ -202,6 +202,15 @@ func (p Pipeline) withoutBlocklisted(ctx context.Context, indexerID int64, raws 
 	return kept, nil
 }
 
+// rejectPassworded turns an indexer's "needs a password" into a hard rejection: the client would only fail on it.
+func rejectPassworded(finds []Find) {
+	for index := range finds {
+		if finds[index].Raw.Passworded && finds[index].Decision.Outcome != model.OutcomeReject {
+			finds[index].Decision = rejectBy(finds[index].Decision, "passworded", "not passworded", "passworded")
+		}
+	}
+}
+
 // decide keeps one row per release, ranks them best first and records each decision against itemID.
 func (p Pipeline) decide(ctx context.Context, itemID int64, finds []Find, source string, at time.Time) ([]library.DecisionDetail, error) {
 	if len(finds) == 0 {
@@ -211,6 +220,7 @@ func (p Pipeline) decide(ctx context.Context, itemID int64, finds []Find, source
 	if err != nil {
 		return nil, fmt.Errorf("persist: %w", err)
 	}
+	rejectPassworded(finds)
 	finds = WithoutCrossIndexerDuplicates(finds)
 	SortBestFirst(finds)
 	decisions := make([]library.DecisionDetail, 0, len(finds))

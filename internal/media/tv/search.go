@@ -341,7 +341,12 @@ func (seasonSpec) Read(w wanted, raw indexer.RawItem, conn judge.Conn, now time.
 	if !ok {
 		return works.Release{}, false
 	}
-	numbers, ok := w.coverage(info)
+	// The indexer's own ids outrank the title: the same id is the series whatever the release calls it, another is not.
+	verdict := works.CompareIDs(raw.IDs, w.providerIDs())
+	if verdict == works.IDsDiffer {
+		return works.Release{}, false
+	}
+	numbers, ok := w.coverageOf(info, verdict == works.IDsSame)
 	if !ok {
 		return works.Release{}, false
 	}
@@ -372,8 +377,18 @@ func (w wanted) titled(info parsetv.Info) bool {
 
 // coverage says which of the wanted episodes the release holds; false when it is not this series, this season or
 // anything wanted.
-func (w wanted) coverage(info parsetv.Info) ([]int, bool) {
-	if !w.titled(info) {
+func (w wanted) coverage(info parsetv.Info) ([]int, bool) { return w.coverageOf(info, false) }
+
+// providerIDs are the series' ids by provider, as releases state theirs.
+func (w wanted) providerIDs() map[string]string {
+	return map[string]string{
+		"tvdb": w.tvdb, "tvmaze": w.otherIDs["tvmazeid"], "tmdb": w.otherIDs["tmdbid"], "imdb": w.otherIDs["imdbid"],
+	}
+}
+
+// coverageOf is coverage; titleKnown says the indexer's ids already settled that the release is this series.
+func (w wanted) coverageOf(info parsetv.Info, titleKnown bool) ([]int, bool) {
+	if !titleKnown && !w.titled(info) {
 		return nil, false
 	}
 	if info.SeasonExtra {
