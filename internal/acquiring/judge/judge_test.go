@@ -2,6 +2,8 @@ package judge_test
 
 import (
 	"context"
+	"errors"
+	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -270,5 +272,59 @@ func TestDuplicatesFromOneIndexerKeepTheFirst(t *testing.T) {
 	kept := judge.WithoutCrossIndexerDuplicates([]judge.Find{find("a"), find("b")})
 	if len(kept) != 1 || kept[0].Raw.GUID != "a" {
 		t.Errorf("kept = %+v", kept)
+	}
+}
+
+// gatedSearcher answers when released and gives up when the context it was handed ends.
+type gatedSearcher struct {
+	started, release chan struct{}
+	items            []indexer.RawItem
+}
+
+func (g *gatedSearcher) Search(ctx context.Context, _ indexer.SearchRequest) ([]indexer.RawItem, error) {
+	close(g.started)
+	select {
+	case <-g.release:
+		return g.items, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// A search that shares an indexer request with another is not cancelled when the other is (RACE-4).
+func TestAskEveryIndexerSharedRequestOutlivesTheCallerThatStartedIt(t *testing.T) {
+	searcher := &gatedSearcher{started: make(chan struct{}), release: make(chan struct{}), items: []indexer.RawItem{{GUID: "a"}}}
+	conns := []judge.Conn{{ID: 91, Client: searcher}}
+	queries := []judge.Query{{Function: "search", Text: "shared request"}}
+	leaderCtx, cancelLeader := context.WithCancel(t.Context())
+	leader := make(chan error, 1)
+	go func() {
+		_, err := judge.AskEveryIndexer(leaderCtx, conns, queries, time.Minute)
+		leader <- err
+	}()
+	<-searcher.started
+	joiner := make(chan judge.Answer, 1)
+	go func() {
+		answers, _ := judge.AskEveryIndexer(t.Context(), conns, queries, time.Minute)
+		joiner <- answers[0]
+	}()
+	for range 1000 {
+		runtime.Gosched()
+	}
+	cancelLeader()
+	if err := <-leader; !errors.Is(err, context.Canceled) {
+		t.Fatalf("leader = %v, want its own cancellation", err)
+	}
+	close(searcher.release)
+	if got := <-joiner; got.Err != nil || len(got.Raws) != 1 {
+		t.Errorf("joined search = %+v, want the indexer's item and no error", got)
+	}
+}
+
+func TestAskEveryIndexerKeepsEachReleaseWithoutAGUID(t *testing.T) {
+	searcher := &fakeSearcher{items: []indexer.RawItem{{Title: "one", Link: "l1"}, {Title: "two", Link: "l2"}, {Title: "one", Link: "l1"}}}
+	answers, err := judge.AskEveryIndexer(t.Context(), []judge.Conn{{ID: 92, Client: searcher}}, []judge.Query{{Function: "search", Text: "no guids"}}, time.Second)
+	if err != nil || len(answers[0].Raws) != 2 {
+		t.Fatalf("answer = %+v, %v; want the two distinct releases", answers[0].Raws, err)
 	}
 }

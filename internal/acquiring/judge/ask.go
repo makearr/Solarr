@@ -100,7 +100,7 @@ func AskEveryIndexer(ctx context.Context, conns []Conn, queries []Query, deadlin
 	slices.SortStableFunc(order, func(a, b int) int { return cmp.Compare(conns[a].Priority, conns[b].Priority) })
 	asked := parallel.Do(group, len(conns), maxIndexersAtOnce, func(ctx context.Context, position int) error {
 		index := order[position]
-		answers[index] = askIndexer(ctx, conns[index], queries)
+		answers[index] = askIndexer(ctx, conns[index], queries, deadline)
 		return nil
 	})
 	for position, err := range asked {
@@ -112,7 +112,8 @@ func AskEveryIndexer(ctx context.Context, conns []Conn, queries []Query, deadlin
 		return nil, err
 	}
 	for index := range answers {
-		if answers[index].Err != nil && errors.Is(group.Err(), context.DeadlineExceeded) && errors.Is(answers[index].Err, context.DeadlineExceeded) {
+		// The group's deadline and the shared request's own are one limit, whichever timer fires first.
+		if errors.Is(answers[index].Err, context.DeadlineExceeded) {
 			answers[index].TooSlow = true
 			answers[index].Err = fmt.Errorf("no answer within %s; its releases are missing from this search", deadline)
 		}
@@ -120,7 +121,7 @@ func AskEveryIndexer(ctx context.Context, conns []Conn, queries []Query, deadlin
 	return answers, nil
 }
 
-func askIndexer(ctx context.Context, conn Conn, queries []Query) Answer {
+func askIndexer(ctx context.Context, conn Conn, queries []Query, deadline time.Duration) Answer {
 	var answer Answer
 	seen := map[string]bool{}
 	for _, query := range queries {
@@ -134,14 +135,21 @@ func askIndexer(ctx context.Context, conn Conn, queries []Query) Answer {
 		request := indexer.SearchRequest{
 			Function: query.Function, Query: query.Text, Extra: query.Extra, Categories: categories, Limit: cmp.Or(query.Limit, resultLimit),
 		}
-		raws, _, err := searches.Do(searchKey(conn.ID, request), func() ([]indexer.RawItem, error) { return conn.Client.Search(ctx, request) })
+		// The request outlives the caller that started it, so the searches joined to it are not cancelled with it.
+		raws, _, err := searches.Do(ctx, searchKey(conn.ID, request), func() ([]indexer.RawItem, error) {
+			shared, cancel := context.WithTimeout(context.WithoutCancel(ctx), deadline)
+			defer cancel()
+			return conn.Client.Search(shared, request)
+		})
 		if err != nil {
 			answer.Err = err
 			return answer
 		}
 		for _, raw := range raws {
-			if !seen[raw.GUID] {
-				seen[raw.GUID] = true
+			// A release the indexer gave no GUID is told apart by its link, else its title.
+			key := cmp.Or(raw.GUID, raw.Link, raw.Title)
+			if !seen[key] {
+				seen[key] = true
 				answer.Raws = append(answer.Raws, raw)
 			}
 		}
