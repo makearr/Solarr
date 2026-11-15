@@ -237,6 +237,40 @@ func (q *Queries) GetDecisionForItemWithCandidate(ctx context.Context, arg GetDe
 	return i, err
 }
 
+const lastDecisionForCandidate = `-- name: LastDecisionForCandidate :one
+SELECT id, candidate_id, desired_item_id, category_id, outcome, score, components_json,
+       rejections_json, deferrals_json, match_confidence, decided_at
+FROM candidate_decision
+WHERE candidate_id = ? AND desired_item_id = ?
+ORDER BY decided_at DESC, id DESC
+LIMIT 1
+`
+
+type LastDecisionForCandidateParams struct {
+	CandidateID   int64
+	DesiredItemID int64
+}
+
+// What a search last decided about a release for an item, to leave an unchanged finding alone.
+func (q *Queries) LastDecisionForCandidate(ctx context.Context, arg LastDecisionForCandidateParams) (CandidateDecision, error) {
+	row := q.db.QueryRowContext(ctx, lastDecisionForCandidate, arg.CandidateID, arg.DesiredItemID)
+	var i CandidateDecision
+	err := row.Scan(
+		&i.ID,
+		&i.CandidateID,
+		&i.DesiredItemID,
+		&i.CategoryID,
+		&i.Outcome,
+		&i.Score,
+		&i.ComponentsJson,
+		&i.RejectionsJson,
+		&i.DeferralsJson,
+		&i.MatchConfidence,
+		&i.DecidedAt,
+	)
+	return i, err
+}
+
 const listDecisionRollup = `-- name: ListDecisionRollup :many
 SELECT desired_item_id, period, outcome, count, best_score, top_reason
 FROM decision_rollup

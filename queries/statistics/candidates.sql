@@ -27,6 +27,15 @@ SELECT id, indexer_id, guid, title, attributes_id, size_bytes, seeders, leechers
        first_seen_at, expires_at
 FROM candidate WHERE id = ?;
 
+-- What a search last decided about a release for an item, to leave an unchanged finding alone.
+-- name: LastDecisionForCandidate :one
+SELECT id, candidate_id, desired_item_id, category_id, outcome, score, components_json,
+       rejections_json, deferrals_json, match_confidence, decided_at
+FROM candidate_decision
+WHERE candidate_id = ? AND desired_item_id = ?
+ORDER BY decided_at DESC, id DESC
+LIMIT 1;
+
 -- name: RecordDecision :one
 INSERT INTO candidate_decision (candidate_id, desired_item_id, category_id, outcome, score,
                                 components_json, rejections_json, deferrals_json,

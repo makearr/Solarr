@@ -227,13 +227,9 @@ func (p Pipeline) decide(ctx context.Context, itemID int64, finds []Find, source
 	rejectPassworded(finds)
 	finds = WithoutCrossIndexerDuplicates(finds)
 	SortBestFirst(finds)
-	decisions := make([]library.DecisionDetail, 0, len(finds))
-	for _, find := range finds {
-		detail, err := Persist(ctx, p.Candidates, p.Sightings, item.ID, item.CategoryID, find, source, at)
-		if err != nil {
-			return decisions, fmt.Errorf("persist: %w", err)
-		}
-		decisions = append(decisions, detail)
+	decisions, err := PersistAll(ctx, p.Candidates, p.Sightings, item.ID, item.CategoryID, finds, source, at)
+	if err != nil {
+		return nil, fmt.Errorf("persist: %w", err)
 	}
 	return decisions, nil
 }

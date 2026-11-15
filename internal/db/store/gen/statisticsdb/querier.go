@@ -36,6 +36,8 @@ type Querier interface {
 	GetDecisionForItemWithCandidate(ctx context.Context, arg GetDecisionForItemWithCandidateParams) (GetDecisionForItemWithCandidateRow, error)
 	InsertDownloadSpeed(ctx context.Context, arg InsertDownloadSpeedParams) error
 	InsertSearchLog(ctx context.Context, arg InsertSearchLogParams) error
+	// What a search last decided about a release for an item, to leave an unchanged finding alone.
+	LastDecisionForCandidate(ctx context.Context, arg LastDecisionForCandidateParams) (CandidateDecision, error)
 	ListDecisionRollup(ctx context.Context, desiredItemID int64) ([]DecisionRollup, error)
 	// The interactive search view's own listing (F16): a decision means nothing without the release it was decided about.
 	ListDecisionsForItemWithCandidate(ctx context.Context, arg ListDecisionsForItemWithCandidateParams) ([]ListDecisionsForItemWithCandidateRow, error)

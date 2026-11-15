@@ -16,7 +16,8 @@ Whether an item is fresh because RSS showed it (ADR-55) is `rss_sighting` in `li
 on an RSS-found release is recorded; the planner and the Fresh filter read it, not the candidates.
 
 `statistics.db` holds download history, the statistics rollup, and every release a search found (`candidate`) with
-what was decided about it (`candidate_decision`, `decision_rollup`).
+what was decided about it (`candidate_decision`, `decision_rollup`). A search writes its whole result list in one batch, and a finding
+repeated with the same outcome and score is recorded once a day, not once a search: the decision counts are per day of change.
 The planner, dispatch and Wanted never read them: a held release and an acquisition carry their own release, and
 freshness reads `rss_sighting`. Interactive search and a person's send read the decisions from `statistics.db`;
 `library.db`'s old candidate and rollup tables were dropped by migration 0117 and the start-up copy removed with them.

@@ -161,11 +161,37 @@ func (d ProtocolDelay) firstSeen(finds []Find) map[int64]map[string]time.Time {
 	return seen
 }
 
-// Persist upserts the release and records the decision against itemID; a release RSS showed is also a sighting.
-func Persist(
-	ctx context.Context, candidates statistics.Candidates, sightings *library.Sightings, itemID, categoryID int64, find Find,
+// PersistAll upserts every release and records its decision against itemID, in one batch; a release RSS showed is
+// also a sighting of the item. The decisions come back in the order of finds.
+func PersistAll(
+	ctx context.Context, candidates statistics.Candidates, sightings *library.Sightings, itemID, categoryID int64, finds []Find,
 	source string, at time.Time,
-) (library.DecisionDetail, error) {
+) ([]library.DecisionDetail, error) {
+	records := make([]statistics.FindRecord, len(finds))
+	for index, find := range finds {
+		records[index] = findRecord(itemID, categoryID, find, source, at)
+	}
+	details, err := candidates.RecordFinds(ctx, records)
+	if err != nil {
+		return nil, err
+	}
+	if sightings != nil {
+		var newest int64
+		for _, detail := range details {
+			if detail.ReleaseCandidate.Source == "rss" {
+				newest = max(newest, detail.ReleaseCandidate.FirstSeenAt)
+			}
+		}
+		if newest > 0 {
+			if err := sightings.RecordRSS(ctx, itemID, newest); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return details, nil
+}
+
+func findRecord(itemID, categoryID int64, find Find, source string, at time.Time) statistics.FindRecord {
 	var sizeBytes *int64
 	if find.Raw.SizeBytes > 0 {
 		size := find.Raw.SizeBytes
@@ -182,37 +208,27 @@ func Persist(
 		publishedAt = &p
 	}
 	confidence := find.ParseConfidence
-	candidate, err := candidates.Upsert(ctx, library.NewReleaseCandidate{
-		IndexerID: find.Conn.ID, GUID: find.Raw.GUID, Title: find.Raw.Title,
-		SizeBytes: sizeBytes, Seeders: seeders, Leechers: leechers, PublishedAt: publishedAt,
-		Protocol: ProtocolFor(find.Conn.Impl), DownloadURL: sealed(find.Conn, find.Raw.Link),
-		ParseConfidence: &confidence, Source: source,
-		FirstSeenAt: at.Unix(), ExpiresAt: at.Add(RetentionDefault).Unix(),
-	})
-	if err != nil {
-		return library.DecisionDetail{}, err
-	}
-	if sightings != nil && candidate.Source == "rss" {
-		if err := sightings.RecordRSS(ctx, itemID, candidate.FirstSeenAt); err != nil {
-			return library.DecisionDetail{}, err
-		}
-	}
 	matchConfidence := find.MatchConfidence
 	if matchConfidence == 0 {
 		matchConfidence = 1 - find.Distance
 	}
-	decision, err := candidates.RecordDecision(ctx, library.NewDecision{
-		CandidateID: candidate.ID, DesiredItemID: itemID, CategoryID: categoryID, Outcome: string(find.Decision.Outcome),
-		Score:           find.Decision.Score(),
-		ComponentsJSON:  jsonOrEmptyArray(find.Decision.Components),
-		RejectionsJSON:  jsonOrEmptyArray(find.Decision.Rejections),
-		DeferralsJSON:   jsonOrEmptyArray(find.Decision.Deferrals),
-		MatchConfidence: &matchConfidence, DecidedAt: at.Unix(),
-	})
-	if err != nil {
-		return library.DecisionDetail{}, err
+	return statistics.FindRecord{
+		Candidate: library.NewReleaseCandidate{
+			IndexerID: find.Conn.ID, GUID: find.Raw.GUID, Title: find.Raw.Title,
+			SizeBytes: sizeBytes, Seeders: seeders, Leechers: leechers, PublishedAt: publishedAt,
+			Protocol: ProtocolFor(find.Conn.Impl), DownloadURL: sealed(find.Conn, find.Raw.Link),
+			ParseConfidence: &confidence, Source: source,
+			FirstSeenAt: at.Unix(), ExpiresAt: at.Add(RetentionDefault).Unix(),
+		},
+		Decision: library.NewDecision{
+			DesiredItemID: itemID, CategoryID: categoryID, Outcome: string(find.Decision.Outcome),
+			Score:           find.Decision.Score(),
+			ComponentsJSON:  jsonOrEmptyArray(find.Decision.Components),
+			RejectionsJSON:  jsonOrEmptyArray(find.Decision.Rejections),
+			DeferralsJSON:   jsonOrEmptyArray(find.Decision.Deferrals),
+			MatchConfidence: &matchConfidence, DecidedAt: at.Unix(),
+		},
 	}
-	return library.DecisionDetail{Decision: decision, ReleaseCandidate: candidate}, nil
 }
 
 func jsonOrEmptyArray(v any) string {

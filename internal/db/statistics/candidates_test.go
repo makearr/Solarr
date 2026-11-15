@@ -1,6 +1,7 @@
 package statistics_test
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -136,5 +137,56 @@ func TestCandidates_ASecondSightingRefreshesTheDownloadLink(t *testing.T) {
 	}
 	if stored.DownloadURL != "https://x/a?token=new" || stored.SizeBytes == nil || *stored.SizeBytes != 500_000_000 {
 		t.Errorf("stored = %+v, want the new link and the size kept when the second sighting has none", stored)
+	}
+}
+
+func findRecord(guid string, score float64, decidedAt int64) statistics.FindRecord {
+	return statistics.FindRecord{
+		Candidate: release(guid, decidedAt, decidedAt+1_000_000),
+		Decision: library.NewDecision{
+			DesiredItemID: 5, CategoryID: 1, Outcome: "ACCEPT", Score: score, ComponentsJSON: "[]", DecidedAt: decidedAt,
+		},
+	}
+}
+
+// A search records its whole result list in one batch, and one that finds the same again records nothing new for a
+// day; a changed score or a day's passing is recorded (PERF-14).
+func TestCandidates_RecordFindsLeavesAnUnchangedFindingAloneForADay(t *testing.T) {
+	candidates := statistics.NewCandidates(openStatistics(t))
+	ctx := t.Context()
+	const hour = 3600
+	batch := func(decidedAt int64, changed string) []statistics.FindRecord {
+		records := make([]statistics.FindRecord, 250)
+		for index := range records {
+			guid := fmt.Sprintf("g%03d", index)
+			score := 1.0
+			if guid == changed {
+				score = 2
+			}
+			records[index] = findRecord(guid, score, decidedAt)
+		}
+		return records
+	}
+	rows := func() int {
+		t.Helper()
+		listed, err := candidates.ListDecisionsForItem(ctx, 5, 10_000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(listed)
+	}
+	first, err := candidates.RecordFinds(ctx, batch(1_000, ""))
+	if err != nil || len(first) != 250 || rows() != 250 {
+		t.Fatalf("first search: %d details, %d rows, %v; want 250 of each", len(first), rows(), err)
+	}
+	again, err := candidates.RecordFinds(ctx, batch(1_000+hour, ""))
+	if err != nil || rows() != 250 || again[7].Decision.ID != first[7].Decision.ID {
+		t.Fatalf("an hour later: %d rows, %v; want 250 and the earlier decisions answered", rows(), err)
+	}
+	if _, err := candidates.RecordFinds(ctx, batch(1_000+2*hour, "g003")); err != nil || rows() != 251 {
+		t.Fatalf("one score changed: %d rows, %v; want exactly one more", rows(), err)
+	}
+	if _, err := candidates.RecordFinds(ctx, batch(1_000+25*hour, "g003")); err != nil || rows() != 500 {
+		t.Fatalf("a day later: %d rows, %v; want the 249 findings last decided over a day ago recorded once more, the changed one only 23 hours old left alone", rows(), err)
 	}
 }

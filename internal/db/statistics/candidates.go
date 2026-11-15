@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -76,23 +77,101 @@ func (c Candidates) RecordDecision(ctx context.Context, req library.NewDecision)
 	var row statisticsdb.CandidateDecision
 	err := c.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		var err error
-		row, err = statisticsdb.New(tx).RecordDecision(ctx, statisticsdb.RecordDecisionParams{
-			CandidateID: req.CandidateID, DesiredItemID: req.DesiredItemID, CategoryID: req.CategoryID, Outcome: req.Outcome,
-			Score: req.Score, ComponentsJson: req.ComponentsJSON,
-			RejectionsJson: nullString(req.RejectionsJSON), DeferralsJson: nullString(req.DeferralsJSON),
-			MatchConfidence: nullFloat64(req.MatchConfidence), DecidedAt: req.DecidedAt,
-		})
+		row, err = recordDecision(ctx, statisticsdb.New(tx), req)
 		return err
 	})
 	if err != nil {
 		return library.Decision{}, fmt.Errorf("statistics: record decision: %w", err)
 	}
+	return decisionFromRow(row), nil
+}
+
+func recordDecision(ctx context.Context, queries *statisticsdb.Queries, req library.NewDecision) (statisticsdb.CandidateDecision, error) {
+	return queries.RecordDecision(ctx, statisticsdb.RecordDecisionParams{
+		CandidateID: req.CandidateID, DesiredItemID: req.DesiredItemID, CategoryID: req.CategoryID, Outcome: req.Outcome,
+		Score: req.Score, ComponentsJson: req.ComponentsJSON,
+		RejectionsJson: nullString(req.RejectionsJSON), DeferralsJson: nullString(req.DeferralsJSON),
+		MatchConfidence: nullFloat64(req.MatchConfidence), DecidedAt: req.DecidedAt,
+	})
+}
+
+func decisionFromRow(row statisticsdb.CandidateDecision) library.Decision {
 	return library.Decision{
 		ID: row.ID, CandidateID: row.CandidateID, DesiredItemID: row.DesiredItemID, CategoryID: row.CategoryID,
 		Outcome: row.Outcome, Score: row.Score, ComponentsJSON: row.ComponentsJson,
 		RejectionsJSON: row.RejectionsJson.String, DeferralsJSON: row.DeferralsJson.String,
 		MatchConfidence: floatPtr(row.MatchConfidence), DecidedAt: row.DecidedAt,
-	}, nil
+	}
+}
+
+// FindRecord is one release a search found and what was decided about it; Decision.CandidateID is filled in on writing.
+type FindRecord struct {
+	Candidate library.NewReleaseCandidate
+	Decision  library.NewDecision
+}
+
+// recordFindsChunk bounds one write transaction.
+const recordFindsChunk = 200
+
+// UnchangedWithin is how long a finding repeated with the same outcome and score is not recorded again: the
+// statistics count it once a day, not once a search.
+const UnchangedWithin = 24 * time.Hour
+
+// RecordFinds upserts every release and records its decision, a chunk to a transaction, and answers the decisions in
+// input order. A release whose last decision for the item has the same outcome and score, made within UnchangedWithin,
+// is left alone and that decision is answered.
+func (c Candidates) RecordFinds(ctx context.Context, records []FindRecord) ([]library.DecisionDetail, error) {
+	details := make([]library.DecisionDetail, 0, len(records))
+	for start := 0; start < len(records); start += recordFindsChunk {
+		chunk := records[start:min(start+recordFindsChunk, len(records))]
+		err := c.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			queries := statisticsdb.New(tx)
+			written := make([]library.DecisionDetail, 0, len(chunk))
+			for _, record := range chunk {
+				detail, err := recordFind(ctx, queries, record)
+				if err != nil {
+					return err
+				}
+				written = append(written, detail)
+			}
+			details = append(details, written...)
+			return nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("statistics: record finds: %w", err)
+		}
+	}
+	return details, nil
+}
+
+func recordFind(ctx context.Context, queries *statisticsdb.Queries, record FindRecord) (library.DecisionDetail, error) {
+	req := record.Candidate
+	candidate, err := queries.UpsertCandidate(ctx, statisticsdb.UpsertCandidateParams{
+		IndexerID: req.IndexerID, Guid: req.GUID, Title: req.Title,
+		SizeBytes: nullInt64(req.SizeBytes), Seeders: nullInt64(req.Seeders), Leechers: nullInt64(req.Leechers),
+		PublishedAt: nullInt64(req.PublishedAt), Protocol: req.Protocol, DownloadUrl: req.DownloadURL,
+		ParseConfidence: nullFloat64(req.ParseConfidence), Source: req.Source,
+		FirstSeenAt: req.FirstSeenAt, ExpiresAt: req.ExpiresAt,
+	})
+	if err != nil {
+		return library.DecisionDetail{}, err
+	}
+	decision := record.Decision
+	decision.CandidateID = candidate.ID
+	last, err := queries.LastDecisionForCandidate(ctx, statisticsdb.LastDecisionForCandidateParams{CandidateID: candidate.ID, DesiredItemID: decision.DesiredItemID})
+	switch {
+	case err == nil:
+		if last.Outcome == decision.Outcome && last.Score == decision.Score && decision.DecidedAt-last.DecidedAt < int64(UnchangedWithin/time.Second) {
+			return library.DecisionDetail{Decision: decisionFromRow(last), ReleaseCandidate: releaseFromRow(candidate)}, nil
+		}
+	case !errors.Is(err, sql.ErrNoRows):
+		return library.DecisionDetail{}, err
+	}
+	row, err := recordDecision(ctx, queries, decision)
+	if err != nil {
+		return library.DecisionDetail{}, err
+	}
+	return library.DecisionDetail{Decision: decisionFromRow(row), ReleaseCandidate: releaseFromRow(candidate)}, nil
 }
 
 // ListDecisionsForItem answers the decisions recorded against one item, each with its release, newest first (F1, F16).
