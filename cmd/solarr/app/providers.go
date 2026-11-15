@@ -235,10 +235,13 @@ func (p *process) indexerClientFactory() adapters.IndexerHTTPFactory {
 				return limited || indexer.AccountRefused(start)
 			},
 		}
+		name := providerIndexerPrefix + strconv.FormatInt(indexerID, 10)
 		if egress.FlareSolverrURL != "" {
 			config.Transport = p.flareSolverrTransport(guard, egress.FlareSolverrURL, config.Proxy)
+		} else {
+			config.Transport = p.pooledTransport(name, baseURL, egress.ProxyURL, guard, config.Proxy)
 		}
-		return p.providerClient(providerIndexerPrefix+strconv.FormatInt(indexerID, 10), guard, config)
+		return p.providerClient(name, guard, config)
 	}
 }
 
@@ -270,8 +273,15 @@ func (p *process) indexerDriver(ctx context.Context, found settings.Indexer, api
 // like any other outbound client (ADR-47 is indexer-specific, not this).
 func (p *process) downloaderClientFactory() adapters.DownloaderHTTPFactory {
 	return func(downloaderID int64, baseURL string) *httpx.Client {
-		return p.providerClient(providerDownloaderPrefix+strconv.FormatInt(downloaderID, 10), connectionGuard(baseURL), httpx.ClientConfig{})
+		name, guard, proxy := providerDownloaderPrefix+strconv.FormatInt(downloaderID, 10), connectionGuard(baseURL), p.liveProxyPolicy()
+		return p.providerClient(name, guard, httpx.ClientConfig{Proxy: proxy, Transport: p.pooledTransport(name, baseURL, "", guard, proxy)})
 	}
+}
+
+// pooledTransport is the connection's transport, kept between calls: the address and the connection's own proxy are
+// what it captures, so a change of either builds a new one.
+func (p *process) pooledTransport(name, baseURL, proxyURL string, guard *httpx.Guard, proxy httpx.LiveProxyPolicy) *http.Transport {
+	return p.transports.For(name, baseURL+"|"+proxyURL, func() *http.Transport { return httpx.NewTransport(guard, proxy) })
 }
 
 // connectionGuard is the SSRF guard for a connection an administrator configured: its own host may

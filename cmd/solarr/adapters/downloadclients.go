@@ -34,8 +34,11 @@ type DownloadClientDeps struct {
 	FS    fsx.FS
 	Clock clock.Clock
 	// Blackholes remembers what a blackhole's settled downloads measured, across the polls that rebuild the client.
-	Blackholes *blackhole.Memo
+	Blackholes *BlackholeMemo
 }
+
+// BlackholeMemo is what a blackhole's settled downloads measured, kept by the process across polls.
+type BlackholeMemo = blackhole.Memo
 
 // downloadClientKind is one kind the user may pick, and how a connection of it is built on its base.
 type downloadClientKind struct {

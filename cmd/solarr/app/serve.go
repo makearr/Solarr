@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
-	"github.com/makearr/Solarr/internal/acquiring/blackhole"
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/api/auth"
@@ -54,6 +53,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/events"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/hitcount"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 	"github.com/makearr/Solarr/internal/platform/keyedlock"
 	"github.com/makearr/Solarr/internal/platform/logbuffer"
 	"github.com/makearr/Solarr/internal/platform/logthrottle"
@@ -80,7 +80,9 @@ type process struct {
 	// hunt is the search hunt, kept for the budget view.
 	hunt *plan.HuntJob
 	// blackholes keeps what blackhole downloads measured, because every poll builds its clients anew.
-	blackholes blackhole.Memo
+	blackholes adapters.BlackholeMemo
+	// transports keeps the sockets of each download client and indexer between the calls that rebuild their clients.
+	transports httpx.Transports
 	// extraMedia are media types a test registers beside the built-in ones (revision 2's R1.9 proof).
 	extraMedia []media.Module
 	build      Build
@@ -848,7 +850,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		History:   adapters.History{History: statistics.NewHistory(p.statistics)},
 		Queue: adapters.Queue{
 			Poll: p.pollJob(), Ready: library.NewReadyQueue(p.library),
-			Describe: p.describeAcquisition, Clock: clock.NewSystem(),
+			Describer: p.newDescriber, Clock: clock.NewSystem(),
 		},
 		LogReader: logSource{ring: p.logRing},
 		Calendar:  adapters.Calendar{Calendar: library.NewCalendar(p.library)},
