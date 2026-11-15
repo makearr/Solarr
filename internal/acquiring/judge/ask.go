@@ -86,6 +86,9 @@ var searches parallel.Flight[[]indexer.RawItem]
 // resultLimit bounds one indexer's response per query.
 const resultLimit = 100
 
+// maxPages bounds the pages read of one query; the indexer's request budget meters each, so a full page costs up to this many requests.
+const maxPages = 3
+
 // AskEveryIndexer runs a tier's queries against every indexer at once and waits for all of them or the group
 // deadline (ADR-37): one slow indexer does not delay the others' results.
 func AskEveryIndexer(ctx context.Context, conns []Conn, queries []Query, deadline time.Duration) ([]Answer, error) {
@@ -132,25 +135,33 @@ func askIndexer(ctx context.Context, conn Conn, queries []Query, deadline time.D
 		if len(categories) > 0 && len(query.MoreCategories) > 0 {
 			categories = append(slices.Clone(categories), query.MoreCategories...)
 		}
-		request := indexer.SearchRequest{
-			Function: query.Function, Query: query.Text, Extra: query.Extra, Categories: categories, Limit: cmp.Or(query.Limit, resultLimit),
-		}
-		// The request outlives the caller that started it, so the searches joined to it are not cancelled with it.
-		raws, _, err := searches.Do(ctx, searchKey(conn.ID, request), func() ([]indexer.RawItem, error) {
-			shared, cancel := context.WithTimeout(context.WithoutCancel(ctx), deadline)
-			defer cancel()
-			return conn.Client.Search(shared, request)
-		})
-		if err != nil {
-			answer.Err = err
-			return answer
-		}
-		for _, raw := range raws {
-			// A release the indexer gave no GUID is told apart by its link, else its title.
-			key := cmp.Or(raw.GUID, raw.Link, raw.Title)
-			if !seen[key] {
-				seen[key] = true
-				answer.Raws = append(answer.Raws, raw)
+		limit := cmp.Or(query.Limit, resultLimit)
+		// A season search answers every release of every episode, newest first, so one page may never reach the older
+		// episodes; a full page asks for the next, and a request for one episode is done with its first.
+		for page := 0; page < maxPages; page++ {
+			request := indexer.SearchRequest{
+				Function: query.Function, Query: query.Text, Extra: query.Extra, Categories: categories, Limit: limit, Offset: page * limit,
+			}
+			// The request outlives the caller that started it, so the searches joined to it are not cancelled with it.
+			raws, _, err := searches.Do(ctx, searchKey(conn.ID, request), func() ([]indexer.RawItem, error) {
+				shared, cancel := context.WithTimeout(context.WithoutCancel(ctx), deadline)
+				defer cancel()
+				return conn.Client.Search(shared, request)
+			})
+			if err != nil {
+				answer.Err = err
+				return answer
+			}
+			for _, raw := range raws {
+				// A release the indexer gave no GUID is told apart by its link, else its title.
+				key := cmp.Or(raw.GUID, raw.Link, raw.Title)
+				if !seen[key] {
+					seen[key] = true
+					answer.Raws = append(answer.Raws, raw)
+				}
+			}
+			if len(raws) < limit || query.Extra["ep"] != "" {
+				break
 			}
 		}
 	}
@@ -164,5 +175,5 @@ func searchKey(indexerID int64, request indexer.SearchRequest) string {
 		extra = append(extra, key+"="+value)
 	}
 	slices.Sort(extra)
-	return fmt.Sprint(indexerID, "|", request.Function, "|", request.Query, "|", request.Categories, "|", request.Limit, "|", extra)
+	return fmt.Sprint(indexerID, "|", request.Function, "|", request.Query, "|", request.Categories, "|", request.Limit, "|", request.Offset, "|", extra)
 }

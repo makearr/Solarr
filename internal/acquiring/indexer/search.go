@@ -18,7 +18,9 @@ type SearchRequest struct {
 	Query      string
 	Categories []int
 	Limit      int
-	Extra      map[string]string
+	// Offset skips that many results, to read the page after a full one; the native clients ignore it.
+	Offset int
+	Extra  map[string]string
 }
 
 // Search fetches and parses one t=<function> response into raw items --
@@ -73,6 +75,9 @@ func (r SearchRequest) params() url.Values {
 	}
 	if r.Limit > 0 {
 		params.Set("limit", strconv.Itoa(r.Limit))
+		if r.Offset > 0 {
+			params.Set("offset", strconv.Itoa(r.Offset))
+		}
 	}
 	for key, value := range r.Extra {
 		params.Set(key, value)

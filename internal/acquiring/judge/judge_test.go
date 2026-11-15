@@ -3,6 +3,7 @@ package judge_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"sync"
 	"testing"
@@ -326,5 +327,47 @@ func TestAskEveryIndexerKeepsEachReleaseWithoutAGUID(t *testing.T) {
 	answers, err := judge.AskEveryIndexer(t.Context(), []judge.Conn{{ID: 92, Client: searcher}}, []judge.Query{{Function: "search", Text: "no guids"}}, time.Second)
 	if err != nil || len(answers[0].Raws) != 2 {
 		t.Fatalf("answer = %+v, %v; want the two distinct releases", answers[0].Raws, err)
+	}
+}
+
+// pagedSearcher answers full pages of distinct releases, as a Newznab season search does.
+type pagedSearcher struct {
+	pageSize int
+	seen     []indexer.SearchRequest
+}
+
+func (p *pagedSearcher) Search(_ context.Context, request indexer.SearchRequest) ([]indexer.RawItem, error) {
+	p.seen = append(p.seen, request)
+	items := make([]indexer.RawItem, p.pageSize)
+	for i := range items {
+		items[i] = indexer.RawItem{GUID: fmt.Sprint("r", request.Offset+i)}
+	}
+	return items, nil
+}
+
+// SRCH-4: a full page asks for the next, up to three, and a request for one episode or a short page stops at the first.
+func TestAskPagesAFullPageButNotAnEpisodeOrAShortPage(t *testing.T) {
+	season := judge.Query{Function: "tvsearch", Extra: map[string]string{"season": "1"}}
+	episode := judge.Query{Function: "tvsearch", Extra: map[string]string{"season": "1", "ep": "3"}}
+	for name, tc := range map[string]struct {
+		query    judge.Query
+		pageSize int
+		offsets  []int
+	}{
+		"full pages":  {season, 100, []int{0, 100, 200}},
+		"short page":  {season, 40, []int{0}},
+		"one episode": {episode, 100, []int{0}},
+	} {
+		searcher := &pagedSearcher{pageSize: tc.pageSize}
+		if _, err := judge.AskEveryIndexer(t.Context(), []judge.Conn{{ID: 1, Client: searcher}}, []judge.Query{tc.query}, time.Second); err != nil {
+			t.Fatal(err)
+		}
+		var offsets []int
+		for _, request := range searcher.seen {
+			offsets = append(offsets, request.Offset)
+		}
+		if !slices.Equal(offsets, tc.offsets) {
+			t.Errorf("%s: offsets = %v, want %v", name, offsets, tc.offsets)
+		}
 	}
 }

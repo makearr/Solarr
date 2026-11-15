@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -64,6 +65,8 @@ type wanted struct {
 	// anime series are also searched by the absolute number releases carry; absolute maps it to the episode number.
 	anime    bool
 	absolute map[int]int
+	// daily series are released under their air date, which is what their searches carry.
+	daily bool
 	// runtimeMs is an episode's usual length, to turn a release's size into a bitrate; zero when nothing says.
 	runtimeMs int64
 	// owned is, for an upgrade, what the file each wanted episode has now is: a release must strictly beat it.
@@ -95,7 +98,8 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 	w := wanted{
 		season: season, missing: map[int]library.SeriesEpisode{}, title: detail.Summary.Title, aliases: detail.Aliases,
 		tvdb: detail.IDs[ProviderTVDB], otherIDs: otherQueryIDs(detail.IDs), year: detail.Summary.Year, absolute: map[int]int{},
-		anime: SeriesType(detail.Summary.Fields["series_type"]) == SeriesAnime, scene: newSceneNumbers(detail.Episodes),
+		anime: SeriesType(detail.Summary.Fields["series_type"]) == SeriesAnime,
+		daily: SeriesType(detail.Summary.Fields["series_type"]) == SeriesDaily, scene: newSceneNumbers(detail.Episodes),
 	}
 	var runtimeSum, runtimeCount int64
 	for _, episode := range detail.Episodes {
@@ -200,51 +204,135 @@ func (w wanted) sceneSeasons() []int {
 	return seasons[:min(len(seasons), maxSceneSeasons)]
 }
 
-// queries builds the tiers of one season's search: the id query first, then text in the spellings releases use. The
-// numbers asked are the scene's, which is what indexers hold releases by.
-func (w wanted) queries() [][]judge.Query {
-	oneEpisode := len(w.missing) == 1
-	var episode SceneNumber
-	for number := range w.missing {
-		episode = w.scene.scene(Key{w.season, number})
-	}
-	seasons := w.sceneSeasons()
+// maxEpisodeQueries bounds the per-episode searches a season may cost; the lowest numbers go first, so repeated hunts
+// walk the season as the ones found drop out.
+const maxEpisodeQueries = 5
 
-	var tiers [][]judge.Query
+// maxDailyQueries bounds the air-date searches of a daily series, newest first.
+const maxDailyQueries = 5
+
+// queries builds the tiers of one season's search: a daily series by air date, then the id query, then text in the
+// spellings releases use. The numbers asked are the scene's, which is what indexers hold releases by.
+func (w wanted) queries() [][]judge.Query {
+	names := append([]string{w.title}, w.aliases...)
+	if len(names) > 3 {
+		names = names[:3]
+	}
+	tiers := w.dailyQueries(names)
+	return append(tiers, w.numberedQueries(names)...)
+}
+
+// perEpisode says whether episodes are asked for one by one: when one is missing, or when fewer than half of the season
+// is, since a season search answers a page of the newest releases and would never reach the older episodes.
+func (w wanted) perEpisode() bool {
+	return len(w.missing) == 1 || (len(w.missing) != w.allCount && len(w.missing)*2 < w.allCount)
+}
+
+// chosenEpisodes are the missing episodes a per-episode search asks for, lowest first.
+func (w wanted) chosenEpisodes() []SceneNumber {
+	numbers := slices.Sorted(maps.Keys(w.missing))
+	numbers = numbers[:min(len(numbers), maxEpisodeQueries)]
+	chosen := make([]SceneNumber, len(numbers))
+	for i, number := range numbers {
+		chosen[i] = w.scene.scene(Key{w.season, number})
+	}
+	return chosen
+}
+
+func (w wanted) idParams() map[string]string {
 	idQueries := map[string]string{"tvdbid": w.tvdb}
 	for param, id := range w.otherIDs {
 		idQueries[param] = id
 	}
+	return idQueries
+}
+
+// dailyQueries ask for the newest missing episodes by air date: Newznab's convention is the year as the season and
+// MM/DD as the episode, and releases are named "Show 2024 05 01".
+func (w wanted) dailyQueries(names []string) [][]judge.Query {
+	if !w.daily {
+		return nil
+	}
+	var dated []time.Time
+	for _, episode := range w.missing {
+		if day, err := time.Parse(time.DateOnly, episode.Date); err == nil {
+			dated = append(dated, day)
+		}
+	}
+	slices.SortFunc(dated, func(a, b time.Time) int { return b.Compare(a) })
+	dated = dated[:min(len(dated), maxDailyQueries)]
+	if len(dated) == 0 {
+		return nil
+	}
+	var tiers [][]judge.Query
+	idQueries := w.idParams()
 	for _, param := range []string{"tvdbid", "tvmazeid", "imdbid"} {
 		if idQueries[param] == "" {
 			continue
 		}
 		var byID []judge.Query
-		for _, season := range seasons {
-			extra := map[string]string{param: idQueries[param], "season": strconv.Itoa(season)}
-			needs := []string{param, "season"}
-			if oneEpisode {
-				extra["ep"] = strconv.Itoa(episode.Number)
-				needs = append(needs, "ep")
+		for _, day := range dated {
+			byID = append(byID, judge.Query{
+				Function: "tvsearch", Extra: map[string]string{param: idQueries[param], "season": day.Format("2006"), "ep": day.Format("01/02")},
+				Needs: []string{param, "season", "ep"},
+			})
+		}
+		tiers = append(tiers, byID)
+	}
+	var text []judge.Query
+	for _, name := range names {
+		for _, day := range dated {
+			text = append(text, judge.Query{Function: "search", Text: releasefacts.CleanQuery(name) + " " + day.Format("2006 01 02")})
+		}
+	}
+	return append(tiers, text)
+}
+
+// numberedQueries are the season and episode forms of the search.
+func (w wanted) numberedQueries(names []string) [][]judge.Query {
+	perEpisode := w.perEpisode()
+	chosen := w.chosenEpisodes()
+	seasons := w.sceneSeasons()
+	// One missing episode is asked for alone; several add the season forms last, where a pack is still found.
+	trailingSeason := perEpisode && len(w.missing) > 1
+
+	var tiers [][]judge.Query
+	idQueries := w.idParams()
+	for _, param := range []string{"tvdbid", "tvmazeid", "imdbid"} {
+		if idQueries[param] == "" {
+			continue
+		}
+		var byID []judge.Query
+		if perEpisode {
+			for _, episode := range chosen {
+				byID = append(byID, judge.Query{
+					Function: "tvsearch", Extra: map[string]string{param: idQueries[param], "season": strconv.Itoa(episode.Season), "ep": strconv.Itoa(episode.Number)},
+					Needs: []string{param, "season", "ep"},
+				})
 			}
-			byID = append(byID, judge.Query{Function: "tvsearch", Extra: extra, Needs: needs})
+		} else {
+			for _, season := range seasons {
+				byID = append(byID, judge.Query{
+					Function: "tvsearch", Extra: map[string]string{param: idQueries[param], "season": strconv.Itoa(season)}, Needs: []string{param, "season"},
+				})
+			}
 		}
 		tiers = append(tiers, byID)
 	}
 
-	names := append([]string{w.title}, w.aliases...)
-	if len(names) > 3 {
-		names = names[:3]
-	}
-	var text, spelled []judge.Query
+	var text, spelled, trailing []judge.Query
 	for _, name := range names {
 		clean := releasefacts.CleanQuery(name)
-		if oneEpisode {
-			text = append(text, judge.Query{Function: "search", Text: fmt.Sprintf("%s S%02dE%02d", clean, episode.Season, episode.Number)})
+		if perEpisode {
+			for _, episode := range chosen {
+				text = append(text, judge.Query{Function: "search", Text: fmt.Sprintf("%s S%02dE%02d", clean, episode.Season, episode.Number)})
+			}
 		}
 		for _, season := range seasons {
-			if !oneEpisode {
+			if !perEpisode {
 				text = append(text, judge.Query{Function: "search", Text: fmt.Sprintf("%s S%02d", clean, season)})
+			} else if trailingSeason {
+				trailing = append(trailing, judge.Query{Function: "search", Text: fmt.Sprintf("%s S%02d", clean, season)})
 			}
 			spelled = append(spelled, judge.Query{Function: "search", Text: fmt.Sprintf("%s Season %d", clean, season)})
 		}
@@ -252,6 +340,23 @@ func (w wanted) queries() [][]judge.Query {
 	tiers = append(tiers, text)
 	if w.anime {
 		tiers = append(tiers, w.absoluteQueries(names))
+	}
+	if trailingSeason {
+		var seasonIDs []judge.Query
+		for _, param := range []string{"tvdbid", "tvmazeid", "imdbid"} {
+			if idQueries[param] == "" {
+				continue
+			}
+			for _, season := range seasons {
+				seasonIDs = append(seasonIDs, judge.Query{
+					Function: "tvsearch", Extra: map[string]string{param: idQueries[param], "season": strconv.Itoa(season)}, Needs: []string{param, "season"},
+				})
+			}
+		}
+		if len(seasonIDs) > 0 {
+			tiers = append(tiers, seasonIDs)
+		}
+		tiers = append(tiers, trailing)
 	}
 	tiers = append(tiers, spelled)
 	if w.anime {
@@ -428,13 +533,35 @@ func (w wanted) coverageOf(info parsetv.Info, titleKnown bool) ([]int, bool) {
 		}
 		return numbers, len(numbers) > 0
 	case info.AirDate != "":
-		for number, episode := range w.missing {
-			if episode.Date == info.AirDate {
-				return []int{number}, true
-			}
-		}
+		numbers := w.airedOn(info.AirDate)
+		return numbers, len(numbers) > 0
 	}
 	return nil, false
+}
+
+// airedOn are the missing episodes a release dated day holds: every one aired that day (a double bill), else the only
+// one aired a day either side, since the provider's air date and the release's can differ by a time zone.
+func (w wanted) airedOn(day string) []int {
+	var exact, near []int
+	released, err := time.Parse(time.DateOnly, day)
+	for number, episode := range w.missing {
+		if episode.Date == day {
+			exact = append(exact, number)
+			continue
+		}
+		if aired, parsed := time.Parse(time.DateOnly, episode.Date); err == nil && parsed == nil &&
+			aired.Sub(released).Abs() == 24*time.Hour {
+			near = append(near, number)
+		}
+	}
+	slices.Sort(exact)
+	if len(exact) > 0 {
+		return exact
+	}
+	if len(near) == 1 {
+		return near
+	}
+	return nil
 }
 
 // releaseEpisodes is how many episodes a release holds: the ones its name numbers, else the season it is a pack of.
