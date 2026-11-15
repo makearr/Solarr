@@ -1,12 +1,14 @@
 package library_test
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
@@ -286,3 +288,40 @@ func TestEnsureTrackItemByPart_RejectsAMissingPart(t *testing.T) {
 func mediaRefFor(track int) string { return fmt.Sprintf("disc1:track%d", track) }
 func sortKeyFor(track int) string  { return fmt.Sprintf("0001%04d", track) }
 func titleFor(track int) string    { return fmt.Sprintf("Track %d", track) }
+
+// PERF-12: unmonitoring an episode recomputes the season it is in and leaves the other seasons alone.
+func TestSetPartsMonitored_RecomputesOnlyTheItemsThePartsBelongTo(t *testing.T) {
+	opened, _ := newLibrary(t)
+	desired := library.NewDesired(opened)
+	work := createWork(t, opened, "tv", "Example Show")
+	first := createPart(t, opened, work.ID, "s01:e01", "0101", "One")
+	createPart(t, opened, work.ID, "s02:e01", "0201", "Two")
+	items := map[string]librarydb.DesiredItem{}
+	for _, ref := range []string{"s01", "s02"} {
+		item, err := desired.EnsureSeasonItem(t.Context(), library.SeasonRequest{WorkID: work.ID, MediaRef: ref, SortKey: ref, CategoryID: 1, ProfileID: 1, Monitored: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		items[ref] = item
+		if err := opened.Write(t.Context(), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, "UPDATE desired_item SET dirty = 0 WHERE id = ?", item.ID)
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := desired.SetPartsMonitored(t.Context(), work.ID, []int64{first.ID}, false); err != nil {
+		t.Fatal(err)
+	}
+	dirty := func(ref string) int64 {
+		row, err := librarydb.New(opened.Read()).GetDesiredItem(t.Context(), items[ref].ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return row.Dirty
+	}
+	if dirty("s01") != 1 || dirty("s02") != 0 {
+		t.Errorf("dirty s01=%d s02=%d, want 1 and 0: only the season of the part is recomputed", dirty("s01"), dirty("s02"))
+	}
+}

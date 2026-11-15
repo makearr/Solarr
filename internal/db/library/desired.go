@@ -286,43 +286,58 @@ func (d Desired) UnmonitorItemsLosingFiles(ctx context.Context, categoryID, root
 // shrink the album's required_count rather than holding it PARTIAL forever
 // (section 19.6, Appendix E D3).
 func (d Desired) SetPartMonitored(ctx context.Context, workID, partID int64, monitored bool) error {
-	err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		queries := librarydb.New(tx)
-		// SetWorkPartMonitored is a bare UPDATE ... WHERE id = ? -- it would
-		// silently affect zero rows for a bogus or cross-work id rather than
-		// erroring, so existence and ownership are checked here first.
-		part, err := queries.GetWorkPart(ctx, partID)
-		if err != nil {
-			return fmt.Errorf("get part: %w", err)
-		}
-		if part.WorkID != workID {
-			return sql.ErrNoRows
-		}
-		if err := queries.SetWorkPartMonitored(ctx,
-			librarydb.SetWorkPartMonitoredParams{Monitored: boolToInt(monitored), ID: partID}); err != nil {
-			return fmt.Errorf("set part monitored: %w", err)
-		}
-		items, err := queries.ListDesiredItemsForWork(ctx, workID)
-		if err != nil {
-			return fmt.Errorf("list items: %w", err)
-		}
-		for _, item := range items {
-			if item.SatisfactionKind != "SET" {
-				continue
+	return d.SetPartsMonitored(ctx, workID, []int64{partID}, monitored)
+}
+
+// partsPerWrite bounds the parts one write transaction changes (ADR-3's 200-row chunk).
+const partsPerWrite = 200
+
+// SetPartsMonitored is SetPartMonitored for many parts of one work: one transaction per chunk, and each affected item is
+// recomputed once, not once per part. Items the parts do not belong to are left alone.
+func (d Desired) SetPartsMonitored(ctx context.Context, workID int64, partIDs []int64, monitored bool) error {
+	for start := 0; start < len(partIDs); start += partsPerWrite {
+		chunk := partIDs[start:min(start+partsPerWrite, len(partIDs))]
+		err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			queries := librarydb.New(tx)
+			refs := make([]string, 0, len(chunk))
+			for _, partID := range chunk {
+				// SetWorkPartMonitored is a bare UPDATE ... WHERE id = ? -- it would silently affect zero rows for a
+				// bogus or cross-work id rather than erroring, so existence and ownership are checked here first.
+				part, err := queries.GetWorkPart(ctx, partID)
+				if err != nil {
+					return fmt.Errorf("get part: %w", err)
+				}
+				if part.WorkID != workID {
+					return sql.ErrNoRows
+				}
+				if err := queries.SetWorkPartMonitored(ctx,
+					librarydb.SetWorkPartMonitoredParams{Monitored: boolToInt(monitored), ID: partID}); err != nil {
+					return fmt.Errorf("set part monitored: %w", err)
+				}
+				refs = append(refs, part.MediaRef)
 			}
-			if item.MediaRef != "" && partInScope(part.MediaRef, item.MediaRef) {
-				if err := syncSeasonMonitoring(ctx, queries, workID, item); err != nil {
+			items, err := queries.ListDesiredItemsForWork(ctx, workID)
+			if err != nil {
+				return fmt.Errorf("list items: %w", err)
+			}
+			for _, item := range items {
+				if item.SatisfactionKind != "SET" || !slices.ContainsFunc(refs, func(ref string) bool { return partInScope(ref, item.MediaRef) }) {
+					continue
+				}
+				if item.MediaRef != "" {
+					if err := syncSeasonMonitoring(ctx, queries, workID, item); err != nil {
+						return err
+					}
+				}
+				if err := recomputeAlbumTx(ctx, queries, item.ID, workID, d.store.Now()); err != nil {
 					return err
 				}
 			}
-			if err := recomputeAlbumTx(ctx, queries, item.ID, workID, d.store.Now()); err != nil {
-				return err
-			}
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("library: set part monitored: %w", err)
 		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("library: set part monitored: %w", err)
 	}
 	return nil
 }
@@ -341,12 +356,21 @@ func (d Desired) UnmonitorPartsLosingFiles(ctx context.Context, categoryID, root
 		if err != nil {
 			return total, fmt.Errorf("library: parts losing files: %w", err)
 		}
+		// A work's parts are unmonitored together, so its items are recomputed once for the page.
+		byWork := map[int64][]int64{}
+		var works []int64
 		for _, row := range page {
 			afterID = row.PartID
-			if err := d.SetPartMonitored(ctx, row.WorkID, row.PartID, false); err != nil {
+			if _, seen := byWork[row.WorkID]; !seen {
+				works = append(works, row.WorkID)
+			}
+			byWork[row.WorkID] = append(byWork[row.WorkID], row.PartID)
+		}
+		for _, workID := range works {
+			if err := d.SetPartsMonitored(ctx, workID, byWork[workID], false); err != nil {
 				return total, err
 			}
-			total++
+			total += len(byWork[workID])
 		}
 		if len(page) < dirtyBatchSize {
 			return total, nil
