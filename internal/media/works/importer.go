@@ -1,9 +1,11 @@
 package works
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -71,7 +73,9 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 	if request.AcquisitionID != nil {
 		seeded, upgrade = i.seeded(ctx, *request.AcquisitionID)
 	}
-	for index, unit := range request.Units {
+	// Every unit of a tracked download is the seeded work, so the first one placed wins: the largest goes first.
+	for _, index := range visitOrder(request.Units, seeded != 0) {
+		unit := request.Units[index]
 		decision := library.UnitDecision{UnitID: request.UnitIDs[index], Decision: library.UnitQueue, Reason: "no " + i.config.Noun + " of the library was found in it"}
 		workID, candidates := seeded, []model.Identification(nil)
 		if workID == 0 {
@@ -113,6 +117,27 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 		}
 	}
 	return result, nil
+}
+
+// visitOrder is the order units are tried in: request order, or with several units of one seeded work the one holding
+// the largest media file first, so an extra beside the film is not placed as the film. Decisions keep request order.
+func visitOrder(units []inspect.Unit, seeded bool) []int {
+	order := make([]int, len(units))
+	for index := range order {
+		order[index] = index
+	}
+	if seeded && len(units) > 1 {
+		slices.SortStableFunc(order, func(a, b int) int { return cmp.Compare(largestMedia(units[b]), largestMedia(units[a])) })
+	}
+	return order
+}
+
+func largestMedia(unit inspect.Unit) int64 {
+	var largest int64
+	for _, file := range unit.Media {
+		largest = max(largest, file.SizeBytes)
+	}
+	return largest
 }
 
 // seeded is the work a download was grabbed for; upgrade says it was below its cutoff, so the download may add a
