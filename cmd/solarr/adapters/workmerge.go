@@ -55,7 +55,7 @@ func (m WorkMerger) Merge(ctx context.Context, dropID, keepID int64, preview boo
 		if err := m.History.MoveWork(ctx, dropID, keepID); err != nil {
 			m.Logger.Warn("merged work's history not moved", slog.Int64("work_id", dropID), slog.Any("error", err))
 		}
-		m.afterMerge(ctx, keepID)
+		m.Realign(ctx, keepID)
 	}
 	return gen.WorkMerge{
 		DropId: merged.DropID, KeepId: merged.KeepID, DropTitle: merged.DropTitle, KeepTitle: merged.KeepTitle,
@@ -63,7 +63,8 @@ func (m WorkMerger) Merge(ctx context.Context, dropID, keepID int64, preview boo
 	}, nil
 }
 
-func (m WorkMerger) afterMerge(ctx context.Context, keepID int64) {
+// Realign places a work's claimed files on its own parts, as after a merge; for a work whose type does nothing of the kind it is a no-op.
+func (m WorkMerger) Realign(ctx context.Context, keepID int64) {
 	mediaType, err := m.Identity.WorkMediaType(ctx, keepID)
 	if err != nil {
 		m.Logger.Warn("merged work's files not placed", slog.Int64("work_id", keepID), slog.Any("error", err))

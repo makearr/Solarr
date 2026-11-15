@@ -26,6 +26,9 @@ type DuplicateResolver struct {
 	Recycle  library.RecycleBin
 	Recycler RemoveAndBlock
 	Settings *settings.Cache
+	// Desired names the works a copy belongs to; Realign places a work's claimed files on its parts again.
+	Desired library.Desired
+	Realign func(ctx context.Context, workID int64)
 }
 
 type duplicatePath struct {
@@ -158,10 +161,20 @@ func (d DuplicateResolver) resolveOne(
 	}
 	switch drop.Action {
 	case "recycle":
+		works, err := d.worksOf(ctx, drop.MediaObjectID)
+		if err != nil {
+			return 0, err
+		}
 		if _, err := d.Recycler.RemoveAndBlockFile(ctx, drop.MediaObjectID, apiserver.RemoveAndBlockInput{
 			RecycleBin: true, RecycleReason: string(library.ReasonUserDelete), RecycleRetainHours: int(duplicateRetain / time.Hour), Reopen: true,
 		}); err != nil {
 			return 0, err
+		}
+		// The kept copy may only have been claimed for the track the dropped one filled: place it, or the track reads missing.
+		if d.Realign != nil {
+			for _, workID := range works {
+				d.Realign(ctx, workID)
+			}
 		}
 		outcome.Recycled++
 		return size * int64(len(dropPaths)), nil
@@ -188,23 +201,22 @@ func (d DuplicateResolver) link(
 	}
 	var size int64
 	kinds := map[int64]string{}
+	var swapped []library.Entry // the originals already replaced by links, put back if a later path fails
 	for i, target := range dropPaths {
 		info, statErr := d.FS.Stat(target.abs)
 		entry, err := d.Recycle.Put(ctx, library.PutRequest{
 			RootPath: roots[target.rootID].Path, OriginalPath: target.abs, RootFolderID: &target.rootID, MediaObjectID: &dropID,
-			Reason: library.ReasonReplaced, Retain: duplicateRetain,
+			Reason: library.ReasonReplaced, Retain: duplicateRetain, ReplacedByObjectID: &keepID,
 		})
 		if err != nil {
-			return 0, fmt.Errorf("recycle %s: %w", path.Base(target.rel), err)
+			return 0, d.rollBack(ctx, swapped, fmt.Errorf("recycle %s: %w", path.Base(target.rel), err))
 		}
 		method, err := linker.Make(d.FS, sources[i].abs, target.abs)
 		if err != nil {
 			// Put the file back where it was: nothing may be lost to a link that could not be made.
-			if _, restoreErr := d.Recycle.Restore(ctx, entry.ID); restoreErr != nil {
-				return 0, fmt.Errorf("link %s: %w (and it could not be put back: %w)", path.Base(target.rel), err, restoreErr)
-			}
-			return 0, fmt.Errorf("link %s: %w", path.Base(target.rel), err)
+			return 0, d.rollBack(ctx, append(swapped, entry), fmt.Errorf("link %s: %w", path.Base(target.rel), err))
 		}
+		swapped = append(swapped, entry)
 		kinds[target.id] = string(method)
 		if statErr == nil {
 			size += info.Size
@@ -221,6 +233,43 @@ func (d DuplicateResolver) link(
 	}
 	outcome.Linked++
 	return size, nil
+}
+
+// rollBack puts every swapped original back, newest first, and answers cause, with what could not be put back added.
+func (d DuplicateResolver) rollBack(ctx context.Context, swapped []library.Entry, cause error) error {
+	var stuck []error
+	for i := len(swapped) - 1; i >= 0; i-- {
+		// The link that took the original's place has to go before the original can return.
+		_ = d.FS.Remove(swapped[i].OriginalPath)
+		if _, err := d.Recycle.Restore(ctx, swapped[i].ID); err != nil {
+			stuck = append(stuck, err)
+		}
+	}
+	if len(stuck) > 0 {
+		return fmt.Errorf("%w (and %d could not be put back: %w)", cause, len(stuck), errors.Join(stuck...))
+	}
+	return cause
+}
+
+// worksOf lists the works a copy is attached to, before it goes.
+func (d DuplicateResolver) worksOf(ctx context.Context, mediaObjectID int64) ([]int64, error) {
+	membership, err := d.Desired.ItemsForFile(ctx, mediaObjectID)
+	if err != nil {
+		return nil, err
+	}
+	var works []int64
+	seen := map[int64]bool{}
+	for _, one := range membership {
+		item, err := d.Desired.Get(ctx, one.DesiredItemID)
+		if err != nil {
+			return nil, err
+		}
+		if !seen[item.WorkID] {
+			seen[item.WorkID] = true
+			works = append(works, item.WorkID)
+		}
+	}
+	return works, nil
 }
 
 // sourceFor picks the path of the kept copy a target is linked to: the same extension, on the same root first.

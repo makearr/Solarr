@@ -926,7 +926,8 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		RecycleBinContents: adapters.RecycleBinContents{Bin: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()).WithOnline(p.rootOnline)},
 		DuplicateResolver: adapters.DuplicateResolver{
 			FS: p.fsys, Physical: library.NewPhysical(p.library), Recycle: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()),
-			Recycler: p.fileRemover(), Settings: p.cache,
+			Recycler: p.fileRemover(), Settings: p.cache, Desired: library.NewDesired(p.library),
+			Realign: adapters.WorkMerger{Identity: library.NewIdentity(p.library), Registry: p.media, Logger: p.logger}.Realign,
 		},
 		IncompleteDiscographies: adapters.IncompleteDiscographies{
 			Coverage: statistics.NewRollup(p.statistics), People: library.NewPeople(p.library),
