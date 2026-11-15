@@ -354,10 +354,26 @@ func (seasonSpec) Read(w wanted, raw indexer.RawItem, conn judge.Conn, now time.
 	}, true
 }
 
+// titled says whether the release names this series. A bare title the release dates is accepted only when its year is
+// the series' (a year late or early is tolerated): the namesake of another decade is not this show.
+func (w wanted) titled(info parsetv.Info) bool {
+	if w.names[parsetv.CleanTitle(info.SeriesTitle)] {
+		return true
+	}
+	bare := w.names[parsetv.CleanTitle(info.TitleWithoutYear)]
+	for _, title := range info.AllTitles {
+		bare = bare || w.names[parsetv.CleanTitle(title)]
+	}
+	if !bare || w.year == 0 || info.Year == 0 || info.AirDate != "" || info.SeasonNumber == info.Year {
+		return bare
+	}
+	return int(w.year)-info.Year >= -1 && int(w.year)-info.Year <= 1
+}
+
 // coverage says which of the wanted episodes the release holds; false when it is not this series, this season or
 // anything wanted.
 func (w wanted) coverage(info parsetv.Info) ([]int, bool) {
-	if !w.names[parsetv.CleanTitle(info.SeriesTitle)] && !w.names[parsetv.CleanTitle(info.TitleWithoutYear)] {
+	if !w.titled(info) {
 		return nil, false
 	}
 	if info.SeasonExtra {

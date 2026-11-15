@@ -67,3 +67,33 @@ func TestAScenePackHoldsTheEpisodesTheSceneReleasesUnderItsSeason(t *testing.T) 
 		t.Errorf("scene seasons = %v, want 1 and 2", got)
 	}
 }
+
+// A namesake of another decade is not the wanted series; a release with no year, an alias or a date-numbered name is (SRCH-1).
+func TestACoverageNamesTheSeriesAndItsYear(t *testing.T) {
+	w := wanted{
+		season: 1, title: "Shameless", aliases: []string{"Shameless US"}, year: 2011,
+		missing: map[int]library.SeriesEpisode{3: {Season: 1, Number: 3, Date: "2012-01-22"}},
+	}
+	w.names = parsetv.CleanTitleSet(w.title, w.aliases)
+	for name, want := range map[string]bool{
+		"Shameless.2004.S01E03.720p.HDTV.x264-GRP":   false,
+		"Shameless.2011.S01E03.720p.HDTV.x264-GRP":   true,
+		"Shameless.2012.S01E03.720p.HDTV.x264-GRP":   true,
+		"Shameless.US.S01E03.720p.HDTV.x264-GRP":     true,
+		"Shameless.S01E03.720p.HDTV.x264-GRP":        true,
+		"Titulo.AKA.Shameless.S01E03.720p.HDTV-GRP":  true,
+		"Titulo.AKA.Other.Name.S01E03.720p.HDTV-GRP": false,
+		"Shameless.2012.01.22.720p.HDTV.x264-GRP":    true,
+	} {
+		if got, ok := w.coverage(parsed(t, name)); ok != want || ok && !reflect.DeepEqual(got, []int{3}) {
+			t.Errorf("%s: covers %v (%v), want covered = %v", name, got, ok, want)
+		}
+	}
+	doctor := wanted{season: 1, title: "Doctor Who (2005)", year: 2005, missing: map[int]library.SeriesEpisode{1: {Season: 1, Number: 1}}}
+	doctor.names = parsetv.CleanTitleSet(doctor.title, doctor.aliases)
+	for name, want := range map[string]bool{"Doctor.Who.2005.S01E01.720p-GRP": true, "Doctor.Who.1963.S01E01.720p-GRP": false} {
+		if _, ok := doctor.coverage(parsed(t, name)); ok != want {
+			t.Errorf("%s: covered = %v, want %v", name, ok, want)
+		}
+	}
+}
