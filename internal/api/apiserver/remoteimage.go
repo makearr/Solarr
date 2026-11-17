@@ -89,6 +89,6 @@ func (s *Server) GetRemoteImage(w http.ResponseWriter, r *http.Request, params g
 	}
 	defer func() { _ = file.Close() }()
 	w.Header().Set("Content-Type", "image/webp")
-	w.Header().Set("Cache-Control", "private, max-age=86400")
+	w.Header().Set("Cache-Control", imageCacheControl(r, "private, max-age=86400"))
 	http.ServeContent(w, r, "", time.Time{}, file)
 }

@@ -24,7 +24,8 @@ export default defineConfig({
   build: {
     outDir: "../internal/api/webui/dist",
     emptyOutDir: false,
-    sourcemap: true,
+    // 3.7 MB of the binary otherwise; VITE_SOURCEMAP=1 brings it back for debugging a release.
+    sourcemap: process.env.VITE_SOURCEMAP === "1",
   },
   server: {
     port: 5173,

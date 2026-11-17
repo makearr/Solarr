@@ -159,7 +159,7 @@ func (s *Server) GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64
 	defer func() { _ = file.Close() }()
 
 	w.Header().Set("Content-Type", "image/webp")
-	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.Header().Set("Cache-Control", imageCacheControl(r, "private, max-age=3600"))
 	http.ServeContent(w, r, "", time.Time{}, file)
 }
 
@@ -224,6 +224,14 @@ func (s *Server) GetPersonArtwork(w http.ResponseWriter, r *http.Request, id int
 	defer func() { _ = file.Close() }()
 
 	w.Header().Set("Content-Type", "image/webp")
-	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.Header().Set("Cache-Control", imageCacheControl(r, "private, max-age=3600"))
 	http.ServeContent(w, r, "", time.Time{}, file)
+}
+
+// imageCacheControl keeps a picture whose URL carries its version for a year: a new version is a new URL.
+func imageCacheControl(r *http.Request, unversioned string) string {
+	if r.URL.Query().Get("v") != "" {
+		return "private, max-age=31536000, immutable"
+	}
+	return unversioned
 }

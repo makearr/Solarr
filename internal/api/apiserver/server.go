@@ -592,7 +592,7 @@ func New(config Config) (*Server, error) {
 	}
 
 	router := chi.NewRouter()
-	router.Use(server.recoverPanic, server.logRequest, server.ipAllowlist, server.securityHeaders, server.crossOrigin, server.userPriority)
+	router.Use(server.recoverPanic, server.logRequest, server.ipAllowlist, server.securityHeaders, server.crossOrigin, server.userPriority, server.compress)
 	// chi's defaults answer in plain text; section 13.1 says every error is problem+json with a
 	// stable slug, and "every" includes the ones a client reaches by mistake.
 	router.NotFound(server.handleNotFound)
