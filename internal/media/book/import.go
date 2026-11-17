@@ -166,8 +166,9 @@ func (p placing) Place(ctx context.Context, request batch.Request, unit inspect.
 	}
 	methods := p.config.Placer.Methods(request.Ladder)
 	var placed []placer.Placed
+	var registered []library.RegisteredFile
 	undo := func(cause error) (*library.Placement, error) {
-		return nil, errors.Join(cause, p.config.Placer.Undo(placed))
+		return nil, errors.Join(cause, p.config.Placer.Undo(placed), p.config.Physical.Unregister(context.WithoutCancel(ctx), registered))
 	}
 	physical := make([]library.PhysicalFile, 0, len(files))
 	owners := make([]placer.Owner, 0, len(files))
@@ -201,7 +202,7 @@ func (p placing) Place(ctx context.Context, request batch.Request, unit inspect.
 		physical = append(physical, library.PhysicalFile{RelPath: destRel, SizeBytes: file.SizeBytes, QuickHash: hashes[index], FirstSeenAt: now})
 		owners = append(owners, placer.Owner{SourceRel: file.RelPath, DestRel: destRel})
 	}
-	registered, err := p.config.Physical.RegisterBatch(ctx, destRoot.ID, physical)
+	registered, err = p.config.Physical.RegisterBatch(ctx, destRoot.ID, physical)
 	if err != nil {
 		return undo(fmt.Errorf("register placed files: %w", err))
 	}

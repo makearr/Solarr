@@ -84,6 +84,37 @@ type RegisteredFile struct {
 	// ContentChanged is a known path whose bytes differ from what its object recorded: the object was updated in place,
 	// or, when other paths share it, this path was moved to an object of its own.
 	ContentChanged bool
+	// Created is an object this call made; PathAdded a path this call made. A rollback removes exactly these.
+	Created   bool
+	PathAdded bool
+}
+
+// Unregister takes back what RegisterBatch just recorded for a placement that failed afterwards: the objects it created
+// and the paths it added to objects that already existed. It never touches a row the call did not make.
+func (p Physical) Unregister(ctx context.Context, files []RegisteredFile) error {
+	if len(files) == 0 {
+		return nil
+	}
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		for _, file := range files {
+			switch {
+			case file.Created:
+				if err := queries.DeleteMediaObject(ctx, file.MediaObjectID); err != nil {
+					return err
+				}
+			case file.PathAdded:
+				if err := queries.DeleteLibraryPath(ctx, file.LibraryPathID); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("library: unregister placed files: %w", err)
+	}
+	return nil
 }
 
 // RegisterBatch finds or creates the media_object and library_path row for each file,
@@ -133,7 +164,7 @@ func registerOne(
 		return RegisteredFile{}, fmt.Errorf("look up: %w", err)
 	}
 
-	mediaObjectID, err := findOrCreateObject(ctx, queries, file)
+	mediaObjectID, created, err := findOrCreateObject(ctx, queries, file)
 	if err != nil {
 		return RegisteredFile{}, err
 	}
@@ -146,7 +177,7 @@ func registerOne(
 	if err != nil {
 		return RegisteredFile{}, fmt.Errorf("add path: %w", err)
 	}
-	return RegisteredFile{MediaObjectID: mediaObjectID, LibraryPathID: libraryPathID}, nil
+	return RegisteredFile{MediaObjectID: mediaObjectID, LibraryPathID: libraryPathID, Created: created, PathAdded: true}, nil
 }
 
 // remeasured gives a re-observed path the size and hash it has now. An object that only this path holds is updated in
@@ -178,7 +209,7 @@ func remeasured(ctx context.Context, queries *librarydb.Queries, existing librar
 		unchanged.ContentChanged = true
 		return unchanged, nil
 	}
-	detached, err := findOrCreateObject(ctx, queries, file)
+	detached, _, err := findOrCreateObject(ctx, queries, file)
 	if err != nil {
 		return RegisteredFile{}, err
 	}
@@ -191,25 +222,25 @@ func remeasured(ctx context.Context, queries *librarydb.Queries, existing librar
 // findOrCreateObject reuses an existing media_object sharing this quick hash and size
 // -- a second path to bytes already known, such as a hardlink -- rather than creating
 // a duplicate (ADR-11: "cross-entry: hardlink, else the user picks").
-func findOrCreateObject(ctx context.Context, queries *librarydb.Queries, file PhysicalFile) (int64, error) {
+func findOrCreateObject(ctx context.Context, queries *librarydb.Queries, file PhysicalFile) (id int64, created bool, err error) {
 	matches, err := queries.FindMediaObjectsByQuickHash(ctx, file.QuickHash)
 	if err != nil {
-		return 0, fmt.Errorf("find by quick hash: %w", err)
+		return 0, false, fmt.Errorf("find by quick hash: %w", err)
 	}
 	for _, match := range matches {
 		if match.SizeBytes == file.SizeBytes {
-			return match.ID, nil
+			return match.ID, false, nil
 		}
 	}
 
-	created, err := queries.CreateMediaObject(ctx, librarydb.CreateMediaObjectParams{
+	createdID, err := queries.CreateMediaObject(ctx, librarydb.CreateMediaObjectParams{
 		SizeBytes: file.SizeBytes, QuickHash: file.QuickHash, Oshash: sql.NullString{String: file.OSHash, Valid: file.OSHash != ""},
 		FirstSeenAt: file.FirstSeenAt.Unix(), Kind: sql.NullString{String: string(filekind.Of(file.RelPath)), Valid: true},
 	})
 	if err != nil {
-		return 0, fmt.Errorf("create media object: %w", err)
+		return 0, false, fmt.Errorf("create media object: %w", err)
 	}
-	return created, nil
+	return createdID, true, nil
 }
 
 // classifyPage is how many media objects one transaction of ClassifyKinds sets (Invariant 2).

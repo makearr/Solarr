@@ -1037,3 +1037,51 @@ func filesUnder(t *testing.T, fsys *fsx.Mem, directory string) []string {
 	}
 	return files
 }
+
+// A store error after the files were registered must not leave files nothing tracks, or rows for files taken back.
+func TestCommitUnit_ALateIdentityFailureTakesBackFilesAndRows(t *testing.T) {
+	committer, opened, fsys := newCommitter(t, true)
+	track := []byte("airbag bytes")
+	source := "Katupoken/KI Pecezinu/01 Sesoge.flac"
+	writeCommitSourceFile(t, fsys, source, track)
+	unit := testUnit("Katupoken/KI Pecezinu", []inspect.File{{RelPath: source, SizeBytes: int64(len(track))}})
+	tags := music.UnitTagSourceFor(commitSourceRoot, []mediatool.Probe{{
+		Path: path.Join(commitSourceRoot, source),
+		Tags: mediatool.Tags{"album": "KI Pecezinu", "albumartist": "Katupoken", "date": "1997-06-16", "tracknumber": "1", "title": "Sesoge"},
+	}})
+	best := model.Identification{
+		Strategy: "embedded-tag", Confidence: 0.95,
+		ExternalID: &model.ExternalID{Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID, Confidence: 0.95},
+	}
+	if _, err := opened.WriteDB().ExecContext(t.Context(),
+		`CREATE TRIGGER refuse_links BEFORE INSERT ON work_file BEGIN SELECT RAISE(ABORT, 'injected'); END`); err != nil {
+		t.Fatalf("create trigger: %v", err)
+	}
+
+	if _, err := committer.CommitUnit(t.Context(), commitSourceRoot, unit, best, tags, commitCategoryID); err == nil {
+		t.Fatal("CommitUnit succeeded although the identity step failed")
+	}
+
+	for _, table := range []string{"library_path", "media_object"} {
+		var rows int
+		if err := opened.Read().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+table).Scan(&rows); err != nil || rows != 0 {
+			t.Errorf("%s rows = %d (%v), want 0 after the take-back", table, rows, err)
+		}
+	}
+	var files func(directory string) []string
+	files = func(directory string) []string {
+		var found []string
+		entries, _ := fsys.ReadDir(directory)
+		for _, entry := range entries {
+			if entry.IsDir {
+				found = append(found, files(path.Join(directory, entry.Name))...)
+			} else {
+				found = append(found, path.Join(directory, entry.Name))
+			}
+		}
+		return found
+	}
+	if left := files(commitDestRoot); len(left) != 0 {
+		t.Errorf("destination root holds files %v, want none", left)
+	}
+}

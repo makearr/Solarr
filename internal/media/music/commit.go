@@ -409,9 +409,10 @@ func (c Committer) CommitMatchedUnit(
 	pathWarnings := make([][]string, len(unit.Media))
 	transferMethods := make([]mover.PlaceMethod, len(unit.Media))
 	var placedSoFar []placedFile
+	var registered []library.RegisteredFile
 	// A unit that fails part-way takes back what it placed, rather than leaving files nothing tracks.
 	undo := func(err error) (Placed, error) {
-		return Placed{}, errors.Join(err, c.undoPlaced(placedSoFar))
+		return Placed{}, errors.Join(err, c.undoPlaced(placedSoFar), c.physical.Unregister(context.WithoutCancel(ctx), registered))
 	}
 	// Unmatched, the files' own disc tags are all there is: two discs named as one would collide on their track numbers.
 	claimedDiscs := 0
@@ -456,7 +457,7 @@ func (c Committer) CommitMatchedUnit(
 		trackFiles[index] = track
 	}
 
-	registered, err := c.physical.RegisterBatch(ctx, destRoot.ID, files)
+	registered, err = c.physical.RegisterBatch(ctx, destRoot.ID, files)
 	if err != nil {
 		return undo(fmt.Errorf("music: register placed files for unit %q: %w", unit.Directory, err))
 	}
@@ -487,7 +488,7 @@ func (c Committer) CommitMatchedUnit(
 	}
 	resolutions, err := c.identity.ResolveWorksDetailed(ctx, now, links)
 	if err != nil {
-		return Placed{}, fmt.Errorf("music: resolve identity for unit %q: %w", unit.Directory, err)
+		return undo(fmt.Errorf("music: resolve identity for unit %q: %w", unit.Directory, err))
 	}
 	resolution := resolutions[0]
 

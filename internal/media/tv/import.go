@@ -472,8 +472,9 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 	methods := i.placer.Methods(request.Ladder)
 
 	placed := make([]placedEpisode, 0, len(files))
+	var registered []library.RegisteredFile
 	undo := func(cause error) (*library.Placement, error) {
-		return nil, errors.Join(cause, i.placer.Undo(placedFiles(placed)))
+		return nil, errors.Join(cause, i.placer.Undo(placedFiles(placed)), i.config.Physical.Unregister(context.WithoutCancel(ctx), registered))
 	}
 	for index, file := range files {
 		naming := episodeNaming(detail, file)
@@ -500,7 +501,7 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 	for index, p := range placed {
 		physical[index] = library.PhysicalFile{RelPath: p.Rel, SizeBytes: p.Size, QuickHash: p.Hash, FirstSeenAt: now}
 	}
-	registered, err := i.config.Physical.RegisterBatch(ctx, destRoot.ID, physical)
+	registered, err = i.config.Physical.RegisterBatch(ctx, destRoot.ID, physical)
 	if err != nil {
 		return undo(fmt.Errorf("register placed files: %w", err))
 	}

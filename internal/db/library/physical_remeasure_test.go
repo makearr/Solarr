@@ -90,3 +90,36 @@ func TestRegisterBatch_ASizeChangeAloneIsRemeasured(t *testing.T) {
 		t.Errorf("size = %d, want 12", object.SizeBytes)
 	}
 }
+
+// A rollback removes the objects the call created and the paths it added, and nothing it did not make.
+func TestUnregister_RemovesOnlyWhatTheCallRegistered(t *testing.T) {
+	opened, _ := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	at := time.Unix(1_700_100_000, 0).UTC()
+	kept, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{{RelPath: "Kept/01.flac", SizeBytes: 7, QuickHash: "same", FirstSeenAt: at}})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	batch, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "Linked/01.flac", SizeBytes: 7, QuickHash: "same", FirstSeenAt: at},
+		{RelPath: "New/01.flac", SizeBytes: 9, QuickHash: "fresh", FirstSeenAt: at},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch (batch): %v", err)
+	}
+	if batch[0].Created || !batch[0].PathAdded || !batch[1].Created {
+		t.Fatalf("batch = %+v, want a path added to the existing object, then a created object", batch)
+	}
+
+	if err := physical.Unregister(t.Context(), batch); err != nil {
+		t.Fatalf("Unregister: %v", err)
+	}
+
+	left, err := physical.PathsForObject(t.Context(), kept[0].MediaObjectID)
+	if err != nil || len(left) != 1 || left[0].RelPath != "Kept/01.flac" {
+		t.Errorf("the pre-existing object's paths = %+v, %v; want only Kept/01.flac", left, err)
+	}
+	if gone, err := physical.PathsForObject(t.Context(), batch[1].MediaObjectID); err != nil || len(gone) != 0 {
+		t.Errorf("the created object's paths = %+v, %v; want none", gone, err)
+	}
+}

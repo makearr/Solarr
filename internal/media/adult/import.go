@@ -164,14 +164,15 @@ func (p placing) Place(ctx context.Context, request batch.Request, unit inspect.
 		return nil, fmt.Errorf("place %q: %w", file.RelPath, err)
 	}
 	placed := []placer.Placed{{Source: sourceAbs, Dest: destAbs, Rel: destRel, Hash: hashes[0], Size: file.SizeBytes, Method: method}}
+	var registered []library.RegisteredFile
 	undo := func(cause error) (*library.Placement, error) {
-		return nil, errors.Join(cause, p.config.Placer.Undo(placed))
+		return nil, errors.Join(cause, p.config.Placer.Undo(placed), p.config.Physical.Unregister(context.WithoutCancel(ctx), registered))
 	}
 	if method != mover.PlaceSymlink {
 		p.config.Placer.Finish(destRoot, destAbs, fileManagement, time.Time{})
 	}
 	oshash, _ := library.OSHash(p.config.FS, destAbs, file.SizeBytes)
-	registered, err := p.config.Physical.RegisterBatch(ctx, destRoot.ID, []library.PhysicalFile{{RelPath: destRel, SizeBytes: file.SizeBytes, QuickHash: hashes[0], OSHash: oshash, FirstSeenAt: now}})
+	registered, err = p.config.Physical.RegisterBatch(ctx, destRoot.ID, []library.PhysicalFile{{RelPath: destRel, SizeBytes: file.SizeBytes, QuickHash: hashes[0], OSHash: oshash, FirstSeenAt: now}})
 	if err != nil {
 		return undo(fmt.Errorf("register placed file: %w", err))
 	}
