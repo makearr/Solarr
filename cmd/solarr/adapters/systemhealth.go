@@ -154,8 +154,8 @@ func (a SystemHealth) waitingForReview(ctx context.Context) []apiserver.HealthCh
 	if waiting > 0 {
 		checks = append(checks, apiserver.HealthCheck{
 			ID: "downloads_waiting_for_review", Severity: apiserver.HealthWarning,
-			Message: fmt.Sprintf("%d downloaded %s waiting for you to identify %s on the Import page.",
-				waiting, plural(waiting, "album is", "albums are"), plural(waiting, "it", "them")),
+			Message: fmt.Sprintf("%d %s waiting for you to identify %s on the Import page.",
+				waiting, plural(waiting, "download is", "downloads are"), plural(waiting, "it", "them")),
 			Link: "/storage/import",
 		})
 	}

@@ -23,8 +23,8 @@ func TestSystemHealth_CountsOnlyDownloadsHeldForAPerson(t *testing.T) {
 		{State: poll.StateDownloading, LastError: poll.WaitingForReview},
 	}}
 	checks := health.waitingForReview(t.Context())
-	if len(checks) != 1 || !strings.HasPrefix(checks[0].Message, "2 downloaded albums are waiting") || checks[0].Link != "/storage/import" {
-		t.Fatalf("checks = %+v, want one warning for 2 albums linking to the Import page", checks)
+	if len(checks) != 1 || !strings.HasPrefix(checks[0].Message, "2 downloads are waiting") || checks[0].Link != "/storage/import" {
+		t.Fatalf("checks = %+v, want one warning for 2 downloads linking to the Import page", checks)
 	}
 	room := (SystemHealth{Acquisitions: fakeActive{{State: poll.StateImporting, LastError: poll.WaitingForRoom}}}).waitingForReview(t.Context())
 	if len(room) != 1 || room[0].ID != "downloads_waiting_for_room" || room[0].Link != "/storage/folders" {
