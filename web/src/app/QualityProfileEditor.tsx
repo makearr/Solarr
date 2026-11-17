@@ -172,7 +172,7 @@ export function QualityProfilesPage() {
 }
 
 /** One profile's editor: the form for audio, the rules as JSON for the rest and at expert. */
-function ProfileForm({
+export function ProfileForm({
   initial,
   onDone,
   onCancel,
@@ -193,6 +193,7 @@ function ProfileForm({
   const [video, setVideo] = useState<VideoRules>(() => parseVideoRules(initial && VIDEO.has(initial.media_type) ? initial.rules : ""));
   const [json, setJson] = useState(initial?.rules ?? "");
   const [asJSON, setAsJSON] = useState(false);
+  const [jsonError, setJsonError] = useState<string>();
   const [upgrade, setUpgrade] = useState(initial?.upgrade ?? DEFAULT_UPGRADE);
   const isVideo = VIDEO.has(mediaType);
   const hasForm = AUDIO.has(mediaType) || isVideo;
@@ -249,7 +250,8 @@ function ProfileForm({
       {(!hasForm || asJSON) && (
         <label className={labelStyle}>
           {hasForm ? "Rules (JSON)" : `${mediaTypeName(mediaType)} is not built yet, so its rules are written as JSON.`}
-          <textarea value={json} onChange={(event) => setJson(event.target.value)} className={`${input} h-40 font-mono`} />
+          <textarea value={json} onChange={(event) => { setJson(event.target.value); setJsonError(undefined); }} className={`${input} h-40 font-mono`} />
+          {jsonError && <span role="alert" className="text-xs text-danger">{jsonError}</span>}
         </label>
       )}
       {isTierVisible(tier, "expert") && (
@@ -262,10 +264,21 @@ function ProfileForm({
                   type="checkbox"
                   checked={asJSON}
                   onChange={(event) => {
-                    if (event.target.checked) setJson(built());
-                    else if (isVideo) setVideo(parseVideoRules(json));
-                    else setRules(parseAudioRules(json));
-                    setAsJSON(event.target.checked);
+                    if (event.target.checked) {
+                      setJson(built());
+                      setAsJSON(true);
+                      return;
+                    }
+                    // Leaving with text the form cannot read would lose it, so the switch stays on and says why.
+                    try {
+                      if (isVideo) setVideo(parseVideoRules(json));
+                      else setRules(parseAudioRules(json));
+                    } catch (error) {
+                      setJsonError(`These rules are not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+                      return;
+                    }
+                    setJsonError(undefined);
+                    setAsJSON(false);
                   }}
                 />
                 Edit the rules as JSON
