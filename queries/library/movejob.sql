@@ -8,16 +8,19 @@ VALUES (sqlc.arg(reason), sqlc.arg(source_root_id), 'PLANNED', sqlc.arg(files_to
 RETURNING id, reason, source_root_id, state, files_total, files_done, bytes_total, bytes_done,
           plan_json, created_at, finished_at, error, category_id;
 
+-- The plan is one value of tens of megabytes for a big library, so the job's own reads leave it out: the running job
+-- re-reads its state after every file, and a list of jobs would carry every past plan.
 -- name: GetMoveJob :one
 SELECT id, reason, source_root_id, state, files_total, files_done, bytes_total, bytes_done,
-       plan_json, created_at, finished_at, error, category_id
+       created_at, finished_at, error, category_id
 FROM move_job WHERE id = ?;
 
--- Small, operator-facing list -- move counts never approach library scale,
--- the same reasoning ListImportSessions' own comment already gives.
+-- name: GetMoveJobPlan :one
+SELECT plan_json FROM move_job WHERE id = ?;
+
 -- name: ListMoveJobs :many
 SELECT id, reason, source_root_id, state, files_total, files_done, bytes_total, bytes_done,
-       plan_json, created_at, finished_at, error, category_id
+       created_at, finished_at, error, category_id
 FROM move_job
 WHERE sqlc.arg(filter_by_state) = 0 OR state = sqlc.arg(state)
 ORDER BY created_at DESC;
@@ -37,7 +40,9 @@ UPDATE move_job SET state = 'CANCELLED', finished_at = sqlc.arg(finished_at)
 WHERE id = sqlc.arg(id) AND state IN ('PLANNED', 'RUNNING', 'PAUSED');
 
 -- name: FinishMoveJob :exec
-UPDATE move_job SET state = sqlc.arg(state), finished_at = sqlc.arg(finished_at), error = sqlc.arg(error)
+-- A finished job's plan is dropped: its items and counts say what happened, and nothing can resume it.
+UPDATE move_job SET state = sqlc.arg(state), finished_at = sqlc.arg(finished_at), error = sqlc.arg(error),
+       plan_json = CASE WHEN sqlc.arg(state) = 'DONE' THEN '' ELSE plan_json END
 WHERE id = sqlc.arg(id);
 
 -- One row per call, looped inside one transaction by the caller (the same
