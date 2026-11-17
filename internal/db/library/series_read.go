@@ -12,6 +12,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/metadata/metaresolve"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // ErrSeriesNotFound reports a series id that is not a TV series visible in the category asked about.
@@ -95,10 +96,17 @@ type SeriesDetailRow struct {
 }
 
 // SeriesReader answers the TV screens' questions.
-type SeriesReader struct{ store *store.Store }
+type SeriesReader struct {
+	store  *store.Store
+	titles *TitleIndex
+}
 
 // NewSeriesReader builds it over an open library store.
-func NewSeriesReader(opened *store.Store) SeriesReader { return SeriesReader{store: opened} }
+func NewSeriesReader(opened *store.Store) SeriesReader {
+	reader := SeriesReader{store: opened}
+	reader.titles = &TitleIndex{source: reader, clock: clock.NewSystem()}
+	return reader
+}
 
 // Get returns one series of a category with every episode; ErrSeriesNotFound when it is not there.
 func (r SeriesReader) Get(ctx context.Context, categoryID, workID int64, now time.Time) (SeriesDetailRow, error) {
@@ -350,6 +358,17 @@ func (r SeriesReader) TitlesOf(ctx context.Context, mediaType string, categoryID
 	return titles, nil
 }
 
+// TitlesMatching is TitlesOf for the few works whose normalised title (key, one normaliser per media type) is one of
+// wanted, from titles read once per category: what matching a folder to the library asks for every file of a scan.
+func (r SeriesReader) TitlesMatching(ctx context.Context, mediaType string, categoryID int64, key func(string) string, wanted []string) ([]SeriesTitle, error) {
+	return r.titles.Lookup(ctx, mediaType, categoryID, key, wanted)
+}
+
+// ForgetTitles drops the titles held for matching, after a work was added to the category.
+func (r SeriesReader) ForgetTitles(mediaType string, categoryID int64) {
+	r.titles.Invalidate(mediaType, categoryID)
+}
+
 // SeasonMonitoring answers each season item's monitored flag, by season number (specials are 0).
 func (r SeriesReader) SeasonMonitoring(ctx context.Context, workID int64) (map[int]bool, error) {
 	items, err := librarydb.New(r.store.Read()).ListDesiredItemsForWork(ctx, workID)
@@ -445,7 +464,7 @@ func (r SeriesReader) WantedSeasonItems(ctx context.Context, workIDs []int64) ([
 
 // ManualFields answers the series' fields the user set themselves, by field.
 func (r SeriesReader) ManualFields(ctx context.Context, workID int64) (map[string]string, error) {
-	return Works(r).ManualFields(ctx, workID)
+	return Works{store: r.store}.ManualFields(ctx, workID)
 }
 
 // PartPath is one file of a part: where it lies, and the part's title, date, runtime and one provider's id.
@@ -484,7 +503,7 @@ func (r SeriesReader) WorksOnRoot(ctx context.Context, mediaType string, rootFol
 
 // FirstCategory answers the first library the series is wanted in.
 func (r SeriesReader) FirstCategory(ctx context.Context, workID int64) (int64, error) {
-	_, categories, err := Works(r).Places(ctx, workID)
+	_, categories, err := Works{store: r.store}.Places(ctx, workID)
 	if err != nil {
 		return 0, err
 	}

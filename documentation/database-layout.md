@@ -86,10 +86,12 @@ the list's SQL orders by the same rule (`metaresolve.OrderSQL`).
 
 ## What the probe read
 
-`media_probe` keeps each file's full probe (`json`) and its `probe_version`: 1 read the streams, 2 also the lyrics
+`media_probe` keeps each file's `probe_version` and the time of the probe (the decoded facts are in `media_attributes` and the `media_object` columns; the raw output is not kept): 1 read the streams, 2 also the lyrics
 language, 3 also a video's picture, subtitle tracks and encoder's CRF (`library.ProbeVersion*`). A file probed
 before what the probe reads now is found by number (`probe_version < 2` for any file, `< 3` for a video) and read
-once more by the background probe. `media_object.probe_json` is no longer written and goes in a later migration.
+once more by the background probe.
+`media_probe_failure` remembers a file ffprobe could not read, with the size it failed at: the probe sweep leaves it alone for a day,
+two, four... up to thirty, or until the file's size changes.
 
 `video_frame_hash` keeps a video's perceptual hash per sampled frame (ADR-35): `frames` is 9 bytes per frame, its
 sample slot (0 to 6) then the 64-bit hash big-endian, in slot order, up to five frames per slot, with flat frames left out;

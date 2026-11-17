@@ -3,6 +3,7 @@ package movie
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -146,13 +147,13 @@ func (r Resolver) byID(ctx context.Context, categoryID int64, ids IDs) int64 {
 // inLibrary finds a movie the category holds under this title (or an alias of it) in this year, give or take one: a
 // film dated at its festival and at its release is the same film.
 func (r Resolver) inLibrary(ctx context.Context, categoryID int64, info parsemovie.Info) (int64, bool) {
-	titles, err := r.Reader.TitlesOf(ctx, MediaType, categoryID)
-	if err != nil {
-		return 0, false
-	}
 	wanted := map[string]bool{}
 	for _, title := range append([]string{info.Title}, info.AllTitles...) {
 		wanted[parsetv.CleanTitle(title)] = true
+	}
+	titles, err := r.Reader.TitlesMatching(ctx, MediaType, categoryID, parsetv.CleanTitle, slices.Collect(maps.Keys(wanted)))
+	if err != nil {
+		return 0, false
 	}
 	canonical := map[int64]string{}
 	for _, held := range titles {
@@ -205,6 +206,7 @@ func (r Resolver) add(ctx context.Context, categoryID int64, ids IDs) int64 {
 		r.warn("movie could not be added", strconv.FormatInt(ids.TMDB, 10)+ids.IMDb, err)
 		return 0
 	}
+	r.Reader.ForgetTitles(MediaType, categoryID)
 	return result.WorkID
 }
 

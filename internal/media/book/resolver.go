@@ -3,6 +3,7 @@ package book
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"regexp"
 	"slices"
 	"strconv"
@@ -128,13 +129,13 @@ func (r Resolver) ByIDs(ctx context.Context, categoryID int64, ids IDs) int64 {
 // inLibrary finds the one book the library holds under this title or an alias of it, in a year that agrees when both
 // are known.
 func (r Resolver) inLibrary(ctx context.Context, categoryID int64, info parsebook.Info) (int64, bool) {
-	titles, err := r.Service.Reader.TitlesOf(ctx, r.Service.Format.MediaType, categoryID)
-	if err != nil {
-		return 0, false
-	}
 	wanted := map[string]bool{}
 	for _, title := range append([]string{info.Title}, info.Titles...) {
 		wanted[parsebook.CleanTitle(title)] = true
+	}
+	titles, err := r.Service.Reader.TitlesMatching(ctx, r.Service.Format.MediaType, categoryID, parsebook.CleanTitle, slices.Collect(maps.Keys(wanted)))
+	if err != nil {
+		return 0, false
 	}
 	var found []int64
 	for _, held := range titles {
@@ -172,6 +173,7 @@ func (r Resolver) add(ctx context.Context, categoryID int64, ids IDs, hint Hint)
 		r.warn("book could not be added", ids.OpenLibrary+ids.ASIN+ids.ISBN, err)
 		return 0
 	}
+	r.Service.Reader.ForgetTitles(r.Service.Format.MediaType, categoryID)
 	return result.WorkID
 }
 

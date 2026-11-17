@@ -129,11 +129,11 @@ func (r Resolver) inLibrary(ctx context.Context, categoryID int64, info parseadu
 	if info.Date != "" {
 		return 0, false
 	}
-	titles, err := r.Service.Reader.TitlesOf(ctx, MediaType, categoryID)
+	wanted := NameKey(info.Title)
+	titles, err := r.Service.Reader.TitlesMatching(ctx, MediaType, categoryID, NameKey, []string{wanted})
 	if err != nil {
 		return 0, false
 	}
-	wanted := NameKey(info.Title)
 	var found []int64
 	for _, held := range titles {
 		if NameKey(held.Title) != wanted {
@@ -162,6 +162,7 @@ func (r Resolver) add(ctx context.Context, categoryID int64, ids IDs, hint Hint,
 		r.warn("scene could not be added", ids.StashDB+ids.ThePornDB+ids.FansDB, err)
 		return 0
 	}
+	r.Service.Reader.ForgetTitles(MediaType, categoryID)
 	return result.WorkID
 }
 
