@@ -2,8 +2,11 @@ package apiserver_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -73,8 +76,10 @@ func TestGetSystemHealth_SilentOnceALibraryHasARoot(t *testing.T) {
 	cookies := fixture.signIn(t, "admin")
 
 	checks := systemHealth(t, fixture, cookies)
-	if hasCheck(checks, "no_library") || hasCheck(checks, "category_without_root") {
-		t.Errorf("checks = %+v, want neither no_library nor category_without_root", checks)
+	for _, check := range checks {
+		if check.ID == "no_library" || strings.HasPrefix(check.ID, "category_without_root") {
+			t.Errorf("checks = %+v, want neither no_library nor category_without_root", checks)
+		}
 	}
 }
 
@@ -102,7 +107,7 @@ func TestGetSystemHealth_ReportsErrorsBeforeWarnings(t *testing.T) {
 func TestGetSystemHealth_LinksPointAtRealRoutes(t *testing.T) {
 	known := map[string]bool{
 		"/libraries": true, "/storage/folders": true,
-		"/connections/indexers": true, "/connections/downloaders": true,
+		"/connections/indexers": true, "/connections/downloaders": true, "/settings/user": true,
 	}
 	fixture := newWorksFixture(t)
 	fixture.createUser(t, "admin", settings.RoleAdmin)
@@ -112,5 +117,47 @@ func TestGetSystemHealth_LinksPointAtRealRoutes(t *testing.T) {
 		if check.Link != "" && !known[check.Link] {
 			t.Errorf("check %q links to %q, which is not a declared route", check.ID, check.Link)
 		}
+	}
+}
+
+// The interface keys its list on the id, so two libraries without a root are two rows.
+func TestGetSystemHealth_GivesEachLibraryWithoutARootItsOwnID(t *testing.T) {
+	fixture := newWorksFixture(t)
+	first, err := fixture.cache.CreateCategory(t.Context(), "music", "First", 100)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	second, err := fixture.cache.CreateCategory(t.Context(), "music", "Second", 100)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	var ids []string
+	for _, check := range systemHealth(t, fixture, cookies) {
+		if strings.HasPrefix(check.ID, "category_without_root") {
+			ids = append(ids, check.ID)
+		}
+	}
+	want := []string{fmt.Sprintf("category_without_root_%d", first.ID), fmt.Sprintf("category_without_root_%d", second.ID)}
+	if !slices.Equal(ids, want) {
+		t.Fatalf("ids = %v, want %v", ids, want)
+	}
+}
+
+func TestGetSystemHealth_WarnsWhenSigningInIsOff(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	if hasCheck(systemHealth(t, fixture, cookies), "sign_in_off") {
+		t.Fatal("sign_in_off reported while signing in is required")
+	}
+
+	if err := fixture.cache.SetAuthRequired(t.Context(), fixture.clock, false); err != nil {
+		t.Fatalf("SetAuthRequired: %v", err)
+	}
+	if !hasCheck(systemHealth(t, fixture, cookies), "sign_in_off") {
+		t.Fatal("no sign_in_off while signing in is off")
 	}
 }

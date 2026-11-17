@@ -70,6 +70,14 @@ func (s *Server) settingsHealthChecks() []HealthCheck {
 	snapshot := s.auth.Settings.Snapshot()
 	var checks []HealthCheck
 
+	if !snapshot.AuthRequired() {
+		checks = append(checks, HealthCheck{
+			ID: "sign_in_off", Severity: HealthWarning,
+			Message: "Signing in is switched off, so anyone who can reach this port is the administrator.",
+			Link:    "/settings/user",
+		})
+	}
+
 	categories := snapshot.Categories()
 	if len(categories) == 0 {
 		checks = append(checks, HealthCheck{
@@ -81,7 +89,7 @@ func (s *Server) settingsHealthChecks() []HealthCheck {
 	for _, category := range categories {
 		if len(snapshot.RootFoldersForCategory(category.ID)) == 0 {
 			checks = append(checks, HealthCheck{
-				ID: "category_without_root", Severity: HealthError,
+				ID: fmt.Sprintf("category_without_root_%d", category.ID), Severity: HealthError,
 				Message: fmt.Sprintf("The library %q has no root folder, so nothing can be scanned or imported into it.", category.Name),
 				Link:    "/storage/folders",
 			})
@@ -91,14 +99,14 @@ func (s *Server) settingsHealthChecks() []HealthCheck {
 		switch {
 		case !root.Online:
 			checks = append(checks, HealthCheck{
-				ID: "root_offline", Severity: HealthWarning,
+				ID: fmt.Sprintf("root_offline_%d", root.ID), Severity: HealthWarning,
 				Message: fmt.Sprintf("The root folder %s is declared offline. Nothing on it counts as missing.", root.Path),
 				Link:    "/storage/folders",
 			})
 		case !root.Writable && !root.ReadOnly:
 			// Read-only is a deliberate policy; unwritable without it is not.
 			checks = append(checks, HealthCheck{
-				ID: "root_not_writable", Severity: HealthWarning,
+				ID: fmt.Sprintf("root_not_writable_%d", root.ID), Severity: HealthWarning,
 				Message: fmt.Sprintf("The root folder %s cannot be written to, and is not marked read-only. Check its ownership, or whether it is a read-only mount.", root.Path),
 				Link:    "/storage/folders",
 			})
