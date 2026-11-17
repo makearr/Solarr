@@ -280,30 +280,32 @@ func (p Physical) ClassifyKinds(ctx context.Context) (int, error) {
 // with the primary path a probe needs to actually read it.
 type UnmeasuredFile struct {
 	MediaObjectID int64
-	RootFolderID  int64
-	RelPath       string
+	// SizeBytes is set by the probe lists only: a failure is remembered for the size it failed at.
+	SizeBytes    int64
+	RootFolderID int64
+	RelPath      string
 }
 
 // ListUnmeasured pages through every media_object with no measured_attributes_id
 // yet, oldest id first -- the same resumable-by-cursor shape ListUnfingerprinted
 // already uses (ADR-35), so a file that fails its probe this run does not block
 // the cursor from reaching what comes after it.
-func (p Physical) ListUnmeasured(ctx context.Context, afterID int64, pageSize int64) ([]UnmeasuredFile, error) {
+func (p Physical) ListUnmeasured(ctx context.Context, afterID, pageSize, now int64) ([]UnmeasuredFile, error) {
 	var files []UnmeasuredFile
 	for int64(len(files)) < pageSize {
 		rows, err := librarydb.New(p.store.Read()).ListUnmeasured(ctx, librarydb.ListUnmeasuredParams{
-			AfterID: afterID, PageSize: pageSize,
+			AfterID: afterID, PageSize: pageSize, Now: now,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("library: list unmeasured: %w", err)
 		}
 		for _, row := range rows {
 			afterID = row.ID
-			// ffprobe cannot read an ebook, so it is never measured and must not be listed again.
+			// Books are excluded in SQL by kind; this guards an object whose kind was never set.
 			if filekind.Of(row.RelPath) == filekind.Book {
 				continue
 			}
-			files = append(files, UnmeasuredFile{MediaObjectID: row.ID, RootFolderID: row.RootFolderID, RelPath: row.RelPath})
+			files = append(files, UnmeasuredFile{MediaObjectID: row.ID, SizeBytes: row.SizeBytes, RootFolderID: row.RootFolderID, RelPath: row.RelPath})
 		}
 		if int64(len(rows)) < pageSize {
 			break
@@ -338,13 +340,17 @@ func (p Physical) SetOshash(ctx context.Context, mediaObjectID int64, oshash str
 
 // CountProbeWork is how many files a probe sweep has to read now: unmeasured, measured before the probe read more,
 // video without an oshash, and (when pictures are made) video without a hash or preview.
-func (p Physical) CountProbeWork(ctx context.Context, hashPictures, previews bool) (int64, error) {
+func (p Physical) CountProbeWork(ctx context.Context, hashPictures, previews bool, now int64) (int64, error) {
 	queries := librarydb.New(p.store.Read())
 	var total int64
 	for _, count := range []func() (int64, error){
-		func() (int64, error) { return queries.CountUnmeasured(ctx) },
-		func() (int64, error) { return queries.CountStaleProbes(ctx, ProbeVersionLyrics) },
-		func() (int64, error) { return queries.CountStaleVideoProbes(ctx, ProbeVersionVideo) },
+		func() (int64, error) { return queries.CountUnmeasured(ctx, now) },
+		func() (int64, error) {
+			return queries.CountStaleProbes(ctx, librarydb.CountStaleProbesParams{BelowVersion: ProbeVersionLyrics, Now: now})
+		},
+		func() (int64, error) {
+			return queries.CountStaleVideoProbes(ctx, librarydb.CountStaleVideoProbesParams{BelowVersion: ProbeVersionVideo, Now: now})
+		},
 		func() (int64, error) { return queries.CountVideoWithoutOshash(ctx) },
 	} {
 		n, err := count()
@@ -445,31 +451,31 @@ const (
 )
 
 // ListStaleProbes pages through the files probed before the probe read lyrics languages, oldest id first.
-func (p Physical) ListStaleProbes(ctx context.Context, afterID int64, pageSize int64) ([]UnmeasuredFile, error) {
+func (p Physical) ListStaleProbes(ctx context.Context, afterID, pageSize, now int64) ([]UnmeasuredFile, error) {
 	rows, err := librarydb.New(p.store.Read()).ListStaleProbes(ctx, librarydb.ListStaleProbesParams{
-		BelowVersion: ProbeVersionLyrics, AfterID: afterID, PageSize: pageSize,
+		BelowVersion: ProbeVersionLyrics, AfterID: afterID, PageSize: pageSize, Now: now,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("library: list stale probes: %w", err)
 	}
 	files := make([]UnmeasuredFile, len(rows))
 	for index, row := range rows {
-		files[index] = UnmeasuredFile{MediaObjectID: row.ID, RootFolderID: row.RootFolderID, RelPath: row.RelPath}
+		files[index] = UnmeasuredFile{MediaObjectID: row.ID, SizeBytes: row.SizeBytes, RootFolderID: row.RootFolderID, RelPath: row.RelPath}
 	}
 	return files, nil
 }
 
 // ListStaleVideoProbes pages through the video files probed before the probe read the picture and subtitle tracks.
-func (p Physical) ListStaleVideoProbes(ctx context.Context, afterID int64, pageSize int64) ([]UnmeasuredFile, error) {
+func (p Physical) ListStaleVideoProbes(ctx context.Context, afterID, pageSize, now int64) ([]UnmeasuredFile, error) {
 	rows, err := librarydb.New(p.store.Read()).ListStaleVideoProbes(ctx, librarydb.ListStaleVideoProbesParams{
-		BelowVersion: ProbeVersionVideo, AfterID: afterID, PageSize: pageSize,
+		BelowVersion: ProbeVersionVideo, AfterID: afterID, PageSize: pageSize, Now: now,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("library: list stale video probes: %w", err)
 	}
 	files := make([]UnmeasuredFile, len(rows))
 	for index, row := range rows {
-		files[index] = UnmeasuredFile{MediaObjectID: row.ID, RootFolderID: row.RootFolderID, RelPath: row.RelPath}
+		files[index] = UnmeasuredFile{MediaObjectID: row.ID, SizeBytes: row.SizeBytes, RootFolderID: row.RootFolderID, RelPath: row.RelPath}
 	}
 	return files, nil
 }
@@ -746,6 +752,9 @@ func (p Physical) RecordMeasured(
 		attrRow, err := queries.InternAttributes(ctx, internParams(claim))
 		if err != nil {
 			return fmt.Errorf("intern measured attributes: %w", err)
+		}
+		if err := queries.DeleteProbeFailure(ctx, mediaObjectID); err != nil {
+			return fmt.Errorf("forget probe failure: %w", err)
 		}
 		if scalars.ProbeJSON != "" {
 			if err := queries.SetMediaProbe(ctx, librarydb.SetMediaProbeParams{

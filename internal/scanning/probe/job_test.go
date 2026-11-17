@@ -133,7 +133,7 @@ func TestJob_RunProbesEveryUnmeasuredFile(t *testing.T) {
 
 	// A second run must find nothing left to probe -- the whole point of
 	// ListUnmeasured's WHERE clause.
-	files, err := physical.ListUnmeasured(t.Context(), 0, 100)
+	files, err := physical.ListUnmeasured(t.Context(), 0, 100, 0)
 	if err != nil {
 		t.Fatalf("ListUnmeasured: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestJob_RunYieldsOnceItsTimeIsSpent(t *testing.T) {
 	if err := job.Run(t.Context(), jobs.Job{}); !errors.Is(err, jobs.ErrYield) {
 		t.Fatalf("Run = %v, want it to yield", err)
 	}
-	left, err := physical.ListUnmeasured(t.Context(), 0, 200)
+	left, err := physical.ListUnmeasured(t.Context(), 0, 200, 0)
 	if err != nil {
 		t.Fatalf("ListUnmeasured: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestJob_RunKeepsGoingWhileNothingWaitsForItsSlot(t *testing.T) {
 	if err := job.Run(t.Context(), jobs.Job{Progress: progress}); err != nil {
 		t.Fatalf("Run = %v, want it to finish: nobody waits for the slot", err)
 	}
-	left, err := physical.ListUnmeasured(t.Context(), 0, 200)
+	left, err := physical.ListUnmeasured(t.Context(), 0, 200, 0)
 	if err != nil || len(left) != 0 {
 		t.Fatalf("left unmeasured %d, %v; want none", len(left), err)
 	}
@@ -276,7 +276,7 @@ func TestJob_RunReadsAgainAFileMeasuredBeforeLyricsLanguages(t *testing.T) {
 		library.MeasuredScalars{ProbeJSON: `{"AudioCodec":"flac"}`}, "", 1); err != nil {
 		t.Fatal(err)
 	}
-	if stale, err := physical.ListStaleProbes(t.Context(), 0, 10); err != nil || len(stale) != 1 {
+	if stale, err := physical.ListStaleProbes(t.Context(), 0, 10, 0); err != nil || len(stale) != 1 {
 		t.Fatalf("stale before = %+v, %v; want the one file", stale, err)
 	}
 
@@ -291,7 +291,7 @@ func TestJob_RunReadsAgainAFileMeasuredBeforeLyricsLanguages(t *testing.T) {
 	if err := job.Run(t.Context(), jobs.Job{}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if stale, err := physical.ListStaleProbes(t.Context(), 0, 10); err != nil || len(stale) != 0 {
+	if stale, err := physical.ListStaleProbes(t.Context(), 0, 10, 0); err != nil || len(stale) != 0 {
 		t.Errorf("stale after = %+v, %v; want none", stale, err)
 	}
 	object, err := librarydb.New(opened.Read()).GetMediaObject(t.Context(), ids[0].MediaObjectID)
@@ -630,5 +630,100 @@ func TestPicturesJob_HandsOverToTheOneSweepInsteadOfRunningIt(t *testing.T) {
 	}
 	if len(page.Items) != 1 || page.Items[0].Type != probe.JobType {
 		t.Fatalf("queued %+v, want exactly one probe sweep, however often the old type is handed over", page.Items)
+	}
+}
+
+// failingTool cannot read any file whose path ends in a name it is told to fail on, and counts every path it is asked for.
+type failingTool struct {
+	fakeTool
+	failOn string
+	asked  map[string]int
+}
+
+func (f *failingTool) ReadTags(ctx context.Context, paths []string) ([]mediatool.Probe, error) {
+	probes, err := f.fakeTool.ReadTags(ctx, paths)
+	for index, p := range paths {
+		f.asked[filepath.Base(p)]++
+		if filepath.Base(p) == f.failOn {
+			probes[index].Err = errors.New("moov atom not found")
+		}
+	}
+	return probes, err
+}
+
+func TestJob_AFileFfprobeCannotReadIsLeftAloneUntilItsWaitIsOverOrItChanges(t *testing.T) {
+	opened := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	root := t.TempDir()
+	for _, name := range []string{"good.flac", "bad.flac"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("faked"), 0o644); err != nil {
+			t.Fatalf("write fixture file: %v", err)
+		}
+	}
+	ids, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "bad.flac", SizeBytes: 5, QuickHash: "bad", FirstSeenAt: time.Unix(0, 0)},
+		{RelPath: "good.flac", SizeBytes: 5, QuickHash: "good", FirstSeenAt: time.Unix(0, 0)},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	fake := clock.NewFakeAtEpoch()
+	tool := &failingTool{fakeTool: fakeTool{measured: mediatool.Measured{FormatName: "flac", AudioCodec: "flac"}}, failOn: "bad.flac", asked: map[string]int{}}
+	job := probe.NewJob(probe.Config{
+		Physical: physical, Coverage: library.NewProbeCoverage(opened, fake),
+		Roots: fakeRoots{1: settings.RootFolder{ID: 1, Path: root, Online: true}},
+		Tool:  tool, Clock: fake, Logger: slog.New(slog.DiscardHandler),
+	})
+	run := func(stage string) {
+		t.Helper()
+		if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+			t.Fatalf("%s: Run: %v", stage, err)
+		}
+	}
+
+	run("first")
+	run("second")
+	if tool.asked["bad.flac"] != 1 || tool.asked["good.flac"] != 1 {
+		t.Fatalf("asked %v, want each file once: the failure is remembered, the success measured", tool.asked)
+	}
+	if failures, err := physical.CountProbeFailures(t.Context()); err != nil || failures != 1 {
+		t.Fatalf("CountProbeFailures = %d, %v; want 1", failures, err)
+	}
+
+	err = opened.Write(t.Context(), store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		_, execErr := tx.ExecContext(ctx, `UPDATE media_object SET size_bytes = 6 WHERE id = ?`, ids[0].MediaObjectID)
+		return execErr
+	})
+	if err != nil {
+		t.Fatalf("change the size: %v", err)
+	}
+	run("after a size change")
+	if tool.asked["bad.flac"] != 2 {
+		t.Fatalf("asked %v, want a file whose size changed asked again at once", tool.asked)
+	}
+
+	fake.Advance(3 * 24 * time.Hour)
+	run("after the wait")
+	if tool.asked["bad.flac"] != 3 {
+		t.Fatalf("asked %v, want a file asked again once its wait is over", tool.asked)
+	}
+
+	tool.failOn = ""
+	fake.Advance(30 * 24 * time.Hour)
+	run("healed")
+	if failures, err := physical.CountProbeFailures(t.Context()); err != nil || failures != 0 {
+		t.Fatalf("CountProbeFailures after a good probe = %d, %v; want 0", failures, err)
+	}
+}
+
+func TestProbeRetryAfter_DoublesFromADayUpToThirtyDays(t *testing.T) {
+	var got []time.Duration
+	for attempts := int64(1); attempts <= 7; attempts++ {
+		got = append(got, library.ProbeRetryAfter(attempts))
+	}
+	day := 24 * time.Hour
+	want := []time.Duration{day, 2 * day, 4 * day, 8 * day, 16 * day, 30 * day, 30 * day}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("waits = %v, want %v", got, want)
 	}
 }

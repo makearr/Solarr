@@ -112,8 +112,10 @@ WHERE id = ?;
 -- name: ListUnmeasured :many
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_object o
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
-WHERE o.measured_attributes_id IS NULL AND o.id > sqlc.arg(after_id)
+JOIN library_path lp ON lp.id = (SELECT MIN(id) FROM library_path WHERE media_object_id = o.id AND is_primary = 1 AND missing_since IS NULL)
+WHERE o.measured_attributes_id IS NULL
+  AND COALESCE(o.kind, '') <> 'book' AND NOT EXISTS (SELECT 1 FROM media_probe_failure f WHERE f.media_object_id = o.id AND f.size_bytes = o.size_bytes AND f.retry_at > sqlc.arg(now))
+  AND o.id > sqlc.arg(after_id)
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
 
@@ -122,8 +124,9 @@ LIMIT sqlc.arg(page_size);
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_probe mp
 JOIN media_object o ON o.id = mp.media_object_id
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
-WHERE mp.probe_version < sqlc.arg(below_version) AND o.measured_attributes_id IS NOT NULL AND o.id > sqlc.arg(after_id)
+JOIN library_path lp ON lp.id = (SELECT MIN(id) FROM library_path WHERE media_object_id = o.id AND is_primary = 1 AND missing_since IS NULL)
+WHERE mp.probe_version < sqlc.arg(below_version) AND o.measured_attributes_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM media_probe_failure f WHERE f.media_object_id = o.id AND f.size_bytes = o.size_bytes AND f.retry_at > sqlc.arg(now)) AND o.id > sqlc.arg(after_id)
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
 
@@ -133,8 +136,9 @@ LIMIT sqlc.arg(page_size);
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_probe mp
 JOIN media_object o ON o.id = mp.media_object_id
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
-WHERE mp.probe_version < sqlc.arg(below_version) AND o.measured_attributes_id IS NOT NULL AND o.id > sqlc.arg(after_id)
+JOIN library_path lp ON lp.id = (SELECT MIN(id) FROM library_path WHERE media_object_id = o.id AND is_primary = 1 AND missing_since IS NULL)
+WHERE mp.probe_version < sqlc.arg(below_version) AND o.measured_attributes_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM media_probe_failure f WHERE f.media_object_id = o.id AND f.size_bytes = o.size_bytes AND f.retry_at > sqlc.arg(now)) AND o.id > sqlc.arg(after_id)
   AND o.kind = 'video'
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
@@ -153,22 +157,25 @@ LIMIT sqlc.arg(page_size);
 -- name: CountUnmeasured :one
 SELECT CAST(count(*) AS INTEGER) AS total
 FROM media_object o
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
-WHERE o.measured_attributes_id IS NULL;
+JOIN library_path lp ON lp.id = (SELECT MIN(id) FROM library_path WHERE media_object_id = o.id AND is_primary = 1 AND missing_since IS NULL)
+WHERE o.measured_attributes_id IS NULL
+  AND COALESCE(o.kind, '') <> 'book' AND NOT EXISTS (SELECT 1 FROM media_probe_failure f WHERE f.media_object_id = o.id AND f.size_bytes = o.size_bytes AND f.retry_at > sqlc.arg(now));
 
 -- name: CountStaleProbes :one
 SELECT CAST(count(*) AS INTEGER) AS total
 FROM media_probe mp
 JOIN media_object o ON o.id = mp.media_object_id
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
-WHERE mp.probe_version < sqlc.arg(below_version) AND o.measured_attributes_id IS NOT NULL;
+JOIN library_path lp ON lp.id = (SELECT MIN(id) FROM library_path WHERE media_object_id = o.id AND is_primary = 1 AND missing_since IS NULL)
+WHERE mp.probe_version < sqlc.arg(below_version) AND o.measured_attributes_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM media_probe_failure f WHERE f.media_object_id = o.id AND f.size_bytes = o.size_bytes AND f.retry_at > sqlc.arg(now));
 
 -- name: CountStaleVideoProbes :one
 SELECT CAST(count(*) AS INTEGER) AS total
 FROM media_probe mp
 JOIN media_object o ON o.id = mp.media_object_id
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
-WHERE mp.probe_version < sqlc.arg(below_version) AND o.measured_attributes_id IS NOT NULL AND o.kind = 'video';
+JOIN library_path lp ON lp.id = (SELECT MIN(id) FROM library_path WHERE media_object_id = o.id AND is_primary = 1 AND missing_since IS NULL)
+WHERE mp.probe_version < sqlc.arg(below_version) AND o.measured_attributes_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM media_probe_failure f WHERE f.media_object_id = o.id AND f.size_bytes = o.size_bytes AND f.retry_at > sqlc.arg(now)) AND o.kind = 'video';
 
 -- name: CountVideoWithoutOshash :one
 SELECT CAST(count(*) AS INTEGER) AS total
@@ -484,3 +491,22 @@ SELECT root_folder_id, missing_since FROM missing_recount ORDER BY root_folder_i
 
 -- name: DeleteMissingRecount :exec
 DELETE FROM missing_recount WHERE root_folder_id = ? AND missing_since = ?;
+
+-- name: UpsertProbeFailure :exec
+INSERT INTO media_probe_failure (media_object_id, attempts, last_error, last_attempt_at, retry_at, size_bytes)
+VALUES (sqlc.arg(media_object_id), 1, sqlc.arg(last_error), sqlc.arg(at), sqlc.arg(retry_at), sqlc.arg(size_bytes))
+ON CONFLICT (media_object_id) DO UPDATE SET
+  attempts = media_probe_failure.attempts + 1, last_error = excluded.last_error,
+  last_attempt_at = excluded.last_attempt_at, retry_at = excluded.retry_at, size_bytes = excluded.size_bytes;
+
+-- name: GetProbeFailureAttempts :one
+SELECT attempts FROM media_probe_failure WHERE media_object_id = ?;
+
+-- name: DeleteProbeFailure :exec
+DELETE FROM media_probe_failure WHERE media_object_id = ?;
+
+-- name: DeleteAllProbeFailures :execrows
+DELETE FROM media_probe_failure;
+
+-- name: CountProbeFailures :one
+SELECT CAST(count(*) AS INTEGER) AS total FROM media_probe_failure;

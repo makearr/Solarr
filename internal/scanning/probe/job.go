@@ -133,13 +133,13 @@ func (j *Job) Run(ctx context.Context, request jobs.Job) error {
 	hashing := j.hashing == nil || j.hashing() || previews || forced != ""
 	hasher, canHash := j.tool.(PerceptualHasher)
 	hashPictures := canHash && hashing
-	if remaining, err := j.physical.CountProbeWork(ctx, hashPictures, previews); err == nil {
+	if remaining, err := j.physical.CountProbeWork(ctx, hashPictures, previews, started.Unix()); err == nil {
 		request.Progress.Set(0, remaining)
 	} else {
 		j.logger.WarnContext(ctx, "count the probe work failed", slog.Any("error", err))
 	}
 	// Unmeasured files first; then those measured before the probe read lyrics languages.
-	for index, list := range []func(context.Context, int64, int64) ([]library.UnmeasuredFile, error){
+	for index, list := range []func(context.Context, int64, int64, int64) ([]library.UnmeasuredFile, error){
 		j.physical.ListUnmeasured, j.physical.ListStaleProbes, j.physical.ListStaleVideoProbes,
 	} {
 		afterID := j.resumeAt[index].Swap(0)
@@ -148,7 +148,7 @@ func (j *Job) Run(ctx context.Context, request jobs.Job) error {
 				return jobs.Retryablef("probe.context", string(JobType), err)
 			}
 
-			batch, err := list(ctx, afterID, batchSize)
+			batch, err := list(ctx, afterID, batchSize, started.Unix())
 			if err != nil {
 				return fmt.Errorf("probe: %w", err)
 			}
@@ -161,10 +161,11 @@ func (j *Job) Run(ctx context.Context, request jobs.Job) error {
 			request.Progress.Add(int64(len(batch)))
 			for file, err := range j.probeBatch(ctx, batch) {
 				failed++
-				// One file failing (an unmounted root, a corrupted file, a
-				// stalled network mount) is not a reason to stop the sweep --
-				// it simply stays unmeasured and is retried next run.
+				// One file failing is not a reason to stop the sweep; it is remembered and asked again after a wait.
 				j.logger.WarnContext(ctx, "probe failed", slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", err))
+				if rememberErr := j.physical.RecordProbeFailure(ctx, file.MediaObjectID, file.SizeBytes, err.Error(), j.clock.Now()); rememberErr != nil {
+					j.logger.WarnContext(ctx, "remember probe failure failed", slog.Any("error", rememberErr))
+				}
 			}
 			if len(batch) < batchSize {
 				break

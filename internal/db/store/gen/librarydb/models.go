@@ -596,6 +596,15 @@ type MediaProbe struct {
 	Json          string
 }
 
+type MediaProbeFailure struct {
+	MediaObjectID int64
+	Attempts      int64
+	LastError     string
+	LastAttemptAt int64
+	RetryAt       int64
+	SizeBytes     int64
+}
+
 type MissingRecount struct {
 	RootFolderID int64
 	MissingSince int64

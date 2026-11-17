@@ -120,16 +120,33 @@ func (q *Queries) CountMeasuredByRootFolder(ctx context.Context) ([]CountMeasure
 	return items, nil
 }
 
+const countProbeFailures = `-- name: CountProbeFailures :one
+SELECT CAST(count(*) AS INTEGER) AS total FROM media_probe_failure
+`
+
+func (q *Queries) CountProbeFailures(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countProbeFailures)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const countStaleProbes = `-- name: CountStaleProbes :one
 SELECT CAST(count(*) AS INTEGER) AS total
 FROM media_probe mp
 JOIN media_object o ON o.id = mp.media_object_id
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+JOIN library_path lp ON lp.id = (SELECT MIN(id) FROM library_path WHERE media_object_id = o.id AND is_primary = 1 AND missing_since IS NULL)
 WHERE mp.probe_version < ?1 AND o.measured_attributes_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM media_probe_failure f WHERE f.media_object_id = o.id AND f.size_bytes = o.size_bytes AND f.retry_at > ?2)
 `
 
-func (q *Queries) CountStaleProbes(ctx context.Context, belowVersion int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countStaleProbes, belowVersion)
+type CountStaleProbesParams struct {
+	BelowVersion int64
+	Now          int64
+}
+
+func (q *Queries) CountStaleProbes(ctx context.Context, arg CountStaleProbesParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countStaleProbes, arg.BelowVersion, arg.Now)
 	var total int64
 	err := row.Scan(&total)
 	return total, err
@@ -139,12 +156,18 @@ const countStaleVideoProbes = `-- name: CountStaleVideoProbes :one
 SELECT CAST(count(*) AS INTEGER) AS total
 FROM media_probe mp
 JOIN media_object o ON o.id = mp.media_object_id
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
-WHERE mp.probe_version < ?1 AND o.measured_attributes_id IS NOT NULL AND o.kind = 'video'
+JOIN library_path lp ON lp.id = (SELECT MIN(id) FROM library_path WHERE media_object_id = o.id AND is_primary = 1 AND missing_since IS NULL)
+WHERE mp.probe_version < ?1 AND o.measured_attributes_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM media_probe_failure f WHERE f.media_object_id = o.id AND f.size_bytes = o.size_bytes AND f.retry_at > ?2) AND o.kind = 'video'
 `
 
-func (q *Queries) CountStaleVideoProbes(ctx context.Context, belowVersion int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countStaleVideoProbes, belowVersion)
+type CountStaleVideoProbesParams struct {
+	BelowVersion int64
+	Now          int64
+}
+
+func (q *Queries) CountStaleVideoProbes(ctx context.Context, arg CountStaleVideoProbesParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countStaleVideoProbes, arg.BelowVersion, arg.Now)
 	var total int64
 	err := row.Scan(&total)
 	return total, err
@@ -153,14 +176,15 @@ func (q *Queries) CountStaleVideoProbes(ctx context.Context, belowVersion int64)
 const countUnmeasured = `-- name: CountUnmeasured :one
 SELECT CAST(count(*) AS INTEGER) AS total
 FROM media_object o
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+JOIN library_path lp ON lp.id = (SELECT MIN(id) FROM library_path WHERE media_object_id = o.id AND is_primary = 1 AND missing_since IS NULL)
 WHERE o.measured_attributes_id IS NULL
+  AND COALESCE(o.kind, '') <> 'book' AND NOT EXISTS (SELECT 1 FROM media_probe_failure f WHERE f.media_object_id = o.id AND f.size_bytes = o.size_bytes AND f.retry_at > ?1)
 `
 
 // The files the probe sweep still has to read, counted for its progress: ListUnmeasured, ListStaleProbes,
 // ListStaleVideoProbes and ListVideoWithoutOshash without their page.
-func (q *Queries) CountUnmeasured(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countUnmeasured)
+func (q *Queries) CountUnmeasured(ctx context.Context, now int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countUnmeasured, now)
 	var total int64
 	err := row.Scan(&total)
 	return total, err
@@ -293,6 +317,18 @@ func (q *Queries) CreateMediaObject(ctx context.Context, arg CreateMediaObjectPa
 	return result.LastInsertId()
 }
 
+const deleteAllProbeFailures = `-- name: DeleteAllProbeFailures :execrows
+DELETE FROM media_probe_failure
+`
+
+func (q *Queries) DeleteAllProbeFailures(ctx context.Context) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteAllProbeFailures)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteLibraryPath = `-- name: DeleteLibraryPath :exec
 DELETE FROM library_path WHERE id = ?
 `
@@ -322,6 +358,15 @@ type DeleteMissingRecountParams struct {
 
 func (q *Queries) DeleteMissingRecount(ctx context.Context, arg DeleteMissingRecountParams) error {
 	_, err := q.db.ExecContext(ctx, deleteMissingRecount, arg.RootFolderID, arg.MissingSince)
+	return err
+}
+
+const deleteProbeFailure = `-- name: DeleteProbeFailure :exec
+DELETE FROM media_probe_failure WHERE media_object_id = ?
+`
+
+func (q *Queries) DeleteProbeFailure(ctx context.Context, mediaObjectID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteProbeFailure, mediaObjectID)
 	return err
 }
 
@@ -579,6 +624,17 @@ func (q *Queries) GetPathByLocation(ctx context.Context, arg GetPathByLocationPa
 		&i.MissingSince,
 	)
 	return i, err
+}
+
+const getProbeFailureAttempts = `-- name: GetProbeFailureAttempts :one
+SELECT attempts FROM media_probe_failure WHERE media_object_id = ?
+`
+
+func (q *Queries) GetProbeFailureAttempts(ctx context.Context, mediaObjectID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getProbeFailureAttempts, mediaObjectID)
+	var attempts int64
+	err := row.Scan(&attempts)
+	return attempts, err
 }
 
 const getVideoFacts = `-- name: GetVideoFacts :one
@@ -1223,14 +1279,16 @@ const listStaleProbes = `-- name: ListStaleProbes :many
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_probe mp
 JOIN media_object o ON o.id = mp.media_object_id
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
-WHERE mp.probe_version < ?1 AND o.measured_attributes_id IS NOT NULL AND o.id > ?2
+JOIN library_path lp ON lp.id = (SELECT MIN(id) FROM library_path WHERE media_object_id = o.id AND is_primary = 1 AND missing_since IS NULL)
+WHERE mp.probe_version < ?1 AND o.measured_attributes_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM media_probe_failure f WHERE f.media_object_id = o.id AND f.size_bytes = o.size_bytes AND f.retry_at > ?2) AND o.id > ?3
 ORDER BY o.id
-LIMIT ?3
+LIMIT ?4
 `
 
 type ListStaleProbesParams struct {
 	BelowVersion int64
+	Now          int64
 	AfterID      int64
 	PageSize     int64
 }
@@ -1244,7 +1302,12 @@ type ListStaleProbesRow struct {
 
 // Files whose probe predates what the probe now reads of every file (below_version), read once more.
 func (q *Queries) ListStaleProbes(ctx context.Context, arg ListStaleProbesParams) ([]ListStaleProbesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listStaleProbes, arg.BelowVersion, arg.AfterID, arg.PageSize)
+	rows, err := q.db.QueryContext(ctx, listStaleProbes,
+		arg.BelowVersion,
+		arg.Now,
+		arg.AfterID,
+		arg.PageSize,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1275,15 +1338,17 @@ const listStaleVideoProbes = `-- name: ListStaleVideoProbes :many
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_probe mp
 JOIN media_object o ON o.id = mp.media_object_id
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
-WHERE mp.probe_version < ?1 AND o.measured_attributes_id IS NOT NULL AND o.id > ?2
+JOIN library_path lp ON lp.id = (SELECT MIN(id) FROM library_path WHERE media_object_id = o.id AND is_primary = 1 AND missing_since IS NULL)
+WHERE mp.probe_version < ?1 AND o.measured_attributes_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM media_probe_failure f WHERE f.media_object_id = o.id AND f.size_bytes = o.size_bytes AND f.retry_at > ?2) AND o.id > ?3
   AND o.kind = 'video'
 ORDER BY o.id
-LIMIT ?3
+LIMIT ?4
 `
 
 type ListStaleVideoProbesParams struct {
 	BelowVersion int64
+	Now          int64
 	AfterID      int64
 	PageSize     int64
 }
@@ -1298,7 +1363,12 @@ type ListStaleVideoProbesRow struct {
 // Video files whose probe predates what the probe now reads of a video (below_version): the picture, the subtitle
 // tracks and the encoder's CRF.
 func (q *Queries) ListStaleVideoProbes(ctx context.Context, arg ListStaleVideoProbesParams) ([]ListStaleVideoProbesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listStaleVideoProbes, arg.BelowVersion, arg.AfterID, arg.PageSize)
+	rows, err := q.db.QueryContext(ctx, listStaleVideoProbes,
+		arg.BelowVersion,
+		arg.Now,
+		arg.AfterID,
+		arg.PageSize,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1436,13 +1506,16 @@ func (q *Queries) ListUnfingerprinted(ctx context.Context, arg ListUnfingerprint
 const listUnmeasured = `-- name: ListUnmeasured :many
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_object o
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
-WHERE o.measured_attributes_id IS NULL AND o.id > ?1
+JOIN library_path lp ON lp.id = (SELECT MIN(id) FROM library_path WHERE media_object_id = o.id AND is_primary = 1 AND missing_since IS NULL)
+WHERE o.measured_attributes_id IS NULL
+  AND COALESCE(o.kind, '') <> 'book' AND NOT EXISTS (SELECT 1 FROM media_probe_failure f WHERE f.media_object_id = o.id AND f.size_bytes = o.size_bytes AND f.retry_at > ?1)
+  AND o.id > ?2
 ORDER BY o.id
-LIMIT ?2
+LIMIT ?3
 `
 
 type ListUnmeasuredParams struct {
+	Now      int64
 	AfterID  int64
 	PageSize int64
 }
@@ -1461,7 +1534,7 @@ type ListUnmeasuredRow struct {
 // The join to library_path is within library.db, not across databases --
 // both tables live here, so it does not run into the no-cross-DB-join rule.
 func (q *Queries) ListUnmeasured(ctx context.Context, arg ListUnmeasuredParams) ([]ListUnmeasuredRow, error) {
-	rows, err := q.db.QueryContext(ctx, listUnmeasured, arg.AfterID, arg.PageSize)
+	rows, err := q.db.QueryContext(ctx, listUnmeasured, arg.Now, arg.AfterID, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -2204,5 +2277,32 @@ type TouchLibraryPathParams struct {
 // for.
 func (q *Queries) TouchLibraryPath(ctx context.Context, arg TouchLibraryPathParams) error {
 	_, err := q.db.ExecContext(ctx, touchLibraryPath, arg.LastSeenAt, arg.ID)
+	return err
+}
+
+const upsertProbeFailure = `-- name: UpsertProbeFailure :exec
+INSERT INTO media_probe_failure (media_object_id, attempts, last_error, last_attempt_at, retry_at, size_bytes)
+VALUES (?1, 1, ?2, ?3, ?4, ?5)
+ON CONFLICT (media_object_id) DO UPDATE SET
+  attempts = media_probe_failure.attempts + 1, last_error = excluded.last_error,
+  last_attempt_at = excluded.last_attempt_at, retry_at = excluded.retry_at, size_bytes = excluded.size_bytes
+`
+
+type UpsertProbeFailureParams struct {
+	MediaObjectID int64
+	LastError     string
+	At            int64
+	RetryAt       int64
+	SizeBytes     int64
+}
+
+func (q *Queries) UpsertProbeFailure(ctx context.Context, arg UpsertProbeFailureParams) error {
+	_, err := q.db.ExecContext(ctx, upsertProbeFailure,
+		arg.MediaObjectID,
+		arg.LastError,
+		arg.At,
+		arg.RetryAt,
+		arg.SizeBytes,
+	)
 	return err
 }

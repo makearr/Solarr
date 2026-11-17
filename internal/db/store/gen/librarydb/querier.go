@@ -165,18 +165,19 @@ type Querier interface {
 	CountPlaceholderEditions(ctx context.Context) (int64, error)
 	// Only 'primary' counts: a trailer belongs to the work without satisfying it.
 	CountPrimaryFiles(ctx context.Context, desiredItemID int64) (int64, error)
+	CountProbeFailures(ctx context.Context) (int64, error)
 	// A client's queue as Solarr fills it: sent and not finished downloading (ADR-57).
 	CountQueuedOnDownloader(ctx context.Context, downloaderID int64) (int64, error)
 	CountRecycleBin(ctx context.Context) (int64, error)
 	CountRunningArrImports(ctx context.Context, instanceID int64) (int64, error)
-	CountStaleProbes(ctx context.Context, belowVersion int64) (int64, error)
-	CountStaleVideoProbes(ctx context.Context, belowVersion int64) (int64, error)
+	CountStaleProbes(ctx context.Context, arg CountStaleProbesParams) (int64, error)
+	CountStaleVideoProbes(ctx context.Context, arg CountStaleVideoProbesParams) (int64, error)
 	// Library health's own "unmatched files" figure (todo 4.8) -- same filter
 	// shape as ListUnidentified below, a count rather than a page.
 	CountUnidentified(ctx context.Context, arg CountUnidentifiedParams) (int64, error)
 	// The files the probe sweep still has to read, counted for its progress: ListUnmeasured, ListStaleProbes,
 	// ListStaleVideoProbes and ListVideoWithoutOshash without their page.
-	CountUnmeasured(ctx context.Context) (int64, error)
+	CountUnmeasured(ctx context.Context, now int64) (int64, error)
 	// What a full sweep would mark missing, against everything the root holds, before it marks anything.
 	CountVanishingPaths(ctx context.Context, arg CountVanishingPathsParams) (CountVanishingPathsRow, error)
 	// The same videos as ListVideoWithoutFrameHashes, counted, for the progress of the pass.
@@ -261,6 +262,7 @@ type Querier interface {
 	DecideRequest(ctx context.Context, arg DecideRequestParams) (int64, error)
 	DeleteAcquisitionMissing(ctx context.Context, acquisitionID int64) error
 	DeleteAcquisitionStall(ctx context.Context, acquisitionID int64) error
+	DeleteAllProbeFailures(ctx context.Context) (int64, error)
 	// A refresh rewrites the numbers one provider gave a part, so a mapping it dropped goes too.
 	DeleteAltNumberingByProvider(ctx context.Context, arg DeleteAltNumberingByProviderParams) error
 	DeleteClassificationValue(ctx context.Context, arg DeleteClassificationValueParams) error
@@ -304,6 +306,7 @@ type Querier interface {
 	// A file that covers an episode is identified, whoever placed it and whenever. TV only: an unverified album's files
 	// are attached to it and still await identification (D6).
 	DeletePlacedUnidentified(ctx context.Context) error
+	DeleteProbeFailure(ctx context.Context, mediaObjectID int64) error
 	DeleteRecycleBinEntry(ctx context.Context, id int64) error
 	DeleteRelationship(ctx context.Context, arg DeleteRelationshipParams) error
 	// A root that is removed from configuration leaves no progress behind.
@@ -467,6 +470,7 @@ type Querier interface {
 	GetPerson(ctx context.Context, id int64) (Person, error)
 	GetPersonArtistMBID(ctx context.Context, personID int64) (string, error)
 	GetPersonByExternalID(ctx context.Context, arg GetPersonByExternalIDParams) (Person, error)
+	GetProbeFailureAttempts(ctx context.Context, mediaObjectID int64) (int64, error)
 	GetRecycleBin(ctx context.Context, id int64) (RecycleBin, error)
 	GetRequest(ctx context.Context, id int64) (Request, error)
 	// Per-root sweep progress (section 10.4). Column lists follow table order, or sqlc
@@ -1346,6 +1350,7 @@ type Querier interface {
 	UpsertHuntQueueEntry(ctx context.Context, arg UpsertHuntQueueEntryParams) error
 	// The planner owns every column but the search record, which each search keeps itself.
 	UpsertPlannedHunt(ctx context.Context, arg UpsertPlannedHuntParams) error
+	UpsertProbeFailure(ctx context.Context, arg UpsertProbeFailureParams) error
 	// F29: the manual identification queue (migration 0014). Column lists follow table
 	// order, or sqlc stops reusing models.
 	// A file marked "not media" is never queued again, nor one that already belongs to a work: a

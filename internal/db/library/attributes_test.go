@@ -200,7 +200,7 @@ func TestListUnmeasured_OnlyReturnsFilesWithNoMeasuredAttributes(t *testing.T) {
 		t.Fatalf("RecordMeasured: %v", err)
 	}
 
-	files, err := physical.ListUnmeasured(t.Context(), 0, 100)
+	files, err := physical.ListUnmeasured(t.Context(), 0, 100, 0)
 	if err != nil {
 		t.Fatalf("ListUnmeasured: %v", err)
 	}

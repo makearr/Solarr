@@ -32,7 +32,7 @@ func (a LibraryHealth) Report(ctx context.Context) (apiserver.LibraryHealthRepor
 	}
 	unprobedCount := int(counts["total_files"] - counts["probed"])
 
-	unprobed, err := a.Physical.ListUnmeasured(ctx, 0, healthSampleSize)
+	unprobed, err := a.Physical.ListUnmeasured(ctx, 0, healthSampleSize, library.IncludeProbeFailures)
 	if err != nil {
 		return apiserver.LibraryHealthReport{}, fmt.Errorf("library health: unprobed sample: %w", err)
 	}

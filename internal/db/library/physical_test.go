@@ -463,8 +463,8 @@ func TestListStaleVideoProbes_FindsOnlyVideo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stale, err := physical.ListStaleVideoProbes(t.Context(), 0, 10)
-	want := []library.UnmeasuredFile{{MediaObjectID: registered[0].MediaObjectID, RootFolderID: 1, RelPath: "Show/S01E01.mkv"}}
+	stale, err := physical.ListStaleVideoProbes(t.Context(), 0, 10, 0)
+	want := []library.UnmeasuredFile{{MediaObjectID: registered[0].MediaObjectID, SizeBytes: 10, RootFolderID: 1, RelPath: "Show/S01E01.mkv"}}
 	if err != nil || fmt.Sprint(stale) != fmt.Sprint(want) {
 		t.Errorf("ListStaleVideoProbes = %+v, %v; want %+v", stale, err, want)
 	}
@@ -483,7 +483,7 @@ func TestListUnmeasured_NeverListsAnEbookAndStillFillsThePage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RegisterBatch: %v", err)
 	}
-	files, err := physical.ListUnmeasured(t.Context(), 0, 2)
+	files, err := physical.ListUnmeasured(t.Context(), 0, 2, 0)
 	if err != nil || len(files) != 2 || files[0].RelPath != "A/01.flac" || files[1].RelPath != "A/02.flac" {
 		t.Errorf("ListUnmeasured = %+v, %v; want the two flac files although two ebooks come first", files, err)
 	}
