@@ -139,7 +139,7 @@ func TestRenderPath_ReservedNameIsSanitised(t *testing.T) {
 }
 
 func TestRenderPath_LongPathWarnsButDoesNotFail(t *testing.T) {
-	ctx := naming.Context{"Artist Name": "Artist", "Track Title": strings.Repeat("A very long track title indeed ", 10)}
+	ctx := naming.Context{"Artist Name": strings.Repeat("Artist ", 10), "Track Title": strings.Repeat("A very long track title indeed ", 10)}
 	path, warnings, err := naming.RenderPath(mustCompile(t, "{Artist Name}/{Track Title}"), ctx, naming.DefaultOptions, ".flac")
 	if err != nil {
 		t.Fatalf("RenderPath: %v", err)
@@ -196,3 +196,59 @@ func TestTitleForms(t *testing.T) {
 		}
 	}
 }
+
+// Titles that open with dots, are made of separators, or are not normalised must still land in one visible folder.
+func TestRenderPath_HostileTitles(t *testing.T) {
+	const template = "{Artist Name}/{Album Title}/{track:00} - {Track Title}"
+	for _, tc := range []struct{ name, artist, album, want string }{
+		{"leading ellipsis", "Plain Band", "...And Then Some", "Plain Band/And Then Some/03 - Song.flac"},
+		{"leading dot in the artist", ".band", "Album", "band/Album/03 - Song.flac"},
+		{"an artist of dots keeps its level", "...", "Album", "_/Album/03 - Song.flac"},
+		{"an album of a hyphen keeps its level", "Band", "-", "Band/_/03 - Song.flac"},
+		{"an album of two dots keeps its level", "Band", "..", "Band/_/03 - Song.flac"},
+		{"decomposed text is composed", "Band", "Café", "Band/Café/03 - Song.flac"},
+		{"bidi override and zero-width space are dropped", "Band", "Al\u202ebum\u200b", "Band/Album/03 - Song.flac"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := naming.Context{"Artist Name": tc.artist, "Album Title": tc.album, "track": "3", "Track Title": "Song"}
+			if got := renderPath(t, template, ctx, naming.DefaultOptions); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// The extension is counted in the 255-byte limit, and the end of a name, where two files differ, survives.
+func TestRenderPath_ALongNameKeepsItsEndAndFitsWithItsExtension(t *testing.T) {
+	long := strings.Repeat("Allegro ma non troppo ", 14)
+	render := func(suffix string) string {
+		ctx := naming.Context{"Album Title": "Album", "Track Title": long + suffix}
+		return renderPath(t, "{Album Title}/{Track Title}", ctx, naming.DefaultOptions)
+	}
+	first, second := render("(Part 1)"), render("(Part 2)")
+	if first == second {
+		t.Fatal("two names that differ only at the end rendered the same")
+	}
+	for _, got := range []string{first, second} {
+		file := got[strings.LastIndex(got, "/")+1:]
+		if len(file) > 255-24+len(".flac") {
+			t.Errorf("file name is %d bytes: %q", len(file), file)
+		}
+		if !strings.HasSuffix(got, ".flac") || !strings.Contains(got, "…") {
+			t.Errorf("got %q, want an elided name that keeps its extension", got)
+		}
+	}
+	if !strings.HasSuffix(strings.TrimSuffix(first, ".flac"), "(Part 1)") {
+		t.Errorf("the tail was cut: %q", first)
+	}
+}
+
+func TestRenderPath_AMultiByteNameIsCutOnARuneBoundary(t *testing.T) {
+	ctx := naming.Context{"Album Title": "Album", "Track Title": strings.Repeat("あ", 120)}
+	got := renderPath(t, "{Album Title}/{Track Title}", ctx, naming.DefaultOptions)
+	if !utf8Valid(got) {
+		t.Errorf("rendered path is not valid UTF-8: %q", got)
+	}
+}
+
+func utf8Valid(s string) bool { return strings.ToValidUTF8(s, "�") == s }

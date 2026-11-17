@@ -6,10 +6,20 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
+
+// maxStemBytes is what a file name may keep of the 255-byte component limit once its extension is counted: 24 bytes stay
+// free for the longest suffix written behind it (".en.forced.srt", "-thumb.jpg", the linker's ".solarr-link-tmp" is a prefix).
+const maxStemBytes = 255 - 24
+
+// placeholderComponent stands in for a folder whose name cleaned to nothing, so the folder level is not lost.
+const placeholderComponent = "_"
 
 // Options is Lidarr's character handling, applied to every rendered path component --
 // template literals included, so a literal ":" is replaced like one inside a title.
@@ -205,13 +215,17 @@ func RenderPath(template []Segment, ctx Context, opts Options, extension string)
 	rendered := renderSegments(template, ctx, opts, &warnings)
 
 	raw := strings.Split(rendered, "/")
-	file := cleanComponent(raw[len(raw)-1], opts)
+	file := cleanComponent(raw[len(raw)-1], opts, maxStemBytes-len(extension))
 	if file == "" {
 		return "", warnings, fmt.Errorf("naming: the file name rendered to nothing for %v", ctx)
 	}
 	var components []string
 	for _, folder := range raw[:len(raw)-1] {
-		if cleaned := cleanComponent(folder, opts); cleaned != "" {
+		cleaned := cleanComponent(folder, opts, 0)
+		if cleaned == "" && strings.TrimSpace(folder) != "" {
+			cleaned = placeholderComponent
+		}
+		if cleaned != "" {
 			components = append(components, cleaned)
 		}
 	}
@@ -240,7 +254,15 @@ var trailingSeparators = regexp.MustCompile(`[- ._]+$`)
 // emptyBrackets is what "({Release Year})" leaves behind when the year is unknown.
 var emptyBrackets = regexp.MustCompile(`\s*(?:\(\s*\)|\[\s*\])`)
 
-func cleanComponent(raw string, opts Options) string {
+// cleanComponent normalises and cleans one component. A budget above zero keeps the result within that many bytes by
+// eliding the middle: the end of a name is where two files differ.
+func cleanComponent(raw string, opts Options, budget int) string {
+	raw = strings.Map(func(r rune) rune {
+		if unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, norm.NFC.String(raw))
 	cleaned := emptyBrackets.ReplaceAllString(replaceColons(raw, opts), "")
 	var b strings.Builder
 	for _, r := range cleaned {
@@ -254,10 +276,34 @@ func cleanComponent(raw string, opts Options) string {
 	}
 	cleaned = collapseRepeats(b.String())
 	cleaned = trailingSeparators.ReplaceAllString(strings.TrimSpace(cleaned), "")
+	// A leading dot makes a hidden folder that players and file managers skip.
+	cleaned = strings.TrimLeft(cleaned, ". ")
 	if cleaned == "" {
 		return ""
 	}
+	if budget > 0 {
+		cleaned = elideMiddle(cleaned, budget)
+	}
 	return fsx.SanitiseComponent(cleaned)
+}
+
+// elideMiddle shortens s to at most limit bytes, keeping its head and its tail around an ellipsis, on rune boundaries.
+func elideMiddle(s string, limit int) string {
+	const ellipsis = "…"
+	if len(s) <= limit {
+		return s
+	}
+	room := limit - len(ellipsis)
+	head, tail := room*2/3, room-room*2/3
+	cutHead := head
+	for cutHead > 0 && !utf8.RuneStart(s[cutHead]) {
+		cutHead--
+	}
+	cutTail := len(s) - tail
+	for cutTail < len(s) && !utf8.RuneStart(s[cutTail]) {
+		cutTail++
+	}
+	return s[:cutHead] + ellipsis + s[cutTail:]
 }
 
 // collapseRepeats is Lidarr's `([- ._])(\1)+`: a doubled separator becomes one. Go's regexp
