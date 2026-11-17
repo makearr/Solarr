@@ -171,5 +171,5 @@ func (p *process) handOverSidecars(ctx context.Context, fromMediaObjectID, toMed
 	if !fromFound || !toFound {
 		return nil
 	}
-	return sidecar.HandOverSidecars(p.fsys, from, to)
+	return sidecar.HandOverSidecars(ctx, p.fsys, from, to)
 }

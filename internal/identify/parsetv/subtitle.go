@@ -26,6 +26,21 @@ var subtitleLanguages = map[string]string{
 	"ar": "ar", "ara": "ar", "he": "he", "heb": "he", "el": "el", "gre": "el", "ell": "el",
 }
 
+// IsSubtitleSuffix reports whether what sits between a video's name and a subtitle's extension (".en.forced", "") is only
+// language and flag claims, so ".Extended.en" after "Film.2010" marks another video's subtitle.
+func IsSubtitleSuffix(middle string) bool {
+	for _, token := range strings.FieldsFunc(middle, func(r rune) bool { return r == '.' || r == '_' || r == ' ' }) {
+		switch token = strings.ToLower(token); token {
+		case "forced", "sdh", "cc", "hi", "default":
+			continue
+		}
+		if _, found := subtitleLanguages[token]; !found {
+			return false
+		}
+	}
+	return true
+}
+
 // ParseSubtitleFile reads the language and flags from names like "Show.S01E01.de.forced.srt"; ok is false for a non-subtitle file.
 func ParseSubtitleFile(name string) (SubtitleInfo, bool) {
 	name = path.Base(strings.ReplaceAll(name, `\`, "/"))

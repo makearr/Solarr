@@ -14,6 +14,8 @@ import (
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/parsetv"
+	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
@@ -112,29 +114,41 @@ func (w Writer) WritePicture(ctx context.Context, folder, name, address string) 
 
 var subtitleExtensions = map[string]bool{".srt": true, ".ass": true, ".ssa": true, ".sub": true, ".idx": true, ".vtt": true}
 
-// HandOverSidecars renames the subtitles named after the file at from (".en.srt") to follow the file at to, keeping
-// what the new file already has.
-func HandOverSidecars(fsys fsx.FS, from, to string) error {
+// HandOverSidecars moves the subtitles named after the file at from (".en.srt") to follow the file at to, keeping what
+// the new file already has. A subtitle whose extra words name another video ("Film.2010.Extended.en.srt" beside
+// "Film.2010.mkv") stays; one that fails to move does not stop the others.
+func HandOverSidecars(ctx context.Context, fsys fsx.FS, from, to string) error {
 	entries, err := fsys.ReadDir(path.Dir(from))
 	if err != nil {
 		return err
 	}
 	fromStem := strings.TrimSuffix(path.Base(from), path.Ext(from))
 	toStem := path.Join(path.Dir(to), strings.TrimSuffix(path.Base(to), path.Ext(to)))
+	var failures []error
 	for _, entry := range entries {
-		if entry.IsDir || !strings.HasPrefix(entry.Name, fromStem+".") || !subtitleExtensions[strings.ToLower(path.Ext(entry.Name))] {
+		extension := path.Ext(entry.Name)
+		if entry.IsDir || !strings.HasPrefix(entry.Name, fromStem+".") || !subtitleExtensions[strings.ToLower(extension)] {
 			continue
 		}
-		destination := toStem + strings.TrimPrefix(entry.Name, fromStem)
+		suffix := strings.TrimPrefix(entry.Name, fromStem)
+		if !parsetv.IsSubtitleSuffix(strings.Trim(strings.TrimSuffix(suffix, extension), ".")) {
+			continue
+		}
+		destination := toStem + suffix
 		if _, err := fsys.Stat(destination); err == nil {
 			continue
 		}
-		if err := fsys.MkdirAll(path.Dir(destination), 0o755); err != nil {
-			return err
+		source := path.Join(path.Dir(from), entry.Name)
+		info, err := fsys.Stat(source)
+		if err == nil {
+			err = fsys.MkdirAll(path.Dir(destination), 0o755)
 		}
-		if err := fsys.Rename(path.Join(path.Dir(from), entry.Name), destination); err != nil {
-			return err
+		if err == nil {
+			_, err = mover.PlaceOne(ctx, fsys, source, destination, info.Size, []mover.PlaceMethod{mover.PlaceMove})
+		}
+		if err != nil {
+			failures = append(failures, fmt.Errorf("subtitle %q: %w", entry.Name, err))
 		}
 	}
-	return nil
+	return errors.Join(failures...)
 }

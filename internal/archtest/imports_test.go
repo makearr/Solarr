@@ -400,7 +400,7 @@ var allowedInternalImports = map[string][]string{
 	// Import lists (ADR-38): AniList and TMDB lists read, previewed and synced through each media type's add.
 	"internal/service/importlist": {"internal/db/library", "internal/db/settings", "internal/jobs", "internal/media", "internal/metadata/anilist", "internal/metadata/mdblist", "internal/metadata/stashbox", "internal/metadata/tmdb", "internal/platform/clock", "internal/platform/config"},
 	"internal/media":              {"internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/acquiring/rss", "internal/moving/renamejob", "internal/acquiring/plan", "internal/db/settings", "internal/identify/model", "internal/jobs", "internal/moving/naming", "internal/scanning/scan"},
-	"internal/moving/sidecar":     {"internal/db/settings", "internal/platform/fsx"},
+	"internal/moving/sidecar":     {"internal/db/settings", "internal/identify/parsetv", "internal/moving/mover", "internal/platform/fsx"},
 	"internal/importing/placer":   {"internal/identify/parsetv", "internal/importing/inspect", "internal/db/library", "internal/db/settings", "internal/moving/mover", "internal/moving/placement", "internal/platform/clock", "internal/platform/fsx"},
 	"internal/media/knownfor":     {"internal/db/library", "internal/media", "internal/metadata/tmdb"},
 	// File Management a sweep applies alike for every type that wants whole works or their parts.
