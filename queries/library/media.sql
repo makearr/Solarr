@@ -348,6 +348,22 @@ WHERE id IN (
   LIMIT ?
 );
 
+-- Direct and deeper children of a directory, by the (root_folder_id, rel_path) index range: prefix is "dir/" and
+-- prefix_end is "dir0" ('0' is the byte after '/').
+-- name: PresentPathsInDirectory :many
+SELECT id, rel_path FROM library_path
+WHERE root_folder_id = sqlc.arg(root_folder_id)
+  AND rel_path >= sqlc.arg(prefix) AND rel_path < sqlc.arg(prefix_end)
+  AND missing_since IS NULL;
+
+-- name: PresentPathsAtRootLevel :many
+SELECT id, rel_path FROM library_path
+WHERE root_folder_id = ? AND instr(rel_path, '/') = 0 AND missing_since IS NULL;
+
+-- name: MarkLibraryPathsMissingByID :execrows
+UPDATE library_path SET missing_since = sqlc.arg(missing_since)
+WHERE id IN (sqlc.slice(ids)) AND missing_since IS NULL;
+
 -- name: DeleteMediaObject :exec
 DELETE FROM media_object WHERE id = ?;
 

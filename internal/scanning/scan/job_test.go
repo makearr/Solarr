@@ -794,3 +794,74 @@ func TestJob_AnIncrementalSweepKeepsTheRootsSize(t *testing.T) {
 		t.Errorf("FilesFound = %d, want the full scan's 2", progress.FilesFound)
 	}
 }
+
+// A directory listed in full is evidence about its own files: what it no longer holds is marked missing, and a file
+// the media type does not include, a file in a subfolder, and a file still on disk are left alone.
+func TestJob_ARescannedDirectoryMarksTheFilesItNoLongerHolds(t *testing.T) {
+	fixture := newJobFixture(t, "a/01.flac", "a/cover.jpg", "a/sub/02.flac")
+	handler := fixture.job(t, scan.IsAudio)
+	now := fixture.clock.Now().Unix()
+	goneID := fixture.stalePath(t, "a/gone.flac", now)
+	stayIDs := []int64{
+		fixture.stalePath(t, "a/01.flac", now), fixture.stalePath(t, "a/cover.jpg", now),
+		fixture.stalePath(t, "a/sub/02.flac", now), fixture.stalePath(t, "b/other.flac", now),
+	}
+
+	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1, CategoryID: 3, Directories: []string{"a"}}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if !fixture.missingSince(t, goneID).Valid {
+		t.Error("a file the listed directory no longer holds was not marked missing")
+	}
+	for _, id := range stayIDs {
+		if fixture.missingSince(t, id).Valid {
+			t.Errorf("path %d was marked missing though its directory still holds it or was not read", id)
+		}
+	}
+}
+
+func TestJob_ARescannedDirectoryThatVanishedMarksItsFilesUnlessTheRootLooksUnmounted(t *testing.T) {
+	fixture := newJobFixture(t, "keep/01.flac")
+	handler := fixture.job(t, scan.IsAudio)
+	now := fixture.clock.Now().Unix()
+	goneID := fixture.stalePath(t, "Artist/Album/01.flac", now)
+	topID := fixture.stalePath(t, "Top/01.flac", now)
+
+	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1, Directories: []string{"Artist/Album", "Top"}}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !fixture.missingSince(t, goneID).Valid || !fixture.missingSince(t, topID).Valid {
+		t.Error("the files of directories that vanished from a readable root were not marked missing")
+	}
+
+	empty := newJobFixture(t)
+	emptyID := empty.stalePath(t, "Top/01.flac", empty.clock.Now().Unix())
+	if err := empty.run(t, empty.job(t, scan.IsAudio), scan.Payload{RootFolderID: 1, Directories: []string{"Top"}}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if empty.missingSince(t, emptyID).Valid {
+		t.Error("a top-level folder vanishing from an empty root was taken as deleted, not as an unmounted share")
+	}
+}
+
+func TestJob_AnIncrementalSweepMarksTheFilesOfADirectoryItReadAgain(t *testing.T) {
+	fixture := newJobFixture(t, "a/01.flac", "b/01.flac")
+	handler := fixture.job(t, scan.IsAudio)
+	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1, Full: true}); err != nil {
+		t.Fatalf("first Run: %v", err)
+	}
+	goneID := fixture.stalePath(t, "a/gone.flac", fixture.clock.Now().Unix())
+	untouchedID := fixture.stalePath(t, "b/gone.flac", fixture.clock.Now().Unix())
+	fixture.write(t, "a/02.flac")
+
+	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1}); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+	if !fixture.missingSince(t, goneID).Valid {
+		t.Error("the sweep read directory a again and did not mark the file it lost")
+	}
+	if fixture.missingSince(t, untouchedID).Valid {
+		t.Error("a directory the sweep did not read had a file marked missing")
+	}
+}

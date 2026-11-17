@@ -1019,6 +1019,7 @@ type Querier interface {
 	// Bounded per Invariant 2: the caller loops this until a pass affects zero rows,
 	// never one UPDATE over the whole root.
 	MarkLibraryPathsMissing(ctx context.Context, arg MarkLibraryPathsMissingParams) (int64, error)
+	MarkLibraryPathsMissingByID(ctx context.Context, arg MarkLibraryPathsMissingByIDParams) (int64, error)
 	MarkNotMedia(ctx context.Context, arg MarkNotMediaParams) error
 	// :execrows so a caller can tell "already restored" (0 rows) from "restored
 	// just now" (1 row) without a separate read first -- nothing calls this yet,
@@ -1089,6 +1090,10 @@ type Querier interface {
 	NextReady(ctx context.Context, arg NextReadyParams) ([]ReadyQueue, error)
 	// Pause, resume and cancel say how many rows changed so a job in the wrong state is told apart from a missing one.
 	PauseMoveJob(ctx context.Context, id int64) (int64, error)
+	PresentPathsAtRootLevel(ctx context.Context, rootFolderID int64) ([]PresentPathsAtRootLevelRow, error)
+	// Direct and deeper children of a directory, by the (root_folder_id, rel_path) index range: prefix is "dir/" and
+	// prefix_end is "dir0" ('0' is the byte after '/').
+	PresentPathsInDirectory(ctx context.Context, arg PresentPathsInDirectoryParams) ([]PresentPathsInDirectoryRow, error)
 	// Which search caused this file, and which download produced it (F4, section 12).
 	ProvenanceForObject(ctx context.Context, mediaObjectID sql.NullInt64) ([]ProvenanceForObjectRow, error)
 	// Keeps only the newest keep attempts for one file.

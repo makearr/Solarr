@@ -26,6 +26,10 @@ document (`categories[].file_management`).
 
 Rules worth knowing:
 
+- **A folder that was just listed in full speaks for its own files.** A folder rescanned after a change (the watcher's) or
+  read again by an incremental scan marks the files it no longer holds as gone, the same way; a vanished top-level folder
+  of an empty root is taken as an unmounted share and marks nothing, and a rescan that would mark more than 50 files
+  marks none and asks for a full scan.
 - **A file a full scan found gone stops counting as held** (both types): its album or season turns partial or missing and
   is searched for again, unless *Unmonitor deleted* is on. A file with another path still on disk counts; a file found
   again counts again at once. **A mass vanish is held**: a full scan that would mark more than 50 of a root's files *and*

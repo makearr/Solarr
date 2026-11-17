@@ -60,6 +60,11 @@ type Batch struct {
 	Files     []Found
 	// Partial is set when more of Directory's files follow in a later batch, so the cursor must not pass it yet.
 	Partial bool
+	// Listed is every file name the directory held, before Include and the watermark: the evidence for what is gone.
+	// Only ReadDirectory sets it.
+	Listed []string
+	// Vanished is set when the directory itself no longer exists. Only ReadDirectory sets it.
+	Vanished bool
 }
 
 // Result is what one sweep did.
@@ -94,6 +99,9 @@ type Options struct {
 	// GatherFiles, above zero, holds whole directories back until about this many files are together, and emits them as
 	// one batch named after the last: a library of one file per folder is otherwise one lookup per batch.
 	GatherFiles int
+	// OnDirectoryRead, when set, is told every directory the walk read in full with the relative paths of all its
+	// files; an incremental sweep uses it to notice files that left a directory whose mtime moved.
+	OnDirectoryRead func(ctx context.Context, directory string, listed []string) error
 	// RemoveStaleInFlight deletes Solarr's own work-in-progress files that a kill left behind; only for a root that is writable.
 	RemoveStaleInFlight bool
 }
@@ -275,6 +283,11 @@ func (w *sweep) filesIn(ctx context.Context, relative, absolute string, listed *
 		return nil
 	}
 	w.read++
+	if w.options.OnDirectoryRead != nil && !w.options.Full {
+		if err := w.options.OnDirectoryRead(ctx, relative, listedNames(relative, listed)); err != nil {
+			return err
+		}
+	}
 
 	batch := Batch{Directory: relative}
 	for _, file := range listed.files {
@@ -321,6 +334,17 @@ func (w *sweep) filesIn(ctx context.Context, relative, absolute string, listed *
 	return w.flushGathered(ctx)
 }
 
+// listedNames are the relative paths of every file in a listing, whatever Include thinks of them.
+func listedNames(relative string, listed *listing) []string {
+	var names []string
+	for _, entry := range listed.entries {
+		if !entry.IsDir && !fsx.IsInFlightName(entry.Name) {
+			names = append(names, path.Join(relative, entry.Name))
+		}
+	}
+	return names
+}
+
 // passed moves the cursor over a directory nothing was read from; files still gathered keep it behind them until flushed.
 func (w *sweep) passed(relative string) {
 	if len(w.gathered.Files) > 0 {
@@ -344,12 +368,12 @@ func (w *sweep) flushGathered(ctx context.Context) error {
 
 // ReadDirectory lists the files directly inside one directory under root, the
 // way a sweep would, but alone: no watermark, no cursor, no subdirectories. A
-// directory that no longer exists is an empty batch, not an error.
+// directory that no longer exists is an empty batch marked Vanished, not an error.
 func (s Sweeper) ReadDirectory(root, relative string, include func(relPath string) bool) (Batch, error) {
 	absolute := path.Join(root, relative)
 	entries, err := s.fsys.ReadDir(absolute)
 	if errors.Is(err, fs.ErrNotExist) {
-		return Batch{Directory: relative}, nil
+		return Batch{Directory: relative, Vanished: true}, nil
 	}
 	if err != nil {
 		return Batch{}, fmt.Errorf("scan: read %q: %w", absolute, err)
@@ -361,6 +385,7 @@ func (s Sweeper) ReadDirectory(root, relative string, include func(relPath strin
 			continue
 		}
 		childRelative := path.Join(relative, entry.Name)
+		batch.Listed = append(batch.Listed, childRelative)
 		if include != nil && !include(childRelative) {
 			continue
 		}
@@ -409,4 +434,11 @@ func (w *sweep) commit(ctx context.Context, batch Batch) error {
 		w.cursor = batch.Directory
 	}
 	return nil
+}
+
+// HasEntries says whether a directory can be listed and is not empty: a root that is not is more likely an unmounted
+// share than a library with every folder deleted.
+func (s Sweeper) HasEntries(directory string) bool {
+	entries, err := s.fsys.ReadDir(directory)
+	return err == nil && len(entries) > 0
 }

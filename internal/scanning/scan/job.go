@@ -229,6 +229,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		// The last sweep's count is the best estimate of this one's, for the status bar's ETA.
 		job.Progress.Set(run.FilesSeen, progress.FilesFound)
 	}
+	departed := &departures{job: j, root: root}
 	flow := pipeline{
 		observe: func(ctx context.Context, batch Batch) error {
 			if err := j.observe(ctx, root, sweep, payload.CategoryID, batch); err != nil {
@@ -244,7 +245,11 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	sliceCtx, endSlice := context.WithTimeout(ctx, j.sliceBudget)
 	defer endSlice()
 	result, err := j.sweeper.Sweep(sliceCtx, root.Path, state,
-		Options{Full: payload.Full, Include: sweep.Include, GatherFiles: sweep.GatherFiles, RemoveStaleInFlight: root.Writable && !root.ReadOnly}, flow.submit)
+		Options{
+			Full: payload.Full, Include: sweep.Include, GatherFiles: sweep.GatherFiles,
+			OnDirectoryRead: departed.read, RemoveStaleInFlight: root.Writable && !root.ReadOnly,
+		}, flow.submit)
+	defer departed.finish(ctx, sweep, payload.CategoryID)
 	if waited := flow.wait(ctx); err == nil {
 		err = waited
 	}
@@ -304,11 +309,13 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 
 // rescanDirectories reads and observes only the named directories. It records
 // no scan progress: it did not walk the root, so it is no evidence about the
-// rest of it, and marks nothing missing.
+// rest of it; it marks missing only the files of a directory it listed itself.
 func (j *Job) rescanDirectories(
 	ctx context.Context, root settings.RootFolder, sweep Sweep, payload Payload, progress *jobs.Progress,
 ) error {
 	files := 0
+	departed := &departures{job: j, root: root}
+	defer departed.finish(ctx, sweep, payload.CategoryID)
 	progress.SetTotal(int64(len(payload.Directories)))
 	for _, directory := range payload.Directories {
 		progress.Add(1)
@@ -316,6 +323,14 @@ func (j *Job) rescanDirectories(
 			return jobs.Retryablef("scan.context", string(JobType), err)
 		}
 		batch, err := j.sweeper.ReadDirectory(root.Path, directory, sweep.Include)
+		if err != nil {
+			return err
+		}
+		if batch.Vanished {
+			err = departed.vanished(ctx, directory)
+		} else {
+			err = departed.read(ctx, directory, batch.Listed)
+		}
 		if err != nil {
 			return err
 		}

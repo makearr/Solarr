@@ -8,6 +8,7 @@ package librarydb
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const addLibraryPath = `-- name: AddLibraryPath :execlastid
@@ -1756,6 +1757,111 @@ func (q *Queries) MarkLibraryPathsMissing(ctx context.Context, arg MarkLibraryPa
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const markLibraryPathsMissingByID = `-- name: MarkLibraryPathsMissingByID :execrows
+UPDATE library_path SET missing_since = ?1
+WHERE id IN (/*SLICE:ids*/?) AND missing_since IS NULL
+`
+
+type MarkLibraryPathsMissingByIDParams struct {
+	MissingSince sql.NullInt64
+	Ids          []int64
+}
+
+func (q *Queries) MarkLibraryPathsMissingByID(ctx context.Context, arg MarkLibraryPathsMissingByIDParams) (int64, error) {
+	query := markLibraryPathsMissingByID
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.MissingSince)
+	if len(arg.Ids) > 0 {
+		for _, v := range arg.Ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(arg.Ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	result, err := q.db.ExecContext(ctx, query, queryParams...)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const presentPathsAtRootLevel = `-- name: PresentPathsAtRootLevel :many
+SELECT id, rel_path FROM library_path
+WHERE root_folder_id = ? AND instr(rel_path, '/') = 0 AND missing_since IS NULL
+`
+
+type PresentPathsAtRootLevelRow struct {
+	ID      int64
+	RelPath string
+}
+
+func (q *Queries) PresentPathsAtRootLevel(ctx context.Context, rootFolderID int64) ([]PresentPathsAtRootLevelRow, error) {
+	rows, err := q.db.QueryContext(ctx, presentPathsAtRootLevel, rootFolderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PresentPathsAtRootLevelRow{}
+	for rows.Next() {
+		var i PresentPathsAtRootLevelRow
+		if err := rows.Scan(&i.ID, &i.RelPath); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const presentPathsInDirectory = `-- name: PresentPathsInDirectory :many
+SELECT id, rel_path FROM library_path
+WHERE root_folder_id = ?1
+  AND rel_path >= ?2 AND rel_path < ?3
+  AND missing_since IS NULL
+`
+
+type PresentPathsInDirectoryParams struct {
+	RootFolderID int64
+	Prefix       string
+	PrefixEnd    string
+}
+
+type PresentPathsInDirectoryRow struct {
+	ID      int64
+	RelPath string
+}
+
+// Direct and deeper children of a directory, by the (root_folder_id, rel_path) index range: prefix is "dir/" and
+// prefix_end is "dir0" ('0' is the byte after '/').
+func (q *Queries) PresentPathsInDirectory(ctx context.Context, arg PresentPathsInDirectoryParams) ([]PresentPathsInDirectoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, presentPathsInDirectory, arg.RootFolderID, arg.Prefix, arg.PrefixEnd)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PresentPathsInDirectoryRow{}
+	for rows.Next() {
+		var i PresentPathsInDirectoryRow
+		if err := rows.Scan(&i.ID, &i.RelPath); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const relocateLibraryPath = `-- name: RelocateLibraryPath :execrows
