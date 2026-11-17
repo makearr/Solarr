@@ -401,6 +401,7 @@ type Querier interface {
 	FindWorksByNormalizedTitle(ctx context.Context, arg FindWorksByNormalizedTitleParams) ([]Work, error)
 	FinishArrImport(ctx context.Context, arg FinishArrImportParams) error
 	FinishImportSession(ctx context.Context, arg FinishImportSessionParams) error
+	// A finished job's plan is dropped: its items and counts say what happened, and nothing can resume it.
 	FinishMoveJob(ctx context.Context, arg FinishMoveJobParams) error
 	// Only a completed sweep moves the watermark and clears the cursor.
 	FinishScan(ctx context.Context, arg FinishScanParams) error
@@ -454,7 +455,10 @@ type Querier interface {
 	GetMediaObject(ctx context.Context, id int64) (MediaObject, error)
 	// oshash is exact identity: the same bytes, with no decoding (ADR-35).
 	GetMediaObjectByOshash(ctx context.Context, oshash sql.NullString) (MediaObject, error)
-	GetMoveJob(ctx context.Context, id int64) (MoveJob, error)
+	// The plan is one value of tens of megabytes for a big library, so the job's own reads leave it out: the running job
+	// re-reads its state after every file, and a list of jobs would carry every past plan.
+	GetMoveJob(ctx context.Context, id int64) (GetMoveJobRow, error)
+	GetMoveJobPlan(ctx context.Context, id int64) (string, error)
 	GetOrganisation(ctx context.Context, id int64) (Organisation, error)
 	GetOrganisationByExternalID(ctx context.Context, arg GetOrganisationByExternalIDParams) (Organisation, error)
 	GetPack(ctx context.Context, id int64) (Pack, error)
@@ -750,9 +754,7 @@ type Querier interface {
 	ListMostSearchedMissing(ctx context.Context) ([]ListMostSearchedMissingRow, error)
 	ListMoveItemCompanions(ctx context.Context, arg ListMoveItemCompanionsParams) ([]MoveItemCompanion, error)
 	ListMoveItems(ctx context.Context, moveJobID int64) ([]MoveItem, error)
-	// Small, operator-facing list -- move counts never approach library scale,
-	// the same reasoning ListImportSessions' own comment already gives.
-	ListMoveJobs(ctx context.Context, arg ListMoveJobsParams) ([]MoveJob, error)
+	ListMoveJobs(ctx context.Context, arg ListMoveJobsParams) ([]ListMoveJobsRow, error)
 	// The organisations a work is made or aired by, named.
 	ListNamedOrganisationsForWork(ctx context.Context, workID int64) ([]ListNamedOrganisationsForWorkRow, error)
 	ListOrganisationExternalIDs(ctx context.Context, organisationID int64) ([]ListOrganisationExternalIDsRow, error)

@@ -153,8 +153,12 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		}
 	}
 	var plan mover.MovePlan
-	if moveJob.PlanJSON != "" {
-		if err := json.Unmarshal([]byte(moveJob.PlanJSON), &plan); err != nil {
+	planJSON, err := j.moveJobs.Plan(ctx, moveJob.ID)
+	if err != nil {
+		return fmt.Errorf("moverjob: read plan of move job %d: %w", moveJob.ID, err)
+	}
+	if planJSON != "" {
+		if err := json.Unmarshal([]byte(planJSON), &plan); err != nil {
 			return fmt.Errorf("moverjob: decode plan for job %d: %w", moveJob.ID, err)
 		}
 	}

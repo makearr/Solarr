@@ -274,7 +274,20 @@ func (m MoveJobs) Get(ctx context.Context, id int64) (Job, error) {
 	if err != nil {
 		return Job{}, fmt.Errorf("library: get move job %d: %w", id, err)
 	}
-	return jobFromRow(row), nil
+	return Job{
+		ID: row.ID, Reason: row.Reason, SourceRootID: int64Ptr(row.SourceRootID), State: row.State,
+		FilesTotal: row.FilesTotal, FilesDone: row.FilesDone, BytesTotal: row.BytesTotal, BytesDone: row.BytesDone,
+		CreatedAt: row.CreatedAt, FinishedAt: int64Ptr(row.FinishedAt), Error: row.Error.String, CategoryID: int64Ptr(row.CategoryID),
+	}, nil
+}
+
+// Plan is the plan the job was accepted with, "" once the job finished; only the job that applies it reads it.
+func (m MoveJobs) Plan(ctx context.Context, id int64) (string, error) {
+	plan, err := librarydb.New(m.store.Read()).GetMoveJobPlan(ctx, id)
+	if err != nil {
+		return "", fmt.Errorf("library: get plan of move job %d: %w", id, err)
+	}
+	return plan, nil
 }
 
 // List returns every job, newest first, optionally filtered to one state --
@@ -289,7 +302,11 @@ func (m MoveJobs) List(ctx context.Context, filterState string) ([]Job, error) {
 	}
 	jobs := make([]Job, len(rows))
 	for i, row := range rows {
-		jobs[i] = jobFromRow(row)
+		jobs[i] = Job{
+			ID: row.ID, Reason: row.Reason, SourceRootID: int64Ptr(row.SourceRootID), State: row.State,
+			FilesTotal: row.FilesTotal, FilesDone: row.FilesDone, BytesTotal: row.BytesTotal, BytesDone: row.BytesDone,
+			CreatedAt: row.CreatedAt, FinishedAt: int64Ptr(row.FinishedAt), Error: row.Error.String, CategoryID: int64Ptr(row.CategoryID),
+		}
 	}
 	return jobs, nil
 }
@@ -305,16 +322,6 @@ func (m MoveJobs) ListItems(ctx context.Context, jobID int64) ([]Item, error) {
 		items[i] = itemFromRow(row)
 	}
 	return items, nil
-}
-
-func jobFromRow(row librarydb.MoveJob) Job {
-	return Job{
-		ID: row.ID, Reason: row.Reason, SourceRootID: int64Ptr(row.SourceRootID),
-		State: row.State, FilesTotal: row.FilesTotal, FilesDone: row.FilesDone,
-		BytesTotal: row.BytesTotal, BytesDone: row.BytesDone, PlanJSON: row.PlanJson,
-		CreatedAt: row.CreatedAt, FinishedAt: int64Ptr(row.FinishedAt), Error: row.Error.String,
-		CategoryID: int64Ptr(row.CategoryID),
-	}
 }
 
 func itemFromRow(row librarydb.MoveItem) Item {

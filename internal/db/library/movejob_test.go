@@ -3,6 +3,7 @@ package library_test
 import (
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -131,5 +132,36 @@ func TestMoveJobs_SetItemStateRecordsAnError(t *testing.T) {
 	}
 	if len(items) != 1 || items[0].State != library.MoveItemFailed || items[0].Error != "disk full" {
 		t.Fatalf("items = %+v, want one FAILED item with the error recorded", items)
+	}
+}
+
+// A big library's plan is megabytes: the job's reads and the lists leave it out, and a finished job drops it.
+func TestMoveJobs_ThePlanIsReadOnlyByItsOwnQueryAndDroppedWhenDone(t *testing.T) {
+	opened, _ := newLibrary(t)
+	jobs := library.NewMoveJobs(opened)
+	ctx := t.Context()
+	plan := `{"moves":"` + strings.Repeat("x", 5<<20) + `"}`
+	id, err := jobs.Create(ctx, library.NewMoveJob{Reason: "RENAME", FilesTotal: 1, BytesTotal: 1, PlanJSON: plan, CreatedAt: 100})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := jobs.Get(ctx, id)
+	if err != nil || got.PlanJSON != "" {
+		t.Fatalf("Get = %d bytes of plan, %v; want none", len(got.PlanJSON), err)
+	}
+	listed, err := jobs.List(ctx, "")
+	if err != nil || len(listed) != 1 || listed[0].PlanJSON != "" {
+		t.Fatalf("List = %+v, %v; want the job without its plan", listed, err)
+	}
+	if read, err := jobs.Plan(ctx, id); err != nil || read != plan {
+		t.Fatalf("Plan = %d bytes, %v; want the stored plan", len(read), err)
+	}
+
+	if err := jobs.Finish(ctx, id, library.MoveJobDone, 200, ""); err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+	if read, err := jobs.Plan(ctx, id); err != nil || read != "" {
+		t.Errorf("Plan after DONE = %d bytes, %v; want it dropped", len(read), err)
 	}
 }

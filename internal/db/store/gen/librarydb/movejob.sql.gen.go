@@ -79,7 +79,8 @@ func (q *Queries) CreateMoveJob(ctx context.Context, arg CreateMoveJobParams) (M
 }
 
 const finishMoveJob = `-- name: FinishMoveJob :exec
-UPDATE move_job SET state = ?1, finished_at = ?2, error = ?3
+UPDATE move_job SET state = ?1, finished_at = ?2, error = ?3,
+       plan_json = CASE WHEN ?1 = 'DONE' THEN '' ELSE plan_json END
 WHERE id = ?4
 `
 
@@ -90,6 +91,7 @@ type FinishMoveJobParams struct {
 	ID         int64
 }
 
+// A finished job's plan is dropped: its items and counts say what happened, and nothing can resume it.
 func (q *Queries) FinishMoveJob(ctx context.Context, arg FinishMoveJobParams) error {
 	_, err := q.db.ExecContext(ctx, finishMoveJob,
 		arg.State,
@@ -102,13 +104,30 @@ func (q *Queries) FinishMoveJob(ctx context.Context, arg FinishMoveJobParams) er
 
 const getMoveJob = `-- name: GetMoveJob :one
 SELECT id, reason, source_root_id, state, files_total, files_done, bytes_total, bytes_done,
-       plan_json, created_at, finished_at, error, category_id
+       created_at, finished_at, error, category_id
 FROM move_job WHERE id = ?
 `
 
-func (q *Queries) GetMoveJob(ctx context.Context, id int64) (MoveJob, error) {
+type GetMoveJobRow struct {
+	ID           int64
+	Reason       string
+	SourceRootID sql.NullInt64
+	State        string
+	FilesTotal   int64
+	FilesDone    int64
+	BytesTotal   int64
+	BytesDone    int64
+	CreatedAt    int64
+	FinishedAt   sql.NullInt64
+	Error        sql.NullString
+	CategoryID   sql.NullInt64
+}
+
+// The plan is one value of tens of megabytes for a big library, so the job's own reads leave it out: the running job
+// re-reads its state after every file, and a list of jobs would carry every past plan.
+func (q *Queries) GetMoveJob(ctx context.Context, id int64) (GetMoveJobRow, error) {
 	row := q.db.QueryRowContext(ctx, getMoveJob, id)
-	var i MoveJob
+	var i GetMoveJobRow
 	err := row.Scan(
 		&i.ID,
 		&i.Reason,
@@ -118,13 +137,23 @@ func (q *Queries) GetMoveJob(ctx context.Context, id int64) (MoveJob, error) {
 		&i.FilesDone,
 		&i.BytesTotal,
 		&i.BytesDone,
-		&i.PlanJson,
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.Error,
 		&i.CategoryID,
 	)
 	return i, err
+}
+
+const getMoveJobPlan = `-- name: GetMoveJobPlan :one
+SELECT plan_json FROM move_job WHERE id = ?
+`
+
+func (q *Queries) GetMoveJobPlan(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getMoveJobPlan, id)
+	var plan_json string
+	err := row.Scan(&plan_json)
+	return plan_json, err
 }
 
 const insertMoveItem = `-- name: InsertMoveItem :exec
@@ -259,7 +288,7 @@ func (q *Queries) ListMoveItems(ctx context.Context, moveJobID int64) ([]MoveIte
 
 const listMoveJobs = `-- name: ListMoveJobs :many
 SELECT id, reason, source_root_id, state, files_total, files_done, bytes_total, bytes_done,
-       plan_json, created_at, finished_at, error, category_id
+       created_at, finished_at, error, category_id
 FROM move_job
 WHERE ?1 = 0 OR state = ?2
 ORDER BY created_at DESC
@@ -270,17 +299,30 @@ type ListMoveJobsParams struct {
 	State         string
 }
 
-// Small, operator-facing list -- move counts never approach library scale,
-// the same reasoning ListImportSessions' own comment already gives.
-func (q *Queries) ListMoveJobs(ctx context.Context, arg ListMoveJobsParams) ([]MoveJob, error) {
+type ListMoveJobsRow struct {
+	ID           int64
+	Reason       string
+	SourceRootID sql.NullInt64
+	State        string
+	FilesTotal   int64
+	FilesDone    int64
+	BytesTotal   int64
+	BytesDone    int64
+	CreatedAt    int64
+	FinishedAt   sql.NullInt64
+	Error        sql.NullString
+	CategoryID   sql.NullInt64
+}
+
+func (q *Queries) ListMoveJobs(ctx context.Context, arg ListMoveJobsParams) ([]ListMoveJobsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listMoveJobs, arg.FilterByState, arg.State)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []MoveJob{}
+	items := []ListMoveJobsRow{}
 	for rows.Next() {
-		var i MoveJob
+		var i ListMoveJobsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Reason,
@@ -290,7 +332,6 @@ func (q *Queries) ListMoveJobs(ctx context.Context, arg ListMoveJobsParams) ([]M
 			&i.FilesDone,
 			&i.BytesTotal,
 			&i.BytesDone,
-			&i.PlanJson,
 			&i.CreatedAt,
 			&i.FinishedAt,
 			&i.Error,
