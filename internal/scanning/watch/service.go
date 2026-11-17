@@ -18,6 +18,10 @@ import (
 type Notifier interface {
 	Add(dir string) error
 	Remove(dir string)
+	// RemoveTree drops a directory and every watch below it.
+	RemoveTree(dir string)
+	// Watching says whether the directory still has a live watch.
+	Watching(dir string) bool
 	Count() int
 	Events() <-chan fswatch.Event
 	Close() error
@@ -124,6 +128,7 @@ func (s *Service) Replan(ctx context.Context) error {
 
 	s.mu.Lock()
 	s.directories, s.budgetShort = len(all), len(chosen) < len(all)
+	s.forgetStaleLocked(roots, all)
 	s.mu.Unlock()
 
 	// Registering is a round trip to the disk for each directory on a network share, minutes for a large library:
@@ -165,6 +170,23 @@ func (s *Service) Replan(ctx context.Context) error {
 		s.covered[id] = coveredFor(all, s.watched, roots[id].Path, id)
 	}
 	return nil
+}
+
+// forgetStaleLocked drops records of watches whose root is gone, or whose directory left the library's records and
+// no longer has a live watch.
+func (s *Service) forgetStaleLocked(roots map[int64]Root, all []Dir) {
+	listed := map[string]bool{}
+	for _, dir := range all {
+		listed[path.Join(roots[dir.RootFolderID].Path, dir.Rel)] = true
+	}
+	for absolute, where := range s.watched {
+		if _, rooted := roots[where.root]; !rooted {
+			s.config.Notifier.RemoveTree(absolute)
+			delete(s.watched, absolute)
+		} else if !listed[absolute] && !s.config.Notifier.Watching(absolute) {
+			delete(s.watched, absolute)
+		}
+	}
 }
 
 func coveredFor(all []Dir, watched map[string]watchedDir, rootPath string, rootID int64) int {
@@ -219,7 +241,7 @@ func (s *Service) handle(event fswatch.Event) {
 		return
 	}
 	if event.IsDir && event.Removed {
-		delete(s.watched, path.Join(event.Dir, event.Name))
+		s.forgetTreeLocked(path.Join(event.Dir, event.Name))
 	}
 	s.markLocked(dirtyKey(where), now)
 	if event.IsDir && event.Created {
@@ -228,6 +250,18 @@ func (s *Service) handle(event fswatch.Event) {
 			childRel := path.Join(where.rel, event.Name)
 			s.watched[child] = watchedDir{root: where.root, rel: childRel}
 			s.markLocked(dirtyKey{where.root, childRel}, now)
+		}
+	}
+}
+
+// forgetTreeLocked drops the watches below a directory that went or was renamed: inotify follows the inode, so they
+// would keep reporting the old name. A moved-in directory comes back as a creation and is watched under its new name.
+func (s *Service) forgetTreeLocked(dir string) {
+	s.config.Notifier.RemoveTree(dir)
+	for absolute, where := range s.watched {
+		if absolute == dir || strings.HasPrefix(absolute, dir+"/") {
+			delete(s.watched, absolute)
+			delete(s.dirty, dirtyKey(where))
 		}
 	}
 }

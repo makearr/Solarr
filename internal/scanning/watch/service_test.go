@@ -3,7 +3,9 @@ package watch
 import (
 	"context"
 	"reflect"
+	"slices"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,7 +26,17 @@ func (f *fakeNotifier) Add(dir string) error {
 	f.added = append(f.added, dir)
 	return nil
 }
-func (f *fakeNotifier) Remove(string)                {}
+func (f *fakeNotifier) Remove(string) {}
+func (f *fakeNotifier) RemoveTree(dir string) {
+	var kept []string
+	for _, added := range f.added {
+		if added != dir && !strings.HasPrefix(added, dir+"/") {
+			kept = append(kept, added)
+		}
+	}
+	f.added = kept
+}
+func (f *fakeNotifier) Watching(dir string) bool     { return slices.Contains(f.added, dir) }
 func (f *fakeNotifier) Count() int                   { return len(f.added) }
 func (f *fakeNotifier) Events() <-chan fswatch.Event { return f.events }
 func (f *fakeNotifier) Close() error                 { return nil }
@@ -136,5 +148,27 @@ func TestTrust_NeedsAWatchOlderThanTheScanNoLostEventsAndAFilesystemItSeesThroug
 	}
 	if watching, _ := service.Trust(root, fake.Now().Add(time.Second)); !watching {
 		t.Fatal("a scan after the loss restores it")
+	}
+}
+
+func TestEvents_ARenamedFolderLeavesNoWatchUnderItsOldName(t *testing.T) {
+	service, notifier, _, _ := newService(t, 100, true)
+	if err := service.Replan(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	service.handle(fswatch.Event{Dir: "/lib", Name: "A", IsDir: true, Removed: true})
+	service.handle(fswatch.Event{Dir: "/lib", Name: "A2", IsDir: true, Created: true})
+	for _, stale := range []string{"/lib/A", "/lib/A/s1"} {
+		if _, kept := service.watched[stale]; kept || slices.Contains(notifier.added, stale) {
+			t.Fatalf("%s still watched", stale)
+		}
+	}
+	for key := range service.dirty {
+		if key.rel == "A" || key.rel == "A/s1" {
+			t.Fatalf("dirty key %+v names the old path", key)
+		}
+	}
+	if !slices.Contains(notifier.added, "/lib/A2") {
+		t.Fatalf("watches %v lack the new name", notifier.added)
 	}
 }

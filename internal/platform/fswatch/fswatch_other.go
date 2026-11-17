@@ -36,6 +36,12 @@ func (*Watcher) Add(string) error { return ErrUnsupported }
 // Remove does nothing.
 func (*Watcher) Remove(string) {}
 
+// RemoveTree does nothing.
+func (*Watcher) RemoveTree(string) {}
+
+// Watching is always false.
+func (*Watcher) Watching(string) bool { return false }
+
 // Count is zero.
 func (*Watcher) Count() int { return 0 }
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -92,6 +93,29 @@ func (w *Watcher) Remove(dir string) {
 		delete(w.byPath, dir)
 		delete(w.byID, id)
 	}
+}
+
+// RemoveTree stops watching a directory and everything below it, which inotify would otherwise keep reporting under
+// the old name after a rename.
+func (w *Watcher) RemoveTree(dir string) {
+	dir = filepath.Clean(dir)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for watched, id := range w.byPath {
+		if watched == dir || strings.HasPrefix(watched, dir+"/") {
+			_, _ = syscall.InotifyRmWatch(int(w.file.Fd()), uint32(id))
+			delete(w.byPath, watched)
+			delete(w.byID, id)
+		}
+	}
+}
+
+// Watching says whether a directory is watched.
+func (w *Watcher) Watching(dir string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	_, watched := w.byPath[filepath.Clean(dir)]
+	return watched
 }
 
 // Count is how many directories are watched.
