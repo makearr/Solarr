@@ -9,6 +9,8 @@ package placement
 import (
 	"fmt"
 	"sort"
+
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 // Strategy ranks the candidates that survive the CANDIDATES filter, chosen
@@ -60,6 +62,22 @@ type RootCandidate struct {
 	Ord            int64
 	Weight         int64
 	PlacementCount int64
+}
+
+// CandidateOf is the one conversion of a configured root folder into a placement candidate; an unprobed free or total
+// size counts as zero.
+func CandidateOf(root settings.RootFolder, acceptsNew bool) RootCandidate {
+	var freeBytes, totalBytes int64
+	if root.FreeBytes != nil {
+		freeBytes = *root.FreeBytes
+	}
+	if root.TotalBytes != nil {
+		totalBytes = *root.TotalBytes
+	}
+	return RootCandidate{
+		RootFolderID: root.ID, FSID: root.FSID, Online: root.Online, Writable: root.Writable, ReadOnly: root.ReadOnly,
+		AcceptsNew: acceptsNew, FreeBytes: freeBytes, TotalBytes: totalBytes, MinFreeBytes: root.MinFreeBytes,
+	}
 }
 
 // Request is what Resolve needs to decide -- Placement's own fields

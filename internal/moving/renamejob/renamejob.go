@@ -165,15 +165,7 @@ func previewNames(request mover.Request, candidate placement.RootCandidate) ([]m
 }
 
 func rootCandidate(rootFolderID int64, root settings.RootFolder) placement.RootCandidate {
-	var freeBytes, totalBytes int64
-	if root.FreeBytes != nil {
-		freeBytes = *root.FreeBytes
-	}
-	if root.TotalBytes != nil {
-		totalBytes = *root.TotalBytes
-	}
-	return placement.RootCandidate{
-		RootFolderID: rootFolderID, FSID: root.FSID, Online: root.Online, Writable: root.Writable,
-		ReadOnly: root.ReadOnly, FreeBytes: freeBytes, TotalBytes: totalBytes, MinFreeBytes: root.MinFreeBytes,
-	}
+	candidate := placement.CandidateOf(root, false)
+	candidate.RootFolderID = rootFolderID
+	return candidate
 }

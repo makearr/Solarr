@@ -97,7 +97,7 @@ func Start(ctx context.Context, cfg Config, rootFolderID int64, preview bool) (R
 	}
 
 	plan, err := mover.PlanDrain(mover.DrainRequest{
-		Source: rootCandidate(source, false), SourceReadOnly: source.ReadOnly, SourceAllowRename: source.AllowRename,
+		Source: placement.CandidateOf(source, false), SourceReadOnly: source.ReadOnly, SourceAllowRename: source.AllowRename,
 		Files: drainFiles, Destinations: eligibleDestinations(cfg.Roots, rootFolderID),
 	})
 	if err != nil {
@@ -187,7 +187,7 @@ func eligibleDestinations(roots Roots, rootFolderID int64) []placement.RootCandi
 		if !ok {
 			continue
 		}
-		candidates = append(candidates, rootCandidate(root, acceptsNew[id]))
+		candidates = append(candidates, placement.CandidateOf(root, acceptsNew[id]))
 	}
 	return candidates
 }
@@ -224,19 +224,4 @@ func (c Completer) CompleteDrainIfEmpty(ctx context.Context, rootFolderID, moveJ
 	}
 
 	return c.Roots.SetRootFolderDrainState(ctx, rootFolderID, settings.DrainStateDrained, nil)
-}
-
-func rootCandidate(root settings.RootFolder, acceptsNew bool) placement.RootCandidate {
-	var freeBytes, totalBytes int64
-	if root.FreeBytes != nil {
-		freeBytes = *root.FreeBytes
-	}
-	if root.TotalBytes != nil {
-		totalBytes = *root.TotalBytes
-	}
-	return placement.RootCandidate{
-		RootFolderID: root.ID, FSID: root.FSID, Online: root.Online, Writable: root.Writable,
-		ReadOnly: root.ReadOnly, AcceptsNew: acceptsNew, FreeBytes: freeBytes, TotalBytes: totalBytes,
-		MinFreeBytes: root.MinFreeBytes,
-	}
 }

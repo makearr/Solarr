@@ -39,7 +39,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/privilege", "internal/platform/previewstore", "internal/platform/ramcopy", "internal/platform/artwork", "internal/platform/disktopo", "internal/platform/disklatency", "internal/platform/iogate",
 		"internal/platform/secrets", "internal/scanning/probe", "internal/scanning/scan", "migrations",
 	},
-	"cmd/solarr/adapters": {"internal/scanning/watch", "internal/platform/disklatency", "internal/platform/disktopo", "internal/acquiring/indexer/spec", "internal/acquiring/cutoff", "internal/importing/arrmap", "internal/db/store", "internal/platform/secrets", "internal/media/works",
+	"cmd/solarr/adapters": {"internal/moving/placement", "internal/scanning/watch", "internal/platform/disklatency", "internal/platform/disktopo", "internal/acquiring/indexer/spec", "internal/acquiring/cutoff", "internal/importing/arrmap", "internal/db/store", "internal/platform/secrets", "internal/media/works",
 		"internal/importing/batch", "internal/moving/renamejob",
 		"internal/db/statistics", "internal/platform/parallel", "internal/service/follow", "internal/service/importlist", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/qbittorrent",
 		"internal/acquiring/sabnzbd", "internal/acquiring/nzbget", "internal/acquiring/deluge", "internal/acquiring/aria2",
@@ -150,7 +150,7 @@ var allowedInternalImports = map[string][]string{
 	// Section 11.7's root-folder chooser: pure ranking logic over candidates
 	// the caller already fetched, no I/O and no settings.db of its own --
 	// the same separation internal/identify/score keeps from internal/db/settings.
-	"internal/moving/placement": {},
+	"internal/moving/placement": {"internal/db/settings"},
 	// ADR-51's move engine. Plan is pure like internal/moving/placement's own
 	// Resolve, reusing placement.RootCandidate rather than a second,
 	// independent copy of the same root-policy shape (this project's own

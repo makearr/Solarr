@@ -676,18 +676,7 @@ func rootCandidates(roots PlacementRoots, categoryID int64) []placement.RootCand
 		if !ok {
 			continue
 		}
-		var freeBytes, totalBytes int64
-		if root.FreeBytes != nil {
-			freeBytes = *root.FreeBytes
-		}
-		if root.TotalBytes != nil {
-			totalBytes = *root.TotalBytes
-		}
-		candidates = append(candidates, placement.RootCandidate{
-			RootFolderID: root.ID, FSID: root.FSID, Online: root.Online, Writable: root.Writable,
-			ReadOnly: root.ReadOnly, AcceptsNew: acceptsNew[id], FreeBytes: freeBytes, TotalBytes: totalBytes,
-			MinFreeBytes: root.MinFreeBytes,
-		})
+		candidates = append(candidates, placement.CandidateOf(root, acceptsNew[id]))
 	}
 	return candidates
 }

@@ -1,7 +1,6 @@
 package adapters
 
 import (
-	"cmp"
 	"context"
 	"database/sql"
 	"errors"
@@ -12,7 +11,9 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/moving/placement"
 	"github.com/makearr/Solarr/internal/moving/renamejob"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // LibraryMove satisfies apiserver.LibraryMover: a work goes to another library of its media type through the one
@@ -23,6 +24,9 @@ type LibraryMove struct {
 	Engine   renamejob.Engine
 	Works    library.Works
 	Desired  library.Desired
+	// MoveJobs cancels the file move just queued when the library change that must follow it fails.
+	MoveJobs library.MoveJobs
+	Clock    clock.Clock
 	// Selection resolves a bulk selection to work ids.
 	Selection WorksMonitor
 	// DefaultProfileID is the profile items take in a library that names none.
@@ -33,6 +37,11 @@ type LibraryMove struct {
 
 // MoveWorkToLibrary plans, and unless preview starts, one work's move or copy.
 func (a LibraryMove) MoveWorkToLibrary(ctx context.Context, request apiserver.LibraryMoveRequest) (apiserver.DrainPlanResult, string, error) {
+	return a.moveWork(ctx, request, nil)
+}
+
+// moveWork is MoveWorkToLibrary with the bytes earlier works of the same request will occupy on each root, nil for none.
+func (a LibraryMove) moveWork(ctx context.Context, request apiserver.LibraryMoveRequest, planned map[int64]int64) (apiserver.DrainPlanResult, string, error) {
 	snapshot := a.Settings.Snapshot()
 	target, found := snapshot.Category(request.ToCategoryID)
 	if !found {
@@ -57,7 +66,7 @@ func (a LibraryMove) MoveWorkToLibrary(ctx context.Context, request apiserver.Li
 		return apiserver.DrainPlanResult{}, fmt.Sprintf("a %s library cannot name its files", target.MediaType), nil
 	}
 	sourceRoots := rootIDs(snapshot.RootFoldersForCategory(source.ID))
-	dest, found := a.destinationRoot(snapshot, target, detail.RootFolderIDs)
+	dest, found := a.destinationRoot(snapshot, target, detail.RootFolderIDs, planned)
 	if !found {
 		return apiserver.DrainPlanResult{}, fmt.Sprintf("%s has no root folder that takes new files", target.Name), nil
 	}
@@ -84,7 +93,14 @@ func (a LibraryMove) MoveWorkToLibrary(ctx context.Context, request apiserver.Li
 		_, err = a.Desired.MoveWorkToLibrary(ctx, request.WorkID, source.ID, target.ID, profileID)
 	}
 	if err != nil {
+		// The files are on their way to the other library while the work still belongs to this one: stop the move.
+		if jobID != 0 {
+			_, _ = a.MoveJobs.Cancel(ctx, jobID, a.Clock.Now().Unix())
+		}
 		return apiserver.DrainPlanResult{}, "", err
+	}
+	if planned != nil && jobID != 0 {
+		planned[dest] += result.BytesTotal
 	}
 	if a.OnMoved != nil {
 		a.OnMoved(ctx)
@@ -115,13 +131,15 @@ func (a LibraryMove) sourceLibrary(
 	return settings.Category{}, "it is in no library to leave"
 }
 
-// destinationRoot is the target root the work's files go to: one taking new files, online, writable and not read-only,
-// on the filesystem the work is on when one is (an instant move), else with the most room.
-func (a LibraryMove) destinationRoot(snapshot *settings.Snapshot, target settings.Category, workRoots []int64) (int64, bool) {
-	filesystems := map[string]bool{}
+// destinationRoot is the target root the work's files go to, chosen by the library's placement rules from the roots taking
+// new files, preferring the filesystem the work is on (an instant move). planned is what earlier works of the same request
+// will already occupy on each root.
+func (a LibraryMove) destinationRoot(snapshot *settings.Snapshot, target settings.Category, workRoots []int64, planned map[int64]int64) (int64, bool) {
+	filesystem := ""
 	for _, id := range workRoots {
 		if root, found := snapshot.RootFolder(id); found && root.FSID != "" {
-			filesystems[root.FSID] = true
+			filesystem = root.FSID
+			break
 		}
 	}
 	accepting := map[int64]bool{}
@@ -130,22 +148,19 @@ func (a LibraryMove) destinationRoot(snapshot *settings.Snapshot, target setting
 			accepting[attachment.RootFolderID] = true
 		}
 	}
-	var usable []settings.RootFolder
+	var candidates []placement.RootCandidate
 	for _, root := range snapshot.RootFoldersForCategory(target.ID) {
-		if accepting[root.ID] && root.Online && root.Writable && !root.ReadOnly {
-			usable = append(usable, root)
-		}
+		candidate := placement.CandidateOf(root, accepting[root.ID])
+		candidate.FreeBytes = max(candidate.FreeBytes-planned[root.ID], 0)
+		candidates = append(candidates, candidate)
 	}
-	if len(usable) == 0 {
+	chosen, decision, err := placement.Resolve(placement.Request{
+		CategoryID: target.ID, Strategy: placement.StrategyMostFreeSpace, SourceFSID: filesystem,
+	}, candidates)
+	if err != nil || decision.Outcome != placement.OutcomePlaced {
 		return 0, false
 	}
-	slices.SortStableFunc(usable, func(x, y settings.RootFolder) int {
-		if same := boolRank(filesystems[y.FSID]) - boolRank(filesystems[x.FSID]); same != 0 {
-			return same
-		}
-		return cmp.Compare(freeBytes(y), freeBytes(x))
-	})
-	return usable[0].ID, true
+	return chosen.RootFolderID, true
 }
 
 // MoveSelectionToLibrary moves or copies every work of a selection, each on its own: a work that cannot go is
@@ -158,10 +173,11 @@ func (a LibraryMove) MoveSelectionToLibrary(
 		return apiserver.BulkLibraryMoveResult{}, err
 	}
 	var result apiserver.BulkLibraryMoveResult
+	planned := map[int64]int64{}
 	for _, id := range ids {
 		one := request
 		one.WorkID = id
-		plan, refusal, err := a.MoveWorkToLibrary(ctx, one)
+		plan, refusal, err := a.moveWork(ctx, one, planned)
 		if err != nil {
 			return result, err
 		}
@@ -192,18 +208,4 @@ func rootIDs(roots []settings.RootFolder) []int64 {
 		ids[i] = root.ID
 	}
 	return ids
-}
-
-func freeBytes(root settings.RootFolder) int64 {
-	if root.FreeBytes == nil {
-		return 0
-	}
-	return *root.FreeBytes
-}
-
-func boolRank(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
 }

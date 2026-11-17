@@ -27,7 +27,7 @@ func StartWorkMove(ctx context.Context, cfg Config, files WorkFiles, workID, tar
 	if !ok {
 		return Result{}, fmt.Errorf("%w: %d", ErrRootFolderNotFound, targetRootID)
 	}
-	roots := map[int64]placement.RootCandidate{targetRootID: rootCandidate(target, true)}
+	roots := map[int64]placement.RootCandidate{targetRootID: placement.CandidateOf(target, true)}
 	readOnly, allowRename := map[int64]bool{}, map[int64]bool{}
 	var moves []mover.FileToMove
 	for _, sourceID := range sharingRoots(cfg.Roots, targetRootID) {
@@ -42,7 +42,7 @@ func StartWorkMove(ctx context.Context, cfg Config, files WorkFiles, workID, tar
 		if len(onRoot) == 0 {
 			continue
 		}
-		roots[sourceID] = rootCandidate(source, false)
+		roots[sourceID] = placement.CandidateOf(source, false)
 		readOnly[sourceID], allowRename[sourceID] = source.ReadOnly, source.AllowRename
 		for _, file := range onRoot {
 			moves = append(moves, mover.FileToMove{
