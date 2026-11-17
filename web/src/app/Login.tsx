@@ -18,7 +18,11 @@ export function Login() {
     mutationFn: () => ok(api.POST("/auth/login", {
       body: { username, password, remember },
     })),
-    onSuccess: () => queryClient.invalidateQueries(),
+    onSuccess: () => {
+      // Another account's cached lists are never shown to the next person on a shared browser.
+      queryClient.removeQueries({ predicate: (query) => query.queryKey.length !== 1 || query.queryKey[0] !== "me" });
+      return queryClient.invalidateQueries({ queryKey: ["me"], exact: true });
+    },
   });
 
   return (

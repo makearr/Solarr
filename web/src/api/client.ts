@@ -1,5 +1,6 @@
 import createClient from "openapi-fetch";
 import type { paths } from "./schema";
+import { queryClient } from "./queryClient";
 import { fromBase64, sealSecrets, sealWith } from "./seal";
 
 /** Every versioned endpoint lives under this prefix, and the paths in
@@ -56,6 +57,22 @@ api.use({
     return new Response(JSON.stringify({ status: response.status, title: response.statusText || "The request failed" }), {
       status: response.status, statusText: response.statusText, headers: { "Content-Type": "application/problem+json" },
     });
+  },
+});
+
+// Answers that are expected to be 401 without the session having ended.
+const SESSION_PROBES = ["/auth/login", "/me", "/auth/transport-key"].map((path) => API_PREFIX + path);
+let sessionEndedAt = -Infinity;
+
+// An expired or revoked session sends the interface back to sign-in: App shows Login once /me answers 401.
+api.use({
+  onResponse({ response }) {
+    if (response.status !== 401 || SESSION_PROBES.includes(new URL(response.url, "http://solarr.test").pathname)) return undefined;
+    // A screen's worth of parallel 401s asks /me once.
+    if (Date.now() - sessionEndedAt < 2_000) return undefined;
+    sessionEndedAt = Date.now();
+    void queryClient.invalidateQueries({ queryKey: ["me"], exact: true });
+    return undefined;
   },
 });
 
