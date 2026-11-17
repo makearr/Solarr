@@ -66,7 +66,7 @@ func TestPhysical_RecordMeasuredWritesAttributesAndScalars(t *testing.T) {
 	err := physical.RecordMeasured(t.Context(), object.ID, library.AttributeClaim{
 		AudioCodec: "flac", Lossless: true, SampleRate: 44100, BitDepth: 16,
 	}, library.MeasuredScalars{
-		DurationMs: 215000, AudioBitrate: 705600, OverallBitrate: 705600, ProbeJSON: `{"ok":true}`,
+		DurationMs: 215000, AudioBitrate: 705600, OverallBitrate: 705600,
 	}, "", 100)
 	if err != nil {
 		t.Fatalf("RecordMeasured: %v", err)

@@ -410,10 +410,6 @@ func (j *Job) record(ctx context.Context, file library.UnmeasuredFile, absolute 
 	measured := probe.Measured
 	measured.CRF = j.encoderCRF(absolute, measured)
 	claim := attributeClaimFromMeasured(measured, sidecarSubtitleLanguages(j.fs, absolute))
-	probeJSON, err := json.Marshal(measured)
-	if err != nil {
-		return fmt.Errorf("marshal probe json: %w", err)
-	}
 
 	// ADR-39: a claim that fails its probe is a signal. claimedFound is false
 	// for every file today -- the claimed side has nowhere in this codebase
@@ -434,7 +430,6 @@ func (j *Job) record(ctx context.Context, file library.UnmeasuredFile, absolute 
 		VideoBitrate:   measured.VideoBitrate,
 		AudioBitrate:   measured.AudioBitrate,
 		OverallBitrate: measured.OverallBitrate,
-		ProbeJSON:      string(probeJSON),
 		ProbeVersion:   library.ProbeVersionCurrent,
 	}, mismatchJSON, j.clock.Now().Unix())
 }

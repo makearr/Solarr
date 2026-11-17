@@ -257,8 +257,8 @@ INSERT INTO media_object (id, size_bytes, quick_hash, content_hash, oshash, phas
                           claimed_attributes_id, measured_attributes_id,
                           attribute_mismatch_json, duration_ms, width, height,
                           video_bitrate, audio_bitrate, overall_bitrate,
-                          probe_json, first_seen_at, verified_at, kind)
-VALUES ((SELECT MAX(COALESCE((SELECT MAX(id) FROM media_object), 0), COALESCE((SELECT value FROM id_high_water WHERE name = 'media_object'), 0)) + 1), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                          first_seen_at, verified_at, kind)
+VALUES ((SELECT MAX(COALESCE((SELECT MAX(id) FROM media_object), 0), COALESCE((SELECT value FROM id_high_water WHERE name = 'media_object'), 0)) + 1), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateMediaObjectParams struct {
@@ -279,7 +279,6 @@ type CreateMediaObjectParams struct {
 	VideoBitrate          sql.NullInt64
 	AudioBitrate          sql.NullInt64
 	OverallBitrate        sql.NullInt64
-	ProbeJson             sql.NullString
 	FirstSeenAt           int64
 	VerifiedAt            sql.NullInt64
 	Kind                  sql.NullString
@@ -306,7 +305,6 @@ func (q *Queries) CreateMediaObject(ctx context.Context, arg CreateMediaObjectPa
 		arg.VideoBitrate,
 		arg.AudioBitrate,
 		arg.OverallBitrate,
-		arg.ProbeJson,
 		arg.FirstSeenAt,
 		arg.VerifiedAt,
 		arg.Kind,
@@ -405,7 +403,7 @@ const findMediaObjectsByQuickHash = `-- name: FindMediaObjectsByQuickHash :many
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
        measured_attributes_id, attribute_mismatch_json, duration_ms, width,
-       height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
+       height, video_bitrate, audio_bitrate, overall_bitrate,
        first_seen_at, verified_at, kind
 FROM media_object WHERE quick_hash = ?
 `
@@ -439,7 +437,6 @@ func (q *Queries) FindMediaObjectsByQuickHash(ctx context.Context, quickHash str
 			&i.VideoBitrate,
 			&i.AudioBitrate,
 			&i.OverallBitrate,
-			&i.ProbeJson,
 			&i.FirstSeenAt,
 			&i.VerifiedAt,
 			&i.Kind,
@@ -523,7 +520,7 @@ const getMediaObject = `-- name: GetMediaObject :one
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
        measured_attributes_id, attribute_mismatch_json, duration_ms, width,
-       height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
+       height, video_bitrate, audio_bitrate, overall_bitrate,
        first_seen_at, verified_at, kind
 FROM media_object WHERE id = ?
 `
@@ -550,7 +547,6 @@ func (q *Queries) GetMediaObject(ctx context.Context, id int64) (MediaObject, er
 		&i.VideoBitrate,
 		&i.AudioBitrate,
 		&i.OverallBitrate,
-		&i.ProbeJson,
 		&i.FirstSeenAt,
 		&i.VerifiedAt,
 		&i.Kind,
@@ -562,7 +558,7 @@ const getMediaObjectByOshash = `-- name: GetMediaObjectByOshash :one
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
        measured_attributes_id, attribute_mismatch_json, duration_ms, width,
-       height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
+       height, video_bitrate, audio_bitrate, overall_bitrate,
        first_seen_at, verified_at, kind
 FROM media_object WHERE oshash = ?
 `
@@ -590,7 +586,6 @@ func (q *Queries) GetMediaObjectByOshash(ctx context.Context, oshash sql.NullStr
 		&i.VideoBitrate,
 		&i.AudioBitrate,
 		&i.OverallBitrate,
-		&i.ProbeJson,
 		&i.FirstSeenAt,
 		&i.VerifiedAt,
 		&i.Kind,
@@ -1442,7 +1437,7 @@ const listUnfingerprinted = `-- name: ListUnfingerprinted :many
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
        measured_attributes_id, attribute_mismatch_json, duration_ms, width,
-       height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
+       height, video_bitrate, audio_bitrate, overall_bitrate,
        first_seen_at, verified_at, kind
 FROM media_object
 WHERE fingerprinted_at IS NULL AND id > ?1
@@ -1485,7 +1480,6 @@ func (q *Queries) ListUnfingerprinted(ctx context.Context, arg ListUnfingerprint
 			&i.VideoBitrate,
 			&i.AudioBitrate,
 			&i.OverallBitrate,
-			&i.ProbeJson,
 			&i.FirstSeenAt,
 			&i.VerifiedAt,
 			&i.Kind,
@@ -2094,7 +2088,7 @@ UPDATE media_object
 SET measured_attributes_id = ?, attribute_mismatch_json = ?,
     duration_ms = ?, width = ?, height = ?,
     video_bitrate = ?, audio_bitrate = ?, overall_bitrate = ?,
-    probe_json = NULL, verified_at = ?
+    verified_at = ?
 WHERE id = ?
 `
 
@@ -2171,26 +2165,20 @@ func (q *Queries) SetMediaObjectKind(ctx context.Context, arg SetMediaObjectKind
 }
 
 const setMediaProbe = `-- name: SetMediaProbe :exec
-INSERT INTO media_probe (media_object_id, probe_version, probed_at, json) VALUES (?, ?, ?, ?)
+INSERT INTO media_probe (media_object_id, probe_version, probed_at) VALUES (?, ?, ?)
 ON CONFLICT (media_object_id) DO UPDATE SET
-  probe_version = excluded.probe_version, probed_at = excluded.probed_at, json = excluded.json
+  probe_version = excluded.probe_version, probed_at = excluded.probed_at
 `
 
 type SetMediaProbeParams struct {
 	MediaObjectID int64
 	ProbeVersion  int64
 	ProbedAt      int64
-	Json          string
 }
 
 // What the probe read of one file, replacing an earlier probe.
 func (q *Queries) SetMediaProbe(ctx context.Context, arg SetMediaProbeParams) error {
-	_, err := q.db.ExecContext(ctx, setMediaProbe,
-		arg.MediaObjectID,
-		arg.ProbeVersion,
-		arg.ProbedAt,
-		arg.Json,
-	)
+	_, err := q.db.ExecContext(ctx, setMediaProbe, arg.MediaObjectID, arg.ProbeVersion, arg.ProbedAt)
 	return err
 }
 

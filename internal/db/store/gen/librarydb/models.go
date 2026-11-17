@@ -583,7 +583,6 @@ type MediaObject struct {
 	VideoBitrate          sql.NullInt64
 	AudioBitrate          sql.NullInt64
 	OverallBitrate        sql.NullInt64
-	ProbeJson             sql.NullString
 	FirstSeenAt           int64
 	VerifiedAt            sql.NullInt64
 	Kind                  sql.NullString
@@ -593,7 +592,6 @@ type MediaProbe struct {
 	MediaObjectID int64
 	ProbeVersion  int64
 	ProbedAt      int64
-	Json          string
 }
 
 type MediaProbeFailure struct {

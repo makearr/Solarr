@@ -732,8 +732,7 @@ type MeasuredScalars struct {
 	DurationMs                                 int64
 	Width, Height                              int
 	VideoBitrate, AudioBitrate, OverallBitrate int64
-	// ProbeJSON is what the probe read, kept in media_probe under ProbeVersion.
-	ProbeJSON    string
+	// ProbeVersion is what the probe read of the file, kept in media_probe so an older probe can be redone.
 	ProbeVersion int64
 }
 
@@ -756,12 +755,10 @@ func (p Physical) RecordMeasured(
 		if err := queries.DeleteProbeFailure(ctx, mediaObjectID); err != nil {
 			return fmt.Errorf("forget probe failure: %w", err)
 		}
-		if scalars.ProbeJSON != "" {
-			if err := queries.SetMediaProbe(ctx, librarydb.SetMediaProbeParams{
-				MediaObjectID: mediaObjectID, ProbeVersion: scalars.ProbeVersion, ProbedAt: verifiedAt, Json: scalars.ProbeJSON,
-			}); err != nil {
-				return fmt.Errorf("record probe: %w", err)
-			}
+		if err := queries.SetMediaProbe(ctx, librarydb.SetMediaProbeParams{
+			MediaObjectID: mediaObjectID, ProbeVersion: scalars.ProbeVersion, ProbedAt: verifiedAt,
+		}); err != nil {
+			return fmt.Errorf("record probe: %w", err)
 		}
 		return queries.SetMeasuredAttributes(ctx, librarydb.SetMeasuredAttributesParams{
 			MeasuredAttributesID:  sql.NullInt64{Int64: attrRow.ID, Valid: true},

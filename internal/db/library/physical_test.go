@@ -452,7 +452,7 @@ func TestListStaleVideoProbes_FindsOnlyVideo(t *testing.T) {
 				return err
 			}
 			if err := librarydb.New(tx).SetMediaProbe(ctx, librarydb.SetMediaProbeParams{
-				MediaObjectID: file.MediaObjectID, ProbeVersion: library.ProbeVersionLyrics, ProbedAt: 1, Json: "{}",
+				MediaObjectID: file.MediaObjectID, ProbeVersion: library.ProbeVersionLyrics, ProbedAt: 1,
 			}); err != nil {
 				return err
 			}

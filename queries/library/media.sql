@@ -31,14 +31,14 @@ INSERT INTO media_object (id, size_bytes, quick_hash, content_hash, oshash, phas
                           claimed_attributes_id, measured_attributes_id,
                           attribute_mismatch_json, duration_ms, width, height,
                           video_bitrate, audio_bitrate, overall_bitrate,
-                          probe_json, first_seen_at, verified_at, kind)
-VALUES ((SELECT MAX(COALESCE((SELECT MAX(id) FROM media_object), 0), COALESCE((SELECT value FROM id_high_water WHERE name = 'media_object'), 0)) + 1), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                          first_seen_at, verified_at, kind)
+VALUES ((SELECT MAX(COALESCE((SELECT MAX(id) FROM media_object), 0), COALESCE((SELECT value FROM id_high_water WHERE name = 'media_object'), 0)) + 1), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetMediaObject :one
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
        measured_attributes_id, attribute_mismatch_json, duration_ms, width,
-       height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
+       height, video_bitrate, audio_bitrate, overall_bitrate,
        first_seen_at, verified_at, kind
 FROM media_object WHERE id = ?;
 
@@ -47,7 +47,7 @@ FROM media_object WHERE id = ?;
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
        measured_attributes_id, attribute_mismatch_json, duration_ms, width,
-       height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
+       height, video_bitrate, audio_bitrate, overall_bitrate,
        first_seen_at, verified_at, kind
 FROM media_object WHERE quick_hash = ?;
 
@@ -56,7 +56,7 @@ FROM media_object WHERE quick_hash = ?;
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
        measured_attributes_id, attribute_mismatch_json, duration_ms, width,
-       height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
+       height, video_bitrate, audio_bitrate, overall_bitrate,
        first_seen_at, verified_at, kind
 FROM media_object WHERE oshash = ?;
 
@@ -68,14 +68,14 @@ UPDATE media_object
 SET measured_attributes_id = ?, attribute_mismatch_json = ?,
     duration_ms = ?, width = ?, height = ?,
     video_bitrate = ?, audio_bitrate = ?, overall_bitrate = ?,
-    probe_json = NULL, verified_at = ?
+    verified_at = ?
 WHERE id = ?;
 
 -- What the probe read of one file, replacing an earlier probe.
 -- name: SetMediaProbe :exec
-INSERT INTO media_probe (media_object_id, probe_version, probed_at, json) VALUES (?, ?, ?, ?)
+INSERT INTO media_probe (media_object_id, probe_version, probed_at) VALUES (?, ?, ?)
 ON CONFLICT (media_object_id) DO UPDATE SET
-  probe_version = excluded.probe_version, probed_at = excluded.probed_at, json = excluded.json;
+  probe_version = excluded.probe_version, probed_at = excluded.probed_at;
 
 -- The claimed half (todo 4.2): derived once per release folder at scan time,
 -- from the release name rather than the file's own bytes, so it needs no
@@ -91,7 +91,7 @@ UPDATE media_object SET claimed_attributes_id = ? WHERE id = ?;
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
        measured_attributes_id, attribute_mismatch_json, duration_ms, width,
-       height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
+       height, video_bitrate, audio_bitrate, overall_bitrate,
        first_seen_at, verified_at, kind
 FROM media_object
 WHERE fingerprinted_at IS NULL AND id > sqlc.arg(after_id)

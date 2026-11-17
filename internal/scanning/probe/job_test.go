@@ -273,7 +273,7 @@ func TestJob_RunReadsAgainAFileMeasuredBeforeLyricsLanguages(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := physical.RecordMeasured(t.Context(), ids[0].MediaObjectID, library.AttributeClaim{AudioCodec: "flac"},
-		library.MeasuredScalars{ProbeJSON: `{"AudioCodec":"flac"}`}, "", 1); err != nil {
+		library.MeasuredScalars{}, "", 1); err != nil {
 		t.Fatal(err)
 	}
 	if stale, err := physical.ListStaleProbes(t.Context(), 0, 10, 0); err != nil || len(stale) != 1 {
