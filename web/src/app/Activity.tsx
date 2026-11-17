@@ -24,6 +24,9 @@ const COLUMNS: readonly Column<Job>[] = [
 // Module scope, so the identity is stable across renders.
 const FILTER_KEYS = ["state"];
 
+// Import progress frames are per-session and several a second; the list shows none of it.
+export const isJobListEvent = (event: { entity: string }) => !event.entity.startsWith("import_session:");
+
 // The first consumer of the headless core, and the only real cursor-paginated
 // collection until the library has rows to list.
 export function Activity() {
@@ -35,6 +38,7 @@ export function Activity() {
     rowHeight: narrow ? CARD_HEIGHT : undefined,
     idOf: (job) => job.id,
     topics: ["job"],
+    accepts: isJobListEvent,
     fetchPage: ({ cursor, query, signal }) => ok(api.GET("/jobs", {
       params: {
         query: {

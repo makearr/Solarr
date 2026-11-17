@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
-import { subscribe } from "@/lib/eventStream";
+import { subscribe, type StreamEvent } from "@/lib/eventStream";
+import { throttle } from "@/lib/throttle";
 
 import * as query from "./query";
 import * as selection from "./selection";
@@ -13,6 +14,8 @@ export interface Page<T> {
   items: T[];
   next_cursor?: string;
 }
+
+const INVALIDATE_WINDOW_MS = 2000;
 
 export interface ListSource<T> {
   /** Distinguishes one list's cache from another's. */
@@ -25,6 +28,8 @@ export interface ListSource<T> {
   }) => Promise<Page<T>>;
   /** Event topics whose arrival should invalidate this list (ADR-9). */
   readonly topics?: readonly string[];
+  /** Which events of those topics change this list; progress frames for a list without a progress column should say no. */
+  readonly accepts?: (event: StreamEvent) => boolean;
   readonly rowHeight?: number;
   /** How many items share one virtualised row -- 1 for a table, the measured
    *  column count for the poster grid, so both views keep one core (section 21.2). */
@@ -153,15 +158,27 @@ export function useLibraryList<T>(source: ListSource<T>, view: ViewState) {
   // render. The list is meant to survive being called the obvious way.
   const topics = source.topics?.join(",") ?? "";
   const listName = source.name;
+  const accepts = source.accepts;
 
   // Events are lossy and for notification only (ADR-9), so they invalidate.
   useEffect(() => {
     if (topics === "") return;
 
-    const invalidate = () => void client.invalidateQueries({ queryKey: [listName] });
+    // Invalidating an infinite query refetches every loaded page, so a burst of frames costs one refetch per window.
+    const invalidate = throttle(() => void client.invalidateQueries({ queryKey: [listName] }), INVALIDATE_WINDOW_MS);
     // A resync means the client fell too far behind to replay.
-    return subscribe({ topics: topics.split(","), onEvents: invalidate, onResync: invalidate });
-  }, [client, listName, topics]);
+    const unsubscribe = subscribe({
+      topics: topics.split(","),
+      onEvents: (events) => {
+        if (!accepts || events.some(accepts)) invalidate.call();
+      },
+      onResync: invalidate.call,
+    });
+    return () => {
+      unsubscribe();
+      invalidate.cancel();
+    };
+  }, [client, listName, topics, accepts]);
 
   const toggle = useCallback(
     (id: selection.Id, extendRange = false) => {

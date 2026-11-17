@@ -221,3 +221,11 @@ describe("the virtualised layout", () => {
     await waitFor(() => expect(seen.list?.totalSize).toBe(240));
   });
 });
+
+describe("which frames refresh a list", () => {
+  test("an import session's progress frame does not refresh the Jobs list", async () => {
+    const { isJobListEvent } = await import("@/app/Activity");
+    expect(isJobListEvent({ entity: "import_session:7" })).toBe(false);
+    expect(isJobListEvent({ entity: "job:12" })).toBe(true);
+  });
+});
