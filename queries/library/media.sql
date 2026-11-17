@@ -231,6 +231,17 @@ INSERT INTO library_path (media_object_id, root_folder_id, rel_path, link_kind,
                           is_primary, created_at, last_seen_at, missing_since)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 
+-- A file changed in place is the same object with new bytes: what was derived from the old bytes is cleared so the
+-- fingerprint and probe jobs measure it again.
+-- name: SetMediaObjectContent :exec
+UPDATE media_object
+SET size_bytes = ?, quick_hash = ?, oshash = ?, content_hash = NULL, phash = NULL, audio_fp = NULL,
+    audio_fp_prefix = NULL, fingerprinted_at = NULL, measured_attributes_id = NULL
+WHERE id = ?;
+
+-- name: SetLibraryPathObject :exec
+UPDATE library_path SET media_object_id = ? WHERE id = ?;
+
 -- name: ListPathsForObject :many
 SELECT id, media_object_id, root_folder_id, rel_path, link_kind, is_primary,
        created_at, last_seen_at, missing_since

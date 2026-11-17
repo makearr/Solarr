@@ -70,3 +70,23 @@ func TestRegisterBatch_ASharedPathChangedInPlaceLeavesTheSharedObject(t *testing
 		t.Errorf("shared object paths = %+v, %v; want only A/01.flac", shared, err)
 	}
 }
+
+// The head and tail sample can miss a change in the middle, which still moves the size.
+func TestRegisterBatch_ASizeChangeAloneIsRemeasured(t *testing.T) {
+	opened, _ := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	file := library.PhysicalFile{RelPath: "A/01.flac", SizeBytes: 7, QuickHash: "sampled", FirstSeenAt: time.Unix(1_700_100_000, 0).UTC()}
+	first, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{file})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	file.SizeBytes = 12
+	second, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{file})
+	if err != nil || !second[0].ContentChanged {
+		t.Fatalf("second = %+v, %v; want ContentChanged", second[0], err)
+	}
+	object, _ := librarydb.New(opened.Read()).GetMediaObject(t.Context(), first[0].MediaObjectID)
+	if object.SizeBytes != 12 {
+		t.Errorf("size = %d, want 12", object.SizeBytes)
+	}
+}
