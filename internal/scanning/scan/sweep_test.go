@@ -594,3 +594,43 @@ func TestSweep_InterruptedIncrementalWalkKeepsTheDirectoriesItPassed(t *testing.
 		t.Errorf("State = %+v, want cursor b and the old watermark", result.State)
 	}
 }
+
+func TestSweep_InFlightFilesAreNeverReportedAndStaleOnesAreRemovedOnAWritableRoot(t *testing.T) {
+	lib := newTree(t, "Album/01.flac")
+	stale := []string{".mnx-move-tmp0a1b", ".solarr-link-tmp0a1b", ".solarr-probe0a1b", ".mnx-write-probe-0a1b"}
+	for _, name := range stale {
+		lib.write(t, "Album/"+name)
+	}
+	lib.clock.Advance(2 * time.Hour)
+	lib.write(t, "Album/.solarr-link-tmpfresh")
+
+	_, collected := sweep(t, lib, scan.State{}, scan.Options{Full: true, RemoveStaleInFlight: true})
+
+	if !slices.Equal(collected.sorted(), []string{"Album/01.flac"}) {
+		t.Errorf("found %v, want only the audio file", collected.sorted())
+	}
+	// A copy of a very large file may still be running, so a move temp lives longer than a link marker.
+	entries, err := lib.fsys.ReadDir(path.Join(root, "Album"))
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	var left []string
+	for _, entry := range entries {
+		left = append(left, entry.Name)
+	}
+	want := []string{".mnx-move-tmp0a1b", ".solarr-link-tmpfresh", "01.flac"}
+	if !slices.Equal(left, want) {
+		t.Errorf("folder holds %v, want %v", left, want)
+	}
+}
+
+func TestSweep_LeavesStaleInFlightFilesOnAReadOnlyRoot(t *testing.T) {
+	lib := newTree(t, "Album/01.flac", "Album/.solarr-link-tmp0a1b")
+	lib.clock.Advance(2 * time.Hour)
+
+	sweep(t, lib, scan.State{}, scan.Options{Full: true})
+
+	if _, err := lib.fsys.Stat(path.Join(root, "Album/.solarr-link-tmp0a1b")); err != nil {
+		t.Errorf("a read-only root's marker was removed: %v", err)
+	}
+}

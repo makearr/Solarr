@@ -76,7 +76,7 @@ var allowedInternalImports = map[string][]string{
 	// inotify: standard library only.
 	"internal/platform/fswatch": {},
 	// Which directories to watch and when a root is due: pure decisions, plus the service that runs the watcher.
-	"internal/scanning/watch": {"internal/platform/fswatch", "internal/platform/clock"},
+	"internal/scanning/watch": {"internal/platform/fswatch", "internal/platform/clock", "internal/platform/fsx"},
 	// Latency per disk group, probed only on demand: clock and filesystem.
 	"internal/platform/disklatency": {"internal/platform/clock", "internal/platform/fsx"},
 	// A bounded in-memory slog handler (revision 7.16). Stdlib only: it wraps

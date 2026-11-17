@@ -244,7 +244,8 @@ func (p Placer) Undo(placed []Placed) error {
 	for _, one := range placed {
 		var err error
 		if one.Method == mover.PlaceMove {
-			_, err = mover.PlaceOne(p.config.FS, one.Dest, one.Source, one.Size, []mover.PlaceMethod{mover.PlaceMove})
+			// A take-back must finish, so it does not follow the caller's cancel.
+			_, err = mover.PlaceOne(context.Background(), p.config.FS, one.Dest, one.Source, one.Size, []mover.PlaceMethod{mover.PlaceMove})
 		} else {
 			err = p.config.FS.Remove(one.Dest)
 		}

@@ -173,7 +173,8 @@ func relocate(fsys fsx.FS, from, to string, sizeBytes int64) error {
 	if err == nil || !errors.Is(err, syscall.EXDEV) {
 		return err
 	}
-	if _, err := mover.PlaceOne(fsys, from, to, sizeBytes, []mover.PlaceMethod{mover.PlaceCopy}); err != nil {
+	// A recycle must finish once begun, so it takes no cancel.
+	if _, err := mover.PlaceOne(context.Background(), fsys, from, to, sizeBytes, []mover.PlaceMethod{mover.PlaceCopy}); err != nil {
 		return err
 	}
 	if err := fsys.Remove(from); err != nil {

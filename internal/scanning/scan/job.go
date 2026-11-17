@@ -244,7 +244,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	sliceCtx, endSlice := context.WithTimeout(ctx, j.sliceBudget)
 	defer endSlice()
 	result, err := j.sweeper.Sweep(sliceCtx, root.Path, state,
-		Options{Full: payload.Full, Include: sweep.Include, GatherFiles: sweep.GatherFiles}, flow.submit)
+		Options{Full: payload.Full, Include: sweep.Include, GatherFiles: sweep.GatherFiles, RemoveStaleInFlight: root.Writable && !root.ReadOnly}, flow.submit)
 	if waited := flow.wait(ctx); err == nil {
 		err = waited
 	}

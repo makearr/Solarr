@@ -74,7 +74,7 @@ func TestApplyOne_SameFilesystemRenames(t *testing.T) {
 		DestRootFolderID: 2, DestRelPath: "New/track.flac",
 		SizeBytes: int64(len("the bytes")), SameFilesystem: true,
 	}
-	if err := mover.ApplyOne(fsys, move, roots); err != nil {
+	if err := mover.ApplyOne(t.Context(), fsys, move, roots); err != nil {
 		t.Fatalf("ApplyOne: %v", err)
 	}
 	if readFile(t, fsys, "/root2/New/track.flac") != "the bytes" {
@@ -98,7 +98,7 @@ func TestApplyOne_CrossFilesystemCopiesButLeavesTheSource(t *testing.T) {
 		DestRootFolderID: 2, DestRelPath: "New/track.flac",
 		SizeBytes: int64(len("the bytes")), SameFilesystem: false,
 	}
-	if err := mover.ApplyOne(fsys, move, roots); err != nil {
+	if err := mover.ApplyOne(t.Context(), fsys, move, roots); err != nil {
 		t.Fatalf("ApplyOne: %v", err)
 	}
 	if readFile(t, fsys, "/root2/New/track.flac") != "the bytes" {
@@ -116,7 +116,7 @@ func TestApplyOne_RefusesAnUnknownSourceRoot(t *testing.T) {
 	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
 	roots := rootPathOf(map[int64]string{2: "/root2"})
 	move := mover.PlannedMove{SourceRootFolderID: 1, DestRootFolderID: 2}
-	if err := mover.ApplyOne(fsys, move, roots); err == nil {
+	if err := mover.ApplyOne(t.Context(), fsys, move, roots); err == nil {
 		t.Fatal("ApplyOne succeeded despite an unresolvable source root")
 	}
 }
@@ -136,7 +136,7 @@ func TestApplyOne_DetectsASizeMismatchAfterCopying(t *testing.T) {
 		SizeBytes:      int64(len("the bytes")) + 1, // claims one more byte than the source really has
 		SameFilesystem: false,
 	}
-	err := mover.ApplyOne(fsys, move, roots)
+	err := mover.ApplyOne(t.Context(), fsys, move, roots)
 	if err == nil || !errors.Is(err, mover.ErrHashMismatch) {
 		t.Fatalf("ApplyOne = %v, want ErrHashMismatch for the wrong expected size", err)
 	}
@@ -150,7 +150,7 @@ func TestPlaceOne_PrefersReflinkAndLeavesTheSource(t *testing.T) {
 	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
 	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
 
-	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), nil)
+	method, err := mover.PlaceOne(t.Context(), fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), nil)
 	if err != nil {
 		t.Fatalf("PlaceOne: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestPlaceOne_FallsBackToHardlinkWithoutReflink(t *testing.T) {
 	fsys.SetReflinkSupported(false)
 	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
 
-	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), nil)
+	method, err := mover.PlaceOne(t.Context(), fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), nil)
 	if err != nil {
 		t.Fatalf("PlaceOne: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestPlaceOne_FallsBackToCopyAcrossFilesystems(t *testing.T) {
 	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
 
 	ladder := []mover.PlaceMethod{mover.PlaceReflink, mover.PlaceHardlink, mover.PlaceCopy}
-	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
+	method, err := mover.PlaceOne(t.Context(), fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
 	if err != nil {
 		t.Fatalf("PlaceOne: %v", err)
 	}
@@ -224,7 +224,7 @@ func TestPlaceOne_DetectsASizeMismatchOnCopy(t *testing.T) {
 	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
 
 	ladder := []mover.PlaceMethod{mover.PlaceReflink, mover.PlaceHardlink, mover.PlaceCopy}
-	_, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes"))+1, ladder)
+	_, err := mover.PlaceOne(t.Context(), fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes"))+1, ladder)
 	if err == nil || !errors.Is(err, mover.ErrHashMismatch) {
 		t.Fatalf("PlaceOne = %v, want ErrHashMismatch for the wrong expected size", err)
 	}
@@ -237,7 +237,7 @@ func TestPlaceOne_WalksTheLadderInOrder(t *testing.T) {
 	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
 
 	ladder := []mover.PlaceMethod{mover.PlaceHardlink, mover.PlaceReflink, mover.PlaceCopy}
-	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
+	method, err := mover.PlaceOne(t.Context(), fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
 	if err != nil {
 		t.Fatalf("PlaceOne: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestPlaceOne_MoveConsumesTheSource(t *testing.T) {
 	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
 
 	ladder := []mover.PlaceMethod{mover.PlaceMove}
-	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
+	method, err := mover.PlaceOne(t.Context(), fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
 	if err != nil {
 		t.Fatalf("PlaceOne: %v", err)
 	}
@@ -277,7 +277,7 @@ func TestPlaceOne_MoveAcrossFilesystemsVerifiesBeforeUnlinking(t *testing.T) {
 	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
 
 	ladder := []mover.PlaceMethod{mover.PlaceMove}
-	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
+	method, err := mover.PlaceOne(t.Context(), fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
 	if err != nil {
 		t.Fatalf("PlaceOne: %v", err)
 	}
@@ -302,7 +302,7 @@ func TestPlaceOne_MoveKeepsTheSourceWhenVerifyFails(t *testing.T) {
 	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
 
 	ladder := []mover.PlaceMethod{mover.PlaceMove}
-	_, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes"))+1, ladder)
+	_, err := mover.PlaceOne(t.Context(), fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes"))+1, ladder)
 	if err == nil {
 		t.Fatal("PlaceOne = nil, want a failure for the wrong expected size")
 	}
@@ -323,7 +323,7 @@ func TestPlaceOne_MoveFromAReadOnlySourceIsACopy(t *testing.T) {
 
 	// A ladder ending at move, as the user's did: nothing after it to fall to.
 	ladder := []mover.PlaceMethod{mover.PlaceReflink, mover.PlaceHardlink, mover.PlaceMove}
-	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
+	method, err := mover.PlaceOne(t.Context(), fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
 	if err != nil {
 		t.Fatalf("PlaceOne: %v", err)
 	}
@@ -342,7 +342,7 @@ func TestPlaceOne_SymlinkOnlyWhenTheLadderNamesIt(t *testing.T) {
 	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
 
 	ladder := []mover.PlaceMethod{mover.PlaceSymlink}
-	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
+	method, err := mover.PlaceOne(t.Context(), fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
 	if err != nil {
 		t.Fatalf("PlaceOne: %v", err)
 	}
@@ -363,7 +363,7 @@ func TestPlaceOne_FailsWhenNoRungSucceeds(t *testing.T) {
 	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
 
 	ladder := []mover.PlaceMethod{mover.PlaceReflink, mover.PlaceHardlink}
-	_, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
+	_, err := mover.PlaceOne(t.Context(), fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
 	if err == nil || !errors.Is(err, mover.ErrNoRungSucceeded) {
 		t.Fatalf("PlaceOne = %v, want ErrNoRungSucceeded", err)
 	}
@@ -379,7 +379,7 @@ func TestPlaceOne_RefusesAnUnknownMethodBeforePlacing(t *testing.T) {
 	writeFile(t, fsys, "/downloads/Old/track.flac", "the bytes")
 
 	ladder := []mover.PlaceMethod{mover.PlaceHardlink, mover.PlaceMethod("teleport")}
-	_, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
+	_, err := mover.PlaceOne(t.Context(), fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), ladder)
 	if err == nil || !errors.Is(err, mover.ErrUnknownMethod) {
 		t.Fatalf("PlaceOne = %v, want ErrUnknownMethod", err)
 	}
@@ -397,7 +397,7 @@ func TestPlaceOne_AFailedCopyRungLeavesTheDestinationFreeForTheNextOne(t *testin
 	// The size is a lie, so the copy rung's verify refuses bytes that are in
 	// fact correct -- the hardlink rung behind it must still be reachable.
 	ladder := []mover.PlaceMethod{mover.PlaceCopy, mover.PlaceHardlink}
-	method, err := mover.PlaceOne(fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes"))+1, ladder)
+	method, err := mover.PlaceOne(t.Context(), fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes"))+1, ladder)
 	if err != nil {
 		t.Fatalf("PlaceOne: %v", err)
 	}

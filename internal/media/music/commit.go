@@ -579,7 +579,8 @@ func (c Committer) undoPlaced(placed []placedFile) error {
 	for _, file := range placed {
 		var err error
 		if file.method == mover.PlaceMove {
-			_, err = mover.PlaceOne(c.fsys, file.dest, file.source, file.sizeBytes, []mover.PlaceMethod{mover.PlaceMove})
+			// A take-back must finish, so it does not follow the caller's cancel.
+			_, err = mover.PlaceOne(context.Background(), c.fsys, file.dest, file.source, file.sizeBytes, []mover.PlaceMethod{mover.PlaceMove})
 		} else {
 			err = c.fsys.Remove(file.dest)
 		}

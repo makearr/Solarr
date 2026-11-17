@@ -182,6 +182,11 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		}
 
 		if err := j.applyItem(ctx, item, diskKind(moveJob.Reason), permissions, planned[item.MediaObjectID]); err != nil {
+			if errors.Is(err, errAfterMove) {
+				// The bytes are already at the new path: FAILED is terminal, so the job fails retryably and the next run's
+				// recovery (destination present, source gone) finishes the bookkeeping.
+				return fmt.Errorf("moverjob: move job %d: %w", moveJob.ID, err)
+			}
 			j.logger.Warn("move item failed",
 				slog.Int64("move_job_id", moveJob.ID), slog.Int64("media_object_id", item.MediaObjectID),
 				slog.String("error", err.Error()))
@@ -210,6 +215,9 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	}
 	return nil
 }
+
+// errAfterMove marks a failure after the bytes reached their destination, which must be retried and never ends the item.
+var errAfterMove = errors.New("moverjob: bytes moved, bookkeeping failed")
 
 // stopped is a job a person paused or cancelled; the loop ends after the file in hand and a resume enqueues it again.
 func stopped(state string) bool {
@@ -285,7 +293,7 @@ func (j *Job) applyItem(
 		return root.Path, ok
 	}
 	if err := iogate.OnDisk(ctx, kind, []string{sourceRoot.Path, destRoot.Path}, func() error {
-		return mover.ApplyOne(j.fsys, move, rootPath)
+		return mover.ApplyOne(ctx, j.fsys, move, rootPath)
 	}); err != nil {
 		return fmt.Errorf("apply: %w", err)
 	}
@@ -300,18 +308,22 @@ func (j *Job) applyItem(
 		}
 	}
 	if err := j.moveJobs.SetItemState(ctx, item.MoveJobID, item.MediaObjectID, library.MoveItemVerified, ""); err != nil {
-		return fmt.Errorf("record verified: %w", err)
+		return fmt.Errorf("%w: record verified: %w", errAfterMove, err)
 	}
 
 	if err := j.physical.Relocate(
 		ctx, primary.RootFolderID, primary.RelPath, item.DestRootID, item.DestRelPath,
 	); err != nil {
-		return fmt.Errorf("record relocation: %w", err)
+		if errors.Is(err, library.ErrDestinationOccupied) || errors.Is(err, library.ErrPathNotFound) {
+			// No retry can change either answer, so the item ends and the source stays.
+			return fmt.Errorf("record relocation: %w", err)
+		}
+		return fmt.Errorf("%w: record relocation: %w", errAfterMove, err)
 	}
 
 	sourceAbs, err := mover.RootRelativePath(j.fsys, sourceRoot.Path, primary.RelPath)
 	if err != nil {
-		return fmt.Errorf("source path before unlink: %w", err)
+		return fmt.Errorf("%w: source path before unlink: %w", errAfterMove, err)
 	}
 	// A move onto itself did nothing, and unlinking its "source" would delete the only copy.
 	if destAbs, err := mover.RootRelativePath(j.fsys, destRoot.Path, item.DestRelPath); err == nil && destAbs == sourceAbs {
@@ -321,7 +333,7 @@ func (j *Job) applyItem(
 		// SameFilesystem's own rename(2) already moved the file, so a
 		// same-filesystem move reaches here with nothing left to unlink --
 		// ErrNotExist is the expected outcome then, not a failure.
-		return fmt.Errorf("unlink source %q: %w", sourceAbs, err)
+		return fmt.Errorf("%w: unlink source %q: %w", errAfterMove, sourceAbs, err)
 	}
 	j.moveCompanions(ctx, item, primary.RootFolderID, permissions)
 	j.tidy(path.Dir(sourceAbs), sourceRoot.Path)
@@ -417,7 +429,7 @@ func (j *Job) moveCompanions(ctx context.Context, item library.Item, sourceRootI
 			DestRootFolderID: item.DestRootID, DestRelPath: companion.DestRelPath, SizeBytes: info.Size,
 			SameFilesystem: sourceRoot.FSID != "" && sourceRoot.FSID == destRoot.FSID,
 		}
-		if err := mover.ApplyOne(j.fsys, move, rootPath); err != nil {
+		if err := mover.ApplyOne(ctx, j.fsys, move, rootPath); err != nil {
 			j.logger.Warn("companion not moved", slog.String("path", sourceAbs), slog.Any("error", err))
 			continue
 		}
@@ -514,7 +526,7 @@ func (j *Job) copyItem(
 			return fmt.Errorf("record existing copy: %w", err)
 		}
 	} else if errors.Is(err, fs.ErrNotExist) {
-		method, err := mover.PlaceOne(j.fsys, sourceAbs, destAbs, item.Bytes, copyLadder)
+		method, err := mover.PlaceOne(ctx, j.fsys, sourceAbs, destAbs, item.Bytes, copyLadder)
 		if err != nil {
 			return fmt.Errorf("copy %q: %w", sourceAbs, err)
 		}
@@ -561,7 +573,7 @@ func (j *Job) copyCompanions(ctx context.Context, item library.Item, sourceRootI
 			j.logger.Warn("companion not copied: destination could not be checked", slog.String("path", destAbs), slog.Any("error", err))
 			continue
 		}
-		if _, err := mover.PlaceOne(j.fsys, sourceAbs, destAbs, info.Size, copyLadder); err != nil {
+		if _, err := mover.PlaceOne(ctx, j.fsys, sourceAbs, destAbs, info.Size, copyLadder); err != nil {
 			j.logger.Warn("companion not copied", slog.String("path", sourceAbs), slog.Int64("source_root", sourceRootID), slog.Any("error", err))
 		}
 	}

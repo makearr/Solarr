@@ -813,3 +813,58 @@ func TestJob_CancelledJobMovesNothingAndCannotResume(t *testing.T) {
 		t.Error("a cancelled job was resumed")
 	}
 }
+
+// A store error after the bytes moved must not end the item: FAILED is terminal, and the library row would
+// keep naming a path that no longer holds the file.
+func TestJob_ARecordingErrorAfterTheMoveIsRetriedNotFailed(t *testing.T) {
+	fx := newFixture(t)
+	fx.writeFile(t, "/root1/Old/track.flac", "same-fs bytes")
+	objectID := fx.registerObject(t, 1, "Old/track.flac", "same-fs bytes")
+
+	moveJobs := library.NewMoveJobs(fx.store)
+	jobID, err := moveJobs.Create(t.Context(), library.NewMoveJob{
+		Reason: string(mover.ReasonRename), FilesTotal: 1, BytesTotal: 13, PlanJSON: "{}", CreatedAt: fx.clock.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := moveJobs.AddItems(t.Context(), jobID, []library.NewMoveItem{{
+		MediaObjectID: objectID, DestRootID: 1, DestRelPath: "New/track.flac", Bytes: 13,
+	}}); err != nil {
+		t.Fatalf("AddItems: %v", err)
+	}
+	roots := fakeRoots{1: {Path: "/root1", FSID: "fs-a"}}
+
+	if _, err := fx.store.WriteDB().ExecContext(t.Context(),
+		`CREATE TRIGGER refuse_relocation BEFORE UPDATE ON library_path BEGIN SELECT RAISE(ABORT, 'injected'); END`); err != nil {
+		t.Fatalf("create trigger: %v", err)
+	}
+	if err := fx.run(t, fx.job(roots), jobID); err == nil {
+		t.Fatal("Run succeeded although the relocation could not be recorded")
+	}
+	items, err := moveJobs.ListItems(t.Context(), jobID)
+	if err != nil {
+		t.Fatalf("ListItems: %v", err)
+	}
+	if len(items) != 1 || items[0].State == library.MoveItemFailed || items[0].State == library.MoveItemDone {
+		t.Fatalf("items = %+v, want one item still to be finished", items)
+	}
+
+	if _, err := fx.store.WriteDB().ExecContext(t.Context(), `DROP TRIGGER refuse_relocation`); err != nil {
+		t.Fatalf("drop trigger: %v", err)
+	}
+	if err := fx.run(t, fx.job(roots), jobID); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+	items, _ = moveJobs.ListItems(t.Context(), jobID)
+	if len(items) != 1 || items[0].State != library.MoveItemDone {
+		t.Fatalf("items = %+v, want one DONE item", items)
+	}
+	paths, err := library.NewPhysical(fx.store).PathsForObject(t.Context(), objectID)
+	if err != nil {
+		t.Fatalf("PathsForObject: %v", err)
+	}
+	if len(paths) != 1 || paths[0].RelPath != "New/track.flac" {
+		t.Fatalf("paths = %+v, want the one path relocated", paths)
+	}
+}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fswatch"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
 // Notifier is the inotify instance the service drives; fswatch.Watcher is one.
@@ -202,7 +203,7 @@ func (s *Service) Run(ctx context.Context) {
 
 // ignoredName is a file Solarr itself writes while working, which would only make it rescan its own doing.
 func ignoredName(name string) bool {
-	return strings.HasSuffix(name, ".mnx-move-tmp") || strings.HasSuffix(name, ".partial") || strings.HasPrefix(name, ".mnx-write-probe")
+	return fsx.IsInFlightName(name) || strings.HasSuffix(name, ".partial")
 }
 
 func (s *Service) handle(event fswatch.Event) {

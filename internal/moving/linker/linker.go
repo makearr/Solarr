@@ -121,7 +121,7 @@ func Plan(fsys fsx.FS, objects []Object) ([]Link, []Skipped, error) {
 // probe asks the filesystem which method works between the pair by making the link beside the destination and
 // removing it again.
 func probe(fsys fsx.FS, keep, replace string) (Method, bool) {
-	scratch, err := scratchPath(replace, ".solarr-probe")
+	scratch, err := scratchPath(replace, fsx.ProbeTempPrefix)
 	if err != nil {
 		return "", false
 	}
@@ -167,7 +167,7 @@ func Apply(fsys fsx.FS, link Link) (Method, error) {
 	if !same {
 		return "", ErrContentDiffers
 	}
-	temp, err := scratchPath(link.Replace.Abs, ".solarr-link-tmp")
+	temp, err := scratchPath(link.Replace.Abs, fsx.LinkTempPrefix)
 	if err != nil {
 		return "", err
 	}
@@ -226,7 +226,7 @@ func unexpected(err error) error {
 // Make puts destination in place as a link to keep, reflink first, replacing whatever is there; the caller has
 // already moved a file it wants to keep out of the way. The swap is atomic like Apply's.
 func Make(fsys fsx.FS, keep, destination string) (Method, error) {
-	temp, err := scratchPath(destination, ".solarr-link-tmp")
+	temp, err := scratchPath(destination, fsx.LinkTempPrefix)
 	if err != nil {
 		return "", err
 	}

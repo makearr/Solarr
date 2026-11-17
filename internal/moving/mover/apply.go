@@ -1,6 +1,7 @@
 package mover
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -14,11 +15,12 @@ import (
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
-// tempSuffix marks a cross-filesystem copy still in flight -- never a real
-// destination name, so a crash mid-copy leaves an orphan this suffix makes
-// unambiguous to find and discard on a later sweep, rather than a
-// same-named partial file that could be mistaken for the real thing.
-const tempSuffix = ".mnx-move-tmp"
+// TempPrefix marks a copy still in flight -- never a real destination name, so a crash mid-copy leaves an orphan
+// that a later sweep can find and discard, not a same-named partial file mistaken for the real thing.
+const TempPrefix = fsx.MoveTempPrefix
+
+// copyBufferBytes is the chunk between context checks, so a 60 GB copy stops within a megabyte of a cancel.
+const copyBufferBytes = 1 << 20
 
 // RootPath answers a root folder's own absolute base path -- the caller's
 // job (settings.db policy, ADR-25), the same separation music.Consumer's
@@ -40,7 +42,7 @@ var ErrHashMismatch = errors.New("mover: copied file does not match its source")
 // whichever caller owns that transaction. ApplyOne returns once the bytes
 // are safely and verifiably at the destination; the source file is left
 // exactly where it was.
-func ApplyOne(fsys fsx.FS, move PlannedMove, roots RootPath) error {
+func ApplyOne(ctx context.Context, fsys fsx.FS, move PlannedMove, roots RootPath) error {
 	sourceRoot, ok := roots(move.SourceRootFolderID)
 	if !ok {
 		return fmt.Errorf("mover: source root %d has no known path", move.SourceRootFolderID)
@@ -95,26 +97,7 @@ func ApplyOne(fsys fsx.FS, move PlannedMove, roots RootPath) error {
 		return nil
 	}
 
-	tempAbs, err := temporaryMovePath(destAbs)
-	if err != nil {
-		return err
-	}
-	if err := copyFile(fsys, sourceAbs, tempAbs); err != nil {
-		_ = fsys.Remove(tempAbs)
-		return fmt.Errorf("mover: copy %q to %q: %w", sourceAbs, tempAbs, err)
-	}
-	if err := Verify(fsys, sourceAbs, tempAbs, move.SizeBytes); err != nil {
-		_ = fsys.Remove(tempAbs)
-		return err
-	}
-	// The rename from temp to final name is itself same-filesystem (both
-	// under destRoot), so this last step is atomic too -- a reader never
-	// sees a partially-written file at the real destination name.
-	if err := fsys.Rename(tempAbs, destAbs); err != nil {
-		_ = fsys.Remove(tempAbs)
-		return fmt.Errorf("mover: rename %q to %q: %w", tempAbs, destAbs, err)
-	}
-	return nil
+	return copyVerified(ctx, fsys, sourceAbs, destAbs, move.SizeBytes)
 }
 
 // RootRelativePath resolves a stored relative path beneath its root, checked where it becomes a filesystem operation:
@@ -196,7 +179,7 @@ func ValidMethod(method PlaceMethod) bool {
 // actually returns it there (both return a raw EXDEV) -- falling through on
 // any error is the contract that is actually honoured. When every rung
 // fails the last rung's own error is returned, wrapped in ErrNoRungSucceeded.
-func PlaceOne(fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64, ladder []PlaceMethod) (PlaceMethod, error) {
+func PlaceOne(ctx context.Context, fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64, ladder []PlaceMethod) (PlaceMethod, error) {
 	if len(ladder) == 0 {
 		ladder = DefaultLadder
 	}
@@ -216,7 +199,7 @@ func PlaceOne(fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64, ladder []
 
 	var lastErr error
 	for _, method := range ladder {
-		err := placeBy(fsys, method, sourceAbs, destAbs, sizeBytes)
+		err := placeBy(ctx, fsys, method, sourceAbs, destAbs, sizeBytes)
 		if err == nil {
 			return method, nil
 		}
@@ -229,17 +212,18 @@ func PlaceOne(fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64, ladder []
 	return "", fmt.Errorf("%w: %w", ErrNoRungSucceeded, lastErr)
 }
 
-func temporaryMovePath(destination string) (string, error) {
+// TemporaryPath names the in-flight sibling of destination, on the same filesystem so the final rename is atomic.
+func TemporaryPath(destination string) (string, error) {
 	random := make([]byte, 12)
 	if _, err := rand.Read(random); err != nil {
 		return "", fmt.Errorf("mover: generate temporary name: %w", err)
 	}
-	return path.Join(path.Dir(destination), tempSuffix+hex.EncodeToString(random)), nil
+	return path.Join(path.Dir(destination), TempPrefix+hex.EncodeToString(random)), nil
 }
 
 // placeBy attempts exactly one rung, leaving no destination behind on failure
 // so the next rung finds the path free rather than already taken.
-func placeBy(fsys fsx.FS, method PlaceMethod, sourceAbs, destAbs string, sizeBytes int64) error {
+func placeBy(ctx context.Context, fsys fsx.FS, method PlaceMethod, sourceAbs, destAbs string, sizeBytes int64) error {
 	switch method {
 	case PlaceReflink:
 		return fsys.Reflink(sourceAbs, destAbs)
@@ -248,24 +232,34 @@ func placeBy(fsys fsx.FS, method PlaceMethod, sourceAbs, destAbs string, sizeByt
 	case PlaceSymlink:
 		return fsys.Symlink(sourceAbs, destAbs)
 	case PlaceMove:
-		return moveFile(fsys, sourceAbs, destAbs, sizeBytes)
+		return moveFile(ctx, fsys, sourceAbs, destAbs, sizeBytes)
 	case PlaceCopy:
-		return copyVerified(fsys, sourceAbs, destAbs, sizeBytes)
+		return copyVerified(ctx, fsys, sourceAbs, destAbs, sizeBytes)
 	default:
 		return fmt.Errorf("%w: %q", ErrUnknownMethod, method)
 	}
 }
 
-// copyVerified copies and proves the bytes arrived, discarding a failed
-// destination so a later rung is not blocked by a partial file.
-func copyVerified(fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64) error {
-	if err := copyFile(fsys, sourceAbs, destAbs); err != nil {
-		_ = fsys.Remove(destAbs)
+// copyVerified copies to an in-flight name, proves the bytes arrived, then renames into place: a kill or a failed
+// verify leaves nothing under the final name, and a later rung is not blocked by a partial file.
+func copyVerified(ctx context.Context, fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64) error {
+	tempAbs, err := TemporaryPath(destAbs)
+	if err != nil {
 		return err
 	}
-	if err := Verify(fsys, sourceAbs, destAbs, sizeBytes); err != nil {
-		_ = fsys.Remove(destAbs)
+	sourceHash, err := copyFile(ctx, fsys, sourceAbs, tempAbs)
+	if err != nil {
+		_ = fsys.Remove(tempAbs)
+		return fmt.Errorf("mover: copy %q to %q: %w", sourceAbs, tempAbs, err)
+	}
+	if err := verifyAgainst(fsys, tempAbs, sizeBytes, sourceHash); err != nil {
+		_ = fsys.Remove(tempAbs)
 		return err
+	}
+	// Both names are under the destination's directory, so this last step is atomic: a reader never sees a partial file.
+	if err := fsys.Rename(tempAbs, destAbs); err != nil {
+		_ = fsys.Remove(tempAbs)
+		return fmt.Errorf("mover: rename %q to %q: %w", tempAbs, destAbs, err)
 	}
 	return nil
 }
@@ -275,11 +269,11 @@ var errSourceKept = errors.New("mover: source kept after a verified copy")
 
 // moveFile renames where it can and copies-then-unlinks where it cannot. The source is removed only
 // after the copy verifies, so a failed move never destroys the only copy of a file.
-func moveFile(fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64) error {
+func moveFile(ctx context.Context, fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64) error {
 	if err := fsys.Rename(sourceAbs, destAbs); err == nil {
 		return nil
 	}
-	if err := copyVerified(fsys, sourceAbs, destAbs, sizeBytes); err != nil {
+	if err := copyVerified(ctx, fsys, sourceAbs, destAbs, sizeBytes); err != nil {
 		return err
 	}
 	if err := fsys.Remove(sourceAbs); err != nil {
@@ -288,22 +282,67 @@ func moveFile(fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64) error {
 	return nil
 }
 
-func copyFile(fsys fsx.FS, sourceAbs, destAbs string) error {
+// copyFile copies in chunks, stopping when ctx ends, flushes the destination to disk, and answers the SHA-256 of what it read,
+// so verifying needs one read of the source instead of two.
+func copyFile(ctx context.Context, fsys fsx.FS, sourceAbs, destAbs string) (string, error) {
 	source, err := fsys.Open(sourceAbs)
 	if err != nil {
-		return fmt.Errorf("open %q: %w", sourceAbs, err)
+		return "", fmt.Errorf("open %q: %w", sourceAbs, err)
 	}
 	defer func() { _ = source.Close() }()
 
 	dest, err := fsys.Create(destAbs)
 	if err != nil {
-		return fmt.Errorf("create %q: %w", destAbs, err)
+		return "", fmt.Errorf("create %q: %w", destAbs, err)
 	}
-	if _, err := io.Copy(dest, source); err != nil {
+	hash := sha256.New()
+	if _, err := io.CopyBuffer(io.MultiWriter(dest, hash), contextReader{ctx: ctx, reader: source}, make([]byte, copyBufferBytes)); err != nil {
 		_ = dest.Close()
-		return fmt.Errorf("write %q: %w", destAbs, err)
+		return "", fmt.Errorf("write %q: %w", destAbs, err)
 	}
-	return dest.Close()
+	// The source is unlinked next on another filesystem; without a flush a power loss could keep the unlink and lose the copy.
+	if syncer, ok := dest.(interface{ Sync() error }); ok {
+		if err := syncer.Sync(); err != nil {
+			_ = dest.Close()
+			return "", fmt.Errorf("flush %q: %w", destAbs, err)
+		}
+	}
+	if err := dest.Close(); err != nil {
+		return "", fmt.Errorf("close %q: %w", destAbs, err)
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// contextReader fails a read once its context has ended.
+type contextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r contextReader) Read(buffer []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.reader.Read(buffer)
+}
+
+// verifyAgainst checks a fresh copy's size and its full-content hash against the hash taken while copying.
+func verifyAgainst(fsys fsx.FS, destAbs string, expectedSize int64, sourceHash string) error {
+	destInfo, err := fsys.Stat(destAbs)
+	if err != nil {
+		return fmt.Errorf("mover: stat copied file %q: %w", destAbs, err)
+	}
+	if destInfo.Size != expectedSize {
+		return fmt.Errorf("mover: %q copied as %d bytes, want %d: %w", destAbs, destInfo.Size, expectedSize, ErrHashMismatch)
+	}
+	destHash, err := fullHash(fsys, destAbs)
+	if err != nil {
+		return fmt.Errorf("mover: hash copied file %q: %w", destAbs, err)
+	}
+	if destHash != sourceHash {
+		return fmt.Errorf("mover: %q does not match its source: %w", destAbs, ErrHashMismatch)
+	}
+	return nil
 }
 
 // Verify checks size then a full content hash, never skipped for a

@@ -94,6 +94,8 @@ type Options struct {
 	// GatherFiles, above zero, holds whole directories back until about this many files are together, and emits them as
 	// one batch named after the last: a library of one file per folder is otherwise one lookup per batch.
 	GatherFiles int
+	// RemoveStaleInFlight deletes Solarr's own work-in-progress files that a kill left behind; only for a root that is writable.
+	RemoveStaleInFlight bool
 }
 
 // Sweeper walks one root folder.
@@ -355,7 +357,7 @@ func (s Sweeper) ReadDirectory(root, relative string, include func(relPath strin
 
 	batch := Batch{Directory: relative}
 	for _, entry := range entries {
-		if entry.IsDir {
+		if entry.IsDir || fsx.IsInFlightName(entry.Name) {
 			continue
 		}
 		childRelative := path.Join(relative, entry.Name)

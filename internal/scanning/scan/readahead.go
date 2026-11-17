@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
@@ -48,6 +49,9 @@ type readAhead struct {
 	include func(relPath string) bool
 	// reads answers whether the walk will read a directory's files, so their stats are taken here too.
 	reads func(relative string, info fsx.FileInfo) bool
+	// removeStale lets the read delete an orphaned in-flight file, judged against clock.
+	removeStale bool
+	clock       clock.Clock
 
 	mu      sync.Mutex
 	wake    *sync.Cond
@@ -61,6 +65,7 @@ type readAhead struct {
 func newReadAhead(ctx context.Context, w *sweep) *readAhead {
 	r := &readAhead{
 		fsys: w.sweeper.fsys, root: w.root, include: w.options.Include, reads: w.reads,
+		removeStale: w.options.RemoveStaleInFlight, clock: w.sweeper.clock,
 		known: map[string]*listing{},
 	}
 	r.wake = sync.NewCond(&r.mu)
@@ -166,10 +171,26 @@ func (r *readAhead) fill(ctx context.Context, next *listing) {
 		return
 	}
 	for _, entry := range entries {
+		if !entry.IsDir && fsx.IsInFlightName(entry.Name) {
+			r.removeIfStale(path.Join(absolute, entry.Name), entry.Name)
+			continue
+		}
 		if entry.IsDir || (r.include != nil && !r.include(path.Join(next.relative, entry.Name))) {
 			continue
 		}
 		child, err := r.fsys.Stat(path.Join(absolute, entry.Name))
 		next.files = append(next.files, listedFile{name: entry.Name, info: child, err: err})
 	}
+}
+
+// removeIfStale deletes an in-flight file no live copy or link can still be using: one older than its marker's limit.
+func (r *readAhead) removeIfStale(absolute, name string) {
+	if !r.removeStale {
+		return
+	}
+	info, err := r.fsys.Lstat(absolute)
+	if err != nil || r.clock.Now().Sub(info.ModTime) < fsx.InFlightStaleAfter(name) {
+		return
+	}
+	_ = r.fsys.Remove(absolute)
 }

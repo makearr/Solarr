@@ -11,7 +11,7 @@ import (
 func PlaceOneOnDisk(ctx context.Context, fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64, ladder []PlaceMethod) (PlaceMethod, error) {
 	var method PlaceMethod
 	err := iogate.OnDisk(ctx, "", []string{sourceAbs, destAbs}, func() (placeErr error) {
-		method, placeErr = PlaceOne(fsys, sourceAbs, destAbs, sizeBytes, ladder)
+		method, placeErr = PlaceOne(ctx, fsys, sourceAbs, destAbs, sizeBytes, ladder)
 		return placeErr
 	})
 	return method, err

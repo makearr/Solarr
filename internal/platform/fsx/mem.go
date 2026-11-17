@@ -118,7 +118,7 @@ func (m *Mem) SetHardlinkSupported(supported bool) {
 
 // SetRenameSupported switches Rename's own cross-device behaviour off, standing
 // in for the same "two different filesystems" case Link already simulates --
-// section 10.8's recycle bin refuses to cross one rather than silently copying.
+// section 10.8's recycle bin refuses to cross one rather than silently copying. A rename inside one directory still works.
 func (m *Mem) SetRenameSupported(supported bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -360,7 +360,8 @@ func (m *Mem) ReadDir(path string) ([]DirEntry, error) {
 func (m *Mem) Rename(oldPath, newPath string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if !m.renameSupported {
+	// Two names in one directory are on one filesystem, whatever the switch says.
+	if !m.renameSupported && filepath.Dir(filepath.Clean(oldPath)) != filepath.Dir(filepath.Clean(newPath)) {
 		return pathError("rename", newPath, syscall.EXDEV)
 	}
 	from := filepath.Clean(oldPath)

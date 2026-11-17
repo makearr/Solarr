@@ -515,6 +515,21 @@ func (p Physical) HoldsFiles(ctx context.Context, rootFolderID int64) (bool, err
 // Plan ran (a rescan, another move, a manual edit), not a bug in the caller.
 var ErrPathNotFound = errors.New("library: no library_path at the given location")
 
+// ErrDestinationOccupied means another library_path already holds the destination: retrying cannot succeed.
+var ErrDestinationOccupied = errors.New("library: another file already holds the destination path")
+
+// Extended result codes of SQLITE_CONSTRAINT_PRIMARYKEY and SQLITE_CONSTRAINT_UNIQUE.
+const (
+	sqliteConstraintPrimaryKey = 1555
+	sqliteConstraintUnique     = 2067
+)
+
+// sqliteUniqueViolation is a uniqueness conflict, which a retry cannot resolve (a trigger's abort, or a busy store, can).
+func sqliteUniqueViolation(err error) bool {
+	var coded interface{ Code() int }
+	return errors.As(err, &coded) && (coded.Code() == sqliteConstraintUnique || coded.Code() == sqliteConstraintPrimaryKey)
+}
+
 // Relocate is ADR-51's own RECORD step: media_object never changes
 // (Invariant 70), only where it lives. Matched by the old
 // (root_folder_id, rel_path) pair, which is exactly what a PlannedMove
@@ -539,6 +554,9 @@ func (p Physical) Relocate(ctx context.Context, oldRootFolderID int64, oldRelPat
 		}
 		return nil
 	})
+	if sqliteUniqueViolation(err) {
+		err = fmt.Errorf("%w: %w", ErrDestinationOccupied, err)
+	}
 	if err != nil {
 		return fmt.Errorf("library: relocate %d:%s to %d:%s: %w",
 			oldRootFolderID, oldRelPath, newRootFolderID, newRelPath, err)

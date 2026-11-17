@@ -67,13 +67,21 @@ func TestMem_LinkAcrossFilesystemsIsEXDEV(t *testing.T) {
 
 func TestMem_RenameAcrossFilesystemsIsEXDEV(t *testing.T) {
 	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
-	if err := fsys.MkdirAll("/library", 0o755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
+	for _, directory := range []string{"/library", "/other"} {
+		if err := fsys.MkdirAll(directory, 0o755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
 	}
 	writeFile(t, fsys, "/library/a.flac", "audio")
 	fsys.SetRenameSupported(false)
 
-	if err := fsys.Rename("/library/a.flac", "/library/b.flac"); !errors.Is(err, syscall.EXDEV) {
+	if err := fsys.Rename("/library/a.flac", "/library/same-directory.flac"); err != nil {
+		t.Errorf("a rename inside one directory = %v, want success", err)
+	}
+	if err := fsys.Rename("/library/same-directory.flac", "/library/a.flac"); err != nil {
+		t.Fatalf("rename back: %v", err)
+	}
+	if err := fsys.Rename("/library/a.flac", "/other/b.flac"); !errors.Is(err, syscall.EXDEV) {
 		t.Errorf("Rename = %v, want EXDEV — recycle bin's own cross-device case (section 10.8)", err)
 	}
 	if _, err := fsys.Stat("/library/a.flac"); err != nil {
