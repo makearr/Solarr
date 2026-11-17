@@ -37,6 +37,26 @@ const DOWNLOAD_VERBS: Record<string, string> = {
  *  far short of being a history view -- that is what the event log is for. */
 const SCROLLBACK = 50;
 
+const CLIENT_ERROR = "client.error";
+
+const clientErrorListeners = new Set<(event: Notification) => void>();
+let clientErrorId = 0;
+
+/** A failure only this tab knows about, shown in the bar like a server event. Ids are negative: the server's are not. */
+export function pushClientError(text: string) {
+  const event: Notification = {
+    id: --clientErrorId, topic: "client", entity: "client", kind: CLIENT_ERROR, at: new Date().toISOString(), data: { detail: text },
+  };
+  for (const listener of clientErrorListeners) listener(event);
+}
+
+/** What a problem body says to a person: its detail, else its title. */
+export function problemText(error: unknown): string {
+  const problem = error as { detail?: unknown; title?: unknown } | null | undefined;
+  for (const text of [problem?.detail, problem?.title]) if (typeof text === "string" && text !== "") return text;
+  return error instanceof Error && error.message !== "" ? error.message : "The request failed";
+}
+
 interface Stream {
   readonly recent: readonly Notification[];
   readonly unread: number;
@@ -56,7 +76,12 @@ export function useNotifications(): Stream {
   const seen = useRef(0);
 
   useEffect(() => {
-    return subscribe<Notification>({
+    const onClientError = (event: Notification) => {
+      setRecent((held) => [event, ...held].slice(0, SCROLLBACK));
+      setUnread((count) => count + 1);
+    };
+    clientErrorListeners.add(onClientError);
+    const unsubscribe = subscribe<Notification>({
       topics: [],
       onConnection: setConnection,
       onEvents: (events) => {
@@ -68,6 +93,10 @@ export function useNotifications(): Stream {
         seen.current += events.length;
       },
     });
+    return () => {
+      clientErrorListeners.delete(onClientError);
+      unsubscribe();
+    };
   }, []);
 
   const markRead = useCallback(() => setUnread(0), []);
@@ -76,6 +105,7 @@ export function useNotifications(): Stream {
 
 /** Plain language for the bar: downloads and imports read as sentences, anything else as "job:42 updated". */
 export function describe(event: Notification): string {
+  if (event.kind === CLIENT_ERROR) return event.data?.detail ?? "The request failed";
   const verb = DOWNLOAD_VERBS[event.kind];
   if (verb !== undefined && event.data) {
     const album = [event.data.artist, event.data.album].filter(Boolean).join(" — ");

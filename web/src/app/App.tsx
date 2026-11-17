@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { RouterProvider } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
@@ -61,7 +62,11 @@ export function App() {
     return <Setup onDone={() => setSkipped(true)} />;
   }
 
-  return <RouterProvider router={router} />;
+  return (
+    <ErrorBoundary name="The application">
+      <RouterProvider router={router} />
+    </ErrorBoundary>
+  );
 }
 
 function Splash({ children }: { children: React.ReactNode }) {

@@ -3,6 +3,7 @@ import { useLocation } from "@tanstack/react-router";
 import { useShowFooter } from "@/lib/interfacePreferences";
 import { isAdministratorPath, useIsAdministrator } from "@/lib/useAdministrator";
 
+import { ErrorBoundary } from "./ErrorBoundary";
 import { NotificationBell } from "./Notifications";
 import { PlayerProvider } from "./player/PlayerContext";
 import { PlayerDock } from "./player/PlayerDock";
@@ -39,8 +40,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </main>
         </div>
       </div>
-      <PlayerDock />
-      {showFooter && <StatusBar />}
+      <ErrorBoundary name="The player"><PlayerDock /></ErrorBoundary>
+      {showFooter && <ErrorBoundary name="The status bar"><StatusBar /></ErrorBoundary>}
     </div>
     </PlayerProvider>
   );

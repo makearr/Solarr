@@ -86,7 +86,7 @@ export function StatusBar() {
                    focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         <Light connection={connection} />
-        <span className="truncate">
+        <span className={`truncate ${latest?.kind === "client.error" ? "text-danger" : ""}`}>
           {latest ? describe(latest) : idle}
         </span>
         {unread > 0 && (
@@ -165,7 +165,7 @@ export function StatusBar() {
               key={event.id}
               className="flex items-baseline gap-2 border-b border-border-subtle px-3 py-1.5 last:border-b-0"
             >
-              <span className="truncate">{describe(event)}</span>
+              <span className={`truncate ${event.kind === "client.error" ? "text-danger" : ""}`}>{describe(event)}</span>
               <time className="ml-auto shrink-0 font-mono text-ink-muted" dateTime={event.at}>
                 {new Date(event.at).toLocaleTimeString(undefined, { hour12: false })}
               </time>

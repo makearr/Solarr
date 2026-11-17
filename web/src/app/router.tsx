@@ -1,3 +1,4 @@
+import { RouteError } from "./ErrorBoundary";
 import {
   createRootRoute,
   createRoute,
@@ -367,6 +368,7 @@ const routes = [
 export const router = createRouter({
   routeTree: rootRoute.addChildren(routes),
   defaultPreload: "intent",
+  defaultErrorComponent: RouteError,
 });
 
 declare module "@tanstack/react-router" {
