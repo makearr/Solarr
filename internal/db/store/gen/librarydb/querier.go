@@ -668,6 +668,8 @@ type Querier interface {
 	// Which of an album's files a Solarr download brought in: placed by an import session a download
 	// started. Only those can replace an owned file (M1d).
 	ListDownloadedFilesForWork(ctx context.Context, workID int64) ([]int64, error)
+	// The queued files whose automatic retry is due; ListUnidentified without the due test lists them all.
+	ListDueUnidentified(ctx context.Context, arg ListDueUnidentifiedParams) ([]IdentificationQueue, error)
 	ListEditionExternalIDs(ctx context.Context, editionID int64) ([]EditionExternalID, error)
 	// Works identified at release-group level only (the text search never picks an
 	// edition): no edition, and either not enriched yet (no credit) or with files on
@@ -1356,6 +1358,7 @@ type Querier interface {
 	// A file marked "not media" is never queued again, nor one that already belongs to a work: a
 	// person's resolve survives a full rescan the chain still cannot decide (found 2026-09-24). An
 	// unverified album (only local ids, D6) does not count: its files still await identification.
+	// Seen again with the same answer for the same bytes, the next automatic try moves out: a day, doubling, up to 30 days.
 	UpsertUnidentified(ctx context.Context, arg UpsertUnidentifiedParams) error
 	// Series (TV works) refresh: provider data written without disturbing what a person set.
 	// A refresh never changes monitoring: monitored is left out of the update.

@@ -423,6 +423,9 @@ type IdentificationQueue struct {
 	CandidatesJson string
 	FirstSeenAt    int64
 	LastSeenAt     int64
+	Tries          int64
+	NextTryAt      int64
+	TriedSize      int64
 }
 
 type ImportDecision struct {

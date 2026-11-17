@@ -61,7 +61,7 @@ func (q *Queries) DeleteUnidentified(ctx context.Context, mediaObjectID int64) e
 }
 
 const getUnidentified = `-- name: GetUnidentified :one
-SELECT media_object_id, root_folder_id, rel_path, candidates_json, first_seen_at, last_seen_at
+SELECT media_object_id, root_folder_id, rel_path, candidates_json, first_seen_at, last_seen_at, tries, next_try_at, tried_size
 FROM identification_queue WHERE media_object_id = ?
 `
 
@@ -78,8 +78,73 @@ func (q *Queries) GetUnidentified(ctx context.Context, mediaObjectID int64) (Ide
 		&i.CandidatesJson,
 		&i.FirstSeenAt,
 		&i.LastSeenAt,
+		&i.Tries,
+		&i.NextTryAt,
+		&i.TriedSize,
 	)
 	return i, err
+}
+
+const listDueUnidentified = `-- name: ListDueUnidentified :many
+SELECT media_object_id, root_folder_id, rel_path, candidates_json, first_seen_at, last_seen_at, tries, next_try_at, tried_size
+FROM identification_queue
+WHERE root_folder_id = ?1 AND next_try_at <= ?2
+  AND (first_seen_at > ?3
+       OR (first_seen_at = ?3 AND identification_queue.media_object_id > ?4))
+  AND NOT EXISTS (SELECT 1 FROM desired_item_file f
+                  JOIN desired_item d ON d.id = f.desired_item_id
+                  JOIN work w ON w.id = d.work_id AND w.media_type = 'tv'
+                  WHERE f.media_object_id = identification_queue.media_object_id)
+ORDER BY first_seen_at, media_object_id
+LIMIT ?5
+`
+
+type ListDueUnidentifiedParams struct {
+	RootFolderID int64
+	DueBy        int64
+	AfterSeen    int64
+	AfterID      int64
+	PageSize     int64
+}
+
+// The queued files whose automatic retry is due; ListUnidentified without the due test lists them all.
+func (q *Queries) ListDueUnidentified(ctx context.Context, arg ListDueUnidentifiedParams) ([]IdentificationQueue, error) {
+	rows, err := q.db.QueryContext(ctx, listDueUnidentified,
+		arg.RootFolderID,
+		arg.DueBy,
+		arg.AfterSeen,
+		arg.AfterID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []IdentificationQueue{}
+	for rows.Next() {
+		var i IdentificationQueue
+		if err := rows.Scan(
+			&i.MediaObjectID,
+			&i.RootFolderID,
+			&i.RelPath,
+			&i.CandidatesJson,
+			&i.FirstSeenAt,
+			&i.LastSeenAt,
+			&i.Tries,
+			&i.NextTryAt,
+			&i.TriedSize,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listManuallyIdentified = `-- name: ListManuallyIdentified :many
@@ -113,7 +178,7 @@ func (q *Queries) ListManuallyIdentified(ctx context.Context, mediaObjectIds str
 }
 
 const listUnidentified = `-- name: ListUnidentified :many
-SELECT media_object_id, root_folder_id, rel_path, candidates_json, first_seen_at, last_seen_at
+SELECT media_object_id, root_folder_id, rel_path, candidates_json, first_seen_at, last_seen_at, tries, next_try_at, tried_size
 FROM identification_queue
 WHERE (?1 = 0
        OR root_folder_id IN (SELECT value FROM json_each(?2)))
@@ -160,6 +225,9 @@ func (q *Queries) ListUnidentified(ctx context.Context, arg ListUnidentifiedPara
 			&i.CandidatesJson,
 			&i.FirstSeenAt,
 			&i.LastSeenAt,
+			&i.Tries,
+			&i.NextTryAt,
+			&i.TriedSize,
 		); err != nil {
 			return nil, err
 		}
@@ -245,16 +313,25 @@ func (q *Queries) RecordManualIdentification(ctx context.Context, arg RecordManu
 const upsertUnidentified = `-- name: UpsertUnidentified :exec
 
 INSERT INTO identification_queue (media_object_id, root_folder_id, rel_path, candidates_json,
-                                   first_seen_at, last_seen_at)
+                                   first_seen_at, last_seen_at, tries, next_try_at, tried_size)
 SELECT ?1, ?2, ?3,
-       ?4, ?5, ?6
+       ?4, ?5, ?6, 0, 0,
+       COALESCE((SELECT size_bytes FROM media_object WHERE id = ?1), 0)
 WHERE NOT EXISTS (SELECT 1 FROM not_media nm WHERE nm.media_object_id = ?1)
   AND NOT EXISTS (SELECT 1 FROM work_file wf WHERE wf.media_object_id = ?1
                     AND EXISTS (SELECT 1 FROM work_external_id vx
                                 WHERE vx.work_id = wf.work_id AND vx.provider NOT LIKE 'local:%'))
 ON CONFLICT (media_object_id) DO UPDATE SET
   root_folder_id = excluded.root_folder_id, rel_path = excluded.rel_path,
-  candidates_json = excluded.candidates_json, last_seen_at = excluded.last_seen_at
+  candidates_json = excluded.candidates_json, last_seen_at = excluded.last_seen_at,
+  tries = CASE WHEN identification_queue.candidates_json = excluded.candidates_json
+                    AND identification_queue.tried_size = excluded.tried_size
+               THEN identification_queue.tries + 1 ELSE 0 END,
+  next_try_at = CASE WHEN identification_queue.candidates_json = excluded.candidates_json
+                          AND identification_queue.tried_size = excluded.tried_size
+                     THEN excluded.last_seen_at + min(86400 * (1 << min(identification_queue.tries, 5)), 2592000)
+                     ELSE 0 END,
+  tried_size = excluded.tried_size
 `
 
 type UpsertUnidentifiedParams struct {
@@ -271,6 +348,7 @@ type UpsertUnidentifiedParams struct {
 // A file marked "not media" is never queued again, nor one that already belongs to a work: a
 // person's resolve survives a full rescan the chain still cannot decide (found 2026-09-24). An
 // unverified album (only local ids, D6) does not count: its files still await identification.
+// Seen again with the same answer for the same bytes, the next automatic try moves out: a day, doubling, up to 30 days.
 func (q *Queries) UpsertUnidentified(ctx context.Context, arg UpsertUnidentifiedParams) error {
 	_, err := q.db.ExecContext(ctx, upsertUnidentified,
 		arg.MediaObjectID,

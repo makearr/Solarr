@@ -29,7 +29,7 @@ func (p *process) identifyRetryTask() jobs.Task {
 
 // enqueueIdentifyRetry rescans the folders of the waiting files of every library whose type declares this retry; each folder goes through its own media type's consumer, probed as a scan would.
 func (p *process) enqueueIdentifyRetry(ctx context.Context) (jobs.EnqueueResult, error) {
-	return p.identifyWaiting(ctx, func(settings.Category) bool { return true })
+	return p.identifyWaiting(ctx, func(settings.Category) bool { return true }, false)
 }
 
 // IdentifyLibraryAgain asks again about one library's waiting files, now; it answers the folders queued.
@@ -38,17 +38,18 @@ func (p *process) IdentifyLibraryAgain(ctx context.Context, categoryID int64) (i
 	if !found || !sharedRetry(p.media, category.MediaType) {
 		return 0, nil
 	}
-	_, folders, err := p.identifyCategory(ctx, category)
+	_, folders, err := p.identifyCategory(ctx, category, true)
 	return folders, err
 }
 
-func (p *process) identifyWaiting(ctx context.Context, wanted func(settings.Category) bool) (jobs.EnqueueResult, error) {
+// identifyWaiting queues the retry of every wanted library; force asks about files whose automatic retry is not yet due too.
+func (p *process) identifyWaiting(ctx context.Context, wanted func(settings.Category) bool, force bool) (jobs.EnqueueResult, error) {
 	var last jobs.EnqueueResult
 	for _, category := range p.cache.Snapshot().Categories() {
 		if !sharedRetry(p.media, category.MediaType) || !wanted(category) {
 			continue
 		}
-		result, _, err := p.identifyCategory(ctx, category)
+		result, _, err := p.identifyCategory(ctx, category, force)
 		if err != nil {
 			return last, err
 		}
@@ -60,12 +61,12 @@ func (p *process) identifyWaiting(ctx context.Context, wanted func(settings.Cate
 }
 
 // identifyCategory queues a rescan of the folders of one library's waiting files.
-func (p *process) identifyCategory(ctx context.Context, category settings.Category) (jobs.EnqueueResult, int, error) {
+func (p *process) identifyCategory(ctx context.Context, category settings.Category, force bool) (jobs.EnqueueResult, int, error) {
 	unidentified := library.NewUnidentified(p.library)
 	var last jobs.EnqueueResult
 	folders := 0
 	for _, root := range p.cache.Snapshot().RootFoldersForCategory(category.ID) {
-		directories, err := adapters.WaitingDirectories(ctx, unidentified, root.ID)
+		directories, err := adapters.WaitingDirectories(ctx, unidentified, root.ID, clock.NewSystem().Now().Unix(), force)
 		if err != nil {
 			return last, folders, err
 		}
@@ -111,7 +112,8 @@ func (p *process) enqueueOutageRetry(ctx context.Context) (jobs.EnqueueResult, e
 	if len(mediaTypes) == 0 {
 		return jobs.EnqueueResult{}, nil
 	}
-	return p.identifyWaiting(ctx, func(category settings.Category) bool { return slices.Contains(mediaTypes, category.MediaType) })
+	// A provider that was down gave the waiting files no real try, so they are all due again.
+	return p.identifyWaiting(ctx, func(category settings.Category) bool { return slices.Contains(mediaTypes, category.MediaType) }, true)
 }
 
 // takeRecoveredMediaTypes empties the notes into the media types of the providers not retried within the spacing.

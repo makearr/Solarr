@@ -2,12 +2,14 @@ package library_test
 
 import (
 	"encoding/json"
+	"math"
 	"slices"
 	"testing"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
 // "Not media" takes a file out of the queue, and a later scan recording it again does not bring it back.
@@ -105,5 +107,72 @@ func TestUnitCandidates_ReadsBothStoredForms(t *testing.T) {
 	}
 	if none, err := library.UnitCandidates(""); err != nil || none != nil {
 		t.Errorf("nothing stored: %+v, %v; want none", none, err)
+	}
+}
+
+// Seen again with the same answer for the same bytes, a file's automatic retry moves out a day, then two, four, eight; a
+// changed file or a different answer starts over.
+func TestUnidentified_ARepeatedAnswerBacksTheRetryOffAndAChangeResetsIt(t *testing.T) {
+	opened, _ := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	queue := library.NewUnidentified(opened)
+	id := registerOne(t, physical, "Heka/Zanuvode/01.flac")
+	const day = int64(86400)
+	entry := library.QueueEntry{MediaObjectID: id, RootFolderID: 1, RelPath: "Heka/Zanuvode/01.flac", At: 1000}
+	record := func(at int64) library.Row {
+		t.Helper()
+		entry.At = at
+		if err := queue.Record(t.Context(), []library.QueueEntry{entry}); err != nil {
+			t.Fatalf("Record: %v", err)
+		}
+		row, err := queue.Get(t.Context(), id)
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		return row
+	}
+
+	if row := record(1000); row.Tries != 0 || row.NextTryAt != 0 {
+		t.Fatalf("first sighting: tries %d next %d, want 0 and due now", row.Tries, row.NextTryAt)
+	}
+	at := int64(2000)
+	for tries, wait := range []int64{day, 2 * day, 4 * day, 8 * day} {
+		if row := record(at); row.Tries != int64(tries+1) || row.NextTryAt != at+wait {
+			t.Fatalf("repeat %d: tries %d next %d, want %d and %d", tries+1, row.Tries, row.NextTryAt, tries+1, at+wait)
+		}
+		at += 10
+	}
+	entry.Candidates = []model.Identification{{Strategy: "tags", Confidence: 0.5}}
+	if row := record(at); row.Tries != 0 || row.NextTryAt != 0 {
+		t.Fatalf("a different answer: tries %d next %d, want a fresh start", row.Tries, row.NextTryAt)
+	}
+}
+
+func TestUnidentified_ListDueSkipsFilesWhoseRetryIsNotDue(t *testing.T) {
+	opened, _ := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	queue := library.NewUnidentified(opened)
+	fresh := registerOne(t, physical, "A/01.flac")
+	tried := registerOne(t, physical, "B/01.flac")
+	entries := []library.QueueEntry{
+		{MediaObjectID: fresh, RootFolderID: 1, RelPath: "A/01.flac", At: 10},
+		{MediaObjectID: tried, RootFolderID: 1, RelPath: "B/01.flac", At: 10},
+	}
+	for _, at := range []int64{10, 20} {
+		entries[1].At = at
+		if err := queue.Record(t.Context(), entries[1:]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := queue.Record(t.Context(), entries[:1]); err != nil {
+		t.Fatal(err)
+	}
+	due, err := queue.ListDue(t.Context(), 1, 30, paginate.Cursor{}, 10)
+	if err != nil || len(due) != 1 || due[0].MediaObjectID != fresh {
+		t.Fatalf("due = %+v, %v; want only the file never retried", due, err)
+	}
+	all, err := queue.ListDue(t.Context(), 1, math.MaxInt64, paginate.Cursor{}, 10)
+	if err != nil || len(all) != 2 {
+		t.Fatalf("forced = %+v, %v; want both", all, err)
 	}
 }

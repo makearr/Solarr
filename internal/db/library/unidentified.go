@@ -54,6 +54,9 @@ type Row struct {
 	Candidates    []Candidate
 	FirstSeenAt   int64
 	LastSeenAt    int64
+	// Tries counts repeats with the same answer for the same bytes; NextTryAt is when the daily retry may ask again.
+	Tries     int64
+	NextTryAt int64
 }
 
 func encodeCandidates(candidates []model.Identification) (string, error) {
@@ -122,6 +125,7 @@ func (u Unidentified) Get(ctx context.Context, mediaObjectID int64) (Row, error)
 	return Row{
 		MediaObjectID: row.MediaObjectID, RootFolderID: row.RootFolderID, RelPath: row.RelPath,
 		Candidates: candidates, FirstSeenAt: row.FirstSeenAt, LastSeenAt: row.LastSeenAt,
+		Tries: row.Tries, NextTryAt: row.NextTryAt,
 	}, nil
 }
 
@@ -243,6 +247,25 @@ func (u Unidentified) List(ctx context.Context, rootFolderIDs []int64, after pag
 		views[index] = Row{
 			MediaObjectID: row.MediaObjectID, RootFolderID: row.RootFolderID, RelPath: row.RelPath,
 			Candidates: candidates, FirstSeenAt: row.FirstSeenAt, LastSeenAt: row.LastSeenAt,
+			Tries: row.Tries, NextTryAt: row.NextTryAt,
+		}
+	}
+	return views, nil
+}
+
+// ListDue returns one page of a root's queued files whose automatic retry is due at dueBy, oldest-queued first.
+func (u Unidentified) ListDue(ctx context.Context, rootFolderID, dueBy int64, after paginate.Cursor, pageSize int) ([]Row, error) {
+	rows, err := librarydb.New(u.store.Read()).ListDueUnidentified(ctx, librarydb.ListDueUnidentifiedParams{
+		RootFolderID: rootFolderID, DueBy: dueBy, AfterSeen: after.Sort, AfterID: after.ID, PageSize: int64(pageSize),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: list due unidentified: %w", err)
+	}
+	views := make([]Row, len(rows))
+	for index, row := range rows {
+		views[index] = Row{
+			MediaObjectID: row.MediaObjectID, RootFolderID: row.RootFolderID, RelPath: row.RelPath,
+			FirstSeenAt: row.FirstSeenAt, LastSeenAt: row.LastSeenAt, Tries: row.Tries, NextTryAt: row.NextTryAt,
 		}
 	}
 	return views, nil

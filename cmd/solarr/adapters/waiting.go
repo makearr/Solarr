@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"context"
+	"math"
 	"path"
 	"slices"
 
@@ -12,12 +13,17 @@ import (
 // waitingPageSize bounds one read of a root's unidentified files.
 const waitingPageSize = 500
 
-// WaitingDirectories are the folders holding the root's files that wait for review, sorted and without repeats.
-func WaitingDirectories(ctx context.Context, unidentified library.Unidentified, rootFolderID int64) ([]string, error) {
+// WaitingDirectories are the folders holding the root's files that wait for review, sorted and without repeats. Unless
+// force is set, only files whose automatic retry is due at now count; a folder is listed when any of its files is due.
+func WaitingDirectories(ctx context.Context, unidentified library.Unidentified, rootFolderID, now int64, force bool) ([]string, error) {
+	dueBy := now
+	if force {
+		dueBy = math.MaxInt64
+	}
 	var directories []string
 	cursor := paginate.Cursor{}
 	for {
-		page, err := unidentified.List(ctx, []int64{rootFolderID}, cursor, waitingPageSize)
+		page, err := unidentified.ListDue(ctx, rootFolderID, dueBy, cursor, waitingPageSize)
 		if err != nil {
 			return nil, err
 		}

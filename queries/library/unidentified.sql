@@ -5,17 +5,27 @@
 -- A file marked "not media" is never queued again, nor one that already belongs to a work: a
 -- person's resolve survives a full rescan the chain still cannot decide (found 2026-09-24). An
 -- unverified album (only local ids, D6) does not count: its files still await identification.
+-- Seen again with the same answer for the same bytes, the next automatic try moves out: a day, doubling, up to 30 days.
 INSERT INTO identification_queue (media_object_id, root_folder_id, rel_path, candidates_json,
-                                   first_seen_at, last_seen_at)
+                                   first_seen_at, last_seen_at, tries, next_try_at, tried_size)
 SELECT sqlc.arg(media_object_id), sqlc.arg(root_folder_id), sqlc.arg(rel_path),
-       sqlc.arg(candidates_json), sqlc.arg(first_seen_at), sqlc.arg(last_seen_at)
+       sqlc.arg(candidates_json), sqlc.arg(first_seen_at), sqlc.arg(last_seen_at), 0, 0,
+       COALESCE((SELECT size_bytes FROM media_object WHERE id = sqlc.arg(media_object_id)), 0)
 WHERE NOT EXISTS (SELECT 1 FROM not_media nm WHERE nm.media_object_id = sqlc.arg(media_object_id))
   AND NOT EXISTS (SELECT 1 FROM work_file wf WHERE wf.media_object_id = sqlc.arg(media_object_id)
                     AND EXISTS (SELECT 1 FROM work_external_id vx
                                 WHERE vx.work_id = wf.work_id AND vx.provider NOT LIKE 'local:%'))
 ON CONFLICT (media_object_id) DO UPDATE SET
   root_folder_id = excluded.root_folder_id, rel_path = excluded.rel_path,
-  candidates_json = excluded.candidates_json, last_seen_at = excluded.last_seen_at;
+  candidates_json = excluded.candidates_json, last_seen_at = excluded.last_seen_at,
+  tries = CASE WHEN identification_queue.candidates_json = excluded.candidates_json
+                    AND identification_queue.tried_size = excluded.tried_size
+               THEN identification_queue.tries + 1 ELSE 0 END,
+  next_try_at = CASE WHEN identification_queue.candidates_json = excluded.candidates_json
+                          AND identification_queue.tried_size = excluded.tried_size
+                     THEN excluded.last_seen_at + min(86400 * (1 << min(identification_queue.tries, 5)), 2592000)
+                     ELSE 0 END,
+  tried_size = excluded.tried_size;
 
 -- A file that resolves on a later sweep leaves the queue entirely -- there is no
 -- "resolved" state to keep around.
@@ -35,7 +45,7 @@ WHERE EXISTS (SELECT 1 FROM desired_item_file f
 -- file's own root_folder_id (to link work_root_folder), which the ranked
 -- candidates list alone does not carry.
 -- name: GetUnidentified :one
-SELECT media_object_id, root_folder_id, rel_path, candidates_json, first_seen_at, last_seen_at
+SELECT media_object_id, root_folder_id, rel_path, candidates_json, first_seen_at, last_seen_at, tries, next_try_at, tried_size
 FROM identification_queue WHERE media_object_id = ?;
 
 -- Library health's own "unmatched files" figure (todo 4.8) -- same filter
@@ -54,10 +64,24 @@ WHERE (sqlc.arg(filter_root_folders) = 0
 -- empty when the caller can see nothing -- same ADR-27 shape as search.sql's
 -- SearchWorks, json_each passing a Go slice as a JSON array.
 -- name: ListUnidentified :many
-SELECT media_object_id, root_folder_id, rel_path, candidates_json, first_seen_at, last_seen_at
+SELECT media_object_id, root_folder_id, rel_path, candidates_json, first_seen_at, last_seen_at, tries, next_try_at, tried_size
 FROM identification_queue
 WHERE (sqlc.arg(filter_root_folders) = 0
        OR root_folder_id IN (SELECT value FROM json_each(sqlc.arg(root_folder_ids))))
+  AND (first_seen_at > sqlc.arg(after_seen)
+       OR (first_seen_at = sqlc.arg(after_seen) AND identification_queue.media_object_id > sqlc.arg(after_id)))
+  AND NOT EXISTS (SELECT 1 FROM desired_item_file f
+                  JOIN desired_item d ON d.id = f.desired_item_id
+                  JOIN work w ON w.id = d.work_id AND w.media_type = 'tv'
+                  WHERE f.media_object_id = identification_queue.media_object_id)
+ORDER BY first_seen_at, media_object_id
+LIMIT sqlc.arg(page_size);
+
+-- The queued files whose automatic retry is due; ListUnidentified without the due test lists them all.
+-- name: ListDueUnidentified :many
+SELECT media_object_id, root_folder_id, rel_path, candidates_json, first_seen_at, last_seen_at, tries, next_try_at, tried_size
+FROM identification_queue
+WHERE root_folder_id = sqlc.arg(root_folder_id) AND next_try_at <= sqlc.arg(due_by)
   AND (first_seen_at > sqlc.arg(after_seen)
        OR (first_seen_at = sqlc.arg(after_seen) AND identification_queue.media_object_id > sqlc.arg(after_id)))
   AND NOT EXISTS (SELECT 1 FROM desired_item_file f
