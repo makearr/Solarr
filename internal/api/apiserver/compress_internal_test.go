@@ -13,6 +13,8 @@ func serveThroughCompress(t *testing.T, contentType, body, acceptEncoding string
 	t.Helper()
 	handler := (&Server{}).compress(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", contentType)
+		// writeJSON sends the status first; the encoding headers still have to precede it.
+		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, body)
 	}))
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/works", nil)
@@ -88,5 +90,18 @@ func TestCompressPassesAFlushThroughAnUnwrappingWriter(t *testing.T) {
 	handler.ServeHTTP(&statusRecorder{ResponseWriter: recorder, status: http.StatusOK}, request)
 	if !recorder.Flushed {
 		t.Fatal("the flush never reached the connection")
+	}
+}
+
+func TestCompressKeepsABodylessStatus(t *testing.T) {
+	handler := (&Server{}).compress(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/works/1", nil)
+	request.Header.Set("Accept-Encoding", "gzip")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", recorder.Code)
 	}
 }

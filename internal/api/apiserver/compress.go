@@ -35,10 +35,23 @@ type gzipWriter struct {
 	http.ResponseWriter
 	gzip    *gzip.Writer
 	decided bool
+	// status is held back until the first write, because the encoding headers must precede it.
+	status int
 }
 
 func (g *gzipWriter) WriteHeader(status int) {
-	g.ResponseWriter.WriteHeader(status)
+	if g.decided {
+		g.ResponseWriter.WriteHeader(status)
+		return
+	}
+	g.status = status
+}
+
+func (g *gzipWriter) sendHeader() {
+	if g.status != 0 {
+		g.ResponseWriter.WriteHeader(g.status)
+		g.status = 0
+	}
 }
 
 func (g *gzipWriter) Write(data []byte) (int, error) {
@@ -52,6 +65,7 @@ func (g *gzipWriter) Write(data []byte) (int, error) {
 			header.Add("Vary", "Accept-Encoding")
 			g.gzip = gzip.NewWriter(g.ResponseWriter)
 		}
+		g.sendHeader()
 	}
 	if g.gzip != nil {
 		return g.gzip.Write(data)
@@ -61,6 +75,8 @@ func (g *gzipWriter) Write(data []byte) (int, error) {
 
 // Flush pushes buffered compressed bytes first, so a flushed JSON stream still arrives.
 func (g *gzipWriter) FlushError() error {
+	g.decided = true
+	g.sendHeader()
 	if g.gzip != nil {
 		if err := g.gzip.Flush(); err != nil {
 			return err
@@ -70,6 +86,8 @@ func (g *gzipWriter) FlushError() error {
 }
 
 func (g *gzipWriter) finish() {
+	g.decided = true
+	g.sendHeader()
 	if g.gzip != nil {
 		_ = g.gzip.Close()
 	}
