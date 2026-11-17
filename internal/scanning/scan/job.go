@@ -192,6 +192,9 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		return jobs.Terminalf("scan.root", string(job.Type),
 			fmt.Errorf("root folder %d is not configured", payload.RootFolderID))
 	}
+	if err := j.physical.FinishPendingRecounts(ctx); err != nil {
+		j.logger.Warn("counts after files went missing not all brought right", slog.Any("error", err))
+	}
 	// An unmounted root is a reason to wait, never to conclude the library is gone
 	// (section 10.4). Retrying is exactly right: the disk may come back.
 	if !root.Online {

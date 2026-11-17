@@ -475,3 +475,12 @@ JOIN import_session s ON s.id = u.session_id
 WHERE iuf.media_object_id = ? AND s.acquisition_id IS NOT NULL
 ORDER BY s.id DESC
 LIMIT 1;
+
+-- name: NoteMissingRecount :exec
+INSERT OR IGNORE INTO missing_recount (root_folder_id, missing_since) VALUES (?, ?);
+
+-- name: ListMissingRecounts :many
+SELECT root_folder_id, missing_since FROM missing_recount ORDER BY root_folder_id, missing_since;
+
+-- name: DeleteMissingRecount :exec
+DELETE FROM missing_recount WHERE root_folder_id = ? AND missing_since = ?;

@@ -295,6 +295,7 @@ type Querier interface {
 	DeleteImportUnits(ctx context.Context, arg DeleteImportUnitsParams) error
 	DeleteLibraryPath(ctx context.Context, id int64) error
 	DeleteMediaObject(ctx context.Context, id int64) error
+	DeleteMissingRecount(ctx context.Context, arg DeleteMissingRecountParams) error
 	DeletePerson(ctx context.Context, id int64) error
 	DeletePersonArtwork(ctx context.Context, subjectID int64) error
 	DeletePersonSubscriptions(ctx context.Context, subjectID int64) error
@@ -745,6 +746,7 @@ type Querier interface {
 	// The artists credited on a library's albums, with what a merge needs to rank them. shared is set
 	// when the person also has work in another library, which a merge in this one must leave alone.
 	ListMergeCandidatesForCategory(ctx context.Context, categoryID int64) ([]ListMergeCandidatesForCategoryRow, error)
+	ListMissingRecounts(ctx context.Context) ([]MissingRecount, error)
 	// The monitored whole-work items (a movie's) covered only by files a full scan just found gone.
 	ListMonitoredItemsLosingFiles(ctx context.Context, arg ListMonitoredItemsLosingFilesParams) ([]int64, error)
 	// The monitored parts covered only by files a full scan just found gone: deleted on purpose, by
@@ -1088,6 +1090,7 @@ type Querier interface {
 	NextPendingMoveItem(ctx context.Context, moveJobID int64) (MoveItem, error)
 	// Revalidated at dispatch, so an expired entry is never handed to a downloader.
 	NextReady(ctx context.Context, arg NextReadyParams) ([]ReadyQueue, error)
+	NoteMissingRecount(ctx context.Context, arg NoteMissingRecountParams) error
 	// Pause, resume and cancel say how many rows changed so a job in the wrong state is told apart from a missing one.
 	PauseMoveJob(ctx context.Context, id int64) (int64, error)
 	PresentPathsAtRootLevel(ctx context.Context, rootFolderID int64) ([]PresentPathsAtRootLevelRow, error)

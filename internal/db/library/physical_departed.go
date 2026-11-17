@@ -57,6 +57,9 @@ func (p Physical) PathsGoneFromDirectory(ctx context.Context, rootFolderID int64
 
 // MarkPathsMissing marks paths missing at a moment and brings the counts of the works that lost a file in line.
 func (p Physical) MarkPathsMissing(ctx context.Context, rootFolderID int64, ids []int64, at time.Time) (int, error) {
+	if err := p.noteMissingRecount(ctx, rootFolderID, at.Unix()); err != nil {
+		return 0, err
+	}
 	total := 0
 	for chunk := range slices.Chunk(ids, dirtyBatchSize) {
 		var changed int64
@@ -72,8 +75,5 @@ func (p Physical) MarkPathsMissing(ctx context.Context, rootFolderID int64, ids 
 		}
 		total += int(changed)
 	}
-	if total == 0 {
-		return 0, nil
-	}
-	return total, p.recomputeWorksMissingSince(ctx, rootFolderID, at.Unix())
+	return total, p.recountMissing(ctx, rootFolderID, at.Unix())
 }

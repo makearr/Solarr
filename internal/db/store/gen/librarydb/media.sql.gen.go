@@ -311,6 +311,20 @@ func (q *Queries) DeleteMediaObject(ctx context.Context, id int64) error {
 	return err
 }
 
+const deleteMissingRecount = `-- name: DeleteMissingRecount :exec
+DELETE FROM missing_recount WHERE root_folder_id = ? AND missing_since = ?
+`
+
+type DeleteMissingRecountParams struct {
+	RootFolderID int64
+	MissingSince int64
+}
+
+func (q *Queries) DeleteMissingRecount(ctx context.Context, arg DeleteMissingRecountParams) error {
+	_, err := q.db.ExecContext(ctx, deleteMissingRecount, arg.RootFolderID, arg.MissingSince)
+	return err
+}
+
 const deleteStaleDestinationPath = `-- name: DeleteStaleDestinationPath :exec
 DELETE FROM library_path
 WHERE library_path.root_folder_id = ?1 AND library_path.rel_path = ?2
@@ -827,6 +841,33 @@ func (q *Queries) ListLivePathsForWork(ctx context.Context, workID int64) ([]Lis
 			&i.LinkKind,
 			&i.IsPrimary,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMissingRecounts = `-- name: ListMissingRecounts :many
+SELECT root_folder_id, missing_since FROM missing_recount ORDER BY root_folder_id, missing_since
+`
+
+func (q *Queries) ListMissingRecounts(ctx context.Context) ([]MissingRecount, error) {
+	rows, err := q.db.QueryContext(ctx, listMissingRecounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MissingRecount{}
+	for rows.Next() {
+		var i MissingRecount
+		if err := rows.Scan(&i.RootFolderID, &i.MissingSince); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1786,6 +1827,20 @@ func (q *Queries) MarkLibraryPathsMissingByID(ctx context.Context, arg MarkLibra
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const noteMissingRecount = `-- name: NoteMissingRecount :exec
+INSERT OR IGNORE INTO missing_recount (root_folder_id, missing_since) VALUES (?, ?)
+`
+
+type NoteMissingRecountParams struct {
+	RootFolderID int64
+	MissingSince int64
+}
+
+func (q *Queries) NoteMissingRecount(ctx context.Context, arg NoteMissingRecountParams) error {
+	_, err := q.db.ExecContext(ctx, noteMissingRecount, arg.RootFolderID, arg.MissingSince)
+	return err
 }
 
 const presentPathsAtRootLevel = `-- name: PresentPathsAtRootLevel :many

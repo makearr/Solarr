@@ -596,6 +596,11 @@ type MediaProbe struct {
 	Json          string
 }
 
+type MissingRecount struct {
+	RootFolderID int64
+	MissingSince int64
+}
+
 type MoveItem struct {
 	MoveJobID     int64
 	MediaObjectID int64

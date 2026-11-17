@@ -428,6 +428,9 @@ func (p *process) openDatabases(ctx context.Context) error {
 	} else if classified > 0 {
 		p.logger.Info("media objects classified by kind", slog.Int("files", classified))
 	}
+	if err := library.NewPhysical(p.library).FinishPendingRecounts(ctx); err != nil {
+		p.logger.Warn("counts after files went missing not all brought right yet", slog.Any("error", err))
+	}
 
 	return p.reconcileRestore(ctx, wall, restored)
 }

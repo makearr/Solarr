@@ -795,6 +795,9 @@ func (p Physical) RecordClaimed(ctx context.Context, mediaObjectID int64, claim 
 // never looked at is not evidence of absence.
 func (p Physical) MarkMissing(ctx context.Context, rootFolderID int64, before time.Time) (int, error) {
 	beforeUnix := before.Unix()
+	if err := p.noteMissingRecount(ctx, rootFolderID, beforeUnix); err != nil {
+		return 0, err
+	}
 	total := 0
 	for {
 		var changed int64
@@ -816,10 +819,7 @@ func (p Physical) MarkMissing(ctx context.Context, rootFolderID int64, before ti
 		}
 		total += int(changed)
 	}
-	if total == 0 {
-		return 0, nil
-	}
-	return total, p.recomputeWorksMissingSince(ctx, rootFolderID, beforeUnix)
+	return total, p.recountMissing(ctx, rootFolderID, beforeUnix)
 }
 
 // Vanishing answers how many of a root's paths a full sweep that started at before would mark missing, and how many
@@ -834,8 +834,55 @@ func (p Physical) Vanishing(ctx context.Context, rootFolderID int64, before time
 	return row.Vanishing, row.Total, nil
 }
 
-// recomputeWorksMissingSince brings the counts of every work that lost a file in one marking in line with it.
+// noteMissingRecount records that a marking is under way, before its first path is marked, so a stop leaves the recount
+// to FinishPendingRecounts.
+func (p Physical) noteMissingRecount(ctx context.Context, rootFolderID, missingSince int64) error {
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).NoteMissingRecount(ctx, librarydb.NoteMissingRecountParams{
+			RootFolderID: rootFolderID, MissingSince: missingSince,
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("library: note missing recount: %w", err)
+	}
+	return nil
+}
+
+// recountMissing recounts the works of one marking and forgets the marking once every work is done.
+func (p Physical) recountMissing(ctx context.Context, rootFolderID, missingSince int64) error {
+	if err := p.recomputeWorksMissingSince(ctx, rootFolderID, missingSince); err != nil {
+		return err
+	}
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).DeleteMissingRecount(ctx, librarydb.DeleteMissingRecountParams{
+			RootFolderID: rootFolderID, MissingSince: missingSince,
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("library: forget missing recount: %w", err)
+	}
+	return nil
+}
+
+// FinishPendingRecounts recounts the works of every marking a stop interrupted; a second call finds nothing to do.
+func (p Physical) FinishPendingRecounts(ctx context.Context) error {
+	pending, err := librarydb.New(p.store.Read()).ListMissingRecounts(ctx)
+	if err != nil {
+		return fmt.Errorf("library: pending missing recounts: %w", err)
+	}
+	var first error
+	for _, marking := range pending {
+		if err := p.recountMissing(ctx, marking.RootFolderID, marking.MissingSince); err != nil && first == nil {
+			first = err
+		}
+	}
+	return first
+}
+
+// recomputeWorksMissingSince brings the counts of every work that lost a file in one marking in line with it; one work
+// failing does not stop the others, and the first error is returned after the last.
 func (p Physical) recomputeWorksMissingSince(ctx context.Context, rootFolderID, missingSince int64) error {
+	var first error
 	var afterID int64
 	for {
 		works, err := librarydb.New(p.store.Read()).ListWorksWithPathsMissingSince(ctx, librarydb.ListWorksWithPathsMissingSinceParams{
@@ -846,12 +893,12 @@ func (p Physical) recomputeWorksMissingSince(ctx context.Context, rootFolderID, 
 			return fmt.Errorf("library: works losing files: %w", err)
 		}
 		for _, workID := range works {
-			if err := p.RecomputeWorkItems(ctx, workID); err != nil {
-				return err
+			if err := p.RecomputeWorkItems(ctx, workID); err != nil && first == nil {
+				first = err
 			}
 		}
 		if len(works) < dirtyBatchSize {
-			return nil
+			return first
 		}
 		afterID = works[len(works)-1]
 	}
