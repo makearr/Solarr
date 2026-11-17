@@ -60,7 +60,8 @@ export function StatusBar() {
       if (error) throw error;
       return data.running;
     },
-    refetchInterval: 3_000,
+    // A live stream already brings job changes; the poll is the fallback. Hidden tabs do not poll (TanStack's default).
+    refetchInterval: connection === "live" ? 10_000 : 3_000,
     retry: false,
   });
   const [jobsOpen, setJobsOpen] = useState(false);

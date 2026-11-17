@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
+import { subscribe } from "@/lib/eventStream";
+
 import * as query from "./query";
 import * as selection from "./selection";
 import type { ViewState } from "./useRouteView";
@@ -156,16 +158,9 @@ export function useLibraryList<T>(source: ListSource<T>, view: ViewState) {
   useEffect(() => {
     if (topics === "") return;
 
-    const stream = new EventSource(`/api/v1/events?topics=${topics}`);
     const invalidate = () => void client.invalidateQueries({ queryKey: [listName] });
-    // The server names every frame "update" or "resync" (never per-topic) --
-    // the ?topics= query string above is what already scopes the
-    // subscription, so any "update" received here is already one of ours.
-    stream.addEventListener("update", invalidate);
     // A resync means the client fell too far behind to replay.
-    stream.addEventListener("resync", invalidate);
-
-    return () => stream.close();
+    return subscribe({ topics: topics.split(","), onEvents: invalidate, onResync: invalidate });
   }, [client, listName, topics]);
 
   const toggle = useCallback(

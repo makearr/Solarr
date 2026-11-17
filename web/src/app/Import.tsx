@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, Ban, ChevronDown, ChevronRight, HelpCircle, Undo2, 
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
+import { subscribe } from "@/lib/eventStream";
 import { factsOf } from "@/lib/identificationEvidence";
 import { useLibraryLabel } from "@/lib/libraryLabel";
 import { invalidateWorkLists, useCategories, useImportSettings } from "@/lib/resources";
@@ -46,20 +47,15 @@ function useImportProgressStream(
   callback.current = onSessionUpdated;
 
   useEffect(() => {
-    const source = new EventSource("/api/v1/events?topics=job");
-    source.addEventListener("update", (message) => {
-      let batch: { events: { entity: string; data?: ImportProgress }[] };
-      try {
-        batch = JSON.parse(message.data) as typeof batch;
-      } catch {
-        return;
-      }
-      for (const event of batch.events) {
-        if (!event.entity.startsWith("import_session:") || !event.data) continue;
-        callback.current(event.data.session_id, event.data);
-      }
+    return subscribe<{ topic: string; entity: string; data?: ImportProgress }>({
+      topics: ["job"],
+      onEvents: (events) => {
+        for (const event of events) {
+          if (!event.entity.startsWith("import_session:") || !event.data) continue;
+          callback.current(event.data.session_id, event.data);
+        }
+      },
     });
-    return () => source.close();
     // Re-subscribing for every selection change would thrash the connection;
     // the latest callback is read through callback instead.
   }, []);
