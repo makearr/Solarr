@@ -121,7 +121,8 @@ export function AddLibraryForm() {
     mutationFn: library.create,
     onSuccess: () => {
       library.forgetName();
-      void queryClient.invalidateQueries();
+      void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+      void queryClient.invalidateQueries({ queryKey: ["categories"] });
     },
   });
 

@@ -393,7 +393,10 @@ function CreateAdministrator() {
     mutationFn: () => ok(api.POST("/setup/admin", {
       body: { username, password },
     })),
-    onSuccess: () => queryClient.invalidateQueries(),
+    onSuccess: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["setup"] }),
+      queryClient.invalidateQueries({ queryKey: ["me"] }),
+    ]),
   });
 
   return (

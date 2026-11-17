@@ -136,6 +136,7 @@ function SettingsDocument() {
     onSuccess: () => {
       setChosen(null);
       if (input.current) input.current.value = "";
+      // A restored settings document replaces every kind of setting, so nothing cached is safe.
       void queryClient.invalidateQueries();
     },
   });

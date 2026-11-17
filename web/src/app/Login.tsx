@@ -80,9 +80,7 @@ export function Login() {
 
           {signIn.isError && (
             <p className="text-xs text-danger">
-              {problemType(signIn.error) === "too-many-requests"
-                ? "Too many failed sign-ins from this address. Wait a minute, then try again."
-                : "The username or password is incorrect."}
+              {signInFailure(signIn.error)}
             </p>
           )}
 
@@ -99,7 +97,14 @@ export function Login() {
   );
 }
 
-/** problemType reads an API problem's type slug, if the error is one. */
-function problemType(error: unknown): string | undefined {
-  return typeof error === "object" && error !== null && "type" in error && typeof error.type === "string" ? error.type : undefined;
+/** What a failed sign-in says; only a 401 may blame the password, or a retyped correct one feeds the rate limiter. */
+export function signInFailure(error: unknown): string {
+  const problem = error as { status?: unknown; type?: unknown } | null;
+  const status = typeof problem?.status === "number" ? problem.status : 0;
+  if (status === 401) return "The username or password is incorrect.";
+  if (status === 429 || problem?.type === "too-many-requests") {
+    return "Too many failed sign-ins from this address. Wait a minute, then try again.";
+  }
+  if (status === 400) return "The page and the server disagree about how to send the password; reload and try again.";
+  return "The server could not be reached or had an error; the password was not checked.";
 }

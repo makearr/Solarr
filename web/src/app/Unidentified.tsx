@@ -27,7 +27,10 @@ export function Unidentified() {
     mutationFn: () => ok(api.POST("/libraries/{id}/identify-again", { params: { path: { id: Number(categoryId) } } })),
     onSuccess: () => {
       // The sweep runs in the background; look again once it has had a moment.
-      window.setTimeout(() => void queryClient.invalidateQueries(), 8000);
+      window.setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ["unidentified"] });
+        void queryClient.invalidateQueries({ queryKey: ["import-sessions"] });
+      }, 8000);
     },
   });
   const list = useLibraryList<UnidentifiedFile>(
