@@ -114,6 +114,7 @@ func TestEvents_ANewDirectoryIsWatchedAndRescanned(t *testing.T) {
 	service, notifier, fake, calls := newService(t, 100, true)
 	_ = service.Replan(t.Context())
 	service.handle(fswatch.Event{Dir: "/lib", Name: "C", IsDir: true, Created: true})
+	service.discoverNew(t.Context())
 	if notifier.added[len(notifier.added)-1] != "/lib/C" {
 		t.Fatalf("watched %v, want /lib/C added", notifier.added)
 	}
@@ -158,6 +159,7 @@ func TestEvents_ARenamedFolderLeavesNoWatchUnderItsOldName(t *testing.T) {
 	}
 	service.handle(fswatch.Event{Dir: "/lib", Name: "A", IsDir: true, Removed: true})
 	service.handle(fswatch.Event{Dir: "/lib", Name: "A2", IsDir: true, Created: true})
+	service.discoverNew(t.Context())
 	for _, stale := range []string{"/lib/A", "/lib/A/s1"} {
 		if _, kept := service.watched[stale]; kept || slices.Contains(notifier.added, stale) {
 			t.Fatalf("%s still watched", stale)
@@ -170,5 +172,24 @@ func TestEvents_ARenamedFolderLeavesNoWatchUnderItsOldName(t *testing.T) {
 	}
 	if !slices.Contains(notifier.added, "/lib/A2") {
 		t.Fatalf("watches %v lack the new name", notifier.added)
+	}
+}
+
+func TestEvents_ACopiedInTreeIsWatchedAndRescannedToItsLeaves(t *testing.T) {
+	service, notifier, fake, calls := newService(t, 100, true)
+	_ = service.Replan(t.Context())
+	tree := map[string][]string{"/lib/N": {"Album"}, "/lib/N/Album": {"CD1"}}
+	service.config.Subdirectories = func(absolute string) []string { return tree[absolute] }
+	service.handle(fswatch.Event{Dir: "/lib", Name: "N", IsDir: true, Created: true})
+	service.discoverNew(t.Context())
+	for _, want := range []string{"/lib/N", "/lib/N/Album", "/lib/N/Album/CD1"} {
+		if !slices.Contains(notifier.added, want) {
+			t.Fatalf("watches %v lack %s", notifier.added, want)
+		}
+	}
+	fake.Advance(time.Minute)
+	service.Flush(t.Context())
+	if want := []dirtyCall{{1, []string{"", "N", "N/Album", "N/Album/CD1"}}}; !reflect.DeepEqual(*calls, want) {
+		t.Fatalf("flushed %v, want %v", *calls, want)
 	}
 }

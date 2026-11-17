@@ -70,6 +70,19 @@ func (p *process) startLibraryWatch(ctx context.Context) {
 			}
 			return out, err
 		},
+		Subdirectories: func(absolute string) []string {
+			entries, err := p.fsys.ReadDir(absolute)
+			if err != nil {
+				return nil
+			}
+			var names []string
+			for _, entry := range entries {
+				if entry.IsDir {
+					names = append(names, entry.Name)
+				}
+			}
+			return names
+		},
 		Budget: func() int { return budget },
 		Dirty:  p.rescanDirectories,
 	})

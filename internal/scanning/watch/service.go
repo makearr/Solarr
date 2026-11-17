@@ -51,6 +51,8 @@ type Config struct {
 	Roots func() []Root
 	// Directories lists the directories of a root that hold library files, from the library's own records.
 	Directories func(ctx context.Context, rootFolderID int64) ([]DirRecord, error)
+	// Subdirectories lists the directories directly inside an absolute directory; an unreadable one has none.
+	Subdirectories func(absolute string) []string
 	// Budget is how many watches Solarr may hold in all.
 	Budget func() int
 	// Dirty is told which directories of a root changed, once their changes have gone quiet.
@@ -72,7 +74,16 @@ type Service struct {
 	lostAt       time.Time
 	dirty        map[dirtyKey]dirtySpan
 	budgetShort  bool
+	discover     []discovery // new directories whose contents are not watched yet
 }
+
+type discovery struct {
+	absolute string
+	where    watchedDir
+}
+
+// maxDiscovered bounds what one burst of new directories may walk; beyond it the ordinary sweep takes over.
+const maxDiscovered = 10000
 
 type watchedDir struct {
 	root int64
@@ -217,6 +228,7 @@ func (s *Service) Run(ctx context.Context) {
 				return
 			}
 			s.handle(event)
+			s.discoverNew(ctx)
 		case <-ticker.C():
 			s.Flush(ctx)
 		}
@@ -246,10 +258,47 @@ func (s *Service) handle(event fswatch.Event) {
 	s.markLocked(dirtyKey(where), now)
 	if event.IsDir && event.Created {
 		child := path.Join(event.Dir, event.Name)
-		if s.config.Notifier.Count() < s.config.Budget() && s.config.Notifier.Add(child) == nil {
-			childRel := path.Join(where.rel, event.Name)
-			s.watched[child] = watchedDir{root: where.root, rel: childRel}
-			s.markLocked(dirtyKey{where.root, childRel}, now)
+		s.discover = append(s.discover, discovery{child, watchedDir{where.root, path.Join(where.rel, event.Name)}})
+	}
+}
+
+// discoverNew watches a copied-in tree down to its leaves: a directory is watched before it is listed, so a
+// subdirectory created in between still produces an event. Directories past the budget are rescanned once, unwatched.
+func (s *Service) discoverNew(ctx context.Context) {
+	s.mu.Lock()
+	queue := s.discover
+	s.discover = nil
+	s.mu.Unlock()
+	for visited := 0; len(queue) > 0; visited++ {
+		next := queue[0]
+		queue = queue[1:]
+		if visited >= maxDiscovered || ctx.Err() != nil {
+			s.mu.Lock()
+			s.lostAt = s.config.Clock.Now()
+			s.mu.Unlock()
+			return
+		}
+		s.mu.Lock()
+		_, held := s.watched[next.absolute]
+		room := s.config.Notifier.Count() < s.config.Budget()
+		s.mu.Unlock()
+		watching := held
+		if !held && room && s.config.Notifier.Add(next.absolute) == nil {
+			watching = true
+		}
+		s.mu.Lock()
+		if watching {
+			s.watched[next.absolute] = next.where
+		} else {
+			s.budgetShort = true
+		}
+		s.markLocked(dirtyKey(next.where), s.config.Clock.Now())
+		s.mu.Unlock()
+		if s.config.Subdirectories == nil {
+			continue
+		}
+		for _, name := range s.config.Subdirectories(next.absolute) {
+			queue = append(queue, discovery{path.Join(next.absolute, name), watchedDir{next.where.root, path.Join(next.where.rel, name)}})
 		}
 	}
 }
