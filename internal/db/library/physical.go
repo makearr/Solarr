@@ -81,6 +81,9 @@ func NewPhysical(opened *store.Store) Physical { return Physical{store: opened} 
 type RegisteredFile struct {
 	MediaObjectID int64
 	LibraryPathID int64
+	// ContentChanged is a known path whose bytes differ from what its object recorded: the object was updated in place,
+	// or, when other paths share it, this path was moved to an object of its own.
+	ContentChanged bool
 }
 
 // RegisterBatch finds or creates the media_object and library_path row for each file,
@@ -124,7 +127,7 @@ func registerOne(
 				return RegisteredFile{}, fmt.Errorf("file back: %w", err)
 			}
 		}
-		return RegisteredFile{MediaObjectID: existing.MediaObjectID, LibraryPathID: existing.ID}, nil
+		return remeasured(ctx, queries, existing, file)
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return RegisteredFile{}, fmt.Errorf("look up: %w", err)
@@ -144,6 +147,45 @@ func registerOne(
 		return RegisteredFile{}, fmt.Errorf("add path: %w", err)
 	}
 	return RegisteredFile{MediaObjectID: mediaObjectID, LibraryPathID: libraryPathID}, nil
+}
+
+// remeasured gives a re-observed path the size and hash it has now. An object that only this path holds is updated in
+// place, keeping its links; one shared with other paths is no longer what this path holds, so the path moves to the
+// object its bytes belong to and is identified afresh.
+func remeasured(ctx context.Context, queries *librarydb.Queries, existing librarydb.LibraryPath, file PhysicalFile) (RegisteredFile, error) {
+	unchanged := RegisteredFile{MediaObjectID: existing.MediaObjectID, LibraryPathID: existing.ID}
+	if file.QuickHash == "" {
+		return unchanged, nil
+	}
+	object, err := queries.GetMediaObject(ctx, existing.MediaObjectID)
+	if err != nil {
+		return RegisteredFile{}, fmt.Errorf("load object: %w", err)
+	}
+	if object.QuickHash == file.QuickHash && object.SizeBytes == file.SizeBytes {
+		return unchanged, nil
+	}
+	paths, err := queries.ListPathsForObject(ctx, existing.MediaObjectID)
+	if err != nil {
+		return RegisteredFile{}, fmt.Errorf("list paths of object: %w", err)
+	}
+	if len(paths) <= 1 {
+		if err := queries.SetMediaObjectContent(ctx, librarydb.SetMediaObjectContentParams{
+			SizeBytes: file.SizeBytes, QuickHash: file.QuickHash, Oshash: sql.NullString{String: file.OSHash, Valid: file.OSHash != ""},
+			ID: existing.MediaObjectID,
+		}); err != nil {
+			return RegisteredFile{}, fmt.Errorf("update object content: %w", err)
+		}
+		unchanged.ContentChanged = true
+		return unchanged, nil
+	}
+	detached, err := findOrCreateObject(ctx, queries, file)
+	if err != nil {
+		return RegisteredFile{}, err
+	}
+	if err := queries.SetLibraryPathObject(ctx, librarydb.SetLibraryPathObjectParams{MediaObjectID: detached, ID: existing.ID}); err != nil {
+		return RegisteredFile{}, fmt.Errorf("move path to its own object: %w", err)
+	}
+	return RegisteredFile{MediaObjectID: detached, LibraryPathID: existing.ID, ContentChanged: true}, nil
 }
 
 // findOrCreateObject reuses an existing media_object sharing this quick hash and size

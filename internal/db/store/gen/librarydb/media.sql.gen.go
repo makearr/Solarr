@@ -1841,6 +1841,20 @@ func (q *Queries) SetFingerprints(ctx context.Context, arg SetFingerprintsParams
 	return err
 }
 
+const setLibraryPathObject = `-- name: SetLibraryPathObject :exec
+UPDATE library_path SET media_object_id = ? WHERE id = ?
+`
+
+type SetLibraryPathObjectParams struct {
+	MediaObjectID int64
+	ID            int64
+}
+
+func (q *Queries) SetLibraryPathObject(ctx context.Context, arg SetLibraryPathObjectParams) error {
+	_, err := q.db.ExecContext(ctx, setLibraryPathObject, arg.MediaObjectID, arg.ID)
+	return err
+}
+
 const setMeasuredAttributes = `-- name: SetMeasuredAttributes :exec
 UPDATE media_object
 SET measured_attributes_id = ?, attribute_mismatch_json = ?,
@@ -1877,6 +1891,32 @@ func (q *Queries) SetMeasuredAttributes(ctx context.Context, arg SetMeasuredAttr
 		arg.AudioBitrate,
 		arg.OverallBitrate,
 		arg.VerifiedAt,
+		arg.ID,
+	)
+	return err
+}
+
+const setMediaObjectContent = `-- name: SetMediaObjectContent :exec
+UPDATE media_object
+SET size_bytes = ?, quick_hash = ?, oshash = ?, content_hash = NULL, phash = NULL, audio_fp = NULL,
+    audio_fp_prefix = NULL, fingerprinted_at = NULL, measured_attributes_id = NULL
+WHERE id = ?
+`
+
+type SetMediaObjectContentParams struct {
+	SizeBytes int64
+	QuickHash string
+	Oshash    sql.NullString
+	ID        int64
+}
+
+// A file changed in place is the same object with new bytes: what was derived from the old bytes is cleared so the
+// fingerprint and probe jobs measure it again.
+func (q *Queries) SetMediaObjectContent(ctx context.Context, arg SetMediaObjectContentParams) error {
+	_, err := q.db.ExecContext(ctx, setMediaObjectContent,
+		arg.SizeBytes,
+		arg.QuickHash,
+		arg.Oshash,
 		arg.ID,
 	)
 	return err

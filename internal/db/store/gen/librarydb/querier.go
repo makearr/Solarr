@@ -1241,10 +1241,14 @@ type Querier interface {
 	SetImportUnitPlacement(ctx context.Context, arg SetImportUnitPlacementParams) error
 	SetItemFileRefs(ctx context.Context, arg SetItemFileRefsParams) error
 	SetLibraryPathLinkKind(ctx context.Context, arg SetLibraryPathLinkKindParams) error
+	SetLibraryPathObject(ctx context.Context, arg SetLibraryPathObjectParams) error
 	// Measured attributes replace claimed ones after probing; the claim is kept so a
 	// mismatch stays visible (ADR-39). The scalars land on the object, not the
 	// interned row, because they are unique per file.
 	SetMeasuredAttributes(ctx context.Context, arg SetMeasuredAttributesParams) error
+	// A file changed in place is the same object with new bytes: what was derived from the old bytes is cleared so the
+	// fingerprint and probe jobs measure it again.
+	SetMediaObjectContent(ctx context.Context, arg SetMediaObjectContentParams) error
 	SetMediaObjectKind(ctx context.Context, arg SetMediaObjectKindParams) error
 	// What the probe read of one file, replacing an earlier probe.
 	SetMediaProbe(ctx context.Context, arg SetMediaProbeParams) error
