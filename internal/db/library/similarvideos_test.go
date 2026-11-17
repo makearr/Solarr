@@ -1,7 +1,9 @@
 package library
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"math/bits"
 	"math/rand"
 	"reflect"
@@ -323,5 +325,69 @@ func TestFramesAlike_AWindowOfHashesToleratesAShift(t *testing.T) {
 	}
 	if framesAlike(build(0), build(5), 0) {
 		t.Error("a shift past the window: alike at 0 bits")
+	}
+}
+
+// syntheticVideos is clusters of three videos whose mean hashes differ in at most six bits, among noise; a video's
+// frames carry its own number so the frame test can say who belongs together.
+func syntheticVideos(clusters int) []hashedVideo {
+	state := uint64(0x9e3779b97f4a7c15)
+	next := func() uint64 {
+		state ^= state << 13
+		state ^= state >> 7
+		state ^= state << 17
+		return state
+	}
+	var videos []hashedVideo
+	for cluster := range clusters {
+		base := next()
+		for member := range 3 {
+			hash := base
+			for range member * 3 {
+				hash ^= 1 << (next() % 64)
+			}
+			number := uint64(len(videos))
+			videos = append(videos, hashedVideo{
+				video:  SimilarVideo{MediaObjectID: int64(len(videos)), DurationMs: int64(1_400_000 + cluster*10_000 + member*100), SizeBytes: int64(len(videos))},
+				mean:   hash,
+				frames: []FrameHash{{Slot: 0, Hash: number}},
+			})
+		}
+	}
+	return videos
+}
+
+func TestGroupSimilarWith_ComparesEachPairOnceAndFindsTheClusters(t *testing.T) {
+	videos := syntheticVideos(700)
+	calls := map[[2]uint64]int{}
+	alike := func(first, second []FrameHash, _ int) bool {
+		a, b := first[0].Hash, second[0].Hash
+		calls[[2]uint64{min(a, b), max(a, b)}]++
+		return a/3 == b/3
+	}
+	groups, err := groupSimilarWith(t.Context(), videos, mediumBits, 10, 10_000, alike)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 700 {
+		t.Fatalf("%d groups, want 700 clusters", len(groups))
+	}
+	for _, group := range groups {
+		if len(group.Videos) != 3 || group.Videos[0].MediaObjectID/3 != group.Videos[1].MediaObjectID/3 || group.Videos[1].MediaObjectID/3 != group.Videos[2].MediaObjectID/3 {
+			t.Fatalf("group %+v is not one cluster", group.Videos)
+		}
+	}
+	for pair, count := range calls {
+		if count != 1 {
+			t.Fatalf("pair %v compared %d times, want once", pair, count)
+		}
+	}
+}
+
+func TestGroupSimilarWith_StopsWhenTheRequestEnds(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := groupSimilarWith(ctx, syntheticVideos(700), mediumBits, 10, 10, framesAlike); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
 	}
 }

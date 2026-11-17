@@ -1,6 +1,7 @@
 package library
 
 import (
+	"cmp"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -209,7 +210,10 @@ func (s SimilarVideos) Groups(ctx context.Context, rootFolderIDs []int64, level 
 	if err != nil {
 		return nil, err
 	}
-	groups := groupSimilar(videos, level.MaxBits(), s.frameBitsAt(level), limit)
+	groups, err := groupSimilarWith(ctx, videos, level.MaxBits(), s.frameBitsAt(level), limit, framesAlike)
+	if err != nil {
+		return nil, err
+	}
 	if err := s.addFacts(ctx, groups); err != nil {
 		return nil, err
 	}
@@ -297,6 +301,20 @@ func collectVideos(rows []librarydb.ListHashedVideosRow, rootFolderIDs []int64) 
 // groupSimilar joins videos whose mean hashes are within maxBits, lengths agree and frames match into groups of two or
 // more. Two hashes within maxBits bits agree on at least one of maxBits+1 bands, so only files sharing a band are compared.
 func groupSimilar(videos []hashedVideo, maxBits, frameBits, limit int) []SimilarGroup {
+	groups, _ := groupSimilarWith(context.Background(), videos, maxBits, frameBits, limit, framesAlike)
+	return groups
+}
+
+// bucketsPerCheck is how many band buckets are compared between looks at ctx.
+const bucketsPerCheck = 1000
+
+// groupSimilarWith is groupSimilar with the frame test chosen, and it stops when ctx ends. A pair is compared only in
+// the first band its videos share, and only when their lengths agree: members of a bucket are ordered by length so the
+// ones too long or too short for each other are never visited.
+func groupSimilarWith(
+	ctx context.Context, videos []hashedVideo, maxBits, frameBits, limit int,
+	alike func(first, second []FrameHash, frameMaxBits int) bool,
+) ([]SimilarGroup, error) {
 	bands := maxBits + 1
 	parent := make([]int, len(videos))
 	for index := range parent {
@@ -310,6 +328,21 @@ func groupSimilar(videos []hashedVideo, maxBits, frameBits, limit int) []Similar
 		return index
 	}
 	widest := make(map[int]int)
+	compare := func(first, second, band int) {
+		distance := bits.OnesCount64(videos[first].mean ^ videos[second].mean)
+		if distance > maxBits || firstSharedBand(videos[first].mean^videos[second].mean, bands) != band ||
+			!sameLength(videos[first].video.DurationMs, videos[second].video.DurationMs) ||
+			!alike(videos[first].frames, videos[second].frames, frameBits) {
+			return
+		}
+		rootFirst, rootSecond := find(first), find(second)
+		if rootFirst != rootSecond {
+			parent[rootSecond] = rootFirst
+			widest[rootFirst] = max(widest[rootFirst], widest[rootSecond])
+		}
+		widest[rootFirst] = max(widest[rootFirst], distance)
+	}
+	checked := 0
 	for band := range bands {
 		low, high := band*64/bands, (band+1)*64/bands
 		mask := uint64(1)<<(high-low) - 1
@@ -319,19 +352,36 @@ func groupSimilar(videos []hashedVideo, maxBits, frameBits, limit int) []Similar
 			buckets[key] = append(buckets[key], index)
 		}
 		for _, members := range buckets {
-			for i, first := range members {
-				for _, second := range members[i+1:] {
-					distance := bits.OnesCount64(videos[first].mean ^ videos[second].mean)
-					if distance > maxBits || !sameLength(videos[first].video.DurationMs, videos[second].video.DurationMs) ||
-						!framesAlike(videos[first].frames, videos[second].frames, frameBits) {
-						continue
+			if checked++; checked%bucketsPerCheck == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+			}
+			// Unknown lengths (0) are comparable with everything; the rest are ordered, and a longer one that is too
+			// long for this one is too long for all that follow.
+			var unknown, known []int
+			for _, member := range members {
+				if videos[member].video.DurationMs == 0 {
+					unknown = append(unknown, member)
+				} else {
+					known = append(known, member)
+				}
+			}
+			slices.SortFunc(known, func(a, b int) int { return cmp.Compare(videos[a].video.DurationMs, videos[b].video.DurationMs) })
+			for i, first := range known {
+				for _, second := range known[i+1:] {
+					if !sameLength(videos[first].video.DurationMs, videos[second].video.DurationMs) {
+						break
 					}
-					rootFirst, rootSecond := find(first), find(second)
-					if rootFirst != rootSecond {
-						parent[rootSecond] = rootFirst
-						widest[rootFirst] = max(widest[rootFirst], widest[rootSecond])
-					}
-					widest[rootFirst] = max(widest[rootFirst], distance)
+					compare(first, second, band)
+				}
+			}
+			for i, first := range unknown {
+				for _, second := range unknown[i+1:] {
+					compare(first, second, band)
+				}
+				for _, second := range known {
+					compare(first, second, band)
 				}
 			}
 		}
@@ -356,5 +406,16 @@ func groupSimilar(videos []hashedVideo, maxBits, frameBits, limit int) []Similar
 	if len(groups) > limit {
 		groups = groups[:limit]
 	}
-	return groups
+	return groups, nil
+}
+
+// firstSharedBand is the lowest of the bands the xor of two mean hashes is zero in: the band that finds the pair first.
+func firstSharedBand(xor uint64, bands int) int {
+	for band := range bands {
+		low, high := band*64/bands, (band+1)*64/bands
+		if xor>>low&(uint64(1)<<(high-low)-1) == 0 {
+			return band
+		}
+	}
+	return bands
 }
