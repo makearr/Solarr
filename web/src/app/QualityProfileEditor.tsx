@@ -18,7 +18,7 @@ import {
 import { useQualityProfiles } from "@/lib/resources";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import { labelStyle } from "@/ui/form";
-import { RemoveButton } from "@/ui/Button";
+import { RemoveButton } from "@/ui/RemoveButton";
 
 import { LanguagePicker } from "./LanguagePicker";
 
@@ -139,6 +139,7 @@ export function QualityProfilesPage() {
                   </button>
                   <RemoveButton
                     aria-label={`Remove quality profile ${profile.name}`}
+                    confirm={{ title: "Remove this quality profile?", body: `Removes ${profile.name}. Libraries and items that use it must be moved to another profile first.` }}
                     disabled={remove.isPending}
                     onClick={() => remove.mutate(profile.id)}
                   />
@@ -558,7 +559,7 @@ function SizeRanges({ rules, onChange }: { rules: VideoRules; onChange: (patch: 
                   </td>
                 ))}
                 <td>
-                  <RemoveButton aria-label={`Remove the ${size.resolution} size limits`} onClick={() => onChange({ sizes: rules.sizes.filter((_, at) => at !== index) })} />
+                  <RemoveButton aria-label={`Remove the ${size.resolution} size limits`} confirm={null} onClick={() => onChange({ sizes: rules.sizes.filter((_, at) => at !== index) })} />
                 </td>
               </tr>
             ))}

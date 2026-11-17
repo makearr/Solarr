@@ -7,7 +7,8 @@ import { missingIndexer } from "@/lib/indexerCatalog";
 import { useDownloaderKinds, useDownloadFolders, useIndexerKinds } from "@/lib/resources";
 import { usePreference } from "@/lib/usePreference";
 import type { components } from "@/api/schema";
-import { Button, RemoveButton } from "@/ui/Button";
+import { Button } from "@/ui/Button";
+import { RemoveButton } from "@/ui/RemoveButton";
 import { inputStyle } from "@/ui/form";
 
 type Downloader = components["schemas"]["Downloader"];
@@ -125,6 +126,7 @@ export function Downloaders() {
                   </button>
                   <RemoveButton
                     aria-label={`Remove ${downloader.name}`}
+                    confirm={{ title: "Remove this download client?", body: `Removes ${downloader.name} and its stored credentials, which cannot be shown again. Downloads already in the client are left alone.` }}
                     onClick={() => remove.mutate(downloader.id)}
                     disabled={remove.isPending}
                   />

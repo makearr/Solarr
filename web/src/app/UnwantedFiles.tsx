@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
-import { Button, RemoveButton } from "@/ui/Button";
+import { Button } from "@/ui/Button";
+import { RemoveButton } from "@/ui/RemoveButton";
 import { inputStyle, labelStyle, addFormStyle } from "@/ui/form";
 
 import { Card } from "./SettingsCard";
@@ -146,6 +147,7 @@ function PatternRow({
       </label>
       <RemoveButton
         aria-label={`Remove pattern ${pattern.pattern}`}
+        confirm={{ title: "Remove this pattern?", body: `Files matching ${pattern.pattern} are no longer flagged as unwanted.` }}
         onClick={onRemove}
         disabled={busy}
       />
@@ -297,6 +299,7 @@ function BlockedRow({
       )}
       <RemoveButton
         aria-label={`Remove block ${entry.title ?? entry.id}`}
+        confirm={{ title: "Remove this block?", body: `${entry.title ?? entry.id} can be grabbed again.` }}
         onClick={onRemove}
         disabled={busy}
         className="ml-auto shrink-0"

@@ -7,7 +7,8 @@ import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import { invalidateWorkLists, useCategories, useLanguageProfiles, useQualityProfiles } from "@/lib/resources";
 import { useMediaType, useMediaTypes } from "@/lib/useMediaTypes";
-import { Button, RemoveButton } from "@/ui/Button";
+import { Button } from "@/ui/Button";
+import { RemoveButton } from "@/ui/RemoveButton";
 import { inputStyle, labelStyle } from "@/ui/form";
 
 import { Card } from "./SettingsCard";
@@ -305,7 +306,7 @@ function Row({
           </button>
         </div>
         <div className="flex items-center">
-          <RemoveButton aria-label={`Remove ${category.name}`} onClick={onRemove} disabled={busy} />
+          <RemoveButton aria-label={`Remove ${category.name}`} confirm={{ title: "Remove this library?", body: `Removes the library ${category.name} from Solarr.` }} onClick={onRemove} disabled={busy} />
         </div>
       </div>
     </li>

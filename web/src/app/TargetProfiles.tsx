@@ -5,7 +5,8 @@ import { Plus } from "lucide-react";
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { TARGET_FAMILIES } from "@/lib/targetDisplay";
-import { Button, RemoveButton } from "@/ui/Button";
+import { Button } from "@/ui/Button";
+import { RemoveButton } from "@/ui/RemoveButton";
 import { inputStyle } from "@/ui/form";
 
 import { AUDIO_CODECS, ENCODER_PRESETS, ENCODER_TUNES, Num, Pick, RESOLUTIONS, VIDEO_CODECS } from "./QualityTargets";
@@ -152,7 +153,7 @@ export function TargetProfilesSection() {
               <button type="button" onClick={() => setEditing(profile.id ?? null)} className={smallButton}>
                 Edit
               </button>
-              <RemoveButton aria-label={`Remove content profile ${profile.name}`} disabled={remove.isPending} onClick={() => profile.id && remove.mutate(profile.id)} />
+              <RemoveButton aria-label={`Remove content profile ${profile.name}`} confirm={{ title: "Remove this content profile?", body: `Removes ${profile.name}.` }} disabled={remove.isPending} onClick={() => profile.id && remove.mutate(profile.id)} />
             </li>
           ),
         )}

@@ -6,7 +6,8 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCategories } from "@/lib/resources";
 import { useLibraryLabel } from "@/lib/libraryLabel";
-import { Button, RemoveButton } from "@/ui/Button";
+import { Button } from "@/ui/Button";
+import { RemoveButton } from "@/ui/RemoveButton";
 import { inputStyle, labelStyle, addFormStyle } from "@/ui/form";
 
 import { ArrConnectionTools } from "./ArrConnectionTools";
@@ -174,6 +175,7 @@ function InstanceCard({
         </button>
         <RemoveButton
           aria-label={`Remove ${instance.name}`}
+          confirm={{ title: "Remove this connection?", body: `Removes the connection ${instance.name} and its stored API key, which cannot be shown again. What it already imported stays.` }}
           onClick={onRemove}
           disabled={busy}
           className="shrink-0"

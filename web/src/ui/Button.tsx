@@ -1,4 +1,3 @@
-import { Trash2 } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost" | "icon" | "remove";
@@ -42,14 +41,5 @@ export function Button({
       {icon}
       {busy && busyLabel ? busyLabel : children}
     </button>
-  );
-}
-
-/** A row's remove control: a bin that turns red on hover; aria-label says what goes. */
-export function RemoveButton(props: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & { "aria-label": string }) {
-  return (
-    <Button variant="remove" {...props}>
-      <Trash2 aria-hidden className="size-3.5" />
-    </Button>
   );
 }

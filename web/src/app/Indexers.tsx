@@ -9,7 +9,8 @@ import { missingDownloader } from "@/lib/indexerCatalog";
 import { useDownloaderKinds, useIndexerKinds } from "@/lib/resources";
 import { usePreference } from "@/lib/usePreference";
 import { isTierVisible, useTier } from "@/lib/useTier";
-import { Button, RemoveButton } from "@/ui/Button";
+import { Button } from "@/ui/Button";
+import { RemoveButton } from "@/ui/RemoveButton";
 import { inputStyle, labelStyle, addFormStyle } from "@/ui/form";
 
 type Indexer = components["schemas"]["Indexer"];
@@ -160,6 +161,7 @@ export function Indexers() {
                   </button>
                   <RemoveButton
                     aria-label={`Remove ${indexer.name}`}
+                    confirm={{ title: "Remove this indexer?", body: `Removes ${indexer.name} and its stored API key, which cannot be shown again. Releases already found keep their name.` }}
                     onClick={() => remove.mutate(indexer.id)}
                     disabled={remove.isPending}
                   />
@@ -499,7 +501,7 @@ function Proxies() {
             <span className="truncate font-mono text-ink-muted">{proxy.url}</span>
             {proxy.source_arr_id && <span className="text-ink-muted">· from Prowlarr</span>}
             <span className="ml-auto">
-              <RemoveButton aria-label={`Remove ${proxy.name}`} onClick={() => remove.mutate(proxy.id)} disabled={remove.isPending} />
+              <RemoveButton aria-label={`Remove ${proxy.name}`} confirm={{ title: "Remove this proxy?", body: `Removes ${proxy.name}. Indexers that use it connect directly.` }} onClick={() => remove.mutate(proxy.id)} disabled={remove.isPending} />
             </span>
           </li>
         ))}

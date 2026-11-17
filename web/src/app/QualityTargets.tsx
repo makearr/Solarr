@@ -5,7 +5,8 @@ import { Plus } from "lucide-react";
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { TARGET_FAMILIES, targetSpecs, targetTitle } from "@/lib/targetDisplay";
-import { Button, RemoveButton } from "@/ui/Button";
+import { Button } from "@/ui/Button";
+import { RemoveButton } from "@/ui/RemoveButton";
 import { inputStyle } from "@/ui/form";
 
 import { applyProfile } from "@/lib/targetProfile";
@@ -423,6 +424,7 @@ export function QualityTargetsSection() {
                   </button>
                   <RemoveButton
                     aria-label={`Remove target ${targetTitle(target)}`}
+                    confirm={{ title: "Remove this quality target?", body: `Removes ${targetTitle(target)}. Libraries that use it fall back to their quality profile.` }}
                     disabled={remove.isPending}
                     onClick={() => target.id && remove.mutate(target.id)}
                   />

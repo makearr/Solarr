@@ -6,7 +6,8 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCategories, useDownloadFolders, useImportSettings } from "@/lib/resources";
 import { useLibraryLabel } from "@/lib/libraryLabel";
-import { Button, RemoveButton } from "@/ui/Button";
+import { Button } from "@/ui/Button";
+import { RemoveButton } from "@/ui/RemoveButton";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { inputStyle, labelStyle, addFormStyle } from "@/ui/form";
 
@@ -144,6 +145,7 @@ function DownloadFolderCard({
         )}
         <RemoveButton
           aria-label={`Stop watching ${folder.path}`}
+          confirm={null}
           onClick={() => setConfirmingRemove(true)}
           disabled={busy}
           className="ml-auto shrink-0"

@@ -4,7 +4,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useLanguageProfiles } from "@/lib/resources";
-import { Button, RemoveButton } from "@/ui/Button";
+import { Button } from "@/ui/Button";
+import { RemoveButton } from "@/ui/RemoveButton";
 import { inputStyle, labelStyle } from "@/ui/form";
 
 import { LanguagePicker } from "./LanguagePicker";
@@ -90,6 +91,7 @@ export function LanguageProfiles() {
                 </button>
                 <RemoveButton
                   aria-label={`Remove language profile ${profile.name}`}
+                  confirm={{ title: "Remove this language profile?", body: `Removes ${profile.name}.` }}
                   disabled={remove.isPending}
                   onClick={() => remove.mutate(profile.id)}
                 />

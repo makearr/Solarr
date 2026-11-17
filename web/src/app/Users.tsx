@@ -7,7 +7,9 @@ import { useAuthPolicy, useSetAuthRequired } from "@/lib/useAuthPolicy";
 import { useSetMyTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 import { useCategories, useTagTree, useUserDefaults } from "@/lib/resources";
-import { Button, RemoveButton } from "@/ui/Button";
+import { Button } from "@/ui/Button";
+import { ConfirmDialog } from "@/ui/ConfirmDialog";
+import { RemoveButton } from "@/ui/RemoveButton";
 import { inputStyle, labelStyle } from "@/ui/form";
 
 import { Card } from "./SettingsCard";
@@ -255,11 +257,8 @@ function APIKeyRow({
         </button>
         <RemoveButton
           aria-label={`Revoke ${apiKey.name}`}
-          onClick={() => {
-            if (window.confirm(`Revoke "${apiKey.name}"? Anything using it will stop working immediately.`)) {
-              onRevoke();
-            }
-          }}
+          confirm={{ title: "Revoke this API key?", body: `Anything using "${apiKey.name}" will stop working immediately.` }}
+          onClick={onRevoke}
           disabled={busy}
           className="shrink-0"
         />
@@ -294,10 +293,14 @@ function CopyKeyButton({ value }: { value: string }) {
 
 /** The login requirement. Kept at the top of User settings because it is the
  *  one setting that changes who everything else is answered as. */
+const NO_LOGIN_PHRASE = "no login";
+
 function AccessSection() {
   const policy = useAuthPolicy();
   const change = useSetAuthRequired();
   const [password, setPassword] = useState("");
+  const [confirmingOff, setConfirmingOff] = useState(false);
+  const [typed, setTyped] = useState("");
 
   if (!policy.data) return null;
   const required = policy.data.auth_required;
@@ -348,12 +351,14 @@ function AccessSection() {
 
       <button
         type="button"
-        onClick={() =>
-          change.mutate({
-            authRequired: !required,
-            password: needsPassword ? password : undefined,
-          })
-        }
+        onClick={() => {
+          if (required) {
+            setTyped("");
+            setConfirmingOff(true);
+            return;
+          }
+          change.mutate({ authRequired: true, password: needsPassword ? password : undefined });
+        }}
         disabled={change.isPending || (needsPassword && password === "")}
         className="self-start rounded-md border border-border-subtle px-2.5 py-1 text-xs
                    text-ink-muted hover:text-ink disabled:opacity-50
@@ -366,6 +371,25 @@ function AccessSection() {
             ? "Stop requiring a login"
             : "Require a login"}
       </button>
+      {confirmingOff && (
+        <ConfirmDialog
+          title="Stop requiring a login?"
+          consequence="Anyone who can reach this port will be the administrator: every setting, key and library is open to them."
+          confirmLabel="Stop requiring a login"
+          danger
+          disabled={typed !== NO_LOGIN_PHRASE}
+          onCancel={() => setConfirmingOff(false)}
+          onConfirm={() => {
+            setConfirmingOff(false);
+            change.mutate({ authRequired: false, password: undefined });
+          }}
+        >
+          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+            Type "{NO_LOGIN_PHRASE}" to confirm
+            <input className={inputStyle} value={typed} onChange={(event) => setTyped(event.target.value)} />
+          </label>
+        </ConfirmDialog>
+      )}
     </Card>
   );
 }
@@ -728,6 +752,7 @@ function Row({
   const [password, setPassword] = useState("");
   const [resetting, setResetting] = useState(false);
   const [open, setOpen] = useState(false);
+  const [pendingRole, setPendingRole] = useState<Role>();
   const isAdmin = user.role === "admin";
   const granted = libraries.filter((library) =>
     user.access.some((entry) => entry.category_id === library.id),
@@ -760,6 +785,7 @@ function Row({
 
         <RemoveButton
           aria-label={`Remove ${user.username}`}
+          confirm={{ title: "Remove this account?", body: `Removes ${user.username} with their API keys, favourites, preferences and access grants.` }}
           onClick={onRemove}
           disabled={busy}
         />
@@ -790,7 +816,12 @@ function Row({
               aria-label={`Role for ${user.username}`}
               value={user.role}
               disabled={busy}
-              onChange={(event) => onRole(event.target.value as Role)}
+              onChange={(event) => {
+                const role = event.target.value as Role;
+                // Gaining or losing administration is one mis-click away in a select, so it asks.
+                if (role === "admin" || user.role === "admin") setPendingRole(role);
+                else onRole(role);
+              }}
               className="rounded-md border border-border-subtle bg-canvas px-1.5 py-0.5 text-xs"
             >
               {ROLES.map((role) => (
@@ -800,6 +831,23 @@ function Row({
               ))}
             </select>
           </label>
+          {pendingRole !== undefined && (
+            <ConfirmDialog
+              title={pendingRole === "admin" ? "Make this account an administrator?" : "Take administration away?"}
+              consequence={
+                pendingRole === "admin"
+                  ? `${user.username} will be able to change every setting, key and account.`
+                  : `${user.username} will no longer be able to change settings, keys or accounts.`
+              }
+              confirmLabel="Change role"
+              danger
+              onCancel={() => setPendingRole(undefined)}
+              onConfirm={() => {
+                onRole(pendingRole);
+                setPendingRole(undefined);
+              }}
+            />
+          )}
           <span className="text-xs text-ink-muted" title={PERMISSION_HELP}>
             Libraries ({PERMISSION_HELP})
           </span>
