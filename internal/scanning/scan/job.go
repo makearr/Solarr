@@ -18,6 +18,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/filekind"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/iogate"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
@@ -408,7 +409,11 @@ func (j *Job) observe(ctx context.Context, root settings.RootFolder, sweep Sweep
 		}
 	}
 
-	probes, err := j.tool.ReadTags(ctx, paths)
+	var probes []mediatool.Probe
+	err := iogate.OnDisk(ctx, "", paths, func() (readErr error) {
+		probes, readErr = j.tool.ReadTags(ctx, paths)
+		return readErr
+	})
 	if err != nil {
 		return fmt.Errorf("scan: probe %s: %w", batch.Directory, err)
 	}

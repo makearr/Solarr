@@ -57,12 +57,20 @@ func TestAcquire_OnlyWholeRunJobsHoldADiskForTheirRunAndUnlistedJobsAreNeverHeld
 	if turns.gate.Waiting("disk:root") != 0 {
 		t.Fatal("nothing should wait yet")
 	}
-	scan, err := turns.Acquire(ctx, jobs.Job{Type: "library.scan", Payload: []byte(`{"root_folder_id":1}`)})
+	statistics, err := turns.Acquire(ctx, jobs.Job{Type: "library.statistics", Payload: []byte(`{"root_folder_id":1}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if turns.gate.Idle("disk:root", time.Hour) {
-		t.Fatal("a scan of root 1 must hold a slot on that root's disk")
+		t.Fatal("a statistics run of root 1 must hold a slot on that root's disk")
+	}
+	statistics()
+	scan, err := turns.Acquire(ctx, jobs.Job{Type: "library.scan", Payload: []byte(`{"root_folder_id":1}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !turns.gate.Idle("disk:root", 0) {
+		t.Fatal("a scan takes its turns per directory, not a slot for its run")
 	}
 	scan()
 	probe, err := turns.Acquire(ctx, jobs.Job{Type: "library.probe"})

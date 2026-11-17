@@ -39,7 +39,7 @@ func waitingOn(t *testing.T, g *Gate, group string, want int) {
 
 func TestAcquire_TheMostUrgentWaiterGetsTheNextSlot(t *testing.T) {
 	g := newGate(clock.NewFakeAtEpoch(), 1, nil)
-	first, _ := g.Acquire(context.Background(), "d", ClassScan)
+	first, _ := g.Acquire(context.Background(), "d", ClassImport)
 	scan := waitFor(g, "d", ClassScan)
 	waitingOn(t, g, "d", 1)
 	imp := waitFor(g, "d", ClassImport)
@@ -60,24 +60,82 @@ func TestAcquire_TheMostUrgentWaiterGetsTheNextSlot(t *testing.T) {
 	}
 }
 
-func TestAcquire_AWaiterThatWaitedLongEnoughOvertakesUrgentWork(t *testing.T) {
+func TestAcquire_BulkWorkThatWaitedLongNeverOvertakesUrgentWork(t *testing.T) {
 	fake := clock.NewFakeAtEpoch()
-	g := newGate(fake, 1, nil)
+	g := newGate(fake, 2, nil)
 	first, _ := g.Acquire(context.Background(), "d", ClassImport)
+	second, _ := g.Acquire(context.Background(), "d", ClassImport)
 	previews := waitFor(g, "d", ClassPreviews)
 	waitingOn(t, g, "d", 1)
-	fake.Advance(95 * time.Second) // nine steps: previews now count as playback
-	imp := waitFor(g, "d", ClassImport)
+	fake.Advance(95 * time.Second) // nine steps: previews would count as playback without the floor
+	rename := waitFor(g, "d", ClassRename)
 	waitingOn(t, g, "d", 2)
 
 	first()
 	select {
-	case release := <-previews:
+	case release := <-rename:
 		release()
 	case <-time.After(2 * time.Second):
-		t.Fatal("a waiter that aged to the top must not be starved by newer urgent work")
+		t.Fatal("a rename must go before bulk work however long that waited")
 	}
-	<-imp
+	second()
+	release := <-previews
+	release()
+}
+
+func TestAcquire_PlaybackNeverWaitsForTheSlotsOfOtherWork(t *testing.T) {
+	g := newGate(clock.NewFakeAtEpoch(), 2, nil)
+	first, _ := g.Acquire(context.Background(), "d", ClassImport)
+	second, _ := g.Acquire(context.Background(), "d", ClassDrain)
+	defer first()
+	defer second()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	release, err := g.Acquire(ctx, "d", ClassPlayback)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+	if g.Waiting("d") != 0 {
+		t.Fatal("playback waited behind two copies")
+	}
+}
+
+func TestAcquire_PlaybackHoldersAreCapped(t *testing.T) {
+	g := newGate(clock.NewFakeAtEpoch(), 1, nil)
+	var releases []func()
+	for range maxPlaybackHolders {
+		release, err := g.Acquire(context.Background(), "d", ClassPlayback)
+		if err != nil {
+			t.Fatal(err)
+		}
+		releases = append(releases, release)
+	}
+	extra := waitFor(g, "d", ClassPlayback)
+	waitingOn(t, g, "d", 1)
+	releases[0]()
+	release := <-extra
+	release()
+	for _, release := range releases[1:] {
+		release()
+	}
+}
+
+func TestAcquire_AShrunkDiskStillAdmitsOneUrgentTaskBesideBulkWork(t *testing.T) {
+	g := newGate(clock.NewFakeAtEpoch(), 1, nil)
+	scan, _ := g.Acquire(context.Background(), "d", ClassScan)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	imp, err := g.Acquire(ctx, "d", ClassImport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := waitFor(g, "d", ClassRename)
+	waitingOn(t, g, "d", 1)
+	imp()
+	release := <-second
+	release()
+	scan()
 }
 
 func TestAcquire_BulkWorkLeavesOneSlotForUrgentWork(t *testing.T) {

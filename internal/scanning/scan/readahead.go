@@ -11,6 +11,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/iogate"
 )
 
 // readAheadWorkers is how many directories are read at once ahead of the walk: on cold NFS every read is a round trip,
@@ -149,6 +150,14 @@ func (r *readAhead) fill(ctx context.Context, next *listing) {
 	if next.relative != "" {
 		absolute = path.Join(r.root, next.relative)
 	}
+	// One directory is one turn on its disk, so a scan of a whole library never holds the disk against a stream or an import.
+	if err := iogate.OnDisk(ctx, "", []string{absolute}, func() error { r.read(next, absolute); return nil }); err != nil {
+		next.statErr = err
+	}
+}
+
+// read lists one directory and, when the walk reads it, stats its included files.
+func (r *readAhead) read(next *listing, absolute string) {
 	info, err := r.fsys.Stat(absolute)
 	if errors.Is(err, fs.ErrNotExist) {
 		next.gone = true

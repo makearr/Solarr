@@ -302,7 +302,7 @@ var allowedInternalImports = map[string][]string{
 	// What it finds is persisted by the caller, so it touches no database.
 	// The sweep itself walks only the fsx seam; the job handler beside it composes
 	// the pieces a scan needs, the way internal/db/recovery does.
-	"internal/scanning/scan": {"internal/platform/filekind",
+	"internal/scanning/scan": {"internal/platform/filekind", "internal/platform/iogate",
 		"internal/platform/clock", "internal/platform/fsx", "internal/jobs", "internal/db/library",
 		"internal/platform/mediatool", "internal/db/settings",
 	},

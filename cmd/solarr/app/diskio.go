@@ -91,8 +91,7 @@ func newDiskTurns(disks diskLayout, monitor *disklatency.Monitor, c clock.Clock)
 
 // wholeRun are the job types that hold their disk for the entire run; every other listed type takes turns per batch.
 var wholeRun = map[jobs.Type]bool{
-	"library.scan": true, "library.rescan": true, "library.statistics": true,
-	"library.recycle_bin_cleanup": true, "library.preview_cleanup": true,
+	"library.statistics": true, "library.recycle_bin_cleanup": true, "library.preview_cleanup": true,
 }
 
 // Acquire is jobs.DiskGate: the turn of a job that holds one disk for its whole run.

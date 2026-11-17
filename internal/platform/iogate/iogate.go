@@ -146,14 +146,19 @@ func (g *Gate) release(group string, held *holder) {
 	g.admitLocked(group, state)
 }
 
-// admitLocked starts waiters, most urgent first, for as long as there is room for them.
+// maxPlaybackHolders bounds the stream reads that are admitted without a slot, so a fault cannot open the gate entirely.
+const maxPlaybackHolders = 8
+
+// admitLocked starts waiters, most urgent first, for as long as there is room for them. A stream read is small and
+// sequential and never waits for a slot; bulk work keeps one slot short of the capacity (but at least one), and a single
+// urgent task may share a disk that a shrunk capacity of 1 gives to bulk work.
 func (g *Gate) admitLocked(group string, state *groupState) {
 	capacity := 1
 	if g.options.Capacity != nil {
 		capacity = max(1, g.options.Capacity(group))
 	}
 	now := g.clock.Now()
-	for len(state.waiting) > 0 && len(state.running) < capacity {
+	for len(state.waiting) > 0 {
 		sort.SliceStable(state.waiting, func(i, j int) bool {
 			a, b := g.effective(state.waiting[i], now), g.effective(state.waiting[j], now)
 			if a != b {
@@ -163,7 +168,7 @@ func (g *Gate) admitLocked(group string, state *groupState) {
 		})
 		admitted := false
 		for i, candidate := range state.waiting {
-			if candidate.class >= firstBulk && capacity > 1 && bulkRunning(state) >= capacity-1 {
+			if !allowed(state, capacity, candidate.class) {
 				continue
 			}
 			held := &holder{class: candidate.class}
@@ -179,19 +184,37 @@ func (g *Gate) admitLocked(group string, state *groupState) {
 	}
 }
 
-// effective is the class a waiter is treated as having: one better for each AgeStep it has waited.
-func (g *Gate) effective(entry *waiter, now time.Time) int {
-	return max(0, int(entry.class)-int(now.Sub(entry.since)/g.options.AgeStep))
-}
-
-func bulkRunning(state *groupState) int {
-	count := 0
+// allowed says whether a task of this class may start now.
+func allowed(state *groupState, capacity int, class Class) bool {
+	var playback, bulk, urgent int
 	for held := range state.running {
-		if held.class >= firstBulk {
-			count++
+		switch {
+		case held.class == ClassPlayback:
+			playback++
+		case held.class >= firstBulk:
+			bulk++
+		default:
+			urgent++
 		}
 	}
-	return count
+	switch {
+	case class == ClassPlayback:
+		return playback < maxPlaybackHolders
+	case class >= firstBulk:
+		return bulk+urgent < capacity && bulk < max(1, capacity-1)
+	default:
+		return bulk+urgent < capacity || (capacity == 1 && urgent == 0)
+	}
+}
+
+// effective is the class a waiter is treated as having: one better for each AgeStep it has waited, but bulk work never
+// ages past the most urgent bulk-adjacent class, so it cannot overtake playback, imports or renames.
+func (g *Gate) effective(entry *waiter, now time.Time) int {
+	floor := 0
+	if entry.class >= firstBulk {
+		floor = int(firstBulk) - 1
+	}
+	return max(floor, int(entry.class)-int(now.Sub(entry.since)/g.options.AgeStep))
 }
 
 func containsWaiter(list []*waiter, entry *waiter) bool {
