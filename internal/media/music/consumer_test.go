@@ -590,6 +590,34 @@ func TestObserve_AnUnidentifiedFileJoinsTheAlbumItsFolderSiblingsAgreeOn(t *test
 	}
 }
 
+// One identified track among many strangers is no album folder: the strangers are queued, with the album offered first.
+func TestObserve_OneIdentifiedFileDoesNotAdoptAFolderOfStrangers(t *testing.T) {
+	consumer, opened, fsys := newConsumer(t)
+	var batch []scan.Observed
+	for i := range 5 {
+		relPath := fmt.Sprintf("Misc/%02d.m4a", i)
+		content := []byte("misc " + relPath)
+		writeMusicFile(t, fsys, relPath, content)
+		tags := mediatool.Tags{"album": "Misc"}
+		if i == 0 {
+			tags["musicbrainz_releasegroupid"] = releaseGroupMBID
+		}
+		batch = append(batch, observedFile(relPath, int64(len(content)), tags))
+	}
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, batch); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	queue, err := library.NewUnidentified(opened).List(t.Context(), nil, paginate.Cursor{}, 50)
+	if err != nil || len(queue) != 4 {
+		t.Fatalf("queue = %d entries (err %v), want the four strangers", len(queue), err)
+	}
+	for _, entry := range queue {
+		if len(entry.Candidates) == 0 || entry.Candidates[0].ExternalID != releaseGroupMBID {
+			t.Errorf("candidates of %s = %+v, want the folder's album first", entry.RelPath, entry.Candidates)
+		}
+	}
+}
+
 // Siblings that disagree prove nothing about a file between them.
 func TestObserve_SiblingsThatDisagreeLeaveAnUnidentifiedFileQueued(t *testing.T) {
 	consumer, opened, fsys := newConsumer(t)

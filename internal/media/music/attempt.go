@@ -16,6 +16,8 @@ const (
 	PassOutcomeFailed              = "failed"
 	PassOutcomeJoined              = "joined"
 	PassOutcomeSiblingsDisagree    = "siblings_disagree"
+	PassOutcomeSiblingsTooFew      = "siblings_too_few"
+	PassOutcomeRefutedBySibling    = "sibling_album_has_no_track"
 	PassOutcomeNoIdentifiedSibling = "no_identified_sibling"
 	// PassOutcomeRetired is an embedded release group no source knows any more; the album is matched instead.
 	PassOutcomeRetired = "retired"

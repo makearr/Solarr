@@ -20,6 +20,9 @@ const PassTrack = "track_match"
 // StrategyTrack is the per-track pass's name in an Identification.
 const StrategyTrack = "track"
 
+// StrategySibling is the folder-sibling pass's name in an Identification.
+const StrategySibling = "sibling"
+
 const (
 	// trackKnownConfidence is a recording the file's own fingerprint or embedded id names.
 	trackKnownConfidence = 0.95

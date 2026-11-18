@@ -354,6 +354,23 @@ func (c Consumer) identifyBatch(
 			out.queue(file.index, file.candidates)
 			continue
 		}
+		// Agreement needs weight: a majority of the folder, or three identified files. One tagged track among forty
+		// strangers is not an album folder, and a file just judged "not on this album" does not join it.
+		majority := len(out.links) >= len(pending)
+		refuted := slices.Contains(file.refuted, sibling.ExternalID)
+		// A bonus track the edition has no track for still joins a folder most of whose files are identified.
+		if !majority && len(out.links) < siblingFloor || refuted && !majority {
+			outcome, candidates := PassOutcomeSiblingsTooFew, file.candidates
+			if refuted {
+				outcome = PassOutcomeRefutedBySibling
+			} else {
+				// The person resolving it gets the one-click answer the rule would have given.
+				candidates = append([]model.Identification{siblingCandidate(sibling)}, candidates...)
+			}
+			out.note(file.index, library.AttemptPass{Pass: PassFolderSiblings, Outcome: outcome})
+			out.queue(file.index, candidates)
+			continue
+		}
 		one := observed[file.index]
 		out.note(file.index, library.AttemptPass{Pass: PassFolderSiblings, Outcome: PassOutcomeJoined})
 		out.identify(file.index, library.WorkLink{
@@ -1121,6 +1138,20 @@ func albumTrackFile(out *batchResult, index int, track *ReleaseTrack) TrackFile 
 // siblingConfidence is below anything a strategy reports for the file itself:
 // the evidence is where the file sits, not what it says.
 const siblingConfidence = 0.5
+
+// siblingCandidate is the folder's album offered to a file the sibling rule did not take.
+func siblingCandidate(sibling library.WorkLink) model.Identification {
+	return model.Identification{
+		Strategy:   StrategySibling,
+		ExternalID: &model.ExternalID{Provider: sibling.Provider, ExternalID: sibling.ExternalID, Confidence: siblingConfidence},
+		Precedence: model.PrecedenceSearched,
+		Confidence: siblingConfidence,
+		Evidence:   []model.MatchEvidence{{Kind: EvidenceTitle, Detail: sibling.Work.CanonicalTitle}},
+	}
+}
+
+// siblingFloor is how many identified files in a folder make their agreement enough when they are fewer than the rest.
+const siblingFloor = 3
 
 // soleSiblingIdentity is the one album every identified file in a folder
 // resolved to, or false when there were none or they disagreed.
