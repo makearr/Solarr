@@ -169,12 +169,17 @@ type pairScore struct {
 	sameRecord   bool
 }
 
-func scorePair(local LocalTrack, track musicbrainz.Track, disc, absolute int) pairScore {
+// scorePair judges one file against one track; localCore and trackCore are their titles' neutralCore, worked out once per title.
+func scorePair(local LocalTrack, track musicbrainz.Track, disc, absolute int, localCore, trackCore string) pairScore {
 	var d distance
 	score := pairScore{}
 	if local.Title.present() && track.Title != "" {
 		score.hasTitles = true
 		score.titlePenalty = match.EditPenalty(local.Title.Value, track.Title)
+		// "Song (2011 Remaster)" is "Song": a pressing's qualifier does not make another title.
+		if localCore != "" && trackCore != "" && (localCore != local.Title.Value || trackCore != track.Title) {
+			score.titlePenalty = min(score.titlePenalty, match.EditPenalty(localCore, trackCore))
+		}
 		d.add(dimensionTrackTitle, dampened(score.titlePenalty, local.Title.Provenance))
 	}
 	if local.Duration > 0 && track.DurationMs > 0 {
@@ -272,11 +277,19 @@ func fitTracklist(locals []LocalTrack, release musicbrainz.Release) tracklistFit
 	for i := range cost {
 		cost[i] = slices.Repeat([]float64{unmappedCost}, size)
 	}
+	localCores := make([]string, len(locals))
+	for i, local := range locals {
+		localCores[i] = neutralCore(local.Title.Value)
+	}
+	trackCores := make([]string, len(releaseTracks))
+	for j, track := range releaseTracks {
+		trackCores[j] = neutralCore(track.Title)
+	}
 	for i, local := range locals {
 		pairs[i] = make([]pairScore, len(tracks))
 		refuted, fits := false, false
 		for j, track := range releaseTracks {
-			pair := scorePair(local, track, tracks[j].Disc, j+1)
+			pair := scorePair(local, track, tracks[j].Disc, j+1, localCores[i], trackCores[j])
 			pairs[i][j] = pair
 			sameName := pair.hasTitles && pair.titlePenalty <= supportTitlePenalty
 			if pair.conflict {
