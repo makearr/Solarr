@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Plus, XCircle } from "lucide-react";
 
 import { api, ok } from "@/api/client";
+import { healthMessage } from "@/lib/healthMessage";
 import { mediaTypeIcon, mediaTypeName } from "@/lib/mediaTypeIcon";
 import { useLibraryTree } from "@/lib/resources";
 import { isTierVisible, useTier } from "@/lib/useTier";
@@ -127,7 +128,7 @@ export function Dashboard() {
                   ) : (
                     <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0 text-ink-muted" />
                   )}
-                  <span className="flex-1">{check.message}</span>
+                  <span className="flex-1">{healthMessage(check)}</span>
                   {check.link != null && (
                     <Link
                       to={check.link}

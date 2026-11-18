@@ -40,6 +40,20 @@ type Module struct {
 	media.Passes
 	// Searching is music's part of a search a person asks for.
 	Searching
+	// AcoustIDConfigured says an AcoustID key is stored; nil skips the health check.
+	AcoustIDConfigured func() bool
+}
+
+// HealthChecks implements media.Healthy: without an AcoustID key, files carrying no tags cannot be recognised.
+func (m Module) HealthChecks(libraries int) []media.HealthCheck {
+	if libraries == 0 || m.AcoustIDConfigured == nil || m.AcoustIDConfigured() {
+		return nil
+	}
+	return []media.HealthCheck{{
+		ID: "music_no_acoustid_key", Severity: media.HealthWarning,
+		Message: "Files without tags cannot be recognised: add your free AcoustID key under Metadata.",
+		Link:    "/settings/metadata",
+	}}
 }
 
 // PlaceFile implements media.PlacingFiles.

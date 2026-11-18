@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
@@ -15,6 +16,8 @@ type HealthCheck struct {
 	Severity string
 	Message  string
 	Link     string
+	// Until is when a check that clears itself is next tried; the web formats it.
+	Until *time.Time
 }
 
 // Severities. An error means something cannot work at all; a warning means it
@@ -59,6 +62,7 @@ func (s *Server) GetSystemHealth(w http.ResponseWriter, r *http.Request) {
 		if check.Link != "" {
 			view.Link = &check.Link
 		}
+		view.Until = check.Until
 		views = append(views, view)
 	}
 	writeJSON(w, s.logger, http.StatusOK, views)

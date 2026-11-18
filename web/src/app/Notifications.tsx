@@ -4,6 +4,7 @@ import { AlertTriangle, Bell, CheckCircle2, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { api, ok } from "@/api/client";
+import { healthMessage } from "@/lib/healthMessage";
 import { isTierVisible, useTier } from "@/lib/useTier";
 
 import { pageTier } from "./sections";
@@ -120,7 +121,7 @@ export function Notifications() {
               ) : (
                 <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0 text-ink-muted" />
               )}
-              <span className="flex-1">{check.message}</span>
+              <span className="flex-1">{healthMessage(check)}</span>
               {check.link != null && (
                 <Link to={check.link} className="shrink-0 text-xs text-accent hover:underline">
                   Fix

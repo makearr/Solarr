@@ -8107,6 +8107,11 @@ export interface components {
             message: string;
             /** @description Where in the interface to fix it, when there is one place. */
             link?: string;
+            /**
+             * Format: date-time
+             * @description When the condition is next tried again, for a check that clears itself (a paused provider); the interface formats it in the viewer's zone.
+             */
+            until?: string;
         };
         /**
          * @description Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships. prowlarr has no library: its active indexers and download clients are used from it.

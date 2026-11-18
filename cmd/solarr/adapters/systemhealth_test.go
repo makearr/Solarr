@@ -2,12 +2,16 @@ package adapters
 
 import (
 	"context"
+	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/poll"
+	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
@@ -45,8 +49,53 @@ func TestSystemHealth_NamesAPausedMetadataProviderAndSkipsAnUnknownConnection(t 
 		}
 	}}
 	checks := health.pausedProviders(t.Context())
-	if len(checks) != 1 || checks[0].ID != "provider_paused_tmdb" || checks[0].Link != "/settings/metadata" ||
-		!strings.Contains(checks[0].Message, "tmdb is paused until") || !strings.Contains(checks[0].Message, "key was rejected") {
-		t.Fatalf("checks = %+v, want only the tmdb warning", checks)
+	want := []apiserver.HealthCheck{{
+		ID: "provider_paused_tmdb", Severity: apiserver.HealthWarning,
+		Message: "tmdb is paused: its key was rejected, so check it.", Link: "/settings/metadata", Until: &retry,
+	}}
+	if !reflect.DeepEqual(checks, want) {
+		t.Fatalf("checks = %+v, want %+v", checks, want)
+	}
+}
+
+type fakeTool struct{ err error }
+
+func (f fakeTool) Available(context.Context) error { return f.err }
+
+type fakeRuns []jobs.ScheduleRun
+
+func (f fakeRuns) List(context.Context) ([]jobs.ScheduleRun, error) { return f, nil }
+
+func TestSystemHealth_MissingMediaToolIsAnErrorAndRunnableToolsSayNothing(t *testing.T) {
+	missing := SystemHealth{Media: fakeTool{err: errors.New("ffprobe not found")}}.missingMediaTools(t.Context())
+	want := []apiserver.HealthCheck{{
+		ID: "media_tools_missing", Severity: apiserver.HealthError,
+		Message: "Solarr cannot run the tools that read media files, so nothing can be scanned or imported: ffprobe not found",
+	}}
+	if !reflect.DeepEqual(missing, want) {
+		t.Fatalf("checks = %+v, want %+v", missing, want)
+	}
+	if none := (SystemHealth{Media: fakeTool{}}).missingMediaTools(t.Context()); len(none) != 0 {
+		t.Fatalf("checks = %+v, want none", none)
+	}
+}
+
+func TestSystemHealth_NamesEachTaskWhoseLastRunFailed(t *testing.T) {
+	health := SystemHealth{
+		Tasks: func() []jobs.Task {
+			return []jobs.Task{{Key: "hunt", Name: "Search"}, {Key: "rss", Name: "Feeds"}, {Key: "backup", Name: "Backup"}}
+		},
+		TaskRuns: fakeRuns{
+			{TaskKey: "hunt", LastOutcome: "error", LastError: "queue is full"},
+			{TaskKey: "rss", LastOutcome: "enqueued"},
+			{TaskKey: "backup", LastOutcome: "error"},
+		},
+	}
+	want := []apiserver.HealthCheck{
+		{ID: "task_failing_hunt", Severity: apiserver.HealthWarning, Message: `The scheduled task "Search" failed on its last run: queue is full.`, Link: "/settings/scheduler"},
+		{ID: "task_failing_backup", Severity: apiserver.HealthWarning, Message: `The scheduled task "Backup" failed on its last run.`, Link: "/settings/scheduler"},
+	}
+	if got := health.failingTasks(t.Context()); !reflect.DeepEqual(got, want) {
+		t.Fatalf("checks = %+v, want %+v", got, want)
 	}
 }

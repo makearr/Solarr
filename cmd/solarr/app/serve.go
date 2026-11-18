@@ -848,6 +848,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		SystemHealth: adapters.SystemHealth{
 			Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library), Vanished: p.vanishedFiles(), Registry: p.media,
 			AboveRating: library.NewWorks(p.library).CountAboveRating, Paused: p.outbound().breaker.Paused,
+			Media: p.tool, Tasks: p.taskRegistry.All, TaskRuns: p.scheduleStates,
 		},
 		Blocklist: adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
 		History:   adapters.History{History: statistics.NewHistory(p.statistics)},

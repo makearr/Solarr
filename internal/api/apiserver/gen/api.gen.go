@@ -3099,6 +3099,9 @@ type HealthCheck struct {
 
 	// Severity error means something cannot work at all; warning means it works but will not do what the user probably expects.
 	Severity HealthCheckSeverity `json:"severity"`
+
+	// Until When the condition is next tried again, for a check that clears itself (a paused provider); the interface formats it in the viewer's zone.
+	Until *time.Time `json:"until,omitempty"`
 }
 
 // HealthCheckSeverity error means something cannot work at all; warning means it works but will not do what the user probably expects.

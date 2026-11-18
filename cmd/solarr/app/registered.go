@@ -112,7 +112,7 @@ func (p *process) musicModule() music.Module {
 	realign := func(ctx context.Context, workID int64) error {
 		return music.AlignClaimedFiles(ctx, &desired, clock.NewSystem(), workID)
 	}
-	return music.Module{Registrations: p.musicJobs(), Realign: realign, Files: p.musicFiles(), Passes: passes, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
+	return music.Module{AcoustIDConfigured: func() bool { return p.cache.Snapshot().AcoustIDConfigured() }, Registrations: p.musicJobs(), Realign: realign, Files: p.musicFiles(), Passes: passes, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
 		Consumer: consumer,
 		Include:  scan.IsAudio,
 		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{

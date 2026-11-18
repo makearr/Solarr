@@ -11,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
@@ -32,6 +33,16 @@ type SystemHealth struct {
 	AboveRating func(ctx context.Context, categoryID int64, limit library.RatingLimit) (int64, error)
 	// Paused lists the providers whose circuit is open; nil skips that check.
 	Paused func() []httpx.BreakerSnapshot
+	// Media reports the tools media files are read with that cannot run; nil skips that check.
+	Media interface {
+		Available(ctx context.Context) error
+	}
+	// Tasks lists the periodic tasks and their last runs; nil skips the failing-task check.
+	Tasks func() []jobs.Task
+	// TaskRuns reads the persisted last run of every task.
+	TaskRuns interface {
+		List(ctx context.Context) ([]jobs.ScheduleRun, error)
+	}
 }
 
 // Checks reports what is missing. Every probe is best-effort: a failure to
@@ -67,7 +78,57 @@ func (a SystemHealth) Checks(ctx context.Context) []apiserver.HealthCheck {
 	checks = append(checks, a.mediaChecks(snapshot)...)
 	checks = append(checks, a.heldByRating(ctx, snapshot)...)
 	checks = append(checks, a.pausedProviders(ctx)...)
+	checks = append(checks, a.missingMediaTools(ctx)...)
+	checks = append(checks, a.failingTasks(ctx)...)
 	return append(checks, pausedForRoom(snapshot)...)
+}
+
+// missingMediaTools says ffprobe or ffmpeg cannot run: no file can be read, so no import or scan can work.
+func (a SystemHealth) missingMediaTools(ctx context.Context) []apiserver.HealthCheck {
+	if a.Media == nil {
+		return nil
+	}
+	err := a.Media.Available(ctx)
+	if err == nil {
+		return nil
+	}
+	return []apiserver.HealthCheck{{
+		ID: "media_tools_missing", Severity: apiserver.HealthError,
+		Message: "Solarr cannot run the tools that read media files, so nothing can be scanned or imported: " + err.Error(),
+	}}
+}
+
+// failingTasks names each periodic task whose last run ended in an error.
+func (a SystemHealth) failingTasks(ctx context.Context) []apiserver.HealthCheck {
+	if a.Tasks == nil || a.TaskRuns == nil {
+		return nil
+	}
+	runs, err := a.TaskRuns.List(ctx)
+	if err != nil {
+		return nil
+	}
+	failed := make(map[string]string, len(runs))
+	for _, run := range runs {
+		if run.LastOutcome == "error" {
+			failed[run.TaskKey] = run.LastError
+		}
+	}
+	var checks []apiserver.HealthCheck
+	for _, task := range a.Tasks() {
+		reason, found := failed[task.Key]
+		if !found {
+			continue
+		}
+		message := fmt.Sprintf("The scheduled task %q failed on its last run", task.Name)
+		if reason != "" {
+			message += ": " + reason
+		}
+		checks = append(checks, apiserver.HealthCheck{
+			ID: "task_failing_" + task.Key, Severity: apiserver.HealthWarning,
+			Message: message + ".", Link: "/settings/scheduler",
+		})
+	}
+	return checks
 }
 
 // workLevel is the key of the level a media type lists its works on ("series", "movies").
@@ -251,14 +312,16 @@ func (a SystemHealth) pausedProviders(ctx context.Context) []apiserver.HealthChe
 		if name == "" {
 			continue
 		}
+		retryAt := paused.RetryAt
 		reason := "it keeps failing"
 		if paused.KeyRejected {
 			reason = "its key was rejected, so check it"
 		}
 		checks = append(checks, apiserver.HealthCheck{
 			ID: "provider_paused_" + paused.Provider, Severity: apiserver.HealthWarning,
-			Message: fmt.Sprintf("%s is paused until %s: %s.", name, paused.RetryAt.Local().Format("15:04"), reason),
+			Message: fmt.Sprintf("%s is paused: %s.", name, reason),
 			Link:    link,
+			Until:   &retryAt,
 		})
 	}
 	return checks

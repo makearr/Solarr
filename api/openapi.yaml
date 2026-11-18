@@ -11430,6 +11430,10 @@ components:
         link:
           type: string
           description: Where in the interface to fix it, when there is one place.
+        until:
+          type: string
+          format: date-time
+          description: When the condition is next tried again, for a check that clears itself (a paused provider); the interface formats it in the viewer's zone.
 
     ArrApp:
       type: string
