@@ -7168,7 +7168,13 @@ type GetRemoteImageParamsSize string
 
 // ListImportSessionsParams defines parameters for ListImportSessions.
 type ListImportSessionsParams struct {
-	State *ListImportSessionsParamsState `form:"state,omitempty" json:"state,omitempty"`
+	Attention *bool `form:"attention,omitempty" json:"attention,omitempty"`
+
+	// Limit Rows per page; default 50, at most 200.
+	Limit           *int                           `form:"limit,omitempty" json:"limit,omitempty"`
+	BeforeStartedAt *int64                         `form:"before_started_at,omitempty" json:"before_started_at,omitempty"`
+	BeforeId        *int64                         `form:"before_id,omitempty" json:"before_id,omitempty"`
+	State           *ListImportSessionsParamsState `form:"state,omitempty" json:"state,omitempty"`
 
 	// IncludeDismissed Include sessions hidden from the screen. Default false.
 	IncludeDismissed *bool `form:"include_dismissed,omitempty" json:"include_dismissed,omitempty"`
@@ -8853,7 +8859,7 @@ type ServerInterface interface {
 	// Point at any path and enqueue ADR-48's own inspection pipeline. Administrator only.
 	// (POST /import/inspect)
 	InspectImport(w http.ResponseWriter, r *http.Request)
-	// Every import session (ADR-48), newest first.
+	// Import sessions (ADR-48), newest first, a page at a time.
 	// (GET /import/sessions)
 	ListImportSessions(w http.ResponseWriter, r *http.Request, params ListImportSessionsParams)
 	// One session's own progress and counts.
@@ -10416,7 +10422,7 @@ func (_ Unimplemented) InspectImport(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Every import session (ADR-48), newest first.
+// Import sessions (ADR-48), newest first, a page at a time.
 // (GET /import/sessions)
 func (_ Unimplemented) ListImportSessions(w http.ResponseWriter, r *http.Request, params ListImportSessionsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -16503,6 +16509,38 @@ func (siw *ServerInterfaceWrapper) ListImportSessions(w http.ResponseWriter, r *
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListImportSessionsParams
+
+	// ------------- Optional query parameter "attention" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "attention", r.URL.Query(), &params.Attention)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attention", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "before_started_at" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "before_started_at", r.URL.Query(), &params.BeforeStartedAt)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "before_started_at", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "before_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "before_id", r.URL.Query(), &params.BeforeId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "before_id", Err: err})
+		return
+	}
 
 	// ------------- Optional query parameter "state" -------------
 

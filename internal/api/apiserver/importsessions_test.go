@@ -39,6 +39,7 @@ type fakeImportSessionLister struct {
 	lastIncludeDismissed bool
 	lastSessionID        int64
 	lastFilterDecision   string
+	lastQuery            apiserver.ImportSessionQuery
 	lastAfterID          int64
 	lastLimit            int
 
@@ -104,9 +105,9 @@ func (f *fakeImportSessionLister) RevertImportSession(
 }
 
 func (f *fakeImportSessionLister) ListImportSessions(
-	_ context.Context, filterState string, includeDismissed bool,
+	_ context.Context, query apiserver.ImportSessionQuery,
 ) ([]apiserver.ImportSessionRow, error) {
-	f.lastFilterState, f.lastIncludeDismissed = filterState, includeDismissed
+	f.lastFilterState, f.lastIncludeDismissed, f.lastQuery = query.State, query.IncludeDismissed, query
 	return f.sessions, f.err
 }
 

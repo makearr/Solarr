@@ -722,6 +722,8 @@ type Querier interface {
 	ListImportSessionsBySourcePath(ctx context.Context, arg ListImportSessionsBySourcePathParams) ([]ImportSession, error)
 	// Every import a download's poll started (an archive and its loose files are two), oldest first.
 	ListImportSessionsForAcquisition(ctx context.Context, acquisitionID sql.NullInt64) ([]ImportSession, error)
+	// One page of sessions, newest first. Attention is what a person may need to act on: running, held, failed, or started by hand lately.
+	ListImportSessionsPage(ctx context.Context, arg ListImportSessionsPageParams) ([]ImportSession, error)
 	ListImportUnitExtrasForSession(ctx context.Context, sessionID int64) ([]ImportUnitExtra, error)
 	ListImportUnitFilesForSession(ctx context.Context, sessionID int64) ([]ListImportUnitFilesForSessionRow, error)
 	ListImportUnitMedia(ctx context.Context, unitID int64) ([]ImportUnitMedium, error)

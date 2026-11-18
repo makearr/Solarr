@@ -68,10 +68,20 @@ func (a ImportSessions) heldCommitBuilt(ctx context.Context, sessionID, unitID i
 	return nil
 }
 
+// attentionWindow is how long a hand-started import keeps showing among the sessions needing attention.
+const attentionWindow = 7 * 24 * time.Hour
+
 func (a ImportSessions) ListImportSessions(
-	ctx context.Context, filterState string, includeDismissed bool,
+	ctx context.Context, query apiserver.ImportSessionQuery,
 ) ([]apiserver.ImportSessionRow, error) {
-	sessions, err := a.Sessions.List(ctx, filterState, includeDismissed)
+	page := library.SessionPage{
+		State: query.State, IncludeDismissed: query.IncludeDismissed, Attention: query.Attention,
+		RecentSince: a.Clock.Now().Add(-attentionWindow).Unix(), Limit: int64(query.Limit),
+	}
+	if query.HasCursor {
+		page.HasCursor, page.BeforeStartedAt, page.BeforeID = true, query.BeforeStartedAt.Unix(), query.BeforeID
+	}
+	sessions, err := a.Sessions.ListPage(ctx, page)
 	if err != nil {
 		return nil, err
 	}

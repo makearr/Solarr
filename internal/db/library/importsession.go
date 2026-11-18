@@ -675,6 +675,37 @@ func (s ImportSessions) List(ctx context.Context, filterState string, includeDis
 	return sessions, nil
 }
 
+// SessionPage asks for one page of sessions, newest first; BeforeID is the cursor's id tie-break.
+type SessionPage struct {
+	State                       string
+	IncludeDismissed, Attention bool
+	// RecentSince is the start time from which a manual import still counts as needing attention.
+	RecentSince int64
+	// HasCursor makes BeforeStartedAt and BeforeID the row the page starts after.
+	HasCursor       bool
+	BeforeStartedAt int64
+	BeforeID        int64
+	Limit           int64
+}
+
+// ListPage answers one page of sessions.
+func (s ImportSessions) ListPage(ctx context.Context, page SessionPage) ([]Session, error) {
+	rows, err := librarydb.New(s.store.Read()).ListImportSessionsPage(ctx, librarydb.ListImportSessionsPageParams{
+		FilterByState: boolToInt(page.State != ""), State: page.State,
+		IncludeDismissed: boolToInt(page.IncludeDismissed), Attention: boolToInt(page.Attention),
+		RecentSince: page.RecentSince, HasCursor: boolToInt(page.HasCursor),
+		BeforeStartedAt: page.BeforeStartedAt, BeforeID: page.BeforeID, RowLimit: page.Limit,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: list import sessions page: %w", err)
+	}
+	sessions := make([]Session, len(rows))
+	for i, row := range rows {
+		sessions[i] = sessionFromRow(row)
+	}
+	return sessions, nil
+}
+
 // ListBySourcePath answers the imports of one source folder in one state, newest first, dismissed ones included.
 func (s ImportSessions) ListBySourcePath(ctx context.Context, sourcePath, state string) ([]Session, error) {
 	rows, err := librarydb.New(s.store.Read()).ListImportSessionsBySourcePath(ctx,

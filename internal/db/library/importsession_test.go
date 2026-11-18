@@ -2,6 +2,7 @@ package library_test
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -478,5 +479,66 @@ func TestImportSessions_DismissHidesAFinishedSessionOnly(t *testing.T) {
 	}
 	if dismissed.DismissedAt == nil || *dismissed.DismissedAt != 400 {
 		t.Errorf("DismissedAt = %v, want 400", dismissed.DismissedAt)
+	}
+}
+
+func TestImportSessions_ListPagePagesByCursorWithAnIDTieBreakAndFiltersAttention(t *testing.T) {
+	opened, _ := newLibrary(t)
+	sessions := library.NewImportSessions(opened)
+	ctx := t.Context()
+	const now = 1_000_000
+	create := func(origin string, startedAt int64) int64 {
+		id, err := sessions.Create(ctx, library.NewSession{SourcePath: "/downloads/x", Origin: origin, Threshold: 0.9, StartedAt: startedAt})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	finish := func(id int64, state string) {
+		if err := sessions.Finish(ctx, id, state, now, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldDone := create(library.ImportOriginAcquisition, 10)
+	finish(oldDone, library.ImportDone)
+	failed := create(library.ImportOriginAcquisition, 20)
+	finish(failed, library.ImportFailed)
+	tieA := create(library.ImportOriginAcquisition, 30)
+	finish(tieA, library.ImportDone)
+	tieB := create(library.ImportOriginAcquisition, 30)
+	finish(tieB, library.ImportDone)
+	recentManual := create(library.ImportOriginManual, now-100)
+	finish(recentManual, library.ImportDone)
+	running := create(library.ImportOriginWatched, 40)
+
+	first, err := sessions.ListPage(ctx, library.SessionPage{Limit: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := func(rows []library.Session) []int64 {
+		ids := make([]int64, len(rows))
+		for i, row := range rows {
+			ids[i] = row.ID
+		}
+		return ids
+	}
+	if want := []int64{recentManual, running, tieB}; !slices.Equal(got(first), want) {
+		t.Fatalf("first page = %v, want %v", got(first), want)
+	}
+	last := first[len(first)-1]
+	second, err := sessions.ListPage(ctx, library.SessionPage{Limit: 3, HasCursor: true, BeforeStartedAt: last.StartedAt, BeforeID: last.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []int64{tieA, failed, oldDone}; !slices.Equal(got(second), want) {
+		t.Errorf("second page = %v, want %v (the tie on started_at broken by id)", got(second), want)
+	}
+
+	attention, err := sessions.ListPage(ctx, library.SessionPage{Limit: 50, Attention: true, RecentSince: now - 1000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []int64{recentManual, running, failed}; !slices.Equal(got(attention), want) {
+		t.Errorf("attention = %v, want the recent manual import, the running one and the failed one", got(attention))
 	}
 }

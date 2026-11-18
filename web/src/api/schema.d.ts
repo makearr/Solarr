@@ -3591,8 +3591,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Every import session (ADR-48), newest first.
-         * @description Unpaginated -- session counts never approach library scale (Invariant 22 is about files, not import runs).
+         * Import sessions (ADR-48), newest first, a page at a time.
+         * @description `attention=true` keeps what a person may act on: running or failed sessions, those holding units for review or with failed units, and manual imports of the last 7 days. The next page starts after the last row's `started_at` (unix seconds) and `id`.
          */
         get: operations["listImportSessions"];
         put?: never;
@@ -17458,6 +17458,11 @@ export interface operations {
     listImportSessions: {
         parameters: {
             query?: {
+                attention?: boolean;
+                /** @description Rows per page; default 50, at most 200. */
+                limit?: number;
+                before_started_at?: number;
+                before_id?: number;
                 state?: "INSPECTING" | "IMPORTING" | "CANCELLING" | "DONE" | "FAILED" | "REVERTED" | "CANCELLED";
                 /** @description Include sessions hidden from the screen. Default false. */
                 include_dismissed?: boolean;

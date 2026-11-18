@@ -253,3 +253,20 @@ INSERT INTO import_unit_media (unit_id, rel_path, size_bytes) VALUES (?, ?, ?);
 
 -- name: ListImportUnitMedia :many
 SELECT unit_id, rel_path, size_bytes FROM import_unit_media WHERE unit_id = ? ORDER BY rel_path;
+
+-- One page of sessions, newest first. Attention is what a person may need to act on: running, held, failed, or started by hand lately.
+-- name: ListImportSessionsPage :many
+SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
+       units_total, units_committed, units_queued, bytes_imported, extract_dir,
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at, preview
+FROM import_session
+WHERE (sqlc.arg(filter_by_state) = 0 OR state = sqlc.arg(state))
+  AND (sqlc.arg(include_dismissed) = 1 OR dismissed_at IS NULL)
+  AND (sqlc.arg(attention) = 0
+       OR state IN ('INSPECTING', 'IMPORTING', 'CANCELLING', 'FAILED')
+       OR units_queued > 0 OR units_failed > 0
+       OR (origin = 'manual' AND started_at >= sqlc.arg(recent_since)))
+  AND (sqlc.arg(has_cursor) = 0 OR started_at < sqlc.arg(before_started_at)
+       OR (started_at = sqlc.arg(before_started_at) AND id < sqlc.arg(before_id)))
+ORDER BY started_at DESC, id DESC
+LIMIT sqlc.arg(row_limit);

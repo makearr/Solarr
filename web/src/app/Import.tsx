@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams, useSearch } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Ban, ChevronDown, ChevronRight, HelpCircle, Undo2, X } from "lucide-react";
 
 import { api, ok } from "@/api/client";
@@ -698,20 +698,61 @@ function SessionList({
   onSelect: (id: number) => void;
   liveProgress: Record<number, ImportProgress>;
 }) {
-  const sessions = useQuery({
-    queryKey: ["import-sessions"],
-    queryFn: () => ok(api.GET("/import/sessions")),
-    refetchInterval: 5000,
+  // "Needs attention" is the default; everything ever run is on the other tab.
+  const { sessions: tab } = useSearch({ strict: false }) as { sessions?: string };
+  const navigate = useNavigate();
+  const attention = tab !== "all";
+  const sessions = useInfiniteQuery({
+    queryKey: ["import-sessions", { attention }],
+    queryFn: ({ pageParam }) => ok(api.GET("/import/sessions", {
+      params: {
+        query: {
+          attention,
+          limit: SESSION_PAGE,
+          ...(pageParam ? { before_started_at: pageParam.startedAt, before_id: pageParam.id } : {}),
+        },
+      },
+    })),
+    initialPageParam: null as { startedAt: number; id: number } | null,
+    getNextPageParam: (page) => {
+      const last = page[page.length - 1];
+      return page.length < SESSION_PAGE || !last
+        ? undefined
+        : { startedAt: Math.floor(Date.parse(last.started_at) / 1000), id: last.id };
+    },
+    // Only the first page is polled, and only while something on it runs; events cover the rest.
+    refetchInterval: (query) =>
+      query.state.data?.pages[0]?.some((session) => RUNNING_STATES.has(session.state)) ? 5000 : false,
   });
+  const rows = sessions.data?.pages.flat() ?? [];
 
   return (
     <div className="flex max-h-[75vh] w-full shrink-0 flex-col gap-2 overflow-y-auto md:sticky md:top-0 md:w-96">
+      <div className="flex gap-1" role="tablist" aria-label="Imports shown">
+        {[
+          { id: "attention", label: "Needs attention" },
+          { id: "all", label: "All" },
+        ].map((entry) => (
+          <button
+            key={entry.id}
+            type="button"
+            role="tab"
+            aria-selected={(entry.id === "attention") === attention}
+            onClick={() => void navigate({ to: ".", search: (prev: Record<string, unknown>) => ({ ...prev, sessions: entry.id === "all" ? "all" : undefined }) })}
+            className={`rounded-md border px-2 py-1 text-xs ${
+              (entry.id === "attention") === attention ? "border-accent text-ink" : "border-border-subtle text-ink-muted hover:text-ink"
+            }`}
+          >
+            {entry.label}
+          </button>
+        ))}
+      </div>
       {sessions.isLoading && <Message>Loading sessions…</Message>}
       {sessions.error !== null && <Message>Sessions could not be read.</Message>}
-      {sessions.data && sessions.data.length === 0 && (
-        <Message>No import has run yet.</Message>
+      {sessions.data && rows.length === 0 && (
+        <Message>{attention ? "Nothing needs you." : "No import has run yet."}</Message>
       )}
-      {sessions.data?.map((session) => (
+      {rows.map((session) => (
         <SessionRow
           key={session.id}
           session={session}
@@ -720,9 +761,21 @@ function SessionList({
           progress={liveProgress[session.id]}
         />
       ))}
+      {sessions.hasNextPage && (
+        <button
+          type="button"
+          disabled={sessions.isFetchingNextPage}
+          onClick={() => void sessions.fetchNextPage()}
+          className="rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50"
+        >
+          {sessions.isFetchingNextPage ? "Loading…" : "Show more"}
+        </button>
+      )}
     </div>
   );
 }
+
+const SESSION_PAGE = 50;
 
 function SessionRow({
   session,
@@ -941,11 +994,11 @@ function UnitList({ sessionId }: { sessionId: number }) {
   });
 
   const queryClient = useQueryClient();
-  const sessions = useQuery({
-    queryKey: ["import-sessions"],
-    queryFn: () => ok(api.GET("/import/sessions")),
+  const session = useQuery({
+    queryKey: ["import-session", sessionId],
+    queryFn: () => ok(api.GET("/import/sessions/{id}", { params: { path: { id: sessionId } } })),
   });
-  const categoryId = sessions.data?.find((session) => session.id === sessionId)?.category_id ?? null;
+  const categoryId = session.data?.category_id ?? null;
   const importSettings = useImportSettings();
   // "Place all identified" (asked 2026-09-30): every waiting unit matched at or above the import's own
   // confidence; the uncertain ones stay for review.

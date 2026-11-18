@@ -151,7 +151,7 @@ export function Unidentified() {
 function HeldImports({ categoryId }: { categoryId?: number }) {
   const sessions = useQuery({
     queryKey: ["import-sessions"],
-    queryFn: () => ok(api.GET("/import/sessions")),
+    queryFn: () => ok(api.GET("/import/sessions", { params: { query: { attention: true, limit: 200 } } })),
     refetchInterval: 15000,
   });
   const held = (sessions.data ?? []).filter(

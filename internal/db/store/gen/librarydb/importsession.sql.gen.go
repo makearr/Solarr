@@ -621,6 +621,90 @@ func (q *Queries) ListImportSessionsForAcquisition(ctx context.Context, acquisit
 	return items, nil
 }
 
+const listImportSessionsPage = `-- name: ListImportSessionsPage :many
+SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
+       units_total, units_committed, units_queued, bytes_imported, extract_dir,
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at, preview
+FROM import_session
+WHERE (?1 = 0 OR state = ?2)
+  AND (?3 = 1 OR dismissed_at IS NULL)
+  AND (?4 = 0
+       OR state IN ('INSPECTING', 'IMPORTING', 'CANCELLING', 'FAILED')
+       OR units_queued > 0 OR units_failed > 0
+       OR (origin = 'manual' AND started_at >= ?5))
+  AND (?6 = 0 OR started_at < ?7
+       OR (started_at = ?7 AND id < ?8))
+ORDER BY started_at DESC, id DESC
+LIMIT ?9
+`
+
+type ListImportSessionsPageParams struct {
+	FilterByState    interface{}
+	State            string
+	IncludeDismissed interface{}
+	Attention        interface{}
+	RecentSince      int64
+	HasCursor        interface{}
+	BeforeStartedAt  int64
+	BeforeID         int64
+	RowLimit         int64
+}
+
+// One page of sessions, newest first. Attention is what a person may need to act on: running, held, failed, or started by hand lately.
+func (q *Queries) ListImportSessionsPage(ctx context.Context, arg ListImportSessionsPageParams) ([]ImportSession, error) {
+	rows, err := q.db.QueryContext(ctx, listImportSessionsPage,
+		arg.FilterByState,
+		arg.State,
+		arg.IncludeDismissed,
+		arg.Attention,
+		arg.RecentSince,
+		arg.HasCursor,
+		arg.BeforeStartedAt,
+		arg.BeforeID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ImportSession{}
+	for rows.Next() {
+		var i ImportSession
+		if err := rows.Scan(
+			&i.ID,
+			&i.SourcePath,
+			&i.Origin,
+			&i.AcquisitionID,
+			&i.CategoryID,
+			&i.State,
+			&i.Threshold,
+			&i.UnitsTotal,
+			&i.UnitsCommitted,
+			&i.UnitsQueued,
+			&i.BytesImported,
+			&i.ExtractDir,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.Error,
+			&i.UnitsSkipped,
+			&i.UnitsFailed,
+			&i.UnitsEstimated,
+			&i.DismissedAt,
+			&i.Preview,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listImportUnitExtrasForSession = `-- name: ListImportUnitExtrasForSession :many
 SELECT iue.id, iue.unit_id, iue.root_folder_id, iue.rel_path
 FROM import_unit_extra iue

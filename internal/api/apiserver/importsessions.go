@@ -24,7 +24,7 @@ import (
 // WorksReader's own doc comment gives for every library-backed interface --
 // apiserver never imports internal/db/library directly.
 type ImportSessionLister interface {
-	ListImportSessions(ctx context.Context, filterState string, includeDismissed bool) ([]ImportSessionRow, error)
+	ListImportSessions(ctx context.Context, query ImportSessionQuery) ([]ImportSessionRow, error)
 	GetImportSession(ctx context.Context, id int64) (ImportSessionRow, error)
 	ListImportUnits(ctx context.Context, sessionID int64, filterDecision string, afterID int64, limit int) ([]ImportUnitRow, error)
 	// CancelImportSession only flips the flag the job itself polls for (ADR-48).
@@ -125,6 +125,16 @@ type ImportInspector interface {
 	// addUnverified is D6: a folder nothing identified still becomes an unverified album.
 	// InspectImport reports alreadyQueued when an identical import of the path is waiting or running, which absorbs this one.
 	InspectImport(ctx context.Context, sourcePath, origin string, categoryID *int64, preview, addUnverified, bestMatch bool) (alreadyQueued bool, err error)
+}
+
+// ImportSessionQuery is one page of sessions: newest first, after the cursor's (started_at, id) when HasCursor.
+type ImportSessionQuery struct {
+	State                       string
+	IncludeDismissed, Attention bool
+	Limit                       int
+	HasCursor                   bool
+	BeforeStartedAt             time.Time
+	BeforeID                    int64
 }
 
 // ImportSessionRow is one import_session row.
@@ -258,6 +268,28 @@ func (s *Server) routeListImportSessions(w http.ResponseWriter, r *http.Request)
 		include := true
 		params.IncludeDismissed = &include
 	}
+	query := r.URL.Query()
+	if query.Get("attention") == "true" {
+		attention := true
+		params.Attention = &attention
+	}
+	if raw := query.Get("limit"); raw != "" {
+		limit, err := strconv.Atoi(raw)
+		if err != nil || limit < 1 {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "limit must be a positive number")
+			return
+		}
+		params.Limit = &limit
+	}
+	if raw := query.Get("before_id"); raw != "" {
+		beforeID, err := strconv.ParseInt(raw, 10, 64)
+		beforeStarted, errStarted := strconv.ParseInt(query.Get("before_started_at"), 10, 64)
+		if err != nil || errStarted != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "before_id needs before_started_at")
+			return
+		}
+		params.BeforeId, params.BeforeStartedAt = &beforeID, &beforeStarted
+	}
 	s.ListImportSessions(w, r, params)
 }
 
@@ -370,7 +402,12 @@ func (s *Server) routeListImportUnits(w http.ResponseWriter, r *http.Request) {
 	s.ListImportUnits(w, r, id, params)
 }
 
-// ListImportSessions returns every session, newest first, optionally
+const (
+	importSessionsDefaultLimit = 50
+	importSessionsMaxLimit     = 200
+)
+
+// ListImportSessions returns a page of sessions, newest first, optionally
 // filtered to one state. Any authenticated caller, the same as root folders
 // and exclusion patterns -- a session carries no per-category visibility of
 // its own (category_id is nullable, "decide per unit").
@@ -388,8 +425,18 @@ func (s *Server) ListImportSessions(w http.ResponseWriter, r *http.Request, para
 	if params.State != nil {
 		filterState = string(*params.State)
 	}
-	includeDismissed := params.IncludeDismissed != nil && *params.IncludeDismissed
-	rows, err := s.importSessions.ListImportSessions(r.Context(), filterState, includeDismissed)
+	listQuery := ImportSessionQuery{
+		State: filterState, IncludeDismissed: params.IncludeDismissed != nil && *params.IncludeDismissed,
+		Attention: params.Attention != nil && *params.Attention, Limit: importSessionsDefaultLimit,
+	}
+	if params.Limit != nil {
+		listQuery.Limit = min(*params.Limit, importSessionsMaxLimit)
+	}
+	if params.BeforeId != nil && params.BeforeStartedAt != nil {
+		listQuery.HasCursor, listQuery.BeforeID = true, *params.BeforeId
+		listQuery.BeforeStartedAt = time.Unix(*params.BeforeStartedAt, 0)
+	}
+	rows, err := s.importSessions.ListImportSessions(r.Context(), listQuery)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
