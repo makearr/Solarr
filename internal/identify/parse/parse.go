@@ -168,6 +168,17 @@ func collapseSpaces(s string) string {
 // more accurate than Lidarr's literal ReportAlbumTitleRegex cascade on real
 // scene names (ATTRIBUTION.md records why).
 func Parse(title string) Result {
+	return parseTitle(title, "")
+}
+
+// ParseAlbumText parses what follows an artist the caller already knows (a search for that artist found the name
+// starting with it), so a hyphen inside the artist's own name cannot end it early.
+func ParseAlbumText(artist, rest string) Result {
+	return parseTitle(rest, artist)
+}
+
+// parseTitle is Parse; a non-empty knownArtist says title holds only the album text after that artist.
+func parseTitle(title, knownArtist string) Result {
 	releaseTitle := removeFileExtension(title)
 	releaseTitle = bitDepthSpelledRe.ReplaceAllString(releaseTitle, "${1}bit")
 	releaseTitle = hiResWordRe.ReplaceAllString(releaseTitle, "hires")
@@ -179,7 +190,11 @@ func Parse(title string) Result {
 		return Result{Confidence: 0, Unparsed: []string{releaseTitle}}
 	}
 
-	group := extractReleaseGroup(stripArtistPrefixForGroup(releaseTitle))
+	groupSource := stripArtistPrefixForGroup(releaseTitle)
+	if knownArtist != "" {
+		groupSource = releaseTitle
+	}
+	group := extractReleaseGroup(groupSource)
 	properRepack := isProperRepack(releaseTitle)
 
 	simple := simpleTitleRe.ReplaceAllString(releaseTitle, "")
@@ -207,7 +222,13 @@ func Parse(title string) Result {
 
 	var artist string
 	var albumSegments []string
-	if loc := splitDashRe.FindStringIndex(core); loc != nil {
+	if knownArtist != "" {
+		artist = knownArtist
+		albumSegments = splitDashRe.Split(core, -1)
+		if len(albumSegments) == 1 {
+			albumSegments = splitUnspacedDash(core)
+		}
+	} else if loc := splitDashRe.FindStringIndex(core); loc != nil {
 		artist = strings.TrimSpace(core[:loc[0]])
 		albumSegments = splitDashRe.Split(core[loc[1]:], -1)
 	} else if segments := splitUnspacedDash(core); len(segments) >= 2 {

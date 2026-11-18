@@ -387,6 +387,10 @@ func evaluateRawItems(
 	var accepted []judge.Find
 	for _, raw := range raws {
 		parsed := parse.Parse(raw.Title)
+		// A name that starts with the wanted artist is split there, whatever dashes the artist's own name holds.
+		if rest, found := afterWantedArtist(raw.Title, wantedArtist); found && !strings.EqualFold(parsed.Identity.Artist, wantedArtist) {
+			parsed = parse.ParseAlbumText(wantedArtist, rest)
+		}
 		if !sameArtist(parsed.Identity.Artist, wantedArtist) || videoRelease(raw.Title) {
 			continue
 		}
@@ -423,6 +427,23 @@ func evaluateRawItems(
 		})
 	}
 	return accepted
+}
+
+// afterWantedArtist cuts the wanted artist and the separator after it off a release name that starts with them:
+// "Kay-Zed-The_Grey_Album-CD-FLAC" for the artist "Kay-Zed". Underscores read as spaces; the artist must be followed
+// by a dash, so "Artist feat. Other-Title" is another artist's release.
+func afterWantedArtist(title, artist string) (string, bool) {
+	title = strings.ReplaceAll(title, "_", " ")
+	artist = strings.ReplaceAll(artist, "_", " ")
+	if artist == "" || len(title) <= len(artist) || !strings.EqualFold(title[:len(artist)], artist) {
+		return "", false
+	}
+	rest := strings.TrimLeft(title[len(artist):], " ")
+	if !strings.HasPrefix(rest, "-") {
+		return "", false
+	}
+	rest = strings.TrimLeft(rest, "- ")
+	return rest, rest != ""
 }
 
 // withoutLeadingArtist cuts the wanted artist off a name the parser could not split

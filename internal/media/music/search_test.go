@@ -1017,3 +1017,29 @@ func TestSearchItem_AnArtistWhoseNameContainsTheWantedOneIsNoMatch(t *testing.T)
 		t.Errorf("decided on %v, want %v", guids, want)
 	}
 }
+
+// A hyphen inside the artist's name does not end the artist, and an album named "... Album" keeps its last word.
+func TestSearchItem_AHyphenatedArtistAndATitleEndingInAlbumAreRead(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Kay-Zed", "The Grey Album", 2003, alwaysAcceptRules)
+	searcher := &fakeIndexerSearcher{
+		responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+			return []indexer.RawItem{
+				rawItem("guid-own", "Kay-Zed-The_Grey_Album-CD-FLAC-2003-GRP"),
+				rawItem("guid-other", "Kay-Zed-The_Black_Album-CD-FLAC-2003-GRP"),
+			}, nil
+		},
+	}
+	result, err := env.search().SearchItem(t.Context(), item.ID,
+		[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}, env.clock.Now())
+	if err != nil {
+		t.Fatalf("SearchItem: %v", err)
+	}
+	var guids []string
+	for _, decision := range result.Decisions {
+		guids = append(guids, decision.ReleaseCandidate.GUID)
+	}
+	if want := []string{"guid-own"}; !slices.Equal(guids, want) {
+		t.Errorf("decided on %v, want %v", guids, want)
+	}
+}
