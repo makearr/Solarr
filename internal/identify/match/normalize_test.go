@@ -29,6 +29,13 @@ func TestNormalizeTitle(t *testing.T) {
 		{"trailing article A", "Bridge, A", "a bridge"},
 		{"trailing article An", "Album, An", "an album"},
 		{"no article, unaffected", "Songs About Nothing", "songs about nothing"},
+		{"decomposed accent", "Zo\u0308rk", "zork"},
+		{"precomposed accent", "Zörk", "zork"},
+		{"letters that do not decompose", "Błażej Mił Straße", "blazej mil strasse"},
+		{"ae, oe, thorn", "Æsir Œuvre Þor", "aesir oeuvre thor"},
+		{"vietnamese stacked marks", "Nguyễn Việt", "nguyen viet"},
+		{"ampersand reads as and", "Alpha & Beta", "alpha and beta"},
+		{"ampersand and and agree", "Alpha and Beta", "alpha and beta"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

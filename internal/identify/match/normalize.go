@@ -3,30 +3,25 @@ package match
 import (
 	"strings"
 	"unicode"
+
+	"golang.org/x/text/unicode/norm"
 )
 
-// accentFold maps common Latin diacritics to their base letter. A lookup table,
-// not full Unicode NFKD decomposition -- x/text/unicode/norm is unavailable here
-// and this covers the practical cases a title comparison sees.
-var accentFold = map[rune]rune{
-	'à': 'a', 'á': 'a', 'â': 'a', 'ã': 'a', 'ä': 'a', 'å': 'a', 'ā': 'a', 'ă': 'a', 'ą': 'a',
-	'ç': 'c', 'ć': 'c', 'ĉ': 'c', 'ċ': 'c', 'č': 'c',
-	'è': 'e', 'é': 'e', 'ê': 'e', 'ë': 'e', 'ē': 'e', 'ĕ': 'e', 'ė': 'e', 'ę': 'e', 'ě': 'e',
-	'ì': 'i', 'í': 'i', 'î': 'i', 'ï': 'i', 'ĩ': 'i', 'ī': 'i', 'ĭ': 'i', 'į': 'i',
-	'ñ': 'n', 'ń': 'n', 'ņ': 'n', 'ň': 'n',
-	'ò': 'o', 'ó': 'o', 'ô': 'o', 'õ': 'o', 'ö': 'o', 'ø': 'o', 'ō': 'o', 'ŏ': 'o', 'ő': 'o',
-	'ù': 'u', 'ú': 'u', 'û': 'u', 'ü': 'u', 'ũ': 'u', 'ū': 'u', 'ŭ': 'u', 'ů': 'u', 'ű': 'u', 'ų': 'u',
-	'ý': 'y', 'ÿ': 'y', 'ŷ': 'y',
-	'ź': 'z', 'ż': 'z', 'ž': 'z',
-}
+// unfoldedLetters are the letters that carry no combining mark to drop, spelled the way an ASCII catalogue does.
+var unfoldedLetters = strings.NewReplacer(
+	"ß", "ss", "æ", "ae", "œ", "oe", "ø", "o", "đ", "d", "ð", "d", "þ", "th", "ł", "l", "ı", "i", "ħ", "h", "ŧ", "t", "ĸ", "k",
+)
 
+// foldAccents decomposes the text (so "o" + U+0308 and "ö" read alike), drops the combining marks, then spells the
+// letters that do not decompose.
 func foldAccents(s string) string {
-	return strings.Map(func(r rune) rune {
-		if folded, ok := accentFold[r]; ok {
-			return folded
+	decomposed := norm.NFKD.String(s)
+	return unfoldedLetters.Replace(strings.Map(func(r rune) rune {
+		if unicode.Is(unicode.Mn, r) {
+			return -1
 		}
 		return r
-	}, s)
+	}, decomposed))
 }
 
 // trailingArticleSuffixes catches "Tonhut, The" so it normalizes the same as
@@ -70,6 +65,7 @@ func normalizeTitle(s string) string {
 	s = foldAccents(s)
 	s = strings.TrimSpace(s)
 	s = moveTrailingArticle(s)
+	s = strings.ReplaceAll(s, "&", " and ")
 	s = stripPunctuation(s)
 	return collapseSpaces(s)
 }
