@@ -263,3 +263,38 @@ func TestWalker_SubtitlesInASubsFolderBelongToTheUnit(t *testing.T) {
 		t.Errorf("Other = %v, want only the subtitle from Subs/", others)
 	}
 }
+
+// The import walk and a held unit's re-read are the same reader: a symlink is never media and the recycle folder is never entered.
+func TestWalker_AndSplitDirectoryReadAFolderAlike(t *testing.T) {
+	tr := newTree(t, "Rel/01 One.flac", "Rel/02 Two.flac")
+	if err := tr.fsys.MkdirAll("/config", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if file, err := tr.fsys.Create("/config/settings.db"); err != nil {
+		t.Fatal(err)
+	} else {
+		_, _ = file.Write(make([]byte, 300*1024))
+		_ = file.Close()
+	}
+	if err := tr.fsys.Symlink("/config/settings.db", root+"/Rel/03 Link.flac"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.fsys.MkdirAll(root+"/Rel/"+inspect.RecycleFolder, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if file, err := tr.fsys.Create(root + "/Rel/" + inspect.RecycleFolder + "/old.flac"); err != nil {
+		t.Fatal(err)
+	} else {
+		_, _ = file.Write(make([]byte, 300*1024))
+		_ = file.Close()
+	}
+
+	walked, _ := walkAll(t, tr, inspect.WalkOptions{})
+	split, err := inspect.SplitDirectory(t.Context(), tr.fsys, root+"/Rel", nil, 0, false)
+	if err != nil {
+		t.Fatalf("SplitDirectory: %v", err)
+	}
+	if len(walked) != 1 || len(split) != 1 || len(walked[0].Media) != 2 || len(split[0].Media) != 2 {
+		t.Errorf("walked %+v, split %+v; want both to see the two real files", walked, split)
+	}
+}

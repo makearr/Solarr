@@ -160,55 +160,13 @@ func (w *walkerRun) visit(ctx context.Context, relative string) (clusterFiles, e
 	if relative != "" {
 		absolute = path.Join(w.root, relative)
 	}
-	var entries []fsx.DirEntry
-	err := iogate.OnDisk(ctx, "", []string{absolute}, func() (readErr error) {
-		entries, readErr = w.fsys.ReadDir(absolute)
-		return readErr
-	})
+	ownMedia, ownOther, dirs, err := readDirectory(ctx, w.fsys, absolute, relative, w.opts)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return clusterFiles{}, nil
-		}
-		return clusterFiles{}, fmt.Errorf("inspect: read %q: %w", absolute, err)
-	}
-	slices.SortFunc(entries, func(a, b fsx.DirEntry) int { return strings.Compare(a.Name, b.Name) })
-
-	var ownMedia, ownOther []File
-	for _, entry := range entries {
-		if entry.IsDir {
-			continue
-		}
-		childRelative := path.Join(relative, entry.Name)
-		if w.opts.Only != nil && !w.opts.Only[childRelative] {
-			continue
-		}
-		// Never a symlink, as in walkDir: what it points at is not the download's to import.
-		info, err := w.fsys.Lstat(path.Join(absolute, entry.Name))
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				continue
-			}
-			return clusterFiles{}, fmt.Errorf("inspect: stat %q: %w", path.Join(absolute, entry.Name), err)
-		}
-		if info.Mode&fs.ModeSymlink != 0 {
-			continue
-		}
-		file := File{
-			RelPath: childRelative, SizeBytes: info.Size, ModTime: info.ModTime,
-			Class: classify(childRelative, info.Size, w.opts.MediaSizeFloorBytes, w.opts.Books),
-		}
-		if file.Class == ClassMedia {
-			ownMedia = append(ownMedia, file)
-		} else {
-			ownOther = append(ownOther, file)
-		}
+		return clusterFiles{}, err
 	}
 
 	var bubbled clusterFiles
-	for _, entry := range entries {
-		if !entry.IsDir {
-			continue
-		}
+	for _, entry := range dirs {
 		if isSubtitleFolder(entry.Name) {
 			ownOther = append(ownOther, w.subtitleFiles(path.Join(relative, entry.Name))...)
 		}
@@ -268,6 +226,60 @@ func (w *walkerRun) visit(ctx context.Context, relative string) (clusterFiles, e
 		w.emitted += len(units)
 	}
 	return clusterFiles{}, nil
+}
+
+// readDirectory lists one directory the way every inspection reads a download: sorted, a symlink never followed, a file
+// that vanished meanwhile skipped, a missing directory empty, the recycle folders left out, and each file classified.
+// Subdirectories are returned for the caller to descend into.
+func readDirectory(
+	ctx context.Context, fsys fsx.FS, absolute, relative string, opts WalkOptions,
+) (media, other []File, dirs []fsx.DirEntry, err error) {
+	var entries []fsx.DirEntry
+	err = iogate.OnDisk(ctx, "", []string{absolute}, func() (readErr error) {
+		entries, readErr = fsys.ReadDir(absolute)
+		return readErr
+	})
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil, nil, nil
+		}
+		return nil, nil, nil, fmt.Errorf("inspect: read %q: %w", absolute, err)
+	}
+	slices.SortFunc(entries, func(a, b fsx.DirEntry) int { return strings.Compare(a.Name, b.Name) })
+
+	for _, entry := range entries {
+		if entry.IsDir {
+			if entry.Name != RecycleFolder && entry.Name != recycleBinFolder {
+				dirs = append(dirs, entry)
+			}
+			continue
+		}
+		childRelative := path.Join(relative, entry.Name)
+		if opts.Only != nil && !opts.Only[childRelative] {
+			continue
+		}
+		// Never a symlink: what it points at is not the download's to import (ADR-11).
+		info, err := fsys.Lstat(path.Join(absolute, entry.Name))
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			return nil, nil, nil, fmt.Errorf("inspect: stat %q: %w", path.Join(absolute, entry.Name), err)
+		}
+		if info.Mode&fs.ModeSymlink != 0 {
+			continue
+		}
+		file := File{
+			RelPath: childRelative, SizeBytes: info.Size, ModTime: info.ModTime,
+			Class: classify(childRelative, info.Size, opts.MediaSizeFloorBytes, opts.Books),
+		}
+		if file.Class == ClassMedia {
+			media = append(media, file)
+		} else {
+			other = append(other, file)
+		}
+	}
+	return media, other, dirs, nil
 }
 
 // isSubtitleFolder is the folder scene releases keep their subtitles in, beside the video.

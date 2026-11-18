@@ -1,12 +1,7 @@
 package inspect
 
 import (
-	"errors"
-	"fmt"
-	"io/fs"
-	"path"
-	"slices"
-	"strings"
+	"context"
 
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
@@ -36,38 +31,13 @@ import (
 // of its own -- a caller that cannot be sure both hold should use Run
 // instead. dir's files must be unchanged since the original walk, or the
 // split this reproduces will not match it.
-func SplitDirectory(fsys fsx.FS, dir string, tags TagReader, floorBytes int64, books bool) ([]Unit, error) {
+func SplitDirectory(ctx context.Context, fsys fsx.FS, dir string, tags TagReader, floorBytes int64, books bool) ([]Unit, error) {
 	if floorBytes <= 0 {
 		floorBytes = DefaultMediaSizeFloorBytes
 	}
-
-	entries, err := fsys.ReadDir(dir)
+	media, other, _, err := readDirectory(ctx, fsys, dir, "", WalkOptions{MediaSizeFloorBytes: floorBytes, Books: books})
 	if err != nil {
-		return nil, fmt.Errorf("inspect: read %q: %w", dir, err)
-	}
-	slices.SortFunc(entries, func(a, b fsx.DirEntry) int { return strings.Compare(a.Name, b.Name) })
-
-	var media, other []File
-	for _, entry := range entries {
-		if entry.IsDir {
-			continue
-		}
-		info, err := fsys.Stat(path.Join(dir, entry.Name))
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				continue
-			}
-			return nil, fmt.Errorf("inspect: stat %q: %w", path.Join(dir, entry.Name), err)
-		}
-		file := File{
-			RelPath: entry.Name, SizeBytes: info.Size, ModTime: info.ModTime,
-			Class: classify(entry.Name, info.Size, floorBytes, books),
-		}
-		if file.Class == ClassMedia {
-			media = append(media, file)
-		} else {
-			other = append(other, file)
-		}
+		return nil, err
 	}
 
 	units := splitByEvidence("", media, tags, nil)

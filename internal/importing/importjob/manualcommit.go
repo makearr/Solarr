@@ -337,7 +337,7 @@ func (m ManualCommitter) reconstructUnit(ctx context.Context, root string, unit 
 	}
 	if len(stored) > 0 {
 		// Found by what it was when inspected, never by its position in a new split of the folder.
-		return m.storedUnit(root, unit, stored, floorBytes, books)
+		return m.storedUnit(ctx, root, unit, stored, floorBytes, books)
 	}
 	if len(sharing) <= 1 {
 		found, err := inspect.Run(ctx, m.fsys, root, inspect.Options{MediaSizeFloorBytes: floorBytes, Books: books})
@@ -353,7 +353,7 @@ func (m ManualCommitter) reconstructUnit(ctx context.Context, root string, unit 
 		}
 		reconstructed = found.Units[0]
 	} else {
-		units, err := inspect.SplitDirectory(m.fsys, root, nil, floorBytes, books)
+		units, err := inspect.SplitDirectory(ctx, m.fsys, root, nil, floorBytes, books)
 		if err != nil {
 			return inspect.Unit{}, fmt.Errorf("importjob: re-split directory for unit %d: %w", unit.ID, err)
 		}
@@ -383,7 +383,7 @@ func (m ManualCommitter) reconstructUnit(ctx context.Context, root string, unit 
 
 // storedUnit rebuilds a unit that shares its folder from the media files kept for it: each must still be there at the
 // size it had. The folder's other files (artwork, sidecars) are the ones no unit owns.
-func (m ManualCommitter) storedUnit(root string, unit library.Unit, stored []library.UnitMedia, floorBytes int64, books bool) (inspect.Unit, error) {
+func (m ManualCommitter) storedUnit(ctx context.Context, root string, unit library.Unit, stored []library.UnitMedia, floorBytes int64, books bool) (inspect.Unit, error) {
 	var evidence inspect.Evidence
 	if err := json.Unmarshal([]byte(unit.EvidenceJSON), &evidence); err != nil {
 		return inspect.Unit{}, fmt.Errorf("importjob: decode evidence of unit %d: %w", unit.ID, err)
@@ -401,7 +401,7 @@ func (m ManualCommitter) storedUnit(root string, unit library.Unit, stored []lib
 			RelPath: file.RelPath, SizeBytes: info.Size, ModTime: info.ModTime, Class: inspect.ClassMedia,
 		})
 	}
-	if folder, err := inspect.SplitDirectory(m.fsys, root, nil, floorBytes, books); err == nil && len(folder) > 0 {
+	if folder, err := inspect.SplitDirectory(ctx, m.fsys, root, nil, floorBytes, books); err == nil && len(folder) > 0 {
 		reconstructed.Other = folder[0].Other
 	}
 	return reconstructed, nil
