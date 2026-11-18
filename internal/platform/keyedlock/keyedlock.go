@@ -12,6 +12,9 @@ type Locks struct {
 
 // Lock takes the key's lock and answers how to release it.
 func (l *Locks) Lock(key string) func() {
+	if l == nil {
+		return func() {}
+	}
 	l.mu.Lock()
 	if l.locks == nil {
 		l.locks = map[string]*sync.Mutex{}

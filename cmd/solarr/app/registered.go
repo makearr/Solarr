@@ -26,7 +26,6 @@ import (
 	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/moving/sidecar"
 	"github.com/makearr/Solarr/internal/platform/clock"
-	"github.com/makearr/Solarr/internal/platform/keyedlock"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 	"github.com/makearr/Solarr/internal/service/follow"
 )
@@ -134,7 +133,7 @@ func (p *process) tvModule() tv.Module {
 		FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
 		Service: p.tvService(), Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem(), Logger: p.logger,
 		DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
-		SharedFiles: p.enqueueSharedFiles,
+		SharedFiles: p.enqueueSharedFiles, Locks: p.locksFor("tv"),
 	})
 	return tv.Module{Registrations: p.tvJobs(), SourcesPaused: p.tvSourcesPaused, SceneNumberingDown: p.sceneNumberingDown, TMDBConfigured: func() bool { return p.cache.Snapshot().TMDBConfigured() },
 		Sweep: scan.Sweep{
@@ -412,6 +411,7 @@ func (p *process) movieModule() movie.Module {
 		FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
 		Service: p.movieService(), Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem(), Logger: p.logger,
 		DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
+		Locks: p.locksFor("movie"),
 	})
 	catalog := p.movieCatalog()
 	return movie.Module{
@@ -431,6 +431,7 @@ func (p *process) movieModule() movie.Module {
 			Resolver: movie.Resolver{
 				Service: p.movieService(), Reader: library.NewSeriesReader(p.library), Logger: p.logger,
 				DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
+				Locks: p.locksFor("movie"),
 			},
 			Series: library.NewSeries(p.library), Unidentified: library.NewUnidentified(p.library), Clock: clock.NewSystem(),
 			AllowAgain: catalog.AllowAgain,
@@ -571,7 +572,7 @@ func (p *process) bookModule(format book.Format) book.Module {
 	authors := book.AuthorWorks{Format: format, People: library.NewPeople(p.library), Reader: library.NewSeriesReader(p.library), Source: service.OpenLibrary}
 	resolver := book.Resolver{
 		Service: service, Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
-		Locks: &keyedlock.Locks{}, Threshold: p.acceptThreshold,
+		Locks: p.locksFor("book"), Threshold: p.acceptThreshold,
 	}
 	grab := p.bookGrab(format)
 	conns := p.bookIndexerConns(format)
@@ -586,6 +587,7 @@ func (p *process) bookModule(format book.Format) book.Module {
 			Consumer: book.NewConsumer(book.ConsumerConfig{
 				FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library), Service: service,
 				Clock: clock.NewSystem(), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
+				Locks: p.locksFor("book"),
 			}),
 			Include: format.Includes, Probe: format.Probes,
 			Housekeeping: housekeeping.Sweep{
@@ -680,7 +682,7 @@ func (p *process) adultModule() adult.Module {
 	conns := p.adultIndexerConns
 	resolver := adult.Resolver{
 		Service: service, Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
-		Locks: &keyedlock.Locks{}, Threshold: p.acceptThreshold,
+		Locks: p.locksFor("adult"), Threshold: p.acceptThreshold,
 	}
 	return adult.Module{
 		Registrations: []media.JobRegistration{
@@ -692,6 +694,7 @@ func (p *process) adultModule() adult.Module {
 			Consumer: adult.NewConsumer(adult.ConsumerConfig{
 				FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library), Service: service,
 				Clock: clock.NewSystem(), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
+				Locks: p.locksFor("adult"),
 			}),
 			Include:     adult.IsScene,
 			GatherFiles: adult.ScanGather,

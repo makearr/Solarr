@@ -78,6 +78,9 @@ type Build struct {
 type process struct {
 	// sendLocks makes a release go to a download client once per item at a time, across every media type's dispatch.
 	sendLocks keyedlock.Locks
+	// resolverLocks makes one new title resolve once at a time per media type across scan, import and watch.
+	resolverLocks   map[string]*keyedlock.Locks
+	resolverLocksMu sync.Mutex
 	// hunt is the search hunt, kept for the budget view.
 	hunt *plan.HuntJob
 	// blackholes keeps what blackhole downloads measured, because every poll builds its clients anew.
@@ -1238,3 +1241,18 @@ const diskProbeInterval = 5 * time.Second
 
 // playbackStallAfter is how long a conversion may send nothing, while the viewer is reading, before it is ended.
 const playbackStallAfter = 45 * time.Second
+
+// locksFor is the lock every caller that resolves a new title of this media type shares.
+func (p *process) locksFor(mediaType string) *keyedlock.Locks {
+	p.resolverLocksMu.Lock()
+	defer p.resolverLocksMu.Unlock()
+	if p.resolverLocks == nil {
+		p.resolverLocks = map[string]*keyedlock.Locks{}
+	}
+	locks, found := p.resolverLocks[mediaType]
+	if !found {
+		locks = &keyedlock.Locks{}
+		p.resolverLocks[mediaType] = locks
+	}
+	return locks
+}

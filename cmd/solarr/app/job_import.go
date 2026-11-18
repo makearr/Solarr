@@ -24,7 +24,6 @@ import (
 	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
-	"github.com/makearr/Solarr/internal/platform/keyedlock"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
@@ -248,7 +247,7 @@ func (p *process) bookImporter(format book.Format) book.Importer {
 		}),
 		Resolver: book.Resolver{
 			Service: p.bookService(format), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: categories,
-			Locks: &keyedlock.Locks{}, Threshold: p.acceptThreshold,
+			Locks: p.locksFor("book"), Threshold: p.acceptThreshold,
 		},
 		Categories: categories, Clock: clock.NewSystem(), Logger: p.logger,
 		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
@@ -276,6 +275,7 @@ func (p *process) tvImporter() tv.Importer {
 		Resolver: tv.Resolver{
 			Service: service, Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem(), Logger: p.logger,
 			DefaultProfileID: p.defaultQualityProfileID, Categories: categories, Threshold: p.acceptThreshold,
+			Locks: p.locksFor("tv"),
 		},
 		Categories: categories, BlockedContent: library.NewBlockedContentStore(p.library), Clock: clock.NewSystem(), Logger: p.logger,
 		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
@@ -301,7 +301,7 @@ func (p *process) movieImporter() movie.Importer {
 		}),
 		Resolver: movie.Resolver{
 			Service: p.movieService(), Reader: library.NewSeriesReader(p.library), Logger: p.logger,
-			DefaultProfileID: p.defaultQualityProfileID, Categories: categories, Locks: &keyedlock.Locks{}, Threshold: p.acceptThreshold,
+			DefaultProfileID: p.defaultQualityProfileID, Categories: categories, Locks: p.locksFor("movie"), Threshold: p.acceptThreshold,
 		},
 		Categories: categories, Clock: clock.NewSystem(), Logger: p.logger,
 		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
@@ -369,7 +369,7 @@ func (p *process) adultImporter() adult.Importer {
 		}),
 		Resolver: adult.Resolver{
 			Service: p.adultService(), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: categories,
-			Locks: &keyedlock.Locks{}, Threshold: p.acceptThreshold,
+			Locks: p.locksFor("adult"), Threshold: p.acceptThreshold,
 		},
 		Categories: categories, Clock: clock.NewSystem(), Logger: p.logger,
 		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},

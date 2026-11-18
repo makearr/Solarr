@@ -21,6 +21,8 @@ func IsFeature(relPath string) bool { return filekind.IsFeature(relPath) }
 
 // ConsumerConfig is what a Consumer needs; every field but Logger is required.
 type ConsumerConfig struct {
+	// Locks serialises resolving one title across every caller (scan, import, watch); nil serialises nothing.
+	Locks *keyedlock.Locks
 	// Threshold is import.auto_commit_confidence; nil takes its default.
 	Threshold        func() float64
 	FS               fsx.FS
@@ -58,7 +60,7 @@ func NewConsumer(config ConsumerConfig) Consumer {
 	}
 	resolver := Resolver{
 		Service: config.Service, Reader: config.Reader, Logger: logger, DefaultProfileID: config.DefaultProfileID,
-		Categories: config.Categories, Locks: &keyedlock.Locks{}, Threshold: config.Threshold,
+		Categories: config.Categories, Locks: config.Locks, Threshold: config.Threshold,
 	}
 	return Consumer{works.NewConsumer(works.ConsumerConfig{
 		MediaType: MediaType, Plural: "movies", OSHash: true, Resolver: scanning{fs: config.FS, resolver: resolver},
