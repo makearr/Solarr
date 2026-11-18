@@ -527,7 +527,7 @@ function InspectForm() {
     mutationFn: async () => {
       return await ok(api.POST("/import/inspect", {
         body: {
-          source_path: sourcePath,
+          source_path: sourcePath.trim(),
           origin,
           category_id: categoryId === "" ? undefined : categoryId,
           best_match: categoryId === "" && !decideLater,
@@ -649,9 +649,14 @@ function InspectForm() {
           An identical import of that folder is already waiting or running, so none was added.
         </p>
       )}
+      {inspect.isSuccess && !inspect.data?.already_queued && (
+        <p className="w-full text-xs text-ink-muted">
+          Queued. It appears below when it starts; imports run one at a time.
+        </p>
+      )}
       {inspect.isError && (
         <p className="w-full text-xs text-danger">
-          That could not be enqueued -- check the path and that you are an administrator.
+          {(inspect.error as { detail?: string }).detail ?? "That could not be queued. Check the path and that you are an administrator."}
         </p>
       )}
     </form>
