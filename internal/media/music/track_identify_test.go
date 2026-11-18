@@ -2,6 +2,7 @@ package music_test
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"testing"
 	"time"
@@ -20,10 +21,12 @@ import (
 type fakeTrackLookup struct {
 	searches   map[string][]musicbrainz.RecordingMatch
 	recordings map[string]musicbrainz.RecordingMatch
+	// searchErr makes every search fail, as an outage does.
+	searchErr error
 }
 
 func (f fakeTrackLookup) SearchRecordings(_ context.Context, _ musicbrainz.Priority, artist, title string, _ int) ([]musicbrainz.RecordingMatch, error) {
-	return f.searches[artist+"/"+title], nil
+	return f.searches[artist+"/"+title], f.searchErr
 }
 
 func (f fakeTrackLookup) Recording(_ context.Context, _ musicbrainz.Priority, mbid string) (musicbrainz.RecordingMatch, error) {
@@ -229,7 +232,7 @@ func TestObserve_ARecordingOfAnotherTitleIsNotTheFile(t *testing.T) {
 func TestObserve_AQualifiedTitleFindsItsSong(t *testing.T) {
 	rgBrothers := musicbrainz.ReleaseGroup{MBID: "rg-brothers", Title: "Feferipu and Rividuf", PrimaryType: "Album", FirstReleaseDate: "1973-08-01"}
 	tracks := fakeTrackLookup{searches: map[string][]musicbrainz.RecordingMatch{
-		"The Mesacu Feferipu Huse/Buvezun (zasukugo version)": {{RecordingMBID: "rec-jessica", Title: "Buvezun", ArtistCredit: "The Mesacu Feferipu Huse",
+		"The Mesacu Feferipu Huse/Buvezun": {{RecordingMBID: "rec-jessica", Title: "Buvezun", ArtistCredit: "The Mesacu Feferipu Huse",
 			DurationMs: 452000, ReleaseGroups: []musicbrainz.ReleaseGroup{rgBrothers}}},
 	}}
 	consumer, opened, fsys := newTrackConsumer(t, &fakeAlbumLookup{}, nil, tracks)
@@ -241,6 +244,46 @@ func TestObserve_AQualifiedTitleFindsItsSong(t *testing.T) {
 	}
 	if got := releaseGroupOf(t, opened, relPath); got != "rg-brothers" {
 		t.Errorf("identified as %q, want rg-brothers", got)
+	}
+}
+
+// The search carries the title without its qualifiers and the first credited artist, since MusicBrainz holds neither.
+func TestObserve_ARemasterTagAndAJoinedArtistAreSearchedBySongAndFirstArtist(t *testing.T) {
+	rgOwn := musicbrainz.ReleaseGroup{MBID: "rg-own", Title: "Invented Record", PrimaryType: "Album", FirstReleaseDate: "2011-01-01"}
+	tracks := fakeTrackLookup{searches: map[string][]musicbrainz.RecordingMatch{
+		"Lefite/Invented Song": {{RecordingMBID: "rec-own", Title: "Invented Song", ArtistCredit: "Lefite", DurationMs: 201000,
+			ReleaseGroups: []musicbrainz.ReleaseGroup{rgOwn}}},
+	}}
+	consumer, opened, fsys := newTrackConsumer(t, &fakeAlbumLookup{}, nil, tracks)
+	relPath := "Lefite/Loose/01.m4a"
+	file := untaggedTrack(t, fsys, relPath, "Lefite feat. Guest Name", "Loose", "Invented Song (2011 Remaster)", 201)
+
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, []scan.Observed{file}); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if got := releaseGroupOf(t, opened, relPath); got != "rg-own" {
+		t.Errorf("identified as %q, want rg-own", got)
+	}
+}
+
+// An outage is not an answer: a file whose search failed is tried again, not left as having no match.
+func TestObserve_AFailedRecordingSearchIsRetriedNotFinal(t *testing.T) {
+	consumer, opened, fsys := newTrackConsumer(t, &fakeAlbumLookup{}, nil, fakeTrackLookup{searchErr: errors.New("provider down")})
+	relPath := "Lefite/Loose/01.m4a"
+	file := untaggedTrack(t, fsys, relPath, "Lefite", "Loose", "Invented Song", 201)
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, []scan.Observed{file}); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	size := int64(len("untagged " + relPath))
+	registered, err := library.NewPhysical(opened).RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: relPath, SizeBytes: size, QuickHash: mustQuickHash(t, fsys, relPath, size), FirstSeenAt: observedAt},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	attempts, err := library.NewAttempts(opened).List(t.Context(), registered[0].MediaObjectID)
+	if err != nil || len(attempts) != 1 || attempts[0].Outcome != music.AttemptRetry {
+		t.Errorf("attempts = %+v, %v; want one retry", attempts, err)
 	}
 }
 

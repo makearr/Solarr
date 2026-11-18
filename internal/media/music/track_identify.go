@@ -29,8 +29,8 @@ const (
 	trackLengthTolerance = 5 * time.Second
 	// trackTitlePenalty is the most a searched recording's title may differ from the file's.
 	trackTitlePenalty = 0.15
-	// trackSearchLimit bounds one recording search.
-	trackSearchLimit = 10
+	// trackSearchLimit bounds one recording search; wide, since the length is checked only afterwards.
+	trackSearchLimit = 25
 )
 
 // TrackLookup is what per-track identification asks the metadata sources; musicbrainz.Provider implements it.
@@ -52,7 +52,10 @@ func (c Consumer) trackPass(ctx context.Context, out *batchResult, files []pendi
 	for _, file := range files {
 		one := out.observed[file.index]
 		local := ReadLocalTrack(one.Probe.Tags, one.Probe.Measured, one.File.RelPath)
-		recordings, confidence := c.recordingsFor(ctx, file, local)
+		recordings, confidence, unanswered := c.recordingsFor(ctx, file, local)
+		if unanswered {
+			out.unanswered[file.index] = true
+		}
 		home, recording, found := homeGroup(recordings, local, hints)
 		// A file stays with the album its folder's files agree on when that album has its song, or
 		// when only a title search points elsewhere: one song has many takes and many entries.
@@ -141,7 +144,7 @@ func (c Consumer) albumTitles(ctx context.Context, groups []string) []string {
 
 // recordingsFor answers what recording the file is: every one its fingerprint or embedded id names,
 // else the recordings a search finds by its artist and title at its length.
-func (c Consumer) recordingsFor(ctx context.Context, file pendingFile, local LocalTrack) ([]musicbrainz.RecordingMatch, float64) {
+func (c Consumer) recordingsFor(ctx context.Context, file pendingFile, local LocalTrack) (recordings []musicbrainz.RecordingMatch, confidence float64, unanswered bool) {
 	var known []musicbrainz.RecordingMatch
 	for _, mbid := range append(slices.Clone(file.recordings), local.RecordingMBID) {
 		if mbid == "" || slices.ContainsFunc(known, func(r musicbrainz.RecordingMatch) bool { return r.RecordingMBID == mbid }) {
@@ -159,28 +162,35 @@ func (c Consumer) recordingsFor(ctx context.Context, file pendingFile, local Loc
 		return !local.Title.present() || match.EditPenalty(local.Title.Value, r.Title) <= trackTitlePenalty
 	})
 	if exact {
-		return known, trackKnownConfidence
+		return known, trackKnownConfidence, false
 	}
 	// Named only as a qualified version -- an instrumental for a sung file -- the search may still
 	// find the exact song; both are ranked together.
-	searched := c.searchedRecordings(ctx, local)
+	searched, err := c.searchedRecordings(ctx, local)
 	switch {
 	case len(known) > 0:
-		return append(known, searched...), trackKnownConfidence
+		return append(known, searched...), trackKnownConfidence, err != nil
 	case len(searched) > 0:
-		return searched, trackSearchedConfidence
+		return searched, trackSearchedConfidence, false
 	}
-	return nil, 0
+	return nil, 0, err != nil
 }
 
 // searchedRecordings are the recordings a search finds by the file's artist and title at its length.
-func (c Consumer) searchedRecordings(ctx context.Context, local LocalTrack) []musicbrainz.RecordingMatch {
+func (c Consumer) searchedRecordings(ctx context.Context, local LocalTrack) ([]musicbrainz.RecordingMatch, error) {
 	if !local.Title.present() || !local.Artist.present() || local.Duration <= 0 {
-		return nil
+		return nil, nil
 	}
-	found, err := c.tracks.SearchRecordings(ctx, musicbrainz.PriorityIdentify, local.Artist.Value, local.Title.Value, trackSearchLimit)
+	// The search only has to bring the candidate: the title without its qualifiers and the first credited artist, since
+	// the phrase must match MusicBrainz's own spelling. Every local check below still decides.
+	title, artist := local.Title.Value, local.Artist.Value
+	if core := titleCore(title); core != "" {
+		title = core
+	}
+	artist = firstCredit(artist)
+	found, err := c.tracks.SearchRecordings(ctx, musicbrainz.PriorityIdentify, artist, title, trackSearchLimit)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	var fitting []musicbrainz.RecordingMatch
 	for _, recording := range found {
@@ -191,7 +201,7 @@ func (c Consumer) searchedRecordings(ctx context.Context, local LocalTrack) []mu
 			fitting = append(fitting, recording)
 		}
 	}
-	return fitting
+	return fitting, nil
 }
 
 // homeGroup chooses the album among every release group the recordings are on -- one the album pass
@@ -304,4 +314,22 @@ func compareDates(a, b string) int {
 		return -1
 	}
 	return strings.Compare(a, b)
+}
+
+// firstCredit is the first artist of a joined credit ("A feat. B" is "A"), spelled as written.
+func firstCredit(credit string) string {
+	lower := strings.ToLower(credit)
+	if len(lower) != len(credit) {
+		return credit
+	}
+	cut := len(credit)
+	for _, separator := range artistSeparators {
+		if index := strings.Index(lower, separator); index > 0 {
+			cut = min(cut, index)
+		}
+	}
+	if first := strings.TrimSpace(credit[:cut]); first != "" {
+		return first
+	}
+	return credit
 }

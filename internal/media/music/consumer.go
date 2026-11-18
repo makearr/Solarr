@@ -318,7 +318,7 @@ func (c Consumer) identifyBatch(
 	out := &batchResult{
 		rootFolderID: rootFolderID, rootPath: rootPath, observed: observed, mediaObjectIDs: mediaObjectIDs,
 		at:     c.clock.Now().Unix(),
-		passes: make(map[int][]library.AttemptPass), outcomes: make(map[int]string),
+		passes: make(map[int][]library.AttemptPass), outcomes: make(map[int]string), unanswered: make(map[int]bool),
 		releaseGroups: make(map[string]string),
 	}
 	all := make([]pendingFile, len(observed))
@@ -388,6 +388,8 @@ type batchResult struct {
 	// passes and outcomes are the attempt record, per batch index, for files past their embedded tags.
 	passes   map[int][]library.AttemptPass
 	outcomes map[int]string
+	// unanswered are files a metadata source failed on: an outage is not an answer, so they are tried again.
+	unanswered map[int]bool
 }
 
 // noted reports whether this file already has a record for that pass.
@@ -449,7 +451,7 @@ func (r *batchResult) attempts() []library.Attempt {
 			continue
 		}
 		outcome, decided := r.outcomes[index]
-		if !decided {
+		if !decided || r.unanswered[index] {
 			outcome = AttemptRetry
 		}
 		attempts = append(attempts, library.Attempt{
