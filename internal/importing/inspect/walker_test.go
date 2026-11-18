@@ -298,3 +298,18 @@ func TestWalker_AndSplitDirectoryReadAFolderAlike(t *testing.T) {
 		t.Errorf("walked %+v, split %+v; want both to see the two real files", walked, split)
 	}
 }
+
+// A clip in a folder named Sample is a preview, not an episode, though it clears the size floor and no probe ran.
+func TestClassify_AFileInASampleFolderIsJunk(t *testing.T) {
+	const big = 80 * 1024 * 1024
+	for relPath, want := range map[string]inspect.Class{
+		"Rel/Sample/rel-sample.mkv": inspect.ClassJunk,
+		"Rel/SAMPLE/clip.mkv":       inspect.ClassJunk,
+		"Rel/Samples/clip.mkv":      inspect.ClassMedia,
+		"Rel/S01E01.mkv":            inspect.ClassMedia,
+	} {
+		if got := inspect.Classify(relPath, big, 0); got != want {
+			t.Errorf("Classify(%q) = %s, want %s", relPath, got, want)
+		}
+	}
+}

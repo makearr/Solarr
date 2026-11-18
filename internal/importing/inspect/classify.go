@@ -3,6 +3,7 @@ package inspect
 import (
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -82,7 +83,7 @@ func classify(relPath string, sizeBytes, floor int64, books bool) Class {
 	kind := filekind.Of(name)
 	switch {
 	case kind == filekind.Audio || kind == filekind.Video || (books && kind == filekind.Book):
-		if sizeBytes < floor {
+		if sizeBytes < floor || inSampleFolder(relPath) {
 			return ClassJunk
 		}
 		return ClassMedia
@@ -99,6 +100,13 @@ func classify(relPath string, sizeBytes, floor int64, books bool) Class {
 	default:
 		return ClassUnknown
 	}
+}
+
+// inSampleFolder reports a path with a segment that is exactly "sample", as Sonarr refuses it: a release's preview clip
+// is above the size floor and needs no ffprobe to be recognised.
+func inSampleFolder(relPath string) bool {
+	segments := strings.Split(path.Dir(relPath), "/")
+	return slices.ContainsFunc(segments, func(segment string) bool { return strings.EqualFold(segment, "sample") })
 }
 
 // File is one file Run found, classified.

@@ -285,7 +285,7 @@ func readDirectory(
 // isSubtitleFolder is the folder scene releases keep their subtitles in, beside the video.
 func isSubtitleFolder(name string) bool {
 	switch strings.ToLower(name) {
-	case "subs", "sub", "subtitles":
+	case "subs", "sub", "subtitles", "subtitle", "vobsub", "idx":
 		return true
 	}
 	return false
