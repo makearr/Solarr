@@ -35,7 +35,7 @@ func Extract(ctx context.Context, fsys fsx.FS, source, destDir string, limits Li
 		return err
 	}
 
-	b := &budget{limits: limits, sourceBytes: info.Size}
+	b := &budget{limits: limits, sourceBytes: VolumesSize(fsys, source, info.Size)}
 	if format == FormatRar {
 		return extractRar(ctx, fsys, source, destDir, b)
 	}
@@ -339,6 +339,46 @@ func extract7z(ctx context.Context, fsys fsx.FS, r io.ReaderAt, size int64, dest
 		_ = src.Close()
 		if err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// VolumesSize is the size of every volume (and file named after the set) of the archive whose first volume is source: what the expansion ratio is
+// measured against, since a release in many small volumes would otherwise look like a bomb. A single archive, or a
+// directory that cannot be listed, answers primarySize.
+func VolumesSize(fsys fsx.FS, source string, primarySize int64) int64 {
+	directory := path.Dir(source)
+	entries, err := fsys.ReadDir(directory)
+	if err != nil {
+		return primarySize
+	}
+	names := make([]string, len(entries))
+	for index, entry := range entries {
+		names[index] = entry.Name
+	}
+	set := volumeSetOf(DetectMultipart(names), path.Base(source))
+	if set == nil {
+		return primarySize
+	}
+	var total int64
+	for _, name := range names {
+		if !set.Has(name) {
+			continue
+		}
+		info, err := fsys.Stat(path.Join(directory, name))
+		if err != nil {
+			return primarySize
+		}
+		total += info.Size
+	}
+	return max(total, primarySize)
+}
+
+func volumeSetOf(sets map[string]*MultipartSet, primary string) *MultipartSet {
+	for _, set := range sets {
+		if set.Primary == primary {
+			return set
 		}
 	}
 	return nil

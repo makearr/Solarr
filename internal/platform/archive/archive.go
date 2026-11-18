@@ -134,6 +134,14 @@ type MultipartSet struct {
 	primaryVolume int
 }
 
+// Has reports whether name is a volume of the set (its primary included).
+func (m MultipartSet) Has(name string) bool {
+	if name == m.Primary {
+		return true
+	}
+	return strings.HasPrefix(strings.ToLower(name), strings.ToLower(m.Base)+".")
+}
+
 // MissingVolumes reports which volume numbers, from 1 up to the highest one
 // actually present, are absent -- "part 3 of 8 missing", never just
 // "corrupt" (ADR-49's own wording).

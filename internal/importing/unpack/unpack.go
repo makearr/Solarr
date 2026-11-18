@@ -45,7 +45,7 @@ func primaries(files []inspect.File) []string {
 		for _, set := range sets {
 			found = append(found, path.Join(directory, set.Primary))
 			for _, name := range names {
-				if belongs(name, set) {
+				if set.Has(name) {
 					inSet[name] = true
 				}
 			}
@@ -58,15 +58,6 @@ func primaries(files []inspect.File) []string {
 	}
 	slices.Sort(found)
 	return slices.Compact(found)
-}
-
-// belongs reports whether name is a volume of set (its primary included).
-func belongs(name string, set *archive.MultipartSet) bool {
-	if name == set.Primary {
-		return true
-	}
-	lower := strings.ToLower(name)
-	return strings.HasPrefix(lower, strings.ToLower(set.Base)+".")
 }
 
 // Expand opens every archive under source into its own folder of workspace, named like the archive without its
@@ -148,7 +139,7 @@ func volumesOf(names []string, primary string) []string {
 			continue
 		}
 		for _, name := range names {
-			if belongs(name, set) && name != primary {
+			if set.Has(name) && name != primary {
 				volumes = append(volumes, name)
 			}
 		}
