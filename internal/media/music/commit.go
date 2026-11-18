@@ -230,7 +230,7 @@ func PlacementOf(decision AlbumDecision, relPaths []string) *AlbumPlacement {
 
 // trackOf is the file as album matching placed it, or as its own tags claim when it matched no track.
 func (p *AlbumPlacement) trackOf(relPath string, tags mediatool.Tags) (TrackFile, int) {
-	claimed := ReadTrackFile(0, tags)
+	claimed := ReadTrackFile(0, "", tags)
 	if claimed.Title == "" {
 		// Untagged files would all be named alike and collide.
 		claimed.Title = strings.TrimSuffix(path.Base(relPath), path.Ext(relPath))
@@ -419,7 +419,7 @@ func (c Committer) CommitMatchedUnit(
 	if matched == nil {
 		for _, media := range unit.Media {
 			if fileTags, err := tags.TagsFor(ctx, model.FileRef{RelPath: media.RelPath}); err == nil {
-				claimedDiscs = max(claimedDiscs, ReadTrackFile(0, fileTags).Disc)
+				claimedDiscs = max(claimedDiscs, ReadTrackFile(0, "", fileTags).Disc)
 			}
 		}
 	}

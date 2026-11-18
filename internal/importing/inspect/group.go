@@ -11,7 +11,19 @@ import (
 
 // discSubfolderRe recognises the disc-subfolder pattern (section 11.9): "CD1", "Disc 2", "Disk-3", "Vol. 4", "DVD1",
 // "BD 1", "Digital Media 01", "Side A", each optionally followed by a title ("CD1 - Live", "Disc 2 (Bonus)").
-var discSubfolderRe = regexp.MustCompile(`(?i)^(?:cd|dis[ck]|dvd|bd|blu-?ray|vol(?:ume)?|digital media|side)\.?\s*[-_#]?\s*(?:\d{1,2}|[a-d])(?:\s*[-:(\[].*)?$`)
+var discSubfolderRe = regexp.MustCompile(`(?i)^(?:cd|dis[ck]|dvd|bd|blu-?ray|vol(?:ume)?|digital media|side)\.?\s*[-_#]?\s*(\d{1,2}|[a-d])(?:\s*[-:(\[].*)?$`)
+
+// DiscNumber is the disc a folder name stands for ("CD2 - Live" is 2, "Side B" is 2), false for any other name.
+func DiscNumber(dirName string) (int, bool) {
+	found := discSubfolderRe.FindStringSubmatch(dirName)
+	if found == nil {
+		return 0, false
+	}
+	if number, err := strconv.Atoi(found[1]); err == nil {
+		return number, number > 0
+	}
+	return int(strings.ToLower(found[1])[0]-'a') + 1, true
+}
 
 // leadingTrackNumberRe pulls a track number off the front of a filename --
 // "01 - Title.flac", "01_title.mp3", "1.flac" all match.

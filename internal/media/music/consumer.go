@@ -376,7 +376,7 @@ func (c Consumer) identifyBatch(
 		out.identify(file.index, library.WorkLink{
 			Provider: sibling.Provider, ExternalID: sibling.ExternalID, Confidence: siblingConfidence,
 			Work: newWorkIdentity(one), RootFolderID: rootFolderID, MediaObjectID: mediaObjectIDs[file.index],
-		}, ReadTrackFile(mediaObjectIDs[file.index], one.Probe.Tags))
+		}, ReadTrackFile(mediaObjectIDs[file.index], one.File.RelPath, one.Probe.Tags))
 	}
 	if len(out.links) == 0 && len(pending) > 0 {
 		out.addUnverified(pending)
@@ -437,7 +437,7 @@ func (r *batchResult) addUnverified(pending []pendingFile) {
 		r.linkUnverified(library.WorkLink{
 			Provider: ProviderLocalAlbum, ExternalID: key, Confidence: unverifiedConfidence,
 			Work: work, RootFolderID: r.rootFolderID, MediaObjectID: r.mediaObjectIDs[file.index],
-		}, ReadTrackFile(r.mediaObjectIDs[file.index], one.Probe.Tags))
+		}, ReadTrackFile(r.mediaObjectIDs[file.index], one.File.RelPath, one.Probe.Tags))
 	}
 }
 
@@ -796,7 +796,7 @@ func (c Consumer) runChain(
 			Provider: result.Best.ExternalID.Provider, ExternalID: externalID,
 			Confidence: result.Best.ExternalID.Confidence, Work: newWorkIdentity(one),
 			Edition: newEditionLink(one), RootFolderID: out.rootFolderID, MediaObjectID: mediaObjectID,
-		}, ReadTrackFile(mediaObjectID, one.Probe.Tags))
+		}, ReadTrackFile(mediaObjectID, one.File.RelPath, one.Probe.Tags))
 	}
 	return pending
 }
@@ -1127,7 +1127,7 @@ func albumLink(out *batchResult, index int, best ReleaseScore) library.WorkLink 
 // albumTrackFile is the file as its matched track, so wanting and alignment use the
 // release's own position and recording rather than the file's possibly missing tags.
 func albumTrackFile(out *batchResult, index int, track *ReleaseTrack) TrackFile {
-	file := ReadTrackFile(out.mediaObjectIDs[index], out.observed[index].Probe.Tags)
+	file := ReadTrackFile(out.mediaObjectIDs[index], out.observed[index].File.RelPath, out.observed[index].Probe.Tags)
 	file.Disc, file.Track, file.RecordingMBID = track.Disc, track.Position, track.RecordingMBID
 	if file.Title == "" {
 		file.Title = track.Title
