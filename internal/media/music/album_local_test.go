@@ -19,7 +19,7 @@ func TestReadLocalTrack_TagsWin(t *testing.T) {
 		Title:  music.Claim{Value: "Tusa Behif Us", Provenance: music.ProvenanceTag},
 		Artist: music.Claim{Value: "P!po", Provenance: music.ProvenanceTag},
 		Album:  music.Claim{Value: "Kebilegev Bibihi", Provenance: music.ProvenanceTag},
-		Disc:   1, Track: 4, Year: 2017, Duration: 270 * time.Second,
+		Disc:   1, Track: 4, TrackTotal: 13, Year: 2017, Duration: 270 * time.Second,
 		FolderAlbum: "Kebilegev Bibihi",
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -70,5 +70,26 @@ func TestReadLocalTrack_AShortNameAloneIsAPlaceholder(t *testing.T) {
 
 	if want := (music.Claim{Value: "DORA9E~V", Provenance: music.ProvenancePlaceholder}); got.Artist != want {
 		t.Errorf("Artist = %+v, want %+v", got.Artist, want)
+	}
+}
+
+func TestReadLocalTrack_ReadsWhatIsPrintedOnTheRelease(t *testing.T) {
+	for name, tc := range map[string]struct {
+		tags    mediatool.Tags
+		barcode string
+		catalog string
+		total   int
+	}{
+		"spaced upc":     {mediatool.Tags{"barcode": "0 12345 67890 5"}, "012345678905", "", 0},
+		"upc tag":        {mediatool.Tags{"UPC": "012345678905"}, "012345678905", "", 0},
+		"too short":      {mediatool.Tags{"barcode": "1234"}, "", "", 0},
+		"catalogue":      {mediatool.Tags{"CATALOGNUMBER": " XYZ-123 "}, "", "XYZ-123", 0},
+		"total separate": {mediatool.Tags{"tracknumber": "3", "tracktotal": "12"}, "", "", 12},
+		"total slashed":  {mediatool.Tags{"tracknumber": "3/12"}, "", "", 12},
+	} {
+		got := music.ReadLocalTrack(tc.tags, mediatool.Measured{}, "a/b.flac")
+		if got.Barcode != tc.barcode || got.CatalogNumber != tc.catalog || got.TrackTotal != tc.total {
+			t.Errorf("%s: barcode %q catalogue %q total %d, want %q %q %d", name, got.Barcode, got.CatalogNumber, got.TrackTotal, tc.barcode, tc.catalog, tc.total)
+		}
 	}
 }

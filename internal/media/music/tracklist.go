@@ -133,6 +133,14 @@ func firstTrackNumber(value string) int {
 	return number
 }
 
+// trackTotal is the total of a "3/10" track number, else the separate total tag, else 0.
+func trackTotal(number, total string) int {
+	if _, after, found := strings.Cut(number, "/"); found {
+		return firstTrackNumber(after)
+	}
+	return firstTrackNumber(total)
+}
+
 // Part is one expected track Align matches candidates against -- a media
 // type's own shape (ADR-23), decoupled from library.db's row so this package
 // never needs to import internal/db/store/gen/librarydb directly.

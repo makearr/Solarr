@@ -624,3 +624,29 @@ func TestDirect_RecordingKeepsEachReleaseGroupOnceAtItsEarliestDate(t *testing.T
 		t.Errorf("recording = %+v\nwant %+v", got, want)
 	}
 }
+
+func TestDirect_SearchReleasesByBarcodeKeepsEachGroupOnce(t *testing.T) {
+	query := url.QueryEscape(`barcode:"012345678905"`)
+	body := `{"releases":[
+	  {"id":"rel-1","release-group":{"id":"rg-1","title":"Kebilegev Bibihi","primary-type":"Album","first-release-date":"2017-10-13"},"artist-credit":[{"name":"P!po","artist":{"name":"P!po"}}]},
+	  {"id":"rel-2","release-group":{"id":"rg-1","title":"Kebilegev Bibihi","primary-type":"Album"},"artist-credit":[{"name":"P!po","artist":{"name":"P!po"}}]}]}`
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://musicbrainz.invalid/release/?query=" + query + "&fmt=json&limit=5": {status: http.StatusOK, body: body},
+	}}
+	source := musicbrainz.NewDirect(newTestClient(t, transport, musicbrainz.DirectName), "https://musicbrainz.invalid")
+	searcher, ok := source.(musicbrainz.ReleaseSearcher)
+	if !ok {
+		t.Fatal("direct does not implement ReleaseSearcher")
+	}
+	got, err := searcher.SearchReleases(t.Context(), musicbrainz.ReleaseQuery{Barcode: "012345678905"}, 5)
+	if err != nil {
+		t.Fatalf("SearchReleases: %v", err)
+	}
+	want := []musicbrainz.ReleaseGroupMatch{{
+		ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg-1", Title: "Kebilegev Bibihi", PrimaryType: "Album", FirstReleaseDate: "2017-10-13"},
+		ArtistCredit: "P!po", ArtistNames: "P!po",
+	}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("matches = %+v\nwant %+v", got, want)
+	}
+}

@@ -933,14 +933,6 @@ func splitByTrackTotal(observed []scan.Observed, group []pendingFile) [][]pendin
 	return split
 }
 
-// trackTotal is the total of a "3/10" track number, else the separate total tag, else 0.
-func trackTotal(number, total string) int {
-	if _, after, found := strings.Cut(number, "/"); found {
-		return firstTrackNumber(after)
-	}
-	return firstTrackNumber(total)
-}
-
 // applyAlbumDecision records one album match and acts on it: identified links every
 // file to its own matched track, ambiguous is queued rather than guessed per file,
 // anything else stays pending for a later pass. Shared by both passes that match an

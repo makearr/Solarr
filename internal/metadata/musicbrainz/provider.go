@@ -56,6 +56,8 @@ const (
 	cacheKindReleases = "musicbrainz:releases"
 	// cacheKindRecordingSearch is a recording search's result set, keyed like cacheKindSearch.
 	cacheKindRecordingSearch = "musicbrainz:recording-search"
+	// cacheKindReleaseSearch is a barcode or catalogue number search's result set.
+	cacheKindReleaseSearch = "musicbrainz:release-search"
 	// cacheKindRecording is one recording with the release groups it is on, keyed on its MBID.
 	cacheKindRecording = "musicbrainz:recording"
 	// cacheKindArtistSearch is an artist search's result set, keyed on query and limit.
@@ -347,6 +349,28 @@ func (p Provider) SearchRecordings(ctx context.Context, priority Priority, artis
 		return nil, nil
 	}
 	return nil, fmt.Errorf("musicbrainz: no source answered recording search %q/%q: %w", artist, title, errors.Join(errs...))
+}
+
+// SearchReleases answers the release groups of the releases carrying a barcode or catalogue number, cache first.
+// Only ReleaseSearcher sources are tried.
+func (p Provider) SearchReleases(ctx context.Context, priority Priority, query ReleaseQuery, limit int) ([]ReleaseGroupMatch, error) {
+	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
+	r := routeFor[ReleaseSearcher](ctx, p)
+	key := searchCacheKey(query.Barcode, query.CatalogNumber, limit)
+	if matches, ok := cachedJSON[[]ReleaseGroupMatch](ctx, p, r, cacheKindReleaseSearch, key); ok {
+		return matches, nil
+	}
+	answer, answered, errs := firstAnswer(ctx, p, r, func(ctx context.Context, searcher ReleaseSearcher) ([]ReleaseGroupMatch, error) {
+		return searcher.SearchReleases(ctx, query, limit)
+	})
+	if answered {
+		rememberJSON(ctx, p, r, answer.Source.Name(), cacheKindReleaseSearch, key, answer.Value)
+		return answer.Value, nil
+	}
+	if len(errs) == 0 {
+		return nil, nil
+	}
+	return nil, fmt.Errorf("musicbrainz: no source answered release search %+v: %w", query, errors.Join(errs...))
 }
 
 // Recording answers one recording and the release groups it is on, cache first; ErrNotFound when

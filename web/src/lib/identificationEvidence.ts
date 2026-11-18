@@ -78,6 +78,7 @@ const RECALL_LABELS: Record<string, string> = {
   sibling: "Other files' album",
   album_tags: "Album tag search",
   recording_search: "Track title search",
+  barcode: "Barcode search",
 };
 
 export function recallLabel(recall: string | undefined): string {

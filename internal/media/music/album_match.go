@@ -77,6 +77,10 @@ type LocalTrack struct {
 	Year                 int
 	Duration             time.Duration
 	RecordingMBID        string
+	// Barcode is the digits of the barcode tag, CatalogNumber the label's number, TrackTotal the album's track count
+	// as the file states it; each is empty or 0 when the file does not say.
+	Barcode, CatalogNumber string
+	TrackTotal             int
 	// FolderAlbum is the album the folder's name gives, searched and scored beside the tag's.
 	FolderAlbum string
 }
@@ -88,7 +92,7 @@ type AlbumCandidate struct {
 	// ArtistNames are the credited artists' own names: a tag saying "2Ibe" fits a "Tupac" credit.
 	ArtistNames string
 	Release     musicbrainz.Release
-	// Recall is how the release group was found: sibling, album_tags or recording_search.
+	// Recall is how the release group was found: sibling, barcode, album_tags or recording_search.
 	Recall string
 }
 
@@ -107,6 +111,7 @@ const (
 	dimensionTrackIndex
 	dimensionRecordingID
 	dimensionReleaseType
+	dimensionEdition
 	dimensionCount
 )
 
@@ -114,7 +119,7 @@ var dimensionWeights = [dimensionCount]float64{
 	dimensionArtist: 3, dimensionAlbum: 3, dimensionYear: 1, dimensionTracks: 2,
 	dimensionMissingTracks: 0.6, dimensionUnmatchedTracks: 0.9,
 	dimensionTrackTitle: 3, dimensionTrackLength: 2, dimensionTrackIndex: 1, dimensionRecordingID: 10,
-	dimensionReleaseType: 3,
+	dimensionReleaseType: 3, dimensionEdition: 3,
 }
 
 // distance collects penalties in [0,1] per dimension; normalized is their weighted mean.
@@ -367,7 +372,7 @@ func scoreRelease(locals []LocalTrack, facts folderFacts, candidate AlbumCandida
 	d.add(dimensionReleaseType, releaseTypePenalty(candidate.ReleaseGroup))
 
 	score.Distance = d.normalized(dimensionMissingTracks)
-	score.GateDistance = d.normalized(dimensionMissingTracks, dimensionReleaseType)
+	score.GateDistance = d.normalized(dimensionMissingTracks, dimensionReleaseType, dimensionEdition)
 	// Positions and lengths agree with too many albums; enough titles or recordings must too.
 	quorum := score.Supported >= min(2, len(locals))
 	score.Accepted = len(locals) > 0 && !score.Contradicted && artistOK && quorum && !playlistOnCompilation(locals, facts, score) &&
@@ -417,6 +422,13 @@ func addAlbumDimensions(d *distance, facts folderFacts, candidate AlbumCandidate
 	if year, releaseYear := facts.year, yearOf(candidate.Release.Date); year > 0 && releaseYear > 0 {
 		gap := math.Abs(float64(year - releaseYear))
 		d.add(dimensionYear, min(1, gap/10))
+	}
+	// An edition signal ranks editions of one album; the gate ignores it, since a rip may carry a wrong barcode.
+	if facts.barcode != "" && barcodeKey(candidate.Release.Barcode) != "" {
+		d.addBool(dimensionEdition, barcodeKey(candidate.Release.Barcode) != facts.barcode)
+	}
+	if count := trackCount(candidate.Release); facts.trackTotal > 0 && count > 0 {
+		d.addBool(dimensionEdition, facts.trackTotal != count)
 	}
 	return artistOK
 }
@@ -530,6 +542,39 @@ func consensusYear(locals []LocalTrack) int {
 	return best
 }
 
+// consensusString is the non-empty value most files carry, the first seen winning a tie.
+func consensusString(locals []LocalTrack, valueOf func(LocalTrack) string) string {
+	counts := make(map[string]int)
+	best, bestCount := "", 0
+	for _, local := range locals {
+		value := valueOf(local)
+		if value == "" {
+			continue
+		}
+		counts[value]++
+		if counts[value] > bestCount {
+			best, bestCount = value, counts[value]
+		}
+	}
+	return best
+}
+
+// consensusTrackTotal is the track count most files that state one agree on.
+func consensusTrackTotal(locals []LocalTrack) int {
+	counts := make(map[int]int)
+	best, bestCount := 0, 0
+	for _, local := range locals {
+		if local.TrackTotal <= 0 {
+			continue
+		}
+		counts[local.TrackTotal]++
+		if counts[local.TrackTotal] > bestCount {
+			best, bestCount = local.TrackTotal, counts[local.TrackTotal]
+		}
+	}
+	return best
+}
+
 // AlbumOutcome names what album matching concluded, so the manual queue can say why.
 type AlbumOutcome string
 
@@ -598,6 +643,9 @@ func DecideAlbum(locals []LocalTrack, candidates []AlbumCandidate) AlbumDecision
 		!onlyPerfectFit(best, scores[runnerUp]) {
 		pick := siblingsAlbumWithinMargin(scores)
 		if pick < 0 {
+			pick = barcodeAlbumWithinMargin(scores)
+		}
+		if pick < 0 {
 			pick = namedAlbumWithinMargin(locals, scores)
 		}
 		if pick < 0 {
@@ -626,6 +674,9 @@ type folderFacts struct {
 	// albumTitles are the titles the files give their album: the tag, the tag cleaned, the folder's.
 	albumTitles []string
 	year        int
+	// barcode is the folder's barcode as barcodeKey writes it, trackTotal the track count its files agree on.
+	barcode    string
+	trackTotal int
 }
 
 func factsOf(locals []LocalTrack) folderFacts {
@@ -634,6 +685,8 @@ func factsOf(locals []LocalTrack) folderFacts {
 		album:       consensusClaim(locals, func(t LocalTrack) Claim { return t.Album }),
 		folderAlbum: folderAlbum(locals),
 		year:        consensusYear(locals),
+		barcode:     barcodeKey(consensusString(locals, func(t LocalTrack) string { return t.Barcode })),
+		trackTotal:  consensusTrackTotal(locals),
 	}
 	facts.albumTitles = []string{facts.album.Value, cleanAlbumTag(facts.album.Value), facts.folderAlbum}
 	return facts
@@ -682,6 +735,14 @@ func withoutCollidingDiscs(locals []LocalTrack) []LocalTrack {
 func siblingsAlbumWithinMargin(scores []ReleaseScore) int {
 	return slices.IndexFunc(scores, func(score ReleaseScore) bool {
 		return score.Accepted && score.Candidate.Recall == RecallSibling && score.Distance-scores[0].Distance < winnerMargin
+	})
+}
+
+// barcodeAlbumWithinMargin is siblingsAlbumWithinMargin for a release recalled by the folder's barcode. A barcode is
+// not proof, so it only breaks a tie inside the margin and is never exempt from the acceptance threshold.
+func barcodeAlbumWithinMargin(scores []ReleaseScore) int {
+	return slices.IndexFunc(scores, func(score ReleaseScore) bool {
+		return score.Accepted && score.Candidate.Recall == RecallBarcode && score.Distance-scores[0].Distance < winnerMargin
 	})
 }
 

@@ -15,7 +15,9 @@ import (
 
 // fakeAlbumLookup answers from fixed maps and records what was asked.
 type fakeAlbumLookup struct {
-	searches   map[string][]musicbrainz.ReleaseGroupMatch
+	searches map[string][]musicbrainz.ReleaseGroupMatch
+	// printed answers a barcode or catalogue number search, keyed by the barcode else the catalogue number.
+	printed    map[string][]musicbrainz.ReleaseGroupMatch
 	recordings map[string][]musicbrainz.RecordingMatch
 	groups     map[string]musicbrainz.ReleaseGroup
 	releases   map[string][]musicbrainz.Release
@@ -35,6 +37,15 @@ func (f *fakeAlbumLookup) ask(what string) {
 func (f *fakeAlbumLookup) Search(_ context.Context, _ musicbrainz.Priority, artist, title string, _ int) ([]musicbrainz.ReleaseGroupMatch, error) {
 	f.ask("search:" + artist + "/" + title)
 	return f.searches[artist+"/"+title], f.err
+}
+
+func (f *fakeAlbumLookup) SearchReleases(_ context.Context, _ musicbrainz.Priority, query musicbrainz.ReleaseQuery, _ int) ([]musicbrainz.ReleaseGroupMatch, error) {
+	key := query.Barcode
+	if key == "" {
+		key = query.CatalogNumber
+	}
+	f.ask("printed:" + key)
+	return f.printed[key], f.err
 }
 
 func (f *fakeAlbumLookup) SearchRecordings(_ context.Context, _ musicbrainz.Priority, artist, title string, _ int) ([]musicbrainz.RecordingMatch, error) {
@@ -335,5 +346,31 @@ func TestIdentifyAlbum_SearchesGoOutTogetherAndAreRankedByEvidence(t *testing.T)
 	}
 	if want := []string{"rg-studio", "rg-folder"}; !slices.Equal(groups, want) {
 		t.Errorf("candidates = %v, want %v: the tags' recall ranks before the folder name's", groups, want)
+	}
+}
+
+func TestIdentifyAlbum_TheBarcodeIsSearchedAndItsGroupComesFirst(t *testing.T) {
+	lookup := &fakeAlbumLookup{
+		printed: map[string][]musicbrainz.ReleaseGroupMatch{"012345678905": {
+			{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg-barcode", Title: "Kebilegev Bibihi", PrimaryType: "Album"}, ArtistCredit: "P!po"},
+		}},
+		searches: map[string][]musicbrainz.ReleaseGroupMatch{"P!po/Kebilegev Bibihi": {
+			{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg-text", Title: "Kebilegev Bibihi", PrimaryType: "Album"}, ArtistCredit: "P!po"},
+		}},
+		releases: map[string][]musicbrainz.Release{"rg-barcode": {studioRelease}, "rg-text": {folderRelease}},
+	}
+	locals := folderOf(traumaTracks)
+	for i := range locals {
+		locals[i].Barcode = "012345678905"
+	}
+	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, nil)
+	if err != nil {
+		t.Fatalf("IdentifyAlbum: %v", err)
+	}
+	if !slices.Contains(lookup.asked, "printed:012345678905") {
+		t.Errorf("asked %v, want the barcode searched", lookup.asked)
+	}
+	if got := bestReleaseGroup(decision); got != "rg-barcode" || decision.Best.Candidate.Recall != music.RecallBarcode {
+		t.Errorf("best = %q recalled %q, want rg-barcode recalled by barcode", got, decision.Best.Candidate.Recall)
 	}
 }

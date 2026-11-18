@@ -152,6 +152,17 @@ type Searcher interface {
 	SearchReleaseGroups(ctx context.Context, artist, title string, limit int) ([]ReleaseGroupMatch, error)
 }
 
+// ReleaseQuery names a release by what is printed on it: a barcode, else a catalogue number.
+type ReleaseQuery struct {
+	Barcode, CatalogNumber string
+}
+
+// ReleaseSearcher is an optional Source capability: the release groups of the releases that carry a barcode or
+// catalogue number.
+type ReleaseSearcher interface {
+	SearchReleases(ctx context.Context, query ReleaseQuery, limit int) ([]ReleaseGroupMatch, error)
+}
+
 // RecordingSearcher is an optional Source capability: the release groups carrying a
 // recording that matches a track title, for folders whose album tags are missing.
 type RecordingSearcher interface {

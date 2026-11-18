@@ -301,6 +301,60 @@ func (d direct) searchReleaseGroups(ctx context.Context, luceneQuery string, lim
 	return matches, nil
 }
 
+// directReleaseSearchResponse is ws/2's release search JSON: each release carries its release group and credit.
+type directReleaseSearchResponse struct {
+	Releases []struct {
+		ReleaseGroup directSearchReleaseGroup `json:"release-group"`
+		ArtistCredit []struct {
+			Name   string `json:"name"`
+			Artist struct {
+				Name string `json:"name"`
+			} `json:"artist"`
+		} `json:"artist-credit"`
+	} `json:"releases"`
+}
+
+// SearchReleases implements ReleaseSearcher: the barcode when there is one, else the catalogue number.
+func (d direct) SearchReleases(ctx context.Context, query ReleaseQuery, limit int) ([]ReleaseGroupMatch, error) {
+	var lucene string
+	switch {
+	case query.Barcode != "":
+		lucene = "barcode:" + luceneQuoted(query.Barcode)
+	case query.CatalogNumber != "":
+		lucene = "catno:" + luceneQuoted(query.CatalogNumber)
+	default:
+		return nil, nil
+	}
+	requestURL := fmt.Sprintf("%s/release/?query=%s&fmt=json&limit=%d", d.baseURL, url.QueryEscape(lucene), limit)
+	var parsed directReleaseSearchResponse
+	if err := getJSON(ctx, d.client, requestURL, &parsed); err != nil {
+		return nil, fmt.Errorf("musicbrainz: search releases %+v: %w", query, err)
+	}
+	var matches []ReleaseGroupMatch
+	seen := map[string]bool{}
+	for _, release := range parsed.Releases {
+		group := release.ReleaseGroup
+		if group.ID == "" || seen[group.ID] {
+			continue
+		}
+		seen[group.ID] = true
+		var creditNames, artistNames []string
+		for _, credit := range release.ArtistCredit {
+			creditNames = append(creditNames, credit.Name)
+			artistNames = append(artistNames, credit.Artist.Name)
+		}
+		matches = append(matches, ReleaseGroupMatch{
+			ReleaseGroup: ReleaseGroup{
+				MBID: group.ID, Title: group.Title, PrimaryType: group.PrimaryType,
+				SecondaryTypes: group.SecondaryTypes, FirstReleaseDate: group.FirstReleaseDate,
+			},
+			ArtistCredit: strings.Join(creditNames, " & "),
+			ArtistNames:  strings.Join(artistNames, " & "),
+		})
+	}
+	return matches, nil
+}
+
 // directRecordingSearchResponse is ws/2's recording search JSON, verified live 2026-09-17.
 type directRecordingSearchResponse struct {
 	Recordings []directRecording `json:"recordings"`

@@ -38,6 +38,9 @@ func ReadLocalTrack(tags mediatool.Tags, measured mediatool.Measured, relPath st
 		Duration:      measured.Duration,
 		RecordingMBID: ReadMBIDs(tags).Recording,
 		FolderAlbum:   folder.Album,
+		Barcode:       barcodeDigits(tags.First("barcode", "upc")),
+		CatalogNumber: strings.TrimSpace(tags.First("catalognumber", "catalog", "labelno")),
+		TrackTotal:    trackTotal(tags.First("tracknumber", "track"), tags.First("tracktotal", "totaltracks")),
 	}
 	if local.Track == 0 {
 		local.Disc, local.Track = stemDisc, stemTrack
@@ -46,6 +49,25 @@ func ReadLocalTrack(tags mediatool.Tags, measured mediatool.Measured, relPath st
 		local.Year = folder.Year
 	}
 	return local
+}
+
+// barcodeDigits is a barcode tag's digits when they make a plausible code (8 to 14), else empty.
+func barcodeDigits(value string) string {
+	digits := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, value)
+	if len(digits) < 8 || len(digits) > 14 {
+		return ""
+	}
+	return digits
+}
+
+// barcodeKey is a barcode without its leading zeros, so a UPC and the same code as an EAN compare equal.
+func barcodeKey(value string) string {
+	return strings.TrimLeft(barcodeDigits(value), "0")
 }
 
 // claimFrom prefers the tag, then each parsed value in turn; a value that says nothing is passed

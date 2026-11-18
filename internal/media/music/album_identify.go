@@ -33,6 +33,7 @@ const (
 	RecallSibling         = "sibling"
 	RecallAlbumTags       = "album_tags"
 	RecallRecordingSearch = "recording_search"
+	RecallBarcode         = "barcode"
 )
 
 // AlbumLookup is what album identification asks the metadata sources; musicbrainz.Provider implements it.
@@ -41,6 +42,7 @@ type AlbumLookup interface {
 	SearchRecordings(ctx context.Context, priority musicbrainz.Priority, artist, title string, limit int) ([]musicbrainz.RecordingMatch, error)
 	Album(ctx context.Context, priority musicbrainz.Priority, releaseGroupMBID, releaseMBID string) (musicbrainz.ReleaseGroup, musicbrainz.Release, error)
 	Releases(ctx context.Context, priority musicbrainz.Priority, releaseGroupMBID string) ([]musicbrainz.Release, error)
+	SearchReleases(ctx context.Context, priority musicbrainz.Priority, query musicbrainz.ReleaseQuery, limit int) ([]musicbrainz.ReleaseGroupMatch, error)
 }
 
 // recalled is one release group to score, and the credit to compare the folder's artist against.
@@ -217,24 +219,44 @@ func recallAlbums(
 	if searchFolder {
 		queries = append(queries, folder)
 	}
-	answers := make([]albumSearch, len(queries))
-	parallel.Do(ctx, len(queries), albumFetchConcurrency, func(ctx context.Context, index int) error {
+	// What is printed on the release names it more exactly than any title; a catalogue number is reused across
+	// labels, so it only counts when there is no barcode.
+	printed := musicbrainz.ReleaseQuery{Barcode: consensusString(locals, func(t LocalTrack) string { return t.Barcode })}
+	if printed.Barcode == "" {
+		printed.CatalogNumber = consensusString(locals, func(t LocalTrack) string { return t.CatalogNumber })
+	}
+	searchPrinted := printed != musicbrainz.ReleaseQuery{}
+	answers := make([]albumSearch, len(queries)+1)
+	parallel.Do(ctx, len(answers), albumFetchConcurrency, func(ctx context.Context, index int) error {
+		if index == len(queries) {
+			if searchPrinted {
+				answers[index].matches, answers[index].err = lookup.SearchReleases(ctx, priority, printed, albumSearchLimit)
+			}
+			return nil
+		}
 		answers[index].matches, answers[index].err = lookup.Search(ctx, priority, artist.Value, queries[index], albumSearchLimit)
 		return nil
 	})
-	addAnswer := func(answer albumSearch) {
+	addAnswer := func(answer albumSearch, recall string) {
 		if answer.err != nil {
 			*failures = append(*failures, answer.err)
 		}
 		for _, found := range answer.matches {
 			add(recalled{
 				group: found.ReleaseGroup, credit: found.ArtistCredit, names: found.ArtistNames,
-				recall: RecallAlbumTags, known: true,
+				recall: recall, known: true,
 			})
 		}
 	}
+	if printed.Barcode != "" {
+		addAnswer(answers[len(queries)], RecallBarcode)
+	}
 	for index := range titles {
-		addAnswer(answers[index])
+		addAnswer(answers[index], RecallAlbumTags)
+	}
+
+	if printed.CatalogNumber != "" {
+		addAnswer(answers[len(queries)], RecallAlbumTags)
 	}
 
 	tagsRecalledEnough := artist.present() && album.present() && len(groups)-len(seeds) >= 2
@@ -249,7 +271,7 @@ func recallAlbums(
 	}
 
 	if searchFolder {
-		addAnswer(answers[len(titles)])
+		addAnswer(answers[len(titles)], RecallAlbumTags)
 	}
 	return groups
 }

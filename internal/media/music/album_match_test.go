@@ -536,3 +536,42 @@ func TestDecideAlbum_TheTagAsWrittenNamesTheRelease(t *testing.T) {
 		t.Errorf("decision = %s %q, want identified rg-deep", decision.Outcome, bestReleaseGroup(decision))
 	}
 }
+
+func withBarcode(release musicbrainz.Release, barcode string) musicbrainz.Release {
+	release.Barcode = barcode
+	return release
+}
+
+func TestDecideAlbum_TheFoldersBarcodePicksTheEditionOverTheEarlierDate(t *testing.T) {
+	early := withBarcode(releaseOf("rel-early", "Kebilegev Bibihi", "official", "1994-03-01", traumaTracks), "0001234567890")
+	late := withBarcode(releaseOf("rel-late", "Kebilegev Bibihi", "official", "2009-05-01", traumaTracks), "012345678905")
+	locals := folderOf(traumaTracks)
+	for i := range locals {
+		locals[i].Barcode = "12345678905"
+	}
+	decision := music.DecideAlbum(locals, []music.AlbumCandidate{
+		candidateOf("rg-album", "Album", nil, early), candidateOf("rg-album", "Album", nil, late),
+	})
+	if decision.Best == nil || decision.Best.Candidate.Release.MBID != "rel-late" {
+		t.Fatalf("best = %+v, want the release whose barcode the files carry", decision.Best)
+	}
+}
+
+func TestDecideAlbum_TheTrackTotalSeparatesTheTwelveTrackEditionFromTheNineTrackOne(t *testing.T) {
+	twelve := make([]trackSpec, 0, 12)
+	for i := range 12 {
+		twelve = append(twelve, trackSpec{fmt.Sprintf("Song %c", 'A'+i), 200})
+	}
+	nine := slices.Clone(twelve[:9])
+	locals := folderOf(twelve[:8])
+	for i := range locals {
+		locals[i].TrackTotal = 12
+	}
+	decision := music.DecideAlbum(locals, []music.AlbumCandidate{
+		candidateOf("rg-album", "Album", nil, releaseOf("rel-aaa-9", "Kebilegev Bibihi", "official", "1994-01-01", nine)),
+		candidateOf("rg-album", "Album", nil, releaseOf("rel-zzz-12", "Kebilegev Bibihi", "official", "1995-01-01", twelve)),
+	})
+	if decision.Best == nil || decision.Best.Candidate.Release.MBID != "rel-zzz-12" {
+		t.Fatalf("best = %+v, want the 12-track release", decision.Best)
+	}
+}
