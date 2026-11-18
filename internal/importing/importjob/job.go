@@ -11,7 +11,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -893,6 +895,22 @@ func (j *Job) importerFor(categoryID *int64) (importbatch.Importer, string) {
 	return j.importers[mediaType], mediaType
 }
 
+// tagEvidenceFor is the importer that reads tags for this walk: the category's, or for a Best match any library's
+// type that does (a folder of tagged audio is grouped by album whichever library it ends in).
+func (j *Job) tagEvidenceFor(payload Payload) importbatch.TagEvidence {
+	if payload.BestMatch && payload.CategoryID == nil {
+		for _, mediaType := range slices.Sorted(maps.Keys(j.importers)) {
+			if tagged, ok := j.importers[mediaType].(importbatch.TagEvidence); ok {
+				return tagged
+			}
+		}
+		return nil
+	}
+	importer, _ := j.importerFor(payload.CategoryID)
+	tagged, _ := importer.(importbatch.TagEvidence)
+	return tagged
+}
+
 // walkOptions are the inspection options of a category's media type, or the loosest of every library's for a Best
 // match import: the size floor, whether ebooks count, and the files asked for.
 func (j *Job) walkOptions(payload Payload) inspect.WalkOptions {
@@ -901,6 +919,11 @@ func (j *Job) walkOptions(payload Payload) inspect.WalkOptions {
 		options.MediaSizeFloorBytes, options.Books = j.loosestWalk(j.routableLibraries())
 	} else if importer, _ := j.importerFor(payload.CategoryID); importer != nil {
 		options.MediaSizeFloorBytes, options.Books = typeWalk(importer)
+	}
+	if tagged := j.tagEvidenceFor(payload); tagged != nil {
+		options.TagsFor = func(ctx context.Context, relPaths []string) (inspect.TagReader, error) {
+			return tagged.InspectTags(ctx, payload.SourcePath, relPaths)
+		}
 	}
 	if len(payload.Only) > 0 {
 		options.Only = make(map[string]bool, len(payload.Only))

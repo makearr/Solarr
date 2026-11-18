@@ -81,3 +81,26 @@ func TestBuildInspectTagReader_AFailedProbeIsNotFoundNotEmpty(t *testing.T) {
 		t.Errorf("a failed probe = %+v, want Found=false -- not evidence of an untagged file", got)
 	}
 }
+
+func TestImporterInspectTags_ReadsOnlyAudioAndNothingWhenThereIsNone(t *testing.T) {
+	tool := fakeTagTool{byPath: map[string]mediatool.Probe{
+		"/in/01.flac": {Tags: mediatool.Tags{"ALBUM": "Wuvo", "ALBUMARTIST": "Cibiz M"}},
+	}}
+	importer := music.NewImporter(music.ImporterConfig{Tool: tool})
+
+	reader, err := importer.InspectTags(t.Context(), "/in", []string{"01.flac", "cover.jpg", "movie.mkv"})
+	if err != nil {
+		t.Fatalf("InspectTags: %v", err)
+	}
+	if got := reader("01.flac"); !got.Found || got.Album != "Wuvo" {
+		t.Errorf("audio file = %+v, want its tags", got)
+	}
+	if got := reader("movie.mkv"); got.Found {
+		t.Errorf("video file = %+v, want unread", got)
+	}
+
+	none, err := importer.InspectTags(t.Context(), "/in", []string{"movie.mkv"})
+	if err != nil || none != nil {
+		t.Errorf("no audio: reader %v, error %v; want neither, so the walk probes nothing", none != nil, err)
+	}
+}

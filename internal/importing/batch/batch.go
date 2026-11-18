@@ -135,6 +135,12 @@ type SizeFloor interface {
 	MediaSizeFloorBytes() int64
 }
 
+// TagEvidence is an Importer that can read the embedded tags of a folder's files, so the walk groups them by album
+// instead of by their names (ADR-48); files it has no use for are left unread.
+type TagEvidence interface {
+	InspectTags(ctx context.Context, root string, relPaths []string) (inspect.TagReader, error)
+}
+
 // BookFiles is an Importer whose walk counts ebook files as media: a book library's.
 type BookFiles interface {
 	TakesBookFiles() bool

@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/platform/filekind"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 	"github.com/makearr/Solarr/internal/platform/parallel"
 )
@@ -55,6 +56,7 @@ type Importer struct {
 var (
 	_ batch.Importer      = Importer{}
 	_ batch.HeldCommitter = Importer{}
+	_ batch.TagEvidence   = Importer{}
 )
 
 // NewImporter builds one.
@@ -64,6 +66,20 @@ func NewImporter(config ImporterConfig) Importer {
 		logger = slog.Default()
 	}
 	return Importer{config: config, logger: logger}
+}
+
+// InspectTags implements batch.TagEvidence: the tags of the audio files among relPaths, read in one batch.
+func (i Importer) InspectTags(ctx context.Context, root string, relPaths []string) (inspect.TagReader, error) {
+	audio := make([]string, 0, len(relPaths))
+	for _, relPath := range relPaths {
+		if filekind.Of(relPath) == filekind.Audio {
+			audio = append(audio, relPath)
+		}
+	}
+	if len(audio) == 0 {
+		return nil, nil
+	}
+	return BuildInspectTagReader(ctx, i.config.Tool, root, audio)
 }
 
 // identifyParallelism bounds IDENTIFY's fan-out across one batch's units; writes stay with the import job.
