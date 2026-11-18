@@ -8,3 +8,10 @@
 {"input":"Invented Artist - Some Title Deluxe Edition 2019 FLAC","artist":"Invented Artist","album":"Some Title","year":2019,"format":"flac","lossless":true,"edition":"deluxe edition","min_confidence":0.9}
 {"input":"Invented Artist-Some Title EP-WEB-2020-GRP","artist":"Invented Artist","album":"Some Title EP","year":2020,"source":"web","release_group":"GRP","min_confidence":0.9}
 {"input":"Invented Artist-The Grey Album-WEB-FLAC-2003-GRP","artist":"Invented Artist","album":"The Grey Album","year":2003,"format":"flac","lossless":true,"source":"web","release_group":"GRP","min_confidence":0.9}
+{"input":"Invented Artist - Some Title (2019) [320kbps]","artist":"Invented Artist","album":"Some Title","year":2019,"bitrate_kbps":320,"bitrate_mode":"cbr","min_confidence":0.9}
+{"input":"Invented Artist - Some Title (2019) [M4A]","artist":"Invented Artist","album":"Some Title","year":2019,"container":"m4a","min_confidence":0.9}
+{"input":"Invented Artist - Some Title (2019) [DSD64]","artist":"Invented Artist","album":"Some Title","year":2019,"format":"dsd","lossless":true,"min_confidence":0.9}
+{"input":"Invented Artist - Some Title (2019) [FLAC 24-bit/96kHz]","artist":"Invented Artist","album":"Some Title","year":2019,"format":"flac","lossless":true,"bit_depth":24,"sample_rate":96000,"min_confidence":0.9}
+{"input":"Invented Artist - Some Title (2019) [Hi-Res FLAC]","artist":"Invented Artist","album":"Some Title","year":2019,"format":"flac","lossless":true,"min_confidence":0.9}
+{"input":"2019 - Some Title","album":"Some Title","year":2019,"min_confidence":0.2,"max_confidence":0.5}
+{"input":"2019 - Some Title [FLAC]","album":"Some Title","year":2019,"format":"flac","lossless":true,"min_confidence":0.2,"max_confidence":0.5}

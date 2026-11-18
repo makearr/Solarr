@@ -55,8 +55,11 @@ var (
 	// hiResPairRe is the scene's bare "-24-192-" for 24-bit/192kHz: two adjacent
 	// numbers that mean nothing apart and are each ambiguous alone.
 	hiResPairRe = regexp.MustCompile(`([-_ \[(])(8|16|24|32)([-_ ])(44|48|88|96|176|192|352)([-_ \])])`)
-	bracketRe   = regexp.MustCompile(`\(([^()]*)\)|\[([^\[\]]*)\]|\{([^{}]*)\}`)
-	splitDashRe = regexp.MustCompile(`\s+-\s+`)
+	// bitDepthSpelledRe reads "24-bit" and "24 bit" as the "24bit" the vocabulary knows; hiResWordRe "Hi-Res" as one word.
+	bitDepthSpelledRe = regexp.MustCompile(`(?i)\b(8|16|24|32)[- ]bit\b`)
+	hiResWordRe       = regexp.MustCompile(`(?i)\bhi-res\b`)
+	bracketRe         = regexp.MustCompile(`\(([^()]*)\)|\[([^\[\]]*)\]|\{([^{}]*)\}`)
+	splitDashRe       = regexp.MustCompile(`\s+-\s+`)
 	// dashRunRe collapses two or more dashes left adjacent by noise-bracket
 	// removal (a bracket whose own contents contain a dash, e.g. "[WEB-AAC]",
 	// leaves "Love-" + " " + "-" + " " + "-TDS" behind) into one -- otherwise
@@ -78,7 +81,10 @@ var bareBitrates = map[string]int{"128": 128, "160": 160, "192": 192, "224": 224
 // losslessFormats and lossyFormats map a recognised codec token to its
 // canonical name -- "tr24" is a scene alias for FLAC (Lidarr's CodecRegex
 // treats it identically), so it aliases rather than storing "tr24" literally.
-var losslessFormats = map[string]string{"flac": "flac", "alac": "alac", "ape": "ape", "wav": "wav", "tr24": "flac"}
+var losslessFormats = map[string]string{
+	"flac": "flac", "alac": "alac", "ape": "ape", "wav": "wav", "tr24": "flac",
+	"dsd": "dsd", "dsd64": "dsd", "dsd128": "dsd", "dsd256": "dsd", "dsf": "dsd", "dff": "dsd",
+}
 var lossyFormats = map[string]string{"mp3": "mp3", "aac": "aac", "ogg": "ogg", "opus": "opus", "wma": "wma"}
 
 // containerFormats map a recognised container token to its canonical name --
@@ -121,6 +127,9 @@ var bracketOnlyWords = map[string]bool{
 	"lossless": true, "promo": true, "itunes": true,
 }
 
+// noiseWords are marketing or container words that are debris in a bracket but record nothing.
+var noiseWords = map[string]bool{"hires": true, "mqa": true, "iso": true}
+
 func init() {
 	for word := range editionModifiers {
 		editionWords[word] = true
@@ -160,6 +169,8 @@ func collapseSpaces(s string) string {
 // scene names (ATTRIBUTION.md records why).
 func Parse(title string) Result {
 	releaseTitle := removeFileExtension(title)
+	releaseTitle = bitDepthSpelledRe.ReplaceAllString(releaseTitle, "${1}bit")
+	releaseTitle = hiResWordRe.ReplaceAllString(releaseTitle, "hires")
 	dotted := false
 	if spaced := dotsToSpaces(releaseTitle); spaced != releaseTitle {
 		releaseTitle, dotted = spaced, true
@@ -208,6 +219,11 @@ func Parse(title string) Result {
 
 	artist = collapseSpaces(artist)
 	album := collapseSpaces(resolveAlbum(albumSegments, group, claims))
+	// "2019 - Some Title" is an album folder named by its year, not an artist called 2019.
+	if yearRe.MatchString(artist) && album != "" && claims.year == 0 {
+		claims.year, _ = strconv.Atoi(artist)
+		artist = ""
+	}
 
 	identity := Identity{Artist: artist, Album: album, Year: claims.year, YearEnd: claims.yearEnd}
 	if variousArtistsNames[strings.ToLower(strings.TrimSpace(artist))] {
@@ -320,6 +336,9 @@ func isNoise(phrase string, claims *claimSet) bool {
 					if claims.edition == "" {
 						claims.edition = lower
 					}
+				}
+				if noiseWords[word] {
+					noise = true
 				}
 			}
 		}

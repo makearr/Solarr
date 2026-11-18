@@ -179,7 +179,8 @@ func releaseGroupTag(title string) string {
 	}
 	if m := releaseGroupBracketRe.FindStringSubmatchIndex(title); m != nil {
 		value := title[m[2]:m[3]]
-		if !codecWordExact[strings.ToLower(value)] {
+		// A bracket naming a format or bitrate ("[320kbps]", "[M4A]", "[DSD64]") is a claim, not a group.
+		if !codecWordExact[strings.ToLower(value)] && !isVocabWord(strings.ToLower(value)) {
 			candidates = append(candidates, candidate{m[2], m[3], value})
 		}
 	}
