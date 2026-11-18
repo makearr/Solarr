@@ -217,10 +217,10 @@ func TestParse_SceneSourceAbbreviationsResolveToCanonicalSource(t *testing.T) {
 }
 
 // A caller that knows the artist keeps a hyphen inside the artist's name out of the split.
-func TestParseAlbumText_ATitleAfterAKnownArtistIsReadWithoutSplittingTheArtist(t *testing.T) {
-	result := parse.ParseAlbumText("Kay-Zed", "The Grey Album-CD-FLAC-2003-GRP")
+func TestAlbumText_ATitleAfterAKnownArtistIsReadWithoutSplittingTheArtist(t *testing.T) {
+	result := parse.AlbumText("Kay-Zed", "The Grey Album-CD-FLAC-2003-GRP")
 	want := parse.Identity{Artist: "Kay-Zed", Album: "The Grey Album", Year: 2003}
 	if result.Identity != want || result.Attributes.Format != "flac" || result.Attributes.ReleaseGroup != "GRP" {
-		t.Errorf("ParseAlbumText = %+v / %+v, want %+v, flac, GRP", result.Identity, result.Attributes, want)
+		t.Errorf("AlbumText = %+v / %+v, want %+v, flac, GRP", result.Identity, result.Attributes, want)
 	}
 }

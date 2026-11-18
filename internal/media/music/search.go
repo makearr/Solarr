@@ -389,7 +389,7 @@ func evaluateRawItems(
 		parsed := parse.Parse(raw.Title)
 		// A name that starts with the wanted artist is split there, whatever dashes the artist's own name holds.
 		if rest, found := afterWantedArtist(raw.Title, wantedArtist); found && !strings.EqualFold(parsed.Identity.Artist, wantedArtist) {
-			parsed = parse.ParseAlbumText(wantedArtist, rest)
+			parsed = parse.AlbumText(wantedArtist, rest)
 		}
 		if !sameArtist(parsed.Identity.Artist, wantedArtist) || videoRelease(raw.Title) {
 			continue

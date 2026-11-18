@@ -171,9 +171,9 @@ func Parse(title string) Result {
 	return parseTitle(title, "")
 }
 
-// ParseAlbumText parses what follows an artist the caller already knows (a search for that artist found the name
+// AlbumText parses what follows an artist the caller already knows (a search for that artist found the name
 // starting with it), so a hyphen inside the artist's own name cannot end it early.
-func ParseAlbumText(artist, rest string) Result {
+func AlbumText(artist, rest string) Result {
 	return parseTitle(rest, artist)
 }
 
