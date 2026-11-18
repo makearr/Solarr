@@ -326,6 +326,73 @@ func TestManualCommitter_CommitHeldPlacesTheCorrectSiblingWhenUnitsShareADirecto
 	}
 }
 
+// sharedFolderSession walks a flat folder of two albums and holds both as units sharing one folder.
+func sharedFolderSession(t *testing.T) (fx *fixture, units []library.Unit) {
+	t.Helper()
+	const otherReleaseGroupMBID = "8c08f153-7820-4e0d-89ba-12c034eb022a"
+	fx = newFixture(t)
+	for _, name := range []string{"01 First", "02 Second", "01 Third", "02 Fourth"} {
+		writeFile(t, fx.fsys, filepath.Join(root, "Messy", name+".flac"), 200*1024)
+		fx.clock.Advance(time.Minute)
+	}
+	fx.tool.byPath[filepath.Join(root, "Messy/01 First.flac")] = mediatool.Tags{"musicbrainz_releasegroupid": releaseGroupMBID}
+	fx.tool.byPath[filepath.Join(root, "Messy/01 Third.flac")] = mediatool.Tags{"musicbrainz_releasegroupid": otherReleaseGroupMBID}
+	catID := int64(7)
+	if err := fx.run(t, fx.job(t, 0.99), importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual, CategoryID: &catID}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	done, _ := fx.sessions().List(t.Context(), library.ImportDone, false)
+	units, _ = fx.sessions().ListUnits(t.Context(), done[0].ID)
+	if len(units) != 2 || units[0].RelPath != units[1].RelPath {
+		t.Fatalf("units = %+v, want 2 sharing one rel_path (test setup)", units)
+	}
+	return fx, units
+}
+
+// A held unit is found by the files it had, not by its place in a new split: committed in reverse order, each still gets its own.
+func TestManualCommitter_CommitHeldFindsASharedFolderUnitByItsFilesInAnyOrder(t *testing.T) {
+	fx, units := sharedFolderSession(t)
+	committer := &fakeCommitter{workID: seedWork(t, fx)}
+	manual := manualCommitter(fx, committer)
+	for _, unit := range []library.Unit{units[1], units[0]} {
+		if _, err := manual.CommitHeld(t.Context(), unit.ID); err != nil {
+			t.Fatalf("CommitHeld(%d): %v", unit.ID, err)
+		}
+	}
+	if !slices.Equal(committer.calls[0].mediaPaths, []string{"Messy/01 Third.flac", "Messy/02 Fourth.flac"}) ||
+		!slices.Equal(committer.calls[1].mediaPaths, []string{"Messy/01 First.flac", "Messy/02 Second.flac"}) {
+		t.Errorf("calls = %+v, want each unit its own files", committer.calls)
+	}
+}
+
+// Committing one sibling by a transfer that removes its files must not make the other uncommittable.
+func TestManualCommitter_CommitHeldSurvivesASiblingBeingMovedAway(t *testing.T) {
+	fx, units := sharedFolderSession(t)
+	for _, name := range []string{"01 First", "02 Second"} {
+		if err := fx.fsys.Remove(filepath.Join(root, "Messy", name+".flac")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	committer := &fakeCommitter{workID: seedWork(t, fx)}
+	if _, err := manualCommitter(fx, committer).CommitHeld(t.Context(), units[1].ID); err != nil {
+		t.Fatalf("CommitHeld: %v", err)
+	}
+	if !slices.Equal(committer.calls[0].mediaPaths, []string{"Messy/01 Third.flac", "Messy/02 Fourth.flac"}) {
+		t.Errorf("mediaPaths = %v, want the second album's files", committer.calls[0].mediaPaths)
+	}
+}
+
+func TestManualCommitter_CommitHeldRefusesASharedFolderUnitWhoseFileIsGone(t *testing.T) {
+	fx, units := sharedFolderSession(t)
+	if err := fx.fsys.Remove(filepath.Join(root, "Messy/02 Fourth.flac")); err != nil {
+		t.Fatal(err)
+	}
+	_, err := manualCommitter(fx, &fakeCommitter{workID: seedWork(t, fx)}).CommitHeld(t.Context(), units[1].ID)
+	if !errors.Is(err, importjob.ErrUnitChanged) {
+		t.Errorf("err = %v, want ErrUnitChanged", err)
+	}
+}
+
 // A session's own placements were already undone by a revert (ClearImportUnitPlacement
 // does not touch decision, only work_id/edition_id) -- CommitHeld must not
 // resurrect anything into it.

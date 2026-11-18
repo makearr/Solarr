@@ -431,6 +431,21 @@ func (q *Queries) InsertImportUnitFile(ctx context.Context, arg InsertImportUnit
 	return err
 }
 
+const insertImportUnitMedia = `-- name: InsertImportUnitMedia :exec
+INSERT INTO import_unit_media (unit_id, rel_path, size_bytes) VALUES (?, ?, ?)
+`
+
+type InsertImportUnitMediaParams struct {
+	UnitID    int64
+	RelPath   string
+	SizeBytes int64
+}
+
+func (q *Queries) InsertImportUnitMedia(ctx context.Context, arg InsertImportUnitMediaParams) error {
+	_, err := q.db.ExecContext(ctx, insertImportUnitMedia, arg.UnitID, arg.RelPath, arg.SizeBytes)
+	return err
+}
+
 const listImportSessions = `-- name: ListImportSessions :many
 SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
@@ -672,6 +687,33 @@ func (q *Queries) ListImportUnitFilesForSession(ctx context.Context, sessionID i
 			&i.LibraryPathID,
 			&i.TransferMethod,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listImportUnitMedia = `-- name: ListImportUnitMedia :many
+SELECT unit_id, rel_path, size_bytes FROM import_unit_media WHERE unit_id = ? ORDER BY rel_path
+`
+
+func (q *Queries) ListImportUnitMedia(ctx context.Context, unitID int64) ([]ImportUnitMedium, error) {
+	rows, err := q.db.QueryContext(ctx, listImportUnitMedia, unitID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ImportUnitMedium{}
+	for rows.Next() {
+		var i ImportUnitMedium
+		if err := rows.Scan(&i.UnitID, &i.RelPath, &i.SizeBytes); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

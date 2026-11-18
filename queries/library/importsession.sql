@@ -247,3 +247,9 @@ SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
        started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at, preview
 FROM import_session WHERE source_path = ? AND state = ? ORDER BY started_at DESC, id DESC;
+
+-- name: InsertImportUnitMedia :exec
+INSERT INTO import_unit_media (unit_id, rel_path, size_bytes) VALUES (?, ?, ?);
+
+-- name: ListImportUnitMedia :many
+SELECT unit_id, rel_path, size_bytes FROM import_unit_media WHERE unit_id = ? ORDER BY rel_path;

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -632,6 +633,10 @@ func (j *Job) commitCluster(
 		routes = j.routeBySession(session.CategoryID, batch)
 	}
 
+	sharing := map[string]int{}
+	for _, route := range routes {
+		sharing[route.unit.Directory]++
+	}
 	newUnits := make([]library.NewUnit, len(routes))
 	for i, route := range routes {
 		if route.importer == nil && route.skip == "" {
@@ -648,6 +653,9 @@ func (j *Job) commitCluster(
 		newUnits[i] = library.NewUnit{
 			RelPath: route.unit.Directory, Shape: string(inspect.ShapeOf(route.unit)),
 			FileCount: int64(len(route.unit.Media)), Bytes: bytes, EvidenceJSON: string(evidenceJSON), CategoryID: route.own,
+		}
+		if sharing[route.unit.Directory] > 1 {
+			newUnits[i].Media = unitMedia(route.unit)
 		}
 	}
 	ids, err := j.sessions.AddUnits(ctx, sessionID, newUnits)
@@ -718,6 +726,15 @@ func (j *Job) commitCluster(
 	}
 	j.publishProgress(ctx, sessionID, importPhaseWalking, batch[len(batch)-1].Directory)
 	return nil
+}
+
+// unitMedia are a unit's media files with paths relative to its own folder.
+func unitMedia(unit inspect.Unit) []library.UnitMedia {
+	files := make([]library.UnitMedia, len(unit.Media))
+	for i, file := range unit.Media {
+		files[i] = library.UnitMedia{RelPath: strings.TrimPrefix(strings.TrimPrefix(file.RelPath, unit.Directory), "/"), SizeBytes: file.SizeBytes}
+	}
+	return files
 }
 
 // abandonUnrecorded handles a group whose import failed. When nothing of the cluster is recorded yet, every unit row goes so

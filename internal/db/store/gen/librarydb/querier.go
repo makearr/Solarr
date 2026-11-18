@@ -516,6 +516,7 @@ type Querier interface {
 	// library_path_id is nullable: 0029's own migration comment explains why
 	// (which path this unit's own placement created, when it can be known).
 	InsertImportUnitFile(ctx context.Context, arg InsertImportUnitFileParams) error
+	InsertImportUnitMedia(ctx context.Context, arg InsertImportUnitMediaParams) error
 	// One row per call, looped inside one transaction by the caller (the same
 	// shape ImportSessions.AddUnits already uses) -- modernc's sqlite driver
 	// does not support :copyfrom (pgx/mysql only).
@@ -723,6 +724,7 @@ type Querier interface {
 	ListImportSessionsForAcquisition(ctx context.Context, acquisitionID sql.NullInt64) ([]ImportSession, error)
 	ListImportUnitExtrasForSession(ctx context.Context, sessionID int64) ([]ImportUnitExtra, error)
 	ListImportUnitFilesForSession(ctx context.Context, sessionID int64) ([]ListImportUnitFilesForSessionRow, error)
+	ListImportUnitMedia(ctx context.Context, unitID int64) ([]ImportUnitMedium, error)
 	ListImportUnits(ctx context.Context, sessionID int64) ([]ImportUnit, error)
 	// Cursor-paginated, unlike ListImportUnits above: a session's own unit count
 	// is not bounded the way a session count is (Invariant 22 is exactly the

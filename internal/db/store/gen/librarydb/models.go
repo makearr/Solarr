@@ -519,6 +519,12 @@ type ImportUnitFile struct {
 	TransferMethod sql.NullString
 }
 
+type ImportUnitMedium struct {
+	UnitID    int64
+	RelPath   string
+	SizeBytes int64
+}
+
 type LibraryPath struct {
 	ID            int64
 	MediaObjectID int64

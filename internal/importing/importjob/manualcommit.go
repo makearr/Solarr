@@ -2,6 +2,7 @@ package importjob
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -17,8 +18,8 @@ import (
 
 // ManualCommitter is what a person does with a session's units the walk did not place: commit one it held (as its
 // best guess, or as a work named), commit every held one, and place what was decided before the session had a
-// library. import_unit keeps no file list, so each re-walks the unit's own folder (reconstructUnit) and hands it to
-// its library's media type, which places it as that type does.
+// library. Units sharing a folder keep their media files; the others re-walk their own folder (reconstructUnit). Either
+// way the unit goes to its library's media type, which places it as that type does.
 type ManualCommitter struct {
 	fsys     fsx.FS
 	sessions library.ImportSessions
@@ -330,6 +331,14 @@ func (m ManualCommitter) reconstructUnit(ctx context.Context, root string, unit 
 	}
 
 	var reconstructed inspect.Unit
+	stored, err := m.sessions.ListUnitMedia(ctx, unit.ID)
+	if err != nil {
+		return inspect.Unit{}, fmt.Errorf("importjob: list media of unit %d: %w", unit.ID, err)
+	}
+	if len(stored) > 0 {
+		// Found by what it was when inspected, never by its position in a new split of the folder.
+		return m.storedUnit(root, unit, stored, floorBytes, books)
+	}
 	if len(sharing) <= 1 {
 		found, err := inspect.Run(ctx, m.fsys, root, inspect.Options{MediaSizeFloorBytes: floorBytes, Books: books})
 		if errors.Is(err, fs.ErrNotExist) {
@@ -369,5 +378,31 @@ func (m ManualCommitter) reconstructUnit(ctx context.Context, root string, unit 
 	// restore the real rel_path, which CommitUnit's own error messages and
 	// its directory-name naming fallback both read.
 	reconstructed.Directory = unit.RelPath
+	return reconstructed, nil
+}
+
+// storedUnit rebuilds a unit that shares its folder from the media files kept for it: each must still be there at the
+// size it had. The folder's other files (artwork, sidecars) are the ones no unit owns.
+func (m ManualCommitter) storedUnit(root string, unit library.Unit, stored []library.UnitMedia, floorBytes int64, books bool) (inspect.Unit, error) {
+	var evidence inspect.Evidence
+	if err := json.Unmarshal([]byte(unit.EvidenceJSON), &evidence); err != nil {
+		return inspect.Unit{}, fmt.Errorf("importjob: decode evidence of unit %d: %w", unit.ID, err)
+	}
+	reconstructed := inspect.Unit{Directory: unit.RelPath, Evidence: evidence}
+	for _, file := range stored {
+		info, err := m.fsys.Stat(path.Join(root, file.RelPath))
+		if err != nil {
+			return inspect.Unit{}, fmt.Errorf("importjob: unit %d: %s is gone: %w", unit.ID, file.RelPath, ErrUnitChanged)
+		}
+		if info.Size != file.SizeBytes {
+			return inspect.Unit{}, fmt.Errorf("importjob: unit %d: %s changed size: %w", unit.ID, file.RelPath, ErrUnitChanged)
+		}
+		reconstructed.Media = append(reconstructed.Media, inspect.File{
+			RelPath: file.RelPath, SizeBytes: info.Size, ModTime: info.ModTime, Class: inspect.ClassMedia,
+		})
+	}
+	if folder, err := inspect.SplitDirectory(m.fsys, root, nil, floorBytes, books); err == nil && len(folder) > 0 {
+		reconstructed.Other = folder[0].Other
+	}
 	return reconstructed, nil
 }

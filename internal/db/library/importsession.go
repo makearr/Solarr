@@ -159,6 +159,14 @@ type NewUnit struct {
 	Reason       string
 	// CategoryID is the library a Best match import routed it to; nil for one routed by its session.
 	CategoryID *int64
+	// Media are the unit's media files, kept when it shares its folder with other units; empty keeps none.
+	Media []UnitMedia
+}
+
+// UnitMedia is one media file of a unit, its path relative to the unit's own folder.
+type UnitMedia struct {
+	RelPath   string
+	SizeBytes int64
 }
 
 // Create starts one session in ImportInspecting, with no units yet.
@@ -208,6 +216,13 @@ func (s ImportSessions) AddUnits(ctx context.Context, sessionID int64, units []N
 				return fmt.Errorf("insert unit %s: %w", unit.RelPath, err)
 			}
 			ids[i] = row.ID
+			for _, file := range unit.Media {
+				if err := queries.InsertImportUnitMedia(ctx, librarydb.InsertImportUnitMediaParams{
+					UnitID: row.ID, RelPath: file.RelPath, SizeBytes: file.SizeBytes,
+				}); err != nil {
+					return fmt.Errorf("insert media of unit %s: %w", unit.RelPath, err)
+				}
+			}
 		}
 		return queries.RecomputeImportSessionCounts(ctx, sessionID)
 	})
@@ -672,6 +687,19 @@ func (s ImportSessions) ListBySourcePath(ctx context.Context, sourcePath, state 
 		sessions[i] = sessionFromRow(row)
 	}
 	return sessions, nil
+}
+
+// ListUnitMedia answers the media files kept for a unit; none for a unit that shares no folder or predates them.
+func (s ImportSessions) ListUnitMedia(ctx context.Context, unitID int64) ([]UnitMedia, error) {
+	rows, err := librarydb.New(s.store.Read()).ListImportUnitMedia(ctx, unitID)
+	if err != nil {
+		return nil, fmt.Errorf("library: list media of import unit %d: %w", unitID, err)
+	}
+	files := make([]UnitMedia, len(rows))
+	for i, row := range rows {
+		files[i] = UnitMedia{RelPath: row.RelPath, SizeBytes: row.SizeBytes}
+	}
+	return files, nil
 }
 
 // ListUnits returns every unit one session found, in the order they were added.
