@@ -530,6 +530,32 @@ func TestJob_ResumesRatherThanDuplicatingOnARetry(t *testing.T) {
 	}
 }
 
+// The source's own folder is the walk's last cluster; a crash after it must finish the session, not walk and add everything again.
+func TestJob_ACrashAfterTheRootClusterDoesNotWalkTheSourceAgain(t *testing.T) {
+	fx := newFixture(t, "01.flac", "02.flac")
+	sessions := fx.sessions()
+	sessionID, err := sessions.Create(t.Context(), library.NewSession{
+		SourcePath: root, Origin: library.ImportOriginManual, Threshold: 0.9, StartedAt: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sessions.AddUnits(t.Context(), sessionID, []library.NewUnit{{RelPath: "", Shape: "folder", FileCount: 2, EvidenceJSON: "{}"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := fx.run(t, fx.job(t, 0.90), importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	done, err := sessions.List(t.Context(), library.ImportDone, false)
+	if err != nil || len(done) != 1 || done[0].ID != sessionID {
+		t.Fatalf("done = %+v, %v; want the interrupted session finished", done, err)
+	}
+	if units, _ := sessions.ListUnits(t.Context(), sessionID); len(units) != 1 {
+		t.Errorf("units = %+v, want the one recorded before the crash, none added again", units)
+	}
+}
+
 // The executor gives up after the last attempt; the session must say so, or the Import page and the download wait for ever.
 func TestJob_ClosesTheSessionAsFailedOnTheLastAttempt(t *testing.T) {
 	fx := newFixture(t, "Artist/Album1/01.flac", "Artist/Album2/01.flac")

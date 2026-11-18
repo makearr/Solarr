@@ -349,14 +349,17 @@ func (j *Job) runSession(ctx context.Context, job jobs.Job, payload Payload) err
 	j.publishProgress(ctx, sessionID, importPhaseWalking, "")
 	j.reportProgress(ctx, sessionID, job.Progress)
 
-	result, err := inspect.NewWalker().Walk(ctx, j.fsys, payload.SourcePath, inspect.WalkState{Cursor: cursor},
-		j.walkOptions(payload),
-		func(ctx context.Context, batch []inspect.Unit) error {
-			err := j.commitCluster(ctx, sessionID, payload.SourcePath, threshold, payload.Preview,
-				unverifiedWanted(payload), payload.BestMatch, payload.TransferLadder, batch)
-			j.reportProgress(ctx, sessionID, job.Progress)
-			return err
-		})
+	var result inspect.WalkResult
+	if cursor != walkFinished {
+		result, err = inspect.NewWalker().Walk(ctx, j.fsys, payload.SourcePath, inspect.WalkState{Cursor: cursor},
+			j.walkOptions(payload),
+			func(ctx context.Context, batch []inspect.Unit) error {
+				err := j.commitCluster(ctx, sessionID, payload.SourcePath, threshold, payload.Preview,
+					unverifiedWanted(payload), payload.BestMatch, payload.TransferLadder, batch)
+				j.reportProgress(ctx, sessionID, job.Progress)
+				return err
+			})
+	}
 	if errors.Is(err, errCancelled) {
 		j.logger.Info("import inspection cancelled",
 			slog.Int64("session_id", sessionID), slog.String("source_path", payload.SourcePath))
@@ -411,6 +414,9 @@ func (j *Job) notifyCommitted(ctx context.Context, sessionID int64) {
 	}
 }
 
+// walkFinished is the resume cursor of a session whose last cluster, the source's own folder, was already recorded.
+const walkFinished = "."
+
 // resumeOrCreate finds a not-yet-finished session for this exact source path and resumes it with
 // the threshold and preview it was started with (answered 2026-09-24), or starts a new one; one
 // found CANCELLING is reported as such rather than resumed.
@@ -444,6 +450,10 @@ func (j *Job) resumeOrCreate(
 			}
 			if len(units) > 0 {
 				cursor = units[len(units)-1].RelPath
+				if cursor == "" {
+					// The source's own folder is the walk's last cluster, and its units are the ones with no path.
+					cursor = walkFinished
+				}
 			}
 			payload.Preview = session.Preview
 			return session.ID, cursor, session.Threshold, false, nil
