@@ -375,6 +375,7 @@ const (
 	EvidenceTitle          = "title"
 	EvidenceArtist         = "artist"
 	EvidenceReleaseType    = "release_type"
+	EvidenceTieBreak       = "tie_break"
 	EvidenceEdition        = "edition"
 	EvidenceEditionTitle   = "edition_title"
 	EvidenceEditionDate    = "edition_date"

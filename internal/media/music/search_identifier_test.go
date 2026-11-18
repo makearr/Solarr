@@ -3,6 +3,7 @@ package music_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -169,13 +170,66 @@ func TestSearchIdentify_SaysNothingWhenNeitherTagsNorTheFolderNameCarryIdentity(
 	}
 }
 
-// A search failure is not evidence there is nothing to find -- treated the same
-// as MBIDIdentifier's own "not found" case, not a hard error.
-func TestSearchIdentify_ASearchFailureIsNotAnError(t *testing.T) {
+// A search failure is not evidence there is nothing to find: it surfaces, so the caller tries again later.
+func TestSearchIdentify_ASearchFailureIsReportedNotTakenForNoCandidates(t *testing.T) {
 	searcher := &fakeSearcher{err: errors.New("musicbrainz unreachable")}
-	found := searchIdentify(t, mediatool.Tags{"artist": "Vutu Doci", "album": "The Sezo Siluko"}, "x/a.flac", searcher)
-	if found != nil {
-		t.Errorf("got %+v, want nothing on a search failure", found)
+	identifier := music.NewSearchIdentifier(music.SearchIdentifierConfig{
+		Tags: fixedTags{tags: mediatool.Tags{"artist": "Vutu Doci", "album": "The Sezo Siluko"}}, Search: searcher,
+	})
+	found, err := identifier.Identify(t.Context(), model.FileRef{RelPath: "x/a.flac"})
+	if err == nil || found != nil {
+		t.Errorf("got %+v, %v; want the search error", found, err)
+	}
+}
+
+// An album and its title single read alike: the better release type decides, below an untied match's confidence.
+func TestSearchIdentify_AnAlbumAndASingleOfOneNameAreToldApartByReleaseType(t *testing.T) {
+	searcher := &fakeSearcher{matches: []musicbrainz.ReleaseGroupMatch{
+		{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg-single", Title: "Invented Title", PrimaryType: "Single", FirstReleaseDate: "2012"}, ArtistCredit: "Vutu Doci"},
+		{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg-album", Title: "Invented Title", PrimaryType: "Album", FirstReleaseDate: "2013"}, ArtistCredit: "Vutu Doci"},
+	}}
+	found := searchIdentify(t, mediatool.Tags{"artist": "Vutu Doci", "album": "Invented Title", "date": "2012"}, "x/a.flac", searcher)
+
+	var winner *model.Identification
+	for i := range found {
+		if found[i].Confidence >= 0.6 {
+			if winner != nil {
+				t.Fatalf("two confident answers: %+v", found)
+			}
+			winner = &found[i]
+		}
+	}
+	if winner == nil || winner.ExternalID.ExternalID != "rg-album" || winner.Confidence != 0.90 {
+		t.Fatalf("winner = %+v, want rg-album at 0.90 (type decides before the single's matching year)", winner)
+	}
+	if !slices.ContainsFunc(winner.Evidence, func(e model.MatchEvidence) bool {
+		return e.Kind == music.EvidenceTieBreak && e.Detail == "release_type"
+	}) {
+		t.Errorf("evidence = %+v, want the deciding step recorded", winner.Evidence)
+	}
+}
+
+// Two albums of one name are told apart by the year tag, and stay ambiguous without one.
+func TestSearchIdentify_TwoAlbumsOfOneNameNeedTheYearTag(t *testing.T) {
+	matches := []musicbrainz.ReleaseGroupMatch{
+		{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg-old", Title: "Invented Title", PrimaryType: "Album", FirstReleaseDate: "1999-05-01"}, ArtistCredit: "Vutu Doci"},
+		{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg-new", Title: "Invented Title", PrimaryType: "Album", FirstReleaseDate: "2014"}, ArtistCredit: "Vutu Doci"},
+	}
+	confident := func(found []model.Identification) string {
+		for _, one := range found {
+			if one.Confidence >= 0.6 {
+				return one.ExternalID.ExternalID
+			}
+		}
+		return ""
+	}
+	withYear := searchIdentify(t, mediatool.Tags{"artist": "Vutu Doci", "album": "Invented Title", "date": "2014-03-02"}, "x/a.flac", &fakeSearcher{matches: matches})
+	if got := confident(withYear); got != "rg-new" {
+		t.Errorf("with the year tag the answer is %q, want rg-new", got)
+	}
+	without := searchIdentify(t, mediatool.Tags{"artist": "Vutu Doci", "album": "Invented Title"}, "x/a.flac", &fakeSearcher{matches: matches})
+	if got := confident(without); got != "" {
+		t.Errorf("without a year the answer is %q, want ambiguous", got)
 	}
 }
 

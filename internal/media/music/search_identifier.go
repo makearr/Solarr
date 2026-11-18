@@ -1,8 +1,11 @@
 package music
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/identify/match"
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -28,6 +31,10 @@ const searchResultLimit = 10
 // searchConfidence is a clean text match's likelihood: 105 of 105 right on the test library
 // (2026-09-17); every 0.1 of distance costs 0.05, so only a close match clears 0.90 on its own.
 const searchConfidence = 0.95
+
+// tieBreakConfidence caps a match chosen between candidates the text could not tell apart: it commits, but ranks
+// below an untied match.
+const tieBreakConfidence = 0.90
 
 // candidateConfidence is the low, never-auto-resolving confidence given to every
 // ranked candidate when match.Rank did not clear both its thresholds -- still
@@ -99,10 +106,8 @@ func (s SearchIdentifier) Identify(ctx context.Context, file model.FileRef) ([]m
 
 	matches, err := s.search.Search(ctx, musicbrainz.PriorityIdentify, artist, album, searchResultLimit)
 	if err != nil {
-		// Deliberately swallowed, not propagated: a search failure says nothing
-		// about whether a later strategy or a later sweep can do better, the same
-		// reasoning as MBIDIdentifier's empty-tags case just above.
-		return nil, nil //nolint:nilerr
+		// An outage is not an answer: the caller retries rather than recording "no candidates".
+		return nil, fmt.Errorf("music: search release groups for %q: %w", combinedTitle(artist, album), err)
 	}
 	if len(matches) == 0 {
 		return nil, nil
@@ -126,10 +131,19 @@ func (s SearchIdentifier) Identify(ctx context.Context, file model.FileRef) ([]m
 	}
 
 	result := match.Rank(claimed, candidates, nil, s.thresholds)
+	tieStep := ""
+	if result.Best == nil {
+		result.Best, tieStep = s.breakTie(result, matches, tags)
+	}
 	identifications := identificationsFor(result)
 	for i, identification := range identifications {
 		for _, one := range matches {
 			if one.MBID == identification.ExternalID.ExternalID {
+				if tieStep != "" && result.Best != nil && one.MBID == result.Best.ID {
+					identifications[i].Confidence = min(identifications[i].Confidence, tieBreakConfidence)
+					identifications[i].ExternalID.Confidence = identifications[i].Confidence
+					identifications[i].Evidence = append(identifications[i].Evidence, model.MatchEvidence{Kind: EvidenceTieBreak, Detail: tieStep})
+				}
 				identifications[i].Evidence = append(identifications[i].Evidence,
 					model.MatchEvidence{Kind: EvidenceTitle, Detail: one.Title},
 					model.MatchEvidence{Kind: EvidenceArtist, Detail: one.ArtistCredit},
@@ -139,6 +153,70 @@ func (s SearchIdentifier) Identify(ctx context.Context, file model.FileRef) ([]m
 		}
 	}
 	return identifications, nil
+}
+
+// breakTie names the winner among leading candidates that share one artist and title (an album and its title single, a
+// self-titled album and EP): the better release type decides, then a first-release year equal to the file's year tag.
+// A tie that stays is left ambiguous. The second result names the deciding step.
+func (s SearchIdentifier) breakTie(result match.Result, matches []musicbrainz.ReleaseGroupMatch, tags mediatool.Tags) (*match.RankedCandidate, string) {
+	if len(result.Candidates) < 2 || result.Candidates[0].Distance.Total > s.thresholds.MaxDistance {
+		return nil, ""
+	}
+	byID := make(map[string]musicbrainz.ReleaseGroupMatch, len(matches))
+	for _, one := range matches {
+		byID[one.MBID] = one
+	}
+	lead, found := byID[result.Candidates[0].ID]
+	if !found {
+		return nil, ""
+	}
+	var tied []int
+	for i, candidate := range result.Candidates {
+		one, known := byID[candidate.ID]
+		if candidate.Distance.Total-result.Candidates[0].Distance.Total > s.thresholds.AmbiguityMargin {
+			break
+		}
+		if !known || !strings.EqualFold(one.ArtistCredit, lead.ArtistCredit) || !strings.EqualFold(one.Title, lead.Title) {
+			return nil, ""
+		}
+		tied = append(tied, i)
+	}
+	best := slices.MinFunc(tied, func(a, b int) int {
+		return cmp.Compare(releaseTypePenalty(byID[result.Candidates[a].ID].ReleaseGroup), releaseTypePenalty(byID[result.Candidates[b].ID].ReleaseGroup))
+	})
+	bestPenalty := releaseTypePenalty(byID[result.Candidates[best].ID].ReleaseGroup)
+	var byType []int
+	for _, i := range tied {
+		if releaseTypePenalty(byID[result.Candidates[i].ID].ReleaseGroup) == bestPenalty {
+			byType = append(byType, i)
+		}
+	}
+	if len(byType) == 1 {
+		return &result.Candidates[byType[0]], "release_type"
+	}
+	year := fileYear(tags)
+	if year == "" {
+		return nil, ""
+	}
+	var byYear []int
+	for _, i := range byType {
+		if strings.HasPrefix(byID[result.Candidates[i].ID].FirstReleaseDate, year) {
+			byYear = append(byYear, i)
+		}
+	}
+	if len(byYear) == 1 {
+		return &result.Candidates[byYear[0]], "year"
+	}
+	return nil, ""
+}
+
+// fileYear is the year a file's date tags give, "" when none reads as one.
+func fileYear(tags mediatool.Tags) string {
+	date := tags.First("originalyear", "originaldate", "date", "year")
+	if len(date) >= 4 && date[0] >= '1' && date[0] <= '2' && strings.Trim(date[:4], "0123456789") == "" {
+		return date[:4]
+	}
+	return ""
 }
 
 // identificationsFor turns a match.Result into RunChain's input: the confident
