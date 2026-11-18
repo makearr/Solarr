@@ -233,3 +233,10 @@ SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
        started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at, preview
 FROM import_session WHERE acquisition_id = ? ORDER BY id DESC LIMIT 1;
+
+-- Every import a download's poll started (an archive and its loose files are two), oldest first.
+-- name: ListImportSessionsForAcquisition :many
+SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
+       units_total, units_committed, units_queued, bytes_imported, extract_dir,
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at, preview
+FROM import_session WHERE acquisition_id = ? ORDER BY id;

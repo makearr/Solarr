@@ -78,16 +78,18 @@ type env struct {
 	removeDone   bool
 	// blockDuplicates is the person's choice to blocklist a release the library holds already.
 	blockDuplicates bool
-	seedRatio       float64
-	seedMinutes     int
-	seedBoth        bool
-	maxSeedMinutes  int
-	stall           poll.StallRules
-	imported        []string
-	searched        []int64
-	history         []string
-	speeds          []string
-	logger          *slog.Logger
+	// importRunning is the download's import job being waiting or running.
+	importRunning  bool
+	seedRatio      float64
+	seedMinutes    int
+	seedBoth       bool
+	maxSeedMinutes int
+	stall          poll.StallRules
+	imported       []string
+	searched       []int64
+	history        []string
+	speeds         []string
+	logger         *slog.Logger
 }
 
 func newEnv(t *testing.T) *env {
@@ -130,6 +132,7 @@ func (e *env) job() *poll.Job {
 	return poll.NewJob(poll.Config{
 		Acquisitions: e.acquisitions, Sessions: e.sessions, Blocklist: e.blocklist, FS: e.fsys,
 		BlocklistDuplicates: func() bool { return e.blockDuplicates },
+		ImportRunning:       func(context.Context, int64) bool { return e.importRunning },
 		Clients: func(context.Context) (map[int64]poll.Client, error) {
 			return map[int64]poll.Client{1: {Name: "Home SABnzbd", Client: driver, RemoveCompleted: e.removeDone, SeedRatio: e.seedRatio, SeedMinutes: e.seedMinutes, SeedBoth: e.seedBoth, MaxSeedMinutes: e.maxSeedMinutes,
 				LocalPath: func(reported string) string { return reported }, Stall: e.stall}}, nil
@@ -442,6 +445,30 @@ func (e *env) placeLater(t *testing.T, acquisition library.Acquisition, unitID i
 	}
 	if err := e.sessions.RecordPlacement(t.Context(), unitID, library.Placement{WorkID: item.WorkID}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// RARs plus a sample are two sessions of one download: the second finding only a sample must not undo the first.
+func TestPoll_AnArchiveAndItsLooseFilesAreJudgedTogether(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	e.finishImport(t, sent, true, library.UnitCommit)
+	e.finishImport(t, sent, false, library.UnitSkip)
+	e.run(t)
+	if got := e.state(t, sent.ID); got.State != poll.StateCleaned {
+		t.Errorf("= %s, want CLEANED, not failed for the second session's nothing", got.State)
+	}
+}
+
+// Between the two sessions the job is still running: the first alone is not judged.
+func TestPoll_AnImportStillRunningIsNotJudged(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	e.finishImport(t, sent, false, library.UnitSkip)
+	e.importRunning = true
+	e.run(t)
+	if got := e.state(t, sent.ID); got.State != poll.StateImporting {
+		t.Errorf("= %s, want IMPORTING while the import job runs", got.State)
 	}
 }
 

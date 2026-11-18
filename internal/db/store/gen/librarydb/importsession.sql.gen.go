@@ -497,6 +497,58 @@ func (q *Queries) ListImportSessions(ctx context.Context, arg ListImportSessions
 	return items, nil
 }
 
+const listImportSessionsForAcquisition = `-- name: ListImportSessionsForAcquisition :many
+SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
+       units_total, units_committed, units_queued, bytes_imported, extract_dir,
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at, preview
+FROM import_session WHERE acquisition_id = ? ORDER BY id
+`
+
+// Every import a download's poll started (an archive and its loose files are two), oldest first.
+func (q *Queries) ListImportSessionsForAcquisition(ctx context.Context, acquisitionID sql.NullInt64) ([]ImportSession, error) {
+	rows, err := q.db.QueryContext(ctx, listImportSessionsForAcquisition, acquisitionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ImportSession{}
+	for rows.Next() {
+		var i ImportSession
+		if err := rows.Scan(
+			&i.ID,
+			&i.SourcePath,
+			&i.Origin,
+			&i.AcquisitionID,
+			&i.CategoryID,
+			&i.State,
+			&i.Threshold,
+			&i.UnitsTotal,
+			&i.UnitsCommitted,
+			&i.UnitsQueued,
+			&i.BytesImported,
+			&i.ExtractDir,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.Error,
+			&i.UnitsSkipped,
+			&i.UnitsFailed,
+			&i.UnitsEstimated,
+			&i.DismissedAt,
+			&i.Preview,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listImportUnitExtrasForSession = `-- name: ListImportUnitExtrasForSession :many
 SELECT iue.id, iue.unit_id, iue.root_folder_id, iue.rel_path
 FROM import_unit_extra iue

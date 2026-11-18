@@ -588,6 +588,20 @@ func (s ImportSessions) LatestForAcquisition(ctx context.Context, acquisitionID 
 	return sessionFromRow(row), nil
 }
 
+// ListForAcquisition answers every import started for a download, oldest first.
+func (s ImportSessions) ListForAcquisition(ctx context.Context, acquisitionID int64) ([]Session, error) {
+	rows, err := librarydb.New(s.store.Read()).ListImportSessionsForAcquisition(ctx,
+		sql.NullInt64{Int64: acquisitionID, Valid: true})
+	if err != nil {
+		return nil, fmt.Errorf("library: imports for acquisition %d: %w", acquisitionID, err)
+	}
+	sessions := make([]Session, len(rows))
+	for i, row := range rows {
+		sessions[i] = sessionFromRow(row)
+	}
+	return sessions, nil
+}
+
 func (s ImportSessions) Get(ctx context.Context, id int64) (Session, error) {
 	row, err := librarydb.New(s.store.Read()).GetImportSession(ctx, id)
 	if err != nil {

@@ -74,6 +74,12 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 	return nil
 }
 
+// importRunningFor says a download's import job is waiting or running.
+func (p *process) importRunningFor(ctx context.Context, acquisitionID int64) bool {
+	active, err := p.queue.HasActive(ctx, importjob.ActionKeyOf(importjob.Payload{AcquisitionID: &acquisitionID}))
+	return err == nil && active
+}
+
 // trackedDownloadAt is the download still being followed whose folder is, or holds, sourcePath.
 func (p *process) trackedDownloadAt(ctx context.Context, sourcePath string) (int64, bool) {
 	active, err := library.NewAcquisitions(p.library).ListActive(ctx)

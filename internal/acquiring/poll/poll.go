@@ -5,7 +5,6 @@ package poll
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -102,8 +101,10 @@ func (c Client) seedGoalMet(found download.Download) bool {
 type Config struct {
 	Acquisitions library.Acquisitions
 	Sessions     library.ImportSessions
-	Blocklist    library.BlocklistStore
-	FS           fsx.FS
+	// ImportRunning says a download's import job is waiting or running; nil says none is.
+	ImportRunning func(ctx context.Context, acquisitionID int64) bool
+	Blocklist     library.BlocklistStore
+	FS            fsx.FS
 	// Clients answers the enabled download clients by id.
 	Clients func(ctx context.Context) (map[int64]Client, error)
 	// DownloadFolders are the folders a reported path must lie in (ADR-14, section 10.9).
@@ -640,19 +641,33 @@ func (j *Job) checkPath(ctx context.Context, localPath string) string {
 
 // followImport moves a download on once its import finishes: imported, waiting for a person or for room, or failed.
 func (j *Job) followImport(ctx context.Context, client Client, acquisition library.Acquisition) error {
-	session, err := j.config.Sessions.LatestForAcquisition(ctx, acquisition.ID)
-	if errors.Is(err, sql.ErrNoRows) {
+	sessions, err := j.config.Sessions.ListForAcquisition(ctx, acquisition.ID)
+	if err != nil {
+		return err
+	}
+	if len(sessions) == 0 {
 		return nil // Not started yet: the queue has it.
 	}
-	if err != nil {
-		return err
+	// An archive and its loose files are two sessions of one job: judged only when all are over, never the last alone.
+	for _, session := range sessions {
+		if session.State != library.ImportDone && session.State != library.ImportFailed {
+			return nil
+		}
 	}
-	if session.State != library.ImportDone && session.State != library.ImportFailed {
+	if j.config.ImportRunning != nil && j.config.ImportRunning(ctx, acquisition.ID) {
 		return nil
 	}
-	units, err := j.config.Sessions.ListUnits(ctx, session.ID)
-	if err != nil {
-		return err
+	var units []library.Unit
+	sessionError := ""
+	for _, session := range sessions {
+		sessionUnits, err := j.config.Sessions.ListUnits(ctx, session.ID)
+		if err != nil {
+			return err
+		}
+		units = append(units, sessionUnits...)
+		if sessionError == "" {
+			sessionError = session.Error
+		}
 	}
 	// Placed, not merely decided: a committed unit with no work is one its library could not take (no root, no room).
 	placed, waiting, noRoom, duplicates := 0, 0, 0, 0
@@ -694,9 +709,9 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 		return j.cleanUp(ctx, client, acquisition)
 	case waiting > 0:
 		return j.transition(ctx, acquisition, StateImporting, WaitingForReview, now)
-	case session.Error != "":
+	case sessionError != "":
 		// The library failed to place it (permissions, I/O), which says nothing about the release: kept, not blocklisted.
-		note := "the library could not place it: " + session.Error
+		note := "the library could not place it: " + sessionError
 		if acquisition.LastError != note {
 			return j.transition(ctx, acquisition, StateImporting, note, now)
 		}

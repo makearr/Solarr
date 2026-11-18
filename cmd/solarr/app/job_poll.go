@@ -30,7 +30,8 @@ func (p *process) registerPollJob(registry *jobs.Registry, executor *jobs.Execut
 func (p *process) pollJob() *poll.Job {
 	return poll.NewJob(poll.Config{
 		Acquisitions: library.NewAcquisitions(p.library), Sessions: library.NewImportSessions(p.library),
-		Blocklist: library.NewBlocklistStore(p.library), FS: p.fsys,
+		ImportRunning: p.importRunningFor,
+		Blocklist:     library.NewBlocklistStore(p.library), FS: p.fsys,
 		Clients: p.pollClients, DownloadFolders: p.pollDownloadFolders,
 		Import: p.importAcquisition, Search: p.searchAgain, History: p.recordDownloadHistory,
 		SendHeld: p.sendHeld, BlocklistDuplicates: func() bool { return p.cache.Snapshot().ImportDuplicateBlocklist() }, Imported: p.afterDownloadImported, Speed: p.recordDownloadSpeed, Clock: clock.NewSystem(), Logger: p.logger,
