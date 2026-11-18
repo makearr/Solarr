@@ -3290,13 +3290,6 @@ type ImportCommitHeldRequest struct {
 	UnitIds *[]int64 `json:"unit_ids,omitempty"`
 }
 
-// ImportCommitHeldResult POST .../commit's own outcome: every QUEUE unit asked for, committed best-effort with its own top-ranked candidate.
-type ImportCommitHeldResult struct {
-	// Errors One entry per unit that could not be committed; never fatal to the rest.
-	Errors         []string `json:"errors"`
-	UnitsCommitted int64    `json:"units_committed"`
-}
-
 // ImportDecisionRecord defines model for ImportDecisionRecord.
 type ImportDecisionRecord struct {
 	Arrived   ReplacementSide `json:"arrived"`
@@ -3481,11 +3474,11 @@ type ImportListWrite struct {
 	Url              *string            `json:"url,omitempty"`
 }
 
-// ImportPlacementResult POST .../category's own outcome: every unit the session had already decided COMMIT but not yet placed, placed best-effort.
-type ImportPlacementResult struct {
-	// Errors One entry per unit that could not be placed; never fatal to the rest.
-	Errors      []string `json:"errors"`
-	UnitsPlaced int64    `json:"units_placed"`
+// ImportPlacementQueued A manual placement (assign a library, commit held units) handed to the import pool. Its progress arrives as `import_session:<id>` events.
+type ImportPlacementQueued struct {
+	// AlreadyQueued A placement for this session was already waiting or running; this is its job.
+	AlreadyQueued bool  `json:"already_queued"`
+	JobId         int64 `json:"job_id"`
 }
 
 // ImportRevertRequest defines model for ImportRevertRequest.
@@ -8872,7 +8865,7 @@ type ServerInterface interface {
 	// Give a session a destination category, and place everything it already decided COMMIT (ADR-48). Administrator only.
 	// (POST /import/sessions/{id}/category)
 	AssignImportSessionCategory(w http.ResponseWriter, r *http.Request, id int64)
-	// Commit the units this session held for review, all or a chosen subset. Administrator only.
+	// Commit the units this session held for review, all or a chosen subset. Administrator only. Answers 202; a job in the import pool places them.
 	// (POST /import/sessions/{id}/commit)
 	CommitHeldImportUnits(w http.ResponseWriter, r *http.Request, id int64)
 	// Hide a finished session from the Import screen. Administrator only.
@@ -10447,7 +10440,7 @@ func (_ Unimplemented) AssignImportSessionCategory(w http.ResponseWriter, r *htt
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Commit the units this session held for review, all or a chosen subset. Administrator only.
+// Commit the units this session held for review, all or a chosen subset. Administrator only. Answers 202; a job in the import pool places them.
 // (POST /import/sessions/{id}/commit)
 func (_ Unimplemented) CommitHeldImportUnits(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)

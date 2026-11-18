@@ -67,6 +67,10 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 		return err
 	}
 	executor.Handle(importjob.RetryJobType, importjob.NewRetryJob(library.NewImportSessions(p.library), p.manualCommitter(), p.logger))
+	if err := registry.Register(importjob.CommitDefinition); err != nil {
+		return err
+	}
+	executor.Handle(importjob.CommitJobType, importjob.NewCommitJob(library.NewImportSessions(p.library), p.manualCommitter(), p.bus, p.logger))
 	return nil
 }
 

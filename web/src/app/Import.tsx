@@ -33,7 +33,7 @@ const ORIGINS: readonly { id: ImportOrigin; label: string }[] = [
  *  one "topic: job" event per cluster committed. */
 interface ImportProgress {
   session_id: number;
-  phase: "walking" | "done" | "cancelled";
+  phase: "walking" | "done" | "cancelled" | "failed" | "placing" | "placed";
   current_unit?: string;
 }
 
@@ -77,6 +77,11 @@ export function Import() {
   useImportProgressStream((sessionId, progress) => {
     setLiveProgress((held) => ({ ...held, [sessionId]: progress }));
     void queryClient.invalidateQueries({ queryKey: ["import-sessions"] });
+    if (progress.phase === "placed") {
+      // A manual placement ran off the request: the library's lists and counts move now.
+      invalidateWorkLists(queryClient);
+      void queryClient.invalidateQueries({ queryKey: ["unidentified"] });
+    }
     if (sessionId === selectedSessionId) {
       void queryClient.invalidateQueries({ queryKey: ["import-units", sessionId] });
     }
@@ -765,14 +770,9 @@ function SessionRow({
       params: { path: { id: session.id } },
       body: {},
     })),
-    onSuccess: () => {
-      invalidate();
-      void queryClient.invalidateQueries({ queryKey: ["import-units", session.id] });
-      // Placed or taken back: the library's lists and counts move with it.
-      invalidateWorkLists(queryClient);
-      void queryClient.invalidateQueries({ queryKey: ["unidentified"] });
-    },
+    onSuccess: invalidate,
   });
+  const placing = commitHeld.isPending || (commitHeld.isSuccess && progress?.phase === "placing");
 
   return (
     <div
@@ -865,18 +865,15 @@ function SessionRow({
                 commitHeld.mutate();
               }
             }}
-            disabled={commitHeld.isPending}
+            disabled={placing}
             className="rounded-md border border-border-subtle px-2 py-1 text-ink hover:border-accent
                        disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2
                        focus-visible:outline-accent"
           >
-            {commitHeld.isPending ? "Committing…" : `Commit all ${session.units_queued} held`}
+            {placing ? "Placing…" : `Commit all ${session.units_queued} held`}
           </button>
-          {commitHeld.data && (
-            <span className="text-ink-muted">
-              {commitHeld.data.units_committed} committed
-              {commitHeld.data.errors.length > 0 && `, ${commitHeld.data.errors.length} could not be`}
-            </span>
+          {commitHeld.data?.already_queued && (
+            <span className="text-ink-muted">A placement of this import was already running.</span>
           )}
           {commitHeld.isError && <span className="text-danger">That could not be committed.</span>}
         </div>
@@ -930,9 +927,7 @@ function AssignCategory({ sessionId }: { sessionId: number }) {
         Assign
       </button>
       {assign.isError && <span className="text-danger">Could not assign.</span>}
-      {assign.isSuccess && assign.data.units_placed > 0 && (
-        <span className="text-ink-muted">{assign.data.units_placed} placed</span>
-      )}
+      {assign.isSuccess && <span className="text-ink-muted">Placing what was already decided…</span>}
     </div>
   );
 }

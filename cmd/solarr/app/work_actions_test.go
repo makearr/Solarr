@@ -251,7 +251,7 @@ func TestCommitImportUnit_ATVUnitWhoseFolderIsGoneIsRefusedAsChanged(t *testing.
 		t.Errorf("unit commit: %d %s, want 409 saying the files no longer match", status, body)
 	}
 	status, body = server.post(t, fmt.Sprintf("/import/sessions/%d/commit", sessionID), `{}`)
-	if status != http.StatusOK || !strings.Contains(body, `"units_committed":0`) || !strings.Contains(body, "its folder is gone") {
-		t.Errorf("commit all: %d %s, want 200 with nothing committed and the reason", status, body)
+	if status != http.StatusAccepted || !strings.Contains(body, `"already_queued":false`) {
+		t.Errorf("commit all: %d %s, want 202 with a job queued", status, body)
 	}
 }

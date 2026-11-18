@@ -3635,7 +3635,7 @@ export interface paths {
         put?: never;
         /**
          * Give a session a destination category, and place everything it already decided COMMIT (ADR-48). Administrator only.
-         * @description `POST /import/inspect` may omit category_id and decide per unit later (questions.md) -- this is that later. Idempotent for the category already on the session: calling it again with the same category_id re-runs the placement catch-up rather than refusing, which is how a caller retries after a transient placement failure (a root folder's capacity not probed yet, say). Refused with 409 only for a genuinely *different* category_id than the one already set, or if the session was reverted (its own placements were already undone, never resurrected by this). Every unit this session already decided COMMIT but has not yet placed (work_id still null -- a session that started INSPECTING before it had a category never places anything as it walks) is placed now, best-effort: one bad unit is reported (its reason included -- a unit sharing its own rel_path with siblings, the same known gap `POST .../commit` documents, is one such case), not fatal to the rest. A session still INSPECTING also starts placing its own future clusters immediately, since the running job re-reads its category every cluster rather than trusting what it was given at enqueue time.
+         * @description `POST /import/inspect` may omit category_id and decide per unit later (questions.md) -- this is that later. Idempotent for the category already on the session: calling it again with the same category_id re-runs the placement catch-up rather than refusing, which is how a caller retries after a transient placement failure (a root folder's capacity not probed yet, say). Refused with 409 only for a genuinely *different* category_id than the one already set, or if the session was reverted (its own placements were already undone, never resurrected by this). Every unit this session already decided COMMIT but has not yet placed (work_id still null -- a session that started INSPECTING before it had a category never places anything as it walks) is placed now, best-effort: one bad unit is reported (its reason included -- a unit sharing its own rel_path with siblings, the same known gap `POST .../commit` documents, is one such case), not fatal to the rest. A session still INSPECTING also starts placing its own future clusters immediately, since the running job re-reads its category every cluster rather than trusting what it was given at enqueue time. The placing runs as a job in the import pool (one at a time, never beside an import): the answer is 202 and the session's progress events say when it is done. A second request while one is waiting or running answers that job.
          */
         post: operations["assignImportSessionCategory"];
         delete?: never;
@@ -3700,8 +3700,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Commit the units this session held for review, all or a chosen subset. Administrator only.
-         * @description The bulk half of "commit what was held" (ADR-48): each unit is placed with the same top-ranked candidate IDENTIFY already found, exactly as `POST .../units/{unitId}/commit` does one at a time, never a re-run of IDENTIFY and never a choice among the other candidates. Pairs with a `preview` inspection, which holds every unit on purpose. Best-effort: a unit that cannot be committed is reported in `errors` and the rest still go. Refused with 409 if the session has no category yet (assign one first) or was reverted; a unit that is not QUEUE is skipped, not an error.
+         * Commit the units this session held for review, all or a chosen subset. Administrator only. Answers 202; a job in the import pool places them.
+         * @description The bulk half of "commit what was held" (ADR-48): each unit is placed with the same top-ranked candidate IDENTIFY already found, exactly as `POST .../units/{unitId}/commit` does one at a time, never a re-run of IDENTIFY and never a choice among the other candidates. Pairs with a `preview` inspection, which holds every unit on purpose. Best-effort: a unit that cannot be committed is logged and left held, and the rest still go. Refused with 409 if the session has no category yet (assign one first) or was reverted; a unit that is not QUEUE is skipped, not an error.
          */
         post: operations["commitHeldImportUnits"];
         delete?: never;
@@ -10083,23 +10083,16 @@ export interface components {
         ImportCommitHeldRequest: {
             unit_ids?: number[];
         };
-        /** @description POST .../commit's own outcome: every QUEUE unit asked for, committed best-effort with its own top-ranked candidate. */
-        ImportCommitHeldResult: {
+        /** @description A manual placement (assign a library, commit held units) handed to the import pool. Its progress arrives as `import_session:<id>` events. */
+        ImportPlacementQueued: {
             /** Format: int64 */
-            units_committed: number;
-            /** @description One entry per unit that could not be committed; never fatal to the rest. */
-            errors: string[];
+            job_id: number;
+            /** @description A placement for this session was already waiting or running; this is its job. */
+            already_queued: boolean;
         };
         ImportRevertRequest: {
             /** @description Defaults to the session's library's recycling bin retention (its File Management), one week unless changed. */
             recycle_retain_hours?: number;
-        };
-        /** @description POST .../category's own outcome: every unit the session had already decided COMMIT but not yet placed, placed best-effort. */
-        ImportPlacementResult: {
-            /** Format: int64 */
-            units_placed: number;
-            /** @description One entry per unit that could not be placed; never fatal to the rest. */
-            errors: string[];
         };
         ImportRevertResult: {
             /** Format: int64 */
@@ -17529,13 +17522,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Assigned; every already-decided unit placed or reported. */
-            200: {
+            /** @description Assigned; the already-decided units are being placed by a job. */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ImportPlacementResult"];
+                    "application/json": components["schemas"]["ImportPlacementQueued"];
                 };
             };
             401: components["responses"]["Problem"];
@@ -17610,13 +17603,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Committed. */
-            200: {
+            /** @description Queued; a job in the import pool places the units. */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ImportCommitHeldResult"];
+                    "application/json": components["schemas"]["ImportPlacementQueued"];
                 };
             };
             401: components["responses"]["Problem"];

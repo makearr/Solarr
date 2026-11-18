@@ -45,7 +45,7 @@ type fakeImportSessionLister struct {
 	// assignErr/assignResult are what AssignImportCategory returns; assignedSession/
 	// assignedCategory are the last arguments it was called with.
 	assignErr        error
-	assignResult     apiserver.ImportPlacementResult
+	assignResult     apiserver.ImportPlacementJob
 	assignedSession  int64
 	assignedCategory int64
 
@@ -59,21 +59,21 @@ type fakeImportSessionLister struct {
 	// heldErr/heldResult are what CommitHeldImportUnits returns; heldSessionID/
 	// heldUnitIDs are the last arguments it was called with.
 	heldErr       error
-	heldResult    apiserver.ImportPlacementResult
+	heldResult    apiserver.ImportPlacementJob
 	heldSessionID int64
 	heldUnitIDs   []int64
 }
 
 func (f *fakeImportSessionLister) CommitHeldImportUnits(
 	_ context.Context, sessionID int64, unitIDs []int64,
-) (apiserver.ImportPlacementResult, error) {
+) (apiserver.ImportPlacementJob, error) {
 	f.heldSessionID, f.heldUnitIDs = sessionID, unitIDs
 	return f.heldResult, f.heldErr
 }
 
 func (f *fakeImportSessionLister) AssignImportCategory(
 	_ context.Context, id, categoryID int64,
-) (apiserver.ImportPlacementResult, error) {
+) (apiserver.ImportPlacementJob, error) {
 	f.assignedSession, f.assignedCategory = id, categoryID
 	return f.assignResult, f.assignErr
 }
@@ -502,15 +502,13 @@ func TestAssignImportSessionCategory_RejectsAMissingBody(t *testing.T) {
 
 func TestAssignImportSessionCategory_AnswersTheLister(t *testing.T) {
 	fixture := newWorksFixture(t)
-	fixture.importSessions.assignResult = apiserver.ImportPlacementResult{
-		UnitsPlaced: 2, Errors: []string{"unit 5: no room"},
-	}
+	fixture.importSessions.assignResult = apiserver.ImportPlacementJob{JobID: 31, AlreadyQueued: true}
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "admin")
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/42/category", `{"category_id":9}`))
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200 (%s)", recorder.Code, recorder.Body)
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202 (%s)", recorder.Code, recorder.Body)
 	}
 	if fixture.importSessions.assignedSession != 42 || fixture.importSessions.assignedCategory != 9 {
 		t.Errorf("assigned = (%d, %d), want (42, 9)",
@@ -520,8 +518,7 @@ func TestAssignImportSessionCategory_AnswersTheLister(t *testing.T) {
 	if err := json.NewDecoder(recorder.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	errs, _ := body["errors"].([]any)
-	if body["units_placed"] != float64(2) || len(errs) != 1 {
+	if body["job_id"] != float64(31) || body["already_queued"] != true {
 		t.Errorf("response = %+v, want the fake's assignResult echoed back", body)
 	}
 }
@@ -732,11 +729,11 @@ func TestCommitHeldImportUnits_CommitsEverythingWhenNoSubsetIsNamed(t *testing.T
 	fixture := newWorksFixture(t)
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "admin")
-	fixture.importSessions.heldResult = apiserver.ImportPlacementResult{UnitsPlaced: 3}
+	fixture.importSessions.heldResult = apiserver.ImportPlacementJob{JobID: 8}
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/7/commit", `{}`))
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200 (%s)", recorder.Code, recorder.Body)
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202 (%s)", recorder.Code, recorder.Body)
 	}
 	if fixture.importSessions.heldSessionID != 7 {
 		t.Errorf("session id = %d, want 7", fixture.importSessions.heldSessionID)
@@ -745,11 +742,11 @@ func TestCommitHeldImportUnits_CommitsEverythingWhenNoSubsetIsNamed(t *testing.T
 		t.Errorf("unit ids = %v, want nil (every held unit)", fixture.importSessions.heldUnitIDs)
 	}
 
-	var body gen.ImportCommitHeldResult
+	var body gen.ImportPlacementQueued
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	want := gen.ImportCommitHeldResult{UnitsCommitted: 3, Errors: []string{}}
+	want := gen.ImportPlacementQueued{JobId: 8}
 	if !reflect.DeepEqual(body, want) {
 		t.Errorf("body = %+v, want %+v", body, want)
 	}
@@ -762,8 +759,8 @@ func TestCommitHeldImportUnits_PassesTheNamedSubsetThrough(t *testing.T) {
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/import/sessions/7/commit",
 		`{"unit_ids":[11,13]}`))
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200 (%s)", recorder.Code, recorder.Body)
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202 (%s)", recorder.Code, recorder.Body)
 	}
 	if !reflect.DeepEqual(fixture.importSessions.heldUnitIDs, []int64{11, 13}) {
 		t.Errorf("unit ids = %v, want [11 13]", fixture.importSessions.heldUnitIDs)

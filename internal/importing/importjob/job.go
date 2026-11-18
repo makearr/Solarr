@@ -807,19 +807,27 @@ type ImportProgress struct {
 // commitCluster's own doc comment gives the reason (todo 4.9's "assign a
 // category later" can change it mid-run).
 func (j *Job) publishProgress(ctx context.Context, sessionID int64, phase, currentUnit string) {
-	if j.events == nil {
+	publishSessionProgress(ctx, j.events, j.sessions, j.logger, sessionID, phase, currentUnit)
+}
+
+// publishSessionProgress is publishProgress for any job that works on a session.
+func publishSessionProgress(
+	ctx context.Context, bus *events.Bus, sessions library.ImportSessions, logger *slog.Logger,
+	sessionID int64, phase, currentUnit string,
+) {
+	if bus == nil {
 		return
 	}
-	session, err := j.sessions.Get(ctx, sessionID)
+	session, err := sessions.Get(ctx, sessionID)
 	if err != nil {
-		j.logger.Debug("could not read session for a progress event", slog.Any("error", err))
+		logger.Debug("could not read session for a progress event", slog.Any("error", err))
 		return
 	}
 	var category int64
 	if session.CategoryID != nil {
 		category = *session.CategoryID
 	}
-	j.events.Publish(events.Event{
+	bus.Publish(events.Event{
 		Topic: events.TopicJob, Entity: fmt.Sprintf("import_session:%d", sessionID), CategoryID: category,
 		Kind: "progress",
 		Data: ImportProgress{

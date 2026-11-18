@@ -5656,7 +5656,10 @@ paths:
         placing its own future clusters immediately, since the running job
         re-reads its category every cluster rather than trusting what it
         was given at
-        enqueue time.
+        enqueue time. The placing runs as a job in the import pool (one at a
+        time, never beside an import): the answer is 202 and the session's
+        progress events say when it is done. A second request while one is
+        waiting or running answers that job.
       requestBody:
         required: true
         content:
@@ -5667,11 +5670,11 @@ paths:
               properties:
                 category_id: { type: integer, format: int64 }
       responses:
-        "200":
-          description: Assigned; every already-decided unit placed or reported.
+        "202":
+          description: Assigned; the already-decided units are being placed by a job.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ImportPlacementResult" }
+              schema: { $ref: "#/components/schemas/ImportPlacementQueued" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
@@ -5738,14 +5741,14 @@ paths:
       tags: [library]
       summary: >-
         Commit the units this session held for review, all or a chosen
-        subset. Administrator only.
+        subset. Administrator only. Answers 202; a job in the import pool places them.
       description: >-
         The bulk half of "commit what was held" (ADR-48): each unit is placed
         with the same top-ranked candidate IDENTIFY already found, exactly as
         `POST .../units/{unitId}/commit` does one at a time, never a re-run of
         IDENTIFY and never a choice among the other candidates. Pairs with a
         `preview` inspection, which holds every unit on purpose. Best-effort:
-        a unit that cannot be committed is reported in `errors` and the rest
+        a unit that cannot be committed is logged and left held, and the rest
         still go. Refused with 409 if the session has no category yet (assign
         one first) or was reverted; a unit that is not QUEUE is skipped, not
         an error.
@@ -5755,11 +5758,11 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/ImportCommitHeldRequest" }
       responses:
-        "200":
-          description: Committed.
+        "202":
+          description: Queued; a job in the import pool places the units.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ImportCommitHeldResult" }
+              schema: { $ref: "#/components/schemas/ImportPlacementQueued" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
@@ -13741,18 +13744,17 @@ components:
           type: array
           items: { type: integer, format: int64 }
 
-    ImportCommitHeldResult:
+    ImportPlacementQueued:
       type: object
       description: >-
-        POST .../commit's own outcome: every QUEUE unit asked for, committed
-        best-effort with its own top-ranked candidate.
-      required: [units_committed, errors]
+        A manual placement (assign a library, commit held units) handed to the
+        import pool. Its progress arrives as `import_session:<id>` events.
+      required: [job_id, already_queued]
       properties:
-        units_committed: { type: integer, format: int64 }
-        errors:
-          type: array
-          items: { type: string }
-          description: One entry per unit that could not be committed; never fatal to the rest.
+        job_id: { type: integer, format: int64 }
+        already_queued:
+          type: boolean
+          description: A placement for this session was already waiting or running; this is its job.
 
     ImportRevertRequest:
       type: object
@@ -13762,19 +13764,6 @@ components:
           description: >-
             Defaults to the session's library's recycling bin retention (its File
             Management), one week unless changed.
-
-    ImportPlacementResult:
-      type: object
-      description: >-
-        POST .../category's own outcome: every unit the session had already
-        decided COMMIT but not yet placed, placed best-effort.
-      required: [units_placed, errors]
-      properties:
-        units_placed: { type: integer, format: int64 }
-        errors:
-          type: array
-          items: { type: string }
-          description: One entry per unit that could not be placed; never fatal to the rest.
 
     ImportRevertResult:
       type: object

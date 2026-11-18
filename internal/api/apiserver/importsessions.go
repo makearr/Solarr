@@ -37,7 +37,7 @@ type ImportSessionLister interface {
 	// AssignImportCategory gives a session a destination category and places
 	// everything it already decided COMMIT but never placed (todo 4.9's
 	// "assign a category later" UI action -- a session can start with none).
-	AssignImportCategory(ctx context.Context, id, categoryID int64) (ImportPlacementResult, error)
+	AssignImportCategory(ctx context.Context, id, categoryID int64) (ImportPlacementJob, error)
 	// CommitImportUnit force-commits one QUEUE-decision unit by hand
 	// ("commit what was held"), using the same top-ranked candidate IDENTIFY
 	// already found.
@@ -45,7 +45,7 @@ type ImportSessionLister interface {
 	// CommitHeldImportUnits force-commits the units a session held for
 	// review, all of them or the named subset -- CommitImportUnit repeated,
 	// best-effort.
-	CommitHeldImportUnits(ctx context.Context, sessionID int64, unitIDs []int64) (ImportPlacementResult, error)
+	CommitHeldImportUnits(ctx context.Context, sessionID int64, unitIDs []int64) (ImportPlacementJob, error)
 }
 
 // ErrImportSessionNotRunning is CancelImportSession's refusal to a non-running session.
@@ -111,12 +111,11 @@ type ImportRevertResult struct {
 	RestoredPaths, NotRestoredPaths []string
 }
 
-// ImportPlacementResult is AssignImportCategory's own outcome: every unit
-// the session had already decided COMMIT but not yet placed, placed
-// best-effort.
-type ImportPlacementResult struct {
-	UnitsPlaced int64
-	Errors      []string
+// ImportPlacementJob is the import-pool job a manual placement was handed to; AlreadyQueued is a placement of the same
+// session that was waiting or running, whose job this is.
+type ImportPlacementJob struct {
+	JobID         int64
+	AlreadyQueued bool
 }
 
 // ImportInspector enqueues ADR-48's own inspection job. Its own interface,
@@ -557,16 +556,8 @@ func (s *Server) AssignImportSessionCategory(w http.ResponseWriter, r *http.Requ
 	case err != nil:
 		writeError(w, s.logger, err)
 	default:
-		writeJSON(w, s.logger, http.StatusOK, importPlacementResultView(result))
+		writeJSON(w, s.logger, http.StatusAccepted, gen.ImportPlacementQueued{JobId: result.JobID, AlreadyQueued: result.AlreadyQueued})
 	}
-}
-
-func importPlacementResultView(result ImportPlacementResult) gen.ImportPlacementResult {
-	errs := result.Errors
-	if errs == nil {
-		errs = []string{}
-	}
-	return gen.ImportPlacementResult{UnitsPlaced: result.UnitsPlaced, Errors: errs}
 }
 
 // CommitHeldImportUnits commits the units a session held for review, all or
@@ -609,12 +600,7 @@ func (s *Server) CommitHeldImportUnits(w http.ResponseWriter, r *http.Request, i
 	case err != nil:
 		writeError(w, s.logger, err)
 	default:
-		errs := result.Errors
-		if errs == nil {
-			errs = []string{}
-		}
-		writeJSON(w, s.logger, http.StatusOK,
-			gen.ImportCommitHeldResult{UnitsCommitted: result.UnitsPlaced, Errors: errs})
+		writeJSON(w, s.logger, http.StatusAccepted, gen.ImportPlacementQueued{JobId: result.JobID, AlreadyQueued: result.AlreadyQueued})
 	}
 }
 

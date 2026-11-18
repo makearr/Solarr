@@ -28,6 +28,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/importing/arrmap"
+	"github.com/makearr/Solarr/internal/importing/importjob"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/jobs/cachebudget"
 	"github.com/makearr/Solarr/internal/media"
@@ -985,6 +986,9 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Manual: p.manualCommitter(), Libraries: adapters.Categories{Cache: p.cache}, RootPath: adapters.RootFolderPath(p.cache),
 			Rescan: func(ctx context.Context, rootFolderID, categoryID int64, directories []string) {
 				_, _ = scan.EnqueueDirectories(ctx, p.queue, rootFolderID, categoryID, directories)
+			},
+			EnqueuePlacement: func(ctx context.Context, payload importjob.CommitPayload) (jobs.EnqueueResult, error) {
+				return importjob.EnqueueCommit(ctx, p.queue, payload)
 			},
 			CommitsHeld: adapters.MediaTypes{Registry: p.media}.CommitsHeldImports,
 			Clock:       clock.NewSystem(),

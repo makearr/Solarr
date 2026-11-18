@@ -38,6 +38,8 @@ type ImportSessions struct {
 	RootPath library.RootFolderPath
 	// Rescan looks again at folders where a revert put files back, so their items are counted from them.
 	Rescan func(ctx context.Context, rootFolderID, categoryID int64, directories []string)
+	// EnqueuePlacement hands a manual placement to the import pool.
+	EnqueuePlacement func(ctx context.Context, payload importjob.CommitPayload) (jobs.EnqueueResult, error)
 	// CommitsHeld says whether a media type commits a held unit by hand; its committer is music's.
 	CommitsHeld func(mediaType string) bool
 }
@@ -194,53 +196,51 @@ func (a ImportSessions) sessionLibraries(ctx context.Context, session library.Se
 
 // AssignImportCategory maps library.ErrSessionCategoryAlreadySet and
 // importjob.ErrSessionReverted to their apiserver sentinels, the same
-// translation RevertImportSession already does for its own errors.
-func (a ImportSessions) AssignImportCategory(ctx context.Context, id, categoryID int64) (apiserver.ImportPlacementResult, error) {
+// translation RevertImportSession already does for its own errors. The placing runs as a job.
+func (a ImportSessions) AssignImportCategory(ctx context.Context, id, categoryID int64) (apiserver.ImportPlacementJob, error) {
 	session, err := a.Sessions.Get(ctx, id)
 	if err != nil {
-		return apiserver.ImportPlacementResult{}, err
+		return apiserver.ImportPlacementJob{}, err
 	}
 	if session.State == library.ImportReverted {
-		return apiserver.ImportPlacementResult{}, apiserver.ErrImportSessionReverted
+		return apiserver.ImportPlacementJob{}, apiserver.ErrImportSessionReverted
 	}
 	if err := a.Sessions.SetCategory(ctx, id, categoryID); err != nil {
 		if errors.Is(err, library.ErrSessionCategoryAlreadySet) {
-			return apiserver.ImportPlacementResult{}, apiserver.ErrImportSessionCategoryAlreadySet
+			return apiserver.ImportPlacementJob{}, apiserver.ErrImportSessionCategoryAlreadySet
 		}
-		return apiserver.ImportPlacementResult{}, err
+		return apiserver.ImportPlacementJob{}, err
 	}
-
-	placed, placeErrs := a.Manual.PlaceUnplaced(ctx, id)
-	messages := make([]string, len(placeErrs))
-	for i, placeErr := range placeErrs {
-		messages[i] = placeErr.Error()
-	}
-	return apiserver.ImportPlacementResult{UnitsPlaced: int64(placed), Errors: messages}, nil
+	return a.enqueuePlacement(ctx, importjob.CommitPayload{SessionID: id, Unplaced: true})
 }
 
-// CommitHeldImportUnits maps the two refusals that stop the whole call;
-// a per-unit failure stays in Errors, never an error, since the bulk commit
-// is best-effort the same way PlaceUnplaced is.
+// CommitHeldImportUnits refuses what stops the whole call before queueing it; a per-unit failure is the job's to log,
+// since the bulk commit is best-effort the same way PlaceUnplaced is.
 func (a ImportSessions) CommitHeldImportUnits(
 	ctx context.Context, sessionID int64, unitIDs []int64,
-) (apiserver.ImportPlacementResult, error) {
+) (apiserver.ImportPlacementJob, error) {
 	if err := a.heldCommitBuilt(ctx, sessionID, 0); err != nil {
-		return apiserver.ImportPlacementResult{}, err
+		return apiserver.ImportPlacementJob{}, err
 	}
-	committed, commitErrs := a.Manual.CommitAllHeld(ctx, sessionID, unitIDs)
-	messages := make([]string, 0, len(commitErrs))
-	for _, commitErr := range commitErrs {
-		switch {
-		case errors.Is(commitErr, sql.ErrNoRows):
-			return apiserver.ImportPlacementResult{}, sql.ErrNoRows
-		case errors.Is(commitErr, importjob.ErrSessionHasNoCategory):
-			return apiserver.ImportPlacementResult{}, apiserver.ErrImportSessionHasNoCategory
-		case errors.Is(commitErr, importjob.ErrSessionReverted):
-			return apiserver.ImportPlacementResult{}, apiserver.ErrImportSessionReverted
-		}
-		messages = append(messages, commitErr.Error())
+	session, err := a.Sessions.Get(ctx, sessionID)
+	if err != nil {
+		return apiserver.ImportPlacementJob{}, err
 	}
-	return apiserver.ImportPlacementResult{UnitsPlaced: int64(committed), Errors: messages}, nil
+	switch {
+	case session.State == library.ImportReverted:
+		return apiserver.ImportPlacementJob{}, apiserver.ErrImportSessionReverted
+	case session.CategoryID == nil:
+		return apiserver.ImportPlacementJob{}, apiserver.ErrImportSessionHasNoCategory
+	}
+	return a.enqueuePlacement(ctx, importjob.CommitPayload{SessionID: sessionID, UnitIDs: unitIDs})
+}
+
+func (a ImportSessions) enqueuePlacement(ctx context.Context, payload importjob.CommitPayload) (apiserver.ImportPlacementJob, error) {
+	result, err := a.EnqueuePlacement(ctx, payload)
+	if err != nil {
+		return apiserver.ImportPlacementJob{}, err
+	}
+	return apiserver.ImportPlacementJob{JobID: result.Job.ID, AlreadyQueued: result.Duplicate}, nil
 }
 
 // CommitImportUnit maps importjob.ManualCommitter's own sentinel errors to
