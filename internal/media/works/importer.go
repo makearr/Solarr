@@ -73,13 +73,23 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 	if request.AcquisitionID != nil {
 		seeded, upgrade = i.seeded(ctx, *request.AcquisitionID)
 	}
+	type resolution struct {
+		workID     int64
+		candidates []model.Identification
+	}
+	resolved := make([]resolution, len(request.Units))
+	if seeded == 0 {
+		batch.ResolveAll(ctx, len(request.Units), func(ctx context.Context, index int) {
+			resolved[index].workID, resolved[index].candidates = i.config.Units.Resolve(ctx, request, request.Units[index])
+		})
+	}
 	// Every unit of a tracked download is the seeded work, so the first one placed wins: the largest goes first.
 	for _, index := range visitOrder(request.Units, seeded != 0) {
 		unit := request.Units[index]
 		decision := library.UnitDecision{UnitID: request.UnitIDs[index], Decision: library.UnitQueue, Reason: "no " + i.config.Noun + " of the library was found in it"}
 		workID, candidates := seeded, []model.Identification(nil)
 		if workID == 0 {
-			workID, candidates = i.config.Units.Resolve(ctx, request, unit)
+			workID, candidates = resolved[index].workID, resolved[index].candidates
 		}
 		if workID <= 0 {
 			result.Decisions[index] = decision

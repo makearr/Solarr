@@ -278,7 +278,7 @@ var allowedInternalImports = map[string][]string{
 	// The enrichment job adds musicbrainz (ADR-29) and jobs (its own handler,
 	// mirroring scan.Job).
 	"internal/acquiring/judge": {"internal/db/statistics", "internal/platform/parallel", "internal/acquiring/indexer", "internal/db/library", "internal/db/settings", "internal/identify/model", "internal/identify/quality", "internal/identify/score"},
-	"internal/importing/batch": {"internal/db/library", "internal/identify/model", "internal/importing/inspect"},
+	"internal/importing/batch": {"internal/db/library", "internal/identify/model", "internal/importing/inspect", "internal/platform/parallel"},
 	// The RSS sync of every media type: feeds read once, each type judging its own.
 	"internal/acquiring/rss": {"internal/acquiring/indexer", "internal/acquiring/judge", "internal/jobs", "internal/platform/clock"},
 	// The cutoff check of every media type: paging, state writes and counting once, each type judging its own.

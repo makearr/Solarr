@@ -127,10 +127,14 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 			request.ReleaseTitle, request.ExpectedParts = i.grabbed(ctx, *request.AcquisitionID)
 		}
 	}
-	for index, unit := range request.Units {
-		decision := library.UnitDecision{UnitID: request.UnitIDs[index], Decision: library.UnitQueue, Reason: "no episode of a known series was found in it"}
-		workID, candidates := seeded, []model.Identification(nil)
-		if workID == 0 {
+	type resolution struct {
+		workID     int64
+		candidates []model.Identification
+	}
+	resolved := make([]resolution, len(request.Units))
+	if seeded == 0 {
+		batch.ResolveAll(ctx, len(request.Units), func(ctx context.Context, index int) {
+			unit := request.Units[index]
 			folder := path.Base(request.SourcePath)
 			if unit.Directory != "" {
 				folder = path.Base(unit.Directory)
@@ -141,7 +145,14 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 			if seasonFolder.MatchString(path.Base(unit.Directory)) {
 				named.Path = path.Dir(named.Path)
 			}
-			workID, candidates = i.config.Resolver.ResolveFolder(ctx, request.CategoryID, folder, []string{firstMedia(unit)}, named)
+			resolved[index].workID, resolved[index].candidates = i.config.Resolver.ResolveFolder(ctx, request.CategoryID, folder, []string{firstMedia(unit)}, named)
+		})
+	}
+	for index, unit := range request.Units {
+		decision := library.UnitDecision{UnitID: request.UnitIDs[index], Decision: library.UnitQueue, Reason: "no episode of a known series was found in it"}
+		workID, candidates := seeded, []model.Identification(nil)
+		if workID == 0 {
+			workID, candidates = resolved[index].workID, resolved[index].candidates
 		}
 		if workID <= 0 {
 			result.Decisions[index] = decision
