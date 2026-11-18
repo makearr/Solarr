@@ -15,6 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/metadata/fanart"
 	"github.com/makearr/Solarr/internal/metadata/mdblist"
+	"github.com/makearr/Solarr/internal/metadata/metaresolve"
 	"github.com/makearr/Solarr/internal/metadata/omdb"
 	"github.com/makearr/Solarr/internal/metadata/radarrmeta"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
@@ -107,28 +108,18 @@ func (s Service) order(categoryID int64) []string {
 func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs) (Movie, error) {
 	order := s.order(categoryID)
 	ids = s.completeIDs(ctx, s.bridgeIDs(ctx, ids, order))
+	// Each source has its own rate bucket and none uses an id another supplied here, so they are asked at once.
+	replies := metaresolve.AskAll(ctx, order, func(ctx context.Context, name string) (Movie, error) {
+		answer, ok := s.askSource(ctx, name, ids)
+		if !ok {
+			return Movie{}, errNoAnswer
+		}
+		return answer, nil
+	})
 	answers := map[string]Movie{}
-	if ids.TMDB > 0 && s.TMDB != nil && s.TMDB.Configured() && slices.Contains(order, settings.MovieSourceTMDB) {
-		answer, err := s.TMDB.Movie(ctx, ids.TMDB)
-		switch {
-		case err == nil:
-			answers[settings.MovieSourceTMDB] = FromTMDB(answer, s.country())
-		case !errors.Is(err, tmdb.ErrNotFound):
-			s.warn("tmdb", ids.TMDB, err)
-		}
-	}
-	if s.Proxy != nil && (ids.TMDB > 0 || ids.IMDb != "") && slices.Contains(order, settings.MovieSourceRadarr) {
-		answer, err := s.askProxy(ctx, ids)
-		switch {
-		case err == nil:
-			answers[settings.MovieSourceRadarr] = FromRadarr(answer, s.country())
-		case !errors.Is(err, radarrmeta.ErrNotFound):
-			s.warn("radarr", ids.TMDB, err)
-		}
-	}
-	for _, name := range order {
-		if answer, ok := s.askMore(ctx, name, ids); ok {
-			answers[name] = answer
+	for _, reply := range replies {
+		if reply.Err == nil {
+			answers[reply.Source] = reply.Value
 		}
 	}
 	var movie Movie
@@ -206,6 +197,38 @@ func (s Service) askMore(ctx context.Context, name string, ids IDs) (Movie, bool
 		}
 		movie, err := s.TVDB.Movie(ctx, id)
 		return FromTVDB(movie), report(err, tvdb.ErrNotFound)
+	}
+	return Movie{}, false
+}
+
+// errNoAnswer marks a source that had nothing to say; the reason was logged where it arose.
+var errNoAnswer = errors.New("movie source gave no answer")
+
+// askSource asks one source of the order: TMDB, Radarr's service, or one of the extra sources.
+func (s Service) askSource(ctx context.Context, name string, ids IDs) (Movie, bool) {
+	switch name {
+	case settings.MovieSourceTMDB:
+		if ids.TMDB > 0 && s.TMDB != nil && s.TMDB.Configured() {
+			answer, err := s.TMDB.Movie(ctx, ids.TMDB)
+			switch {
+			case err == nil:
+				return FromTMDB(answer, s.country()), true
+			case !errors.Is(err, tmdb.ErrNotFound):
+				s.warn("tmdb", ids.TMDB, err)
+			}
+		}
+	case settings.MovieSourceRadarr:
+		if s.Proxy != nil && (ids.TMDB > 0 || ids.IMDb != "") {
+			answer, err := s.askProxy(ctx, ids)
+			switch {
+			case err == nil:
+				return FromRadarr(answer, s.country()), true
+			case !errors.Is(err, radarrmeta.ErrNotFound):
+				s.warn("radarr", ids.TMDB, err)
+			}
+		}
+	default:
+		return s.askMore(ctx, name, ids)
 	}
 	return Movie{}, false
 }

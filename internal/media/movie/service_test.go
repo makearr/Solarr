@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -291,5 +292,56 @@ func TestLookupKeepsANumberEndingTheNameWhenAsAYearItFindsNothing(t *testing.T) 
 	found, err := catalog.LookupWorks(t.Context(), media.AddLookup{Kind: "movie", Query: "Example 2049", Limit: 10})
 	if err != nil || len(found) != 1 || found[0].ExternalID != "603" {
 		t.Errorf("lookup = %+v, %v; want the film found without the year", found, err)
+	}
+}
+
+// meeting answers once every source of a fetch is waiting inside its call at the same time.
+type meeting struct {
+	arrived sync.WaitGroup
+}
+
+func (m *meeting) wait() {
+	m.arrived.Done()
+	m.arrived.Wait()
+}
+
+type meetingTMDB struct {
+	fakeTMDB
+	meet *meeting
+}
+
+func (f meetingTMDB) Movie(ctx context.Context, id int64) (tmdb.Movie, error) {
+	f.meet.wait()
+	return f.fakeTMDB.Movie(ctx, id)
+}
+
+type meetingProxy struct {
+	fakeProxy
+	meet *meeting
+}
+
+func (f meetingProxy) Movie(ctx context.Context, id int64) (radarrmeta.Movie, error) {
+	f.meet.wait()
+	return f.fakeProxy.Movie(ctx, id)
+}
+
+func TestFetchAsksEverySourceAtOnce(t *testing.T) {
+	meet := &meeting{}
+	meet.arrived.Add(2)
+	proxy := meetingProxy{fakeProxy: fakeProxy{movie: radarrmeta.Movie{TMDBID: 603, Title: "Example (other)"}}, meet: meet}
+	service, _ := newService(t, meetingTMDB{fakeTMDB: fakeTMDB{configured: true, movie: theExample()}, meet: meet}, proxy)
+
+	done := make(chan movie.Movie, 1)
+	go func() {
+		fetched, _ := service.FetchFor(t.Context(), 1, movie.IDs{TMDB: 603})
+		done <- fetched
+	}()
+	select {
+	case fetched := <-done:
+		if fetched.Title != "The Example Film" || len(fetched.Sources) != 2 {
+			t.Errorf("merged result: %+v", fetched)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the sources were asked one after another: neither call left while the other waited")
 	}
 }

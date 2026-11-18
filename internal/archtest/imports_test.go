@@ -414,7 +414,7 @@ var allowedInternalImports = map[string][]string{
 	// One lock per key, for work on the same series folder or movie.
 	"internal/platform/keyedlock": {},
 	// The movie module (stage 10), built beside music and TV on the same seams.
-	"internal/media/movie": {"internal/importing/arrmap", "internal/importing/arrimport", "internal/media/works",
+	"internal/media/movie": {"internal/metadata/metaresolve", "internal/importing/arrmap", "internal/importing/arrimport", "internal/media/works",
 		"internal/media/knownfor", "internal/media/picturesweep", "internal/media/screen",
 		"internal/db/library", "internal/db/settings", "internal/db/store/gen/librarydb", "internal/identify/model",
 		"internal/identify/parsemovie", "internal/identify/parsetv", "internal/identify/quality", "internal/identify/score", "internal/importing/batch",
