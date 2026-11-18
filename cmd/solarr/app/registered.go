@@ -132,8 +132,7 @@ func (p *process) tvModule() tv.Module {
 	consumer := tv.NewConsumer(tv.ConsumerConfig{
 		FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
 		Service: p.tvService(), Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem(), Logger: p.logger,
-		DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
-		SharedFiles: p.enqueueSharedFiles, Locks: p.locksFor("tv"),
+		Categories: adapters.Categories{Cache: p.cache}, Resolver: p.tvResolver(), SharedFiles: p.enqueueSharedFiles,
 	})
 	return tv.Module{Registrations: p.tvJobs(), SourcesPaused: p.tvSourcesPaused, SceneNumberingDown: p.sceneNumberingDown, TMDBConfigured: func() bool { return p.cache.Snapshot().TMDBConfigured() },
 		Sweep: scan.Sweep{
@@ -409,9 +408,7 @@ func (p *process) tvTitleRenameTask() jobs.Task {
 func (p *process) movieModule() movie.Module {
 	consumer := movie.NewConsumer(movie.ConsumerConfig{
 		FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
-		Service: p.movieService(), Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem(), Logger: p.logger,
-		DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
-		Locks: p.locksFor("movie"),
+		Service: p.movieService(), Clock: clock.NewSystem(), Logger: p.logger, Resolver: p.movieResolver(),
 	})
 	catalog := p.movieCatalog()
 	return movie.Module{
@@ -428,12 +425,8 @@ func (p *process) movieModule() movie.Module {
 		Rename:    &movie.RenameConfig{Movies: library.NewSeriesReader(p.library)},
 		Profiling: knownfor.Profiling{People: library.NewPeople(p.library), Reader: library.NewSeriesReader(p.library), Source: p.tmdbShared, Albums: p.knownAlbums()},
 		Files: movie.Files{
-			Resolver: movie.Resolver{
-				Service: p.movieService(), Reader: library.NewSeriesReader(p.library), Logger: p.logger,
-				DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
-				Locks: p.locksFor("movie"),
-			},
-			Series: library.NewSeries(p.library), Unidentified: library.NewUnidentified(p.library), Clock: clock.NewSystem(),
+			Resolver: p.movieResolver(),
+			Series:   library.NewSeries(p.library), Unidentified: library.NewUnidentified(p.library), Clock: clock.NewSystem(),
 			AllowAgain: catalog.AllowAgain,
 		},
 		ServerFiles: &movie.ServerFilesJob{
@@ -570,10 +563,7 @@ func (p *process) bookModule(format book.Format) book.Module {
 	service := p.bookService(format)
 	catalog := p.bookCatalog(format)
 	authors := book.AuthorWorks{Format: format, People: library.NewPeople(p.library), Reader: library.NewSeriesReader(p.library), Source: service.OpenLibrary}
-	resolver := book.Resolver{
-		Service: service, Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
-		Locks: p.locksFor("book"), Threshold: p.acceptThreshold,
-	}
+	resolver := p.bookResolver(format)
 	grab := p.bookGrab(format)
 	conns := p.bookIndexerConns(format)
 	module := book.Module{Format: format}
@@ -586,8 +576,7 @@ func (p *process) bookModule(format book.Format) book.Module {
 		Sweep: scan.Sweep{
 			Consumer: book.NewConsumer(book.ConsumerConfig{
 				FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library), Service: service,
-				Clock: clock.NewSystem(), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
-				Locks: p.locksFor("book"),
+				Clock: clock.NewSystem(), Logger: p.logger, Resolver: resolver,
 			}),
 			Include: format.Includes, Probe: format.Probes,
 			Housekeeping: housekeeping.Sweep{
@@ -680,10 +669,7 @@ func (p *process) adultModule() adult.Module {
 	catalog := p.adultCatalog()
 	grab := p.adultGrab()
 	conns := p.adultIndexerConns
-	resolver := adult.Resolver{
-		Service: service, Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
-		Locks: p.locksFor("adult"), Threshold: p.acceptThreshold,
-	}
+	resolver := p.adultResolver()
 	return adult.Module{
 		Registrations: []media.JobRegistration{
 			{Definition: adult.RefreshDefinition(), Handler: adult.NewRefreshJob(library.NewSeriesReader(p.library), service, clock.NewSystem(), p.logger)},
@@ -693,8 +679,7 @@ func (p *process) adultModule() adult.Module {
 		Sweep: scan.Sweep{
 			Consumer: adult.NewConsumer(adult.ConsumerConfig{
 				FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library), Service: service,
-				Clock: clock.NewSystem(), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
-				Locks: p.locksFor("adult"),
+				Clock: clock.NewSystem(), Logger: p.logger, Resolver: resolver,
 			}),
 			Include:     adult.IsScene,
 			GatherFiles: adult.ScanGather,
@@ -806,4 +791,37 @@ func (p *process) personReaders(people library.People) []namedPersonReader {
 func (p *process) refreshArtistNow(ctx context.Context, personID int64) error {
 	_, err := music.EnqueueRefreshArtistNow(ctx, p.queue, personID)
 	return err
+}
+
+// The resolvers below are the only place a media type's resolver is built: scan, import and watch take the same
+// value, so they share one lock and one threshold.
+
+func (p *process) tvResolver() tv.Resolver {
+	return tv.Resolver{
+		Service: p.tvService(), Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem(), Logger: p.logger,
+		DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
+		Locks: p.locksFor("tv"),
+	}
+}
+
+func (p *process) movieResolver() movie.Resolver {
+	return movie.Resolver{
+		Service: p.movieService(), Reader: library.NewSeriesReader(p.library), Logger: p.logger,
+		DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
+		Locks: p.locksFor("movie"),
+	}
+}
+
+func (p *process) bookResolver(format book.Format) book.Resolver {
+	return book.Resolver{
+		Service: p.bookService(format), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID,
+		Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold, Locks: p.locksFor("book"),
+	}
+}
+
+func (p *process) adultResolver() adult.Resolver {
+	return adult.Resolver{
+		Service: p.adultService(), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID,
+		Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold, Locks: p.locksFor("adult"),
+	}
 }

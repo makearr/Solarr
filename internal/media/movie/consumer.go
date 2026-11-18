@@ -12,7 +12,6 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/filekind"
 	"github.com/makearr/Solarr/internal/platform/fsx"
-	"github.com/makearr/Solarr/internal/platform/keyedlock"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
@@ -21,22 +20,14 @@ func IsFeature(relPath string) bool { return filekind.IsFeature(relPath) }
 
 // ConsumerConfig is what a Consumer needs; every field but Logger is required.
 type ConsumerConfig struct {
-	// Locks serialises resolving one title across every caller (scan, import, watch); nil serialises nothing.
-	Locks *keyedlock.Locks
-	// Threshold is import.auto_commit_confidence; nil takes its default.
-	Threshold        func() float64
-	FS               fsx.FS
-	Physical         library.Physical
-	Unidentified     library.Unidentified
-	Service          Service
-	Reader           library.SeriesReader
-	Clock            clock.Clock
-	Logger           *slog.Logger
-	DefaultProfileID int64
-	Categories       interface {
-		Category(id int64) (settings.Category, bool)
-		ProfileFor(category settings.Category, fallback int64) int64
-	}
+	// Resolver is the one the app builds per media type, shared with import and watch.
+	Resolver     Resolver
+	FS           fsx.FS
+	Physical     library.Physical
+	Unidentified library.Unidentified
+	Service      Service
+	Clock        clock.Clock
+	Logger       *slog.Logger
 }
 
 // Consumer is the movie module's scan.Consumer: it registers what a sweep found, reads each file's title and year from
@@ -58,12 +49,8 @@ func NewConsumer(config ConsumerConfig) Consumer {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	resolver := Resolver{
-		Service: config.Service, Reader: config.Reader, Logger: logger, DefaultProfileID: config.DefaultProfileID,
-		Categories: config.Categories, Locks: config.Locks, Threshold: config.Threshold,
-	}
 	return Consumer{works.NewConsumer(works.ConsumerConfig{
-		MediaType: MediaType, Plural: "movies", OSHash: true, Resolver: scanning{fs: config.FS, resolver: resolver},
+		MediaType: MediaType, Plural: "movies", OSHash: true, Resolver: scanning{fs: config.FS, resolver: config.Resolver},
 		FS: config.FS, Physical: config.Physical, Unidentified: config.Unidentified, Series: config.Service.Series,
 		Clock: config.Clock, Logger: logger,
 	})}

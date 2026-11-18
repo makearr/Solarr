@@ -16,7 +16,6 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/filekind"
 	"github.com/makearr/Solarr/internal/platform/fsx"
-	"github.com/makearr/Solarr/internal/platform/keyedlock"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
@@ -25,18 +24,15 @@ func IsVideo(relPath string) bool { return filekind.IsFeature(relPath) }
 
 // ConsumerConfig is what a Consumer needs; every field but Logger is required.
 type ConsumerConfig struct {
-	// Locks serialises resolving one title across every caller (scan, import, watch); nil serialises nothing.
-	Locks *keyedlock.Locks
-	// Threshold is import.auto_commit_confidence; nil takes its default.
-	Threshold        func() float64
-	FS               fsx.FS
-	Physical         library.Physical
-	Unidentified     library.Unidentified
-	Service          Service
-	Reader           library.SeriesReader
-	Clock            clock.Clock
-	Logger           *slog.Logger
-	DefaultProfileID int64
+	// Resolver is the one the app builds for TV, shared with import; the consumer adds its folder memory.
+	Resolver     Resolver
+	FS           fsx.FS
+	Physical     library.Physical
+	Unidentified library.Unidentified
+	Service      Service
+	Reader       library.SeriesReader
+	Clock        clock.Clock
+	Logger       *slog.Logger
 	// Profile resolves a category's quality profile, or the default when it has none.
 	Categories interface {
 		Category(id int64) (settings.Category, bool)
@@ -61,10 +57,9 @@ func NewConsumer(config ConsumerConfig) Consumer {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return Consumer{config: config, logger: logger, resolver: Resolver{
-		Service: config.Service, Reader: config.Reader, Clock: config.Clock, Logger: logger,
-		DefaultProfileID: config.DefaultProfileID, Categories: config.Categories, Locks: config.Locks, Threshold: config.Threshold, Resolved: &FolderMemory{},
-	}}
+	resolver := config.Resolver
+	resolver.Resolved = &FolderMemory{}
+	return Consumer{config: config, logger: logger, resolver: resolver}
 }
 
 var _ scan.Consumer = Consumer{}

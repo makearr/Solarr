@@ -74,7 +74,8 @@ func newConsumer(t *testing.T, source movie.TMDBSource, policy string) (movie.Co
 	}
 	consumer := movie.NewConsumer(movie.ConsumerConfig{
 		FS: fsys, Physical: library.NewPhysical(opened), Unidentified: library.NewUnidentified(opened), Service: service,
-		Reader: library.NewSeriesReader(opened), Clock: fake, DefaultProfileID: 1, Categories: categories{policy},
+		Clock:    fake,
+		Resolver: movie.Resolver{Service: service, Reader: library.NewSeriesReader(opened), DefaultProfileID: 1, Categories: categories{policy}},
 	})
 	return consumer, opened, fsys
 }

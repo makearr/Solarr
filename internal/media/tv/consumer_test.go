@@ -67,7 +67,8 @@ func newConsumerIn(t *testing.T, sky tv.SeriesSource, policy scanCategories) (tv
 	service := tv.Service{Skyhook: sky, TVmaze: fakeTVmaze{err: tvmaze.ErrNotFound}, Series: library.NewSeries(opened), Exclusions: library.NewExclusions(opened), Desired: library.NewDesired(opened), Clock: fake}
 	consumer := tv.NewConsumer(tv.ConsumerConfig{
 		FS: fsys, Physical: library.NewPhysical(opened), Unidentified: library.NewUnidentified(opened), Service: service,
-		Reader: library.NewSeriesReader(opened), Clock: fake, DefaultProfileID: 1, Categories: policy,
+		Reader: library.NewSeriesReader(opened), Clock: fake, Categories: policy,
+		Resolver: tv.Resolver{Service: service, Reader: library.NewSeriesReader(opened), Clock: fake, DefaultProfileID: 1, Categories: policy},
 	})
 	return consumer, opened, fsys
 }
