@@ -29,7 +29,7 @@
 {"input":"The Goda (Skit) (Produced By Birino)","album":"The Goda (Skit)","min_confidence":0.1,"max_confidence":0.3}
 {"input":"Without Me (Produced By Birino & Jeff Bass)","album":"Without Me","min_confidence":0.1,"max_confidence":0.3}
 {"input":"SUKE - The Love Dutefofu 1998 2CD 192kbps RIP","artist":"SUKE","album":"The Love Dutefofu","year":1998,"bitrate_kbps":192,"discs":2,"bitrate_mode":"cbr","min_confidence":0.9}
-{"input":"Gemu Codub Sa - Live Cimos Gulofip 2016 (2017) MP3 192kbps","artist":"Gemu Codub Sa","album":"Live Cimos Gulofip","year":2016,"year_end":2017,"format":"mp3","bitrate_kbps":192,"bitrate_mode":"cbr","min_confidence":0.9}
+{"input":"Gemu Codub Sa - Live Cimos Gulofip 2016 (2017) MP3 192kbps","artist":"Gemu Codub Sa","album":"Live Cimos Gulofip 2016","year":2017,"format":"mp3","bitrate_kbps":192,"bitrate_mode":"cbr","min_confidence":0.9}
 {"input":"Zos Mefarada - Studio Discography 1969-1982 (10 albums)(flac)","artist":"Zos Mefarada","album":"Discography","year":1969,"year_end":1982,"format":"flac","lossless":true,"edition":"10 albums","discography":true,"min_confidence":0.9}
 {"input":"Tulap Vinuma - Complete Discography [1989] [Anthology]","artist":"Tulap Vinuma","album":"Discography","year":1989,"discography":true,"release_group":"Anthology","min_confidence":0.9}
 {"input":"(Bosav Pusob) Heci - Discography(46 CD) [1985 - 2015]","artist":"(Bosav Pusob) Heci","album":"Discography","year":1985,"year_end":2015,"source":"cd","discography":true,"min_confidence":0.9}

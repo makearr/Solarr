@@ -1,0 +1,10 @@
+{"input":"Invented Artist - Some Album 320","artist":"Invented Artist","album":"Some Album","bitrate_kbps":320,"bitrate_mode":"cbr","min_confidence":0.9}
+{"input":"Invented Artist-Some Album-2CD-FLAC-2001-GRP","artist":"Invented Artist","album":"Some Album","year":2001,"format":"flac","lossless":true,"discs":2,"release_group":"GRP","min_confidence":0.9}
+{"input":"Invented Artist - 1989 (2014) [FLAC]","artist":"Invented Artist","album":"1989","year":2014,"format":"flac","lossless":true,"min_confidence":0.9}
+{"input":"Invented_Artist-1989-CD-FLAC-2014-GRP","artist":"Invented Artist","album":"1989","year":2014,"format":"flac","lossless":true,"source":"cd","release_group":"GRP","min_confidence":0.9}
+{"input":"Invented.Artist.-.Some.Album.Title.2020.FLAC-GRP","artist":"Invented Artist","album":"Some Album Title","year":2020,"format":"flac","lossless":true,"release_group":"GRP","min_confidence":0.9}
+{"input":"Invented Artist - Live at Somewhere 2010 (2011) FLAC","artist":"Invented Artist","album":"Live at Somewhere 2010","year":2011,"format":"flac","lossless":true,"min_confidence":0.9}
+{"input":"Invented Artist - Some Album (Deluxe Edition) (2019)","artist":"Invented Artist","album":"Some Album","year":2019,"edition":"deluxe edition","min_confidence":0.9}
+{"input":"Invented Artist - Some Title Deluxe Edition 2019 FLAC","artist":"Invented Artist","album":"Some Title","year":2019,"format":"flac","lossless":true,"edition":"deluxe edition","min_confidence":0.9}
+{"input":"Invented Artist-Some Title EP-WEB-2020-GRP","artist":"Invented Artist","album":"Some Title EP","year":2020,"source":"web","release_group":"GRP","min_confidence":0.9}
+{"input":"Invented Artist-The Grey Album-WEB-FLAC-2003-GRP","artist":"Invented Artist","album":"The Grey Album","year":2003,"format":"flac","lossless":true,"source":"web","release_group":"GRP","min_confidence":0.9}

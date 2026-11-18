@@ -99,20 +99,35 @@ var sourceWords = map[string]string{
 	"vls": "vinyl", "cdm": "cd", "cds": "cd",
 }
 
-// editionWords mark a bracket or segment as noise to strip, not part of the
-// album's identity: a reissue label, not a different work. Matched whole-word
-// (isNoise tokenizes first) -- "ep" as a raw substring matches inside
-// "Mesofisak", which is exactly the bug that made this a set of whole words
-// rather than a Contains check.
-var editionWords = map[string]bool{
+// editionWords mark a bracket as noise to strip, not part of the album's identity: a reissue label, not a different
+// work. Matched whole-word (isNoise tokenizes first) -- "ep" as a raw substring matches inside "Mesofisak".
+var editionWords = map[string]bool{}
+
+// editionModifiers describe a reissue; in bare text they are stripped only beside an anchor (editionEnders, or a
+// technical claim already stripped from the same tail), since "Limited" and "Bonus" are also title words.
+var editionModifiers = map[string]bool{
 	"edition": true, "deluxe": true, "remaster": true, "remastered": true,
-	"album": true, "albums": true, "single": true, "ep": true, "promo": true,
-	"anniversary": true, "bonus": true, "expanded": true, "itunes": true,
-	"lossless": true, "tracks": true,
-	// Found missing against this project's own real download folder --
-	// "Limited Edition" and "Legacy Edition" are as common as "Deluxe
-	// Edition" but were only ever half-recognised (the "edition" half).
-	"limited": true, "legacy": true, "collectors": true, "collector's": true,
+	"anniversary": true, "bonus": true, "expanded": true,
+	"limited": true, "collectors": true, "collector's": true, "legacy": true,
+}
+
+// editionEnders close an edition phrase ("Deluxe Edition", "2011 Remaster"), which anchors the modifiers before them.
+var editionEnders = map[string]bool{"edition": true, "remaster": true, "remastered": true, "version": true}
+
+// bracketOnlyWords are noise inside a bracket ("[Single]", "(EP)") but plain title words in bare text ("The Grey
+// Album", "... Legacy"): bare text strips them only after a technical claim.
+var bracketOnlyWords = map[string]bool{
+	"album": true, "albums": true, "single": true, "ep": true, "tracks": true,
+	"lossless": true, "promo": true, "itunes": true,
+}
+
+func init() {
+	for word := range editionModifiers {
+		editionWords[word] = true
+	}
+	for word := range bracketOnlyWords {
+		editionWords[word] = true
+	}
 }
 
 // creditPrefixes mark a collaborator credit, stripped the same way as an edition
@@ -145,6 +160,10 @@ func collapseSpaces(s string) string {
 // scene names (ATTRIBUTION.md records why).
 func Parse(title string) Result {
 	releaseTitle := removeFileExtension(title)
+	dotted := false
+	if spaced := dotsToSpaces(releaseTitle); spaced != releaseTitle {
+		releaseTitle, dotted = spaced, true
+	}
 	if isHashedRelease(releaseTitle) {
 		return Result{Confidence: 0, Unparsed: []string{releaseTitle}}
 	}
@@ -159,6 +178,11 @@ func Parse(title string) Result {
 	simple = normalizeAirDate(simple)
 	simple = normalizeSixDigitAirDate(simple)
 	simple = normalizeHiResPair(simple)
+
+	// "Artist.-.Title.2020.FLAC-GRP": once the dots are spaces the glued group is not a dash segment, so it is cut here.
+	if dotted && group != "" && strings.HasSuffix(strings.ToLower(simple), strings.ToLower("-"+group)) {
+		simple = simple[:len(simple)-len(group)-1]
+	}
 
 	claims := &claimSet{}
 	// "...LOSSLESS.FLAC" names its codec where a file has its extension; Lidarr reads it too.
@@ -209,9 +233,38 @@ func Parse(title string) Result {
 	}
 }
 
+// dotAbbreviationRe finds an abbreviation whose dot belongs to it ("Vol.", "Mr.").
+var dotAbbreviationRe = regexp.MustCompile(`(?i)(^|[^a-z])(vol|no|pt|st|mr|dr)$`)
+
+// dotsToSpaces reads a dot-separated name ("Artist.Name.-.Title.2020.FLAC-GRP") as words. A name with spaces or
+// underscores, or with fewer than two dots, is left alone, and so is one whose dashes already delimit its fields
+// ("Artist.Name-Album.Title-WEB-FLAC-2020-GRP"); so is a dot between digits ("5.1", "24.96") or after an abbreviation.
+func dotsToSpaces(name string) string {
+	if strings.ContainsAny(name, " _") || strings.Count(name, ".") < 2 ||
+		(strings.Count(name, "-") > 1 && !strings.Contains(name, ".-.")) {
+		return name
+	}
+	var out strings.Builder
+	for i := 0; i < len(name); i++ {
+		if name[i] != '.' {
+			out.WriteByte(name[i])
+			continue
+		}
+		between := i > 0 && i < len(name)-1 && name[i-1] >= '0' && name[i-1] <= '9' && name[i+1] >= '0' && name[i+1] <= '9'
+		if between || dotAbbreviationRe.MatchString(name[:i]) {
+			out.WriteByte('.')
+			continue
+		}
+		out.WriteByte(' ')
+	}
+	return out.String()
+}
+
 // claimSet accumulates what bracket, segment and tail-token classification found.
 type claimSet struct {
-	year, yearEnd, bitrateKbps, discs, bitDepth, sampleRate    int
+	year, yearEnd, bitrateKbps, discs, bitDepth, sampleRate int
+	// bracketYear is set once a year was read from a bracket: the release year, so a bare year before it is the title's.
+	bracketYear                                                bool
 	format, source, edition, bitrateMode, vbrPreset, container string
 	lossless                                                   bool
 	unparsed                                                   []string
@@ -278,6 +331,9 @@ func isNoise(phrase string, claims *claimSet) bool {
 		for _, field := range strings.Fields(token) {
 			if claimField(strings.Trim(field, ",."), claims) {
 				noise = true
+				if yearRe.MatchString(strings.Trim(field, ",.")) {
+					claims.bracketYear = true
+				}
 			}
 		}
 	}
@@ -324,7 +380,7 @@ func resolveAlbum(segments []string, group string, claims *claimSet) string {
 			segments = segments[1:]
 		}
 	}
-	return stripTrailingTokens(strings.TrimSpace(strings.Join(segments, " ")), claims)
+	return stripTrailingTokens(strings.TrimSpace(strings.Join(segments, " ")), claims, false)
 }
 
 // stripNoiseSegments drops whole trailing segments that are entirely noise (a
@@ -359,13 +415,36 @@ func stripNoiseSegments(segments []string, group string, claims *claimSet) []str
 		}
 	}
 	for end > 0 {
-		trimmed := stripTrailingTokens(strings.TrimSpace(segments[end-1]), claims)
+		if isSceneTagSegment(strings.TrimSpace(segments[end-1])) && end > 1 {
+			end--
+			continue
+		}
+		// A segment of its own may be all noise; the first one is the title and is never dropped whole.
+		trimmed := stripTrailingTokens(strings.TrimSpace(segments[end-1]), claims, end > 1)
 		if trimmed != "" {
 			return append(append([]string{}, segments[:end-1]...), trimmed)
 		}
 		end--
 	}
 	return segments[:end]
+}
+
+// sceneTags are release markers a scene name carries as a whole dash segment between title and technical run.
+var sceneTags = map[string]bool{
+	"proper": true, "repack": true, "rerip": true, "read nfo": true, "readnfo": true, "nfofix": true, "dirfix": true,
+	"int": true, "retail": true, "advance": true, "bootleg": true, "digipak": true, "mcd": true, "cdr": true,
+	"dab": true, "sat": true, "cable": true, "fm": true, "dvda": true, "ost": true,
+}
+
+// countryCodes are the two-capital release-country tags ("-DE-"); only these, since "CD", "LP" and "RI" are claims.
+var countryCodes = map[string]bool{
+	"DE": true, "FR": true, "JP": true, "ES": true, "IT": true, "NL": true, "PL": true, "SE": true, "RU": true, "KR": true,
+}
+
+// isSceneTagSegment recognises a whole dash segment that is a scene tag, or a two-capital country code in the
+// original text.
+func isSceneTagSegment(segment string) bool {
+	return sceneTags[strings.ToLower(segment)] || countryCodes[segment]
 }
 
 // stripTrailingTokens removes recognised technical and edition words from the
@@ -376,7 +455,7 @@ func stripNoiseSegments(segments []string, group string, claims *claimSet) []str
 // end. Unlike group extraction, this never guesses a release group --
 // word-level debris is too easily a real title word for that heuristic to be
 // safe here.
-func stripTrailingTokens(s string, claims *claimSet) string {
+func stripTrailingTokens(s string, claims *claimSet, segment bool) string {
 	words := strings.Fields(s)
 	if len(words) >= 2 {
 		last := strings.ToLower(strings.Trim(words[len(words)-1], ",."))
@@ -388,20 +467,33 @@ func stripTrailingTokens(s string, claims *claimSet) string {
 
 	end := len(words)
 	recognizedAny := false
+	anchored := false           // a technical claim or an edition ender was stripped from this tail
 	var trimmedEdition []string // collected back-to-front, reversed below
 	for end > 0 {
 		field := strings.ToLower(strings.Trim(words[end-1], ",."))
-		if editionWords[field] {
+		if editionModifiers[field] && (anchored || segment || editionEnders[field]) {
+			trimmedEdition = append(trimmedEdition, field)
+			end--
+			recognizedAny = true
+			anchored = true
+			continue
+		}
+		if bracketOnlyWords[field] && bracketOnlyStrippable(words[:end-1], anchored || segment) {
 			trimmedEdition = append(trimmedEdition, field)
 			end--
 			recognizedAny = true
 			continue
 		}
-		if !claimField(field, claims) {
+		// A year already claimed (a bracketed release year) leaves a bare year in the title, as does one that is the whole title.
+		if !segment && yearRe.MatchString(field) && (claims.bracketYear || end == 1) {
+			break
+		}
+		if editionWords[field] || !claimField(field, claims) {
 			break
 		}
 		end--
 		recognizedAny = true
+		anchored = true
 	}
 	// A short digit-fused-with-letters leftover beside something already
 	// recognised ("12INCH" beside "VINYL", found against this project's own
@@ -422,6 +514,23 @@ func stripTrailingTokens(s string, claims *claimSet) string {
 		claims.edition = strings.Join(trimmedEdition, " ")
 	}
 	return strings.TrimSpace(strings.Join(words[:end], " "))
+}
+
+// bracketOnlyStrippable reports whether a bracket-only word ending the tail is debris: a technical claim stands before
+// it ("FLAC Tracks"), or the tail is nothing but vocabulary beside a claim already stripped or in a segment of its own
+// ("lossless FLAC Tracks", "-SINGLE-").
+func bracketOnlyStrippable(before []string, wholeTail bool) bool {
+	for i := len(before) - 1; i >= 0; i-- {
+		field := strings.ToLower(strings.Trim(before[i], ",."))
+		switch {
+		case isStrictVocabWord(field):
+			return true
+		case editionWords[field]:
+		default:
+			return false
+		}
+	}
+	return wholeTail
 }
 
 var compoundTechnicalTokenRe = regexp.MustCompile(`(?i)^\d+[a-z]+$`)
