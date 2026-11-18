@@ -26,7 +26,11 @@ const (
 	recycleBinCleanupJobType   = jobs.Type("library.recycle_bin_cleanup")
 	decisionRetentionJobType   = jobs.Type("library.decision_retention")
 	jobRetentionJobType        = jobs.Type("jobs.retention")
+	historyRetentionJobType    = jobs.Type("library.history_retention")
 )
+
+// importHistoryKept is how long a finished import that placed nothing stays listed.
+const importHistoryKept = 90 * 24 * time.Hour
 
 // decisionRetentionPages bounds one run, so a first pass over an old backlog is spread over several nights.
 const decisionRetentionPages = 250
@@ -51,6 +55,7 @@ var maintenanceDefinitions = []jobs.Definition{
 	{Type: recycleBinCleanupJobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3},
 	{Type: decisionRetentionJobType, Name: "Cleaning old search results", Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3},
 	previewCleanupDefinition,
+	{Type: historyRetentionJobType, Name: "Cleaning old import history", Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3},
 	{Type: jobRetentionJobType, Name: "Cleaning old jobs", Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3},
 }
 
@@ -75,6 +80,32 @@ func (j decisionRetentionJob) Run(ctx context.Context, _ jobs.Job) error {
 	}
 	if retired.Decisions > 0 || retired.Candidates > 0 {
 		j.logger.Info("old search results cleaned", slog.Int64("decisions", retired.Decisions), slog.Int64("releases", retired.Candidates))
+	}
+	return nil
+}
+
+// historyRetentionJob deletes finished imports older than importHistoryKept that placed nothing, a batch at a time.
+type historyRetentionJob struct {
+	sessions library.ImportSessions
+	clock    clock.Clock
+	logger   *slog.Logger
+}
+
+func (j historyRetentionJob) Run(ctx context.Context, _ jobs.Job) error {
+	before := j.clock.Now().Add(-importHistoryKept).Unix()
+	var total int64
+	for range jobRetentionPages {
+		deleted, err := j.sessions.DeleteOldSessions(ctx, before, jobRetentionBatch)
+		if err != nil {
+			return err
+		}
+		total += deleted
+		if deleted < jobRetentionBatch {
+			break
+		}
+	}
+	if total > 0 {
+		j.logger.Info("old import history cleaned", slog.Int64("sessions", total))
 	}
 	return nil
 }
@@ -269,6 +300,7 @@ func (p *process) registerMaintenanceJobs(registry *jobs.Registry, executor *job
 	executor.Handle(previewCleanupJobType, previewCleanupJob{
 		fs: p.fsys, dir: filepath.Join(p.config.Paths.ConfigDir, "previews"), physical: library.NewPhysical(p.library), logger: p.logger,
 	})
+	executor.Handle(historyRetentionJobType, historyRetentionJob{sessions: library.NewImportSessions(p.library), clock: clock.NewSystem(), logger: p.logger})
 	executor.Handle(jobRetentionJobType, jobRetentionJob{queue: p.queue, clock: clock.NewSystem(), logger: p.logger})
 	executor.Handle(backupJobType, backupJob{
 		backup: bundleBackup{
@@ -335,6 +367,10 @@ func (p *process) enqueueRecycleBinCleanup(ctx context.Context) (jobs.EnqueueRes
 
 func (p *process) enqueueDecisionRetention(ctx context.Context) (jobs.EnqueueResult, error) {
 	return p.enqueueMaintenanceJob(ctx, decisionRetentionJobType)
+}
+
+func (p *process) enqueueHistoryRetention(ctx context.Context) (jobs.EnqueueResult, error) {
+	return p.enqueueMaintenanceJob(ctx, historyRetentionJobType)
 }
 
 func (p *process) enqueueJobRetention(ctx context.Context) (jobs.EnqueueResult, error) {

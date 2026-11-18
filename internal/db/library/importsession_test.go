@@ -542,3 +542,40 @@ func TestImportSessions_ListPagePagesByCursorWithAnIDTieBreakAndFiltersAttention
 		t.Errorf("attention = %v, want the recent manual import, the running one and the failed one", got(attention))
 	}
 }
+
+func TestImportSessions_DeleteOldSessionsKeepsWhatStillMatters(t *testing.T) {
+	opened, _ := newLibrary(t)
+	sessions := library.NewImportSessions(opened)
+	ctx := t.Context()
+	create := func(finish string, units ...library.NewUnit) int64 {
+		id, err := sessions.Create(ctx, library.NewSession{SourcePath: "/downloads/x", Origin: library.ImportOriginAcquisition, Threshold: 0.9, StartedAt: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := sessions.AddUnits(ctx, id, units); err != nil {
+			t.Fatal(err)
+		}
+		if err := sessions.Finish(ctx, id, finish, 100, ""); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	unit := library.NewUnit{RelPath: ".", Shape: library.UnitSet, FileCount: 1, EvidenceJSON: "{}"}
+	skipped := create(library.ImportDone)
+	failed := create(library.ImportFailed)
+	held := create(library.ImportDone, unit) // AddUnits records a unit as QUEUE
+
+	deleted, err := sessions.DeleteOldSessions(ctx, 1000, 200)
+	if err != nil || deleted != 2 {
+		t.Fatalf("deleted %d, %v; want the two sessions that placed and held nothing", deleted, err)
+	}
+	for id, wantGone := range map[int64]bool{skipped: true, failed: true, held: false} {
+		_, err := sessions.Get(ctx, id)
+		if gone := err != nil; gone != wantGone {
+			t.Errorf("session %d gone = %v, want %v", id, gone, wantGone)
+		}
+	}
+	if deleted, err := sessions.DeleteOldSessions(ctx, 50, 200); err != nil || deleted != 0 {
+		t.Errorf("a window before the finish deleted %d, %v; want none", deleted, err)
+	}
+}

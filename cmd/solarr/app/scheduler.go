@@ -47,6 +47,7 @@ const (
 	backupCleanupScheduleCron      = "30 1 * * 0"    // Sundays at 01:30, after the backup
 	recycleBinCleanupScheduleCron  = "30 2 * * *"    // daily at 02:30
 	decisionRetentionScheduleCron  = "10 3 * * *"    // daily at 03:10
+	historyRetentionScheduleCron   = "20 3 * * *"    // daily at 03:20
 	jobRetentionScheduleCron       = "20 3 * * *"    // daily at 03:20
 	previewCleanupScheduleCron     = "40 3 * * *"    // daily at 03:40
 	refreshPeopleScheduleCron      = "0 5 * * 0"     // Sundays at 05:00, after database maintenance
@@ -263,6 +264,10 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	registry.MustRegister(jobs.Task{
 		Key: "decision_retention", Name: "Clean old search results", DefaultCadence: decisionRetentionScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMaintenance, Enqueue: p.enqueueDecisionRetention,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "history_retention", Name: "Clean old import history", DefaultCadence: historyRetentionScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMaintenance, Enqueue: p.enqueueHistoryRetention,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "job_retention", Name: "Clean old jobs", DefaultCadence: jobRetentionScheduleCron,

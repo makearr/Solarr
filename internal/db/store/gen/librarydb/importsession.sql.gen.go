@@ -175,6 +175,33 @@ func (q *Queries) DeleteImportUnits(ctx context.Context, arg DeleteImportUnitsPa
 	return err
 }
 
+const deleteOldImportSessions = `-- name: DeleteOldImportSessions :execrows
+DELETE FROM import_session WHERE id IN (
+  SELECT s.id FROM import_session s
+  WHERE s.state IN ('DONE', 'FAILED', 'CANCELLED', 'REVERTED')
+    AND s.finished_at IS NOT NULL AND s.finished_at < ?1
+    AND (s.state = 'REVERTED' OR NOT EXISTS (
+      SELECT 1 FROM import_unit u WHERE u.session_id = s.id AND (u.decision = 'QUEUE' OR u.work_id IS NOT NULL)))
+    AND NOT EXISTS (SELECT 1 FROM pack p WHERE p.session_id = s.id)
+    AND NOT EXISTS (SELECT 1 FROM pack_item pi JOIN import_unit u2 ON u2.id = pi.import_unit_id WHERE u2.session_id = s.id)
+  ORDER BY s.id
+  LIMIT ?2)
+`
+
+type DeleteOldImportSessionsParams struct {
+	FinishedBefore sql.NullInt64
+	RowLimit       int64
+}
+
+// Old finished sessions that placed nothing still in the library and hold nothing for a person; a pack keeps its session.
+func (q *Queries) DeleteOldImportSessions(ctx context.Context, arg DeleteOldImportSessionsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteOldImportSessions, arg.FinishedBefore, arg.RowLimit)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const dismissImportSession = `-- name: DismissImportSession :execrows
 UPDATE import_session SET dismissed_at = ?1
 WHERE id = ?2 AND dismissed_at IS NULL

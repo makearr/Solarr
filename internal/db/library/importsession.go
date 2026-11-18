@@ -706,6 +706,23 @@ func (s ImportSessions) ListPage(ctx context.Context, page SessionPage) ([]Sessi
 	return sessions, nil
 }
 
+// DeleteOldSessions removes up to limit finished sessions older than finishedBefore that placed nothing still in the
+// library and hold nothing for review, and answers how many went.
+func (s ImportSessions) DeleteOldSessions(ctx context.Context, finishedBefore int64, limit int64) (int64, error) {
+	var deleted int64
+	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		var err error
+		deleted, err = librarydb.New(tx).DeleteOldImportSessions(ctx, librarydb.DeleteOldImportSessionsParams{
+			FinishedBefore: sql.NullInt64{Int64: finishedBefore, Valid: true}, RowLimit: limit,
+		})
+		return err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("library: delete old import sessions: %w", err)
+	}
+	return deleted, nil
+}
+
 // ListBySourcePath answers the imports of one source folder in one state, newest first, dismissed ones included.
 func (s ImportSessions) ListBySourcePath(ctx context.Context, sourcePath, state string) ([]Session, error) {
 	rows, err := librarydb.New(s.store.Read()).ListImportSessionsBySourcePath(ctx,

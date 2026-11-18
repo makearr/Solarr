@@ -270,3 +270,16 @@ WHERE (sqlc.arg(filter_by_state) = 0 OR state = sqlc.arg(state))
        OR (started_at = sqlc.arg(before_started_at) AND id < sqlc.arg(before_id)))
 ORDER BY started_at DESC, id DESC
 LIMIT sqlc.arg(row_limit);
+
+-- Old finished sessions that placed nothing still in the library and hold nothing for a person; a pack keeps its session.
+-- name: DeleteOldImportSessions :execrows
+DELETE FROM import_session WHERE id IN (
+  SELECT s.id FROM import_session s
+  WHERE s.state IN ('DONE', 'FAILED', 'CANCELLED', 'REVERTED')
+    AND s.finished_at IS NOT NULL AND s.finished_at < sqlc.arg(finished_before)
+    AND (s.state = 'REVERTED' OR NOT EXISTS (
+      SELECT 1 FROM import_unit u WHERE u.session_id = s.id AND (u.decision = 'QUEUE' OR u.work_id IS NOT NULL)))
+    AND NOT EXISTS (SELECT 1 FROM pack p WHERE p.session_id = s.id)
+    AND NOT EXISTS (SELECT 1 FROM pack_item pi JOIN import_unit u2 ON u2.id = pi.import_unit_id WHERE u2.session_id = s.id)
+  ORDER BY s.id
+  LIMIT sqlc.arg(row_limit));

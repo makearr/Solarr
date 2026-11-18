@@ -298,6 +298,8 @@ type Querier interface {
 	DeleteLibraryPath(ctx context.Context, id int64) error
 	DeleteMediaObject(ctx context.Context, id int64) error
 	DeleteMissingRecount(ctx context.Context, arg DeleteMissingRecountParams) error
+	// Old finished sessions that placed nothing still in the library and hold nothing for a person; a pack keeps its session.
+	DeleteOldImportSessions(ctx context.Context, arg DeleteOldImportSessionsParams) (int64, error)
 	DeletePerson(ctx context.Context, id int64) error
 	DeletePersonArtwork(ctx context.Context, subjectID int64) error
 	DeletePersonSubscriptions(ctx context.Context, subjectID int64) error
