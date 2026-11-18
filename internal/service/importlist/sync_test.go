@@ -28,6 +28,8 @@ import (
 type listType struct {
 	added *[]media.AddRequest
 	fail  error
+	// lookupErr makes the lookup of the entry with that title fail.
+	lookupErr map[string]error
 }
 
 func (listType) Descriptor() media.Descriptor {
@@ -39,7 +41,10 @@ func (listType) ImportListTypes() []media.ListType {
 	return []media.ListType{media.ListTMDBList, media.ListTMDBPopular}
 }
 
-func (listType) ResolveListEntry(_ context.Context, entry media.ListEntry) (media.ListMatch, error) {
+func (l listType) ResolveListEntry(_ context.Context, entry media.ListEntry) (media.ListMatch, error) {
+	if err := l.lookupErr[entry.Title]; err != nil {
+		return media.ListMatch{}, err
+	}
 	switch {
 	case entry.Form == tmdb.MediaMovie:
 		return media.ListMatch{Foreign: true}, nil
@@ -414,5 +419,40 @@ func TestCheckRefusesWhatTheLibraryCannotTake(t *testing.T) {
 	}
 	if err := f.service.Check(99, request); !errors.Is(err, settings.ErrNotFound) {
 		t.Errorf("no library: err = %v", err)
+	}
+}
+
+func TestOneEntryThatCannotBeLookedUpIsLeftUnresolvedAndTheRestAreKept(t *testing.T) {
+	f := newSyncFixture(t, show(1, "First"), show(2, "Odd"), show(3, "Third"))
+	f.module.lookupErr = map[string]error{"Odd": errors.New("400 bad name")}
+	f.run(t, 1)
+	if got := f.addedIDs(); !reflect.DeepEqual(got, []string{"tmdb:1", "tmdb:3"}) {
+		t.Fatalf("added %v, want the entries around the odd one", got)
+	}
+	entries, _ := f.records.Entries(t.Context(), 1)
+	outcomes := map[string]library.ListOutcome{}
+	for _, entry := range entries {
+		outcomes[entry.Title] = entry.Outcome
+	}
+	if want := map[string]library.ListOutcome{"First": library.ListAdded, "Odd": library.ListUnresolved, "Third": library.ListAdded}; !reflect.DeepEqual(outcomes, want) {
+		t.Errorf("outcomes = %v, want %v", outcomes, want)
+	}
+}
+
+func TestASourceThatIsDownStopsThePassButKeepsWhatWasDecidedBefore(t *testing.T) {
+	f := newSyncFixture(t, show(1, "Held"), show(2, "Down"), show(3, "Third"))
+	f.held[media.ProviderID{Provider: "tmdb", ExternalID: "1"}] = 55
+	f.module.lookupErr = map[string]error{"Down": media.ErrSourceUnavailable}
+	f.run(t, 1)
+	if len(f.added) != 0 {
+		t.Errorf("added %v from a pass that stopped", f.addedIDs())
+	}
+	entries, _ := f.records.Entries(t.Context(), 1)
+	if len(entries) != 1 || entries[0].Title != "Held" || entries[0].Outcome != library.ListHeld {
+		t.Errorf("entries = %+v, want the held verdict kept", entries)
+	}
+	state, _ := f.records.State(t.Context(), 1)
+	if state.RunFailure != "source_unavailable" {
+		t.Errorf("state = %+v", state)
 	}
 }

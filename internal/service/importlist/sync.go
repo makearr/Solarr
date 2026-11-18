@@ -20,7 +20,9 @@ import (
 const (
 	previewResolutions = 30
 	runResolutions     = 100
-	runAdds            = 50
+	// maxEntryFailures is how many lookups in a row may fail before the source counts as down.
+	maxEntryFailures = 5
+	runAdds          = 50
 	// unresolvedRetry is how long an entry no source knew waits before it is looked up again.
 	unresolvedRetry = 7 * 24 * time.Hour
 )
@@ -50,6 +52,8 @@ type Judged struct {
 	Verdict Verdict
 	Match   media.ProviderID
 	WorkID  int64
+	// Reason is why an entry stayed unresolved when its lookup failed, for the preview.
+	Reason string
 }
 
 // Lists are the import lists as settings keeps them.
@@ -198,7 +202,9 @@ func (s Service) Preview(ctx context.Context, listID int64) ([]Judged, error) {
 	return judged, nil
 }
 
-// judge reads the list and decides every entry, looking up at most bound entries by name.
+// judge reads the list and decides every entry, looking up at most bound entries by name. An entry whose lookup fails
+// is left unresolved; a failure that says the whole source is down, or five in a row, stops the pass, which answers the
+// verdicts made so far with the error.
 func (s Service) judge(ctx context.Context, aimed target, bound int) ([]Judged, error) {
 	entries, err := aimed.kind.Source.Entries(ctx, aimed.options)
 	if err != nil {
@@ -215,7 +221,7 @@ func (s Service) judge(ctx context.Context, aimed target, bound int) ([]Judged, 
 	filters := filterTokens(aimed.list.Exclusions)
 	mediaType := aimed.category.MediaType
 	judged := make([]Judged, 0, len(entries))
-	resolutions := 0
+	resolutions, failures := 0, 0
 	seen := map[media.ProviderID]bool{}
 	for _, entry := range entries {
 		key := entry.Key()
@@ -244,18 +250,36 @@ func (s Service) judge(ctx context.Context, aimed target, bound int) ([]Judged, 
 			default:
 				resolutions++
 				match, err := aimed.resolver.ResolveListEntry(ctx, entry)
-				if err != nil {
-					return nil, err
-				}
-				verdict.Match = match.ProviderID
-				if err := s.decide(ctx, &verdict, match, excluded, filters, mediaType); err != nil {
-					return nil, err
+				switch {
+				case err != nil && (ctx.Err() != nil || stopsList(err)):
+					return judged, err
+				case err != nil:
+					failures++
+					if failures == maxEntryFailures {
+						return judged, fmt.Errorf("%w: %d lookups in a row failed, the last with: %w", ErrSourceUnavailable, failures, err)
+					}
+					verdict.Verdict, verdict.Reason = VerdictUnknown, err.Error()
+				default:
+					failures = 0
+					verdict.Match = match.ProviderID
+					if err := s.decide(ctx, &verdict, match, excluded, filters, mediaType); err != nil {
+						return judged, err
+					}
 				}
 			}
 		}
 		judged = append(judged, verdict)
 	}
 	return judged, nil
+}
+
+// stopsList says a lookup error is about the whole source, not the one entry.
+func stopsList(err error) bool {
+	switch FailureOf(err) {
+	case FailureNeedsKey, FailureSourceUnavailable, FailureNotSupported:
+		return true
+	}
+	return false
 }
 
 // decide judges a resolved entry by the id it is added by, which the entry's own ids may not hold.

@@ -148,10 +148,8 @@ func (s Service) syncEntries(ctx context.Context, listID int64) (int, error) {
 	if !ok {
 		return 0, ErrNotSupported
 	}
-	judged, err := s.judge(ctx, aimed, runResolutions)
-	if err != nil {
-		return 0, err
-	}
+	// A pass that stops half-way still records what it decided about the entries before the stop.
+	judged, judgeErr := s.judge(ctx, aimed, runResolutions)
 	now := s.Clock.Now().Unix()
 	record := func(verdict Judged, outcome library.ListOutcome, workID int64) library.ImportListEntry {
 		key := verdict.Entry.Key()
@@ -171,7 +169,7 @@ func (s Service) syncEntries(ctx context.Context, listID int64) (int, error) {
 		case VerdictUnknown:
 			kept = append(kept, record(verdict, library.ListUnresolved, 0))
 		case VerdictAdd:
-			if added == runAdds {
+			if added == runAdds || judgeErr != nil {
 				continue
 			}
 			result, err := s.add(ctx, aimed, adding, verdict.Match)
@@ -188,7 +186,7 @@ func (s Service) syncEntries(ctx context.Context, listID int64) (int, error) {
 			kept = append(kept, record(verdict, library.ListAdded, result.WorkID))
 		}
 	}
-	return added, s.Records.Record(ctx, kept)
+	return added, errors.Join(judgeErr, s.Records.Record(ctx, kept))
 }
 
 // add adds one entry through the media type's own add, with the list's monitoring and profile.
