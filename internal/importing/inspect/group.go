@@ -9,9 +9,9 @@ import (
 	"strings"
 )
 
-// discSubfolderRe recognises the disc-subfolder pattern (section 11.9): "CD1",
-// "Disc 2", "Disk-3", "Vol. 4", "Volume4".
-var discSubfolderRe = regexp.MustCompile(`(?i)^(cd|dis[ck]|vol(?:ume)?)\.?\s*[-_]?\s*\d+$`)
+// discSubfolderRe recognises the disc-subfolder pattern (section 11.9): "CD1", "Disc 2", "Disk-3", "Vol. 4", "DVD1",
+// "BD 1", "Digital Media 01", "Side A", each optionally followed by a title ("CD1 - Live", "Disc 2 (Bonus)").
+var discSubfolderRe = regexp.MustCompile(`(?i)^(?:cd|dis[ck]|dvd|bd|blu-?ray|vol(?:ume)?|digital media|side)\.?\s*[-_#]?\s*(?:\d{1,2}|[a-d])(?:\s*[-:(\[].*)?$`)
 
 // leadingTrackNumberRe pulls a track number off the front of a filename --
 // "01 - Title.flac", "01_title.mp3", "1.flac" all match.

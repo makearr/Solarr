@@ -141,3 +141,32 @@ func TestWalk_TagsForReadsEachClusterAndAFailureFallsBackToNoTags(t *testing.T) 
 		t.Errorf("TagsFor asked for %v, want the cluster's 3 media files", asked)
 	}
 }
+
+func TestRun_DiscFoldersWithATitleOrAnotherMediumMerge(t *testing.T) {
+	for _, pair := range [][2]string{
+		{"CD1 - Live in Paris", "CD2 - Encore"}, {"Disc 1", "Disc 2 (Bonus)"}, {"DVD1", "DVD2"}, {"BD 1", "BD 2"},
+		{"Digital Media 01", "Digital Media 02"}, {"Side A", "Side B"},
+	} {
+		tr := newTree(t, "Box/"+pair[0]+"/01.flac", "Box/"+pair[1]+"/01.flac")
+		session, err := inspect.Run(t.Context(), tr.fsys, root, inspect.Options{})
+		if err != nil {
+			t.Fatalf("%v: Run: %v", pair, err)
+		}
+		if len(session.Units) != 1 {
+			t.Errorf("%v: %d units, want 1 merged set", pair, len(session.Units))
+		}
+	}
+}
+
+func TestRun_FoldersThatOnlyLookLikeDiscsStayApart(t *testing.T) {
+	for _, name := range []string{"CD Singles", "Volume", "Disco", "Side Project"} {
+		tr := newTree(t, "Artist/"+name+"/01.flac", "Artist/Other Album/01.flac")
+		session, err := inspect.Run(t.Context(), tr.fsys, root, inspect.Options{})
+		if err != nil {
+			t.Fatalf("%s: Run: %v", name, err)
+		}
+		if len(session.Units) != 2 {
+			t.Errorf("%s: %d units, want 2 separate albums", name, len(session.Units))
+		}
+	}
+}
