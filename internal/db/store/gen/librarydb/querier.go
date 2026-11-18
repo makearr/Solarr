@@ -717,6 +717,8 @@ type Querier interface {
 	// already uses -- an "arg = '' OR ..." single-argument form leaves sqlc unable to
 	// infer a concrete type for the argument.
 	ListImportSessions(ctx context.Context, arg ListImportSessionsParams) ([]ImportSession, error)
+	// The imports of one source folder in one state, newest first; dismissed ones included.
+	ListImportSessionsBySourcePath(ctx context.Context, arg ListImportSessionsBySourcePathParams) ([]ImportSession, error)
 	// Every import a download's poll started (an archive and its loose files are two), oldest first.
 	ListImportSessionsForAcquisition(ctx context.Context, acquisitionID sql.NullInt64) ([]ImportSession, error)
 	ListImportUnitExtrasForSession(ctx context.Context, sessionID int64) ([]ImportUnitExtra, error)

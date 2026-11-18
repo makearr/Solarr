@@ -660,6 +660,20 @@ func (s ImportSessions) List(ctx context.Context, filterState string, includeDis
 	return sessions, nil
 }
 
+// ListBySourcePath answers the imports of one source folder in one state, newest first, dismissed ones included.
+func (s ImportSessions) ListBySourcePath(ctx context.Context, sourcePath, state string) ([]Session, error) {
+	rows, err := librarydb.New(s.store.Read()).ListImportSessionsBySourcePath(ctx,
+		librarydb.ListImportSessionsBySourcePathParams{SourcePath: sourcePath, State: state})
+	if err != nil {
+		return nil, fmt.Errorf("library: list %s imports of %s: %w", state, sourcePath, err)
+	}
+	sessions := make([]Session, len(rows))
+	for i, row := range rows {
+		sessions[i] = sessionFromRow(row)
+	}
+	return sessions, nil
+}
+
 // ListUnits returns every unit one session found, in the order they were added.
 func (s ImportSessions) ListUnits(ctx context.Context, sessionID int64) ([]Unit, error) {
 	rows, err := librarydb.New(s.store.Read()).ListImportUnits(ctx, sessionID)

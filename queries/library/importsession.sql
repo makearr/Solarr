@@ -240,3 +240,10 @@ SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,
        started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at, preview
 FROM import_session WHERE acquisition_id = ? ORDER BY id;
+
+-- The imports of one source folder in one state, newest first; dismissed ones included.
+-- name: ListImportSessionsBySourcePath :many
+SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
+       units_total, units_committed, units_queued, bytes_imported, extract_dir,
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at, preview
+FROM import_session WHERE source_path = ? AND state = ? ORDER BY started_at DESC, id DESC;

@@ -213,14 +213,11 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 
 // holdsQueuedUnits reports whether the newest finished session of a source still has units waiting for a person.
 func (j *Job) holdsQueuedUnits(ctx context.Context, sourcePath string) bool {
-	sessions, err := j.sessions.List(ctx, library.ImportDone, true)
+	sessions, err := j.sessions.ListBySourcePath(ctx, sourcePath, library.ImportDone)
 	if err != nil {
 		return true
 	}
 	for _, session := range sessions {
-		if session.SourcePath != sourcePath {
-			continue
-		}
 		units, err := j.sessions.ListUnits(ctx, session.ID)
 		if err != nil {
 			return true
@@ -236,26 +233,20 @@ func (j *Job) holdsQueuedUnits(ctx context.Context, sourcePath string) bool {
 
 // placedAll reports whether the newest finished session of a source placed every unit it held.
 func (j *Job) placedAll(ctx context.Context, sourcePath string) bool {
-	sessions, err := j.sessions.List(ctx, library.ImportDone, true)
-	if err != nil {
+	sessions, err := j.sessions.ListBySourcePath(ctx, sourcePath, library.ImportDone)
+	if err != nil || len(sessions) == 0 {
 		return false
 	}
-	for _, session := range sessions {
-		if session.SourcePath != sourcePath {
-			continue
-		}
-		units, err := j.sessions.ListUnits(ctx, session.ID)
-		if err != nil || len(units) == 0 {
+	units, err := j.sessions.ListUnits(ctx, sessions[0].ID)
+	if err != nil || len(units) == 0 {
+		return false
+	}
+	for _, unit := range units {
+		if unit.WorkID == nil {
 			return false
 		}
-		for _, unit := range units {
-			if unit.WorkID == nil {
-				return false
-			}
-		}
-		return true
 	}
-	return false
+	return true
 }
 
 // retireArchives sends the archives of a folder the user pointed at to the recycle bin once their contents are in the
@@ -300,6 +291,11 @@ func (j *Job) unpack(ctx context.Context, sourcePath string) (workspace string, 
 	sum := sha256.Sum256([]byte(sourcePath))
 	// Named after the source so a workspace session reads as what it came from, and the hash keeps two sources apart.
 	workspace = path.Join(j.workspace, fsx.SanitiseComponent(path.Base(sourcePath))+"-"+hex.EncodeToString(sum[:])[:8])
+	if j.holdsQueuedUnits(ctx, workspace) {
+		// Held units still read their files from here: opening the archives again would wipe them.
+		j.logger.Info("source waits for its held units; archives not opened again", slog.String("source_path", sourcePath))
+		return workspace, 0
+	}
 	if err := unpack.RemoveTree(j.fsys, workspace); err != nil {
 		j.logger.Warn("import workspace not cleared", slog.String("workspace", workspace), slog.Any("error", err))
 		return "", 0
@@ -423,14 +419,11 @@ func (j *Job) resumeOrCreate(
 ) (sessionID int64, cursor string, threshold float64, cancelling bool, err error) {
 	for _, state := range []string{library.ImportInspecting, library.ImportCancelling} {
 		// Dismissal is a display concern, so resume looks past it.
-		existing, err := j.sessions.List(ctx, state, true)
+		existing, err := j.sessions.ListBySourcePath(ctx, payload.SourcePath, state)
 		if err != nil {
 			return 0, "", 0, false, fmt.Errorf("importjob: list %s sessions: %w", state, err)
 		}
 		for _, session := range existing {
-			if session.SourcePath != payload.SourcePath {
-				continue
-			}
 			if !sameAcquisition(session.AcquisitionID, payload.AcquisitionID) {
 				// A re-grab lands in the same folder: resuming the old session would skip its units and keep its acquisition.
 				finished := library.ImportFailed

@@ -497,6 +497,63 @@ func (q *Queries) ListImportSessions(ctx context.Context, arg ListImportSessions
 	return items, nil
 }
 
+const listImportSessionsBySourcePath = `-- name: ListImportSessionsBySourcePath :many
+SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
+       units_total, units_committed, units_queued, bytes_imported, extract_dir,
+       started_at, finished_at, error, units_skipped, units_failed, units_estimated, dismissed_at, preview
+FROM import_session WHERE source_path = ? AND state = ? ORDER BY started_at DESC, id DESC
+`
+
+type ListImportSessionsBySourcePathParams struct {
+	SourcePath string
+	State      string
+}
+
+// The imports of one source folder in one state, newest first; dismissed ones included.
+func (q *Queries) ListImportSessionsBySourcePath(ctx context.Context, arg ListImportSessionsBySourcePathParams) ([]ImportSession, error) {
+	rows, err := q.db.QueryContext(ctx, listImportSessionsBySourcePath, arg.SourcePath, arg.State)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ImportSession{}
+	for rows.Next() {
+		var i ImportSession
+		if err := rows.Scan(
+			&i.ID,
+			&i.SourcePath,
+			&i.Origin,
+			&i.AcquisitionID,
+			&i.CategoryID,
+			&i.State,
+			&i.Threshold,
+			&i.UnitsTotal,
+			&i.UnitsCommitted,
+			&i.UnitsQueued,
+			&i.BytesImported,
+			&i.ExtractDir,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.Error,
+			&i.UnitsSkipped,
+			&i.UnitsFailed,
+			&i.UnitsEstimated,
+			&i.DismissedAt,
+			&i.Preview,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listImportSessionsForAcquisition = `-- name: ListImportSessionsForAcquisition :many
 SELECT id, source_path, origin, acquisition_id, category_id, state, threshold,
        units_total, units_committed, units_queued, bytes_imported, extract_dir,

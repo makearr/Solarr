@@ -1248,6 +1248,23 @@ func TestJob_ImportsTheContentsOfAnArchiveLikeAFolder(t *testing.T) {
 	if _, err := fx.fsys.Stat(archivePath); err != nil {
 		t.Errorf("the source archive was touched: %v", err)
 	}
+
+	// Importing the source again must not wipe the workspace the held unit still reads from.
+	marker := filepath.Join(done[0].SourcePath, "kept.txt")
+	if f, err := fx.fsys.Create(marker); err != nil {
+		t.Fatal(err)
+	} else {
+		_ = f.Close()
+	}
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+	if _, err := fx.fsys.Stat(filepath.Join(done[0].SourcePath, units[0].RelPath, "01 One.flac")); err != nil {
+		t.Errorf("a second import wiped the held unit's file: %v", err)
+	}
+	if _, err := fx.fsys.Stat(marker); err != nil {
+		t.Errorf("a second import cleared the workspace: %v", err)
+	}
 }
 
 // testArchiveLimits is the shipped limits without the free-space margin, which an in-memory filesystem cannot report.
