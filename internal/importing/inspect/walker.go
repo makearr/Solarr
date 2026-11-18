@@ -26,7 +26,6 @@ type WalkState struct {
 // Options.
 type WalkOptions struct {
 	Tags                TagReader
-	SegmentPlausible    SegmentPlausibility
 	MediaSizeFloorBytes int64
 	// Books counts ebook files as media, for a book library's import.
 	Books bool
@@ -39,9 +38,8 @@ type WalkResult struct {
 	State WalkState
 	// Completed is false when the walk was cancelled part-way -- what
 	// distinguishes "resume here" from "the cursor is now valid".
-	Completed         bool
-	UnitsEmitted      int
-	ContainerSegments []string
+	Completed    bool
+	UnitsEmitted int
 }
 
 // Walker walks one root incrementally, emitting each fully-grouped cluster's
@@ -104,7 +102,6 @@ type walkerRun struct {
 	root string
 	opts WalkOptions
 	emit func(context.Context, []Unit) error
-	agg  *containerAggregator
 
 	// resumeFrom is the cursor an interrupted walk left behind. reached flips
 	// true the instant this run's own (deterministic, sorted) traversal passes
@@ -131,7 +128,6 @@ func (Walker) Walk(
 	}
 	w := &walkerRun{
 		fsys: fsys, root: root, opts: opts, emit: emit,
-		agg:        newContainerAggregator(),
 		resumeFrom: state.Cursor, reached: state.Cursor == "",
 	}
 
@@ -149,7 +145,6 @@ func (Walker) Walk(
 	}
 
 	result.Completed = true
-	result.ContainerSegments = w.agg.Result(opts.SegmentPlausible)
 	return result, nil
 }
 
@@ -271,9 +266,6 @@ func (w *walkerRun) visit(ctx context.Context, relative string) (clusterFiles, e
 		}
 		w.cursor = relative
 		w.emitted += len(units)
-	}
-	for _, u := range units {
-		w.agg.Add(u)
 	}
 	return clusterFiles{}, nil
 }

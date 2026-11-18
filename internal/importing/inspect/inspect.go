@@ -37,19 +37,9 @@ type Tags struct {
 // legitimate input (a pure structural inspection), not an error.
 type TagReader func(relPath string) Tags
 
-// SegmentPlausibility scores one path segment's chance of being a real entity name
-// (an artist, an album) rather than a container a caller's media type had no reason
-// to name ("downloads", "_unsorted"). ok is false when the caller has no opinion,
-// which falls back to the built-in generic word list. Keeping this an injected
-// function rather than a hardcoded vocabulary is what keeps this package free of
-// media-type knowledge (ADR-23) -- a caller with real linguistic knowledge (does
-// this parse as "Artist Name"?) scores better than this package ever could alone.
-type SegmentPlausibility func(segment string) (confidence float64, ok bool)
-
 // Options tunes one Run. Every field is optional.
 type Options struct {
-	Tags             TagReader
-	SegmentPlausible SegmentPlausibility
+	Tags TagReader
 	// MediaSizeFloorBytes is the minimum size a file with a media extension
 	// must clear to classify as Media rather than Junk -- ADR-48's own example,
 	// "sample.mp3", is exactly what this guards against. Zero uses
@@ -64,11 +54,6 @@ type Session struct {
 	Root string
 	// Units is every group of media files Run believes belongs together.
 	Units []Unit
-	// ContainerSegments is every path segment Run found identical across every
-	// unit beneath it, or scored implausible by Options.SegmentPlausible --
-	// the "downloads/misc must never become an artist" rule, surfaced so an
-	// IDENTIFY stage can skip these segments as evidence.
-	ContainerSegments []string
 }
 
 // Run walks root, classifies every file it finds, and groups the media files into
@@ -86,7 +71,5 @@ func Run(ctx context.Context, fsys fsx.FS, root string, opts Options) (Session, 
 	sort.Slice(files, func(i, j int) bool { return files[i].RelPath < files[j].RelPath })
 
 	units := group(files, opts.Tags)
-	containers := containerSegments(units, opts.SegmentPlausible)
-
-	return Session{Root: root, Units: units, ContainerSegments: containers}, nil
+	return Session{Root: root, Units: units}, nil
 }

@@ -266,33 +266,6 @@ func TestRun_UndersizedMediaExtensionIsJunkNotATrack(t *testing.T) {
 	}
 }
 
-// A container segment shared by every unit beneath it (the download client's
-// own wrapping folder) must never be mistaken for an artist name.
-func TestRun_SharedWrapperSegmentIsAContainer(t *testing.T) {
-	tr := newTree(t,
-		"_unsorted/Artist One/Album/01-track.flac",
-		"_unsorted/Artist Two/Album/01-track.flac",
-	)
-	session, err := inspect.Run(t.Context(), tr.fsys, root, inspect.Options{})
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	found := false
-	for _, c := range session.ContainerSegments {
-		if c == "_unsorted" {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("ContainerSegments = %v, want \"_unsorted\" (shared by every unit)", session.ContainerSegments)
-	}
-	for _, c := range session.ContainerSegments {
-		if c == "Artist One" || c == "Artist Two" {
-			t.Errorf("ContainerSegments = %v, a real artist name must not be flagged as a container", session.ContainerSegments)
-		}
-	}
-}
-
 func TestClassify_EveryClass(t *testing.T) {
 	cases := []struct {
 		path  string

@@ -161,25 +161,6 @@ func TestWalker_ErrorsWhenTheResumeCursorIsNeverFound(t *testing.T) {
 	}
 }
 
-// ContainerSegments must reach the same answer as Run's global computation,
-// even though Walker never holds every Unit in memory at once to compute it.
-func TestWalker_ContainerSegmentsMatchTheWholeSessionRule(t *testing.T) {
-	tr := newTree(t,
-		"downloads/Artist1/Album1/01.flac",
-		"downloads/Artist2/Album2/01.flac",
-	)
-	_, result := walkAll(t, tr, inspect.WalkOptions{})
-	found := false
-	for _, s := range result.ContainerSegments {
-		if s == "downloads" {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("ContainerSegments = %v, want \"downloads\" (shared by every unit)", result.ContainerSegments)
-	}
-}
-
 // EstimateUnits agrees with a real Walk over the same tree when there is no
 // tag evidence to disagree over -- the common case, since Job.Run's own
 // WalkOptions{} never feeds Walk any tags either (todo 4.21).
