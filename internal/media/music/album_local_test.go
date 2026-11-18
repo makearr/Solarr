@@ -19,7 +19,7 @@ func TestReadLocalTrack_TagsWin(t *testing.T) {
 		Title:  music.Claim{Value: "Tusa Behif Us", Provenance: music.ProvenanceTag},
 		Artist: music.Claim{Value: "P!po", Provenance: music.ProvenanceTag},
 		Album:  music.Claim{Value: "Kebilegev Bibihi", Provenance: music.ProvenanceTag},
-		Disc:   1, Track: 4, TrackTotal: 13, Year: 2017, Duration: 270 * time.Second,
+		Disc:   1, Track: 4, TrackTotal: 13, Year: 2017, OriginalYear: 2017, Duration: 270 * time.Second,
 		FolderAlbum: "Kebilegev Bibihi",
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -35,7 +35,7 @@ func TestReadLocalTrack_FallsBackToThePath(t *testing.T) {
 		Title:  music.Claim{Value: "Tusa Behif Us", Provenance: music.ProvenanceParsed},
 		Artist: music.Claim{Value: "P!po", Provenance: music.ProvenanceParsed},
 		Album:  music.Claim{Value: "Kebilegev Bibihi", Provenance: music.ProvenanceParsed},
-		Track:  4, Year: 2017,
+		Track:  4, Year: 2017, OriginalYear: 2017,
 		FolderAlbum: "Kebilegev Bibihi",
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -91,5 +91,16 @@ func TestReadLocalTrack_ReadsWhatIsPrintedOnTheRelease(t *testing.T) {
 		if got.Barcode != tc.barcode || got.CatalogNumber != tc.catalog || got.TrackTotal != tc.total {
 			t.Errorf("%s: barcode %q catalogue %q total %d, want %q %q %d", name, got.Barcode, got.CatalogNumber, got.TrackTotal, tc.barcode, tc.catalog, tc.total)
 		}
+	}
+}
+
+func TestReadLocalTrack_KeepsTheOriginalDateApartFromTheEditions(t *testing.T) {
+	both := music.ReadLocalTrack(mediatool.Tags{"originaldate": "1973-03-01", "date": "2011-06-01"}, mediatool.Measured{}, "a/b.flac")
+	if both.Year != 2011 || both.OriginalYear != 1973 {
+		t.Errorf("both tags: year %d original %d, want 2011 and 1973", both.Year, both.OriginalYear)
+	}
+	only := music.ReadLocalTrack(mediatool.Tags{"date": "1973"}, mediatool.Measured{}, "a/b.flac")
+	if only.Year != 1973 || only.OriginalYear != 1973 {
+		t.Errorf("one tag: year %d original %d, want 1973 for both", only.Year, only.OriginalYear)
 	}
 }

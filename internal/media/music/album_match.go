@@ -74,9 +74,10 @@ func (c Claim) present() bool {
 type LocalTrack struct {
 	Title, Artist, Album Claim
 	Disc, Track          int
-	Year                 int
-	Duration             time.Duration
-	RecordingMBID        string
+	// Year is the edition's own date, OriginalYear the first release's.
+	Year, OriginalYear int
+	Duration           time.Duration
+	RecordingMBID      string
 	// Barcode is the digits of the barcode tag, CatalogNumber the label's number, TrackTotal the album's track count
 	// as the file states it; each is empty or 0 when the file does not say.
 	Barcode, CatalogNumber string
@@ -419,9 +420,14 @@ func addAlbumDimensions(d *distance, facts folderFacts, candidate AlbumCandidate
 	if album := facts.album; album.present() {
 		d.add(dimensionAlbum, dampened(albumTitlePenalty(facts, candidate), album.Provenance))
 	}
+	// The files' date is compared with the pressing's. When they also carry a different original date, that is
+	// compared with the group's first release, so a 2011 remaster tagged originaldate=1973 fits the 2011 pressing
+	// and not the 1973 one. A single tagged date has no such twin and is compared as it always was.
 	if year, releaseYear := facts.year, yearOf(candidate.Release.Date); year > 0 && releaseYear > 0 {
-		gap := math.Abs(float64(year - releaseYear))
-		d.add(dimensionYear, min(1, gap/10))
+		d.add(dimensionYear, min(1, math.Abs(float64(year-releaseYear))/10))
+	}
+	if original, firstYear := facts.originalYear, yearOf(candidate.ReleaseGroup.FirstReleaseDate); original > 0 && original != facts.year && firstYear > 0 {
+		d.add(dimensionYear, min(1, math.Abs(float64(original-firstYear))/10))
 	}
 	// An edition signal ranks editions of one album; the gate ignores it, since a rip may carry a wrong barcode.
 	if facts.barcode != "" && barcodeKey(candidate.Release.Barcode) != "" {
@@ -527,16 +533,17 @@ func consensusClaim(locals []LocalTrack, of func(LocalTrack) Claim) Claim {
 	return best
 }
 
-func consensusYear(locals []LocalTrack) int {
+func consensusYear(locals []LocalTrack, yearOf func(LocalTrack) int) int {
 	counts := make(map[int]int)
 	best, bestCount := 0, 0
 	for _, local := range locals {
-		if local.Year <= 0 {
+		year := yearOf(local)
+		if year <= 0 {
 			continue
 		}
-		counts[local.Year]++
-		if counts[local.Year] > bestCount {
-			best, bestCount = local.Year, counts[local.Year]
+		counts[year]++
+		if counts[year] > bestCount {
+			best, bestCount = year, counts[year]
 		}
 	}
 	return best
@@ -672,8 +679,8 @@ type folderFacts struct {
 	artist, album Claim
 	folderAlbum   string
 	// albumTitles are the titles the files give their album: the tag, the tag cleaned, the folder's.
-	albumTitles []string
-	year        int
+	albumTitles        []string
+	year, originalYear int
 	// barcode is the folder's barcode as barcodeKey writes it, trackTotal the track count its files agree on.
 	barcode    string
 	trackTotal int
@@ -681,12 +688,13 @@ type folderFacts struct {
 
 func factsOf(locals []LocalTrack) folderFacts {
 	facts := folderFacts{
-		artist:      consensusClaim(locals, func(t LocalTrack) Claim { return t.Artist }),
-		album:       consensusClaim(locals, func(t LocalTrack) Claim { return t.Album }),
-		folderAlbum: folderAlbum(locals),
-		year:        consensusYear(locals),
-		barcode:     barcodeKey(consensusString(locals, func(t LocalTrack) string { return t.Barcode })),
-		trackTotal:  consensusTrackTotal(locals),
+		artist:       consensusClaim(locals, func(t LocalTrack) Claim { return t.Artist }),
+		album:        consensusClaim(locals, func(t LocalTrack) Claim { return t.Album }),
+		folderAlbum:  folderAlbum(locals),
+		year:         consensusYear(locals, func(t LocalTrack) int { return t.Year }),
+		originalYear: consensusYear(locals, func(t LocalTrack) int { return t.OriginalYear }),
+		barcode:      barcodeKey(consensusString(locals, func(t LocalTrack) string { return t.Barcode })),
+		trackTotal:   consensusTrackTotal(locals),
 	}
 	facts.albumTitles = []string{facts.album.Value, cleanAlbumTag(facts.album.Value), facts.folderAlbum}
 	return facts

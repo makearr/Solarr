@@ -575,3 +575,54 @@ func TestDecideAlbum_TheTrackTotalSeparatesTheTwelveTrackEditionFromTheNineTrack
 		t.Fatalf("best = %+v, want the 12-track release", decision.Best)
 	}
 }
+
+func yearGroup(release musicbrainz.Release) music.AlbumCandidate {
+	candidate := candidateOf("rg-album", "Album", nil, release)
+	candidate.ReleaseGroup.FirstReleaseDate = "1973-03-01"
+	return candidate
+}
+
+func TestDecideAlbum_ARemasterTaggedWithItsOriginalDateIsNotPushedToTheFirstPressing(t *testing.T) {
+	first := releaseOf("rel-1973", "Kebilegev Bibihi", "official", "1973-03-01", traumaTracks)
+	remaster := releaseOf("rel-2011", "Kebilegev Bibihi", "official", "2011-06-01", traumaTracks)
+	locals := folderOf(traumaTracks)
+	for i := range locals {
+		locals[i].Year, locals[i].OriginalYear = 2011, 1973
+	}
+	decision := music.DecideAlbum(locals, []music.AlbumCandidate{yearGroup(first), yearGroup(remaster)})
+	if decision.Best == nil || decision.Best.Candidate.Release.MBID != "rel-2011" {
+		t.Fatalf("best = %+v, want the 2011 remaster the date tag names", decision.Best)
+	}
+	for _, score := range decision.Scores {
+		if score.Candidate.Release.MBID == "rel-2011" && score.Distance > 0.01 {
+			t.Errorf("2011 distance = %.3f, want no year penalty", score.Distance)
+		}
+	}
+}
+
+func TestDecideAlbum_AFolderWithOnlyADateBehavesAsBefore(t *testing.T) {
+	first := releaseOf("rel-1973", "Kebilegev Bibihi", "official", "1973-03-01", traumaTracks)
+	remaster := releaseOf("rel-2011", "Kebilegev Bibihi", "official", "2011-06-01", traumaTracks)
+	locals := folderOf(traumaTracks)
+	for i := range locals {
+		locals[i].Year, locals[i].OriginalYear = 1973, 1973
+	}
+	decision := music.DecideAlbum(locals, []music.AlbumCandidate{yearGroup(remaster), yearGroup(first)})
+	if decision.Best == nil || decision.Best.Candidate.Release.MBID != "rel-1973" {
+		t.Fatalf("best = %+v, want the 1973 pressing", decision.Best)
+	}
+}
+
+func TestDecideAlbum_TheOriginalDateTellsTwoGroupsOfOnePressingDateApart(t *testing.T) {
+	classic := yearGroup(releaseOf("rel-classic", "Kebilegev Bibihi", "official", "2011-06-01", traumaTracks))
+	newer := candidateOf("rg-newer", "Album", nil, releaseOf("rel-aaa-newer", "Kebilegev Bibihi", "official", "2011-06-01", traumaTracks))
+	newer.ReleaseGroup.FirstReleaseDate = "2011-06-01"
+	locals := folderOf(traumaTracks)
+	for i := range locals {
+		locals[i].Year, locals[i].OriginalYear = 2011, 1973
+	}
+	decision := music.DecideAlbum(locals, []music.AlbumCandidate{newer, classic})
+	if decision.Best == nil || decision.Best.Candidate.Release.MBID != "rel-classic" {
+		t.Fatalf("best = %v, want the group first released in 1973", decision.Best.Candidate.Release.MBID)
+	}
+}

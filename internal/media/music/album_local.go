@@ -1,6 +1,7 @@
 package music
 
 import (
+	"cmp"
 	"path"
 	"regexp"
 	"strconv"
@@ -34,7 +35,8 @@ func ReadLocalTrack(tags mediatool.Tags, measured mediatool.Measured, relPath st
 		Album:         claimFrom(tags.First("album"), folder.Album),
 		Disc:          firstTrackNumber(tags.First("discnumber", "disc")),
 		Track:         firstTrackNumber(tags.First("tracknumber", "track")),
-		Year:          yearOf(tags.First("originaldate", "date", "year")),
+		Year:          yearOf(tags.First("date", "year")),
+		OriginalYear:  yearOf(tags.First("originaldate", "originalyear")),
 		Duration:      measured.Duration,
 		RecordingMBID: ReadMBIDs(tags).Recording,
 		FolderAlbum:   folder.Album,
@@ -45,8 +47,13 @@ func ReadLocalTrack(tags mediatool.Tags, measured mediatool.Measured, relPath st
 	if local.Track == 0 {
 		local.Disc, local.Track = stemDisc, stemTrack
 	}
-	if local.Year == 0 {
-		local.Year = folder.Year
+	// With only one of the two dates tagged there is no telling which it is, so both fields take it.
+	switch {
+	case local.Year == 0:
+		local.Year = cmp.Or(local.OriginalYear, folder.Year)
+		local.OriginalYear = cmp.Or(local.OriginalYear, local.Year)
+	case local.OriginalYear == 0:
+		local.OriginalYear = local.Year
 	}
 	return local
 }
