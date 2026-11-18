@@ -285,3 +285,55 @@ func TestIdentifyAlbum_TheSiblingsAlbumDecidesACloseTie(t *testing.T) {
 			decision.Scores[0].Distance, decision.Scores[0].Candidate.ReleaseGroup.MBID, decision.Scores[1].Distance, decision.Scores[1].Candidate.ReleaseGroup.MBID)
 	}
 }
+
+// searchOrderLookup holds the album-title search until the folder-title search has answered, so a recall that asks
+// one after another stalls and one that merges by completion order ranks the groups the wrong way round.
+type searchOrderLookup struct {
+	*fakeAlbumLookup
+	folderAnswered chan struct{}
+	stalled        bool
+}
+
+func (l *searchOrderLookup) Search(ctx context.Context, priority musicbrainz.Priority, artist, title string, limit int) ([]musicbrainz.ReleaseGroupMatch, error) {
+	if title != "Kebilegev Bibihi" {
+		defer close(l.folderAnswered)
+		return l.fakeAlbumLookup.Search(ctx, priority, artist, title, limit)
+	}
+	select {
+	case <-l.folderAnswered:
+	case <-time.After(5 * time.Second):
+		l.stalled = true
+	}
+	return l.fakeAlbumLookup.Search(ctx, priority, artist, title, limit)
+}
+
+var folderRelease = releaseOf("rel-zfolder", "Kebilegev Bibihi", "official", "2017-10-13", traumaTracks)
+
+func TestIdentifyAlbum_SearchesGoOutTogetherAndAreRankedByEvidence(t *testing.T) {
+	lookup := &searchOrderLookup{folderAnswered: make(chan struct{}), fakeAlbumLookup: &fakeAlbumLookup{
+		searches: map[string][]musicbrainz.ReleaseGroupMatch{
+			"P!po/Kebilegev Bibihi": {{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg-studio", Title: "Kebilegev Bibihi", PrimaryType: "Album"}, ArtistCredit: "P!po"}},
+			"P!po/Folder Name":      {{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg-folder", Title: "Folder Name", PrimaryType: "Album"}, ArtistCredit: "P!po"}},
+		},
+		releases: map[string][]musicbrainz.Release{"rg-studio": {studioRelease}, "rg-folder": {folderRelease}},
+	}}
+	locals := folderOf(traumaTracks)
+	for i := range locals {
+		locals[i].FolderAlbum = "Folder Name"
+	}
+
+	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, nil)
+	if err != nil {
+		t.Fatalf("IdentifyAlbum: %v", err)
+	}
+	if lookup.stalled {
+		t.Fatal("the album-title search waited for the folder search: they were asked one after another")
+	}
+	var groups []string
+	for _, candidate := range decision.Scores {
+		groups = append(groups, candidate.Candidate.ReleaseGroup.MBID)
+	}
+	if want := []string{"rg-studio", "rg-folder"}; !slices.Equal(groups, want) {
+		t.Errorf("candidates = %v, want %v: the tags' recall ranks before the folder name's", groups, want)
+	}
+}

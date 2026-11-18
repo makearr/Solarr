@@ -196,18 +196,6 @@ func recallAlbums(
 
 	artist := consensusClaim(locals, func(t LocalTrack) Claim { return t.Artist })
 	album := consensusClaim(locals, func(t LocalTrack) Claim { return t.Album })
-	search := func(title string) {
-		matches, err := lookup.Search(ctx, priority, artist.Value, title, albumSearchLimit)
-		if err != nil {
-			*failures = append(*failures, err)
-		}
-		for _, found := range matches {
-			add(recalled{
-				group: found.ReleaseGroup, credit: found.ArtistCredit, names: found.ArtistNames,
-				recall: RecallAlbumTags, known: true,
-			})
-		}
-	}
 	var titles []string
 	if artist.present() && album.present() {
 		// The raw tag is searched too: "(2008 mix)" is noise to cleanAlbumTag but part of a real title.
@@ -215,9 +203,38 @@ func recallAlbums(
 		if raw := strings.TrimSpace(album.Value); !strings.EqualFold(raw, titles[0]) {
 			titles = append(titles, raw)
 		}
-		for _, title := range titles {
-			search(title)
+	}
+	// A malformed tag ("Dee Gees / Sohe Basen - Gus Hogecuru / Live") hides the title the folder
+	// names; searched last and never counted as the tags' recall, since a folder name misreads
+	// easily ("Mazotuz - The Remixes!" parses as artist "Runaway").
+	folder := cleanAlbumTag(folderAlbum(locals))
+	searchFolder := artist.present() && folder != "" &&
+		!slices.ContainsFunc(titles, func(title string) bool { return strings.EqualFold(title, folder) })
+
+	// The searches go out together, but their answers are merged in the order evidence is ranked in, so the
+	// decision does not depend on which answered first.
+	queries := slices.Clone(titles)
+	if searchFolder {
+		queries = append(queries, folder)
+	}
+	answers := make([]albumSearch, len(queries))
+	parallel.Do(ctx, len(queries), albumFetchConcurrency, func(ctx context.Context, index int) error {
+		answers[index].matches, answers[index].err = lookup.Search(ctx, priority, artist.Value, queries[index], albumSearchLimit)
+		return nil
+	})
+	addAnswer := func(answer albumSearch) {
+		if answer.err != nil {
+			*failures = append(*failures, answer.err)
 		}
+		for _, found := range answer.matches {
+			add(recalled{
+				group: found.ReleaseGroup, credit: found.ArtistCredit, names: found.ArtistNames,
+				recall: RecallAlbumTags, known: true,
+			})
+		}
+	}
+	for index := range titles {
+		addAnswer(answers[index])
 	}
 
 	tagsRecalledEnough := artist.present() && album.present() && len(groups)-len(seeds) >= 2
@@ -231,14 +248,16 @@ func recallAlbums(
 		}
 	}
 
-	// A malformed tag ("Dee Gees / Sohe Basen - Gus Hogecuru / Live") hides the title the folder
-	// names; searched last and never counted as the tags' recall, since a folder name misreads
-	// easily ("Mazotuz - The Remixes!" parses as artist "Runaway").
-	if folder := cleanAlbumTag(folderAlbum(locals)); artist.present() && folder != "" &&
-		!slices.ContainsFunc(titles, func(title string) bool { return strings.EqualFold(title, folder) }) {
-		search(folder)
+	if searchFolder {
+		addAnswer(answers[len(titles)])
 	}
 	return groups
+}
+
+// albumSearch is one album search's answer.
+type albumSearch struct {
+	matches []musicbrainz.ReleaseGroupMatch
+	err     error
 }
 
 // recordingRecall searches a few tracks' titles and keeps the release groups most of them
@@ -258,22 +277,27 @@ func recordingRecall(
 	if artist.present() {
 		searchArtist = artist.Value
 	}
-	searched := 0
+	var sampled []LocalTrack
 	for _, local := range locals {
-		if searched >= sample {
+		if len(sampled) >= sample {
 			break
 		}
-		if !local.Title.present() {
-			continue
+		if local.Title.present() {
+			sampled = append(sampled, local)
 		}
-		searched++
-		matches, err := lookup.SearchRecordings(ctx, priority, searchArtist, local.Title.Value, recordingSearchLimit)
-		if err != nil {
-			*failures = append(*failures, err)
+	}
+	answers := make([]recordingSearch, len(sampled))
+	parallel.Do(ctx, len(sampled), albumFetchConcurrency, func(ctx context.Context, index int) error {
+		answers[index].matches, answers[index].err = lookup.SearchRecordings(ctx, priority, searchArtist, sampled[index].Title.Value, recordingSearchLimit)
+		return nil
+	})
+	for _, answer := range answers {
+		if answer.err != nil {
+			*failures = append(*failures, answer.err)
 			continue
 		}
 		hitThisTrack := make(map[string]bool)
-		for _, found := range matches {
+		for _, found := range answer.matches {
 			for _, group := range found.ReleaseGroups {
 				if hitThisTrack[group.MBID] {
 					continue
@@ -304,6 +328,12 @@ func recordingRecall(
 		groups = append(groups, recalled{group: one.group, credit: one.credit, recall: RecallRecordingSearch})
 	}
 	return groups
+}
+
+// recordingSearch is one track title search's answer.
+type recordingSearch struct {
+	matches []musicbrainz.RecordingMatch
+	err     error
 }
 
 func creditNames(credits []musicbrainz.ArtistCredit) string {
