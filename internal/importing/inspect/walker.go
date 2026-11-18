@@ -25,7 +25,9 @@ type WalkState struct {
 // WalkOptions tune one resumable walk. Every field is optional, the same as
 // Options.
 type WalkOptions struct {
-	Tags                TagReader
+	Tags TagReader
+	// TagsFor reads the tags of one cluster's media just before it is split; an error falls back to Tags.
+	TagsFor             func(ctx context.Context, relPaths []string) (TagReader, error)
 	MediaSizeFloorBytes int64
 	// Books counts ebook files as media, for a book library's import.
 	Books bool
@@ -209,7 +211,17 @@ func (w *walkerRun) visit(ctx context.Context, relative string) (clusterFiles, e
 	}
 	var units []Unit
 	if err := iogate.OnDisk(ctx, "", []string{absolute}, func() error {
-		units = splitByEvidence(relative, allMedia, w.opts.Tags, extra)
+		tags := w.opts.Tags
+		if w.opts.TagsFor != nil && len(allMedia) > 1 {
+			relPaths := make([]string, len(allMedia))
+			for i, file := range allMedia {
+				relPaths[i] = file.RelPath
+			}
+			if read, err := w.opts.TagsFor(ctx, relPaths); err == nil {
+				tags = read
+			}
+		}
+		units = splitByEvidence(relative, allMedia, tags, extra)
 		return nil
 	}); err != nil {
 		return clusterFiles{}, err

@@ -1,6 +1,7 @@
 package inspect
 
 import (
+	"cmp"
 	"path"
 	"regexp"
 	"sort"
@@ -141,8 +142,8 @@ func splitByEvidence(directory string, files []File, tags TagReader, extra *Sign
 // default -- when neither signal has anything to say.
 func splitFiles(files []File, tags TagReader, structuralFallbackAllowed bool) (groups [][]File, signals [][]Signal, ambiguous bool) {
 	if tags != nil {
-		if g, s, ok := splitByTags(files, tags); ok {
-			return g, s, false
+		if g, s, unsure, ok := splitByTags(files, tags); ok {
+			return g, s, unsure
 		}
 	}
 	if structuralFallbackAllowed {
@@ -153,44 +154,102 @@ func splitFiles(files []File, tags TagReader, structuralFallbackAllowed bool) (g
 	return [][]File{files}, [][]Signal{{{Kind: SignalDirectoryBoundary}}}, false
 }
 
-// splitByTags groups by embedded release id first, falling back to
-// (album, album-artist) when no file carries a release id. ok is false when
-// no file in files has any tags at all, so the caller falls through to the
-// structural signal instead of pretending one untagged group is agreement.
-func splitByTags(files []File, tags TagReader) (groups [][]File, signals [][]Signal, ok bool) {
-	type key struct{ releaseID, album, artist string }
-	order := []key{}
-	byKey := map[key][]File{}
-	anyTagged := false
+// trailingDiscRe is the disc marker older rips append to the album tag ("Album (Disc 2)").
+var trailingDiscRe = regexp.MustCompile(`(?i)\s*[\(\[]?\s*(?:cd|dis[ck])\s*\d+\s*[\)\]]?$`)
+
+// albumKey is what two files must share to be one album when no release id says so: the album without its disc
+// marker and the album artist, both case- and space-folded.
+type albumKey struct{ album, artist string }
+
+func foldTag(value string) string { return strings.ToLower(strings.Join(strings.Fields(value), " ")) }
+
+func albumKeyOf(t Tags) albumKey {
+	return albumKey{
+		album:  foldTag(trailingDiscRe.ReplaceAllString(strings.TrimSpace(t.Album), "")),
+		artist: foldTag(cmp.Or(t.AlbumArtist, t.Artist)),
+	}
+}
+
+// splitByTags groups by embedded release id first, falling back to (album, album-artist) for files without one; a
+// file whose album and artist agree with every file of one release id joins it. Files with no usable tags join the
+// only group there is, else form a group of their own and the split is ambiguous. ok is false when no file has
+// any grouping tag, so the caller falls through to the structural signal instead of pretending one untagged group
+// is agreement.
+func splitByTags(files []File, tags TagReader) (groups [][]File, signals [][]Signal, ambiguous, ok bool) {
+	type group struct {
+		files  []File
+		signal Signal
+		albums map[albumKey]bool
+	}
+	var order []*group
+	byRelease := map[string]*group{}
+	byAlbum := map[albumKey]*group{}
+	var untagged []File
 
 	for _, f := range files {
 		t := tags(f.RelPath)
-		if !t.Found {
-			continue
+		key := albumKeyOf(t)
+		switch {
+		case !t.Found || (t.ReleaseID == "" && key == albumKey{}):
+			untagged = append(untagged, f)
+		case t.ReleaseID != "":
+			g, seen := byRelease[t.ReleaseID]
+			if !seen {
+				g = &group{signal: Signal{Kind: SignalEmbeddedID, Detail: t.ReleaseID}, albums: map[albumKey]bool{}}
+				byRelease[t.ReleaseID] = g
+				order = append(order, g)
+			}
+			g.files = append(g.files, f)
+			g.albums[key] = true
+		default:
+			g, seen := byAlbum[key]
+			if !seen {
+				g = &group{signal: Signal{Kind: SignalTagAgreement, Detail: key.artist + " / " + key.album}}
+				byAlbum[key] = g
+				order = append(order, g)
+			}
+			g.files = append(g.files, f)
 		}
-		anyTagged = true
-		k := key{releaseID: t.ReleaseID}
-		if k.releaseID == "" {
-			k.album, k.artist = t.Album, t.AlbumArtist
-		}
-		if _, seen := byKey[k]; !seen {
-			order = append(order, k)
-		}
-		byKey[k] = append(byKey[k], f)
 	}
-	if !anyTagged {
-		return nil, nil, false
+	if len(order) == 0 {
+		return nil, nil, false, false
 	}
 
-	for _, k := range order {
-		groups = append(groups, byKey[k])
-		if k.releaseID != "" {
-			signals = append(signals, []Signal{{Kind: SignalEmbeddedID, Detail: k.releaseID}})
-		} else {
-			signals = append(signals, []Signal{{Kind: SignalTagAgreement, Detail: k.artist + " / " + k.album}})
+	// A release whose files all carry one album and artist takes the files of that album that lost their release id.
+	merged := map[*group]bool{}
+	for key, loose := range byAlbum {
+		var home *group
+		for _, release := range byRelease {
+			if len(release.albums) == 1 && release.albums[key] {
+				if home != nil {
+					home = nil
+					break
+				}
+				home = release
+			}
+		}
+		if home != nil {
+			home.files = append(home.files, loose.files...)
+			merged[loose] = true
 		}
 	}
-	return groups, signals, true
+
+	for _, g := range order {
+		if !merged[g] {
+			groups = append(groups, g.files)
+			signals = append(signals, []Signal{g.signal})
+		}
+	}
+	switch {
+	case len(untagged) == 0:
+	case len(groups) == 1:
+		groups[0] = append(groups[0], untagged...)
+	default:
+		groups = append(groups, untagged)
+		signals = append(signals, []Signal{{Kind: SignalDirectoryBoundary}})
+		ambiguous = true
+	}
+	return groups, signals, ambiguous, true
 }
 
 // splitByTrackContinuity is the one purely-structural splitter: track numbers
