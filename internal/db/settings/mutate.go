@@ -444,6 +444,11 @@ func (c *Cache) DeleteCategory(ctx context.Context, id int64) error {
 	if members := len(c.Snapshot().LibraryCategories(id)) - 1; members > 0 && c.Snapshot().LibraryOf(id) == id {
 		references = append(references, Reference{Kind: "further media types of the library", Count: int64(members)})
 	}
+	used, err := c.categoryRowCounts(ctx, id)
+	if err != nil {
+		return err
+	}
+	references = append(references, used...)
 	if len(references) > 0 {
 		return &InUseError{Entity: "category", ID: id, References: references}
 	}
@@ -453,6 +458,9 @@ func (c *Cache) DeleteCategory(ctx context.Context, id int64) error {
 		return fmt.Errorf("settings: read category %d: %w", id, err)
 	}
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		if err := queries.DeleteExclusionPatternsForCategory(ctx, sql.NullInt64{Int64: id, Valid: true}); err != nil {
+			return err
+		}
 		if err := queries.DeleteCategory(ctx, id); err != nil {
 			return err
 		}
@@ -1696,10 +1704,42 @@ func (c *Cache) CheckMergeCategory(ctx context.Context, from, into int64) error 
 	if members := len(snapshot.LibraryCategories(from)) - 1; members > 0 && snapshot.LibraryOf(from) == from {
 		references = append(references, Reference{Kind: "further media types of the library", Count: int64(members)})
 	}
+	clash, err := c.queries.CountArrInstancesClashing(ctx, settingsdb.CountArrInstancesClashingParams{
+		FromCategoryID: sql.NullInt64{Int64: from, Valid: true}, IntoCategoryID: sql.NullInt64{Int64: into, Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("settings: count linked *Arr clashes for category %d: %w", from, err)
+	}
+	if clash > 0 {
+		references = append(references, Reference{Kind: "linked *Arr instances of a kind the target library already links (unlink one first)", Count: clash})
+	}
 	if len(references) > 0 {
 		return &InUseError{Entity: "category", ID: from, References: references}
 	}
 	return nil
+}
+
+// categoryRowCounts names what in settings.db still belongs to a library besides its folders, grants and jobs.
+func (c *Cache) categoryRowCounts(ctx context.Context, id int64) ([]Reference, error) {
+	nullable := sql.NullInt64{Int64: id, Valid: true}
+	placement, err := c.queries.CountPlacementAffinityForCategory(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("settings: count placement rules for category %d: %w", id, err)
+	}
+	folders, err := c.queries.CountDownloadFoldersForCategory(ctx, nullable)
+	if err != nil {
+		return nil, fmt.Errorf("settings: count download folders for category %d: %w", id, err)
+	}
+	arrs, err := c.queries.CountArrInstancesForCategory(ctx, nullable)
+	if err != nil {
+		return nil, fmt.Errorf("settings: count *Arr instances for category %d: %w", id, err)
+	}
+	lists, err := c.queries.CountImportListsForCategory(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("settings: count import lists for category %d: %w", id, err)
+	}
+	return countedReferences(Reference{"placement rules", placement}, Reference{"download folders", folders},
+		Reference{"linked *Arr instances", arrs}, Reference{"import lists", lists}), nil
 }
 
 // MergeCategory is the settings half of merging library from into library into, after what the library holds has moved:
@@ -1709,12 +1749,36 @@ func (c *Cache) MergeCategory(ctx context.Context, from, into int64) error {
 		return err
 	}
 	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
-		for _, statement := range []string{
-			"UPDATE OR IGNORE category_root_folder SET category_id = ?2 WHERE category_id = ?1",
-			"DELETE FROM category_root_folder WHERE category_id = ?1",
-			"DELETE FROM user_category_access WHERE category_id = ?1",
-		} {
-			if _, err := tx.ExecContext(ctx, statement, from, into); err != nil {
+		queries := c.queries.WithTx(tx)
+		into64, from64 := sql.NullInt64{Int64: into, Valid: true}, sql.NullInt64{Int64: from, Valid: true}
+		steps := []func() error{
+			func() error {
+				return queries.MoveCategoryRootFolders(ctx, settingsdb.MoveCategoryRootFoldersParams{IntoCategoryID: into, FromCategoryID: from})
+			},
+			func() error { return queries.DropCategoryRootFolders(ctx, from) },
+			func() error { return queries.DropCategoryAccess(ctx, from) },
+			func() error {
+				return queries.MoveImportLists(ctx, settingsdb.MoveImportListsParams{IntoCategoryID: into, FromCategoryID: from})
+			},
+			func() error {
+				return queries.RenameLeftoverImportLists(ctx, settingsdb.RenameLeftoverImportListsParams{IntoCategoryID: into, FromCategoryID: from})
+			},
+			func() error {
+				return queries.MoveDownloadFolders(ctx, settingsdb.MoveDownloadFoldersParams{IntoCategoryID: into64, FromCategoryID: from64})
+			},
+			func() error {
+				return queries.MoveArrInstances(ctx, settingsdb.MoveArrInstancesParams{IntoCategoryID: into64, FromCategoryID: from64})
+			},
+			func() error {
+				return queries.MoveExclusionPatterns(ctx, settingsdb.MoveExclusionPatternsParams{IntoCategoryID: into64, FromCategoryID: from64})
+			},
+			func() error {
+				return queries.MovePlacementAffinity(ctx, settingsdb.MovePlacementAffinityParams{IntoCategoryID: into, FromCategoryID: from})
+			},
+			func() error { return queries.DropPlacementAffinity(ctx, from) },
+		}
+		for _, step := range steps {
+			if err := step(); err != nil {
 				return err
 			}
 		}

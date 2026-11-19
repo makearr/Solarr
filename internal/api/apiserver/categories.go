@@ -619,12 +619,14 @@ func (s *Server) MergeCategory(w http.ResponseWriter, r *http.Request, id int64)
 		writeError(w, s.logger, err)
 		return
 	}
-	moved, err := s.categoryMerger.Merge(r.Context(), id, into)
+	// Both halves finish once begun: the first moves content that cannot be moved back.
+	ctx := context.WithoutCancel(r.Context())
+	moved, err := s.categoryMerger.Merge(ctx, id, into)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
-	if err := s.auth.Settings.MergeCategory(r.Context(), id, into); err != nil {
+	if err := s.auth.Settings.MergeCategory(ctx, id, into); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}

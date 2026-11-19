@@ -15,6 +15,8 @@ type Querier interface {
 	ClearCategoryTarget(ctx context.Context, categoryID int64) error
 	ClearCategoryTargetAuto(ctx context.Context, categoryID int64) error
 	ClearDefaultLanguages(ctx context.Context) error
+	CountArrInstancesClashing(ctx context.Context, arg CountArrInstancesClashingParams) (int64, error)
+	CountArrInstancesForCategory(ctx context.Context, categoryID sql.NullInt64) (int64, error)
 	CountCategoriesUsingLanguageProfile(ctx context.Context, languageProfileID sql.NullInt64) (int64, error)
 	// Invariant 41: deleting an entity in use is refused with a count of what
 	// references it, so the user gets a reason rather than a constraint violation.
@@ -23,7 +25,10 @@ type Querier interface {
 	// Invariant 41: deleting a category in use is refused with a count of what
 	// references it.
 	CountDiscoveryJobsUsingCategory(ctx context.Context, categoryID sql.NullInt64) (int64, error)
+	CountDownloadFoldersForCategory(ctx context.Context, categoryID sql.NullInt64) (int64, error)
+	CountImportListsForCategory(ctx context.Context, categoryID int64) (int64, error)
 	CountImportListsUsingQualityProfile(ctx context.Context, qualityProfileID sql.NullInt64) (int64, error)
+	CountPlacementAffinityForCategory(ctx context.Context, categoryID int64) (int64, error)
 	CountRootFoldersInCategory(ctx context.Context, categoryID int64) (int64, error)
 	CountUsersWithCategoryAccess(ctx context.Context, categoryID int64) (int64, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
@@ -63,6 +68,7 @@ type Querier interface {
 	DeleteDownloadFolder(ctx context.Context, id int64) error
 	DeleteDownloader(ctx context.Context, id int64) error
 	DeleteExclusionPattern(ctx context.Context, id int64) error
+	DeleteExclusionPatternsForCategory(ctx context.Context, categoryID sql.NullInt64) error
 	DeleteImportList(ctx context.Context, id int64) error
 	DeleteIndexer(ctx context.Context, id int64) error
 	DeleteLanguageProfile(ctx context.Context, id int64) error
@@ -76,6 +82,9 @@ type Querier interface {
 	DeleteUser(ctx context.Context, id int64) error
 	DeleteUserBlockedTags(ctx context.Context, userID int64) error
 	DetachRootFolderFromCategory(ctx context.Context, arg DetachRootFolderFromCategoryParams) error
+	DropCategoryAccess(ctx context.Context, categoryID int64) error
+	DropCategoryRootFolders(ctx context.Context, categoryID int64) error
+	DropPlacementAffinity(ctx context.Context, categoryID int64) error
 	GetArrInstance(ctx context.Context, id int64) (ArrInstance, error)
 	GetCalendarFeed(ctx context.Context, userID int64) (CalendarFeed, error)
 	GetCalendarFeedByHash(ctx context.Context, tokenHash string) (CalendarFeed, error)
@@ -131,7 +140,14 @@ type Querier interface {
 	ListRootFolders(ctx context.Context) ([]RootFolder, error)
 	ListTargetProfiles(ctx context.Context) ([]TargetProfile, error)
 	ListUsers(ctx context.Context) ([]AppUser, error)
+	MoveArrInstances(ctx context.Context, arg MoveArrInstancesParams) error
+	MoveCategoryRootFolders(ctx context.Context, arg MoveCategoryRootFoldersParams) error
+	MoveDownloadFolders(ctx context.Context, arg MoveDownloadFoldersParams) error
+	MoveExclusionPatterns(ctx context.Context, arg MoveExclusionPatternsParams) error
+	MoveImportLists(ctx context.Context, arg MoveImportListsParams) error
+	MovePlacementAffinity(ctx context.Context, arg MovePlacementAffinityParams) error
 	RecordDiscoveryJobRun(ctx context.Context, arg RecordDiscoveryJobRunParams) error
+	RenameLeftoverImportLists(ctx context.Context, arg RenameLeftoverImportListsParams) error
 	RevokeCategoryAccess(ctx context.Context, arg RevokeCategoryAccessParams) error
 	// A separate statement from UpdateArrInstance so a caller that is not
 	// changing the key never re-seals and rewrites it -- Seal generates a fresh
