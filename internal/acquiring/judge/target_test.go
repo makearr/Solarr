@@ -89,7 +89,7 @@ func TestWithTarget_PreferOverRanksAboveBeforeBelowAndIgnoreBelowLeavesBelowUnra
 	rules := score.Profile{Compare: []string{"score"}}
 	bitrate := int64(5000)
 	preferred := judge.WithTarget(rules, settings.QualityTarget{Resolution: "1080p", VideoBitrateKbps: &bitrate, PreferOver: true})
-	want := [][]string{{"1080p"}, {"1440p"}, {"2160p"}, {"720p"}, {"576p"}, {"480p"}}
+	want := [][]string{{"1080p"}, {"1440p"}, {"2160p"}, {"720p"}, {"576p"}, {"540p"}, {"480p"}, {"360p"}}
 	if got := preferred.Tiers["resolution"]; !slices.EqualFunc(got, want, slices.Equal[[]string]) {
 		t.Errorf("resolution tiers = %v, want %v", got, want)
 	}
@@ -137,7 +137,7 @@ func TestWithFreshTarget_PreferOverEvenWhenTheLibraryDidNotAskForIt(t *testing.T
 	if got := fresh.Targets["video_bitrate"][0]; got.Weights.Under != 1000 || got.Lenience != 0.25 {
 		t.Errorf("a new item's bitrate target = %+v, want under 1000 with 25%% lenience", got)
 	}
-	want := [][]string{{"1080p"}, {"1440p"}, {"2160p"}, {"720p"}, {"576p"}, {"480p"}}
+	want := [][]string{{"1080p"}, {"1440p"}, {"2160p"}, {"720p"}, {"576p"}, {"540p"}, {"480p"}, {"360p"}}
 	if got := fresh.Tiers["resolution"]; !slices.EqualFunc(got, want, slices.Equal[[]string]) {
 		t.Errorf("resolution tiers = %v, want 4k nearer than 720p", got)
 	}

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/quality"
 	"github.com/makearr/Solarr/internal/identify/score"
 )
 
@@ -16,13 +17,11 @@ const targetLanguageScore = 5
 // transcoding brings quality down, never up, so a release above the target beats one below it however near that one is.
 const shortfallWeight = 1000
 
-// resolutionLadder is the resolutions in order from the highest, by the position of each in the list.
-var resolutionNames = []string{"2160p", "1440p", "1080p", "720p", "576p", "480p"}
-
+// resolutionLadder gives each resolution a target may name the full ranking, highest first.
 var resolutionLadder = func() map[string][]string {
-	ladder := make(map[string][]string, len(resolutionNames))
-	for _, name := range resolutionNames {
-		ladder[name] = resolutionNames
+	ladder := make(map[string][]string, len(quality.TargetResolutions))
+	for _, name := range quality.TargetResolutions {
+		ladder[name] = quality.Resolutions
 	}
 	return ladder
 }()

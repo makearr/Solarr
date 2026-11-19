@@ -195,3 +195,42 @@ func TestMeetsTarget_AVideoBitrateFarUnderIsFineWhenTheCRFIsWithinTheTarget(t *t
 		t.Error("with no CRF to vouch for it, a quarter of the bitrate is short")
 	}
 }
+
+// A label off the old six-rung ladder still has a place on it, so the lowest-resolution files do not look closest (QUAL-5).
+func TestDistance_ResolutionsOffTheTargetLadderStillCount(t *testing.T) {
+	target := settings.QualityTarget{MediaType: "movie", Resolution: "480p"}
+	tests := []struct {
+		resolution string
+		percent    int
+	}{
+		{"480p", 100},
+		{"540p", 60},
+		{"360p", 60},
+		{"576p", 20},
+		{"4320p", 0},
+		{"odd", -1},
+	}
+	for _, test := range tests {
+		got, ok := quality.Distance(target, score.FileFacts{Resolution: test.resolution})
+		if test.percent < 0 {
+			if ok {
+				t.Errorf("%s: a label without lines has no closeness, got %+v", test.resolution, got)
+			}
+			continue
+		}
+		if !ok || got.Percent != test.percent {
+			t.Errorf("%s: %d%% ok %v, want %d%%", test.resolution, got.Percent, ok, test.percent)
+		}
+	}
+	tall := settings.QualityTarget{MediaType: "movie", Resolution: "1080p"}
+	if got, _ := quality.Distance(tall, score.FileFacts{Resolution: "4320p"}); got.Percent != 20 {
+		t.Errorf("4320p against 1080p = %d%%, want 20 (two rungs up)", got.Percent)
+	}
+	if got, _ := quality.Distance(tall, score.FileFacts{Resolution: "360p"}); got.Percent != 0 {
+		t.Errorf("360p against 1080p = %d%%, want 0", got.Percent)
+	}
+	box := settings.QualityTarget{MediaType: "movie", Container: "mkv"}
+	if got, _ := quality.Distance(box, score.FileFacts{Container: "matroska", Extension: "avi"}); got.Percent != 100 {
+		t.Errorf("the probe's container wins over the extension: %d%%", got.Percent)
+	}
+}

@@ -41,8 +41,11 @@ func (c Closeness) Gaps() []Part {
 	return gaps
 }
 
-// resolutionLadder orders the resolutions a target can name, so one step off costs a fixed share.
-var resolutionLadder = []string{"2160p", "1440p", "1080p", "720p", "576p", "480p"}
+// Resolutions orders every label a probe reports, highest first, so one step off costs a fixed share.
+var Resolutions = []string{"2160p", "1440p", "1080p", "720p", "576p", "540p", "480p", "360p"}
+
+// TargetResolutions are the labels a target may name.
+var TargetResolutions = []string{"2160p", "1440p", "1080p", "720p", "576p", "480p"}
 
 const (
 	// resolutionStepCost is what each rung between the file's resolution and the target's takes off.
@@ -91,9 +94,9 @@ func Distance(target settings.QualityTarget, file score.FileFacts) (closeness Cl
 	if tolerance <= 0 {
 		tolerance = defaultBitrateTolerancePct
 	}
-	name := file.Extension
+	name := file.Container
 	if name == "" {
-		name = file.Container
+		name = file.Extension
 	}
 	if target.Container != "" && name != "" {
 		match := false
@@ -189,14 +192,24 @@ func Distance(target settings.QualityTarget, file score.FileFacts) (closeness Cl
 	return Closeness{Percent: int(math.Round(100 * earned / possible)), Parts: parts}, true
 }
 
-// rung is the resolution's place on the ladder, or -1 when it is not on it.
+// rung is the resolution's place on the ladder; a label off it takes the place of the first rung at or below its height,
+// and only a label without lines is -1.
 func rung(resolution string) int {
-	for index, name := range resolutionLadder {
+	for index, name := range Resolutions {
 		if strings.EqualFold(name, resolution) {
 			return index
 		}
 	}
-	return -1
+	height := resolutionHeight(resolution)
+	if height <= 0 {
+		return -1
+	}
+	for index, name := range Resolutions {
+		if resolutionHeight(name) <= height {
+			return index
+		}
+	}
+	return len(Resolutions) - 1
 }
 
 func formatNumber(value float64) string {
