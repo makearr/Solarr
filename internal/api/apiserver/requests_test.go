@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -169,5 +170,41 @@ func TestAddWork_TheAddLevelAddsAtOnceWithoutAutoApprove(t *testing.T) {
 	}
 	if len(fixture.requests.records) != 1 || fixture.requests.records[0].State != "FULFILLED" {
 		t.Errorf("requests = %+v, want one fulfilled record", fixture.requests.records)
+	}
+}
+
+// SEC-15: a request keeps the title and how to watch it, not the profile, folder, tags or search the requester typed; a
+// repeat is the same request and an account has at most 50 waiting.
+func TestFileRequest_KeepsOnlyWhatARequesterMayChooseAndBoundsTheQueue(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, _ := fixture.createCategoryWithRoot(t, "TV", "/media/tv")
+	asker := fixture.createUser(t, "asker", settings.RoleUser)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), asker.ID, category.ID, settings.PermissionRequest); err != nil {
+		t.Fatal(err)
+	}
+	cookies := fixture.signIn(t, "asker")
+	body := func(id string) string {
+		return fmt.Sprintf(`{"category_id":%d,"kind":"series","provider":"tvdb","external_id":"%s","title":"Some Show","monitor_option":"all","specials":true,`+
+			`"quality_profile_id":9,"root_folder_id":3,"target_id":4,"tags":["x"],"fields":{"a":"b"},"search":true,"monitored":false}`, category.ID, id)
+	}
+
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works", body("1"))); recorder.Code != http.StatusOK {
+		t.Fatalf("file: %d (%s)", recorder.Code, recorder.Body)
+	}
+	want := fmt.Sprintf(`{"category_id":%d,"external_id":"1","kind":"series","monitor_option":"all","provider":"tvdb","specials":true,"title":"Some Show"}`, category.ID)
+	if got := fixture.requests.records[0].ScopeJSON; got != want {
+		t.Errorf("stored scope = %s, want %s", got, want)
+	}
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works", body("1")))
+	if recorder.Code != http.StatusOK || len(fixture.requests.records) != 1 || !strings.Contains(recorder.Body.String(), `"request_id":1`) {
+		t.Errorf("the same request again: %d (%s), %d filed; want the first one back", recorder.Code, recorder.Body, len(fixture.requests.records))
+	}
+	for id := 2; id <= 50; id++ {
+		if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works", body(fmt.Sprint(id)))); recorder.Code != http.StatusOK {
+			t.Fatalf("request %d: %d", id, recorder.Code)
+		}
+	}
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works", body("51"))); recorder.Code != http.StatusTooManyRequests {
+		t.Errorf("the 51st waiting request: %d, want 429", recorder.Code)
 	}
 }

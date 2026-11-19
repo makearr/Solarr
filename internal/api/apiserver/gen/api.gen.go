@@ -5627,16 +5627,25 @@ type RequestView struct {
 	DecidedAt  *time.Time `json:"decided_at,omitempty"`
 
 	// DecidedBy Username of who decided; empty for an automatic approval.
-	DecidedBy     *string      `json:"decided_by,omitempty"`
-	DeclineReason *string      `json:"decline_reason,omitempty"`
-	ExternalId    *string      `json:"external_id,omitempty"`
-	Id            int64        `json:"id"`
-	MediaType     string       `json:"media_type"`
-	Provider      *string      `json:"provider,omitempty"`
-	State         RequestState `json:"state"`
-	Title         string       `json:"title"`
-	UserId        int64        `json:"user_id"`
-	Username      string       `json:"username"`
+	DecidedBy     *string `json:"decided_by,omitempty"`
+	DeclineReason *string `json:"decline_reason,omitempty"`
+	ExternalId    *string `json:"external_id,omitempty"`
+	Id            int64   `json:"id"`
+
+	// Kind What kind of thing was asked for
+	Kind      *string `json:"kind,omitempty"`
+	MediaType string  `json:"media_type"`
+
+	// MonitorOption How much of it to monitor once approved.
+	MonitorOption *string `json:"monitor_option,omitempty"`
+	Provider      *string `json:"provider,omitempty"`
+
+	// Specials Whether the specials are monitored too.
+	Specials *bool        `json:"specials,omitempty"`
+	State    RequestState `json:"state"`
+	Title    string       `json:"title"`
+	UserId   int64        `json:"user_id"`
+	Username string       `json:"username"`
 
 	// WorkId The work the approval added.
 	WorkId *int64 `json:"work_id,omitempty"`
@@ -6608,7 +6617,7 @@ type WorkCredit struct {
 type WorkDetail struct {
 	AddedAt time.Time `json:"added_at"`
 
-	// CanRequest Whether the caller holds request in one of the album's libraries: searching, sending and monitoring it would be accepted.
+	// CanRequest Whether the caller holds add in one of the album's libraries (request only asks): searching, sending and monitoring it would be accepted.
 	CanRequest bool     `json:"can_request"`
 	Credits    []Credit `json:"credits"`
 

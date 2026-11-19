@@ -70,6 +70,9 @@ export function Requests() {
                   {[
                     administrator ? `by ${entry.username}` : undefined,
                     entry.media_type,
+                    entry.kind,
+                    entry.monitor_option ? `monitor ${entry.monitor_option}` : undefined,
+                    entry.specials ? "with specials" : undefined,
                     new Date(entry.created_at).toLocaleDateString(),
                     STATE_LABEL[entry.state],
                     entry.decline_reason ? `“${entry.decline_reason}”` : undefined,

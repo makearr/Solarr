@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -60,6 +61,9 @@ func (s *Server) fileRequest(w http.ResponseWriter, r *http.Request, access auth
 		writeError(w, s.logger, err)
 		return
 	}
+	if !access.Permission(body.CategoryId).AtLeast(settings.PermissionAdd) {
+		body = requestScope(body)
+	}
 	scope, err := json.Marshal(body)
 	if err != nil {
 		writeError(w, s.logger, err)
@@ -83,12 +87,40 @@ func (s *Server) fileRequest(w http.ResponseWriter, r *http.Request, access auth
 		writeJSON(w, s.logger, http.StatusOK, addWorkView(result))
 		return
 	}
+	pending, err := s.requests.List(r.Context(), access.UserID(), requestPending, 0, maxPendingRequests+1)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	for _, earlier := range pending {
+		if earlier.CategoryID == filed.CategoryID && earlier.ExternalRef == filed.ExternalRef {
+			writeJSON(w, s.logger, http.StatusOK, gen.AddWorkResult{Kind: "request", RequestId: &earlier.ID})
+			return
+		}
+	}
+	if len(pending) >= maxPendingRequests {
+		writeProblem(w, s.logger, http.StatusTooManyRequests, TypeTooManyRequests, "Too many requests",
+			fmt.Sprintf("you have %d requests waiting; ask again once an administrator has decided some", maxPendingRequests))
+		return
+	}
 	record, err := s.requests.File(r.Context(), filed)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, gen.AddWorkResult{Kind: "request", RequestId: &record.ID})
+}
+
+// maxPendingRequests is how many requests one account may have waiting.
+const maxPendingRequests = 50
+
+// requestScope keeps what an account that may only ask chooses: which title and how to watch it. The profile, root folder, target, tags, fields and
+// starting a search are the library's defaults at approval (SEC-15).
+func requestScope(body gen.AddWorkRequest) gen.AddWorkRequest {
+	return gen.AddWorkRequest{
+		CategoryId: body.CategoryId, Provider: body.Provider, ExternalId: body.ExternalId, Title: body.Title,
+		Kind: body.Kind, MonitorOption: body.MonitorOption, Specials: body.Specials,
+	}
 }
 
 func (s *Server) requestView(record RequestRecord) gen.RequestView {
@@ -98,7 +130,7 @@ func (s *Server) requestView(record RequestRecord) gen.RequestView {
 	view := gen.RequestView{
 		Id: record.ID, UserId: record.UserID, MediaType: record.MediaType, State: gen.RequestState(record.State),
 		Title: derefOr(scope.Title, record.ExternalRef), CreatedAt: record.CreatedAt,
-		Provider: &scope.Provider, ExternalId: &scope.ExternalId,
+		Provider: &scope.Provider, ExternalId: &scope.ExternalId, Kind: scope.Kind, MonitorOption: scope.MonitorOption, Specials: scope.Specials,
 	}
 	if user, found := snapshot.User(record.UserID); found {
 		view.Username = user.Username

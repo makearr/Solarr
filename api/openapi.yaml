@@ -12228,6 +12228,9 @@ components:
         category_id: { type: integer, format: int64 }
         provider: { type: string }
         external_id: { type: string }
+        kind: { type: string, description: What kind of thing was asked for, when the type has more than one. }
+        monitor_option: { type: string, description: How much of it to monitor once approved. }
+        specials: { type: boolean, description: Whether the specials are monitored too. }
         state: { $ref: "#/components/schemas/RequestState" }
         work_id: { type: integer, format: int64, description: The work the approval added. }
         decided_by: { type: string, description: Username of who decided; empty for an automatic approval. }

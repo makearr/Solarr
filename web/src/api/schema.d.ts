@@ -8856,6 +8856,12 @@ export interface components {
             category_id?: number;
             provider?: string;
             external_id?: string;
+            /** @description What kind of thing was asked for */
+            kind?: string;
+            /** @description How much of it to monitor once approved. */
+            monitor_option?: string;
+            /** @description Whether the specials are monitored too. */
+            specials?: boolean;
             state: components["schemas"]["RequestState"];
             /**
              * Format: int64
@@ -9549,7 +9555,7 @@ export interface components {
             };
             /** @description The work's monitored-or-not groups (an album's one, a series' seasons), in order. */
             groups?: components["schemas"]["WorkGroup"][];
-            /** @description Whether the caller holds request in one of the album's libraries: searching, sending and monitoring it would be accepted. */
+            /** @description Whether the caller holds add in one of the album's libraries (request only asks): searching, sending and monitoring it would be accepted. */
             can_request: boolean;
             /** Format: int64 */
             id: number;
