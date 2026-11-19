@@ -483,3 +483,13 @@ func TestLimiter_QueuedRequestsTakeTheirPacingTurnAfterTheirSlot(t *testing.T) {
 	fake.Advance(time.Second)
 	(<-started)()
 }
+
+func TestLimiter_ARetryAfterOfAYearPausesForAtMostSixHours(t *testing.T) {
+	limiter, fake := newLimiter(httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 60}})
+
+	limiter.Observe("indexer", httpx.Outcome{Success: false, RetryAfter: 365 * 24 * time.Hour})
+
+	if want := fake.Now().Add(6 * time.Hour); !limiter.State("indexer").PausedUntil.Equal(want) {
+		t.Errorf("PausedUntil = %v, want %v", limiter.State("indexer").PausedUntil, want)
+	}
+}

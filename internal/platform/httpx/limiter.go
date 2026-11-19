@@ -117,6 +117,9 @@ func (l *Limiter) Acquire(ctx context.Context, provider string) (release func(),
 	}, nil
 }
 
+// maxRetryAfter caps a server-chosen pause: one bad answer (a year-long Retry-After) must not disable a provider until restart.
+const maxRetryAfter = 6 * time.Hour
+
 // maxBlockingPause is the longest a request waits out a provider's pause; a longer one (a spent quota's Retry-After)
 // fails the request instead, so a scan is not held for hours by an enrichment source.
 const maxBlockingPause = 2 * time.Minute
@@ -240,7 +243,7 @@ func (l *Limiter) Observe(provider string, outcome Outcome) {
 		budget.effectivePerSecond/2,
 	)
 
-	pause := outcome.RetryAfter
+	pause := min(outcome.RetryAfter, maxRetryAfter)
 	if pause <= 0 {
 		pause = l.jitter(exponential(budget.consecutiveFailures))
 	}

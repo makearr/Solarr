@@ -589,3 +589,32 @@ func TestClient_AnAnswerThatFailedCountsTowardsTheBreakerAndStaysReadable(t *tes
 		t.Errorf("state = %s, want open", state)
 	}
 }
+
+func TestClient_ACredentialHeaderDoesNotFollowARedirectToAnotherHost(t *testing.T) {
+	for name, test := range map[string]struct {
+		target     string
+		wantHeader string
+	}{
+		"another host": {"https://other.example/y", ""},
+		"same host":    {"https://arr.example/y", "secret"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			transport := &roundTripper{responses: []*http.Response{respond(http.StatusFound, map[string]string{"Location": test.target}), respond(http.StatusOK, nil)}}
+			client, _, _, _ := newTestClient(t, transport)
+			request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://arr.example/x", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request.Header.Set("X-Api-Key", "secret")
+
+			response, err := client.Do(t.Context(), request)
+			if err != nil {
+				t.Fatalf("Do: %v", err)
+			}
+			_ = response.Body.Close()
+			if got := transport.requests[len(transport.requests)-1].Header.Get("X-Api-Key"); got != test.wantHeader {
+				t.Errorf("X-Api-Key on the followed request = %q, want %q", got, test.wantHeader)
+			}
+		})
+	}
+}

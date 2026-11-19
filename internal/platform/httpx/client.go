@@ -125,6 +125,11 @@ func NewClient(c clock.Clock, guard *Guard, limiter *Limiter, breaker *Breaker, 
 				if err := guard.CheckURL(request.URL); err != nil {
 					return err
 				}
+				if request.URL.Host != via[0].URL.Host {
+					for _, name := range credentialHeaders {
+						request.Header.Del(name)
+					}
+				}
 				return checkProxiedDestination(request.Context(), guard, config.Proxy, request)
 			},
 		},
@@ -353,6 +358,9 @@ func (c *Client) Get(ctx context.Context, url string) (*http.Response, error) {
 	}
 	return c.Do(ctx, request)
 }
+
+// credentialHeaders are the headers that carry a secret; Go drops only Authorization and Cookie on a redirect to another host.
+var credentialHeaders = []string{"X-Api-Key", "X-Emby-Token", "Authorization", "Cookie"}
 
 // ErrNotFound is a 404 GetJSON met: the provider knows nothing under what was asked.
 var ErrNotFound = errors.New("httpx: not found")
