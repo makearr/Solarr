@@ -3,8 +3,10 @@ package settings_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/netip"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/goccy/go-yaml"
@@ -534,5 +536,34 @@ func TestMoveUserBlockedTag_TheBlockFollowsTheMerge(t *testing.T) {
 	want := []settings.UserBlockedTag{{TagID: 6, Name: "Scary"}}
 	if got := cache.Snapshot().UserBlockedTags(user.ID); !reflect.DeepEqual(got, want) {
 		t.Errorf("blocks = %+v, want %+v", got, want)
+	}
+}
+
+// SEC-8: a preference has a bounded key and value, and an account a bounded number of them.
+func TestSetUserPreference_IsBounded(t *testing.T) {
+	cache, fake := newCache(t)
+	ctx := context.Background()
+	user, err := cache.CreateUser(ctx, fake, "kid", "hash", settings.RoleReadonly)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"", "Upper", "1start", "has space", strings.Repeat("a", 97)} {
+		if err := cache.SetUserPreference(ctx, user.ID, key, `1`); err == nil {
+			t.Errorf("key %q was accepted", key)
+		}
+	}
+	if err := cache.SetUserPreference(ctx, user.ID, "list.view.works", `"`+strings.Repeat("x", 8<<10)+`"`); err == nil {
+		t.Error("a value over 8 KiB was accepted")
+	}
+	for index := range 200 {
+		if err := cache.SetUserPreference(ctx, user.ID, fmt.Sprintf("k%d", index), `1`); err != nil {
+			t.Fatalf("preference %d: %v", index, err)
+		}
+	}
+	if err := cache.SetUserPreference(ctx, user.ID, "one.more", `1`); err == nil {
+		t.Error("the 201st preference was accepted")
+	}
+	if err := cache.SetUserPreference(ctx, user.ID, "k0", `2`); err != nil {
+		t.Errorf("updating a kept key: %v", err)
 	}
 }

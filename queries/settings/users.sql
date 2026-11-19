@@ -92,3 +92,6 @@ ON CONFLICT (user_id, tag_id) DO NOTHING;
 
 -- name: DeleteUserBlockedTagsOfTag :exec
 DELETE FROM user_blocked_tag WHERE tag_id = ?;
+
+-- name: CountPreferencesForUser :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM user_preference WHERE user_id = ?;

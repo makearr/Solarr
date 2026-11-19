@@ -27,6 +27,17 @@ func (q *Queries) CopyUserBlockedTag(ctx context.Context, arg CopyUserBlockedTag
 	return err
 }
 
+const countPreferencesForUser = `-- name: CountPreferencesForUser :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM user_preference WHERE user_id = ?
+`
+
+func (q *Queries) CountPreferencesForUser(ctx context.Context, userID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPreferencesForUser, userID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createAPIKey = `-- name: CreateAPIKey :one
 INSERT INTO api_key (user_id, name, key_hash, created_at, key_sealed)
 VALUES (?, ?, ?, ?, ?)

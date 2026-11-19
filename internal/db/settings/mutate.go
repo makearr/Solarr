@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -1647,19 +1648,43 @@ func (c *Cache) UserPreferences(ctx context.Context, userID int64) (map[string]s
 	return out, nil
 }
 
+// A preference is a small interface setting: a bounded key and value, and a bounded number per account.
+const (
+	maxPreferenceBytes    = 8 << 10
+	maxPreferencesPerUser = 200
+)
+
+var preferenceKey = regexp.MustCompile(`^[a-z][a-z0-9_.:-]{0,95}$`)
+
 // SetUserPreference stores one interface preference. Self-service, like
 // SetUserTier: nothing here changes behaviour, only what the caller sees.
 func (c *Cache) SetUserPreference(ctx context.Context, userID int64, key, valueJSON string) error {
 	if _, found := c.Snapshot().User(userID); !found {
 		return fmt.Errorf("%w: user %d", ErrNotFound, userID)
 	}
-	if strings.TrimSpace(key) == "" {
-		return config.Problems{{Path: "key", Expectation: "a preference key"}}
+	if !preferenceKey.MatchString(key) {
+		return config.Problems{{Path: "key", Value: key, Expectation: "a lower-case key of letters, digits and . _ : -, up to 96 characters"}}
 	}
 	if !json.Valid([]byte(valueJSON)) {
 		return config.Problems{{Path: "value", Value: valueJSON, Expectation: "a JSON value"}}
 	}
+	if len(valueJSON) > maxPreferenceBytes {
+		return config.Problems{{Path: "value", Expectation: fmt.Sprintf("at most %d bytes", maxPreferenceBytes)}}
+	}
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		// An update of a key already kept is exempt from the count.
+		_, err := queries.GetPreference(ctx, settingsdb.GetPreferenceParams{UserID: userID, Key: key})
+		if errors.Is(err, sql.ErrNoRows) {
+			stored, err := queries.CountPreferencesForUser(ctx, userID)
+			if err != nil {
+				return err
+			}
+			if stored >= maxPreferencesPerUser {
+				return config.Problems{{Path: "key", Value: key, Expectation: fmt.Sprintf("room for it: an account keeps at most %d preferences", maxPreferencesPerUser)}}
+			}
+		} else if err != nil {
+			return err
+		}
 		return queries.SetPreference(ctx, settingsdb.SetPreferenceParams{
 			UserID: userID, Key: key, ValueJson: valueJSON,
 		})

@@ -30,6 +30,7 @@ type Querier interface {
 	CountImportListsForCategory(ctx context.Context, categoryID int64) (int64, error)
 	CountImportListsUsingQualityProfile(ctx context.Context, qualityProfileID sql.NullInt64) (int64, error)
 	CountPlacementAffinityForCategory(ctx context.Context, categoryID int64) (int64, error)
+	CountPreferencesForUser(ctx context.Context, userID int64) (int64, error)
 	CountRootFoldersInCategory(ctx context.Context, categoryID int64) (int64, error)
 	CountUsersWithCategoryAccess(ctx context.Context, categoryID int64) (int64, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
