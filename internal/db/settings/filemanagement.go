@@ -104,6 +104,8 @@ type Tagging struct {
 	EmbedCover bool
 	// Navidrome adds what Navidrome reads (D10): the track artist's tags and MusicBrainz id, and a cover.jpg in each album folder.
 	Navidrome bool
+	// CopyLinkedFiles writes a separate copy of a file a download still links to; off, such a file waits until the link is gone.
+	CopyLinkedFiles bool
 }
 
 // DefaultFileManagement is Sonarr's defaults, with Solarr's 7-day recycle bin as the bin.
@@ -226,7 +228,7 @@ func writeCategoryFileManagement(ctx context.Context, queries *settingsdb.Querie
 		SetPermissions: boolToInt(f.SetPermissions), ChmodFolder: f.ChmodFolder, ChownGroup: f.ChownGroup,
 		WriteIdsToTags: boolToInt(f.Tagging.WriteIDs), ReplaceIdsInTags: boolToInt(f.Tagging.ReplaceIDs),
 		WriteMetadataToTags: boolToInt(f.Tagging.WriteMetadata), EmbedCoverInTags: boolToInt(f.Tagging.EmbedCover),
-		NavidromeProfile:   boolToInt(f.Tagging.Navidrome),
+		NavidromeProfile: boolToInt(f.Tagging.Navidrome), TagCopyLinkedFiles: boolToInt(f.Tagging.CopyLinkedFiles),
 		MergeArtistAliases: boolToInt(f.MergeArtistAliases),
 		ImportExtraFiles:   extrasOn, ExtraFileExtensions: extensions,
 		MediaServerFiles: boolToInt(f.MediaServerFiles), SharedFileFallback: string(f.SharedFileFallback),
@@ -256,7 +258,7 @@ func withFileManagement(categories []Category, rows []settingsdb.CategoryFileMan
 			Tagging: Tagging{
 				WriteIDs: row.WriteIdsToTags != 0, ReplaceIDs: row.ReplaceIdsInTags != 0,
 				WriteMetadata: row.WriteMetadataToTags != 0, EmbedCover: row.EmbedCoverInTags != 0,
-				Navidrome: row.NavidromeProfile != 0,
+				Navidrome: row.NavidromeProfile != 0, CopyLinkedFiles: row.TagCopyLinkedFiles != 0,
 			},
 			ExtraFiles:           decodeExtraFiles(row.ImportExtraFiles, row.ExtraFileExtensions),
 			MediaServerFiles:     row.MediaServerFiles != 0,

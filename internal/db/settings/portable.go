@@ -245,6 +245,7 @@ type FileManagementEntry struct {
 	WriteMetadataToTags bool  `yaml:"write_metadata_to_tags,omitempty"`
 	EmbedCoverInTags    bool  `yaml:"embed_cover_in_tags,omitempty"`
 	NavidromeProfile    bool  `yaml:"navidrome_profile,omitempty"`
+	TagCopyLinkedFiles  bool  `yaml:"tag_copy_linked_files,omitempty"`
 	// ImportExtraFiles and ExtraFileExtensions are absent while the library takes its media type's own.
 	ImportExtraFiles    *bool    `yaml:"import_extra_files,omitempty"`
 	ExtraFileExtensions []string `yaml:"extra_file_extensions,omitempty"`
@@ -265,7 +266,7 @@ func (e FileManagementEntry) fileManagement() FileManagement {
 		SetPermissions:     e.SetPermissions, ChmodFolder: e.ChmodFolder, ChownGroup: e.ChownGroup,
 		Tagging: Tagging{
 			WriteIDs: e.WriteIDsToTags == nil || *e.WriteIDsToTags, ReplaceIDs: e.ReplaceIDsInTags,
-			WriteMetadata: e.WriteMetadataToTags, EmbedCover: e.EmbedCoverInTags, Navidrome: e.NavidromeProfile,
+			WriteMetadata: e.WriteMetadataToTags, EmbedCover: e.EmbedCoverInTags, Navidrome: e.NavidromeProfile, CopyLinkedFiles: e.TagCopyLinkedFiles,
 		},
 		ExtraFiles:       ExtraFiles{Import: e.ImportExtraFiles, Extensions: e.ExtraFileExtensions},
 		MediaServerFiles: e.MediaServerFiles, SharedFileFallback: SharedFileCopy, IgnoreNewSeasons: e.IgnoreNewSeasons,
@@ -289,7 +290,7 @@ func fileManagementEntry(f FileManagement) FileManagementEntry {
 		MergeArtistAliases: f.MergeArtistAliases,
 		SetPermissions:     f.SetPermissions, ChmodFolder: f.ChmodFolder, ChownGroup: f.ChownGroup, WriteIDsToTags: &writeIDs,
 		ReplaceIDsInTags: f.Tagging.ReplaceIDs, WriteMetadataToTags: f.Tagging.WriteMetadata,
-		EmbedCoverInTags: f.Tagging.EmbedCover, NavidromeProfile: f.Tagging.Navidrome,
+		EmbedCoverInTags: f.Tagging.EmbedCover, NavidromeProfile: f.Tagging.Navidrome, TagCopyLinkedFiles: f.Tagging.CopyLinkedFiles,
 		ImportExtraFiles: f.ExtraFiles.Import, ExtraFileExtensions: f.ExtraFiles.Extensions,
 		MediaServerFiles: f.MediaServerFiles, IgnoreNewSeasons: f.IgnoreNewSeasons,
 	}

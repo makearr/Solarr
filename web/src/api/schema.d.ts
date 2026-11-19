@@ -10025,6 +10025,8 @@ export interface components {
             embed_cover: boolean;
             /** @description Navidrome's profile: also fill the track artist's tags and MusicBrainz id, and put a cover.jpg in each album folder that has no cover file. Nothing a file or folder already has is replaced. */
             navidrome: boolean;
+            /** @description A file a download (a torrent being seeded) still links to is never rewritten in place. Off, it waits until the download is removed; on, a separate copy is tagged and swapped in, which costs the file's size twice while the download exists. */
+            copy_linked_files: boolean;
         };
         /** @description The ready queue's bound (acquire.ready_queue_limit). */
         ReadyQueueLimit: {

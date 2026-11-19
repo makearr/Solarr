@@ -109,6 +109,16 @@ frame ffprobe does not show). Verified 2026-09-29 on FLAC, MP3, M4A and Opus: a 
 changes nothing. A pure-Go writer per format can replace the helper later behind the same
 interface.
 
+## Files a download still links to
+
+Import places by reflink, hardlink or copy, so a hardlinked library file is the download's file. The tag writer
+never saves such a file in place (a torrent client would see its payload change and re-download it). By default the
+file waits until the link is gone; with "Tag files a download still links to, on a separate copy" on, the writer tags a
+copy next to it (`<name>.solarr-tag`) and renames it over the library name, so the download keeps the original bytes.
+That costs the file's size twice while the download exists. An edit that embeds a cover goes through the same copy
+even for an unlinked file, because the larger tag block can shift the audio and a kill mid-write would leave it broken.
+Text-only edits on an unlinked file are saved in place.
+
 ## How the tools are called
 
 `internal/platform/mediatool` is ADR-30's interface. `mediatool.Tool` rather than

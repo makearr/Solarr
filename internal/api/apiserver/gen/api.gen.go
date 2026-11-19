@@ -6178,6 +6178,9 @@ type TagRef struct {
 
 // Tagging What the tag writer puts into this library's files once enrichment has identified them (revision D3, widened 2026-09-29). Only the library's own root folders are written, never a read-only one and never a download folder.
 type Tagging struct {
+	// CopyLinkedFiles A file a download (a torrent being seeded) still links to is never rewritten in place. Off, it waits until the download is removed; on, a separate copy is tagged and swapped in, which costs the file's size twice while the download exists.
+	CopyLinkedFiles bool `json:"copy_linked_files"`
+
 	// EmbedCover Embed the fetched cover into files that carry no picture.
 	EmbedCover bool `json:"embed_cover"`
 

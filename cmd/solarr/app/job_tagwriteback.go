@@ -38,7 +38,7 @@ func (p *process) tagRoots(context.Context) ([]music.TagRoot, error) {
 				tagging := category.FileManagement.Tagging
 				roots = append(roots, music.TagRoot{ID: root.ID, Path: root.Path, Options: music.TagOptions{
 					WriteIDs: tagging.WriteIDs, ReplaceIDs: tagging.ReplaceIDs,
-					WriteMetadata: tagging.WriteMetadata, EmbedCover: tagging.EmbedCover, Navidrome: tagging.Navidrome,
+					WriteMetadata: tagging.WriteMetadata, EmbedCover: tagging.EmbedCover, Navidrome: tagging.Navidrome, CopyLinkedFiles: tagging.CopyLinkedFiles,
 				}})
 				break
 			}

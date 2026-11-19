@@ -65,6 +65,8 @@ type TagOptions struct {
 	WriteIDs, ReplaceIDs, WriteMetadata, EmbedCover bool
 	// Navidrome is its consumer profile (D10): track-artist tags and id, and a cover.jpg beside the tracks.
 	Navidrome bool
+	// CopyLinkedFiles tags a separate copy of a file a download still links to; off, that file waits until the link is gone.
+	CopyLinkedFiles bool
 }
 
 func (o TagOptions) any() bool { return o.WriteIDs || o.WriteMetadata || o.EmbedCover || o.Navidrome }
@@ -112,6 +114,8 @@ type tagRun struct {
 	covers                   map[string]string
 	folderCovers             map[string]bool
 	written, current, failed int
+	// waiting counts files left alone because a download still links to them.
+	waiting int
 	// progress counts files sent to the helper, for the status bar.
 	progress *jobs.Progress
 }
@@ -154,9 +158,10 @@ func (j *TagWritebackJob) Run(ctx context.Context, job jobs.Job) error {
 		}
 		afterID = candidates[len(candidates)-1].MediaObjectID
 	}
-	if run.written+run.failed > 0 {
+	if run.written+run.failed+run.waiting > 0 {
 		j.config.Logger.Info("tag writer finished",
-			slog.Int("written", run.written), slog.Int("already_current", run.current), slog.Int("failed", run.failed))
+			slog.Int("written", run.written), slog.Int("already_current", run.current), slog.Int("failed", run.failed),
+			slog.Int("linked_to_a_download", run.waiting))
 	}
 	return nil
 }
@@ -166,6 +171,7 @@ func (j *TagWritebackJob) writePage(ctx context.Context, run *tagRun, candidates
 	var edits []mediatool.TagEdit
 	var digests []string
 	var editOf []library.TagCandidate
+	var originals []string
 	for _, candidate := range candidates {
 		root := run.roots[candidate.RootFolderID]
 		filePath, err := mover.RootRelativePath(j.config.FS, root.Path, candidate.RelPath)
@@ -190,10 +196,36 @@ func (j *TagWritebackJob) writePage(ctx context.Context, run *tagRun, candidates
 			}
 		}
 		edit.Path = filePath
+		// A file with a second hard link is the download's file: saving it in place would change what a client is seeding.
+		info, statErr := j.config.FS.Lstat(filePath)
+		linked := statErr == nil && info.Nlink > 1
+		if linked && !root.Options.CopyLinkedFiles {
+			run.waiting++
+			continue
+		}
+		// A cover grows the tag block, so the audio may be shifted: that edit, like a linked file, goes through a copy.
+		original := ""
+		if linked || edit.Cover != "" {
+			original = filePath
+			edit.Path = filePath + tagCopySuffix
+			if err := j.copyFile(filePath, edit.Path); err != nil {
+				run.failed++
+				j.config.Logger.Warn("tag copy not made", slog.Int64("media_object_id", candidate.MediaObjectID), slog.Any("error", err))
+				continue
+			}
+		}
 		edits = append(edits, edit)
+		originals = append(originals, original)
 		digests = append(digests, digest)
 		editOf = append(editOf, candidate)
 	}
+	defer func() {
+		for k, original := range originals {
+			if original != "" {
+				_ = j.config.FS.Remove(edits[k].Path)
+			}
+		}
+	}()
 	if len(edits) == 0 {
 		return nil
 	}
@@ -213,6 +245,11 @@ func (j *TagWritebackJob) writePage(ctx context.Context, run *tagRun, candidates
 	now := j.config.Clock.Now().Unix()
 	for k, result := range results {
 		failure, digest := "", digests[k]
+		if result.Err == nil && originals[k] != "" && len(result.Changed) > 0 {
+			if err := j.config.FS.Rename(edits[k].Path, originals[k]); err != nil {
+				result.Err = fmt.Errorf("swap the tagged copy in: %w", err)
+			}
+		}
 		switch {
 		case result.Err != nil:
 			// No digest for a failed write, or the next run takes the file as done and never tries again.
@@ -229,6 +266,22 @@ func (j *TagWritebackJob) writePage(ctx context.Context, run *tagRun, candidates
 		}
 	}
 	return nil
+}
+
+// tagCopySuffix names the private copy a file is tagged on before it replaces the original.
+const tagCopySuffix = ".solarr-tag"
+
+// copyFile makes a private copy of source at destination, atomically.
+func (j *TagWritebackJob) copyFile(source, destination string) error {
+	in, err := j.config.FS.Open(source)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+	return fsx.WriteAtomic(j.config.FS, destination, func(w io.Writer) error {
+		_, err := io.Copy(w, in)
+		return err
+	})
 }
 
 // coverFileNames are the folder pictures players look for; a folder with any of them is left alone.

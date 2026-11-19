@@ -15,7 +15,7 @@ SELECT category_id, propers_repacks, rescan_after_refresh, change_file_date, rec
        delete_empty_folders, create_empty_artist_folders, unmonitor_deleted, set_permissions,
        chmod_folder, chown_group, write_ids_to_tags, replace_ids_in_tags, write_metadata_to_tags,
        embed_cover_in_tags, merge_artist_aliases, navidrome_profile, import_extra_files, extra_file_extensions, media_server_files,
-       shared_file_fallback, ignore_new_seasons, episode_title_required
+       shared_file_fallback, ignore_new_seasons, episode_title_required, tag_copy_linked_files
 FROM category_file_management
 ORDER BY category_id
 `
@@ -53,6 +53,7 @@ func (q *Queries) ListCategoryFileManagement(ctx context.Context) ([]CategoryFil
 			&i.SharedFileFallback,
 			&i.IgnoreNewSeasons,
 			&i.EpisodeTitleRequired,
+			&i.TagCopyLinkedFiles,
 		); err != nil {
 			return nil, err
 		}
@@ -73,8 +74,8 @@ INSERT INTO category_file_management (
   delete_empty_folders, create_empty_artist_folders, unmonitor_deleted, set_permissions,
   chmod_folder, chown_group, write_ids_to_tags, replace_ids_in_tags, write_metadata_to_tags,
   embed_cover_in_tags, merge_artist_aliases, navidrome_profile, import_extra_files, extra_file_extensions,
-  media_server_files, shared_file_fallback, ignore_new_seasons, episode_title_required
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  media_server_files, shared_file_fallback, ignore_new_seasons, episode_title_required, tag_copy_linked_files
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (category_id) DO UPDATE SET
   propers_repacks = excluded.propers_repacks,
   rescan_after_refresh = excluded.rescan_after_refresh,
@@ -97,7 +98,8 @@ ON CONFLICT (category_id) DO UPDATE SET
   media_server_files = excluded.media_server_files,
   shared_file_fallback = excluded.shared_file_fallback,
   ignore_new_seasons = excluded.ignore_new_seasons,
-  episode_title_required = excluded.episode_title_required
+  episode_title_required = excluded.episode_title_required,
+  tag_copy_linked_files = excluded.tag_copy_linked_files
 `
 
 type UpsertCategoryFileManagementParams struct {
@@ -124,6 +126,7 @@ type UpsertCategoryFileManagementParams struct {
 	SharedFileFallback       string
 	IgnoreNewSeasons         int64
 	EpisodeTitleRequired     string
+	TagCopyLinkedFiles       int64
 }
 
 func (q *Queries) UpsertCategoryFileManagement(ctx context.Context, arg UpsertCategoryFileManagementParams) error {
@@ -151,6 +154,7 @@ func (q *Queries) UpsertCategoryFileManagement(ctx context.Context, arg UpsertCa
 		arg.SharedFileFallback,
 		arg.IgnoreNewSeasons,
 		arg.EpisodeTitleRequired,
+		arg.TagCopyLinkedFiles,
 	)
 	return err
 }

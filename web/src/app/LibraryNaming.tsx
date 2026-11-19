@@ -320,6 +320,12 @@ export function LibraryNaming() {
             checked={taggingDraft.navidrome}
             onChange={(checked) => setTaggingDraft({ ...taggingDraft, navidrome: checked })}
           />
+          <Toggle
+            label="Tag files a download still links to, on a separate copy"
+            help="A file hardlinked to a download (a torrent being seeded) is never changed in place. Off, it waits until the download is removed; on, a tagged copy replaces it in the library and the file costs its size twice while the download exists. Permission and date changes on import still reach the download's copy."
+            checked={taggingDraft.copy_linked_files}
+            onChange={(checked) => setTaggingDraft({ ...taggingDraft, copy_linked_files: checked })}
+          />
         </section>
       )}
 

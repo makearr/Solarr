@@ -155,6 +155,7 @@ func infoFrom(info fs.FileInfo) FileInfo {
 		converted.UID = int(stat.Uid)
 		converted.GID = int(stat.Gid)
 		converted.Inode = stat.Ino
+		converted.Nlink = stat.Nlink
 	}
 	return converted
 }

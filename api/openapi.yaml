@@ -13635,7 +13635,7 @@ components:
         What the tag writer puts into this library's files once enrichment has
         identified them (revision D3, widened 2026-09-29). Only the library's own
         root folders are written, never a read-only one and never a download folder.
-      required: [write_ids, replace_ids, write_metadata, embed_cover, navidrome]
+      required: [write_ids, replace_ids, write_metadata, embed_cover, navidrome, copy_linked_files]
       properties:
         write_ids:
           type: boolean
@@ -13654,6 +13654,12 @@ components:
           description: >-
             Navidrome's profile: also fill the track artist's tags and MusicBrainz id, and put a cover.jpg in each
             album folder that has no cover file. Nothing a file or folder already has is replaced.
+        copy_linked_files:
+          type: boolean
+          description: >-
+            A file a download (a torrent being seeded) still links to is never rewritten in place. Off, it waits until
+            the download is removed; on, a separate copy is tagged and swapped in, which costs the file's size twice
+            while the download exists.
 
     ReadyQueueLimit:
       type: object

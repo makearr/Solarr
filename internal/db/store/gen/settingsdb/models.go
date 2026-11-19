@@ -102,6 +102,7 @@ type CategoryFileManagement struct {
 	SharedFileFallback       string
 	IgnoreNewSeasons         int64
 	EpisodeTitleRequired     string
+	TagCopyLinkedFiles       int64
 }
 
 type CategoryMetadataSource struct {

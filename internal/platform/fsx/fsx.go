@@ -40,6 +40,8 @@ type FileInfo struct {
 	GID int
 	// Inode names the bytes on disk: two paths on one filesystem with the same Inode are one file. 0 where unreported.
 	Inode uint64
+	// Nlink is the number of names the bytes have; above 1, a write through one name changes the others. 0 where unreported.
+	Nlink uint64
 }
 
 // DirEntry carries only what a directory read yields for free (ADR-22).

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"image"
 	"io"
+	"path"
 	"reflect"
 	"testing"
 
@@ -46,6 +47,9 @@ func (f *fakeTagFiles) WriteTags(_ context.Context, edits []mediatool.TagEdit) (
 		f.edits = append(f.edits, edit)
 		for key := range edit.Fill {
 			results[i].Changed = append(results[i].Changed, key)
+		}
+		if _, err := f.fs.Lstat(edit.Path); err == nil {
+			_ = fsx.WriteAtomic(f.fs, edit.Path, func(w io.Writer) error { _, err := w.Write([]byte("tagged")); return err })
 		}
 	}
 	return results, nil
@@ -151,6 +155,7 @@ func TestTagWriteback_WritesMetadataWhenAsked(t *testing.T) {
 func TestTagWriteback_EmbedsAFetchedCover(t *testing.T) {
 	fixture := newTagWritebackJob(t, music.TagRoot{ID: 1, Path: "/music", Options: music.TagOptions{EmbedCover: true}})
 	workID := identifyFile(t, fixture.opened, "Heka/Zanuvode/01.m4a", "rg-1", "rel-1")
+	putFile(t, fixture.fs, "/music/Heka/Zanuvode/01.m4a", "audio")
 	if edits := fixture.run(t); len(edits) != 0 {
 		t.Fatalf("with no cover fetched, wrote %v", edits)
 	}
@@ -173,7 +178,7 @@ func TestTagWriteback_EmbedsAFetchedCover(t *testing.T) {
 	}
 
 	want := []mediatool.TagEdit{{
-		Path: "/music/Heka/Zanuvode/01.m4a", Fill: mediatool.Tags{}, Set: mediatool.Tags{},
+		Path: "/music/Heka/Zanuvode/01.m4a.solarr-tag", Fill: mediatool.Tags{}, Set: mediatool.Tags{},
 		Cover: "/cache/tag-covers/work-1-cover.jpg",
 	}}
 	if edits := fixture.run(t); !reflect.DeepEqual(edits, want) {
@@ -261,5 +266,78 @@ func TestTagWriteback_APageTheHelperRefusesDoesNotFailTheRun(t *testing.T) {
 
 	if err := fixture.job.Run(t.Context(), jobs.Job{Type: music.TagWritebackJobType}); err != nil {
 		t.Errorf("Run = %v, want the failed page logged and the run finished", err)
+	}
+}
+
+// putFile creates a library file with content.
+func putFile(t *testing.T, fs fsx.FS, name, content string) {
+	t.Helper()
+	if err := fs.MkdirAll(path.Dir(name), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := fsx.WriteAtomic(fs, name, func(w io.Writer) error { _, err := w.Write([]byte(content)); return err }); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func readFile(t *testing.T, fs fsx.FS, name string) string {
+	t.Helper()
+	file, err := fs.Open(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = file.Close() }()
+	content, err := io.ReadAll(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(content)
+}
+
+// A file a download links to is the download's file: by default it waits, untouched, until the link is gone.
+func TestTagWriteback_ALinkedFileWaitsByDefault(t *testing.T) {
+	fixture := newTagWritebackJob(t, music.TagRoot{ID: 1, Path: "/music", Options: idsOnly})
+	identifyFile(t, fixture.opened, "Heka/Zanuvode/01.m4a", "rg-1", "rel-1")
+	putFile(t, fixture.fs, "/music/Heka/Zanuvode/01.m4a", "audio")
+	if err := fixture.fs.MkdirAll("/downloads", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.fs.Link("/music/Heka/Zanuvode/01.m4a", "/downloads/01.m4a"); err != nil {
+		t.Fatal(err)
+	}
+
+	if edits := fixture.run(t); len(edits) != 0 {
+		t.Fatalf("a linked file was sent to the helper: %v", edits)
+	}
+	if err := fixture.fs.Remove("/downloads/01.m4a"); err != nil {
+		t.Fatal(err)
+	}
+	if edits := fixture.run(t); len(edits) != 1 {
+		t.Errorf("once the link was gone, edits = %v, want the file written", edits)
+	}
+}
+
+// With the copy option the library name gets a tagged copy and the download keeps the original bytes.
+func TestTagWriteback_ALinkedFileIsTaggedOnACopyWhenAsked(t *testing.T) {
+	options := music.TagOptions{WriteIDs: true, CopyLinkedFiles: true}
+	fixture := newTagWritebackJob(t, music.TagRoot{ID: 1, Path: "/music", Options: options})
+	identifyFile(t, fixture.opened, "Heka/Zanuvode/01.m4a", "rg-1", "rel-1")
+	putFile(t, fixture.fs, "/music/Heka/Zanuvode/01.m4a", "audio")
+	if err := fixture.fs.MkdirAll("/downloads", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.fs.Link("/music/Heka/Zanuvode/01.m4a", "/downloads/01.m4a"); err != nil {
+		t.Fatal(err)
+	}
+
+	fixture.run(t)
+	if got := readFile(t, fixture.fs, "/music/Heka/Zanuvode/01.m4a"); got != "tagged" {
+		t.Errorf("library file = %q, want the tagged copy", got)
+	}
+	if got := readFile(t, fixture.fs, "/downloads/01.m4a"); got != "audio" {
+		t.Errorf("download file = %q, want the untouched original", got)
+	}
+	if _, err := fixture.fs.Lstat("/music/Heka/Zanuvode/01.m4a.solarr-tag"); err == nil {
+		t.Error("the private copy was left behind")
 	}
 }

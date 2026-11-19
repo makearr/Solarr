@@ -184,6 +184,11 @@ func (m *Mem) statLocked(op, path string) (FileInfo, error) {
 		info.Size = int64(len(node.content.data))
 		info.Inode = node.content.inode
 		node.content.mu.Unlock()
+		for _, other := range m.nodes {
+			if other.content == node.content {
+				info.Nlink++
+			}
+		}
 	}
 	return info, nil
 }
