@@ -761,6 +761,62 @@ func (q *Queries) ListDesiredItemsForWork(ctx context.Context, workID int64) ([]
 	return items, nil
 }
 
+const listDesiredItemsForWorkInCategory = `-- name: ListDesiredItemsForWorkInCategory :many
+SELECT id, work_id, edition_id, media_ref, media_sort_key, category_id, profile_id,
+       monitored, satisfaction_kind, required_count, present_count, state,
+       available_from, available_confidence, available_basis, dirty, generation,
+       last_planned_at, added_by
+FROM desired_item WHERE work_id = ?1 AND category_id = ?2 ORDER BY media_sort_key, id
+`
+
+type ListDesiredItemsForWorkInCategoryParams struct {
+	WorkID     int64
+	CategoryID int64
+}
+
+func (q *Queries) ListDesiredItemsForWorkInCategory(ctx context.Context, arg ListDesiredItemsForWorkInCategoryParams) ([]DesiredItem, error) {
+	rows, err := q.db.QueryContext(ctx, listDesiredItemsForWorkInCategory, arg.WorkID, arg.CategoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DesiredItem{}
+	for rows.Next() {
+		var i DesiredItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkID,
+			&i.EditionID,
+			&i.MediaRef,
+			&i.MediaSortKey,
+			&i.CategoryID,
+			&i.ProfileID,
+			&i.Monitored,
+			&i.SatisfactionKind,
+			&i.RequiredCount,
+			&i.PresentCount,
+			&i.State,
+			&i.AvailableFrom,
+			&i.AvailableConfidence,
+			&i.AvailableBasis,
+			&i.Dirty,
+			&i.Generation,
+			&i.LastPlannedAt,
+			&i.AddedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDirtyDesiredItems = `-- name: ListDirtyDesiredItems :many
 SELECT id, work_id, edition_id, media_ref, media_sort_key, category_id, profile_id,
        monitored, satisfaction_kind, required_count, present_count, state,

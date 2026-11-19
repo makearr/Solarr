@@ -55,7 +55,7 @@ func (d Desired) EnsureAlbumItem(ctx context.Context, request AlbumRequest) (lib
 	var item librarydb.DesiredItem
 	err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
-		existing, err := queries.ListDesiredItemsForWork(ctx, request.WorkID)
+		existing, err := queries.ListDesiredItemsForWorkInCategory(ctx, librarydb.ListDesiredItemsForWorkInCategoryParams{WorkID: request.WorkID, CategoryID: request.CategoryID})
 		if err != nil {
 			return fmt.Errorf("list existing: %w", err)
 		}
@@ -115,7 +115,7 @@ func (d Desired) EnsureTrackItem(ctx context.Context, request TrackRequest) (lib
 			return fmt.Errorf("find part: %w", err)
 		}
 
-		existing, err := queries.ListDesiredItemsForWork(ctx, request.WorkID)
+		existing, err := queries.ListDesiredItemsForWorkInCategory(ctx, librarydb.ListDesiredItemsForWorkInCategoryParams{WorkID: request.WorkID, CategoryID: request.CategoryID})
 		if err != nil {
 			return fmt.Errorf("list existing: %w", err)
 		}

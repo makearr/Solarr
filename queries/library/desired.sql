@@ -25,6 +25,13 @@ SELECT id, work_id, edition_id, media_ref, media_sort_key, category_id, profile_
        last_planned_at, added_by
 FROM desired_item WHERE work_id = ? ORDER BY media_sort_key, id;
 
+-- name: ListDesiredItemsForWorkInCategory :many
+SELECT id, work_id, edition_id, media_ref, media_sort_key, category_id, profile_id,
+       monitored, satisfaction_kind, required_count, present_count, state,
+       available_from, available_confidence, available_basis, dirty, generation,
+       last_planned_at, added_by
+FROM desired_item WHERE work_id = sqlc.arg(work_id) AND category_id = sqlc.arg(category_id) ORDER BY media_sort_key, id;
+
 -- The planner reads the dirty set, not the whole library (ADR-6).
 -- name: ListDirtyDesiredItems :many
 SELECT id, work_id, edition_id, media_ref, media_sort_key, category_id, profile_id,

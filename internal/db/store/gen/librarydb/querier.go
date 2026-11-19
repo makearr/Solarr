@@ -689,6 +689,7 @@ type Querier interface {
 	// What a file belongs to. A scan needs this to recognise bytes it has seen.
 	ListDesiredItemsForFile(ctx context.Context, mediaObjectID int64) ([]DesiredItemFile, error)
 	ListDesiredItemsForWork(ctx context.Context, workID int64) ([]DesiredItem, error)
+	ListDesiredItemsForWorkInCategory(ctx context.Context, arg ListDesiredItemsForWorkInCategoryParams) ([]DesiredItem, error)
 	// Every pair of episodes a person said are not one broadcast.
 	ListDifferentContentPairs(ctx context.Context) ([]ListDifferentContentPairsRow, error)
 	// The planner reads the dirty set, not the whole library (ADR-6).

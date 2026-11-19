@@ -515,3 +515,25 @@ func TestDesired_IncompleteItemsForOnePerson(t *testing.T) {
 		t.Errorf("IncompleteItems(Heka) = %+v, %v; want only Zanuvode", items, err)
 	}
 }
+
+// IDENT-2: the same title is wanted once per library, and a second library does not get the first one's item.
+func TestEnsureAlbumItem_AnotherLibraryGetsItsOwnItem(t *testing.T) {
+	opened, _ := newLibrary(t)
+	desired := library.NewDesired(opened)
+	work := createWork(t, opened, "music", "Wanted Twice")
+	first, err := desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{WorkID: work.ID, CategoryID: 1, ProfileID: 1, Monitored: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{WorkID: work.ID, CategoryID: 2, ProfileID: 1, Monitored: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{WorkID: work.ID, CategoryID: 2, ProfileID: 1, Monitored: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ID == second.ID || first.CategoryID != 1 || second.CategoryID != 2 || again.ID != second.ID {
+		t.Errorf("items %d (library %d), %d (library %d), again %d; want one per library, stable", first.ID, first.CategoryID, second.ID, second.CategoryID, again.ID)
+	}
+}

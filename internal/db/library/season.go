@@ -33,7 +33,7 @@ func (d Desired) EnsureSeasonItem(ctx context.Context, request SeasonRequest) (l
 	var item librarydb.DesiredItem
 	err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
-		existing, err := queries.ListDesiredItemsForWork(ctx, request.WorkID)
+		existing, err := queries.ListDesiredItemsForWorkInCategory(ctx, librarydb.ListDesiredItemsForWorkInCategoryParams{WorkID: request.WorkID, CategoryID: request.CategoryID})
 		if err != nil {
 			return fmt.Errorf("list existing: %w", err)
 		}
