@@ -21,8 +21,9 @@ export function sealWith(
   return `${SEALED_PREFIX}${base64(x25519.getPublicKey(ephemeral))}:${base64(nonce)}:${base64(ciphertext)}`;
 }
 
-/** isSecretField names the request fields that carry a password, an API key or client credentials. */
-export function isSecretField(name: string): boolean {
+/** isSecretField names the request fields that carry a password, an API key or client credentials; a proxy URL is one once it names a user. */
+export function isSecretField(name: string, value?: string): boolean {
+  if (name === "proxy_url" || name === "egress_proxy_url") return value?.includes("@") ?? false;
   return name === "password" || name === "api_key" || name === "credentials" || name.endsWith("_api_key");
 }
 
@@ -33,7 +34,7 @@ export function sealSecrets(value: unknown, seal: (plain: string) => string): un
   return Object.fromEntries(
     Object.entries(value).map(([name, item]) => [
       name,
-      isSecretField(name) && typeof item === "string" && item !== "" && !item.startsWith(SEALED_PREFIX)
+      isSecretField(name, typeof item === "string" ? item : undefined) && typeof item === "string" && item !== "" && !item.startsWith(SEALED_PREFIX)
         ? seal(item)
         : sealSecrets(item, seal),
     ]),

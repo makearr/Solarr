@@ -512,7 +512,7 @@ func (c *Cache) Export() Document {
 		ImportRenameOnImport:         snapshot.ImportRenameOnImport(),
 		NetworkPort:                  network.Port,
 		NetworkProxyEnabled:          network.ProxyEnabled,
-		NetworkProxyURL:              network.ProxyURL,
+		NetworkProxyURL:              network.ProxyURLPublic,
 		NetworkProxyBypass:           network.ProxyBypass,
 		NetworkAllowCIDRsEnabled:     network.AllowCIDRsEnabled,
 		NetworkAllowCIDRs:            network.AllowCIDRs,

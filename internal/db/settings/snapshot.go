@@ -20,6 +20,8 @@ type Snapshot struct {
 	exclusionPatterns []ExclusionPattern
 	// policy is instance-wide settings by key, read through typed accessors.
 	policy map[string]string
+	// proxyCredentials is the egress proxy's "user:password", opened; set when the snapshot is built.
+	proxyCredentials string
 
 	// Indexes, built once, so a lookup is a map hit rather than a scan.
 	userByID             map[int64]User

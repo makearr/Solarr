@@ -3,6 +3,7 @@ package settings_test
 import (
 	"bytes"
 	"errors"
+	"net/netip"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -197,5 +198,45 @@ func TestDeleteArrInstance_ItsIDIsNeverGivenAgain(t *testing.T) {
 	}
 	if second := create("Second"); second.ID == first.ID {
 		t.Errorf("a new connection took the deleted id %d", first.ID)
+	}
+}
+
+// SEC-14: a proxy's user and password are sealed apart from its URL, which the export and the screens see without them.
+func TestSetNetworkSettings_SealsTheProxyCredentials(t *testing.T) {
+	cache, fake := newCache(t)
+	ctx := t.Context()
+	wanted := settings.NetworkSettings{ProxyEnabled: true, ProxyURL: "socks5://kim:s3cret@proxy.local:1080", ProxyBypass: []string{}, AllowCIDRs: []string{}}
+	if err := cache.SetNetworkSettings(ctx, fake, wanted, netip.Addr{}); err == nil {
+		t.Fatal("credentials were accepted with no way to seal them")
+	}
+	cipher, err := secrets.New(testCipherKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache.EnableSecrets(cipher)
+	if err := cache.SetNetworkSettings(ctx, fake, wanted, netip.Addr{}); err != nil {
+		t.Fatal(err)
+	}
+	got := cache.Snapshot().NetworkSettings()
+	if got.ProxyURL != "socks5://kim:s3cret@proxy.local:1080" || got.ProxyURLPublic != "socks5://proxy.local:1080" {
+		t.Errorf("dialled %q, public %q", got.ProxyURL, got.ProxyURLPublic)
+	}
+	if exported := cache.Export().Settings.NetworkProxyURL; exported != "socks5://proxy.local:1080" {
+		t.Errorf("exported %q, want no credentials", exported)
+	}
+
+	wanted.ProxyURL = "socks5://kim:xxxxx@proxy.local:1080"
+	if err := cache.SetNetworkSettings(ctx, fake, wanted, netip.Addr{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := cache.Snapshot().NetworkSettings().ProxyURL; got != "socks5://kim:s3cret@proxy.local:1080" {
+		t.Errorf("after sending the mask back: %q, want the password kept", got)
+	}
+	wanted.ProxyURL = "socks5://proxy.local:1080"
+	if err := cache.SetNetworkSettings(ctx, fake, wanted, netip.Addr{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := cache.Snapshot().NetworkSettings().ProxyURL; got != "socks5://proxy.local:1080" {
+		t.Errorf("after clearing: %q", got)
 	}
 }

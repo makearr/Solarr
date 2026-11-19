@@ -271,6 +271,7 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 		convertExclusionPatterns(exclusionPatterns),
 		policy,
 	)
+	snapshot.proxyCredentials = c.openProxyCredentials(policy)
 	snapshot.targetProfiles = convertTargetProfiles(targetProfiles)
 	snapshot.defaultLanguages = defaultLanguages
 	snapshot.blockedTagsByUser = blockedByUser

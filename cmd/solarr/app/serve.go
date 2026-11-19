@@ -420,6 +420,9 @@ func (p *process) openDatabases(ctx context.Context) error {
 		return err
 	}
 	cache.EnableSecrets(cipher)
+	if err := cache.SealStoredProxyCredentials(ctx, wall); err != nil {
+		return err
+	}
 
 	// cache/metadata.db (ADR-2) is disposable -- unlike the three above, a
 	// corrupt copy is the operator's to delete, not OpenChecked's to restore

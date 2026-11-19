@@ -43,3 +43,17 @@ describe("sealSecrets", () => {
     });
   });
 });
+
+describe("a proxy URL that names a user", () => {
+  it("is sealed, and one without a user is left as typed", () => {
+    const sealed = sealSecrets(
+      { proxy_url: "socks5://kim:pw@proxy:1080", egress_proxy_url: "http://proxy:3128", other: { proxy_url: "http://u:p@h:1" } },
+      (plain) => `sealed(${plain})`,
+    );
+    expect(sealed).toEqual({
+      proxy_url: "sealed(socks5://kim:pw@proxy:1080)",
+      egress_proxy_url: "http://proxy:3128",
+      other: { proxy_url: "sealed(http://u:p@h:1)" },
+    });
+  });
+});

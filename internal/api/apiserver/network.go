@@ -45,17 +45,11 @@ func (s *Server) ipAllowlist(next http.Handler) http.Handler {
 // GetNetworkSettings answers ADR-58's own policy, plus the port this
 // instance actually bound to at startup.
 func (s *Server) GetNetworkSettings(w http.ResponseWriter, r *http.Request) {
-	access, err := authz.FromContext(r.Context())
-	if err != nil {
+	if _, err := authz.FromContext(r.Context()); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
-	view := s.networkSettingsView()
-	// A proxy's password is configuration only an administrator may read.
-	if access.Role() != settings.RoleAdmin && view.ProxyUrl != nil {
-		view.ProxyUrl = redactedProxyURL(*view.ProxyUrl)
-	}
-	writeJSON(w, s.logger, http.StatusOK, view)
+	writeJSON(w, s.logger, http.StatusOK, s.networkSettingsView())
 }
 
 // redactedProxyURL hides a proxy URL's password; one that does not parse is withheld, since it cannot be redacted.
@@ -186,7 +180,8 @@ func (s *Server) networkSettingsView() gen.NetworkSettings {
 		AllowCidrsEnabled: stored.AllowCIDRsEnabled, AllowCidrs: stored.AllowCIDRs,
 	}
 	if stored.ProxyURL != "" {
-		view.ProxyUrl = &stored.ProxyURL
+		// A proxy's password is never shown again, to anyone; sending the masked URL back keeps it.
+		view.ProxyUrl = redactedProxyURL(stored.ProxyURL)
 	}
 	// A fresh instance has never written these; nil serialises to JSON null,
 	// which crashed the Network screen's own network.proxy_bypass.join(...)

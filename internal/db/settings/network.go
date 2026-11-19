@@ -2,7 +2,9 @@ package settings
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/netip"
 	"net/url"
 	"strconv"
@@ -10,14 +12,17 @@ import (
 
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
+	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
 // ADR-58's own keys, the same instance_setting shape auth.required and the
 // cache budget already use.
 const (
-	KeyNetworkPort              = "network.port"
-	KeyNetworkProxyEnabled      = "network.proxy_enabled"
-	KeyNetworkProxyURL          = "network.proxy_url"
+	KeyNetworkPort         = "network.port"
+	KeyNetworkProxyEnabled = "network.proxy_enabled"
+	KeyNetworkProxyURL     = "network.proxy_url"
+	// KeyNetworkProxyCredentials holds the proxy's "user:password", sealed; the URL setting never carries them.
+	KeyNetworkProxyCredentials  = "network.proxy_credentials"
 	KeyNetworkProxyBypass       = "network.proxy_bypass"
 	KeyNetworkAllowCIDRsEnabled = "network.allow_cidrs_enabled"
 	KeyNetworkAllowCIDRs        = "network.allow_cidrs"
@@ -33,9 +38,12 @@ var DefaultLocalRanges = []string{"127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", 
 // each have their own enable flag, off until someone turns it on
 // (2026-09-19), so a prefilled list is a suggestion rather than a rule.
 type NetworkSettings struct {
-	Port              int
-	ProxyEnabled      bool
-	ProxyURL          string
+	Port         int
+	ProxyEnabled bool
+	// ProxyURL is the proxy as it is dialled, credentials included: for the process, never for a screen or a file.
+	ProxyURL string
+	// ProxyURLPublic is the same without the user and password.
+	ProxyURLPublic    string
 	ProxyBypass       []string
 	AllowCIDRsEnabled bool
 	AllowCIDRs        []string
@@ -47,7 +55,8 @@ func (s *Snapshot) NetworkSettings() NetworkSettings {
 	return NetworkSettings{
 		Port:              int(s.policyInt(KeyNetworkPort, 0)),
 		ProxyEnabled:      s.policyBool(KeyNetworkProxyEnabled, false),
-		ProxyURL:          s.policy[KeyNetworkProxyURL],
+		ProxyURL:          joinProxyCredentials(s.policy[KeyNetworkProxyURL], s.proxyCredentials),
+		ProxyURLPublic:    s.policy[KeyNetworkProxyURL],
 		ProxyBypass:       s.policyStringListOr(KeyNetworkProxyBypass, DefaultLocalRanges),
 		AllowCIDRsEnabled: s.policyBool(KeyNetworkAllowCIDRsEnabled, false),
 		AllowCIDRs:        s.policyStringListOr(KeyNetworkAllowCIDRs, DefaultLocalRanges),
@@ -101,14 +110,99 @@ func (c *Cache) SetNetworkSettings(ctx context.Context, cl clock.Clock, ns Netwo
 		return err
 	}
 
-	return c.setPolicies(ctx, cl, map[string]string{
+	proxyURL, credentials, keep := splitProxyURL(ns.ProxyURL)
+	values := map[string]string{
 		KeyNetworkPort:              strconv.Itoa(ns.Port),
 		KeyNetworkProxyEnabled:      boolPolicy(ns.ProxyEnabled),
-		KeyNetworkProxyURL:          ns.ProxyURL,
+		KeyNetworkProxyURL:          proxyURL,
 		KeyNetworkProxyBypass:       string(proxyBypass),
 		KeyNetworkAllowCIDRsEnabled: boolPolicy(ns.AllowCIDRsEnabled),
 		KeyNetworkAllowCIDRs:        string(allowCIDRs),
-	})
+	}
+	if !keep {
+		sealed, err := c.sealProxyCredentials(credentials)
+		if err != nil {
+			return err
+		}
+		values[KeyNetworkProxyCredentials] = sealed
+	}
+	return c.setPolicies(ctx, cl, values)
+}
+
+// proxyPasswordMask is what a screen shows in place of the password; sending it back keeps the stored one.
+const proxyPasswordMask = "xxxxx"
+
+// splitProxyURL separates a proxy URL's "user:password" from the rest. keep says the password is the mask, so the
+// stored credentials stay as they are.
+func splitProxyURL(raw string) (proxyURL, credentials string, keep bool) {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.User == nil {
+		return raw, "", false
+	}
+	password, _ := parsed.User.Password()
+	credentials = parsed.User.String()
+	parsed.User = nil
+	return parsed.String(), credentials, password == proxyPasswordMask
+}
+
+// joinProxyCredentials puts credentials, as url.Userinfo wrote them, back into a proxy URL for dialling.
+func joinProxyCredentials(proxyURL, credentials string) string {
+	if credentials == "" {
+		return proxyURL
+	}
+	scheme, rest, found := strings.Cut(proxyURL, "://")
+	if !found {
+		return proxyURL
+	}
+	return scheme + "://" + credentials + "@" + rest
+}
+
+// sealProxyCredentials seals "user:password" for the policy table; empty credentials seal to nothing.
+func (c *Cache) sealProxyCredentials(credentials string) (string, error) {
+	if credentials == "" {
+		return "", nil
+	}
+	if c.cipher == nil {
+		return "", config.Problems{{Path: "proxy_url", Expectation: "no user and password in the URL while secrets cannot be stored"}}
+	}
+	sealed, err := c.cipher.Seal(secrets.Secret(credentials))
+	if err != nil {
+		return "", fmt.Errorf("settings: seal proxy credentials: %w", err)
+	}
+	return base64.StdEncoding.EncodeToString(sealed), nil
+}
+
+// openProxyCredentials reads the sealed credentials back; empty when there are none or they cannot be opened.
+func (c *Cache) openProxyCredentials(policy map[string]string) string {
+	encoded := policy[KeyNetworkProxyCredentials]
+	if encoded == "" || c.cipher == nil {
+		return ""
+	}
+	sealed, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return ""
+	}
+	opened, err := c.cipher.Open(sealed)
+	if err != nil {
+		return ""
+	}
+	return opened.Reveal()
+}
+
+// SealStoredProxyCredentials moves a password that an earlier version stored inside the proxy URL into the sealed
+// credentials, once the cipher is there.
+func (c *Cache) SealStoredProxyCredentials(ctx context.Context, cl clock.Clock) error {
+	stored := c.Snapshot().policy[KeyNetworkProxyURL]
+	proxyURL, credentials, _ := splitProxyURL(stored)
+	if credentials == "" || c.cipher == nil {
+		// Nothing to move; the snapshot built before the cipher existed learns the sealed credentials now.
+		return c.Reload(ctx)
+	}
+	sealed, err := c.sealProxyCredentials(credentials)
+	if err != nil {
+		return err
+	}
+	return c.setPolicies(ctx, cl, map[string]string{KeyNetworkProxyURL: proxyURL, KeyNetworkProxyCredentials: sealed})
 }
 
 // ValidateNetworkSettings is SetNetworkSettings' check alone, for a caller with a write of its own to make first.
