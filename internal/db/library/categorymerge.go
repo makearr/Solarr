@@ -3,8 +3,8 @@ package library
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -19,22 +19,19 @@ type CategoryMerges struct{ store *store.Store }
 // NewCategoryMerges builds it over an open library store.
 func NewCategoryMerges(opened *store.Store) CategoryMerges { return CategoryMerges{store: opened} }
 
-// smallTables name a category by category_id and are few enough to move in one statement; a row the target already holds
-// is left, then dropped.
-var smallTables = []string{"request", "collection", "import_session", "move_job", "subscription"}
-
 // Merge makes every wanted item, request, collection, import session, move and follow of category from category into's,
-// and recomputes who and what each library holds. A wanted item the target already has for the same thing is dropped, not
-// doubled. It answers how many wanted items moved.
+// and recomputes who and what each library holds. A wanted item the target already has for the same thing is folded
+// into it with its files and downloads, not doubled. It answers how many wanted items moved. Every step is repeatable,
+// so a merge that failed is finished by calling it again.
 func (m CategoryMerges) Merge(ctx context.Context, from, into int64) (int64, error) {
 	if from == into {
 		return 0, fmt.Errorf("library: a library cannot be merged into itself")
 	}
 	var moved, after int64
 	for {
-		ids, err := m.nextItems(ctx, from, after)
+		ids, err := librarydb.New(m.store.Read()).NextCategoryItemIDs(ctx, librarydb.NextCategoryItemIDsParams{CategoryID: from, ID: after, Limit: mergeChunk})
 		if err != nil {
-			return moved, err
+			return moved, fmt.Errorf("library: wanted items of library %d: %w", from, err)
 		}
 		if len(ids) == 0 {
 			break
@@ -46,20 +43,36 @@ func (m CategoryMerges) Merge(ctx context.Context, from, into int64) (int64, err
 		moved += int64(len(ids))
 	}
 	err := m.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		for _, table := range smallTables {
-			if _, err := tx.ExecContext(ctx, "UPDATE OR IGNORE "+table+" SET category_id = ? WHERE category_id = ?", into, from); err != nil {
-				return fmt.Errorf("move %s: %w", table, err)
-			}
-			if _, err := tx.ExecContext(ctx, "DELETE FROM "+table+" WHERE category_id = ?", from); err != nil {
-				return fmt.Errorf("drop %s: %w", table, err)
-			}
+		queries := librarydb.New(tx)
+		nullable := func(id int64) sql.NullInt64 { return sql.NullInt64{Int64: id, Valid: true} }
+		steps := []func() error{
+			func() error {
+				return queries.MoveRequestsToCategory(ctx, librarydb.MoveRequestsToCategoryParams{IntoCategoryID: nullable(into), FromCategoryID: nullable(from)})
+			},
+			func() error { return queries.DropCategoryRequests(ctx, nullable(from)) },
+			func() error {
+				return queries.MoveCollectionsToCategory(ctx, librarydb.MoveCollectionsToCategoryParams{IntoCategoryID: into, FromCategoryID: from})
+			},
+			func() error { return queries.DropCategoryCollections(ctx, from) },
+			func() error {
+				return queries.MoveImportSessionsToCategory(ctx, librarydb.MoveImportSessionsToCategoryParams{IntoCategoryID: nullable(into), FromCategoryID: nullable(from)})
+			},
+			func() error { return queries.DropCategoryImportSessions(ctx, nullable(from)) },
+			func() error {
+				return queries.MoveMoveJobsToCategory(ctx, librarydb.MoveMoveJobsToCategoryParams{IntoCategoryID: nullable(into), FromCategoryID: nullable(from)})
+			},
+			func() error { return queries.DropCategoryMoveJobs(ctx, nullable(from)) },
+			func() error {
+				return queries.MoveSubscriptionsToCategory(ctx, librarydb.MoveSubscriptionsToCategoryParams{IntoCategoryID: nullable(into), FromCategoryID: nullable(from)})
+			},
+			func() error { return queries.DropCategorySubscriptions(ctx, nullable(from)) },
+			func() error { return queries.DropCategoryDesiredItems(ctx, from) },
+			func() error { return queries.DropCategoryPeople(ctx, from) },
+			func() error { return queries.DropCategoryOrganisations(ctx, from) },
 		}
-		if _, err := tx.ExecContext(ctx, "DELETE FROM desired_item WHERE category_id = ?", from); err != nil {
-			return fmt.Errorf("drop duplicate wanted items: %w", err)
-		}
-		for _, table := range []string{"person_library", "organisation_library"} {
-			if _, err := tx.ExecContext(ctx, "DELETE FROM "+table+" WHERE category_id = ?", from); err != nil {
-				return fmt.Errorf("clear %s: %w", table, err)
+		for _, step := range steps {
+			if err := step(); err != nil {
+				return err
 			}
 		}
 		return nil
@@ -70,47 +83,46 @@ func (m CategoryMerges) Merge(ctx context.Context, from, into int64) (int64, err
 	return moved, nil
 }
 
-func (m CategoryMerges) nextItems(ctx context.Context, from, after int64) ([]int64, error) {
-	rows, err := m.store.Read().QueryContext(ctx, `SELECT id FROM desired_item WHERE category_id = ? AND id > ? ORDER BY id LIMIT ?`, from, after, mergeChunk)
-	if err != nil {
-		return nil, fmt.Errorf("library: wanted items of library %d: %w", from, err)
-	}
-	defer func() { _ = rows.Close() }()
-	var ids []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	return ids, rows.Err()
-}
-
-// moveItems re-files one chunk of wanted items and recomputes the people and organisations of their works.
+// moveItems re-files one chunk of wanted items and recomputes the people and organisations of their works. An item the
+// target already holds for the same thing hands its files and downloads to that one first.
 func (m CategoryMerges) moveItems(ctx context.Context, ids []int64, into int64) error {
+	encoded, err := json.Marshal(ids)
+	if err != nil {
+		return err
+	}
+	list := string(encoded)
 	return m.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		marks := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
-		args := make([]any, 0, len(ids)+1)
-		args = append(args, into)
-		for _, id := range ids {
-			args = append(args, id)
+		queries := librarydb.New(tx)
+		duplicates, err := queries.ListMergeDuplicates(ctx, librarydb.ListMergeDuplicatesParams{IntoCategoryID: into, ItemIds: list})
+		if err != nil {
+			return fmt.Errorf("library: find duplicate wanted items: %w", err)
 		}
-		// A work the target already wants in the same way is not wanted twice.
-		if _, err := tx.ExecContext(ctx, `DELETE FROM desired_item WHERE id IN (`+marks+`) AND EXISTS (SELECT 1 FROM desired_item held
-WHERE held.category_id = ? AND held.work_id = desired_item.work_id AND held.media_ref = desired_item.media_ref
-  AND COALESCE(held.edition_id, 0) = COALESCE(desired_item.edition_id, 0))`, append(args[1:], into)...); err != nil {
-			return fmt.Errorf("library: drop duplicate wanted items: %w", err)
+		for _, duplicate := range duplicates {
+			if err := queries.MergeDesiredItemFiles(ctx, librarydb.MergeDesiredItemFilesParams{
+				ToItemID: duplicate.CounterpartID, FromItemID: duplicate.ItemID, KeepID: duplicate.WorkID,
+			}); err != nil {
+				return fmt.Errorf("library: fold files of item %d: %w", duplicate.ItemID, err)
+			}
+			if err := queries.MoveAcquisitionsToItem(ctx, librarydb.MoveAcquisitionsToItemParams{
+				ToItemID: sql.NullInt64{Int64: duplicate.CounterpartID, Valid: true}, FromItemID: sql.NullInt64{Int64: duplicate.ItemID, Valid: true},
+			}); err != nil {
+				return fmt.Errorf("library: fold downloads of item %d: %w", duplicate.ItemID, err)
+			}
+			if err := queries.MarkDesiredItemDirty(ctx, duplicate.CounterpartID); err != nil {
+				return err
+			}
+			if err := queries.DeleteDesiredItemRow(ctx, duplicate.ItemID); err != nil {
+				return fmt.Errorf("library: drop duplicate wanted item %d: %w", duplicate.ItemID, err)
+			}
 		}
 		// dirty: the planner works out what each now wants in its new library.
-		if _, err := tx.ExecContext(ctx, "UPDATE OR IGNORE desired_item SET category_id = ?, dirty = 1 WHERE id IN ("+marks+")", args...); err != nil {
+		if err := queries.MoveDesiredItemsToCategory(ctx, librarydb.MoveDesiredItemsToCategoryParams{IntoCategoryID: into, ItemIds: list}); err != nil {
 			return fmt.Errorf("library: move wanted items: %w", err)
 		}
-		workIDs, err := workIDsOf(ctx, tx, marks, args)
+		workIDs, err := queries.ListWorksOfItems(ctx, librarydb.ListWorksOfItemsParams{CategoryID: into, ItemIds: list})
 		if err != nil {
 			return err
 		}
-		queries := librarydb.New(tx)
 		for _, workID := range workIDs {
 			if err := refreshWorkMembers(ctx, queries, workID); err != nil {
 				return err
@@ -118,22 +130,4 @@ WHERE held.category_id = ? AND held.work_id = desired_item.work_id AND held.medi
 		}
 		return nil
 	})
-}
-
-// workIDsOf are the works of the wanted items just moved; args are the target library and the item ids.
-func workIDsOf(ctx context.Context, tx *sql.Tx, marks string, args []any) ([]int64, error) {
-	works, err := tx.QueryContext(ctx, "SELECT DISTINCT work_id FROM desired_item WHERE category_id = ? AND id IN ("+marks+")", args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = works.Close() }()
-	var workIDs []int64
-	for works.Next() {
-		var id int64
-		if err := works.Scan(&id); err != nil {
-			return nil, err
-		}
-		workIDs = append(workIDs, id)
-	}
-	return workIDs, works.Err()
 }

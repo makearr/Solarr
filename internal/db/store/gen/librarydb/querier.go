@@ -292,6 +292,7 @@ type Querier interface {
 	DeleteCustomCollection(ctx context.Context, id int64) (int64, error)
 	// Links whose collection is gone; the origin rows go with the collection by cascade.
 	DeleteDanglingCollectionLinks(ctx context.Context) (int64, error)
+	DeleteDesiredItemRow(ctx context.Context, id int64) error
 	DeleteDesiredItemsForWork(ctx context.Context, workID int64) error
 	// Import revert's own use (todo 4.9): only ever called for an edition
 	// CommitUnit itself created (import_unit.edition_created), and only after
@@ -374,6 +375,14 @@ type Querier interface {
 	// so a run in progress cannot be dismissed out from under itself. :execrows
 	// distinguishes "no such session, or still running" from "now hidden".
 	DismissImportSession(ctx context.Context, arg DismissImportSessionParams) (int64, error)
+	DropCategoryCollections(ctx context.Context, categoryID int64) error
+	DropCategoryDesiredItems(ctx context.Context, categoryID int64) error
+	DropCategoryImportSessions(ctx context.Context, categoryID sql.NullInt64) error
+	DropCategoryMoveJobs(ctx context.Context, categoryID sql.NullInt64) error
+	DropCategoryOrganisations(ctx context.Context, categoryID int64) error
+	DropCategoryPeople(ctx context.Context, categoryID int64) error
+	DropCategoryRequests(ctx context.Context, categoryID sql.NullInt64) error
+	DropCategorySubscriptions(ctx context.Context, categoryID sql.NullInt64) error
 	DropUnplacedItemFiles(ctx context.Context, arg DropUnplacedItemFilesParams) error
 	// A work's items move to another library and take its profile; an item the target already has (a copy made before)
 	// is dropped from the source instead (plan 10-libraries L3).
@@ -775,6 +784,7 @@ type Querier interface {
 	// The artists credited on a library's albums, with what a merge needs to rank them. shared is set
 	// when the person also has work in another library, which a merge in this one must leave alone.
 	ListMergeCandidatesForCategory(ctx context.Context, categoryID int64) ([]ListMergeCandidatesForCategoryRow, error)
+	ListMergeDuplicates(ctx context.Context, arg ListMergeDuplicatesParams) ([]ListMergeDuplicatesRow, error)
 	ListMissingRecounts(ctx context.Context) ([]MissingRecount, error)
 	// The monitored whole-work items (a movie's) covered only by files a full scan just found gone.
 	ListMonitoredItemsLosingFiles(ctx context.Context, arg ListMonitoredItemsLosingFilesParams) ([]int64, error)
@@ -1025,6 +1035,7 @@ type Querier interface {
 	ListWorksNeedingReleaseGroupArtwork(ctx context.Context, arg ListWorksNeedingReleaseGroupArtworkParams) ([]ListWorksNeedingReleaseGroupArtworkRow, error)
 	// The works whose files already sit under a folder of a root, to place a directory the providers cannot name alone.
 	ListWorksOfFolder(ctx context.Context, arg ListWorksOfFolderParams) ([]int64, error)
+	ListWorksOfItems(ctx context.Context, arg ListWorksOfItemsParams) ([]int64, error)
 	// The works with a file on a root, a page at a time.
 	ListWorksOnRoot(ctx context.Context, arg ListWorksOnRootParams) ([]int64, error)
 	// Works of a media type with a provider's id whose organisation in one role was never asked for: no work_field of
@@ -1089,9 +1100,11 @@ type Querier interface {
 	MoveCollectionLinksFrom(ctx context.Context, arg MoveCollectionLinksFromParams) error
 	MoveCollectionLinksTo(ctx context.Context, arg MoveCollectionLinksToParams) error
 	MoveCollectionMembers(ctx context.Context, arg MoveCollectionMembersParams) error
+	MoveCollectionsToCategory(ctx context.Context, arg MoveCollectionsToCategoryParams) error
 	MoveCrossoverMissingParts(ctx context.Context, arg MoveCrossoverMissingPartsParams) error
 	// An item the kept work has no counterpart for moves over whole, without the dropped work's edition.
 	MoveDesiredItemToWork(ctx context.Context, arg MoveDesiredItemToWorkParams) error
+	MoveDesiredItemsToCategory(ctx context.Context, arg MoveDesiredItemsToCategoryParams) error
 	// A credit both editions hold stays the twin's own; the leftover goes with DeleteEditionCredits.
 	MoveEditionCredits(ctx context.Context, arg MoveEditionCreditsParams) error
 	MoveEditionDesiredItems(ctx context.Context, arg MoveEditionDesiredItemsParams) error
@@ -1099,9 +1112,14 @@ type Querier interface {
 	MoveEditionImportUnits(ctx context.Context, arg MoveEditionImportUnitsParams) error
 	MoveEditionPackItems(ctx context.Context, arg MoveEditionPackItemsParams) error
 	MoveEditionToWork(ctx context.Context, arg MoveEditionToWorkParams) error
+	MoveImportSessionsToCategory(ctx context.Context, arg MoveImportSessionsToCategoryParams) error
+	MoveMoveJobsToCategory(ctx context.Context, arg MoveMoveJobsToCategoryParams) error
+	MoveRequestsToCategory(ctx context.Context, arg MoveRequestsToCategoryParams) error
+	MoveSubscriptionsToCategory(ctx context.Context, arg MoveSubscriptionsToCategoryParams) error
 	MoveTagAliases(ctx context.Context, arg MoveTagAliasesParams) error
 	MoveTagAssignments(ctx context.Context, arg MoveTagAssignmentsParams) error
 	MoveWorkItemsToCategory(ctx context.Context, arg MoveWorkItemsToCategoryParams) (int64, error)
+	NextCategoryItemIDs(ctx context.Context, arg NextCategoryItemIDsParams) ([]int64, error)
 	// newest_release.
 	NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNewestReleaseParams) ([]HuntQueue, error)
 	// newest_searched.
