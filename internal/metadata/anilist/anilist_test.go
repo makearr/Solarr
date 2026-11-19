@@ -58,10 +58,22 @@ func TestMediaReadsTitlesSynonymsAndArt(t *testing.T) {
 }
 
 func TestAnUnknownIDIsNotFound(t *testing.T) {
-	if _, err := newClient(&canned{body: `{"data":{"Media":null},"errors":[{"message":"Not Found."}]}`}).Media(t.Context(), 1); !errors.Is(err, anilist.ErrNotFound) {
+	if _, err := newClient(&canned{body: `{"data":{"Media":null},"errors":[{"message":"Not Found.","status":404}]}`}).Media(t.Context(), 1); !errors.Is(err, anilist.ErrNotFound) {
 		t.Errorf("null media err = %v", err)
 	}
 	if _, err := newClient(&canned{status: http.StatusNotFound}).Media(t.Context(), 1); !errors.Is(err, anilist.ErrNotFound) {
 		t.Errorf("404 err = %v", err)
+	}
+}
+
+func TestAnApplicationErrorIsNotNotFound(t *testing.T) {
+	body := `{"data":null,"errors":[{"message":"Internal Server Error","status":500}]}`
+	_, err := newClient(&canned{body: body}).Media(t.Context(), 1)
+	if err == nil || errors.Is(err, anilist.ErrNotFound) || !strings.Contains(err.Error(), "Internal Server Error") {
+		t.Errorf("Media err = %v, want the AniList message and not ErrNotFound", err)
+	}
+	_, err = newClient(&canned{body: body}).Related(t.Context(), 1)
+	if err == nil || errors.Is(err, anilist.ErrNotFound) {
+		t.Errorf("Related err = %v, want a failure and not ErrNotFound", err)
 	}
 }

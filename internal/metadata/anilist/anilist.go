@@ -113,6 +113,19 @@ func (c Client) ask(ctx context.Context, question string, variables map[string]a
 	return raw, nil
 }
 
+// refusal turns the errors AniList answered into ErrNotFound (status 404: no such entry) or a retryable failure; nil when there were none.
+func refusal(id int64, errs []graphQLError) error {
+	if len(errs) == 0 {
+		return nil
+	}
+	for _, refused := range errs {
+		if refused.Status == http.StatusNotFound {
+			return ErrNotFound
+		}
+	}
+	return fmt.Errorf("anilist: %d: %s", id, messages(errs))
+}
+
 // Media reads one anime by AniList id.
 func (c Client) Media(ctx context.Context, id int64) (Media, error) {
 	raw, err := c.post(ctx, query, id)
@@ -123,9 +136,13 @@ func (c Client) Media(ctx context.Context, id int64) (Media, error) {
 		Data struct {
 			Media *Media `json:"Media"`
 		} `json:"data"`
+		Errors []graphQLError `json:"errors"`
 	}
 	if err := json.Unmarshal(raw, &answer); err != nil {
 		return Media{}, fmt.Errorf("anilist: %d: decode: %w", id, err)
+	}
+	if err := refusal(id, answer.Errors); err != nil {
+		return Media{}, err
 	}
 	if answer.Data.Media == nil {
 		return Media{}, ErrNotFound
@@ -169,9 +186,13 @@ func (c Client) Related(ctx context.Context, id int64) ([]Relation, error) {
 				} `json:"relations"`
 			} `json:"Media"`
 		} `json:"data"`
+		Errors []graphQLError `json:"errors"`
 	}
 	if err := json.Unmarshal(raw, &answer); err != nil {
 		return nil, fmt.Errorf("anilist: %d: decode: %w", id, err)
+	}
+	if err := refusal(id, answer.Errors); err != nil {
+		return nil, err
 	}
 	if answer.Data.Media == nil {
 		return nil, ErrNotFound
