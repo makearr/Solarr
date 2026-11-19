@@ -49,3 +49,40 @@ func TestFetchFor_ITunesIsAskedByTheTitleAndAuthorAnotherSourceLearned(t *testin
 		t.Errorf("ids = %+v, want iTunes's collection found by the reading's title and author", book.IDs)
 	}
 }
+
+func TestSameTitle_ASubtitleContinuesATitleButAnotherWordDoesNot(t *testing.T) {
+	cases := []struct {
+		found, wanted string
+		want          bool
+	}{
+		{"Dune Messiah", "Dune", false},
+		{"Dune: Deluxe Edition", "Dune", true},
+		{"Dune", "Dune", true},
+		{"Dune", "Dune: Deluxe Edition", true},
+		{"Harry Potter and the Chamber of Secrets", "Harry Potter", false},
+		{"Dune - A Novel", "dune", true},
+	}
+	for _, c := range cases {
+		if got := sameTitle(c.found, c.wanted); got != c.want {
+			t.Errorf("sameTitle(%q, %q) = %v, want %v", c.found, c.wanted, got, c.want)
+		}
+	}
+}
+
+type neighbourFirstITunes struct{ fakeITunes }
+
+func (neighbourFirstITunes) Search(context.Context, string, string, int) ([]itunes.Audiobook, error) {
+	return []itunes.Audiobook{
+		{CollectionID: 1, Name: "Dune Messiah", Author: "Frank Herbert"},
+		{CollectionID: 2, Name: "Dune: Deluxe Edition", Author: "Frank Herbert"},
+		{CollectionID: 3, Name: "Dune", Author: "Frank Herbert"},
+	}, nil
+}
+
+func TestAskITunes_TakesTheExactTitleNotTheNeighbourListedFirst(t *testing.T) {
+	service := Service{Format: Audiobook, ITunes: neighbourFirstITunes{}}
+	got, ok := service.askITunes(context.Background(), IDs{}, Hint{Title: "Dune"}, func(string, error, error) bool { return true })
+	if !ok || got.IDs.ITunes != "3" {
+		t.Errorf("got %+v ok=%v", got.IDs, ok)
+	}
+}

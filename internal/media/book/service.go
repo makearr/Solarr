@@ -244,10 +244,51 @@ func hintFrom(hint Hint, answers map[string]Book, order []string) Hint {
 	return hint
 }
 
-// sameTitle says a provider's title is the hint's: letters and digits alone, one containing the other.
+// sameTitle says a provider's title is the hint's: the same letters and digits, or one title followed by a subtitle
+// ("Dune: Deluxe Edition", "Dune (Unabridged)"); another word after it makes a neighbouring book ("Dune Messiah").
 func sameTitle(found, wanted string) bool {
 	a, b := foldTitle(found), foldTitle(wanted)
-	return a != "" && b != "" && (a == b || strings.HasPrefix(a, b) || strings.HasPrefix(b, a))
+	if a == "" || b == "" {
+		return false
+	}
+	if a == b {
+		return true
+	}
+	shorter, longer := strings.ToLower(strings.TrimSpace(wanted)), strings.ToLower(strings.TrimSpace(found))
+	if len(a) < len(b) {
+		shorter, longer = longer, shorter
+	}
+	rest, continues := strings.CutPrefix(longer, shorter)
+	return continues && strings.ContainsRune(":-–—([", firstRune(strings.TrimSpace(rest)))
+}
+
+func firstRune(text string) rune {
+	for _, r := range text {
+		return r
+	}
+	return 0
+}
+
+// bestTitleHit is the hit with the hinted title and author: the exact title first, else the shortest title that
+// continues it, so a search listing a longer neighbour first does not adopt it.
+func bestTitleHit[T any](hits []T, wanted string, titles func(T) []string, authorOK func(T) bool) (T, bool) {
+	var best T
+	bestLength, found := 0, false
+	for _, hit := range hits {
+		if !authorOK(hit) {
+			continue
+		}
+		for _, title := range titles(hit) {
+			if !sameTitle(title, wanted) {
+				continue
+			}
+			length := len(foldTitle(title))
+			if !found || length < bestLength {
+				best, bestLength, found = hit, length, true
+			}
+		}
+	}
+	return best, found
 }
 
 // sameAuthor says the found book is by the hinted author, or that no author was hinted.
@@ -273,12 +314,12 @@ func (s Service) askITunes(ctx context.Context, ids IDs, hint Hint, report func(
 	if !report(hint.Title, err, nil) {
 		return Book{}, false
 	}
-	for _, hit := range hits {
-		if sameTitle(hit.Title(), hint.Title) && sameAuthor([]string{hit.Author}, hint.Author) {
-			return FromITunes(hit), true
-		}
+	hit, found := bestTitleHit(hits, hint.Title, func(hit itunes.Audiobook) []string { return []string{hit.Title()} },
+		func(hit itunes.Audiobook) bool { return sameAuthor([]string{hit.Author}, hint.Author) })
+	if !found {
+		return Book{}, false
 	}
-	return Book{}, false
+	return FromITunes(hit), true
 }
 
 func (s Service) askFantLab(ctx context.Context, ids IDs, hint Hint, report func(string, error, error) bool) (Book, bool) {
@@ -294,12 +335,10 @@ func (s Service) askFantLab(ctx context.Context, ids IDs, hint Hint, report func
 		if !report(hint.Title, err, nil) {
 			return Book{}, false
 		}
-		for _, hit := range hits {
-			names := []string{hit.AuthorName, hit.AuthorRus}
-			if (sameTitle(hit.Name, hint.Title) || sameTitle(hit.RussianName, hint.Title)) && sameAuthor(names, hint.Author) {
-				id = hit.WorkID
-				break
-			}
+		hit, found := bestTitleHit(hits, hint.Title, func(hit fantlab.Match) []string { return []string{hit.Name, hit.RussianName} },
+			func(hit fantlab.Match) bool { return sameAuthor([]string{hit.AuthorName, hit.AuthorRus}, hint.Author) })
+		if found {
+			id = hit.WorkID
 		}
 	}
 	if id == 0 {
@@ -317,12 +356,15 @@ func (s Service) askHardcover(ctx context.Context, ids IDs, hint Hint, report fu
 	if !report(hint.Title, err, nil) {
 		return Book{}, false
 	}
-	for _, hit := range hits {
-		if (ids.Hardcover != "" && hit.ID == ids.Hardcover) || (sameTitle(hit.Title, hint.Title) && sameAuthor(hit.Authors, hint.Author)) {
-			return FromHardcover(hit), true
-		}
+	if i := slices.IndexFunc(hits, func(hit hardcover.Book) bool { return ids.Hardcover != "" && hit.ID == ids.Hardcover }); i >= 0 {
+		return FromHardcover(hits[i]), true
 	}
-	return Book{}, false
+	hit, found := bestTitleHit(hits, hint.Title, func(hit hardcover.Book) []string { return []string{hit.Title} },
+		func(hit hardcover.Book) bool { return sameAuthor(hit.Authors, hint.Author) })
+	if !found {
+		return Book{}, false
+	}
+	return FromHardcover(hit), true
 }
 
 // completeIDs finds Open Library's work for a book known only by an ISBN or, for an audiobook, by the title and author
