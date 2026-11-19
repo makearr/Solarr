@@ -715,3 +715,31 @@ func TestAuth_TheSessionCookieIsSecureBehindATrustedTLSProxy(t *testing.T) {
 		}
 	}
 }
+
+// SEC-12: a body with more than eight sealed strings is refused before any of them is opened.
+func TestAuth_ABodyOfManySealedValuesIsRefused(t *testing.T) {
+	fixture := newAuthFixture(t, apiserver.AuthLocal)
+	keyResponse := fixture.do(t, httptest.NewRequest(http.MethodGet, "/api/v1/auth/transport-key", nil))
+	var key struct {
+		PublicKey string `json:"public_key"`
+	}
+	if err := json.Unmarshal(keyResponse.Body.Bytes(), &key); err != nil {
+		t.Fatal(err)
+	}
+	post := func(values int) int {
+		extra := make([]string, values)
+		for index := range extra {
+			extra[index] = seal(t, key.PublicKey, "x")
+		}
+		body, _ := json.Marshal(map[string]any{"username": "avs", "password": testPassword, "remember": false, "extra": extra})
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		return fixture.do(t, request).Code
+	}
+	if got := post(7); got != http.StatusOK {
+		t.Errorf("seven extra values plus a plain password: %d, want 200", got)
+	}
+	if got := post(9); got != http.StatusBadRequest {
+		t.Errorf("nine sealed values: %d, want 400", got)
+	}
+}

@@ -3,6 +3,7 @@ package apiserver
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -13,6 +14,12 @@ import (
 
 // sealedBodyLimit is the largest body opened for sealed values; a larger one passes as it is, to its handler's limit.
 const sealedBodyLimit = 1 << 20
+
+// maxSealedValues is how many sealed strings one body may carry: opening each costs a key agreement, and a body of
+// thousands of them (anyone can make them from the public key) would pin the server before authentication (SEC-12).
+const maxSealedValues = 8
+
+var errTooManySealed = errors.New("too many sealed values")
 
 // GetTransportKey answers the key the browser seals secrets with.
 func (s *Server) GetTransportKey(w http.ResponseWriter, _ *http.Request) {
@@ -66,23 +73,27 @@ func (s *Server) openBody(body []byte) ([]byte, error) {
 	if err := decoder.Decode(&document); err != nil {
 		return nil, err
 	}
-	opened, err := s.openValue(document)
+	budget := maxSealedValues
+	opened, err := s.openValue(document, &budget)
 	if err != nil {
 		return nil, err
 	}
 	return json.Marshal(opened)
 }
 
-func (s *Server) openValue(value any) (any, error) {
+func (s *Server) openValue(value any, budget *int) (any, error) {
 	switch typed := value.(type) {
 	case string:
 		if !auth.IsSealed(typed) {
 			return typed, nil
 		}
+		if *budget--; *budget < 0 {
+			return nil, errTooManySealed
+		}
 		return s.auth.Transport.Open(typed)
 	case map[string]any:
 		for key, item := range typed {
-			opened, err := s.openValue(item)
+			opened, err := s.openValue(item, budget)
 			if err != nil {
 				return nil, err
 			}
@@ -91,7 +102,7 @@ func (s *Server) openValue(value any) (any, error) {
 		return typed, nil
 	case []any:
 		for i, item := range typed {
-			opened, err := s.openValue(item)
+			opened, err := s.openValue(item, budget)
 			if err != nil {
 				return nil, err
 			}
