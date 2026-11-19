@@ -51,3 +51,16 @@ func TestABooksFactsCarryItsIDsAuthorsAndPlaceInItsSeries(t *testing.T) {
 		t.Errorf("ids = %+v, %v, %v; want %+v", ids, found, err, want)
 	}
 }
+
+func TestAMalformedIDIsLeftOutOfTheBatchNotSentToFailIt(t *testing.T) {
+	transport := &bookTransport{}
+	paced := clock.NewFakeAtEpoch()
+	fetcher := wikidata.New(wikidata.Config{WikidataClient: newTestClient(t, transport, "wikidata"), WikipediaClient: newTestClient(t, transport, "wikipedia"), Clock: paced})
+
+	if _, err := fetcher.FactsOf(t.Context(), wikidata.FactBook, []string{"OL1001W", "OL1\x7f2W", "not an id"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(transport.query, `VALUES ?id { "OL1001W" }`) {
+		t.Errorf("query = %s, want only the well-formed id", transport.query)
+	}
+}

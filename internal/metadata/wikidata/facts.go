@@ -3,6 +3,7 @@ package wikidata
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -21,6 +22,21 @@ const (
 	// FactBook is Open Library's work id ("OL27482W"), which a literary work's item records.
 	FactBook FactKind = "P648"
 )
+
+var numericIDPattern = regexp.MustCompile(`^[0-9]{1,12}$`)
+
+// valid says id has the shape its property holds; anything else would be a syntax error that fails the whole batch.
+func (k FactKind) valid(id string) bool {
+	switch k {
+	case FactFilm, FactSeries:
+		return numericIDPattern.MatchString(id)
+	case FactAlbum:
+		return musicBrainzIDPattern.MatchString(id)
+	case FactBook:
+		return openLibraryWorkPattern.MatchString(id)
+	}
+	return false
+}
 
 // WorkFacts are what Wikidata's item, and its English Wikipedia article, say of a film, a series or an album.
 type WorkFacts struct {
@@ -55,7 +71,7 @@ func (f Fetcher) FactsOf(ctx context.Context, kind FactKind, ids []string) (map[
 	out := map[string]WorkFacts{}
 	var wanted []string
 	for _, id := range ids {
-		if id != "" && !slices.Contains(wanted, id) {
+		if kind.valid(id) && !slices.Contains(wanted, id) {
 			wanted = append(wanted, id)
 		}
 	}
