@@ -1,7 +1,9 @@
 package library
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -122,6 +124,25 @@ type SeriesWrite struct {
 	LeadRole string
 	// Franchise is the collection a provider says the work belongs to (a movie's franchise); nil leaves it as it is.
 	Franchise *SeriesFranchiseWrite
+	// Force writes in full although the provider's answer is what the last write stored (a person asked for a refresh).
+	Force bool
+}
+
+// seriesWriteVersion changes whenever Upsert stores something it did not before, so the next refresh writes in full.
+const seriesWriteVersion = 1
+
+// digest identifies what a write stores; Force is not part of it.
+func (w SeriesWrite) digest() ([]byte, error) {
+	w.Force = false
+	encoded, err := json.Marshal(struct {
+		Version int
+		Write   SeriesWrite
+	}{seriesWriteVersion, w})
+	if err != nil {
+		return nil, fmt.Errorf("library: encode series write: %w", err)
+	}
+	sum := sha256.Sum256(encoded)
+	return sum[:], nil
 }
 
 // SeriesFranchiseWrite names a franchise by the provider's id for it.
@@ -151,17 +172,30 @@ func NewSeries(opened *store.Store) Series { return Series{store: opened} }
 // refresh never changes monitoring, never removes a part and never overwrites a manual field.
 func (s Series) Upsert(ctx context.Context, at time.Time, write SeriesWrite) (SeriesResult, error) {
 	var result SeriesResult
-	err := s.store.Write(ctx, store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
+	digest, err := write.digest()
+	if err != nil {
+		return SeriesResult{}, err
+	}
+	unchanged := false
+	err = s.store.Write(ctx, store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
 		workID, created, skipped, err := upsertSeriesWork(ctx, queries, at, write)
 		if err != nil {
 			return err
 		}
 		result = SeriesResult{WorkID: workID, Created: created, IDsSkipped: skipped, PartIDs: map[string]int64{}}
+		if stored, err := queries.GetWorkWriteDigest(ctx, workID); !write.Force && err == nil && bytes.Equal(stored, digest) {
+			unchanged = true
+			// The work counts as refreshed: the sweep orders by this stamp.
+			return queries.UpdateWorkTimestamp(ctx, librarydb.UpdateWorkTimestampParams{UpdatedAt: at.Unix(), ID: workID})
+		}
 		return writeSeriesMetadata(ctx, queries, at, workID, write)
 	})
 	if err != nil {
 		return SeriesResult{}, err
+	}
+	if unchanged {
+		return s.unchangedResult(ctx, result)
 	}
 
 	existing, err := s.existingPartRefs(ctx, result.WorkID)
@@ -202,6 +236,24 @@ func (s Series) Upsert(ctx context.Context, at time.Time, write SeriesWrite) (Se
 		if err != nil {
 			return SeriesResult{}, fmt.Errorf("library: set lead of work %d: %w", result.WorkID, err)
 		}
+	}
+	err = s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetWorkWriteDigest(ctx, librarydb.SetWorkWriteDigestParams{WorkID: result.WorkID, Digest: digest, WrittenAt: at.Unix()})
+	})
+	if err != nil {
+		return SeriesResult{}, fmt.Errorf("library: store write digest of work %d: %w", result.WorkID, err)
+	}
+	return result, nil
+}
+
+// unchangedResult is the result of a write that stored nothing: the parts are the ones already there.
+func (s Series) unchangedResult(ctx context.Context, result SeriesResult) (SeriesResult, error) {
+	rows, err := librarydb.New(s.store.Read()).ListWorkPartRefs(ctx, result.WorkID)
+	if err != nil {
+		return SeriesResult{}, fmt.Errorf("library: list parts: %w", err)
+	}
+	for _, row := range rows {
+		result.PartIDs[row.MediaRef] = row.ID
 	}
 	return result, nil
 }

@@ -240,3 +240,10 @@ WHERE lp.root_folder_id = sqlc.arg(root_folder_id)
   AND w.media_type = sqlc.arg(media_type)
   AND lp.rel_path >= sqlc.arg(prefix) AND lp.rel_path < sqlc.arg(prefix_end)
 LIMIT 2;
+
+-- name: GetWorkWriteDigest :one
+SELECT digest FROM work_write_digest WHERE work_id = ?;
+
+-- name: SetWorkWriteDigest :exec
+INSERT INTO work_write_digest (work_id, digest, written_at) VALUES (?, ?, ?)
+ON CONFLICT (work_id) DO UPDATE SET digest = excluded.digest, written_at = excluded.written_at;

@@ -478,6 +478,8 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 type RefreshRequest struct {
 	WorkID     int64
 	CategoryID int64
+	// Force rewrites the film in full although the providers answered what is stored.
+	Force bool
 }
 
 // Refresh reads a movie the library holds again. Monitoring and the person's own fields are untouched.
@@ -498,7 +500,9 @@ func (s Service) Refresh(ctx context.Context, request RefreshRequest) (AddResult
 	}
 	now := s.Clock.Now()
 	availability := s.availability(request.CategoryID, Availability(manual[FieldMinimumAvailability]))
-	stored, err := s.Series.Upsert(ctx, now, ToWrite(movie, WriteOptions{Availability: availability, Now: now, Country: s.country()}))
+	write := ToWrite(movie, WriteOptions{Availability: availability, Now: now, Country: s.country()})
+	write.Force = request.Force
+	stored, err := s.Series.Upsert(ctx, now, write)
 	if err != nil {
 		return AddResult{}, err
 	}

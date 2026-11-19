@@ -709,6 +709,8 @@ type RefreshRequest struct {
 	WorkID     int64
 	CategoryID int64
 	ProfileID  int64
+	// Force rewrites the series in full although the providers answered what is stored: a person asked for the refresh.
+	Force bool
 }
 
 // Refresh re-reads a series the library holds. Monitoring is the user's: an episode that is new follows its season, a
@@ -760,6 +762,7 @@ func (s Service) Refresh(ctx context.Context, request RefreshRequest) (AddResult
 	}
 	now := s.Clock.Now()
 	write := ToWrite(series, WriteOptions{NewPart: wants, Now: now, Grace: s.grace()})
+	write.Force = request.Force
 	stored, err := s.Series.Upsert(ctx, now, write)
 	if err != nil {
 		return AddResult{}, err

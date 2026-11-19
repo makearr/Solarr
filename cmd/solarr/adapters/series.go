@@ -60,8 +60,8 @@ func (c SeriesCatalog) Refresh(ctx context.Context, categoryID, seriesID int64) 
 	if category, ok := c.Categories.Category(categoryID); ok {
 		profile = c.Categories.ProfileFor(category, profile)
 	}
-	_, err := c.Service.Refresh(ctx, tv.RefreshRequest{WorkID: seriesID, CategoryID: categoryID, ProfileID: profile})
-	if errors.Is(err, tv.ErrNoSource) {
+	_, err := c.Service.Refresh(ctx, tv.RefreshRequest{WorkID: seriesID, CategoryID: categoryID, ProfileID: profile, Force: true})
+	if errors.Is(err, tv.ErrNoSource) || errors.Is(err, media.ErrSourceUnavailable) {
 		return fmt.Errorf("%w: %w", apiserver.ErrSeriesSourceUnavailable, err)
 	}
 	return err

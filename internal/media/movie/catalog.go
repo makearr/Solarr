@@ -124,7 +124,7 @@ func (s catalogSource) Add(ctx context.Context, request works.Add) (media.AddRes
 
 // Refresh re-reads one movie from the sources; monitoring and the person's own fields stay as they are.
 func (c Catalog) Refresh(ctx context.Context, categoryID, workID int64) error {
-	_, err := c.Service.Refresh(ctx, RefreshRequest{WorkID: workID, CategoryID: categoryID})
+	_, err := c.Service.Refresh(ctx, RefreshRequest{WorkID: workID, CategoryID: categoryID, Force: true})
 	if errors.Is(err, ErrNoSource) {
 		return fmt.Errorf("%w: %w", media.ErrSourceUnavailable, err)
 	}

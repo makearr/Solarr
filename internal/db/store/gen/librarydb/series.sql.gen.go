@@ -263,6 +263,17 @@ func (q *Queries) GetWorkCertification(ctx context.Context, workID int64) (GetWo
 	return i, err
 }
 
+const getWorkWriteDigest = `-- name: GetWorkWriteDigest :one
+SELECT digest FROM work_write_digest WHERE work_id = ?
+`
+
+func (q *Queries) GetWorkWriteDigest(ctx context.Context, workID int64) ([]byte, error) {
+	row := q.db.QueryRowContext(ctx, getWorkWriteDigest, workID)
+	var digest []byte
+	err := row.Scan(&digest)
+	return digest, err
+}
+
 const linkOrganisationExternalID = `-- name: LinkOrganisationExternalID :exec
 INSERT OR IGNORE INTO organisation_external_id (provider, external_id, organisation_id) VALUES (?, ?, ?)
 `
@@ -1087,6 +1098,22 @@ func (q *Queries) SetWorkRating(ctx context.Context, arg SetWorkRatingParams) er
 		arg.Votes,
 		arg.FetchedAt,
 	)
+	return err
+}
+
+const setWorkWriteDigest = `-- name: SetWorkWriteDigest :exec
+INSERT INTO work_write_digest (work_id, digest, written_at) VALUES (?, ?, ?)
+ON CONFLICT (work_id) DO UPDATE SET digest = excluded.digest, written_at = excluded.written_at
+`
+
+type SetWorkWriteDigestParams struct {
+	WorkID    int64
+	Digest    []byte
+	WrittenAt int64
+}
+
+func (q *Queries) SetWorkWriteDigest(ctx context.Context, arg SetWorkWriteDigestParams) error {
+	_, err := q.db.ExecContext(ctx, setWorkWriteDigest, arg.WorkID, arg.Digest, arg.WrittenAt)
 	return err
 }
 

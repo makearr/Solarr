@@ -1055,3 +1055,9 @@ type WorkTitle struct {
 	Kind       string
 	Source     sql.NullString
 }
+
+type WorkWriteDigest struct {
+	WorkID    int64
+	Digest    []byte
+	WrittenAt int64
+}

@@ -504,6 +504,7 @@ type Querier interface {
 	GetWorkPart(ctx context.Context, id int64) (WorkPart, error)
 	// The ids a user's image picker asks the providers with.
 	GetWorkReleaseGroupMBID(ctx context.Context, workID int64) (string, error)
+	GetWorkWriteDigest(ctx context.Context, workID int64) ([]byte, error)
 	// A mass vanish is held, not marked: the count and the sweep start a later accept marks against.
 	HoldVanished(ctx context.Context, arg HoldVanishedParams) error
 	// What a library's downloads still on their way will take when they land, so the free-space gate
@@ -1316,6 +1317,7 @@ type Querier interface {
 	// so there is no earlier value worth protecting.
 	// A work is named after its release group once enrichment has it, not after whichever file came first.
 	SetWorkTitle(ctx context.Context, arg SetWorkTitleParams) error
+	SetWorkWriteDigest(ctx context.Context, arg SetWorkWriteDigestParams) error
 	StampPartGrace(ctx context.Context, arg StampPartGraceParams) (int64, error)
 	// A sweep that starts records only that it started: the watermark must not move
 	// until one finishes, or an interrupted scan would look complete.

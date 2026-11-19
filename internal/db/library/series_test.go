@@ -449,3 +449,59 @@ func TestAnEpisodesAltTitlesAreRewrittenByARefreshAndRead(t *testing.T) {
 		t.Errorf("alt titles = %v, want %v (the refresh replaces, never doubles)", titles, want)
 	}
 }
+
+func TestSeriesUpsertOfWhatIsStoredWritesNothingUnlessForcedOrAPartChanged(t *testing.T) {
+	opened, queries := newLibrary(t)
+	series := library.NewSeries(opened)
+	first, err := series.Upsert(t.Context(), seriesAt, sampleSeries())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tamper := func(description string) {
+		write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+			return q.SetWorkDescription(ctx, librarydb.SetWorkDescriptionParams{Description: sql.NullString{String: description, Valid: true}, ID: first.WorkID})
+		})
+	}
+	description := func() string {
+		work, err := queries.GetWork(t.Context(), first.WorkID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return work.Description.String
+	}
+
+	tamper("tampered")
+	again, err := series.Upsert(t.Context(), seriesAt.Add(time.Hour), sampleSeries())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.WorkID != first.WorkID || again.PartsCreated != 0 || again.PartsUpdated != 0 || !reflect.DeepEqual(again.PartIDs, first.PartIDs) || description() != "tampered" {
+		t.Errorf("unchanged write = %+v, description %q: nothing should have been written", again, description())
+	}
+	work, _ := queries.GetWork(t.Context(), first.WorkID)
+	if work.UpdatedAt != seriesAt.Add(time.Hour).Unix() {
+		t.Errorf("updated_at = %d, want the refresh stamp", work.UpdatedAt)
+	}
+
+	forced := sampleSeries()
+	forced.Force = true
+	if _, err := series.Upsert(t.Context(), seriesAt.Add(2*time.Hour), forced); err != nil || description() != "Plot." {
+		t.Errorf("forced write: err = %v, description %q, want it restored", err, description())
+	}
+
+	tamper("tampered")
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.DeleteWorkPart(ctx, first.PartIDs["s00e01"])
+	})
+	healed, err := series.Upsert(t.Context(), seriesAt.Add(3*time.Hour), sampleSeries())
+	if err != nil || healed.PartsCreated != 1 || description() != "Plot." {
+		t.Errorf("after another writer removed a part: %+v, %v, description %q, want a full write", healed, err, description())
+	}
+
+	changed := sampleSeries()
+	changed.Parts[0].Title = "Pilot (retitled)"
+	tamper("tampered")
+	if _, err := series.Upsert(t.Context(), seriesAt.Add(4*time.Hour), changed); err != nil || description() != "Plot." {
+		t.Errorf("changed write: err = %v, description %q", err, description())
+	}
+}

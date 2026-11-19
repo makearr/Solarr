@@ -45,6 +45,10 @@ replaces one provider's aliases, writes network, genres, rating and dates, and u
 refresh never changes a part's monitoring and never removes a part.** Part availability (`available_at`, confidence,
 basis), part-level collection members and per-work release filters are the generic columns and tables of migration 0059.
 
+A write whose content hash equals the one stored in `work_write_digest` (hash of the `SeriesWrite` plus `seriesWriteVersion`) stores nothing
+but the work's `updated_at`, which orders the refresh sweep. Triggers on `work_part` and `credit` drop the digest when another writer changes
+either; the person's Refresh button sets `Force`. Bump `seriesWriteVersion` whenever `Upsert` starts to store something new.
+
 Credits are `person` rows keyed by `tmdb:<id>` and `credit` rows on the work (cast, creator, crew roles) or on the episode
 (`part_id`: guest star, director, writer); the person's photo URL lives in `fields_json`, the biography fills in when the
 person page asks TMDB what the person is known for (`tv.Profiling`, `GET /people/{id}/known-for`). Networks are
