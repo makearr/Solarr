@@ -567,3 +567,44 @@ func TestSetUserPreference_IsBounded(t *testing.T) {
 		t.Errorf("updating a kept key: %v", err)
 	}
 }
+
+// USER-1: an account's parts change together or not at all, and two creations of one name give one account.
+func TestUpdateAccount_RefusalChangesNothingAndANameIsTakenOnce(t *testing.T) {
+	cache, fake := newCache(t)
+	ctx := context.Background()
+	if _, err := cache.CreateUser(ctx, fake, "boss", "hash", settings.RoleAdmin); err != nil {
+		t.Fatal(err)
+	}
+	kid, err := cache.CreateUser(ctx, fake, "kid", "hash", settings.RoleUser)
+	if err != nil {
+		t.Fatal(err)
+	}
+	role, bad, hashed := settings.RoleReadonly, settings.UserLimits{TierDefault: "nonsense"}, "newhash"
+	err = cache.UpdateAccount(ctx, kid.ID, settings.AccountPatch{Role: &role, Limits: &bad, PasswordHash: &hashed})
+	var problems config.Problems
+	if !errors.As(err, &problems) {
+		t.Fatalf("invalid limits: %v, want problems", err)
+	}
+	if after, _ := cache.Snapshot().User(kid.ID); after.Role != settings.RoleUser || after.SessionStamp != kid.SessionStamp {
+		t.Errorf("a refused update changed the account: %+v", after)
+	}
+	good := settings.UserLimits{TierDefault: "normal", TierMax: "expert", NewLibraryPermission: settings.PermissionRead}
+	if err := cache.UpdateAccount(ctx, kid.ID, settings.AccountPatch{Role: &role, Limits: &good, PasswordHash: &hashed}); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := cache.Snapshot().User(kid.ID); after.Role != settings.RoleReadonly || after.SessionStamp == kid.SessionStamp {
+		t.Errorf("a whole update did not apply: %+v", after)
+	}
+
+	results := make(chan error, 2)
+	for range 2 {
+		go func() {
+			_, err := cache.CreateAccount(ctx, fake, settings.NewAccount{Username: "twin", PasswordHash: "h", Role: settings.RoleUser, Limits: cache.DefaultLimits(settings.RoleUser)})
+			results <- err
+		}()
+	}
+	first, second := <-results, <-results
+	if (first == nil) == (second == nil) || (first != nil && !errors.Is(first, settings.ErrUsernameTaken)) || (second != nil && !errors.Is(second, settings.ErrUsernameTaken)) {
+		t.Errorf("two creations of one name: %v and %v, want one success and one ErrUsernameTaken", first, second)
+	}
+}

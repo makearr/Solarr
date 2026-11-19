@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
@@ -44,6 +45,8 @@ type NewAccount struct {
 	Limits       UserLimits
 	// Access grants per library id; an absent library is not granted.
 	Access map[int64]Permission
+	// Blocked are the tags the account is kept from, written with the account.
+	Blocked []UserBlockedTag
 }
 
 func (t Tier) rank() int {
@@ -121,6 +124,9 @@ func (c *Cache) CreateAccount(ctx context.Context, cl clock.Clock, account NewAc
 	return c.createAccount(ctx, cl, account, false)
 }
 
+// ErrUsernameTaken reports an account name that exists already, also when a concurrent request took it first.
+var ErrUsernameTaken = errors.New("settings: an account with that name exists already")
+
 // ErrAlreadyClaimed reports a first account asked for once an account already exists.
 var ErrAlreadyClaimed = errors.New("settings: an account already exists")
 
@@ -194,8 +200,16 @@ func (c *Cache) createAccount(ctx context.Context, cl clock.Clock, account NewAc
 				return err
 			}
 		}
+		for _, tag := range account.Blocked {
+			if err := queries.InsertUserBlockedTag(ctx, settingsdb.InsertUserBlockedTagParams{UserID: row.ID, TagID: tag.TagID, TagName: tag.Name}); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed: app_user.username") {
+		return User{}, fmt.Errorf("%w: %q", ErrUsernameTaken, account.Username)
+	}
 	if err != nil {
 		return User{}, fmt.Errorf("settings: create user %q: %w", account.Username, err)
 	}
@@ -269,4 +283,88 @@ func sessionStampOf(passwordHash string) string {
 	}
 	sum := sha256.Sum256([]byte("solarr:session-stamp:" + passwordHash))
 	return hex.EncodeToString(sum[:8])
+}
+
+// AccountPatch is the parts of an account to change together; nil leaves a part alone.
+type AccountPatch struct {
+	Role         *Role
+	Limits       *UserLimits
+	Blocked      *[]UserBlockedTag
+	PasswordHash *string
+}
+
+// UpdateAccount changes the parts of AccountPatch in one transaction, after checking all of them: a refusal changes
+// nothing, and the last-administrator rule sees the whole change.
+func (c *Cache) UpdateAccount(ctx context.Context, id int64, patch AccountPatch) error {
+	c.administrators.Lock()
+	defer c.administrators.Unlock()
+	user, found := c.Snapshot().User(id)
+	if !found {
+		return fmt.Errorf("%w: user %d", ErrNotFound, id)
+	}
+	if patch.Limits != nil {
+		if problems := validateLimits(*patch.Limits); len(problems) > 0 {
+			return problems
+		}
+	}
+	if patch.Role != nil {
+		if err := c.wouldStrandTheInstance(user, *patch.Role); err != nil {
+			return err
+		}
+	}
+	categories := c.Snapshot().Categories()
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		limits := user.Limits
+		if patch.Role != nil {
+			if err := queries.SetUserRole(ctx, settingsdb.SetUserRoleParams{ID: id, Role: string(*patch.Role)}); err != nil {
+				return err
+			}
+			if *patch.Role == RoleAdmin && user.Role != RoleAdmin {
+				// A promoted administrator manages every library, as one created as administrator does.
+				for _, category := range categories {
+					if err := queries.SetCategoryAccess(ctx, settingsdb.SetCategoryAccessParams{
+						UserID: id, CategoryID: category.ID, Permission: string(PermissionManage),
+					}); err != nil {
+						return err
+					}
+				}
+				limits.NewLibraryPermission = PermissionManage
+				if err := queries.SetUserLimits(ctx, settingsdb.SetUserLimitsParams{
+					ID: id, UiTierDefault: string(limits.TierDefault), UiTierMax: string(limits.TierMax),
+					NewLibraryPermission: string(limits.NewLibraryPermission), AutoApprove: boolToInt(limits.AutoApprove),
+				}); err != nil {
+					return err
+				}
+			}
+		}
+		if patch.Blocked != nil {
+			if err := queries.DeleteUserBlockedTags(ctx, id); err != nil {
+				return err
+			}
+			for _, tag := range *patch.Blocked {
+				if err := queries.InsertUserBlockedTag(ctx, settingsdb.InsertUserBlockedTagParams{UserID: id, TagID: tag.TagID, TagName: tag.Name}); err != nil {
+					return err
+				}
+			}
+		}
+		if patch.Limits != nil {
+			if err := queries.SetUserLimits(ctx, settingsdb.SetUserLimitsParams{
+				ID: id, UiTierDefault: string(patch.Limits.TierDefault), UiTierMax: string(patch.Limits.TierMax),
+				NewLibraryPermission: string(patch.Limits.NewLibraryPermission), AutoApprove: boolToInt(patch.Limits.AutoApprove),
+			}); err != nil {
+				return err
+			}
+			if patch.Limits.TierDefault != user.Limits.TierDefault {
+				if err := queries.SetUserTier(ctx, settingsdb.SetUserTierParams{ID: id, UiTier: string(patch.Limits.TierDefault)}); err != nil {
+					return err
+				}
+			}
+		}
+		if patch.PasswordHash != nil {
+			return queries.SetUserPasswordHash(ctx, settingsdb.SetUserPasswordHashParams{
+				ID: id, PasswordHash: sql.NullString{String: *patch.PasswordHash, Valid: *patch.PasswordHash != ""},
+			})
+		}
+		return nil
+	})
 }

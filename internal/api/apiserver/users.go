@@ -92,16 +92,11 @@ func (s *Server) CreateUser(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	account.Blocked = blocked
 	created, err := s.auth.Settings.CreateAccount(r.Context(), s.auth.Clock, account)
 	if err != nil {
 		s.writeUserError(w, err)
 		return
-	}
-	if len(blocked) > 0 {
-		if err := s.auth.Settings.SetUserBlockedTags(r.Context(), created.ID, blocked); err != nil {
-			s.writeUserError(w, err)
-			return
-		}
 	}
 	s.logger.InfoContext(r.Context(), "account created",
 		"username", created.Username, "role", string(created.Role))
@@ -132,6 +127,8 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, id int64) {
 			return
 		}
 	}
+	// Everything is read and checked first, then written together: a refusal changes nothing.
+	var patch settings.AccountPatch
 	if request.Role != nil {
 		role, ok := parseRole(*request.Role)
 		if !ok {
@@ -139,40 +136,30 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, id int64) {
 				"Bad request", "role must be admin, user or readonly")
 			return
 		}
-		if err := s.auth.Settings.SetRole(r.Context(), id, role); err != nil {
-			s.writeUserError(w, err)
-			return
-		}
+		patch.Role = &role
 	}
-
 	if request.Blocked != nil {
 		blocked, ok := s.blockedTagsOf(w, r, *request.Blocked)
 		if !ok {
 			return
 		}
-		if err := s.auth.Settings.SetUserBlockedTags(r.Context(), id, blocked); err != nil {
-			s.writeUserError(w, err)
-			return
-		}
+		patch.Blocked = &blocked
 	}
-
 	if request.Limits != nil {
-		if err := s.auth.Settings.SetUserLimits(r.Context(), id, limitsFrom(*request.Limits)); err != nil {
-			s.writeUserError(w, err)
-			return
-		}
+		limits := limitsFrom(*request.Limits)
+		patch.Limits = &limits
 	}
-
 	if request.Password != nil {
 		hashed, err := auth.HashPassword(*request.Password)
 		if err != nil {
 			writeError(w, s.logger, err)
 			return
 		}
-		if err := s.auth.Settings.SetPassword(r.Context(), id, hashed); err != nil {
-			s.writeUserError(w, err)
-			return
-		}
+		patch.PasswordHash = &hashed
+	}
+	if err := s.auth.Settings.UpdateAccount(r.Context(), id, patch); err != nil {
+		s.writeUserError(w, err)
+		return
 	}
 
 	user, found := s.auth.Settings.Snapshot().User(id)
@@ -249,6 +236,8 @@ func (s *Server) writeUserError(w http.ResponseWriter, err error) {
 	case errors.As(err, &problems):
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
 			"The account has problems", problems.Report("the account", "Nothing was changed."))
+	case errors.Is(err, settings.ErrUsernameTaken):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Name taken", "an account with that name exists already")
 	case errors.Is(err, settings.ErrLastAdministrator):
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
 			"That would leave no administrator", err.Error())
