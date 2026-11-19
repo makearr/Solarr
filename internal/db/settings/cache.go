@@ -10,6 +10,7 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
@@ -57,6 +58,10 @@ type Cache struct {
 	// libraryUsage is optional (EnableLibraryUsage): without it a root folder, profile or target is deleted without asking the library.
 	libraryUsage LibraryUsage
 	logger       *slog.Logger
+	// touched is when each API key's last use was last written; touching holds the writes still running.
+	touchMu  sync.Mutex
+	touched  map[int64]time.Time
+	touching sync.WaitGroup
 }
 
 // DownloadUsage tells settings which unfinished downloads and held releases depend on a connection; library.db owns the rows.

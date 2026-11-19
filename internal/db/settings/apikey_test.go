@@ -142,6 +142,7 @@ func TestTouchAPIKey_RecordsLastUsed(t *testing.T) {
 	if err := cache.TouchAPIKey(t.Context(), fake, key.ID); err != nil {
 		t.Fatalf("TouchAPIKey: %v", err)
 	}
+	cache.FlushTouches()
 
 	keys, err := cache.ListAPIKeys(t.Context(), owner.ID)
 	if err != nil {

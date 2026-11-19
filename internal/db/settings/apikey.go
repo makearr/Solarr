@@ -69,19 +69,43 @@ func (c *Cache) CreateAPIKey(ctx context.Context, cl clock.Clock, userID int64,
 	}, nil
 }
 
-// TouchAPIKey records that a key was used.
+// apiKeyTouchEvery is how often one key's last use is written: a dashboard polling with a key costs a write every
+// few minutes, not one per poll.
+const apiKeyTouchEvery = 5 * time.Minute
+
+// TouchAPIKey records that a key was used. At most one write per key per apiKeyTouchEvery, made off the request's path,
+// so authenticating never waits for the settings writer.
 func (c *Cache) TouchAPIKey(ctx context.Context, cl clock.Clock, keyID int64) error {
-	err := c.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		return c.queries.WithTx(tx).TouchAPIKey(ctx, settingsdb.TouchAPIKeyParams{
-			LastUsedAt: sql.NullInt64{Int64: cl.Now().Unix(), Valid: true},
-			ID:         keyID,
-		})
-	})
-	if err != nil {
-		return fmt.Errorf("settings: touch api key %d: %w", keyID, err)
+	now := cl.Now()
+	c.touchMu.Lock()
+	if last, found := c.touched[keyID]; found && now.Sub(last) < apiKeyTouchEvery {
+		c.touchMu.Unlock()
+		return nil
 	}
+	if c.touched == nil {
+		c.touched = map[int64]time.Time{}
+	}
+	c.touched[keyID] = now
+	c.touchMu.Unlock()
+
+	c.touching.Add(1)
+	go func() {
+		defer c.touching.Done()
+		err := c.store.Write(context.WithoutCancel(ctx), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			return c.queries.WithTx(tx).TouchAPIKey(ctx, settingsdb.TouchAPIKeyParams{
+				LastUsedAt: sql.NullInt64{Int64: now.Unix(), Valid: true},
+				ID:         keyID,
+			})
+		})
+		if err != nil && c.logger != nil {
+			c.logger.Debug("could not record api key use", "key", keyID, "error", err)
+		}
+	}()
 	return nil
 }
+
+// FlushTouches waits for the last-used writes still running.
+func (c *Cache) FlushTouches() { c.touching.Wait() }
 
 // ListAPIKeys returns a user's keys, without their hashes.
 func (c *Cache) ListAPIKeys(ctx context.Context, userID int64) ([]APIKey, error) {

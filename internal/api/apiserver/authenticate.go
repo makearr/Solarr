@@ -143,7 +143,7 @@ func (s *Server) identifyByAPIKey(r *http.Request) (settings.User, error) {
 	if err != nil {
 		return settings.User{}, err
 	}
-	// Bookkeeping, at bulk priority, so it never makes a request wait.
+	// Bookkeeping, written at most every few minutes and off the request.
 	if err := s.auth.Settings.TouchAPIKey(r.Context(), s.auth.Clock, authenticated.APIKeyID); err != nil {
 		s.logger.Debug("could not record api key use", slog.Any("error", err))
 	}
