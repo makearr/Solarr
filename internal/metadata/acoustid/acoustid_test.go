@@ -18,13 +18,17 @@ import (
 type fakeTransport struct {
 	body       string
 	lastQuery  url.Values
+	lastMethod string
+	lastURL    string
 	calls      int
 	statusCode int
 }
 
 func (f *fakeTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	f.calls++
-	f.lastQuery = request.URL.Query()
+	f.lastMethod, f.lastURL = request.Method, request.URL.String()
+	sent, _ := io.ReadAll(request.Body)
+	f.lastQuery, _ = url.ParseQuery(string(sent))
 	status := f.statusCode
 	if status == 0 {
 		status = http.StatusOK
@@ -113,6 +117,9 @@ func TestLookup_SendsTheFingerprintAndDuration(t *testing.T) {
 	}
 	if got := transport.lastQuery.Get("client"); got != "secret-key" {
 		t.Errorf("client = %q, want the configured key", got)
+	}
+	if transport.lastMethod != http.MethodPost || strings.Contains(transport.lastURL, "?") {
+		t.Errorf("request = %s %s, want a POST with the fingerprint and key in the body, not the URL", transport.lastMethod, transport.lastURL)
 	}
 }
 

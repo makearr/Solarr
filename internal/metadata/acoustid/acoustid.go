@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -109,7 +110,7 @@ func (c Client) Lookup(ctx context.Context, fingerprint string, duration time.Du
 	query.Set("format", "json")
 
 	var decoded response
-	if err := c.getJSON(ctx, c.baseURL+"/lookup?"+query.Encode(), &decoded); err != nil {
+	if err := c.postForm(ctx, c.baseURL+"/lookup", query, &decoded); err != nil {
 		return nil, fmt.Errorf("acoustid: lookup: %w", err)
 	}
 	if decoded.Status != "ok" {
@@ -196,8 +197,14 @@ func creditOf(artists []responseArtist) string {
 // maxResponseBytes bounds a reply nobody legitimately sends more than.
 const maxResponseBytes = 4 << 20
 
-func (c Client) getJSON(ctx context.Context, url string, into any) error {
-	response, err := c.http.Get(ctx, url)
+// postForm sends the lookup as a form body: a 2-4 kB fingerprint and the key stay out of URLs that proxies log or truncate.
+func (c Client) postForm(ctx context.Context, address string, form url.Values, into any) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, address, strings.NewReader(form.Encode()))
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response, err := c.http.Do(ctx, request)
 	if err != nil {
 		return err
 	}
