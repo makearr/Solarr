@@ -13,14 +13,16 @@ type Querier interface {
 	ClearMetadataCache(ctx context.Context) error
 	CountMetadataCache(ctx context.Context) (int64, error)
 	// ADR-60's max_age: a per-entry ceiling, enforced regardless of budget.
-	DeleteMetadataCacheOlderThan(ctx context.Context, fetchedAt int64) (int64, error)
+	// A chunk at a time, oldest first, so no transaction holds the writer for long.
+	DeleteMetadataCacheOlderThan(ctx context.Context, arg DeleteMetadataCacheOlderThanParams) (int64, error)
 	// ADR-60's budget-triggered eviction: oldest first, exactly n rows, returning each one's bytes so the caller keeps a
 	// running total instead of summing the whole cache again. WITHOUT ROWID, so the subquery is by primary key.
 	DeleteOldestMetadataCache(ctx context.Context, limit int64) ([]int64, error)
 	// Column lists follow table order, or sqlc stops reusing the generated model.
 	GetCachedMetadata(ctx context.Context, arg GetCachedMetadataParams) (MetadataCache, error)
 	SetCachedMetadata(ctx context.Context, arg SetCachedMetadataParams) error
-	// ADR-60's budget: bytes stored (a BLOB's length; a text's counts characters), not the file, which DELETE does not shrink.
+	// ADR-60's budget: bytes stored (body_bytes is a BLOB's length, not characters), not the file, which DELETE does not shrink.
+	// A covering scan of the age index: no body is read.
 	SumMetadataCacheBytes(ctx context.Context) (int64, error)
 }
 

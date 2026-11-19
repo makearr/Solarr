@@ -31,12 +31,20 @@ func (q *Queries) CountMetadataCache(ctx context.Context) (int64, error) {
 }
 
 const deleteMetadataCacheOlderThan = `-- name: DeleteMetadataCacheOlderThan :execrows
-DELETE FROM metadata_cache WHERE fetched_at < ?
+DELETE FROM metadata_cache WHERE (kind, external_id) IN (
+  SELECT old.kind, old.external_id FROM metadata_cache old WHERE old.fetched_at < ? ORDER BY old.fetched_at ASC LIMIT ?
+)
 `
 
+type DeleteMetadataCacheOlderThanParams struct {
+	FetchedAt int64
+	Limit     int64
+}
+
 // ADR-60's max_age: a per-entry ceiling, enforced regardless of budget.
-func (q *Queries) DeleteMetadataCacheOlderThan(ctx context.Context, fetchedAt int64) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteMetadataCacheOlderThan, fetchedAt)
+// A chunk at a time, oldest first, so no transaction holds the writer for long.
+func (q *Queries) DeleteMetadataCacheOlderThan(ctx context.Context, arg DeleteMetadataCacheOlderThanParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteMetadataCacheOlderThan, arg.FetchedAt, arg.Limit)
 	if err != nil {
 		return 0, err
 	}
@@ -47,7 +55,7 @@ const deleteOldestMetadataCache = `-- name: DeleteOldestMetadataCache :many
 DELETE FROM metadata_cache WHERE (kind, external_id) IN (
   SELECT kind, external_id FROM metadata_cache ORDER BY fetched_at ASC LIMIT ?
 )
-RETURNING CAST(LENGTH(CAST(body AS BLOB)) AS INTEGER) AS bytes
+RETURNING body_bytes AS bytes
 `
 
 // ADR-60's budget-triggered eviction: oldest first, exactly n rows, returning each one's bytes so the caller keeps a
@@ -60,11 +68,11 @@ func (q *Queries) DeleteOldestMetadataCache(ctx context.Context, limit int64) ([
 	defer rows.Close()
 	items := []int64{}
 	for rows.Next() {
-		var column_1 int64
-		if err := rows.Scan(&column_1); err != nil {
+		var body_bytes int64
+		if err := rows.Scan(&body_bytes); err != nil {
 			return nil, err
 		}
-		items = append(items, column_1)
+		items = append(items, body_bytes)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -77,7 +85,7 @@ func (q *Queries) DeleteOldestMetadataCache(ctx context.Context, limit int64) ([
 
 const getCachedMetadata = `-- name: GetCachedMetadata :one
 
-SELECT kind, external_id, source, body, fetched_at
+SELECT kind, external_id, source, body, fetched_at, body_bytes
 FROM metadata_cache WHERE kind = ? AND external_id = ?
 `
 
@@ -96,17 +104,19 @@ func (q *Queries) GetCachedMetadata(ctx context.Context, arg GetCachedMetadataPa
 		&i.Source,
 		&i.Body,
 		&i.FetchedAt,
+		&i.BodyBytes,
 	)
 	return i, err
 }
 
 const setCachedMetadata = `-- name: SetCachedMetadata :exec
-INSERT INTO metadata_cache (kind, external_id, source, body, fetched_at)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO metadata_cache (kind, external_id, source, body, fetched_at, body_bytes)
+VALUES (?1, ?2, ?3, ?4, ?5, LENGTH(CAST(?4 AS BLOB)))
 ON CONFLICT (kind, external_id) DO UPDATE SET
   source = excluded.source,
   body = excluded.body,
-  fetched_at = excluded.fetched_at
+  fetched_at = excluded.fetched_at,
+  body_bytes = excluded.body_bytes
 `
 
 type SetCachedMetadataParams struct {
@@ -129,10 +139,11 @@ func (q *Queries) SetCachedMetadata(ctx context.Context, arg SetCachedMetadataPa
 }
 
 const sumMetadataCacheBytes = `-- name: SumMetadataCacheBytes :one
-SELECT CAST(COALESCE(SUM(LENGTH(CAST(body AS BLOB))), 0) AS INTEGER) FROM metadata_cache
+SELECT CAST(COALESCE(SUM(body_bytes), 0) AS INTEGER) FROM metadata_cache INDEXED BY metadata_cache_by_age
 `
 
-// ADR-60's budget: bytes stored (a BLOB's length; a text's counts characters), not the file, which DELETE does not shrink.
+// ADR-60's budget: bytes stored (body_bytes is a BLOB's length, not characters), not the file, which DELETE does not shrink.
+// A covering scan of the age index: no body is read.
 func (q *Queries) SumMetadataCacheBytes(ctx context.Context) (int64, error) {
 	row := q.db.QueryRowContext(ctx, sumMetadataCacheBytes)
 	var column_1 int64

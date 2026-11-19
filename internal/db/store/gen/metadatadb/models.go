@@ -10,4 +10,5 @@ type MetadataCache struct {
 	Source     string
 	Body       string
 	FetchedAt  int64
+	BodyBytes  int64
 }

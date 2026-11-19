@@ -2,6 +2,7 @@ package metacache_test
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -244,5 +245,41 @@ func TestCache_ClearRemovesEverything(t *testing.T) {
 	}
 	if count != 0 {
 		t.Errorf("Count = %d after Clear, want 0", count)
+	}
+}
+
+// A multi-byte body counts its bytes, and a replaced entry counts its new size.
+func TestCache_SizeBytesCountsBytesNotCharactersAndFollowsAReplace(t *testing.T) {
+	cache := newCache(t)
+	at := time.Unix(1_700_000_000, 0)
+	set := func(body string) {
+		t.Helper()
+		if err := cache.Set(t.Context(), "release", "a", metacache.Entry{Body: body, FetchedAt: at}); err != nil {
+			t.Fatalf("Set: %v", err)
+		}
+	}
+
+	set("éé")
+	if size, _ := cache.SizeBytes(t.Context()); size != 4 {
+		t.Errorf("SizeBytes of two two-byte characters = %d, want 4", size)
+	}
+	set("x")
+	if size, _ := cache.SizeBytes(t.Context()); size != 1 {
+		t.Errorf("SizeBytes after replacing the body = %d, want 1", size)
+	}
+}
+
+func TestCache_DeleteOlderThanRemovesMoreThanOneChunk(t *testing.T) {
+	cache := newCache(t)
+	old := time.Unix(1_000_000_000, 0)
+	for i := range 450 {
+		if err := cache.Set(t.Context(), "release", fmt.Sprintf("id-%d", i), metacache.Entry{Body: "x", FetchedAt: old}); err != nil {
+			t.Fatalf("Set: %v", err)
+		}
+	}
+
+	removed, err := cache.DeleteOlderThan(t.Context(), time.Unix(1_500_000_000, 0))
+	if err != nil || removed != 450 {
+		t.Errorf("DeleteOlderThan = %d, %v; want all 450 across chunks", removed, err)
 	}
 }

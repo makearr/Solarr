@@ -95,20 +95,34 @@ func (c Cache) Count(ctx context.Context) (int64, error) {
 	return count, nil
 }
 
+// expiryChunk is how many expired entries go in one write transaction.
+const expiryChunk = 200
+
 // DeleteOlderThan removes every entry fetched before cutoff (ADR-60's
-// max_age, a per-entry ceiling enforced regardless of budget). Returns how
-// many were removed.
+// max_age, a per-entry ceiling enforced regardless of budget), a chunk per
+// transaction. Returns how many were removed.
 func (c Cache) DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
-	var removed int64
-	err := c.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		var err error
-		removed, err = metadatadb.New(tx).DeleteMetadataCacheOlderThan(ctx, cutoff.Unix())
-		return err
-	})
-	if err != nil {
-		return 0, fmt.Errorf("metacache: delete older than %s: %w", cutoff, err)
+	var total int64
+	for {
+		if err := ctx.Err(); err != nil {
+			return total, err
+		}
+		var removed int64
+		err := c.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			var err error
+			removed, err = metadatadb.New(tx).DeleteMetadataCacheOlderThan(ctx, metadatadb.DeleteMetadataCacheOlderThanParams{
+				FetchedAt: cutoff.Unix(), Limit: expiryChunk,
+			})
+			return err
+		})
+		if err != nil {
+			return total, fmt.Errorf("metacache: delete older than %s: %w", cutoff, err)
+		}
+		total += removed
+		if removed < expiryChunk {
+			return total, nil
+		}
 	}
-	return removed, nil
 }
 
 // DeleteOldest removes up to n entries, oldest first (ADR-60's budget-triggered eviction): how many went, which may

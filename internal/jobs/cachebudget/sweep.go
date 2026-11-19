@@ -337,8 +337,11 @@ func (s *Sweep) evictOldestImagesUntilUnder(budgetBytes int64) (int64, error) {
 	return evicted, nil
 }
 
-// evictOldestMetadataUntilUnder removes one entry at a time against a running total, so it never over-evicts and
-// measures the cache once rather than once per entry (a full read of every body).
+// metadataEvictionChunk is how many entries one eviction transaction removes.
+const metadataEvictionChunk = 200
+
+// evictOldestMetadataUntilUnder removes a chunk at a time against a running total and measures the cache once; it may
+// over-evict by up to one chunk less one entry, which a cache can afford.
 func (s *Sweep) evictOldestMetadataUntilUnder(ctx context.Context, budgetBytes int64) (int64, error) {
 	size, err := s.metadata.SizeBytes(ctx)
 	if err != nil {
@@ -346,7 +349,7 @@ func (s *Sweep) evictOldestMetadataUntilUnder(ctx context.Context, budgetBytes i
 	}
 	var evicted int64
 	for size > budgetBytes {
-		removed, bytes, err := s.metadata.DeleteOldest(ctx, 1)
+		removed, bytes, err := s.metadata.DeleteOldest(ctx, metadataEvictionChunk)
 		if err != nil {
 			return evicted, err
 		}
