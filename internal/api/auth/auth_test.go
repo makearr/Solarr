@@ -282,3 +282,20 @@ func TestLoginLimiter_CountsAttemptsStillBeingChecked(t *testing.T) {
 		t.Errorf("after five failures wait = %v, want %v", wait, auth.LoginWindow)
 	}
 }
+
+// SEC-2: an IPv6 subscriber owns a /64, so the limit counts the whole prefix; IPv4 stays per address.
+func TestLoginLimiter_CountsAnIPv6PrefixAsOneAddress(t *testing.T) {
+	limiter := auth.NewLoginLimiter(clock.NewFakeAtEpoch())
+	for range auth.LoginAttempts {
+		limiter.Failed(netip.MustParseAddr("2001:db8::1"))
+	}
+	if wait := limiter.Begin(netip.MustParseAddr("2001:db8::2")); wait == 0 {
+		t.Error("another address of the same /64 was admitted")
+	}
+	if wait := limiter.Begin(netip.MustParseAddr("2001:db8:0:1::1")); wait != 0 {
+		t.Errorf("an address of another /64 waited %v", wait)
+	}
+	if wait := limiter.Wait(netip.MustParseAddr("::ffff:192.0.2.7")); wait != 0 {
+		t.Errorf("an unrelated mapped IPv4 address waited %v", wait)
+	}
+}

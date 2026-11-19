@@ -31,8 +31,18 @@ func NewLoginLimiter(cl clock.Clock) *LoginLimiter {
 // pendingRetry is the wait answered while the address's other attempts are still being checked.
 const pendingRetry = time.Second
 
+// limiterKey is the address a failure is counted against: an IPv6 /64 is one subscriber's, who owns 2^64 addresses in it.
+func limiterKey(address netip.Addr) netip.Addr {
+	address = address.Unmap()
+	if address.Is6() {
+		return netip.PrefixFrom(address, 64).Masked().Addr()
+	}
+	return address
+}
+
 // Wait answers how long the address must wait before it may try again; zero means it may try now.
 func (l *LoginLimiter) Wait(address netip.Addr) time.Duration {
+	address = limiterKey(address)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.waitLocked(address)
@@ -53,6 +63,7 @@ func (l *LoginLimiter) waitLocked(address netip.Addr) time.Duration {
 // with End: checking a password takes long enough that attempts sent together would otherwise all be admitted
 // before the first failure is recorded.
 func (l *LoginLimiter) Begin(address netip.Addr) time.Duration {
+	address = limiterKey(address)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if wait := l.waitLocked(address); wait > 0 {
@@ -64,6 +75,7 @@ func (l *LoginLimiter) Begin(address netip.Addr) time.Duration {
 
 // End closes an attempt Begin admitted, recording it as a failure when it failed.
 func (l *LoginLimiter) End(address netip.Addr, failed bool) {
+	address = limiterKey(address)
 	l.mu.Lock()
 	if l.pending[address]--; l.pending[address] <= 0 {
 		delete(l.pending, address)
@@ -76,6 +88,7 @@ func (l *LoginLimiter) End(address netip.Addr, failed bool) {
 
 // Failed records one failed sign-in from the address.
 func (l *LoginLimiter) Failed(address netip.Addr) {
+	address = limiterKey(address)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if len(l.failures) >= sweepAbove {
