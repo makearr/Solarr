@@ -47,24 +47,29 @@ var (
 	repackRe        = compile(`\b(?<repack>repack\d?|rerip\d?)\b`, regexp2.IgnoreCase)
 	versionRe       = compile(`\d[-._ ]?v(?<version>\d)[-._ ]|\[v(?<version>\d)\]|repack(?<version>\d)|rerip(?<version>\d)|(?:480|576|720|1080|2160)p[._ ]v(?<version>\d)`, regexp2.IgnoreCase)
 	realRe          = compile(`\b(?<real>REAL)\b`, 0)
-	resolutionRe    = compile(`\b(?:(?<R360p>360p)|(?<R480p>480p|480i|640x480|848x480)|(?<R540p>540p)|(?<R576p>576p)|(?<R720p>720p|1280x720|960p)|(?<R1080p>1080p|1920x1080|1440p|FHD|1080i|4kto1080p)|(?<R2160p>2160p|3840x2160|4k[-_. ](?:UHD|HEVC|BD|H265)|(?:UHD|HEVC|BD|H265)[-_. ]4k))\b`, regexp2.IgnoreCase)
+	resolutionRe    = compile(`\b(?:(?<R360p>360p)|(?<R480p>480p|480i|640x480|848x480)|(?<R540p>540p)|(?<R576p>576p|576i)|(?<R720p>720p|1280x720|960p)|(?<R1080p>1080p|1920x1080|1440p|FHD|1080i|4kto1080p)|(?<R2160p>2160p|3840x2160|4k[-_. ](?:UHD|HEVC|BD|H265)|(?:UHD|HEVC|BD|H265)[-_. ]4k))\b`, regexp2.IgnoreCase)
 	altResolutionRe = compile(`\b(?<R2160p>UHD)\b|(?<R2160p>\[4K\])`, regexp2.IgnoreCase)
 	resolutionNames = []struct {
 		group string
 		lines int
 	}{{"R360p", 360}, {"R480p", 480}, {"R540p", 540}, {"R576p", 576}, {"R720p", 720}, {"R1080p", 1080}, {"R2160p", 2160}}
-	otherSourceRe  = compile(`(?<hdtv>HD[-_. ]TV)|(?<sdtv>SD[-_. ]TV)`, regexp2.IgnoreCase)
-	animeBlurayRe  = compile(`bd(?:720|1080|2160)|bluray(?:480|576|720|1080|2160)p|(?<=[-_. (\[])bd(?=[-_. )\]])`, regexp2.IgnoreCase)
-	animeWebDLRe   = compile(`\[WEB\]|[\[\(]WEB[ .]`, regexp2.IgnoreCase)
-	remuxRe        = compile(`(?:[_. ]|\d{4}p-|\bHybrid-)(?<remux>(?:(BD|UHD)[-_. ]?)?Remux)\b|(?<remux>(?:(BD|UHD)[-_. ]?)?Remux[_. ]\d{4}p)`, regexp2.IgnoreCase)
-	highDefPdtvRe  = compile(`hr[-_. ]ws`, regexp2.IgnoreCase)
-	videoCodecRe   = compile(`\b(?:(?<h265>x265|h[-_. ]?265|hevc)|(?<h264>x264|h[-_. ]?264|avc)|(?<av1>av1)|(?<vp9>vp9)|(?<xvid>xvid(?:hd)?)|(?<divx>divx)|(?<mpeg2>mpeg[-_. ]?2))\b`, regexp2.IgnoreCase)
-	hdrRe          = compile(`\b(?:(?<dv>DV|DoVi|Dolby[-_. ]?Vision)|(?<hdr10plus>HDR10(?:\+|Plus)|HDR10P)|(?<hdr10>HDR10)|(?<hlg>HLG)|(?<hdr>HDR))\b`, regexp2.IgnoreCase)
-	audioCodecRe   = compile(`\b(?:(?<truehd>TrueHD)|(?<dtshdma>DTS[-_. ]?HD[-_. ]?MA|DTS[-_. ]?MA)|(?<dtsx>DTS[-_. ]?X)|(?<dts>DTS(?:[-_. ]?HD|[-_. ]?ES)?)|(?<eac3>DDP|DD\+|E[-_. ]?AC[-_. ]?3)|(?<ac3>DD|AC[-_. ]?3)|(?<aac>AAC)|(?<flac>FLAC)|(?<opus>OPUS)|(?<mp3>MP3))`, regexp2.IgnoreCase)
-	audioNames     = []string{"truehd", "dtshdma", "dtsx", "dts", "eac3", "ac3", "aac", "flac", "opus", "mp3"}
-	audioChannelRe = compile(`(?<![\d.])(?<channels>[1-9])[. ]?(?<lfe>[01])(?![\dp])`, 0)
-	serviceRe      = compile(`\b(?<service>AMZN|NF|ATVP|DSNP|HMAX|MAX|HULU|PCOK|PMTP|PMNP|STAN|CRAV|iT|SHO|STZ|ROKU|CC|BBC|iP|ITV|ALL4|MA|VIKI|CR|FUNI|HIDI|TUBI|PLUZ|PLEX|RED|DSCP|APTV|STRP|ATV|NOW|SKST|ALL4|U4|ID|AE|DCU|DSNY|CBS|NBC|ABC|FOX|TVNZ|SBS|9NOW|10P)\b`, 0)
-	multiRe        = compile(`[_. ](?<multi>multi)[_. ]`, regexp2.IgnoreCase)
+	otherSourceRe = compile(`(?<hdtv>HD[-_. ]TV)|(?<sdtv>SD[-_. ]TV)`, regexp2.IgnoreCase)
+	animeBlurayRe = compile(`bd(?:720|1080|2160)|bluray(?:480|576|720|1080|2160)p|(?<=[-_. (\[])bd(?=[-_. )\]])`, regexp2.IgnoreCase)
+	animeWebDLRe  = compile(`\[WEB\]|[\[\(]WEB[ .]`, regexp2.IgnoreCase)
+	remuxRe       = compile(`(?:[_. ]|\d{4}p-|\bHybrid-)(?<remux>(?:(BD|UHD)[-_. ]?)?Remux)\b|(?<remux>(?:(BD|UHD)[-_. ]?)?Remux[_. ]\d{4}p)`, regexp2.IgnoreCase)
+	highDefPdtvRe = compile(`hr[-_. ]ws`, regexp2.IgnoreCase)
+	// A name with one of these says high definition even where it states no lines.
+	highDefCodecRe      = compile(`\b(?:x265|h[-_. ]?265|hevc|av1|vp9|hdr(?:10(?:\+|Plus)?)?|dv|DoVi|Dolby[-_. ]?Vision)\b`, regexp2.IgnoreCase)
+	standardDefMarkerRe = compile(`\b(?:xvid|divx|480|576|SD)\b`, regexp2.IgnoreCase)
+	sceneCodecRe        = compile(`\b(?:x264|xvid|divx)\b`, regexp2.IgnoreCase)
+	standardDefCodecRe  = compile(`\b(?:xvid|divx)\b`, regexp2.IgnoreCase)
+	videoCodecRe        = compile(`\b(?:(?<h265>x265|h[-_. ]?265|hevc)|(?<h264>x264|h[-_. ]?264|avc)|(?<av1>av1)|(?<vp9>vp9)|(?<xvid>xvid(?:hd)?)|(?<divx>divx)|(?<mpeg2>mpeg[-_. ]?2))\b`, regexp2.IgnoreCase)
+	hdrRe               = compile(`\b(?:(?<dv>DV|DoVi|Dolby[-_. ]?Vision)|(?<hdr10plus>HDR10(?:\+|Plus)|HDR10P)|(?<hdr10>HDR10)|(?<hlg>HLG)|(?<hdr>HDR))\b`, regexp2.IgnoreCase)
+	audioCodecRe        = compile(`\b(?:(?<truehd>TrueHD)|(?<dtshdma>DTS[-_. ]?HD[-_. ]?MA|DTS[-_. ]?MA)|(?<dtsx>DTS[-_. ]?X)|(?<dts>DTS(?:[-_. ]?HD|[-_. ]?ES)?)|(?<eac3>DDP|DD\+|E[-_. ]?AC[-_. ]?3)|(?<ac3>DD|AC[-_. ]?3)|(?<aac>AAC)|(?<flac>FLAC)|(?<opus>OPUS)|(?<mp3>MP3))`, regexp2.IgnoreCase)
+	audioNames          = []string{"truehd", "dtshdma", "dtsx", "dts", "eac3", "ac3", "aac", "flac", "opus", "mp3"}
+	audioChannelRe      = compile(`(?<![\d.])(?<channels>[1-9])[. ]?(?<lfe>[01])(?![\dp])`, 0)
+	serviceRe           = compile(`\b(?<service>AMZN|NF|ATVP|DSNP|HMAX|MAX|HULU|PCOK|PMTP|PMNP|STAN|CRAV|iT|SHO|STZ|ROKU|CC|BBC|iP|ITV|ALL4|MA|VIKI|CR|FUNI|HIDI|TUBI|PLUZ|PLEX|RED|DSCP|APTV|STRP|ATV|NOW|SKST|ALL4|U4|ID|AE|DCU|DSNY|CBS|NBC|ABC|FOX|TVNZ|SBS|9NOW|10P)\b`, 0)
+	multiRe             = compile(`[_. ](?<multi>multi)[_. ]`, regexp2.IgnoreCase)
 )
 
 // ParseClaims reads what a name says about its encoding, without deciding what is good.
@@ -137,18 +142,34 @@ func parseSource(normalized string) string {
 	return ""
 }
 
-// impliedResolution is what a high-definition source means by itself; only the name's own words count otherwise.
+// impliedResolution is what a source means by itself when the name states no lines: standard definition for the
+// sources released that way for two decades, nothing for a Blu-ray rip that is more often 720p than SD.
 func impliedResolution(source, normalized string) int {
+	lower := strings.ToLower(normalized)
 	switch source {
 	case "dvd":
 		// Sonarr's and Radarr's DVD quality is 480p: a DVD names no lines because it is standard definition.
 		return 480
 	case "pdtv", "sdtv", "dsr", "tvrip":
 		switch {
-		case strings.Contains(strings.ToLower(normalized), "1080p"):
+		case strings.Contains(lower, "1080p"):
 			return 1080
-		case strings.Contains(strings.ToLower(normalized), "720p"), isMatch(highDefPdtvRe, normalized):
+		case strings.Contains(lower, "720p"), isMatch(highDefPdtvRe, normalized):
 			return 720
+		}
+		return 480
+	case "hdtv", "webdl", "webrip":
+		// A bare "HDTV" or "WEBDL" is Sonarr's 720p; only a scene codec token marks the standard-definition release.
+		if !isMatch(highDefCodecRe, normalized) && isMatch(sceneCodecRe, normalized) {
+			return 480
+		}
+	case "bluray", "bdrip", "brrip":
+		if isMatch(standardDefMarkerRe, normalized) {
+			return 480
+		}
+	case "":
+		if isMatch(standardDefCodecRe, normalized) {
+			return 480
 		}
 	}
 	return 0

@@ -99,3 +99,30 @@ func TestADVDNamesNoLinesButIsStandardDefinition(t *testing.T) {
 		t.Errorf("a stated resolution wins: %d", hd.Resolution)
 	}
 }
+
+// A source that was released in standard definition names no lines; a Blu-ray rip or a high-definition codec does not imply them.
+func TestSourceWithoutLinesImpliesStandardDefinition(t *testing.T) {
+	tests := map[string]int{
+		"The.Series.S02E05.HDTV.x264-GRP":        480,
+		"The.Series.S02E05.PDTV.XviD-GRP":        480,
+		"The.Series.S02E05.DSR.x264-GRP":         480,
+		"The.Series.S02E05.WEB.x264-GRP":         480,
+		"The.Series.S02E05.WEBRip.x264-GRP":      480,
+		"The.Series.S02E05.BDRip.XviD-GRP":       480,
+		"The.Series.S02E05.XviD-GRP":             480,
+		"The.Series.S02E05.576i.DVDRip.x264-GRP": 576,
+		"The.Series.S02E05.PDTV.HR.WS.x264-GRP":  720,
+		"The.Series.S02E05.720p.HDTV.x264-GRP":   720,
+		"The.Series.S02E05.BDRip.x264-GRP":       0,
+		"The.Series.S02E05.WEB-DL.HEVC-GRP":      0,
+		"The.Series.S02E05.HDTV.HDR.x265-GRP":    0,
+		"The.Series.S02E05.HDTV-GRP":             0,
+		"The.Series.S02E05.REMUX-GRP":            0,
+		"The.Series.S02E05.x264-GRP":             0,
+	}
+	for name, want := range tests {
+		if got := ParseClaims(name).Resolution; got != want {
+			t.Errorf("%q: resolution %d, want %d", name, got, want)
+		}
+	}
+}
