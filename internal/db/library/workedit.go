@@ -45,6 +45,19 @@ func (d Desired) SetProfileOverride(ctx context.Context, itemID int64, profileID
 	return nil
 }
 
+// SetProfileOverrideForWork gives every item of a work the profile an add chose for it on purpose.
+func (d Desired) SetProfileOverrideForWork(ctx context.Context, workID, profileID int64) error {
+	err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetDesiredProfileOverrideForWork(ctx, librarydb.SetDesiredProfileOverrideForWorkParams{
+			ProfileID: profileID, WorkID: workID,
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("library: set profile override of work %d: %w", workID, err)
+	}
+	return nil
+}
+
 // TargetOverride answers the quality target an item was given of its own; found is false for the library's.
 func (d Desired) TargetOverride(ctx context.Context, itemID int64) (targetID int64, found bool, err error) {
 	targetID, err = librarydb.New(d.store.Read()).GetDesiredTargetOverride(ctx, itemID)

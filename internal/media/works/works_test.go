@@ -148,3 +148,33 @@ func TestRefreshJob_OneFailingNeverStopsTheRestAndIsMarked(t *testing.T) {
 		t.Errorf("refreshed %v, marked %v", refreshed, marked)
 	}
 }
+
+type createdSource struct{ *source }
+
+func (s createdSource) Add(ctx context.Context, request works.Add) (media.AddResult, error) {
+	result, err := s.source.Add(ctx, request)
+	result.Created = true
+	return result, err
+}
+
+type overrideLog struct{ got [][2]int64 }
+
+func (l *overrideLog) SetProfileOverrideForWork(_ context.Context, workID, profileID int64) error {
+	l.got = append(l.got, [2]int64{workID, profileID})
+	return nil
+}
+
+// A profile picked in the add dialog stays with the work beside the library's list (QUAL-6); the library's own default does not.
+func TestCatalog_KeepsAProfileChosenOnPurposeAsTheWorksOverride(t *testing.T) {
+	log := &overrideLog{}
+	catalog := works.Catalog{Source: createdSource{&source{}}, Categories: categories{}, DefaultProfileID: 1, Overrides: log}
+	own, libraryOwn := int64(5), int64(30)
+	for _, profile := range []*int64{nil, &libraryOwn, &own} {
+		if _, err := catalog.AddWork(t.Context(), media.AddRequest{CategoryID: 7, Provider: "p", ExternalID: "1", Monitored: true, ProfileID: profile}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if want := [][2]int64{{9, 5}}; !slices.Equal(log.got, want) {
+		t.Errorf("overrides = %v, want %v", log.got, want)
+	}
+}

@@ -139,10 +139,7 @@ func (a Adder) addAlbum(ctx context.Context, category settings.Category, request
 	workID := resolutions[0].WorkID
 	a.creditArtists(ctx, now, workID, releaseGroup.ArtistCredit)
 
-	profileID := a.DefaultProfileID
-	if category.QualityProfileID != nil {
-		profileID = *category.QualityProfileID
-	}
+	profileID := a.libraryProfile(category)
 	if request.ProfileID != nil {
 		profileID = *request.ProfileID
 	}
@@ -153,6 +150,11 @@ func (a Adder) addAlbum(ctx context.Context, category settings.Category, request
 	if err != nil {
 		return media.AddResult{}, fmt.Errorf("ensure album item: %w", err)
 	}
+	if request.ProfileID != nil && resolutions[0].WorkCreated && *request.ProfileID != a.libraryProfile(category) {
+		if err := a.Desired.SetProfileOverride(ctx, item.ID, request.ProfileID); err != nil {
+			return media.AddResult{}, fmt.Errorf("keep the chosen quality profile: %w", err)
+		}
+	}
 	if a.Enrich != nil {
 		a.Enrich(ctx)
 	}
@@ -161,6 +163,14 @@ func (a Adder) addAlbum(ctx context.Context, category settings.Category, request
 		a.SearchAlbum(ctx, category.ID, item.ID)
 	}
 	return media.AddResult{Kind: AddKindAlbum, WorkID: workID, Searching: searching, Created: resolutions[0].WorkCreated}, nil
+}
+
+// libraryProfile is the profile an album gets when the add names none.
+func (a Adder) libraryProfile(category settings.Category) int64 {
+	if category.QualityProfileID != nil {
+		return *category.QualityProfileID
+	}
+	return a.DefaultProfileID
 }
 
 // creditArtists records an added album's artists at once, so a search before enrichment has an artist to ask for.

@@ -1243,6 +1243,7 @@ type Querier interface {
 	SetDesiredItemRequiredCount(ctx context.Context, arg SetDesiredItemRequiredCountParams) error
 	SetDesiredItemState(ctx context.Context, arg SetDesiredItemStateParams) error
 	SetDesiredProfileOverride(ctx context.Context, arg SetDesiredProfileOverrideParams) error
+	SetDesiredProfileOverrideForWork(ctx context.Context, arg SetDesiredProfileOverrideForWorkParams) error
 	SetDesiredTargetOverride(ctx context.Context, arg SetDesiredTargetOverrideParams) error
 	SetFingerprints(ctx context.Context, arg SetFingerprintsParams) error
 	SetGenreTreeSeed(ctx context.Context, arg SetGenreTreeSeedParams) error

@@ -140,3 +140,21 @@ func TestBlockTag_TakesItOffEveryWorkAndRefusesItAgainUntilUnblocked(t *testing.
 		t.Errorf("CreateTag after unblocking: %v", err)
 	}
 }
+
+func TestProfileOverrideForWork_CoversEveryItemOfThatWorkOnly(t *testing.T) {
+	opened, _ := newLibrary(t)
+	desired := library.NewDesired(opened)
+	work := createWork(t, opened, "music", "Alpha")
+	first := createDesired(t, opened, work.ID, "SET", 3)
+	other := createDesired(t, opened, createWork(t, opened, "music", "Beta").ID, "SET", 3)
+
+	if err := desired.SetProfileOverrideForWork(t.Context(), work.ID, 7); err != nil {
+		t.Fatal(err)
+	}
+	if got, found, err := desired.ProfileOverride(t.Context(), first.ID); err != nil || !found || got != 7 {
+		t.Errorf("the work's item: got=%d found=%v err=%v, want 7", got, found, err)
+	}
+	if _, found, err := desired.ProfileOverride(t.Context(), other.ID); err != nil || found {
+		t.Errorf("another work's item: found=%v err=%v, want none", found, err)
+	}
+}

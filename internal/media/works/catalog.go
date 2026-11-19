@@ -46,6 +46,13 @@ type Catalog struct {
 	DefaultProfileID int64
 	// AllowAgain lifts the exclusion of a work a person removed and now adds on purpose; nil lifts nothing.
 	AllowAgain func(ctx context.Context, provider, externalID string) error
+	// Overrides keeps a profile an add chose on purpose beside the library's list; nil leaves the choice to the stored default.
+	Overrides ProfileOverrides
+}
+
+// ProfileOverrides records that a work's items follow a profile of their own rather than the library's.
+type ProfileOverrides interface {
+	SetProfileOverrideForWork(ctx context.Context, workID, profileID int64) error
 }
 
 var _ media.Adding = Catalog{}
@@ -85,7 +92,8 @@ func (c Catalog) AddWork(ctx context.Context, request media.AddRequest) (media.A
 	if !valid(option) {
 		return media.AddResult{}, fmt.Errorf("%w: %q is not a monitor choice", media.ErrInvalidAdd, option)
 	}
-	profile := c.Categories.ProfileFor(category, c.DefaultProfileID)
+	libraryProfile := c.Categories.ProfileFor(category, c.DefaultProfileID)
+	profile := libraryProfile
 	if request.ProfileID != nil {
 		profile = *request.ProfileID
 	}
@@ -98,5 +106,11 @@ func (c Catalog) AddWork(ctx context.Context, request media.AddRequest) (media.A
 	if request.UserID != 0 {
 		addedBy = &request.UserID
 	}
-	return c.Source.Add(ctx, Add{AddRequest: request, Category: category, ProfileID: profile, Option: option, AddedBy: addedBy})
+	result, err := c.Source.Add(ctx, Add{AddRequest: request, Category: category, ProfileID: profile, Option: option, AddedBy: addedBy})
+	if err == nil && result.Created && profile != libraryProfile && c.Overrides != nil {
+		if err := c.Overrides.SetProfileOverrideForWork(ctx, result.WorkID, profile); err != nil {
+			return result, fmt.Errorf("keep the chosen quality profile: %w", err)
+		}
+	}
+	return result, err
 }

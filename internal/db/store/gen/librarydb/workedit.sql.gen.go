@@ -106,6 +106,22 @@ func (q *Queries) SetDesiredProfileOverride(ctx context.Context, arg SetDesiredP
 	return err
 }
 
+const setDesiredProfileOverrideForWork = `-- name: SetDesiredProfileOverrideForWork :exec
+INSERT INTO desired_profile_override (desired_item_id, profile_id)
+SELECT id, ?1 FROM desired_item WHERE work_id = ?2
+ON CONFLICT (desired_item_id) DO UPDATE SET profile_id = excluded.profile_id
+`
+
+type SetDesiredProfileOverrideForWorkParams struct {
+	ProfileID int64
+	WorkID    int64
+}
+
+func (q *Queries) SetDesiredProfileOverrideForWork(ctx context.Context, arg SetDesiredProfileOverrideForWorkParams) error {
+	_, err := q.db.ExecContext(ctx, setDesiredProfileOverrideForWork, arg.ProfileID, arg.WorkID)
+	return err
+}
+
 const setDesiredTargetOverride = `-- name: SetDesiredTargetOverride :exec
 INSERT INTO desired_target_override (desired_item_id, target_id) VALUES (?, ?)
 ON CONFLICT (desired_item_id) DO UPDATE SET target_id = excluded.target_id

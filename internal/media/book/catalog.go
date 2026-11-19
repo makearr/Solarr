@@ -25,7 +25,7 @@ type Catalog struct {
 var _ media.Adding = Catalog{}
 
 func (c Catalog) shared() works.Catalog {
-	return works.Catalog{Source: catalogSource{c.Service}, Categories: c.Categories, DefaultProfileID: c.DefaultProfileID, AllowAgain: c.AllowAgain}
+	return works.Catalog{Source: catalogSource{c.Service}, Categories: c.Categories, DefaultProfileID: c.DefaultProfileID, AllowAgain: c.AllowAgain, Overrides: c.Service.Desired}
 }
 
 // LookupWorks implements media.Adding.

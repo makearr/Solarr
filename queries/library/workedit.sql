@@ -5,6 +5,11 @@ SELECT profile_id FROM desired_profile_override WHERE desired_item_id = ?;
 INSERT INTO desired_profile_override (desired_item_id, profile_id) VALUES (?, ?)
 ON CONFLICT (desired_item_id) DO UPDATE SET profile_id = excluded.profile_id;
 
+-- name: SetDesiredProfileOverrideForWork :exec
+INSERT INTO desired_profile_override (desired_item_id, profile_id)
+SELECT id, sqlc.arg(profile_id) FROM desired_item WHERE work_id = sqlc.arg(work_id)
+ON CONFLICT (desired_item_id) DO UPDATE SET profile_id = excluded.profile_id;
+
 -- name: ClearDesiredProfileOverride :exec
 DELETE FROM desired_profile_override WHERE desired_item_id = ?;
 

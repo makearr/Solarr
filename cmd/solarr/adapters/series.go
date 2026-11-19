@@ -29,7 +29,7 @@ type SeriesCatalog struct {
 
 func (c SeriesCatalog) shared() works.Catalog {
 	return works.Catalog{
-		Source: tv.CatalogSource{Service: c.Service}, Categories: c.Categories, DefaultProfileID: c.DefaultProfileID,
+		Source: tv.CatalogSource{Service: c.Service}, Categories: c.Categories, DefaultProfileID: c.DefaultProfileID, Overrides: c.Desired,
 		AllowAgain: func(ctx context.Context, provider, externalID string) error {
 			return WorkExclusions{Exclusions: c.Service.Exclusions}.Allow(ctx, tv.MediaType, provider, externalID)
 		},
