@@ -265,7 +265,7 @@ const createCollection = `-- name: CreateCollection :one
 
 INSERT INTO collection (media_type, name, kind, source, monitored, complete_at, added_at)
 VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked
+RETURNING id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked, facts_checked_at
 `
 
 type CreateCollectionParams struct {
@@ -302,6 +302,7 @@ func (q *Queries) CreateCollection(ctx context.Context, arg CreateCollectionPara
 		&i.PosterUrl,
 		&i.CategoryID,
 		&i.NameLocked,
+		&i.FactsCheckedAt,
 	)
 	return i, err
 }
@@ -626,7 +627,7 @@ func (q *Queries) GetArtwork(ctx context.Context, arg GetArtworkParams) (string,
 }
 
 const getCollection = `-- name: GetCollection :one
-SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked FROM collection WHERE id = ?
+SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked, facts_checked_at FROM collection WHERE id = ?
 `
 
 func (q *Queries) GetCollection(ctx context.Context, id int64) (Collection, error) {
@@ -644,12 +645,13 @@ func (q *Queries) GetCollection(ctx context.Context, id int64) (Collection, erro
 		&i.PosterUrl,
 		&i.CategoryID,
 		&i.NameLocked,
+		&i.FactsCheckedAt,
 	)
 	return i, err
 }
 
 const getCollectionByExternalID = `-- name: GetCollectionByExternalID :one
-SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked, c.facts_checked_at
 FROM collection c JOIN collection_external_id e ON e.collection_id = c.id
 WHERE e.provider = ? AND e.external_id = ?
 `
@@ -675,6 +677,7 @@ func (q *Queries) GetCollectionByExternalID(ctx context.Context, arg GetCollecti
 		&i.PosterUrl,
 		&i.CategoryID,
 		&i.NameLocked,
+		&i.FactsCheckedAt,
 	)
 	return i, err
 }
@@ -1188,7 +1191,7 @@ func (q *Queries) ListCollectionMembersInCategory(ctx context.Context, arg ListC
 }
 
 const listCollectionsForWork = `-- name: ListCollectionsForWork :many
-SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked, c.facts_checked_at
 FROM collection c
 JOIN collection_member m ON m.collection_id = c.id
 WHERE m.work_id = ? ORDER BY c.name
@@ -1215,6 +1218,7 @@ func (q *Queries) ListCollectionsForWork(ctx context.Context, workID int64) ([]C
 			&i.PosterUrl,
 			&i.CategoryID,
 			&i.NameLocked,
+			&i.FactsCheckedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1230,7 +1234,7 @@ func (q *Queries) ListCollectionsForWork(ctx context.Context, workID int64) ([]C
 }
 
 const listCollectionsInCategory = `-- name: ListCollectionsInCategory :many
-SELECT c.id, c.name, c.kind, c.monitored, c.complete_at AS total, c.poster_url,
+SELECT c.id, c.name, c.kind, c.monitored, c.complete_at AS total, c.poster_url, c.facts_checked_at,
        CAST(COALESCE((SELECT e.external_id FROM collection_external_id e WHERE e.collection_id = c.id LIMIT 1), '') AS TEXT) AS external_id
 FROM collection c
 WHERE c.kind IN ('franchise', 'custom') AND c.media_type = ?1
@@ -1246,13 +1250,14 @@ type ListCollectionsInCategoryParams struct {
 }
 
 type ListCollectionsInCategoryRow struct {
-	ID         int64
-	Name       string
-	Kind       string
-	Monitored  int64
-	Total      sql.NullInt64
-	PosterUrl  string
-	ExternalID string
+	ID             int64
+	Name           string
+	Kind           string
+	Monitored      int64
+	Total          sql.NullInt64
+	PosterUrl      string
+	FactsCheckedAt int64
+	ExternalID     string
 }
 
 // A library's collections: the provider's franchises with a work of the library, and the hand-made ones of the library.
@@ -1272,6 +1277,7 @@ func (q *Queries) ListCollectionsInCategory(ctx context.Context, arg ListCollect
 			&i.Monitored,
 			&i.Total,
 			&i.PosterUrl,
+			&i.FactsCheckedAt,
 			&i.ExternalID,
 		); err != nil {
 			return nil, err
@@ -1288,7 +1294,7 @@ func (q *Queries) ListCollectionsInCategory(ctx context.Context, arg ListCollect
 }
 
 const listCollectionsOfKind = `-- name: ListCollectionsOfKind :many
-SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked
+SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked, facts_checked_at
 FROM collection WHERE kind = ?1 AND media_type = ?2 ORDER BY name, id
 `
 
@@ -1318,6 +1324,7 @@ func (q *Queries) ListCollectionsOfKind(ctx context.Context, arg ListCollections
 			&i.PosterUrl,
 			&i.CategoryID,
 			&i.NameLocked,
+			&i.FactsCheckedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1333,7 +1340,7 @@ func (q *Queries) ListCollectionsOfKind(ctx context.Context, arg ListCollections
 }
 
 const listCollectionsOfWorkParts = `-- name: ListCollectionsOfWorkParts :many
-SELECT DISTINCT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked
+SELECT DISTINCT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked, c.facts_checked_at
 FROM collection c JOIN collection_member m ON m.collection_id = c.id
 WHERE m.work_id = ?1 AND m.part_id <> 0 AND c.kind = ?2
 ORDER BY c.name, c.id
@@ -1365,6 +1372,7 @@ func (q *Queries) ListCollectionsOfWorkParts(ctx context.Context, arg ListCollec
 			&i.PosterUrl,
 			&i.CategoryID,
 			&i.NameLocked,
+			&i.FactsCheckedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -2973,6 +2981,20 @@ type SetCollectionCompleteParams struct {
 
 func (q *Queries) SetCollectionComplete(ctx context.Context, arg SetCollectionCompleteParams) error {
 	_, err := q.db.ExecContext(ctx, setCollectionComplete, arg.CompleteAt, arg.ID)
+	return err
+}
+
+const setCollectionFactsChecked = `-- name: SetCollectionFactsChecked :exec
+UPDATE collection SET facts_checked_at = ? WHERE id = ?
+`
+
+type SetCollectionFactsCheckedParams struct {
+	FactsCheckedAt int64
+	ID             int64
+}
+
+func (q *Queries) SetCollectionFactsChecked(ctx context.Context, arg SetCollectionFactsCheckedParams) error {
+	_, err := q.db.ExecContext(ctx, setCollectionFactsChecked, arg.FactsCheckedAt, arg.ID)
 	return err
 }
 

@@ -1229,6 +1229,7 @@ type Querier interface {
 	// compare against.
 	SetClaimedAttributes(ctx context.Context, arg SetClaimedAttributesParams) error
 	SetCollectionComplete(ctx context.Context, arg SetCollectionCompleteParams) error
+	SetCollectionFactsChecked(ctx context.Context, arg SetCollectionFactsCheckedParams) error
 	SetCollectionMonitored(ctx context.Context, arg SetCollectionMonitoredParams) error
 	SetCollectionName(ctx context.Context, arg SetCollectionNameParams) error
 	SetCollectionPoster(ctx context.Context, arg SetCollectionPosterParams) error

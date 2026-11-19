@@ -166,17 +166,18 @@ type BlocklistedRelease struct {
 }
 
 type Collection struct {
-	ID         int64
-	MediaType  string
-	Name       string
-	Kind       string
-	Source     string
-	Monitored  int64
-	CompleteAt sql.NullInt64
-	AddedAt    int64
-	PosterUrl  string
-	CategoryID int64
-	NameLocked int64
+	ID             int64
+	MediaType      string
+	Name           string
+	Kind           string
+	Source         string
+	Monitored      int64
+	CompleteAt     sql.NullInt64
+	AddedAt        int64
+	PosterUrl      string
+	CategoryID     int64
+	NameLocked     int64
+	FactsCheckedAt int64
 }
 
 type CollectionDeclaredKey struct {

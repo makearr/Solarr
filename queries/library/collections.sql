@@ -3,7 +3,7 @@
 -- name: CreateCollection :one
 INSERT INTO collection (media_type, name, kind, source, monitored, complete_at, added_at)
 VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked;
+RETURNING id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked, facts_checked_at;
 
 -- name: AddCollectionMember :exec
 INSERT INTO collection_member (collection_id, work_id, part_id, ord)
@@ -27,7 +27,7 @@ WHERE c.id = ?
 GROUP BY c.id;
 
 -- name: ListCollectionsForWork :many
-SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked, c.facts_checked_at
 FROM collection c
 JOIN collection_member m ON m.collection_id = c.id
 WHERE m.work_id = ? ORDER BY c.name;
@@ -236,17 +236,17 @@ WHERE m.collection_id IN (sqlc.slice(collection_ids))
 ORDER BY m.collection_id, m.ord, m.part_id;
 
 -- name: ListCollectionsOfKind :many
-SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked
+SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked, facts_checked_at
 FROM collection WHERE kind = sqlc.arg(kind) AND media_type = sqlc.arg(media_type) ORDER BY name, id;
 
 -- name: ListCollectionsOfWorkParts :many
-SELECT DISTINCT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked
+SELECT DISTINCT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked, c.facts_checked_at
 FROM collection c JOIN collection_member m ON m.collection_id = c.id
 WHERE m.work_id = sqlc.arg(work_id) AND m.part_id <> 0 AND c.kind = sqlc.arg(kind)
 ORDER BY c.name, c.id;
 
 -- name: GetCollection :one
-SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked FROM collection WHERE id = ?;
+SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked, facts_checked_at FROM collection WHERE id = ?;
 
 -- name: RenameCollection :exec
 UPDATE collection SET name = ?, monitored = ? WHERE id = ?;
@@ -327,7 +327,7 @@ ORDER BY a.work_id, a.sort_key, b.id;
 
 -- A collection a provider names, found by its id there: a movie's franchise.
 -- name: GetCollectionByExternalID :one
-SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked, c.facts_checked_at
 FROM collection c JOIN collection_external_id e ON e.collection_id = c.id
 WHERE e.provider = ? AND e.external_id = ?;
 
@@ -346,7 +346,7 @@ UPDATE collection SET complete_at = ? WHERE id = ?;
 
 -- A library's collections: the provider's franchises with a work of the library, and the hand-made ones of the library.
 -- name: ListCollectionsInCategory :many
-SELECT c.id, c.name, c.kind, c.monitored, c.complete_at AS total, c.poster_url,
+SELECT c.id, c.name, c.kind, c.monitored, c.complete_at AS total, c.poster_url, c.facts_checked_at,
        CAST(COALESCE((SELECT e.external_id FROM collection_external_id e WHERE e.collection_id = c.id LIMIT 1), '') AS TEXT) AS external_id
 FROM collection c
 WHERE c.kind IN ('franchise', 'custom') AND c.media_type = sqlc.arg(media_type)
@@ -399,6 +399,9 @@ DELETE FROM collection_member WHERE collection_id = ? AND work_id = ? AND part_i
 
 -- name: GetCollectionExternalIDOf :one
 SELECT provider, external_id FROM collection_external_id WHERE collection_id = ? ORDER BY provider LIMIT 1;
+
+-- name: SetCollectionFactsChecked :exec
+UPDATE collection SET facts_checked_at = ? WHERE id = ?;
 
 -- name: SetCollectionPoster :exec
 UPDATE collection SET poster_url = ? WHERE id = ?;

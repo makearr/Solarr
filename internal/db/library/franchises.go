@@ -123,6 +123,8 @@ type FranchiseRow struct {
 	ExternalIDs []string
 	Monitored   bool
 	PosterURL   string
+	// FactsCheckedAt is when a provider was last asked for the picture and count, unix seconds, 0 never.
+	FactsCheckedAt int64
 	// Total is the works the provider says the franchise has, 0 when unknown.
 	Total   int64
 	Members []FranchiseMember
@@ -143,7 +145,7 @@ func (f Franchises) InCategory(ctx context.Context, mediaType string, categoryID
 	ids := make([]int64, len(collections))
 	at := make(map[int64]int, len(collections))
 	for index, row := range collections {
-		out[index] = FranchiseRow{ID: row.ID, Name: row.Name, Kind: row.Kind, ExternalID: row.ExternalID, Monitored: row.Monitored == 1, Total: row.Total.Int64, PosterURL: row.PosterUrl}
+		out[index] = FranchiseRow{ID: row.ID, Name: row.Name, Kind: row.Kind, ExternalID: row.ExternalID, Monitored: row.Monitored == 1, Total: row.Total.Int64, PosterURL: row.PosterUrl, FactsCheckedAt: row.FactsCheckedAt}
 		ids[index], at[row.ID] = row.ID, index
 	}
 	if len(ids) == 0 {
@@ -264,6 +266,17 @@ func (f Franchises) SetMonitored(ctx context.Context, id int64, monitored bool, 
 	})
 	if err != nil {
 		return fmt.Errorf("library: monitor franchise %d: %w", id, err)
+	}
+	return nil
+}
+
+// SetFactsChecked records that a provider was asked for the franchise's picture and count.
+func (f Franchises) SetFactsChecked(ctx context.Context, id, checkedAt int64) error {
+	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetCollectionFactsChecked(ctx, librarydb.SetCollectionFactsCheckedParams{FactsCheckedAt: checkedAt, ID: id})
+	})
+	if err != nil {
+		return fmt.Errorf("library: franchise %d facts checked: %w", id, err)
 	}
 	return nil
 }

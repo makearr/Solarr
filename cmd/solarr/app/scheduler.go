@@ -20,6 +20,7 @@ const (
 	refreshWorksScheduleCron       = "20 * * * *"    // every hour; a running series is due twice a day, 40 a run
 	subscriptionExpandScheduleCron = "10 */12 * * *" // every 12 hours
 	franchiseExpandScheduleCron    = "25 */12 * * *" // every 12 hours; at most 25 works a run
+	franchiseFactsScheduleCron     = "40 * * * *"    // hourly; at most 15 collections a library a run
 	franchiseLinkScheduleCron      = "55 */6 * * *"  // every six hours; reads the franchise ids already held
 	musicCollectionsScheduleCron   = "50 4 * * *"    // daily; a bulk read of Wikidata and at most 120 MusicBrainz requests
 	bookSeriesKeysScheduleCron     = "15 5 * * *"    // daily; one bulk read of Wikidata for the book series
@@ -135,6 +136,11 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Key: "franchise_expand", Name: "Add the new works of monitored franchises", DefaultCadence: franchiseExpandScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
 		Enqueue: p.enqueueFranchiseExpand,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "franchise_facts", Name: "Fill in collection pictures and counts", DefaultCadence: franchiseFactsScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueFranchiseFacts,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "franchise_link", Name: "Link the collections of different libraries", DefaultCadence: franchiseLinkScheduleCron,

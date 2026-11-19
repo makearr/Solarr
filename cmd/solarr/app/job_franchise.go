@@ -7,6 +7,8 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/service/franchisefacts"
 	"github.com/makearr/Solarr/internal/service/franchiselink"
 	"github.com/makearr/Solarr/internal/service/franchisewatch"
 )
@@ -23,6 +25,13 @@ func (p *process) registerFranchiseExpandJob(registry *jobs.Registry, executor *
 	}
 	executor.Handle(franchisewatch.JobType, franchisewatch.Service{
 		Libraries: cacheLibraries{cache: p.cache}, Franchises: library.NewFranchises(p.library), Media: p.media, Logger: p.logger,
+	})
+	if err := registry.Register(franchisefacts.Definition); err != nil {
+		return err
+	}
+	executor.Handle(franchisefacts.JobType, franchisefacts.Service{
+		Libraries: cacheLibraries{cache: p.cache}, Franchises: library.NewFranchises(p.library), Media: p.media,
+		Clock: clock.NewSystem(), Logger: p.logger,
 	})
 	if err := registry.Register(franchiselink.Definition); err != nil {
 		return err
@@ -48,6 +57,15 @@ func (p *process) enqueueFranchiseExpand(ctx context.Context) (jobs.EnqueueResul
 	result, err := franchisewatch.Enqueue(ctx, p.queue)
 	if err != nil {
 		p.logger.Warn("enqueue franchise sweep", slog.Any("error", err))
+	}
+	return result, err
+}
+
+// enqueueFranchiseFacts submits one pass; registered as a task, so it also runs on its own schedule.
+func (p *process) enqueueFranchiseFacts(ctx context.Context) (jobs.EnqueueResult, error) {
+	result, err := franchisefacts.Enqueue(ctx, p.queue)
+	if err != nil {
+		p.logger.Warn("enqueue franchise facts pass", slog.Any("error", err))
 	}
 	return result, err
 }

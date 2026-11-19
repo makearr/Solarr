@@ -14,9 +14,6 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-// picturesPerList bounds the provider calls one listing makes for franchise pictures; the rest follow next time.
-const picturesPerList = 15
-
 // LibraryFranchises implements apiserver.Franchises: collections are one table for every media type, the provider's
 // part (what a franchise lacks, its picture, following it) comes from the media type when it has one.
 type LibraryFranchises struct {
@@ -49,38 +46,6 @@ func (a LibraryFranchises) List(ctx context.Context, categoryID int64) ([]gen.Fr
 	rows, err := a.Store.InCategory(ctx, category.MediaType, categoryID)
 	if err != nil {
 		return nil, err
-	}
-	if provider, ok := a.capability(category); ok {
-		var asked []media.FranchiseRef
-		for _, row := range rows {
-			if (row.PosterURL == "" || row.Total == 0) && row.Kind == library.FranchiseKind && len(asked) < picturesPerList {
-				asked = append(asked, media.FranchiseRef{ID: row.ID, ExternalID: row.ExternalID})
-			}
-		}
-		if len(asked) > 0 {
-			facts := provider.FranchiseFacts(ctx, asked)
-			for index := range rows {
-				if !slices.ContainsFunc(asked, func(ref media.FranchiseRef) bool { return ref.ID == rows[index].ID }) {
-					continue
-				}
-				fact := facts[rows[index].ID]
-				if fact.Total > 0 && int64(fact.Total) != rows[index].Total {
-					if err := a.Store.SetTotal(ctx, rows[index].ID, int64(fact.Total)); err == nil {
-						rows[index].Total = int64(fact.Total)
-					}
-				}
-				// The provider had no picture: the first of its works that has one stands in, and is kept so it is not asked again.
-				poster := fact.PosterURL
-				if poster == "" && rows[index].PosterURL == "" {
-					poster = firstPoster(rows[index].Members)
-				}
-				if poster != "" && rows[index].PosterURL == "" {
-					if err := a.Store.SetPoster(ctx, rows[index].ID, poster); err == nil {
-						rows[index].PosterURL = poster
-					}
-				}
-			}
-		}
 	}
 	linked, err := a.Store.LinkedCountsByCollection(ctx)
 	if err != nil {
