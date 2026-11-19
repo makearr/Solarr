@@ -142,8 +142,7 @@ func (r Resolver) inLibrary(ctx context.Context, categoryID int64, info parseboo
 		if !wanted[parsebook.CleanTitle(held.Title)] {
 			continue
 		}
-		if info.Year != 0 && held.Year != 0 && int(held.Year) != info.Year && r.Service.Format.ByFolder {
-			// An audiobook's year is its reading's, the work's year is its first printing: years say nothing for it.
+		if !yearsAgree(info.Year, int(held.Year), r.Service.Format.ByFolder) {
 			continue
 		}
 		if len(found) == 0 || found[len(found)-1] != held.WorkID {
@@ -154,6 +153,15 @@ func (r Resolver) inLibrary(ctx context.Context, categoryID int64, info parseboo
 		return found[0], true
 	}
 	return 0, false
+}
+
+// yearsAgree compares an ebook's year within one year (a reprint at the turn of a year); an audiobook's year is its
+// reading's, the work's is its first printing, so years say nothing for it.
+func yearsAgree(wanted, held int, audiobook bool) bool {
+	if audiobook || wanted == 0 || held == 0 {
+		return true
+	}
+	return wanted-held <= 1 && held-wanted <= 1
 }
 
 func (r Resolver) add(ctx context.Context, categoryID int64, ids IDs, hint Hint) int64 {
