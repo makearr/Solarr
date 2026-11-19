@@ -154,6 +154,8 @@ type ArrSync interface {
 	PushMonitoring(ctx context.Context, instanceID int64) (ArrPushResult, error)
 	// Pull runs a sync by the options stored on the connection.
 	Pull(ctx context.Context, instanceID int64) (ArrImportRun, error)
+	// Forget drops what is kept of a connection about to be deleted, refusing while a run of it is going.
+	Forget(ctx context.Context, instanceID int64) error
 }
 
 // ArrPushResult is what one send of monitoring did; Unknown counts linked items Solarr holds no wanted item of, left alone.

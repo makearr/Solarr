@@ -116,6 +116,12 @@ func (s *Server) DeleteArrInstance(w http.ResponseWriter, r *http.Request, id in
 	if !s.requireAdministrator(w, r) {
 		return
 	}
+	if s.arrSync != nil {
+		if err := s.arrSync.Forget(r.Context(), id); err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
+	}
 	if err := s.auth.Settings.DeleteArrInstance(r.Context(), id); err != nil {
 		writeError(w, s.logger, err)
 		return

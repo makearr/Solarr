@@ -172,3 +172,30 @@ func TestDeleteArrInstance_RemovesIt(t *testing.T) {
 		t.Errorf("ArrInstances after delete = %+v, want none", instances)
 	}
 }
+
+// DB-17: library.db keeps links by connection id, so a deleted connection's id must not come back.
+func TestDeleteArrInstance_ItsIDIsNeverGivenAgain(t *testing.T) {
+	cache, fake := newCache(t)
+	cipher, err := secrets.New(testCipherKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache.EnableSecrets(cipher)
+	create := func(name string) settings.ArrInstance {
+		t.Helper()
+		created, err := cache.CreateArrInstance(t.Context(), settings.ArrInstanceRequest{
+			App: settings.ArrAppLidarr, Name: name, BaseURL: "http://lidarr.local:8686",
+		}, secrets.Secret("key"), fake.Now().Unix())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return created
+	}
+	first := create("First")
+	if err := cache.DeleteArrInstance(t.Context(), first.ID); err != nil {
+		t.Fatal(err)
+	}
+	if second := create("Second"); second.ID == first.ID {
+		t.Errorf("a new connection took the deleted id %d", first.ID)
+	}
+}

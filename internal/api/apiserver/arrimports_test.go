@@ -74,6 +74,8 @@ func (f *fakeArrSync) Revert(_ context.Context, id int64) (apiserver.ArrImportRe
 	return f.revert, nil
 }
 
+func (f *fakeArrSync) Forget(context.Context, int64) error { return f.err }
+
 func (f *fakeArrSync) PushMonitoring(context.Context, int64) (apiserver.ArrPushResult, error) {
 	return apiserver.ArrPushResult{}, f.err
 }

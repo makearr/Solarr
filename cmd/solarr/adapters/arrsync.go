@@ -308,6 +308,24 @@ func (a ArrSync) ListImports(ctx context.Context, instanceID int64) ([]apiserver
 	return views, nil
 }
 
+// Forget removes the links of a connection that is being deleted; its import runs stay as the undo history.
+func (a ArrSync) Forget(ctx context.Context, instanceID int64) error {
+	runs, err := a.Imports.ListForInstance(ctx, instanceID)
+	if err != nil {
+		return err
+	}
+	running := int64(0)
+	for _, run := range runs {
+		if run.State == library.ArrImportRunning {
+			running++
+		}
+	}
+	if running > 0 {
+		return &settings.InUseError{Entity: "*Arr connection", ID: instanceID, References: []settings.Reference{{Kind: "imports still running", Count: running}}}
+	}
+	return a.Links.Forget(ctx, instanceID)
+}
+
 // GetImport answers one run's own detail, including every item it touched.
 func (a ArrSync) GetImport(ctx context.Context, id int64) (apiserver.ArrImportDetail, error) {
 	run, err := a.Imports.Get(ctx, id)

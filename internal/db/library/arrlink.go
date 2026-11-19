@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 // ArrLink is one *Arr item and what it is here.
@@ -27,10 +28,9 @@ func NewArrLinks(opened *store.Store) ArrLinks { return ArrLinks{store: opened} 
 // Link records what an *Arr item is here; a later import's answer replaces an earlier one.
 func (l ArrLinks) Link(ctx context.Context, instanceID int64, link ArrLink) error {
 	err := l.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO arr_link (instance_id, source_kind, source_id, local_kind, local_id) VALUES (?, ?, ?, ?, ?)
-ON CONFLICT (instance_id, source_kind, source_id) DO UPDATE SET local_kind = excluded.local_kind, local_id = excluded.local_id`,
-			instanceID, link.SourceKind, link.SourceID, link.LocalKind, link.LocalID)
-		return err
+		return librarydb.New(tx).UpsertArrLink(ctx, librarydb.UpsertArrLinkParams{
+			InstanceID: instanceID, SourceKind: link.SourceKind, SourceID: link.SourceID, LocalKind: link.LocalKind, LocalID: link.LocalID,
+		})
 	})
 	if err != nil {
 		return fmt.Errorf("library: link %s %s of instance %d: %w", link.SourceKind, link.SourceID, instanceID, err)
@@ -41,9 +41,10 @@ ON CONFLICT (instance_id, source_kind, source_id) DO UPDATE SET local_kind = exc
 // SetSynced remembers the monitored flag both sides now agree on, so the next run can tell which side changed.
 func (l ArrLinks) SetSynced(ctx context.Context, instanceID int64, link ArrLink, monitored bool) error {
 	err := l.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `UPDATE arr_link SET synced_monitored = ? WHERE instance_id = ? AND source_kind = ? AND source_id = ?`,
-			monitored, instanceID, link.SourceKind, link.SourceID)
-		return err
+		return librarydb.New(tx).SetArrLinkSynced(ctx, librarydb.SetArrLinkSyncedParams{
+			SyncedMonitored: sql.NullInt64{Int64: boolToInt(monitored), Valid: true},
+			InstanceID:      instanceID, SourceKind: link.SourceKind, SourceID: link.SourceID,
+		})
 	})
 	if err != nil {
 		return fmt.Errorf("library: record sync of %s %s of instance %d: %w", link.SourceKind, link.SourceID, instanceID, err)
@@ -53,22 +54,29 @@ func (l ArrLinks) SetSynced(ctx context.Context, instanceID int64, link ArrLink,
 
 // ForInstance lists every item of one connection that an import matched.
 func (l ArrLinks) ForInstance(ctx context.Context, instanceID int64) ([]ArrLink, error) {
-	rows, err := l.store.Read().QueryContext(ctx, `SELECT source_kind, source_id, local_kind, local_id, synced_monitored FROM arr_link WHERE instance_id = ? ORDER BY source_kind, source_id`, instanceID)
+	rows, err := librarydb.New(l.store.Read()).ListArrLinksForInstance(ctx, instanceID)
 	if err != nil {
 		return nil, fmt.Errorf("library: links of instance %d: %w", instanceID, err)
 	}
-	defer func() { _ = rows.Close() }()
-	var links []ArrLink
-	for rows.Next() {
-		var link ArrLink
-		var synced sql.NullBool
-		if err := rows.Scan(&link.SourceKind, &link.SourceID, &link.LocalKind, &link.LocalID, &synced); err != nil {
-			return nil, err
-		}
-		if synced.Valid {
-			link.SyncedMonitored = &synced.Bool
+	links := make([]ArrLink, 0, len(rows))
+	for _, row := range rows {
+		link := ArrLink{SourceKind: row.SourceKind, SourceID: row.SourceID, LocalKind: row.LocalKind, LocalID: row.LocalID}
+		if row.SyncedMonitored.Valid {
+			synced := row.SyncedMonitored.Int64 == 1
+			link.SyncedMonitored = &synced
 		}
 		links = append(links, link)
 	}
-	return links, rows.Err()
+	return links, nil
+}
+
+// Forget removes every link of a deleted connection.
+func (l ArrLinks) Forget(ctx context.Context, instanceID int64) error {
+	err := l.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).DeleteArrLinksForInstance(ctx, instanceID)
+	})
+	if err != nil {
+		return fmt.Errorf("library: forget links of instance %d: %w", instanceID, err)
+	}
+	return nil
 }

@@ -273,6 +273,7 @@ type Querier interface {
 	DeleteAllProbeFailures(ctx context.Context) (int64, error)
 	// A refresh rewrites the numbers one provider gave a part, so a mapping it dropped goes too.
 	DeleteAltNumberingByProvider(ctx context.Context, arg DeleteAltNumberingByProviderParams) error
+	DeleteArrLinksForInstance(ctx context.Context, instanceID int64) error
 	DeleteClassificationValue(ctx context.Context, arg DeleteClassificationValueParams) error
 	DeleteCollection(ctx context.Context, id int64) error
 	DeleteCollectionDeclaredKeys(ctx context.Context, arg DeleteCollectionDeclaredKeysParams) error
@@ -590,6 +591,7 @@ type Querier interface {
 	ListAnimeWithoutRelationCheck(ctx context.Context, limit int64) ([]ListAnimeWithoutRelationCheckRow, error)
 	ListArrImportItems(ctx context.Context, importID int64) ([]ArrImportItem, error)
 	ListArrImportsForInstance(ctx context.Context, instanceID int64) ([]ArrImport, error)
+	ListArrLinksForInstance(ctx context.Context, instanceID int64) ([]ListArrLinksForInstanceRow, error)
 	// The monitored artists to refresh next: never refreshed first, then the stalest. One without a MusicBrainz id has
 	// nothing to refresh from and would stay first for ever.
 	ListArtistsDueRefresh(ctx context.Context, arg ListArtistsDueRefreshParams) ([]int64, error)
@@ -1228,6 +1230,7 @@ type Querier interface {
 	SetAcquisitionStall(ctx context.Context, arg SetAcquisitionStallParams) error
 	SetAcquisitionState(ctx context.Context, arg SetAcquisitionStateParams) error
 	SetArrImportState(ctx context.Context, arg SetArrImportStateParams) error
+	SetArrLinkSynced(ctx context.Context, arg SetArrLinkSyncedParams) error
 	SetCertificationAge(ctx context.Context, arg SetCertificationAgeParams) error
 	// The claimed half (todo 4.2): derived once per release folder at scan time,
 	// from the release name rather than the file's own bytes, so it needs no
@@ -1369,6 +1372,7 @@ type Querier interface {
 	// A work's year is never overwritten once set -- by a person, or by an earlier
 	// enrichment pass -- so this is conditional rather than a plain UPDATE.
 	UpdateWorkYearIfNull(ctx context.Context, arg UpdateWorkYearIfNullParams) error
+	UpsertArrLink(ctx context.Context, arg UpsertArrLinkParams) error
 	UpsertArtwork(ctx context.Context, arg UpsertArtworkParams) error
 	UpsertCrossoverEvent(ctx context.Context, arg UpsertCrossoverEventParams) error
 	UpsertCrossoverMissingPart(ctx context.Context, arg UpsertCrossoverMissingPartParams) error
