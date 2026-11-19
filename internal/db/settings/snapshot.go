@@ -124,6 +124,18 @@ func (s *Snapshot) Permission(userID, categoryID int64) Permission {
 }
 
 // UserBlockedTags are the tags the account is kept from: the items carrying one are not shown to it.
+func (s *Snapshot) TagBlockedForAnyUser(tagID int64) bool {
+	for _, blocked := range s.blockedTagsByUser {
+		for _, tag := range blocked {
+			if tag.TagID == tagID {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// UserBlockedTags is the tags an account is kept from.
 func (s *Snapshot) UserBlockedTags(userID int64) []UserBlockedTag { return s.blockedTagsByUser[userID] }
 
 // VisibleCategoryIDs returns the categories a user may see at the given level, in snapshot

@@ -1525,6 +1525,16 @@ func (c *Cache) SetUserBlockedTags(ctx context.Context, userID int64, tags []Use
 	})
 }
 
+// MoveUserBlockedTag points every account's block on a merged tag at the tag it was merged into.
+func (c *Cache) MoveUserBlockedTag(ctx context.Context, fromTagID, intoTagID int64, intoName string) error {
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		if err := queries.CopyUserBlockedTag(ctx, settingsdb.CopyUserBlockedTagParams{IntoTagID: intoTagID, IntoName: intoName, FromTagID: fromTagID}); err != nil {
+			return err
+		}
+		return queries.DeleteUserBlockedTagsOfTag(ctx, fromTagID)
+	})
+}
+
 // PasswordHash reads a user's stored hash.
 func (c *Cache) PasswordHash(ctx context.Context, username string) (string, error) {
 	row, err := c.queries.GetUserByUsername(ctx, username)

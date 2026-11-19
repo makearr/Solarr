@@ -84,3 +84,11 @@ DELETE FROM user_blocked_tag WHERE user_id = ?;
 
 -- name: InsertUserBlockedTag :exec
 INSERT INTO user_blocked_tag (user_id, tag_id, tag_name) VALUES (?, ?, ?) ON CONFLICT (user_id, tag_id) DO NOTHING;
+
+-- name: CopyUserBlockedTag :exec
+INSERT INTO user_blocked_tag (user_id, tag_id, tag_name)
+SELECT b.user_id, sqlc.arg(into_tag_id), sqlc.arg(into_name) FROM user_blocked_tag b WHERE b.tag_id = sqlc.arg(from_tag_id)
+ON CONFLICT (user_id, tag_id) DO NOTHING;
+
+-- name: DeleteUserBlockedTagsOfTag :exec
+DELETE FROM user_blocked_tag WHERE tag_id = ?;

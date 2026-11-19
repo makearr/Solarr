@@ -10,6 +10,23 @@ import (
 	"database/sql"
 )
 
+const copyUserBlockedTag = `-- name: CopyUserBlockedTag :exec
+INSERT INTO user_blocked_tag (user_id, tag_id, tag_name)
+SELECT b.user_id, ?1, ?2 FROM user_blocked_tag b WHERE b.tag_id = ?3
+ON CONFLICT (user_id, tag_id) DO NOTHING
+`
+
+type CopyUserBlockedTagParams struct {
+	IntoTagID int64
+	IntoName  string
+	FromTagID int64
+}
+
+func (q *Queries) CopyUserBlockedTag(ctx context.Context, arg CopyUserBlockedTagParams) error {
+	_, err := q.db.ExecContext(ctx, copyUserBlockedTag, arg.IntoTagID, arg.IntoName, arg.FromTagID)
+	return err
+}
+
 const createAPIKey = `-- name: CreateAPIKey :one
 INSERT INTO api_key (user_id, name, key_hash, created_at, key_sealed)
 VALUES (?, ?, ?, ?, ?)
@@ -117,6 +134,15 @@ DELETE FROM user_blocked_tag WHERE user_id = ?
 
 func (q *Queries) DeleteUserBlockedTags(ctx context.Context, userID int64) error {
 	_, err := q.db.ExecContext(ctx, deleteUserBlockedTags, userID)
+	return err
+}
+
+const deleteUserBlockedTagsOfTag = `-- name: DeleteUserBlockedTagsOfTag :exec
+DELETE FROM user_blocked_tag WHERE tag_id = ?
+`
+
+func (q *Queries) DeleteUserBlockedTagsOfTag(ctx context.Context, tagID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteUserBlockedTagsOfTag, tagID)
 	return err
 }
 

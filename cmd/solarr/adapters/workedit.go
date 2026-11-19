@@ -357,11 +357,22 @@ func (a WorkEdit) EditTag(ctx context.Context, id int64, name string, parentID i
 
 // MergeTag folds one tag into another.
 func (a WorkEdit) MergeTag(ctx context.Context, fromID, intoID int64) error {
-	return tagError(a.People.MergeTag(ctx, fromID, intoID))
+	if err := a.People.MergeTag(ctx, fromID, intoID); err != nil {
+		return tagError(err)
+	}
+	// An account kept from the merged tag stays kept from what it became.
+	name, found, err := a.People.TagName(ctx, intoID)
+	if err != nil || !found {
+		return err
+	}
+	return a.Settings.MoveUserBlockedTag(ctx, fromID, intoID, name)
 }
 
-// DeleteTag removes a tag.
+// DeleteTag removes a tag, unless an account is kept from it: a deleted genre returns under a new id, unblocked.
 func (a WorkEdit) DeleteTag(ctx context.Context, id int64) error {
+	if a.Settings.Snapshot().TagBlockedForAnyUser(id) {
+		return &settings.InUseError{Entity: "tag", ID: id, References: []settings.Reference{{Kind: "accounts kept from it (unblock them or merge the tag first)", Count: 1}}}
+	}
 	return a.People.DeleteTag(ctx, id)
 }
 

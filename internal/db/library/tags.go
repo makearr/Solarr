@@ -564,6 +564,18 @@ func deleteTag(ctx context.Context, queries *librarydb.Queries, id int64) error 
 	return err
 }
 
+// TagName answers a tag's name; false when there is no such tag.
+func (p People) TagName(ctx context.Context, id int64) (string, bool, error) {
+	tag, err := librarydb.New(p.store.Read()).GetTag(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("library: tag %d: %w", id, err)
+	}
+	return tag.Name, true, nil
+}
+
 // WorkCarriesAnyTag says whether the work carries one of the tags or one below it.
 func (p People) WorkCarriesAnyTag(ctx context.Context, workID int64, tagIDs []int64) (bool, error) {
 	if len(tagIDs) == 0 {

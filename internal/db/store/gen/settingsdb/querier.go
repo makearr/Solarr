@@ -15,6 +15,7 @@ type Querier interface {
 	ClearCategoryTarget(ctx context.Context, categoryID int64) error
 	ClearCategoryTargetAuto(ctx context.Context, categoryID int64) error
 	ClearDefaultLanguages(ctx context.Context) error
+	CopyUserBlockedTag(ctx context.Context, arg CopyUserBlockedTagParams) error
 	CountArrInstancesClashing(ctx context.Context, arg CountArrInstancesClashingParams) (int64, error)
 	CountArrInstancesForCategory(ctx context.Context, categoryID sql.NullInt64) (int64, error)
 	CountCategoriesUsingLanguageProfile(ctx context.Context, languageProfileID sql.NullInt64) (int64, error)
@@ -81,6 +82,7 @@ type Querier interface {
 	DeleteTargetProfile(ctx context.Context, id int64) error
 	DeleteUser(ctx context.Context, id int64) error
 	DeleteUserBlockedTags(ctx context.Context, userID int64) error
+	DeleteUserBlockedTagsOfTag(ctx context.Context, tagID int64) error
 	DetachRootFolderFromCategory(ctx context.Context, arg DetachRootFolderFromCategoryParams) error
 	DropCategoryAccess(ctx context.Context, categoryID int64) error
 	DropCategoryRootFolders(ctx context.Context, categoryID int64) error

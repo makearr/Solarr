@@ -513,3 +513,26 @@ func TestDeletes_AskTheLibraryFirst(t *testing.T) {
 		t.Fatalf("detach with files: %v", err)
 	}
 }
+
+// SEC-17: a merged tag's block follows the tag it became, and a tag an account is kept from is known.
+func TestMoveUserBlockedTag_TheBlockFollowsTheMerge(t *testing.T) {
+	cache, fake := newCache(t)
+	ctx := context.Background()
+	user, err := cache.CreateUser(ctx, fake, "kid", "hash", settings.RoleUser)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetUserBlockedTags(ctx, user.ID, []settings.UserBlockedTag{{TagID: 5, Name: "Horror"}}); err != nil {
+		t.Fatal(err)
+	}
+	if !cache.Snapshot().TagBlockedForAnyUser(5) || cache.Snapshot().TagBlockedForAnyUser(6) {
+		t.Fatal("tag 5 is blocked and tag 6 is not")
+	}
+	if err := cache.MoveUserBlockedTag(ctx, 5, 6, "Scary"); err != nil {
+		t.Fatal(err)
+	}
+	want := []settings.UserBlockedTag{{TagID: 6, Name: "Scary"}}
+	if got := cache.Snapshot().UserBlockedTags(user.ID); !reflect.DeepEqual(got, want) {
+		t.Errorf("blocks = %+v, want %+v", got, want)
+	}
+}
