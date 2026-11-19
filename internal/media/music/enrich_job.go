@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -83,6 +84,9 @@ const enrichLookupWorkers = 8
 // personBackfillBatchSize is one page of the artist image and biography sweep; the sweep's
 // per-run budget is a setting (EnrichJobConfig.PeopleBackfillPerRun).
 const personBackfillBatchSize = 20
+
+// personArtworkAbsentTTL is how long "this artist has no photo" holds before the sweep asks again.
+const personArtworkAbsentTTL = 90 * 24 * time.Hour
 
 // defaultPeopleBackfillPerRun is the budget when none is configured.
 const defaultPeopleBackfillPerRun = 200
@@ -528,7 +532,8 @@ func (j *EnrichJob) backfillPeople(ctx context.Context, progress *backfillProgre
 			return
 		}
 
-		batch, err := j.artworks.PeopleNeedingArtwork(ctx, progress.afterPersonID, personBackfillBatchSize)
+		batch, err := j.artworks.PeopleNeedingArtwork(ctx, progress.afterPersonID, personBackfillBatchSize,
+			j.clock.Now().Add(-personArtworkAbsentTTL).Unix())
 		if err != nil {
 			j.logger.WarnContext(ctx, "people needing artwork failed", slog.Any("error", err))
 			return
@@ -588,8 +593,9 @@ func (j *EnrichJob) backfillOne(ctx context.Context, candidate library.PersonArt
 
 	j.linkWikidata(ctx, candidate.PersonID, artist.WikidataQID)
 	bio, err := j.wikidataLookup(ctx, artist)
+	var artErr error
 	if err == nil {
-		bio = j.withArtistArt(ctx, artist, bio)
+		bio, artErr = j.withArtistArt(ctx, artist, bio)
 	}
 	if err != nil {
 		// A failed lookup says nothing about whether the artist has a photo.
@@ -607,6 +613,12 @@ func (j *EnrichJob) backfillOne(ctx context.Context, candidate library.PersonArt
 			slog.Int64("person_id", candidate.PersonID), slog.Any("error", err))
 	}
 
+	if artErr != nil && bio.ImageURL == "" {
+		// The second source failing says nothing about whether the artist has a photo.
+		j.logger.WarnContext(ctx, "artist backfill second source failed",
+			slog.Int64("person_id", candidate.PersonID), slog.Any("error", artErr))
+		return backfillFailed
+	}
 	outcome := imageUnusable
 	if bio.ImageURL != "" {
 		outcome = j.fetchPersonImage(ctx, candidate.PersonID, bio.ImageURL)
@@ -992,18 +1004,22 @@ func (j *EnrichJob) wikidataBiographyFor(ctx context.Context, artist musicbrainz
 			slog.String("qid", artist.WikidataQID), slog.Any("error", err))
 		bio = wikidata.Biography{}
 	}
-	return j.withArtistArt(ctx, artist, bio)
+	bio, err = j.withArtistArt(ctx, artist, bio)
+	if err != nil {
+		j.logger.DebugContext(ctx, "second artist source failed", slog.String("mbid", artist.MBID), slog.Any("error", err))
+	}
+	return bio
 }
 
-// withArtistArt fills the photo and biography Wikidata left empty from the second source.
-func (j *EnrichJob) withArtistArt(ctx context.Context, artist musicbrainz.Artist, bio wikidata.Biography) wikidata.Biography {
+// withArtistArt fills the photo and biography Wikidata left empty from the second source; the error is the
+// source failing, not knowing nothing (that answers empty).
+func (j *EnrichJob) withArtistArt(ctx context.Context, artist musicbrainz.Artist, bio wikidata.Biography) (wikidata.Biography, error) {
 	if j.artistArt == nil || artist.MBID == "" || (bio.ImageURL != "" && biographyText(bio) != "") {
-		return bio
+		return bio, nil
 	}
 	photo, text, err := j.artistArt(ctx, artist.MBID)
 	if err != nil {
-		j.logger.DebugContext(ctx, "second artist source had nothing", slog.String("mbid", artist.MBID), slog.Any("error", err))
-		return bio
+		return bio, err
 	}
 	if bio.ImageURL == "" {
 		bio.ImageURL = photo
@@ -1011,7 +1027,7 @@ func (j *EnrichJob) withArtistArt(ctx context.Context, artist musicbrainz.Artist
 	if biographyText(bio) == "" {
 		bio.Extract = text
 	}
-	return bio
+	return bio, nil
 }
 
 // wikidataLookup is wikidataBiographyFor without swallowing the error, for a

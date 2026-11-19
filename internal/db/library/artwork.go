@@ -128,9 +128,9 @@ type PersonArtworkCandidate struct {
 // NeedingArtwork's own shape one subject over. Works have had that sweep since
 // section 21.6; people never did, so an artist first resolved before the image
 // code existed never got one (found 2026-09-13).
-func (a Artworks) PeopleNeedingArtwork(ctx context.Context, afterPersonID, pageSize int64) ([]PersonArtworkCandidate, error) {
+func (a Artworks) PeopleNeedingArtwork(ctx context.Context, afterPersonID, pageSize, absentAfter int64) ([]PersonArtworkCandidate, error) {
 	rows, err := librarydb.New(a.store.Read()).ListPeopleNeedingArtwork(ctx, librarydb.ListPeopleNeedingArtworkParams{
-		AfterID: afterPersonID, PageSize: pageSize,
+		AfterID: afterPersonID, PageSize: pageSize, AbsentAfter: absentAfter,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("library: people needing artwork: %w", err)

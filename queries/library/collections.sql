@@ -168,6 +168,7 @@ JOIN person_external_id x ON x.person_id = p.id AND x.provider = 'musicbrainz:ar
 WHERE p.id > sqlc.arg(after_id)
   AND NOT EXISTS (
     SELECT 1 FROM artwork a WHERE a.subject_type = 'person' AND a.subject_id = p.id AND a.kind = 'cover'
+      AND (a.cache_key <> '' OR a.fetched_at > CAST(sqlc.arg(absent_after) AS INTEGER))
   )
 ORDER BY p.id
 LIMIT sqlc.arg(page_size);

@@ -148,7 +148,7 @@ func TestPeopleNeedingArtwork_ListsACreditedArtistWithNoImageYet(t *testing.T) {
 
 	personID := resolvePersonNamed(t, people, "artist-mbid-1", "Heka")
 
-	found, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 10)
+	found, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 10, 0)
 	if err != nil {
 		t.Fatalf("PeopleNeedingArtwork: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestPeopleNeedingArtwork_ExcludesAPersonWhoseImageWasFetched(t *testing.T) 
 		t.Fatalf("RecordForPerson: %v", err)
 	}
 
-	found, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 10)
+	found, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 10, 0)
 	if err != nil {
 		t.Fatalf("PeopleNeedingArtwork: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestPeopleNeedingArtwork_ExcludesAPersonRecordedAsHavingNoImage(t *testing.
 		t.Fatalf("RecordPersonArtworkAbsent: %v", err)
 	}
 
-	found, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 10)
+	found, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 10, 0)
 	if err != nil {
 		t.Fatalf("PeopleNeedingArtwork: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestPeopleNeedingArtwork_StartsAfterTheGivenPerson(t *testing.T) {
 	first := resolvePersonNamed(t, people, "artist-mbid-a", "First")
 	second := resolvePersonNamed(t, people, "artist-mbid-b", "Second")
 
-	found, err := artworks.PeopleNeedingArtwork(t.Context(), first, 10)
+	found, err := artworks.PeopleNeedingArtwork(t.Context(), first, 10, 0)
 	if err != nil {
 		t.Fatalf("PeopleNeedingArtwork: %v", err)
 	}
@@ -474,6 +474,29 @@ func TestNeedingEmbeddedArtwork_AsksOnlyForItsOwnMediaType(t *testing.T) {
 		found, err := artworks.NeedingEmbeddedArtwork(t.Context(), mediaType, library.ArtworkAsk{Source: "embedded"}, 0, 10)
 		if err != nil || len(found) != want {
 			t.Errorf("%s: %d candidates, %v; want %d", mediaType, len(found), err, want)
+		}
+	}
+}
+
+func TestPeopleNeedingArtwork_ListsAgainAPersonWhoseAbsenceMarkerIsOld(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	artworks := library.NewArtworks(opened)
+	personID := resolvePersonNamed(t, people, "artist-mbid-9", "Heka")
+	if err := artworks.RecordPersonArtworkAbsent(t.Context(), personID, 100); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range []struct {
+		absentAfter int64
+		want        int
+	}{{absentAfter: 50, want: 0}, {absentAfter: 100, want: 1}, {absentAfter: 200, want: 1}} {
+		found, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 10, test.absentAfter)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(found) != test.want {
+			t.Errorf("absentAfter %d: listed %d people, want %d", test.absentAfter, len(found), test.want)
 		}
 	}
 }

@@ -1984,14 +1984,16 @@ JOIN person_external_id x ON x.person_id = p.id AND x.provider = 'musicbrainz:ar
 WHERE p.id > ?1
   AND NOT EXISTS (
     SELECT 1 FROM artwork a WHERE a.subject_type = 'person' AND a.subject_id = p.id AND a.kind = 'cover'
+      AND (a.cache_key <> '' OR a.fetched_at > CAST(?2 AS INTEGER))
   )
 ORDER BY p.id
-LIMIT ?2
+LIMIT ?3
 `
 
 type ListPeopleNeedingArtworkParams struct {
-	AfterID  int64
-	PageSize int64
+	AfterID     int64
+	AbsentAfter int64
+	PageSize    int64
 }
 
 type ListPeopleNeedingArtworkRow struct {
@@ -2007,7 +2009,7 @@ type ListPeopleNeedingArtworkRow struct {
 // appeared (found 2026-09-13). 'musicbrainz:artist' must match
 // internal/media/music.ProviderArtist.
 func (q *Queries) ListPeopleNeedingArtwork(ctx context.Context, arg ListPeopleNeedingArtworkParams) ([]ListPeopleNeedingArtworkRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPeopleNeedingArtwork, arg.AfterID, arg.PageSize)
+	rows, err := q.db.QueryContext(ctx, listPeopleNeedingArtwork, arg.AfterID, arg.AbsentAfter, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}

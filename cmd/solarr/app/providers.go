@@ -320,6 +320,9 @@ func (p *process) theAudioDBArtist(client theaudiodb.Client) music.ArtistArt {
 			return "", "", nil
 		}
 		artist, err := client.Artist(ctx, artistMBID)
+		if errors.Is(err, theaudiodb.ErrNotFound) {
+			return "", "", nil
+		}
 		return artist.Photo, artist.Biography, err
 	}
 }

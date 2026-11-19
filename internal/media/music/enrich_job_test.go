@@ -832,7 +832,7 @@ func TestEnrichJob_RecordsThatAnArtistHasNoImageSoTheSweepMovesOn(t *testing.T) 
 		t.Fatalf("GetForPerson = %+v, want no servable image for an artist without one", recorded)
 	}
 
-	remaining, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 10)
+	remaining, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 10, 0)
 	if err != nil {
 		t.Fatalf("PeopleNeedingArtwork: %v", err)
 	}
@@ -856,7 +856,7 @@ func TestEnrichJob_BackfillRetriesAnArtistWhoseWikidataLookupFailed(t *testing.T
 		t.Fatalf("Run: %v", err)
 	}
 
-	remaining, err := library.NewArtworks(opened).PeopleNeedingArtwork(t.Context(), 0, 10)
+	remaining, err := library.NewArtworks(opened).PeopleNeedingArtwork(t.Context(), 0, 10, 0)
 	if err != nil {
 		t.Fatalf("PeopleNeedingArtwork: %v", err)
 	}
@@ -887,7 +887,7 @@ func TestEnrichJob_BackfillRecordsAnUndecodableImageAsNoImage(t *testing.T) {
 	}
 
 	artworks := library.NewArtworks(opened)
-	remaining, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 10)
+	remaining, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 10, 0)
 	if err != nil {
 		t.Fatalf("PeopleNeedingArtwork: %v", err)
 	}
@@ -917,7 +917,7 @@ func TestEnrichJob_BackfillRecordsNothingWithoutAWikidataSource(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	remaining, err := library.NewArtworks(opened).PeopleNeedingArtwork(t.Context(), 0, 10)
+	remaining, err := library.NewArtworks(opened).PeopleNeedingArtwork(t.Context(), 0, 10, 0)
 	if err != nil {
 		t.Fatalf("PeopleNeedingArtwork: %v", err)
 	}
@@ -944,7 +944,7 @@ func TestEnrichJob_BackfillRecordsNothingWithWikidataSwitchedOff(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	remaining, err := library.NewArtworks(opened).PeopleNeedingArtwork(t.Context(), 0, 10)
+	remaining, err := library.NewArtworks(opened).PeopleNeedingArtwork(t.Context(), 0, 10, 0)
 	if err != nil {
 		t.Fatalf("PeopleNeedingArtwork: %v", err)
 	}
@@ -1009,7 +1009,7 @@ func TestEnrichJob_BackfillStopsAtTheConfiguredBudget(t *testing.T) {
 		if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
-		waiting, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 50)
+		waiting, err := artworks.PeopleNeedingArtwork(t.Context(), 0, 50, 0)
 		if err != nil {
 			t.Fatalf("PeopleNeedingArtwork: %v", err)
 		}
@@ -1935,5 +1935,30 @@ func TestEnrichJob_AnArtistTheProviderCouldNotAnswerForIsNotMarkedRefreshed(t *t
 	}
 	if due, _ := people.ArtistsDueRefresh(t.Context(), 1, 10); len(due) != 0 {
 		t.Errorf("due right after a failed scheduled refresh = %v, want it to wait for its retry", due)
+	}
+}
+
+// The second source being down says nothing about whether the artist has a photo: no marker, retried.
+func TestEnrichJob_BackfillRetriesAnArtistWhoseSecondSourceFailed(t *testing.T) {
+	server := testImageServer(t)
+	source := &fakeArtistSource{artists: map[string]musicbrainz.Artist{
+		"artist-9": {MBID: "artist-9", Name: "Heka", SortName: "Heka"},
+	}}
+	job, opened, _, _ := newEnrichJobWithImageFetch(t, source, &fakeBiographer{biographies: map[string]wikidata.Biography{}}, server.URL,
+		func(config *music.EnrichJobConfig) {
+			config.ArtistArt = func(context.Context, string) (string, string, error) { return "", "", errors.New("rate limited") }
+		})
+	personID := resolveBareArtist(t, opened, "artist-9", "Heka")
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	remaining, err := library.NewArtworks(opened).PeopleNeedingArtwork(t.Context(), 0, 10, 0)
+	if err != nil {
+		t.Fatalf("PeopleNeedingArtwork: %v", err)
+	}
+	if len(remaining) != 1 || remaining[0].PersonID != personID {
+		t.Fatalf("PeopleNeedingArtwork = %+v, want person %d still waiting", remaining, personID)
 	}
 }
