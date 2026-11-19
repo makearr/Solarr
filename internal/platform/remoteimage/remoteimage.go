@@ -109,7 +109,7 @@ func (c *Cache) Ensure(ctx context.Context, address string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	sizes, err := artwork.Process(source)
+	sizes, err := artwork.Process(ctx, source)
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}

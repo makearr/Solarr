@@ -361,7 +361,7 @@ func (j *ArtworkJob) download(ctx context.Context, imageURL string) ([]byte, err
 // bytes, however they were obtained. sourceURL is empty for art read from a file.
 func (j *ArtworkJob) storeCover(ctx context.Context, workID int64, sourceURL string, source []byte) error {
 	cacheKey := fmt.Sprintf("work-%d-cover", workID)
-	full, err := j.writeSizes(cacheKey, source)
+	full, err := j.writeSizes(ctx, cacheKey, source)
 	if err != nil {
 		return err
 	}
@@ -371,7 +371,7 @@ func (j *ArtworkJob) storeCover(ctx context.Context, workID int64, sourceURL str
 // storeImage is storeCover for a person's image.
 func (j *ArtworkJob) storeImage(ctx context.Context, personID int64, sourceURL string, source []byte) error {
 	cacheKey := fmt.Sprintf("person-%d-cover", personID)
-	full, err := j.writeSizes(cacheKey, source)
+	full, err := j.writeSizes(ctx, cacheKey, source)
 	if err != nil {
 		return err
 	}
@@ -379,8 +379,11 @@ func (j *ArtworkJob) storeImage(ctx context.Context, personID int64, sourceURL s
 }
 
 // writeSizes encodes source at every size under cacheKey and answers the full one.
-func (j *ArtworkJob) writeSizes(cacheKey string, source []byte) (artwork.Image, error) {
-	sizes, err := artwork.Process(source)
+func (j *ArtworkJob) writeSizes(ctx context.Context, cacheKey string, source []byte) (artwork.Image, error) {
+	sizes, err := artwork.Process(ctx, source)
+	if ctx.Err() != nil {
+		return artwork.Image{}, ctx.Err()
+	}
 	if err != nil {
 		return artwork.Image{}, fmt.Errorf("process image: %w: %w", errNotAnImage, err)
 	}

@@ -39,7 +39,7 @@ func TestProcess_AgainstARealFetchedCoverImage(t *testing.T) {
 		t.Skipf("read live image failed, skipping: %v", err)
 	}
 
-	result, err := artwork.Process(source)
+	result, err := artwork.Process(t.Context(), source)
 	if err != nil {
 		t.Fatalf("Process(real cover art): %v", err)
 	}

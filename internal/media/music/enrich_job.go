@@ -1097,7 +1097,7 @@ func (j *EnrichJob) fetchPersonImage(ctx context.Context, personID int64, imageU
 	}
 
 	// The same bytes will fail to decode next run too, so this is final.
-	sizes, err := artwork.Process(source)
+	sizes, err := artwork.Process(ctx, source)
 	if err != nil {
 		j.logger.WarnContext(ctx, "person image process failed",
 			slog.Int64("person_id", personID), slog.Any("error", err))

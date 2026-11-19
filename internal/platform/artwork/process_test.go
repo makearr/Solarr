@@ -30,7 +30,7 @@ func syntheticCover(width, height int) *image.RGBA {
 func TestProcessImage_ProducesAllThreeSizesAsValidDecodableWebP(t *testing.T) {
 	source := syntheticCover(1600, 1200)
 
-	result, err := artwork.ProcessImage(source)
+	result, err := artwork.ProcessImage(t.Context(), source)
 	if err != nil {
 		t.Fatalf("ProcessImage: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestProcessImage_ProducesAllThreeSizesAsValidDecodableWebP(t *testing.T) {
 func TestProcessImage_NeverUpscalesASmallSource(t *testing.T) {
 	source := syntheticCover(50, 40)
 
-	result, err := artwork.ProcessImage(source)
+	result, err := artwork.ProcessImage(t.Context(), source)
 	if err != nil {
 		t.Fatalf("ProcessImage: %v", err)
 	}

@@ -25,6 +25,12 @@ func ResizeLongestEdge(img image.Image, edge int) image.Image {
 		targetWidth = max(1, width*edge/height)
 	}
 
+	// A source much larger than the target is first brought to twice the target with the cheap filter.
+	if width > 2*targetWidth && height > 2*targetHeight {
+		coarse := image.NewRGBA(image.Rect(0, 0, 2*targetWidth, 2*targetHeight))
+		draw.ApproxBiLinear.Scale(coarse, coarse.Bounds(), img, bounds, draw.Src, nil)
+		img, bounds = coarse, coarse.Bounds()
+	}
 	dst := image.NewRGBA(image.Rect(0, 0, targetWidth, targetHeight))
 	draw.CatmullRom.Scale(dst, dst.Bounds(), img, bounds, draw.Src, nil)
 	return dst
