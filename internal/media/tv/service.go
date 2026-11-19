@@ -130,11 +130,15 @@ func (s Service) order(categoryID int64) []string {
 func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool, order []string) (Series, error) {
 	ids = s.completeIDs(ctx, s.bridgeIDs(ctx, ids, order))
 	var sources []Series
+	var failed []string
 	bySource := map[string]Series{}
 	if ids.TVDB > 0 && s.Skyhook != nil && slices.Contains(order, settings.TVSourceSkyhook) {
 		series, err := s.Skyhook.Series(ctx, ids.TVDB)
 		if err != nil {
 			s.warn("skyhook", ids.TVDB, err)
+			if !errors.Is(err, skyhook.ErrNotFound) {
+				failed = append(failed, sourceSkyhook)
+			}
 		} else {
 			sources = append(sources, FromSkyhook(series))
 			bySource[settings.TVSourceSkyhook] = sources[len(sources)-1]
@@ -209,6 +213,7 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool, order []st
 	if wrong := wrongTVmaze.Load(); wrong > 0 && merged.IDs.TVmaze == wrong {
 		merged.IDs.TVmaze = 0
 	}
+	merged.Failed = failed
 	merged.Type = DetectType(merged)
 	if merged.AirTime != nil && merged.AirTime.Timezone == "" {
 		if zone := GuessZone(merged.OriginalCountry); zone != "" {
@@ -721,6 +726,10 @@ func (s Service) Refresh(ctx context.Context, request RefreshRequest) (AddResult
 	series, err := s.fetch(ctx, ids, true, s.order(request.CategoryID))
 	if err != nil {
 		return AddResult{}, err
+	}
+	// Skyhook sets the aired numbering: a refresh built on the fallback's numbers would add parts under other numbers.
+	if slices.Contains(series.Failed, sourceSkyhook) {
+		return AddResult{}, fmt.Errorf("tv: refresh of work %d skipped, %s did not answer: %w", request.WorkID, sourceSkyhook, media.ErrSourceUnavailable)
 	}
 	s.addAltTitles(ctx, &series, request.CategoryID, true)
 	manual, err := s.Reader.ManualFields(ctx, request.WorkID)

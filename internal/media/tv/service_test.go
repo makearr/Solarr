@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
@@ -389,4 +390,27 @@ func seriesIn(ctx context.Context, opened *store.Store, categoryID int64) ([]lib
 		summaries = append(summaries, detail.Summary)
 	}
 	return summaries, nil
+}
+
+func TestRefreshIsSkippedWhileSkyhookIsDownSoTheFallbacksNumbersNeverReachTheLibrary(t *testing.T) {
+	service, opened := newService(t, searchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
+	service.Reader = library.NewSeriesReader(opened)
+	added, err := service.Add(t.Context(), tv.AddRequest{IDs: tv.IDs{TVDB: 1234}, CategoryID: 3, ProfileID: 1, Monitor: tv.MonitorAll})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := partMonitoring(t, opened, added.WorkID)
+
+	number := 9
+	service.Skyhook = fakeSkyhook{err: errors.New("skyhook timed out")}
+	service.TVmaze = fakeTVmaze{
+		show:     tvmaze.Show{ID: 42, Name: "Example Show"},
+		episodes: []tvmaze.Episode{{ID: 1, Name: "Other numbering", Season: 4, Number: &number, Airdate: "2025-01-05"}},
+	}
+	if _, err := service.Refresh(t.Context(), tv.RefreshRequest{WorkID: added.WorkID, CategoryID: 3, ProfileID: 1}); !errors.Is(err, media.ErrSourceUnavailable) {
+		t.Fatalf("Refresh err = %v, want ErrSourceUnavailable", err)
+	}
+	if after := partMonitoring(t, opened, added.WorkID); !reflect.DeepEqual(after, before) {
+		t.Errorf("parts = %v, want %v unchanged", after, before)
+	}
 }

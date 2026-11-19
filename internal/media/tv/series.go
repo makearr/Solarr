@@ -188,6 +188,8 @@ type Series struct {
 	Basis string
 	// Sources lists the providers that contributed, in priority order.
 	Sources []string
+	// Failed lists the sources that were asked and answered an error, not "no such series".
+	Failed []string
 	// SceneMapped says TheXEM answered for the series, so its write replaces the scene numbers stored before.
 	SceneMapped bool
 }
