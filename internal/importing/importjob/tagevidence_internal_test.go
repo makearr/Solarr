@@ -12,7 +12,7 @@ type plainImporter struct{ importbatch.Importer }
 
 type taggingImporter struct{ importbatch.Importer }
 
-func (taggingImporter) InspectTags(context.Context, string, []string) (inspect.TagReader, error) {
+func (taggingImporter) InspectTags(context.Context, string, []string) (inspect.TagGrouper, error) {
 	return nil, nil
 }
 

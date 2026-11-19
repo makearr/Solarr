@@ -1,7 +1,6 @@
 package inspect
 
 import (
-	"cmp"
 	"path"
 	"regexp"
 	"sort"
@@ -33,7 +32,7 @@ var leadingTrackNumberRe = regexp.MustCompile(`^0*(\d{1,3})\b`)
 // whichever unit shares their directory, or dropped if no unit claims that
 // directory -- Run's caller sees them via Session, not lost, since a stray
 // cover.jpg beside no album is still evidence, not an import failure.
-func group(files []File, tags TagReader) []Unit {
+func group(files []File, tags TagGrouper) []Unit {
 	mediaByDir := map[string][]File{}
 	otherByDir := map[string][]File{}
 	for _, f := range files {
@@ -129,7 +128,7 @@ func mergeDiscSubfolders(mediaByDir map[string][]File) ([]mergedGroup, []string)
 // several, and returns the resulting units. extra, when non-nil, is a signal
 // already established before this call (a disc-subfolder merge) that every
 // resulting unit carries regardless of how the split itself resolves.
-func splitByEvidence(directory string, files []File, tags TagReader, extra *Signal) []Unit {
+func splitByEvidence(directory string, files []File, tags TagGrouper, extra *Signal) []Unit {
 	// A disc-subfolder merge already explains why track numbering restarts
 	// (CD2 starts at 01 same as CD1) -- letting the structural fallback run
 	// on top would split the very set that signal just merged back apart.
@@ -152,7 +151,7 @@ func splitByEvidence(directory string, files []File, tags TagReader, extra *Sign
 // decisive and high-weight signals), track-number continuity as the only
 // purely structural fallback, and the whole directory as one group -- the
 // default -- when neither signal has anything to say.
-func splitFiles(files []File, tags TagReader, structuralFallbackAllowed bool) (groups [][]File, signals [][]Signal, ambiguous bool) {
+func splitFiles(files []File, tags TagGrouper, structuralFallbackAllowed bool) (groups [][]File, signals [][]Signal, ambiguous bool) {
 	if tags != nil {
 		if g, s, unsure, ok := splitByTags(files, tags); ok {
 			return g, s, unsure
@@ -166,102 +165,45 @@ func splitFiles(files []File, tags TagReader, structuralFallbackAllowed bool) (g
 	return [][]File{files}, [][]Signal{{{Kind: SignalDirectoryBoundary}}}, false
 }
 
-// trailingDiscRe is the disc marker older rips append to the album tag ("Album (Disc 2)").
-var trailingDiscRe = regexp.MustCompile(`(?i)\s*[\(\[]?\s*(?:cd|dis[ck])\s*\d+\s*[\)\]]?$`)
-
-// albumKey is what two files must share to be one album when no release id says so: the album without its disc
-// marker and the album artist, both case- and space-folded.
-type albumKey struct{ album, artist string }
-
-func foldTag(value string) string { return strings.ToLower(strings.Join(strings.Fields(value), " ")) }
-
-func albumKeyOf(t Tags) albumKey {
-	return albumKey{
-		album:  foldTag(trailingDiscRe.ReplaceAllString(strings.TrimSpace(t.Album), "")),
-		artist: foldTag(cmp.Or(t.AlbumArtist, t.Artist)),
+// splitByTags groups by what the media type's tags say. ok is false when they say nothing, or when the grouper
+// does not place every file exactly once, so the caller falls through to the structural signal.
+func splitByTags(files []File, tags TagGrouper) (groups [][]File, signals [][]Signal, ambiguous, ok bool) {
+	relPaths := make([]string, len(files))
+	for i, f := range files {
+		relPaths[i] = f.RelPath
 	}
-}
-
-// splitByTags groups by embedded release id first, falling back to (album, album-artist) for files without one; a
-// file whose album and artist agree with every file of one release id joins it. Files with no usable tags join the
-// only group there is, else form a group of their own and the split is ambiguous. ok is false when no file has
-// any grouping tag, so the caller falls through to the structural signal instead of pretending one untagged group
-// is agreement.
-func splitByTags(files []File, tags TagReader) (groups [][]File, signals [][]Signal, ambiguous, ok bool) {
-	type group struct {
-		files  []File
-		signal Signal
-		albums map[albumKey]bool
-	}
-	var order []*group
-	byRelease := map[string]*group{}
-	byAlbum := map[albumKey]*group{}
-	var untagged []File
-
-	for _, f := range files {
-		t := tags(f.RelPath)
-		key := albumKeyOf(t)
-		switch {
-		case !t.Found || (t.ReleaseID == "" && key == albumKey{}):
-			untagged = append(untagged, f)
-		case t.ReleaseID != "":
-			g, seen := byRelease[t.ReleaseID]
-			if !seen {
-				g = &group{signal: Signal{Kind: SignalEmbeddedID, Detail: t.ReleaseID}, albums: map[albumKey]bool{}}
-				byRelease[t.ReleaseID] = g
-				order = append(order, g)
-			}
-			g.files = append(g.files, f)
-			g.albums[key] = true
-		default:
-			g, seen := byAlbum[key]
-			if !seen {
-				g = &group{signal: Signal{Kind: SignalTagAgreement, Detail: key.artist + " / " + key.album}}
-				byAlbum[key] = g
-				order = append(order, g)
-			}
-			g.files = append(g.files, f)
-		}
-	}
-	if len(order) == 0 {
+	grouped, ok := tags(relPaths)
+	if !ok || !placesEachOnce(grouped, len(files)) {
 		return nil, nil, false, false
 	}
+	for g, members := range grouped.Groups {
+		group := make([]File, len(members))
+		for i, member := range members {
+			group[i] = files[member]
+		}
+		groups = append(groups, group)
+		signals = append(signals, []Signal{grouped.Signals[g]})
+	}
+	return groups, signals, grouped.Ambiguous, true
+}
 
-	// A release whose files all carry one album and artist takes the files of that album that lost their release id.
-	merged := map[*group]bool{}
-	for key, loose := range byAlbum {
-		var home *group
-		for _, release := range byRelease {
-			if len(release.albums) == 1 && release.albums[key] {
-				if home != nil {
-					home = nil
-					break
-				}
-				home = release
+// placesEachOnce reports whether groups hold every one of count files exactly once, with a signal per group.
+func placesEachOnce(grouped TagGroups, count int) bool {
+	if len(grouped.Signals) != len(grouped.Groups) {
+		return false
+	}
+	seen := make([]bool, count)
+	placed := 0
+	for _, members := range grouped.Groups {
+		for _, member := range members {
+			if member < 0 || member >= count || seen[member] {
+				return false
 			}
-		}
-		if home != nil {
-			home.files = append(home.files, loose.files...)
-			merged[loose] = true
+			seen[member] = true
+			placed++
 		}
 	}
-
-	for _, g := range order {
-		if !merged[g] {
-			groups = append(groups, g.files)
-			signals = append(signals, []Signal{g.signal})
-		}
-	}
-	switch {
-	case len(untagged) == 0:
-	case len(groups) == 1:
-		groups[0] = append(groups[0], untagged...)
-	default:
-		groups = append(groups, untagged)
-		signals = append(signals, []Signal{{Kind: SignalDirectoryBoundary}})
-		ambiguous = true
-	}
-	return groups, signals, ambiguous, true
+	return placed == count
 }
 
 // splitByTrackContinuity is the one purely-structural splitter: track numbers

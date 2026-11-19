@@ -69,7 +69,7 @@ func NewImporter(config ImporterConfig) Importer {
 }
 
 // InspectTags implements batch.TagEvidence: the tags of the audio files among relPaths, read in one batch.
-func (i Importer) InspectTags(ctx context.Context, root string, relPaths []string) (inspect.TagReader, error) {
+func (i Importer) InspectTags(ctx context.Context, root string, relPaths []string) (inspect.TagGrouper, error) {
 	audio := make([]string, 0, len(relPaths))
 	for _, relPath := range relPaths {
 		if filekind.Of(relPath) == filekind.Audio {
@@ -79,7 +79,7 @@ func (i Importer) InspectTags(ctx context.Context, root string, relPaths []strin
 	if len(audio) == 0 {
 		return nil, nil
 	}
-	return BuildInspectTagReader(ctx, i.config.Tool, root, audio)
+	return BuildInspectTagGrouper(ctx, i.config.Tool, root, audio)
 }
 
 // identifyParallelism bounds IDENTIFY's fan-out across one batch's units; writes stay with the import job.

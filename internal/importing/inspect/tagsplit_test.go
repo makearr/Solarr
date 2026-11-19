@@ -8,8 +8,39 @@ import (
 	"github.com/makearr/Solarr/internal/importing/inspect"
 )
 
-func tagsByPath(table map[string]inspect.Tags) inspect.TagReader {
-	return func(relPath string) inspect.Tags { return table[relPath] }
+// keyedGrouper groups paths sharing a key, the way a media type's rule would; paths without a key are untagged,
+// joining the only group or forming an ambiguous one of their own.
+func keyedGrouper(kind inspect.SignalKind, keys map[string]string) inspect.TagGrouper {
+	return func(relPaths []string) (inspect.TagGroups, bool) {
+		var grouped inspect.TagGroups
+		index := map[string]int{}
+		var untagged []int
+		for i, relPath := range relPaths {
+			key, found := keys[relPath]
+			if !found {
+				untagged = append(untagged, i)
+				continue
+			}
+			if _, seen := index[key]; !seen {
+				index[key] = len(grouped.Groups)
+				grouped.Groups = append(grouped.Groups, nil)
+				grouped.Signals = append(grouped.Signals, inspect.Signal{Kind: kind, Detail: key})
+			}
+			grouped.Groups[index[key]] = append(grouped.Groups[index[key]], i)
+		}
+		switch {
+		case len(grouped.Groups) == 0:
+			return inspect.TagGroups{}, false
+		case len(untagged) == 0:
+		case len(grouped.Groups) == 1:
+			grouped.Groups[0] = append(grouped.Groups[0], untagged...)
+		default:
+			grouped.Groups = append(grouped.Groups, untagged)
+			grouped.Signals = append(grouped.Signals, inspect.Signal{Kind: inspect.SignalDirectoryBoundary})
+			grouped.Ambiguous = true
+		}
+		return grouped, true
+	}
 }
 
 func unitSizes(units []inspect.Unit) []int {
@@ -20,7 +51,7 @@ func unitSizes(units []inspect.Unit) []int {
 	return sizes
 }
 
-func runTagged(t *testing.T, tr *tree, tags inspect.TagReader) []inspect.Unit {
+func runTagged(t *testing.T, tr *tree, tags inspect.TagGrouper) []inspect.Unit {
 	t.Helper()
 	session, err := inspect.Run(t.Context(), tr.fsys, root, inspect.Options{Tags: tags})
 	if err != nil {
@@ -31,10 +62,8 @@ func runTagged(t *testing.T, tr *tree, tags inspect.TagReader) []inspect.Unit {
 
 func TestSplitByTags_TwoAlbumsInOneFlatFolderWithUniqueNumbersAreTwoUnits(t *testing.T) {
 	tr := newTree(t, "flat/a1.mp3", "flat/a2.mp3", "flat/b1.mp3", "flat/b2.mp3", "flat/b3.mp3")
-	tags := tagsByPath(map[string]inspect.Tags{
-		"flat/a1.mp3": {Found: true, Album: "Alpha", AlbumArtist: "Ixu Band"}, "flat/a2.mp3": {Found: true, Album: "Alpha", AlbumArtist: "Ixu Band"},
-		"flat/b1.mp3": {Found: true, Album: "Beta", AlbumArtist: "Ixu Band"}, "flat/b2.mp3": {Found: true, Album: "Beta", AlbumArtist: "Ixu Band"},
-		"flat/b3.mp3": {Found: true, Album: "Beta", AlbumArtist: "Ixu Band"},
+	tags := keyedGrouper(inspect.SignalTagAgreement, map[string]string{
+		"flat/a1.mp3": "Alpha", "flat/a2.mp3": "Alpha", "flat/b1.mp3": "Beta", "flat/b2.mp3": "Beta", "flat/b3.mp3": "Beta",
 	})
 	units := runTagged(t, tr, tags)
 	if got := unitSizes(units); len(got) != 2 || got[0]+got[1] != 5 {
@@ -47,55 +76,9 @@ func TestSplitByTags_TwoAlbumsInOneFlatFolderWithUniqueNumbersAreTwoUnits(t *tes
 	}
 }
 
-func TestSplitByTags_FilesWithoutAReleaseIDJoinTheReleaseOfTheSameAlbum(t *testing.T) {
-	paths := make([]string, 12)
-	table := map[string]inspect.Tags{}
-	for i := range paths {
-		paths[i] = "album/" + string(rune('a'+i)) + ".mp3"
-		table[paths[i]] = inspect.Tags{Found: true, Album: "Gamma", AlbumArtist: "Ixu Band", ReleaseID: "rel-1"}
-		if i >= 10 {
-			table[paths[i]] = inspect.Tags{Found: true, Album: "gamma ", AlbumArtist: "Ixu Band"}
-		}
-	}
-	units := runTagged(t, newTree(t, paths...), tagsByPath(table))
-	if got := unitSizes(units); len(got) != 1 || got[0] != 12 {
-		t.Fatalf("unit sizes = %v, want one unit of 12", got)
-	}
-	if kind := units[0].Evidence.Signals[0].Kind; kind != inspect.SignalEmbeddedID {
-		t.Errorf("signal = %q, want the embedded id", kind)
-	}
-}
-
-func TestSplitByTags_ADiscMarkerInTheAlbumTagDoesNotSplitADiscSet(t *testing.T) {
-	tr := newTree(t, "Set/CD1/1.mp3", "Set/CD1/2.mp3", "Set/CD2/1.mp3", "Set/CD2/2.mp3")
-	tags := tagsByPath(map[string]inspect.Tags{
-		"Set/CD1/1.mp3": {Found: true, Album: "Delta (Disc 1)", AlbumArtist: "Ixu Band"}, "Set/CD1/2.mp3": {Found: true, Album: "Delta (Disc 1)", AlbumArtist: "Ixu Band"},
-		"Set/CD2/1.mp3": {Found: true, Album: "Delta (Disc 2)", AlbumArtist: "Ixu Band"}, "Set/CD2/2.mp3": {Found: true, Album: "Delta [CD 2]", AlbumArtist: "Ixu Band"},
-	})
-	if got := unitSizes(runTagged(t, tr, tags)); len(got) != 1 || got[0] != 4 {
-		t.Fatalf("unit sizes = %v, want one unit of 4", got)
-	}
-}
-
-func TestSplitByTags_AnUntaggedFileBesideTaggedOnesJoinsThem(t *testing.T) {
-	paths := make([]string, 12)
-	table := map[string]inspect.Tags{}
-	for i := range paths {
-		paths[i] = "album/" + string(rune('a'+i)) + ".mp3"
-		if i < 11 {
-			table[paths[i]] = inspect.Tags{Found: true, Album: "Epsilon", AlbumArtist: "Ixu Band"}
-		}
-	}
-	if got := unitSizes(runTagged(t, newTree(t, paths...), tagsByPath(table))); len(got) != 1 || got[0] != 12 {
-		t.Fatalf("unit sizes = %v, want one unit of 12", got)
-	}
-}
-
 func TestSplitByTags_UntaggedFilesBesideSeveralAlbumsAreAmbiguousAndKept(t *testing.T) {
 	tr := newTree(t, "flat/a1.mp3", "flat/b1.mp3", "flat/x.mp3")
-	tags := tagsByPath(map[string]inspect.Tags{
-		"flat/a1.mp3": {Found: true, Album: "Alpha", AlbumArtist: "Ixu Band"}, "flat/b1.mp3": {Found: true, Album: "Beta", AlbumArtist: "Ixu Band"},
-	})
+	tags := keyedGrouper(inspect.SignalTagAgreement, map[string]string{"flat/a1.mp3": "Alpha", "flat/b1.mp3": "Beta"})
 	units := runTagged(t, tr, tags)
 	if got := unitSizes(units); len(got) != 3 {
 		t.Fatalf("unit sizes = %v, want 3 units, none lost", got)
@@ -107,23 +90,36 @@ func TestSplitByTags_UntaggedFilesBesideSeveralAlbumsAreAmbiguousAndKept(t *test
 	}
 }
 
+func TestSplitByTags_AGrouperThatLosesOrRepeatsAFileIsNotTrusted(t *testing.T) {
+	tr := newTree(t, "flat/a1.mp3", "flat/a2.mp3", "flat/b1.mp3")
+	for name, grouped := range map[string]inspect.TagGroups{
+		"loses":    {Groups: [][]int{{0}, {1}}, Signals: []inspect.Signal{{}, {}}},
+		"repeats":  {Groups: [][]int{{0, 1}, {1, 2}}, Signals: []inspect.Signal{{}, {}}},
+		"swaps":    {Groups: [][]int{{0, 0}, {2}}, Signals: []inspect.Signal{{}, {}}},
+		"overruns": {Groups: [][]int{{0, 1}, {3}}, Signals: []inspect.Signal{{}, {}}},
+		"unsigned": {Groups: [][]int{{0, 1}, {2}}, Signals: []inspect.Signal{{}}},
+	} {
+		units := runTagged(t, tr, func([]string) (inspect.TagGroups, bool) { return grouped, true })
+		if got := unitSizes(units); len(got) != 1 || got[0] != 3 {
+			t.Errorf("%s: unit sizes = %v, want the whole folder as one unit", name, got)
+		}
+	}
+}
+
 func TestWalk_TagsForReadsEachClusterAndAFailureFallsBackToNoTags(t *testing.T) {
 	tr := newTree(t, "flat/a1.mp3", "flat/a2.mp3", "flat/b1.mp3")
-	table := map[string]inspect.Tags{
-		"flat/a1.mp3": {Found: true, Album: "Alpha", AlbumArtist: "Ixu Band"}, "flat/a2.mp3": {Found: true, Album: "Alpha", AlbumArtist: "Ixu Band"},
-		"flat/b1.mp3": {Found: true, Album: "Beta", AlbumArtist: "Ixu Band"},
-	}
+	grouper := keyedGrouper(inspect.SignalTagAgreement, map[string]string{"flat/a1.mp3": "Alpha", "flat/a2.mp3": "Alpha", "flat/b1.mp3": "Beta"})
 	var asked []string
 	for _, tc := range []struct {
 		name string
-		read func(context.Context, []string) (inspect.TagReader, error)
+		read func(context.Context, []string) (inspect.TagGrouper, error)
 		want int
 	}{
-		{"reads", func(_ context.Context, relPaths []string) (inspect.TagReader, error) {
+		{"reads", func(_ context.Context, relPaths []string) (inspect.TagGrouper, error) {
 			asked = relPaths
-			return tagsByPath(table), nil
+			return grouper, nil
 		}, 2},
-		{"fails", func(context.Context, []string) (inspect.TagReader, error) { return nil, errors.New("no ffprobe") }, 1},
+		{"fails", func(context.Context, []string) (inspect.TagGrouper, error) { return nil, errors.New("no ffprobe") }, 1},
 	} {
 		var units []inspect.Unit
 		_, err := inspect.NewWalker().Walk(t.Context(), tr.fsys, root, inspect.WalkState{}, inspect.WalkOptions{TagsFor: tc.read}, func(_ context.Context, batch []inspect.Unit) error {

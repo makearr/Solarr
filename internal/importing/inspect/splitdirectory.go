@@ -31,7 +31,7 @@ import (
 // of its own -- a caller that cannot be sure both hold should use Run
 // instead. dir's files must be unchanged since the original walk, or the
 // split this reproduces will not match it.
-func SplitDirectory(ctx context.Context, fsys fsx.FS, dir string, tags TagReader, floorBytes int64, books bool) ([]Unit, error) {
+func SplitDirectory(ctx context.Context, fsys fsx.FS, dir string, tags TagGrouper, floorBytes int64, books bool) ([]Unit, error) {
 	if floorBytes <= 0 {
 		floorBytes = DefaultMediaSizeFloorBytes
 	}

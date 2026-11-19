@@ -975,130 +975,20 @@ func applyAlbumDecision(
 	return nil
 }
 
-// groupByAlbum splits pending files by their album tag; untagged files join the only tagged
-// album when there is one, and form their own group otherwise. The track artist is not part of the key: a compilation
-// or an album with "feat." tracks is one album. Files are split by artist only where they say so (differing
-// album-artist tags) or where the folder is a pile of singles under one generic album word.
+// groupByAlbum splits pending files into the albums their tags name, by the rule import shares (GroupByAlbumTags).
 func groupByAlbum(observed []scan.Observed, files []pendingFile) [][]pendingFile {
-	albumOf := func(file pendingFile) string {
-		return strings.ToLower(strings.TrimSpace(observed[file.index].Probe.Tags.First("album")))
+	tags := make([]AlbumTags, len(files))
+	for i, file := range files {
+		tags[i] = AlbumTagsOf(observed[file.index].Probe.Tags)
 	}
-	byAlbum := make(map[string][]pendingFile)
-	var albums []string
-	for _, file := range files {
-		album := albumOf(file)
-		if _, seen := byAlbum[album]; !seen {
-			albums = append(albums, album)
-		}
-		byAlbum[album] = append(byAlbum[album], file)
-	}
-	keyOf := make(map[int]string, len(files))
-	for _, album := range albums {
-		subKeys := splitAlbumByArtist(observed, byAlbum[album])
-		for _, file := range byAlbum[album] {
-			keyOf[file.index] = album + "\x1f" + subKeys[file.index]
-		}
-	}
-	var keys []string
-	groups := make(map[string][]pendingFile)
-	for _, file := range files {
-		key := ""
-		if albumOf(file) != "" {
-			key = keyOf[file.index]
-		}
-		if _, seen := groups[key]; !seen {
-			keys = append(keys, key)
-		}
-		groups[key] = append(groups[key], file)
-	}
-	if untagged, found := groups[""]; found && len(keys) == 2 {
-		tagged := keys[0]
-		if tagged == "" {
-			tagged = keys[1]
-		}
-		groups[tagged] = append(groups[tagged], untagged...)
-		delete(groups, "")
-		keys = []string{tagged}
-	}
-	result := make([][]pendingFile, 0, len(keys))
-	for _, key := range keys {
-		if group, found := groups[key]; found {
-			result = append(result, group)
+	groups := GroupByAlbumTags(tags)
+	result := make([][]pendingFile, len(groups))
+	for g, members := range groups {
+		for _, i := range members {
+			result[g] = append(result[g], files[i])
 		}
 	}
 	return result
-}
-
-// splitAlbumByArtist answers, per file index, the artist part of its group key within one album: "" for the whole
-// album, or an artist where the files name different album artists, or are singles with no album artist.
-func splitAlbumByArtist(observed []scan.Observed, files []pendingFile) map[int]string {
-	fold := func(value string) string { return strings.ToLower(strings.TrimSpace(value)) }
-	albumArtist := func(file pendingFile) string {
-		return fold(observed[file.index].Probe.Tags.First("albumartist", "album_artist"))
-	}
-	trackArtist := func(file pendingFile) string {
-		return fold(observed[file.index].Probe.Tags.First("artist"))
-	}
-	keys := make(map[int]string, len(files))
-	counts := map[string]int{}
-	for _, file := range files {
-		if artist := albumArtist(file); artist != "" {
-			counts[artist]++
-		}
-	}
-	switch {
-	case len(counts) > 1:
-		// Two real albums of one title: files without an album artist follow their track artist, else the largest.
-		largest := ""
-		for artist, count := range counts {
-			if count > counts[largest] || (count == counts[largest] && artist < largest) {
-				largest = artist
-			}
-		}
-		for _, file := range files {
-			artist := albumArtist(file)
-			if artist == "" {
-				artist = trackArtist(file)
-				if counts[artist] == 0 {
-					artist = largest
-				}
-			}
-			keys[file.index] = artist
-		}
-	case len(counts) == 0 && pileOfSingles(observed, files, trackArtist):
-		for _, file := range files {
-			keys[file.index] = trackArtist(file)
-		}
-	}
-	return keys
-}
-
-// pileOfSingles is a folder of different artists' tracks under one album word with no album artist and track numbers
-// that collide or are absent: not one compilation, which numbers its tracks 1..n.
-func pileOfSingles(observed []scan.Observed, files []pendingFile, trackArtist func(pendingFile) string) bool {
-	artists := map[string]bool{}
-	numbers := map[string]int{}
-	numbered := 0
-	for _, file := range files {
-		artists[trackArtist(file)] = true
-		if number := strings.TrimSpace(observed[file.index].Probe.Tags.First("track", "tracknumber")); number != "" {
-			numbers[number]++
-			numbered++
-		}
-	}
-	if len(artists) < 2 {
-		return false
-	}
-	if numbered == 0 {
-		return true
-	}
-	colliding := 0
-	for _, count := range numbers {
-		if count > 1 {
-			colliding += count
-		}
-	}
-	return colliding*2 > len(files)
 }
 
 // albumLink links one placed file of an identified album to its release group and release.

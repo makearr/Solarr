@@ -6,6 +6,33 @@ How a scanned or imported music file comes to belong to an album. Code:
 `internal/media/music/consumer.go` (scan), `inspect_identify.go` (import),
 `album_match.go`, `album_identify.go`, `album_local.go`, `edition_choice.go`.
 
+## Grouping files into albums
+
+A library scan and an import group a folder's files by one rule, `music.GroupByAlbumTags`; import
+reaches it through the `inspect.TagGrouper` the music importer returns, so the walk itself knows no tags.
+
+1. An embedded release id (`MUSICBRAINZ_ALBUMID`) is decisive: one id is one album, whatever its
+   album tags, track numbers or artists say; two ids under one title are two editions.
+2. Files without one group by album title, a trailing disc marker dropped (`Album (Disc 2)`,
+   `Album [CD 2]`, `Album CD2`, but not `Abcd 2`), case and spaces folded. The track artist is not
+   part of the key: a compilation without album-artist tags, or an album with "feat." tracks, is one
+   album. A title splits by artist only where album-artist tags differ (files without one follow their
+   track artist when it is one of them, else the largest) or where the title is a pile of singles:
+   different artists, no album artist, track numbers absent or mostly colliding.
+3. Such a title group joins the one release whose files all carry its title and whose artists
+   (album artist, else track artist) include its own; a file with no album artist also joins a release
+   without album artists. A second copy joins as well; album matching places it on the track it copies.
+4. Files naming no album (no album tag, no release id; an artist alone says nothing) join the only
+   group there is, else form a last group of their own, which import marks ambiguous. A folder where no
+   file names an album falls through to import's structural signals.
+
+Chosen 2026-11-19 by running the earlier scan rule, the earlier import rule and this one over the
+tags of the local test library and of a random sample of a full library. This rule changed no folder
+of the sample and four of the test library, each toward the other pipeline's tested behaviour: a
+disc-marked set scan split in two, a box set under one release id scan split per track artist, a
+compilation import split per track artist, and a deluxe disc without ids beside its standard release,
+which import kept apart and scan, like this rule, keeps with it.
+
 ## Passes
 
 A scan batch is one directory's files. Each pass only sees what the previous ones left.
@@ -19,7 +46,7 @@ A scan batch is one directory's files. Each pass only sees what the previous one
    (tag write-back writes the new one). A placeholder that turns out to be an edition the work
    already has is folded into it (`foldEdition`).
 2. **Album matching** (a release the files name -- their album tag as written, else their
-   folder -- beats one they do not, whatever its release type): the remaining files, grouped by album tag, scored together against
+   folder -- beats one they do not, whatever its release type): the remaining files, grouped into albums (below), scored together against
    whole release tracklists. A group that fits nothing as a whole while its track numbers
    collide is split by the track total each file claims ("3/10" against "3") and each part
    matched alone: an album's first half and its single's remixes under one album tag.

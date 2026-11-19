@@ -921,7 +921,7 @@ func (j *Job) walkOptions(payload Payload) inspect.WalkOptions {
 		options.MediaSizeFloorBytes, options.Books = typeWalk(importer)
 	}
 	if tagged := j.tagEvidenceFor(payload); tagged != nil {
-		options.TagsFor = func(ctx context.Context, relPaths []string) (inspect.TagReader, error) {
+		options.TagsFor = func(ctx context.Context, relPaths []string) (inspect.TagGrouper, error) {
 			return tagged.InspectTags(ctx, payload.SourcePath, relPaths)
 		}
 	}

@@ -156,14 +156,9 @@ func TestRun_OneAlbumUniqueTrackNumbersScrambledMtimeDoesNotSplit(t *testing.T) 
 // disagreeing -- the decisive signal, so no ambiguity this time.
 func TestRun_TwoUnrelatedAlbumsFlatWithDisagreeingTagsSplitDecisively(t *testing.T) {
 	tr := newTree(t, "flat/song-a.mp3", "flat/song-b.mp3", "flat/song-x.mp3")
-	tags := func(relPath string) inspect.Tags {
-		switch relPath {
-		case "flat/song-a.mp3", "flat/song-b.mp3":
-			return inspect.Tags{Found: true, ReleaseID: "release-1", Album: "Album One"}
-		default:
-			return inspect.Tags{Found: true, ReleaseID: "release-2", Album: "Album Two"}
-		}
-	}
+	tags := keyedGrouper(inspect.SignalEmbeddedID, map[string]string{
+		"flat/song-a.mp3": "release-1", "flat/song-b.mp3": "release-1", "flat/song-x.mp3": "release-2",
+	})
 
 	session, err := inspect.Run(t.Context(), tr.fsys, root, inspect.Options{Tags: tags})
 	if err != nil {

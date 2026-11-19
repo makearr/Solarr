@@ -1,23 +1,21 @@
 package music
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"path/filepath"
-	"strconv"
-	"strings"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
-// BuildInspectTagReader probes every one of mediaRelPaths under root in one
-// batched call (ADR-28 -- a subprocess per file is what the batch interface
-// exists to avoid) and returns an inspect.TagReader closed over the result, so
-// inspect.Run's own per-file signature never has to know a probe happened.
-func BuildInspectTagReader(
+// BuildInspectTagGrouper probes every one of mediaRelPaths under root in one batched call (ADR-28) and returns an
+// inspect.TagGrouper over the result that groups by the rule scan uses (GroupByAlbumTags).
+func BuildInspectTagGrouper(
 	ctx context.Context, tool mediatool.Tool, root string, mediaRelPaths []string,
-) (inspect.TagReader, error) {
+) (inspect.TagGrouper, error) {
 	absolute := make([]string, len(mediaRelPaths))
 	for i, rel := range mediaRelPaths {
 		absolute[i] = filepath.Join(root, rel)
@@ -25,53 +23,58 @@ func BuildInspectTagReader(
 
 	probes, err := tool.ReadTags(ctx, absolute)
 	if err != nil {
-		return nil, fmt.Errorf("music: inspect tag reader: %w", err)
+		return nil, fmt.Errorf("music: inspect tag grouper: %w", err)
 	}
 	if len(probes) != len(mediaRelPaths) {
-		return nil, fmt.Errorf("music: inspect tag reader: got %d probes for %d paths",
+		return nil, fmt.Errorf("music: inspect tag grouper: got %d probes for %d paths",
 			len(probes), len(mediaRelPaths))
 	}
 
-	byRelPath := make(map[string]inspect.Tags, len(probes))
+	byRelPath := make(map[string]AlbumTags, len(probes))
 	for i, probe := range probes {
-		if probe.Err != nil {
-			// Not found, not empty: a file ReadTags could not open at all
-			// (corrupt, not actually audio) carries no evidence either way.
-			continue
+		// A file ReadTags could not open (corrupt, not audio) carries no evidence: it stays untagged.
+		if probe.Err == nil {
+			byRelPath[mediaRelPaths[i]] = AlbumTagsOf(probe.Tags)
 		}
-		byRelPath[mediaRelPaths[i]] = tagsFromProbe(probe.Tags)
 	}
 
-	return func(relPath string) inspect.Tags {
-		return byRelPath[relPath]
+	return func(relPaths []string) (inspect.TagGroups, bool) {
+		tags := make([]AlbumTags, len(relPaths))
+		for i, relPath := range relPaths {
+			tags[i] = byRelPath[relPath]
+		}
+		return inspectTagGroups(tags)
 	}, nil
 }
 
-// tagsFromProbe reads the same tag names identifier.go and search_identifier.go
-// already read (MUSICBRAINZ_ALBUMID, ALBUMARTIST/ARTIST, ALBUM), so a file that
-// agrees with the ADR-24 chain's own claims also agrees for inspection.
-func tagsFromProbe(tags mediatool.Tags) inspect.Tags {
-	artist := tags.First("albumartist", "album_artist", "artist")
-	return inspect.Tags{
-		Found:       true,
-		Artist:      artist,
-		Album:       tags.First("album"),
-		AlbumArtist: artist,
-		ReleaseID:   tags.First("musicbrainz_albumid"),
-		DiscNumber:  leadingInt(tags.First("discnumber", "disc")),
-		TrackNumber: leadingInt(tags.First("tracknumber", "track")),
+// inspectTagGroups is GroupByAlbumTags with its evidence; false when no file names an album, so inspect falls
+// through to the structural signal instead of calling one untagged group agreement.
+func inspectTagGroups(tags []AlbumTags) (inspect.TagGroups, bool) {
+	if !slices.ContainsFunc(tags, AlbumTags.hasAlbumEvidence) {
+		return inspect.TagGroups{}, false
 	}
+	grouped := inspect.TagGroups{Groups: GroupByAlbumTags(tags)}
+	for _, members := range grouped.Groups {
+		signal := albumGroupSignal(tags, members)
+		grouped.Ambiguous = grouped.Ambiguous || signal.Kind == inspect.SignalDirectoryBoundary
+		grouped.Signals = append(grouped.Signals, signal)
+	}
+	return grouped, true
 }
 
-// leadingInt reads a tag value that may be "N" or "N/total" (TRACKNUMBER's two
-// common shapes), treating anything unparseable as absent.
-func leadingInt(value string) int {
-	if slash := strings.IndexByte(value, '/'); slash >= 0 {
-		value = value[:slash]
+// albumGroupSignal is the strongest evidence a group's files carry: a release id, an album title, or none (the
+// untagged files left beside several albums).
+func albumGroupSignal(tags []AlbumTags, members []int) inspect.Signal {
+	for _, i := range members {
+		if tags[i].ReleaseID != "" {
+			return inspect.Signal{Kind: inspect.SignalEmbeddedID, Detail: tags[i].ReleaseID}
+		}
 	}
-	n, err := strconv.Atoi(strings.TrimSpace(value))
-	if err != nil {
-		return 0
+	for _, i := range members {
+		if title := albumTitleKey(tags[i].Album); title != "" {
+			artist := foldTag(cmp.Or(tags[i].AlbumArtist, tags[i].Artist))
+			return inspect.Signal{Kind: inspect.SignalTagAgreement, Detail: artist + " / " + title}
+		}
 	}
-	return n
+	return inspect.Signal{Kind: inspect.SignalDirectoryBoundary}
 }

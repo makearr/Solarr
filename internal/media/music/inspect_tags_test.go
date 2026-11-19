@@ -3,14 +3,17 @@ package music_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"reflect"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // fakeTagTool answers ReadTags from a fixed table, keyed by the exact path
-// asked for -- Probe.Path is not read by BuildInspectTagReader, matching
+// asked for -- Probe.Path is not read by BuildInspectTagGrouper, matching
 // mediatool.Probe's own doc comment that results are matched positionally.
 type fakeTagTool struct {
 	byPath map[string]mediatool.Probe
@@ -34,73 +37,112 @@ func (f fakeTagTool) Fingerprint(context.Context, []string) ([]mediatool.Fingerp
 	return nil, nil
 }
 
-func TestBuildInspectTagReader_ReadsTheSameTagsTheADR24ChainReads(t *testing.T) {
-	tool := fakeTagTool{byPath: map[string]mediatool.Probe{
-		"/downloads/album/01.flac": {Tags: mediatool.Tags{
-			"ALBUM": "Zuroveguv Wants to Dance", "ALBUMARTIST": "Cibiz M",
-			"MUSICBRAINZ_ALBUMID": "release-1", "TRACKNUMBER": "1/10",
-		}},
-		"/downloads/album/02.flac": {Tags: mediatool.Tags{
-			"album": "Zuroveguv Wants to Dance", "artist": "Cibiz M",
-			"musicbrainz_albumid": "release-1", "tracknumber": "2",
-		}},
-	}}
-
-	reader, err := music.BuildInspectTagReader(t.Context(), tool, "/downloads/album",
-		[]string{"01.flac", "02.flac"})
+// groupFolder runs the import grouper over one folder of tag sets named 00.flac, 01.flac, ...
+func groupFolder(t *testing.T, tags ...mediatool.Tags) (inspect.TagGroups, bool) {
+	t.Helper()
+	probes := map[string]mediatool.Probe{}
+	relPaths := make([]string, len(tags))
+	for i, one := range tags {
+		relPaths[i] = fmt.Sprintf("%02d.flac", i)
+		probes["/in/"+relPaths[i]] = mediatool.Probe{Tags: one}
+	}
+	grouper, err := music.BuildInspectTagGrouper(t.Context(), fakeTagTool{byPath: probes}, "/in", relPaths)
 	if err != nil {
-		t.Fatalf("BuildInspectTagReader: %v", err)
+		t.Fatalf("BuildInspectTagGrouper: %v", err)
 	}
+	return grouper(relPaths)
+}
 
-	first := reader("01.flac")
-	if !first.Found || first.ReleaseID != "release-1" || first.Album != "Zuroveguv Wants to Dance" ||
-		first.AlbumArtist != "Cibiz M" || first.TrackNumber != 1 {
-		t.Errorf("first = %+v, want Found tags matching the fixture (track 1, not 1/10 literally)", first)
+func repeatTags(count int, tags func(i int) mediatool.Tags) []mediatool.Tags {
+	out := make([]mediatool.Tags, count)
+	for i := range out {
+		out[i] = tags(i)
 	}
-	second := reader("02.flac")
-	if !second.Found || second.ReleaseID != "release-1" || second.TrackNumber != 2 {
-		t.Errorf("second = %+v, want the lowercase-keyed tags read the same way", second)
-	}
+	return out
+}
 
-	if got := reader("no-such-file.flac"); got.Found {
-		t.Errorf("reader for an unprobed path = %+v, want Found=false", got)
+func TestBuildInspectTagGrouper_GroupsByTheRuleScanUses(t *testing.T) {
+	album := func(name string) mediatool.Tags { return mediatool.Tags{"ALBUM": name, "ALBUMARTIST": "Ixu Band"} }
+	release := mediatool.Tags{"album": "Gamma", "albumartist": "Ixu Band", "musicbrainz_albumid": "rel-1"}
+	tagAgreement := inspect.Signal{Kind: inspect.SignalTagAgreement, Detail: "ixu band / alpha"}
+	boundary := inspect.Signal{Kind: inspect.SignalDirectoryBoundary}
+	for name, test := range map[string]struct {
+		tags []mediatool.Tags
+		want inspect.TagGroups
+	}{
+		"two albums in one flat folder are two groups": {
+			[]mediatool.Tags{album("Alpha"), album("Beta"), album("Alpha")},
+			inspect.TagGroups{Groups: [][]int{{0, 2}, {1}}, Signals: []inspect.Signal{tagAgreement, {Kind: inspect.SignalTagAgreement, Detail: "ixu band / beta"}}},
+		},
+		"files without a release id join the release of the same album": {
+			[]mediatool.Tags{release, release, {"album": "gamma ", "albumartist": "Ixu Band"}},
+			inspect.TagGroups{Groups: [][]int{{0, 1, 2}}, Signals: []inspect.Signal{{Kind: inspect.SignalEmbeddedID, Detail: "rel-1"}}},
+		},
+		"a disc marker in the album tag does not split a set": {
+			[]mediatool.Tags{album("Alpha (Disc 1)"), album("Alpha (Disc 2)"), album("Alpha [CD 2]")},
+			inspect.TagGroups{Groups: [][]int{{0, 1, 2}}, Signals: []inspect.Signal{tagAgreement}},
+		},
+		"an untagged file beside one album joins it": {
+			[]mediatool.Tags{album("Alpha"), {}, album("Alpha")},
+			inspect.TagGroups{Groups: [][]int{{0, 2, 1}}, Signals: []inspect.Signal{tagAgreement}},
+		},
+		"a file naming only an artist is untagged": {
+			[]mediatool.Tags{album("Alpha"), {"artist": "Ixu Band"}},
+			inspect.TagGroups{Groups: [][]int{{0, 1}}, Signals: []inspect.Signal{tagAgreement}},
+		},
+		"untagged files beside several albums are an ambiguous group of their own": {
+			[]mediatool.Tags{album("Alpha"), album("Beta"), {}},
+			inspect.TagGroups{Groups: [][]int{{0}, {1}, {2}}, Ambiguous: true,
+				Signals: []inspect.Signal{tagAgreement, {Kind: inspect.SignalTagAgreement, Detail: "ixu band / beta"}, boundary}},
+		},
+		"a compilation without album artists is one album": {
+			repeatTags(4, func(i int) mediatool.Tags {
+				return mediatool.Tags{"album": "Invented Hits", "artist": fmt.Sprintf("Artist %d", i), "track": fmt.Sprint(i + 1)}
+			}),
+			inspect.TagGroups{Groups: [][]int{{0, 1, 2, 3}}, Signals: []inspect.Signal{{Kind: inspect.SignalTagAgreement, Detail: "artist 0 / invented hits"}}},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, ok := groupFolder(t, test.tags...)
+			if !ok || !reflect.DeepEqual(got, test.want) {
+				t.Errorf("groups = %+v, %v; want %+v", got, ok, test.want)
+			}
+		})
 	}
 }
 
-func TestBuildInspectTagReader_AFailedProbeIsNotFoundNotEmpty(t *testing.T) {
+func TestBuildInspectTagGrouper_NoAlbumTagsSayNothing(t *testing.T) {
 	tool := fakeTagTool{byPath: map[string]mediatool.Probe{
-		"/downloads/album/corrupt.flac": {Err: errors.New("not a media file")},
+		"/in/01.flac":      {Tags: mediatool.Tags{"artist": "Ixu Band", "tracknumber": "1"}},
+		"/in/corrupt.flac": {Err: errors.New("not a media file"), Tags: mediatool.Tags{"album": "Alpha"}},
 	}}
-
-	reader, err := music.BuildInspectTagReader(t.Context(), tool, "/downloads/album",
-		[]string{"corrupt.flac"})
+	grouper, err := music.BuildInspectTagGrouper(t.Context(), tool, "/in", []string{"01.flac", "corrupt.flac"})
 	if err != nil {
-		t.Fatalf("BuildInspectTagReader: %v", err)
+		t.Fatalf("BuildInspectTagGrouper: %v", err)
 	}
-	if got := reader("corrupt.flac"); got.Found {
-		t.Errorf("a failed probe = %+v, want Found=false -- not evidence of an untagged file", got)
+	if got, ok := grouper([]string{"01.flac", "corrupt.flac", "unprobed.flac"}); ok {
+		t.Errorf("groups = %+v, want none: an artist alone, a failed probe and an unread file name no album", got)
 	}
 }
 
 func TestImporterInspectTags_ReadsOnlyAudioAndNothingWhenThereIsNone(t *testing.T) {
 	tool := fakeTagTool{byPath: map[string]mediatool.Probe{
-		"/in/01.flac": {Tags: mediatool.Tags{"ALBUM": "Wuvo", "ALBUMARTIST": "Cibiz M"}},
+		"/in/01.flac":   {Tags: mediatool.Tags{"ALBUM": "Wuvo", "ALBUMARTIST": "Cibiz M"}},
+		"/in/movie.mkv": {Tags: mediatool.Tags{"ALBUM": "Other", "ALBUMARTIST": "Cibiz M"}},
 	}}
 	importer := music.NewImporter(music.ImporterConfig{Tool: tool})
 
-	reader, err := importer.InspectTags(t.Context(), "/in", []string{"01.flac", "cover.jpg", "movie.mkv"})
+	grouper, err := importer.InspectTags(t.Context(), "/in", []string{"01.flac", "cover.jpg", "movie.mkv"})
 	if err != nil {
 		t.Fatalf("InspectTags: %v", err)
 	}
-	if got := reader("01.flac"); !got.Found || got.Album != "Wuvo" {
-		t.Errorf("audio file = %+v, want its tags", got)
-	}
-	if got := reader("movie.mkv"); got.Found {
-		t.Errorf("video file = %+v, want unread", got)
+	want := inspect.TagGroups{Groups: [][]int{{0, 1, 2}}, Signals: []inspect.Signal{{Kind: inspect.SignalTagAgreement, Detail: "cibiz m / wuvo"}}}
+	if got, ok := grouper([]string{"01.flac", "movie.mkv", "02.flac"}); !ok || !reflect.DeepEqual(got, want) {
+		t.Errorf("groups = %+v, %v; want the audio file grouped and the video file unread", got, ok)
 	}
 
 	none, err := importer.InspectTags(t.Context(), "/in", []string{"movie.mkv"})
 	if err != nil || none != nil {
-		t.Errorf("no audio: reader %v, error %v; want neither, so the walk probes nothing", none != nil, err)
+		t.Errorf("no audio: grouper %v, error %v; want neither, so the walk probes nothing", none != nil, err)
 	}
 }

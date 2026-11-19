@@ -25,9 +25,9 @@ type WalkState struct {
 // WalkOptions tune one resumable walk. Every field is optional, the same as
 // Options.
 type WalkOptions struct {
-	Tags TagReader
+	Tags TagGrouper
 	// TagsFor reads the tags of one cluster's media just before it is split; an error falls back to Tags.
-	TagsFor             func(ctx context.Context, relPaths []string) (TagReader, error)
+	TagsFor             func(ctx context.Context, relPaths []string) (TagGrouper, error)
 	MediaSizeFloorBytes int64
 	// Books counts ebook files as media, for a book library's import.
 	Books bool
@@ -70,7 +70,7 @@ func NewWalker() Walker { return Walker{} }
 // file, the same filesystem cost Walk's own traversal pays, and nothing more.
 // It runs the identical WALK/GROUP logic (including disc-subfolder merging
 // and the track-continuity structural fallback splitFiles falls back to with
-// no TagReader), so it undercounts only where tag evidence alone would have
+// no TagGrouper), so it undercounts only where tag evidence alone would have
 // split a directory that structure does not -- a real, accepted inaccuracy,
 // not a bug, for an estimate that exists purely for a progress ETA (todo
 // 4.21). Deliberately a second walk of the tree: the "never a second walk to

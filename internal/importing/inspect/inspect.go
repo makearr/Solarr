@@ -15,31 +15,23 @@ import (
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
-// Tags is what a caller can tell this package about one file's embedded metadata,
-// when it has already read it. A zero Tags (Found false) means "not read" rather
-// than "read and empty" -- the two must not be confused, or a file with genuinely
-// blank tags would be treated as untagged and grouped by structure alone.
-type Tags struct {
-	Found       bool
-	Artist      string
-	Album       string
-	AlbumArtist string
-	// ReleaseID is the embedded release-group or release id (e.g.
-	// MUSICBRAINZ_ALBUMID) -- ADR-48's decisive grouping signal when two files
-	// agree on it, whatever the directory layout says.
-	ReleaseID   string
-	DiscNumber  int
-	TrackNumber int
+// TagGroups is how a media type's embedded tags group a set of media files (ADR-48's decisive and high-weight
+// signals); the rules are the media type's (ADR-23), this package only applies them.
+type TagGroups struct {
+	// Groups holds indexes into the paths asked about, each exactly once.
+	Groups [][]int
+	// Signals is the evidence for each group, parallel to Groups.
+	Signals   []Signal
+	Ambiguous bool
 }
 
-// TagReader answers one media file's tags, by its path relative to the inspected
-// root. A nil TagReader means no tag evidence is available at all, which is a
-// legitimate input (a pure structural inspection), not an error.
-type TagReader func(relPath string) Tags
+// TagGrouper groups media files, by path relative to the inspected root, by their embedded tags; ok is false
+// when no file carries a grouping tag. A nil TagGrouper means no tag evidence: a pure structural inspection.
+type TagGrouper func(relPaths []string) (groups TagGroups, ok bool)
 
 // Options tunes one Run. Every field is optional.
 type Options struct {
-	Tags TagReader
+	Tags TagGrouper
 	// MediaSizeFloorBytes is the minimum size a file with a media extension
 	// must clear to classify as Media rather than Junk -- ADR-48's own example,
 	// "sample.mp3", is exactly what this guards against. Zero uses

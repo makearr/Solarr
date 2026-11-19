@@ -50,6 +50,41 @@ func TestGroupByAlbum(t *testing.T) {
 		{"album": "Invented Record", "artist": "Main Name", "track": "3"},
 		{"album": "Invented Record", "artist": "Main Name & Other", "track": "4"},
 	}
+	discSet := []mediatool.Tags{
+		{"album": "Invented Set (Disc 1)", "albumartist": "Ixu Band", "track": "1"},
+		{"album": "Invented Set (Disc 1)", "albumartist": "Ixu Band", "track": "2"},
+		{"album": "Invented Set (Disc 2)", "albumartist": "Ixu Band", "track": "1"},
+		{"album": "Invented Set [CD 2]", "albumartist": "Ixu Band", "track": "2"},
+	}
+	boxSet := make([]mediatool.Tags, 12)
+	for i := range boxSet {
+		artist := "Main Name"
+		if i%4 == 0 {
+			artist = fmt.Sprintf("Main Name feat. Guest %d", i)
+		}
+		boxSet[i] = mediatool.Tags{"album": "Invented Box", "artist": artist, "musicbrainz_albumid": "rel-box", "track": fmt.Sprint(i%3 + 1)}
+	}
+	editions := []mediatool.Tags{
+		{"album": "Invented Record", "albumartist": "Ixu Band", "musicbrainz_albumid": "rel-1", "track": "1"},
+		{"album": "Invented Record", "albumartist": "Ixu Band", "musicbrainz_albumid": "rel-2", "track": "1"},
+	}
+	lostID := []mediatool.Tags{
+		{"album": "Invented Record", "artist": "Ixu Band", "musicbrainz_albumid": "rel-1", "track": "1"},
+		{"album": "Invented Record", "artist": "Ixu Band", "musicbrainz_albumid": "rel-1", "track": "2"},
+		{"album": "invented  record", "albumartist": "Ixu Band", "track": "3"},
+	}
+	placeTaken := []mediatool.Tags{lostID[0], lostID[1], {"album": "Invented Record", "albumartist": "Ixu Band", "track": "2/3"}}
+	twoHomes := append(append([]mediatool.Tags{}, editions...), mediatool.Tags{"album": "Invented Record", "albumartist": "Ixu Band", "track": "2"})
+	otherTitle := []mediatool.Tags{
+		{"album": "Other Record", "albumartist": "Ixu Band", "musicbrainz_albumid": "rel-9", "track": "1"},
+		{"album": "Invented Record", "albumartist": "Ixu Band", "track": "2"},
+	}
+	otherArtist := []mediatool.Tags{lostID[0], {"album": "Invented Record", "albumartist": "Other Band", "track": "2"}}
+	namedArtist := []mediatool.Tags{lostID[0], lostID[1], {"album": "Invented Record", "albumartist": "Ixu Band", "track": "3"}}
+	untagged := []mediatool.Tags{
+		{"album": "Invented Record", "albumartist": "Ixu Band"}, {"artist": "Ixu Band"}, {},
+	}
+	notADisc := []mediatool.Tags{{"album": "Abcd 2", "albumartist": "Ixu Band"}, {"album": "Abcd 3", "albumartist": "Ixu Band"}}
 	for name, test := range map[string]struct {
 		tags []mediatool.Tags
 		want []int
@@ -58,6 +93,17 @@ func TestGroupByAlbum(t *testing.T) {
 		"two album artists under one title are two albums":               {twoAlbums, []int{6, 6}},
 		"a pile of singles under one word stays per artist":              {singles, slicesOf(10, 1)},
 		"feat. credits do not split an album":                            {featuring, []int{4}},
+		"a disc marker in the album tag does not split a set":            {discSet, []int{4}},
+		"one release id is one album, whatever its numbers and artists":  {boxSet, []int{12}},
+		"two release ids under one title are two editions":               {editions, []int{1, 1}},
+		"a file that lost its release id joins it":                       {lostID, []int{3}},
+		"a second copy that lost its release id joins it":                {placeTaken, []int{3}},
+		"a file that lost its id beside two editions joins neither":      {twoHomes, []int{1, 1, 1}},
+		"an album artist naming the release's track artist joins it":     {namedArtist, []int{3}},
+		"a file of another title does not join a release":                {otherTitle, []int{1, 1}},
+		"a file of another album artist does not join a release":         {otherArtist, []int{1, 1}},
+		"files with no album tag join the only album":                    {untagged, []int{3}},
+		"a title merely ending in cd and a number is not a disc marker":  {notADisc, []int{1, 1}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			observed, files := folder(test.tags...)

@@ -70,11 +70,9 @@ func TestWalker_DiscSubfoldersMergeIntoOneUnit(t *testing.T) {
 
 func TestWalker_TwoUnrelatedAlbumsFlatWithDisagreeingTagsSplitDecisively(t *testing.T) {
 	tr := newTree(t, "Unsorted/a.flac", "Unsorted/b.flac", "Unsorted/c.flac", "Unsorted/d.flac")
-	tagged := taggedReader(map[string]inspect.Tags{
-		"Unsorted/a.flac": {Found: true, Artist: "Katupoken", Album: "KI Pecezinu"},
-		"Unsorted/b.flac": {Found: true, Artist: "Katupoken", Album: "KI Pecezinu"},
-		"Unsorted/c.flac": {Found: true, Artist: "Migf", Album: "Gesuhu"},
-		"Unsorted/d.flac": {Found: true, Artist: "Migf", Album: "Gesuhu"},
+	tagged := keyedGrouper(inspect.SignalTagAgreement, map[string]string{
+		"Unsorted/a.flac": "Katupoken / KI Pecezinu", "Unsorted/b.flac": "Katupoken / KI Pecezinu",
+		"Unsorted/c.flac": "Migf / Gesuhu", "Unsorted/d.flac": "Migf / Gesuhu",
 	})
 	units, _ := walkAll(t, tr, inspect.WalkOptions{Tags: tagged})
 	if len(units) != 2 {
@@ -200,11 +198,6 @@ var errInterrupted = &interruptedError{}
 type interruptedError struct{}
 
 func (*interruptedError) Error() string { return "injected interruption" }
-
-// taggedReader is a TagReader over a fixed table, keyed by relative path.
-func taggedReader(byPath map[string]inspect.Tags) inspect.TagReader {
-	return func(relPath string) inspect.Tags { return byPath[relPath] }
-}
 
 // A walk limited to some files sees only those: the finished tracks of a download that stalled.
 func TestWalker_OnlySeesTheFilesItIsGiven(t *testing.T) {
