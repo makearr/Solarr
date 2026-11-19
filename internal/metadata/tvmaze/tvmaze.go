@@ -151,37 +151,55 @@ type SearchResult struct {
 // Search finds shows by name.
 func (c Client) Search(ctx context.Context, query string) ([]SearchResult, error) {
 	var results []SearchResult
-	return results, c.get(ctx, "/search/shows?q="+url.QueryEscape(query), &results)
+	if err := c.get(ctx, "/search/shows?q="+url.QueryEscape(query), &results); err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
 // Show reads one series by TVmaze id.
 func (c Client) Show(ctx context.Context, id int64) (Show, error) {
 	var show Show
-	return show, c.get(ctx, "/shows/"+strconv.FormatInt(id, 10), &show)
+	if err := c.get(ctx, "/shows/"+strconv.FormatInt(id, 10), &show); err != nil {
+		return Show{}, err
+	}
+	return show, nil
 }
 
 // LookupTVDB finds the show TVmaze holds for a TheTVDB id.
 func (c Client) LookupTVDB(ctx context.Context, tvdbID int64) (Show, error) {
 	var show Show
-	return show, c.get(ctx, "/lookup/shows?thetvdb="+strconv.FormatInt(tvdbID, 10), &show)
+	if err := c.get(ctx, "/lookup/shows?thetvdb="+strconv.FormatInt(tvdbID, 10), &show); err != nil {
+		return Show{}, err
+	}
+	return show, nil
 }
 
 // LookupIMDb finds the show TVmaze holds for an IMDb id such as "tt0000000".
 func (c Client) LookupIMDb(ctx context.Context, imdbID string) (Show, error) {
 	var show Show
-	return show, c.get(ctx, "/lookup/shows?imdb="+url.QueryEscape(imdbID), &show)
+	if err := c.get(ctx, "/lookup/shows?imdb="+url.QueryEscape(imdbID), &show); err != nil {
+		return Show{}, err
+	}
+	return show, nil
 }
 
 // Episodes lists every episode, specials included, in aired order.
 func (c Client) Episodes(ctx context.Context, id int64) ([]Episode, error) {
 	var episodes []Episode
-	return episodes, c.get(ctx, "/shows/"+strconv.FormatInt(id, 10)+"/episodes?specials=1", &episodes)
+	if err := c.get(ctx, "/shows/"+strconv.FormatInt(id, 10)+"/episodes?specials=1", &episodes); err != nil {
+		return nil, err
+	}
+	return episodes, nil
 }
 
 // Seasons lists the show's seasons.
 func (c Client) Seasons(ctx context.Context, id int64) ([]Season, error) {
 	var seasons []Season
-	return seasons, c.get(ctx, "/shows/"+strconv.FormatInt(id, 10)+"/seasons", &seasons)
+	if err := c.get(ctx, "/shows/"+strconv.FormatInt(id, 10)+"/seasons", &seasons); err != nil {
+		return nil, err
+	}
+	return seasons, nil
 }
 
 // Aliases lists the other names the show is known by.
@@ -202,7 +220,10 @@ func (c Client) Aliases(ctx context.Context, id int64) ([]string, error) {
 // Cast lists the show's main cast.
 func (c Client) Cast(ctx context.Context, id int64) ([]CastMember, error) {
 	var cast []CastMember
-	return cast, c.get(ctx, "/shows/"+strconv.FormatInt(id, 10)+"/cast", &cast)
+	if err := c.get(ctx, "/shows/"+strconv.FormatInt(id, 10)+"/cast", &cast); err != nil {
+		return nil, err
+	}
+	return cast, nil
 }
 
 func (c Client) get(ctx context.Context, path string, into any) error {

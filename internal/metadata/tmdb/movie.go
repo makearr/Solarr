@@ -163,7 +163,10 @@ const movieAppend = "credits,external_ids,release_dates,keywords,images,alternat
 func (c Client) Movie(ctx context.Context, id int64) (Movie, error) {
 	var movie Movie
 	query := url.Values{"append_to_response": {movieAppend}, "include_image_language": {c.imageLanguages()}}
-	return movie, c.get(ctx, "/movie/"+strconv.FormatInt(id, 10), query, &movie)
+	if err := c.get(ctx, "/movie/"+strconv.FormatInt(id, 10), query, &movie); err != nil {
+		return Movie{}, err
+	}
+	return movie, nil
 }
 
 // MovieHit is one film a search found.
@@ -220,5 +223,8 @@ type CollectionDetail struct {
 // Collection reads one franchise by TMDB id.
 func (c Client) Collection(ctx context.Context, id int64) (CollectionDetail, error) {
 	var collection CollectionDetail
-	return collection, c.get(ctx, "/collection/"+strconv.FormatInt(id, 10), nil, &collection)
+	if err := c.get(ctx, "/collection/"+strconv.FormatInt(id, 10), nil, &collection); err != nil {
+		return CollectionDetail{}, err
+	}
+	return collection, nil
 }

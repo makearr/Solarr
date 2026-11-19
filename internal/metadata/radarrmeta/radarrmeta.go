@@ -101,7 +101,10 @@ type Movie struct {
 // Movie reads one film by TMDB id.
 func (c Client) Movie(ctx context.Context, tmdbID int64) (Movie, error) {
 	var movie Movie
-	return movie, c.get(ctx, "/movie/"+strconv.FormatInt(tmdbID, 10), nil, &movie)
+	if err := c.get(ctx, "/movie/"+strconv.FormatInt(tmdbID, 10), nil, &movie); err != nil {
+		return Movie{}, err
+	}
+	return movie, nil
 }
 
 // ByIMDb reads the film an IMDb id names.
@@ -123,7 +126,10 @@ func (c Client) Search(ctx context.Context, term string, year int) ([]Movie, err
 		query.Set("year", strconv.Itoa(year))
 	}
 	var movies []Movie
-	return movies, c.get(ctx, "/search", query, &movies)
+	if err := c.get(ctx, "/search", query, &movies); err != nil {
+		return nil, err
+	}
+	return movies, nil
 }
 
 func (c Client) get(ctx context.Context, path string, query url.Values, into any) error {

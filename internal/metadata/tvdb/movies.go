@@ -54,7 +54,10 @@ func (m Movie) RemoteID(sourceName string) string {
 // Movie reads one film with its artwork and translations.
 func (c Client) Movie(ctx context.Context, id int64) (Movie, error) {
 	var movie Movie
-	return movie, c.get(ctx, "/movies/"+strconv.FormatInt(id, 10)+"/extended", url.Values{"meta": {"translations"}, "short": {"false"}}, &movie)
+	if err := c.get(ctx, "/movies/"+strconv.FormatInt(id, 10)+"/extended", url.Values{"meta": {"translations"}, "short": {"false"}}, &movie); err != nil {
+		return Movie{}, err
+	}
+	return movie, nil
 }
 
 // MovieByRemoteID finds the film another site's id names (an IMDb id, a TMDB id); false when TheTVDB has none.
@@ -78,5 +81,8 @@ func (c Client) MovieByRemoteID(ctx context.Context, remoteID string) (int64, bo
 // MovieRemoteIDs reads a film's short record, which carries its ids at other sites and nothing heavy.
 func (c Client) MovieRemoteIDs(ctx context.Context, id int64) (Movie, error) {
 	var movie Movie
-	return movie, c.get(ctx, "/movies/"+strconv.FormatInt(id, 10)+"/extended", url.Values{"short": {"true"}}, &movie)
+	if err := c.get(ctx, "/movies/"+strconv.FormatInt(id, 10)+"/extended", url.Values{"short": {"true"}}, &movie); err != nil {
+		return Movie{}, err
+	}
+	return movie, nil
 }

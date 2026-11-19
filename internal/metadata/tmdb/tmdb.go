@@ -224,7 +224,10 @@ const seriesAppend = "aggregate_credits,external_ids,content_ratings,keywords,im
 func (c Client) Series(ctx context.Context, id int64) (Series, error) {
 	var series Series
 	query := url.Values{"append_to_response": {seriesAppend}, "include_image_language": {c.imageLanguages()}}
-	return series, c.get(ctx, "/tv/"+strconv.FormatInt(id, 10), query, &series)
+	if err := c.get(ctx, "/tv/"+strconv.FormatInt(id, 10), query, &series); err != nil {
+		return Series{}, err
+	}
+	return series, nil
 }
 
 func (c Client) imageLanguages() string {
@@ -277,7 +280,10 @@ type Season struct {
 // Season reads one season's episodes, each with guest stars and crew.
 func (c Client) Season(ctx context.Context, seriesID int64, number int) (Season, error) {
 	var season Season
-	return season, c.get(ctx, "/tv/"+strconv.FormatInt(seriesID, 10)+"/season/"+strconv.Itoa(number), nil, &season)
+	if err := c.get(ctx, "/tv/"+strconv.FormatInt(seriesID, 10)+"/season/"+strconv.Itoa(number), nil, &season); err != nil {
+		return Season{}, err
+	}
+	return season, nil
 }
 
 // seasonsPerCall is how many seasons one append_to_response may carry; TMDB allows 20 appended objects.
@@ -425,7 +431,10 @@ type EpisodeGroup struct {
 // EpisodeGroup reads one alternative ordering by its id.
 func (c Client) EpisodeGroup(ctx context.Context, id string) (EpisodeGroup, error) {
 	var group EpisodeGroup
-	return group, c.get(ctx, "/tv/episode_group/"+url.PathEscape(id), nil, &group)
+	if err := c.get(ctx, "/tv/episode_group/"+url.PathEscape(id), nil, &group); err != nil {
+		return EpisodeGroup{}, err
+	}
+	return group, nil
 }
 
 // Credit is one title a person appears in, as the person page lists it.
@@ -468,7 +477,10 @@ type Person struct {
 func (c Client) Person(ctx context.Context, id int64) (Person, error) {
 	var person Person
 	query := url.Values{"append_to_response": {"combined_credits,external_ids"}}
-	return person, c.get(ctx, "/person/"+strconv.FormatInt(id, 10), query, &person)
+	if err := c.get(ctx, "/person/"+strconv.FormatInt(id, 10), query, &person); err != nil {
+		return Person{}, err
+	}
+	return person, nil
 }
 
 // Ping asks the cheapest authenticated question, for the connection test.

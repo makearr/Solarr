@@ -127,13 +127,19 @@ type Series struct {
 // Series reads one show by TheTVDB id, with every episode.
 func (c Client) Series(ctx context.Context, tvdbID int64) (Series, error) {
 	var series Series
-	return series, c.get(ctx, "/shows/"+url.PathEscape(c.language)+"/"+strconv.FormatInt(tvdbID, 10), &series)
+	if err := c.get(ctx, "/shows/"+url.PathEscape(c.language)+"/"+strconv.FormatInt(tvdbID, 10), &series); err != nil {
+		return Series{}, err
+	}
+	return series, nil
 }
 
 // Search finds shows by name; hits carry the show's own fields but no episodes.
 func (c Client) Search(ctx context.Context, term string) ([]Series, error) {
 	var hits []Series
-	return hits, c.get(ctx, "/search/"+url.PathEscape(c.language)+"/?term="+url.QueryEscape(term), &hits)
+	if err := c.get(ctx, "/search/"+url.PathEscape(c.language)+"/?term="+url.QueryEscape(term), &hits); err != nil {
+		return nil, err
+	}
+	return hits, nil
 }
 
 func (c Client) get(ctx context.Context, path string, into any) error {

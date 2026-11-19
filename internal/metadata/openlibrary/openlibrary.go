@@ -248,7 +248,10 @@ func (c Client) Work(ctx context.Context, workID string) (Work, error) {
 		return Work{}, ErrNotFound
 	}
 	var work Work
-	return work, c.get(ctx, "/works/"+workID+".json", &work)
+	if err := c.get(ctx, "/works/"+workID+".json", &work); err != nil {
+		return Work{}, err
+	}
+	return work, nil
 }
 
 // Author reads one author by id.
@@ -257,7 +260,10 @@ func (c Client) Author(ctx context.Context, authorID string) (Author, error) {
 		return Author{}, ErrNotFound
 	}
 	var author Author
-	return author, c.get(ctx, "/authors/"+authorID+".json", &author)
+	if err := c.get(ctx, "/authors/"+authorID+".json", &author); err != nil {
+		return Author{}, err
+	}
+	return author, nil
 }
 
 // ByISBN reads the edition an ISBN names, which names its work.
@@ -267,7 +273,10 @@ func (c Client) ByISBN(ctx context.Context, isbn string) (Edition, error) {
 		return Edition{}, ErrNotFound
 	}
 	var edition Edition
-	return edition, c.get(ctx, "/isbn/"+isbn+".json", &edition)
+	if err := c.get(ctx, "/isbn/"+isbn+".json", &edition); err != nil {
+		return Edition{}, err
+	}
+	return edition, nil
 }
 
 // Edition reads one edition by id.
@@ -276,7 +285,10 @@ func (c Client) Edition(ctx context.Context, editionID string) (Edition, error) 
 		return Edition{}, ErrNotFound
 	}
 	var edition Edition
-	return edition, c.get(ctx, "/books/"+editionID+".json", &edition)
+	if err := c.get(ctx, "/books/"+editionID+".json", &edition); err != nil {
+		return Edition{}, err
+	}
+	return edition, nil
 }
 
 // CoverURL is the large picture of a cover id, empty for none.

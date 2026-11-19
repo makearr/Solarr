@@ -242,243 +242,106 @@ func notFound(err error) bool {
 func (p Provider) Search(
 	ctx context.Context, priority Priority, artist, title string, limit int,
 ) ([]ReleaseGroupMatch, error) {
-	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
-	r := routeFor[Searcher](ctx, p)
 	key := searchCacheKey(artist, title, limit)
-	if matches, ok := cachedJSON[[]ReleaseGroupMatch](ctx, p, r, cacheKindSearch, key); ok {
-		return matches, nil
-	}
-
-	answer, answered, errs := firstAnswer(ctx, p, r, func(ctx context.Context, searcher Searcher) ([]ReleaseGroupMatch, error) {
+	call := lookup{kind: cacheKindSearch, key: key, what: fmt.Sprintf("search %q/%q", artist, title)}
+	return through(ctx, p, priority, call, func(ctx context.Context, searcher Searcher) ([]ReleaseGroupMatch, error) {
 		return searcher.SearchReleaseGroups(ctx, artist, title, limit)
 	})
-	if answered {
-		rememberJSON(ctx, p, r, answer.Source.Name(), cacheKindSearch, key, answer.Value)
-		return answer.Value, nil
-	}
-	if len(errs) == 0 {
-		// No configured source can search at all -- a wiring gap, not a failed
-		// lookup, so the caller's chain treats it exactly like "found nothing".
-		return nil, nil
-	}
-	if stale, ok := staleJSON[[]ReleaseGroupMatch](ctx, p, r, cacheKindSearch, key, errs); ok {
-		return stale, nil
-	}
-	return nil, fmt.Errorf("musicbrainz: no source answered search %q/%q: %w", artist, title, errors.Join(errs...))
 }
 
 // SearchByQuery is Search's own free-text counterpart (todo 4.17, ADR-56):
 // only sources implementing QuerySearcher are tried, same reasoning as Search
 // itself -- the proxy does not implement it either.
 func (p Provider) SearchByQuery(ctx context.Context, priority Priority, query string, limit int) ([]ReleaseGroupMatch, error) {
-	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
-	r := routeFor[QuerySearcher](ctx, p)
-	key := queryCacheKey(query, limit)
-	if matches, ok := cachedJSON[[]ReleaseGroupMatch](ctx, p, r, cacheKindSearch, key); ok {
-		return matches, nil
-	}
-
-	answer, answered, errs := firstAnswer(ctx, p, r, func(ctx context.Context, searcher QuerySearcher) ([]ReleaseGroupMatch, error) {
+	call := lookup{kind: cacheKindSearch, key: queryCacheKey(query, limit), what: fmt.Sprintf("query search %q", query)}
+	return through(ctx, p, priority, call, func(ctx context.Context, searcher QuerySearcher) ([]ReleaseGroupMatch, error) {
 		return searcher.SearchReleaseGroupsByQuery(ctx, query, limit)
 	})
-	if answered {
-		rememberJSON(ctx, p, r, answer.Source.Name(), cacheKindSearch, key, answer.Value)
-		return answer.Value, nil
-	}
-	if len(errs) == 0 {
-		// No configured source can search at all -- a wiring gap, not a failed
-		// lookup, so the caller's chain treats it exactly like "found nothing".
-		return nil, nil
-	}
-	if stale, ok := staleJSON[[]ReleaseGroupMatch](ctx, p, r, cacheKindSearch, key, errs); ok {
-		return stale, nil
-	}
-	return nil, fmt.Errorf("musicbrainz: no source answered query search %q: %w", query, errors.Join(errs...))
 }
 
 // Releases answers every release of a release group with its tracklist, cache first, from
 // the first source able to list them. Album identification asks it for every candidate.
 func (p Provider) Releases(ctx context.Context, priority Priority, releaseGroupMBID string) ([]Release, error) {
-	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
-	r := routeFor[ReleaseLister](ctx, p)
-	if releases, ok := cachedJSON[[]Release](ctx, p, r, cacheKindReleases, releaseGroupMBID); ok {
-		return releases, nil
+	call := lookup{
+		kind: cacheKindReleases, key: releaseGroupMBID, what: "listed releases of " + releaseGroupMBID,
+		noSource: fmt.Errorf("musicbrainz: no source can list releases (release group %s)", releaseGroupMBID),
 	}
-	answer, answered, errs := firstAnswer(ctx, p, r, func(ctx context.Context, lister ReleaseLister) ([]Release, error) {
+	return through(ctx, p, priority, call, func(ctx context.Context, lister ReleaseLister) ([]Release, error) {
 		return lister.Releases(ctx, releaseGroupMBID)
 	})
-	if answered {
-		rememberJSON(ctx, p, r, answer.Source.Name(), cacheKindReleases, releaseGroupMBID, answer.Value)
-		return answer.Value, nil
-	}
-	if len(errs) == 0 {
-		return nil, fmt.Errorf("musicbrainz: no source can list releases (release group %s)", releaseGroupMBID)
-	}
-	if stale, ok := staleJSON[[]Release](ctx, p, r, cacheKindReleases, releaseGroupMBID, errs); ok {
-		return stale, nil
-	}
-	return nil, fmt.Errorf("musicbrainz: no source listed releases of %s: %w", releaseGroupMBID, errors.Join(errs...))
 }
 
 // SearchArtists answers artists matching a name, cache first, from the first
 // source able to search them -- what adding an artist the library has never
-// seen starts from (revision 7.1). Only ArtistSearcher sources are tried, the
-// same optional-capability shape SearchByQuery already uses; no source able to
-// search at all reads as "found nothing", since that is a wiring gap rather
-// than a failed lookup and the caller cannot act on the difference.
+// seen starts from (revision 7.1). No source able to search at all reads as
+// "found nothing": a wiring gap, not a failed lookup.
 func (p Provider) SearchArtists(ctx context.Context, priority Priority, query string, limit int) ([]ArtistMatch, error) {
-	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
-	r := routeFor[ArtistSearcher](ctx, p)
-	key := queryCacheKey(query, limit)
-	if matches, ok := cachedJSON[[]ArtistMatch](ctx, p, r, cacheKindArtistSearch, key); ok {
-		return matches, nil
-	}
-
-	answer, answered, errs := firstAnswer(ctx, p, r, func(ctx context.Context, searcher ArtistSearcher) ([]ArtistMatch, error) {
+	call := lookup{kind: cacheKindArtistSearch, key: queryCacheKey(query, limit), what: fmt.Sprintf("artist search %q", query)}
+	return through(ctx, p, priority, call, func(ctx context.Context, searcher ArtistSearcher) ([]ArtistMatch, error) {
 		return searcher.SearchArtists(ctx, query, limit)
 	})
-	if answered {
-		rememberJSON(ctx, p, r, answer.Source.Name(), cacheKindArtistSearch, key, answer.Value)
-		return answer.Value, nil
-	}
-	if len(errs) == 0 {
-		return nil, nil
-	}
-	if stale, ok := staleJSON[[]ArtistMatch](ctx, p, r, cacheKindArtistSearch, key, errs); ok {
-		return stale, nil
-	}
-	return nil, fmt.Errorf("musicbrainz: no source answered artist search %q: %w", query, errors.Join(errs...))
 }
 
 // SearchRecordings answers recordings matching a track title (and artist, when known),
 // each with the release groups it appears on, cache first. Only RecordingSearcher sources are tried.
 func (p Provider) SearchRecordings(ctx context.Context, priority Priority, artist, title string, limit int) ([]RecordingMatch, error) {
-	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
-	r := routeFor[RecordingSearcher](ctx, p)
-	key := searchCacheKey(artist, title, limit)
-	if matches, ok := cachedJSON[[]RecordingMatch](ctx, p, r, cacheKindRecordingSearch, key); ok {
-		return matches, nil
+	call := lookup{
+		kind: cacheKindRecordingSearch, key: searchCacheKey(artist, title, limit),
+		what: fmt.Sprintf("recording search %q/%q", artist, title),
 	}
-
-	answer, answered, errs := firstAnswer(ctx, p, r, func(ctx context.Context, searcher RecordingSearcher) ([]RecordingMatch, error) {
+	return through(ctx, p, priority, call, func(ctx context.Context, searcher RecordingSearcher) ([]RecordingMatch, error) {
 		return searcher.SearchRecordingReleaseGroups(ctx, artist, title, limit)
 	})
-	if answered {
-		rememberJSON(ctx, p, r, answer.Source.Name(), cacheKindRecordingSearch, key, answer.Value)
-		return answer.Value, nil
-	}
-	if len(errs) == 0 {
-		return nil, nil
-	}
-	if stale, ok := staleJSON[[]RecordingMatch](ctx, p, r, cacheKindRecordingSearch, key, errs); ok {
-		return stale, nil
-	}
-	return nil, fmt.Errorf("musicbrainz: no source answered recording search %q/%q: %w", artist, title, errors.Join(errs...))
 }
 
 // SearchReleases answers the release groups of the releases carrying a barcode or catalogue number, cache first.
 // Only ReleaseSearcher sources are tried.
 func (p Provider) SearchReleases(ctx context.Context, priority Priority, query ReleaseQuery, limit int) ([]ReleaseGroupMatch, error) {
-	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
-	r := routeFor[ReleaseSearcher](ctx, p)
-	key := searchCacheKey(query.Barcode, query.CatalogNumber, limit)
-	if matches, ok := cachedJSON[[]ReleaseGroupMatch](ctx, p, r, cacheKindReleaseSearch, key); ok {
-		return matches, nil
+	call := lookup{
+		kind: cacheKindReleaseSearch, key: searchCacheKey(query.Barcode, query.CatalogNumber, limit),
+		what: fmt.Sprintf("release search %+v", query),
 	}
-	answer, answered, errs := firstAnswer(ctx, p, r, func(ctx context.Context, searcher ReleaseSearcher) ([]ReleaseGroupMatch, error) {
+	return through(ctx, p, priority, call, func(ctx context.Context, searcher ReleaseSearcher) ([]ReleaseGroupMatch, error) {
 		return searcher.SearchReleases(ctx, query, limit)
 	})
-	if answered {
-		rememberJSON(ctx, p, r, answer.Source.Name(), cacheKindReleaseSearch, key, answer.Value)
-		return answer.Value, nil
-	}
-	if len(errs) == 0 {
-		return nil, nil
-	}
-	if stale, ok := staleJSON[[]ReleaseGroupMatch](ctx, p, r, cacheKindReleaseSearch, key, errs); ok {
-		return stale, nil
-	}
-	return nil, fmt.Errorf("musicbrainz: no source answered release search %+v: %w", query, errors.Join(errs...))
 }
 
 // Recording answers one recording and the release groups it is on, cache first; ErrNotFound when
 // every source that can look recordings up answered 404. Only RecordingLookup sources are tried.
 func (p Provider) Recording(ctx context.Context, priority Priority, mbid string) (RecordingMatch, error) {
-	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
-	r := routeFor[RecordingLookup](ctx, p)
-	if recording, ok := cachedJSON[RecordingMatch](ctx, p, r, cacheKindRecording, mbid); ok {
-		return recording, nil
+	call := lookup{
+		kind: cacheKindRecording, key: mbid, what: "recording " + mbid, notFoundWhenAll404: true,
+		noSource: fmt.Errorf("musicbrainz: no source can look up a recording (mbid %s)", mbid),
 	}
-	if p.knownMissing(ctx, cacheKindRecording, mbid) {
-		return RecordingMatch{}, ErrNotFound
-	}
-	answer, answered, errs := firstAnswer(ctx, p, r, func(ctx context.Context, lookup RecordingLookup) (RecordingMatch, error) {
-		return lookup.Recording(ctx, mbid)
+	return through(ctx, p, priority, call, func(ctx context.Context, source RecordingLookup) (RecordingMatch, error) {
+		return source.Recording(ctx, mbid)
 	})
-	if answered {
-		rememberJSON(ctx, p, r, answer.Source.Name(), cacheKindRecording, mbid, answer.Value)
-		return answer.Value, nil
-	}
-	if len(errs) > 0 && !outage(errs) {
-		p.rememberMissing(ctx, cacheKindRecording, mbid)
-		return RecordingMatch{}, ErrNotFound
-	}
-	if stale, ok := staleJSON[RecordingMatch](ctx, p, r, cacheKindRecording, mbid, errs); ok {
-		return stale, nil
-	}
-	return RecordingMatch{}, fmt.Errorf("musicbrainz: no source answered recording %s: %w", mbid, errors.Join(errs...))
 }
 
 // Artist answers one artist's own detail, cache-first, permanent like Album.
 // Only sources implementing ArtistLookup are tried -- same reasoning as
 // Search, the proxy's artist shape is unverified live.
 func (p Provider) Artist(ctx context.Context, priority Priority, mbid string) (Artist, error) {
-	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
-	r := routeFor[ArtistLookup](ctx, p)
-	if artist, ok := cachedJSON[Artist](ctx, p, r, cacheKindArtist, mbid); ok {
-		return artist, nil
+	call := lookup{
+		kind: cacheKindArtist, key: mbid, what: "artist " + mbid,
+		noSource: fmt.Errorf("musicbrainz: no source can look up an artist (mbid %s)", mbid),
 	}
-
-	answer, answered, errs := firstAnswer(ctx, p, r, func(ctx context.Context, lookup ArtistLookup) (Artist, error) {
-		return lookup.Artist(ctx, mbid)
+	return through(ctx, p, priority, call, func(ctx context.Context, source ArtistLookup) (Artist, error) {
+		return source.Artist(ctx, mbid)
 	})
-	if answered {
-		rememberJSON(ctx, p, r, answer.Source.Name(), cacheKindArtist, mbid, answer.Value)
-		return answer.Value, nil
-	}
-	if len(errs) == 0 {
-		return Artist{}, fmt.Errorf("musicbrainz: no source can look up an artist (mbid %s)", mbid)
-	}
-	if stale, ok := staleJSON[Artist](ctx, p, r, cacheKindArtist, mbid, errs); ok {
-		return stale, nil
-	}
-	return Artist{}, fmt.Errorf("musicbrainz: no source answered artist %s: %w", mbid, errors.Join(errs...))
 }
 
 // ArtistReleaseGroups answers an artist's full discography, cache-first. Only
 // sources that implement Discography are tried, same reasoning as Search and
 // Artist.
 func (p Provider) ArtistReleaseGroups(ctx context.Context, priority Priority, artistMBID string) ([]ReleaseGroup, error) {
-	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
-	r := routeFor[Discography](ctx, p)
-	if groups, ok := cachedJSON[[]ReleaseGroup](ctx, p, r, cacheKindDiscography, artistMBID); ok {
-		return groups, nil
+	call := lookup{
+		kind: cacheKindDiscography, key: artistMBID, what: "discography " + artistMBID,
+		noSource: fmt.Errorf("%w: browse a discography (artist %s)", ErrNoCapableSource, artistMBID),
 	}
-
-	answer, answered, errs := firstAnswer(ctx, p, r, func(ctx context.Context, discography Discography) ([]ReleaseGroup, error) {
+	return through(ctx, p, priority, call, func(ctx context.Context, discography Discography) ([]ReleaseGroup, error) {
 		return discography.ArtistReleaseGroups(ctx, artistMBID)
 	})
-	if answered {
-		rememberJSON(ctx, p, r, answer.Source.Name(), cacheKindDiscography, artistMBID, answer.Value)
-		return answer.Value, nil
-	}
-	if len(errs) == 0 {
-		return nil, fmt.Errorf("%w: browse a discography (artist %s)", ErrNoCapableSource, artistMBID)
-	}
-	if stale, ok := staleJSON[[]ReleaseGroup](ctx, p, r, cacheKindDiscography, artistMBID, errs); ok {
-		return stale, nil
-	}
-	return nil, fmt.Errorf("musicbrainz: no source answered discography %s: %w", artistMBID, errors.Join(errs...))
 }
 
 // searchCacheKey normalises a search so "Vutu Doci"/"vutu doci" share one cache
@@ -646,25 +509,13 @@ const (
 
 // Label answers one label's details, cache-first, from the sources that can look one up.
 func (p Provider) Label(ctx context.Context, priority Priority, mbid string) (Label, error) {
-	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
-	r := routeFor[LabelLookup](ctx, p)
-	if label, ok := cachedJSON[Label](ctx, p, r, cacheKindLabel, mbid); ok {
-		return label, nil
+	call := lookup{
+		kind: cacheKindLabel, key: mbid, what: "label " + mbid,
+		noSource: fmt.Errorf("musicbrainz: no source can look up a label (mbid %s)", mbid),
 	}
-	answer, answered, errs := firstAnswer(ctx, p, r, func(ctx context.Context, lookup LabelLookup) (Label, error) {
-		return lookup.Label(ctx, mbid)
+	return through(ctx, p, priority, call, func(ctx context.Context, source LabelLookup) (Label, error) {
+		return source.Label(ctx, mbid)
 	})
-	if answered {
-		rememberJSON(ctx, p, r, answer.Source.Name(), cacheKindLabel, mbid, answer.Value)
-		return answer.Value, nil
-	}
-	if len(errs) == 0 {
-		return Label{}, fmt.Errorf("musicbrainz: no source can look up a label (mbid %s)", mbid)
-	}
-	if stale, ok := staleJSON[Label](ctx, p, r, cacheKindLabel, mbid, errs); ok {
-		return stale, nil
-	}
-	return Label{}, fmt.Errorf("musicbrainz: no source answered label %s: %w", mbid, errors.Join(errs...))
 }
 
 // cacheKindSeries is the series a release group is part of.
@@ -696,23 +547,11 @@ func (p Provider) ReleaseGroupSeries(ctx context.Context, priority Priority, rel
 
 // LabelReleaseGroups answers what a label released, cache-first, from the sources that can browse it.
 func (p Provider) LabelReleaseGroups(ctx context.Context, priority Priority, labelMBID string) ([]ReleaseGroup, error) {
-	ctx = httpx.WithPriorityAtLeast(ctx, httpx.Priority(priority))
-	r := routeFor[LabelCatalogue](ctx, p)
-	if groups, ok := cachedJSON[[]ReleaseGroup](ctx, p, r, cacheKindLabelCatalogue, labelMBID); ok {
-		return groups, nil
+	call := lookup{
+		kind: cacheKindLabelCatalogue, key: labelMBID, what: "label catalogue " + labelMBID,
+		noSource: fmt.Errorf("musicbrainz: no source can browse a label (mbid %s)", labelMBID),
 	}
-	answer, answered, errs := firstAnswer(ctx, p, r, func(ctx context.Context, catalogue LabelCatalogue) ([]ReleaseGroup, error) {
+	return through(ctx, p, priority, call, func(ctx context.Context, catalogue LabelCatalogue) ([]ReleaseGroup, error) {
 		return catalogue.LabelReleaseGroups(ctx, labelMBID)
 	})
-	if answered {
-		rememberJSON(ctx, p, r, answer.Source.Name(), cacheKindLabelCatalogue, labelMBID, answer.Value)
-		return answer.Value, nil
-	}
-	if len(errs) == 0 {
-		return nil, fmt.Errorf("musicbrainz: no source can browse a label (mbid %s)", labelMBID)
-	}
-	if stale, ok := staleJSON[[]ReleaseGroup](ctx, p, r, cacheKindLabelCatalogue, labelMBID, errs); ok {
-		return stale, nil
-	}
-	return nil, fmt.Errorf("musicbrainz: no source answered label catalogue %s: %w", labelMBID, errors.Join(errs...))
 }

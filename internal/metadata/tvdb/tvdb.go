@@ -174,7 +174,10 @@ func (s Series) RemoteID(sourceName string) string {
 // Series reads one show with its characters, artwork, seasons and ratings.
 func (c Client) Series(ctx context.Context, id int64) (Series, error) {
 	var series Series
-	return series, c.get(ctx, "/series/"+strconv.FormatInt(id, 10)+"/extended", url.Values{"short": {"false"}}, &series)
+	if err := c.get(ctx, "/series/"+strconv.FormatInt(id, 10)+"/extended", url.Values{"short": {"false"}}, &series); err != nil {
+		return Series{}, err
+	}
+	return series, nil
 }
 
 // Episode is one episode in one ordering.
@@ -233,7 +236,10 @@ type Hit struct {
 // Search finds series by name.
 func (c Client) Search(ctx context.Context, term string) ([]Hit, error) {
 	var hits []Hit
-	return hits, c.get(ctx, "/search", url.Values{"query": {term}, "type": {"series"}}, &hits)
+	if err := c.get(ctx, "/search", url.Values{"query": {term}, "type": {"series"}}, &hits); err != nil {
+		return nil, err
+	}
+	return hits, nil
 }
 
 // Ping logs in, which is the whole of what a connection test needs to know.

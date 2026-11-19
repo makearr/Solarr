@@ -115,7 +115,10 @@ func (c Client) Volume(ctx context.Context, id string) (Volume, error) {
 		return Volume{}, ErrNotFound
 	}
 	var volume Volume
-	return volume, c.get(ctx, "/volumes/"+id, url.Values{}, &volume)
+	if err := c.get(ctx, "/volumes/"+id, url.Values{}, &volume); err != nil {
+		return Volume{}, err
+	}
+	return volume, nil
 }
 
 // Search finds volumes by title and, when given, author; an ISBN as the title asks by ISBN. An empty answer is not an
