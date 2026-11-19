@@ -145,7 +145,7 @@ func (i Identity) ResolveWorksDetailed(ctx context.Context, at time.Time, links 
 			workID := ids[index]
 			resolution := WorkResolution{WorkID: workID, WorkCreated: created[index]}
 			if link.Edition != nil {
-				editionID, editionCreated, err := resolveEdition(ctx, queries, workID, *link.Edition)
+				editionID, editionCreated, err := resolveEdition(ctx, queries, workID, *link.Edition, link.MediaObjectID != 0)
 				if err != nil {
 					return fmt.Errorf("library: resolve edition for work %d: %w", workID, err)
 				}
@@ -215,7 +215,7 @@ func (i Identity) DeleteEdition(ctx context.Context, editionID int64) error {
 // folder and file.
 func linkResolvedWork(ctx context.Context, queries *librarydb.Queries, at time.Time, workID int64, link WorkLink) error {
 	if link.Edition != nil {
-		if _, _, err := resolveEdition(ctx, queries, workID, *link.Edition); err != nil {
+		if _, _, err := resolveEdition(ctx, queries, workID, *link.Edition, link.MediaObjectID != 0); err != nil {
 			return fmt.Errorf("edition: %w", err)
 		}
 	}
@@ -370,12 +370,17 @@ const insertChunk = 200
 // scoped to workID -- the same find-then-create shape as findOrCreateWork, one level
 // down ADR-7's Work -> Edition -> File chain.
 func resolveEdition(
-	ctx context.Context, queries *librarydb.Queries, workID int64, link EditionLink,
+	ctx context.Context, queries *librarydb.Queries, workID int64, link EditionLink, linkHasFile bool,
 ) (editionID int64, created bool, err error) {
 	existing, err := queries.GetEditionByExternalID(ctx, librarydb.GetEditionByExternalIDParams{
 		Provider: link.Provider, ExternalID: link.ExternalID,
 	})
 	if err == nil {
+		if existing.WorkID != workID {
+			if err := moveEditionUnlessHeld(ctx, queries, existing.ID, workID, linkHasFile); err != nil {
+				return 0, false, err
+			}
+		}
 		return existing.ID, false, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -395,6 +400,25 @@ func resolveEdition(
 		return 0, false, fmt.Errorf("link external id: %w", err)
 	}
 	return edition.ID, true, nil
+}
+
+// moveEditionUnlessHeld gives an edition a provider now places under another work to that work, when the edition holds
+// no files or the link naming it carries a file that would otherwise be left without one; else it stays where it is.
+func moveEditionUnlessHeld(ctx context.Context, queries *librarydb.Queries, editionID, workID int64, linkHasFile bool) error {
+	files, err := queries.CountEditionFiles(ctx, sql.NullInt64{Int64: editionID, Valid: true})
+	if err != nil {
+		return fmt.Errorf("count edition files: %w", err)
+	}
+	if files > 0 && !linkHasFile {
+		return nil
+	}
+	if err := queries.ClearEditionOfOtherWorks(ctx, librarydb.ClearEditionOfOtherWorksParams{EditionID: sql.NullInt64{Int64: editionID, Valid: true}, WorkID: workID}); err != nil {
+		return fmt.Errorf("release edition from the old work: %w", err)
+	}
+	if err := queries.MoveEditionToWork(ctx, librarydb.MoveEditionToWorkParams{KeepID: workID, EditionID: editionID}); err != nil {
+		return fmt.Errorf("move edition: %w", err)
+	}
+	return nil
 }
 
 // ReturnedToReview is what ReturnToReview did with an album.

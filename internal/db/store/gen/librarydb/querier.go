@@ -83,6 +83,8 @@ type Querier interface {
 	ClearCrossoverMemberGuesses(ctx context.Context, collectionID int64) error
 	ClearDesiredProfileOverride(ctx context.Context, desiredItemID int64) error
 	ClearDesiredTargetOverride(ctx context.Context, desiredItemID int64) error
+	// A wanted item of the old work stops pointing at an edition that is no longer its work's.
+	ClearEditionOfOtherWorks(ctx context.Context, arg ClearEditionOfOtherWorksParams) error
 	// Import revert's own first step for one unit (todo 4.9): work_id/edition_id
 	// going back to NULL is what makes it safe to then delete the work/edition
 	// row itself (import_unit's own FK to either carries no ON DELETE CASCADE,
@@ -126,6 +128,7 @@ type Querier interface {
 	// The truth the reconciliation job compares a counter against.
 	CountDesiredItemsByState(ctx context.Context, categoryID int64) ([]CountDesiredItemsByStateRow, error)
 	CountDesiredItemsInCategory(ctx context.Context, arg CountDesiredItemsInCategoryParams) (int64, error)
+	CountEditionFiles(ctx context.Context, editionID sql.NullInt64) (int64, error)
 	CountEnabledSubscriptionsForSubject(ctx context.Context, arg CountEnabledSubscriptionsForSubjectParams) (int64, error)
 	// The dashboard's fresh-works count (ADR-55, todo 4.20): every work with a
 	// work_date of kind on or after the cutoff. Distinct since a work can carry
