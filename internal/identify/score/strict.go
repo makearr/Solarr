@@ -45,7 +45,12 @@ func ValidateStrict(data []byte) []Problem {
 	var strict Profile
 	if err := decoder.Decode(&strict); err != nil {
 		if field, found := strings.CutPrefix(err.Error(), "json: unknown field "); found {
-			add("rules", strings.Trim(field, `"`), "a known key (see the profile reference); this one would be ignored")
+			key := strings.Trim(field, `"`)
+			if key == "upgrade" {
+				add("rules", key, "not here: the upgrade policy is set in its own field beside the rules")
+			} else {
+				add("rules", key, "a known key (see the profile reference); this one would be ignored")
+			}
 		}
 	}
 

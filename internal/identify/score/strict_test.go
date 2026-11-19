@@ -41,3 +41,11 @@ func TestValidateStrict(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateStrict_UpgradeBelongsBesideTheRules(t *testing.T) {
+	got := ValidateStrict([]byte(`{"compare":["score"],"upgrade":{"min_delta":15}}`))
+	want := []Problem{{Path: "rules", Value: "upgrade", Expectation: "not here: the upgrade policy is set in its own field beside the rules"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ValidateStrict = %#v, want %#v", got, want)
+	}
+}

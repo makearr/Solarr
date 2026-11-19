@@ -26,6 +26,8 @@ type RankedProfile struct {
 	// UpgradeRules rank for an item that already has files: the target's preference for over-quality applies only
 	// when the library asked for it. Rules, the default, are for an item with nothing yet.
 	UpgradeRules score.Profile
+	// Upgrade is when a better release replaces a file under this profile: the minimum gain, file age and imports per window.
+	Upgrade score.UpgradePolicy
 }
 
 // ForUpgrade is the profiles as they judge an item that already has files.
@@ -115,7 +117,9 @@ func LibraryProfiles(
 			rules = WithFreshTarget(rules, *chosen)
 			target = chosen
 		}
-		profiles = append(profiles, RankedProfile{Name: profile.Name, Rules: rules, Target: target, UpgradeRules: upgrade})
+		// A policy that does not parse is the zero policy, as it always was, not a reason to stop judging.
+		policy, _ := score.ParseUpgrade([]byte(profile.UpgradeJSON))
+		profiles = append(profiles, RankedProfile{Name: profile.Name, Rules: rules, Target: target, UpgradeRules: upgrade, Upgrade: policy})
 	}
 	return profiles, nil
 }
@@ -252,21 +256,4 @@ func BeatsIncumbent(candidate, incumbent model.Decision, minDelta float64) bool 
 	winner, _ := model.Compare(candidate.Quality, incumbent.Quality)
 	gain := candidate.Score() - incumbent.Score()
 	return winner < 0 || (winner == 0 && gain > 0 && gain >= minDelta)
-}
-
-// UpgradePolicyFor is the upgrade policy of the category's first quality profile; the zero policy when it has none.
-func UpgradePolicyFor(snapshot *settings.Snapshot, categoryID int64) score.UpgradePolicy {
-	category, found := snapshot.Category(categoryID)
-	if !found || len(category.QualityProfileIDs) == 0 {
-		return score.UpgradePolicy{}
-	}
-	profile, found := snapshot.QualityProfile(category.QualityProfileIDs[0])
-	if !found {
-		return score.UpgradePolicy{}
-	}
-	policy, err := score.ParseUpgrade([]byte(profile.UpgradeJSON))
-	if err != nil {
-		return score.UpgradePolicy{}
-	}
-	return policy
 }

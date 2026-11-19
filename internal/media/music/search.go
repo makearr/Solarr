@@ -266,7 +266,7 @@ func (s Search) yardstickFor(ctx context.Context, item librarydb.DesiredItem) (y
 		languagePolicy: judge.LanguagePolicyFor(snapshot, item.CategoryID), preferPropers: preferPropers, delay: delay,
 	}
 	built.cutoffMet = item.State == ItemStateComplete
-	built.minUpgradeDelta = judge.UpgradePolicyFor(snapshot, item.CategoryID).MinDelta
+	built.minUpgradeDelta = rules[0].Upgrade.MinDelta
 	if item.State == ItemStateUpgradable {
 		built.rules = judge.ForUpgrade(built.rules)
 		if built.incumbent, built.incumbentFile, err = s.incumbentFor(ctx, item.WorkID, built); err != nil {

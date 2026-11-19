@@ -20,7 +20,6 @@ type Profile struct {
 	// comparison, so an existing bitrate-only profile needs no changes at all.
 	Targets map[string][]Target `json:"targets"`
 	Scoring []ScoringRule       `json:"scoring"`
-	Upgrade UpgradePolicy       `json:"upgrade"`
 }
 
 // Requirements is ADR-40 stage 1 -- every entry is evaluated, never short-circuited,

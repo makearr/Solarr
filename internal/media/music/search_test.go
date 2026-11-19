@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/statistics"
@@ -1041,5 +1042,23 @@ func TestSearchItem_AHyphenatedArtistAndATitleEndingInAlbumAreRead(t *testing.T)
 	}
 	if want := []string{"guid-own"}; !slices.Equal(guids, want) {
 		t.Errorf("decided on %v, want %v", guids, want)
+	}
+}
+
+// K-4: the minimum gain comes from the profile that ranked the release, here the item's own, not the library's first.
+func TestLibraryProfiles_CarryTheUpgradePolicyOfTheProfileThatRanked(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	own, err := env.settings.CreateQualityProfile(t.Context(), "own", alwaysAcceptRules, `{"min_delta":5}`)
+	if err != nil {
+		t.Fatalf("CreateQualityProfile: %v", err)
+	}
+	desired := library.NewDesired(env.library)
+	if err := desired.SetProfileOverride(t.Context(), item.ID, &own.ID); err != nil {
+		t.Fatalf("SetProfileOverride: %v", err)
+	}
+	profiles, err := judge.LibraryProfiles(t.Context(), desired, env.settings.Snapshot(), item.ID, item.CategoryID, item.ProfileID)
+	if err != nil || len(profiles) != 1 || profiles[0].Upgrade.MinDelta != 5 {
+		t.Fatalf("profiles = %+v, %v; want one carrying min_delta 5", profiles, err)
 	}
 }

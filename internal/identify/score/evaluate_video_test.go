@@ -41,8 +41,7 @@ const seriesStandardProfileJSON = `{
         {"field": "seeders", "gte": 20},
         {"field": "protocol", "eq": "usenet"}
     ]}
-  ],
-  "upgrade": {"min_delta": 15, "min_file_age": "24h", "max_per_window": 3, "window": "168h"}
+  ]
 }`
 
 func seriesStandardProfile(t *testing.T) Profile {
@@ -52,15 +51,6 @@ func seriesStandardProfile(t *testing.T) Profile {
 		t.Fatalf("Parse: %v", err)
 	}
 	return profile
-}
-
-// TestSeriesStandard_ParsesTheUpgradeBlockWithoutEvaluatingIt confirms the parsed
-// struct exists for a future caller, even though this pass evaluates none of it.
-func TestSeriesStandard_ParsesTheUpgradeBlockWithoutEvaluatingIt(t *testing.T) {
-	profile := seriesStandardProfile(t)
-	if profile.Upgrade.MinDelta != 15 || profile.Upgrade.MaxPerWindow != 3 {
-		t.Errorf("Upgrade = %+v, want MinDelta=15 MaxPerWindow=3", profile.Upgrade)
-	}
 }
 
 // TestSeriesStandard_HEVCBeatsH264WhenResolutionTies is the design doc's own
