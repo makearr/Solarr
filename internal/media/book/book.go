@@ -9,14 +9,16 @@ import "strings"
 // Provider names, as stored in work_external_id and person_external_id.
 const (
 	ProviderOpenLibrary = "openlibrary"
-	ProviderGoogleBooks = "googlebooks"
-	ProviderAudible     = "audible"
-	ProviderISBN        = "isbn"
-	ProviderGoodreads   = "goodreads"
-	ProviderHardcover   = "hardcover"
-	ProviderITunes      = "itunes"
-	ProviderFantLab     = "fantlab"
-	ProviderWikidata    = "wikidata"
+	// ProviderOpenLibraryAuthor is a person's Open Library author id, "OL26320A", beside the name they are kept under.
+	ProviderOpenLibraryAuthor = "openlibrary:author"
+	ProviderGoogleBooks       = "googlebooks"
+	ProviderAudible           = "audible"
+	ProviderISBN              = "isbn"
+	ProviderGoodreads         = "goodreads"
+	ProviderHardcover         = "hardcover"
+	ProviderITunes            = "itunes"
+	ProviderFantLab           = "fantlab"
+	ProviderWikidata          = "wikidata"
 	// ProviderSeries keeps a book series on its collection row, by Wikidata's item or the provider's own name for it.
 	ProviderSeries = "book:series"
 	// ProviderPerson names an author or narrator by their name, so one writer is one person in every book library.
@@ -55,11 +57,13 @@ type IDs struct {
 func (ids IDs) Empty() bool { return ids == IDs{} }
 
 // Credit is one person's part in a book.
+// OpenLibrary is the person's Open Library author id when the source pairs names with ids.
 type Credit struct {
-	Name  string
-	Image string
-	Role  string
-	Order int
+	Name        string
+	Image       string
+	Role        string
+	Order       int
+	OpenLibrary string
 }
 
 // Image is one picture of a book: its cover, kept as a "poster" as every work's picture is.

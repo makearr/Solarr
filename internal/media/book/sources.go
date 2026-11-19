@@ -105,6 +105,9 @@ func FromOpenLibrary(work openlibrary.Work, doc openlibrary.Doc) Book {
 		if index < len(keys) {
 			credit.Image = openlibrary.AuthorPhotoURL(keys[index])
 		}
+		if len(doc.AuthorKeys) == len(doc.AuthorNames) {
+			credit.OpenLibrary = doc.AuthorKeys[index]
+		}
 		book.Credits = append(book.Credits, credit)
 	}
 	return book
@@ -305,16 +308,22 @@ func Merge(first, second Book) Book {
 	return merged
 }
 
-// mergeCredits keeps the first's credits of each role it has, and takes the second's of a role it lacks; a picture the
-// first lacks for someone the second names is taken too.
+// mergeCredits keeps the first's credits of each role it has, and takes the second's of a role it lacks; a picture or
+// author id the first lacks for someone the second names is taken too.
 func mergeCredits(first, second []Credit) []Credit {
 	merged := slices.Clone(first)
 	for index, credit := range merged {
-		if credit.Image != "" {
-			continue
+		if credit.Image == "" {
+			if at := slices.IndexFunc(second, func(other Credit) bool { return PersonKey(other.Name) == PersonKey(credit.Name) && other.Image != "" }); at >= 0 {
+				merged[index].Image = second[at].Image
+			}
 		}
-		if at := slices.IndexFunc(second, func(other Credit) bool { return PersonKey(other.Name) == PersonKey(credit.Name) && other.Image != "" }); at >= 0 {
-			merged[index].Image = second[at].Image
+		if credit.OpenLibrary == "" {
+			if at := slices.IndexFunc(second, func(other Credit) bool {
+				return PersonKey(other.Name) == PersonKey(credit.Name) && other.OpenLibrary != ""
+			}); at >= 0 {
+				merged[index].OpenLibrary = second[at].OpenLibrary
+			}
 		}
 	}
 	for _, credit := range second {

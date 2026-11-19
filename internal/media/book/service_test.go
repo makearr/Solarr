@@ -21,7 +21,10 @@ import (
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
-type fakeOpenLibrary struct{ asked []string }
+type fakeOpenLibrary struct {
+	asked []string
+	works []openlibrary.Doc
+}
 
 func (f *fakeOpenLibrary) Search(_ context.Context, title, author string, _ int) ([]openlibrary.Doc, error) {
 	f.asked = append(f.asked, "search:"+title+"|"+author)
@@ -35,6 +38,14 @@ func (f *fakeOpenLibrary) ByAuthor(_ context.Context, author string, _ int) ([]o
 		{Key: "/works/OL1002W", Title: "The Glass Orchard", AuthorNames: []string{"Mara Quell"}, FirstPublishYear: 1991, CoverID: 7},
 		{Key: "/works/OL1003W", Title: "Not Hers", AuthorNames: []string{"Someone Else"}, FirstPublishYear: 2001},
 	}, nil
+}
+
+func (f *fakeOpenLibrary) ByAuthorKey(_ context.Context, authorID string, limit, offset int) ([]openlibrary.Doc, int, error) {
+	f.asked = append(f.asked, fmt.Sprintf("key:%s@%d", authorID, offset))
+	if f.works == nil {
+		return nil, 0, nil
+	}
+	return f.works[min(offset, len(f.works)):min(offset+limit, len(f.works))], len(f.works), nil
 }
 
 func (f *fakeOpenLibrary) Doc(_ context.Context, workID string) (openlibrary.Doc, error) {
@@ -115,8 +126,8 @@ func TestFetchFor_WikidataLeadsWhatItHoldsAndNeverTheTitle(t *testing.T) {
 	if !reflect.DeepEqual(book.Genres, []string{"Fantasy fiction", "Epic"}) {
 		t.Errorf("genres = %v", book.Genres)
 	}
-	if book.Credits[0].Image == "" {
-		t.Errorf("the author's photo should come from Open Library: %+v", book.Credits)
+	if book.Credits[0].Image == "" || book.Credits[0].OpenLibrary != "OL2001A" {
+		t.Errorf("the author's photo and key should come from Open Library: %+v", book.Credits)
 	}
 }
 

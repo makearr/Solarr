@@ -204,6 +204,26 @@ func (c Client) ByAuthor(ctx context.Context, author string, limit int) ([]Doc, 
 	return found.Docs, nil
 }
 
+// ByAuthorKey finds one page of the works of the author Open Library keys so, the newest first, with how many there are.
+func (c Client) ByAuthorKey(ctx context.Context, authorID string, limit, offset int) ([]Doc, int, error) {
+	if !authorPattern.MatchString(authorID) {
+		return nil, 0, ErrNotFound
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	query := url.Values{"fields": {searchFields}, "limit": {strconv.Itoa(limit)}, "offset": {strconv.Itoa(max(offset, 0))},
+		"sort": {"new"}, "author_key": {authorID}}
+	var found struct {
+		NumFound int   `json:"numFound"`
+		Docs     []Doc `json:"docs"`
+	}
+	if err := c.get(ctx, "/search.json?"+query.Encode(), &found); err != nil {
+		return nil, 0, err
+	}
+	return found.Docs, found.NumFound, nil
+}
+
 // Doc reads what the search index says of one work: its editions' ids, publishers and pages in one request.
 func (c Client) Doc(ctx context.Context, workID string) (Doc, error) {
 	if !workPattern.MatchString(workID) {

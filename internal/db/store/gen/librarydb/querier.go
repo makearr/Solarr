@@ -32,6 +32,8 @@ type Querier interface {
 	// The second half of importing a file, and execlastid for the same reason.
 	AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) (int64, error)
 	AddPersonAlias(ctx context.Context, arg AddPersonAliasParams) error
+	// A further id of a person: the first person to claim it keeps it, so a key never moves between same-named people.
+	AddPersonExternalID(ctx context.Context, arg AddPersonExternalIDParams) error
 	AddRelationship(ctx context.Context, arg AddRelationshipParams) error
 	AddTagAlias(ctx context.Context, arg AddTagAliasParams) error
 	// The closure is materialised, so inserting a tag inserts its ancestry too.

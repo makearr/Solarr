@@ -46,7 +46,10 @@ the series' name, so Audible's several ASINs for one series are one collection; 
 and the book's place in it is the `series_position` field.
 
 An author's page lists their other books from Open Library (`AuthorWorks`, `profile.go`), each added to the library from
-there; covers come from Open Library, Google Books and Audible, whose hosts the picture cache allows.
+there. They are read by the author's Open Library key (`openlibrary:author` on the person, stored from a book's credits
+when Open Library pairs each author name with its key; the first person to claim a key keeps it), newest first, in pages
+of 100, at most five; an author with no key yet (none of their books refreshed since) is searched by name, the 100 most
+published works whose authors include that name. A name is shared by several writers, the key is not; covers come from Open Library, Google Books and Audible, whose hosts the picture cache allows.
 
 Three more providers, found by reading what ReadMeABook, Listenarr, Calibre-Web and Audiobookshelf use: iTunes (audiobooks
 only, keyless), FantLab (keyless; the original title becomes the title, the Russian one an alias) and Hardcover (needs the

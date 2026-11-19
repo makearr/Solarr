@@ -42,13 +42,17 @@ func (f Following) FollowCandidates(ctx context.Context, follow media.Follow) ([
 	if err != nil {
 		return nil, err
 	}
-	docs, err := f.Authors.writtenBy(ctx, person.Name)
+	key, err := f.Authors.authorKey(ctx, person.ID)
 	if err != nil {
-		return nil, fmt.Errorf("book: follow %s: %w", person.Name, err)
+		return nil, err
 	}
 	since := 0
 	if !follow.BackCatalogue {
 		since = time.Unix(follow.CreatedAt, 0).UTC().Year()
+	}
+	docs, err := f.Authors.writtenBy(ctx, person.Name, key, authorQuery{since: since})
+	if err != nil {
+		return nil, fmt.Errorf("book: follow %s: %w", person.Name, err)
 	}
 	held := map[string]bool{}
 	if titles, err := f.Authors.Reader.TitlesOf(ctx, f.Authors.Format.MediaType, follow.CategoryID); err == nil {

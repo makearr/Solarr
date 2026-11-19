@@ -70,6 +70,12 @@ INSERT INTO person_external_id (provider, external_id, person_id)
 VALUES (?, ?, ?)
 ON CONFLICT (provider, external_id) DO UPDATE SET person_id = excluded.person_id;
 
+-- A further id of a person: the first person to claim it keeps it, so a key never moves between same-named people.
+-- name: AddPersonExternalID :exec
+INSERT INTO person_external_id (provider, external_id, person_id)
+VALUES (?, ?, ?)
+ON CONFLICT (provider, external_id) DO NOTHING;
+
 -- name: GetPersonByExternalID :one
 SELECT p.id, p.name, p.sort_name, p.disambiguation, p.kind, p.gender, p.country,
        p.born, p.died, p.fields_json, p.monitored, p.added_at, p.name_locked

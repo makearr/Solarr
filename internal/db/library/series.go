@@ -71,11 +71,13 @@ type SeriesRatingWrite struct {
 }
 
 // SeriesCreditWrite is one person's credit on the series; PartRef scopes it to one episode, empty for the whole run.
+// ExternalIDs are the person's further provider ids, linked only where no other person holds them.
 type SeriesCreditWrite struct {
 	Provider, ExternalID, Name, ImageURL string
 	Role, Character                      string
 	Ord                                  int
 	PartRef                              string
+	ExternalIDs                          []ExternalIDWrite
 }
 
 // SeriesNetworkWrite is a further network or streamer the series airs on.

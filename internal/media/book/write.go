@@ -91,9 +91,13 @@ func ToWrite(format Format, book Book, now time.Time) library.SeriesWrite {
 		if key == "" {
 			continue
 		}
-		write.Credits = append(write.Credits, library.SeriesCreditWrite{
+		entry := library.SeriesCreditWrite{
 			Provider: ProviderPerson, ExternalID: key, Name: strings.TrimSpace(credit.Name), ImageURL: credit.Image, Role: credit.Role, Ord: credit.Order,
-		})
+		}
+		if credit.OpenLibrary != "" {
+			entry.ExternalIDs = []library.ExternalIDWrite{{Provider: ProviderOpenLibraryAuthor, ExternalID: credit.OpenLibrary}}
+		}
+		write.Credits = append(write.Credits, entry)
 	}
 	if book.Series != nil && book.Series.Name != "" {
 		// Keyed by name: Audible gives one series several ASINs, which made it several collections.

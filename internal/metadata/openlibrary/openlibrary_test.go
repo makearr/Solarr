@@ -115,3 +115,28 @@ func TestCoverAndPhotoAddresses(t *testing.T) {
 		t.Error("no picture should be no address")
 	}
 }
+
+func TestByAuthorKeyAsksTheExactAuthorAPageAtATime(t *testing.T) {
+	transport := &answer{bodies: map[string]string{"/search.json": `{"numFound":250,"docs":[{"key":"/works/OL1001W","title":"The Lantern Keeper",
+		"author_name":["Mara Quell"],"author_key":["OL2001A"]}]}`}}
+	docs, found, err := client(t, transport).ByAuthorKey(t.Context(), "OL2001A", 100, 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []openlibrary.Doc{{Key: "/works/OL1001W", Title: "The Lantern Keeper", AuthorNames: []string{"Mara Quell"}, AuthorKeys: []string{"OL2001A"}}}
+	if !reflect.DeepEqual(docs, want) || found != 250 {
+		t.Errorf("docs = %+v found %d, want %+v found 250", docs, found, want)
+	}
+	asked := transport.asked[0]
+	for _, part := range []string{"author_key=OL2001A", "limit=100", "offset=200", "sort=new"} {
+		if !strings.Contains(asked, part) {
+			t.Errorf("asked %s, want %s in it", asked, part)
+		}
+	}
+	if _, _, err := client(t, transport).ByAuthorKey(t.Context(), "Mara Quell", 100, 0); !errors.Is(err, openlibrary.ErrNotFound) {
+		t.Errorf("a name as the key: %v, want not found", err)
+	}
+	if len(transport.asked) != 1 {
+		t.Errorf("a malformed key was asked: %v", transport.asked)
+	}
+}

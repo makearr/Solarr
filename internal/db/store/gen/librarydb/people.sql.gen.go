@@ -67,6 +67,24 @@ func (q *Queries) AddPersonAlias(ctx context.Context, arg AddPersonAliasParams) 
 	return err
 }
 
+const addPersonExternalID = `-- name: AddPersonExternalID :exec
+INSERT INTO person_external_id (provider, external_id, person_id)
+VALUES (?, ?, ?)
+ON CONFLICT (provider, external_id) DO NOTHING
+`
+
+type AddPersonExternalIDParams struct {
+	Provider   string
+	ExternalID string
+	PersonID   int64
+}
+
+// A further id of a person: the first person to claim it keeps it, so a key never moves between same-named people.
+func (q *Queries) AddPersonExternalID(ctx context.Context, arg AddPersonExternalIDParams) error {
+	_, err := q.db.ExecContext(ctx, addPersonExternalID, arg.Provider, arg.ExternalID, arg.PersonID)
+	return err
+}
+
 const addRelationship = `-- name: AddRelationship :exec
 INSERT INTO relationship (from_type, from_id, to_type, to_id, kind)
 VALUES (?, ?, ?, ?, ?)

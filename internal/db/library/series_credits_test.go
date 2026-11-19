@@ -156,3 +156,27 @@ func TestAWriteOfKnownGenresOnlyMakesNoTagOfAKeyword(t *testing.T) {
 		t.Errorf("tags = %v, want %v: both works are Fantasy, and no keyword became a tag", names, want)
 	}
 }
+
+func TestACreditsFurtherIDIsLinkedOnceAndNeverTakenFromAnotherPerson(t *testing.T) {
+	opened, _ := newLibrary(t)
+	series := library.NewSeries(opened)
+	write := sampleSeries()
+	write.Credits = []library.SeriesCreditWrite{
+		{Provider: "book:person", ExternalID: "mara quell", Name: "Mara Quell", Role: "author",
+			ExternalIDs: []library.ExternalIDWrite{{Provider: "openlibrary:author", ExternalID: "OL2001A"}}},
+		{Provider: "book:person", ExternalID: "m quell", Name: "M. Quell", Role: "author", Ord: 1,
+			ExternalIDs: []library.ExternalIDWrite{{Provider: "openlibrary:author", ExternalID: "OL2001A"}}},
+	}
+	if _, err := series.Upsert(t.Context(), seriesAt, write); err != nil {
+		t.Fatal(err)
+	}
+	people := library.NewPeople(opened)
+	first, _, err := people.FindByExternalID(t.Context(), "book:person", "mara quell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	holder, found, err := people.FindByExternalID(t.Context(), "openlibrary:author", "OL2001A")
+	if err != nil || !found || holder != first {
+		t.Errorf("OL2001A held by %d (found %v, err %v), want the first credited, %d", holder, found, err, first)
+	}
+}

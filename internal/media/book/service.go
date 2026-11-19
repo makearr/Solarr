@@ -32,6 +32,7 @@ var ErrNoSource = errors.New("book: no metadata source answered")
 type OpenLibrarySource interface {
 	Search(ctx context.Context, title, author string, limit int) ([]openlibrary.Doc, error)
 	ByAuthor(ctx context.Context, author string, limit int) ([]openlibrary.Doc, error)
+	ByAuthorKey(ctx context.Context, authorID string, limit, offset int) ([]openlibrary.Doc, int, error)
 	Doc(ctx context.Context, workID string) (openlibrary.Doc, error)
 	Work(ctx context.Context, workID string) (openlibrary.Work, error)
 	ByISBN(ctx context.Context, isbn string) (openlibrary.Edition, error)

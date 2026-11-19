@@ -10,6 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/metadata/openlibrary"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/migrations"
 )
@@ -50,7 +51,10 @@ func TestFollowingAnAuthorOffersTheirBooksFromTheFollowsYearOrEveryOneWithTheBac
 		t.Fatal(err)
 	}
 	following := Following{
-		Authors: AuthorWorks{Format: Ebook, People: library.NewPeople(opened), Reader: library.NewSeriesReader(opened), Source: &fakeOpenLibrary{}},
+		Authors: AuthorWorks{Format: Ebook, People: library.NewPeople(opened), Reader: library.NewSeriesReader(opened), Source: &fakeOpenLibrary{works: []openlibrary.Doc{
+			{Key: "/works/OL1002W", Title: "The Glass Orchard", AuthorNames: []string{"Mara Quell"}, FirstPublishYear: 1991, CoverID: 7},
+			{Key: "/works/OL1001W", Title: "The Lantern Keeper", AuthorNames: []string{"Mara Quell"}, FirstPublishYear: 1987},
+		}}},
 		Catalog: Catalog{Service: Service{Format: Ebook, Series: library.NewSeries(opened)}},
 	}
 	follow := media.Follow{SubjectType: "person", SubjectID: author, CategoryID: 5, BackCatalogue: true}

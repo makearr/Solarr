@@ -37,6 +37,13 @@ func (s Series) writeCredits(ctx context.Context, at time.Time, workID int64, pa
 				if err != nil {
 					return fmt.Errorf("person %s:%s: %w", credit.Provider, credit.ExternalID, err)
 				}
+				for _, id := range credit.ExternalIDs {
+					if err := queries.AddPersonExternalID(ctx, librarydb.AddPersonExternalIDParams{
+						Provider: id.Provider, ExternalID: id.ExternalID, PersonID: personID,
+					}); err != nil {
+						return fmt.Errorf("person %s:%s: %w", id.Provider, id.ExternalID, err)
+					}
+				}
 				if credit.ImageURL != "" {
 					if err := queries.SetPersonImageURL(ctx, librarydb.SetPersonImageURLParams{ImageUrl: credit.ImageURL, ID: personID}); err != nil {
 						return fmt.Errorf("person image: %w", err)

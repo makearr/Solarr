@@ -7,7 +7,7 @@ import (
 
 func TestAnAuthorsOtherBooksAreTheirsAndNotHeld(t *testing.T) {
 	works := AuthorWorks{Format: Ebook, Source: &fakeOpenLibrary{}}
-	got, err := works.otherBooks(t.Context(), "Mara Quell", map[string]bool{foldTitle("The Lantern Keeper"): true})
+	got, err := works.otherBooks(t.Context(), "Mara Quell", "", map[string]bool{foldTitle("The Lantern Keeper"): true})
 	if err != nil {
 		t.Fatal(err)
 	}
