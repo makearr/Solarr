@@ -1,7 +1,6 @@
 package score
 
 import (
-	"regexp"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -68,8 +67,8 @@ func evaluateOperator(spec Spec, facts Facts, preferred []string) bool {
 		if !ok {
 			return false
 		}
-		matched, err := regexp.MatchString(spec.Matches, got)
-		return err == nil && matched
+		pattern := CompiledPattern(spec.Matches)
+		return pattern != nil && pattern.MatchString(got)
 	case spec.GTE != nil || spec.GT != nil || spec.LTE != nil || spec.LT != nil:
 		got, ok := facts.numberField(spec.Field)
 		if !ok {
