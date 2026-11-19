@@ -282,16 +282,25 @@ func mergeEpisodes(into *Series, other Series) {
 		into.Episodes = other.Episodes
 		return
 	}
-	byKey := make(map[Key]Episode, len(other.Episodes))
-	for _, episode := range other.Episodes {
-		byKey[Key{episode.Season, episode.Number}] = episode
+	byKey := make(map[Key]int, len(other.Episodes))
+	for index, episode := range other.Episodes {
+		byKey[Key{episode.Season, episode.Number}] = index
 	}
+	joined := make(map[int]bool, len(other.Episodes))
 	for index := range into.Episodes {
 		have := &into.Episodes[index]
-		match, found := byKey[Key{have.Season, have.Number}]
+		at, found := byKey[Key{have.Season, have.Number}]
 		if !found {
 			continue
 		}
+		if !sameEpisode(*have, other.Episodes[at]) {
+			// The sources number this one differently: its counterpart is the one aired the same day, if there is one.
+			if at = counterpart(*have, other.Episodes); at < 0 {
+				continue
+			}
+		}
+		joined[at] = true
+		match := other.Episodes[at]
 		for provider, id := range match.IDs {
 			if have.IDs == nil {
 				have.IDs = map[string]int64{}
@@ -313,6 +322,79 @@ func mergeEpisodes(into *Series, other Series) {
 			have.AirUTC, have.AirConfidence, have.AirBasis = match.AirUTC, match.AirConfidence, match.AirBasis
 		}
 	}
+	into.Episodes = append(into.Episodes, announcedAhead(into.Episodes, other.Episodes, joined)...)
+}
+
+// sameEpisode says two sources' entries under one number are one episode: aired within a day of each other, or, with a
+// date missing, equally titled by a title that names something.
+func sameEpisode(have, match Episode) bool {
+	if have.AirDate != "" && match.AirDate != "" {
+		return daysApart(have.AirDate, match.AirDate) <= 1
+	}
+	title := normalised(have.Title)
+	return title != "" && title == normalised(match.Title) && !genericTitle(have.Title) && !genericTitle(match.Title)
+}
+
+// counterpart is the index of the one episode of others aired the day have did, -1 when there is none or several.
+func counterpart(have Episode, others []Episode) int {
+	if have.AirDate == "" {
+		return -1
+	}
+	found := -1
+	for index, other := range others {
+		if other.AirDate != have.AirDate || !sameEpisode(have, other) {
+			continue
+		}
+		if found >= 0 {
+			return -1
+		}
+		found = index
+	}
+	return found
+}
+
+// announcedAhead are the episodes only the other source lists that come after the last one the basis lists in their
+// season (or open the season after its last); a hole inside a season is another numbering's, never filled.
+func announcedAhead(have, others []Episode, joined map[int]bool) []Episode {
+	highest := map[int]int{}
+	lastAired := map[int]string{}
+	topSeason := 0
+	for _, episode := range have {
+		highest[episode.Season] = max(highest[episode.Season], episode.Number)
+		lastAired[episode.Season] = max(lastAired[episode.Season], episode.AirDate)
+		topSeason = max(topSeason, episode.Season)
+	}
+	var ahead []Episode
+	for index, episode := range others {
+		if joined[index] || episode.Season == 0 || episode.AirDate == "" || episode.Season > topSeason+1 {
+			continue
+		}
+		if episode.Number <= highest[episode.Season] || episode.AirDate <= lastAired[episode.Season] {
+			continue
+		}
+		ahead = append(ahead, episode)
+	}
+	return ahead
+}
+
+func daysApart(a, b string) int {
+	first, errFirst := time.Parse(time.DateOnly, a)
+	second, errSecond := time.Parse(time.DateOnly, b)
+	if errFirst != nil || errSecond != nil {
+		return math.MaxInt
+	}
+	return int(math.Abs(first.Sub(second).Hours() / 24))
+}
+
+// genericTitle is a placeholder a source gives an episode it has no name for.
+func genericTitle(title string) bool {
+	folded := normalised(title)
+	if folded == "" || folded == "tba" || folded == "tbd" {
+		return true
+	}
+	number, found := strings.CutPrefix(folded, "episode")
+	_, err := strconv.Atoi(number)
+	return found && err == nil
 }
 
 func rank(confidence Confidence) int {
@@ -418,7 +500,9 @@ func statusOfTVmaze(status string) Status {
 		return StatusContinuing
 	case "ended":
 		return StatusEnded
-	case "to be determined", "in development":
+	case "to be determined":
+		return StatusContinuing
+	case "in development":
 		return StatusUpcoming
 	}
 	return ""

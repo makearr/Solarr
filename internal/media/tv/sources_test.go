@@ -80,3 +80,59 @@ func TestTVmazeAloneSuppliesTheEpisodeList(t *testing.T) {
 		t.Errorf("episodes = %+v, want a date-only low-confidence episode", merged.Episodes)
 	}
 }
+
+func episodeOf(season, number int, title, date string, id int64, confidence tv.Confidence) tv.Episode {
+	return tv.Episode{Season: season, Number: number, Title: title, AirDate: date, AirConfidence: confidence, IDs: map[string]int64{"p": id}}
+}
+
+func TestMergeTakesAnEpisodesDetailsFromTheOneAiredTheSameDayNotFromTheOneUnderItsNumber(t *testing.T) {
+	// The second source counts a double-length premiere as two episodes, so every later number is shifted by one.
+	first := tv.Series{Episodes: []tv.Episode{
+		episodeOf(1, 1, "Premiere", "2025-01-05", 1, tv.ConfidenceMedium),
+		episodeOf(1, 2, "Second Night", "2025-01-12", 2, tv.ConfidenceMedium),
+	}}
+	second := tv.Series{Episodes: []tv.Episode{
+		episodeOf(1, 1, "Premiere, Part 1", "2025-01-05", 11, tv.ConfidenceHigh),
+		episodeOf(1, 2, "Premiere, Part 2", "2025-01-05", 12, tv.ConfidenceHigh),
+		episodeOf(1, 3, "Second Night", "2025-01-12", 13, tv.ConfidenceHigh),
+	}}
+	second.Episodes[2].Overview = "The second night."
+	merged := tv.Merge(first, second)
+	got := merged.Episodes[1]
+	if got.Overview != "The second night." || got.IDs["p"] != 13 || len(got.AltTitles) != 0 {
+		t.Errorf("episode 2 = %+v, want the second night's synopsis and no alternate title", got)
+	}
+}
+
+func TestMergeLeavesAnEpisodeAloneWhenNoEpisodeOfTheOtherSourceAiredThatDay(t *testing.T) {
+	first := tv.Series{Episodes: []tv.Episode{episodeOf(1, 1, "Pilot", "2025-01-05", 1, tv.ConfidenceMedium)}}
+	second := tv.Series{Episodes: []tv.Episode{episodeOf(1, 1, "Another Episode", "2025-03-09", 21, tv.ConfidenceHigh)}}
+	merged := tv.Merge(first, second)
+	want := episodeOf(1, 1, "Pilot", "2025-01-05", 1, tv.ConfidenceMedium)
+	if !reflect.DeepEqual(merged.Episodes, []tv.Episode{want}) {
+		t.Errorf("episodes = %+v, want the basis's untouched", merged.Episodes)
+	}
+}
+
+func TestMergeAppendsAnEpisodeOnlyTheOtherSourceAnnouncedAndJoinsItLater(t *testing.T) {
+	first := tv.Series{Episodes: []tv.Episode{episodeOf(1, 1, "Pilot", "2025-01-05", 1, tv.ConfidenceMedium)}}
+	second := tv.Series{Episodes: []tv.Episode{
+		episodeOf(1, 1, "Pilot", "2025-01-05", 21, tv.ConfidenceHigh),
+		episodeOf(1, 2, "Announced", "2025-01-12", 22, tv.ConfidenceHigh),
+		episodeOf(2, 1, "Next Year", "2026-01-04", 23, tv.ConfidenceHigh),
+		episodeOf(4, 1, "Too Far", "2027-01-04", 24, tv.ConfidenceHigh),
+	}}
+	merged := tv.Merge(first, second)
+	var refs []tv.Key
+	for _, episode := range merged.Episodes {
+		refs = append(refs, tv.Key{Season: episode.Season, Number: episode.Number})
+	}
+	if want := []tv.Key{{Season: 1, Number: 1}, {Season: 1, Number: 2}, {Season: 2, Number: 1}}; !reflect.DeepEqual(refs, want) {
+		t.Errorf("episodes = %v, want %v", refs, want)
+	}
+	first.Episodes = append(first.Episodes, episodeOf(1, 2, "Announced", "2025-01-12", 2, tv.ConfidenceMedium))
+	merged = tv.Merge(first, second)
+	if len(merged.Episodes) != 3 || merged.Episodes[1].IDs["p"] != 22 {
+		t.Errorf("after the basis lists it: %+v", merged.Episodes)
+	}
+}
