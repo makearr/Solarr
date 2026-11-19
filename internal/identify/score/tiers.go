@@ -95,6 +95,10 @@ func numericTier(dimension string, facts Facts) model.TierValue {
 		if facts.File.Lossless {
 			return model.TierValue{Dimension: dimension, Rank: 0, Label: "lossless", Detail: "measured lossless"}
 		}
+		file := facts.File
+		if file.AudioCodec == "" && file.Container == "" && file.Extension == "" {
+			return model.TierValue{Dimension: dimension, Rank: 2, Label: "unmeasured", Detail: "no format claimed"}
+		}
 		return model.TierValue{Dimension: dimension, Rank: 1, Label: "lossy", Detail: "measured lossy"}
 	}
 

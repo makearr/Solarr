@@ -3,6 +3,8 @@ package score
 import (
 	"math"
 	"testing"
+
+	"github.com/makearr/Solarr/internal/identify/model"
 )
 
 func TestRankInGroups(t *testing.T) {
@@ -130,5 +132,23 @@ func TestListTier_ContainerMeansTheFormatAndExtensionTheName(t *testing.T) {
 	}
 	if value := tierValueFor("container", tiers, mp4, nil); value.Rank != 0 {
 		t.Errorf("an .mp4 file ranks %d by container, want 0", value.Rank)
+	}
+}
+
+// A release that names no format is unmeasured, not lossy: a 2CD grab with no format in its name read "measured lossy" (and fit a lossless profile).
+func TestNumericTier_LosslessSaysUnmeasuredWhenNoFormatWasClaimed(t *testing.T) {
+	tests := []struct {
+		name string
+		file FileFacts
+		want model.TierValue
+	}{
+		{"lossless", FileFacts{AudioCodec: "flac", Lossless: true}, model.TierValue{Dimension: "lossless", Rank: 0, Label: "lossless", Detail: "measured lossless"}},
+		{"lossy", FileFacts{AudioCodec: "mp3"}, model.TierValue{Dimension: "lossless", Rank: 1, Label: "lossy", Detail: "measured lossy"}},
+		{"claim-less", FileFacts{}, model.TierValue{Dimension: "lossless", Rank: 2, Label: "unmeasured", Detail: "no format claimed"}},
+	}
+	for _, test := range tests {
+		if got := numericTier("lossless", Facts{File: test.file}); got != test.want {
+			t.Errorf("%s: %+v, want %+v", test.name, got, test.want)
+		}
 	}
 }
