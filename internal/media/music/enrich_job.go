@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync/atomic"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -854,16 +856,40 @@ func (j *EnrichJob) enrichCreditsAndGenres(
 		}
 	}
 
-	if len(rg.Genres) == 0 {
+	names := weightedGenres(rg.Genres)
+	if len(names) == 0 {
 		return
 	}
-	genres := make([]library.GenreLink, len(rg.Genres))
-	for index, genre := range rg.Genres {
-		genres[index] = library.GenreLink{Name: genre.Name}
+	genres := make([]library.GenreLink, len(names))
+	for index, name := range names {
+		genres[index] = library.GenreLink{Name: name}
 	}
 	if err := j.people.AssignGenres(ctx, workID, GenreTree.Key, genres); err != nil {
 		j.logger.WarnContext(ctx, "assign genres failed", slog.Int64("work_id", workID), slog.Any("error", err))
 	}
+}
+
+// maxAlbumGenres is the most genres one album takes from the votes.
+const maxAlbumGenres = 6
+
+// weightedGenres are the genres the votes agree on: the most voted first, those with a quarter of the top count or
+// more, at most maxAlbumGenres. Counts of one or none are all single votes and all stay.
+func weightedGenres(genres []musicbrainz.Genre) []string {
+	ranked := slices.Clone(genres)
+	slices.SortStableFunc(ranked, func(a, b musicbrainz.Genre) int {
+		if a.Count != b.Count {
+			return b.Count - a.Count
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
+	var names []string
+	for _, genre := range ranked {
+		if len(names) == maxAlbumGenres || (len(names) > 0 && ranked[0].Count > 1 && genre.Count < ranked[0].Count/4) {
+			break
+		}
+		names = append(names, genre.Name)
+	}
+	return names
 }
 
 // enrichDescription writes the work's own description from the release
