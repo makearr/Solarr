@@ -589,53 +589,62 @@ func (i Identity) LeaveUnverified(ctx context.Context, mediaObjectIDs []int64) (
 	if len(mediaObjectIDs) == 0 {
 		return nil, nil
 	}
-	err = i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		queries := librarydb.New(tx)
-		for _, mediaObjectID := range mediaObjectIDs {
-			titles, err := leaveUnverified(ctx, queries, mediaObjectID)
-			if err != nil {
-				return err
-			}
+	for start := 0; start < len(mediaObjectIDs); start += leaveUnverifiedChunk {
+		chunk := mediaObjectIDs[start:min(start+leaveUnverifiedChunk, len(mediaObjectIDs))]
+		err = i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			titles, err := leaveUnverified(ctx, librarydb.New(tx), chunk)
 			deleted = append(deleted, titles...)
+			return err
+		})
+		if err != nil {
+			return nil, fmt.Errorf("library: leave unverified: %w", err)
 		}
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("library: leave unverified: %w", err)
 	}
 	return deleted, nil
 }
 
-func leaveUnverified(ctx context.Context, queries *librarydb.Queries, mediaObjectID int64) (deleted []string, err error) {
-	workIDs, err := queries.ListUnverifiedWorksForFile(ctx, mediaObjectID)
+// leaveUnverifiedChunk bounds the files one write lets go of.
+const leaveUnverifiedChunk = 200
+
+// leaveUnverified lets a batch of files go from the unverified albums they were linked to, and deletes the albums that
+// are left without a file nobody asked for; each step is one statement over the whole batch.
+func leaveUnverified(ctx context.Context, queries *librarydb.Queries, mediaObjectIDs []int64) (deleted []string, err error) {
+	encodedFiles, err := json.Marshal(mediaObjectIDs)
 	if err != nil {
 		return nil, err
 	}
-	for _, workID := range workIDs {
-		if err := queries.DetachDesiredFileForWork(ctx, librarydb.DetachDesiredFileForWorkParams{
-			MediaObjectID: mediaObjectID, WorkID: workID,
-		}); err != nil {
-			return deleted, err
+	pairs, err := queries.ListUnverifiedWorkFilePairs(ctx, string(encodedFiles))
+	if err != nil || len(pairs) == 0 {
+		return nil, err
+	}
+	encodedPairs := make([][2]int64, len(pairs))
+	var workIDs []int64
+	for index, pair := range pairs {
+		encodedPairs[index] = [2]int64{pair.WorkID, pair.MediaObjectID}
+		if len(workIDs) == 0 || workIDs[len(workIDs)-1] != pair.WorkID {
+			workIDs = append(workIDs, pair.WorkID)
 		}
-		if err := queries.UnlinkWorkFile(ctx, librarydb.UnlinkWorkFileParams{WorkID: workID, MediaObjectID: mediaObjectID}); err != nil {
-			return deleted, err
-		}
-		files, err := queries.CountWorkFiles(ctx, workID)
-		if err != nil {
-			return deleted, err
-		}
-		asked, err := queries.CountPersonAddedItems(ctx, workID)
-		if err != nil {
-			return deleted, err
-		}
-		if files > 0 || asked > 0 {
-			continue
-		}
-		work, err := queries.GetWork(ctx, workID)
-		if err != nil {
-			return deleted, err
-		}
-		if err := deleteFilelessWork(ctx, queries, workID); err != nil {
+	}
+	pairsJSON, err := json.Marshal(encodedPairs)
+	if err != nil {
+		return nil, err
+	}
+	if err := queries.DetachDesiredFilePairs(ctx, string(pairsJSON)); err != nil {
+		return nil, err
+	}
+	if err := queries.UnlinkWorkFilePairs(ctx, string(pairsJSON)); err != nil {
+		return nil, err
+	}
+	workJSON, err := json.Marshal(workIDs)
+	if err != nil {
+		return nil, err
+	}
+	empty, err := queries.ListFilelessUnrequestedWorks(ctx, string(workJSON))
+	if err != nil {
+		return nil, err
+	}
+	for _, work := range empty {
+		if err := deleteFilelessWork(ctx, queries, work.ID); err != nil {
 			return deleted, err
 		}
 		deleted = append(deleted, work.CanonicalTitle)

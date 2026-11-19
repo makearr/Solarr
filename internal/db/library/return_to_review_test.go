@@ -124,3 +124,20 @@ func TestLeaveUnverified_TheAlbumGoesWithItsLastFile(t *testing.T) {
 		t.Fatalf("last file: deleted %v, %v; want the album gone", deleted, err)
 	}
 }
+
+// PERF-10: a whole batch of files lets go in one call and the album left without any goes once.
+func TestLeaveUnverified_ABatchOfFilesInOneCall(t *testing.T) {
+	workID, files, queries, identity, opened := albumWithFiles(t, nil)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.LinkWorkExternalID(ctx, librarydb.LinkWorkExternalIDParams{
+			Provider: "local:album", ExternalID: "/music/unsorted|unsorted", WorkID: workID, Confidence: 0.1, FirstSeenAt: 1,
+		})
+	})
+	deleted, err := identity.LeaveUnverified(t.Context(), files)
+	if err != nil || len(deleted) != 1 {
+		t.Fatalf("deleted %v, %v; want the one album", deleted, err)
+	}
+	if _, err := queries.GetWork(t.Context(), workID); err == nil {
+		t.Error("the album is still there")
+	}
+}

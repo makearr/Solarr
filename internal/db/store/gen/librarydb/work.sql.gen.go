@@ -536,19 +536,15 @@ func (q *Queries) DeleteWorkPart(ctx context.Context, id int64) error {
 	return err
 }
 
-const detachDesiredFileForWork = `-- name: DetachDesiredFileForWork :exec
+const detachDesiredFilePairs = `-- name: DetachDesiredFilePairs :exec
 DELETE FROM desired_item_file
-WHERE media_object_id = ?1
-  AND desired_item_id IN (SELECT id FROM desired_item WHERE work_id = ?2)
+WHERE EXISTS (SELECT 1 FROM json_each(?1) j
+              WHERE desired_item_file.media_object_id = json_extract(j.value, '$[1]')
+                AND desired_item_file.desired_item_id IN (SELECT d.id FROM desired_item d WHERE d.work_id = json_extract(j.value, '$[0]')))
 `
 
-type DetachDesiredFileForWorkParams struct {
-	MediaObjectID int64
-	WorkID        int64
-}
-
-func (q *Queries) DetachDesiredFileForWork(ctx context.Context, arg DetachDesiredFileForWorkParams) error {
-	_, err := q.db.ExecContext(ctx, detachDesiredFileForWork, arg.MediaObjectID, arg.WorkID)
+func (q *Queries) DetachDesiredFilePairs(ctx context.Context, pairs interface{}) error {
+	_, err := q.db.ExecContext(ctx, detachDesiredFilePairs, pairs)
 	return err
 }
 
@@ -1489,6 +1485,43 @@ func (q *Queries) ListEditions(ctx context.Context, workID int64) ([]Edition, er
 	return items, nil
 }
 
+const listFilelessUnrequestedWorks = `-- name: ListFilelessUnrequestedWorks :many
+SELECT w.id, w.canonical_title FROM work w
+WHERE w.id IN (SELECT value FROM json_each(?1))
+  AND NOT EXISTS (SELECT 1 FROM work_file f WHERE f.work_id = w.id)
+  AND NOT EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.added_by IS NOT NULL)
+ORDER BY w.id
+`
+
+type ListFilelessUnrequestedWorksRow struct {
+	ID             int64
+	CanonicalTitle string
+}
+
+// Of these works, the ones no file holds and no person asked for.
+func (q *Queries) ListFilelessUnrequestedWorks(ctx context.Context, workIds interface{}) ([]ListFilelessUnrequestedWorksRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFilelessUnrequestedWorks, workIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFilelessUnrequestedWorksRow{}
+	for rows.Next() {
+		var i ListFilelessUnrequestedWorksRow
+		if err := rows.Scan(&i.ID, &i.CanonicalTitle); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPlaceholderEditions = `-- name: ListPlaceholderEditions :many
 SELECT id, work_id, kind, label, year, format, catalogue_number,
        barcode, runtime_ms, is_default
@@ -1535,28 +1568,33 @@ func (q *Queries) ListPlaceholderEditions(ctx context.Context, arg ListPlacehold
 	return items, nil
 }
 
-const listUnverifiedWorksForFile = `-- name: ListUnverifiedWorksForFile :many
-SELECT wf.work_id FROM work_file wf
-WHERE wf.media_object_id = ?
+const listUnverifiedWorkFilePairs = `-- name: ListUnverifiedWorkFilePairs :many
+SELECT wf.work_id, wf.media_object_id FROM work_file wf
+WHERE wf.media_object_id IN (SELECT value FROM json_each(?1))
   AND EXISTS (SELECT 1 FROM work_external_id ux WHERE ux.work_id = wf.work_id)
   AND NOT EXISTS (SELECT 1 FROM work_external_id vx WHERE vx.work_id = wf.work_id AND vx.provider NOT LIKE 'local:%')
-ORDER BY wf.work_id
+ORDER BY wf.work_id, wf.media_object_id
 `
 
-// The unverified albums (only local ids, D6) a file is linked to, for when it is identified.
-func (q *Queries) ListUnverifiedWorksForFile(ctx context.Context, mediaObjectID int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listUnverifiedWorksForFile, mediaObjectID)
+type ListUnverifiedWorkFilePairsRow struct {
+	WorkID        int64
+	MediaObjectID int64
+}
+
+// The same for a batch of files: (work, file) pairs, so one statement replaces a handful per file.
+func (q *Queries) ListUnverifiedWorkFilePairs(ctx context.Context, mediaObjectIds interface{}) ([]ListUnverifiedWorkFilePairsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUnverifiedWorkFilePairs, mediaObjectIds)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []int64{}
+	items := []ListUnverifiedWorkFilePairsRow{}
 	for rows.Next() {
-		var work_id int64
-		if err := rows.Scan(&work_id); err != nil {
+		var i ListUnverifiedWorkFilePairsRow
+		if err := rows.Scan(&i.WorkID, &i.MediaObjectID); err != nil {
 			return nil, err
 		}
-		items = append(items, work_id)
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -2371,17 +2409,14 @@ func (q *Queries) SetWorkTitle(ctx context.Context, arg SetWorkTitleParams) erro
 	return err
 }
 
-const unlinkWorkFile = `-- name: UnlinkWorkFile :exec
-DELETE FROM work_file WHERE work_id = ? AND media_object_id = ?
+const unlinkWorkFilePairs = `-- name: UnlinkWorkFilePairs :exec
+DELETE FROM work_file
+WHERE EXISTS (SELECT 1 FROM json_each(?1) j
+              WHERE work_file.work_id = json_extract(j.value, '$[0]') AND work_file.media_object_id = json_extract(j.value, '$[1]'))
 `
 
-type UnlinkWorkFileParams struct {
-	WorkID        int64
-	MediaObjectID int64
-}
-
-func (q *Queries) UnlinkWorkFile(ctx context.Context, arg UnlinkWorkFileParams) error {
-	_, err := q.db.ExecContext(ctx, unlinkWorkFile, arg.WorkID, arg.MediaObjectID)
+func (q *Queries) UnlinkWorkFilePairs(ctx context.Context, pairs interface{}) error {
+	_, err := q.db.ExecContext(ctx, unlinkWorkFilePairs, pairs)
 	return err
 }
 

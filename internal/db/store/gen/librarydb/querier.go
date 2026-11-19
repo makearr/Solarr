@@ -365,7 +365,7 @@ type Querier interface {
 	// widened the key). Removing an album is removing the intent to have it.
 	// A download's record outlives the want it served: history keeps its own copy of the names.
 	DetachAcquisitionsForWork(ctx context.Context, workID int64) error
-	DetachDesiredFileForWork(ctx context.Context, arg DetachDesiredFileForWorkParams) error
+	DetachDesiredFilePairs(ctx context.Context, pairs interface{}) error
 	DetachDesiredFilesForWork(ctx context.Context, workID int64) error
 	// Removes the file from the item entirely, every part it covered with it.
 	DetachFile(ctx context.Context, arg DetachFileParams) error
@@ -713,6 +713,8 @@ type Querier interface {
 	ListFavoriteIDs(ctx context.Context, arg ListFavoriteIDsParams) ([]int64, error)
 	// A work's files with where each claims to sit, for aligning them once its tracklist exists.
 	ListFileTrackClaimsForWork(ctx context.Context, workID int64) ([]FileTrackClaim, error)
+	// Of these works, the ones no file holds and no person asked for.
+	ListFilelessUnrequestedWorks(ctx context.Context, workIds interface{}) ([]ListFilelessUnrequestedWorksRow, error)
 	ListFilesForDesiredItem(ctx context.Context, desiredItemID int64) ([]DesiredItemFile, error)
 	// Episodes of the series in a franchise of two or more series of a library, to find the events that run across them.
 	ListFranchiseEpisodes(ctx context.Context, arg ListFranchiseEpisodesParams) ([]ListFranchiseEpisodesRow, error)
@@ -960,8 +962,8 @@ type Querier interface {
 	ListUnplacedCommitUnits(ctx context.Context, sessionID int64) ([]ImportUnit, error)
 	// Pairs of works a person said do not belong together.
 	ListUnrelatedWorkPairs(ctx context.Context, mediaType string) ([]ListUnrelatedWorkPairsRow, error)
-	// The unverified albums (only local ids, D6) a file is linked to, for when it is identified.
-	ListUnverifiedWorksForFile(ctx context.Context, mediaObjectID int64) ([]int64, error)
+	// The same for a batch of files: (work, file) pairs, so one statement replaces a handful per file.
+	ListUnverifiedWorkFilePairs(ctx context.Context, mediaObjectIds interface{}) ([]ListUnverifiedWorkFilePairsRow, error)
 	// Monitored albums below their library's cutoff: what the Cutoff Unmet search walks.
 	ListUpgradableDesiredItems(ctx context.Context, arg ListUpgradableDesiredItemsParams) ([]ListUpgradableDesiredItemsRow, error)
 	// Video files with no per-frame hash yet, those hashed before it included, and (when previews are wanted) those with no
@@ -1379,7 +1381,7 @@ type Querier interface {
 	// The queue holds at most keep entries: what would be sent last goes first (section 10.5).
 	TrimReady(ctx context.Context, keep int64) error
 	UnblockTagSlugs(ctx context.Context, arg UnblockTagSlugsParams) error
-	UnlinkWorkFile(ctx context.Context, arg UnlinkWorkFileParams) error
+	UnlinkWorkFilePairs(ctx context.Context, pairs interface{}) error
 	UnlinkWorkFiles(ctx context.Context, workID int64) error
 	// A library's "Unmonitor Deleted Tracks": items holding a file a full scan just found gone.
 	UnmonitorDesiredItemsWithMissingFiles(ctx context.Context, arg UnmonitorDesiredItemsWithMissingFilesParams) (int64, error)

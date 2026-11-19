@@ -493,21 +493,32 @@ SELECT CAST(COUNT(*) AS INTEGER) AS total FROM desired_item WHERE work_id = ? AN
 -- name: ResetDesiredItemsForWork :exec
 UPDATE desired_item SET present_count = 0, state = 'MISSING', dirty = 1 WHERE work_id = ?;
 
--- The unverified albums (only local ids, D6) a file is linked to, for when it is identified.
--- name: ListUnverifiedWorksForFile :many
-SELECT wf.work_id FROM work_file wf
-WHERE wf.media_object_id = ?
+-- The same for a batch of files: (work, file) pairs, so one statement replaces a handful per file.
+-- name: ListUnverifiedWorkFilePairs :many
+SELECT wf.work_id, wf.media_object_id FROM work_file wf
+WHERE wf.media_object_id IN (SELECT value FROM json_each(sqlc.arg(media_object_ids)))
   AND EXISTS (SELECT 1 FROM work_external_id ux WHERE ux.work_id = wf.work_id)
   AND NOT EXISTS (SELECT 1 FROM work_external_id vx WHERE vx.work_id = wf.work_id AND vx.provider NOT LIKE 'local:%')
-ORDER BY wf.work_id;
+ORDER BY wf.work_id, wf.media_object_id;
 
--- name: UnlinkWorkFile :exec
-DELETE FROM work_file WHERE work_id = ? AND media_object_id = ?;
-
--- name: DetachDesiredFileForWork :exec
+-- name: DetachDesiredFilePairs :exec
 DELETE FROM desired_item_file
-WHERE media_object_id = sqlc.arg(media_object_id)
-  AND desired_item_id IN (SELECT id FROM desired_item WHERE work_id = sqlc.arg(work_id));
+WHERE EXISTS (SELECT 1 FROM json_each(sqlc.arg(pairs)) j
+              WHERE desired_item_file.media_object_id = json_extract(j.value, '$[1]')
+                AND desired_item_file.desired_item_id IN (SELECT d.id FROM desired_item d WHERE d.work_id = json_extract(j.value, '$[0]')));
+
+-- name: UnlinkWorkFilePairs :exec
+DELETE FROM work_file
+WHERE EXISTS (SELECT 1 FROM json_each(sqlc.arg(pairs)) j
+              WHERE work_file.work_id = json_extract(j.value, '$[0]') AND work_file.media_object_id = json_extract(j.value, '$[1]'));
+
+-- Of these works, the ones no file holds and no person asked for.
+-- name: ListFilelessUnrequestedWorks :many
+SELECT w.id, w.canonical_title FROM work w
+WHERE w.id IN (SELECT value FROM json_each(sqlc.arg(work_ids)))
+  AND NOT EXISTS (SELECT 1 FROM work_file f WHERE f.work_id = w.id)
+  AND NOT EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.added_by IS NOT NULL)
+ORDER BY w.id;
 
 -- Whether any unverified album exists, so a scan skips the per-file check on a library with none.
 -- name: AnyUnverifiedWork :one
