@@ -39,6 +39,8 @@ const (
 	TypeTooManyRequests = "too-many-requests"
 	// A wrong verb is not a malformed request.
 	TypeMethodNotAllowed = "method-not-allowed"
+	// TypeSetupCodeRequired is a first-administrator claim from a public address without the printed code.
+	TypeSetupCodeRequired = "setup-code-required"
 )
 
 // writeProblem renders an error as RFC 7807.

@@ -2,6 +2,8 @@ package apiserver
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -16,10 +18,35 @@ import (
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/config"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // maxSetupBody bounds what an unauthenticated caller can make the server read.
 const maxSetupBody = 4 << 10
+
+// newSetupCode is twelve letters and digits in groups of four, easy to read off a log.
+func newSetupCode() string {
+	const alphabet = "abcdefghjkmnpqrstuvwxyz23456789"
+	random := make([]byte, 12)
+	if _, err := rand.Read(random); err != nil {
+		panic(err) // the system has no randomness; nothing safe can start
+	}
+	code := make([]byte, 0, 14)
+	for index, value := range random {
+		if index > 0 && index%4 == 0 {
+			code = append(code, '-')
+		}
+		code = append(code, alphabet[int(value)%len(alphabet)])
+	}
+	return string(code)
+}
+
+// setupCodeNeeded says the caller must send the code: only a public address does, as a loopback or private one is
+// someone with the machine or the network already (SEC-1 owner decision 2026-11-13).
+func (s *Server) setupCodeNeeded(r *http.Request) bool {
+	address := s.resolvedClientAddress(r)
+	return !address.IsValid() || httpx.ClassifyAddress(address) == ""
+}
 
 // GetSetupStatus reports what the wizard still has to do. Unauthenticated, and
 // reveals only the outstanding steps.
@@ -68,6 +95,12 @@ func (s *Server) CreateFirstAdministrator(w http.ResponseWriter, r *http.Request
 
 	s.claim.Lock()
 	defer s.claim.Unlock()
+	if s.setupCode != "" && s.setupCodeNeeded(r) &&
+		subtle.ConstantTimeCompare([]byte(strings.TrimSpace(derefOr(request.SetupCode, ""))), []byte(s.setupCode)) != 1 {
+		writeProblem(w, s.logger, http.StatusForbidden, TypeSetupCodeRequired, "Setup code required",
+			"this request comes from outside your network: enter the setup code printed in the container log (docker logs solarr)")
+		return
+	}
 	// Checked again in the transaction that writes the account: a concurrent second claim loses there, rather than
 	// becoming a second administrator nobody asked for.
 	created, err := s.auth.Settings.CreateFirstUser(r.Context(), s.auth.Clock,
@@ -82,6 +115,7 @@ func (s *Server) CreateFirstAdministrator(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	s.setupCode = ""
 	// Signed in immediately; re-typing the credentials adds nothing.
 	http.SetCookie(w, s.sessionCookie(s.auth.Sessions.Issue(created.ID, created.SessionStamp),
 		int(s.auth.Sessions.TTL().Seconds()), r))

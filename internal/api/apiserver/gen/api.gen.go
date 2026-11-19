@@ -7603,7 +7603,10 @@ type SetAuthPolicyJSONBody struct {
 // CreateFirstAdministratorJSONBody defines parameters for CreateFirstAdministrator.
 type CreateFirstAdministratorJSONBody struct {
 	Password string `json:"password"`
-	Username string `json:"username"`
+
+	// SetupCode The code printed in the log at start, required only when the request comes from a public address; a loopback or private one needs none. Single use.
+	SetupCode *string `json:"setup_code,omitempty"`
+	Username  string  `json:"username"`
 }
 
 // BrowsePathParams defines parameters for BrowsePath.

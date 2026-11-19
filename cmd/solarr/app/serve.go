@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -809,10 +810,15 @@ func (p *process) startServer(ctx context.Context) error {
 
 // newServer wires every adapter into the HTTP server without listening, so a test can drive the same server.
 func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prober) (*apiserver.Server, error) {
+	var setupCode string
+	if p.env != nil {
+		setupCode, _ = p.env("SOLARR_SETUP_CODE")
+	}
 	return apiserver.New(apiserver.Config{
-		Bind:    p.config.Server.Bind,
-		Port:    p.effectivePort,
-		BaseURL: p.config.Server.BaseURL,
+		SetupCode: strings.TrimSpace(setupCode),
+		Bind:      p.config.Server.Bind,
+		Port:      p.effectivePort,
+		BaseURL:   p.config.Server.BaseURL,
 		Build: apiserver.BuildInfo{
 			Version: p.build.Version, Milestone: p.build.Milestone, Commit: p.build.Commit,
 			BuildDate: p.build.BuildDate, SourceURL: p.build.SourceURL, License: p.build.License,

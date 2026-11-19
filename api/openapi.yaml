@@ -517,7 +517,12 @@ paths:
               required: [username, password]
               properties:
                 username: { type: string, minLength: 1 }
-                password: { type: string, format: password, minLength: 12 }
+                password: { type: string, format: password, minLength: 8 }
+                setup_code:
+                  type: string
+                  description: >-
+                    The code printed in the log at start, required only when the request comes from a public address;
+                    a loopback or private one needs none. Single use.
       responses:
         "201":
           description: Created, and signed in. The session cookie is set here.
@@ -529,6 +534,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Identity" }
         "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
         "409":
           $ref: "#/components/responses/Problem"
           description: An account already exists; setup is closed.

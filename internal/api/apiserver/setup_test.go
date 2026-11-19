@@ -28,6 +28,11 @@ type setupFixture struct {
 
 func newSetupFixture(t *testing.T, roots apiserver.RootChecker) setupFixture {
 	t.Helper()
+	return newSetupFixtureWithCode(t, roots, "")
+}
+
+func newSetupFixtureWithCode(t *testing.T, roots apiserver.RootChecker, setupCode string) setupFixture {
+	t.Helper()
 	directory := t.TempDir()
 	backups := filepath.Join(directory, "backups")
 	if err := os.MkdirAll(backups, 0o755); err != nil {
@@ -57,7 +62,7 @@ func newSetupFixture(t *testing.T, roots apiserver.RootChecker) setupFixture {
 	}
 
 	server, err := apiserver.New(apiserver.Config{
-		Bind: "127.0.0.1", Port: 0, BaseURL: "/",
+		Bind: "127.0.0.1", Port: 0, BaseURL: "/", SetupCode: setupCode,
 		Checker: fakeChecker{},
 		Clock:   fake,
 		Logger:  slog.New(slog.DiscardHandler),
@@ -619,5 +624,51 @@ func TestCrossOriginWritesAreRefused(t *testing.T) {
 	}
 	if got := recorder.Header().Get("X-Content-Type-Options"); got != "nosniff" {
 		t.Errorf("X-Content-Type-Options = %q, want nosniff", got)
+	}
+}
+
+func (f setupFixture) postFrom(t *testing.T, remote, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/setup/admin", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.RemoteAddr = remote
+	recorder := httptest.NewRecorder()
+	f.server.Handler().ServeHTTP(recorder, request)
+	return recorder
+}
+
+// SETUP-1: a claim from a public address needs the code printed in the log; one from the machine or the LAN does not.
+func TestCreateFirstAdministrator_APublicAddressNeedsTheSetupCodeOnce(t *testing.T) {
+	fixture := newSetupFixtureWithCode(t, nil, "abcd-efgh-jkmn")
+	const credentials = `"username":"avs","password":"correct horse battery"`
+
+	for _, remote := range []string{"8.8.8.8:5000", "[2606:4700::1]:5000"} {
+		without := fixture.postFrom(t, remote, `{`+credentials+`}`)
+		wrong := fixture.postFrom(t, remote, `{`+credentials+`,"setup_code":"nope"}`)
+		for _, got := range []*httptest.ResponseRecorder{without, wrong} {
+			if got.Code != http.StatusForbidden || !strings.Contains(got.Body.String(), `"type":"setup-code-required"`) {
+				t.Fatalf("%s: status %d (%s), want 403 setup-code-required", remote, got.Code, got.Body)
+			}
+		}
+	}
+	if users := fixture.cache.Snapshot().Users(); len(users) != 0 {
+		t.Fatalf("%d accounts exist after refused claims", len(users))
+	}
+	right := fixture.postFrom(t, "8.8.8.8:5000", `{`+credentials+`,"setup_code":"abcd-efgh-jkmn"}`)
+	if right.Code != http.StatusCreated {
+		t.Fatalf("with the code: status %d (%s), want 201", right.Code, right.Body)
+	}
+	if again := fixture.postFrom(t, "8.8.8.8:5000", `{`+credentials+`,"setup_code":"abcd-efgh-jkmn"}`); again.Code != http.StatusConflict {
+		t.Errorf("a second claim: status %d, want 409", again.Code)
+	}
+}
+
+func TestCreateFirstAdministrator_ALocalOrPrivateAddressNeedsNoCode(t *testing.T) {
+	for _, remote := range []string{"127.0.0.1:5000", "192.168.1.20:5000", "10.0.0.3:5000", "[::1]:5000", "[fd00::5]:5000"} {
+		fixture := newSetupFixtureWithCode(t, nil, "abcd-efgh-jkmn")
+		got := fixture.postFrom(t, remote, `{"username":"avs","password":"correct horse battery"}`)
+		if got.Code != http.StatusCreated {
+			t.Errorf("%s: status %d (%s), want 201 without a code", remote, got.Code, got.Body)
+		}
 	}
 }

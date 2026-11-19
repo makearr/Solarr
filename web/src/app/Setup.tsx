@@ -390,16 +390,19 @@ function CreateAdministrator() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
+  const [setupCode, setSetupCode] = useState("");
 
   const create = useMutation({
     mutationFn: () => ok(api.POST("/setup/admin", {
-      body: { username, password },
+      body: { username, password, ...(setupCode.trim() ? { setup_code: setupCode.trim() } : {}) },
     })),
     onSuccess: () => Promise.all([
       queryClient.invalidateQueries({ queryKey: ["setup"] }),
       queryClient.invalidateQueries({ queryKey: ["me"] }),
     ]),
   });
+
+  const codeRequired = (create.error as { type?: string } | null)?.type === "setup-code-required" || setupCode !== "";
 
   return (
     <Panel
@@ -431,6 +434,21 @@ function CreateAdministrator() {
           />
         </Field>
         <RepeatPassword password={password} repeat={repeat} onRepeat={setRepeat} inputClassName={inputStyle} />
+        {codeRequired && (
+          <Field label="Setup code">
+            <input
+              className={inputStyle}
+              value={setupCode}
+              autoComplete="off"
+              placeholder="xxxx-xxxx-xxxx"
+              onChange={(event) => setSetupCode(event.target.value)}
+            />
+            <p className="text-xs text-ink-muted">
+              You are reaching Solarr from outside your network. The code is printed in the container log:
+              <code className="ml-1">docker logs solarr</code>
+            </p>
+          </Field>
+        )}
 
         {create.isError && <Problem error={create.error} />}
 

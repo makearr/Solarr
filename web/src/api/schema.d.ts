@@ -11608,6 +11608,8 @@ export interface operations {
                     username: string;
                     /** Format: password */
                     password: string;
+                    /** @description The code printed in the log at start, required only when the request comes from a public address; a loopback or private one needs none. Single use. */
+                    setup_code?: string;
                 };
             };
         };
@@ -11624,6 +11626,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             /** @description An account already exists; setup is closed. */
             409: components["responses"]["Problem"];
         };

@@ -47,8 +47,10 @@ type Config struct {
 	// BaseURL lets the API sit behind a reverse proxy on a subpath.
 	BaseURL string
 	Build   BuildInfo
-	Checker Checker
-	Auth    AuthConfig
+	// SetupCode fixes the code a public address needs to claim a fresh install; empty makes a new one at each start.
+	SetupCode string
+	Checker   Checker
+	Auth      AuthConfig
 	// Jobs is optional: a CLI command that only serves health has no queue.
 	Jobs *jobs.Queue
 	// Running and JobRegistry are optional: the running jobs the status bar shows, and their names.
@@ -456,6 +458,9 @@ type Server struct {
 	// claim serialises the unauthenticated first-run writes, so a request that found no account yet cannot act on
 	// that once another request has created one.
 	claim sync.Mutex
+	// setupCode is what a public address must send to claim an unclaimed install; empty once it was used or when
+	// an account exists. Guarded by claim.
+	setupCode string
 }
 
 // New builds a server. It does not listen until Start.
@@ -587,8 +592,17 @@ func New(config Config) (*Server, error) {
 		tvProviders:             config.TVProviders,
 		remoteImages:            config.RemoteImages,
 		effectivePort:           config.Port,
+		setupCode:               config.SetupCode,
 		healthPath:              base + APIPrefix + "/health",
 		address:                 net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
+	}
+
+	if server.auth.Settings != nil && len(server.auth.Settings.Snapshot().Users()) == 0 {
+		if server.setupCode == "" {
+			server.setupCode = newSetupCode()
+		}
+		server.logger.Info("setup code: a request from a public address needs it to create the first administrator",
+			"setup_code", server.setupCode)
 	}
 
 	router := chi.NewRouter()
