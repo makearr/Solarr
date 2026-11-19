@@ -60,30 +60,27 @@ func (c Cutoff) CutoffPage(ctx context.Context, workID, afterID, limit int64) ([
 	if workID == 0 {
 		return c.Page(ctx, afterID, limit)
 	}
-	var ofWork []library.CutoffItem
-	for {
-		page, err := c.Page(ctx, afterID, limit)
-		if err != nil {
-			return nil, err
-		}
-		for _, item := range page {
-			afterID = item.ID
-			if item.WorkID == workID {
-				ofWork = append(ofWork, item)
-			}
-		}
-		if int64(len(page)) < limit {
-			return ofWork, nil
-		}
-	}
+	return c.Desired.CutoffItemsOfWork(ctx, workID, afterID)
 }
 
 // CheckCutoff implements cutoff.Check: a second file is settled whatever the item's state; an item with gaps is not
 // marked.
 func (c Cutoff) CheckCutoff(ctx context.Context, snapshot *settings.Snapshot, item library.CutoffItem) (cutoff.Outcome, error) {
-	settled, err := c.settle(ctx, snapshot, item)
+	var files []File
+	haveFiles := false
+	if c.settles() {
+		var err error
+		if files, err = c.Files(ctx, item.ID); err != nil {
+			return cutoff.Outcome{}, err
+		}
+		haveFiles = true
+	}
+	settled, err := c.settle(ctx, snapshot, item, files)
 	if err != nil {
 		return cutoff.Outcome{}, err
+	}
+	if settled > 0 {
+		haveFiles = false // the recycled files must not be judged
 	}
 	if item.State == StatePartial {
 		return cutoff.Outcome{Replaced: settled}, nil
@@ -92,7 +89,7 @@ func (c Cutoff) CheckCutoff(ctx context.Context, snapshot *settings.Snapshot, it
 	if !found {
 		return cutoff.Outcome{Replaced: settled}, nil
 	}
-	state, decided, tally, err := c.stateFor(ctx, snapshot, category, item)
+	state, decided, tally, err := c.stateFor(ctx, snapshot, category, item, files, haveFiles)
 	if err != nil {
 		return cutoff.Outcome{}, err
 	}
@@ -106,19 +103,18 @@ func (c Cutoff) StateUnder(ctx context.Context, snapshot *settings.Snapshot, cat
 	if item.State == StatePartial {
 		return "", false, nil
 	}
-	state, decided, _, err := c.stateFor(ctx, snapshot, category, item)
+	state, decided, _, err := c.stateFor(ctx, snapshot, category, item, nil, false)
 	return state, decided, err
 }
 
+// settles says a second file of a part is weighed against the first and the loser recycled.
+func (c Cutoff) settles() bool { return c.Recycle != nil && !c.Uncontested }
+
 // settle keeps, per part a download brought a second file for, the strictly better measured file and recycles the
 // rest; answers how many were recycled.
-func (c Cutoff) settle(ctx context.Context, snapshot *settings.Snapshot, item library.CutoffItem) (int, error) {
-	if c.Recycle == nil || c.Uncontested {
+func (c Cutoff) settle(ctx context.Context, snapshot *settings.Snapshot, item library.CutoffItem, files []File) (int, error) {
+	if !c.settles() {
 		return 0, nil
-	}
-	files, err := c.Files(ctx, item.ID)
-	if err != nil {
-		return 0, err
 	}
 	byPart := map[string][]File{}
 	var order []string
@@ -232,13 +228,16 @@ func allMeasured(files []File) bool {
 // tally is empty unless every monitored file was judged.
 func (c Cutoff) stateFor(
 	ctx context.Context, snapshot *settings.Snapshot, category settings.Category, item library.CutoffItem,
+	files []File, haveFiles bool,
 ) (string, bool, cutoff.Tally, error) {
 	if c.NeverUpgrades {
 		return StateComplete, true, cutoff.Tally{}, nil
 	}
-	files, err := c.Files(ctx, item.ID)
-	if err != nil {
-		return "", false, cutoff.Tally{}, fmt.Errorf("cutoff check item %d: %w", item.ID, err)
+	if !haveFiles {
+		var err error
+		if files, err = c.Files(ctx, item.ID); err != nil {
+			return "", false, cutoff.Tally{}, fmt.Errorf("cutoff check item %d: %w", item.ID, err)
+		}
 	}
 	if !category.QualityUpgrades {
 		// Counted for the statistics page; the item stays complete because the library never upgrades.

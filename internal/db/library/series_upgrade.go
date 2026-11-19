@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 )
 
@@ -70,12 +71,29 @@ ORDER BY id LIMIT ?`, afterID, mediaType, limit)
 	if err != nil {
 		return nil, fmt.Errorf("library: tv cutoff page: %w", err)
 	}
+	return scanCutoffItems(rows)
+}
+
+// CutoffItemsOfWork is the monitored COMPLETE, UPGRADABLE and PARTIAL items of one work after afterID, from its index
+// rather than a walk over the whole media type.
+func (d Desired) CutoffItemsOfWork(ctx context.Context, workID, afterID int64) ([]CutoffItem, error) {
+	rows, err := d.store.Read().QueryContext(ctx,
+		`SELECT id, work_id, category_id, profile_id, state, present_count FROM desired_item
+WHERE work_id = ? AND monitored = 1 AND satisfaction_kind = 'SET' AND state IN ('COMPLETE', 'UPGRADABLE', 'PARTIAL') AND id > ?
+ORDER BY id`, workID, afterID)
+	if err != nil {
+		return nil, fmt.Errorf("library: cutoff items of work %d: %w", workID, err)
+	}
+	return scanCutoffItems(rows)
+}
+
+func scanCutoffItems(rows *sql.Rows) ([]CutoffItem, error) {
 	defer func() { _ = rows.Close() }()
 	var items []CutoffItem
 	for rows.Next() {
 		var item CutoffItem
 		if err := rows.Scan(&item.ID, &item.WorkID, &item.CategoryID, &item.ProfileID, &item.State, &item.PresentCount); err != nil {
-			return nil, fmt.Errorf("library: scan tv cutoff item: %w", err)
+			return nil, fmt.Errorf("library: scan cutoff item: %w", err)
 		}
 		items = append(items, item)
 	}
