@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -144,7 +145,12 @@ func (j *TagWritebackJob) Run(ctx context.Context, job jobs.Job) error {
 			break
 		}
 		if err := j.writePage(ctx, run, candidates); err != nil {
-			return err
+			// A page the helper cannot take must not keep every page after it from being written.
+			if ctx.Err() != nil || errors.Is(err, mediatool.ErrToolMissing) {
+				return err
+			}
+			j.config.Logger.Warn("tag writer page failed", slog.Int64("after_media_object_id", afterID), slog.Any("error", err))
+			run.failed += len(candidates)
 		}
 		afterID = candidates[len(candidates)-1].MediaObjectID
 	}

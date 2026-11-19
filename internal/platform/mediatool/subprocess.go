@@ -163,7 +163,7 @@ func (s *Subprocess) writeBatch(ctx context.Context, edits []TagEdit) ([]TagResu
 	case <-runCtx.Done():
 		return nil, runCtx.Err()
 	}
-	output, err := s.runner.Run(runCtx, tagBinary, string(encoded))
+	output, err := s.runner.RunInput(runCtx, encoded, tagBinary)
 	<-s.slots
 	if err != nil {
 		return nil, err

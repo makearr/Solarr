@@ -29,6 +29,8 @@ type fakeRunner struct {
 	calls    int
 	inFlight int32
 	peak     int32
+	// stdin is what RunInput last received.
+	stdin string
 }
 
 func (f *fakeRunner) Lookup(name string) error {
@@ -36,6 +38,18 @@ func (f *fakeRunner) Lookup(name string) error {
 		return fmt.Errorf("%w: %s", mediatool.ErrToolMissing, name)
 	}
 	return nil
+}
+
+// RunInput answers like Run, with the stdin as the payload and no arguments.
+func (f *fakeRunner) RunInput(_ context.Context, stdin []byte, name string, args ...string) ([]byte, error) {
+	f.mu.Lock()
+	f.calls++
+	f.stdin = string(stdin)
+	if f.record != nil {
+		f.record(args)
+	}
+	f.mu.Unlock()
+	return f.respond(name, string(stdin))
 }
 
 func (f *fakeRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
@@ -334,7 +348,7 @@ func TestFingerprint_TreatsAnEmptyResultAsAFailure(t *testing.T) {
 	}
 }
 
-// The helper gets every edit as one JSON argument and answers per file: one file it cannot
+// The helper gets every edit as JSON on stdin and answers per file: one file it cannot
 // tag fails alone, not the batch (revision D3).
 func TestWriteTags_ReportsEachFileOnItsOwn(t *testing.T) {
 	var sent []string
@@ -357,8 +371,8 @@ func TestWriteTags_ReportsEachFileOnItsOwn(t *testing.T) {
 	}
 	want := `[{"path":"/m/a.m4a","fill":{"musicbrainz_releasegroupid":"rg-1"},"cover":"/c/work-1.jpg"},` +
 		`{"path":"/m/b.txt","set":{"musicbrainz_albumid":"rel-1"}}]`
-	if len(sent) != 1 || sent[0] != want {
-		t.Errorf("sent %q, want %q", sent, want)
+	if runner.stdin != want || len(sent) != 0 {
+		t.Errorf("stdin %q, args %q; want the batch on stdin and nothing else", runner.stdin, sent)
 	}
 	if len(results) != 2 || results[0].Err != nil ||
 		fmt.Sprint(results[0].Changed) != "[musicbrainz_releasegroupid cover]" ||

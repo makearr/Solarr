@@ -22,12 +22,16 @@ type fakeTagFiles struct {
 	mediatool.Tool
 	fs         fsx.FS
 	refuse     map[string]bool
+	failBatch  error
 	edits      []mediatool.TagEdit
 	coverSeen  bool
 	coverFound bool
 }
 
 func (f *fakeTagFiles) WriteTags(_ context.Context, edits []mediatool.TagEdit) ([]mediatool.TagResult, error) {
+	if f.failBatch != nil {
+		return nil, f.failBatch
+	}
 	results := make([]mediatool.TagResult, len(edits))
 	for i, edit := range edits {
 		if f.refuse[edit.Path] {
@@ -246,5 +250,16 @@ func TestTagWriteback_NavidromeProfileFillsArtistTagsAndWritesCoverJpg(t *testin
 	fixture.run(t)
 	if _, err := fixture.fs.Stat("/music/Heka/Zanuvode/cover.jpg"); err == nil {
 		t.Error("cover.jpg was written into a folder that already had folder.jpg")
+	}
+}
+
+// A page the helper cannot take is logged and counted; the run goes on to the next page instead of failing for good.
+func TestTagWriteback_APageTheHelperRefusesDoesNotFailTheRun(t *testing.T) {
+	fixture := newTagWritebackJob(t, music.TagRoot{ID: 1, Path: "/music", Options: idsOnly})
+	identifyFile(t, fixture.opened, "Heka/Zanuvode/01.m4a", "rg-1", "rel-1")
+	fixture.tool.failBatch = errors.New("argument list too long")
+
+	if err := fixture.job.Run(t.Context(), jobs.Job{Type: music.TagWritebackJobType}); err != nil {
+		t.Errorf("Run = %v, want the failed page logged and the run finished", err)
 	}
 }

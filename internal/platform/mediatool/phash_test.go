@@ -343,6 +343,10 @@ type frameRunner struct {
 
 func (*frameRunner) Lookup(string) error { return nil }
 
+func (r *frameRunner) RunInput(ctx context.Context, _ []byte, name string, args ...string) ([]byte, error) {
+	return r.Run(ctx, name, args...)
+}
+
 func (r *frameRunner) Run(_ context.Context, _ string, args ...string) ([]byte, error) {
 	r.calls = append(r.calls, args)
 	if r.hardwareFails && slices.Contains(args, "-hwaccel") {

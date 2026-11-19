@@ -13,6 +13,8 @@ import (
 // clock.Clock exists (ADR-17).
 type Runner interface {
 	Run(ctx context.Context, name string, args ...string) ([]byte, error)
+	// RunInput is Run with stdin: a payload too large or too private for the command line.
+	RunInput(ctx context.Context, stdin []byte, name string, args ...string) ([]byte, error)
 	// Lookup reports whether a tool is on PATH, without running it.
 	Lookup(name string) error
 }
@@ -23,8 +25,16 @@ type ExecRunner struct{ IONice IONice }
 // Run executes name and returns its standard output. Standard error is folded into
 // the error, because a tool that fails silently is the harder failure to diagnose.
 func (e ExecRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return e.RunInput(ctx, nil, name, args...)
+}
+
+// RunInput executes name with stdin as its standard input and returns its standard output.
+func (e ExecRunner) RunInput(ctx context.Context, stdin []byte, name string, args ...string) ([]byte, error) {
 	wrappedName, wrappedArgs := e.IONice.Wrap(name, args)
 	command := exec.CommandContext(ctx, wrappedName, wrappedArgs...)
+	if stdin != nil {
+		command.Stdin = bytes.NewReader(stdin)
+	}
 	var stdout, stderr bytes.Buffer
 	command.Stdout = &stdout
 	command.Stderr = &stderr
