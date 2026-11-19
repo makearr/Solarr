@@ -15,8 +15,11 @@ func TestVideoHashing_IsOffUntilAnAdministratorTurnsItOn(t *testing.T) {
 	fixture.createUser(t, "listener", settings.RoleReadonly)
 	admin, listener := fixture.signIn(t, "admin"), fixture.signIn(t, "listener")
 
-	if recorder := fixture.do(authedGet(t, listener, "/api/v1/settings/video-hashing")); !strings.Contains(recorder.Body.String(), `"enabled":false`) {
+	if recorder := fixture.do(authedGet(t, admin, "/api/v1/settings/video-hashing")); !strings.Contains(recorder.Body.String(), `"enabled":false`) {
 		t.Errorf("default: %s, want disabled", recorder.Body)
+	}
+	if recorder := fixture.do(authedGet(t, listener, "/api/v1/settings/video-hashing")); recorder.Code != http.StatusForbidden {
+		t.Errorf("listener GET: status %d, want 403", recorder.Code)
 	}
 	put := func(cookies []*http.Cookie) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(http.MethodPut, "/api/v1/settings/video-hashing", strings.NewReader(`{"enabled":true}`))
@@ -43,7 +46,7 @@ func TestImportDuplicates_CheckIsOnAndBlocklistOffUntilAnAdministratorChangesThe
 	fixture.createUser(t, "listener", settings.RoleReadonly)
 	admin, listener := fixture.signIn(t, "admin"), fixture.signIn(t, "listener")
 
-	if recorder := fixture.do(authedGet(t, listener, "/api/v1/settings/import-duplicates")); !strings.Contains(recorder.Body.String(), `"check":true`) ||
+	if recorder := fixture.do(authedGet(t, admin, "/api/v1/settings/import-duplicates")); !strings.Contains(recorder.Body.String(), `"check":true`) ||
 		!strings.Contains(recorder.Body.String(), `"blocklist":false`) {
 		t.Errorf("default: %s, want the check on and the blocklist off", recorder.Body)
 	}

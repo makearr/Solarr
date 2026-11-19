@@ -34,6 +34,8 @@ func TestAdministratorOnlyReads(t *testing.T) {
 		"/api/v1/recyclebin/entries", "/api/v1/packs", "/api/v1/packs/1", "/api/v1/library/health", "/api/v1/import/sessions",
 		"/api/v1/import/sessions/1", "/api/v1/import/sessions/1/units", "/api/v1/downloadfolders/1/contents",
 		"/api/v1/people/1/artwork/options",
+		"/api/v1/blocked", "/api/v1/settings/disk", "/api/v1/settings/video-hashing", "/api/v1/settings/import-duplicates",
+		"/api/v1/targetprofiles", "/api/v1/defaultlanguages",
 	} {
 		if recorder := fixture.do(authedGet(t, cookies, target)); recorder.Code != http.StatusForbidden {
 			t.Errorf("GET %s = %d, want 403 for a non-administrator", target, recorder.Code)

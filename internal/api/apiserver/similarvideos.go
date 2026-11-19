@@ -206,7 +206,10 @@ func (s *Server) ResolveSimilarVideos(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetVideoHashing answers whether videos are hashed in the background.
-func (s *Server) GetVideoHashing(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) GetVideoHashing(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
 	writeJSON(w, s.logger, http.StatusOK, gen.VideoHashing{Enabled: s.auth.Settings.Snapshot().VideoPerceptualHash()})
 }
 
@@ -228,7 +231,10 @@ func (s *Server) SetVideoHashing(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetImportDuplicates answers how an import treats a download the library already holds.
-func (s *Server) GetImportDuplicates(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) GetImportDuplicates(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
 	snapshot := s.auth.Settings.Snapshot()
 	writeJSON(w, s.logger, http.StatusOK, gen.ImportDuplicates{Check: snapshot.ImportDuplicateCheck(), Blocklist: snapshot.ImportDuplicateBlocklist()})
 }

@@ -45,7 +45,10 @@ func targetProfileFromBody(body gen.TargetProfile) settings.TargetProfile {
 }
 
 // ListTargetProfiles answers every content profile.
-func (s *Server) ListTargetProfiles(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) ListTargetProfiles(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
 	profiles := s.auth.Settings.Snapshot().TargetProfiles()
 	views := make([]gen.TargetProfile, len(profiles))
 	for i, profile := range profiles {

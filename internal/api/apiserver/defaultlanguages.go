@@ -8,7 +8,10 @@ import (
 )
 
 // GetDefaultLanguages answers the languages a new library prefers.
-func (s *Server) GetDefaultLanguages(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) GetDefaultLanguages(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
 	codes := s.auth.Settings.Snapshot().DefaultLanguages()
 	if codes == nil {
 		codes = []string{}

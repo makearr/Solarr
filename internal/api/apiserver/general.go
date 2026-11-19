@@ -19,6 +19,7 @@ func (s *Server) generalSettings() gen.GeneralSettings {
 }
 
 // GetGeneralSettings answers the instance-wide switches of Settings -> General.
+// Every screen reads it (FileThumb.tsx needs the thumbnail switch), so it stays open to any signed-in account.
 func (s *Server) GetGeneralSettings(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, s.generalSettings())
 }

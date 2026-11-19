@@ -36,13 +36,16 @@ func (f *fakeDiskManager) SetScanInterval(_ context.Context, hours int64) error 
 
 func (f *fakeDiskManager) Measure(context.Context) error { f.measured++; return nil }
 
-func TestDiskSettings_ReadByAnyoneWrittenOnlyByAnAdministrator(t *testing.T) {
+func TestDiskSettings_ReadAndWrittenOnlyByAnAdministrator(t *testing.T) {
 	fixture := newWorksFixture(t)
 	fixture.createUser(t, "listener", settings.RoleReadonly)
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	listener, admin := fixture.signIn(t, "listener"), fixture.signIn(t, "admin")
 
-	recorder := fixture.do(authedGet(t, listener, "/api/v1/settings/disk"))
+	if recorder := fixture.do(authedGet(t, listener, "/api/v1/settings/disk")); recorder.Code != http.StatusForbidden {
+		t.Fatalf("a listener's read: status %d, want 403: the host's mounts are not theirs", recorder.Code)
+	}
+	recorder := fixture.do(authedGet(t, admin, "/api/v1/settings/disk"))
 	var body struct {
 		Inotify struct {
 			Budget int64 `json:"budget_watches"`

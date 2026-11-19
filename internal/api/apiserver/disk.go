@@ -82,6 +82,9 @@ func (s *Server) diskManagerOrProblem(w http.ResponseWriter) (DiskManager, bool)
 
 // GetDiskSettings answers the detected layout, the latest latencies and the inotify budget.
 func (s *Server) GetDiskSettings(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
 	manager, ok := s.diskManagerOrProblem(w)
 	if !ok {
 		return

@@ -58,3 +58,23 @@ func TestCondition_SQL(t *testing.T) {
 		}
 	}
 }
+
+// SEC-10: a text value is bounded in bytes and words, and a whole filter in size.
+func TestParse_BoundsTextAndTheWholeFilter(t *testing.T) {
+	filter := func(value string) string { return `[{"field":"name","op":"contains","value":"` + value + `"}]` }
+	if _, err := listfilter.Parse(filter(strings.Repeat("a", 200)), fields); err != nil {
+		t.Errorf("200 bytes: %v", err)
+	}
+	if _, err := listfilter.Parse(filter(strings.Repeat("a ", 7)+"a"), fields); err != nil {
+		t.Errorf("8 words: %v", err)
+	}
+	if _, err := listfilter.Parse(filter(strings.Repeat("a", 201)), fields); err == nil || err.Error() != "condition 1: the text is at most 200 bytes" {
+		t.Errorf("201 bytes: %v", err)
+	}
+	if _, err := listfilter.Parse(filter(strings.Repeat("a ", 8)+"a"), fields); err == nil || err.Error() != "condition 1: the text is at most 8 words" {
+		t.Errorf("9 words: %v", err)
+	}
+	if _, err := listfilter.Parse(filter(strings.Repeat(" ", 9000)), fields); err == nil || err.Error() != "a filter is at most 8192 bytes" {
+		t.Errorf("9000 bytes: %v", err)
+	}
+}

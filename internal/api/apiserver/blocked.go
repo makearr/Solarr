@@ -62,6 +62,9 @@ func (s *Server) routeListBlockedContent(w http.ResponseWriter, r *http.Request)
 
 // ListBlockedContent pages through every block, oldest first.
 func (s *Server) ListBlockedContent(w http.ResponseWriter, r *http.Request, params gen.ListBlockedContentParams) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
 	if s.blockedContent == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
 			"Unavailable", "blocked content is not available")

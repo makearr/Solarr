@@ -45,11 +45,21 @@ var operators = map[Kind][]string{
 // maxConditions bounds one filter: a list is not a query language.
 const maxConditions = 12
 
+// A text value is a few words: each word becomes a predicate, and a whole filter stays small.
+const (
+	maxTextBytes  = 200
+	maxTextWords  = 8
+	maxFilterSize = 8 << 10
+)
+
 // Parse reads the conditions a request carries as a JSON array; empty is no filter. Every problem is reported at once,
 // naming the condition, so a person can fix a saved filter that no longer fits.
 func Parse(raw string, fields map[string]Field) ([]Condition, error) {
 	if strings.TrimSpace(raw) == "" {
 		return nil, nil
+	}
+	if len(raw) > maxFilterSize {
+		return nil, fmt.Errorf("a filter is at most %d bytes", maxFilterSize)
 	}
 	var conditions []Condition
 	if err := json.Unmarshal([]byte(raw), &conditions); err != nil {
@@ -83,6 +93,11 @@ func Parse(raw string, fields map[string]Field) ([]Condition, error) {
 				problems = append(problems, fmt.Sprintf("condition %d: %q is not one of %s", index+1, condition.Value, strings.Join(field.Choices, ", ")))
 			}
 		case Text:
+			if len(condition.Value) > maxTextBytes {
+				problems = append(problems, fmt.Sprintf("condition %d: the text is at most %d bytes", index+1, maxTextBytes))
+			} else if len(strings.Fields(condition.Value)) > maxTextWords {
+				problems = append(problems, fmt.Sprintf("condition %d: the text is at most %d words", index+1, maxTextWords))
+			}
 		}
 	}
 	if len(problems) > 0 {

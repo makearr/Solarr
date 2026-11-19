@@ -43,8 +43,8 @@ func TestListBlockedContent_ReturnsCannedRows(t *testing.T) {
 		{ID: 1, OSHash: "abc123", SizeBytes: 5000, Reason: "FAKE", Title: "Fake Album",
 			Source: "user", CreatedAt: time.Unix(100, 0), HitCount: 3},
 	}
-	fixture.createUser(t, "listener", settings.RoleReadonly)
-	cookies := fixture.signIn(t, "listener")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/blocked"))
 	if recorder.Code != http.StatusOK {
@@ -67,8 +67,8 @@ func TestListBlockedContent_ReturnsCannedRows(t *testing.T) {
 
 func TestListBlockedContent_PassesThroughAfterIDAndLimit(t *testing.T) {
 	fixture := newWorksFixture(t)
-	fixture.createUser(t, "listener", settings.RoleReadonly)
-	cookies := fixture.signIn(t, "listener")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/blocked?after_id=42&limit=10"))
 	if recorder.Code != http.StatusOK {
