@@ -437,3 +437,49 @@ func TestLimiter_ALoneLowPriorityWaiterIsNotHeldBack(t *testing.T) {
 	}
 	release()
 }
+
+// Requests that queued for a slot behind slow ones still start MinInterval apart once the slots free up.
+func TestLimiter_QueuedRequestsTakeTheirPacingTurnAfterTheirSlot(t *testing.T) {
+	limiter, fake := newLimiter(httpx.Config{
+		Defaults: httpx.Limits{MinInterval: time.Second, MaxConcurrent: 2},
+	})
+	releaseFirst, err := limiter.Acquire(t.Context(), "indexer-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake.Advance(time.Second)
+	releaseSecond, err := limiter.Acquire(t.Context(), "indexer-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	started := make(chan func(), 2)
+	for range 2 {
+		go func() {
+			release, err := limiter.Acquire(t.Context(), "indexer-a")
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			started <- release
+		}()
+	}
+	for range 3 {
+		time.Sleep(20 * time.Millisecond)
+		fake.Advance(time.Second)
+	}
+	time.Sleep(20 * time.Millisecond)
+	releaseFirst()
+	releaseSecond()
+
+	release := <-started
+	defer release()
+	select {
+	case other := <-started:
+		other()
+		t.Fatal("both queued requests started at once; the second skipped its pacing turn")
+	case <-time.After(50 * time.Millisecond):
+	}
+	fake.Advance(time.Second)
+	(<-started)()
+}

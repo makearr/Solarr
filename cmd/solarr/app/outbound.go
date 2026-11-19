@@ -77,7 +77,7 @@ func bucketOf(key string) string {
 func withMetadataPaces(limits map[string]httpx.Limits) map[string]httpx.Limits {
 	for _, provider := range settings.MetadataProviders {
 		if provider.PerMinute > 0 {
-			limits[bucketOf(provider.Key)] = httpx.Limits{MinInterval: paceInterval(provider.PerMinute)}
+			limits[bucketOf(provider.Key)] = httpx.Limits{MinInterval: paceInterval(provider.PerMinute), MaxConcurrent: metadataConcurrency}
 		}
 	}
 	return limits
@@ -112,11 +112,18 @@ func (p *process) livePace(bucket string) (time.Duration, bool) {
 // providerFamilyLimits pace each connection of a kind on its own bucket: a search fans out to every indexer at
 // once (ADR-37), a download client is polled.
 var providerFamilyLimits = map[string]httpx.Limits{
-	providerIndexerPrefix:    {MinInterval: 500 * time.Millisecond},
-	providerDownloaderPrefix: {MinInterval: 200 * time.Millisecond},
+	providerIndexerPrefix:    {MinInterval: 500 * time.Millisecond, MaxConcurrent: connectionConcurrency},
+	providerDownloaderPrefix: {MinInterval: 200 * time.Millisecond, MaxConcurrent: connectionConcurrency},
 	// Someone's own *Arr server, often busy with its own imports.
-	providerArrPrefix: {MinInterval: 500 * time.Millisecond},
+	providerArrPrefix: {MinInterval: 500 * time.Millisecond, MaxConcurrent: connectionConcurrency},
 }
+
+// connectionConcurrency is how many requests one indexer, download client or *Arr connection has in flight; the pace only
+// spaces their starts, so a slow answer would otherwise pile up requests on a server that is already struggling.
+const connectionConcurrency = 2
+
+// metadataConcurrency is the same bound for one metadata provider.
+const metadataConcurrency = 4
 
 // outbound is the process's one rate-limit registry and one circuit breaker (ADR-13). A limiter built anywhere
 // else is a second budget for the same provider, which is how MusicBrainz came to answer 503 (2026-09-17).

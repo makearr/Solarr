@@ -72,6 +72,11 @@ func NewLimiter(c clock.Clock, config Config, jitter func(time.Duration) time.Du
 // must invoke when the request finishes. A due token goes to the lane whose turn it is, then to the most urgent waiter in it (PriorityFrom).
 func (l *Limiter) Acquire(ctx context.Context, provider string) (release func(), err error) {
 	priority := PriorityFrom(ctx)
+	// The slot comes before the pacing turn: requests queued behind a slow one would otherwise all start at once when it ends.
+	budget := l.budgetFor(provider)
+	if err := budget.slots.acquire(ctx, priority); err != nil {
+		return nil, err
+	}
 	l.wait(provider, priority, 1)
 	for {
 		wait, err := l.tryTake(provider, priority)
@@ -80,20 +85,16 @@ func (l *Limiter) Acquire(ctx context.Context, provider string) (release func(),
 		}
 		if err != nil {
 			l.wait(provider, priority, -1)
+			budget.slots.release()
 			return nil, err
 		}
 		if wait == 0 {
 			break
 		}
 	}
-	// Holding its token, the request no longer keeps its lane's turn from the others while it waits for a slot.
+	// Holding its token, the request no longer keeps its lane's turn from the others while it waits for the global gate.
 	l.wait(provider, priority, -1)
 
-	budget := l.budgetFor(provider)
-	if err := budget.slots.acquire(ctx, priority); err != nil {
-		l.refund(provider)
-		return nil, err
-	}
 	if err := l.global.acquire(ctx, priority); err != nil {
 		budget.slots.release()
 		l.refund(provider)
