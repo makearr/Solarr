@@ -15,6 +15,13 @@ lossless first, as Lidarr's default does (the no-op "Unconfigured" profile only 
 Profiles carry a `suggested_rank`, the order a library is offered
 ("Space conscious, Lossy 320, Lossless preferred, then the rest" — the user's own example).
 
+A profile picked when adding a work (the add dialog, an import list, an *Arr import) stays with that work as its own
+profile, beside the library's list; a pick equal to the library's default is not kept. Saving a profile checks its rules
+strictly: an unknown key, a target value without its unit, a range or weight that cannot hold, a `compare` entry naming
+nothing, a regex that does not compile, and an `upgrade` block inside the rules are refused with the field named.
+Profiles already stored are not refused; the log warns once at start for each. A release that names no resolution
+is 480p when its source and scene codec say standard definition (HDTV/WEB with x264 or XviD, PDTV, DSR).
+
 ## Fitting a profile
 
 `score.Fits`: every gate passes, every dimension the profile tiers is in its **first** tier, and
