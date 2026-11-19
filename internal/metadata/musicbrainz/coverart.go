@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
@@ -149,17 +150,19 @@ func (c CoverArt) get(ctx context.Context, entity, mbid string) (coverArtRespons
 	return parsed, nil
 }
 
-// bestCoverArtImage prefers a front, approved image (section 21.6's cover
-// grid wants the one canonical image); an upload nobody has moderated yet is
-// still better than nothing, so any image is the fallback.
+// bestCoverArtImage picks the release's front: the chosen approved one, else any approved image typed Front, else an
+// unapproved front. A back, booklet or tray scan is no cover, so the next source is asked instead.
 func bestCoverArtImage(images []coverArtImage) (string, bool) {
-	for _, image := range images {
-		if image.Front && image.Approved {
-			return image.url(), true
+	for _, accept := range []func(coverArtImage) bool{
+		func(image coverArtImage) bool { return image.Front && image.Approved },
+		func(image coverArtImage) bool { return image.Approved && slices.Contains(image.Types, "Front") },
+		func(image coverArtImage) bool { return image.Front || slices.Contains(image.Types, "Front") },
+	} {
+		for _, image := range images {
+			if accept(image) {
+				return image.url(), true
+			}
 		}
-	}
-	if len(images) > 0 {
-		return images[0].url(), true
 	}
 	return "", false
 }

@@ -80,18 +80,37 @@ func TestCoverArt_FetchPrefersFrontApprovedOverArrayOrder(t *testing.T) {
 	}
 }
 
-func TestCoverArt_FetchFallsBackToAnyImageWhenNoneIsFrontApproved(t *testing.T) {
-	const body = `{"images": [{"approved": false, "front": false, "image": "https://coverartarchive.org/unapproved.jpg"}]}`
-	server := newCoverArtServer(t, http.StatusOK, body)
-	client := newCoverArtClient(t, server.URL)
-	coverArt := musicbrainz.NewCoverArt(client, server.URL)
+func TestCoverArt_FetchTakesOnlyAFront(t *testing.T) {
+	for name, test := range map[string]struct{ body, want string }{
+		"only a back and a booklet": {
+			body: `{"images": [{"approved": true, "front": false, "image": "https://coverartarchive.org/back.jpg", "types": ["Back"]},` +
+				`{"approved": true, "front": false, "image": "https://coverartarchive.org/booklet.jpg", "types": ["Booklet"]}]}`,
+		},
+		"an unapproved front": {
+			body: `{"images": [{"approved": false, "front": true, "image": "https://coverartarchive.org/unapproved.jpg", "types": ["Front"]}]}`,
+			want: "https://coverartarchive.org/unapproved.jpg",
+		},
+		"an approved Front type without the flag beats an unapproved flag": {
+			body: `{"images": [{"approved": false, "front": true, "image": "https://coverartarchive.org/unapproved.jpg", "types": ["Front"]},` +
+				`{"approved": true, "front": false, "image": "https://coverartarchive.org/typed.jpg", "types": ["Front", "Back"]}]}`,
+			want: "https://coverartarchive.org/typed.jpg",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			server := newCoverArtServer(t, http.StatusOK, test.body)
+			coverArt := musicbrainz.NewCoverArt(newCoverArtClient(t, server.URL), server.URL)
 
-	image, err := coverArt.Fetch(t.Context(), "any-release")
-	if err != nil {
-		t.Fatalf("Fetch: %v", err)
-	}
-	if image != "https://coverartarchive.org/unapproved.jpg" {
-		t.Errorf("Fetch = %q, want the sole image as fallback", image)
+			image, err := coverArt.Fetch(t.Context(), "any-release")
+			if test.want == "" {
+				if !errors.Is(err, musicbrainz.ErrNoCoverArt) {
+					t.Errorf("Fetch = %q, %v; want ErrNoCoverArt so the next source is asked", image, err)
+				}
+				return
+			}
+			if err != nil || image != test.want {
+				t.Errorf("Fetch = %q, %v; want %q", image, err, test.want)
+			}
+		})
 	}
 }
 
