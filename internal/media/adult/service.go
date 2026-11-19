@@ -325,6 +325,9 @@ func (s Service) askWhisparr(ctx context.Context, ids IDs, hint Hint) (Scene, bo
 	}
 	for _, term := range searchTerms(hint) {
 		found, err := memoized(ctx, s.Memo, sourceWhisparr, term, func() ([]whisparr.Scene, error) { return s.Whisparr.SearchScenes(ctx, term) })
+		if errors.Is(err, whisparr.ErrNotFound) {
+			continue
+		}
 		if err != nil {
 			s.warn(sourceWhisparr, term, err)
 			return Scene{}, false

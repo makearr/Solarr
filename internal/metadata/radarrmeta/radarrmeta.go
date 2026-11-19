@@ -138,20 +138,12 @@ func (c Client) get(ctx context.Context, path string, query url.Values, into any
 	request.Header.Set("Accept", "application/json")
 	response, err := c.http.Do(ctx, request)
 	if err != nil {
-		var refused *httpx.StatusError
-		if errors.As(err, &refused) && refused.Status == http.StatusNotFound {
+		if httpx.IsNotFound(err) {
 			return ErrNotFound
 		}
 		return fmt.Errorf("radarrmeta: %s: %w", path, err)
 	}
 	defer func() { _ = response.Body.Close() }()
-	switch response.StatusCode {
-	case http.StatusOK:
-	case http.StatusNotFound:
-		return ErrNotFound
-	default:
-		return fmt.Errorf("radarrmeta: %s: status %d", path, response.StatusCode)
-	}
 	body, err := httpx.ReadLimited(response.Body, maxResponseBytes)
 	if err != nil {
 		return fmt.Errorf("radarrmeta: %s: read: %w", path, err)

@@ -58,9 +58,9 @@ func (a Audiobook) Title() string {
 // Abridged says iTunes tags the recording abridged.
 func (a Audiobook) Abridged() bool { return strings.HasSuffix(strings.TrimSpace(a.Name), "(Abridged)") }
 
-// Cover is the artwork at 600 pixels; iTunes serves any size by the name of the file.
+// Cover is the artwork at 1500 pixels, which iTunes scales down to the original when that is smaller.
 func (a Audiobook) Cover() string {
-	return strings.Replace(a.Artwork100, "100x100bb", "600x600bb", 1)
+	return strings.Replace(a.Artwork100, "100x100bb", "1500x1500bb", 1)
 }
 
 // Year is the year of release, 0 when unknown.

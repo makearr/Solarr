@@ -93,9 +93,6 @@ func (c Client) query(ctx context.Context, query string, variables map[string]an
 		return err
 	}
 	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("hardcover: status %d", response.StatusCode)
-	}
 	raw, err := httpx.ReadLimited(response.Body, maxResponseBytes)
 	if err != nil {
 		return err

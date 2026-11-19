@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -92,15 +91,12 @@ func (c Client) get(ctx context.Context, route string, query url.Values, into an
 	}
 	response, err := c.http.Do(ctx, request)
 	if err != nil {
+		if httpx.IsNotFound(err) {
+			return ErrNotFound
+		}
 		return err
 	}
 	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode == http.StatusNotFound {
-		return ErrNotFound
-	}
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("whisparr: status %d", response.StatusCode)
-	}
 	raw, err := httpx.ReadLimited(response.Body, maxResponseBytes)
 	if err != nil {
 		return err

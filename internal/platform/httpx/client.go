@@ -357,12 +357,20 @@ func (c *Client) Get(ctx context.Context, url string) (*http.Response, error) {
 // ErrNotFound is a 404 GetJSON met: the provider knows nothing under what was asked.
 var ErrNotFound = errors.New("httpx: not found")
 
+// IsNotFound says err is the provider answering that it knows nothing under what was asked (404, 410), not an outage.
+func IsNotFound(err error) bool {
+	if errors.Is(err, ErrNotFound) {
+		return true
+	}
+	var refused *StatusError
+	return errors.As(err, &refused) && (refused.Status == http.StatusNotFound || refused.Status == http.StatusGone)
+}
+
 // GetJSON fetches a URL and decodes its JSON body, read up to limit bytes; a 404 answers ErrNotFound.
 func (c *Client) GetJSON(ctx context.Context, address string, limit int64, into any) error {
 	response, err := c.Get(ctx, address)
 	if err != nil {
-		var refused *StatusError
-		if errors.As(err, &refused) && refused.Status == http.StatusNotFound {
+		if IsNotFound(err) {
 			return ErrNotFound
 		}
 		return err

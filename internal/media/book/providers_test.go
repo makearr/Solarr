@@ -14,7 +14,7 @@ func TestTheNewProvidersAnswerABookEachWithItsOwnId(t *testing.T) {
 		CollectionID: 9, Name: "Awaken Online: Catharsis (Unabridged)", Author: "Travis Bagwell", ReleaseDate: "2016-08-26T07:00:00Z",
 		Artwork100: "https://is1-ssl.mzstatic.com/x/100x100bb.jpg",
 	})
-	if apple.IDs.ITunes != "9" || apple.Title != "Awaken Online: Catharsis" || apple.Year != 2016 || apple.Images[0].URL != "https://is1-ssl.mzstatic.com/x/600x600bb.jpg" {
+	if apple.IDs.ITunes != "9" || apple.Title != "Awaken Online: Catharsis" || apple.Year != 2016 || apple.Images[0].URL != "https://is1-ssl.mzstatic.com/x/1500x1500bb.jpg" {
 		t.Errorf("iTunes book = %+v", apple)
 	}
 	russian := FromFantLab(fantlab.Work{ID: 4325, Name: "Дюна", Original: "Dune", Year: 1965, Authors: []fantlab.Author{{Name: "Фрэнк Герберт", Original: "Frank Herbert"}}})

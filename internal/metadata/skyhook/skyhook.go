@@ -139,16 +139,12 @@ func (c Client) Search(ctx context.Context, term string) ([]Series, error) {
 func (c Client) get(ctx context.Context, path string, into any) error {
 	response, err := c.http.Get(ctx, baseURL+path)
 	if err != nil {
-		var refused *httpx.StatusError
-		if errors.As(err, &refused) && refused.Status == http.StatusNotFound {
+		if httpx.IsNotFound(err) {
 			return ErrNotFound
 		}
 		return fmt.Errorf("skyhook: %s: %w", path, err)
 	}
 	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("skyhook: %s: status %d", path, response.StatusCode)
-	}
 	body, err := httpx.ReadLimited(response.Body, maxResponseBytes)
 	if err != nil {
 		return fmt.Errorf("skyhook: %s: read: %w", path, err)

@@ -68,3 +68,20 @@ func TestFindSiteTreatsTheEmptySiteAsNotFound(t *testing.T) {
 		t.Errorf("site = %+v, err = %v", site, err)
 	}
 }
+
+func TestGetMapsAnUnknownRouteToNotFoundAndAServerErrorToAnOutage(t *testing.T) {
+	whisp := client(t, &answer{bodies: map[string]string{}})
+	if _, err := whisp.FindSite(t.Context(), 9); !errors.Is(err, whisparr.ErrNotFound) {
+		t.Errorf("404 err = %v, want ErrNotFound", err)
+	}
+	broken := client(t, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusBadRequest, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("no")), Request: request}, nil
+	}))
+	if _, err := broken.FindSite(t.Context(), 9); err == nil || errors.Is(err, whisparr.ErrNotFound) {
+		t.Errorf("400 err = %v, want an error that is not ErrNotFound", err)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) { return f(request) }

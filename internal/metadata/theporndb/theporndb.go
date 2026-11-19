@@ -132,8 +132,7 @@ func (c Client) get(ctx context.Context, path string, query url.Values, into any
 	request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(c.key()))
 	request.Header.Set("Accept", "application/json")
 	response, err := c.http.Do(ctx, request)
-	var refused *httpx.StatusError
-	if errors.As(err, &refused) && refused.Status == http.StatusNotFound {
+	if httpx.IsNotFound(err) {
 		return ErrNotFound
 	}
 	if err != nil {
