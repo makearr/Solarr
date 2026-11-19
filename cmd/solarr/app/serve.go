@@ -27,6 +27,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/identify/score"
 	"github.com/makearr/Solarr/internal/importing/arrmap"
 	"github.com/makearr/Solarr/internal/importing/importjob"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -398,6 +399,12 @@ func (p *process) openDatabases(ctx context.Context) error {
 	}
 	p.cache = cache
 	p.settingsRegistry = settings.NewDefaultRegistry()
+	for _, profile := range cache.Snapshot().QualityProfiles() {
+		for _, mistake := range score.ValidateStrict([]byte(profile.RulesJSON)) {
+			p.logger.Warn("quality profile has a field that does not do what it says",
+				"profile", profile.Name, "path", mistake.Path, "value", mistake.Value, "expected", mistake.Expectation)
+		}
+	}
 
 	// Equips the cache to seal/open an *Arr instance's own API key
 	// (todo 4.13): the same encryption key authConfig decodes for session

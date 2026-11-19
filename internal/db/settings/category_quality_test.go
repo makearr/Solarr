@@ -1,6 +1,7 @@
 package settings_test
 
 import (
+	"context"
 	"errors"
 	"net/netip"
 	"reflect"
@@ -409,5 +410,26 @@ func TestTargetFamilies_MovieSeriesAndAdultLibrariesShareOneSetOfPresetsAndEachP
 	}
 	if created, err := cache.CreateQualityTarget(t.Context(), settings.QualityTarget{Name: "Mine", MediaType: "tv", Resolution: "720p"}); err != nil || created.MediaType != "video" {
 		t.Errorf("a target made for tv = %+v, %v; want it in the video family", created, err)
+	}
+}
+
+// Every profile that ships passes the strict check a user's own profile must pass.
+func TestQualityProfiles_ShippedPassStrictCheck(t *testing.T) {
+	cache, _ := newCache(t)
+	for _, profile := range cache.Snapshot().QualityProfiles() {
+		if problems := score.ValidateStrict([]byte(profile.RulesJSON)); len(problems) > 0 {
+			t.Errorf("%s: %v", profile.Name, problems)
+		}
+	}
+}
+
+// A mistyped target is refused on save with the field named (QUAL-4).
+func TestCreateQualityProfile_RefusesMistypedTarget(t *testing.T) {
+	cache, _ := newCache(t)
+	rules := `{"compare":["bitrate_distance"],"targets":{"bitrate":[{"ideal":"20 Mb/s"}]}}`
+	_, err := cache.CreateQualityProfile(context.Background(), "Typo", rules, `{}`)
+	var problems config.Problems
+	if !errors.As(err, &problems) || len(problems) != 1 || problems[0].Path != "rules.targets.bitrate[0].ideal" {
+		t.Fatalf("err = %#v", err)
 	}
 }

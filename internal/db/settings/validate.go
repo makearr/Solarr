@@ -159,9 +159,8 @@ func validateImportTransferLadder(ladder []string) config.Problems {
 // a name, and rules/upgrade JSON that actually decodes as ADR-40's shape --
 // internal/identify/score.Parse/ParseUpgrade own that shape, so a typo like `"compare":
 // "resolution"` (a string where the schema wants a list) is caught here, not only
-// a first evaluation. The interpreter itself never rejects an unknown dimension
-// or field name -- an unmeasured/unlisted one just contributes no evidence, by
-// design -- so there is no stricter semantic check to add beyond decoding cleanly.
+// a first evaluation. The interpreter never rejects what it cannot read -- it just contributes no evidence -- so
+// score.ValidateStrict names those mistakes here, on save and import only, never on load.
 func validateQualityProfile(name, rulesJSON, upgradeJSON string) config.Problems {
 	var problems config.Problems
 	if strings.TrimSpace(name) == "" {
@@ -171,6 +170,12 @@ func validateQualityProfile(name, rulesJSON, upgradeJSON string) config.Problems
 		problems = append(problems, config.Problem{
 			Path: "rules", Value: rulesJSON, Expectation: fmt.Sprintf("a valid rules document: %v", err),
 		})
+	} else {
+		for _, mistake := range score.ValidateStrict([]byte(rulesJSON)) {
+			problems = append(problems, config.Problem{
+				Path: "rules." + mistake.Path, Value: mistake.Value, Expectation: mistake.Expectation,
+			})
+		}
 	}
 	if _, err := score.ParseUpgrade([]byte(upgradeJSON)); err != nil {
 		problems = append(problems, config.Problem{
