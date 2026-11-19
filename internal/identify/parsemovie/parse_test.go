@@ -86,3 +86,40 @@ func TestParsePathTakesTheFolderWhenTheFileHasNoYear(t *testing.T) {
 		t.Errorf("file: %+v ok=%v", info, ok)
 	}
 }
+
+func TestParsePathReadsIDsFromTheFilmFolder(t *testing.T) {
+	cases := []struct {
+		rel  string
+		imdb string
+		tmdb int64
+	}{
+		{"Example Film (2010) {tmdb-27205}/Example Film (2010) Bluray-1080p.mkv", "", 27205},
+		{"Example Film (2010) [imdbid-tt1375666]/Example.Film.2010.1080p.mkv", "tt1375666", 0},
+		{"Example Film (2010) {tmdb-27205}/Disc 1/Example Film (2010).mkv", "", 27205},
+		{"Example Film (2010) {tmdb-27205}/BDMV/STREAM/00001.m2ts", "", 27205},
+		{"Example Film (2010) {tmdb-27205}/Extras/Example Film (2010) trailer.mkv", "", 0},
+		{"Example Film (2010) {tmdb-1}/Example Film (2010) {tmdb-2}.mkv", "", 2},
+		{"Example Film (2010) tt1375666.mkv", "tt1375666", 0},
+	}
+	for _, c := range cases {
+		info, ok := parsemovie.ParsePath(c.rel)
+		if !ok || info.IMDb != c.imdb || info.TMDB != c.tmdb {
+			t.Errorf("%q: imdb %q tmdb %d ok=%v, want %q %d", c.rel, info.IMDb, info.TMDB, ok, c.imdb, c.tmdb)
+		}
+	}
+}
+
+func TestParseAtDoesNotTakeAFutureNumberForTheYear(t *testing.T) {
+	info, _ := parsemovie.ParseAt("Sample.Runner.2049.1080p.BluRay", 2026)
+	if info.Title != "Sample Runner 2049" || info.Year != 0 {
+		t.Errorf("future: %+v", info)
+	}
+	info, _ = parsemovie.ParseAt("Sample.Runner.2049.2017.1080p.BluRay", 2026)
+	if info.Title != "Sample Runner 2049" || info.Year != 2017 {
+		t.Errorf("with year: %+v", info)
+	}
+	info, _ = parsemovie.Parse("Sample.Runner.2049.1080p.BluRay")
+	if info.Year != 2049 {
+		t.Errorf("no clock: %+v", info)
+	}
+}

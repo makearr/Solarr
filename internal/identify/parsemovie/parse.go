@@ -32,9 +32,12 @@ type Info struct {
 }
 
 var (
-	imdbRe    = regexp.MustCompile(`(?i)[\[{(]\s*imdb(?:id)?[-= ]?(tt\d+)\s*[\]})]`)
-	tmdbRe    = regexp.MustCompile(`(?i)[\[{(]\s*tmdb(?:id)?[-= ]?(\d+)\s*[\]})]`)
-	editionRe = regexp.MustCompile(`(?i)[\[{(]\s*edition[-= ]([^\]})]+?)\s*[\]})]`)
+	imdbRe     = regexp.MustCompile(`(?i)[\[{(]\s*imdb(?:id)?[-= ]?(tt\d+)\s*[\]})]`)
+	bareIMDbRe = regexp.MustCompile(`(?i)(?:^|[\s.\[({_-])(tt\d{7,9})(?:$|[\s.\])}_-])`)
+	// discFolderRe is a folder that holds one disc or the disc image of the film in the folder above it.
+	discFolderRe = regexp.MustCompile(`(?i)^(?:(?:cd|dis[ck]|dvd|bd)[\s._-]*\d{1,2}|video_ts|bdmv|stream|certificate)$`)
+	tmdbRe       = regexp.MustCompile(`(?i)[\[{(]\s*tmdb(?:id)?[-= ]?(\d+)\s*[\]})]`)
+	editionRe    = regexp.MustCompile(`(?i)[\[{(]\s*edition[-= ]([^\]})]+?)\s*[\]})]`)
 	// tagRe takes out the square and curly tags left in a title ("[1080p]", "[YTS.MX]"); parentheses stay part of a
 	// title ("Nusjbin or (The Izuxmatnov Tecmeu of Omnesaxho)") unless they hold only the technical half.
 	tagRe   = regexp.MustCompile(`[\[{][^\]}]*[\]}]`)
@@ -71,19 +74,24 @@ var (
 )
 
 // Parse reads a movie release name or a file name (with or without its extension).
-func Parse(name string) (Info, bool) {
+func Parse(name string) (Info, bool) { return ParseAt(name, 0) }
+
+// ParseAt is Parse for a caller that knows the year: a year token beyond thisYear+1 is part of the title
+// ("Sample.Runner.2049.1080p"). thisYear 0 accepts every year.
+func ParseAt(name string, thisYear int) (Info, bool) {
+	key := parsedKey{name: name, thisYear: thisYear}
 	parsed.Lock()
-	cached, found := parsed.results[name]
+	cached, found := parsed.results[key]
 	parsed.Unlock()
 	if found {
 		return cached.info.clone(), cached.ok
 	}
-	info, ok := parse(name)
+	info, ok := parse(name, thisYear)
 	parsed.Lock()
 	if len(parsed.results) >= maxParsed {
 		clear(parsed.results)
 	}
-	parsed.results[name] = parsedResult{info: info.clone(), ok: ok}
+	parsed.results[key] = parsedResult{info: info.clone(), ok: ok}
 	parsed.Unlock()
 	return info, ok
 }
@@ -92,8 +100,13 @@ func Parse(name string) (Info, bool) {
 // claims is most of a hundred regular expressions.
 var parsed = struct {
 	sync.Mutex
-	results map[string]parsedResult
-}{results: map[string]parsedResult{}}
+	results map[parsedKey]parsedResult
+}{results: map[parsedKey]parsedResult{}}
+
+type parsedKey struct {
+	name     string
+	thisYear int
+}
 
 // maxParsed bounds the cache; one past it starts it over.
 const maxParsed = 8192
@@ -110,18 +123,18 @@ func (info Info) clone() Info {
 	return info
 }
 
-func parse(name string) (Info, bool) {
+func parse(name string, thisYear int) (Info, bool) {
 	info := Info{ReleaseTitle: name}
 	work := strings.TrimSpace(name)
 	if extensions[strings.ToLower(path.Ext(work))] {
 		work = strings.TrimSuffix(work, path.Ext(work))
 	}
 	work = readIDs(&info, work)
-	work = readEdition(&info, work)
+	work = readEdition(&info, work, thisYear)
 	info.Claims = parsetv.ParseClaims(work)
 	info.ReleaseGroup = parsetv.ParseReleaseGroup(work)
 
-	titlePart, year := splitTitle(work)
+	titlePart, year := splitTitle(work, thisYear)
 	info.Year = year
 	title := cleanSeparators(titlePart)
 	if title == "" {
@@ -132,9 +145,49 @@ func parse(name string) (Info, bool) {
 }
 
 // ParsePath reads a library or download path: the file name first; when it names no year the folder it is in
-// ("Title (2001)/movie.mkv") supplies the title and year.
+// ("Title (2001)/movie.mkv") supplies the title and year. Ids the file name lacks come from the folder
+// ("Title (2001) {tmdb-1}/Title.mkv"), and from the film folder above a disc folder.
 func ParsePath(rel string) (Info, bool) {
 	rel = strings.ReplaceAll(rel, "\\", "/")
+	info, ok := parsePathNames(rel)
+	if !ok {
+		return info, ok
+	}
+	if info.IMDb == "" || info.TMDB == 0 {
+		if folder, found := ParseFolderOf(rel); found {
+			info = info.withIDsOf(folder)
+		}
+		if parent, found := parseDiscParent(rel); found {
+			info = info.withIDsOf(parent)
+		}
+	}
+	return info, ok
+}
+
+// withIDsOf fills the ids this name lacks from other's; an id the name carries wins.
+func (info Info) withIDsOf(other Info) Info {
+	if info.IMDb == "" {
+		info.IMDb = other.IMDb
+	}
+	if info.TMDB == 0 {
+		info.TMDB = other.TMDB
+	}
+	return info
+}
+
+// parseDiscParent reads the folder above a disc folder ("Film (2010) {tmdb-1}/Disc 1/x.mkv").
+func parseDiscParent(rel string) (Info, bool) {
+	dir, _ := path.Split(rel)
+	parts := strings.Split(strings.Trim(dir, "/"), "/")
+	for i := len(parts) - 1; i >= 0; i-- {
+		if !discFolderRe.MatchString(parts[i]) {
+			return Parse(parts[i])
+		}
+	}
+	return Info{}, false
+}
+
+func parsePathNames(rel string) (Info, bool) {
 	dir, file := path.Split(rel)
 	info, ok := Parse(file)
 	if ok && info.Year != 0 {
@@ -180,11 +233,17 @@ func readIDs(info *Info, work string) string {
 		info.TMDB, _ = strconv.ParseInt(m[1], 10, 64)
 		work = tmdbRe.ReplaceAllString(work, " ")
 	}
+	if info.IMDb == "" {
+		if m := bareIMDbRe.FindStringSubmatch(work); m != nil {
+			info.IMDb = strings.ToLower(m[1])
+			work = bareIMDbRe.ReplaceAllString(work, " ")
+		}
+	}
 	return work
 }
 
 // readEdition takes an explicit {edition-...} tag, else the first edition word of the name.
-func readEdition(info *Info, work string) string {
+func readEdition(info *Info, work string, thisYear int) string {
 	if m := editionRe.FindStringSubmatch(work); m != nil {
 		info.Edition = strings.TrimSpace(m[1])
 		return editionRe.ReplaceAllString(work, " ")
@@ -192,7 +251,7 @@ func readEdition(info *Info, work string) string {
 	cut := qualityStartIndex(work)
 	// With a year, the title is known: an edition word inside it ("Uncut Gems", "Final Cut") is the title's, not an edition.
 	titleEnd := 0
-	if title, year := splitTitle(work); year != 0 {
+	if title, year := splitTitle(work, thisYear); year != 0 {
 		titleEnd = strings.Index(work, title) + len(title)
 	}
 	for _, edition := range editions {
@@ -215,13 +274,13 @@ func qualityStartIndex(work string) int {
 
 // splitTitle cuts the name at its year, or where the technical half begins; the year is the last one before that
 // point that has a title in front of it, so "2001 A Cfago Utenkoa 1968" and "Sample Runner 2049 (2017)" read right.
-func splitTitle(work string) (title string, year int) {
+func splitTitle(work string, thisYear int) (title string, year int) {
 	limit := len(work)
 	if cut := qualityStartIndex(work); cut >= 0 {
 		limit = cut
 	}
 	scan := work[:limit]
-	matches := yearTokens(scan)
+	matches := yearTokens(scan, thisYear)
 	for i := len(matches) - 1; i >= 0; i-- {
 		start, end := matches[i][0], matches[i][1]
 		if strings.TrimSpace(scan[:start]) == "" && i != 0 {
@@ -241,11 +300,14 @@ func splitTitle(work string) (title string, year int) {
 }
 
 // yearTokens are the spans of the four-digit years in text that stand alone, so "2049.2017" holds two.
-func yearTokens(text string) [][2]int {
+func yearTokens(text string, thisYear int) [][2]int {
 	var spans [][2]int
 	for _, m := range yearRe.FindAllStringSubmatchIndex(text, -1) {
 		start, end := m[2], m[3]
 		if end < len(text) && !strings.ContainsRune(" .])}_-", rune(text[end])) {
+			continue
+		}
+		if thisYear != 0 && mustYear(text[start:end]) > thisYear+1 {
 			continue
 		}
 		spans = append(spans, [2]int{start, end})
@@ -262,13 +324,13 @@ func mustYear(text string) int {
 // has spaces as it is, and drops what is left of tags and a trailing dash.
 func cleanSeparators(title string) string {
 	title = tagRe.ReplaceAllStringFunc(title, func(tag string) string {
-		if len(yearTokens(tag)) > 0 {
+		if len(yearTokens(tag, 0)) > 0 {
 			return tag
 		}
 		return " "
 	})
 	title = parenRe.ReplaceAllStringFunc(title, func(tag string) string {
-		if strings.TrimSpace(strings.Trim(tag, "()")) == "" || qualityStartIndex(tag) >= 0 && len(yearTokens(tag)) == 0 {
+		if strings.TrimSpace(strings.Trim(tag, "()")) == "" || qualityStartIndex(tag) >= 0 && len(yearTokens(tag, 0)) == 0 {
 			return " "
 		}
 		return tag
