@@ -204,7 +204,7 @@ func (j *ArtworkJob) sweepEmbedded(ctx context.Context, progress *jobs.Progress,
 			total++
 			afterWorkID = candidate.WorkID
 			switch err := outcomes[index]; {
-			case errors.Is(err, mediatool.ErrNoEmbeddedPicture):
+			case artworkMiss(err):
 				skipped++
 				missed = append(missed, candidate.WorkID)
 			case err != nil:
@@ -229,7 +229,7 @@ func (j *ArtworkJob) sweepEmbedded(ctx context.Context, progress *jobs.Progress,
 func (j *ArtworkJob) embeddedOne(ctx context.Context, candidate library.EmbeddedArtworkCandidate) error {
 	root, found := j.roots.RootFolder(candidate.RootFolderID)
 	if !found {
-		return fmt.Errorf("root folder %d is not configured", candidate.RootFolderID)
+		return fmt.Errorf("root folder %d: %w", candidate.RootFolderID, errRootNotConfigured)
 	}
 	source, err := j.pictures.EmbeddedPicture(ctx, path.Join(root.Path, candidate.RelPath))
 	if err != nil {
@@ -276,8 +276,8 @@ func (j *ArtworkJob) sweep(
 			switch err := outcomes[index]; {
 			case errors.Is(err, httpx.ErrCircuitOpen):
 				paused = true
-			case errors.Is(err, musicbrainz.ErrNoCoverArt):
-				// Not a failure: nothing at this source. Asked again once the miss is artworkRetryAfter old.
+			case artworkMiss(err):
+				// Nothing usable at this source, and asking again gives the same answer until artworkRetryAfter.
 				skipped++
 				missed = append(missed, candidate.WorkID)
 			case err != nil:
@@ -301,6 +301,31 @@ func (j *ArtworkJob) sweep(
 	j.logger.Info("music artwork sweep finished", slog.String("kind", kind),
 		slog.Int("processed", total), slog.Int("failed", failed), slog.Int("skipped", skipped))
 	return nil
+}
+
+// errNotAnImage is a download the picture decoder rejects: the same bytes fail again.
+var errNotAnImage = errors.New("not a usable image")
+
+// errRootNotConfigured is an album whose root folder was removed from the settings.
+var errRootNotConfigured = errors.New("root folder is not configured")
+
+// artworkMiss says err will repeat as it is (no art there, a dead image link, an undecodable or oversize file), so the work
+// is left alone for artworkRetryAfter; an outage, a rate limit or a share that is offline is not a miss and is asked again.
+func artworkMiss(err error) bool {
+	if err == nil {
+		return false
+	}
+	var refused *httpx.StatusError
+	var tooLarge *httpx.TooLargeError
+	switch {
+	case errors.Is(err, musicbrainz.ErrNoCoverArt), errors.Is(err, mediatool.ErrNoEmbeddedPicture),
+		errors.Is(err, errNotAnImage), errors.Is(err, errRootNotConfigured), errors.As(err, &tooLarge):
+		return true
+	case errors.As(err, &refused):
+		return refused.Status >= 400 && refused.Status < 500 &&
+			refused.Status != http.StatusRequestTimeout && refused.Status != http.StatusTooManyRequests
+	}
+	return false
 }
 
 func (j *ArtworkJob) processOne(ctx context.Context, candidate library.ArtworkCandidate, lookup artworkSource) error {
@@ -357,7 +382,7 @@ func (j *ArtworkJob) storeImage(ctx context.Context, personID int64, sourceURL s
 func (j *ArtworkJob) writeSizes(cacheKey string, source []byte) (artwork.Image, error) {
 	sizes, err := artwork.Process(source)
 	if err != nil {
-		return artwork.Image{}, fmt.Errorf("process image: %w", err)
+		return artwork.Image{}, fmt.Errorf("process image: %w: %w", errNotAnImage, err)
 	}
 	if err := j.fs.MkdirAll(j.imagesDir, 0o755); err != nil {
 		return artwork.Image{}, fmt.Errorf("create %s: %w", j.imagesDir, err)

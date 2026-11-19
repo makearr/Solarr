@@ -22,9 +22,16 @@ func ReadLimited(body io.Reader, limit int64) ([]byte, error) {
 		return nil, err
 	}
 	if int64(len(data)) > limit {
-		return nil, fmt.Errorf("httpx: response exceeds %d bytes", limit)
+		return nil, &TooLargeError{Limit: limit}
 	}
 	return data, nil
+}
+
+// TooLargeError reports a response with more bytes than the caller allows; asking again returns the same body.
+type TooLargeError struct{ Limit int64 }
+
+func (e *TooLargeError) Error() string {
+	return fmt.Sprintf("httpx: response exceeds %d bytes", e.Limit)
 }
 
 // ResponseClass decides behaviour, which is the part that matters (§16).

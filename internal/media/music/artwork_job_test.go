@@ -520,3 +520,23 @@ func TestArtworkJob_FetchesABatchsCoversConcurrently(t *testing.T) {
 		t.Errorf("at most %d lookups at once over %d calls, want overlapping lookups, each release once", coverArt.most, coverArt.calls)
 	}
 }
+
+// An image the decoder rejects fails the same way next time, so it waits out the week.
+func TestArtworkJob_AnUndecodableImageIsRememberedAsAMiss(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("this is not a picture"))
+	}))
+	t.Cleanup(server.Close)
+	coverArt := &fakeCoverArt{urlByMBID: map[string]string{"release-1": server.URL + "/garbage.png"}}
+	job, opened, _ := newArtworkJob(t, coverArt, server.URL)
+	refineWithReleaseMBIDForArtworkJob(t, library.NewIdentity(opened), "rg-1", "release-1")
+
+	for range 2 {
+		if err := job.Run(t.Context(), jobs.Job{Type: music.ArtworkJobType}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	}
+	if coverArt.calls != 1 {
+		t.Errorf("the archive was asked %d times over two runs, want once", coverArt.calls)
+	}
+}
