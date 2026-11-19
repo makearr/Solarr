@@ -118,6 +118,17 @@ func (q *Queries) AnyUnverifiedWork(ctx context.Context) (int64, error) {
 	return present, err
 }
 
+const countAllWorks = `-- name: CountAllWorks :one
+SELECT COUNT(*) FROM work
+`
+
+func (q *Queries) CountAllWorks(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countAllWorks)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countCalendarDates = `-- name: CountCalendarDates :many
 SELECT release_date, CAST(COUNT(*) AS INTEGER) AS releases
 FROM (

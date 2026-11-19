@@ -105,6 +105,7 @@ type Querier interface {
 	CopyWorkItemFilesToCategory(ctx context.Context, arg CopyWorkItemFilesToCategoryParams) error
 	// A copy in another library starts unmonitored: it holds what exists, acquisition stays with the original.
 	CopyWorkItemsToCategory(ctx context.Context, arg CopyWorkItemsToCategoryParams) (int64, error)
+	CountAllWorks(ctx context.Context) (int64, error)
 	// The "artists" count for one category (ADR-54's person-entity navigation levels,
 	// e.g. music's Artists): distinct persons credited with role 'artist' on a work
 	// visible to the category. Hard-codes the 'artist' role, the same way

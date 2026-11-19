@@ -950,15 +950,8 @@ type IncompleteItem struct {
 	RequiredCount, PresentCount int64
 }
 
-// CountIncomplete answers how many monitored items are MISSING or PARTIAL --
-// library health's own "missing tracks" figure (todo 4.8), a live query
-// (desired_by_category's own index) rather than a cached counter: unlike
-// categorycounts.go's own per-category "missing"/"partial" counters, nothing
-// today reconciles a library-wide sum of those into the "library" counter
-// scope dashboard.go's own libraryCounts already reads a "missing" key from
-// -- a pre-existing gap (that dashboard figure has always read zero),
-// noted rather than fixed here since fixing it is categorycounts.go's own
-// job, not this one's. categoryID zero means every category.
+// CountIncomplete answers how many monitored items are MISSING or PARTIAL -- library health's "missing tracks" figure
+// (todo 4.8), a live query on desired_by_category. categoryID zero means every category.
 func (d Desired) CountIncomplete(ctx context.Context, categoryID int64) (int64, error) {
 	rows, err := librarydb.New(d.store.Read()).CountDesiredItemsByState(ctx, categoryID)
 	if err != nil {

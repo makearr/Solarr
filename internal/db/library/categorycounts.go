@@ -75,7 +75,34 @@ func (c CategoryCounters) Reconcile(ctx context.Context, scopes []CategoryScope)
 		}
 		corrections = append(corrections, found...)
 	}
-	return corrections, nil
+	found, err := c.reconcileLibrary(ctx, reader, now, filesByRoot)
+	if err != nil {
+		return nil, fmt.Errorf("library: category counters: reconcile library: %w", err)
+	}
+	return append(corrections, found...), nil
+}
+
+// reconcileLibrary keeps the whole library's figures the dashboard shows, in the scope it reads.
+func (c CategoryCounters) reconcileLibrary(ctx context.Context, reader *librarydb.Queries, now int64, filesByRoot map[int64]int64) ([]Correction, error) {
+	works, err := reader.CountAllWorks(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("count works: %w", err)
+	}
+	states, err := reader.CountDesiredItemsByState(ctx, 0)
+	if err != nil {
+		return nil, fmt.Errorf("count wanted items: %w", err)
+	}
+	var files, monitored, missing int64
+	for _, total := range filesByRoot {
+		files += total
+	}
+	for _, row := range states {
+		monitored += row.Total
+		if row.State == "MISSING" || row.State == "PARTIAL" {
+			missing += row.Total
+		}
+	}
+	return c.writeScope(ctx, reader, now, "library", map[string]int64{"works": works, "files": files, "monitored": monitored, "missing": missing})
 }
 
 func (c CategoryCounters) reconcileScope(
@@ -120,6 +147,11 @@ func (c CategoryCounters) reconcileScope(
 		"artists":       artists,
 	}
 
+	return c.writeScope(ctx, reader, now, scopeKey, truth)
+}
+
+// writeScope stores the figures of one counter scope that differ from what is stored and answers each correction.
+func (c CategoryCounters) writeScope(ctx context.Context, reader *librarydb.Queries, now int64, scopeKey string, truth map[string]int64) ([]Correction, error) {
 	existingRows, err := reader.ListCountersForScope(ctx, scopeKey)
 	if err != nil {
 		return nil, err

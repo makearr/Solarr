@@ -130,6 +130,9 @@ SELECT id, work_id, kind, label, year, format, catalogue_number,
        barcode, runtime_ms, is_default
 FROM edition WHERE work_id = ? ORDER BY is_default DESC, year, label;
 
+-- name: CountAllWorks :one
+SELECT COUNT(*) FROM work;
+
 -- name: GetEditionByExternalID :one
 SELECT e.id, e.work_id, e.kind, e.label, e.year, e.format, e.catalogue_number,
        e.barcode, e.runtime_ms, e.is_default

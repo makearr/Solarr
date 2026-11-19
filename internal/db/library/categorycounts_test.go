@@ -52,8 +52,22 @@ func TestCategoryCounters_CountsWorksAndFilesForTheScopedRoots(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
-	if len(corrections) != 12 {
-		t.Fatalf("corrections = %+v, want 12 (works+works_wanted+files+files_offline+parts+artists for each of 2 categories)", corrections)
+	if len(corrections) != 16 {
+		t.Fatalf("corrections = %+v, want 16 (works+works_wanted+files+files_offline+parts+artists for each of 2 categories, and the library's four)", corrections)
+	}
+	for _, want := range []struct {
+		metric string
+		value  int64
+	}{{"works", 3}, {"files", 4}, {"monitored", 0}, {"missing", 0}} {
+		found := false
+		for _, correction := range corrections {
+			if correction.Scope == "library" && correction.Metric == want.metric {
+				found = correction.Now == want.value
+			}
+		}
+		if !found {
+			t.Errorf("library %s is not %d in %+v", want.metric, want.value, corrections)
+		}
 	}
 
 	if v, ok := correctionFor(corrections, "works"); !ok || v.Now != 2 || v.Scope != "category:1" {
