@@ -433,3 +433,30 @@ func TestCreateQualityProfile_RefusesMistypedTarget(t *testing.T) {
 		t.Fatalf("err = %#v", err)
 	}
 }
+
+// PERF-11: one parse per snapshot however often the profile is asked for, and a new snapshot sees an edited profile.
+func TestSnapshot_ParsesAProfileOncePerSnapshot(t *testing.T) {
+	cache, _ := newCache(t)
+	profile, err := cache.CreateQualityProfile(context.Background(), "Parsed once", `{"compare":["score"]}`, `{}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := cache.Snapshot()
+	first, err := snapshot.ParsedQualityProfile(profile.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, _ := snapshot.ParsedQualityProfile(profile.ID)
+	if &first.Compare[0] != &second.Compare[0] {
+		t.Error("the second call parsed the rules again")
+	}
+	if err := cache.UpdateQualityProfile(context.Background(), profile.ID, "Parsed once", `{"compare":["score","lossless"]}`, `{}`); err != nil {
+		t.Fatal(err)
+	}
+	if edited, _ := cache.Snapshot().ParsedQualityProfile(profile.ID); len(edited.Compare) != 2 {
+		t.Errorf("a new snapshot parsed %v, want the edited rules", edited.Compare)
+	}
+	if _, err := snapshot.ParsedQualityProfile(profile.ID + 1000); !errors.Is(err, settings.ErrNotFound) {
+		t.Errorf("unknown profile: %v", err)
+	}
+}

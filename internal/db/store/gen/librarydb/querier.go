@@ -440,6 +440,7 @@ type Querier interface {
 	GetCrossoverEvent(ctx context.Context, collectionID int64) (CrossoverEvent, error)
 	GetCrossoverFamilyChecked(ctx context.Context, familyKey string) (int64, error)
 	GetDesiredItem(ctx context.Context, id int64) (DesiredItem, error)
+	GetDesiredOverrides(ctx context.Context, itemID int64) (GetDesiredOverridesRow, error)
 	GetDesiredProfileOverride(ctx context.Context, desiredItemID int64) (int64, error)
 	GetDesiredTargetOverride(ctx context.Context, desiredItemID int64) (int64, error)
 	GetEdition(ctx context.Context, id int64) (Edition, error)

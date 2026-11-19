@@ -27,6 +27,23 @@ func (q *Queries) ClearDesiredTargetOverride(ctx context.Context, desiredItemID 
 	return err
 }
 
+const getDesiredOverrides = `-- name: GetDesiredOverrides :one
+SELECT CAST(COALESCE((SELECT p.profile_id FROM desired_profile_override p WHERE p.desired_item_id = ?1), 0) AS INTEGER) AS profile_id,
+       CAST(COALESCE((SELECT t.target_id FROM desired_target_override t WHERE t.desired_item_id = ?1), 0) AS INTEGER) AS target_id
+`
+
+type GetDesiredOverridesRow struct {
+	ProfileID int64
+	TargetID  int64
+}
+
+func (q *Queries) GetDesiredOverrides(ctx context.Context, itemID int64) (GetDesiredOverridesRow, error) {
+	row := q.db.QueryRowContext(ctx, getDesiredOverrides, itemID)
+	var i GetDesiredOverridesRow
+	err := row.Scan(&i.ProfileID, &i.TargetID)
+	return i, err
+}
+
 const getDesiredProfileOverride = `-- name: GetDesiredProfileOverride :one
 SELECT profile_id FROM desired_profile_override WHERE desired_item_id = ?
 `

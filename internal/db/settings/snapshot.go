@@ -1,9 +1,16 @@
 package settings
 
-import "slices"
+import (
+	"fmt"
+	"slices"
+	"sync"
+
+	"github.com/makearr/Solarr/internal/identify/score"
+)
 
 // Snapshot is an immutable view of settings.db (ADR-25).
 type Snapshot struct {
+	parsedProfiles    sync.Map // quality profile id -> parsedProfile, filled on first use and gone with the snapshot
 	users             []User
 	categories        []Category
 	rootFolders       []RootFolder
@@ -256,4 +263,25 @@ func (s *Snapshot) LibraryCategories(categoryID int64) []Category {
 		}
 	}
 	return categories
+}
+
+type parsedProfile struct {
+	rules score.Profile
+	err   error
+}
+
+// ParsedQualityProfile is the profile's rules parsed once per snapshot, so a settings change drops it with the
+// snapshot. The result is shared: a caller copies before changing it.
+func (s *Snapshot) ParsedQualityProfile(id int64) (score.Profile, error) {
+	if cached, found := s.parsedProfiles.Load(id); found {
+		parsed := cached.(parsedProfile)
+		return parsed.rules, parsed.err
+	}
+	profile, found := s.qualityProfileByID[id]
+	if !found {
+		return score.Profile{}, fmt.Errorf("settings: quality profile %d: %w", id, ErrNotFound)
+	}
+	rules, err := score.Parse([]byte(profile.RulesJSON))
+	s.parsedProfiles.Store(id, parsedProfile{rules: rules, err: err})
+	return rules, err
 }

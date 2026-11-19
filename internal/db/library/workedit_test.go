@@ -158,3 +158,22 @@ func TestProfileOverrideForWork_CoversEveryItemOfThatWorkOnly(t *testing.T) {
 		t.Errorf("another work's item: found=%v err=%v, want none", found, err)
 	}
 }
+
+func TestOverrides_BothChoicesInOneRead(t *testing.T) {
+	opened, _ := newLibrary(t)
+	desired := library.NewDesired(opened)
+	item := createDesired(t, opened, createWork(t, opened, "music", "Alpha").ID, "SET", 3)
+	if profile, target, err := desired.Overrides(t.Context(), item.ID); err != nil || profile != 0 || target != 0 {
+		t.Fatalf("fresh item: %d %d %v, want none", profile, target, err)
+	}
+	profileID, targetID := int64(7), int64(9)
+	if err := desired.SetProfileOverride(t.Context(), item.ID, &profileID); err != nil {
+		t.Fatal(err)
+	}
+	if err := desired.SetTargetOverride(t.Context(), item.ID, &targetID); err != nil {
+		t.Fatal(err)
+	}
+	if profile, target, err := desired.Overrides(t.Context(), item.ID); err != nil || profile != 7 || target != 9 {
+		t.Fatalf("overrides = %d %d %v, want 7 and 9", profile, target, err)
+	}
+}

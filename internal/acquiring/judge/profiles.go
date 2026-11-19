@@ -82,18 +82,17 @@ func LibraryProfiles(
 	if categoryFound && len(category.QualityProfileIDs) > 0 {
 		ids = category.QualityProfileIDs
 	}
-	override, overridden, err := desired.ProfileOverride(ctx, itemID)
+	profileOverride, targetOverride, err := desired.Overrides(ctx, itemID)
 	if err != nil {
 		return nil, err
 	}
+	overridden := profileOverride != 0
 	if overridden {
-		ids = []int64{override}
+		ids = []int64{profileOverride}
 	}
 	chosen := category.QualityTarget
-	if targetID, own, err := desired.TargetOverride(ctx, itemID); err != nil {
-		return nil, err
-	} else if own {
-		if target, found := snapshot.QualityTarget(targetID); found {
+	if targetOverride != 0 {
+		if target, found := snapshot.QualityTarget(targetOverride); found {
 			chosen = &target
 		}
 	}
@@ -106,7 +105,7 @@ func LibraryProfiles(
 		if !found {
 			return nil, ErrNoQualityProfile
 		}
-		rules, err := score.Parse([]byte(profile.RulesJSON))
+		rules, err := snapshot.ParsedQualityProfile(id)
 		if err != nil {
 			return nil, fmt.Errorf("quality profile %d: %w", id, err)
 		}
