@@ -33,7 +33,7 @@ export function FollowPanel({ subject, subjectId, libraryIds }: { subject: Subje
   const shown = (libraries.data ?? []).filter(
     (library) =>
       ids.includes(library.id) &&
-      (library.permission === "request" || library.permission === "manage") &&
+      (library.permission === "add" || library.permission === "manage") &&
       followableIn(mediaTypes.find((type) => type.key === library.media_type), subject),
   );
   if (shown.length === 0) return null;

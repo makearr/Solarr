@@ -12990,7 +12990,7 @@ components:
         can_request:
           type: boolean
           description: >-
-            Whether the caller holds request in one of the album's libraries:
+            Whether the caller holds add in one of the album's libraries (request only asks):
             searching, sending and monitoring it would be accepted.
         id: { type: integer, format: int64 }
         media_type: { type: string, example: "music" }

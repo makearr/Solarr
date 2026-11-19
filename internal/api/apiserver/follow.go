@@ -11,7 +11,6 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
-	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 // The subjects a follow can be of.
@@ -62,7 +61,7 @@ func (s *Server) followBody(w http.ResponseWriter, r *http.Request, access authz
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
 		return gen.FollowRequest{}, false
 	}
-	if _, err := access.Category(body.CategoryId, settings.PermissionRequest); err != nil {
+	if _, err := access.Category(body.CategoryId, actionLevels[actionFollow]); err != nil {
 		writeError(w, s.logger, err)
 		return gen.FollowRequest{}, false
 	}
@@ -123,7 +122,7 @@ func (s *Server) deleteFollow(w http.ResponseWriter, r *http.Request, subjectTyp
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "category_id must be a number")
 		return
 	}
-	if _, err := access.Category(categoryID, settings.PermissionRequest); err != nil {
+	if _, err := access.Category(categoryID, actionLevels[actionFollow]); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}

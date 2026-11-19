@@ -6,7 +6,7 @@ import { ArrowDown, ArrowUp, ListFilter, Search } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
-import { useCanRequest } from "@/lib/useLibraryPermission";
+import { useCanAdd } from "@/lib/useLibraryPermission";
 import type { MediaTypeInfo } from "@/lib/useMediaTypes";
 import { vocabularyOf } from "@/lib/i18n";
 import { useLibraries } from "@/lib/resources";
@@ -97,8 +97,8 @@ export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
     view === "missing" ? libraries.data?.find((library) => String(library.id) === categoryId)?.wanted : undefined;
   const pages = total === undefined ? undefined : Math.max(1, Math.ceil(total / size));
 
-  const canRequest = useCanRequest((library) => String(library.id) === categoryId);
-  const searchable = canRequest;
+  const canAdd = useCanAdd((library) => String(library.id) === categoryId);
+  const searchable = canAdd;
 
   const setView = (next: {
     sort?: Sort; dir?: "asc" | "desc"; size?: number; view?: "missing" | "cutoff"; layout?: IndexView;
@@ -163,7 +163,7 @@ export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
           {searchLibrary.isSuccess &&
             (searchLibrary.data?.duplicate ? "That search is already running." : "Searching in the background.")}
           {searchLibrary.isError && <span className="text-danger">The search could not start.</span>}
-          {!canRequest && <span>Searching needs request access to this library.</span>}
+          {!canAdd && <span>Searching needs add access to this library.</span>}
           {searchable && (
           <>
           <button
@@ -240,7 +240,7 @@ export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
             <StateBadge state={work.wanted_state} />
             <span className="flex items-center justify-end gap-2 text-xs text-ink-muted">
               <span className="truncate">{rowResult[work.id]}</span>
-              {canRequest && (
+              {canAdd && (
               <>
               {searchable && (
               <button

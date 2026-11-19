@@ -169,7 +169,7 @@ func (s *Server) SaveWorkEdit(w http.ResponseWriter, r *http.Request, id int64) 
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
 		return
 	}
-	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
+	if !s.workPermitted(w, r, access, id, actionLevels[actionEditWork]) {
 		return
 	}
 	edit := WorkEditRow{Monitored: body.Monitored, ProfileID: body.ProfileId, TargetID: body.TargetId, Tags: body.Tags, Fields: derefOr(body.Fields, nil)}
@@ -213,7 +213,7 @@ func (s *Server) BulkEditWorks(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
 		return
 	}
-	rootFolderIDs, categoryIDs, err := s.libraryVisibility(access, body.CategoryId, derefOr(body.WholeLibrary, false), settings.PermissionRequest)
+	rootFolderIDs, categoryIDs, err := s.libraryVisibility(access, body.CategoryId, derefOr(body.WholeLibrary, false), actionLevels[actionEditWork])
 	if err != nil {
 		writeError(w, s.logger, err)
 		return

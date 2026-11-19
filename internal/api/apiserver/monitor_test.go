@@ -85,7 +85,7 @@ func visibleWorksFixture(t *testing.T) (worksFixture, []*http.Cookie) {
 	fixture := newWorksFixture(t)
 	category, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
 	user := fixture.createUser(t, "listener", settings.RoleReadonly)
-	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, settings.PermissionRequest); err != nil {
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, settings.PermissionManage); err != nil {
 		t.Fatalf("SetCategoryAccess: %v", err)
 	}
 	cookies := fixture.signIn(t, "listener")
@@ -545,7 +545,7 @@ func TestSetWorkMonitored_NeedsRequestNotRead(t *testing.T) {
 
 // The album page offers search and monitoring only to a caller the server would accept them from.
 func TestGetWork_SaysWhetherTheCallerMayRequest(t *testing.T) {
-	for permission, want := range map[settings.Permission]bool{settings.PermissionRead: false, settings.PermissionRequest: true} {
+	for permission, want := range map[settings.Permission]bool{settings.PermissionRead: false, settings.PermissionRequest: false, settings.PermissionAdd: true} {
 		fixture := newWorksFixture(t)
 		category, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
 		user := fixture.createUser(t, "member", settings.RoleReadonly)

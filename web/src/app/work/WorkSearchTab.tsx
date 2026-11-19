@@ -68,7 +68,7 @@ export function WorkSearchTab({ work, info, words, lead }: { work: Work; info: M
   });
 
   if (groups.length === 0 || group === undefined) return <p className="text-sm text-ink-muted">{t("work.notWanted", words)}</p>;
-  if (!work.can_request) return <p className="text-sm text-ink-muted">Searching needs request access to this library.</p>;
+  if (!work.can_request) return <p className="text-sm text-ink-muted">Searching needs add access to this library.</p>;
 
   return (
     <div className="flex flex-col gap-3">

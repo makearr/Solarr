@@ -96,7 +96,7 @@ func searchableWorkFixture(t *testing.T, permission settings.Permission) (worksF
 
 // Searching, grabbing and sending can start a download: the album's library decides, at request
 // (2026-09-25 review). Read shows the candidates; none or another library's album is 404.
-func TestWorkAcquisition_NeedsRequestOnTheAlbumsLibrary(t *testing.T) {
+func TestWorkAcquisition_NeedsAddOnTheAlbumsLibrary(t *testing.T) {
 	for _, tc := range []struct {
 		permission settings.Permission
 		method     string
@@ -107,9 +107,12 @@ func TestWorkAcquisition_NeedsRequestOnTheAlbumsLibrary(t *testing.T) {
 		{settings.PermissionRead, http.MethodPost, "/api/v1/works/42/grab", http.StatusForbidden},
 		{settings.PermissionRead, http.MethodPost, "/api/v1/works/42/candidates/7/send", http.StatusForbidden},
 		{settings.PermissionRead, http.MethodGet, "/api/v1/works/42/candidates", http.StatusOK},
-		{settings.PermissionRequest, http.MethodPost, "/api/v1/works/42/search", http.StatusOK},
-		{settings.PermissionRequest, http.MethodPost, "/api/v1/works/42/grab", http.StatusOK},
-		{settings.PermissionRequest, http.MethodPost, "/api/v1/works/42/candidates/7/send", http.StatusOK},
+		{settings.PermissionRequest, http.MethodPost, "/api/v1/works/42/search", http.StatusForbidden},
+		{settings.PermissionRequest, http.MethodPost, "/api/v1/works/42/grab", http.StatusForbidden},
+		{settings.PermissionRequest, http.MethodPost, "/api/v1/works/42/candidates/7/send", http.StatusForbidden},
+		{settings.PermissionAdd, http.MethodPost, "/api/v1/works/42/search", http.StatusOK},
+		{settings.PermissionAdd, http.MethodPost, "/api/v1/works/42/grab", http.StatusOK},
+		{settings.PermissionAdd, http.MethodPost, "/api/v1/works/42/candidates/7/send", http.StatusOK},
 		{settings.PermissionNone, http.MethodPost, "/api/v1/works/42/search", http.StatusNotFound},
 		{settings.PermissionNone, http.MethodGet, "/api/v1/works/42/candidates", http.StatusNotFound},
 	} {
@@ -370,7 +373,7 @@ func TestWorkAcquisition_PassesTheScope(t *testing.T) {
 		{http.MethodPost, "/api/v1/works/42/candidates/7/send?group=s01", apiserver.SearchScope{Group: &group}},
 		{http.MethodPost, "/api/v1/works/42/grab", apiserver.SearchScope{}},
 	} {
-		fixture, cookies := searchableWorkFixture(t, settings.PermissionRequest)
+		fixture, cookies := searchableWorkFixture(t, settings.PermissionAdd)
 		request := authedPost(t, cookies, tc.path, "")
 		request.Method = tc.method
 		if recorder := fixture.do(request); recorder.Code != http.StatusOK {
@@ -380,7 +383,7 @@ func TestWorkAcquisition_PassesTheScope(t *testing.T) {
 			t.Errorf("%s %s: scope %+v, want %+v", tc.method, tc.path, got, tc.want)
 		}
 	}
-	fixture, cookies := searchableWorkFixture(t, settings.PermissionRequest)
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionAdd)
 	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/grab?part=s01e02", "")); recorder.Code != http.StatusBadRequest {
 		t.Errorf("a part that is no id: status %d, want 400", recorder.Code)
 	}

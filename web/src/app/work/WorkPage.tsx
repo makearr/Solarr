@@ -362,7 +362,7 @@ function WorkHeader({
             <Button
               disabled={!work.can_request}
               busy={monitor.isPending}
-              title={work.can_request ? undefined : "Monitoring needs request access to this library"}
+              title={work.can_request ? undefined : "Monitoring needs add access to this library"}
               icon={<MonitorIcon monitored={monitored} />}
               onClick={() => monitor.mutate(!monitored)}
             >

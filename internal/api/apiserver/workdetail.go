@@ -319,7 +319,7 @@ func (s *Server) GetWork(w http.ResponseWriter, r *http.Request, id int64) {
 	}
 
 	view := buildWorkDetailView(row)
-	requestRoots, requestCategories := s.visibleAt(access, settings.PermissionRequest)
+	requestRoots, requestCategories := s.visibleAt(access, actionLevels[actionSetMonitored])
 	view.CanRequest = workDetailVisible(requestRoots, requestCategories, row)
 	if view.Files != nil {
 		annotateWholeFiles(access, row.CategoryIDs, s.ownTarget(r.Context(), access, id), *view.Files)
@@ -504,7 +504,7 @@ func (s *Server) SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int
 	}
 
 	// Monitoring decides what is searched and downloaded: request, as search itself (2026-09-28).
-	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
+	if !s.workPermitted(w, r, access, id, actionLevels[actionSetMonitored]) {
 		return
 	}
 
@@ -588,7 +588,7 @@ func (s *Server) SetTrackWanted(w http.ResponseWriter, r *http.Request, id, part
 	}
 
 	// Monitoring decides what is searched and downloaded: request, as search itself (2026-09-28).
-	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
+	if !s.workPermitted(w, r, access, id, actionLevels[actionSetMonitored]) {
 		return
 	}
 
@@ -629,7 +629,7 @@ func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Monitoring decides what is searched, as for one work; a preview only reads.
-	permission := settings.PermissionRequest
+	permission := actionLevels[actionSetMonitored]
 	if derefOr(body.Preview, false) {
 		permission = settings.PermissionRead
 	}

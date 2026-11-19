@@ -9,7 +9,6 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
-	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 // ArtistActions are the artist page's bulk verbs (asked for 2026-09-19). A missing person answers
@@ -70,7 +69,7 @@ func (s *Server) SearchPersonMissing(w http.ResponseWriter, r *http.Request, id 
 	if !s.artistActionsAvailable(w) {
 		return
 	}
-	categoryIDs := access.VisibleCategoryIDs(settings.PermissionRequest)
+	categoryIDs := access.VisibleCategoryIDs(actionLevels[actionSearchPersonMissing])
 	if len(categoryIDs) == 0 {
 		writeError(w, s.logger, fmt.Errorf("%w: no library allows requests", authz.ErrInsufficientPermission))
 		return

@@ -7,7 +7,6 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
-	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 // ErrNotRefreshable reports a work whose media type cannot be read again from its sources.
@@ -35,7 +34,7 @@ func (s *Server) RefreshWork(w http.ResponseWriter, r *http.Request, id int64) {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "refresh is not available")
 		return
 	}
-	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
+	if !s.workPermitted(w, r, access, id, actionLevels[actionRefreshWork]) {
 		return
 	}
 	duplicate, err := s.workRefresher.RefreshWork(r.Context(), id)

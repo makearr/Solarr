@@ -14,7 +14,6 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
-	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 )
 
@@ -215,7 +214,7 @@ func (s *Server) searchWork(w http.ResponseWriter, r *http.Request, id int64, sc
 		writeError(w, s.logger, err)
 		return
 	}
-	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
+	if !s.workPermitted(w, r, access, id, actionLevels[actionSearchWork]) {
 		return
 	}
 	var terms map[string]string
@@ -293,7 +292,7 @@ func (s *Server) sendCandidate(w http.ResponseWriter, r *http.Request, id, decis
 		writeError(w, s.logger, err)
 		return
 	}
-	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
+	if !s.workPermitted(w, r, access, id, actionLevels[actionSendCandidate]) {
 		return
 	}
 	acquisition, err := s.candidateSearcher.SendCandidate(r.Context(), id, scope, decisionID)
@@ -348,7 +347,7 @@ func (s *Server) SearchCategory(w http.ResponseWriter, r *http.Request, id int64
 		return
 	}
 	// Searching sends downloads now, so it is a request on the library, not a read of it.
-	if err := access.Require(id, settings.PermissionRequest); err != nil {
+	if err := access.Require(id, actionLevels[actionSearchLibrary]); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
@@ -401,7 +400,7 @@ func (s *Server) grabWork(w http.ResponseWriter, r *http.Request, id int64, scop
 		writeError(w, s.logger, err)
 		return
 	}
-	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
+	if !s.workPermitted(w, r, access, id, actionLevels[actionGrabWork]) {
 		return
 	}
 	result, err := s.candidateSearcher.GrabWork(r.Context(), id, scope)

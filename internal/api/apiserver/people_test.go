@@ -285,7 +285,7 @@ func TestFollowPerson_NeedsRequestInTheLibrary(t *testing.T) {
 		t.Errorf("read only: status %d, called %q; want 403 and nothing followed", recorder.Code, fixture.follower.called)
 	}
 
-	fixture, user, cookies := requestingListener(t, settings.PermissionRequest)
+	fixture, user, cookies := requestingListener(t, settings.PermissionAdd)
 	music = fixture.cache.Snapshot().Categories()[0]
 	body = fmt.Sprintf(`{"category_id":%d,"roles":["artist"],"options":{"include_primary_types":["Album"]},"back_catalogue":true}`, music.ID)
 	recorder := fixture.do(authedPut(t, cookies, "/api/v1/people/7/follow", body))
@@ -307,7 +307,7 @@ func TestFollow_AnswersByWhatTheFollowerReports(t *testing.T) {
 		{apiserver.ErrNotFollowable, http.StatusBadRequest},
 		{apiserver.ErrFollowSourceMissing, http.StatusConflict},
 	} {
-		fixture, _, cookies := requestingListener(t, settings.PermissionRequest)
+		fixture, _, cookies := requestingListener(t, settings.PermissionAdd)
 		music := fixture.cache.Snapshot().Categories()[0]
 		fixture.follower.err = tc.err
 		recorder := fixture.do(authedPost(t, cookies, "/api/v1/organisations/3/follow/preview", fmt.Sprintf(`{"category_id":%d}`, music.ID)))
@@ -318,7 +318,7 @@ func TestFollow_AnswersByWhatTheFollowerReports(t *testing.T) {
 }
 
 func TestUnfollowPerson_NamesTheLibrary(t *testing.T) {
-	fixture, user, cookies := requestingListener(t, settings.PermissionRequest)
+	fixture, user, cookies := requestingListener(t, settings.PermissionAdd)
 	music := fixture.cache.Snapshot().Categories()[0]
 	recorder := fixture.do(authedDelete(t, cookies, fmt.Sprintf("/api/v1/people/7/follow?category_id=%d", music.ID)))
 	if recorder.Code != http.StatusNoContent || fixture.follower.called != "unfollow" || fixture.follower.categoryID != music.ID ||
@@ -393,7 +393,7 @@ func TestSearchPersonMissing_SearchesOnlyTheLibrariesTheCallerMayRequestIn(t *te
 		t.Errorf("read only: status %d, searched %v; want 403 and nothing searched", recorder.Code, fixture.artistActions.searchedCategories)
 	}
 
-	fixture, _, cookies = requestingListener(t, settings.PermissionRequest)
+	fixture, _, cookies = requestingListener(t, settings.PermissionAdd)
 	music := fixture.cache.Snapshot().Categories()[0]
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/search", ""))
 	if recorder.Code != http.StatusAccepted || !slices.Equal(fixture.artistActions.searchedCategories, []int64{music.ID}) {
@@ -487,5 +487,18 @@ func TestOrganisations_AreReadAsTheCallerMaySeeThem(t *testing.T) {
 	}
 	if got := fixture.organisations.lastVisible; !reflect.DeepEqual(got, want) {
 		t.Errorf("the organisation was read as %+v, want %+v", got, want)
+	}
+}
+
+// SEC-16: an account that may only ask cannot follow, which would make a whole catalogue wanted.
+func TestFollowPerson_ARequestOnlyAccountIsRefused(t *testing.T) {
+	fixture, _, cookies := requestingListener(t, settings.PermissionRequest)
+	music := fixture.cache.Snapshot().Categories()[0]
+	body := fmt.Sprintf(`{"category_id":%d,"roles":["artist"]}`, music.ID)
+	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/people/7/follow", body)); recorder.Code != http.StatusForbidden || fixture.follower.called != "" {
+		t.Errorf("status %d, called %q; want 403 and nothing followed", recorder.Code, fixture.follower.called)
+	}
+	if recorder := fixture.do(authedDelete(t, cookies, fmt.Sprintf("/api/v1/people/7/follow?category_id=%d", music.ID))); recorder.Code != http.StatusForbidden {
+		t.Errorf("unfollow: status %d, want 403", recorder.Code)
 	}
 }
