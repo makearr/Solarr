@@ -116,6 +116,7 @@ type Querier interface {
 	// ListCalendarEntries answers, counted rather than listed, so a busy year is never truncated.
 	CountCalendarDates(ctx context.Context, arg CountCalendarDatesParams) ([]CountCalendarDatesRow, error)
 	CountCalendarEpisodeDates(ctx context.Context, arg CountCalendarEpisodeDatesParams) ([]CountCalendarEpisodeDatesRow, error)
+	CountCategoryFilesOnRoot(ctx context.Context, arg CountCategoryFilesOnRootParams) (int64, error)
 	CountCollectionRefusals(ctx context.Context, arg CountCollectionRefusalsParams) (int64, error)
 	CountCrossoverMissingParts(ctx context.Context, collectionID int64) (int64, error)
 	// library.db references settings.db by id with no foreign key (ADR-25), so only the
@@ -142,6 +143,8 @@ type Querier interface {
 	// Mirrors ListImportUnitFilesForSession's own join and filter; rows written
 	// before migration 0034 carry no method and are left out rather than guessed.
 	CountImportUnitTransferMethodsForSession(ctx context.Context, sessionID int64) ([]CountImportUnitTransferMethodsForSessionRow, error)
+	CountItemsPinnedToProfile(ctx context.Context, wantedID int64) (int64, error)
+	CountItemsPinnedToTarget(ctx context.Context, targetID int64) (int64, error)
 	// The root_folder_id half of the ADR-25 orphan check. See CountDesiredItemsByCategory.
 	CountLibraryPathsByRootFolder(ctx context.Context) ([]CountLibraryPathsByRootFolderRow, error)
 	// Probe coverage, the same per-root shape CountLibraryPathsByRootFolder already
@@ -171,6 +174,9 @@ type Querier interface {
 	// A client's queue as Solarr fills it: sent and not finished downloading (ADR-57).
 	CountQueuedOnDownloader(ctx context.Context, downloaderID int64) (int64, error)
 	CountRecycleBin(ctx context.Context) (int64, error)
+	CountRootIdentificationQueue(ctx context.Context, rootFolderID int64) (int64, error)
+	// What still names a settings row, asked before the settings row is deleted. Settings cannot see these tables.
+	CountRootRecycleEntries(ctx context.Context, rootFolderID sql.NullInt64) (int64, error)
 	CountRunningArrImports(ctx context.Context, instanceID int64) (int64, error)
 	CountStaleProbes(ctx context.Context, arg CountStaleProbesParams) (int64, error)
 	CountStaleVideoProbes(ctx context.Context, arg CountStaleVideoProbesParams) (int64, error)

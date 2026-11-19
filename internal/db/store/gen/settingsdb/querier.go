@@ -23,6 +23,7 @@ type Querier interface {
 	// Invariant 41: deleting a category in use is refused with a count of what
 	// references it.
 	CountDiscoveryJobsUsingCategory(ctx context.Context, categoryID sql.NullInt64) (int64, error)
+	CountImportListsUsingQualityProfile(ctx context.Context, qualityProfileID sql.NullInt64) (int64, error)
 	CountRootFoldersInCategory(ctx context.Context, categoryID int64) (int64, error)
 	CountUsersWithCategoryAccess(ctx context.Context, categoryID int64) (int64, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)

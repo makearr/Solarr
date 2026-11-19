@@ -54,7 +54,9 @@ type Cache struct {
 	validateNaming NamingValidator
 	// downloadUsage is optional (EnableDownloadUsage): without it a client or indexer is deleted without asking who uses it.
 	downloadUsage DownloadUsage
-	logger        *slog.Logger
+	// libraryUsage is optional (EnableLibraryUsage): without it a root folder, profile or target is deleted without asking the library.
+	libraryUsage LibraryUsage
+	logger       *slog.Logger
 }
 
 // DownloadUsage tells settings which unfinished downloads and held releases depend on a connection; library.db owns the rows.
@@ -62,6 +64,17 @@ type DownloadUsage interface {
 	OpenOnDownloader(ctx context.Context, downloaderID int64) (int64, error)
 	OpenFromIndexer(ctx context.Context, indexerID int64) (open, held int64, err error)
 }
+
+// LibraryUsage tells settings what in library.db still names a root folder, quality profile or quality target.
+type LibraryUsage interface {
+	RootFolderRows(ctx context.Context, rootFolderID int64) (files, recycled, queued int64, err error)
+	CategoryFilesOnRoot(ctx context.Context, categoryID, rootFolderID int64) (int64, error)
+	ItemsPinnedToProfile(ctx context.Context, profileID int64) (int64, error)
+	ItemsPinnedToTarget(ctx context.Context, targetID int64) (int64, error)
+}
+
+// EnableLibraryUsage makes the deletes of a root folder, profile and target, and detaching a root, refuse while library rows name them.
+func (c *Cache) EnableLibraryUsage(usage LibraryUsage) { c.libraryUsage = usage }
 
 // EnableDownloadUsage makes deleting or re-pointing a connection that downloads still run through refuse.
 func (c *Cache) EnableDownloadUsage(usage DownloadUsage) {

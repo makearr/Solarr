@@ -44,6 +44,7 @@ func (p *process) registerMedia() error {
 	p.media = registry
 	p.cache.EnableNamingValidation(adapters.NamingValidator(registry))
 	p.cache.EnableDownloadUsage(library.NewAcquisitions(p.library))
+	p.cache.EnableLibraryUsage(library.NewUsage(p.library))
 	return nil
 }
 

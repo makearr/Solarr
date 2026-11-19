@@ -34,3 +34,6 @@ WHERE id = ?;
 
 -- name: DeleteImportList :exec
 DELETE FROM import_list WHERE id = ?;
+
+-- name: CountImportListsUsingQualityProfile :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM import_list WHERE quality_profile_id = ?;

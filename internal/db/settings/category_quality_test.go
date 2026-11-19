@@ -460,3 +460,56 @@ func TestSnapshot_ParsesAProfileOncePerSnapshot(t *testing.T) {
 		t.Errorf("unknown profile: %v", err)
 	}
 }
+
+type usageStub struct {
+	files, recycled, queued, onRoot, profileItems, targetItems int64
+}
+
+func (u usageStub) RootFolderRows(context.Context, int64) (int64, int64, int64, error) {
+	return u.files, u.recycled, u.queued, nil
+}
+func (u usageStub) CategoryFilesOnRoot(context.Context, int64, int64) (int64, error) {
+	return u.onRoot, nil
+}
+func (u usageStub) ItemsPinnedToProfile(context.Context, int64) (int64, error) {
+	return u.profileItems, nil
+}
+func (u usageStub) ItemsPinnedToTarget(context.Context, int64) (int64, error) {
+	return u.targetItems, nil
+}
+
+// DB-16: settings rows that library rows still name are not deleted.
+func TestDeletes_AskTheLibraryFirst(t *testing.T) {
+	cache, _ := newCache(t)
+	ctx := context.Background()
+	profile, err := cache.CreateQualityProfile(ctx, "Pinned", `{"compare":["score"]}`, `{}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache.EnableLibraryUsage(usageStub{profileItems: 3})
+	var inUse *settings.InUseError
+	err = cache.DeleteQualityProfile(ctx, profile.ID)
+	want := []settings.Reference{{Kind: "items pinned to it", Count: 3}}
+	if !errors.As(err, &inUse) || !reflect.DeepEqual(inUse.References, want) {
+		t.Fatalf("pinned profile: %v, want references %v", err, want)
+	}
+	cache.EnableLibraryUsage(usageStub{})
+	if err := cache.DeleteQualityProfile(ctx, profile.ID); err != nil {
+		t.Fatalf("unpinned profile: %v", err)
+	}
+
+	root, err := cache.CreateRootFolder(ctx, t.TempDir(), "usage")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache.EnableLibraryUsage(usageStub{files: 2, recycled: 1})
+	err = cache.DeleteRootFolder(ctx, root.ID)
+	want = []settings.Reference{{Kind: "files in the library", Count: 2}, {Kind: "recycle bin entries", Count: 1}}
+	if !errors.As(err, &inUse) || !reflect.DeepEqual(inUse.References, want) {
+		t.Fatalf("root with files: %v, want references %v", err, want)
+	}
+	cache.EnableLibraryUsage(usageStub{onRoot: 4})
+	if err := cache.DetachRootFolder(ctx, 1, root.ID); !errors.As(err, &inUse) {
+		t.Fatalf("detach with files: %v", err)
+	}
+}

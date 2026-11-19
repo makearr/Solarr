@@ -532,6 +532,19 @@ func (c *Cache) DeleteQualityProfile(ctx context.Context, id int64) error {
 		return &InUseError{Entity: "quality profile", ID: id,
 			References: []Reference{{Kind: "categories", Count: categories}}}
 	}
+	lists, err := c.queries.CountImportListsUsingQualityProfile(ctx, sql.NullInt64{Int64: id, Valid: true})
+	if err != nil {
+		return fmt.Errorf("settings: count import lists for quality profile %d: %w", id, err)
+	}
+	var pinned int64
+	if c.libraryUsage != nil {
+		if pinned, err = c.libraryUsage.ItemsPinnedToProfile(ctx, id); err != nil {
+			return fmt.Errorf("settings: items on quality profile %d: %w", id, err)
+		}
+	}
+	if references := countedReferences(Reference{"import lists", lists}, Reference{"items pinned to it", pinned}); len(references) > 0 {
+		return &InUseError{Entity: "quality profile", ID: id, References: references}
+	}
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		return queries.DeleteQualityProfile(ctx, id)
 	})
@@ -814,6 +827,15 @@ func (c *Cache) DeleteQualityTarget(ctx context.Context, id int64) error {
 	for _, category := range c.Snapshot().Categories() {
 		if category.QualityTarget != nil && category.QualityTarget.ID == id {
 			return fmt.Errorf("%w: library %s still aims for this target", ErrInUse, category.Name)
+		}
+	}
+	if c.libraryUsage != nil {
+		pinned, err := c.libraryUsage.ItemsPinnedToTarget(ctx, id)
+		if err != nil {
+			return fmt.Errorf("settings: items on quality target %d: %w", id, err)
+		}
+		if pinned > 0 {
+			return &InUseError{Entity: "quality target", ID: id, References: []Reference{{Kind: "items pinned to it", Count: pinned}}}
 		}
 	}
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
@@ -1222,6 +1244,17 @@ func (c *Cache) DeleteRootFolder(ctx context.Context, id int64) error {
 		return &InUseError{Entity: "root folder", ID: id,
 			References: []Reference{{Kind: "categories", Count: categories}}}
 	}
+	if c.libraryUsage != nil {
+		files, recycled, queued, err := c.libraryUsage.RootFolderRows(ctx, id)
+		if err != nil {
+			return fmt.Errorf("settings: library rows on root folder %d: %w", id, err)
+		}
+		references := countedReferences(Reference{"files in the library", files}, Reference{"recycle bin entries", recycled},
+			Reference{"files waiting to be identified", queued})
+		if len(references) > 0 {
+			return &InUseError{Entity: "root folder", ID: id, References: references}
+		}
+	}
 
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		return queries.DeleteRootFolder(ctx, id)
@@ -1300,6 +1333,15 @@ func (c *Cache) AttachRootFolder(ctx context.Context, attachment CategoryRoot) e
 
 // DetachRootFolder removes a root folder from a category.
 func (c *Cache) DetachRootFolder(ctx context.Context, categoryID, rootFolderID int64) error {
+	if c.libraryUsage != nil {
+		files, err := c.libraryUsage.CategoryFilesOnRoot(ctx, categoryID, rootFolderID)
+		if err != nil {
+			return fmt.Errorf("settings: files of library %d on root folder %d: %w", categoryID, rootFolderID, err)
+		}
+		if files > 0 {
+			return &InUseError{Entity: "root folder", ID: rootFolderID, References: []Reference{{Kind: "files of this library (move them first)", Count: files}}}
+		}
+	}
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		return queries.DetachRootFolderFromCategory(ctx,
 			settingsdb.DetachRootFolderFromCategoryParams{
@@ -1685,4 +1727,15 @@ func (c *Cache) MergeCategory(ctx context.Context, from, into int64) error {
 		return err
 	}
 	return c.DeleteCategory(ctx, from)
+}
+
+// countedReferences keeps the references that count for something.
+func countedReferences(all ...Reference) []Reference {
+	var kept []Reference
+	for _, reference := range all {
+		if reference.Count > 0 {
+			kept = append(kept, reference)
+		}
+	}
+	return kept
 }

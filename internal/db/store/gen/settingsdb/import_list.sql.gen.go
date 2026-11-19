@@ -10,6 +10,17 @@ import (
 	"database/sql"
 )
 
+const countImportListsUsingQualityProfile = `-- name: CountImportListsUsingQualityProfile :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM import_list WHERE quality_profile_id = ?
+`
+
+func (q *Queries) CountImportListsUsingQualityProfile(ctx context.Context, qualityProfileID sql.NullInt64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countImportListsUsingQualityProfile, qualityProfileID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createImportList = `-- name: CreateImportList :one
 
 INSERT INTO import_list (category_id, name, type, url, cadence_hours, monitor,
