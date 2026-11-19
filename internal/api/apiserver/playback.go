@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -414,7 +415,7 @@ func parseStart(raw string) (float64, error) {
 		return 0, nil
 	}
 	start, err := strconv.ParseFloat(raw, 64)
-	if err != nil || start < 0 || start > 48*3600 {
+	if err != nil || math.IsNaN(start) || start < 0 || start > 48*3600 {
 		return 0, errors.New("bad start")
 	}
 	return start, nil
