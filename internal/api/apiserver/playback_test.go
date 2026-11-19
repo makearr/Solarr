@@ -11,9 +11,12 @@ import (
 )
 
 type fakePlayback struct {
-	file apiserver.PlaybackFile
-	err  error
+	file  apiserver.PlaybackFile
+	err   error
+	works []int64
 }
+
+func (f *fakePlayback) WorksOfFile(context.Context, int64) ([]int64, error) { return f.works, nil }
 
 func (f *fakePlayback) LocatePlayback(context.Context, int64) (apiserver.PlaybackFile, error) {
 	return f.file, f.err
@@ -173,5 +176,33 @@ func TestFilePreview_ServedToWhoMayReadTheFileAndNotToAnyoneElse(t *testing.T) {
 	}
 	if got := fixture.do(authedGet(t, fixture.signIn(t, "viewer"), "/api/v1/files/7/preview/poster")).Code; got != http.StatusBadRequest && got != http.StatusNotFound {
 		t.Errorf("an unknown kind = %d, want 400", got)
+	}
+}
+
+// SEC-13: a file of a work an account is kept from is as missing as the work.
+func TestPlayback_AFileOfABlockedWorkIsNotFound(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	user := fixture.createUser(t, "listener", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, settings.PermissionRead); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.cache.SetUserBlockedTags(t.Context(), user.ID, []settings.UserBlockedTag{{TagID: 1, Name: "Rock"}}); err != nil {
+		t.Fatal(err)
+	}
+	cookies := fixture.signIn(t, "listener")
+	writeFixtureMedia(t, fixture, "/media/music/a.flac", "0123456789")
+	fixture.playback.file = apiserver.PlaybackFile{MediaObjectID: 5, AbsolutePath: "/media/music/a.flac", RootFolderID: root.ID, AudioCodec: "flac"}
+	fixture.playback.works = []int64{7}
+	fixture.workEditor.carrying = map[int64]bool{7: true}
+
+	for _, target := range []string{"/api/v1/files/5/playback", "/api/v1/files/5/stream", "/api/v1/files/5/preview"} {
+		if recorder := fixture.do(authedGet(t, cookies, target)); recorder.Code != http.StatusNotFound {
+			t.Errorf("GET %s = %d, want 404 for a blocked work's file", target, recorder.Code)
+		}
+	}
+	fixture.workEditor.carrying = map[int64]bool{}
+	if recorder := fixture.do(authedGet(t, cookies, "/api/v1/files/5/playback")); recorder.Code != http.StatusOK {
+		t.Errorf("a file of an unblocked work = %d, want 200", recorder.Code)
 	}
 }

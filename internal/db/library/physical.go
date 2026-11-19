@@ -580,6 +580,15 @@ func (p Physical) PathsForObject(ctx context.Context, mediaObjectID int64) ([]li
 	return rows, nil
 }
 
+// WorksOfFile lists the works a file is linked to.
+func (p Physical) WorksOfFile(ctx context.Context, mediaObjectID int64) ([]int64, error) {
+	ids, err := librarydb.New(p.store.Read()).ListWorksOfFile(ctx, mediaObjectID)
+	if err != nil {
+		return nil, fmt.Errorf("library: works of file %d: %w", mediaObjectID, err)
+	}
+	return ids, nil
+}
+
 // HoldsFiles says the library still has a file on the root that is not missing.
 func (p Physical) HoldsFiles(ctx context.Context, rootFolderID int64) (bool, error) {
 	holds, err := librarydb.New(p.store.Read()).RootHoldsFiles(ctx, rootFolderID)

@@ -200,9 +200,6 @@ type Querier interface {
 	CountWantedWorksVisibleToCategory(ctx context.Context, arg CountWantedWorksVisibleToCategoryParams) (int64, error)
 	CountWorkExclusion(ctx context.Context, arg CountWorkExclusionParams) (int64, error)
 	CountWorkFieldManual(ctx context.Context, arg CountWorkFieldManualParams) (int64, error)
-	// How many files the library actually holds for one work. Removing an album
-	// deletes the work row only when this is zero: with files on disk the work
-	// would be recreated by the next scan, so deleting it would be a lie.
 	CountWorkFiles(ctx context.Context, workID int64) (int64, error)
 	// One work folded into another of its type: everything that pointed at the dropped work points at the kept one.
 	// Each statement moves one kind of row; Identity.MergeWork runs them in one transaction.
@@ -1040,6 +1037,10 @@ type Querier interface {
 	// carrying several after a merge. 'musicbrainz:release-group' must match
 	// internal/media/music.ProviderReleaseGroup.
 	ListWorksNeedingReleaseGroupArtwork(ctx context.Context, arg ListWorksNeedingReleaseGroupArtworkParams) ([]ListWorksNeedingReleaseGroupArtworkRow, error)
+	// How many files the library actually holds for one work. Removing an album
+	// deletes the work row only when this is zero: with files on disk the work
+	// would be recreated by the next scan, so deleting it would be a lie.
+	ListWorksOfFile(ctx context.Context, mediaObjectID int64) ([]int64, error)
 	// The works whose files already sit under a folder of a root, to place a directory the providers cannot name alone.
 	ListWorksOfFolder(ctx context.Context, arg ListWorksOfFolderParams) ([]int64, error)
 	ListWorksOfItems(ctx context.Context, arg ListWorksOfItemsParams) ([]int64, error)

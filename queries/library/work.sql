@@ -353,6 +353,9 @@ LIMIT sqlc.arg(page_size);
 -- How many files the library actually holds for one work. Removing an album
 -- deletes the work row only when this is zero: with files on disk the work
 -- would be recreated by the next scan, so deleting it would be a lie.
+-- name: ListWorksOfFile :many
+SELECT work_id FROM work_file WHERE media_object_id = ? ORDER BY work_id;
+
 -- name: CountWorkFiles :one
 SELECT CAST(COUNT(*) AS INTEGER) AS total FROM work_file WHERE work_id = ?;
 

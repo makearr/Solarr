@@ -17,6 +17,11 @@ type Playback struct {
 	Cache    *settings.Cache
 }
 
+// WorksOfFile answers the works a file belongs to.
+func (a Playback) WorksOfFile(ctx context.Context, mediaObjectID int64) ([]int64, error) {
+	return a.Physical.WorksOfFile(ctx, mediaObjectID)
+}
+
 // LocatePlayback answers the first path of the file whose root folder is still configured.
 func (a Playback) LocatePlayback(ctx context.Context, mediaObjectID int64) (apiserver.PlaybackFile, error) {
 	facts, err := a.Physical.PlaybackFacts(ctx, mediaObjectID)

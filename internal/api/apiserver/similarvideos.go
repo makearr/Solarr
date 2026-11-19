@@ -158,6 +158,9 @@ func (s *Server) writeSimilarReport(w http.ResponseWriter, r *http.Request, fold
 	for _, group := range groups {
 		view := groupView{MaxDistance: group.MaxDistance, Videos: make([]videoView, 0, len(group.Videos))}
 		for _, video := range group.Videos {
+			if video.WorkID != 0 && s.keptFromWork(r.Context(), access, video.WorkID) {
+				continue
+			}
 			file := partFileView(video.File)
 			annotateFiles(access, []int64{rootCategory[video.RootFolderID]}, nil, []*gen.PartFile{file})
 			view.Videos = append(view.Videos, videoView{

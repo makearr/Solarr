@@ -312,9 +312,6 @@ const countWorkFiles = `-- name: CountWorkFiles :one
 SELECT CAST(COUNT(*) AS INTEGER) AS total FROM work_file WHERE work_id = ?
 `
 
-// How many files the library actually holds for one work. Removing an album
-// deletes the work row only when this is zero: with files on disk the work
-// would be recreated by the next scan, so deleting it would be a lie.
 func (q *Queries) CountWorkFiles(ctx context.Context, workID int64) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countWorkFiles, workID)
 	var total int64
@@ -2111,6 +2108,36 @@ func (q *Queries) ListWorkTitles(ctx context.Context, workID int64) ([]WorkTitle
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorksOfFile = `-- name: ListWorksOfFile :many
+SELECT work_id FROM work_file WHERE media_object_id = ? ORDER BY work_id
+`
+
+// How many files the library actually holds for one work. Removing an album
+// deletes the work row only when this is zero: with files on disk the work
+// would be recreated by the next scan, so deleting it would be a lie.
+func (q *Queries) ListWorksOfFile(ctx context.Context, mediaObjectID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listWorksOfFile, mediaObjectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var work_id int64
+		if err := rows.Scan(&work_id); err != nil {
+			return nil, err
+		}
+		items = append(items, work_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

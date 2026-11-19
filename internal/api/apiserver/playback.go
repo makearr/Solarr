@@ -91,6 +91,29 @@ func codecIn(codec string, names ...string) bool {
 	return slices.ContainsFunc(names, func(name string) bool { return strings.Contains(codec, name) })
 }
 
+// FileWorkReader answers which works a file belongs to, so a file can be kept from an account like its works are.
+type FileWorkReader interface {
+	WorksOfFile(ctx context.Context, mediaObjectID int64) ([]int64, error)
+}
+
+// fileKeptFrom says the account is kept from every work the file belongs to; a file no work holds follows its root only.
+func (s *Server) fileKeptFrom(ctx context.Context, access authz.Access, mediaObjectID int64) bool {
+	reader, ok := s.playback.(FileWorkReader)
+	if !ok || len(blockedTagIDs(access)) == 0 {
+		return false
+	}
+	workIDs, err := reader.WorksOfFile(ctx, mediaObjectID)
+	if err != nil {
+		return true
+	}
+	for _, workID := range workIDs {
+		if !s.keptFromWork(ctx, access, workID) {
+			return false
+		}
+	}
+	return len(workIDs) > 0
+}
+
 // playbackFile finds the file for the caller or writes the 404 the caller gets for a file it cannot read (ADR-27).
 func (s *Server) playbackFile(w http.ResponseWriter, r *http.Request) (PlaybackFile, string, bool) {
 	access, err := authz.FromContext(r.Context())
@@ -118,6 +141,10 @@ func (s *Server) playbackFile(w http.ResponseWriter, r *http.Request) (PlaybackF
 	}
 	visibleRoots, _ := s.visibleAt(access, settings.PermissionRead)
 	if !slices.Contains(visibleRoots, file.RootFolderID) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such file")
+		return PlaybackFile{}, "", false
+	}
+	if s.fileKeptFrom(r.Context(), access, mediaObjectID) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such file")
 		return PlaybackFile{}, "", false
 	}
