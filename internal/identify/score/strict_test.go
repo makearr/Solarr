@@ -13,7 +13,7 @@ func TestValidateStrict(t *testing.T) {
 	}{
 		{"clean", `{"compare":["bitrate_distance","score"],"targets":{"bitrate":[{"when":{"audio_codec":"mp3"},"min":"192kbps","ideal":"320kbps","max":"400kbps"}]}}`, nil},
 		{"unknown key", `{"compare":["score"],"require":{"reject_codec":["xvid"]}}`,
-			[]Problem{{Path: "rules", Value: "reject_codec", Expectation: "a known key (see the profile reference); this one would be ignored"}}},
+			[]Problem{{Path: "", Value: "reject_codec", Expectation: "a known key (see the profile reference); this one would be ignored"}}},
 		{"bare bitrate", `{"targets":{"bitrate":[{"ideal":"320"}]}}`,
 			[]Problem{{Path: "targets.bitrate[0].ideal", Value: "320", Expectation: "a rate with its unit: 320kbps, 4Mbps, 40MB/min"}}},
 		{"missing ideal", `{"targets":{"bit_depth":[{}]}}`,
@@ -44,7 +44,7 @@ func TestValidateStrict(t *testing.T) {
 
 func TestValidateStrict_UpgradeBelongsBesideTheRules(t *testing.T) {
 	got := ValidateStrict([]byte(`{"compare":["score"],"upgrade":{"min_delta":15}}`))
-	want := []Problem{{Path: "rules", Value: "upgrade", Expectation: "not here: the upgrade policy is set in its own field beside the rules"}}
+	want := []Problem{{Path: "", Value: "upgrade", Expectation: "not here: the upgrade policy is set in its own field beside the rules"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("ValidateStrict = %#v, want %#v", got, want)
 	}

@@ -172,9 +172,11 @@ func validateQualityProfile(name, rulesJSON, upgradeJSON string) config.Problems
 		})
 	} else {
 		for _, mistake := range score.ValidateStrict([]byte(rulesJSON)) {
-			problems = append(problems, config.Problem{
-				Path: "rules." + mistake.Path, Value: mistake.Value, Expectation: mistake.Expectation,
-			})
+			path := "rules"
+			if mistake.Path != "" {
+				path += "." + mistake.Path
+			}
+			problems = append(problems, config.Problem{Path: path, Value: mistake.Value, Expectation: mistake.Expectation})
 		}
 	}
 	if _, err := score.ParseUpgrade([]byte(upgradeJSON)); err != nil {

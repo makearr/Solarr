@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// Problem is one mistake in a profile document: the JSON path of the field, what was written, what would be accepted.
+// Problem is one mistake in a profile document: the JSON path of the field (empty for the document itself), what was written, what would be accepted.
 type Problem struct {
 	Path        string
 	Value       string
@@ -47,9 +47,9 @@ func ValidateStrict(data []byte) []Problem {
 		if field, found := strings.CutPrefix(err.Error(), "json: unknown field "); found {
 			key := strings.Trim(field, `"`)
 			if key == "upgrade" {
-				add("rules", key, "not here: the upgrade policy is set in its own field beside the rules")
+				add("", key, "not here: the upgrade policy is set in its own field beside the rules")
 			} else {
-				add("rules", key, "a known key (see the profile reference); this one would be ignored")
+				add("", key, "a known key (see the profile reference); this one would be ignored")
 			}
 		}
 	}
