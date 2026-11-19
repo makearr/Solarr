@@ -842,3 +842,59 @@ func TestProvider_WithFreshSkipsTheCacheAndRewritesIt(t *testing.T) {
 		t.Errorf("later cached Album = %q after %d calls; want the refreshed answer from the cache", rg.Title, direct.calls)
 	}
 }
+
+func TestProvider_AnOutageServesTheStoredAnswerPastRefreshAfter(t *testing.T) {
+	direct := &fakeSource{name: "direct", rg: musicbrainz.ReleaseGroup{MBID: "rg1", Title: "KI Pecezinu"},
+		rel: musicbrainz.Release{MBID: "rel1", Title: "KI Pecezinu"}}
+	provider, fake, _ := newRefreshingProvider(t, 90*24*time.Hour, direct)
+	if _, _, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, "rg1", "rel1"); err != nil {
+		t.Fatalf("first Album: %v", err)
+	}
+	fake.Advance(91 * 24 * time.Hour)
+	direct.err = errors.New("musicbrainz down")
+
+	rg, release, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, "rg1", "rel1")
+	if err != nil || rg.Title != "KI Pecezinu" || release.MBID != "rel1" {
+		t.Errorf("Album during an outage = %+v, %+v, %v; want the stored answer", rg, release, err)
+	}
+	if direct.calls != 2 {
+		t.Errorf("source called %d times, want 2 -- the stale entry is tried against the source first", direct.calls)
+	}
+	if _, _, err := provider.Album(musicbrainz.WithFresh(t.Context()), musicbrainz.PriorityEnrich, "rg1", "rel1"); err == nil {
+		t.Error("a refresh a person asked for was answered from the stored copy")
+	}
+}
+
+func TestProvider_AnOutageServesAStoredArtistButAMissingOneStaysAnError(t *testing.T) {
+	direct := &fakeArtistLookupSource{fakeSource: fakeSource{name: "direct"}, artist: musicbrainz.Artist{MBID: "a1", Name: "Vutu Doci"}}
+	provider, fake, _ := newRefreshingProvider(t, 90*24*time.Hour, direct)
+	if _, err := provider.Artist(t.Context(), musicbrainz.PriorityEnrich, "a1"); err != nil {
+		t.Fatalf("first Artist: %v", err)
+	}
+	fake.Advance(91 * 24 * time.Hour)
+	direct.artistErr = errors.New("musicbrainz down")
+	if artist, err := provider.Artist(t.Context(), musicbrainz.PriorityEnrich, "a1"); err != nil || artist.Name != "Vutu Doci" {
+		t.Errorf("Artist during an outage = %+v, %v", artist, err)
+	}
+	if _, err := provider.Artist(t.Context(), musicbrainz.PriorityEnrich, "a2"); err == nil {
+		t.Error("an artist never stored was answered during an outage")
+	}
+}
+
+func TestProvider_AnIdEverySourceAnswered404IsNotAskedAgainForADay(t *testing.T) {
+	gone := &httpx.StatusError{Status: http.StatusNotFound}
+	direct := &fakeSource{name: "direct", err: gone}
+	provider, fake, _ := newRefreshingProvider(t, 90*24*time.Hour, direct)
+	for range 2 {
+		if _, _, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, "rg1", "rel1"); !errors.Is(err, musicbrainz.ErrNotFound) {
+			t.Fatalf("Album err = %v, want ErrNotFound", err)
+		}
+	}
+	if direct.calls != 1 {
+		t.Errorf("source called %d times, want 1 within the day", direct.calls)
+	}
+	fake.Advance(25 * time.Hour)
+	if _, _, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, "rg1", "rel1"); !errors.Is(err, musicbrainz.ErrNotFound) || direct.calls != 2 {
+		t.Errorf("after a day: err = %v, calls = %d, want ErrNotFound and 2", err, direct.calls)
+	}
+}

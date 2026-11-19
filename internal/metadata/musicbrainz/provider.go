@@ -175,6 +175,9 @@ func (p Provider) Album(
 	if rg, release, ok := p.cached(ctx, r, releaseGroupMBID, releaseMBID); ok {
 		return rg, release, nil
 	}
+	if p.knownMissing(ctx, cacheKindRelease, releaseMBID) {
+		return ReleaseGroup{}, Release{}, fmt.Errorf("musicbrainz: %s/%s: %w", releaseGroupMBID, releaseMBID, ErrNotFound)
+	}
 
 	type album struct {
 		group   ReleaseGroup
@@ -188,9 +191,13 @@ func (p Provider) Album(
 		p.remember(ctx, r, answer.Source.Name(), answer.Value.group, answer.Value.release)
 		return answer.Value.group, answer.Value.release, nil
 	}
-	if len(errs) > 0 && !slices.ContainsFunc(errs, func(err error) bool { return !notFound(err) }) {
+	if len(errs) > 0 && !outage(errs) {
+		p.rememberMissing(ctx, cacheKindRelease, releaseMBID)
 		return ReleaseGroup{}, Release{}, fmt.Errorf("musicbrainz: %s/%s: %w: %w",
 			releaseGroupMBID, releaseMBID, ErrNotFound, errors.Join(errs...))
+	}
+	if rg, release, ok := p.staleAlbum(ctx, r, releaseGroupMBID, releaseMBID, errs); ok {
+		return rg, release, nil
 	}
 	return ReleaseGroup{}, Release{}, fmt.Errorf("musicbrainz: no source answered for %s/%s: %w",
 		releaseGroupMBID, releaseMBID, errors.Join(errs...))
@@ -251,6 +258,9 @@ func (p Provider) Search(
 		// lookup, so the caller's chain treats it exactly like "found nothing".
 		return nil, nil
 	}
+	if stale, ok := staleJSON[[]ReleaseGroupMatch](ctx, p, r, cacheKindSearch, key, errs); ok {
+		return stale, nil
+	}
 	return nil, fmt.Errorf("musicbrainz: no source answered search %q/%q: %w", artist, title, errors.Join(errs...))
 }
 
@@ -277,6 +287,9 @@ func (p Provider) SearchByQuery(ctx context.Context, priority Priority, query st
 		// lookup, so the caller's chain treats it exactly like "found nothing".
 		return nil, nil
 	}
+	if stale, ok := staleJSON[[]ReleaseGroupMatch](ctx, p, r, cacheKindSearch, key, errs); ok {
+		return stale, nil
+	}
 	return nil, fmt.Errorf("musicbrainz: no source answered query search %q: %w", query, errors.Join(errs...))
 }
 
@@ -297,6 +310,9 @@ func (p Provider) Releases(ctx context.Context, priority Priority, releaseGroupM
 	}
 	if len(errs) == 0 {
 		return nil, fmt.Errorf("musicbrainz: no source can list releases (release group %s)", releaseGroupMBID)
+	}
+	if stale, ok := staleJSON[[]Release](ctx, p, r, cacheKindReleases, releaseGroupMBID, errs); ok {
+		return stale, nil
 	}
 	return nil, fmt.Errorf("musicbrainz: no source listed releases of %s: %w", releaseGroupMBID, errors.Join(errs...))
 }
@@ -325,6 +341,9 @@ func (p Provider) SearchArtists(ctx context.Context, priority Priority, query st
 	if len(errs) == 0 {
 		return nil, nil
 	}
+	if stale, ok := staleJSON[[]ArtistMatch](ctx, p, r, cacheKindArtistSearch, key, errs); ok {
+		return stale, nil
+	}
 	return nil, fmt.Errorf("musicbrainz: no source answered artist search %q: %w", query, errors.Join(errs...))
 }
 
@@ -348,6 +367,9 @@ func (p Provider) SearchRecordings(ctx context.Context, priority Priority, artis
 	if len(errs) == 0 {
 		return nil, nil
 	}
+	if stale, ok := staleJSON[[]RecordingMatch](ctx, p, r, cacheKindRecordingSearch, key, errs); ok {
+		return stale, nil
+	}
 	return nil, fmt.Errorf("musicbrainz: no source answered recording search %q/%q: %w", artist, title, errors.Join(errs...))
 }
 
@@ -370,6 +392,9 @@ func (p Provider) SearchReleases(ctx context.Context, priority Priority, query R
 	if len(errs) == 0 {
 		return nil, nil
 	}
+	if stale, ok := staleJSON[[]ReleaseGroupMatch](ctx, p, r, cacheKindReleaseSearch, key, errs); ok {
+		return stale, nil
+	}
 	return nil, fmt.Errorf("musicbrainz: no source answered release search %+v: %w", query, errors.Join(errs...))
 }
 
@@ -381,6 +406,9 @@ func (p Provider) Recording(ctx context.Context, priority Priority, mbid string)
 	if recording, ok := cachedJSON[RecordingMatch](ctx, p, r, cacheKindRecording, mbid); ok {
 		return recording, nil
 	}
+	if p.knownMissing(ctx, cacheKindRecording, mbid) {
+		return RecordingMatch{}, ErrNotFound
+	}
 	answer, answered, errs := firstAnswer(ctx, p, r, func(ctx context.Context, lookup RecordingLookup) (RecordingMatch, error) {
 		return lookup.Recording(ctx, mbid)
 	})
@@ -388,8 +416,12 @@ func (p Provider) Recording(ctx context.Context, priority Priority, mbid string)
 		rememberJSON(ctx, p, r, answer.Source.Name(), cacheKindRecording, mbid, answer.Value)
 		return answer.Value, nil
 	}
-	if len(errs) > 0 && !slices.ContainsFunc(errs, func(err error) bool { return !notFound(err) }) {
+	if len(errs) > 0 && !outage(errs) {
+		p.rememberMissing(ctx, cacheKindRecording, mbid)
 		return RecordingMatch{}, ErrNotFound
+	}
+	if stale, ok := staleJSON[RecordingMatch](ctx, p, r, cacheKindRecording, mbid, errs); ok {
+		return stale, nil
 	}
 	return RecordingMatch{}, fmt.Errorf("musicbrainz: no source answered recording %s: %w", mbid, errors.Join(errs...))
 }
@@ -414,6 +446,9 @@ func (p Provider) Artist(ctx context.Context, priority Priority, mbid string) (A
 	if len(errs) == 0 {
 		return Artist{}, fmt.Errorf("musicbrainz: no source can look up an artist (mbid %s)", mbid)
 	}
+	if stale, ok := staleJSON[Artist](ctx, p, r, cacheKindArtist, mbid, errs); ok {
+		return stale, nil
+	}
 	return Artist{}, fmt.Errorf("musicbrainz: no source answered artist %s: %w", mbid, errors.Join(errs...))
 }
 
@@ -436,6 +471,9 @@ func (p Provider) ArtistReleaseGroups(ctx context.Context, priority Priority, ar
 	}
 	if len(errs) == 0 {
 		return nil, fmt.Errorf("musicbrainz: no source can browse a discography (artist %s)", artistMBID)
+	}
+	if stale, ok := staleJSON[[]ReleaseGroup](ctx, p, r, cacheKindDiscography, artistMBID, errs); ok {
+		return stale, nil
 	}
 	return nil, fmt.Errorf("musicbrainz: no source answered discography %s: %w", artistMBID, errors.Join(errs...))
 }
@@ -469,6 +507,68 @@ func (p Provider) cachedEntry(ctx context.Context, r route, kind, key string) (m
 		return metacache.Entry{}, false
 	}
 	return entry, true
+}
+
+// storedEntry is cachedEntry for an outage: an entry past RefreshAfter still counts, unless a person asked for a fresh one.
+func (p Provider) storedEntry(ctx context.Context, r route, kind, key string) (metacache.Entry, bool) {
+	if wantsFresh(ctx) {
+		return metacache.Entry{}, false
+	}
+	if entry, err := p.cache.Get(ctx, kind+r.tag, key); err == nil {
+		return entry, true
+	}
+	entry, err := p.cache.Get(ctx, kind, key)
+	return entry, err == nil && r.lead != "" && entry.Source == r.lead
+}
+
+// notFoundRetry is how long an id every source answered 404 for is not asked again; shorter than RefreshAfter, so a
+// release MusicBrainz adds later is found within a day.
+const notFoundRetry = 24 * time.Hour
+
+// cacheKindMissing holds the ids every source answered 404 for, keyed on the kind and id.
+const cacheKindMissing = "musicbrainz:missing"
+
+func missingKey(kind, key string) string { return kind + "\x1f" + key }
+
+func (p Provider) knownMissing(ctx context.Context, kind, key string) bool {
+	if wantsFresh(ctx) {
+		return false
+	}
+	entry, err := p.cache.Get(ctx, cacheKindMissing, missingKey(kind, key))
+	return err == nil && p.clock.Now().Sub(entry.FetchedAt) < notFoundRetry
+}
+
+func (p Provider) rememberMissing(ctx context.Context, kind, key string) {
+	entry := metacache.Entry{Source: "none", FetchedAt: p.clock.Now()}
+	if err := p.cache.Set(ctx, cacheKindMissing, missingKey(kind, key), entry); err != nil {
+		p.logger.WarnContext(ctx, "musicbrainz: cache write failed", slog.String("kind", cacheKindMissing), slog.Any("error", err))
+	}
+}
+
+// outage says the sources failed for a reason other than "no such id".
+func outage(errs []error) bool {
+	return slices.ContainsFunc(errs, func(err error) bool { return !notFound(err) })
+}
+
+// staleJSON answers the stored copy of kind/key when every source failed and one of them was an outage; the copy is
+// older than RefreshAfter, but data MusicBrainz holds changes rarely.
+func staleJSON[T any](ctx context.Context, p Provider, r route, kind, key string, errs []error) (T, bool) {
+	var value T
+	if !outage(errs) {
+		return value, false
+	}
+	entry, ok := p.storedEntry(ctx, r, kind, key)
+	if !ok || json.Unmarshal([]byte(entry.Body), &value) != nil {
+		return value, false
+	}
+	p.logger.InfoContext(ctx, "musicbrainz: sources failed, serving a stored answer", slog.String("kind", kind), slog.String("age", p.clock.Now().Sub(entry.FetchedAt).String()))
+	return value, true
+}
+
+func (p Provider) staleAlbum(ctx context.Context, r route, releaseGroupMBID, releaseMBID string, errs []error) (ReleaseGroup, Release, bool) {
+	rg, rgFound := staleJSON[ReleaseGroup](ctx, p, r, cacheKindReleaseGroup, releaseGroupMBID, errs)
+	release, releaseFound := staleJSON[Release](ctx, p, r, cacheKindRelease, releaseMBID, errs)
+	return rg, release, rgFound && releaseFound
 }
 
 func (p Provider) cached(ctx context.Context, r route, releaseGroupMBID, releaseMBID string) (ReleaseGroup, Release, bool) {
@@ -558,6 +658,9 @@ func (p Provider) Label(ctx context.Context, priority Priority, mbid string) (La
 	if len(errs) == 0 {
 		return Label{}, fmt.Errorf("musicbrainz: no source can look up a label (mbid %s)", mbid)
 	}
+	if stale, ok := staleJSON[Label](ctx, p, r, cacheKindLabel, mbid, errs); ok {
+		return stale, nil
+	}
 	return Label{}, fmt.Errorf("musicbrainz: no source answered label %s: %w", mbid, errors.Join(errs...))
 }
 
@@ -582,6 +685,9 @@ func (p Provider) ReleaseGroupSeries(ctx context.Context, priority Priority, rel
 	if len(errs) == 0 {
 		return nil, false, fmt.Errorf("musicbrainz: no source can look up series (release group %s)", releaseGroupMBID)
 	}
+	if stale, ok := staleJSON[[]Series](ctx, p, r, cacheKindSeries, releaseGroupMBID, errs); ok {
+		return stale, false, nil
+	}
 	return nil, false, fmt.Errorf("musicbrainz: no source answered series of %s: %w", releaseGroupMBID, errors.Join(errs...))
 }
 
@@ -601,6 +707,9 @@ func (p Provider) LabelReleaseGroups(ctx context.Context, priority Priority, lab
 	}
 	if len(errs) == 0 {
 		return nil, fmt.Errorf("musicbrainz: no source can browse a label (mbid %s)", labelMBID)
+	}
+	if stale, ok := staleJSON[[]ReleaseGroup](ctx, p, r, cacheKindLabelCatalogue, labelMBID, errs); ok {
+		return stale, nil
 	}
 	return nil, fmt.Errorf("musicbrainz: no source answered label catalogue %s: %w", labelMBID, errors.Join(errs...))
 }
