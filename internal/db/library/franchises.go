@@ -488,9 +488,25 @@ func (f Franchises) CreateAuto(ctx context.Context, mediaType, name string) (int
 func (f Franchises) MergeFranchises(ctx context.Context, keep int64, others []int64) error {
 	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
+		for _, id := range append([]int64{keep}, others...) {
+			collection, err := queries.GetCollection(ctx, id)
+			if err != nil {
+				return err
+			}
+			// The crossover tables hang off a crossover collection; this merge does not carry them.
+			if collection.Kind == CrossoverKind {
+				return fmt.Errorf("collection %d is a crossover, which is merged by its own pass", id)
+			}
+		}
 		for _, other := range others {
 			if other == keep {
 				continue
+			}
+			if err := queries.MergeCollectionState(ctx, librarydb.MergeCollectionStateParams{IntoID: keep, FromID: other}); err != nil {
+				return err
+			}
+			if err := moveCollectionOrigins(ctx, queries, keep, other); err != nil {
+				return err
 			}
 			if err := queries.MoveCollectionMembers(ctx, librarydb.MoveCollectionMembersParams{IntoID: keep, FromID: other}); err != nil {
 				return err
@@ -809,6 +825,20 @@ func (f Franchises) AddToFranchise(ctx context.Context, id int64, workIDs []int6
 	return nil
 }
 
+// moveCollectionOrigins carries why links and members exist and the franchises a collection declared, which cascade away with it.
+func moveCollectionOrigins(ctx context.Context, queries *librarydb.Queries, keep, other int64) error {
+	if err := queries.MoveCollectionLinkOriginsLow(ctx, librarydb.MoveCollectionLinkOriginsLowParams{IntoID: keep, FromID: other}); err != nil {
+		return err
+	}
+	if err := queries.MoveCollectionLinkOriginsHigh(ctx, librarydb.MoveCollectionLinkOriginsHighParams{IntoID: keep, FromID: other}); err != nil {
+		return err
+	}
+	if err := queries.MoveCollectionMemberOrigins(ctx, librarydb.MoveCollectionMemberOriginsParams{IntoID: keep, FromID: other}); err != nil {
+		return err
+	}
+	return queries.MoveCollectionDeclaredKeys(ctx, librarydb.MoveCollectionDeclaredKeysParams{IntoID: keep, FromID: other})
+}
+
 func moveCollectionLinks(ctx context.Context, queries *librarydb.Queries, keep, other int64) error {
 	if err := queries.MoveCollectionLinksFrom(ctx, librarydb.MoveCollectionLinksFromParams{IntoID: keep, FromID: other}); err != nil {
 		return err
@@ -919,19 +949,8 @@ func (f Franchises) DuplicateMerges(ctx context.Context, mediaType string, categ
 // MergeDuplicates applies a plan: each group's collections fold into the larger, which stays monitored when any was.
 func (f Franchises) MergeDuplicates(ctx context.Context, merges []CollectionMerge) error {
 	for _, merge := range merges {
-		monitored := false
-		for _, id := range append([]int64{merge.Keep}, merge.Drop...) {
-			if row, err := f.Get(ctx, id); err == nil && row.Monitored {
-				monitored = true
-			}
-		}
 		if err := f.MergeFranchises(ctx, merge.Keep, merge.Drop); err != nil {
 			return err
-		}
-		if monitored {
-			if err := f.SetMonitored(ctx, merge.Keep, true, 0); err != nil {
-				return err
-			}
 		}
 	}
 	return nil

@@ -2743,6 +2743,39 @@ func (q *Queries) MarkWorkCollectionChecked(ctx context.Context, arg MarkWorkCol
 	return err
 }
 
+const mergeCollectionState = `-- name: MergeCollectionState :exec
+UPDATE collection SET
+  monitored = MAX(collection.monitored, (SELECT f.monitored FROM collection f WHERE f.id = ?1)),
+  complete_at = COALESCE(collection.complete_at, (SELECT f.complete_at FROM collection f WHERE f.id = ?1)),
+  poster_url = CASE WHEN collection.poster_url = '' THEN (SELECT f.poster_url FROM collection f WHERE f.id = ?1) ELSE collection.poster_url END
+WHERE collection.id = ?2
+`
+
+type MergeCollectionStateParams struct {
+	FromID int64
+	IntoID int64
+}
+
+func (q *Queries) MergeCollectionState(ctx context.Context, arg MergeCollectionStateParams) error {
+	_, err := q.db.ExecContext(ctx, mergeCollectionState, arg.FromID, arg.IntoID)
+	return err
+}
+
+const moveCollectionDeclaredKeys = `-- name: MoveCollectionDeclaredKeys :exec
+INSERT OR IGNORE INTO collection_declared_key (collection_id, provider, external_id)
+SELECT ?1, k.provider, k.external_id FROM collection_declared_key k WHERE k.collection_id = ?2
+`
+
+type MoveCollectionDeclaredKeysParams struct {
+	IntoID int64
+	FromID int64
+}
+
+func (q *Queries) MoveCollectionDeclaredKeys(ctx context.Context, arg MoveCollectionDeclaredKeysParams) error {
+	_, err := q.db.ExecContext(ctx, moveCollectionDeclaredKeys, arg.IntoID, arg.FromID)
+	return err
+}
+
 const moveCollectionExternalIDs = `-- name: MoveCollectionExternalIDs :exec
 UPDATE collection_external_id SET collection_id = ?1 WHERE collection_id = ?2
 `
@@ -2754,6 +2787,38 @@ type MoveCollectionExternalIDsParams struct {
 
 func (q *Queries) MoveCollectionExternalIDs(ctx context.Context, arg MoveCollectionExternalIDsParams) error {
 	_, err := q.db.ExecContext(ctx, moveCollectionExternalIDs, arg.IntoID, arg.FromID)
+	return err
+}
+
+const moveCollectionLinkOriginsHigh = `-- name: MoveCollectionLinkOriginsHigh :exec
+INSERT OR IGNORE INTO collection_link_origin (low_id, high_id, reason, detail, created_at)
+SELECT MIN(?1, o.low_id), MAX(?1, o.low_id), o.reason, o.detail, o.created_at
+FROM collection_link_origin o WHERE o.high_id = ?2 AND o.low_id <> ?1
+`
+
+type MoveCollectionLinkOriginsHighParams struct {
+	IntoID interface{}
+	FromID int64
+}
+
+func (q *Queries) MoveCollectionLinkOriginsHigh(ctx context.Context, arg MoveCollectionLinkOriginsHighParams) error {
+	_, err := q.db.ExecContext(ctx, moveCollectionLinkOriginsHigh, arg.IntoID, arg.FromID)
+	return err
+}
+
+const moveCollectionLinkOriginsLow = `-- name: MoveCollectionLinkOriginsLow :exec
+INSERT OR IGNORE INTO collection_link_origin (low_id, high_id, reason, detail, created_at)
+SELECT MIN(?1, o.high_id), MAX(?1, o.high_id), o.reason, o.detail, o.created_at
+FROM collection_link_origin o WHERE o.low_id = ?2 AND o.high_id <> ?1
+`
+
+type MoveCollectionLinkOriginsLowParams struct {
+	IntoID interface{}
+	FromID int64
+}
+
+func (q *Queries) MoveCollectionLinkOriginsLow(ctx context.Context, arg MoveCollectionLinkOriginsLowParams) error {
+	_, err := q.db.ExecContext(ctx, moveCollectionLinkOriginsLow, arg.IntoID, arg.FromID)
 	return err
 }
 
@@ -2787,9 +2852,25 @@ func (q *Queries) MoveCollectionLinksTo(ctx context.Context, arg MoveCollectionL
 	return err
 }
 
+const moveCollectionMemberOrigins = `-- name: MoveCollectionMemberOrigins :exec
+INSERT OR IGNORE INTO collection_member_origin (collection_id, work_id, reason, detail, created_at)
+SELECT ?1, o.work_id, o.reason, o.detail, o.created_at FROM collection_member_origin o WHERE o.collection_id = ?2
+`
+
+type MoveCollectionMemberOriginsParams struct {
+	IntoID int64
+	FromID int64
+}
+
+func (q *Queries) MoveCollectionMemberOrigins(ctx context.Context, arg MoveCollectionMemberOriginsParams) error {
+	_, err := q.db.ExecContext(ctx, moveCollectionMemberOrigins, arg.IntoID, arg.FromID)
+	return err
+}
+
 const moveCollectionMembers = `-- name: MoveCollectionMembers :exec
-INSERT OR IGNORE INTO collection_member (collection_id, work_id, part_id, ord)
-SELECT ?1, cm.work_id, cm.part_id, cm.ord FROM collection_member cm WHERE cm.collection_id = ?2
+INSERT INTO collection_member (collection_id, work_id, part_id, ord, by_hand)
+SELECT ?1, cm.work_id, cm.part_id, cm.ord, cm.by_hand FROM collection_member cm WHERE cm.collection_id = ?2
+ON CONFLICT (collection_id, work_id, part_id) DO UPDATE SET by_hand = MAX(collection_member.by_hand, excluded.by_hand)
 `
 
 type MoveCollectionMembersParams struct {
@@ -2797,6 +2878,7 @@ type MoveCollectionMembersParams struct {
 	FromID int64
 }
 
+// A member someone added by hand stays by hand when both collections held it.
 func (q *Queries) MoveCollectionMembers(ctx context.Context, arg MoveCollectionMembersParams) error {
 	_, err := q.db.ExecContext(ctx, moveCollectionMembers, arg.IntoID, arg.FromID)
 	return err

@@ -1073,6 +1073,7 @@ type Querier interface {
 	MaxDesiredItemID(ctx context.Context) (int64, error)
 	MergeAliasesInto(ctx context.Context, arg MergeAliasesIntoParams) error
 	MergeArtworkInto(ctx context.Context, arg MergeArtworkIntoParams) error
+	MergeCollectionState(ctx context.Context, arg MergeCollectionStateParams) error
 	MergeCreditsInto(ctx context.Context, arg MergeCreditsIntoParams) error
 	// A file keeps covering a part only where the kept work has that part; the media type places the rest again.
 	MergeDesiredItemFiles(ctx context.Context, arg MergeDesiredItemFilesParams) error
@@ -1096,9 +1097,14 @@ type Querier interface {
 	MergeWorkRootFolders(ctx context.Context, arg MergeWorkRootFoldersParams) error
 	MergeWorkTags(ctx context.Context, arg MergeWorkTagsParams) error
 	MoveAcquisitionsToItem(ctx context.Context, arg MoveAcquisitionsToItemParams) error
+	MoveCollectionDeclaredKeys(ctx context.Context, arg MoveCollectionDeclaredKeysParams) error
 	MoveCollectionExternalIDs(ctx context.Context, arg MoveCollectionExternalIDsParams) error
+	MoveCollectionLinkOriginsHigh(ctx context.Context, arg MoveCollectionLinkOriginsHighParams) error
+	MoveCollectionLinkOriginsLow(ctx context.Context, arg MoveCollectionLinkOriginsLowParams) error
 	MoveCollectionLinksFrom(ctx context.Context, arg MoveCollectionLinksFromParams) error
 	MoveCollectionLinksTo(ctx context.Context, arg MoveCollectionLinksToParams) error
+	MoveCollectionMemberOrigins(ctx context.Context, arg MoveCollectionMemberOriginsParams) error
+	// A member someone added by hand stays by hand when both collections held it.
 	MoveCollectionMembers(ctx context.Context, arg MoveCollectionMembersParams) error
 	MoveCollectionsToCategory(ctx context.Context, arg MoveCollectionsToCategoryParams) error
 	MoveCrossoverMissingParts(ctx context.Context, arg MoveCrossoverMissingPartsParams) error

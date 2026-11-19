@@ -195,3 +195,42 @@ func TestLinkedCollectionsSeeEachOtherAndTheLinkFollowsAMergeAndADelete(t *testi
 		t.Errorf("still linked: %v", got)
 	}
 }
+
+// DB-13: a merge keeps what a person made by hand and what they switched on.
+func TestMergeFranchisesKeepsHandMembersMonitoringAndHandLinks(t *testing.T) {
+	opened, _ := newLibrary(t)
+	franchises := library.NewFranchises(opened)
+	result, err := library.NewSeries(opened).Upsert(t.Context(), seriesAt, sampleSeries())
+	if err != nil {
+		t.Fatal(err)
+	}
+	keep, _ := franchises.CreateAuto(t.Context(), "tv", "Kept")
+	drop, _ := franchises.CreateAuto(t.Context(), "tv", "Dropped")
+	other, _ := franchises.CreateAuto(t.Context(), "movie", "Films")
+	if err := franchises.AddMember(t.Context(), drop, result.WorkID); err != nil {
+		t.Fatal(err)
+	}
+	if err := franchises.SetMonitored(t.Context(), drop, true, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := franchises.LinkCollections(t.Context(), drop, other); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := franchises.MergeFranchises(t.Context(), keep, []int64{drop}); err != nil {
+		t.Fatal(err)
+	}
+	var byHand int64
+	if err := opened.Read().QueryRowContext(t.Context(), `SELECT by_hand FROM collection_member WHERE collection_id = ? AND work_id = ?`, keep, result.WorkID).Scan(&byHand); err != nil || byHand != 1 {
+		t.Errorf("by_hand of the moved member = %d, %v; want 1", byHand, err)
+	}
+	if row, err := franchises.Get(t.Context(), keep); err != nil || !row.Monitored {
+		t.Errorf("kept franchise = %+v, %v; want monitored", row, err)
+	}
+	if pruned, err := franchises.PruneCollectionLinks(t.Context()); err != nil || pruned != 0 {
+		t.Errorf("pruned %d, %v; want the hand-made link kept", pruned, err)
+	}
+	if got, _ := franchises.LinkedWith(t.Context(), other); len(got) != 1 || got[0] != keep {
+		t.Errorf("films linked with %v, want [%d]", got, keep)
+	}
+}

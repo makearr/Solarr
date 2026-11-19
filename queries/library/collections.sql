@@ -433,9 +433,36 @@ SELECT r.from_id, r.to_id FROM relationship r
 JOIN work a ON a.id = r.from_id AND a.media_type = ?
 WHERE r.kind = 'related_series' AND r.from_type = 'work' AND r.to_type = 'work';
 
+-- A member someone added by hand stays by hand when both collections held it.
 -- name: MoveCollectionMembers :exec
-INSERT OR IGNORE INTO collection_member (collection_id, work_id, part_id, ord)
-SELECT sqlc.arg(into_id), cm.work_id, cm.part_id, cm.ord FROM collection_member cm WHERE cm.collection_id = sqlc.arg(from_id);
+INSERT INTO collection_member (collection_id, work_id, part_id, ord, by_hand)
+SELECT sqlc.arg(into_id), cm.work_id, cm.part_id, cm.ord, cm.by_hand FROM collection_member cm WHERE cm.collection_id = sqlc.arg(from_id)
+ON CONFLICT (collection_id, work_id, part_id) DO UPDATE SET by_hand = MAX(collection_member.by_hand, excluded.by_hand);
+
+-- name: MergeCollectionState :exec
+UPDATE collection SET
+  monitored = MAX(collection.monitored, (SELECT f.monitored FROM collection f WHERE f.id = sqlc.arg(from_id))),
+  complete_at = COALESCE(collection.complete_at, (SELECT f.complete_at FROM collection f WHERE f.id = sqlc.arg(from_id))),
+  poster_url = CASE WHEN collection.poster_url = '' THEN (SELECT f.poster_url FROM collection f WHERE f.id = sqlc.arg(from_id)) ELSE collection.poster_url END
+WHERE collection.id = sqlc.arg(into_id);
+
+-- name: MoveCollectionLinkOriginsLow :exec
+INSERT OR IGNORE INTO collection_link_origin (low_id, high_id, reason, detail, created_at)
+SELECT MIN(sqlc.arg(into_id), o.high_id), MAX(sqlc.arg(into_id), o.high_id), o.reason, o.detail, o.created_at
+FROM collection_link_origin o WHERE o.low_id = sqlc.arg(from_id) AND o.high_id <> sqlc.arg(into_id);
+
+-- name: MoveCollectionLinkOriginsHigh :exec
+INSERT OR IGNORE INTO collection_link_origin (low_id, high_id, reason, detail, created_at)
+SELECT MIN(sqlc.arg(into_id), o.low_id), MAX(sqlc.arg(into_id), o.low_id), o.reason, o.detail, o.created_at
+FROM collection_link_origin o WHERE o.high_id = sqlc.arg(from_id) AND o.low_id <> sqlc.arg(into_id);
+
+-- name: MoveCollectionMemberOrigins :exec
+INSERT OR IGNORE INTO collection_member_origin (collection_id, work_id, reason, detail, created_at)
+SELECT sqlc.arg(into_id), o.work_id, o.reason, o.detail, o.created_at FROM collection_member_origin o WHERE o.collection_id = sqlc.arg(from_id);
+
+-- name: MoveCollectionDeclaredKeys :exec
+INSERT OR IGNORE INTO collection_declared_key (collection_id, provider, external_id)
+SELECT sqlc.arg(into_id), k.provider, k.external_id FROM collection_declared_key k WHERE k.collection_id = sqlc.arg(from_id);
 
 -- name: ListGenresOfType :many
 SELECT a.subject_id AS work_id, t.name AS genre
