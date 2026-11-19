@@ -187,6 +187,11 @@ func ParsePath(relPath string, byFolder bool) (Info, bool) {
 	if !ok {
 		return info, false
 	}
+	if !byFolder && info.Author != "" && folder != "." && folderNamesTheTitleNotTheAuthor(folder, info) {
+		// Calibre's "Author/Title (12)/Title - Author.epub": the folders name the author, so the parts are exchanged.
+		info.Title, info.Author = info.Author, info.Title
+		info.Titles = []string{info.Title}
+	}
 	if byFolder && info.Author != "" && folder != "." {
 		// "Author/Title - Subtitle": the folder above names the author, so the first part is a reading of the title.
 		if parent, found := Parse(path.Base(folder)); found && CleanTitle(parent.Title) != CleanTitle(info.Author) {
@@ -206,6 +211,17 @@ func ParsePath(relPath string, byFolder bool) (Info, bool) {
 		}
 	}
 	return info, true
+}
+
+// folderNamesTheTitleNotTheAuthor is true when the folder two levels up reads as info's title: the file name was
+// written "Title - Author" under Calibre's "Author/Title (id)/", so the author folder sits in the title slot.
+func folderNamesTheTitleNotTheAuthor(folder string, info Info) bool {
+	outer := path.Dir(folder)
+	if outer == "." || outer == "/" {
+		return false
+	}
+	parsed, found := Parse(path.Base(outer))
+	return found && CleanTitle(parsed.Title) == CleanTitle(info.Title)
 }
 
 func isFormat(extension string) bool {

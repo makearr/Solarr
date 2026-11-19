@@ -136,3 +136,18 @@ func TestParse_AnOpenLibraryExportNameLosesItsDateAndEdition(t *testing.T) {
 		t.Errorf("got %+v", got)
 	}
 }
+
+func TestParsePath_ACalibreFileNameIsTitleThenAuthor(t *testing.T) {
+	got, ok := parsebook.ParsePath("Mara Quell/The Lantern Keeper (12)/The Lantern Keeper - Mara Quell.epub", false)
+	if !ok || got.Title != "The Lantern Keeper" || got.Author != "Mara Quell" {
+		t.Errorf("calibre: %+v ok=%v", got, ok)
+	}
+	got, ok = parsebook.ParsePath("Mara Quell/The Lantern Keeper/Mara Quell - The Lantern Keeper.epub", false)
+	if !ok || got.Title != "The Lantern Keeper" || got.Author != "Mara Quell" {
+		t.Errorf("author - title: %+v ok=%v", got, ok)
+	}
+	got, ok = parsebook.ParsePath("Books/Mara Quell - The Lantern Keeper.epub", false)
+	if !ok || got.Title != "The Lantern Keeper" || got.Author != "Mara Quell" {
+		t.Errorf("flat: %+v ok=%v", got, ok)
+	}
+}
