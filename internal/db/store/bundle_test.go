@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -95,5 +96,31 @@ func TestPruneBundles_KeepsTheNewestMinimum(t *testing.T) {
 	}
 	if len(removed) != 2 {
 		t.Errorf("removed %d bundles, want 2 (5 minus the floor of 3)", len(removed))
+	}
+}
+
+// SEC-18: a member that climbs out of the scratch directory fails the bundle, and nothing is written outside it.
+func TestVerifyBundle_RefusesAMemberThatLeavesTheScratchDirectory(t *testing.T) {
+	fixture := newMigrationFixture(t)
+	payload := filepath.Join(t.TempDir(), "payload")
+	if err := os.WriteFile(payload, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	scratch := filepath.Join(outside, "scratch")
+	if err := os.Mkdir(scratch, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for index, name := range []string{"../escape.db", "sub/escape.db", "/abs.db"} {
+		bundle, err := store.WriteBundle(fsx.NewOS(), fixture.backupDir, time.Unix(int64(3_000_000+index), 0), []store.BundleMember{{Name: name, Path: payload}})
+		if err != nil {
+			t.Fatalf("WriteBundle %q: %v", name, err)
+		}
+		if err := store.VerifyBundle(t.Context(), fsx.NewOS(), bundle, scratch); !errors.Is(err, store.ErrInvalidBundle) {
+			t.Errorf("%q: VerifyBundle = %v, want ErrInvalidBundle", name, err)
+		}
+		if _, err := os.Stat(filepath.Join(outside, "escape.db")); err == nil {
+			t.Errorf("%q: a file appeared outside the scratch directory", name)
+		}
 	}
 }

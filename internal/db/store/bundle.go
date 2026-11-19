@@ -142,7 +142,12 @@ func readBundle(fsys fsx.FS, bundlePath string, visit func(name string, content 
 		if err != nil {
 			return fmt.Errorf("store: read backup bundle %q: %w", bundlePath, err)
 		}
-		done, err := visit(path.Clean(header.Name), archive)
+		// A bundle is flat by construction: a member that names a folder, climbs out or is no plain file is not one of ours.
+		name := path.Clean(header.Name)
+		if header.Typeflag != tar.TypeReg || name == "." || name == ".." || strings.Contains(name, "/") || strings.Contains(name, `\`) {
+			return fmt.Errorf("%w: member %q is not a plain file of the bundle", ErrInvalidBundle, header.Name)
+		}
+		done, err := visit(name, archive)
 		if err != nil || done {
 			return err
 		}
