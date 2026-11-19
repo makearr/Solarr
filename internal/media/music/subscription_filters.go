@@ -12,7 +12,7 @@ import (
 // people switch off. Matched case-insensitively and by substring against
 // MusicBrainz's own secondary-type vocabulary, since "Mixtape/Street" is the
 // real value for what a user thinks of as "mixtape".
-var DefaultExcludedSecondaryTypes = []string{"compilation", "live", "remix", "dj-mix", "mixtape"}
+var DefaultExcludedSecondaryTypes = []string{"compilation", "live", "remix", "dj-mix", "mixtape", "demo", "interview", "audiobook", "audio drama", "field recording"}
 
 // DefaultIncludedPrimaryTypes is what a subscription naming no types brings
 // in: the three anyone means by "their albums" (2026-09-19). Matched

@@ -196,6 +196,18 @@
           {
             "key": "interview",
             "label": "Interviews"
+          },
+          {
+            "key": "audiobook",
+            "label": "Audiobooks"
+          },
+          {
+            "key": "audio drama",
+            "label": "Audio dramas"
+          },
+          {
+            "key": "field recording",
+            "label": "Field recordings"
           }
         ],
         "default": [
@@ -203,7 +215,12 @@
           "live",
           "remix",
           "dj-mix",
-          "mixtape"
+          "mixtape",
+          "demo",
+          "interview",
+          "audiobook",
+          "audio drama",
+          "field recording"
         ],
         "key": "exclude_secondary_types",
         "label": "Leave out",

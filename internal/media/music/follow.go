@@ -67,7 +67,8 @@ var followOptions = []media.FollowOption{
 		Key: "exclude_secondary_types", Label: "Leave out", Many: true, Default: DefaultExcludedSecondaryTypes,
 		Choices: []media.Choice{{Key: "compilation", Label: "Compilations"}, {Key: "live", Label: "Live"}, {Key: "remix", Label: "Remixes"},
 			{Key: "dj-mix", Label: "DJ mixes"}, {Key: "mixtape", Label: "Mixtapes"}, {Key: "soundtrack", Label: "Soundtracks"},
-			{Key: "demo", Label: "Demos"}, {Key: "spokenword", Label: "Spoken word"}, {Key: "interview", Label: "Interviews"}},
+			{Key: "demo", Label: "Demos"}, {Key: "spokenword", Label: "Spoken word"}, {Key: "interview", Label: "Interviews"},
+			{Key: "audiobook", Label: "Audiobooks"}, {Key: "audio drama", Label: "Audio dramas"}, {Key: "field recording", Label: "Field recordings"}},
 	},
 }
 
