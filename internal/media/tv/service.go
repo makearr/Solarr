@@ -48,11 +48,11 @@ type ShowSource interface {
 type RichSource interface {
 	Configured() bool
 	Series(ctx context.Context, id int64) (tmdb.Series, error)
-	Season(ctx context.Context, seriesID int64, number int) (tmdb.Season, error)
+	Seasons(ctx context.Context, seriesID int64, numbers []int) (map[int]tmdb.Season, error)
 	SeasonIn(ctx context.Context, seriesID int64, number int, language string) (tmdb.Season, error)
 	FindByTVDB(ctx context.Context, tvdbID int64) (tmdb.Hit, error)
 	FindByIMDb(ctx context.Context, imdbID string) (tmdb.Hit, error)
-	Search(ctx context.Context, term string) ([]tmdb.Hit, error)
+	Search(ctx context.Context, term string, year int) ([]tmdb.Hit, error)
 }
 
 // AnimeSource is the AniList client as the service needs it.
@@ -396,27 +396,17 @@ func (s Service) fetchTMDB(ctx context.Context, ids IDs, recentOnly bool) (Serie
 // seasonWorkers is how many of a series' seasons are asked of TMDB at once; its bucket still paces the calls.
 const seasonWorkers = 4
 
-// fetchSeasons reads the seasons' guest stars and episode crew, a few at a time, in the order asked; one that fails is
-// skipped.
+// fetchSeasons reads the seasons' guest stars and episode crew, many to one request, in the order asked; a season TMDB
+// does not answer is skipped.
 func (s Service) fetchSeasons(ctx context.Context, id int64, numbers []int) []tmdb.Season {
-	answers := make([]*tmdb.Season, len(numbers))
-	asked := parallel.Do(ctx, len(numbers), seasonWorkers, func(ctx context.Context, index int) error {
-		season, err := s.TMDB.Season(ctx, id, numbers[index])
-		if err != nil {
-			return err
-		}
-		answers[index] = &season
-		return nil
-	})
-	for _, err := range asked {
-		if err != nil {
-			s.warn("tmdb season", id, err)
-		}
+	answers, err := s.TMDB.Seasons(ctx, id, numbers)
+	if err != nil {
+		s.warn("tmdb season", id, err)
 	}
 	var seasons []tmdb.Season
-	for _, answer := range answers {
-		if answer != nil {
-			seasons = append(seasons, *answer)
+	for _, number := range numbers {
+		if season, found := answers[number]; found {
+			seasons = append(seasons, season)
 		}
 	}
 	return seasons
@@ -852,9 +842,9 @@ type Candidate struct {
 	Traits media.Traits
 }
 
-// Search finds series by name through Skyhook, and through TMDB when a key is stored for shows TheTVDB does not list
+// Search finds series by name (and premiere year, when known) through Skyhook, and through TMDB when a key is stored for shows TheTVDB does not list
 // (new or announced ones); an empty answer is not an error. A TMDB hit already found at Skyhook, by name and year, is dropped.
-func (s Service) Search(ctx context.Context, term string, limit int) ([]Candidate, error) {
+func (s Service) Search(ctx context.Context, term string, year, limit int) ([]Candidate, error) {
 	if s.Skyhook == nil && (s.TMDB == nil || !s.TMDB.Configured()) {
 		return nil, ErrNoSource
 	}
@@ -882,7 +872,7 @@ func (s Service) Search(ctx context.Context, term string, limit int) ([]Candidat
 			candidates = append(candidates, candidate)
 		}
 	}
-	extra, alternatives := s.searchTMDB(ctx, term, candidates)
+	extra, alternatives := s.searchTMDB(ctx, term, year, candidates)
 	for i := range candidates {
 		candidates[i].AltTitles = alternatives[searchKey(candidates[i].Title, candidates[i].Year)]
 	}
@@ -895,11 +885,11 @@ func (s Service) Search(ctx context.Context, term string, limit int) ([]Candidat
 }
 
 // searchTMDB lists TMDB's hits for a term that the earlier candidates do not already cover.
-func (s Service) searchTMDB(ctx context.Context, term string, have []Candidate) ([]Candidate, map[string][]string) {
+func (s Service) searchTMDB(ctx context.Context, term string, year int, have []Candidate) ([]Candidate, map[string][]string) {
 	if s.TMDB == nil || !s.TMDB.Configured() {
 		return nil, nil
 	}
-	hits, err := s.TMDB.Search(ctx, term)
+	hits, err := s.TMDB.Search(ctx, term, year)
 	if err != nil {
 		s.warn("tmdb search", 0, err)
 		return nil, nil

@@ -280,6 +280,38 @@ func (c Client) Season(ctx context.Context, seriesID int64, number int) (Season,
 	return season, c.get(ctx, "/tv/"+strconv.FormatInt(seriesID, 10)+"/season/"+strconv.Itoa(number), nil, &season)
 }
 
+// seasonsPerCall is how many seasons one append_to_response may carry; TMDB allows 20 appended objects.
+const seasonsPerCall = 20
+
+// Seasons reads several seasons in as few requests as TMDB allows, by number; a season TMDB does not know is absent.
+func (c Client) Seasons(ctx context.Context, seriesID int64, numbers []int) (map[int]Season, error) {
+	seasons := make(map[int]Season, len(numbers))
+	for start := 0; start < len(numbers); start += seasonsPerCall {
+		chunk := numbers[start:min(start+seasonsPerCall, len(numbers))]
+		appended := make([]string, len(chunk))
+		for i, number := range chunk {
+			appended[i] = "season/" + strconv.Itoa(number)
+		}
+		var answer map[string]json.RawMessage
+		query := url.Values{"append_to_response": {strings.Join(appended, ",")}}
+		if err := c.get(ctx, "/tv/"+strconv.FormatInt(seriesID, 10), query, &answer); err != nil {
+			return seasons, err
+		}
+		for _, number := range chunk {
+			raw, found := answer["season/"+strconv.Itoa(number)]
+			if !found {
+				continue
+			}
+			var season Season
+			if err := json.Unmarshal(raw, &season); err != nil {
+				return seasons, fmt.Errorf("tmdb: season %d: %w", number, err)
+			}
+			seasons[number] = season
+		}
+	}
+	return seasons, nil
+}
+
 // SeasonIn reads one season with its titles in another language (a BCP 47 tag).
 func (c Client) SeasonIn(ctx context.Context, seriesID int64, number int, language string) (Season, error) {
 	c.language = language
@@ -319,12 +351,21 @@ func Genres(ids []int64) []string {
 	return names
 }
 
-// Search finds shows by name.
-func (c Client) Search(ctx context.Context, term string) ([]Hit, error) {
+// Search finds shows by name, narrowed to the year of the première when one is given; a year that finds nothing is
+// dropped, because a release name often carries the season's year.
+func (c Client) Search(ctx context.Context, term string, year int) ([]Hit, error) {
 	var answer struct {
 		Results []Hit `json:"results"`
 	}
-	return answer.Results, c.get(ctx, "/search/tv", url.Values{"query": {term}}, &answer)
+	query := url.Values{"query": {term}, "include_adult": {"false"}}
+	if year > 0 {
+		query.Set("first_air_date_year", strconv.Itoa(year))
+		if err := c.get(ctx, "/search/tv", query, &answer); err != nil || len(answer.Results) > 0 {
+			return answer.Results, err
+		}
+		query.Del("first_air_date_year")
+	}
+	return answer.Results, c.get(ctx, "/search/tv", query, &answer)
 }
 
 // NewOnNetwork lists the shows that first aired on a network on or after a date (yyyy-MM-dd), newest first.

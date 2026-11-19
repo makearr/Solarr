@@ -78,14 +78,14 @@ func TestSeriesReadsCreditsIDsRatingsAndOrderings(t *testing.T) {
 
 func TestAPIKeyGoesAsParameterAndTokenAsBearer(t *testing.T) {
 	plain := &canned{body: `{"results":[]}`}
-	if _, err := newClient(t, plain, "abc123").Search(t.Context(), "x"); err != nil {
+	if _, err := newClient(t, plain, "abc123").Search(t.Context(), "x", 0); err != nil {
 		t.Fatal(err)
 	}
 	if got := plain.requested[0].URL.Query().Get("api_key"); got != "abc123" || plain.requested[0].Header.Get("Authorization") != "" {
 		t.Errorf("v3 key: api_key=%q auth=%q", got, plain.requested[0].Header.Get("Authorization"))
 	}
 	token := &canned{body: `{"results":[]}`}
-	if _, err := newClient(t, token, "eyJhbGciOiJIUzI1NiJ9.payload.sig").Search(t.Context(), "x"); err != nil {
+	if _, err := newClient(t, token, "eyJhbGciOiJIUzI1NiJ9.payload.sig").Search(t.Context(), "x", 0); err != nil {
 		t.Fatal(err)
 	}
 	if token.requested[0].URL.Query().Has("api_key") || token.requested[0].Header.Get("Authorization") != "Bearer eyJhbGciOiJIUzI1NiJ9.payload.sig" {
@@ -153,5 +153,48 @@ func TestNewOnNetworkAsksForShowsSinceADate(t *testing.T) {
 	query := transport.requested[0].URL.Query()
 	if query.Get("with_networks") != "9" || query.Get("first_air_date.gte") != "2026-08-01" || query.Get("sort_by") != "first_air_date.desc" {
 		t.Errorf("query = %v", query)
+	}
+}
+
+func TestSeasonsAreAppendedToOneRequestAndAnUnknownOneIsAbsent(t *testing.T) {
+	transport := &canned{body: `{"id":7,"season/1":{"season_number":1,"episodes":[{"id":100,"season_number":1,"episode_number":1,"name":"One"}]},
+		"season/2":{"season_number":2,"episodes":[]}}`}
+	seasons, err := newClient(t, transport, "k").Seasons(t.Context(), 7, []int{1, 2, 9})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(transport.requested) != 1 || transport.requested[0].URL.Query().Get("append_to_response") != "season/1,season/2,season/9" {
+		t.Errorf("requests = %d, url = %s", len(transport.requested), transport.requested[0].URL)
+	}
+	if len(seasons) != 2 || seasons[1].Episodes[0].Name != "One" || seasons[2].SeasonNumber != 2 {
+		t.Errorf("seasons = %+v", seasons)
+	}
+}
+
+func TestSeasonsBeyondTheAppendLimitGoInFollowUpCalls(t *testing.T) {
+	transport := &canned{body: `{}`}
+	numbers := make([]int, 45)
+	for i := range numbers {
+		numbers[i] = i + 1
+	}
+	if _, err := newClient(t, transport, "k").Seasons(t.Context(), 7, numbers); err != nil {
+		t.Fatal(err)
+	}
+	if len(transport.requested) != 3 {
+		t.Errorf("requests = %d, want 3", len(transport.requested))
+	}
+}
+
+func TestSearchNarrowsToTheYearAndRetriesWithoutWhenItFindsNothing(t *testing.T) {
+	transport := &canned{body: `{"results":[]}`}
+	if _, err := newClient(t, transport, "k").Search(t.Context(), "x", 2005); err != nil {
+		t.Fatal(err)
+	}
+	if len(transport.requested) != 2 {
+		t.Fatalf("requests = %d, want 2", len(transport.requested))
+	}
+	first, second := transport.requested[0].URL.Query(), transport.requested[1].URL.Query()
+	if first.Get("first_air_date_year") != "2005" || second.Has("first_air_date_year") || second.Get("include_adult") != "false" {
+		t.Errorf("first = %v, second = %v", first, second)
 	}
 }

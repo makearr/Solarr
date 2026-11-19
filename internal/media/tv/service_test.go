@@ -234,7 +234,7 @@ func TestSearchAnswersCandidatesUpToTheLimit(t *testing.T) {
 	sky := skyhook.Series{TVDBID: 5, Title: "Alpha", FirstAired: "2019-04-01", Network: "Net", Status: "Ended",
 		Images: []skyhook.Image{{CoverType: "Banner", URL: "b"}, {CoverType: "Poster", URL: "p"}}}
 	service, _ := newService(t, fakeSkyhook{series: sky}, fakeTVmaze{})
-	got, err := service.Search(t.Context(), "alpha", 5)
+	got, err := service.Search(t.Context(), "alpha", 0, 5)
 	if err != nil || len(got) != 1 || got[0].Year != 2019 || got[0].Poster != "p" || got[0].Status != tv.StatusEnded {
 		t.Errorf("candidates = %+v, %v", got, err)
 	}

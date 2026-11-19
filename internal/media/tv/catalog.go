@@ -18,7 +18,7 @@ var _ works.Source = CatalogSource{}
 
 // Lookup implements works.Source.
 func (c CatalogSource) Lookup(ctx context.Context, lookup media.AddLookup) ([]media.AddCandidate, error) {
-	found, err := c.Service.Search(ctx, lookup.Query, lookup.Limit)
+	found, err := c.Service.Search(ctx, lookup.Query, 0, lookup.Limit)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", media.ErrSourceUnavailable, err)
 	}

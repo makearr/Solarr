@@ -329,15 +329,16 @@ func (goldenTMDB) Series(context.Context, int64) (tmdb.Series, error) {
 }
 
 func (g goldenTMDB) SeasonIn(ctx context.Context, id int64, number int, _ string) (tmdb.Season, error) {
-	return g.Season(ctx, id, number)
+	seasons, _ := g.Seasons(ctx, id, []int{number})
+	return seasons[1], nil
 }
 
-func (goldenTMDB) Season(context.Context, int64, int) (tmdb.Season, error) {
-	return tmdb.Season{SeasonNumber: 1, Name: "Season 1", AirDate: "2020-02-03", Episodes: []tmdb.Episode{{
+func (goldenTMDB) Seasons(context.Context, int64, []int) (map[int]tmdb.Season, error) {
+	return map[int]tmdb.Season{1: {SeasonNumber: 1, Name: "Season 1", AirDate: "2020-02-03", Episodes: []tmdb.Episode{{
 		ID: 801, SeasonNumber: 1, EpisodeNumber: 1, Name: "Slack Water", AirDate: "2020-02-03", Runtime: 45,
 		GuestStars: []tmdb.GuestStar{{ID: 304, Name: "Odile Renn", Character: "The Pilot"}},
 		Crew:       []tmdb.EpisodeCrew{{ID: 305, Name: "Hal Brandt", Job: "Director", Department: "Directing"}},
-	}}}, nil
+	}}}}, nil
 }
 
 func (goldenTMDB) FindByTVDB(context.Context, int64) (tmdb.Hit, error) {
@@ -346,7 +347,7 @@ func (goldenTMDB) FindByTVDB(context.Context, int64) (tmdb.Hit, error) {
 func (goldenTMDB) FindByIMDb(context.Context, string) (tmdb.Hit, error) {
 	return tmdb.Hit{}, tmdb.ErrNotFound
 }
-func (goldenTMDB) Search(context.Context, string) ([]tmdb.Hit, error) { return nil, nil }
+func (goldenTMDB) Search(context.Context, string, int) ([]tmdb.Hit, error) { return nil, nil }
 
 // seedSeries adds the invented series through the TV service, with the first two episodes on disk.
 func (g goldenServer) seedSeries(ctx context.Context, t *testing.T, libraries goldenLibraries) int64 {

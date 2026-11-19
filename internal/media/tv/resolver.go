@@ -275,14 +275,14 @@ const searchLimit = 20
 // search asks the providers for the folder's title and, when the folder gives a year, for the title with the year in
 // brackets as TheTVDB names such a series: that puts "Forever (2014)" first where "Forever" buries it.
 func (c Resolver) search(ctx context.Context, guess FolderGuess) ([]Candidate, error) {
-	found, err := c.Service.Search(ctx, guess.Title, searchLimit)
+	found, err := c.Service.Search(ctx, guess.Title, guess.Year, searchLimit)
 	asked := 1
 	failed := 0
 	if err != nil {
 		failed++
 	}
 	merge := func(term string) {
-		more, moreErr := c.Service.Search(ctx, term, searchLimit)
+		more, moreErr := c.Service.Search(ctx, term, guess.Year, searchLimit)
 		asked++
 		if moreErr != nil {
 			failed++

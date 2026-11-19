@@ -2,6 +2,7 @@ package tv_test
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -90,18 +91,21 @@ func (f fakeTMDB) SeasonIn(_ context.Context, _ int64, number int, language stri
 	}
 	return tmdb.Season{}, tmdb.ErrNotFound
 }
-func (f fakeTMDB) Season(_ context.Context, _ int64, number int) (tmdb.Season, error) {
+func (f fakeTMDB) Seasons(_ context.Context, _ int64, numbers []int) (map[int]tmdb.Season, error) {
+	found := map[int]tmdb.Season{}
 	for _, season := range f.seasons {
-		if season.SeasonNumber == number {
-			return season, nil
+		if slices.Contains(numbers, season.SeasonNumber) {
+			found[season.SeasonNumber] = season
 		}
 	}
-	return tmdb.Season{}, tmdb.ErrNotFound
+	return found, nil
 }
 func (f fakeTMDB) FindByTVDB(context.Context, int64) (tmdb.Hit, error) {
 	return tmdb.Hit{ID: f.series.ID}, nil
 }
-func (f fakeTMDB) Search(context.Context, string) ([]tmdb.Hit, error) { return f.hits, nil }
+func (f fakeTMDB) Search(context.Context, string, int) ([]tmdb.Hit, error) {
+	return f.hits, nil
+}
 func (f fakeTMDB) FindByIMDb(context.Context, string) (tmdb.Hit, error) {
 	return tmdb.Hit{}, tmdb.ErrNotFound
 }
@@ -219,7 +223,7 @@ func TestSearchAddsTMDBShowsTheTVDBDoesNotListAndDropsTheOnesItDoes(t *testing.T
 		{ID: 8, Name: "Announced Show", FirstAirDate: "2027-02-01", Overview: "Only TMDB has it.", PosterPath: "/p.jpg"},
 	}
 	service := tv.Service{Skyhook: searchSkyhook{series: skyhookShow()}, TMDB: fakeTMDB{hits: hits}}
-	found, err := service.Search(t.Context(), "show", 10)
+	found, err := service.Search(t.Context(), "show", 0, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +234,7 @@ func TestSearchAddsTMDBShowsTheTVDBDoesNotListAndDropsTheOnesItDoes(t *testing.T
 
 func TestSearchWithOnlyTMDBStillAnswers(t *testing.T) {
 	service := tv.Service{TMDB: fakeTMDB{hits: []tmdb.Hit{{ID: 8, Name: "Announced Show"}}}}
-	found, err := service.Search(t.Context(), "show", 10)
+	found, err := service.Search(t.Context(), "show", 0, 10)
 	if err != nil || len(found) != 1 || found[0].TMDBID != 8 {
 		t.Errorf("found = %+v, err = %v", found, err)
 	}
