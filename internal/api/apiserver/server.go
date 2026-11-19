@@ -458,6 +458,8 @@ type Server struct {
 	// claim serialises the unauthenticated first-run writes, so a request that found no account yet cannot act on
 	// that once another request has created one.
 	claim sync.Mutex
+	// configMu serialises edits of config.yml.
+	configMu sync.Mutex
 	// setupCode is what a public address must send to claim an unclaimed install; empty once it was used or when
 	// an account exists. Guarded by claim.
 	setupCode string

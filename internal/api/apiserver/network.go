@@ -104,15 +104,25 @@ func (s *Server) UpdateNetworkSettings(w http.ResponseWriter, r *http.Request) {
 		s.writeNetworkSettingsError(w, err)
 		return
 	}
+	var previous []byte
+	patchedFile := false
 	if wanted.Port != 0 && s.configPath != "" {
+		previous, _ = s.readConfig()
 		if err := s.writeConfigServerPort(wanted.Port); err != nil {
 			writeProblem(w, s.logger, http.StatusInternalServerError, TypeInternal,
 				"The port could not be saved", "config.yml could not be updated: "+err.Error())
 			return
 		}
+		patchedFile = true
 	}
 
 	if err := s.auth.Settings.SetNetworkSettings(r.Context(), s.auth.Clock, wanted, caller); err != nil {
+		// File first is the recorded order (ADR-58); a settings write that then fails puts the file back as it was.
+		if patchedFile && previous != nil {
+			if restoreErr := s.patchConfig(func([]byte) ([]byte, error) { return previous, nil }); restoreErr != nil {
+				s.logger.Error("config.yml keeps the new port though the network settings were refused", "error", restoreErr)
+			}
+		}
 		s.writeNetworkSettingsError(w, err)
 		return
 	}
@@ -154,7 +164,11 @@ func (s *Server) readConfig() ([]byte, error) {
 }
 
 // patchConfig rewrites config.yml with what patch makes of it.
+// One patch at a time: two overlapping read-modify-writes would each start from the same bytes and the later one
+// would drop the earlier one's change.
 func (s *Server) patchConfig(patch func([]byte) ([]byte, error)) error {
+	s.configMu.Lock()
+	defer s.configMu.Unlock()
 	data, err := s.readConfig()
 	if err != nil {
 		return err

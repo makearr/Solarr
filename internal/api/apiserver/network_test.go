@@ -384,3 +384,21 @@ func TestIPAllowlist_TrustsForwardedForOnlyBehindATrustedProxy(t *testing.T) {
 		t.Fatalf("status = %d, body = %s, want 403 -- the leftmost entry is the client's to choose", recorder.Code, recorder.Body)
 	}
 }
+
+// API-1: file first stays the order, but a settings write that then fails puts the file back as it was.
+func TestUpdateNetworkSettings_RestoresConfigYAMLWhenTheSettingsWriteFails(t *testing.T) {
+	fixture := newWorksFixtureWithConfigPath(t, "/config/config.yml")
+	writeFakeConfigYAML(t, fixture.fsys, "/config/config.yml")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	before := readFile(t, fixture.fsys, "/config/config.yml")
+	// Passes validation, then fails at the write: a proxy password cannot be sealed on a cache with no cipher.
+	body := `{"port":6000,"proxy_enabled":true,"proxy_url":"http://kim:pw@proxy.local:3128","proxy_bypass":[],"allow_cidrs":[]}`
+	if recorder := fixture.do(authedPatch(t, cookies, "/api/v1/network", body)); recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s, want the settings write refused", recorder.Code, recorder.Body)
+	}
+	if after := readFile(t, fixture.fsys, "/config/config.yml"); after != before {
+		t.Errorf("config.yml keeps the refused change:\nbefore: %s\nafter: %s", before, after)
+	}
+}

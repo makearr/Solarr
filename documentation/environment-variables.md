@@ -54,6 +54,7 @@ environment:
 | `SOLARR_PORT` | `server.port` | `5454` | HTTP port. Always wins over the Network screen, and is written to it so the screen shows it in effect |
 | `SOLARR_BIND` | `server.bind` | `0.0.0.0` | Address to listen on |
 | `SOLARR_BASE_URL` | `server.base_url` | `/` | Path prefix when served behind a reverse proxy under a sub-path, e.g. `/solarr` |
+| `SOLARR_SETUP_CODE` | (none) | random per start | The code a first-administrator claim from a public address needs; local and private addresses need none. Printed in the log at start |
 | `SOLARR_PROXY_URL` | `network.proxy` (`settings.db`) | unset | Outbound proxy for metadata traffic: `http://`, `https://` or `socks5://` with an explicit port. Turns the proxy on |
 
 ## Media folders
