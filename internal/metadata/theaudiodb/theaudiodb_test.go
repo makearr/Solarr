@@ -15,12 +15,17 @@ import (
 
 type cannedTransport struct {
 	body      string
+	status    int
 	requested []string
 }
 
 func (c *cannedTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	c.requested = append(c.requested, request.URL.String())
-	return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header),
+	status := c.status
+	if status == 0 {
+		status = http.StatusOK
+	}
+	return &http.Response{StatusCode: status, Header: make(http.Header),
 		Body: io.NopCloser(strings.NewReader(c.body)), Request: request}, nil
 }
 
@@ -59,5 +64,22 @@ func TestArtistAndAlbumCover(t *testing.T) {
 	unknown := &cannedTransport{body: `{"artists":null}`}
 	if _, err := newClient(t, unknown, "123").Artist(t.Context(), "x"); !errors.Is(err, theaudiodb.ErrNotFound) {
 		t.Errorf("unknown artist: err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestAStatusErrorKeepsItsCauseAndHidesTheKey(t *testing.T) {
+	limited := &cannedTransport{status: http.StatusTooManyRequests}
+	_, err := newClient(t, limited, "k3y").Artist(t.Context(), "9546cacb-d515-4327-878c-123e2125eb70")
+	var refused *httpx.StatusError
+	if !errors.As(err, &refused) || refused.Status != http.StatusTooManyRequests {
+		t.Fatalf("err = %v, want a wrapped 429 StatusError", err)
+	}
+	if strings.Contains(err.Error(), "k3y") {
+		t.Errorf("error text %q carries the key", err.Error())
+	}
+
+	missing := &cannedTransport{status: http.StatusNotFound}
+	if _, err := newClient(t, missing, "123").Artist(t.Context(), "x"); !errors.Is(err, theaudiodb.ErrNotFound) {
+		t.Errorf("404: err = %v, want ErrNotFound", err)
 	}
 }

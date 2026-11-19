@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 
@@ -131,19 +130,30 @@ func pictures(record map[string]any, fields [][2]string) []Picture {
 	return found
 }
 
-// get fetches one lookup. The key sits in the URL's path, where httpx cannot redact it, so no
-// error from the transport is passed on with it in.
+// requestError is a failed lookup whose text hides the key and whose cause stays inspectable.
+type requestError struct {
+	endpoint string
+	text     string
+	cause    error
+}
+
+func (e *requestError) Error() string { return "theaudiodb: " + e.endpoint + ": " + e.text }
+func (e *requestError) Unwrap() error { return e.cause }
+
+// get fetches one lookup. The key sits in the URL's path, where httpx cannot redact it, so the
+// transport's error is wrapped with the key segment hidden from its text.
 func (c Client) get(ctx context.Context, endpoint, mbid string, into any) error {
 	key := c.key()
 	requestURL := baseURL + url.PathEscape(key) + "/" + endpoint + "?i=" + url.QueryEscape(mbid)
 	response, err := c.http.Get(ctx, requestURL)
 	if err != nil {
-		return fmt.Errorf("theaudiodb: %s: %s", endpoint, strings.ReplaceAll(err.Error(), key, "***"))
+		if httpx.IsNotFound(err) {
+			return ErrNotFound
+		}
+		text := strings.ReplaceAll(err.Error(), "/json/"+url.PathEscape(key)+"/", "/json/***/")
+		return &requestError{endpoint: endpoint, text: text, cause: err}
 	}
 	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("theaudiodb: %s: status %d", endpoint, response.StatusCode)
-	}
 	body, err := httpx.ReadLimited(response.Body, maxResponseBytes)
 	if err != nil {
 		return fmt.Errorf("theaudiodb: %s: read: %w", endpoint, err)
