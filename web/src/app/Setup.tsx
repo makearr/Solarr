@@ -1,3 +1,4 @@
+import { RepeatPassword, passwordReady } from "./NewPassword";
 import { DefaultLanguagesEditor } from "./DefaultLanguages";
 import { TargetChoiceField, useTargetChoice } from "./LibraryTargetChoice";
 import { useState } from "react";
@@ -388,6 +389,7 @@ function CreateAdministrator() {
   const queryClient = useQueryClient();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [repeat, setRepeat] = useState("");
 
   const create = useMutation({
     mutationFn: () => ok(api.POST("/setup/admin", {
@@ -428,12 +430,13 @@ function CreateAdministrator() {
             onChange={(event) => setPassword(event.target.value)}
           />
         </Field>
+        <RepeatPassword password={password} repeat={repeat} onRepeat={setRepeat} inputClassName={inputStyle} />
 
         {create.isError && <Problem error={create.error} />}
 
         <button
           type="submit"
-          disabled={!username.trim() || password === "" || create.isPending}
+          disabled={!username.trim() || !passwordReady(password, repeat) || create.isPending}
           className={primaryButtonStyle}
         >
           {create.isPending ? "Creating…" : "Create account"}

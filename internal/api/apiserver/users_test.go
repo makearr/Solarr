@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -25,7 +26,7 @@ func TestCreateUser_RefusesANonAdministrator(t *testing.T) {
 	fixture := newAuthFixture(t, apiserver.AuthLocal)
 
 	response := fixture.as(t, "housemate", http.MethodPost, "/api/v1/users",
-		`{"username":"guest","password":"pw","role":"readonly"}`)
+		`{"username":"guest","password":"password1","role":"readonly"}`)
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403", response.Code)
 	}
@@ -78,7 +79,20 @@ func TestCreateUser_TheChosenAccessIsWhatTheAccountSees(t *testing.T) {
 func TestCreateUser_ATakenNameIsAConflict(t *testing.T) {
 	fixture := newAuthFixture(t, apiserver.AuthLocal)
 
-	if response := fixture.as(t, "avs", http.MethodPost, "/api/v1/users", `{"username":"housemate","password":"pw","role":"readonly"}`); response.Code != http.StatusConflict {
+	if response := fixture.as(t, "avs", http.MethodPost, "/api/v1/users", `{"username":"housemate","password":"password1","role":"readonly"}`); response.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409: %s", response.Code, response.Body)
+	}
+}
+
+// SEC-6: a short password is refused when an account is made and when it is changed, before anything is written.
+func TestUsers_RefuseAShortPassword(t *testing.T) {
+	fixture := newAuthFixture(t, apiserver.AuthLocal)
+
+	response := fixture.as(t, "avs", http.MethodPost, "/api/v1/users", `{"username":"guest","password":"short","role":"readonly"}`)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "at least 8 characters") {
+		t.Fatalf("create: status %d (%s), want 400 naming the rule", response.Code, response.Body)
+	}
+	if _, found := fixture.cache.Snapshot().UserByUsername("guest"); found {
+		t.Error("the account was created anyway")
 	}
 }

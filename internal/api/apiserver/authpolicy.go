@@ -79,6 +79,10 @@ func (s *Server) SetAuthPolicy(w http.ResponseWriter, r *http.Request) {
 					"with this change; without it the interface locks itself out")
 			return
 		}
+		if problem := validPassword(request.Password); problem != "" {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", problem)
+			return
+		}
 		if err := s.giveCredential(r, request.Username, request.Password); err != nil {
 			writeError(w, s.logger, err)
 			return

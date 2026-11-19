@@ -123,20 +123,19 @@ func TestCreateFirstAdministrator_ClosesPermanently(t *testing.T) {
 	}
 }
 
-// A short password is not weak input. Length and composition rules produce
-// predictable substitutions rather than strength, and on a self-hosted install
-// the only person they constrain is its owner. Empty stays refused: an account
-// nobody can fail to authenticate as is auth_mode none, which is a deliberate
-// decision made in config.yml.
-func TestCreateFirstAdministrator_AcceptsAShortPassword(t *testing.T) {
+// SEC-6: a password under eight characters is refused with the rule named; no composition rule applies.
+func TestCreateFirstAdministrator_RefusesAShortPassword(t *testing.T) {
 	fixture := newSetupFixture(t, nil)
 
 	got := fixture.post(t, "/api/v1/setup/admin", `{"username":"avs","password":"x"}`)
-	if got.Code != http.StatusCreated {
-		t.Fatalf("status = %d, want 201: a length rule has come back", got.Code)
+	if got.Code != http.StatusBadRequest || !strings.Contains(got.Body.String(), "a password is at least 8 characters") {
+		t.Fatalf("status = %d (%s), want 400 naming the rule", got.Code, got.Body)
 	}
-	if users := fixture.cache.Snapshot().Users(); len(users) != 1 {
-		t.Errorf("%d accounts exist, want 1", len(users))
+	if users := fixture.cache.Snapshot().Users(); len(users) != 0 {
+		t.Errorf("%d accounts exist, want 0", len(users))
+	}
+	if got := fixture.post(t, "/api/v1/setup/admin", `{"username":"avs","password":"alllowercase"}`); got.Code != http.StatusCreated {
+		t.Errorf("a plain long password: status %d, want 201", got.Code)
 	}
 }
 

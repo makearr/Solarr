@@ -53,14 +53,10 @@ func (s *Server) CreateFirstAdministrator(w http.ResponseWriter, r *http.Request
 			"Bad request", "a username is required")
 		return
 	}
-	// No length or composition rule. Rules of that shape produce predictable
-	// substitutions rather than strength, and this is a self-hosted install
-	// whose owner is the only person they would constrain. Empty is still
-	// refused: an account nobody can fail to authenticate as is auth_mode none,
-	// which is a deliberate file-level decision, not an empty form field.
-	if request.Password == "" {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a password is required")
+	// Empty is refused: an account nobody can fail to authenticate as is auth_mode none, a deliberate file-level
+	// decision, not an empty form field. A short one is refused too, with no composition rule (SEC-6).
+	if problem := validPassword(request.Password); problem != "" {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", problem)
 		return
 	}
 

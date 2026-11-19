@@ -57,6 +57,10 @@ func (s *Server) CreateUser(w http.ResponseWriter, r *http.Request) {
 			"Bad request", "a username and password are required")
 		return
 	}
+	if problem := validPassword(request.Password); problem != "" {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", problem)
+		return
+	}
 	role, ok := parseRole(request.Role)
 	if !ok {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
@@ -122,10 +126,11 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, id int64) {
 	}
 
 	// Every refusal comes before the first write, so a 400 changes nothing.
-	if request.Password != nil && *request.Password == "" {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a password is required")
-		return
+	if request.Password != nil {
+		if problem := validPassword(*request.Password); problem != "" {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", problem)
+			return
+		}
 	}
 	if request.Role != nil {
 		role, ok := parseRole(*request.Role)

@@ -1,3 +1,4 @@
+import { RepeatPassword, passwordReady } from "./NewPassword";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Eye, EyeOff, ShieldAlert, ShieldCheck } from "lucide-react";
@@ -299,6 +300,7 @@ function AccessSection() {
   const policy = useAuthPolicy();
   const change = useSetAuthRequired();
   const [password, setPassword] = useState("");
+  const [repeat, setRepeat] = useState("");
   const [confirmingOff, setConfirmingOff] = useState(false);
   const [typed, setTyped] = useState("");
 
@@ -344,6 +346,14 @@ function AccessSection() {
           />
         </label>
       )}
+      {needsPassword && (
+        <RepeatPassword
+          password={password}
+          repeat={repeat}
+          onRepeat={setRepeat}
+          inputClassName="rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink"
+        />
+      )}
 
       {change.isError && (
         <p className="text-xs text-danger">That could not be saved.</p>
@@ -359,7 +369,7 @@ function AccessSection() {
           }
           change.mutate({ authRequired: true, password: needsPassword ? password : undefined });
         }}
-        disabled={change.isPending || (needsPassword && password === "")}
+        disabled={change.isPending || (needsPassword && !passwordReady(password, repeat))}
         className="self-start rounded-md border border-border-subtle px-2.5 py-1 text-xs
                    text-ink-muted hover:text-ink disabled:opacity-50
                    focus-visible:outline-2 focus-visible:outline-offset-2
@@ -750,6 +760,7 @@ function Row({
   busy: boolean;
 }) {
   const [password, setPassword] = useState("");
+  const [repeat, setRepeat] = useState("");
   const [resetting, setResetting] = useState(false);
   const [open, setOpen] = useState(false);
   const [pendingRole, setPendingRole] = useState<Role>();
@@ -879,11 +890,12 @@ function Row({
 
       {resetting && (
         <form
-          className="flex items-center gap-2"
+          className="flex items-start gap-2"
           onSubmit={(event) => {
             event.preventDefault();
             onPassword(password);
             setPassword("");
+            setRepeat("");
             setResetting(false);
           }}
         >
@@ -895,9 +907,15 @@ function Row({
             onChange={(event) => setPassword(event.target.value)}
             className="flex-1 rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs"
           />
+          <RepeatPassword
+            password={password}
+            repeat={repeat}
+            onRepeat={setRepeat}
+            inputClassName="w-full rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs"
+          />
           <button
             type="submit"
-            disabled={password === ""}
+            disabled={!passwordReady(password, repeat)}
             className="rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted
                        hover:text-ink disabled:opacity-50"
           >
@@ -917,6 +935,7 @@ function AddUser({ libraries, onAdded }: { libraries: readonly Library[]; onAdde
   const defaults = useUserDefaults();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [repeat, setRepeat] = useState("");
   const [role, setRole] = useState<Role>("readonly");
   const [grants, setGrants] = useState<CategoryGrant[]>([]);
   const [limits, setLimits] = useState<UserLimits | null>(null);
@@ -935,6 +954,7 @@ function AddUser({ libraries, onAdded }: { libraries: readonly Library[]; onAdde
     onSuccess: () => {
       setUsername("");
       setPassword("");
+      setRepeat("");
       setGrants([]);
       setLimits(null);
       setBlocked([]);
@@ -974,6 +994,9 @@ function AddUser({ libraries, onAdded }: { libraries: readonly Library[]; onAdde
             onChange={(event) => setPassword(event.target.value)}
           />
         </label>
+        <div className="flex min-w-32 flex-1 flex-col gap-1 text-xs text-ink-muted">
+          <RepeatPassword password={password} repeat={repeat} onRepeat={setRepeat} inputClassName={inputStyle} />
+        </div>
         <label className={labelStyle}>
           Role
           <select
@@ -1018,7 +1041,7 @@ function AddUser({ libraries, onAdded }: { libraries: readonly Library[]; onAdde
         <Button
           variant="primary"
           type="submit"
-          disabled={!username.trim() || password === "" || create.isPending}
+          disabled={!username.trim() || !passwordReady(password, repeat) || create.isPending}
         >
           {create.isPending ? "Adding…" : "Add user"}
         </Button>
