@@ -56,7 +56,7 @@ var allowedInternalImports = map[string][]string{
 	},
 	"internal/api/auth":  {"internal/platform/clock", "internal/platform/secrets"},
 	"internal/api/authz": {"internal/db/settings"},
-	"internal/api/apiserver": {"internal/platform/iogate",
+	"internal/api/apiserver": {"internal/platform/artwork", "internal/platform/iogate",
 		"internal/platform/remoteimage", "internal/api/apiserver/gen", "internal/api/apiserver/legal", "internal/api/auth", "internal/api/authz",
 		"internal/platform/clock", "internal/platform/config", "internal/platform/events", "internal/platform/fsx",
 		"internal/jobs", "internal/identify/model", "internal/platform/paginate", "internal/identify/parse",
@@ -140,7 +140,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/platform/transcode": {"internal/platform/fsx", "internal/platform/mediatool", "internal/platform/clock"},
 	// Section 21.6's resize-and-encode step: pure image processing (stdlib image
 	// package plus a pure-Go WebP encoder dependency), no I/O of its own.
-	"internal/platform/artwork":     {},
+	"internal/platform/artwork":     {"internal/platform/fsx"},
 	"internal/platform/remoteimage": {"internal/platform/artwork", "internal/platform/clock", "internal/platform/fsx", "internal/platform/hitcount", "internal/platform/httpx"},
 	"internal/platform/hitcount":    {},
 	// Section 11.8's path template compiler/renderer: parsing and string

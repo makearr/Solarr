@@ -9,6 +9,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/platform/artwork"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/remoteimage"
 )
@@ -25,7 +26,7 @@ type RemoteImages interface {
 func (s *Server) openImage(key, size string) (fsx.File, error) {
 	name := key + "-" + size + ".webp"
 	if s.mediaCoverDir != "" {
-		if file, err := s.fsys.Open(filepath.Join(s.mediaCoverDir, name)); err == nil {
+		if file, err := s.fsys.Open(artwork.ReadPath(s.fsys, s.mediaCoverDir, name)); err == nil {
 			return file, nil
 		}
 	}
@@ -36,7 +37,7 @@ func (s *Server) openImage(key, size string) (fsx.File, error) {
 // directory first, so the cache budget cannot evict it.
 func (s *Server) openLibraryImage(key, size string) (fsx.File, error) {
 	if s.mediaCoverDir != "" {
-		if _, err := s.fsys.Stat(filepath.Join(s.mediaCoverDir, key+"-full.webp")); err != nil {
+		if _, err := s.fsys.Stat(artwork.ReadPath(s.fsys, s.mediaCoverDir, key+"-full.webp")); err != nil {
 			_ = remoteimage.PromoteFiles(s.fsys, s.imagesDir, s.mediaCoverDir, key)
 		}
 	}

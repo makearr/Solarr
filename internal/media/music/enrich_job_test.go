@@ -26,6 +26,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/metacache"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
+	"github.com/makearr/Solarr/internal/platform/artwork"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/httpx"
@@ -582,7 +583,7 @@ func TestEnrichJob_FetchesAndRecordsTheArtistsWikidataImage(t *testing.T) {
 		t.Fatal("no artwork recorded for the resolved person")
 	}
 	for _, size := range []string{"thumb", "small", "full"} {
-		path := "/cache/images/" + recorded.CacheKey + "-" + size + ".webp"
+		path := artwork.CoverPath("/cache/images", recorded.CacheKey+"-"+size+".webp")
 		if _, err := memFS.Stat(path); err != nil {
 			t.Errorf("%s was not written: %v", path, err)
 		}
@@ -788,7 +789,7 @@ func TestEnrichJob_BackfillsAnAlreadyResolvedArtistsImageAndBiography(t *testing
 		t.Fatal("the already-resolved artist gained no image")
 	}
 	for _, size := range []string{"thumb", "small", "full"} {
-		path := "/cache/images/" + recorded.CacheKey + "-" + size + ".webp"
+		path := artwork.CoverPath("/cache/images", recorded.CacheKey+"-"+size+".webp")
 		if _, err := memFS.Stat(path); err != nil {
 			t.Errorf("%s was not written: %v", path, err)
 		}

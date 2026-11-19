@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"net/http"
 	"path"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -1106,7 +1105,11 @@ func (j *EnrichJob) fetchPersonImage(ctx context.Context, personID int64, imageU
 
 	cacheKey := fmt.Sprintf("person-%d-cover", personID)
 	for size, image := range sizes {
-		destination := filepath.Join(j.imagesDir, fmt.Sprintf("%s-%s.webp", cacheKey, artworkSizeName(size)))
+		destination, err := artwork.ShardedFor(j.fs, j.imagesDir, fmt.Sprintf("%s-%s.webp", cacheKey, artworkSizeName(size)))
+		if err != nil {
+			j.logger.WarnContext(ctx, "person image folder not made", slog.Int64("person_id", personID), slog.Any("error", err))
+			return imageFailed
+		}
 		if err := fsx.WriteAtomic(j.fs, destination, func(w io.Writer) error {
 			_, err := w.Write(image.Bytes)
 			return err

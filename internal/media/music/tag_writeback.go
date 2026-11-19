@@ -395,7 +395,7 @@ func (j *TagWritebackJob) coverJPEG(ctx context.Context, run *tagRun, cacheKey s
 }
 
 func (j *TagWritebackJob) convertCover(cacheKey string) (string, error) {
-	file, err := j.config.FS.Open(filepath.Join(j.config.ImagesDir, cacheKey+"-full.webp"))
+	file, err := j.config.FS.Open(artwork.ReadPath(j.config.FS, j.config.ImagesDir, cacheKey+"-full.webp"))
 	if err != nil {
 		return "", err
 	}

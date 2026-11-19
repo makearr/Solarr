@@ -95,10 +95,22 @@ func (r *imageRecompress) update(change func(*apiserver.RecompressStatus)) {
 // listFiles are the stored covers (.webp, one folder) and the previews (.jpg, a folder per thousand ids).
 func (r *imageRecompress) listFiles(ctx context.Context, since time.Time) []string {
 	var files []string
+	coverFolders := []string{r.coverDir}
 	if entries, err := r.fs.ReadDir(r.coverDir); err == nil {
 		for _, entry := range entries {
-			if !entry.IsDir && strings.HasSuffix(entry.Name, ".webp") && r.madeSince(filepath.Join(r.coverDir, entry.Name), since) {
-				files = append(files, filepath.Join(r.coverDir, entry.Name))
+			if entry.IsDir {
+				coverFolders = append(coverFolders, filepath.Join(r.coverDir, entry.Name))
+			}
+		}
+	}
+	for _, folder := range coverFolders {
+		entries, err := r.fs.ReadDir(folder)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if !entry.IsDir && strings.HasSuffix(entry.Name, ".webp") && r.madeSince(filepath.Join(folder, entry.Name), since) {
+				files = append(files, filepath.Join(folder, entry.Name))
 			}
 		}
 	}
@@ -192,4 +204,23 @@ func reencodePreview(source []byte, maxEdge, quality int) ([]byte, error) {
 		return nil, err
 	}
 	return artwork.EncodeJPEGAt(artwork.ResizeLongestEdge(img, maxEdge), quality)
+}
+
+// shardCovers moves the pictures an older layout left in one folder into their shard folders; readers find either place meanwhile.
+func shardCovers(fsys fsx.FS, dir string, logger *slog.Logger) {
+	total := 0
+	for {
+		moved, err := artwork.ShardCovers(fsys, dir)
+		total += moved
+		if err != nil {
+			logger.Warn("library covers not sharded", "moved", total, "error", err)
+			return
+		}
+		if moved == 0 {
+			break
+		}
+	}
+	if total > 0 {
+		logger.Info("library covers moved into shard folders", "files", total)
+	}
 }

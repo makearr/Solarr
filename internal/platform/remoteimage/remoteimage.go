@@ -177,7 +177,7 @@ func (c *Cache) stored(key string) bool {
 	if c.CoverDir == "" {
 		return false
 	}
-	_, err := c.FS.Stat(filepath.Join(c.CoverDir, FileName(key, artwork.Full)))
+	_, err := c.FS.Stat(artwork.ReadPath(c.FS, c.CoverDir, FileName(key, artwork.Full)))
 	return err == nil
 }
 
@@ -197,10 +197,11 @@ func MoveLibraryCovers(fsys fsx.FS, from, to string) (int, error) {
 		if !strings.HasPrefix(name, "work-") && !strings.HasPrefix(name, "person-") {
 			continue
 		}
-		if err := fsys.MkdirAll(to, 0o755); err != nil {
+		destination, err := artwork.ShardedFor(fsys, to, name)
+		if err != nil {
 			return moved, err
 		}
-		if err := fsys.Rename(filepath.Join(from, name), filepath.Join(to, name)); err != nil {
+		if err := fsys.Rename(filepath.Join(from, name), destination); err != nil {
 			return moved, err
 		}
 		moved++
@@ -221,7 +222,11 @@ func PromoteFiles(fsys fsx.FS, from, to, key string) error {
 		return err
 	}
 	for _, size := range []artwork.Size{artwork.Thumb, artwork.Small, artwork.Full} {
-		source, destination := filepath.Join(from, FileName(key, size)), filepath.Join(to, FileName(key, size))
+		source := filepath.Join(from, FileName(key, size))
+		destination, err := artwork.ShardedFor(fsys, to, FileName(key, size))
+		if err != nil {
+			return err
+		}
 		if err := fsys.Rename(source, destination); err == nil {
 			continue
 		}

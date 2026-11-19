@@ -23,6 +23,7 @@ import (
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/platform/artwork"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/httpx"
@@ -241,7 +242,7 @@ func TestArtworkJob_FetchesResizesAndRecordsEndToEnd(t *testing.T) {
 	}
 
 	for _, size := range []string{"thumb", "small", "full"} {
-		path := fmt.Sprintf("/cache/images/work-%d-cover-%s.webp", workID, size)
+		path := artwork.CoverPath("/cache/images", fmt.Sprintf("work-%d-cover-%s.webp", workID, size))
 		info, err := memFS.Stat(path)
 		if err != nil {
 			t.Errorf("Stat(%s): %v, want the file written by the job", path, err)
@@ -459,7 +460,7 @@ func TestArtworkJob_UsesTheCoverArtEmbeddedInTheFile(t *testing.T) {
 		t.Fatal("the embedded picture was never used")
 	}
 	for _, size := range []string{"thumb", "small", "full"} {
-		path := "/cache/images/" + recorded.CacheKey + "-" + size + ".webp"
+		path := artwork.CoverPath("/cache/images", recorded.CacheKey+"-"+size+".webp")
 		if _, err := memFS.Stat(path); err != nil {
 			t.Errorf("%s was not written: %v", path, err)
 		}

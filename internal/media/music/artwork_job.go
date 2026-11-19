@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"path"
-	"path/filepath"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -391,7 +390,10 @@ func (j *ArtworkJob) writeSizes(ctx context.Context, cacheKey string, source []b
 		return artwork.Image{}, fmt.Errorf("create %s: %w", j.imagesDir, err)
 	}
 	for size, image := range sizes {
-		destination := filepath.Join(j.imagesDir, fmt.Sprintf("%s-%s.webp", cacheKey, artworkSizeName(size)))
+		destination, err := artwork.ShardedFor(j.fs, j.imagesDir, fmt.Sprintf("%s-%s.webp", cacheKey, artworkSizeName(size)))
+		if err != nil {
+			return artwork.Image{}, fmt.Errorf("create the cover folder: %w", err)
+		}
 		if err := fsx.WriteAtomic(j.fs, destination, func(w io.Writer) error {
 			_, err := w.Write(image.Bytes)
 			return err
