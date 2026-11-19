@@ -432,26 +432,38 @@ type Candidate struct {
 // Search finds books by title and, when given, author: an audiobook in Audible's catalog first, a book in Open Library,
 // either then in Google Books. An empty answer is not an error.
 func (s Service) Search(ctx context.Context, categoryID int64, title, author string, limit int) ([]Candidate, error) {
+	return s.SearchUntil(ctx, categoryID, title, author, limit, nil)
+}
+
+// SearchUntil is Search that keeps asking the next source while enough says the hits so far do not settle it: a source
+// answers almost any query with something, and the one holding the exact title may be behind it. A nil enough stops
+// at the first source with an answer.
+func (s Service) SearchUntil(ctx context.Context, categoryID int64, title, author string, limit int, enough func([]Candidate) bool) ([]Candidate, error) {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return nil, nil
 	}
 	var failure error
+	var found []Candidate
 	for _, name := range s.searchOrder(categoryID) {
-		found, err := s.searchOne(ctx, name, title, author, limit)
+		hits, err := s.searchOne(ctx, name, title, author, limit)
 		if err != nil {
 			failure = err
 			s.warn(name, title, err)
 			continue
 		}
-		if len(found) > 0 {
+		if len(hits) == 0 {
+			continue
+		}
+		found = append(found, hits...)
+		if enough == nil || enough(found) {
 			return found, nil
 		}
 	}
-	if failure != nil {
+	if len(found) == 0 && failure != nil {
 		return nil, fmt.Errorf("book: search %q: %w", title, failure)
 	}
-	return nil, nil
+	return found, nil
 }
 
 // searchOrder is the library's providers that can search, in its order; Wikidata cannot.
@@ -506,7 +518,7 @@ func (s Service) searchOne(ctx context.Context, name, title, author string, limi
 		}
 		for _, volume := range volumes {
 			found := FromGoogleBooks(volume)
-			candidates = append(candidates, Candidate{IDs: found.IDs, Title: found.Title, Author: first(found.Authors()), Year: found.Year,
+			candidates = append(candidates, Candidate{IDs: found.IDs, Title: found.Title, Author: first(found.Authors()), CoAuthors: othersThanFirst(found.Authors()), Year: found.Year,
 				Overview: found.Overview, Cover: volume.Cover(), Traits: media.Traits{Genres: found.Genres, OriginalLanguage: found.Language}})
 		}
 	case settings.BookSourceITunes:
@@ -519,7 +531,7 @@ func (s Service) searchOne(ctx context.Context, name, title, author string, limi
 		}
 		for _, item := range items {
 			found := FromITunes(item)
-			candidates = append(candidates, Candidate{IDs: found.IDs, Title: found.Title, Author: first(found.Authors()), Year: found.Year,
+			candidates = append(candidates, Candidate{IDs: found.IDs, Title: found.Title, Author: first(found.Authors()), CoAuthors: othersThanFirst(found.Authors()), Year: found.Year,
 				Overview: found.Overview, Cover: item.Cover(), Traits: media.Traits{Genres: found.Genres}})
 		}
 	case settings.BookSourceFantLab:
@@ -544,7 +556,7 @@ func (s Service) searchOne(ctx context.Context, name, title, author string, limi
 		}
 		for _, hit := range books {
 			found := FromHardcover(hit)
-			candidates = append(candidates, Candidate{IDs: found.IDs, Title: found.Title, Author: first(found.Authors()), Year: found.Year,
+			candidates = append(candidates, Candidate{IDs: found.IDs, Title: found.Title, Author: first(found.Authors()), CoAuthors: othersThanFirst(found.Authors()), Year: found.Year,
 				Overview: found.Overview, Cover: hit.Cover(), Traits: media.Traits{Genres: found.Genres}})
 		}
 	}

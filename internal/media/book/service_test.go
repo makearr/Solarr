@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parsebook"
 	"github.com/makearr/Solarr/internal/metadata/audible"
@@ -296,5 +297,59 @@ func TestPickCandidate_AFolderThatPrefixesTheSeriesNamesTheBookByTheLastWordsAnd
 	}
 	if _, _, ok := pickCandidate([]Candidate{{Title: "Ember", Author: "Mara Quell"}}, info); ok {
 		t.Error("a single last word was taken for a title")
+	}
+}
+
+type searchOpenLibrary struct {
+	*fakeOpenLibrary
+	docs []openlibrary.Doc
+}
+
+func (f searchOpenLibrary) Search(context.Context, string, string, int) ([]openlibrary.Doc, error) {
+	f.asked = append(f.asked, "search")
+	return f.docs, nil
+}
+
+type searchGoogle struct {
+	fakeGoogle
+	volumes []googlebooks.Volume
+	asked   *int
+}
+
+func (f searchGoogle) Search(context.Context, string, string, int) ([]googlebooks.Volume, error) {
+	*f.asked++
+	return f.volumes, nil
+}
+
+func googleVolume(title string, authors ...string) googlebooks.Volume {
+	var volume googlebooks.Volume
+	volume.ID = "vol" + title
+	volume.VolumeInfo.Title, volume.VolumeInfo.Authors = title, authors
+	return volume
+}
+
+func TestSearchUntil_AsksTheNextSourceWhenTheHitsAreNotTheBook(t *testing.T) {
+	asked := 0
+	format := Ebook
+	format.Sources = []string{settings.BookSourceOpenLibrary, settings.BookSourceGoogleBooks}
+	service := Service{
+		Format:      format,
+		OpenLibrary: searchOpenLibrary{fakeOpenLibrary: &fakeOpenLibrary{}, docs: []openlibrary.Doc{{Key: "/works/OL1W", Title: "Another Book", AuthorNames: []string{"Someone Else"}}}},
+		GoogleBooks: searchGoogle{volumes: []googlebooks.Volume{googleVolume("The Lantern Keeper", "Mara Quell", "Jo Vale")}, asked: &asked},
+	}
+	info := parsebook.Info{Title: "The Lantern Keeper", Author: "Jo Vale"}
+	placed := func(found []Candidate) bool { _, _, ok := pickCandidate(found, info); return ok }
+	found, err := service.SearchUntil(context.Background(), 0, info.Title, info.Author, 10, placed)
+	if err != nil || len(found) != 2 {
+		t.Fatalf("found %d, err %v", len(found), err)
+	}
+	pick, _, ok := pickCandidate(found, info)
+	if !ok || pick.Title != "The Lantern Keeper" || !slices.Equal(pick.CoAuthors, []string{"Jo Vale"}) {
+		t.Errorf("pick %+v ok=%v", pick, ok)
+	}
+	asked = 0
+	service.OpenLibrary = searchOpenLibrary{fakeOpenLibrary: &fakeOpenLibrary{}, docs: []openlibrary.Doc{{Key: "/works/OL2W", Title: "The Lantern Keeper", AuthorNames: []string{"Jo Vale"}}}}
+	if _, err := service.SearchUntil(context.Background(), 0, info.Title, info.Author, 10, placed); err != nil || asked != 0 {
+		t.Errorf("second source asked %d times after the first placed the book, err %v", asked, err)
 	}
 }

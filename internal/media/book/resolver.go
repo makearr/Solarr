@@ -70,7 +70,8 @@ func (r Resolver) Resolve(ctx context.Context, categoryID int64, info parsebook.
 	if id, found := r.inLibrary(ctx, categoryID, info); found {
 		return id, nil
 	}
-	candidates, err := r.Service.Search(ctx, categoryID, info.Title, info.Author, searchLimit)
+	placed := func(found []Candidate) bool { _, _, ok := pickCandidate(found, info); return ok }
+	candidates, err := r.Service.SearchUntil(ctx, categoryID, info.Title, info.Author, searchLimit, placed)
 	if err != nil {
 		r.warn("book lookup failed", info.Title, err)
 		return 0, nil
