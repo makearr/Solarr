@@ -1893,3 +1893,47 @@ func TestEnrichJob_LinksTheReleasesLabel(t *testing.T) {
 		}
 	}
 }
+
+// An artist the provider cannot answer for is not marked refreshed: the manual refresh says so, and the scheduled one
+// asks again in hours, not in days.
+func TestEnrichJob_AnArtistTheProviderCouldNotAnswerForIsNotMarkedRefreshed(t *testing.T) {
+	source := &fakeArtistSource{
+		fakeSource: fakeSource{
+			rg: musicbrainz.ReleaseGroup{
+				MBID: "rg-1", Title: "KI Pecezinu", PrimaryType: "Album",
+				ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "artist-1", Name: "Katupoken"}},
+			},
+			release: musicbrainz.Release{MBID: "rel-1", Title: "KI Pecezinu", Status: "official"},
+		},
+		artists: map[string]musicbrainz.Artist{"artist-1": {MBID: "artist-1", Name: "Katupoken", SortName: "Katupoken"}},
+	}
+	job, opened, queries := newEnrichJobRealigning(t, source, nil, nil, nil)
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	person, err := queries.GetPersonByExternalID(t.Context(), librarydb.GetPersonByExternalIDParams{Provider: music.ProviderArtist, ExternalID: "artist-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := queries.SetPersonMonitored(t.Context(), librarydb.SetPersonMonitoredParams{Monitored: 1, ID: person.ID}); err != nil {
+		t.Fatal(err)
+	}
+	people := library.NewPeople(opened)
+	delete(source.artists, "artist-1")
+	dueAt := int64(1 << 40)
+
+	if err := job.RefreshArtist(t.Context(), person.ID, true); err == nil {
+		t.Fatal("RefreshArtist answered nil although the provider could not answer")
+	}
+	if due, _ := people.ArtistsDueRefresh(t.Context(), dueAt, 10); !slices.Equal(due, []int64{person.ID}) {
+		t.Errorf("due after a failed refresh = %v, want the artist still due", due)
+	}
+
+	if err := (music.RefreshArtistsJob{Enrich: job}).Run(t.Context(), jobs.Job{Type: music.RefreshArtistsJobType}); err != nil {
+		t.Fatalf("scheduled run: %v", err)
+	}
+	if due, _ := people.ArtistsDueRefresh(t.Context(), 1, 10); len(due) != 0 {
+		t.Errorf("due right after a failed scheduled refresh = %v, want it to wait for its retry", due)
+	}
+}

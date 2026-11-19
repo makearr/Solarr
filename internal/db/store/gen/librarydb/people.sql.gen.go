@@ -814,6 +814,7 @@ const listArtistsDueRefresh = `-- name: ListArtistsDueRefresh :many
 SELECT p.id FROM person p
 LEFT JOIN person_refresh r ON r.person_id = p.id
 WHERE p.monitored = 1 AND (r.refreshed_at IS NULL OR r.refreshed_at < ?1)
+  AND EXISTS (SELECT 1 FROM person_external_id x WHERE x.person_id = p.id AND x.provider = 'musicbrainz:artist')
 ORDER BY COALESCE(r.refreshed_at, 0), p.id
 LIMIT ?2
 `
@@ -823,7 +824,8 @@ type ListArtistsDueRefreshParams struct {
 	PageSize int64
 }
 
-// The monitored artists to refresh next: never refreshed first, then the stalest.
+// The monitored artists to refresh next: never refreshed first, then the stalest. One without a MusicBrainz id has
+// nothing to refresh from and would stay first for ever.
 func (q *Queries) ListArtistsDueRefresh(ctx context.Context, arg ListArtistsDueRefreshParams) ([]int64, error) {
 	rows, err := q.db.QueryContext(ctx, listArtistsDueRefresh, arg.Before, arg.PageSize)
 	if err != nil {

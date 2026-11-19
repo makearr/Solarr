@@ -20,6 +20,9 @@ import (
 // ErrNotFound is every source answering that an id does not exist: retired, not merely unreachable.
 var ErrNotFound = errors.New("musicbrainz: not found at any source")
 
+// ErrNoCapableSource says no configured source can answer the kind of lookup at all: a wiring gap, not an outage.
+var ErrNoCapableSource = errors.New("musicbrainz: no source can answer this lookup")
+
 // Priority is ADR-29's request-priority ladder: within one source's rate-limit bucket a
 // lower level takes the next token first (httpx.WithPriority), so a user never waits behind a scan.
 type Priority int
@@ -470,7 +473,7 @@ func (p Provider) ArtistReleaseGroups(ctx context.Context, priority Priority, ar
 		return answer.Value, nil
 	}
 	if len(errs) == 0 {
-		return nil, fmt.Errorf("musicbrainz: no source can browse a discography (artist %s)", artistMBID)
+		return nil, fmt.Errorf("%w: browse a discography (artist %s)", ErrNoCapableSource, artistMBID)
 	}
 	if stale, ok := staleJSON[[]ReleaseGroup](ctx, p, r, cacheKindDiscography, artistMBID, errs); ok {
 		return stale, nil

@@ -345,7 +345,7 @@ func TestSubscribe_SecondCallForTheSamePersonIsIdempotent(t *testing.T) {
 }
 
 // The scheduled refresh takes monitored artists never refreshed first, then the stalest, and skips
-// both the recently refreshed and the unmonitored.
+// the recently refreshed, the unmonitored and an artist with no MusicBrainz id.
 func TestArtistsDueRefresh_StalestMonitoredFirst(t *testing.T) {
 	opened, queries := newLibrary(t)
 	people := library.NewPeople(opened)
@@ -353,7 +353,13 @@ func TestArtistsDueRefresh_StalestMonitoredFirst(t *testing.T) {
 	stale := resolvePersonNamed(t, people, "a2", "Stale")
 	recent := resolvePersonNamed(t, people, "a3", "Recent")
 	resolvePersonNamed(t, people, "a4", "Unmonitored")
-	for _, id := range []int64{never, stale, recent} {
+	nameOnly, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
+		Provider: "tmdb", ExternalID: "11", Person: library.PersonIdentity{Name: "Name Only"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []int64{never, stale, recent, nameOnly} {
 		if err := queries.SetPersonMonitored(t.Context(), librarydb.SetPersonMonitoredParams{Monitored: 1, ID: id}); err != nil {
 			t.Fatal(err)
 		}

@@ -3,6 +3,7 @@ package music
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -73,6 +74,8 @@ var RefreshArtistsDefinition = jobs.Definition{
 const (
 	refreshArtistsBatch = 100
 	refreshArtistsAge   = 6 * 24 * time.Hour
+	// refreshArtistsRetry is how long an artist whose refresh failed waits for the next scheduled one.
+	refreshArtistsRetry = 6 * time.Hour
 )
 
 // RefreshArtistsJob is Sonarr's periodic "Refresh Series" for music: a scheduled, not manual,
@@ -99,6 +102,11 @@ func (j RefreshArtistsJob) Run(ctx context.Context, _ jobs.Job) error {
 		}
 		if err := j.Enrich.RefreshArtist(artistCtx, personID, false); err != nil {
 			j.Enrich.logger.WarnContext(ctx, "scheduled artist refresh failed", slog.Int64("person_id", personID), slog.Any("error", err))
+			// A failed artist is asked again in refreshArtistsRetry, not first in every run until it works.
+			retryAt := j.Enrich.clock.Now().Add(refreshArtistsRetry - refreshArtistsAge).Unix()
+			if err := j.Enrich.people.RecordRefresh(ctx, personID, retryAt); err != nil {
+				j.Enrich.logger.WarnContext(ctx, "scheduled artist refresh: retry not recorded", slog.Int64("person_id", personID), slog.Any("error", err))
+			}
 		}
 	}
 	j.Enrich.logger.Info("scheduled artist refresh finished", slog.Int("artists", len(due)))
@@ -107,22 +115,27 @@ func (j RefreshArtistsJob) Run(ctx context.Context, _ jobs.Job) error {
 
 // refreshAlbums fetches each album again past the cache -- credits, genres, description -- and has
 // their folders rescanned as the library's "Rescan after refresh" says. Answers the albums refreshed.
-func (j *EnrichJob) refreshAlbums(ctx, fresh context.Context, workIDs []int64, manual bool) ([]int64, error) {
-	var refreshed []int64
+func (j *EnrichJob) refreshAlbums(ctx, fresh context.Context, workIDs []int64, manual bool) (refreshed []int64, failure error, err error) {
 	var answers []albumAnswer
+	asked := 0
+	var firstFailure error
 	artists := artistMemo{}
 	for _, workID := range workIDs {
 		if ctx.Err() != nil {
-			return refreshed, ctx.Err()
+			return refreshed, nil, ctx.Err()
 		}
 		releaseGroupMBID, ok, err := j.identity.WorkExternalID(ctx, workID, ProviderReleaseGroup)
 		if err != nil || !ok {
 			continue
 		}
+		asked++
 		library := j.workLibrary(ctx, workID)
 		rg, _, err := j.provider.Album(musicbrainz.ForLibrary(fresh, library), musicbrainz.PriorityRefresh, releaseGroupMBID, "")
 		if err != nil {
 			j.logger.WarnContext(ctx, "refresh: album not refreshed", slog.Int64("work_id", workID), slog.Any("error", err))
+			if firstFailure == nil {
+				firstFailure = err
+			}
 			continue
 		}
 		j.enrichCreditsAndGenres(musicbrainz.ForLibrary(ctx, library), workID, rg, artists)
@@ -138,12 +151,16 @@ func (j *EnrichJob) refreshAlbums(ctx, fresh context.Context, workIDs []int64, m
 			j.logger.WarnContext(ctx, "refresh: rescan failed", slog.Any("error", err))
 		}
 	}
-	return refreshed, nil
+	// Fewer than half of the albums answering says the provider, not the albums, is the matter.
+	if len(refreshed)*2 < asked {
+		failure = firstFailure
+	}
+	return refreshed, failure, nil
 }
 
 // RefreshAlbum is RefreshArtist for one album: Radarr's per-item "Refresh" (asked 2026-09-30).
 func (j *EnrichJob) RefreshAlbum(ctx context.Context, workID int64) error {
-	refreshed, err := j.refreshAlbums(ctx, musicbrainz.WithFresh(ctx), []int64{workID}, true)
+	refreshed, _, err := j.refreshAlbums(ctx, musicbrainz.WithFresh(ctx), []int64{workID}, true)
 	if err != nil {
 		return err
 	}
@@ -201,10 +218,14 @@ func (j *EnrichJob) RefreshArtist(ctx context.Context, personID int64, manual bo
 	}
 	fresh := musicbrainz.WithFresh(j.forPerson(ctx, personID))
 
-	j.refreshDetails(fresh, personID, artistMBID)
+	// The artist counts as refreshed only when the provider answered; the rest of the work is done either way.
+	failure := j.refreshDetails(fresh, personID, artistMBID)
 	// The new discography lands in the cache; the next subscription expansion reads it from there.
 	if _, err := j.provider.ArtistReleaseGroups(fresh, musicbrainz.PriorityRefresh, artistMBID); err != nil {
 		j.logger.WarnContext(ctx, "artist refresh: discography not refreshed", slog.Int64("person_id", personID), slog.Any("error", err))
+		if !errors.Is(err, musicbrainz.ErrNotFound) && !errors.Is(err, musicbrainz.ErrNoCapableSource) && failure == nil {
+			failure = err
+		}
 	}
 
 	works, err := j.people.Discography(ctx, personID, CreditRoleArtist)
@@ -215,9 +236,15 @@ func (j *EnrichJob) RefreshArtist(ctx context.Context, personID int64, manual bo
 	for index, work := range works {
 		workIDs[index] = work.ID
 	}
-	refreshed, err := j.refreshAlbums(ctx, fresh, workIDs, manual)
+	refreshed, albumFailure, err := j.refreshAlbums(ctx, fresh, workIDs, manual)
 	if err != nil {
 		return err
+	}
+	if failure == nil {
+		failure = albumFailure
+	}
+	if failure != nil {
+		return fmt.Errorf("music: refresh artist %d: the provider did not answer: %w", personID, failure)
 	}
 	if err := j.people.RecordRefresh(ctx, personID, j.clock.Now().Unix()); err != nil {
 		return fmt.Errorf("music: refresh artist %d: %w", personID, err)
@@ -228,17 +255,21 @@ func (j *EnrichJob) RefreshArtist(ctx context.Context, personID int64, manual bo
 
 // refreshDetails is the backfill's own details-and-picture pass for one artist; without a Wikidata
 // source it refreshes the details alone, never recording that the artist has no picture.
-func (j *EnrichJob) refreshDetails(ctx context.Context, personID int64, artistMBID string) {
+func (j *EnrichJob) refreshDetails(ctx context.Context, personID int64, artistMBID string) error {
 	if j.artworks != (library.Artworks{}) && j.wikidataOn() {
 		if j.backfillOne(ctx, library.PersonArtworkCandidate{PersonID: personID, ArtistMBID: artistMBID}) == backfillFailed {
 			j.logger.WarnContext(ctx, "artist refresh: details not refreshed", slog.Int64("person_id", personID))
+			return errArtistDetails
 		}
-		return
+		return nil
 	}
 	artist, err := j.provider.Artist(ctx, musicbrainz.PriorityRefresh, artistMBID)
 	if err != nil {
 		j.logger.WarnContext(ctx, "artist refresh: details not refreshed", slog.Int64("person_id", personID), slog.Any("error", err))
-		return
+		if errors.Is(err, musicbrainz.ErrNotFound) {
+			return nil
+		}
+		return err
 	}
 	j.linkWikidata(ctx, personID, artist.WikidataQID)
 	if err := j.people.BackfillDetails(ctx, personID, library.PersonIdentity{
@@ -247,4 +278,8 @@ func (j *EnrichJob) refreshDetails(ctx context.Context, personID int64, artistMB
 	}); err != nil {
 		j.logger.WarnContext(ctx, "artist refresh: details not saved", slog.Int64("person_id", personID), slog.Any("error", err))
 	}
+	return nil
 }
+
+// errArtistDetails is the backfill's own answer that an artist's details could not be read; its cause is logged there.
+var errArtistDetails = errors.New("artist details not read")

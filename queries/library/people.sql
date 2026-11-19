@@ -287,11 +287,13 @@ DELETE FROM person WHERE id = ?;
 INSERT INTO person_refresh (person_id, refreshed_at) VALUES (?, ?)
 ON CONFLICT (person_id) DO UPDATE SET refreshed_at = excluded.refreshed_at;
 
--- The monitored artists to refresh next: never refreshed first, then the stalest.
+-- The monitored artists to refresh next: never refreshed first, then the stalest. One without a MusicBrainz id has
+-- nothing to refresh from and would stay first for ever.
 -- name: ListArtistsDueRefresh :many
 SELECT p.id FROM person p
 LEFT JOIN person_refresh r ON r.person_id = p.id
 WHERE p.monitored = 1 AND (r.refreshed_at IS NULL OR r.refreshed_at < sqlc.arg(before))
+  AND EXISTS (SELECT 1 FROM person_external_id x WHERE x.person_id = p.id AND x.provider = 'musicbrainz:artist')
 ORDER BY COALESCE(r.refreshed_at, 0), p.id
 LIMIT sqlc.arg(page_size);
 

@@ -581,7 +581,8 @@ type Querier interface {
 	ListAnimeWithoutRelationCheck(ctx context.Context, limit int64) ([]ListAnimeWithoutRelationCheckRow, error)
 	ListArrImportItems(ctx context.Context, importID int64) ([]ArrImportItem, error)
 	ListArrImportsForInstance(ctx context.Context, instanceID int64) ([]ArrImport, error)
-	// The monitored artists to refresh next: never refreshed first, then the stalest.
+	// The monitored artists to refresh next: never refreshed first, then the stalest. One without a MusicBrainz id has
+	// nothing to refresh from and would stay first for ever.
 	ListArtistsDueRefresh(ctx context.Context, arg ListArtistsDueRefreshParams) ([]int64, error)
 	// The monitored artists credited on a wanted album released within the window.
 	ListArtistsWithFreshRelease(ctx context.Context, arg ListArtistsWithFreshReleaseParams) ([]int64, error)
