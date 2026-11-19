@@ -281,6 +281,9 @@ func (m *Mem) Chown(path string, uid, gid int) error {
 	return nil
 }
 
+// Lchown records ownership of the entry itself; the in-memory tree does not follow a link to change it.
+func (m *Mem) Lchown(path string, uid, gid int) error { return m.Chown(path, uid, gid) }
+
 // Chmod records the permission bits.
 func (m *Mem) Chmod(path string, mode fs.FileMode) error {
 	return m.updateNode("chmod", path, func(node *memNode) { node.mode = node.mode.Type() | mode.Perm() })

@@ -75,6 +75,8 @@ type FS interface {
 
 	// Chown changes ownership; -1 leaves that half alone, as chown(2) does.
 	Chown(path string, uid, gid int) error
+	// Lchown is Chown on a link itself, never on what it points at.
+	Lchown(path string, uid, gid int) error
 
 	// Chmod sets the permission bits, for a library's "Set Permissions" (Sonarr's).
 	Chmod(path string, mode fs.FileMode) error

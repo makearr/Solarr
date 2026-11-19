@@ -3,6 +3,7 @@ package privilege_test
 import (
 	"io"
 	"log/slog"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -204,5 +205,46 @@ func TestChownTree_FollowsTheConfiguredLinkButNoLinkInside(t *testing.T) {
 	}
 	if info, err := mem.Stat("/elsewhere/private"); err != nil || info.UID == 1000 {
 		t.Errorf("the target of a link inside the tree was taken over: uid %d, %v", info.UID, err)
+	}
+}
+
+type countingFS struct {
+	fsx.FS
+	chowned []string
+}
+
+func (c *countingFS) Lchown(path string, uid, gid int) error {
+	c.chowned = append(c.chowned, path)
+	return c.FS.Lchown(path, uid, gid)
+}
+
+// SEC-19: only entries that are not already theirs are chowned, so a start over a big tree is not a write per file.
+func TestChownTree_TouchesOnlyWhatIsNotAlreadyTheirs(t *testing.T) {
+	mem := fsx.NewMem(clock.NewFakeAtEpoch())
+	if err := mem.MkdirAll("/config/covers", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range []string{"/config/covers/a", "/config/covers/b"} {
+		if err := fsx.WriteAtomic(mem, file, func(w io.Writer) error { _, err := io.WriteString(w, "x"); return err }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	identity := privilege.Identity{UID: 1000, GID: 1000}
+	counting := &countingFS{FS: mem}
+	if _, err := privilege.ChownTree(counting, "/config", identity); err != nil {
+		t.Fatal(err)
+	}
+	if len(counting.chowned) != 4 {
+		t.Fatalf("first pass chowned %v, want /config, covers and both files", counting.chowned)
+	}
+	counting.chowned = nil
+	if err := mem.Chown("/config/covers/b", 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := privilege.ChownTree(counting, "/config", identity); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"/config/covers/b"}; !slices.Equal(counting.chowned, want) {
+		t.Errorf("second pass chowned %v, want only %v", counting.chowned, want)
 	}
 }

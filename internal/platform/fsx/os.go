@@ -70,6 +70,9 @@ func (OS) MkdirAll(path string, perm fs.FileMode) error { return os.MkdirAll(pat
 // Chown is os.Chown, here so the forbidigo choke point stays absolute.
 func (OS) Chown(path string, uid, gid int) error { return os.Chown(path, uid, gid) }
 
+// Lchown is os.Lchown.
+func (OS) Lchown(path string, uid, gid int) error { return os.Lchown(path, uid, gid) }
+
 func (OS) Chmod(path string, mode fs.FileMode) error { return os.Chmod(path, mode) }
 
 // Chtimes leaves the access time at the modification time; nothing reads it.

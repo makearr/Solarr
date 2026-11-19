@@ -178,8 +178,11 @@ func walk(fsys fsx.FS, path string, identity Identity) error {
 	if info.Mode&fs.ModeSymlink != 0 {
 		return nil
 	}
-	if err := fsys.Chown(path, identity.UID, identity.GID); err != nil {
-		return err
+	// Only what is not already theirs: a start that touched every cover again was a metadata write each.
+	if info.UID != identity.UID || info.GID != identity.GID {
+		if err := fsys.Lchown(path, identity.UID, identity.GID); err != nil {
+			return err
+		}
 	}
 	if !info.IsDir {
 		return nil

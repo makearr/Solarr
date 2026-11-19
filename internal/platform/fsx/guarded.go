@@ -79,6 +79,14 @@ func (g Guarded) Chown(path string, uid, gid int) error {
 	return g.FS.Chown(path, uid, gid)
 }
 
+// Lchown refuses a change under a read-only path.
+func (g Guarded) Lchown(path string, uid, gid int) error {
+	if err := g.refuse("chown", path); err != nil {
+		return err
+	}
+	return g.FS.Lchown(path, uid, gid)
+}
+
 // Chmod refuses a change under a read-only path.
 func (g Guarded) Chmod(path string, mode fs.FileMode) error {
 	if err := g.refuse("chmod", path); err != nil {
