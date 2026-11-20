@@ -108,3 +108,21 @@ func httpClient(t *testing.T, server *clienttest.Server) *httpx.Client {
 		Provider: "download-client-test", UserAgent: "test", Transport: server,
 	})
 }
+
+// Flood's status is a set: "complete" beside "error" or "checking" is not a finished download.
+func TestDownloader_ErrorAndCheckingOutrankComplete(t *testing.T) {
+	server := api(map[string]string{"/api/torrents": `{"id":1,"torrents":{
+	 "AAAA":{"name":"Lost","status":["complete","error"],"message":"files missing","directory":"/downloads"},
+	 "BBBB":{"name":"Rechecked","status":["seeding","complete","checking"],"directory":"/downloads"}}}`})
+	got, err := driver(t, server, "me:secret").Downloads(t.Context(), "")
+	if err != nil || len(got) != 2 {
+		t.Fatalf("Downloads = %v, %v", got, err)
+	}
+	byRef := map[string]download.Download{got[0].ClientRef: got[0], got[1].ClientRef: got[1]}
+	if lost := byRef["aaaa"]; lost.State != download.StateFailed || lost.Path != "" {
+		t.Errorf("complete+error = %+v, want failed with no path", lost)
+	}
+	if checking := byRef["bbbb"]; checking.State != download.StateProcessing || checking.Path != "" {
+		t.Errorf("complete+checking = %+v, want processing with no path", checking)
+	}
+}

@@ -75,12 +75,13 @@ func (d Downloader) Downloads(ctx context.Context, _ string) ([]download.Downloa
 
 func stateOf(status []string) download.State {
 	switch {
-	case slices.Contains(status, "seeding"), slices.Contains(status, "complete"):
-		return download.StateCompleted
+	// A finished torrent whose files went missing, or that is being re-checked, carries "complete" beside these.
 	case slices.Contains(status, "error"):
 		return download.StateFailed
 	case slices.Contains(status, "checking"):
 		return download.StateProcessing
+	case slices.Contains(status, "seeding"), slices.Contains(status, "complete"):
+		return download.StateCompleted
 	case slices.Contains(status, "stopped"):
 		return download.StatePaused
 	case slices.Contains(status, "downloading"):
