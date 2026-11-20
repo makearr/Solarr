@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -35,8 +34,10 @@ func (s *Server) ListProwlarrIndexers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.ListProwlarrIndexersJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil ||
-		strings.TrimSpace(body.BaseUrl) == "" || strings.TrimSpace(body.ApiKey) == "" {
+	if !s.decodeBody(w, r, maxImportBody, &body, "Prowlarr's address and API key are both needed") {
+		return
+	}
+	if strings.TrimSpace(body.BaseUrl) == "" || strings.TrimSpace(body.ApiKey) == "" {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "Prowlarr's address and API key are both needed")
 		return
 	}

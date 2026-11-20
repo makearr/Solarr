@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -150,7 +149,10 @@ func (s *Server) GetFranchise(w http.ResponseWriter, r *http.Request, id int64, 
 // CreateFranchise makes an empty collection by hand.
 func (s *Server) CreateFranchise(w http.ResponseWriter, r *http.Request) {
 	var body gen.CreateFranchiseJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil || strings.TrimSpace(body.Name) == "" {
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected category_id and a name") {
+		return
+	}
+	if strings.TrimSpace(body.Name) == "" {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected category_id and a name")
 		return
 	}
@@ -169,7 +171,10 @@ func (s *Server) CreateFranchise(w http.ResponseWriter, r *http.Request) {
 // RenameFranchise renames a collection made by hand.
 func (s *Server) RenameFranchise(w http.ResponseWriter, r *http.Request, id int64, params gen.RenameFranchiseParams) {
 	var body gen.RenameFranchiseJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil || strings.TrimSpace(body.Name) == "" {
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a name") {
+		return
+	}
+	if strings.TrimSpace(body.Name) == "" {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a name")
 		return
 	}

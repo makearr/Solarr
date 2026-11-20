@@ -3,7 +3,6 @@ package apiserver
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -81,7 +80,10 @@ func (s *Server) CreateCrossover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.CrossoverWrite
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil || body.Name == "" || body.CategoryId == nil {
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a name, a library and its episodes") {
+		return
+	}
+	if body.Name == "" || body.CategoryId == nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a name, a library and its episodes")
 		return
 	}
@@ -151,7 +153,10 @@ func (s *Server) UpdateCrossover(w http.ResponseWriter, r *http.Request, id int6
 		return
 	}
 	var body gen.CrossoverWrite
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil || body.Name == "" {
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a name and the episodes") {
+		return
+	}
+	if body.Name == "" {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a name and the episodes")
 		return
 	}
@@ -219,7 +224,10 @@ func (s *Server) LinkSameContent(w http.ResponseWriter, r *http.Request, id int6
 		return
 	}
 	var body gen.LinkSameContentJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil || body.PartId == id {
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected another episode") {
+		return
+	}
+	if body.PartId == id {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected another episode")
 		return
 	}
@@ -248,7 +256,10 @@ func (s *Server) MarkNotSameContent(w http.ResponseWriter, r *http.Request, id i
 		return
 	}
 	var body gen.MarkNotSameContentJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil || body.PartId == id {
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected another episode") {
+		return
+	}
+	if body.PartId == id {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected another episode")
 		return
 	}

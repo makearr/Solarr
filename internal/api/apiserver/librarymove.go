@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
@@ -49,7 +48,10 @@ func (s *Server) MoveWorkToLibrary(w http.ResponseWriter, r *http.Request, id in
 		return
 	}
 	var body gen.MoveWorkToLibraryJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDrainBody)).Decode(&body); err != nil || body.CategoryId == 0 {
+	if !s.decodeBody(w, r, maxDrainBody, &body, "name the library it goes to") {
+		return
+	}
+	if body.CategoryId == 0 {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "name the library it goes to")
 		return
 	}
@@ -79,7 +81,10 @@ func (s *Server) BulkMoveWorksToLibrary(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var body gen.BulkMoveWorksToLibraryJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil || body.CategoryId == 0 {
+	if !s.decodeBody(w, r, maxImportBody, &body, "name the library they go to") {
+		return
+	}
+	if body.CategoryId == 0 {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "name the library they go to")
 		return
 	}

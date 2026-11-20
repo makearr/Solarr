@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -194,7 +193,10 @@ func (s *Server) MoveWork(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	var body gen.MoveWorkJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDrainBody)).Decode(&body); err != nil || body.RootFolderId == 0 {
+	if !s.decodeBody(w, r, maxDrainBody, &body, "name the root folder to move to") {
+		return
+	}
+	if body.RootFolderId == 0 {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "name the root folder to move to")
 		return
 	}

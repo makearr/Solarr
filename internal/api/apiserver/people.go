@@ -3,7 +3,6 @@ package apiserver
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -442,7 +441,10 @@ func (s *Server) EditPerson(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	var body gen.PersonEdit
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil || strings.TrimSpace(body.Name) == "" {
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a name and the attributes") {
+		return
+	}
+	if strings.TrimSpace(body.Name) == "" {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a name and the attributes")
 		return
 	}
@@ -474,7 +476,10 @@ func (s *Server) MergePerson(w http.ResponseWriter, r *http.Request, id int64) {
 	var body struct {
 		IntoID int64 `json:"into_id"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil || body.IntoID <= 0 || body.IntoID == id {
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected into_id, another person") {
+		return
+	}
+	if body.IntoID <= 0 || body.IntoID == id {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected into_id, another person")
 		return
 	}

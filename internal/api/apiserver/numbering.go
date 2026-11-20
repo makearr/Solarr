@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -62,7 +61,10 @@ func (s *Server) SetWorkNumbering(w http.ResponseWriter, r *http.Request, id int
 		return
 	}
 	var body gen.SetWorkNumberingJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil || body.Basis == "" {
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a basis") {
+		return
+	}
+	if body.Basis == "" {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a basis")
 		return
 	}

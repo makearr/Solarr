@@ -246,7 +246,10 @@ func (s *Server) TestDownloaderConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.TestDownloaderConfigJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil || body.Impl == "" {
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected impl and base_url") {
+		return
+	}
+	if body.Impl == "" {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected impl and base_url")
 		return
 	}

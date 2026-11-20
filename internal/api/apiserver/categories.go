@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -599,7 +598,10 @@ func (s *Server) MergeCategory(w http.ResponseWriter, r *http.Request, id int64)
 	var body struct {
 		Into int64 `json:"into_category_id"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&body); err != nil || body.Into == 0 {
+	if !s.decodeBody(w, r, 1<<10, &body, "into_category_id names the library to merge into") {
+		return
+	}
+	if body.Into == 0 {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "into_category_id names the library to merge into")
 		return
 	}

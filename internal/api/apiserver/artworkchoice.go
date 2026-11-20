@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -131,7 +130,10 @@ func (s *Server) workArtworkVisible(w http.ResponseWriter, r *http.Request, id i
 
 func (s *Server) decodeImagePick(w http.ResponseWriter, r *http.Request) (string, bool) {
 	var body gen.ImagePick
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&body); err != nil || body.Url == "" {
+	if !s.decodeBody(w, r, maxUserBody, &body, "expected the url of an offered image") {
+		return "", false
+	}
+	if body.Url == "" {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected the url of an offered image")
 		return "", false
 	}

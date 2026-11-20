@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"slices"
@@ -125,7 +124,10 @@ func (s *Server) TestIndexerConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.TestIndexerConfigJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil || body.Impl == "" || body.BaseUrl == "" {
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected impl and base_url") {
+		return
+	}
+	if body.Impl == "" || body.BaseUrl == "" {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected impl and base_url")
 		return
 	}

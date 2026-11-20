@@ -3,7 +3,6 @@ package apiserver
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -352,10 +351,11 @@ func (s *Server) SearchCategory(w http.ResponseWriter, r *http.Request, id int64
 	}
 	var body gen.SearchCategoryJSONRequestBody
 	if r.ContentLength != 0 {
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil ||
-			body.WorkIds != nil && len(*body.WorkIds) > maxPageSearch {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-				"Bad request", "work_ids must be a list of at most 200 album ids")
+		if !s.decodeBody(w, r, maxImportBody, &body, "work_ids must be a list of at most 200 album ids") {
+			return
+		}
+		if body.WorkIds != nil && len(*body.WorkIds) > maxPageSearch {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "work_ids must be a list of at most 200 album ids")
 			return
 		}
 	}
