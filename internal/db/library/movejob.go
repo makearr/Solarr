@@ -28,7 +28,6 @@ const (
 // library_path is repointed and the source is unlinked.
 const (
 	MoveItemPending  = "PENDING"
-	MoveItemCopied   = "COPIED"
 	MoveItemVerified = "VERIFIED"
 	MoveItemDone     = "DONE"
 	MoveItemFailed   = "FAILED"

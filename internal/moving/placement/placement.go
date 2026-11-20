@@ -27,23 +27,6 @@ const (
 	StrategyManual          Strategy = "manual"
 )
 
-// AffinityScope names what an affinity key binds at -- section 11.7's table.
-// Resolve itself treats the key as an opaque string; the scope is what the
-// caller uses to decide how to build one from a DesiredItem, so it lives
-// here only as shared vocabulary for settings validation.
-type AffinityScope string
-
-// The seven scopes section 11.7's own table names.
-const (
-	ScopeAuto   AffinityScope = "auto"
-	ScopeSeries AffinityScope = "series"
-	ScopeSeason AffinityScope = "season"
-	ScopeArtist AffinityScope = "artist"
-	ScopeAlbum  AffinityScope = "album"
-	ScopeWork   AffinityScope = "work"
-	ScopeOff    AffinityScope = "off"
-)
-
 // RootCandidate is one root folder's state, as the caller last read it from
 // settings.db -- Resolve trusts these values rather than probing anything
 // itself; a stale reading is the caller's problem to refresh before calling

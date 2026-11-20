@@ -372,7 +372,6 @@ type RootFolder struct {
 const (
 	DrainStateNone     = "NONE"
 	DrainStateDraining = "DRAINING"
-	DrainStatePaused   = "PAUSED"
 	DrainStateDrained  = "DRAINED"
 )
 

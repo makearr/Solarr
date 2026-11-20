@@ -25,10 +25,9 @@ type Status string
 
 // The states Radarr shows.
 const (
-	StatusAnnounced  Status = "announced"
-	StatusInCinemas  Status = "in_cinemas"
-	StatusReleased   Status = "released"
-	StatusIncomplete Status = ""
+	StatusAnnounced Status = "announced"
+	StatusInCinemas Status = "in_cinemas"
+	StatusReleased  Status = "released"
 )
 
 // Availability is Radarr's "minimum availability": when a movie is wanted.

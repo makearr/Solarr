@@ -20,11 +20,9 @@ import (
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
-// Two of the download clients Solarr can drive (ADR-46) by the downloader row's own impl value; the rest are named only
-// by their definitions.
+// ImplSABnzbd is the downloader row's own impl value of the one client built by name; the rest are named only by their definitions.
 const (
-	ImplSABnzbd     = "sabnzbd"
-	ImplQBittorrent = "qbittorrent"
+	ImplSABnzbd = "sabnzbd"
 )
 
 // DownloadClientDeps are what building a client needs besides its own row: HTTP for a client with an API, the

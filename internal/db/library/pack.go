@@ -16,11 +16,7 @@ import (
 // library.UnitSingle etc. already give inspect.Shape's values.
 const (
 	PackDiscography = pack.Discography
-	PackBoxSet      = pack.BoxSet
-	PackAnthology   = pack.Anthology
-	PackCompilation = pack.Compilation
 
-	PackDetectedFromStructure         = pack.DetectedFromStructure
 	PackDetectedFromStructureAndTitle = pack.DetectedFromStructureAndTitle
 )
 

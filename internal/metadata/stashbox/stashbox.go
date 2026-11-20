@@ -34,8 +34,6 @@ const (
 // Fingerprint algorithms a server matches files by.
 const (
 	AlgorithmOSHash = "OSHASH"
-	AlgorithmPHash  = "PHASH"
-	AlgorithmMD5    = "MD5"
 )
 
 // Doer is the one method of httpx.Client this package needs.

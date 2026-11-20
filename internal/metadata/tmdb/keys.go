@@ -6,6 +6,5 @@ const (
 	KeySeries  = "tmdb"
 	KeyMovie   = "tmdb:movie"
 	KeyPerson  = "tmdb"
-	KeyNetwork = "tmdb"
 	KeyCompany = "tmdb:company"
 )

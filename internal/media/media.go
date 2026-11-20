@@ -202,7 +202,6 @@ type WantedGrain string
 
 // The grains Wanted lists at; the zero value is works.
 const (
-	WantedWorks WantedGrain = ""
 	WantedParts WantedGrain = "part"
 )
 

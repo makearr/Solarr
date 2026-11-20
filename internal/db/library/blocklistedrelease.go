@@ -14,11 +14,10 @@ import (
 // (blocklisted_release.reason, section 10.11).
 type BlocklistReason string
 
-// The six reasons blocklisted_release.reason accepts.
+// The reasons Go writes to blocklisted_release.reason, which also accepts CORRUPT.
 const (
 	BlocklistDownloadFailed BlocklistReason = "DOWNLOAD_FAILED"
 	BlocklistStalled        BlocklistReason = "STALLED"
-	BlocklistCorrupt        BlocklistReason = "CORRUPT"
 	BlocklistImportFailed   BlocklistReason = "IMPORT_FAILED"
 	BlocklistRejectedWorse  BlocklistReason = "REJECTED_WORSE"
 	// BlocklistManual is what ADR-53's own "remove and block" action uses --

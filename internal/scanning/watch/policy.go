@@ -35,7 +35,6 @@ const (
 	WhyNeverScanned   Why = "never_scanned"
 	WhyStartupStale   Why = "startup_stale"
 	WhyStartupRecent  Why = "startup_recent"
-	WhyWatcherLost    Why = "watcher_lost"
 	WhyIntervalPassed Why = "interval_passed"
 	WhyWithinInterval Why = "within_interval"
 	WhyChangedSize    Why = "size_or_count_changed"

@@ -17,7 +17,6 @@ import (
 // only the job itself writes ImportCancelled, after it stops recording units.
 const (
 	ImportInspecting = "INSPECTING"
-	ImportImporting  = "IMPORTING"
 	ImportCancelling = "CANCELLING"
 	ImportDone       = "DONE"
 	ImportFailed     = "FAILED"

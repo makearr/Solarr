@@ -40,7 +40,6 @@ const (
 	ReleaseTheatrical      = 3
 	ReleaseDigital         = 4
 	ReleasePhysical        = 5
-	ReleaseTV              = 6
 )
 
 // ReleaseDate is one dated release of a movie in a country.

@@ -14,13 +14,10 @@ import (
 // migration 0019).
 type BlockReason string
 
-// The five reasons blocked_content.reason accepts.
+// The reasons Go writes to blocked_content.reason, which also accepts MISLABELLED, CORRUPT and EXECUTABLE.
 const (
-	BlockReasonFake        BlockReason = "FAKE"
-	BlockReasonMislabelled BlockReason = "MISLABELLED"
-	BlockReasonCorrupt     BlockReason = "CORRUPT"
-	BlockReasonUnwanted    BlockReason = "UNWANTED"
-	BlockReasonExecutable  BlockReason = "EXECUTABLE"
+	BlockReasonFake     BlockReason = "FAKE"
+	BlockReasonUnwanted BlockReason = "UNWANTED"
 )
 
 // BlockSource says who created the block (blocked_content.source).
