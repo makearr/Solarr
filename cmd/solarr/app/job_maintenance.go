@@ -199,7 +199,8 @@ func (j databaseMaintenanceJob) Run(ctx context.Context, _ jobs.Job) error {
 		}
 		j.logger.Info("database maintained", slog.String("database", report.Database),
 			slog.Int64("bytes_before", report.SizeBefore), slog.Int64("bytes_after", report.SizeAfter),
-			slog.Duration("duration", report.Duration), slog.Bool("checkpoint_blocked", report.Checkpoint.Blocked))
+			slog.Duration("duration", report.Duration), slog.Bool("vacuumed", report.Vacuumed), slog.String("vacuum_skipped", report.VacuumSkipped),
+			slog.Bool("checkpoint_blocked", report.Checkpoint.Blocked))
 	}
 	return errors.Join(failures...)
 }

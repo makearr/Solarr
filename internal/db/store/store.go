@@ -127,7 +127,13 @@ type Store struct {
 
 	// checkpointConn exists so a checkpoint runs beside the writer instead of in
 	// front of it. It never opens a transaction, so ADR-3's single writer stands.
-	checkpointConn   *sql.DB
+	checkpointConn *sql.DB
+	// backupConn runs VACUUM INTO and the integrity check: both only read the database, so they stay off the writer.
+	// A long read pins the log, so checkpoints wait for it. backupMu keeps it to one copy at a time.
+	backupConn *sql.DB
+	backupMu   sync.Mutex
+	// copyHook runs inside a copy, for a test that must hold one open.
+	copyHook         func()
 	checkpointWanted chan struct{}
 	checkpointerDone chan struct{}
 	// Held by whichever of the two paths is checkpointing. Without it they contend
@@ -191,6 +197,17 @@ func Open(ctx context.Context, c clock.Clock, config Config) (*Store, error) {
 	checkpointConn.SetMaxIdleConns(1)
 	checkpointConn.SetConnMaxLifetime(0)
 
+	backupConn, err := sql.Open(driverName, buildDSN(config, checkpointCacheSizeKB, false))
+	if err != nil {
+		_ = write.Close()
+		_ = read.Close()
+		_ = checkpointConn.Close()
+		return nil, fmt.Errorf("store %s: open backup handle: %w", config.Name, err)
+	}
+	backupConn.SetMaxOpenConns(1)
+	backupConn.SetMaxIdleConns(1)
+	backupConn.SetConnMaxLifetime(0)
+
 	store := &Store{
 		config:           config,
 		clock:            c,
@@ -199,6 +216,7 @@ func Open(ctx context.Context, c clock.Clock, config Config) (*Store, error) {
 		logger:           config.Logger.With(slog.String("database", config.Name)),
 		fs:               config.FS,
 		checkpointConn:   checkpointConn,
+		backupConn:       backupConn,
 		checkpointWanted: make(chan struct{}, 1),
 		checkpointerDone: make(chan struct{}),
 		queue:            newWriteQueue(),
@@ -261,6 +279,11 @@ func (s *Store) Close() error {
 			errs = append(errs, fmt.Errorf("close checkpoint handle: %w", err))
 		}
 	}
+	if s.backupConn != nil {
+		if err := s.backupConn.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close backup handle: %w", err))
+		}
+	}
 	s.shutdownMaintenance()
 	if s.write != nil {
 		if err := s.write.Close(); err != nil {
@@ -287,6 +310,11 @@ func (s *Store) shutdownMaintenance() {
 
 func (s *Store) closeHandles() error {
 	var errs []error
+	if s.backupConn != nil {
+		if err := s.backupConn.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close backup handle: %w", err))
+		}
+	}
 	if s.checkpointConn != nil {
 		if err := s.checkpointConn.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("close checkpoint handle: %w", err))

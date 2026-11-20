@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -36,21 +35,10 @@ func (s *Store) Backup(ctx context.Context, directory string, kind BackupKind) (
 	}
 
 	var path string
-	err := s.writeExclusive(ctx, PrioBulk, true, func(ctx context.Context, db *sql.DB) error {
-		// Choose the name on the single writer, after any earlier backup has
-		// completed; selecting before enqueue lets simultaneous callers race.
+	err := s.copyOut(ctx, func() (string, error) {
 		var err error
 		path, err = s.unusedBackupPath(directory, kind)
-		if err != nil {
-			return err
-		}
-		// VACUUM INTO refuses to overwrite, which is the behaviour we want; the
-		// name is chosen above rather than relying on that refusal.
-		if _, err := db.ExecContext(ctx, "VACUUM INTO ?", path); err != nil {
-			return err
-		}
-		// SQLite creates the copy with the umask's mode; it carries what the live file's 0600 protects.
-		return s.fs.Chmod(path, 0o600)
+		return path, err
 	})
 	if err != nil {
 		return "", fmt.Errorf("store %s: backup to %q: %w", s.config.Name, path, err)
@@ -58,22 +46,35 @@ func (s *Store) Backup(ctx context.Context, directory string, kind BackupKind) (
 	return path, nil
 }
 
-// SnapshotTo writes a consistent copy of the database to path, which must not exist. The writer is held for the
-// copy, as for a backup.
+// SnapshotTo writes a consistent copy of the database to path, which must not exist. Writes go on meanwhile.
 func (s *Store) SnapshotTo(ctx context.Context, path string) error {
 	if !filepath.IsAbs(path) {
 		return fmt.Errorf("store %s: snapshot path %q must be absolute", s.config.Name, path)
 	}
-	err := s.writeExclusive(ctx, PrioBulk, true, func(ctx context.Context, db *sql.DB) error {
-		if _, err := db.ExecContext(ctx, "VACUUM INTO ?", path); err != nil {
-			return err
-		}
-		return s.fs.Chmod(path, 0o600)
-	})
-	if err != nil {
+	if err := s.copyOut(ctx, func() (string, error) { return path, nil }); err != nil {
 		return fmt.Errorf("store %s: snapshot to %q: %w", s.config.Name, path, err)
 	}
 	return nil
+}
+
+// copyOut writes the copy VACUUM INTO makes of one read snapshot, outside the write queue: it reads under an ordinary read
+// transaction and writes only the new file. choose runs under the lock, so simultaneous callers do not pick one name.
+func (s *Store) copyOut(ctx context.Context, choose func() (string, error)) error {
+	s.backupMu.Lock()
+	defer s.backupMu.Unlock()
+	path, err := choose()
+	if err != nil {
+		return err
+	}
+	if s.copyHook != nil {
+		s.copyHook()
+	}
+	// VACUUM INTO refuses to overwrite, which is the behaviour we want; the name is chosen rather than relying on that refusal.
+	if _, err := s.backupConn.ExecContext(ctx, "VACUUM INTO ?", path); err != nil {
+		return err
+	}
+	// SQLite creates the copy with the umask's mode; it carries what the live file's 0600 protects.
+	return s.fs.Chmod(path, 0o600)
 }
 
 // unusedBackupPath finds a free name (ADR-2). The kind is embedded right after the

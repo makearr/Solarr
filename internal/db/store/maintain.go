@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
+	"path/filepath"
 	"time"
 )
 
@@ -15,22 +17,38 @@ type MaintenanceReport struct {
 	SizeBefore int64
 	SizeAfter  int64
 	Duration   time.Duration
+	// Vacuumed says whether the database was rebuilt; VacuumSkipped says why not when it was not.
+	Vacuumed      bool
+	VacuumSkipped string
 }
 
-// Maintain checks, optimises, vacuums and checkpoints while holding the writer, so writes wait;
-// a corrupt database stops before VACUUM, which would rebuild it from whatever it can still read.
+const (
+	// vacuumMinFreeBytes and vacuumMinFreeShare are how much of a database must be free pages before a rebuild pays for itself.
+	vacuumMinFreeBytes = 64 << 20
+	vacuumMinFreeShare = 10 // a tenth of the pages
+	// vacuumSpaceHeadroom is the room a rebuild needs beside the database: its size plus a tenth.
+	vacuumSpaceHeadroom = 1.1
+)
+
+const (
+	vacuumSkippedNotNeeded = "few free pages"
+	vacuumSkippedNoSpace   = "not enough free space beside the database"
+)
+
+// Maintain checks, optimises, vacuums when it pays and checkpoints. The check only reads, so it runs beside the writer;
+// the rest holds the writer, so writes wait. A corrupt database stops before VACUUM, which would rebuild it from whatever it can still read.
 func (s *Store) Maintain(ctx context.Context) (MaintenanceReport, error) {
 	report := MaintenanceReport{Database: s.config.Name, SizeBefore: s.fileSize()}
 	started := s.clock.Now()
+	if err := s.checkReadOnly(ctx); err != nil {
+		return report, err
+	}
 	err := s.writeExclusive(ctx, PrioBulk, true, func(ctx context.Context, db *sql.DB) error {
-		if err := checkOn(ctx, db, s.config.Name, true); err != nil {
-			return err
-		}
 		if err := optimizeAll(ctx, db); err != nil {
 			return fmt.Errorf("store %s: optimize: %w", s.config.Name, err)
 		}
-		if _, err := db.ExecContext(ctx, "VACUUM"); err != nil {
-			return fmt.Errorf("store %s: vacuum: %w", s.config.Name, err)
+		if err := s.vacuumIfWorthIt(ctx, db, &report); err != nil {
+			return err
 		}
 		// In WAL mode VACUUM's rewrite sits in the log; only this checkpoint shrinks the file.
 		return s.truncateTheLog(ctx, db, &report.Checkpoint)
@@ -38,6 +56,39 @@ func (s *Store) Maintain(ctx context.Context) (MaintenanceReport, error) {
 	report.Duration = s.clock.Since(started)
 	report.SizeAfter = s.fileSize()
 	return report, err
+}
+
+// checkReadOnly runs the full integrity check on the backup handle, off the writer.
+func (s *Store) checkReadOnly(ctx context.Context) error {
+	s.backupMu.Lock()
+	defer s.backupMu.Unlock()
+	return checkOn(ctx, s.backupConn, s.config.Name, true)
+}
+
+// vacuumIfWorthIt rebuilds the database when enough of it is free pages and the room beside it allows; a rebuild
+// rewrites the whole file, so one that frees almost nothing only makes every write wait.
+func (s *Store) vacuumIfWorthIt(ctx context.Context, db *sql.DB, report *MaintenanceReport) error {
+	var free, pages, pageSize int64
+	for pragma, into := range map[string]*int64{"freelist_count": &free, "page_count": &pages, "page_size": &pageSize} {
+		if err := db.QueryRowContext(ctx, "PRAGMA "+pragma).Scan(into); err != nil {
+			return fmt.Errorf("store %s: %s: %w", s.config.Name, pragma, err)
+		}
+	}
+	if free*pageSize < vacuumMinFreeBytes && free*vacuumMinFreeShare < pages {
+		report.VacuumSkipped = vacuumSkippedNotNeeded
+		return nil
+	}
+	if _, available, err := s.fs.DiskUsage(filepath.Dir(s.config.Path)); err == nil && float64(available) < float64(pages*pageSize)*vacuumSpaceHeadroom {
+		report.VacuumSkipped = vacuumSkippedNoSpace
+		s.logger.Warn("vacuum skipped: not enough free space beside the database",
+			slog.Int64("database_bytes", pages*pageSize), slog.Int64("free_bytes", available))
+		return nil
+	}
+	if _, err := db.ExecContext(ctx, "VACUUM"); err != nil {
+		return fmt.Errorf("store %s: vacuum: %w", s.config.Name, err)
+	}
+	report.Vacuumed = true
+	return nil
 }
 
 // Analyze refreshes the planner statistics on the writer. Plain PRAGMA optimize only looks at
