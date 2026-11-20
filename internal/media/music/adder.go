@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strconv"
 	"time"
@@ -31,6 +32,7 @@ type Adder struct {
 	Categories       Categories
 	DefaultProfileID int64
 	Clock            clock.Clock
+	Logger           *slog.Logger
 	// Enrich starts fetching an added album's tracklist now rather than at the next hourly sweep; nil waits.
 	Enrich func(context.Context)
 	// SearchAlbum searches one added album at once; ExpandArtist adds a new artist's albums now. Nil does neither.
@@ -137,7 +139,9 @@ func (a Adder) addAlbum(ctx context.Context, category settings.Category, request
 		return media.AddResult{}, fmt.Errorf("resolve work: %w", err)
 	}
 	workID := resolutions[0].WorkID
-	a.creditArtists(ctx, now, workID, releaseGroup.ArtistCredit)
+	if err := a.creditArtists(ctx, now, workID, releaseGroup.ArtistCredit); err != nil && a.Logger != nil {
+		a.Logger.Warn("added album listed without all its artists until the next refresh", slog.Int64("work_id", workID), slog.Any("error", err))
+	}
 
 	profileID := a.libraryProfile(category)
 	if request.ProfileID != nil {
@@ -174,8 +178,9 @@ func (a Adder) libraryProfile(category settings.Category) int64 {
 }
 
 // creditArtists records an added album's artists at once, so a search before enrichment has an artist to ask for.
-// Best-effort: enrichment credits them anyway.
-func (a Adder) creditArtists(ctx context.Context, now time.Time, workID int64, credits []musicbrainz.ArtistCredit) {
+// Best-effort: the caller logs what failed and enrichment credits them anyway.
+func (a Adder) creditArtists(ctx context.Context, now time.Time, workID int64, credits []musicbrainz.ArtistCredit) error {
+	var failures []error
 	for index, credit := range credits {
 		if credit.MBID == "" {
 			continue
@@ -186,14 +191,19 @@ func (a Adder) creditArtists(ctx context.Context, now time.Time, workID int64, c
 		}
 		personID, err := a.People.ResolvePerson(ctx, now, ArtistLink(credit.MBID, library.PersonIdentity{Name: name}))
 		if err != nil {
+			failures = append(failures, fmt.Errorf("resolve %s: %w", credit.MBID, err))
 			continue
 		}
 		if index == 0 {
-			_ = a.People.AddLeadCredit(ctx, workID, personID, CreditRoleArtist)
+			err = a.People.AddLeadCredit(ctx, workID, personID, CreditRoleArtist)
 		} else {
-			_ = a.People.AddCredit(ctx, workID, personID, CreditRoleArtist, index)
+			err = a.People.AddCredit(ctx, workID, personID, CreditRoleArtist, index)
+		}
+		if err != nil {
+			failures = append(failures, fmt.Errorf("credit %s: %w", credit.MBID, err))
 		}
 	}
+	return errors.Join(failures...)
 }
 
 // addArtist resolves the person behind an artist MBID and, when monitored, follows them; the discography arrives with

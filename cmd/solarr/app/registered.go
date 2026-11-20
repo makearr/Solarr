@@ -88,7 +88,7 @@ func (p *process) musicModule() music.Module {
 	following := music.Following{
 		People: people, Organisations: library.NewOrganisations(p.library), Identity: library.NewIdentity(p.library), Desired: &desired,
 		Categories:  adapters.Categories{Cache: p.cache},
-		Discography: provider, DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(),
+		Discography: provider, DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(), Logger: p.logger,
 		Search: func(ctx context.Context, categoryID, personID int64) error {
 			_, err := music.EnqueueSearchArtist(ctx, p.queue, jobs.PriorityLow, categoryID, personID)
 			return err
