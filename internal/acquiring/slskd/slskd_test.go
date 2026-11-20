@@ -33,7 +33,7 @@ func TestDownloader_AddAsksThePeerForTheFolder(t *testing.T) {
 	if err != nil || ref != `peer%20one|@@music\Heka\Zanuvode` {
 		t.Fatalf("Add = %q, %v", ref, err)
 	}
-	if body := server.Seen[0].Body; body != `[{"filename":"@@music\\Heka\\Zanuvode\\01.flac","size":10},{"filename":"@@music\\Heka\\Zanuvode\\02.flac","size":20}]` {
+	if body := server.Seen[len(server.Seen)-1].Body; body != `[{"filename":"@@music\\Heka\\Zanuvode\\01.flac","size":10},{"filename":"@@music\\Heka\\Zanuvode\\02.flac","size":20}]` {
 		t.Errorf("body = %s", body)
 	}
 	if _, err := driver(t, server).Add(t.Context(), download.AddRequest{File: []byte(`{"files":[]}`)}); !errors.Is(err, download.ErrNotDirectRelease) {
@@ -118,12 +118,12 @@ func TestDownloader_AFileReleaseIsItsOwnDownload(t *testing.T) {
 	}
 }
 
-func TestDownloader_RemoveCancelsEveryTransferOfTheFolderAndDeletesIt(t *testing.T) {
+func TestDownloader_RemoveCancelsEveryTransferOfTheFolderAndDeletesItsFilesOnly(t *testing.T) {
 	server := &clienttest.Server{Routes: map[string]clienttest.Route{
-		"/api/v0/transfers/downloads": {Body: `[{"username":"peer","directories":[{"directory":"@@music\\A\\Done","files":[{"id":"1"},{"id":"2"}]},
+		"/api/v0/transfers/downloads": {Body: `[{"username":"peer","directories":[{"directory":"@@music\\A\\Done","files":[{"id":"1","filename":"@@music\\A\\Done\\01.flac"},{"id":"2","filename":"@@music\\A\\Done\\02.flac"}]},
 		 {"directory":"@@music\\A\\Other","files":[{"id":"3"}]}]}]`},
 		"DELETE /api/v0/transfers/downloads/peer/1": {}, "DELETE /api/v0/transfers/downloads/peer/2": {},
-		"DELETE /api/v0/files/downloads/directories/RG9uZQ==": {},
+		"DELETE /api/v0/files/downloads/files/RG9uZS8wMS5mbGFj": {}, "DELETE /api/v0/files/downloads/files/RG9uZS8wMi5mbGFj": {},
 	}}
 	if err := driver(t, server).Remove(t.Context(), `peer|@@music\A\Done`, true); err != nil {
 		t.Fatalf("Remove: %v", err)
@@ -134,7 +134,8 @@ func TestDownloader_RemoveCancelsEveryTransferOfTheFolderAndDeletesIt(t *testing
 			deleted = append(deleted, seen.Path)
 		}
 	}
-	want := []string{"/api/v0/transfers/downloads/peer/1", "/api/v0/transfers/downloads/peer/2", "/api/v0/files/downloads/directories/RG9uZQ=="}
+	want := []string{"/api/v0/transfers/downloads/peer/1", "/api/v0/transfers/downloads/peer/2",
+		"/api/v0/files/downloads/files/RG9uZS8wMS5mbGFj", "/api/v0/files/downloads/files/RG9uZS8wMi5mbGFj"}
 	if !reflect.DeepEqual(deleted, want) {
 		t.Errorf("deleted = %v, want %v", deleted, want)
 	}
@@ -166,4 +167,43 @@ func httpClient(t *testing.T, server *clienttest.Server) *httpx.Client {
 	return httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), limiter, breaker, httpx.ClientConfig{
 		Provider: "download-client-test", UserAgent: "test", Transport: server,
 	})
+}
+
+// Two peers' folders of one name land in one place, so the second is not sent.
+func TestDownloader_AFolderNamedLikeOneAlreadyHeldIsRefused(t *testing.T) {
+	server := &clienttest.Server{Routes: map[string]clienttest.Route{
+		"POST /api/v0/transfers/downloads/peer two": {Status: http.StatusCreated},
+		"/api/v0/transfers/downloads":               {Body: `[{"username":"peer one","directories":[{"directory":"@@music\\Other\\Zanuvode","files":[{"id":"1","filename":"@@music\\Other\\Zanuvode\\01.flac"}]}]}]`},
+	}}
+	second := `{"source":"peer two","whole_folder":true,"files":[{"path":"@@music\\Heka\\Zanuvode\\01.flac","size":10}]}`
+	if _, err := driver(t, server).Add(t.Context(), download.AddRequest{File: []byte(second)}); !errors.Is(err, download.ErrRefused) {
+		t.Errorf("Add = %v, want ErrRefused", err)
+	}
+	for _, seen := range server.Seen {
+		if seen.Method == http.MethodPost {
+			t.Errorf("slskd was asked for the files: %s", seen.Path)
+		}
+	}
+	// The same peer's same folder asked again is the same download, not a clash.
+	same := `{"source":"peer one","whole_folder":true,"files":[{"path":"@@music\\Other\\Zanuvode\\01.flac","size":10}]}`
+	server.Routes["POST /api/v0/transfers/downloads/peer one"] = clienttest.Route{Status: http.StatusCreated}
+	if _, err := driver(t, server).Add(t.Context(), download.AddRequest{File: []byte(same)}); err != nil {
+		t.Errorf("the same folder again: %v", err)
+	}
+}
+
+func TestDownloader_OwnFilesAreTheNamesOfItsTransfers(t *testing.T) {
+	server := &clienttest.Server{Routes: map[string]clienttest.Route{
+		"/api/v0/transfers/downloads": {Body: `[{"username":"peer","directories":[{"directory":"@@music\\A\\Done","files":[
+		 {"id":"1","filename":"@@music\\A\\Done\\01.flac"},{"id":"2","filename":"@@music\\A\\Done\\02.flac"}]},
+		 {"directory":"@@music\\B\\Done","files":[{"id":"3","filename":"@@music\\B\\Done\\09.flac"}]}]}]`},
+	}}
+	own, ok := driver(t, server).(download.OwnFiles)
+	if !ok {
+		t.Fatal("the direct driver does not forward OwnFiles")
+	}
+	got, err := own.OwnFiles(t.Context(), `peer|@@music\A\Done`)
+	if want := []string{"01.flac", "02.flac"}; err != nil || !reflect.DeepEqual(got, want) {
+		t.Errorf("OwnFiles = %v, %v, want %v", got, err, want)
+	}
 }

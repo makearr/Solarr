@@ -594,10 +594,23 @@ func (j *Job) completed(ctx context.Context, client Client, acquisition library.
 		return j.transition(ctx, acquisition, StateCompleted, problem, now)
 	}
 	acquisition.DownloadDir = localPath
-	if err := j.config.Import(ctx, acquisition, localPath, nil); err != nil {
+	only, err := j.ownFiles(ctx, client, acquisition)
+	if err != nil {
+		return err
+	}
+	if err := j.config.Import(ctx, acquisition, localPath, only); err != nil {
 		return j.transition(ctx, acquisition, StateCompleted, "import could not start: "+err.Error(), now)
 	}
 	return j.transition(ctx, acquisition, StateImporting, "", now)
+}
+
+// ownFiles is what a client whose folder is shared between downloads says this one brought; nil takes the whole folder.
+func (j *Job) ownFiles(ctx context.Context, client Client, acquisition library.Acquisition) ([]string, error) {
+	own, ok := client.Client.(download.OwnFiles)
+	if !ok {
+		return nil, nil
+	}
+	return own.OwnFiles(ctx, acquisition.DownloadClientRef)
 }
 
 // jobFolder is the folder a download lives in: a client that names the one file it produced (SABnzbd does for a

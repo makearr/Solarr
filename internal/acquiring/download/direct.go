@@ -63,6 +63,14 @@ func (b directBase) Add(ctx context.Context, request AddRequest) (string, error)
 	return b.client.AddDirect(ctx, release, request)
 }
 
+// OwnFiles implements OwnFiles when the client underneath does; otherwise the whole folder is the download's.
+func (b directBase) OwnFiles(ctx context.Context, clientRef string) ([]string, error) {
+	if own, ok := b.client.(OwnFiles); ok {
+		return own.OwnFiles(ctx, clientRef)
+	}
+	return nil, nil
+}
+
 func (b directBase) Downloads(ctx context.Context, category string) ([]Download, error) {
 	return b.client.Downloads(ctx, category)
 }

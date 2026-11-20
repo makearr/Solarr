@@ -23,7 +23,10 @@ func Definition() download.Definition {
 // and, for a file, the file's name. slskd saves either below its downloads directory, under the folder's own name.
 type Downloader struct{ Client Client }
 
-var _ download.DirectClient = Downloader{}
+var (
+	_ download.DirectClient = Downloader{}
+	_ download.OwnFiles     = Downloader{}
+)
 
 // refSeparator splits a reference into the peer, path-escaped, the peer's folder and, for a file, its name; neither a
 // Soulseek path nor a file name can hold it.
@@ -92,6 +95,9 @@ func (d Downloader) AddDirect(ctx context.Context, release download.DirectReleas
 		}
 		files[i] = FileRequest{Filename: file.Path, Size: file.Size}
 	}
+	if clash := d.clashWith(ctx, release, directory); clash != "" {
+		return "", fmt.Errorf("%w: %s", download.ErrRefused, clash)
+	}
 	if err := d.Client.Enqueue(ctx, release.Source, files); err != nil {
 		return "", fmt.Errorf("%w: %w", download.ErrRefused, err)
 	}
@@ -100,6 +106,63 @@ func (d Downloader) AddDirect(ctx context.Context, release download.DirectReleas
 		reference.file = lastSegment(release.Files[0].Path)
 	}
 	return reference.String(), nil
+}
+
+// clashWith says what another transfer already in slskd would share with the release: slskd saves a folder under its
+// last name alone, so two peers' folders of one name, or two peers' file of one name, would mix in one place.
+func (d Downloader) clashWith(ctx context.Context, release download.DirectRelease, directory string) string {
+	users, err := d.Client.Downloads(ctx)
+	if err != nil {
+		return ""
+	}
+	folder := lastSegment(directory)
+	for _, user := range users {
+		for _, other := range user.Directories {
+			if lastSegment(other.Directory) != folder || (user.Username == release.Source && other.Directory == directory) {
+				continue
+			}
+			if release.WholeFolder {
+				return fmt.Sprintf("slskd already holds a folder named %q from another download", folder)
+			}
+			for _, file := range other.Files {
+				if lastSegment(file.Filename) == lastSegment(release.Files[0].Path) {
+					return fmt.Sprintf("slskd already holds a file named %q in a folder %q from another download", lastSegment(file.Filename), folder)
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// OwnFiles answers the names of the files this download's transfers brought.
+func (d Downloader) OwnFiles(ctx context.Context, clientRef string) ([]string, error) {
+	reference, err := parseReference(clientRef)
+	if err != nil {
+		return nil, err
+	}
+	users, err := d.Client.Downloads(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, user := range users {
+		if user.Username != reference.username {
+			continue
+		}
+		for _, folder := range user.Directories {
+			if folder.Directory != reference.directory {
+				continue
+			}
+			files := folder.Files
+			if reference.file != "" {
+				files = sameStem(files, reference.file)
+			}
+			for _, file := range files {
+				names = append(names, lastSegment(file.Filename))
+			}
+		}
+	}
+	return names, nil
 }
 
 // Downloads answers one download per peer's folder, and a part for each file with the files that share its name.
@@ -226,10 +289,8 @@ func (d Downloader) Remove(ctx context.Context, clientRef string, deleteFiles bo
 	if !deleteFiles {
 		return nil
 	}
+	// Only the files this download brought: its folder is shared by name with other downloads, and may hold more.
 	folder := lastSegment(reference.directory)
-	if reference.file == "" {
-		return d.Client.DeleteDirectory(ctx, folder)
-	}
 	for _, name := range removed {
 		if err := d.Client.DeleteFile(ctx, folder+"/"+name); err != nil {
 			return err

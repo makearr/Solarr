@@ -104,6 +104,12 @@ type FinishedFiles interface {
 	FinishedFiles(ctx context.Context, clientRef string) (folder string, files []string, err error)
 }
 
+// OwnFiles is a client whose download folder is not the download's alone (Soulseek saves every folder of one name to
+// the same place): it answers the names of the files this download brought, so an import takes those and no others.
+type OwnFiles interface {
+	OwnFiles(ctx context.Context, clientRef string) ([]string, error)
+}
+
 // ByReference is a client that can answer for named downloads alone. Asking it is exact where listing a category is
 // not: a category lists only a window of a shared client's history, and a finished download can drop out of it.
 type ByReference interface {

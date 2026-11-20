@@ -33,7 +33,11 @@ type fakeClient struct {
 	// finishedFolder and finished are what FinishedFiles answers: a torrent's own folder and its complete files.
 	finishedFolder string
 	finished       []string
+	// own is what OwnFiles answers: the files a download brought into a folder other downloads share.
+	own []string
 }
+
+func (f *fakeClient) OwnFiles(context.Context, string) ([]string, error) { return f.own, nil }
 
 func (f *fakeClient) FinishedFiles(context.Context, string) (string, []string, error) {
 	return f.finishedFolder, f.finished, nil
@@ -1065,5 +1069,21 @@ func TestPoll_ALocalClientErrorKeepsTheDownloadWaiting(t *testing.T) {
 	e.run(t)
 	if got := e.state(t, sent.ID); got.State != poll.StateDownloading || got.LastError != "" {
 		t.Errorf("after the client recovers = %s %q, want DOWNLOADING with no message", got.State, got.LastError)
+	}
+}
+
+// A client whose folder is shared between downloads names the files this one brought, and only those are imported.
+func TestPoll_ADownloadInASharedFolderImportsOnlyItsOwnFiles(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	e.client.own = []string{"01.flac", "02.flac"}
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka-Zanuvode", State: download.StateCompleted, Path: "/downloads/complete/Heka-Zanuvode"}}
+	e.run(t)
+
+	if got := e.state(t, sent.ID); got.State != poll.StateImporting {
+		t.Fatalf("= %s, want IMPORTING", got.State)
+	}
+	if want := []string{"/downloads/complete/Heka-Zanuvode", "only: 01.flac, 02.flac"}; !slices.Equal(e.imported, want) {
+		t.Errorf("imported %v, want %v", e.imported, want)
 	}
 }
