@@ -224,11 +224,11 @@ type yardstick struct {
 	delay judge.ProtocolDelay
 }
 
-// yardstickFor builds item's yardstick from its work and its library's settings.
 // ErrArtistUnknown reports an album with no credited artist yet (its metadata is still being fetched): a search could not
 // tell its releases from another artist's of the same title.
 var ErrArtistUnknown = errors.New("music: the album has no artist yet")
 
+// yardstickFor builds item's yardstick from its work and its library's settings.
 func (s Search) yardstickFor(ctx context.Context, item librarydb.DesiredItem) (yardstick, error) {
 	detail, err := s.Works.Detail(ctx, item.WorkID)
 	if err != nil {
