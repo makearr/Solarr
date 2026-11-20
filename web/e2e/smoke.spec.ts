@@ -21,7 +21,8 @@ test("a fresh install can be set up, and lands on the dashboard", async ({ page 
 
   await expect(page.getByRole("heading", { name: "Set up Solarr" })).toBeVisible();
   await page.getByLabel("Username").fill(USERNAME);
-  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+  await page.getByLabel("Repeat password").fill(PASSWORD);
   await page.getByRole("button", { name: /create/i }).click();
 
   // The languages step asks what the user wants; this run keeps the default and goes on.
@@ -218,6 +219,7 @@ test("a target quality can be made under quality profiles, and language profiles
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("E2E 1080p")).toBeVisible();
   await page.getByRole("button", { name: "Remove target E2E 1080p" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Remove", exact: true }).click();
   await expect(page.getByText("E2E 1080p")).toBeHidden();
 });
 
@@ -264,7 +266,7 @@ async function signIn(page: Page) {
   const username = page.getByLabel("Username");
   if (!(await username.isVisible().catch(() => false))) return; // already signed in
   await username.fill(USERNAME);
-  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await page.getByRole("button", { name: /sign in|log in/i }).click();
   await expect(username).toBeHidden();
 }
