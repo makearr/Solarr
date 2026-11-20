@@ -101,3 +101,29 @@ func httpClient(t *testing.T, server *clienttest.Server) *httpx.Client {
 		Provider: "download-client-test", UserAgent: "test", Transport: server,
 	})
 }
+
+func TestDownloader_AMagnetsMetadataFetchIsNeverAFinishedDownload(t *testing.T) {
+	metadata := status("1", "complete", "eeee", "", "0", "0")
+	content := status("2", "active", "eeee", "Album", "10", "10")
+	for name, tc := range map[string]struct {
+		active, stopped string
+		want            string
+	}{
+		"metadata alone":         {stopped: metadata, want: "eeee  downloading "},
+		"metadata then content":  {active: content, stopped: metadata, want: "eeee Album completed /downloads/Album"},
+		"content then metadata":  {active: metadata, stopped: content, want: "eeee Album completed /downloads/Album"},
+		"removed by a person":    {stopped: status("3", "removed", "eeee", "Album", "10", "2"), want: "eeee Album removed "},
+		"metadata that followed": {stopped: strings.Replace(metadata, `"bittorrent"`, `"followedBy":["2"],"bittorrent"`, 1), want: "eeee  downloading "},
+	} {
+		server := rpc(map[string]string{
+			"aria2.tellActive": `[` + tc.active + `]`, "aria2.tellWaiting": `[]`, "aria2.tellStopped": `[` + tc.stopped + `]`,
+		})
+		got, err := driver(t, server, "s3cret").Downloads(t.Context(), "")
+		if err != nil || len(got) != 1 {
+			t.Fatalf("%s: Downloads = %v, %v", name, got, err)
+		}
+		if line := got[0].ClientRef + " " + got[0].Name + " " + string(got[0].State) + " " + got[0].Path; line != tc.want {
+			t.Errorf("%s: = %q, want %q", name, line, tc.want)
+		}
+	}
+}

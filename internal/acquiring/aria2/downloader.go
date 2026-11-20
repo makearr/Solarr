@@ -63,14 +63,22 @@ func (d Downloader) Downloads(ctx context.Context, _ string) ([]download.Downloa
 			ClientRef: strings.ToLower(status.InfoHash), Name: status.BitTorrent.Info.Name, State: stateOf(status.Status, total, done),
 			SizeBytes: total, SizeLeftBytes: max(total-done, 0), SpeedBytesPerSec: Number(status.DownloadSpeed),
 		}
+		// A magnet's metadata fetch ends "complete" long before its content exists; until the real download is
+		// listed the torrent is still resolving, not finished and not gone.
+		pending := entry.Name == "" || len(status.FollowedBy) > 0
+		if pending && entry.State == download.StateCompleted {
+			entry.State = download.StateDownloading
+		}
 		switch entry.State {
 		case download.StateCompleted:
 			entry.Path = download.ContentPath(status.Dir, entry.Name)
 		case download.StateFailed:
 			entry.Error = "aria2 reports " + status.ErrorMessage
+		case download.StateRemoved:
+			entry.Error = "removed in aria2"
 		}
 		if at, found := seen[entry.ClientRef]; found {
-			if entry.Name != "" {
+			if !pending {
 				downloads[at] = entry
 			}
 			continue
@@ -94,8 +102,11 @@ func stateOf(status string, total, done int64) download.State {
 		return download.StatePaused
 	case "complete":
 		return download.StateCompleted
-	case "error", "removed":
+	case "error":
 		return download.StateFailed
+	case "removed":
+		// Taken out of aria2 by a person: recorded as removed, not a release at fault.
+		return download.StateRemoved
 	}
 	return download.StateProcessing
 }

@@ -136,7 +136,9 @@ type Status struct {
 	Dir             string `json:"dir"`
 	InfoHash        string `json:"infoHash"`
 	ErrorMessage    string `json:"errorMessage"`
-	BitTorrent      struct {
+	// FollowedBy names the downloads a magnet's metadata fetch led to; only that fetch has any.
+	FollowedBy []string `json:"followedBy"`
+	BitTorrent struct {
 		Info struct {
 			Name string `json:"name"`
 		} `json:"info"`
@@ -150,7 +152,7 @@ func Number(text string) int64 {
 }
 
 var statusKeys = []string{
-	"gid", "status", "totalLength", "completedLength", "downloadSpeed", "dir", "infoHash", "errorMessage", "bittorrent",
+	"gid", "status", "totalLength", "completedLength", "downloadSpeed", "dir", "infoHash", "errorMessage", "followedBy", "bittorrent",
 }
 
 // Downloads answers every download aria2 holds: active, waiting and stopped.
