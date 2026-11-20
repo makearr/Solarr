@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -94,6 +95,87 @@ func (s *Server) fileRequest(w http.ResponseWriter, r *http.Request, access auth
 	}
 	for _, earlier := range pending {
 		if earlier.CategoryID == filed.CategoryID && earlier.ExternalRef == filed.ExternalRef {
+			writeJSON(w, s.logger, http.StatusOK, gen.AddWorkResult{Kind: "request", RequestId: &earlier.ID})
+			return
+		}
+	}
+	if len(pending) >= maxPendingRequests {
+		writeProblem(w, s.logger, http.StatusTooManyRequests, TypeTooManyRequests, "Too many requests",
+			fmt.Sprintf("you have %d requests waiting; ask again once an administrator has decided some", maxPendingRequests))
+		return
+	}
+	record, err := s.requests.File(r.Context(), filed)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, gen.AddWorkResult{Kind: "request", RequestId: &record.ID})
+}
+
+// requestKindSearch marks a request for a search of a work already in the library, not for an add.
+const requestKindSearch = "search"
+
+// RequestWorkSearch satisfies the generated interface; the mounted route reads the id itself.
+func (s *Server) RequestWorkSearch(w http.ResponseWriter, r *http.Request, _ int64) {
+	id, err := parsePathID(w, s, r, "id", "a work id must be a number")
+	if err != nil {
+		return
+	}
+	s.requestWorkSearch(w, r, id)
+}
+
+func (s *Server) routeRequestWorkSearch(w http.ResponseWriter, r *http.Request) {
+	s.RequestWorkSearch(w, r, 0)
+}
+
+// requestWorkSearch files the ask of an account that may not search: approval runs the automatic search as the library's administrator.
+func (s *Server) requestWorkSearch(w http.ResponseWriter, r *http.Request, id int64) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.requests == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "requests are not available")
+		return
+	}
+	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
+		return
+	}
+	row, err := s.workDetail.GetWorkDetail(r.Context(), id)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	_, categoryIDs := s.visibleAt(access, settings.PermissionRequest)
+	categoryID := int64(0)
+	for _, candidate := range row.CategoryIDs {
+		if slices.Contains(categoryIDs, candidate) {
+			categoryID = candidate
+			break
+		}
+	}
+	if categoryID == 0 {
+		writeError(w, s.logger, fmt.Errorf("%w: work %d is in no library this account may ask in", authz.ErrInsufficientPermission, id))
+		return
+	}
+	kind := requestKindSearch
+	scope, err := json.Marshal(gen.AddWorkRequest{CategoryId: categoryID, Title: &row.Title, Kind: &kind})
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	filed := NewRequestRecord{
+		UserID: access.UserID(), CategoryID: categoryID, WorkID: id, ExternalRef: "work:" + strconv.FormatInt(id, 10),
+		MediaType: row.MediaType, ScopeJSON: string(scope), State: requestPending,
+	}
+	pending, err := s.requests.List(r.Context(), access.UserID(), requestPending, 0, maxPendingRequests+1)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	for _, earlier := range pending {
+		if earlier.ExternalRef == filed.ExternalRef {
 			writeJSON(w, s.logger, http.StatusOK, gen.AddWorkResult{Kind: "request", RequestId: &earlier.ID})
 			return
 		}
@@ -260,12 +342,21 @@ func (s *Server) ApproveRequest(w http.ResponseWriter, r *http.Request, _ int64)
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Cannot be approved", "the request no longer says what to add")
 		return
 	}
-	result, err := s.performAdd(r.Context(), record.UserID, scope)
-	if err != nil {
-		s.writeAddError(w, err)
-		return
+	workID := record.WorkID
+	if derefOr(scope.Kind, "") == requestKindSearch {
+		if _, err := s.candidateSearcher.GrabWork(r.Context(), workID, SearchScope{}); err != nil {
+			writeCandidateSearchError(w, s, err)
+			return
+		}
+	} else {
+		result, err := s.performAdd(r.Context(), record.UserID, scope)
+		if err != nil {
+			s.writeAddError(w, err)
+			return
+		}
+		workID = result.WorkID
 	}
-	changed, err := s.requests.Fulfil(r.Context(), record.ID, access.UserID(), result.WorkID)
+	changed, err := s.requests.Fulfil(r.Context(), record.ID, access.UserID(), workID)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return

@@ -217,6 +217,11 @@ function WorkHeader({
     },
     onError: () => setNote(t("search.failed")),
   });
+  const askSearch = useMutation({
+    mutationFn: () => ok(api.POST("/works/{id}/request-search", { params: { path: { id: work.id } } })),
+    onSuccess: () => setNote(t("search.requested")),
+    onError: () => setNote(t("search.requestFailed")),
+  });
   const refresh = useMutation({
     mutationFn: async () => {
       await ok(api.POST("/works/{id}/refresh", { params: { path: { id: work.id } } }));
@@ -371,6 +376,11 @@ function WorkHeader({
             {work.can_request && groups.length > 0 && (
               <Button busy={search.isPending} busyLabel="Searching…" icon={<Search aria-hidden className="size-4" />} onClick={() => search.mutate()}>
                 {t("action.search")}
+              </Button>
+            )}
+            {!work.can_request && library?.permission === "request" && groups.length > 0 && (
+              <Button busy={askSearch.isPending} icon={<Search aria-hidden className="size-4" />} onClick={() => askSearch.mutate()}>
+                {t("action.askSearch")}
               </Button>
             )}
             {work.can_request && groups.length > 0 && (

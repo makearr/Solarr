@@ -4753,6 +4753,30 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
 
+  /works/{id}/request-search:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: requestWorkSearch
+      tags: [library]
+      summary: Ask for an automatic search of a work already in the library; an administrator approves, which runs the search.
+      description: >-
+        For an account that may only request. Asking twice while the first waits answers the same request.
+        An account that may add searches with grab instead.
+      responses:
+        "200":
+          description: The request is filed, or was already waiting.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AddWorkResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/search:
     parameters:
       - name: id

@@ -754,6 +754,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/candidates/{decisionId}/blocklist", server.routeBlocklistCandidate)
 			secured.Post("/works/{id}/search", server.routeSearchWork)
 			secured.Post("/works/{id}/grab", server.routeGrabWork)
+			secured.Post("/works/{id}/request-search", server.routeRequestWorkSearch)
 			secured.Post("/works/{id}/refresh", server.routeRefreshWork)
 			secured.Get("/wanted/parts", server.routeListWantedParts)
 			secured.Get("/images/remote", server.routeGetRemoteImage)

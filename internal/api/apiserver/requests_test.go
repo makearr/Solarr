@@ -208,3 +208,34 @@ func TestFileRequest_KeepsOnlyWhatARequesterMayChooseAndBoundsTheQueue(t *testin
 		t.Errorf("the 51st waiting request: %d, want 429", recorder.Code)
 	}
 }
+
+// A request-only account asks for a search of a work already in the library; asking twice files one request, and the administrator's
+// approval runs the automatic search.
+func TestRequestWorkSearch_FilesOneRequestAndApprovalSearches(t *testing.T) {
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionRequest)
+	fixture.workDetail.row.CategoryIDs = []int64{1}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	adminCookies := fixture.signIn(t, "admin")
+
+	for range 2 {
+		if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/request-search", "")); recorder.Code != http.StatusOK {
+			t.Fatalf("request-search: %d (%s)", recorder.Code, recorder.Body)
+		}
+	}
+	if len(fixture.requests.records) != 1 || fixture.requests.records[0].WorkID != 42 || fixture.candidateSearcher.lastSearchWorkID != 0 {
+		t.Fatalf("filed %+v, searched work %d; want one request for work 42 and no search yet", fixture.requests.records, fixture.candidateSearcher.lastSearchWorkID)
+	}
+	if recorder := fixture.do(authedPost(t, adminCookies, "/api/v1/requests/1/approve", "")); recorder.Code != http.StatusOK || requestState(t, recorder.Body.Bytes()) != "FULFILLED" {
+		t.Fatalf("approve: %d (%s)", recorder.Code, recorder.Body)
+	}
+	if fixture.candidateSearcher.lastSearchWorkID != 42 || len(fixture.workAdder.adds) != 0 {
+		t.Errorf("approval searched work %d with %d adds; want a search of 42 and no add", fixture.candidateSearcher.lastSearchWorkID, len(fixture.workAdder.adds))
+	}
+}
+
+func TestRequestWorkSearch_ReadOnlyAccountIsRefused(t *testing.T) {
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionRead)
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/request-search", "")); recorder.Code != http.StatusForbidden || len(fixture.requests.records) != 0 {
+		t.Errorf("read-only: %d, %d requests; want 403 and none", recorder.Code, len(fixture.requests.records))
+	}
+}

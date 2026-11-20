@@ -3101,6 +3101,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/request-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask for an automatic search of a work already in the library; an administrator approves, which runs the search.
+         * @description For an account that may only request. Asking twice while the first waits answers the same request. An account that may add searches with grab instead.
+         */
+        post: operations["requestWorkSearch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/search": {
         parameters: {
             query?: never;
@@ -16523,6 +16545,32 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+        };
+    };
+    requestWorkSearch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request is filed, or was already waiting. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddWorkResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
         };
     };
     searchCategory: {

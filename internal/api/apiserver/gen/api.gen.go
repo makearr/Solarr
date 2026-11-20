@@ -9558,6 +9558,9 @@ type ServerInterface interface {
 	// Stop wanting a work, optionally delete its files and keep it from being added back. Administrator only.
 	// (POST /works/{id}/remove)
 	RemoveWork(w http.ResponseWriter, r *http.Request, id int64)
+	// Ask for an automatic search of a work already in the library; an administrator approves, which runs the search.
+	// (POST /works/{id}/request-search)
+	RequestWorkSearch(w http.ResponseWriter, r *http.Request, id int64)
 	// Interactive search: ask every enabled indexer for what the scope names (the work's own item, one group, or one part of a group) and record a decision per release. Nothing is sent. With a body, searches those terms instead, keyed by the media type's search_terms; a release matching them counts as matching the work.
 	// (POST /works/{id}/search)
 	SearchWork(w http.ResponseWriter, r *http.Request, id int64, params SearchWorkParams)
@@ -11802,6 +11805,12 @@ func (_ Unimplemented) SetWorkReleaseFilters(w http.ResponseWriter, r *http.Requ
 // Stop wanting a work, optionally delete its files and keep it from being added back. Administrator only.
 // (POST /works/{id}/remove)
 func (_ Unimplemented) RemoveWork(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Ask for an automatic search of a work already in the library; an administrator approves, which runs the search.
+// (POST /works/{id}/request-search)
+func (_ Unimplemented) RequestWorkSearch(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -23970,6 +23979,39 @@ func (siw *ServerInterfaceWrapper) RemoveWork(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// RequestWorkSearch operation middleware
+func (siw *ServerInterfaceWrapper) RequestWorkSearch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RequestWorkSearch(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SearchWork operation middleware
 func (siw *ServerInterfaceWrapper) SearchWork(w http.ResponseWriter, r *http.Request) {
 
@@ -25253,6 +25295,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/remove", wrapper.RemoveWork)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/{id}/request-search", wrapper.RequestWorkSearch)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/search", wrapper.SearchWork)
