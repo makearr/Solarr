@@ -83,6 +83,8 @@ files have not changed for a minute, and its watch folder becomes a download fol
 **slskd** takes a direct release: JSON naming the peer and the files of one of its folders
 (`{"source": "user", "files": [{"path": "@@music\\Artist\\Album\\01.flac", "size": 123}]}`). No indexer answers
 one yet, so an slskd client receives nothing until a Soulseek search source exists.
+An album whose peer shares it as disc folders (`CD1`, `Disc 2`) is one release and one download; slskd lays the discs down
+as sibling folders, so the poll moves them under `<downloads>/.solarr/<id>/` before the import reads that single folder.
 
 ## Missing albums are searched on their own
 
