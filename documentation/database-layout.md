@@ -211,16 +211,21 @@ Both are scheduler tasks (Settings -> Scheduler, Maintenance), since 2026-09-24:
 | Clean old backups | Sundays 01:30 | Keeps the newest N (default 7) or the last N days; never fewer than 3 |
 | Clean recycling bin | daily 02:30 | Purges recycle bin entries past their library's retention ([file-management.md](file-management.md)) |
 | Clean old search results | daily 03:10 | Decisions older than `retention.decisions_full` (90 days) are counted into `decision_rollup` per item, day and outcome, then deleted. A release past its expiry is deleted once no decision refers to it; a held download carries its own copy of the release. At most 250 pages of 200 a run, so an old backlog is worked off over several nights |
-| Clean old jobs | daily 03:20 | Jobs that finished more than 14 days ago, with their attempts, 200 a transaction; a job another still depends on stays |
+| Clean old jobs | daily 03:20 | Jobs that finished more than 14 days ago, with their attempts, 200 a transaction |
 
 Every task can also be set to run **at startup** (Settings -> Scheduler, "Add at startup"). Database maintenance and
 backup are heavy: their startup run waits five minutes and is skipped when the task last ran within its own
 interval, so a restart two days after the weekly maintenance does not repeat it.
 
-**Maintenance holds the writer exclusively** (`store.Maintain`), so every write to that database
-waits until it finishes; the others keep working. A failed integrity check stops that database's
-pass before `VACUUM`, which would otherwise rebuild it from whatever it could still read.
-`VACUUM` runs before the truncating checkpoint because in WAL mode its rewrite lands in the log.
+**Maintenance holds the writer for `optimize`, `VACUUM` and the checkpoint** (`store.Maintain`), so every write to that
+database waits until they finish; the others keep working. The integrity check only reads and runs beside the writer, on
+the store's backup connection; a failure stops that database's pass before `VACUUM`, which would otherwise rebuild it from
+whatever it could still read. `VACUUM` runs only when at least 64 MiB or a tenth of the pages are free and the disk has
+room for the database plus a tenth beside it; the log says which databases were rebuilt. It runs before the truncating
+checkpoint because in WAL mode its rewrite lands in the log.
+
+Backups and the RAM-to-disk snapshots (`VACUUM INTO`) read on that same connection, one copy per database at a time, and
+never hold the writer. A copy pins the log while it runs, so checkpoints wait for it.
 
 `settings.db` is backed up on every change instead and pruned by `backup.keep_settings`. A value a sweep measured
 (root capacity, the cache measurement, placement affinity) is not a change in this sense and takes no backup, or it
