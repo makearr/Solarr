@@ -23,7 +23,6 @@ func convertJob(row jobsdb.Job) Job {
 		RunAfter:       time.Unix(row.RunAfter, 0).UTC(),
 		LeaseOwner:     row.LeaseOwner.String,
 		LeaseExpiresAt: unixOrZero(row.LeaseExpiresAt),
-		DependsOn:      row.DependsOn.Int64,
 		CorrelationID:  row.CorrelationID.String,
 		UserID:         row.UserID.Int64,
 		CategoryID:     row.CategoryID.Int64,

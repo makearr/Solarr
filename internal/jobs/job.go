@@ -89,10 +89,8 @@ type Job struct {
 	RunAfter       time.Time
 	LeaseOwner     string
 	LeaseExpiresAt time.Time
-	// DependsOn keeps a job unclaimable until another has succeeded.
-	DependsOn     int64
-	CorrelationID string
-	UserID        int64
+	CorrelationID  string
+	UserID         int64
 	// CategoryID scopes the job for per-category visibility (ADR-27). Zero
 	// means system work that belongs to no one category.
 	CategoryID int64
@@ -124,7 +122,6 @@ type Request struct {
 	Payload   []byte
 	// RunAfter delays the first attempt. Zero means immediately.
 	RunAfter      time.Time
-	DependsOn     int64
 	CorrelationID string
 	UserID        int64
 	CategoryID    int64

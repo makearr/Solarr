@@ -1,9 +1,9 @@
 -- name: EnqueueJob :one
 INSERT INTO job (
   type, pool, action_key, priority, payload_json, state, mutating,
-  max_attempts, run_after, depends_on, correlation_id, user_id,
+  max_attempts, run_after, correlation_id, user_id,
   created_at, updated_at, category_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, type, pool, action_key, priority, payload_json, state, mutating,
           attempts, max_attempts, run_after, lease_owner, lease_expires_at,
           depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id, reclaims;
@@ -28,7 +28,7 @@ UPDATE job SET priority = sqlc.arg(priority), updated_at = sqlc.arg(now)
 WHERE id = sqlc.arg(id) AND priority < sqlc.arg(priority) AND state IN ('PENDING', 'PENDING_RETRY');
 
 -- One conditional UPDATE ... RETURNING, so two dispatchers cannot hand the same
--- job to two workers. depends_on keeps a job unclaimable until its parent succeeds.
+-- job to two workers.
 
 -- name: ClaimJobs :many
 UPDATE job
@@ -44,9 +44,6 @@ WHERE id IN (
     AND NOT EXISTS (SELECT 1 FROM job_task AS origin
                     JOIN task_pause ON task_pause.scope IN (origin.task_key, '*')
                     WHERE origin.job_id = candidate.id)
-    AND (candidate.depends_on IS NULL
-         OR EXISTS (SELECT 1 FROM job AS parent
-                    WHERE parent.id = candidate.depends_on AND parent.state = 'SUCCEEDED'))
   ORDER BY candidate.priority DESC, candidate.run_after ASC
   LIMIT sqlc.arg(capacity)
 )
@@ -166,12 +163,11 @@ UPDATE job_attempt SET finished_at = ?, outcome = ?, error = ? WHERE id = ?;
 SELECT id, job_id, attempt, lease_owner, started_at, finished_at, outcome, error
 FROM job_attempt WHERE job_id = ? ORDER BY attempt;
 
--- One bounded page of retention (Invariant 2); a job another depends on stays, or its delete fails the whole page.
+-- One bounded page of retention (Invariant 2).
 -- name: DeleteFinishedJobsBefore :execrows
 DELETE FROM job WHERE id IN (
   SELECT j.id FROM job j
   WHERE j.state IN ('SUCCEEDED', 'FAILED', 'CANCELLED') AND j.updated_at < sqlc.arg(before)
-    AND NOT EXISTS (SELECT 1 FROM job d WHERE d.depends_on = j.id)
   LIMIT sqlc.arg(batch_size)
 );
 

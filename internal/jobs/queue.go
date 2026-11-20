@@ -141,7 +141,6 @@ func (q *Queue) enqueueIn(ctx context.Context, queries *jobsdb.Queries, request 
 		Mutating:      boolToInt(definition.Mutating),
 		MaxAttempts:   int64(definition.MaxAttempts),
 		RunAfter:      runAfter.Unix(),
-		DependsOn:     nullInt(request.DependsOn),
 		CorrelationID: nullString(request.CorrelationID),
 		UserID:        nullInt(request.UserID),
 		CreatedAt:     now.Unix(),

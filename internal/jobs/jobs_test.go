@@ -294,36 +294,6 @@ func TestClaim_RespectsRunAfter(t *testing.T) {
 	}
 }
 
-func TestClaim_WaitsForADependency(t *testing.T) {
-	queue, _ := newQueue(t)
-
-	parent := mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
-	mustEnqueue(t, queue, jobs.Request{Type: typeBackup, DependsOn: parent.ID})
-
-	// Only the parent is claimable: a dependent job stays unclaimable rather
-	// than being claimed and discovering the problem inside a worker.
-	claimed, err := queue.Claim(t.Context(), jobs.PoolMaintenance, "worker-1", 5, time.Minute)
-	if err != nil {
-		t.Fatalf("Claim: %v", err)
-	}
-	if len(claimed) != 1 || claimed[0].ID != parent.ID {
-		t.Fatalf("claimed %+v, want only the parent %d", claimed, parent.ID)
-	}
-
-	attempt := startJob(t, queue, claimed[0], "worker-1")
-	if err := queue.Complete(t.Context(), claimed[0], "worker-1", attempt); err != nil {
-		t.Fatalf("Complete: %v", err)
-	}
-
-	after, err := queue.Claim(t.Context(), jobs.PoolMaintenance, "worker-1", 5, time.Minute)
-	if err != nil {
-		t.Fatalf("Claim after the parent succeeded: %v", err)
-	}
-	if len(after) != 1 {
-		t.Errorf("claimed %d jobs after the dependency succeeded, want 1", len(after))
-	}
-}
-
 func TestComplete_RecordsTheAttempt(t *testing.T) {
 	queue, _ := newQueue(t)
 	enqueued := mustEnqueue(t, queue, jobs.Request{Type: typeBackup})

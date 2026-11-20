@@ -14,7 +14,7 @@ type Querier interface {
 	AppendEvent(ctx context.Context, arg AppendEventParams) (int64, error)
 	CancelJob(ctx context.Context, arg CancelJobParams) (int64, error)
 	// One conditional UPDATE ... RETURNING, so two dispatchers cannot hand the same
-	// job to two workers. depends_on keeps a job unclaimable until its parent succeeds.
+	// job to two workers.
 	ClaimJobs(ctx context.Context, arg ClaimJobsParams) ([]Job, error)
 	CloseReclaimedAttempts(ctx context.Context, arg CloseReclaimedAttemptsParams) error
 	CompleteJob(ctx context.Context, arg CompleteJobParams) (int64, error)
@@ -23,7 +23,7 @@ type Querier interface {
 	// Jobs a pause is holding or has interrupted: waiting in the queue, not yet finished.
 	CountHeldJobsByTask(ctx context.Context) ([]CountHeldJobsByTaskRow, error)
 	CountJobsByState(ctx context.Context) ([]CountJobsByStateRow, error)
-	// One bounded page of retention (Invariant 2); a job another depends on stays, or its delete fails the whole page.
+	// One bounded page of retention (Invariant 2).
 	DeleteFinishedJobsBefore(ctx context.Context, arg DeleteFinishedJobsBeforeParams) (int64, error)
 	EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, error)
 	FailJob(ctx context.Context, arg FailJobParams) (int64, error)

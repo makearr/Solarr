@@ -18,11 +18,10 @@ func finishOne(t *testing.T, queue *jobs.Queue, request jobs.Request) jobs.Job {
 	return claimed
 }
 
-func TestPruneFinished_DeletesOnlyOldFinishedJobsNothingDependsOn(t *testing.T) {
+func TestPruneFinished_DeletesOnlyOldFinishedJobs(t *testing.T) {
 	queue, fake := newQueue(t)
 	old := finishOne(t, queue, jobs.Request{Type: typeBackup})
-	parent := finishOne(t, queue, jobs.Request{Type: typeBackup})
-	waiting := mustEnqueue(t, queue, jobs.Request{Type: typeImport, DependsOn: parent.ID})
+	waiting := mustEnqueue(t, queue, jobs.Request{Type: typeImport})
 	fake.Advance(30 * 24 * time.Hour)
 	recent := finishOne(t, queue, jobs.Request{Type: typeBackup})
 
@@ -36,7 +35,7 @@ func TestPruneFinished_DeletesOnlyOldFinishedJobsNothingDependsOn(t *testing.T) 
 	if _, err := queue.Get(t.Context(), old.ID); !errors.Is(err, jobs.ErrNotFound) {
 		t.Errorf("old finished job: Get = %v, want ErrNotFound", err)
 	}
-	for name, id := range map[string]int64{"depended on": parent.ID, "pending": waiting.ID, "recent": recent.ID} {
+	for name, id := range map[string]int64{"pending": waiting.ID, "recent": recent.ID} {
 		if _, err := queue.Get(t.Context(), id); err != nil {
 			t.Errorf("%s job %d: Get = %v, want it kept", name, id, err)
 		}

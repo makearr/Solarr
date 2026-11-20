@@ -80,9 +80,6 @@ WHERE id IN (
     AND NOT EXISTS (SELECT 1 FROM job_task AS origin
                     JOIN task_pause ON task_pause.scope IN (origin.task_key, '*')
                     WHERE origin.job_id = candidate.id)
-    AND (candidate.depends_on IS NULL
-         OR EXISTS (SELECT 1 FROM job AS parent
-                    WHERE parent.id = candidate.depends_on AND parent.state = 'SUCCEEDED'))
   ORDER BY candidate.priority DESC, candidate.run_after ASC
   LIMIT ?5
 )
@@ -100,7 +97,7 @@ type ClaimJobsParams struct {
 }
 
 // One conditional UPDATE ... RETURNING, so two dispatchers cannot hand the same
-// job to two workers. depends_on keeps a job unclaimable until its parent succeeds.
+// job to two workers.
 func (q *Queries) ClaimJobs(ctx context.Context, arg ClaimJobsParams) ([]Job, error) {
 	rows, err := q.db.QueryContext(ctx, claimJobs,
 		arg.LeaseOwner,
@@ -248,7 +245,6 @@ const deleteFinishedJobsBefore = `-- name: DeleteFinishedJobsBefore :execrows
 DELETE FROM job WHERE id IN (
   SELECT j.id FROM job j
   WHERE j.state IN ('SUCCEEDED', 'FAILED', 'CANCELLED') AND j.updated_at < ?1
-    AND NOT EXISTS (SELECT 1 FROM job d WHERE d.depends_on = j.id)
   LIMIT ?2
 )
 `
@@ -258,7 +254,7 @@ type DeleteFinishedJobsBeforeParams struct {
 	BatchSize int64
 }
 
-// One bounded page of retention (Invariant 2); a job another depends on stays, or its delete fails the whole page.
+// One bounded page of retention (Invariant 2).
 func (q *Queries) DeleteFinishedJobsBefore(ctx context.Context, arg DeleteFinishedJobsBeforeParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, deleteFinishedJobsBefore, arg.Before, arg.BatchSize)
 	if err != nil {
@@ -270,9 +266,9 @@ func (q *Queries) DeleteFinishedJobsBefore(ctx context.Context, arg DeleteFinish
 const enqueueJob = `-- name: EnqueueJob :one
 INSERT INTO job (
   type, pool, action_key, priority, payload_json, state, mutating,
-  max_attempts, run_after, depends_on, correlation_id, user_id,
+  max_attempts, run_after, correlation_id, user_id,
   created_at, updated_at, category_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, type, pool, action_key, priority, payload_json, state, mutating,
           attempts, max_attempts, run_after, lease_owner, lease_expires_at,
           depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id, reclaims
@@ -288,7 +284,6 @@ type EnqueueJobParams struct {
 	Mutating      int64
 	MaxAttempts   int64
 	RunAfter      int64
-	DependsOn     sql.NullInt64
 	CorrelationID sql.NullString
 	UserID        sql.NullInt64
 	CreatedAt     int64
@@ -307,7 +302,6 @@ func (q *Queries) EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, er
 		arg.Mutating,
 		arg.MaxAttempts,
 		arg.RunAfter,
-		arg.DependsOn,
 		arg.CorrelationID,
 		arg.UserID,
 		arg.CreatedAt,
