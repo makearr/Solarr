@@ -400,10 +400,6 @@ func (s *Server) MergeDuplicateFranchises(w http.ResponseWriter, r *http.Request
 	}{groups, merged})
 }
 
-func (s *Server) routeLinkFranchise(w http.ResponseWriter, r *http.Request) {
-	s.franchiseIDRoute(w, r, s.LinkFranchise)
-}
-
 func (s *Server) routeUnlinkFranchise(w http.ResponseWriter, r *http.Request) {
 	ids, ok := parseFranchiseIDs(r, "id")
 	category, categoryErr := strconv.ParseInt(r.URL.Query().Get("category_id"), 10, 64)
@@ -413,13 +409,4 @@ func (s *Server) routeUnlinkFranchise(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.UnlinkFranchise(w, r, ids[0], gen.UnlinkFranchiseParams{CategoryId: category, OtherId: other})
-}
-
-func (s *Server) franchiseIDRoute(w http.ResponseWriter, r *http.Request, handle func(http.ResponseWriter, *http.Request, int64)) {
-	ids, ok := parseFranchiseIDs(r, "id")
-	if !ok {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an id must be a number")
-		return
-	}
-	handle(w, r, ids[0])
 }

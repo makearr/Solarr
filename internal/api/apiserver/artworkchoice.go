@@ -24,30 +24,6 @@ type ArtworkChoices interface {
 	PickPerson(ctx context.Context, personID int64, imageURL string) error
 }
 
-func (s *Server) routeGetWorkArtworkOptions(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "a work id must be a number"); err == nil {
-		s.GetWorkArtworkOptions(w, r, id)
-	}
-}
-
-func (s *Server) routeChooseWorkArtwork(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "a work id must be a number"); err == nil {
-		s.ChooseWorkArtwork(w, r, id)
-	}
-}
-
-func (s *Server) routeGetPersonArtworkOptions(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "a person id must be a number"); err == nil {
-		s.GetPersonArtworkOptions(w, r, id)
-	}
-}
-
-func (s *Server) routeChoosePersonArtwork(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "a person id must be a number"); err == nil {
-		s.ChoosePersonArtwork(w, r, id)
-	}
-}
-
 // GetWorkArtworkOptions lists the covers providers hold for a work the caller can see.
 func (s *Server) GetWorkArtworkOptions(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.workArtworkVisible(w, r, id) {

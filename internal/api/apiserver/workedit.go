@@ -101,18 +101,6 @@ type BulkEditChange struct {
 	Specials      bool
 }
 
-func (s *Server) routeGetWorkEdit(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.workIDParam(w, r); ok {
-		s.GetWorkEdit(w, r, id)
-	}
-}
-
-func (s *Server) routeSaveWorkEdit(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.workIDParam(w, r); ok {
-		s.SaveWorkEdit(w, r, id)
-	}
-}
-
 func (s *Server) workIDParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

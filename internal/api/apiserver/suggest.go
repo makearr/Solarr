@@ -42,24 +42,6 @@ type LibrarySuggester interface {
 	KindRules(mediaType, kind string) []settings.LibraryRule
 }
 
-func (s *Server) routeGetLibraryRules(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.workIDParam(w, r); ok {
-		s.GetLibraryRules(w, r, id)
-	}
-}
-
-func (s *Server) routeSetLibraryRules(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.workIDParam(w, r); ok {
-		s.SetLibraryRules(w, r, id)
-	}
-}
-
-func (s *Server) routeCheckLibrary(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.workIDParam(w, r); ok {
-		s.CheckLibrary(w, r, id)
-	}
-}
-
 // GetLibraryRules answers a library's rules: its own, else its kind's.
 func (s *Server) GetLibraryRules(w http.ResponseWriter, r *http.Request, id int64) {
 	access, err := authz.FromContext(r.Context())

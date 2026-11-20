@@ -534,24 +534,6 @@ func (s *Server) SyncArrInstanceIndexers(w http.ResponseWriter, r *http.Request,
 	})
 }
 
-func (s *Server) routeListArrInstanceIndexers(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "an instance id must be a number"); err == nil {
-		s.ListArrInstanceIndexers(w, r, id)
-	}
-}
-
-func (s *Server) routeUseArrInstanceIndexers(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "an instance id must be a number"); err == nil {
-		s.UseArrInstanceIndexers(w, r, id)
-	}
-}
-
-func (s *Server) routeListArrInstanceDownloadClients(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "an instance id must be a number"); err == nil {
-		s.ListArrInstanceDownloadClients(w, r, id)
-	}
-}
-
 // arrConnectionsReady answers whether the connections reader is wired, having answered if not.
 func (s *Server) arrConnectionsReady(w http.ResponseWriter, r *http.Request) bool {
 	if !s.requireAdministrator(w, r) {

@@ -250,12 +250,6 @@ func (s *Server) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64
 	writeJSON(w, s.logger, http.StatusOK, categorySettingsView(updated))
 }
 
-func (s *Server) routeAddLibraryType(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.workIDParam(w, r); ok {
-		s.AddLibraryType(w, r, id)
-	}
-}
-
 // AddLibraryType lets a library hold a further media type; administrator only.
 func (s *Server) AddLibraryType(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {

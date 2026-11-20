@@ -119,12 +119,6 @@ func (s *Server) UpdateIndexer(w http.ResponseWriter, r *http.Request, id int64)
 	writeJSON(w, s.logger, http.StatusOK, indexerView(updated))
 }
 
-func (s *Server) routeUseIndexerUpstream(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "an indexer id must be a number"); err == nil {
-		s.UseIndexerUpstream(w, r, id)
-	}
-}
-
 // UseIndexerUpstream points a Prowlarr indexer at the site behind it, with the key the owner gives.
 func (s *Server) UseIndexerUpstream(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {

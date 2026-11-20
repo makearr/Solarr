@@ -23,18 +23,6 @@ type ArtistActions interface {
 	MonitorAll(ctx context.Context, personID int64) (albums int64, err error)
 }
 
-func (s *Server) routeSearchPersonMissing(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "a person id must be a number"); err == nil {
-		s.SearchPersonMissing(w, r, id)
-	}
-}
-
-func (s *Server) routeRefreshPerson(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "a person id must be a number"); err == nil {
-		s.RefreshPerson(w, r, id)
-	}
-}
-
 // RefreshPerson is the artist page's "Refresh metadata"; any signed-in user, like a search.
 func (s *Server) RefreshPerson(w http.ResponseWriter, r *http.Request, id int64) {
 	if _, err := authz.FromContext(r.Context()); err != nil {
@@ -50,12 +38,6 @@ func (s *Server) RefreshPerson(w http.ResponseWriter, r *http.Request, id int64)
 		return
 	}
 	writeJSON(w, s.logger, http.StatusAccepted, gen.CategorySearchEnqueued{Duplicate: duplicate})
-}
-
-func (s *Server) routeMonitorPersonAll(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "a person id must be a number"); err == nil {
-		s.MonitorPersonAll(w, r, id)
-	}
 }
 
 // SearchPersonMissing is the artist page's "Search all missing": it sends downloads, so it searches

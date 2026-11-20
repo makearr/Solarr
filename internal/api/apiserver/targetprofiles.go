@@ -81,12 +81,6 @@ func (s *Server) CreateTargetProfile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusCreated, targetProfileView(created))
 }
 
-func (s *Server) routeUpdateTargetProfile(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "an id must be a number"); err == nil {
-		s.UpdateTargetProfile(w, r, id)
-	}
-}
-
 // UpdateTargetProfile replaces a content profile. Administrator only.
 func (s *Server) UpdateTargetProfile(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -103,12 +97,6 @@ func (s *Server) UpdateTargetProfile(w http.ResponseWriter, r *http.Request, id 
 	}
 	updated, _ := s.auth.Settings.Snapshot().TargetProfile(id)
 	writeJSON(w, s.logger, http.StatusOK, targetProfileView(updated))
-}
-
-func (s *Server) routeDeleteTargetProfile(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "an id must be a number"); err == nil {
-		s.DeleteTargetProfile(w, r, id)
-	}
 }
 
 // DeleteTargetProfile removes a content profile. Administrator only.

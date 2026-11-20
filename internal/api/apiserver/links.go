@@ -37,18 +37,6 @@ type LinkManager interface {
 // linkPreviewRows bounds the pairs one preview lists; the totals cover them all.
 const linkPreviewRows = 200
 
-func (s *Server) routeGetCategoryLinks(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "a category id must be a number"); err == nil {
-		s.GetCategoryLinks(w, r, id)
-	}
-}
-
-func (s *Server) routeLinkCategoryCopies(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "a category id must be a number"); err == nil {
-		s.LinkCategoryCopies(w, r, id)
-	}
-}
-
 // GetCategoryLinks answers the plan; a library the caller cannot read is 404.
 func (s *Server) GetCategoryLinks(w http.ResponseWriter, r *http.Request, id int64) {
 	access, err := authz.FromContext(r.Context())

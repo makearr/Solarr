@@ -15,18 +15,6 @@ import (
 	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
-func (s *Server) routeGetLibraryMetadataSources(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.categoryIDParam(w, r); ok {
-		s.GetLibraryMetadataSources(w, r, id)
-	}
-}
-
-func (s *Server) routeSetLibraryMetadataSources(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.categoryIDParam(w, r); ok {
-		s.SetLibraryMetadataSources(w, r, id)
-	}
-}
-
 func (s *Server) metadataSourcesView(category settings.Category) gen.LibraryMetadataSources {
 	snapshot := s.auth.Settings.Snapshot()
 	current, _ := snapshot.Category(category.ID)

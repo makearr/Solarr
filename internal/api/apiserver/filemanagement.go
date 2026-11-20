@@ -9,18 +9,6 @@ import (
 	"github.com/makearr/Solarr/internal/platform/config"
 )
 
-func (s *Server) routeGetLibraryFileManagement(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.categoryIDParam(w, r); ok {
-		s.GetLibraryFileManagement(w, r, id)
-	}
-}
-
-func (s *Server) routeSetLibraryFileManagement(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.categoryIDParam(w, r); ok {
-		s.SetLibraryFileManagement(w, r, id)
-	}
-}
-
 // GetLibraryFileManagement answers a library's File Management and Permissions.
 func (s *Server) GetLibraryFileManagement(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -125,18 +113,6 @@ func (s *Server) fileManagementView(category settings.Category) gen.FileManageme
 		DeleteEmptyFolders: f.DeleteEmptyFolders, CreateEmptyArtistFolders: f.CreateEmptyArtistFolders,
 		UnmonitorDeleted: f.UnmonitorDeleted, MergeArtistAliases: f.MergeArtistAliases, SetPermissions: f.SetPermissions,
 		ChmodFolder: f.ChmodFolder, ChownGroup: f.ChownGroup,
-	}
-}
-
-func (s *Server) routeGetLibraryTagging(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.categoryIDParam(w, r); ok {
-		s.GetLibraryTagging(w, r, id)
-	}
-}
-
-func (s *Server) routeSetLibraryTagging(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.categoryIDParam(w, r); ok {
-		s.SetLibraryTagging(w, r, id)
 	}
 }
 

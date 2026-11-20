@@ -26,12 +26,6 @@ type FileRateView struct {
 // FileRates answers a library's primary video files. Defined here, implemented by the caller.
 type FileRates func(ctx context.Context, categoryID int64) ([]FileRateView, error)
 
-func (s *Server) routeGetCategoryTargetSize(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "a category id must be a number"); err == nil {
-		s.GetCategoryTargetSize(w, r, id)
-	}
-}
-
 // GetCategoryTargetSize judges every video file of a library against the bitrate its target expects.
 func (s *Server) GetCategoryTargetSize(w http.ResponseWriter, r *http.Request, id int64) {
 	access, err := authz.FromContext(r.Context())

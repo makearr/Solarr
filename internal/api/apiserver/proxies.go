@@ -95,15 +95,3 @@ func (s *Server) DeleteProxy(w http.ResponseWriter, r *http.Request, id int64) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
-
-func (s *Server) routeUpdateProxy(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "a proxy id must be a number"); err == nil {
-		s.UpdateProxy(w, r, id)
-	}
-}
-
-func (s *Server) routeDeleteProxy(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "a proxy id must be a number"); err == nil {
-		s.DeleteProxy(w, r, id)
-	}
-}

@@ -3,9 +3,6 @@ package apiserver
 import (
 	"errors"
 	"net/http"
-	"strconv"
-
-	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
@@ -43,40 +40,6 @@ type NamingPreset struct {
 
 // NamingExample is one rendered sample path.
 type NamingExample struct{ Label, Path string }
-
-func (s *Server) routeGetLibraryNaming(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.categoryIDParam(w, r); ok {
-		s.GetLibraryNaming(w, r, id)
-	}
-}
-
-func (s *Server) routeSetLibraryNaming(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.categoryIDParam(w, r); ok {
-		s.SetLibraryNaming(w, r, id)
-	}
-}
-
-func (s *Server) routePreviewLibraryNaming(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.categoryIDParam(w, r); ok {
-		s.PreviewLibraryNaming(w, r, id)
-	}
-}
-
-func (s *Server) routeRenameLibrary(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.categoryIDParam(w, r); ok {
-		s.RenameLibrary(w, r, id)
-	}
-}
-
-func (s *Server) categoryIDParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a library id must be a number")
-		return 0, false
-	}
-	return id, true
-}
 
 // GetLibraryNaming answers a library's naming with its scheme and examples.
 func (s *Server) GetLibraryNaming(w http.ResponseWriter, r *http.Request, id int64) {

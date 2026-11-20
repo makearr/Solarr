@@ -66,12 +66,6 @@ type DuplicateResolver interface {
 // duplicateGroupLimit bounds one report.
 const duplicateGroupLimit = 300
 
-func (s *Server) routeGetCategoryDuplicates(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "a category id must be a number"); err == nil {
-		s.GetCategoryDuplicates(w, r, id)
-	}
-}
-
 // GetCategoryDuplicates answers one library's duplicate tracks; a library the caller cannot read is 404.
 func (s *Server) GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, id int64) {
 	access, err := authz.FromContext(r.Context())
@@ -143,12 +137,6 @@ func (s *Server) GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, i
 		report.ReclaimableBytes += view.ReclaimableBytes
 	}
 	writeJSON(w, s.logger, http.StatusOK, report)
-}
-
-func (s *Server) routeResolveCategoryDuplicates(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "a category id must be a number"); err == nil {
-		s.ResolveCategoryDuplicates(w, r, id)
-	}
 }
 
 // duplicateChoice reads a resolve request; a request that keeps no copy (keepID 0) may only recycle.

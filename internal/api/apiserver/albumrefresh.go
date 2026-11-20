@@ -17,12 +17,6 @@ type WorkRefresher interface {
 	RefreshWork(ctx context.Context, workID int64) (duplicate bool, err error)
 }
 
-func (s *Server) routeRefreshWork(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "a work id must be a number"); err == nil {
-		s.RefreshWork(w, r, id)
-	}
-}
-
 // RefreshWork is a work's "Refresh"; request on its library, since a series' refresh also adds its new episodes.
 func (s *Server) RefreshWork(w http.ResponseWriter, r *http.Request, id int64) {
 	access, err := authz.FromContext(r.Context())

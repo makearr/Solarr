@@ -36,12 +36,6 @@ type LibraryMoveRefusal struct {
 	Reason string
 }
 
-func (s *Server) routeMoveWorkToLibrary(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.workIDParam(w, r); ok {
-		s.MoveWorkToLibrary(w, r, id)
-	}
-}
-
 // MoveWorkToLibrary plans or starts one work's move or copy to another library; it moves files, so administrator only.
 func (s *Server) MoveWorkToLibrary(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) || !s.libraryMoverAvailable(w) {

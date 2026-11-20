@@ -18,12 +18,6 @@ type ScanReader interface {
 	RunningScans(ctx context.Context) ([]gen.ScanRun, error)
 }
 
-func (s *Server) routeIdentifyLibraryAgain(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.categoryIDParam(w, r); ok {
-		s.IdentifyLibraryAgain(w, r, id)
-	}
-}
-
 // IdentifyLibraryAgain queues a rescan of the folders of one library's waiting files.
 func (s *Server) IdentifyLibraryAgain(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {

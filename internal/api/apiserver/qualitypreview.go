@@ -27,12 +27,6 @@ type QualityChangePreview struct {
 // QualityPreviewer judges a library's files under a proposed quality. Defined here, implemented by the caller.
 type QualityPreviewer func(ctx context.Context, categoryID int64, change QualityChange) (QualityChangePreview, error)
 
-func (s *Server) routePreviewLibraryQuality(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.categoryIDParam(w, r); ok {
-		s.PreviewLibraryQuality(w, r, id)
-	}
-}
-
 // PreviewLibraryQuality answers how many items a library's proposed quality would make upgradable, saving nothing.
 func (s *Server) PreviewLibraryQuality(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {

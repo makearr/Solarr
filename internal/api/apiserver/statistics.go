@@ -51,12 +51,6 @@ type StatisticsReader interface {
 	CategoryStatistics(ctx context.Context, categoryID int64) (StatisticsView, error)
 }
 
-func (s *Server) routeGetCategoryStatistics(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "a category id must be a number"); err == nil {
-		s.GetCategoryStatistics(w, r, id)
-	}
-}
-
 // GetCategoryStatistics answers one library's rolled-up figures; a library the caller cannot read is 404.
 func (s *Server) GetCategoryStatistics(w http.ResponseWriter, r *http.Request, id int64) {
 	access, err := authz.FromContext(r.Context())

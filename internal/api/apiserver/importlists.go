@@ -10,8 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -86,22 +84,6 @@ var importListReadDetails = map[string]string{
 	"source_unavailable": "The list's source did not answer; try again in a while.",
 }
 
-func (s *Server) importListID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an id must be a number")
-		return 0, false
-	}
-	return id, true
-}
-
-// routeListImportLists parses the id path parameter.
-func (s *Server) routeListImportLists(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.importListID(w, r); ok {
-		s.ListImportLists(w, r, id)
-	}
-}
-
 // ListImportLists answers one library's own import lists, each with its last preview and run (ADR-38).
 func (s *Server) ListImportLists(w http.ResponseWriter, r *http.Request, id int64) {
 	access, err := authz.FromContext(r.Context())
@@ -135,13 +117,6 @@ func (s *Server) importListStatus(ctx context.Context, list settings.ImportList)
 		return ImportListStatus{}, nil
 	}
 	return s.importLists.Status(ctx, list)
-}
-
-// routeListImportListTypes parses the id path parameter.
-func (s *Server) routeListImportListTypes(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.importListID(w, r); ok {
-		s.ListImportListTypes(w, r, id)
-	}
 }
 
 // ListImportListTypes answers the list types a library takes, with their settings; read on the library.
@@ -184,13 +159,6 @@ func listChoiceViews(choices []MediaChoice) []gen.MediaChoice {
 		views[i] = gen.MediaChoice{Key: choice.Key, Label: choice.Label}
 	}
 	return views
-}
-
-// routeCreateImportList parses the id path parameter.
-func (s *Server) routeCreateImportList(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.importListID(w, r); ok {
-		s.CreateImportList(w, r, id)
-	}
 }
 
 // CreateImportList adds a disabled import list to a library; it is enabled after its preview. Administrator only.
@@ -268,13 +236,6 @@ func (s *Server) writeImportList(w http.ResponseWriter, r *http.Request, status 
 	writeJSON(w, s.logger, status, importListView(list, listStatus))
 }
 
-// routeUpdateImportList parses the id path parameter.
-func (s *Server) routeUpdateImportList(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.importListID(w, r); ok {
-		s.UpdateImportList(w, r, id)
-	}
-}
-
 // UpdateImportList replaces an import list's fields; enabling needs a preview of the type and settings it is saved
 // with (ADR-38). Administrator only.
 func (s *Server) UpdateImportList(w http.ResponseWriter, r *http.Request, id int64) {
@@ -316,13 +277,6 @@ func (s *Server) UpdateImportList(w http.ResponseWriter, r *http.Request, id int
 	s.writeImportList(w, r, http.StatusOK, updated)
 }
 
-// routePreviewImportList parses the id path parameter.
-func (s *Server) routePreviewImportList(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.importListID(w, r); ok {
-		s.PreviewImportList(w, r, id)
-	}
-}
-
 // PreviewImportList answers what the list would add now, adding nothing (ADR-38). Administrator only.
 func (s *Server) PreviewImportList(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -357,13 +311,6 @@ func (s *Server) PreviewImportList(w http.ResponseWriter, r *http.Request, id in
 	writeJSON(w, s.logger, http.StatusOK, gen.ImportListPreview{Entries: entries})
 }
 
-// routeRunImportList parses the id path parameter.
-func (s *Server) routeRunImportList(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.importListID(w, r); ok {
-		s.RunImportList(w, r, id)
-	}
-}
-
 // RunImportList queues an enabled list's run now. Administrator only.
 func (s *Server) RunImportList(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -387,13 +334,6 @@ func (s *Server) RunImportList(w http.ResponseWriter, r *http.Request, id int64)
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
-}
-
-// routeDeleteImportList parses the id path parameter.
-func (s *Server) routeDeleteImportList(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.importListID(w, r); ok {
-		s.DeleteImportList(w, r, id)
-	}
 }
 
 // DeleteImportList removes an import list and what it did; the works it added stay. Administrator only.

@@ -15,18 +15,6 @@ import (
 	"github.com/makearr/Solarr/internal/platform/config"
 )
 
-func (s *Server) routeGetLibraryQuality(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.categoryIDParam(w, r); ok {
-		s.GetLibraryQuality(w, r, id)
-	}
-}
-
-func (s *Server) routeSetLibraryQuality(w http.ResponseWriter, r *http.Request) {
-	if id, ok := s.categoryIDParam(w, r); ok {
-		s.SetLibraryQuality(w, r, id)
-	}
-}
-
 // GetLibraryQuality answers a library's ordered profiles, cutoff, target and warnings.
 func (s *Server) GetLibraryQuality(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -427,12 +415,6 @@ func (s *Server) CreateQualityTarget(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusCreated, qualityTargetView(created))
 }
 
-func (s *Server) routeUpdateQualityTarget(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "an id must be a number"); err == nil {
-		s.UpdateQualityTarget(w, r, id)
-	}
-}
-
 // UpdateQualityTarget replaces a target; the libraries aiming for it follow. Administrator only.
 func (s *Server) UpdateQualityTarget(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -450,12 +432,6 @@ func (s *Server) UpdateQualityTarget(w http.ResponseWriter, r *http.Request, id 
 	}
 	updated, _ := s.auth.Settings.Snapshot().QualityTarget(id)
 	writeJSON(w, s.logger, http.StatusOK, qualityTargetView(updated))
-}
-
-func (s *Server) routeDeleteQualityTarget(w http.ResponseWriter, r *http.Request) {
-	if id, err := parsePathID(w, s, r, "id", "an id must be a number"); err == nil {
-		s.DeleteQualityTarget(w, r, id)
-	}
 }
 
 // DeleteQualityTarget removes a target no library aims for. Administrator only.
