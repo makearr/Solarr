@@ -398,3 +398,53 @@ func TestOpen_PathWithURICharacters(t *testing.T) {
 		t.Fatalf("database not at the requested path: %v", err)
 	}
 }
+
+// A caller whose context ends while its write still waits leaves at once, and the writer never runs the write (SCHED-7).
+func TestWrite_ACancelledCallerLeavesTheQueueAndItsWriteNeverRuns(t *testing.T) {
+	opened := openWritableStore(t, clock.NewFakeAtEpoch(), nil)
+	holding, release := make(chan struct{}), make(chan struct{})
+	var releaseOnce sync.Once
+	letGo := func() { releaseOnce.Do(func() { close(release) }) }
+	defer letGo()
+	blocked := make(chan error, 1)
+	go func() {
+		blocked <- opened.Write(t.Context(), store.PrioNormal, func(context.Context, *sql.Tx) error {
+			close(holding)
+			<-release
+			return nil
+		})
+	}()
+	<-holding
+
+	ctx, cancel := context.WithCancel(t.Context())
+	var ran bool
+	left := make(chan error, 1)
+	go func() {
+		left <- opened.Write(ctx, store.PrioNormal, func(context.Context, *sql.Tx) error {
+			ran = true
+			return nil
+		})
+	}()
+	for opened.QueueDepth() == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	select {
+	case err := <-left:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("Write = %v, want context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the cancelled caller is still parked behind the writer")
+	}
+	letGo()
+	if err := <-blocked; err != nil {
+		t.Fatalf("blocking write: %v", err)
+	}
+	if err := opened.Write(t.Context(), store.PrioNormal, func(context.Context, *sql.Tx) error { return nil }); err != nil {
+		t.Fatalf("a later write: %v", err)
+	}
+	if ran {
+		t.Error("the abandoned write ran")
+	}
+}

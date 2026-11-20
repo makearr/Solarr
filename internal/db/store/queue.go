@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -55,7 +56,22 @@ type writeOp struct {
 
 	result chan error
 	index  int
+
+	// phase is queued until the writer begins the op or its caller gives up on it, whichever comes first.
+	phase atomic.Int32
 }
+
+const (
+	phaseQueued int32 = iota
+	phaseRunning
+	phaseAbandoned
+)
+
+// begin claims the op for the writer; false when its caller already left.
+func (o *writeOp) begin() bool { return o.phase.CompareAndSwap(phaseQueued, phaseRunning) }
+
+// abandon lets the caller leave; false when the writer already runs the op, whose outcome the caller must then wait for.
+func (o *writeOp) abandon() bool { return o.phase.CompareAndSwap(phaseQueued, phaseAbandoned) }
 
 func newWriteOp(ctx context.Context, priority Priority, now time.Time, execute func(context.Context, *sql.DB) error) *writeOp {
 	return &writeOp{

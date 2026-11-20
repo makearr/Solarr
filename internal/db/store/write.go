@@ -39,9 +39,20 @@ func (s *Store) Write(ctx context.Context, priority Priority, run func(context.C
 		return fmt.Errorf("store %s: %w", s.config.Name, err)
 	}
 
+	return s.await(ctx, op)
+}
+
+// await waits for the writer to run op. A caller whose context ends while the op still waits leaves at once; the writer
+// then skips the op. An op already running is waited for, so its caller never reports a failure for a commit.
+func (s *Store) await(ctx context.Context, op *writeOp) error {
 	select {
 	case err := <-op.result:
 		return err
+	case <-ctx.Done():
+		if op.abandon() {
+			return fmt.Errorf("store %s: %w", s.config.Name, ctx.Err())
+		}
+		return <-op.result
 	case <-s.writerDone:
 		// Unreachable while the queue drains before the writer exits, which it does and which is
 		// tested.
@@ -101,6 +112,9 @@ func (s *Store) writeLoop() {
 func (s *Store) WritesRun() int64 { return s.writesRun.Load() }
 
 func (s *Store) execute(op *writeOp) error {
+	if !op.begin() {
+		return nil
+	}
 	s.writesRun.Add(1)
 	started := s.clock.Now()
 	queueWait := started.Sub(op.enqueued)
@@ -219,17 +233,7 @@ func (s *Store) writeExclusive(ctx context.Context, priority Priority, exemptFro
 	if err := s.queue.push(op); err != nil {
 		return fmt.Errorf("store %s: %w", s.config.Name, err)
 	}
-	select {
-	case err := <-op.result:
-		return err
-	case <-s.writerDone:
-		select {
-		case err := <-op.result:
-			return err
-		default:
-			return fmt.Errorf("store %s: %w before the write ran", s.config.Name, ErrClosed)
-		}
-	}
+	return s.await(ctx, op)
 }
 
 // reportDuration enforces the transaction budget (ADR-28).
