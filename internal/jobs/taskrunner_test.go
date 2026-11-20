@@ -608,3 +608,61 @@ func TestTaskRunner_APausedTaskRefusesRunNowAndFiresAgainOnceResumed(t *testing.
 		t.Errorf("the enqueue saw task keys %v, want [scan] only from the run after Resume", keys)
 	}
 }
+
+// A run that fell due while the process was down fires once when the runner starts; one that ran on time, a disabled task,
+// a task that fires at startup and a fast cadence do not (SCHED-3).
+func TestTaskRunner_CatchesUpOneMissedRun(t *testing.T) {
+	due := time.Unix(3600, 0).UTC()
+	for _, tc := range []struct {
+		name  string
+		setup func(source *fakeScheduleSource, states *jobs.ScheduleStates, task *jobs.Task)
+		want  int
+	}{
+		{"missed", func(*fakeScheduleSource, *jobs.ScheduleStates, *jobs.Task) {}, 1},
+		{"ran after it fell due", func(_ *fakeScheduleSource, states *jobs.ScheduleStates, task *jobs.Task) {
+			if err := states.RecordRun(t.Context(), task.Key, due.Add(time.Minute), time.Second, "enqueued", "", due); err != nil {
+				t.Fatal(err)
+			}
+		}, 0},
+		{"not due yet", func(_ *fakeScheduleSource, states *jobs.ScheduleStates, task *jobs.Task) {
+			if err := states.SetNextRun(t.Context(), task.Key, time.Now().Add(72*time.Hour)); err != nil {
+				t.Fatal(err)
+			}
+		}, 0},
+		{"disabled", func(source *fakeScheduleSource, _ *jobs.ScheduleStates, task *jobs.Task) {
+			source.disabled[task.Key] = true
+		}, 0},
+		{"fires at startup", func(source *fakeScheduleSource, _ *jobs.ScheduleStates, task *jobs.Task) {
+			source.startup[task.Key] = true
+		}, 0},
+		{"fast cadence", func(source *fakeScheduleSource, _ *jobs.ScheduleStates, task *jobs.Task) {
+			source.cadence[task.Key] = []string{"*/5 * * * *"}
+		}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			states, fake := newScheduleStates(t)
+			source := newFakeScheduleSource()
+			fired := make(chan struct{}, 10)
+			task := jobs.Task{Key: "files", DefaultCadence: "30 4 * * *", Startup: jobs.StartupOff, Enqueue: func(context.Context) (jobs.EnqueueResult, error) {
+				fired <- struct{}{}
+				return jobs.EnqueueResult{}, nil
+			}}
+			fake.Advance(48 * time.Hour)
+			if err := states.SetNextRun(t.Context(), task.Key, due); err != nil {
+				t.Fatal(err)
+			}
+			tc.setup(source, states, &task)
+			runner := jobs.NewTaskRunner(task, source, states, fake, quietLogger())
+
+			ctx, cancel := context.WithCancel(t.Context())
+			done := make(chan struct{})
+			go func() { defer close(done); runner.Run(ctx) }()
+			fake.BlockUntilWaiters(1)
+			cancel()
+			<-done
+			if got := len(fired); got != tc.want {
+				t.Errorf("fired %d times, want %d", got, tc.want)
+			}
+		})
+	}
+}

@@ -72,8 +72,34 @@ func NewTaskRunner(task Task, source ScheduleSource, states *ScheduleStates, cl 
 	return &TaskRunner{task: task, source: source, states: states, clock: cl, logger: logger}
 }
 
+// catchUpMinInterval is the cadence gap above which a missed fire is made up; a task firing more often is close enough to its next fire.
+const catchUpMinInterval = 15 * time.Minute
+
+// catchUp fires once a run that fell due while the process was down. A task that fires at startup already did, so it is left alone.
+func (r *TaskRunner) catchUp(ctx context.Context) {
+	if !r.source.Enabled(r.task.Key) || r.source.RunAtStartup(r.task.Key, r.task.Startup == StartupOn) {
+		return
+	}
+	state, found, err := r.states.Get(ctx, r.task.Key)
+	now := r.clock.Now()
+	if err != nil || !found || state.NextRunAt == nil || !state.NextRunAt.Before(now) {
+		return
+	}
+	if state.LastRunAt != nil && !state.LastRunAt.Before(*state.NextRunAt) {
+		return
+	}
+	if CadenceInterval(r.source.Cadences(r.task.Key, r.task.DefaultCadence), r.task.DefaultCadence, now) <= catchUpMinInterval {
+		return
+	}
+	r.logger.Info("catching up a run missed while stopped", slog.String("task", r.task.Key), slog.Time("due", *state.NextRunAt))
+	if err := r.runOnce(ctx, r.task.Enqueue); err != nil {
+		r.logger.Debug("catch-up run skipped", slog.String("task", r.task.Key), slog.Any("error", err))
+	}
+}
+
 // Run drives the loop until ctx ends.
 func (r *TaskRunner) Run(ctx context.Context) {
+	r.catchUp(ctx)
 	for {
 		schedule := r.resolveSchedule()
 		next := schedule.Next(r.clock.Now())
