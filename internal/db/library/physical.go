@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"strings"
 	"time"
 
@@ -32,7 +33,33 @@ func QuickHash(fsys fsx.FS, absolutePath string, size int64) (string, error) {
 		return "", fmt.Errorf("library: quick hash %s: %w", absolutePath, err)
 	}
 	defer func() { _ = file.Close() }()
+	return quickHashOf(file, absolutePath, size)
+}
 
+// FileVanished reports a hashing failure caused by the file going away or shrinking between the probe and the read.
+func FileVanished(err error) bool {
+	return errors.Is(err, fs.ErrNotExist) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
+}
+
+// Hashes is QuickHash and, when withOSHash, OSHash from one open of the file.
+func Hashes(fsys fsx.FS, absolutePath string, size int64, withOSHash bool) (quick, os string, err error) {
+	file, err := fsys.Open(absolutePath)
+	if err != nil {
+		return "", "", fmt.Errorf("library: hash %s: %w", absolutePath, err)
+	}
+	defer func() { _ = file.Close() }()
+	if quick, err = quickHashOf(file, absolutePath, size); err != nil {
+		return "", "", err
+	}
+	if withOSHash {
+		if os, err = osHashOf(file, absolutePath, size); err != nil {
+			return "", "", err
+		}
+	}
+	return quick, os, nil
+}
+
+func quickHashOf(file fsx.File, absolutePath string, size int64) (string, error) {
 	hash := sha256.New()
 	hash.Write(fmt.Appendf(nil, "%d:", size))
 

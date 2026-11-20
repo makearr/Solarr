@@ -79,19 +79,23 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 	if len(readable) == 0 {
 		return nil
 	}
-	files := make([]library.PhysicalFile, len(readable))
-	for i, observed := range readable {
+	files := make([]library.PhysicalFile, 0, len(readable))
+	kept := readable[:0:0]
+	for _, observed := range readable {
 		absolute := path.Join(root.Path, observed.File.RelPath)
-		hash, err := library.QuickHash(c.config.FS, absolute, observed.File.SizeBytes)
+		hash, oshash, err := library.Hashes(c.config.FS, absolute, observed.File.SizeBytes, c.config.OSHash)
+		if library.FileVanished(err) {
+			c.logger.Debug("file gone or shorter than scanned; left for the next scan", slog.String("path", observed.File.RelPath), slog.Any("error", err))
+			continue
+		}
 		if err != nil {
 			return fmt.Errorf("%s: %w", c.config.MediaType, err)
 		}
-		files[i] = library.PhysicalFile{RelPath: observed.File.RelPath, SizeBytes: observed.File.SizeBytes, QuickHash: hash, FirstSeenAt: now}
-		if c.config.OSHash {
-			if files[i].OSHash, err = library.OSHash(c.config.FS, absolute, observed.File.SizeBytes); err != nil {
-				return fmt.Errorf("%s: %w", c.config.MediaType, err)
-			}
-		}
+		kept = append(kept, observed)
+		files = append(files, library.PhysicalFile{RelPath: observed.File.RelPath, SizeBytes: observed.File.SizeBytes, QuickHash: hash, OSHash: oshash, FirstSeenAt: now})
+	}
+	if readable = kept; len(readable) == 0 {
+		return nil
 	}
 	registered, err := c.config.Physical.RegisterBatch(ctx, root.ID, files)
 	if err != nil {

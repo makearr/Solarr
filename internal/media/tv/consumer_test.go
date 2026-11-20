@@ -130,6 +130,23 @@ func TestScanAddsTheSeriesAndAttachesEpisodes(t *testing.T) {
 	}
 }
 
+// A file that disappears between the probe and the hash is left for the next scan; the rest of the batch is recorded (K-9).
+func TestScanSkipsAFileThatVanishedBeforeItWasHashed(t *testing.T) {
+	consumer, opened, fsys := newConsumer(t, searchSkyhook{series: fixtureSkyhook()})
+	gone := writeVideo(t, fsys, "Example Show/Season 1/Example Show - S01E01 - Episode.mkv")
+	kept := writeVideo(t, fsys, "Example Show/Season 1/Example Show - S01E02 - Episode.mkv")
+	if err := fsys.Remove(path.Join(scanRoot, gone.File.RelPath)); err != nil {
+		t.Fatal(err)
+	}
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: scanRoot, Online: true}, 3, []scan.Observed{gone, kept}); err != nil {
+		t.Fatalf("Observe: %v, want the vanished file skipped", err)
+	}
+	list, err := seriesIn(t.Context(), opened, 3)
+	if err != nil || len(list) != 1 || list[0].Counts.Present != 1 {
+		t.Errorf("series = %+v, %v; want one with the one surviving episode present", list, err)
+	}
+}
+
 func TestScanMonitorsWhatTheLibraryAsksFor(t *testing.T) {
 	for policy, want := range map[string]int64{settings.TVMonitorExisting: 2, settings.TVMonitorAll: 5, settings.TVMonitorNone: 0} {
 		consumer, opened, fsys := newConsumerIn(t, searchSkyhook{series: fixtureSkyhook()}, choosing{policy: policy})

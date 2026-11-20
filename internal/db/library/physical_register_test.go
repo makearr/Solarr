@@ -201,3 +201,27 @@ func TestRegisterBatch_SameQuickHashDifferentSizeStaysDistinct(t *testing.T) {
 		t.Error("files of different sizes sharing a quick hash were merged into one object")
 	}
 }
+
+// Hashes gives the same quick hash and OpenSubtitles hash as the two single-purpose calls, from one open of the file.
+func TestHashes_MatchTheSinglePurposeCalls(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	content := make([]byte, 200_000)
+	for i := range content {
+		content[i] = byte(i * 7)
+	}
+	writeFile(t, fsys, "/media/film.mkv", content)
+	size := int64(len(content))
+
+	quick, oshash, err := library.Hashes(fsys, "/media/film.mkv", size, true)
+	if err != nil {
+		t.Fatalf("Hashes: %v", err)
+	}
+	wantQuick, _ := library.QuickHash(fsys, "/media/film.mkv", size)
+	wantOS, _ := library.OSHash(fsys, "/media/film.mkv", size)
+	if quick != wantQuick || oshash != wantOS || oshash == "" {
+		t.Errorf("Hashes = %q, %q; want %q, %q", quick, oshash, wantQuick, wantOS)
+	}
+	if _, _, err := library.Hashes(fsys, "/media/none.mkv", size, true); !library.FileVanished(err) {
+		t.Errorf("Hashes of a missing file = %v, want it reported as vanished", err)
+	}
+}

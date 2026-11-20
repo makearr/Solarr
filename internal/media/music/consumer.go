@@ -169,17 +169,26 @@ func (c Consumer) Observe(
 	}
 
 	now := c.clock.Now()
-	files := make([]library.PhysicalFile, len(readable))
-	for index, observed := range readable {
+	files := make([]library.PhysicalFile, 0, len(readable))
+	kept := readable[:0:0]
+	for _, observed := range readable {
 		absolute := path.Join(root.Path, observed.File.RelPath)
 		hash, err := library.QuickHash(c.fsys, absolute, observed.File.SizeBytes)
+		if library.FileVanished(err) {
+			c.logger.Debug("file gone or shorter than scanned; left for the next scan", slog.String("path", observed.File.RelPath), slog.Any("error", err))
+			continue
+		}
 		if err != nil {
 			return fmt.Errorf("music: %w", err)
 		}
-		files[index] = library.PhysicalFile{
+		kept = append(kept, observed)
+		files = append(files, library.PhysicalFile{
 			RelPath: observed.File.RelPath, SizeBytes: observed.File.SizeBytes,
 			QuickHash: hash, FirstSeenAt: now,
-		}
+		})
+	}
+	if readable = kept; len(readable) == 0 {
+		return nil
 	}
 
 	registered, err := c.physical.RegisterBatch(ctx, root.ID, files)

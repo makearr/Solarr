@@ -22,7 +22,14 @@ func OSHash(fsys fsx.FS, absolutePath string, size int64) (string, error) {
 		return "", fmt.Errorf("library: oshash %s: %w", absolutePath, err)
 	}
 	defer func() { _ = file.Close() }()
+	return osHashOf(file, absolutePath, size)
+}
 
+// osHashOf hashes an open file; Hashes shares the open with the quick hash.
+func osHashOf(file fsx.File, absolutePath string, size int64) (string, error) {
+	if filekind.Of(absolutePath) != filekind.Video || size < oshashBlockBytes {
+		return "", nil
+	}
 	sum := uint64(size)
 	block := make([]byte, oshashBlockBytes)
 	for _, offset := range []int64{0, size - oshashBlockBytes} {
