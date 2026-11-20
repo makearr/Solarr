@@ -211,7 +211,7 @@ func (d Dispatch) SendRelease(ctx context.Context, itemID int64, release library
 			return library.Acquisition{}, ErrContentBlocklisted
 		}
 	}
-	clientRef, err := downloader.Client.Add(ctx, download.AddRequest{
+	clientRef, err := d.addOrAdopt(ctx, downloader.Client, detail.ReleaseCandidate.Protocol, download.AddRequest{
 		Name: detail.ReleaseCandidate.Title, File: file, Category: category,
 	})
 	if err != nil {
@@ -250,6 +250,25 @@ func (d Dispatch) SendRelease(ctx context.Context, itemID int64, release library
 		d.History(ctx, download.HistoryGrabbed, created, "")
 	}
 	return created, nil
+}
+
+// addOrAdopt sends the release, except that a torrent the client already holds in our category is taken as sent: the
+// refusal of a duplicate must not make the next, worse release go out beside it.
+func (d Dispatch) addOrAdopt(ctx context.Context, client download.Client, protocol string, request download.AddRequest) (string, error) {
+	if protocol != "torrent" {
+		return client.Add(ctx, request)
+	}
+	if ref, err := adoptTorrent(ctx, client, request.File, request.Category); err != nil || ref != "" {
+		return ref, err
+	}
+	ref, err := client.Add(ctx, request)
+	if !errors.Is(err, download.ErrRefused) {
+		return ref, err
+	}
+	if adopted, adoptErr := adoptTorrent(ctx, client, request.File, request.Category); adoptErr != nil || adopted != "" {
+		return adopted, adoptErr
+	}
+	return ref, err
 }
 
 // partsOf is what a release holds of the item; nil is the whole item.
