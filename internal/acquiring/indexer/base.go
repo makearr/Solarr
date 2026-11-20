@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -259,8 +260,16 @@ func answerCode(start []byte) int {
 // and 501), which an indexer sends with a 200 status: the caller must back off, not take it for a search with no results.
 func LimitReached(start []byte) bool {
 	code := answerCode(start)
-	return code == 500 || code == 501
+	return code == 500 || code == 501 || jsonLimitAnswer.Match(start[:min(len(start), jsonLimitWindow)])
 }
+
+// jsonLimitWindow is how much of an answer's start is read for a JSON tracker's limit answer, which comes first and is short.
+const jsonLimitWindow = 300
+
+// jsonLimitAnswer matches the JSON trackers' limit answers, anchored to the start so a release named alike is not one:
+// BroadcasTheNet's JSON-RPC "Call Limit Exceeded" error, and a Gazelle site's failure that speaks of a rate limit.
+var jsonLimitAnswer = regexp.MustCompile(
+	`(?is)^\s*\{(?:[^{}]*"error"\s*:\s*\{[^{}]*call limit exceeded|\s*"status"\s*:\s*"failure"[^{}]*(?:rate.?limit|too many requests))`)
 
 // AccountRefused reports an answer that says the key is wrong or suspended or the API is off (codes 100 to 102 and
 // 910): the indexer is unhealthy until someone fixes it, which the breaker must see rather than an empty result.

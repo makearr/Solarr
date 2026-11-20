@@ -83,10 +83,14 @@ func TestNewznabDefinitions_AreUniqueAndAddressed(t *testing.T) {
 
 func TestLimitReached(t *testing.T) {
 	for body, want := range map[string]bool{
-		`<?xml version="1.0"?><error code="500" description="Request limit reached"/>`: true,
-		`<error code="501" description="Download limit reached"/>`:                     true,
-		`<error code="100" description="Incorrect user credentials"/>`:                 false,
-		`<rss><channel><item/></channel></rss>`:                                        false,
+		`<?xml version="1.0"?><error code="500" description="Request limit reached"/>`:     true,
+		`<error code="501" description="Download limit reached"/>`:                         true,
+		`<error code="100" description="Incorrect user credentials"/>`:                     false,
+		`<rss><channel><item/></channel></rss>`:                                            false,
+		`{"id":"1","result":null,"error":{"code":-32002,"message":"Call Limit Exceeded"}}`: true,
+		`{"status":"failure","error":"Rate limit exceeded"}`:                               true,
+		`{"status":"failure","error":"Invalid API key"}`:                                   false,
+		`{"id":"1","result":{"torrents":[{"name":"Call Limit Exceeded"}]},"error":null}`:   false,
 	} {
 		if got := indexer.LimitReached([]byte(body)); got != want {
 			t.Errorf("LimitReached(%q) = %v, want %v", body, got, want)
