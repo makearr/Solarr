@@ -59,6 +59,44 @@ func (q *Queue) Complete(ctx context.Context, job Job, owner string, attempt Att
 	return nil
 }
 
+// CompleteAndContinue marks a yielded job succeeded and queues its remainder in the same transaction, so a crash cannot drop the rest.
+func (q *Queue) CompleteAndContinue(ctx context.Context, job Job, owner string, attempt Attempt) error {
+	now := q.clock.Now()
+	taskKey := TaskKeyFrom(ctx)
+	var affected int64
+	err := q.store.Write(ctx, store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
+		queries := q.queries.WithTx(tx)
+		rows, err := queries.CompleteJob(ctx, jobsdb.CompleteJobParams{UpdatedAt: now.Unix(), ID: job.ID, LeaseOwner: nullString(owner)})
+		if err != nil {
+			return err
+		}
+		affected = rows
+		if rows == 0 {
+			return nil
+		}
+		if err := queries.RecordAttemptFinish(ctx, jobsdb.RecordAttemptFinishParams{
+			FinishedAt: sql.NullInt64{Int64: now.Unix(), Valid: true},
+			Outcome:    nullString(string(OutcomeSucceeded)),
+			ID:         attempt.ID,
+		}); err != nil {
+			return err
+		}
+		_, err = q.enqueueIn(ctx, queries, Request{
+			Type: job.Type, ActionKey: job.ActionKey, Priority: job.Priority, Payload: job.Payload,
+			CorrelationID: job.CorrelationID, UserID: job.UserID, CategoryID: job.CategoryID,
+		}, taskKey)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("jobs: complete and continue %d: %w", job.ID, err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("%w: job %d", ErrLeaseLost, job.ID)
+	}
+	q.Nudge()
+	return nil
+}
+
 // Resolution is what Fail decided, so a caller can log it without re-deriving
 // the classification.
 type Resolution struct {

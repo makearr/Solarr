@@ -188,13 +188,16 @@ func (e *Executor) Execute(ctx context.Context, job Job) {
 	shutdown := ctx.Err() != nil && errors.Is(runErr, context.Canceled)
 	// Recorded without cancellation: at shutdown the parent context ends too, and an unrecorded outcome waits out the lease.
 	ctx = context.WithoutCancel(ctx)
-	if runErr == nil || errors.Is(runErr, ErrYield) {
+	if runErr == nil {
 		if err := e.queue.Complete(ctx, job, e.owner, attempt); err != nil {
 			logger.Warn("could not record success", slog.Any("error", err))
-			return
 		}
-		if runErr != nil {
-			e.continueAfterYield(WithTaskKey(ctx, taskKey), job, logger)
+		return
+	}
+	if errors.Is(runErr, ErrYield) {
+		// Its action key is free again once it succeeded, so the rest is queued under the same key.
+		if err := e.queue.CompleteAndContinue(WithTaskKey(ctx, taskKey), job, e.owner, attempt); err != nil {
+			logger.Warn("could not record a yield", slog.Any("error", err))
 		}
 		return
 	}
@@ -307,16 +310,6 @@ func (e *Executor) runOnDisk(ctx context.Context, handler Handler, job Job) erro
 	}
 	defer release()
 	return runWithRecovery(ctx, handler, job)
-}
-
-// continueAfterYield queues the rest of a yielded job; its action key is free again once it succeeded.
-func (e *Executor) continueAfterYield(ctx context.Context, job Job, logger *slog.Logger) {
-	if _, err := e.queue.Enqueue(ctx, Request{
-		Type: job.Type, ActionKey: job.ActionKey, Priority: job.Priority, Payload: job.Payload,
-		CorrelationID: job.CorrelationID, UserID: job.UserID, CategoryID: job.CategoryID,
-	}); err != nil {
-		logger.Warn("could not queue the rest of a yielded job", slog.Any("error", err))
-	}
 }
 
 // refuse cancels a mutating job in a dry-run mode (ADR-20).

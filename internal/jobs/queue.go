@@ -78,6 +78,22 @@ type EnqueueResult struct {
 
 // Enqueue adds a job, or returns the active one already carrying its action key (ADR-3).
 func (q *Queue) Enqueue(ctx context.Context, request Request) (EnqueueResult, error) {
+	var result EnqueueResult
+	taskKey := TaskKeyFrom(ctx)
+	err := q.store.Write(ctx, store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
+		var err error
+		result, err = q.enqueueIn(ctx, q.queries.WithTx(tx), request, taskKey)
+		return err
+	})
+	if err != nil {
+		return EnqueueResult{}, fmt.Errorf("jobs: enqueue %s: %w", request.Type, err)
+	}
+	q.Nudge()
+	return result, nil
+}
+
+// enqueueIn is Enqueue inside a transaction the caller owns.
+func (q *Queue) enqueueIn(ctx context.Context, queries *jobsdb.Queries, request Request, taskKey string) (EnqueueResult, error) {
 	definition, known := q.registry.Lookup(request.Type)
 	if !known {
 		return EnqueueResult{}, fmt.Errorf("%w: %s", ErrUnknownType, request.Type)
@@ -93,67 +109,54 @@ func (q *Queue) Enqueue(ctx context.Context, request Request) (EnqueueResult, er
 		priority = PriorityNormal
 	}
 
-	taskKey := TaskKeyFrom(ctx)
-	var result EnqueueResult
-	err := q.store.Write(ctx, store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
-		queries := q.queries.WithTx(tx)
-
-		if request.ActionKey != "" {
-			existing, err := queries.FindActiveJobByActionKey(ctx, sql.NullString{
-				String: request.ActionKey, Valid: true,
-			})
-			if err == nil {
-				// "Run now" on a job queued at low priority, or a caller asking more urgently, moves it up.
-				if err := queries.RaiseWaitingJobPriority(ctx, jobsdb.RaiseWaitingJobPriorityParams{
-					Priority: int64(priority), Now: now.Unix(), ID: existing.ID,
-				}); err != nil {
-					return fmt.Errorf("raise priority: %w", err)
-				}
-				waiting := State(existing.State) == StatePending || State(existing.State) == StatePendingRetry
-				if waiting && existing.Priority < int64(priority) {
-					existing.Priority = int64(priority)
-				}
-				result = EnqueueResult{Job: convertJob(existing), Duplicate: true}
-				return nil
-			}
-			if !errors.Is(err, sql.ErrNoRows) {
-				return fmt.Errorf("look up action key: %w", err)
-			}
-		}
-
-		created, err := queries.EnqueueJob(ctx, jobsdb.EnqueueJobParams{
-			Type:          string(request.Type),
-			Pool:          string(definition.Pool),
-			ActionKey:     nullString(request.ActionKey),
-			Priority:      int64(priority),
-			PayloadJson:   string(request.Payload),
-			State:         string(StatePending),
-			Mutating:      boolToInt(definition.Mutating),
-			MaxAttempts:   int64(definition.MaxAttempts),
-			RunAfter:      runAfter.Unix(),
-			DependsOn:     nullInt(request.DependsOn),
-			CorrelationID: nullString(request.CorrelationID),
-			UserID:        nullInt(request.UserID),
-			CreatedAt:     now.Unix(),
-			UpdatedAt:     now.Unix(),
-			CategoryID:    nullInt(request.CategoryID),
+	if request.ActionKey != "" {
+		existing, err := queries.FindActiveJobByActionKey(ctx, sql.NullString{
+			String: request.ActionKey, Valid: true,
 		})
-		if err != nil {
-			return fmt.Errorf("insert: %w", err)
-		}
-		if taskKey != "" {
-			if err := queries.RecordJobTask(ctx, jobsdb.RecordJobTaskParams{JobID: created.ID, TaskKey: taskKey}); err != nil {
-				return fmt.Errorf("record task: %w", err)
+		if err == nil {
+			// "Run now" on a job queued at low priority, or a caller asking more urgently, moves it up.
+			if err := queries.RaiseWaitingJobPriority(ctx, jobsdb.RaiseWaitingJobPriorityParams{
+				Priority: int64(priority), Now: now.Unix(), ID: existing.ID,
+			}); err != nil {
+				return EnqueueResult{}, fmt.Errorf("raise priority: %w", err)
 			}
+			waiting := State(existing.State) == StatePending || State(existing.State) == StatePendingRetry
+			if waiting && existing.Priority < int64(priority) {
+				existing.Priority = int64(priority)
+			}
+			return EnqueueResult{Job: convertJob(existing), Duplicate: true}, nil
 		}
-		result = EnqueueResult{Job: convertJob(created)}
-		return nil
+		if !errors.Is(err, sql.ErrNoRows) {
+			return EnqueueResult{}, fmt.Errorf("look up action key: %w", err)
+		}
+	}
+
+	created, err := queries.EnqueueJob(ctx, jobsdb.EnqueueJobParams{
+		Type:          string(request.Type),
+		Pool:          string(definition.Pool),
+		ActionKey:     nullString(request.ActionKey),
+		Priority:      int64(priority),
+		PayloadJson:   string(request.Payload),
+		State:         string(StatePending),
+		Mutating:      boolToInt(definition.Mutating),
+		MaxAttempts:   int64(definition.MaxAttempts),
+		RunAfter:      runAfter.Unix(),
+		DependsOn:     nullInt(request.DependsOn),
+		CorrelationID: nullString(request.CorrelationID),
+		UserID:        nullInt(request.UserID),
+		CreatedAt:     now.Unix(),
+		UpdatedAt:     now.Unix(),
+		CategoryID:    nullInt(request.CategoryID),
 	})
 	if err != nil {
-		return EnqueueResult{}, fmt.Errorf("jobs: enqueue %s: %w", request.Type, err)
+		return EnqueueResult{}, fmt.Errorf("insert: %w", err)
 	}
-	q.Nudge()
-	return result, nil
+	if taskKey != "" {
+		if err := queries.RecordJobTask(ctx, jobsdb.RecordJobTaskParams{JobID: created.ID, TaskKey: taskKey}); err != nil {
+			return EnqueueResult{}, fmt.Errorf("record task: %w", err)
+		}
+	}
+	return EnqueueResult{Job: convertJob(created)}, nil
 }
 
 // HasActive reports whether a job with this action key is waiting or running.

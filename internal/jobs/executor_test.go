@@ -511,3 +511,20 @@ func TestExecute_EveryRunIsLoggedWithItsType(t *testing.T) {
 		t.Fatalf("runs = %+v, want one run of %s lasting 3s (failures count too)", spy.runs, typeBackup)
 	}
 }
+
+// A worker that lost its lease queues no continuation: the job's new owner decides what happens next (SCHED-2).
+func TestCompleteAndContinue_LostLeaseQueuesNothing(t *testing.T) {
+	queue, _ := newQueue(t)
+	mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
+	job := claimOne(t, queue, jobs.PoolMaintenance, "worker-1")
+	attempt, err := queue.Start(t.Context(), job, "worker-1")
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if err := queue.CompleteAndContinue(t.Context(), job, "worker-2", attempt); !errors.Is(err, jobs.ErrLeaseLost) {
+		t.Fatalf("CompleteAndContinue by another owner = %v, want ErrLeaseLost", err)
+	}
+	if claimable, err := queue.ClaimableIn(t.Context(), jobs.PoolMaintenance); err != nil || claimable != 0 {
+		t.Errorf("claimable = %d (%v), want 0: no continuation without the lease", claimable, err)
+	}
+}
