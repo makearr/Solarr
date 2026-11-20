@@ -99,3 +99,33 @@ func TestSystemHealth_NamesEachTaskWhoseLastRunFailed(t *testing.T) {
 		t.Fatalf("checks = %+v, want %+v", got, want)
 	}
 }
+
+type fakeBackups []apiserver.BackupFileRow
+
+func (f fakeBackups) List(context.Context) ([]apiserver.BackupFileRow, error) { return f, nil }
+
+func TestSystemHealth_StaleBackupWarnsPastTwoGapsAndIgnoresPreMigrationCopies(t *testing.T) {
+	now := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	week := 7 * 24 * time.Hour
+	health := func(rows ...apiserver.BackupFileRow) SystemHealth {
+		return SystemHealth{
+			Backups: fakeBackups(rows), BackupInterval: func(time.Time) time.Duration { return week },
+			Now: func() time.Time { return now },
+		}
+	}
+	old := apiserver.BackupFileRow{TakenAt: now.Add(-15 * 24 * time.Hour)}
+	recentPre := apiserver.BackupFileRow{TakenAt: now.Add(-time.Hour), PreMigration: true}
+	want := []apiserver.HealthCheck{{
+		ID: "backup_stale", Severity: apiserver.HealthWarning,
+		Message: "The newest backup is 15 days old, older than two scheduled backups.", Link: "/settings/backups",
+	}}
+	if got := health(old, recentPre).staleBackup(t.Context()); !reflect.DeepEqual(got, want) {
+		t.Fatalf("checks = %+v, want %+v", got, want)
+	}
+	if got := health(apiserver.BackupFileRow{TakenAt: now.Add(-13 * 24 * time.Hour)}).staleBackup(t.Context()); len(got) != 0 {
+		t.Fatalf("checks = %+v, want none", got)
+	}
+	if got := health().staleBackup(t.Context()); len(got) != 0 {
+		t.Fatalf("no backup yet: checks = %+v, want none", got)
+	}
+}

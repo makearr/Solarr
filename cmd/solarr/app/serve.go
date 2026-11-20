@@ -872,6 +872,10 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library), Vanished: p.vanishedFiles(), Registry: p.media,
 			AboveRating: library.NewWorks(p.library).CountAboveRating, Paused: p.outbound().breaker.Paused,
 			Media: p.tool, Tasks: p.taskRegistry.All, TaskRuns: p.scheduleStates,
+			Backups: backupSource{FS: p.fsys, Directory: p.config.Paths.BackupDir}, Now: clock.NewSystem().Now,
+			BackupInterval: func(now time.Time) time.Duration {
+				return jobs.CadenceInterval(p.cache.Snapshot().ScheduleCadences("backup", backupScheduleCron), backupScheduleCron, now)
+			},
 		},
 		Blocklist: adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
 		History:   adapters.History{History: statistics.NewHistory(p.statistics)},

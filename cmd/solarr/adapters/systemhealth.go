@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/poll"
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -43,6 +44,14 @@ type SystemHealth struct {
 	TaskRuns interface {
 		List(ctx context.Context) ([]jobs.ScheduleRun, error)
 	}
+	// Backups lists the backup files present; nil skips the stale-backup check.
+	Backups interface {
+		List(ctx context.Context) ([]apiserver.BackupFileRow, error)
+	}
+	// BackupInterval is the gap between two scheduled backups; zero when none is scheduled.
+	BackupInterval func(now time.Time) time.Duration
+	// Now stamps the stale-backup check.
+	Now func() time.Time
 }
 
 // Checks reports what is missing. Every probe is best-effort: a failure to
@@ -80,6 +89,7 @@ func (a SystemHealth) Checks(ctx context.Context) []apiserver.HealthCheck {
 	checks = append(checks, a.pausedProviders(ctx)...)
 	checks = append(checks, a.missingMediaTools(ctx)...)
 	checks = append(checks, a.failingTasks(ctx)...)
+	checks = append(checks, a.staleBackup(ctx)...)
 	return append(checks, pausedForRoom(snapshot)...)
 }
 
@@ -95,6 +105,37 @@ func (a SystemHealth) missingMediaTools(ctx context.Context) []apiserver.HealthC
 	return []apiserver.HealthCheck{{
 		ID: "media_tools_missing", Severity: apiserver.HealthError,
 		Message: "Solarr cannot run the tools that read media files, so nothing can be scanned or imported: " + err.Error(),
+	}}
+}
+
+// staleBackup warns when the newest backup is older than two scheduled gaps; no backup yet says nothing,
+// since a fresh install has none until its first scheduled run.
+func (a SystemHealth) staleBackup(ctx context.Context) []apiserver.HealthCheck {
+	if a.Backups == nil || a.BackupInterval == nil || a.Now == nil {
+		return nil
+	}
+	now := a.Now()
+	interval := a.BackupInterval(now)
+	if interval <= 0 {
+		return nil
+	}
+	rows, err := a.Backups.List(ctx)
+	if err != nil {
+		return nil
+	}
+	var newest time.Time
+	for _, row := range rows {
+		if !row.PreMigration && row.TakenAt.After(newest) {
+			newest = row.TakenAt
+		}
+	}
+	if newest.IsZero() || now.Sub(newest) <= 2*interval {
+		return nil
+	}
+	return []apiserver.HealthCheck{{
+		ID: "backup_stale", Severity: apiserver.HealthWarning,
+		Message: fmt.Sprintf("The newest backup is %d days old, older than two scheduled backups.", int(now.Sub(newest).Hours()/24)),
+		Link:    "/settings/backups",
 	}}
 }
 
