@@ -495,13 +495,13 @@ const artistReleaseGroupsPageSize = 100
 const artistReleaseGroupsMaxPages = 20
 
 // ArtistReleaseGroups implements Discography by browsing musicbrainz.org's
-// release-group endpoint, paging until either a page comes back short or the
-// reported total is reached.
+// release-group endpoint (website-default: no bootleg-only groups) until a page
+// comes back short or the reported total is reached.
 func (d direct) ArtistReleaseGroups(ctx context.Context, artistMBID string) ([]ReleaseGroup, error) {
 	var all []ReleaseGroup
 	for page := 0; page < artistReleaseGroupsMaxPages; page++ {
 		offset := page * artistReleaseGroupsPageSize
-		requestURL := fmt.Sprintf("%s/release-group?artist=%s&limit=%d&offset=%d&fmt=json",
+		requestURL := fmt.Sprintf("%s/release-group?artist=%s&release-group-status=website-default&limit=%d&offset=%d&fmt=json",
 			d.baseURL, url.QueryEscape(artistMBID), artistReleaseGroupsPageSize, offset)
 
 		var parsed directBrowseResponse
@@ -621,15 +621,22 @@ func luceneQuoted(value string) string {
 	return `"` + escaped + `"`
 }
 
-// directRelease is musicbrainz.org's release JSON with inc=recordings+labels+media.
+// directRelease is musicbrainz.org's release JSON with inc=recordings+artist-credits+isrcs+labels+media.
 // Field names are hyphenated -- MusicBrainz's own convention, not a typo.
 type directRelease struct {
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	Date      string `json:"date"`
-	Status    string `json:"status"`
-	Country   string `json:"country"`
-	Barcode   string `json:"barcode"`
+	ID      string `json:"id"`
+	Title   string `json:"title"`
+	Date    string `json:"date"`
+	Status  string `json:"status"`
+	Country string `json:"country"`
+	Barcode string `json:"barcode"`
+
+	Disambiguation     string `json:"disambiguation"`
+	Packaging          string `json:"packaging"`
+	TextRepresentation struct {
+		Language string `json:"language"`
+		Script   string `json:"script"`
+	} `json:"text-representation"`
 	LabelInfo []struct {
 		Label struct {
 			ID   string `json:"id"`
@@ -640,15 +647,18 @@ type directRelease struct {
 	Media []struct {
 		Position int    `json:"position"`
 		Format   string `json:"format"`
+		Title    string `json:"title"`
 		Tracks   []struct {
-			Number    string `json:"number"`
-			Position  int    `json:"position"`
-			Title     string `json:"title"`
-			Length    *int64 `json:"length"`
-			Recording struct {
-				ID     string `json:"id"`
-				Title  string `json:"title"`
-				Length *int64 `json:"length"`
+			ArtistCredit []directCredit `json:"artist-credit"`
+			Number       string         `json:"number"`
+			Position     int            `json:"position"`
+			Title        string         `json:"title"`
+			Length       *int64         `json:"length"`
+			Recording    struct {
+				ID     string   `json:"id"`
+				Title  string   `json:"title"`
+				Length *int64   `json:"length"`
+				ISRCs  []string `json:"isrcs"`
 			} `json:"recording"`
 		} `json:"tracks"`
 	} `json:"media"`
@@ -657,7 +667,7 @@ type directRelease struct {
 func (d direct) release(ctx context.Context, mbid string) (Release, error) {
 	var parsed directRelease
 	escaped := url.PathEscape(mbid) // an id from a file tag is not trusted to be a bare MBID
-	url := fmt.Sprintf("%s/release/%s?fmt=json&inc=recordings+labels+media", d.baseURL, escaped)
+	url := fmt.Sprintf("%s/release/%s?fmt=json&inc=recordings+artist-credits+isrcs+labels+media", d.baseURL, escaped)
 	if err := getJSON(ctx, d.client, url, &parsed); err != nil {
 		return Release{}, fmt.Errorf("musicbrainz: release %s: %w", mbid, err)
 	}
@@ -698,7 +708,7 @@ func (d direct) Releases(ctx context.Context, releaseGroupMBID string) ([]Releas
 			Count    int             `json:"release-count"`
 			Releases []directRelease `json:"releases"`
 		}
-		url := fmt.Sprintf("%s/release?release-group=%s&fmt=json&inc=recordings+labels+media&limit=%d&offset=%d",
+		url := fmt.Sprintf("%s/release?release-group=%s&fmt=json&inc=recordings+artist-credits+isrcs+labels+media&limit=%d&offset=%d",
 			d.baseURL, releaseGroupMBID, directReleaseBrowseLimit, len(releases))
 		if err := getJSON(ctx, d.client, url, &parsed); err != nil {
 			return nil, fmt.Errorf("musicbrainz: releases of %s: %w", releaseGroupMBID, err)
@@ -713,10 +723,29 @@ func (d direct) Releases(ctx context.Context, releaseGroupMBID string) ([]Releas
 	return releases, nil
 }
 
+// directCredit is one artist-credit entry of a track.
+type directCredit struct {
+	Name   string `json:"name"`
+	Artist struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"artist"`
+}
+
+func creditsOf(parsed []directCredit) []ArtistCredit {
+	var out []ArtistCredit
+	for _, one := range parsed {
+		out = append(out, ArtistCredit{MBID: one.Artist.ID, Name: one.Name, ArtistName: one.Artist.Name})
+	}
+	return out
+}
+
 func (parsed directRelease) toRelease() Release {
 	release := Release{
 		MBID: parsed.ID, Title: parsed.Title, Status: strings.ToLower(parsed.Status),
 		Date: parsed.Date, Country: parsed.Country, Barcode: parsed.Barcode,
+		Disambiguation: parsed.Disambiguation, Packaging: parsed.Packaging,
+		Language: parsed.TextRepresentation.Language, Script: parsed.TextRepresentation.Script,
 	}
 	if len(parsed.LabelInfo) > 0 {
 		release.LabelName = parsed.LabelInfo[0].Label.Name
@@ -724,7 +753,7 @@ func (parsed directRelease) toRelease() Release {
 		release.CatalogueNumber = parsed.LabelInfo[0].CatalogNumber
 	}
 	for _, medium := range parsed.Media {
-		out := Medium{Position: medium.Position, Format: medium.Format}
+		out := Medium{Position: medium.Position, Format: medium.Format, Title: medium.Title}
 		for _, track := range medium.Tracks {
 			title := track.Title
 			if title == "" {
@@ -734,6 +763,8 @@ func (parsed directRelease) toRelease() Release {
 				Position: track.Position, Number: track.Number, Title: title,
 				DurationMs:    firstNonNil(track.Length, track.Recording.Length),
 				RecordingMBID: track.Recording.ID,
+				ArtistCredit:  creditsOf(track.ArtistCredit),
+				ISRCs:         track.Recording.ISRCs,
 			})
 		}
 		release.Media = append(release.Media, out)

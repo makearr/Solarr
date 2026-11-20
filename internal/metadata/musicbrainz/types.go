@@ -98,7 +98,13 @@ type Release struct {
 	LabelMBID       string
 	CatalogueNumber string
 	Barcode         string
-	Media           []Medium
+	// Disambiguation names the edition ("deluxe edition", "2011 remaster"); Packaging, Language
+	// and Script are MusicBrainz's own values, empty from a source that does not answer them.
+	Disambiguation string
+	Packaging      string
+	Language       string
+	Script         string
+	Media          []Medium
 }
 
 // Medium is one disc or side within a Release.
@@ -106,7 +112,9 @@ type Medium struct {
 	// Position is the disc number, 1-based.
 	Position int
 	Format   string
-	Tracks   []Track
+	// Title is the disc's own name ("Live in Berlin"), empty for most discs.
+	Title  string
+	Tracks []Track
 }
 
 // Track is one recording's appearance on one medium: work_part_external_id
@@ -120,6 +128,9 @@ type Track struct {
 	Title         string
 	DurationMs    int64
 	RecordingMBID string
+	// ArtistCredit is who the track credits; empty from a source that does not answer it.
+	ArtistCredit []ArtistCredit
+	ISRCs        []string
 }
 
 // Source is one place to ask (ADR-29): the Servarr proxy or direct MusicBrainz.

@@ -55,6 +55,9 @@ const directReleaseBody = `{
   "status": "Official",
   "country": "GB",
   "barcode": "724385502125",
+  "disambiguation": "deluxe edition",
+  "packaging": "Jewel Case",
+  "text-representation": {"language": "eng", "script": "Latn"},
   "label-info": [
     {"label": {"name": "Parlophone"}, "catalog-number": "CDNODATA02"}
   ],
@@ -62,10 +65,12 @@ const directReleaseBody = `{
     {
       "position": 1,
       "format": "CD",
+      "title": "Live in Pecez",
       "tracks": [
         {
           "number": "1", "position": 1, "title": "Sesoge", "length": 284400,
-          "recording": {"id": "1509e192-0467-437e-80d9-138f3222fd39", "title": "Sesoge", "length": 284386}
+          "artist-credit": [{"name": "Katupoken", "artist": {"id": "d6f6e536-85f7-4d04-8327-66db2e835786", "name": "Katupoken"}}],
+          "recording": {"id": "1509e192-0467-437e-80d9-138f3222fd39", "title": "Sesoge", "length": 284386, "isrcs": ["XXA000000001"]}
         },
         {
           "number": "2", "position": 2, "title": "", "length": null,
@@ -81,7 +86,7 @@ func TestDirect_AlbumParsesTheRealFieldShape(t *testing.T) {
 		"https://musicbrainz.invalid/release-group/" + okComputerRG + "?fmt=json&inc=artist-credits+genres+url-rels": {
 			status: http.StatusOK, body: directReleaseGroupBody,
 		},
-		"https://musicbrainz.invalid/release/" + okComputerRelease + "?fmt=json&inc=recordings+labels+media": {
+		"https://musicbrainz.invalid/release/" + okComputerRelease + "?fmt=json&inc=recordings+artist-credits+isrcs+labels+media": {
 			status: http.StatusOK, body: directReleaseBody,
 		},
 	}}
@@ -119,7 +124,15 @@ func TestDirect_AlbumParsesTheRealFieldShape(t *testing.T) {
 		t.Fatalf("Media = %+v, want one medium of two tracks", release.Media)
 	}
 
+	if release.Disambiguation != "deluxe edition" || release.Packaging != "Jewel Case" ||
+		release.Language != "eng" || release.Script != "Latn" || release.Media[0].Title != "Live in Pecez" {
+		t.Errorf("edition fields = %+v, want disambiguation, packaging, language, script and medium title", release)
+	}
+
 	first := release.Media[0].Tracks[0]
+	if len(first.ArtistCredit) != 1 || first.ArtistCredit[0].Name != "Katupoken" || len(first.ISRCs) != 1 || first.ISRCs[0] != "XXA000000001" {
+		t.Errorf("track 1 credit/ISRC = %+v %v, want the track credit and its ISRC", first.ArtistCredit, first.ISRCs)
+	}
 	if first.Title != "Sesoge" || first.DurationMs != 284400 || first.RecordingMBID != "1509e192-0467-437e-80d9-138f3222fd39" {
 		t.Errorf("track 1 = %+v, want the track's own title and length", first)
 	}
@@ -407,7 +420,7 @@ const directBrowseBody = `{
 }`
 
 func TestDirect_ArtistReleaseGroupsParsesTheRealFieldShapeIncludingSecondaryTypes(t *testing.T) {
-	requestURL := "https://musicbrainz.invalid/release-group?artist=" + radioheadMBID + "&limit=100&offset=0&fmt=json"
+	requestURL := "https://musicbrainz.invalid/release-group?artist=" + radioheadMBID + "&release-group-status=website-default&limit=100&offset=0&fmt=json"
 	transport := &fakeTransport{responses: map[string]fakeResponse{
 		requestURL: {status: http.StatusOK, body: directBrowseBody},
 	}}
@@ -447,8 +460,8 @@ func TestDirect_ArtistReleaseGroupsPagesUntilAShortPage(t *testing.T) {
 	}
 	fullPage = append(fullPage, `]}`...)
 
-	page0 := "https://musicbrainz.invalid/release-group?artist=" + radioheadMBID + "&limit=100&offset=0&fmt=json"
-	page1 := "https://musicbrainz.invalid/release-group?artist=" + radioheadMBID + "&limit=100&offset=100&fmt=json"
+	page0 := "https://musicbrainz.invalid/release-group?artist=" + radioheadMBID + "&release-group-status=website-default&limit=100&offset=0&fmt=json"
+	page1 := "https://musicbrainz.invalid/release-group?artist=" + radioheadMBID + "&release-group-status=website-default&limit=100&offset=100&fmt=json"
 	transport := &fakeTransport{responses: map[string]fakeResponse{
 		page0: {status: http.StatusOK, body: string(fullPage)},
 		page1: {status: http.StatusOK, body: `{"release-group-count": 150, "release-groups": [` +
@@ -497,7 +510,7 @@ func TestDirect_ReleasesBrowsesTheGroupsReleasesWithTracks(t *testing.T) {
 	   "media": [{"position": 1, "format": "CD", "tracks": [
 	     {"position": 1, "number": "1", "title": "Covabapoz Fofu", "recording": {"id": "rec-2"}}]}]}]}`
 	transport := &fakeTransport{responses: map[string]fakeResponse{
-		"https://mb.invalid/release?release-group=rg-shepherd&fmt=json&inc=recordings+labels+media&limit=100&offset=0": {
+		"https://mb.invalid/release?release-group=rg-shepherd&fmt=json&inc=recordings+artist-credits+isrcs+labels+media&limit=100&offset=0": {
 			status: http.StatusOK, body: body,
 		},
 	}}
@@ -527,7 +540,7 @@ func TestDirect_ReleasesFollowsEveryPage(t *testing.T) {
 		}
 		return fmt.Sprintf(`{"release-count": %d, "releases": [%s]}`, count, strings.Join(releases, ","))
 	}
-	base := "https://mb.invalid/release?release-group=rg-red&fmt=json&inc=recordings+labels+media&limit=100&offset="
+	base := "https://mb.invalid/release?release-group=rg-red&fmt=json&inc=recordings+artist-credits+isrcs+labels+media&limit=100&offset="
 	transport := &fakeTransport{responses: map[string]fakeResponse{
 		base + "0":  {status: http.StatusOK, body: page(0, 25, 30)},
 		base + "25": {status: http.StatusOK, body: page(25, 30, 30)},
