@@ -886,7 +886,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			CacheDir: p.config.Paths.CacheDir, BackupDir: p.config.Paths.BackupDir,
 			Scratch: filepath.Join(p.config.Paths.BackupDir, stagingDirName),
 			Recompress: &imageRecompress{
-				fs: p.fsys, coverDir: p.config.Paths.MediaCoverDir, previewsDir: filepath.Join(p.config.Paths.ConfigDir, "previews"),
+				fs: p.fsys, clock: clock.NewSystem(), coverDir: p.config.Paths.MediaCoverDir, previewsDir: filepath.Join(p.config.Paths.ConfigDir, "previews"),
 				images: func() settings.ImageSettings { return p.cache.Snapshot().ImageSettings() }, logger: p.logger,
 			},
 			Apply: p.applyImageSettings, Background: p.background,

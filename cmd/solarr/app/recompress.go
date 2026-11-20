@@ -21,6 +21,7 @@ import (
 // set, one at a time; a picture that would not come out smaller is left as it is.
 type imageRecompress struct {
 	fs                    fsx.FS
+	clock                 clock.Clock
 	coverDir, previewsDir string
 	images                func() settings.ImageSettings
 	logger                *slog.Logger
@@ -41,7 +42,7 @@ func (r *imageRecompress) Start(ctx context.Context) bool {
 	if r.status.Running {
 		return false
 	}
-	now := clock.NewSystem().Now()
+	now := r.clock.Now()
 	r.status = apiserver.RecompressStatus{Running: true, StartedAt: &now}
 	go r.run(ctx)
 	return true
@@ -60,7 +61,7 @@ func (r *imageRecompress) run(ctx context.Context) {
 			since = info.ModTime
 		}
 	}
-	started := clock.NewSystem().Now()
+	started := r.clock.Now()
 	files := r.listFiles(ctx, since)
 	r.update(func(s *apiserver.RecompressStatus) { s.Total = int64(len(files)) })
 	for _, file := range files {
@@ -81,7 +82,7 @@ func (r *imageRecompress) run(ctx context.Context) {
 		_ = fsx.WriteAtomic(r.fs, marker, func(w io.Writer) error { _, err := io.WriteString(w, figures); return err })
 		_ = r.fs.Chtimes(marker, started)
 	}
-	finished := clock.NewSystem().Now()
+	finished := r.clock.Now()
 	r.update(func(s *apiserver.RecompressStatus) { s.Running, s.FinishedAt = false, &finished })
 	r.logger.Info("pictures recompressed", slog.Int64("saved_bytes", r.Status().SavedBytes), slog.Int64("failed", r.Status().Failed))
 }
@@ -155,6 +156,10 @@ func (r *imageRecompress) recompress(path string, images settings.ImageSettings)
 		return 0, err
 	}
 	if err := fsx.WriteAtomic(r.fs, path, func(w io.Writer) error { _, err := w.Write(rewritten); return err }); err != nil {
+		return 0, err
+	}
+	// The picture keeps its age, or the next run would take it for one made since and lossy formats would lose a little more.
+	if err := r.fs.Chtimes(path, info.ModTime); err != nil {
 		return 0, err
 	}
 	return info.Size - int64(len(rewritten)), nil

@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/artwork"
@@ -24,7 +25,8 @@ func noisy(width, height int) *image.RGBA {
 }
 
 func TestRecompress_ShrinksCoversAndPreviewsToTheNewFiguresAndNeverGrowsOne(t *testing.T) {
-	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	fake := clock.NewFakeAtEpoch()
+	fsys := fsx.NewMem(fake)
 	cover, err := artwork.EncodeWebP(noisy(1000, 1000))
 	if err != nil {
 		t.Fatal(err)
@@ -37,7 +39,7 @@ func TestRecompress_ShrinksCoversAndPreviewsToTheNewFiguresAndNeverGrowsOne(t *t
 	putFile(t, fsys, "/previews/0/5-frame.jpg", string(preview))
 
 	run := &imageRecompress{
-		fs: fsys, coverDir: "/mediacover", previewsDir: "/previews", logger: slog.New(slog.DiscardHandler),
+		fs: fsys, clock: fake, coverDir: "/mediacover", previewsDir: "/previews", logger: slog.New(slog.DiscardHandler),
 		images: func() settings.ImageSettings {
 			return settings.ImageSettings{CoverMaxEdge: 500, CoverQuality: 60, PreviewMaxEdge: 640, PreviewQuality: 50}
 		},
@@ -74,5 +76,34 @@ func TestRecompress_ShrinksCoversAndPreviewsToTheNewFiguresAndNeverGrowsOne(t *t
 	run.run(t.Context())
 	if got := run.Status().SavedBytes; got != before {
 		t.Errorf("a second run saved %d more bytes; want it to leave settled pictures alone", got-before)
+	}
+}
+
+// A rewritten picture keeps the age it had, so the next run does not take it for one made since (K-9).
+func TestRecompress_ARewrittenPictureKeepsItsModificationTime(t *testing.T) {
+	fake := clock.NewFakeAtEpoch()
+	fsys := fsx.NewMem(fake)
+	cover, err := artwork.EncodeWebP(noisy(1000, 1000))
+	if err != nil {
+		t.Fatal(err)
+	}
+	putFile(t, fsys, "/mediacover/work-1-cover-full.webp", string(cover))
+	made, err := fsys.Stat("/mediacover/work-1-cover-full.webp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake.Advance(time.Hour)
+	run := &imageRecompress{fs: fsys, clock: fake, coverDir: "/mediacover", logger: slog.New(slog.DiscardHandler)}
+
+	saved, err := run.recompress("/mediacover/work-1-cover-full.webp", settings.ImageSettings{CoverMaxEdge: 500, CoverQuality: 60})
+	if err != nil || saved <= 0 {
+		t.Fatalf("recompress saved %d, %v; want a smaller picture", saved, err)
+	}
+	after, err := fsys.Stat("/mediacover/work-1-cover-full.webp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.ModTime.Equal(made.ModTime) {
+		t.Errorf("modification time = %v after the rewrite, want %v", after.ModTime, made.ModTime)
 	}
 }
