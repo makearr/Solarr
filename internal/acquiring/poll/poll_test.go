@@ -35,6 +35,13 @@ type fakeClient struct {
 	finished       []string
 	// own is what OwnFiles answers: the files a download brought into a folder other downloads share.
 	own []string
+	// gatherTarget and gatherSources are what Gather answers: where a download laid down as several folders is collected.
+	gatherTarget  string
+	gatherSources []string
+}
+
+func (f *fakeClient) Gather(context.Context, string) (string, []string, error) {
+	return f.gatherTarget, f.gatherSources, nil
 }
 
 func (f *fakeClient) OwnFiles(context.Context, string) ([]string, error) { return f.own, nil }
@@ -1084,6 +1091,35 @@ func TestPoll_ADownloadInASharedFolderImportsOnlyItsOwnFiles(t *testing.T) {
 		t.Fatalf("= %s, want IMPORTING", got.State)
 	}
 	if want := []string{"/downloads/complete/Heka-Zanuvode", "only: 01.flac, 02.flac"}; !slices.Equal(e.imported, want) {
+		t.Errorf("imported %v, want %v", e.imported, want)
+	}
+}
+
+func TestPoll_ADownloadLaidDownAsSeveralFoldersIsGatheredBeforeTheImport(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	for _, folder := range []string{"/downloads/CD1", "/downloads/CD2"} {
+		if err := e.fsys.MkdirAll(folder, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e.client.gatherTarget, e.client.gatherSources = "/downloads/.solarr/d-1", []string{"/downloads/CD1", "/downloads/CD2"}
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Zanuvode", State: download.StateCompleted, Path: "/downloads/.solarr/d-1"}}
+	e.run(t)
+	e.run(t) // a second poll finds the folders already moved and does not fail
+
+	if got := e.state(t, sent.ID); got.State != poll.StateImporting {
+		t.Fatalf("= %s, want IMPORTING", got.State)
+	}
+	for _, moved := range []string{"/downloads/.solarr/d-1/CD1", "/downloads/.solarr/d-1/CD2"} {
+		if _, err := e.fsys.Stat(moved); err != nil {
+			t.Errorf("%s: %v, want the disc folder gathered", moved, err)
+		}
+	}
+	if _, err := e.fsys.Stat("/downloads/CD1"); err == nil {
+		t.Error("/downloads/CD1 is still where slskd left it")
+	}
+	if want := []string{"/downloads/.solarr/d-1"}; !slices.Equal(e.imported, want) {
 		t.Errorf("imported %v, want %v", e.imported, want)
 	}
 }

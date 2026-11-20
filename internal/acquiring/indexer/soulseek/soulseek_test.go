@@ -41,7 +41,7 @@ func TestSearch_IsOneReleasePerPeerFolderWithAudio(t *testing.T) {
 	if got[0].Title != "Heka - Zanuvode (1988) [FLAC]" || got[0].SizeBytes != 75 || got[0].Categories[0] != 3040 || got[0].Seeders != 1 {
 		t.Errorf("album = %+v", got[0])
 	}
-	if got[1].Title != "Heka - Live [MP3 320]" || got[1].Categories[0] != 3010 {
+	if got[1].Title != "Heka - Live [MP3 320] [cd1 only]" || got[1].Categories[0] != 3010 {
 		t.Errorf("live = %+v", got[1])
 	}
 	if !strings.Contains(server.Seen[0].Body, `"searchText":"Heka Zanuvode"`) || server.Seen[0].Header.Get("X-API-Key") != "key" {
@@ -146,4 +146,32 @@ func httpClient(t *testing.T, server *clienttest.Server) *httpx.Client {
 	return httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), limiter, breaker, httpx.ClientConfig{
 		Provider: "indexer-test", UserAgent: "test", Transport: server,
 	})
+}
+
+func TestSearch_AnAlbumOfSeveralDiscFoldersIsOneRelease(t *testing.T) {
+	server := &clienttest.Server{}
+	server.Answer = func(request clienttest.Request) (clienttest.Route, bool) {
+		if strings.HasSuffix(request.Path, "/responses") {
+			return clienttest.Route{Body: `[{"username":"peer","files":[
+			 {"filename":"@@m\\Heka\\Zanuvode\\CD1\\01.flac","size":10,"extension":"flac"},
+			 {"filename":"@@m\\Heka\\Zanuvode\\CD2\\01.flac","size":20,"extension":"flac"},
+			 {"filename":"@@m\\Heka\\Zanuvode\\CD2\\02.flac","size":30,"extension":"flac"}]}]`}, true
+		}
+		if request.Method == "POST" {
+			return clienttest.Route{Body: `{"id":"x","isComplete":true}`}, true
+		}
+		return clienttest.Route{}, true
+	}
+	searcher := soulseek.New(httpClient(t, server), clock.NewFakeAtEpoch(), "http://slskd:5030", "key")
+	got, err := searcher.Search(t.Context(), indexer.SearchRequest{Function: "music", Query: "Heka Zanuvode", Categories: []int{3000}})
+	if err != nil || len(got) != 1 {
+		t.Fatalf("Search = %+v, %v; want one release for both discs", got, err)
+	}
+	if got[0].Title != "Heka - Zanuvode [FLAC]" || got[0].SizeBytes != 60 || got[0].GUID != "slsk://peer/@@m/Heka/Zanuvode" {
+		t.Errorf("release = %+v", got[0])
+	}
+	file, _ := searcher.Fetch(t.Context(), got[0].Link)
+	if release, err := download.ParseDirectRelease(file); err != nil || len(release.Files) != 3 || !release.WholeFolder {
+		t.Errorf("release = %+v, %v; want the three files of both discs", release, err)
+	}
 }

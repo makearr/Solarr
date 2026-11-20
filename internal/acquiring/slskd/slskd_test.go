@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -236,5 +237,72 @@ func TestDownloader_RemoveWithoutRemoteFileManagementLeavesTheFilesAndSucceeds(t
 	}}
 	if err := driver(t, server).Remove(t.Context(), `peer|@@music\A\Done`, true); err != nil {
 		t.Errorf("Remove = %v, want nil", err)
+	}
+}
+
+const twoDiscs = `{"source":"peer","whole_folder":true,"files":[{"path":"@@music\\Heka\\Zanuvode\\CD1\\01.flac","size":10},{"path":"@@music\\Heka\\Zanuvode\\CD2\\01.flac","size":20}]}`
+
+const twoDiscTransfers = `[{"username":"peer","directories":[
+ {"directory":"@@music\\Heka\\Zanuvode\\CD1","files":[{"id":"1","filename":"@@music\\Heka\\Zanuvode\\CD1\\01.flac","state":"Completed, Succeeded","size":10}]},
+ {"directory":"@@music\\Heka\\Zanuvode\\CD2","files":[{"id":"2","filename":"@@music\\Heka\\Zanuvode\\CD2\\01.flac","state":"Completed, Succeeded","size":20}]},
+ {"directory":"@@music\\Heka\\Other\\Disc 1","files":[{"id":"3","filename":"@@music\\Heka\\Other\\Disc 1\\01.flac","state":"Queued, Remotely","size":5}]}]}]`
+
+func TestDownloader_AMultiDiscAlbumIsOneDownloadGatheredInOneFolder(t *testing.T) {
+	server := &clienttest.Server{Routes: map[string]clienttest.Route{
+		"POST /api/v0/transfers/downloads/peer": {Status: http.StatusCreated},
+		"/api/v0/options":                       {Body: `{"directories":{"downloads":"/app/downloads"}}`},
+		"/api/v0/transfers/downloads":           {Body: twoDiscTransfers},
+	}}
+	ref, err := driver(t, server).Add(t.Context(), download.AddRequest{File: []byte(twoDiscs)})
+	if want := `peer|@@music\Heka\Zanuvode\*`; err != nil || ref != want {
+		t.Fatalf("Add = %q, %v, want %q", ref, err, want)
+	}
+	got, err := driver(t, server).Downloads(t.Context(), "")
+	if err != nil {
+		t.Fatalf("Downloads: %v", err)
+	}
+	var album download.Download
+	for _, one := range got {
+		if one.ClientRef == ref {
+			album = one
+		}
+	}
+	if album.State != download.StateCompleted || album.SizeBytes != 30 || album.Name != "Zanuvode" || !strings.HasPrefix(album.Path, "/app/downloads/.solarr/d-") {
+		t.Errorf("album = %+v, want both discs as one finished download below .solarr", album)
+	}
+	target, sources, err := driver(t, server).(download.Gatherer).Gather(t.Context(), ref)
+	if wantSources := []string{"/app/downloads/CD1", "/app/downloads/CD2"}; err != nil || target != album.Path || !reflect.DeepEqual(sources, wantSources) {
+		t.Errorf("Gather = %q, %v, %v; want %q and %v", target, sources, err, album.Path, wantSources)
+	}
+	if names, err := driver(t, server).(download.OwnFiles).OwnFiles(t.Context(), ref); names != nil || err != nil {
+		t.Errorf("OwnFiles = %v, %v; the gathered folder is all this download's", names, err)
+	}
+}
+
+func TestDownloader_FilesInFoldersThatAreNotDiscsOfOneAlbumAreRefused(t *testing.T) {
+	server := &clienttest.Server{}
+	other := `{"source":"peer","whole_folder":true,"files":[{"path":"@@music\\A\\CD1\\01.flac","size":1},{"path":"@@music\\B\\CD2\\01.flac","size":1}]}`
+	if _, err := driver(t, server).Add(t.Context(), download.AddRequest{File: []byte(other)}); !errors.Is(err, slskd.ErrSpansFolders) {
+		t.Errorf("two albums: %v, want ErrSpansFolders", err)
+	}
+}
+
+func TestDownloader_RemovingAMultiDiscAlbumDeletesTheGatheredFolderToo(t *testing.T) {
+	server := &clienttest.Server{Routes: map[string]clienttest.Route{"/api/v0/transfers/downloads": {Body: twoDiscTransfers},
+		"DELETE /api/v0/transfers/downloads/peer/1": {}, "DELETE /api/v0/transfers/downloads/peer/2": {}}}
+	if err := driver(t, server).Remove(t.Context(), `peer|@@music\Heka\Zanuvode\*`, true); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	var cancelled []string
+	for _, seen := range server.Seen {
+		if seen.Method == http.MethodDelete && strings.Contains(seen.Path, "/transfers/") {
+			cancelled = append(cancelled, seen.Path)
+		}
+	}
+	if want := []string{"/api/v0/transfers/downloads/peer/1", "/api/v0/transfers/downloads/peer/2"}; !reflect.DeepEqual(cancelled, want) {
+		t.Errorf("cancelled = %v, want %v (the other album's disc stays)", cancelled, want)
+	}
+	if last := server.Seen[len(server.Seen)-1]; last.Method != http.MethodDelete || !strings.Contains(last.Path, "/files/downloads/directories/") {
+		t.Errorf("last request = %s %s, want the gathered folder deleted", last.Method, last.Path)
 	}
 }

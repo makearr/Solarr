@@ -2,9 +2,12 @@ package slskd
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
@@ -26,7 +29,42 @@ type Downloader struct{ Client Client }
 var (
 	_ download.DirectClient = Downloader{}
 	_ download.OwnFiles     = Downloader{}
+	_ download.Gatherer     = Downloader{}
 )
+
+// discsMarker ends the reference directory of an album sent as several disc folders: the parent folder, then this.
+const discsMarker = `\*`
+
+// gatherRoot is the folder below the downloads directory where a multi-disc download's folders are collected.
+const gatherRoot = ".solarr"
+
+// parentOfDiscs is the album folder a reference directory stands for, when it stands for all its disc folders.
+func parentOfDiscs(directory string) (string, bool) { return strings.CutSuffix(directory, discsMarker) }
+
+// discFolder is a folder named for one disc of an album.
+func discFolder(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	for _, prefix := range []string{"cd", "disc", "disk"} {
+		if rest, found := strings.CutPrefix(lower, prefix); found && strings.TrimLeft(strings.TrimSpace(rest), "0123456789") == "" {
+			return true
+		}
+	}
+	return false
+}
+
+// gatherName is the folder of one multi-disc download below gatherRoot; the same peer and album always give the same.
+func gatherName(username, parent string) string {
+	sum := sha256.Sum256([]byte(username + refSeparator + parent))
+	return "d-" + hex.EncodeToString(sum[:8])
+}
+
+// holds says whether a folder the peer named belongs to the reference: it is the folder, or one disc of the album.
+func (r ref) holds(directory string) bool {
+	if parent, discs := parentOfDiscs(r.directory); discs {
+		return folderOf(directory) == parent && discFolder(lastSegment(directory))
+	}
+	return directory == r.directory
+}
 
 // refSeparator splits a reference into the peer, path-escaped, the peer's folder and, for a file, its name; neither a
 // Soulseek path nor a file name can hold it.
@@ -85,18 +123,31 @@ func stem(name string) string {
 // ErrSpansFolders is a direct release whose files lie in more than one of the peer's folders.
 var ErrSpansFolders = errors.New("slskd: the release's files lie in more than one folder")
 
-// AddDirect asks the peer for the release's files, which must share one folder.
+// AddDirect asks the peer for the release's files, which must share one folder, or lie in the disc folders of one album.
 func (d Downloader) AddDirect(ctx context.Context, release download.DirectRelease, _ download.AddRequest) (string, error) {
 	directory := folderOf(release.Files[0].Path)
 	files := make([]FileRequest, len(release.Files))
+	var folders []string
 	for i, file := range release.Files {
-		if folderOf(file.Path) != directory {
-			return "", ErrSpansFolders
+		folder := folderOf(file.Path)
+		if !slices.Contains(folders, folder) {
+			folders = append(folders, folder)
 		}
 		files[i] = FileRequest{Filename: file.Path, Size: file.Size}
 	}
-	if clash := d.clashWith(ctx, release, directory); clash != "" {
-		return "", fmt.Errorf("%w: %s", download.ErrRefused, clash)
+	if len(folders) > 1 {
+		parent := folderOf(folders[0])
+		for _, folder := range folders {
+			if folderOf(folder) != parent || !discFolder(lastSegment(folder)) {
+				return "", ErrSpansFolders
+			}
+		}
+		directory = parent + discsMarker
+	}
+	for _, folder := range folders {
+		if clash := d.clashWith(ctx, release, folder); clash != "" {
+			return "", fmt.Errorf("%w: %s", download.ErrRefused, clash)
+		}
 	}
 	answer, err := d.Client.Enqueue(ctx, release.Source, files)
 	if err != nil {
@@ -148,6 +199,9 @@ func (d Downloader) OwnFiles(ctx context.Context, clientRef string) ([]string, e
 	if err != nil {
 		return nil, err
 	}
+	if _, discs := parentOfDiscs(reference.directory); discs {
+		return nil, nil // gathered into a folder of its own: everything in it is this download's
+	}
 	users, err := d.Client.Downloads(ctx)
 	if err != nil {
 		return nil, err
@@ -158,7 +212,7 @@ func (d Downloader) OwnFiles(ctx context.Context, clientRef string) ([]string, e
 			continue
 		}
 		for _, folder := range user.Directories {
-			if folder.Directory != reference.directory {
+			if !reference.holds(folder.Directory) {
 				continue
 			}
 			files := folder.Files
@@ -205,8 +259,75 @@ func (d Downloader) Downloads(ctx context.Context, _ string) ([]download.Downloa
 				downloads = append(downloads, part)
 			}
 		}
+		downloads = append(downloads, albumsOfDiscs(user, root)...)
 	}
 	return downloads, nil
+}
+
+// albumsOfDiscs answers one download for each album the peer's disc folders make up, which is where a multi-disc release is tracked.
+func albumsOfDiscs(user UserTransfers, root string) []download.Download {
+	discs := map[string][]Transfer{}
+	var parents []string
+	for _, directory := range user.Directories {
+		if parent := folderOf(directory.Directory); discFolder(lastSegment(directory.Directory)) {
+			if _, seen := discs[parent]; !seen {
+				parents = append(parents, parent)
+			}
+			discs[parent] = append(discs[parent], directory.Files...)
+		}
+	}
+	var albums []download.Download
+	for _, parent := range parents {
+		count := 0
+		for _, directory := range user.Directories {
+			if folderOf(directory.Directory) == parent && discFolder(lastSegment(directory.Directory)) {
+				count++
+			}
+		}
+		if count < 2 {
+			continue
+		}
+		whole := summarise(discs[parent])
+		whole.ClientRef, whole.Name = ref{username: user.Username, directory: parent + discsMarker}.String(), lastSegment(parent)
+		if whole.State == download.StateCompleted {
+			whole.Path = root + "/" + gatherRoot + "/" + gatherName(user.Username, parent)
+		}
+		albums = append(albums, whole)
+	}
+	return albums
+}
+
+// Gather names where a finished multi-disc download's disc folders must be collected, and the folders slskd made for them.
+func (d Downloader) Gather(ctx context.Context, clientRef string) (string, []string, error) {
+	reference, err := parseReference(clientRef)
+	if err != nil {
+		return "", nil, err
+	}
+	parent, discs := parentOfDiscs(reference.directory)
+	if !discs {
+		return "", nil, nil
+	}
+	users, err := d.Client.Downloads(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+	root, err := d.Client.DownloadsDirectory(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+	root = strings.TrimRight(root, "/")
+	var sources []string
+	for _, user := range users {
+		if user.Username != reference.username {
+			continue
+		}
+		for _, folder := range user.Directories {
+			if reference.holds(folder.Directory) && download.PlainName(lastSegment(folder.Directory)) {
+				sources = append(sources, root+"/"+lastSegment(folder.Directory))
+			}
+		}
+	}
+	return root + "/" + gatherRoot + "/" + gatherName(reference.username, parent), sources, nil
 }
 
 // sameStem are the transfers whose file shares name's stem.
@@ -279,7 +400,7 @@ func (d Downloader) Remove(ctx context.Context, clientRef string, deleteFiles bo
 			continue
 		}
 		for _, folder := range user.Directories {
-			if folder.Directory != reference.directory {
+			if !reference.holds(folder.Directory) {
 				continue
 			}
 			files := folder.Files
@@ -290,7 +411,7 @@ func (d Downloader) Remove(ctx context.Context, clientRef string, deleteFiles bo
 				if err := d.Client.RemoveTransfer(ctx, reference.username, file.ID); err != nil {
 					return err
 				}
-				removed = append(removed, lastSegment(file.Filename))
+				removed = append(removed, lastSegment(folder.Directory)+"/"+lastSegment(file.Filename))
 			}
 		}
 	}
@@ -298,11 +419,20 @@ func (d Downloader) Remove(ctx context.Context, clientRef string, deleteFiles bo
 		return nil
 	}
 	// Only the files this download brought: its folder is shared by name with other downloads, and may hold more.
-	folder := lastSegment(reference.directory)
+	parent, discs := parentOfDiscs(reference.directory)
 	for _, name := range removed {
-		if err := d.Client.DeleteFile(ctx, folder+"/"+name); err != nil {
+		if err := d.Client.DeleteFile(ctx, name); err != nil {
 			return err
 		}
+		if discs {
+			if err := d.Client.DeleteFile(ctx, gatherRoot+"/"+gatherName(reference.username, parent)+"/"+name); err != nil {
+				return err
+			}
+		}
+	}
+	if discs {
+		// The gathering folder is this download's alone.
+		return d.Client.DeleteDirectory(ctx, gatherRoot+"/"+gatherName(reference.username, parent))
 	}
 	return nil
 }

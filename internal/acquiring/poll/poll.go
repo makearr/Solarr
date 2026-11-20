@@ -585,6 +585,9 @@ func (j *Job) completed(ctx context.Context, client Client, acquisition library.
 	if client.LocalPath != nil {
 		localPath = client.LocalPath(entry.Path)
 	}
+	if err := j.gather(ctx, client, acquisition); err != nil {
+		return err
+	}
 	localPath = j.jobFolder(ctx, localPath)
 	if err := j.config.Acquisitions.SetPath(ctx, acquisition.ID, localPath, now); err != nil {
 		return err
@@ -602,6 +605,39 @@ func (j *Job) completed(ctx context.Context, client Client, acquisition library.
 		return j.transition(ctx, acquisition, StateCompleted, "import could not start: "+err.Error(), now)
 	}
 	return j.transition(ctx, acquisition, StateImporting, "", now)
+}
+
+// gather moves the folders of a download laid down as several (disc folders) under the one folder the import reads;
+// a folder already moved is skipped, so a poll after a crash finishes the job.
+func (j *Job) gather(ctx context.Context, client Client, acquisition library.Acquisition) error {
+	gatherer, ok := client.Client.(download.Gatherer)
+	if !ok {
+		return nil
+	}
+	target, sources, err := gatherer.Gather(ctx, acquisition.DownloadClientRef)
+	if err != nil || target == "" {
+		return err
+	}
+	local := func(reported string) string {
+		if client.LocalPath != nil {
+			return client.LocalPath(reported)
+		}
+		return reported
+	}
+	target = local(target)
+	if err := j.config.FS.MkdirAll(target, 0o755); err != nil {
+		return err
+	}
+	for _, source := range sources {
+		source = local(source)
+		if _, err := j.config.FS.Stat(source); err != nil {
+			continue
+		}
+		if err := j.config.FS.Rename(source, path.Join(target, path.Base(source))); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ownFiles is what a client whose folder is shared between downloads says this one brought; nil takes the whole folder.

@@ -63,6 +63,14 @@ func (b directBase) Add(ctx context.Context, request AddRequest) (string, error)
 	return b.client.AddDirect(ctx, release, request)
 }
 
+// Gather implements Gatherer when the client underneath does; otherwise nothing is gathered.
+func (b directBase) Gather(ctx context.Context, clientRef string) (string, []string, error) {
+	if gatherer, ok := b.client.(Gatherer); ok {
+		return gatherer.Gather(ctx, clientRef)
+	}
+	return "", nil, nil
+}
+
 // OwnFiles implements OwnFiles when the client underneath does; otherwise the whole folder is the download's.
 func (b directBase) OwnFiles(ctx context.Context, clientRef string) ([]string, error) {
 	if own, ok := b.client.(OwnFiles); ok {

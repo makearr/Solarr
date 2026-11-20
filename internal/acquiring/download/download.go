@@ -110,6 +110,12 @@ type OwnFiles interface {
 	OwnFiles(ctx context.Context, clientRef string) ([]string, error)
 }
 
+// Gatherer is a client that lays one download down as several folders (a multi-disc album): the poll moves the folders
+// under the one it names, so the import takes a single path. A download that needs no gathering answers an empty target.
+type Gatherer interface {
+	Gather(ctx context.Context, clientRef string) (target string, sources []string, err error)
+}
+
 // ByReference is a client that can answer for named downloads alone. Asking it is exact where listing a category is
 // not: a category lists only a window of a shared client's history, and a finished download can drop out of it.
 type ByReference interface {

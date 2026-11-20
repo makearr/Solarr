@@ -176,14 +176,56 @@ func Releases(responses []response, query string, at time.Time) []indexer.RawIte
 			folders[folder] = append(folders[folder], found)
 		}
 		for _, folder := range order {
+			if discAudio(folder, folders[folder]) {
+				continue
+			}
 			for _, group := range groups(folder, folders[folder], query) {
 				if item, ok := release(peer, group, at); ok {
 					items = append(items, item)
 				}
 			}
 		}
+		for _, album := range discAlbums(order, folders) {
+			if item, ok := release(peer, album, at); ok {
+				items = append(items, item)
+			}
+		}
 	}
 	return items
+}
+
+// discAudio is a folder of audio named for one disc, which belongs to its album and not to a release of its own.
+func discAudio(folder string, files []file) bool {
+	return discFolder(lastSegment(folder)) && formatOf(files) != ""
+}
+
+// discAlbums makes one release of each album whose disc folders a peer shares, holding every disc's files; an album
+// of which the peer shares one disc folder only is marked, so the evaluator's size and track check can refuse it.
+func discAlbums(order []string, folders map[string][]file) []group {
+	var parents []string
+	discs := map[string][]string{}
+	for _, folder := range order {
+		if discAudio(folder, folders[folder]) {
+			parent := folderOf(folder)
+			if _, seen := discs[parent]; !seen {
+				parents = append(parents, parent)
+			}
+			discs[parent] = append(discs[parent], folder)
+		}
+	}
+	var albums []group
+	for _, parent := range parents {
+		var files []file
+		for _, folder := range discs[parent] {
+			files = append(files, folders[folder]...)
+		}
+		title := titleOf(discs[parent][0], formatOf(files))
+		if len(discs[parent]) == 1 {
+			title += " [" + strings.ToLower(lastSegment(discs[parent][0])) + " only]"
+		}
+		albums = append(albums, group{files: files, title: title, categories: formatCategories(formatOf(files)), wholeFolder: true, guidFolder: parent})
+	}
+	return albums
 }
 
 // group is the files of one release, its title and categories.
@@ -192,18 +234,13 @@ type group struct {
 	title       string
 	categories  []int
 	wholeFolder bool
+	// guidFolder names the release by this folder rather than its first file's, for a release of several disc folders.
+	guidFolder string
 }
 
 func groups(folder string, files []file, query string) []group {
 	if format := formatOf(files); format != "" {
-		category := 3010
-		switch {
-		case strings.HasPrefix(format, "FLAC"):
-			category = 3040
-		case format == "M4B":
-			category = 3030
-		}
-		return []group{{files: files, title: titleOf(folder, format), categories: []int{category}, wholeFolder: true}}
+		return []group{{files: files, title: titleOf(folder, format), categories: formatCategories(format), wholeFolder: true}}
 	}
 	var found []group
 	for _, kind := range []struct {
@@ -244,6 +281,17 @@ func groups(folder string, files []file, query string) []group {
 	return found
 }
 
+// formatCategories files audio of a format: lossless, audiobook, or other music.
+func formatCategories(format string) []int {
+	switch {
+	case strings.HasPrefix(format, "FLAC"):
+		return []int{3040}
+	case format == "M4B":
+		return []int{3030}
+	}
+	return []int{3010}
+}
+
 // videoCategories files a name that says its episode or season under TV, and any other video under both films and
 // TV: a film's name and an anime episode's often look alike.
 func videoCategories(name string) []int {
@@ -268,7 +316,11 @@ func release(peer response, found group, at time.Time) (indexer.RawItem, bool) {
 	if peer.HasFreeUploadSlot {
 		seeders = 1
 	}
-	guid := "slsk://" + peer.Username + "/" + strings.ReplaceAll(folderOf(found.files[0].Filename), `\`, "/")
+	guidFolder := found.guidFolder
+	if guidFolder == "" {
+		guidFolder = folderOf(found.files[0].Filename)
+	}
+	guid := "slsk://" + peer.Username + "/" + strings.ReplaceAll(guidFolder, `\`, "/")
 	if !found.wholeFolder {
 		guid += "/" + lastSegment(found.files[0].Filename)
 	}
