@@ -2,14 +2,14 @@
 ARG BUILDPLATFORM=linux/amd64
 
 # Pinned to the builder's platform: a RUN in the final stage would need qemu.
-FROM --platform=$BUILDPLATFORM alpine:3 AS rootfs
+FROM --platform=$BUILDPLATFORM alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS rootfs
 RUN addgroup -g 1000 media \
  && adduser -D -u 1000 -G media -h /config -s /sbin/nologin media \
  && mkdir -p /skeleton/config /skeleton/data /skeleton/media \
  && chown -R 1000:1000 /skeleton
 
 # Built once on the builder: JavaScript is identical for every target.
-FROM --platform=$BUILDPLATFORM node:22-alpine AS web
+FROM --platform=$BUILDPLATFORM node:22.23.5-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a AS web
 WORKDIR /web
 # Lockfile first, so a source-only change does not reinstall.
 COPY web/package.json web/package-lock.json ./
@@ -18,7 +18,7 @@ COPY web/ ./
 # outDir points at internal/api/webui/dist, where go:embed reaches it.
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM golang:1 AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.4@sha256:ec47ea3725fea0cc88f6de94919aef19f40f12fc1ec0e2d1b3426dbf15ecca04 AS build
 
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
@@ -50,7 +50,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
       -o /out/solarr ./cmd/solarr
 
 # Alpine rather than distroless: a self-hosted deployment gets debugged in place.
-FROM alpine:3
+FROM alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
 
 # Copied rather than installed: a RUN here would need qemu. zoneinfo because air
 # dates and TZ are timezone-dependent (architecture section 19.2).

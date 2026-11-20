@@ -53,7 +53,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.15.0
           # The prebuilt binary lags the Go version in go.mod; build it with the runner's toolchain.
           install-mode: goinstall
 
@@ -65,7 +65,17 @@ jobs:
       - name: sqlc up to date
         run: |
           [ -f sqlc.yaml ] || { echo "no sqlc.yaml yet, skipping"; exit 0; }
-          go run github.com/sqlc-dev/sqlc/cmd/sqlc@latest diff
+          go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 diff
+
+      # Non-blocking until a week of runs is clean; then drop continue-on-error.
+      - name: Go vulnerabilities
+        continue-on-error: true
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+
+      - name: Web vulnerabilities
+        continue-on-error: true
+        working-directory: web
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Generated API up to date
         run: |
