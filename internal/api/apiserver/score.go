@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
@@ -17,9 +16,7 @@ const maxScoreSimulateBody = 1 << 16
 // optionally language) profile, return the Decision. No candidate, no side effects.
 func (s *Server) SimulateScore(w http.ResponseWriter, r *http.Request) {
 	var request gen.SimulateScoreJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxScoreSimulateBody)).Decode(&request); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with title and quality_profile_id")
+	if !s.decodeBody(w, r, maxScoreSimulateBody, &request, "expected a JSON object with title and quality_profile_id") {
 		return
 	}
 	if request.Title == "" {

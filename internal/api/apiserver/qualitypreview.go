@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
@@ -48,8 +47,7 @@ func (s *Server) PreviewLibraryQuality(w http.ResponseWriter, r *http.Request, i
 		return
 	}
 	var body gen.LibraryQualityWrite
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 	preview, err := s.qualityPreview(r.Context(), id, QualityChange{

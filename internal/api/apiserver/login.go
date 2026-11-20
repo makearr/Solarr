@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -39,9 +38,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var request loginRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxLoginBody)).Decode(&request); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with username and password")
+	if !s.decodeBody(w, r, maxLoginBody, &request, "expected a JSON object with username and password") {
 		return
 	}
 

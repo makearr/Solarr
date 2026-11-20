@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -68,9 +67,7 @@ func (s *Server) CreateFirstAdministrator(w http.ResponseWriter, r *http.Request
 	}
 
 	var request gen.CreateFirstAdministratorJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&request); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with username and password")
+	if !s.decodeBody(w, r, maxSetupBody, &request, "expected a JSON object with username and password") {
 		return
 	}
 
@@ -168,9 +165,7 @@ func (s *Server) AddRootFolder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var request gen.AddRootFolderJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&request); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with a path")
+	if !s.decodeBody(w, r, maxSetupBody, &request, "expected a JSON object with a path") {
 		return
 	}
 
@@ -309,9 +304,7 @@ func (s *Server) UpdateRootFolderPolicy(w http.ResponseWriter, r *http.Request, 
 	}
 
 	var body gen.UpdateRootFolderPolicyJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected read_only, allow_rename and min_free_bytes")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected read_only, allow_rename and min_free_bytes") {
 		return
 	}
 
@@ -382,8 +375,7 @@ func (s *Server) SetRootFolderOnline(w http.ResponseWriter, r *http.Request, id 
 	}
 
 	var body gen.SetRootFolderOnlineJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected an online flag")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected an online flag") {
 		return
 	}
 

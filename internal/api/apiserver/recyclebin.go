@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -27,9 +26,7 @@ func (s *Server) UpdateRecycleBinLimits(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var body gen.RecycleBinLimits
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected max_bytes and max_percent_of_root")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected max_bytes and max_percent_of_root") {
 		return
 	}
 	if err := s.auth.Registry.LookupAll(settings.KeyRecycleBinMaxBytes, settings.KeyRecycleBinMaxPercentOfRoot); err != nil {

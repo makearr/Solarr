@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -45,8 +44,7 @@ func (s *Server) ListProxies(w http.ResponseWriter, r *http.Request) {
 
 func decodeProxy(w http.ResponseWriter, s *Server, r *http.Request) (settings.ProxyRequest, bool) {
 	var body gen.ProxyRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a JSON object with name, kind and url")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object with name, kind and url") {
 		return settings.ProxyRequest{}, false
 	}
 	return settings.ProxyRequest{Name: body.Name, Kind: settings.ProxyKind(body.Kind), URL: body.Url}, true

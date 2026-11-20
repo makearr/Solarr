@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"maps"
 	"net/http"
@@ -149,8 +148,7 @@ func (s *Server) AddWork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.AddWorkRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 	if body.Provider == "" || body.ExternalId == "" {

@@ -49,9 +49,7 @@ func (s *Server) AddDownloader(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body gen.AddDownloaderJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with name, impl, base_url and protocol")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object with name, impl, base_url and protocol") {
 		return
 	}
 
@@ -117,9 +115,7 @@ func (s *Server) UpdateDownloader(w http.ResponseWriter, r *http.Request, id int
 	}
 
 	var body gen.UpdateDownloaderJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with name, impl, base_url and protocol")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object with name, impl, base_url and protocol") {
 		return
 	}
 
@@ -197,8 +193,7 @@ func (s *Server) SetDownloaderCredentials(w http.ResponseWriter, r *http.Request
 	}
 
 	var body gen.SetDownloaderCredentialsJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a JSON object")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object") {
 		return
 	}
 	if err := s.auth.Settings.SetDownloaderCredentials(r.Context(), id, secrets.Secret(derefOr(body.Credentials, "")), s.wall.Now().Unix()); err != nil {

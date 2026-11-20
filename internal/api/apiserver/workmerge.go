@@ -3,7 +3,6 @@ package apiserver
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -65,8 +64,7 @@ func (s *Server) MergeWork(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	var body gen.MergeWorkJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected the work to merge into")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected the work to merge into") {
 		return
 	}
 	preview := body.Preview != nil && *body.Preview

@@ -161,9 +161,7 @@ func (s *Server) DrainRootFolder(w http.ResponseWriter, r *http.Request, id int6
 
 	var body gen.DrainRootFolderJSONRequestBody
 	if r.ContentLength != 0 {
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDrainBody)).Decode(&body); err != nil {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-				"Bad request", "the request body could not be read")
+		if !s.decodeBody(w, r, maxDrainBody, &body, "the request body could not be read") {
 			return
 		}
 	}
@@ -235,9 +233,7 @@ func (s *Server) RenameRootFolder(w http.ResponseWriter, r *http.Request, id int
 
 	var body gen.RenameRootFolderJSONRequestBody
 	if r.ContentLength != 0 {
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDrainBody)).Decode(&body); err != nil {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-				"Bad request", "the request body could not be read")
+		if !s.decodeBody(w, r, maxDrainBody, &body, "the request body could not be read") {
 			return
 		}
 	}

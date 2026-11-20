@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -81,8 +80,7 @@ func (s *Server) SetLibraryRules(w http.ResponseWriter, r *http.Request, id int6
 		return
 	}
 	var body gen.SetLibraryRulesJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 	var rules []settings.LibraryRule

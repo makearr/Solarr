@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -106,9 +105,7 @@ func (s *Server) UpdateCacheBudget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body gen.UpdateCacheBudgetJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected max_bytes, max_age_days, images_share_percent and metadata_share_percent")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected max_bytes, max_age_days, images_share_percent and metadata_share_percent") {
 		return
 	}
 
@@ -210,8 +207,7 @@ func (s *Server) SetDatabaseMemory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.SetDatabaseMemoryJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected cache_size_kb")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected cache_size_kb") {
 		return
 	}
 	if body.CacheSizeKb < minCacheSizeKB || body.CacheSizeKb > maxCacheSizeKB {

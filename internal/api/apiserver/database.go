@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -96,8 +95,7 @@ func (s *Server) SetImageSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.ImageSettings
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected the four picture figures")
+	if !s.decodeBody(w, r, maxUserBody, &body, "expected the four picture figures") {
 		return
 	}
 	err := s.auth.Registry.LookupAll(settings.KeyCoverMaxEdge, settings.KeyCoverQuality, settings.KeyPreviewMaxEdge, settings.KeyPreviewQuality)

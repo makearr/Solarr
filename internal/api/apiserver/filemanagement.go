@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -46,8 +45,7 @@ func (s *Server) SetLibraryFileManagement(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var body gen.FileManagement
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected the file management settings")
+	if !s.decodeBody(w, r, maxUserBody, &body, "expected the file management settings") {
 		return
 	}
 	wanted := settings.FileManagement{
@@ -172,8 +170,7 @@ func (s *Server) SetLibraryTagging(w http.ResponseWriter, r *http.Request, id in
 		return
 	}
 	var body gen.Tagging
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected the tagging settings")
+	if !s.decodeBody(w, r, maxUserBody, &body, "expected the tagging settings") {
 		return
 	}
 	wanted := category.FileManagement

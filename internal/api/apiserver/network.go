@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -70,9 +69,7 @@ func (s *Server) UpdateNetworkSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body gen.UpdateNetworkSettingsJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected port, proxy_bypass and allow_cidrs")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected port, proxy_bypass and allow_cidrs") {
 		return
 	}
 

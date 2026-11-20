@@ -51,9 +51,7 @@ func (s *Server) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body gen.CreateCategoryJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 
@@ -191,9 +189,7 @@ func (s *Server) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64
 	}
 
 	var body gen.UpdateCategoryJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 
@@ -292,8 +288,7 @@ func (s *Server) AddLibraryType(w http.ResponseWriter, r *http.Request, id int64
 		return
 	}
 	var body gen.AddLibraryTypeJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 	if _, known := s.mediaTypeInfo(body.MediaType); !known {
@@ -489,9 +484,7 @@ func (s *Server) AttachRootFolderToCategory(w http.ResponseWriter, r *http.Reque
 	}
 
 	var body gen.AttachRootFolderToCategoryJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with root_folder_id")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object with root_folder_id") {
 		return
 	}
 
@@ -639,8 +632,7 @@ func (s *Server) OrderCategories(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.OrderCategoriesJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected ids")
+	if !s.decodeBody(w, r, 1<<14, &body, "expected ids") {
 		return
 	}
 	if err := s.auth.Settings.OrderLibraries(r.Context(), body.Ids); err != nil {

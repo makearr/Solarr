@@ -28,13 +28,15 @@ type Problem struct {
 // Problem type slugs. These are part of the API contract: renaming one breaks
 // clients that switch on it.
 const (
-	TypeNotFound     = "not-found"
-	TypeForbidden    = "forbidden"
-	TypeConflict     = "conflict"
-	TypeBadRequest   = "bad-request"
-	TypeUnavailable  = "unavailable"
-	TypeInternal     = "internal"
-	TypeUnauthorized = "unauthorized"
+	TypeNotFound   = "not-found"
+	TypeForbidden  = "forbidden"
+	TypeConflict   = "conflict"
+	TypeBadRequest = "bad-request"
+	// TypePayloadTooLarge is a request body past the endpoint's limit.
+	TypePayloadTooLarge = "payload-too-large"
+	TypeUnavailable     = "unavailable"
+	TypeInternal        = "internal"
+	TypeUnauthorized    = "unauthorized"
 	// TypeTooManyRequests is a caller that must wait before trying again.
 	TypeTooManyRequests = "too-many-requests"
 	// A wrong verb is not a malformed request.
@@ -42,6 +44,22 @@ const (
 	// TypeSetupCodeRequired is a first-administrator claim from a public address without the printed code.
 	TypeSetupCodeRequired = "setup-code-required"
 )
+
+// decodeBody reads a JSON request body of at most limit bytes into body, or answers 413 for a body past the limit and
+// 400 with detail for one that is not JSON; false means the answer is written.
+func (s *Server) decodeBody(w http.ResponseWriter, r *http.Request, limit int64, body any, detail string) bool {
+	err := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit)).Decode(body)
+	if err == nil {
+		return true
+	}
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		writeProblem(w, s.logger, http.StatusRequestEntityTooLarge, TypePayloadTooLarge, "Request too large", "the request body is larger than this endpoint accepts")
+		return false
+	}
+	writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", detail)
+	return false
+}
 
 // writeProblem renders an error as RFC 7807.
 func writeProblem(w http.ResponseWriter, logger *slog.Logger, status int, slug, title, detail string) {

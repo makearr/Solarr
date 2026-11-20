@@ -3,7 +3,6 @@ package apiserver
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -160,9 +159,7 @@ func (s *Server) ResolveUnidentified(w http.ResponseWriter, r *http.Request, med
 		return
 	}
 	var body gen.ResolveUnidentifiedJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 	// Placing a file adds a work, as Add does: manage on the library it lands in.

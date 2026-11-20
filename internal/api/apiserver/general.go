@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -30,8 +29,7 @@ func (s *Server) PatchGeneralSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.GeneralSettings
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a JSON object")
+	if !s.decodeBody(w, r, maxUserBody, &body, "expected a JSON object") {
 		return
 	}
 	if body.VideoHashing != nil {

@@ -235,8 +235,7 @@ func (s *Server) RemoveFranchiseMember(w http.ResponseWriter, r *http.Request, i
 // MonitorFranchise follows or stops following a franchise; the person needs to manage the library.
 func (s *Server) MonitorFranchise(w http.ResponseWriter, r *http.Request, id int64) {
 	var body gen.MonitorFranchiseJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected category_id and monitored")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected category_id and monitored") {
 		return
 	}
 	category, ok := s.franchiseCategory(w, r, body.CategoryId, settings.PermissionManage)
@@ -338,8 +337,7 @@ func (s *Server) routeMonitorFranchise(w http.ResponseWriter, r *http.Request) {
 // LinkFranchise links a collection with one of another library.
 func (s *Server) LinkFranchise(w http.ResponseWriter, r *http.Request, id int64) {
 	var body gen.LinkFranchiseJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected category_id, other_id and other_category_id")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected category_id, other_id and other_category_id") {
 		return
 	}
 	category, ok := s.franchiseCategory(w, r, body.CategoryId, settings.PermissionManage)
@@ -373,8 +371,7 @@ func (s *Server) UnlinkFranchise(w http.ResponseWriter, r *http.Request, id int6
 // MergeDuplicateFranchises lists a library's duplicate collections and, when asked, merges each group.
 func (s *Server) MergeDuplicateFranchises(w http.ResponseWriter, r *http.Request) {
 	var body gen.MergeDuplicateFranchisesJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected category_id and apply")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected category_id and apply") {
 		return
 	}
 	category, ok := s.franchiseCategory(w, r, body.CategoryId, settings.PermissionManage)

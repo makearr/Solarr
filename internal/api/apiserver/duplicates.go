@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"path"
 
@@ -183,8 +182,7 @@ func (s *Server) ResolveCategoryDuplicates(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var body gen.ResolveCategoryDuplicatesJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "keep and at least one copy to drop are required")
+	if !s.decodeBody(w, r, maxImportBody, &body, "keep and at least one copy to drop are required") {
 		return
 	}
 	keepID, drops, valid := duplicateChoice(body)

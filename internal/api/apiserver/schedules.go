@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -114,9 +113,7 @@ func (s *Server) UpdateSchedule(w http.ResponseWriter, r *http.Request, key stri
 	}
 
 	var body gen.UpdateScheduleJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with cadences, enabled and/or run_at_startup")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object with cadences, enabled and/or run_at_startup") {
 		return
 	}
 
@@ -225,8 +222,7 @@ func (s *Server) SetAllSchedulesPaused(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.SetAllSchedulesPausedJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a JSON object with paused")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object with paused") {
 		return
 	}
 	pause := s.scheduler.Resume

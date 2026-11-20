@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -95,9 +94,7 @@ func (s *Server) SetBackupRetention(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request gen.BackupRetention
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&request); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with mode, keep_count and keep_days")
+	if !s.decodeBody(w, r, maxUserBody, &request, "expected a JSON object with mode, keep_count and keep_days") {
 		return
 	}
 	err := s.auth.Registry.LookupAll(settings.KeyBackupRetention, settings.KeyBackupKeepCount, settings.KeyBackupKeepDays)

@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -81,8 +80,7 @@ func (s *Server) SetLibraryTypeDefaults(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	var body gen.LibraryTypeDefaultsWrite
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "the request body could not be read") {
 		return
 	}
 	if err := s.auth.Registry.LookupAll(settings.KeyLibraryTypeDefaults); err != nil {

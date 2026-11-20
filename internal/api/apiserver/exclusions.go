@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -39,9 +38,7 @@ func (s *Server) CreateExclusionPattern(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var body gen.CreateExclusionPatternJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 
@@ -79,9 +76,7 @@ func (s *Server) UpdateExclusionPattern(w http.ResponseWriter, r *http.Request, 
 	}
 
 	var body gen.UpdateExclusionPatternJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 

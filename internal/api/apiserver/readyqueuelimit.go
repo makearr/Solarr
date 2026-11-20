@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -24,8 +23,7 @@ func (s *Server) SetReadyQueueLimit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request gen.ReadyQueueLimit
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&request); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a JSON object with limit")
+	if !s.decodeBody(w, r, maxUserBody, &request, "expected a JSON object with limit") {
 		return
 	}
 	if err := s.auth.Registry.LookupAll(settings.KeyReadyQueueLimit); err != nil {

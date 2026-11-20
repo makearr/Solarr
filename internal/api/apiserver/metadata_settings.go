@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -31,9 +30,7 @@ func (s *Server) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var body gen.UpdateMetadataSettingsJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected brainzmash_user_agent")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected brainzmash_user_agent") {
 		return
 	}
 
@@ -122,8 +119,7 @@ func (s *Server) SetAcoustIDAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body gen.SetAcoustIDAPIKeyJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a JSON object")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object") {
 		return
 	}
 	if err := s.auth.Registry.LookupAll(settings.KeyAcoustIDAPIKey); err != nil {
@@ -221,8 +217,7 @@ func (s *Server) setProviderKey(
 	var body struct {
 		APIKey *string `json:"api_key"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a JSON object")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object") {
 		return
 	}
 	if err := s.auth.Registry.LookupAll(settingKey); err != nil {

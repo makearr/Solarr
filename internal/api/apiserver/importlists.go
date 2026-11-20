@@ -199,8 +199,7 @@ func (s *Server) CreateImportList(w http.ResponseWriter, r *http.Request, id int
 		return
 	}
 	var body gen.CreateImportListJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 	request := importListRequestFromWrite(body)
@@ -283,8 +282,7 @@ func (s *Server) UpdateImportList(w http.ResponseWriter, r *http.Request, id int
 		return
 	}
 	var body gen.UpdateImportListJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 	current, err := s.auth.Settings.ImportList(r.Context(), id)

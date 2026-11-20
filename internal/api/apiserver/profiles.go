@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -38,9 +37,7 @@ func (s *Server) CreateQualityProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body gen.CreateQualityProfileJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 
@@ -76,9 +73,7 @@ func (s *Server) UpdateQualityProfile(w http.ResponseWriter, r *http.Request, id
 	}
 
 	var body gen.UpdateQualityProfileJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 
@@ -149,9 +144,7 @@ func (s *Server) CreateLanguageProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body gen.CreateLanguageProfileJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 
@@ -186,9 +179,7 @@ func (s *Server) UpdateLanguageProfile(w http.ResponseWriter, r *http.Request, i
 	}
 
 	var body gen.UpdateLanguageProfileJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 

@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -46,7 +45,7 @@ func (s *Server) CreateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.CreateTagJSONRequestBody
-	if !s.decodeTagBody(w, r, &body) || !s.tagNamed(w, body.Name) {
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") || !s.tagNamed(w, body.Name) {
 		return
 	}
 	row, err := s.workEditor.CreateTag(r.Context(), strings.TrimSpace(body.Name), body.GenreTree, derefOr(body.ParentId, 0))
@@ -63,7 +62,7 @@ func (s *Server) EditTag(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	var body gen.EditTagJSONRequestBody
-	if !s.decodeTagBody(w, r, &body) || !s.tagNamed(w, body.Name) {
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") || !s.tagNamed(w, body.Name) {
 		return
 	}
 	if err := s.workEditor.EditTag(r.Context(), id, strings.TrimSpace(body.Name), derefOr(body.ParentId, 0)); err != nil {
@@ -79,7 +78,7 @@ func (s *Server) MergeTag(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	var body gen.MergeTagJSONRequestBody
-	if !s.decodeTagBody(w, r, &body) {
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 	if err := s.workEditor.MergeTag(r.Context(), id, body.IntoId); err != nil {
@@ -122,14 +121,6 @@ func (s *Server) tagNamed(w http.ResponseWriter, name string) bool {
 func (s *Server) tagsAvailable(w http.ResponseWriter) bool {
 	if s.workEditor == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "tags are not available")
-		return false
-	}
-	return true
-}
-
-func (s *Server) decodeTagBody(w http.ResponseWriter, r *http.Request, body any) bool {
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
 		return false
 	}
 	return true

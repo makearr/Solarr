@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -52,9 +51,7 @@ func (s *Server) SetLibraryQuality(w http.ResponseWriter, r *http.Request, id in
 		return
 	}
 	var body gen.LibraryQualityWrite
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 	protocol, minutes := category.PreferredProtocol, category.ProtocolDelayMinutes
@@ -419,8 +416,7 @@ func (s *Server) CreateQualityTarget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.QualityTarget
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 	created, err := s.auth.Settings.CreateQualityTarget(r.Context(), qualityTargetFromBody(body))
@@ -443,8 +439,7 @@ func (s *Server) UpdateQualityTarget(w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 	var body gen.QualityTarget
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 	target := qualityTargetFromBody(body)

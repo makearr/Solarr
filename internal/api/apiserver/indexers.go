@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -52,9 +51,7 @@ func (s *Server) AddIndexer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body gen.AddIndexerJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with name, impl and base_url")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object with name, impl and base_url") {
 		return
 	}
 
@@ -92,9 +89,7 @@ func (s *Server) UpdateIndexer(w http.ResponseWriter, r *http.Request, id int64)
 	}
 
 	var body gen.UpdateIndexerJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with name, impl and base_url")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object with name, impl and base_url") {
 		return
 	}
 
@@ -149,8 +144,7 @@ func (s *Server) UseIndexerUpstream(w http.ResponseWriter, r *http.Request, id i
 		return
 	}
 	var body gen.UseIndexerUpstreamJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected the api_key")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected the api_key") {
 		return
 	}
 	existing, err := s.auth.Settings.GetIndexer(r.Context(), id)
@@ -238,8 +232,7 @@ func (s *Server) SetIndexerAPIKey(w http.ResponseWriter, r *http.Request, id int
 	}
 
 	var body gen.SetIndexerAPIKeyJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a JSON object")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object") {
 		return
 	}
 	if err := s.auth.Settings.SetIndexerAPIKey(r.Context(), id, secrets.Secret(derefOr(body.ApiKey, "")), s.wall.Now().Unix()); err != nil {

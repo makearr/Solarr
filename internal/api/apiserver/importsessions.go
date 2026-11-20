@@ -218,9 +218,7 @@ func (s *Server) InspectImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body gen.InspectImportJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 	if body.SourcePath == "" {
@@ -547,9 +545,7 @@ func (s *Server) RevertImportSession(w http.ResponseWriter, r *http.Request, id 
 
 	var body gen.RevertImportSessionJSONRequestBody
 	if r.ContentLength != 0 {
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-				"Bad request", "the request body could not be read")
+		if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 			return
 		}
 	}
@@ -584,9 +580,7 @@ func (s *Server) AssignImportSessionCategory(w http.ResponseWriter, r *http.Requ
 	}
 
 	var body gen.AssignImportSessionCategoryJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "category_id is required")
+	if !s.decodeBody(w, r, maxImportBody, &body, "category_id is required") {
 		return
 	}
 

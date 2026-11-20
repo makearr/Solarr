@@ -115,9 +115,7 @@ func (s *Server) SetLibraryLastLevel(w http.ResponseWriter, r *http.Request, id 
 	}
 
 	var body gen.SetLibraryLastLevelJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 	if _, ok := s.findLevel(category.MediaType, body.Level); !ok {

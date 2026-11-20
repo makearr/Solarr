@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -57,8 +56,7 @@ func (s *Server) followCaller(w http.ResponseWriter, r *http.Request) (int64, au
 // followBody reads a follow request and checks the caller may add to its library; false means the answer was written.
 func (s *Server) followBody(w http.ResponseWriter, r *http.Request, access authz.Access) (gen.FollowRequest, bool) {
 	var body gen.FollowRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return gen.FollowRequest{}, false
 	}
 	if _, err := access.Category(body.CategoryId, actionLevels[actionFollow]); err != nil {

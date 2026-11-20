@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"path"
@@ -185,8 +184,7 @@ func (s *Server) ResolveSimilarVideos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.ResolveSimilarVideosJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "keep and at least one copy to drop are required")
+	if !s.decodeBody(w, r, maxImportBody, &body, "keep and at least one copy to drop are required") {
 		return
 	}
 	keepID, drops, valid := duplicateChoice(body)
@@ -222,8 +220,7 @@ func (s *Server) SetVideoHashing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request gen.VideoHashing
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&request); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a JSON object with enabled")
+	if !s.decodeBody(w, r, maxUserBody, &request, "expected a JSON object with enabled") {
 		return
 	}
 	if err := s.auth.Settings.SetVideoPerceptualHash(r.Context(), s.auth.Clock, request.Enabled); err != nil {
@@ -248,8 +245,7 @@ func (s *Server) SetImportDuplicates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request gen.ImportDuplicates
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&request); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a JSON object with check and blocklist")
+	if !s.decodeBody(w, r, maxUserBody, &request, "expected a JSON object with check and blocklist") {
 		return
 	}
 	if err := s.auth.Settings.SetImportDuplicates(r.Context(), s.auth.Clock, request.Check, request.Blocklist); err != nil {

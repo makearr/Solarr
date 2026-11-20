@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -44,9 +43,7 @@ func (s *Server) AddArrInstance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body gen.AddArrInstanceJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with app, name, base_url and api_key")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object with app, name, base_url and api_key") {
 		return
 	}
 
@@ -79,9 +76,7 @@ func (s *Server) UpdateArrInstance(w http.ResponseWriter, r *http.Request, id in
 	}
 
 	var body gen.UpdateArrInstanceJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with name and base_url")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object with name and base_url") {
 		return
 	}
 
@@ -146,9 +141,7 @@ func (s *Server) SetArrInstanceKey(w http.ResponseWriter, r *http.Request, id in
 	}
 
 	var body gen.SetArrInstanceKeyJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with api_key")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object with api_key") {
 		return
 	}
 	if err := s.auth.Settings.SetArrInstanceAPIKey(r.Context(), id, secrets.Secret(body.ApiKey), s.wall.Now().Unix()); err != nil {

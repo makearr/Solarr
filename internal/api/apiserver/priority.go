@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -32,9 +31,7 @@ func (s *Server) UpdatePrioritySettings(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var body gen.UpdatePrioritySettingsJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected the four weights and new_release_days")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected the four weights and new_release_days") {
 		return
 	}
 

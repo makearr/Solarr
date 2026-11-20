@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -153,9 +152,7 @@ func (s *Server) SetMyTier(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Tier string `json:"tier"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with tier")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object with tier") {
 		return
 	}
 
@@ -235,9 +232,7 @@ func (s *Server) CreateMyAPIKey(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name string `json:"name"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with name")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object with name") {
 		return
 	}
 	name := strings.TrimSpace(body.Name)
@@ -374,9 +369,7 @@ func (s *Server) SetMyPreference(w http.ResponseWriter, r *http.Request, key str
 	var body struct {
 		Value string `json:"value"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with value")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object with value") {
 		return
 	}
 

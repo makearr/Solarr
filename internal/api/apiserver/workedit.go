@@ -3,7 +3,6 @@ package apiserver
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -165,8 +164,7 @@ func (s *Server) SaveWorkEdit(w http.ResponseWriter, r *http.Request, id int64) 
 		return
 	}
 	var body gen.SaveWorkEditJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 	if !s.workPermitted(w, r, access, id, actionLevels[actionEditWork]) {
@@ -209,8 +207,7 @@ func (s *Server) BulkEditWorks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.BulkEditWorksJSONBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 	rootFolderIDs, categoryIDs, err := s.libraryVisibility(access, body.CategoryId, derefOr(body.WholeLibrary, false), actionLevels[actionEditWork])

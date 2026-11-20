@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -87,8 +86,7 @@ func (s *Server) SetMetadataProviderPace(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	var body gen.SetMetadataProviderPaceJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected per_minute")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected per_minute") {
 		return
 	}
 	if err := s.auth.Registry.LookupAll(settings.KeyMetadataProviderPaces); err != nil {
@@ -155,8 +153,7 @@ func (s *Server) SetMetadataProviderEnabled(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var body gen.SetMetadataProviderEnabledJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected enabled")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected enabled") {
 		return
 	}
 	if err := s.auth.Registry.LookupAll(settings.KeyMetadataDisabledProviders, settings.KeyMetadataWikidata, settings.KeyMetadataTheAudioDB, settings.KeyMetadataAcoustID); err != nil {
@@ -201,8 +198,7 @@ func (s *Server) SetLibraryMetadataSources(w http.ResponseWriter, r *http.Reques
 	var body struct {
 		Sources []string `json:"sources"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected sources")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected sources") {
 		return
 	}
 	if err := s.auth.Settings.SetCategoryMetadataSources(r.Context(), id, body.Sources); err != nil {

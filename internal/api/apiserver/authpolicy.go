@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
@@ -50,9 +49,7 @@ func (s *Server) SetAuthPolicy(w http.ResponseWriter, r *http.Request) {
 		Username     string `json:"username"`
 		Password     string `json:"password"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&request); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with auth_required")
+	if !s.decodeBody(w, r, maxSetupBody, &request, "expected a JSON object with auth_required") {
 		return
 	}
 	if request.AuthRequired == nil {

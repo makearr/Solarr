@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -59,8 +58,7 @@ func (s *Server) ListTargetProfiles(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) readTargetProfile(w http.ResponseWriter, r *http.Request) (settings.TargetProfile, bool) {
 	var body gen.TargetProfile
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return settings.TargetProfile{}, false
 	}
 	return targetProfileFromBody(body), true

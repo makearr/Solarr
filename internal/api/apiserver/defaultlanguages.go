@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
@@ -25,8 +24,7 @@ func (s *Server) SetDefaultLanguages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.DefaultLanguages
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return
 	}
 	if err := s.auth.Settings.SetDefaultLanguages(r.Context(), body.Languages); err != nil {

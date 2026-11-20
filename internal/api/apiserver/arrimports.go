@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -238,8 +237,7 @@ func (s *Server) readArrSyncOptions(w http.ResponseWriter, r *http.Request) (Arr
 		return options, true
 	}
 	var body gen.ArrSyncOptions
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the sync options could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the sync options could not be read") {
 		return ArrSyncOptions{}, false
 	}
 	options = ArrSyncOptions{Monitored: derefOr(body.Monitored, true), Unmonitored: derefOr(body.Unmonitored, false), Albums: "all"}
@@ -562,8 +560,7 @@ func (s *Server) GetArrInstanceSyncOptions(w http.ResponseWriter, r *http.Reques
 // SetArrInstanceSyncOptions stores what a Prowlarr connection keeps in step.
 func (s *Server) SetArrInstanceSyncOptions(w http.ResponseWriter, r *http.Request, id int64) {
 	var body gen.SetArrInstanceSyncOptionsJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected the sync options")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected the sync options") {
 		return
 	}
 	options := settings.ProwlarrSync{
@@ -667,8 +664,7 @@ func (s *Server) UseArrInstanceIndexers(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	var body gen.UseArrInstanceIndexersJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected prowlarr_ids")
+	if !s.decodeBody(w, r, maxImportBody, &body, "expected prowlarr_ids") {
 		return
 	}
 	if err := s.auth.Registry.LookupAll(settings.EntityIndexer); err != nil {
@@ -762,8 +758,7 @@ func (s *Server) GetArrInstancePull(w http.ResponseWriter, r *http.Request, id i
 // SetArrInstancePull stores what a content connection brings in.
 func (s *Server) SetArrInstancePull(w http.ResponseWriter, r *http.Request, id int64) {
 	var body gen.SetArrInstancePullJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected the pull options")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected the pull options") {
 		return
 	}
 	pull := settings.ArrPull{

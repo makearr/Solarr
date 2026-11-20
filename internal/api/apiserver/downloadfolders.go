@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -56,9 +55,7 @@ func (s *Server) AddDownloadFolder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body gen.AddDownloadFolderJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with a path")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a JSON object with a path") {
 		return
 	}
 
@@ -121,8 +118,7 @@ func (s *Server) UpdateDownloadFolder(w http.ResponseWriter, r *http.Request, id
 		return
 	}
 	var body gen.UpdateDownloadFolderJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "the request body could not be read") {
 		return
 	}
 	update := settings.DownloadFolderUpdate{CategoryID: body.CategoryId, Watch: body.Watch}

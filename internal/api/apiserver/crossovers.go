@@ -181,8 +181,7 @@ func (s *Server) MonitorCrossover(w http.ResponseWriter, r *http.Request, id int
 		return
 	}
 	var body gen.MonitorCrossoverJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected monitored")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected monitored") {
 		return
 	}
 	event, err := s.crossovers.Monitor(r.Context(), id, body.Monitored)

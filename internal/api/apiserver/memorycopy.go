@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -62,8 +61,7 @@ func (s *Server) SetMemoryCopies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.MemoryCopySettings
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected the RAM options")
+	if !s.decodeBody(w, r, maxUserBody, &body, "expected the RAM options") {
 		return
 	}
 	err := s.memoryCopies.Set(r.Context(), MemoryCopySettings{

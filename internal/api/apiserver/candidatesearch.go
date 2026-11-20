@@ -220,8 +220,7 @@ func (s *Server) searchWork(w http.ResponseWriter, r *http.Request, id int64, sc
 	var terms map[string]string
 	if r.ContentLength != 0 {
 		var body gen.SearchWorkJSONRequestBody
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "terms must be an object of strings")
+		if !s.decodeBody(w, r, maxImportBody, &body, "terms must be an object of strings") {
 			return
 		}
 		for key, value := range body {

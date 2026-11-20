@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
@@ -43,8 +42,7 @@ func (s *Server) SetWorkReleaseFilters(w http.ResponseWriter, r *http.Request, i
 		return
 	}
 	var body gen.SetWorkReleaseFiltersJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a list of rules")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected a list of rules") {
 		return
 	}
 	if err := s.workReleaseFilters.Replace(r.Context(), id, body); err != nil {

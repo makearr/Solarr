@@ -3,7 +3,6 @@ package apiserver
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -488,8 +487,7 @@ func (s *Server) UpdateStreaming(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.UpdateStreamingJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the streaming settings could not be read")
+	if !s.decodeBody(w, r, maxSetupBody, &body, "the streaming settings could not be read") {
 		return
 	}
 	if err := s.auth.Registry.LookupAll(settings.KeyStreamingTranscodeEnabled, settings.KeyStreamingHardware,

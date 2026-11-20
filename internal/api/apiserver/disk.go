@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -111,8 +110,7 @@ func (s *Server) SetDiskOverrides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.DiskOverrides
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected {\"groups\": {path: label}}")
+	if !s.decodeBody(w, r, maxUserBody, &body, "expected {\"groups\": {path: label}}") {
 		return
 	}
 	if err := manager.SetOverrides(r.Context(), body.Groups); err != nil {
@@ -153,8 +151,7 @@ func (s *Server) SetDiskScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.DiskScanChange
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected {\"interval_hours\": number}")
+	if !s.decodeBody(w, r, maxUserBody, &body, "expected {\"interval_hours\": number}") {
 		return
 	}
 	if err := manager.SetScanInterval(r.Context(), body.IntervalHours); err != nil {

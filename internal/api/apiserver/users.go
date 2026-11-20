@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -45,9 +44,7 @@ func (s *Server) CreateUser(w http.ResponseWriter, r *http.Request) {
 		Limits   *gen.UserLimits     `json:"limits"`
 		Blocked  []int64             `json:"blocked_tag_ids"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&request); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with username, password and role")
+	if !s.decodeBody(w, r, maxUserBody, &request, "expected a JSON object with username, password and role") {
 		return
 	}
 
@@ -114,9 +111,7 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, id int64) {
 		Limits   *gen.UserLimits `json:"limits"`
 		Blocked  *[]int64        `json:"blocked_tag_ids"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&request); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with role or password")
+	if !s.decodeBody(w, r, maxUserBody, &request, "expected a JSON object with role or password") {
 		return
 	}
 
@@ -194,9 +189,7 @@ func (s *Server) SetUserAccess(w http.ResponseWriter, r *http.Request, id int64)
 		CategoryID int64  `json:"category_id"`
 		Permission string `json:"permission"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&request); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with category_id and permission")
+	if !s.decodeBody(w, r, maxUserBody, &request, "expected a JSON object with category_id and permission") {
 		return
 	}
 
@@ -328,9 +321,7 @@ func (s *Server) SetUserDefaults(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request gen.UserDefaults
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxUserBody)).Decode(&request); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected a JSON object with new_library_permission")
+	if !s.decodeBody(w, r, maxUserBody, &request, "expected a JSON object with new_library_permission") {
 		return
 	}
 	if err := s.auth.Registry.LookupAll(settings.KeyUsersNewLibraryPermission); err != nil {

@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -145,9 +144,7 @@ func (s *Server) RenameLibrary(w http.ResponseWriter, r *http.Request, id int64)
 	}
 	var body gen.RenameLibraryJSONRequestBody
 	if r.ContentLength != 0 {
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDrainBody)).Decode(&body); err != nil {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-				"Bad request", "the request body could not be read")
+		if !s.decodeBody(w, r, maxDrainBody, &body, "the request body could not be read") {
 			return
 		}
 	}
@@ -205,9 +202,7 @@ func (s *Server) libraryFor(r *http.Request, id int64) (settings.Category, error
 
 func (s *Server) decodeNaming(w http.ResponseWriter, r *http.Request) (settings.NamingProfile, bool) {
 	var body gen.NamingSettings
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "the request body could not be read")
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
 		return settings.NamingProfile{}, false
 	}
 	return settings.NamingProfile{
