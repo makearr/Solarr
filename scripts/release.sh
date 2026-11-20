@@ -38,6 +38,10 @@ entry="## ${new_version} — $(date -u +%Y-%m-%d)
 
 ${subjects}
 "
+notes=$(mktemp); trap 'rm -f "$notes"' EXIT
+printf '%s\n' "$subjects" > "$notes"
+scripts/scan-text-private.sh "$notes" || die "the changelog text holds a private value; nothing was committed"
+
 if [ -f "$CHANGELOG" ]; then
   # insert beneath the header, newest first
   { head -n 4 "$CHANGELOG"; echo; echo "$entry"; tail -n +5 "$CHANGELOG"; } > "$CHANGELOG.tmp"

@@ -208,6 +208,8 @@ image:      ## Release (user's word only): secrets scan, multi-arch, ghcr + Dock
 	@# claims a source revision that does not describe the running binary.
 	@git diff --quiet && git diff --cached --quiet || \
 	  { echo "working tree is dirty — commit first, or use 'make image-local'"; exit 1; }
+	@# The commit messages the changelog will publish are scanned before the long build.
+	@git log -n 50 --format=%B > $(SCAN_DIR).msgs && ./scripts/scan-text-private.sh $(SCAN_DIR).msgs; status=$$?; rm -f $(SCAN_DIR).msgs; exit $$status
 	@# Each platform's filesystem is scanned for private keys before anything is pushed.
 	@rm -rf $(SCAN_DIR) && mkdir -p $(SCAN_DIR)
 	@for p in $(subst $(comma), ,$(PLATFORMS)); do \

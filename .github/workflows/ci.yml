@@ -68,6 +68,9 @@ jobs:
           go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 diff
 
       # Non-blocking until a week of runs is clean; then drop continue-on-error.
+      - name: Release scripts
+        run: scripts/test-release-scan.sh
+
       - name: Go vulnerabilities
         continue-on-error: true
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
