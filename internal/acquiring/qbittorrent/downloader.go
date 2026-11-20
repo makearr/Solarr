@@ -92,7 +92,7 @@ func downloadsOf(torrents []Torrent) []download.Download {
 			downloads[i].Path = torrent.ContentPath
 		}
 		if downloads[i].State == download.StateFailed {
-			downloads[i].Error = "qBittorrent reports " + torrent.State
+			downloads[i].Error, downloads[i].LocalError = "qBittorrent reports "+torrent.State, true
 		}
 	}
 	return downloads

@@ -109,7 +109,7 @@ func TestDownloader_DownloadsMapsStates(t *testing.T) {
 		{ClientRef: "aaa", Name: "Album", Category: "music", State: download.StateCompleted, SizeBytes: 10, Path: "/downloads/Album", Ratio: 2, SeedingSeconds: 30},
 		{ClientRef: "bbb", Name: "Going", State: download.StateDownloading, SizeBytes: 10, SizeLeftBytes: 4, SpeedBytesPerSec: 512},
 		{ClientRef: "ccc", Name: "Held", State: download.StatePaused, SizeBytes: 10, SizeLeftBytes: 9},
-		{ClientRef: "ddd", Name: "Broken", State: download.StateFailed, Error: "Deluge reports No space left"},
+		{ClientRef: "ddd", Name: "Broken", State: download.StateFailed, Error: "Deluge reports No space left", LocalError: true},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Downloads =\n%+v\nwant\n%+v", got, want)

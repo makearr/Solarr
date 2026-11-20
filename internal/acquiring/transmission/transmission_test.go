@@ -86,7 +86,7 @@ func TestDownloader_DownloadsMapsStatusesAndPaths(t *testing.T) {
 		{ClientRef: "aaa", Name: "Album", State: download.StateCompleted, SizeBytes: 10, Path: "/downloads/music/Album", Ratio: 1.5, SeedingSeconds: 60},
 		{ClientRef: "bbb", Name: "Going", State: download.StateDownloading, SizeBytes: 10, SizeLeftBytes: 4, SpeedBytesPerSec: 100},
 		{ClientRef: "ccc", Name: "Stopped", State: download.StatePaused, SizeBytes: 10, SizeLeftBytes: 9},
-		{ClientRef: "ddd", Name: "Broken", State: download.StateFailed, Error: "No data found"},
+		{ClientRef: "ddd", Name: "Broken", State: download.StateFailed, Error: "No data found", LocalError: true},
 		{ClientRef: "eee", Name: "Done", State: download.StateCompleted, SizeBytes: 10, Path: "/downloads/Done"},
 		{ClientRef: "fff", Name: "Waiting", State: download.StateQueued, SizeBytes: 10, SizeLeftBytes: 10},
 	}

@@ -403,9 +403,13 @@ func (j *Job) advance(
 		// The client dropped it (a person, or its own duplicate check): recorded, never sent again on our own.
 		return j.setFailed(ctx, acquisition, entry.Error)
 	case download.StateFailed:
+		if entry.LocalError {
+			return j.waitOnClient(ctx, client, acquisition, entry.Error, now)
+		}
 		return j.failed(ctx, client, acquisition, library.BlocklistDownloadFailed, entry.Error)
 	case download.StateDownloading, download.StateProcessing:
-		if acquisition.State == StateQueued {
+		// The client runs it again: its earlier local error no longer applies.
+		if acquisition.State == StateQueued || acquisition.LastError != "" {
 			if err := j.transition(ctx, acquisition, StateDownloading, "", now); err != nil {
 				return err
 			}
@@ -424,6 +428,17 @@ func (j *Job) advance(
 		return j.config.Acquisitions.ForgetStall(ctx, acquisition.ID)
 	}
 	return nil
+}
+
+// waitOnClient keeps a download whose client cannot use its own disk in the queue with the client's message: the release
+// is not at fault, so nothing is blocklisted or searched again, and it goes on when the client does.
+func (j *Job) waitOnClient(ctx context.Context, client Client, acquisition library.Acquisition, detail string, now int64) error {
+	if acquisition.State == StateDownloading && acquisition.LastError == detail {
+		return nil
+	}
+	j.config.Logger.Warn("a download client reports it cannot use its own files; the download waits",
+		slog.String("client", client.Name), slog.String("release", acquisition.CandidateTitle), slog.String("detail", detail))
+	return j.transition(ctx, acquisition, StateDownloading, detail, now)
 }
 
 // checkStall compares a running download's progress every Check: a check that finds it has not moved is a strike, and

@@ -1044,3 +1044,26 @@ func TestQueue_AsksAClientThatCanForTheDownloadsItTracks(t *testing.T) {
 		t.Errorf("asked %v, want exactly the tracked reference", tracking.asked)
 	}
 }
+
+// A client that cannot use its own disk says nothing about the release: it waits in the queue, not blocklisted or searched again.
+func TestPoll_ALocalClientErrorKeepsTheDownloadWaiting(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "x", State: download.StateFailed, Error: "disk full", LocalError: true}}
+	e.run(t)
+	e.run(t)
+
+	if got := e.state(t, sent.ID); got.State != poll.StateDownloading || got.LastError != "disk full" || len(e.searched) != 0 {
+		t.Errorf("= %s %q, searched %d; want DOWNLOADING with the client's message and no search", got.State, got.LastError, len(e.searched))
+	}
+	indexerID := int64(3)
+	if blocked, err := e.blocklist.IsBlocked(t.Context(), &indexerID, "guid-nzo-1", "", e.clock.Now().Unix()); err != nil || blocked {
+		t.Errorf("blocklisted = %v, %v; want the release left alone", blocked, err)
+	}
+
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "x", State: download.StateDownloading, SizeBytes: 10, SizeLeftBytes: 5}}
+	e.run(t)
+	if got := e.state(t, sent.ID); got.State != poll.StateDownloading || got.LastError != "" {
+		t.Errorf("after the client recovers = %s %q, want DOWNLOADING with no message", got.State, got.LastError)
+	}
+}

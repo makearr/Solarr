@@ -70,6 +70,8 @@ type Download struct {
 	Path string
 	// Error is the client's reason for a failure.
 	Error string
+	// LocalError means the client could not write or read its own files (a full disk, an unmounted share); it says nothing about the release.
+	LocalError bool
 	// Ratio and SeedingSeconds are what a torrent has shared and for how long; zero for a client that does not seed.
 	Ratio          float64
 	SeedingSeconds int64
