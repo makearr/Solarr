@@ -23,9 +23,8 @@ var ErrNotSearchable = works.ErrNotSearchable
 // queries by author and title, and whether a release is the book in the format's files.
 type Search struct {
 	works.Deps
-	Format   Format
-	Reader   library.SeriesReader
-	Physical library.Physical
+	Format Format
+	Reader library.SeriesReader
 }
 
 func (s Search) shared() works.Search[wanted] {
@@ -86,7 +85,7 @@ func (b bookSpec) Wanted(ctx context.Context, item librarydb.DesiredItem, _ int,
 	if s.Settings == nil || s.Format.ByFolder {
 		return w, false, nil
 	}
-	files, err := fileFacts(ctx, s.Format, s.Reader, s.Physical, item.ID)
+	files, err := fileFacts(ctx, s.Format, s.Reader, item.ID)
 	if err != nil {
 		return w, false, err
 	}
@@ -171,7 +170,7 @@ func ReleaseFacts(format Format, info parsebook.Info, raw indexer.RawItem, impl 
 
 // fileFacts are a book's files as a profile judges them: an ebook by its extension, which is all there is to measure;
 // an audiobook by what the probe measured, its extension where ffprobe says nothing.
-func fileFacts(ctx context.Context, format Format, reader library.SeriesReader, physical library.Physical, itemID int64) ([]works.File, error) {
+func fileFacts(ctx context.Context, format Format, reader library.SeriesReader, itemID int64) ([]works.File, error) {
 	files, err := reader.ItemFiles(ctx, itemID)
 	if err != nil {
 		return nil, err
@@ -179,14 +178,7 @@ func fileFacts(ctx context.Context, format Format, reader library.SeriesReader, 
 	out := make([]works.File, 0, len(files))
 	for _, file := range files {
 		held := works.File{MediaObjectID: file.File.MediaObjectID, AddedAt: file.AddedAt, Monitored: file.Monitored}
-		paths, err := physical.PathsForObject(ctx, file.File.MediaObjectID)
-		if err != nil {
-			return nil, err
-		}
-		extension := ""
-		if len(paths) > 0 {
-			extension = path.Ext(paths[0].RelPath)
-		}
+		extension := path.Ext(file.RelPath)
 		held.Facts = score.Facts{File: score.FileFacts{Extension: extension, Container: file.File.Container}}
 		if format.ByFolder {
 			held.Facts.File.AudioCodec, held.Facts.File.AudioBitrate = file.File.AudioCodec, file.File.AudioBitrate

@@ -15,6 +15,8 @@ type SeasonFile struct {
 	Measured bool
 	// AddedAt is when the file was attached to the episode.
 	AddedAt int64
+	// RelPath is the primary path of the file; only ItemFiles fills it.
+	RelPath string
 	File    EpisodeFile
 }
 
@@ -107,7 +109,8 @@ func (r SeriesReader) ItemFiles(ctx context.Context, itemID int64) ([]SeasonFile
 		`SELECT d.monitored, f.added_at, mo.id, mo.size_bytes, COALESCE(ma.resolution, ''), COALESCE(ma.video_codec, ''), COALESCE(ma.hdr, ''),
        COALESCE(ma.audio_codec, ''), COALESCE(ma.audio_channels, ''), COALESCE(ma.subtitles, ''),
        COALESCE(mo.video_bitrate, 0), COALESCE(mo.duration_ms, 0), COALESCE(ma.container, ''),
-       COALESCE(ma.languages, ''), COALESCE(ma.frame_rate, 0), COALESCE(mo.audio_bitrate, 0), COALESCE(ma.crf, 0)
+       COALESCE(ma.languages, ''), COALESCE(ma.frame_rate, 0), COALESCE(mo.audio_bitrate, 0), COALESCE(ma.crf, 0),
+       COALESCE((SELECT rel_path FROM library_path WHERE media_object_id = mo.id ORDER BY is_primary DESC, id LIMIT 1), '')
 FROM desired_item_file f
 JOIN desired_item d ON d.id = f.desired_item_id
 JOIN media_object mo ON mo.id = f.media_object_id
@@ -125,7 +128,7 @@ ORDER BY mo.id`, itemID)
 		var monitored int64
 		if err := rows.Scan(&monitored, &found.AddedAt, &found.File.MediaObjectID, &found.File.SizeBytes, &found.File.Resolution, &found.File.VideoCodec,
 			&found.File.HDR, &found.File.AudioCodec, &found.File.AudioChannels, &subtitles, &found.File.VideoBitrate, &found.File.DurationMs,
-			&found.File.Container, &languages, &found.File.FrameRate, &found.File.AudioBitrate, &found.File.CRF); err != nil {
+			&found.File.Container, &languages, &found.File.FrameRate, &found.File.AudioBitrate, &found.File.CRF, &found.RelPath); err != nil {
 			return nil, fmt.Errorf("library: scan item file: %w", err)
 		}
 		found.Monitored = monitored == 1

@@ -22,7 +22,6 @@ type CutoffJob struct {
 	Format   Format
 	Desired  library.Desired
 	Reader   library.SeriesReader
-	Physical library.Physical
 	Settings *settings.Cache
 	// Recycle moves a file to the recycle bin; replaced is true for an owned file an upgrade superseded. Nil leaves
 	// every file in place.
@@ -37,7 +36,7 @@ func (j CutoffJob) shared() works.Cutoff {
 			return j.Desired.CutoffPageOf(ctx, j.Format.MediaType, afterID, limit)
 		},
 		Files: func(ctx context.Context, itemID int64) ([]works.File, error) {
-			return fileFacts(ctx, j.Format, j.Reader, j.Physical, itemID)
+			return fileFacts(ctx, j.Format, j.Reader, itemID)
 		},
 	}
 }
