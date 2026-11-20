@@ -18,10 +18,10 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/identify/titlekey"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
@@ -345,14 +345,7 @@ func matches(name, query string) bool {
 	return true
 }
 
-func normalise(text string) string {
-	return strings.Map(func(r rune) rune {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			return unicode.ToLower(r)
-		}
-		return ' '
-	}, text)
-}
+func normalise(text string) string { return titlekey.Fold(text, titlekey.Words) }
 
 // folderName is a folder's own name, its parent's for a disc folder ("Show S01\\Disc 2").
 func folderName(folder string) string {

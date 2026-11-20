@@ -22,3 +22,11 @@ func TestAnAuthorsOtherBooksAreTheirsAndNotHeld(t *testing.T) {
 		t.Errorf("entry = %+v, want an Open Library book with its cover", got[0])
 	}
 }
+
+func TestFoldTitle_AccentsAndAmpersandsReadAlike(t *testing.T) {
+	for _, pair := range [][2]string{{"Les Misérables", "Les Miserables"}, {"Pride & Prejudice", "Pride and Prejudice"}} {
+		if a, b := foldTitle(pair[0]), foldTitle(pair[1]); a != b {
+			t.Errorf("foldTitle(%q) = %q, foldTitle(%q) = %q, want one key", pair[0], a, pair[1], b)
+		}
+	}
+}

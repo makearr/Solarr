@@ -5,14 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
-	"strings"
 	"time"
-	"unicode"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/identify/titlekey"
 )
 
 // RetentionDefault is how long a found candidate stays queryable before the sweep may remove it.
@@ -80,19 +79,7 @@ func WithoutCrossIndexerDuplicates(finds []Find) []Find {
 }
 
 // cleanTitle is a release title for comparing: case, punctuation and apostrophes ignored, "&" read as "and".
-func cleanTitle(title string) string {
-	var cleaned strings.Builder
-	for _, r := range strings.ReplaceAll(strings.ToLower(title), "&", " and ") {
-		switch {
-		case r == '\'' || r == '\u2019' || r == '`':
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			cleaned.WriteRune(r)
-		default:
-			cleaned.WriteRune(' ')
-		}
-	}
-	return strings.Join(strings.Fields(cleaned.String()), " ")
-}
+func cleanTitle(title string) string { return titlekey.Fold(title, titlekey.Words) }
 
 func sameSize(a, b int64) bool {
 	if a <= 0 || b <= 0 {

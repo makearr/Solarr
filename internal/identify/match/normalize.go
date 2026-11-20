@@ -2,27 +2,9 @@ package match
 
 import (
 	"strings"
-	"unicode"
 
-	"golang.org/x/text/unicode/norm"
+	"github.com/makearr/Solarr/internal/identify/titlekey"
 )
-
-// unfoldedLetters are the letters that carry no combining mark to drop, spelled the way an ASCII catalogue does.
-var unfoldedLetters = strings.NewReplacer(
-	"ß", "ss", "æ", "ae", "œ", "oe", "ø", "o", "đ", "d", "ð", "d", "þ", "th", "ł", "l", "ı", "i", "ħ", "h", "ŧ", "t", "ĸ", "k",
-)
-
-// foldAccents decomposes the text (so "o" + U+0308 and "ö" read alike), drops the combining marks, then spells the
-// letters that do not decompose.
-func foldAccents(s string) string {
-	decomposed := norm.NFKD.String(s)
-	return unfoldedLetters.Replace(strings.Map(func(r rune) rune {
-		if unicode.Is(unicode.Mn, r) {
-			return -1
-		}
-		return r
-	}, decomposed))
-}
 
 // trailingArticleSuffixes catches "Tonhut, The" so it normalizes the same as
 // "The Example" -- section 10.2's own leading-article example.
@@ -38,36 +20,13 @@ func moveTrailingArticle(s string) string {
 	return s
 }
 
-func stripPunctuation(s string) string {
-	return strings.Map(func(r rune) rune {
-		// An apostrophe joins its word ("Shep's" is "sheps"), whichever of the look-alikes a tagger typed.
-		if r == '\'' || r == '\u2019' || r == '\u2018' || r == '`' {
-			return -1
-		}
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsSpace(r) {
-			return r
-		}
-		return ' '
-	}, s)
-}
-
-func collapseSpaces(s string) string {
-	return strings.Join(strings.Fields(s), " ")
-}
-
 // normalizeTitle applies section 10.2's normalisation: case fold, accent fold,
 // leading-article handling, punctuation strip, separator collapse. Roman-numeral
 // normalisation and embedded-year extraction are deliberately skipped -- Year is
 // already its own Identity field, and folding "II" against "2" is disproportionate
 // for this pass.
 func normalizeTitle(s string) string {
-	s = strings.ToLower(s)
-	s = foldAccents(s)
-	s = strings.TrimSpace(s)
-	s = moveTrailingArticle(s)
-	s = strings.ReplaceAll(s, "&", " and ")
-	s = stripPunctuation(s)
-	return collapseSpaces(s)
+	return titlekey.Fold(moveTrailingArticle(strings.TrimSpace(strings.ToLower(s))), titlekey.Words)
 }
 
 func tokenSet(s string) map[string]struct{} {

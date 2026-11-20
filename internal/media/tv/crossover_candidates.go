@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/identify/titlekey"
 	"github.com/makearr/Solarr/internal/metadata/tvdb"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
 )
@@ -155,15 +155,7 @@ func sharedTitleEvent(cluster []listedEpisode) (library.ProviderEvent, bool) {
 }
 
 // normalised is a title as plain lower-case letters and digits, to find one title inside another.
-func normalised(title string) string {
-	var out strings.Builder
-	for _, r := range strings.ToLower(title) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			out.WriteRune(r)
-		}
-	}
-	return out.String()
-}
+func normalised(title string) string { return titlekey.Fold(title, titlekey.Compact) }
 
 func names(text string, series *listedSeries) bool {
 	title := normalised(series.title)

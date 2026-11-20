@@ -108,7 +108,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/identify/score": {"internal/identify/model"},
 	// Section 10.2's weighted-distance identity matcher: pure, no I/O. Produces a
 	// model.Decision-shaped explanation the same way internal/identify/score does.
-	"internal/identify/match": {"internal/identify/model"},
+	"internal/identify/match": {"internal/identify/titlekey", "internal/identify/model"},
 	// Field-level provider merge (ADR-8): no I/O, the caller fetches rows and
 	// priority order.
 	"internal/metadata/metaresolve": {"internal/platform/parallel"},
@@ -215,7 +215,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/acquiring/indexer/beyondhd":        {"internal/acquiring/indexer", "internal/platform/httpx"},
 	"internal/acquiring/indexer/broadcasthenet":  {"internal/acquiring/indexer", "internal/platform/httpx"},
 	// Soulseek through slskd's search API: its releases are download.DirectRelease, awaited on the clock.
-	"internal/acquiring/indexer/soulseek": {
+	"internal/acquiring/indexer/soulseek": {"internal/identify/titlekey",
 		"internal/acquiring/download", "internal/acquiring/indexer", "internal/platform/clock", "internal/platform/httpx",
 	},
 	// Stage 5's own SABnzbd downloader client (ADR-46/57): the same "just a
@@ -277,7 +277,7 @@ var allowedInternalImports = map[string][]string{
 	// but never store or librarydb directly, which stays library's alone to touch.
 	// The enrichment job adds musicbrainz (ADR-29) and jobs (its own handler,
 	// mirroring scan.Job).
-	"internal/acquiring/judge": {"internal/db/statistics", "internal/platform/parallel", "internal/acquiring/indexer", "internal/db/library", "internal/db/settings", "internal/identify/model", "internal/identify/quality", "internal/identify/score"},
+	"internal/acquiring/judge": {"internal/identify/titlekey", "internal/db/statistics", "internal/platform/parallel", "internal/acquiring/indexer", "internal/db/library", "internal/db/settings", "internal/identify/model", "internal/identify/quality", "internal/identify/score"},
 	"internal/importing/batch": {"internal/db/library", "internal/identify/model", "internal/importing/inspect", "internal/platform/parallel"},
 	// The RSS sync of every media type: feeds read once, each type judging its own.
 	"internal/acquiring/rss": {"internal/acquiring/indexer", "internal/acquiring/judge", "internal/jobs", "internal/platform/clock"},
@@ -411,11 +411,11 @@ var allowedInternalImports = map[string][]string{
 	"internal/media/picturesweep": {"internal/db/library", "internal/jobs", "internal/platform/parallel"},
 	// What film and TV share as data: their genre tree.
 	"internal/media/screen": {"internal/media", "internal/db/settings"},
-	"internal/media/tv":     {"internal/importing/arrmap", "internal/importing/arrimport", "internal/media/works", "internal/media/picturesweep", "internal/media/screen", "internal/metadata/anilist", "internal/metadata/wikidata", "internal/media/knownfor", "internal/platform/filekind", "internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/platform/parallel", "internal/media", "internal/acquiring/plan", "internal/importing/batch", "internal/importing/inspect", "internal/moving/mover", "internal/importing/placer", "internal/importing/rules", "internal/acquiring/releasefacts", "internal/acquiring/dispatch", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/judge", "internal/db/store/gen/librarydb", "internal/identify/score", "internal/identify/parsetv", "internal/scanning/scan", "internal/platform/fsx", "internal/identify/model", "internal/db/library", "internal/db/settings", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/anilist", "internal/metadata/tvdb", "internal/metadata/thexem", "internal/metadata/metaresolve", "internal/moving/naming", "internal/moving/renamejob", "internal/moving/sidecar", "internal/platform/clock", "internal/platform/keyedlock", "internal/platform/mediatool", "internal/platform/paginate", "internal/jobs", "internal/identify/quality"},
+	"internal/media/tv":     {"internal/identify/titlekey", "internal/importing/arrmap", "internal/importing/arrimport", "internal/media/works", "internal/media/picturesweep", "internal/media/screen", "internal/metadata/anilist", "internal/metadata/wikidata", "internal/media/knownfor", "internal/platform/filekind", "internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/platform/parallel", "internal/media", "internal/acquiring/plan", "internal/importing/batch", "internal/importing/inspect", "internal/moving/mover", "internal/importing/placer", "internal/importing/rules", "internal/acquiring/releasefacts", "internal/acquiring/dispatch", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/judge", "internal/db/store/gen/librarydb", "internal/identify/score", "internal/identify/parsetv", "internal/scanning/scan", "internal/platform/fsx", "internal/identify/model", "internal/db/library", "internal/db/settings", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/anilist", "internal/metadata/tvdb", "internal/metadata/thexem", "internal/metadata/metaresolve", "internal/moving/naming", "internal/moving/renamejob", "internal/moving/sidecar", "internal/platform/clock", "internal/platform/keyedlock", "internal/platform/mediatool", "internal/platform/paginate", "internal/jobs", "internal/identify/quality"},
 	// One lock per key, for work on the same series folder or movie.
 	"internal/platform/keyedlock": {},
 	// The movie module (stage 10), built beside music and TV on the same seams.
-	"internal/media/movie": {"internal/metadata/metaresolve", "internal/importing/arrmap", "internal/importing/arrimport", "internal/media/works",
+	"internal/media/movie": {"internal/identify/titlekey", "internal/metadata/metaresolve", "internal/importing/arrmap", "internal/importing/arrimport", "internal/media/works",
 		"internal/media/knownfor", "internal/media/picturesweep", "internal/media/screen",
 		"internal/db/library", "internal/db/settings", "internal/db/store/gen/librarydb", "internal/identify/model",
 		"internal/identify/parsemovie", "internal/identify/parsetv", "internal/identify/quality", "internal/identify/score", "internal/importing/batch",
@@ -433,7 +433,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/metadata/wikidata", "internal/acquiring/cutoff", "internal/acquiring/indexer", "internal/acquiring/judge", "internal/acquiring/releasefacts", "internal/acquiring/rss",
 		"internal/db/statistics", "internal/db/store/gen/librarydb", "internal/identify/parsetv", "internal/identify/score",
 	},
-	"internal/media/book": {"internal/platform/httpx", "internal/platform/filekind",
+	"internal/media/book": {"internal/identify/titlekey", "internal/platform/httpx", "internal/platform/filekind",
 		"internal/media/works", "internal/db/store/gen/librarydb", "internal/media/picturesweep", "internal/db/library", "internal/db/settings", "internal/identify/model",
 		"internal/identify/parsebook", "internal/identify/quality", "internal/identify/score", "internal/importing/batch",
 		"internal/importing/inspect", "internal/importing/placer", "internal/importing/rules", "internal/jobs", "internal/media",
@@ -463,7 +463,8 @@ var allowedInternalImports = map[string][]string{
 	"internal/metadata/theporndb":   {"internal/platform/httpx"},
 	"internal/metadata/whisparr":    {"internal/platform/httpx"},
 	"internal/metadata/audible":     {"internal/platform/httpx"},
-	"internal/identify/parsebook":   {},
+	"internal/identify/parsebook":   {"internal/identify/titlekey"},
+	"internal/identify/titlekey":    {},
 	"internal/identify/parseadult":  {},
 	// Radarr's own keyless movie metadata service, the fallback behind TMDB.
 	"internal/metadata/radarrmeta": {"internal/platform/httpx"},

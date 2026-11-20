@@ -3,10 +3,9 @@ package book
 import (
 	"context"
 	"slices"
-	"strings"
-	"unicode"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/identify/titlekey"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/metadata/openlibrary"
 )
@@ -133,12 +132,4 @@ func (a AuthorWorks) otherBooks(ctx context.Context, name, key string, held map[
 }
 
 // foldTitle is a title's letters and digits, so "Dune!" and "dune" are one.
-func foldTitle(title string) string {
-	var folded strings.Builder
-	for _, r := range strings.ToLower(title) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			folded.WriteRune(r)
-		}
-	}
-	return folded.String()
-}
+func foldTitle(title string) string { return titlekey.Fold(title, titlekey.Compact) }

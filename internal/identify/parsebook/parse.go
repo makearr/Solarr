@@ -10,7 +10,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"unicode"
+
+	"github.com/makearr/Solarr/internal/identify/titlekey"
 )
 
 // Info is what one name says.
@@ -238,20 +239,6 @@ func stripNumbering(title string) string {
 
 func collapse(text string) string { return strings.Join(strings.Fields(text), " ") }
 
-// CleanTitle is a title's words, lower case, without punctuation, accents kept, "&" as "and": what two spellings of one
+// CleanTitle is a title's words, lower case, without punctuation, accents folded, "&" as "and": what two spellings of one
 // title share.
-func CleanTitle(title string) string {
-	var out strings.Builder
-	for _, r := range strings.ToLower(strings.NewReplacer("&", " and ", "'", "", "’", "").Replace(title)) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			out.WriteRune(r)
-		} else {
-			out.WriteRune(' ')
-		}
-	}
-	words := strings.Fields(out.String())
-	if len(words) > 1 && slices.Contains([]string{"the", "a", "an"}, words[0]) {
-		words = words[1:]
-	}
-	return strings.Join(words, " ")
-}
+func CleanTitle(title string) string { return titlekey.Fold(title, titlekey.WordsNoArticle) }

@@ -14,6 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parsemovie"
 	"github.com/makearr/Solarr/internal/identify/parsetv"
+	"github.com/makearr/Solarr/internal/identify/titlekey"
 	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/platform/keyedlock"
 )
@@ -262,15 +263,7 @@ func pickCandidate(candidates []Candidate, info parsemovie.Info) (Candidate, flo
 
 // titleKey is a title's letters and digits alone, apostrophes gone ("Straight A's" is "Straight As"): CleanTitle also drops
 // articles, which turns "L.A." into "l".
-func titleKey(title string) string {
-	var key strings.Builder
-	for _, r := range strings.ToLower(strings.NewReplacer("&", "and", "'", "", "\u2019", "").Replace(title)) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			key.WriteRune(r)
-		}
-	}
-	return key.String()
-}
+func titleKey(title string) string { return titlekey.Fold(title, titlekey.Compact) }
 
 // wordsBound says the shorter title is the longer one's first or last words and has at least two ("Borat Subsequent
 // Moviefilm" and its provider title with the full Kazakh subtitle, "Almeeg of Vix 3 Dguzoli Haheix" and "Dguzoli Haheix").
