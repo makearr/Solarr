@@ -132,7 +132,7 @@ func (p *process) musicModule() music.Module {
 // tvModule wires TV's sweep; its waiting files are identified again by the shared identify-retry task.
 func (p *process) tvModule() tv.Module {
 	consumer := tv.NewConsumer(tv.ConsumerConfig{
-		FS: p.fsys, Unidentified: library.NewUnidentified(p.library),
+		FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
 		Service: p.tvService(), Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem(), Logger: p.logger,
 		Categories: adapters.Categories{Cache: p.cache}, Resolver: p.tvResolver(), SharedFiles: p.enqueueSharedFiles,
 	})
@@ -409,7 +409,7 @@ func (p *process) tvTitleRenameTask() jobs.Task {
 // jobs that keep the metadata and pictures current.
 func (p *process) movieModule() movie.Module {
 	consumer := movie.NewConsumer(movie.ConsumerConfig{
-		FS: p.fsys, Unidentified: library.NewUnidentified(p.library),
+		FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
 		Service: p.movieService(), Clock: clock.NewSystem(), Logger: p.logger, Resolver: p.movieResolver(),
 	})
 	catalog := p.movieCatalog()
@@ -577,7 +577,7 @@ func (p *process) bookModule(format book.Format) book.Module {
 		}, p.bookSeriesKeysJob(format)...),
 		Sweep: scan.Sweep{
 			Consumer: book.NewConsumer(book.ConsumerConfig{
-				FS: p.fsys, Unidentified: library.NewUnidentified(p.library), Service: service,
+				FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library), Service: service,
 				Clock: clock.NewSystem(), Logger: p.logger, Resolver: resolver,
 			}),
 			Include: format.Includes, Probe: format.Probes,
@@ -680,7 +680,7 @@ func (p *process) adultModule() adult.Module {
 		},
 		Sweep: scan.Sweep{
 			Consumer: adult.NewConsumer(adult.ConsumerConfig{
-				FS: p.fsys, Unidentified: library.NewUnidentified(p.library), Service: service,
+				FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library), Service: service,
 				Clock: clock.NewSystem(), Logger: p.logger, Resolver: resolver,
 			}),
 			Include:     adult.IsScene,
