@@ -194,8 +194,8 @@ func (d *Driver) errorMessage(selectors []ErrorSelector, found *goquery.Document
 	return "", false
 }
 
-// login signs in as the spec says. A cookie login only sets the owner's cookie, which every request carries.
-func (d *Driver) login(ctx context.Context) error {
+// signIn signs in as the spec says. A cookie login only sets the owner's cookie, which every request carries.
+func (d *Driver) signIn(ctx context.Context) error {
 	login := d.spec.Login
 	if login == nil || login.Method == "" || login.Method == "cookie" || login.Method == "none" {
 		return nil

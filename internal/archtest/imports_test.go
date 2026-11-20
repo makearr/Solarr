@@ -200,7 +200,7 @@ var allowedInternalImports = map[string][]string{
 	// FlareSolverr solves challenges for an indexer's requests; it knows no other package.
 	"internal/acquiring/indexer/flaresolverr": {},
 	// The spec engine: a Driver over the converted site specs, on the indexer types and httpx.
-	"internal/acquiring/indexer/spec": {"internal/acquiring/indexer", "internal/platform/clock", "internal/platform/httpx"},
+	"internal/acquiring/indexer/spec": {"internal/acquiring/indexer", "internal/platform/clock", "internal/platform/httpx", "internal/platform/keyedlock"},
 	// Prowlarr's API-based indexers, each on indexer.Base: "just a client" over its site's documented API.
 	"internal/acquiring/indexer/thepiratebay":    {"internal/acquiring/indexer", "internal/platform/httpx"},
 	"internal/acquiring/indexer/nyaa":            {"internal/acquiring/indexer", "internal/platform/httpx"},
