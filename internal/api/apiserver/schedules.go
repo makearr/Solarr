@@ -27,6 +27,8 @@ type Scheduler interface {
 	// State answers one task's own persisted run-state. found is false for
 	// a task that has never ticked yet.
 	State(ctx context.Context, key string) (jobs.ScheduleRun, bool, error)
+	// States answers the run-state of every task that has ticked, by key, in one read.
+	States(ctx context.Context) (map[string]jobs.ScheduleRun, error)
 	// EffectiveCadences resolves a task's live cadences: a stored override, or [defaultCadence].
 	EffectiveCadences(key, defaultCadence string) []string
 	// Enabled resolves a task's live enabled flag.
@@ -80,15 +82,15 @@ func (s *Server) ListSchedules(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.logger, err)
 		return
 	}
+	states, err := s.scheduler.States(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
 	tasks := s.scheduler.Tasks()
 	views := make([]gen.Schedule, len(tasks))
 	for index, task := range tasks {
-		view, err := s.scheduleView(r.Context(), task, held)
-		if err != nil {
-			writeError(w, s.logger, err)
-			return
-		}
-		views[index] = view
+		views[index] = s.scheduleView(task, states[task.Key], held)
 	}
 	writeJSON(w, s.logger, http.StatusOK, views)
 }
@@ -164,12 +166,12 @@ func (s *Server) UpdateSchedule(w http.ResponseWriter, r *http.Request, key stri
 		writeError(w, s.logger, err)
 		return
 	}
-	view, err := s.scheduleView(r.Context(), task, held)
+	state, _, err := s.scheduler.State(r.Context(), key)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, view)
+	writeJSON(w, s.logger, http.StatusOK, s.scheduleView(task, state, held))
 }
 
 // routeRunSchedule parses the key path parameter and the full query string,
@@ -247,12 +249,7 @@ func (s *Server) findTask(key string) jobs.Task {
 	return jobs.Task{}
 }
 
-func (s *Server) scheduleView(ctx context.Context, task jobs.Task, held map[string]int64) (gen.Schedule, error) {
-	state, _, err := s.scheduler.State(ctx, task.Key)
-	if err != nil {
-		return gen.Schedule{}, err
-	}
-
+func (s *Server) scheduleView(task jobs.Task, state jobs.ScheduleRun, held map[string]int64) gen.Schedule {
 	view := gen.Schedule{
 		Key: task.Key, Name: task.Name, Tier: gen.ScheduleTier(task.Tier),
 		Category:       gen.ScheduleCategory(task.Category),
@@ -273,5 +270,5 @@ func (s *Server) scheduleView(ctx context.Context, task jobs.Task, held map[stri
 		lastError := state.LastError
 		view.LastError = &lastError
 	}
-	return view, nil
+	return view
 }

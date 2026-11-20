@@ -27,13 +27,21 @@ type fakeScheduler struct {
 	runNowErr     error
 	lastRunKey    string
 	lastRunFull   bool
+	// stateReads and statesReads count the one-task and the all-tasks reads of run-state.
+	stateReads, statesReads int
 }
 
 func (f *fakeScheduler) Tasks() []jobs.Task { return f.tasks }
 
 func (f *fakeScheduler) State(_ context.Context, key string) (jobs.ScheduleRun, bool, error) {
+	f.stateReads++
 	run, found := f.states[key]
 	return run, found, nil
+}
+
+func (f *fakeScheduler) States(context.Context) (map[string]jobs.ScheduleRun, error) {
+	f.statesReads++
+	return f.states, nil
 }
 
 func (f *fakeScheduler) EffectiveCadences(key, defaultCadence string) []string {
@@ -154,6 +162,9 @@ func TestListSchedules_ReturnsEveryTaskWithItsEffectiveSettings(t *testing.T) {
 	}
 	if schedules[0].SupportsFull {
 		t.Error("supports_full = true for a task with no RunFull")
+	}
+	if fixture.scheduler.statesReads != 1 || fixture.scheduler.stateReads != 0 {
+		t.Errorf("run-state read %d times all at once and %d times per task, want 1 and 0", fixture.scheduler.statesReads, fixture.scheduler.stateReads)
 	}
 }
 

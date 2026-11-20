@@ -26,6 +26,18 @@ func (a Schedule) State(ctx context.Context, key string) (jobs.ScheduleRun, bool
 	return a.States.Get(ctx, key)
 }
 
+func (a Schedule) States(ctx context.Context) (map[string]jobs.ScheduleRun, error) {
+	listed, err := a.States.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	states := make(map[string]jobs.ScheduleRun, len(listed))
+	for _, run := range listed {
+		states[run.TaskKey] = run
+	}
+	return states, nil
+}
+
 func (a Schedule) EffectiveCadences(key, defaultCadence string) []string {
 	return a.Cache.Snapshot().ScheduleCadences(key, defaultCadence)
 }
