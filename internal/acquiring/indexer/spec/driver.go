@@ -128,17 +128,20 @@ func (d *Driver) fetch(ctx context.Context, method, target string, form url.Valu
 	if method == http.MethodPost {
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
-	for name, values := range headers {
-		for _, value := range values {
-			rendered, err := render(value, d.variables())
-			if err != nil {
-				return page{}, err
+	// The owner's cookie and the spec's headers (which may carry a key) go to the tracker only, never to a host a page linked to.
+	if d.sameSite(target) {
+		for name, values := range headers {
+			for _, value := range values {
+				rendered, err := render(value, d.variables())
+				if err != nil {
+					return page{}, err
+				}
+				request.Header.Add(name, rendered)
 			}
-			request.Header.Add(name, rendered)
 		}
-	}
-	if cookie := d.settings["cookie"]; cookie != "" && d.spec.Login != nil && d.spec.Login.Method == "cookie" {
-		request.Header.Set("Cookie", cookie)
+		if cookie := d.settings["cookie"]; cookie != "" && d.spec.Login != nil && d.spec.Login.Method == "cookie" {
+			request.Header.Set("Cookie", cookie)
+		}
 	}
 	response, err := d.http.Do(ctx, request)
 	if err != nil {
