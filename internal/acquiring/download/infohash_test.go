@@ -2,6 +2,7 @@ package download_test
 
 import (
 	"crypto/sha1" //nolint:gosec // the info hash under test is SHA-1
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"strings"
@@ -53,5 +54,36 @@ func TestInfoHash_AnOverlongStringLengthIsRefused(t *testing.T) {
 		if name := download.TorrentName([]byte(file)); name != "" {
 			t.Errorf("TorrentName(%q) = %q", file, name)
 		}
+	}
+}
+
+func TestInfoHash_AV2OnlyTorrentIsListedByTheSHA256OfItsInfo(t *testing.T) {
+	const v2Info = "d12:meta versioni2e4:name1:a12:piece lengthi16384ee"
+	sum := sha256.Sum256([]byte(v2Info))
+	want := hex.EncodeToString(sum[:20])
+	got, err := download.InfoHash([]byte("d4:info" + v2Info + "e"))
+	if err != nil || got != want {
+		t.Errorf("v2 only = %q, %v, want %q", got, err, want)
+	}
+
+	const hybridInfo = "d12:meta versioni2e4:name1:a12:piece lengthi16384e6:pieces20:01234567890123456789e"
+	v1 := sha1.Sum([]byte(hybridInfo)) //nolint:gosec // see above
+	if got, err := download.InfoHash([]byte("d4:info" + hybridInfo + "e")); err != nil || got != hex.EncodeToString(v1[:]) {
+		t.Errorf("hybrid = %q, %v, want the v1 hash", got, err)
+	}
+}
+
+func TestInfoHash_ReadsAV2MagnetAndPrefersTheV1Hash(t *testing.T) {
+	multihash := strings.Repeat("ab", 32)
+	if got, err := download.InfoHash([]byte("magnet:?xt=urn:btmh:1220" + multihash + "&dn=x")); err != nil || got != multihash[:40] {
+		t.Errorf("btmh = %q, %v, want the first 40 hex", got, err)
+	}
+	v1 := strings.Repeat("cd", 20)
+	both := "magnet:?xt=urn:btmh:1220" + multihash + "&xt=urn:btih:" + v1
+	if got, _ := download.InfoHash([]byte(both)); got != v1 {
+		t.Errorf("both = %q, want the btih %q", got, v1)
+	}
+	if _, err := download.InfoHash([]byte("magnet:?xt=urn:btmh:1220abcd")); !errors.Is(err, download.ErrNoInfoHash) {
+		t.Errorf("a short btmh: %v, want ErrNoInfoHash", err)
 	}
 }

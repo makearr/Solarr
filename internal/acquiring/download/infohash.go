@@ -2,6 +2,7 @@ package download
 
 import (
 	"crypto/sha1" //nolint:gosec // BitTorrent's own info hash is SHA-1, an identity and not a security measure
+	"crypto/sha256"
 	"encoding/base32"
 	"encoding/hex"
 	"errors"
@@ -10,7 +11,7 @@ import (
 	"strings"
 )
 
-// ErrNoInfoHash reports bytes that are not a torrent file or a magnet link naming a BitTorrent v1 info hash.
+// ErrNoInfoHash reports bytes that are not a torrent file or a magnet link naming a BitTorrent info hash.
 var ErrNoInfoHash = errors.New("download: no info hash in the torrent")
 
 // InfoHash answers the lowercase hex info hash of a torrent file's bytes, or of a magnet link.
@@ -22,8 +23,38 @@ func InfoHash(file []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if v2Only(file[start:end]) {
+		// Clients list a v2-only torrent under the first 20 bytes of the SHA-256 of its info dictionary.
+		sum := sha256.Sum256(file[start:end])
+		return hex.EncodeToString(sum[:20]), nil
+	}
 	sum := sha1.Sum(file[start:end]) //nolint:gosec // see above
 	return hex.EncodeToString(sum[:]), nil
+}
+
+// v2Only says whether an info dictionary is BitTorrent v2 with no v1 part: "meta version" 2 and no "pieces".
+// A hybrid torrent has both and is listed by its v1 hash.
+func v2Only(info []byte) bool {
+	hasPieces, metaV2 := false, false
+	position := 1
+	for position < len(info) && info[position] != 'e' {
+		key, next, err := readString(info, position)
+		if err != nil {
+			return false
+		}
+		valueEnd, err := skipValue(info, next)
+		if err != nil {
+			return false
+		}
+		switch key {
+		case "pieces":
+			hasPieces = true
+		case "meta version":
+			metaV2 = string(info[next:valueEnd]) == "i2e"
+		}
+		position = valueEnd
+	}
+	return metaV2 && !hasPieces
 }
 
 func magnetHash(magnet string) (string, error) {
@@ -44,6 +75,14 @@ func magnetHash(magnet string) (string, error) {
 		case 32:
 			if raw, err := base32.StdEncoding.DecodeString(strings.ToUpper(btih)); err == nil {
 				return hex.EncodeToString(raw), nil
+			}
+		}
+	}
+	// A v2-only magnet: the multihash is 1220 (SHA-256, 32 bytes) and clients list the first 20 bytes of it.
+	for _, topic := range parsed.Query()["xt"] {
+		if btmh, found := strings.CutPrefix(strings.ToLower(topic), "urn:btmh:1220"); found && len(btmh) == 64 {
+			if _, err := hex.DecodeString(btmh); err == nil {
+				return btmh[:40], nil
 			}
 		}
 	}
