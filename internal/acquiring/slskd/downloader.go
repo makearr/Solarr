@@ -98,8 +98,16 @@ func (d Downloader) AddDirect(ctx context.Context, release download.DirectReleas
 	if clash := d.clashWith(ctx, release, directory); clash != "" {
 		return "", fmt.Errorf("%w: %s", download.ErrRefused, clash)
 	}
-	if err := d.Client.Enqueue(ctx, release.Source, files); err != nil {
+	answer, err := d.Client.Enqueue(ctx, release.Source, files)
+	if err != nil {
 		return "", fmt.Errorf("%w: %w", download.ErrRefused, err)
+	}
+	if len(answer.Failed) > 0 {
+		// Half an album tracked as a whole one would be imported or blocklisted as if it were all there.
+		for _, taken := range answer.Enqueued {
+			_ = d.Client.RemoveTransfer(context.WithoutCancel(ctx), release.Source, taken.ID)
+		}
+		return "", fmt.Errorf("%w: the peer refused %d of %d files", download.ErrRefused, len(answer.Failed), len(files))
 	}
 	reference := ref{username: release.Source, directory: directory}
 	if !release.WholeFolder {

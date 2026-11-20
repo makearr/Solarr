@@ -207,3 +207,34 @@ func TestDownloader_OwnFilesAreTheNamesOfItsTransfers(t *testing.T) {
 		t.Errorf("OwnFiles = %v, %v, want %v", got, err, want)
 	}
 }
+
+// Half an album the peer refused is not tracked as a whole one: what was taken is cancelled and the release refused.
+func TestDownloader_APartlyRefusedEnqueueIsRefusedAndCancelled(t *testing.T) {
+	server := &clienttest.Server{Routes: map[string]clienttest.Route{
+		"POST /api/v0/transfers/downloads/peer one":     {Status: http.StatusCreated, Body: `{"enqueued":[{"id":"7","filename":"@@music\\Heka\\Zanuvode\\01.flac"}],"failed":["@@music\\Heka\\Zanuvode\\02.flac: not shared"]}`},
+		"DELETE /api/v0/transfers/downloads/peer one/7": {},
+	}}
+	_, err := driver(t, server).Add(t.Context(), download.AddRequest{File: []byte(release)})
+	if !errors.Is(err, download.ErrRefused) {
+		t.Fatalf("Add = %v, want ErrRefused", err)
+	}
+	cancelled := false
+	for _, seen := range server.Seen {
+		cancelled = cancelled || (seen.Method == http.MethodDelete && seen.Path == "/api/v0/transfers/downloads/peer one/7")
+	}
+	if !cancelled {
+		t.Errorf("the accepted transfer was not cancelled: %+v", server.Seen)
+	}
+}
+
+// slskd ships remote file management off and answers 403: the download still leaves the queue, its files stay.
+func TestDownloader_RemoveWithoutRemoteFileManagementLeavesTheFilesAndSucceeds(t *testing.T) {
+	server := &clienttest.Server{Routes: map[string]clienttest.Route{
+		"/api/v0/transfers/downloads":                           {Body: `[{"username":"peer","directories":[{"directory":"@@music\\A\\Done","files":[{"id":"1","filename":"@@music\\A\\Done\\01.flac"}]}]}]`},
+		"DELETE /api/v0/transfers/downloads/peer/1":             {},
+		"DELETE /api/v0/files/downloads/files/RG9uZS8wMS5mbGFj": {Status: http.StatusForbidden},
+	}}
+	if err := driver(t, server).Remove(t.Context(), `peer|@@music\A\Done`, true); err != nil {
+		t.Errorf("Remove = %v, want nil", err)
+	}
+}

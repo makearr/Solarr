@@ -57,7 +57,7 @@ func (c Client) call(ctx context.Context, method, path string, payload any, into
 	if err != nil {
 		return fmt.Errorf("slskd: read %s: %w", path, err)
 	}
-	if into == nil {
+	if into == nil || len(bytes.TrimSpace(data)) == 0 {
 		return nil
 	}
 	if err := json.Unmarshal(data, into); err != nil {
@@ -100,9 +100,17 @@ type FileRequest struct {
 	Size     int64  `json:"size"`
 }
 
-// Enqueue asks username for files.
-func (c Client) Enqueue(ctx context.Context, username string, files []FileRequest) error {
-	return c.call(ctx, http.MethodPost, "/transfers/downloads/"+url.PathEscape(username), files, nil)
+// Enqueued is slskd's answer to an enqueue: the transfers it made and the files it refused (peer offline, no longer shared).
+type Enqueued struct {
+	Enqueued []Transfer `json:"enqueued"`
+	Failed   []string   `json:"failed"`
+}
+
+// Enqueue asks username for files and answers which were taken and which refused.
+func (c Client) Enqueue(ctx context.Context, username string, files []FileRequest) (Enqueued, error) {
+	var answer Enqueued
+	err := c.call(ctx, http.MethodPost, "/transfers/downloads/"+url.PathEscape(username), files, &answer)
+	return answer, err
 }
 
 // Transfer is one file's transfer.
@@ -145,9 +153,14 @@ func (c Client) RemoveTransfer(ctx context.Context, username, id string) error {
 // DeleteFile deletes one file below the downloads directory, named relative to it; one already gone is not an error.
 func (c Client) DeleteFile(ctx context.Context, relative string) error {
 	encoded := base64.URLEncoding.EncodeToString([]byte(relative))
-	err := c.call(ctx, http.MethodDelete, "/files/downloads/files/"+encoded, nil, nil)
+	return forgiveDelete(c.call(ctx, http.MethodDelete, "/files/downloads/files/"+encoded, nil, nil))
+}
+
+// forgiveDelete lets a delete that found nothing (404) or that slskd does not allow (403: remote file management is
+// off by default) pass: the transfer is already forgotten, and failing here would keep the queue entry for ever.
+func forgiveDelete(err error) error {
 	var status *httpx.StatusError
-	if errors.As(err, &status) && status.Status == http.StatusNotFound {
+	if errors.As(err, &status) && (status.Status == http.StatusNotFound || status.Status == http.StatusForbidden) {
 		return nil
 	}
 	return err
@@ -157,10 +170,5 @@ func (c Client) DeleteFile(ctx context.Context, relative string) error {
 // error.
 func (c Client) DeleteDirectory(ctx context.Context, relative string) error {
 	encoded := base64.URLEncoding.EncodeToString([]byte(relative))
-	err := c.call(ctx, http.MethodDelete, "/files/downloads/directories/"+encoded, nil, nil)
-	var status *httpx.StatusError
-	if errors.As(err, &status) && status.Status == http.StatusNotFound {
-		return nil
-	}
-	return err
+	return forgiveDelete(c.call(ctx, http.MethodDelete, "/files/downloads/directories/"+encoded, nil, nil))
 }
