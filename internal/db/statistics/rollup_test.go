@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/statistics"
@@ -70,5 +71,32 @@ func TestRollup_IncompleteDiscographiesMostMissingFirst(t *testing.T) {
 	}
 	if want := []statistics.DiscographyCoverage{{PersonID: 8, Held: 1, Total: 6}, {PersonID: 7, Held: 1, Total: 2}}; !reflect.DeepEqual(listed, want) {
 		t.Errorf("incomplete = %+v, want %+v", listed, want)
+	}
+}
+
+// A metric with a row per artist is stored in 200-row writes, and a replace still leaves exactly the new rows (K-9).
+func TestRollup_ReplacesALargeMetricInChunks(t *testing.T) {
+	opened := openStatistics(t)
+	rollup := statistics.NewRollup(opened)
+	figures := func(n int) []statistics.Figure {
+		list := make([]statistics.Figure, n)
+		for i := range list {
+			list[i] = statistics.Figure{Metric: "coverage", Dimension: statistics.Dimension(1, strconv.Itoa(i)), Value: 1, Count: 1}
+		}
+		return list
+	}
+	if err := rollup.ReplaceCategory(t.Context(), "coverage", 1, figures(450), 9); err != nil {
+		t.Fatal(err)
+	}
+	before := opened.WritesRun()
+	if err := rollup.ReplaceCategory(t.Context(), "coverage", 1, figures(420), 10); err != nil {
+		t.Fatal(err)
+	}
+	if writes := opened.WritesRun() - before; writes != 3 {
+		t.Errorf("replacing 420 figures ran %d writes, want 3 (200, 200, 20)", writes)
+	}
+	got, err := rollup.ForCategory(t.Context(), "coverage", 1)
+	if err != nil || len(got) != 420 {
+		t.Errorf("rows = %d, %v; want exactly the 420 new ones", len(got), err)
 	}
 }

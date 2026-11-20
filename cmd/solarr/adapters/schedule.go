@@ -26,7 +26,7 @@ func (a Schedule) State(ctx context.Context, key string) (jobs.ScheduleRun, bool
 	return a.States.Get(ctx, key)
 }
 
-func (a Schedule) States(ctx context.Context) (map[string]jobs.ScheduleRun, error) {
+func (a Schedule) AllStates(ctx context.Context) (map[string]jobs.ScheduleRun, error) {
 	listed, err := a.States.List(ctx)
 	if err != nil {
 		return nil, err

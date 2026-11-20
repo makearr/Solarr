@@ -27,8 +27,8 @@ type Scheduler interface {
 	// State answers one task's own persisted run-state. found is false for
 	// a task that has never ticked yet.
 	State(ctx context.Context, key string) (jobs.ScheduleRun, bool, error)
-	// States answers the run-state of every task that has ticked, by key, in one read.
-	States(ctx context.Context) (map[string]jobs.ScheduleRun, error)
+	// AllStates answers the run-state of every task that has ticked, by key, in one read.
+	AllStates(ctx context.Context) (map[string]jobs.ScheduleRun, error)
 	// EffectiveCadences resolves a task's live cadences: a stored override, or [defaultCadence].
 	EffectiveCadences(key, defaultCadence string) []string
 	// Enabled resolves a task's live enabled flag.
@@ -82,7 +82,7 @@ func (s *Server) ListSchedules(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.logger, err)
 		return
 	}
-	states, err := s.scheduler.States(r.Context())
+	states, err := s.scheduler.AllStates(r.Context())
 	if err != nil {
 		writeError(w, s.logger, err)
 		return

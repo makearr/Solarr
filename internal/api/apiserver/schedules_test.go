@@ -39,7 +39,7 @@ func (f *fakeScheduler) State(_ context.Context, key string) (jobs.ScheduleRun, 
 	return run, found, nil
 }
 
-func (f *fakeScheduler) States(context.Context) (map[string]jobs.ScheduleRun, error) {
+func (f *fakeScheduler) AllStates(context.Context) (map[string]jobs.ScheduleRun, error) {
 	f.statesReads++
 	return f.states, nil
 }

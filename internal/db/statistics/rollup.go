@@ -38,21 +38,45 @@ func Dimension(categoryID int64, key string) string {
 	return strconv.FormatInt(categoryID, 10) + "|" + key
 }
 
-// Replace rebuilds the metrics named: their rows go, figures takes their place, in one transaction.
+// figureChunk is how many figures one write stores; a metric with a row per artist is written over several (the 50 ms rule).
+const figureChunk = 200
+
+// Replace rebuilds the metrics named: their rows go, figures takes their place. The delete and the first chunk are one
+// write, the rest follow in chunks, so a reader may see a metric briefly partial; library.db is correct without them.
 func (r Rollup) Replace(ctx context.Context, metrics []string, figures []Figure, computedAt int64) error {
-	err := r.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		queries := statisticsdb.New(tx)
+	err := r.replaceChunked(ctx, func(ctx context.Context, queries *statisticsdb.Queries) error {
 		for _, metric := range metrics {
 			if err := queries.DeleteStatRollupMetric(ctx, metric); err != nil {
 				return err
 			}
 		}
-		return setFigures(ctx, queries, figures, computedAt)
-	})
+		return nil
+	}, figures, computedAt)
 	if err != nil {
 		return fmt.Errorf("statistics: replace rollup: %w", err)
 	}
 	return nil
+}
+
+// replaceChunked removes in the first write, with the first chunk of figures, then stores the rest chunk by chunk.
+func (r Rollup) replaceChunked(
+	ctx context.Context, remove func(context.Context, *statisticsdb.Queries) error, figures []Figure, computedAt int64,
+) error {
+	first := figures[:min(figureChunk, len(figures))]
+	err := r.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := statisticsdb.New(tx)
+		if err := remove(ctx, queries); err != nil {
+			return err
+		}
+		return setFigures(ctx, queries, first, computedAt)
+	})
+	if err != nil {
+		return err
+	}
+	return store.WriteBatched(ctx, r.store, store.PrioBulk, figureChunk, figures[len(first):],
+		func(ctx context.Context, tx *sql.Tx, chunk []Figure) error {
+			return setFigures(ctx, statisticsdb.New(tx), chunk, computedAt)
+		})
 }
 
 // Set stores figures over the rows of the same dimension, leaving every other row of their metrics alone.
@@ -77,15 +101,9 @@ func (r Rollup) ReplaceKeyed(ctx context.Context, metric string, categoryID int6
 }
 
 func (r Rollup) replaceUnder(ctx context.Context, metric, prefix string, figures []Figure, computedAt int64) error {
-	err := r.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		queries := statisticsdb.New(tx)
-		if err := queries.DeleteStatRollupMetricForCategory(ctx, statisticsdb.DeleteStatRollupMetricForCategoryParams{
-			Metric: metric, Prefix: prefix,
-		}); err != nil {
-			return err
-		}
-		return setFigures(ctx, queries, figures, computedAt)
-	})
+	err := r.replaceChunked(ctx, func(ctx context.Context, queries *statisticsdb.Queries) error {
+		return queries.DeleteStatRollupMetricForCategory(ctx, statisticsdb.DeleteStatRollupMetricForCategoryParams{Metric: metric, Prefix: prefix})
+	}, figures, computedAt)
 	if err != nil {
 		return fmt.Errorf("statistics: replace %s under %q: %w", metric, prefix, err)
 	}
