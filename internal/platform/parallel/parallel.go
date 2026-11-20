@@ -40,11 +40,17 @@ func Do(ctx context.Context, n, width int, fn func(ctx context.Context, index in
 	return errs
 }
 
-func call(ctx context.Context, index int, fn func(ctx context.Context, index int) error) (err error) {
+func call(ctx context.Context, index int, fn func(ctx context.Context, index int) error) error {
+	return Protect(func() error { return fn(ctx, index) })
+}
+
+// Protect runs fn on the caller's goroutine and turns a panic in it into a *PanicError. A goroutine that calls into
+// an adapter or provider wraps its body in it, since nothing above a bare goroutine can recover.
+func Protect(fn func() error) (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			err = &PanicError{Value: recovered, Stack: debug.Stack()}
 		}
 	}()
-	return fn(ctx, index)
+	return fn()
 }

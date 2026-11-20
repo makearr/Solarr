@@ -11,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/parallel"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
@@ -87,7 +88,11 @@ func (s scanning) Resolve(ctx context.Context, _ settings.RootFolder, categoryID
 		slots <- struct{}{}
 		go func() {
 			defer func() { <-slots; placing.Done() }()
-			matches[i].WorkID, matches[i].Candidates = s.resolver.ResolveKnown(ctx, categoryID, info, files[i].OSHash, known)
+			// A resolver that panics leaves its file unplaced; the batch goes on.
+			_ = parallel.Protect(func() error {
+				matches[i].WorkID, matches[i].Candidates = s.resolver.ResolveKnown(ctx, categoryID, info, files[i].OSHash, known)
+				return nil
+			})
 		}()
 	}
 	placing.Wait()

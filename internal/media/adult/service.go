@@ -19,6 +19,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/whisparr"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
 // ErrNoSource means no provider could be asked or none knew the scene.
@@ -167,7 +168,8 @@ func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, hint Hint
 			asking.Add(1)
 			go func() {
 				defer asking.Done()
-				ask(i)
+				// A provider that panics has not answered; the others still count.
+				_ = parallel.Protect(func() error { ask(i); return nil })
 			}()
 		}
 		asking.Wait()

@@ -94,3 +94,29 @@ func TestQueue_SharesOneReadOfTheClientsAndAsksThemTogether(t *testing.T) {
 		t.Errorf("after the read went stale the client was asked %d times, want 2", first.asked.Load())
 	}
 }
+
+// panickingClient stands for an adapter that trips over a third party's answer.
+type panickingClient struct{ download.Client }
+
+func (panickingClient) QueueStatus(context.Context) (download.QueueStatus, error) {
+	panic("unexpected shape in the client's answer")
+}
+
+// A panic in one client adapter is that client's error and the other clients are still read (RACE-3).
+func TestQueue_APanickingClientIsItsOwnErrorAndTheOthersAreStillRead(t *testing.T) {
+	e := newEnv(t)
+	healthy := &slowClient{}
+	job := poll.NewJob(poll.Config{
+		Acquisitions: e.acquisitions, Clock: e.clock,
+		Clients: func(context.Context) (map[int64]poll.Client, error) {
+			return map[int64]poll.Client{1: {Name: "SABnzbd", Client: healthy}, 2: {Name: "Broken", Client: panickingClient{}}}, nil
+		},
+	})
+	_, clients, err := job.Queue(t.Context())
+	if err != nil {
+		t.Fatalf("Queue: %v", err)
+	}
+	if len(clients) != 2 || clients[0].Err != nil || clients[0].Status.Items != 1 || clients[1].Err == nil {
+		t.Errorf("clients = %+v, want the first read and the second reported as an error", clients)
+	}
+}

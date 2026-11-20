@@ -56,7 +56,7 @@ var allowedInternalImports = map[string][]string{
 	},
 	"internal/api/auth":  {"internal/platform/clock", "internal/platform/secrets"},
 	"internal/api/authz": {"internal/db/settings"},
-	"internal/api/apiserver": {"internal/platform/artwork", "internal/platform/iogate",
+	"internal/api/apiserver": {"internal/platform/artwork", "internal/platform/iogate", "internal/platform/parallel",
 		"internal/platform/remoteimage", "internal/api/apiserver/gen", "internal/api/apiserver/legal", "internal/api/auth", "internal/api/authz",
 		"internal/platform/clock", "internal/platform/config", "internal/platform/events", "internal/platform/fsx",
 		"internal/jobs", "internal/identify/model", "internal/platform/paginate", "internal/identify/parse",
@@ -227,7 +227,7 @@ var allowedInternalImports = map[string][]string{
 	// supplied by the caller, so no media type is imported here.
 	"internal/acquiring/poll": {
 		"internal/acquiring/download", "internal/db/library", "internal/jobs", "internal/platform/clock",
-		"internal/platform/fsx",
+		"internal/platform/fsx", "internal/platform/parallel",
 	},
 	"internal/acquiring/sabnzbd":      {"internal/platform/httpx", "internal/acquiring/download"},
 	"internal/acquiring/qbittorrent":  {"internal/platform/httpx", "internal/acquiring/download"},
@@ -304,7 +304,7 @@ var allowedInternalImports = map[string][]string{
 	// the pieces a scan needs, the way internal/db/recovery does.
 	"internal/scanning/scan": {"internal/platform/filekind", "internal/platform/iogate",
 		"internal/platform/clock", "internal/platform/fsx", "internal/jobs", "internal/db/library",
-		"internal/platform/mediatool", "internal/db/settings",
+		"internal/platform/mediatool", "internal/db/settings", "internal/platform/parallel",
 	},
 	// ADR-39's measured-half sweep: its own job handler, the same shape as
 	// internal/scanning/scan's -- a Roots lookup for path resolution, mediatool to
@@ -425,7 +425,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/moving/renamejob", "internal/moving/sidecar", "internal/platform/clock", "internal/platform/filekind", "internal/platform/fsx", "internal/platform/keyedlock",
 		"internal/platform/mediatool", "internal/platform/parallel", "internal/platform/paginate", "internal/scanning/scan", "internal/db/statistics",
 	},
-	"internal/media/adult": {"internal/importing/arrmap", "internal/importing/arrimport", "internal/media/works", "internal/media/picturesweep", "internal/db/library", "internal/db/settings", "internal/identify/model",
+	"internal/media/adult": {"internal/platform/parallel", "internal/importing/arrmap", "internal/importing/arrimport", "internal/media/works", "internal/media/picturesweep", "internal/db/library", "internal/db/settings", "internal/identify/model",
 		"internal/identify/parseadult", "internal/importing/batch", "internal/importing/inspect", "internal/importing/placer", "internal/importing/rules",
 		"internal/jobs", "internal/media", "internal/metadata/stashbox", "internal/metadata/theporndb", "internal/metadata/whisparr", "internal/acquiring/plan", "internal/moving/mover",
 		"internal/moving/naming", "internal/moving/renamejob", "internal/platform/clock", "internal/platform/fsx", "internal/platform/httpx",

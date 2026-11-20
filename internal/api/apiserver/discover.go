@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
 // ErrDiscoverUnsupportedMediaType reports a library whose media type cannot add, or a candidate it cannot add.
@@ -212,7 +213,7 @@ func (s *Server) tellCompanion(ctx context.Context, result AddWorkResult, body g
 	go func() {
 		withLimit, cancel := context.WithTimeout(background, time.Minute)
 		defer cancel()
-		if err := s.arrCompanion.Added(withLimit, added); err != nil {
+		if err := parallel.Protect(func() error { return s.arrCompanion.Added(withLimit, added) }); err != nil {
 			s.logger.Warn("arr companion: the *Arr was not told about an add", "work_id", added.WorkID, "error", err)
 		}
 	}()

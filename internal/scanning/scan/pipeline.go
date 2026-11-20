@@ -3,6 +3,8 @@ package scan
 import (
 	"context"
 	"errors"
+
+	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
 // observeConcurrency is how many directories are identified at once. Identification waits on
@@ -54,7 +56,8 @@ func (p *pipeline) submit(ctx context.Context, batch Batch) error {
 	p.window = append(p.window, slot)
 	p.running++
 	go func() {
-		slot.done <- p.observe(ctx, batch)
+		// A panic while identifying one directory fails the scan slice, which resumes from its cursor, instead of ending the process.
+		slot.done <- parallel.Protect(func() error { return p.observe(ctx, batch) })
 		p.finished <- struct{}{}
 	}()
 	return nil

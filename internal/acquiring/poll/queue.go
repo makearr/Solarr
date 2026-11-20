@@ -2,12 +2,13 @@ package poll
 
 import (
 	"context"
+	"fmt"
 	"slices"
-	"sync"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
 // Entry is one download in flight as the Downloads queue shows it: Solarr's record and, when the
@@ -109,25 +110,30 @@ func (j *Job) readClients(ctx context.Context, active []library.Acquisition, cli
 
 	statuses := make([]ClientStatus, len(ids))
 	downloads := make([]map[string]download.Download, len(ids))
-	var wg sync.WaitGroup
-	for i, id := range ids {
-		wg.Go(func() {
-			client := clients[id]
-			status := ClientStatus{ID: id, Name: client.Name}
-			status.Status, status.Err = client.Client.QueueStatus(ctx)
-			if open := activeOn(active, id); status.Err == nil && len(open) > 0 {
-				listed, err := listDownloads(ctx, client.Client, open)
-				status.Err = err
-				byRef := make(map[string]download.Download, len(listed))
-				for _, entry := range listed {
-					byRef[entry.ClientRef] = entry
-				}
-				downloads[i] = byRef
+	// A client adapter parses a third party's answer; a panic in one is that client's error, not the process's.
+	failed := parallel.Do(ctx, len(ids), 0, func(ctx context.Context, i int) error {
+		id := ids[i]
+		client := clients[id]
+		status := ClientStatus{ID: id, Name: client.Name}
+		status.Status, status.Err = client.Client.QueueStatus(ctx)
+		if open := activeOn(active, id); status.Err == nil && len(open) > 0 {
+			listed, err := listDownloads(ctx, client.Client, open)
+			status.Err = err
+			byRef := make(map[string]download.Download, len(listed))
+			for _, entry := range listed {
+				byRef[entry.ClientRef] = entry
 			}
-			statuses[i] = status
-		})
+			downloads[i] = byRef
+		}
+		statuses[i] = status
+		return nil
+	})
+	for i, err := range failed {
+		if err != nil {
+			statuses[i] = ClientStatus{ID: ids[i], Name: clients[ids[i]].Name, Err: fmt.Errorf("download client: %w", err)}
+			downloads[i] = nil
+		}
 	}
-	wg.Wait()
 
 	reported := make(map[int64]map[string]download.Download, len(ids))
 	for i, id := range ids {
