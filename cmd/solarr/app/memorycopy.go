@@ -14,6 +14,9 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/importing/importjob"
+	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/moving/moverjob"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -25,6 +28,12 @@ const memoryWatchInterval = 30 * time.Second
 
 // memoryFloor is the free memory below which the RAM copies are given up: a twentieth of the limit, at least this.
 const memoryFloor = 256 << 20
+
+// syncDebounce is how long after work that moved files on disk the databases are copied; the interval stays the upper bound.
+const syncDebounce = 30 * time.Second
+
+// finalSyncWarnAfter is when a final copy is slow enough to need a longer stop_grace_period.
+const finalSyncWarnAfter = 5 * time.Second
 
 // shmHeadroom is how much larger than what it will hold the RAM directory must be: the files plus a fifth.
 const shmHeadroom = 1.2
@@ -47,6 +56,58 @@ type memoryCopy struct {
 	notice                  string
 	// configured is what config.yml holds now, which differs from what runs until the next start.
 	configured config.Memory
+	// syncRequested asks for a database copy soon, after work that changed files on disk (RAM-1).
+	syncRequested chan struct{}
+}
+
+// requestSync asks for a database copy shortly; requests that arrive together make one copy.
+func (m *memoryCopy) requestSync() {
+	if m == nil || !m.databaseRunning {
+		return
+	}
+	select {
+	case m.syncRequested <- struct{}{}:
+	default:
+	}
+}
+
+// syncAfterRequests runs work once debounce after a request, however many arrive meanwhile, until ctx ends.
+func syncAfterRequests(ctx context.Context, wall clock.Clock, debounce time.Duration, requests <-chan struct{}, work func(context.Context) error, logger *slog.Logger) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-requests:
+		}
+		if err := wall.Sleep(ctx, debounce); err != nil {
+			return
+		}
+		select {
+		case <-requests:
+		default:
+		}
+		if err := work(ctx); err != nil && ctx.Err() == nil {
+			logger.Error("copying the databases to disk after file work failed", slog.Any("error", err))
+		}
+	}
+}
+
+// diskWorkRunLog copies the databases to disk soon after a job that placed, moved or recycled files has run.
+type diskWorkRunLog struct {
+	jobs.RunLog
+	memory *memoryCopy
+}
+
+var jobsThatChangeFiles = map[string]bool{
+	string(importjob.JobType): true, string(importjob.CommitJobType): true, string(importjob.RetryJobType): true,
+	string(moverjob.JobType): true, string(recycleBinCleanupJobType): true,
+}
+
+func (l diskWorkRunLog) RecordRun(jobType string, start, end time.Time) {
+	l.RunLog.RecordRun(jobType, start, end)
+	if jobsThatChangeFiles[jobType] {
+		l.memory.requestSync()
+	}
 }
 
 func (p *process) imagesDir() string {
@@ -67,7 +128,7 @@ func (p *process) metadataDir() string {
 // stageMemoryCopies puts the databases and the cache into RAM when config.yml asks and the container has the memory;
 // otherwise it says why not and runs from disk. It runs before any database opens.
 func (p *process) stageMemoryCopies(ctx context.Context) error {
-	p.memory = &memoryCopy{p: p, stamps: map[string]string{}, configured: p.config.Memory}
+	p.memory = &memoryCopy{p: p, stamps: map[string]string{}, configured: p.config.Memory, syncRequested: make(chan struct{}, 1)}
 	settings := p.config.Memory
 	p.memory.notice = p.readMemoryNotice()
 	if !settings.CacheTmpfs && !settings.DatabaseTmpfs {
@@ -159,6 +220,7 @@ func (m *memoryCopy) start(ctx context.Context, cache, database bool) error {
 	}
 	if database {
 		m.diskDBDir, m.ramDBDir = p.config.Paths.DBDir, filepath.Join(root, "db")
+		m.reportCutOffSync()
 		if err := m.load(ctx, m.diskDBDir, m.ramDBDir, func(name string) bool { return strings.HasSuffix(name, ".db") }); err != nil {
 			return err
 		}
@@ -177,6 +239,27 @@ func (m *memoryCopy) start(ctx context.Context, cache, database bool) error {
 		m.cacheRunning = true
 	}
 	return nil
+}
+
+// reportCutOffSync names a copy to disk that did not finish: the last stop was cut short and the disk copy is older than it should be.
+func (m *memoryCopy) reportCutOffSync() {
+	entries, err := m.p.fsys.ReadDir(m.diskDBDir)
+	if err != nil {
+		return
+	}
+	now := clock.NewSystem().Now()
+	for _, entry := range entries {
+		name, cutOff := strings.CutSuffix(entry.Name, ".syncing")
+		if !cutOff {
+			continue
+		}
+		age := time.Duration(0)
+		if info, err := m.p.fsys.Stat(filepath.Join(m.diskDBDir, name)); err == nil {
+			age = now.Sub(info.ModTime)
+		}
+		m.p.logger.Error("the last copy of a database to disk was cut off; the copy on disk is older than the library, so give the container a longer stop_grace_period",
+			slog.String("database", name), slog.Duration("disk_copy_age", age))
+	}
 }
 
 // load replaces a RAM folder with the chosen files of a disk folder.
@@ -206,6 +289,7 @@ func (m *memoryCopy) startSync(ctx context.Context) {
 	settings := m.p.config.Memory
 	if m.databaseRunning {
 		go m.every(ctx, wall, settings.DatabaseSyncInterval.AsDuration(), m.syncDatabases)
+		go syncAfterRequests(ctx, wall, syncDebounce, m.syncRequested, m.syncDatabases, m.p.logger)
 	}
 	if m.cacheRunning {
 		go m.every(ctx, wall, settings.CacheSyncInterval.AsDuration(), m.syncCache)
@@ -230,8 +314,10 @@ func (m *memoryCopy) every(ctx context.Context, wall clock.Clock, interval time.
 	}
 }
 
+// databaseStores lists the databases in the order they are copied: the library first, then the jobs that act on it.
+// The copies are taken back to back but are not one atomic set.
 func (m *memoryCopy) databaseStores() []*store.Store {
-	return []*store.Store{m.p.settings, m.p.jobs, m.p.library, m.p.statistics}
+	return []*store.Store{m.p.library, m.p.jobs, m.p.statistics, m.p.settings}
 }
 
 // syncDatabases writes a snapshot of each changed database over its disk file. A snapshot holds that database's writer.
@@ -304,6 +390,19 @@ func (m *memoryCopy) finalSync(ctx context.Context) {
 	if m == nil {
 		return
 	}
+	wall := clock.NewSystem()
+	started := wall.Now()
+	defer func() {
+		if !m.databaseRunning && !m.cacheRunning {
+			return
+		}
+		took := wall.Since(started)
+		level := slog.LevelInfo
+		if took > finalSyncWarnAfter {
+			level = slog.LevelWarn
+		}
+		m.p.logger.Log(ctx, level, "the final copy to disk took; a container stopped sooner than this loses the rest", slog.Duration("took", took))
+	}()
 	if m.databaseRunning {
 		if err := m.syncDatabases(ctx); err != nil {
 			m.p.logger.Error("the final copy of the databases to disk failed", slog.Any("error", err))

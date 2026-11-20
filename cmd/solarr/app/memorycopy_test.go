@@ -1,10 +1,12 @@
 package app
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
@@ -81,5 +83,38 @@ func TestShmLargeEnough_NeedsAFifthMoreThanWhatItWillHold(t *testing.T) {
 		if got := shmLargeEnough(test.total, test.onDisk); got != test.want {
 			t.Errorf("shmLargeEnough(%d, %d) = %v, want %v", test.total, test.onDisk, got, test.want)
 		}
+	}
+}
+
+// Work that changed files asks for a copy of the databases; requests arriving together make one copy after the debounce (RAM-1).
+func TestSyncAfterRequests_TwoRequestsMakeOneCopyAfterTheDebounce(t *testing.T) {
+	fake := clock.NewFakeAtEpoch()
+	requests := make(chan struct{}, 1)
+	copied := make(chan struct{}, 4)
+	ctx, stop := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		syncAfterRequests(ctx, fake, 30*time.Second, requests, func(context.Context) error { copied <- struct{}{}; return nil }, slog.New(slog.DiscardHandler))
+	}()
+	requests <- struct{}{}
+	fake.BlockUntilWaiters(1)
+	requests <- struct{}{}
+	fake.Advance(29 * time.Second)
+	if len(copied) != 0 {
+		t.Fatal("copied before the debounce ended")
+	}
+	fake.Advance(time.Second)
+	select {
+	case <-copied:
+	case <-time.After(3 * time.Second):
+		t.Fatal("no copy after the debounce")
+	}
+	fake.Advance(time.Minute)
+	time.Sleep(50 * time.Millisecond)
+	stop()
+	<-done
+	if len(copied) != 0 {
+		t.Errorf("%d further copies, want the two requests to make one", len(copied))
 	}
 }

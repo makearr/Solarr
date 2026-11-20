@@ -18,6 +18,9 @@ and the transcode folder are never put in RAM.
 
 - **A crash loses what changed since the last copy** (Solarr killed, out-of-memory kill, power cut, the machine
   rebooting). For the databases that is everything Solarr learned in that time. Backups are separate and unaffected.
+- The databases are also copied 30 seconds after a job that placed, moved or recycled files has run, so the copy on disk
+  does not fall far behind the library folders; the interval stays the upper bound. The four are copied back to back
+  (library first) but are not one atomic set.
 - A copy of a database holds its writer for as long as the snapshot takes, so a large `library.db` pauses writes for that
   time at every interval; a database that has not been written since the last copy is skipped.
 - RAM is counted by the container's cgroup. The options need the files' size plus 10%.
@@ -33,7 +36,9 @@ and what each needs, so the number to give `shm_size` is on the page.
 
 On SIGTERM everything that runs from RAM is copied to disk **at once**, before the running jobs drain, and again after
 they have stopped. A container runtime gives a stopping container ten seconds unless told otherwise
-(`stop_grace_period` in compose, `docker stop -t`): raise it if the databases are large.
+(`stop_grace_period` in compose, `docker stop -t`): raise it if the databases are large. The log says how long the final
+copy took (a warning above 5 seconds). A `*.db.syncing` file found at the next start means a stop cut the copy off: it is
+logged as an error with the age of the copy on disk.
 
 ## Turning it on
 

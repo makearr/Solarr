@@ -588,7 +588,7 @@ func (p *process) startJobs(ctx context.Context) error {
 		Running:  p.running,
 		DiskGate: p.diskTurns,
 		Watchdog: p.diskTurns,
-		RunLog:   p.taskHours,
+		RunLog:   diskWorkRunLog{RunLog: p.taskHours, memory: p.memory},
 		Pauses:   p.pauses,
 	})
 	if err := p.registerScanJob(ctx, registry, executor); err != nil {
