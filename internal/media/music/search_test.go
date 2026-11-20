@@ -152,8 +152,16 @@ func (env *searchTestEnv) createWork(t *testing.T, title string, year int64) int
 // -- everything SearchItem needs to run against it.
 func (env *searchTestEnv) createSearchableWork(t *testing.T, artist, title string, year int64, rulesJSON string) librarydb.DesiredItem {
 	t.Helper()
-	people := library.NewPeople(env.library)
 	workID := env.createWork(t, title, year)
+	if artist != "" {
+		env.creditArtist(t, workID, artist)
+	}
+	return env.wantWork(t, workID, title, rulesJSON)
+}
+
+func (env *searchTestEnv) creditArtist(t *testing.T, workID int64, artist string) {
+	t.Helper()
+	people := library.NewPeople(env.library)
 
 	personID, err := people.ResolvePerson(t.Context(), env.clock.Now(), library.PersonLink{
 		Provider: "test", ExternalID: artist,
@@ -165,7 +173,10 @@ func (env *searchTestEnv) createSearchableWork(t *testing.T, artist, title strin
 	if err := people.AddLeadCredit(t.Context(), workID, personID, "artist"); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
+}
 
+func (env *searchTestEnv) wantWork(t *testing.T, workID int64, title, rulesJSON string) librarydb.DesiredItem {
+	t.Helper()
 	profile, err := env.settings.CreateQualityProfile(t.Context(), title+"-profile", rulesJSON,
 		`{"min_delta":15,"min_file_age":"24h","max_per_window":3,"window":"168h"}`)
 	if err != nil {
@@ -255,6 +266,26 @@ func TestSearchItem_ExactTierAcceptsAMatchingRelease(t *testing.T) {
 	searches, err := env.candidates.SearchesByCategory(t.Context(), 0)
 	if err != nil || len(searches) != 2 || searches[0].Count != 1 || searches[1].Count != 1 {
 		t.Errorf("search log = %+v, %v; want one search that found something", searches, err)
+	}
+}
+
+// An album whose artist is not known yet (its metadata is still arriving) is not searched: every release of the same
+// title would pass the artist check (found 2026-11-20 on a freshly followed artist).
+func TestSearchItem_AnAlbumWithoutAnArtistIsNotSearched(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "", "Discovery", 2001, alwaysAcceptRules)
+	searcher := &fakeIndexerSearcher{
+		responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+			return []indexer.RawItem{rawItem("guid-1", "Other Band-Discovery-2001-FLAC-GROUP")}, nil
+		},
+	}
+
+	_, err := env.search().SearchItem(t.Context(), item.ID, []music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}, env.clock.Now())
+	if !errors.Is(err, music.ErrArtistUnknown) {
+		t.Fatalf("SearchItem error = %v, want ErrArtistUnknown", err)
+	}
+	if len(searcher.requests) != 0 {
+		t.Errorf("%d requests, want none", len(searcher.requests))
 	}
 }
 

@@ -225,6 +225,10 @@ type yardstick struct {
 }
 
 // yardstickFor builds item's yardstick from its work and its library's settings.
+// ErrArtistUnknown reports an album with no credited artist yet (its metadata is still being fetched): a search could not
+// tell its releases from another artist's of the same title.
+var ErrArtistUnknown = errors.New("music: the album has no artist yet")
+
 func (s Search) yardstickFor(ctx context.Context, item librarydb.DesiredItem) (yardstick, error) {
 	detail, err := s.Works.Detail(ctx, item.WorkID)
 	if err != nil {
@@ -244,6 +248,9 @@ func (s Search) yardstickFor(ctx context.Context, item librarydb.DesiredItem) (y
 		preferPropers = category.FileManagement.PropersRepacks != settings.PropersDoNotPrefer
 	}
 	artistName := primaryArtistName(detail)
+	if artistName == "" {
+		return yardstick{}, ErrArtistUnknown
+	}
 	var delay judge.ProtocolDelay
 	if category, found := snapshot.Category(item.CategoryID); found {
 		delay = judge.ProtocolDelay{
