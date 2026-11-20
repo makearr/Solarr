@@ -1,12 +1,15 @@
 package jobs_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -664,5 +667,32 @@ func TestTaskRunner_CatchesUpOneMissedRun(t *testing.T) {
 				t.Errorf("fired %d times, want %d", got, tc.want)
 			}
 		})
+	}
+}
+
+// An invalid cadence override is reported once, not on every resolve, and the task keeps its default cadence (SCHED-4).
+func TestTaskRunner_LogsAnInvalidCadenceOnce(t *testing.T) {
+	states, fake := newScheduleStates(t)
+	source := newFakeScheduleSource()
+	source.cadence["scan"] = []string{"not a cron"}
+	var logged bytes.Buffer
+	task := jobs.Task{Key: "scan", DefaultCadence: "0 3 * * *", Enqueue: func(context.Context) (jobs.EnqueueResult, error) {
+		return jobs.EnqueueResult{}, nil
+	}}
+	runner := jobs.NewTaskRunner(task, source, states, fake, slog.New(slog.NewTextHandler(&logged, nil)))
+	for range 3 {
+		if err := runner.RunNow(t.Context()); err != nil {
+			t.Fatalf("RunNow: %v", err)
+		}
+	}
+	if got := strings.Count(logged.String(), "schedule override is invalid"); got != 1 {
+		t.Errorf("the invalid cadence was logged %d times, want 1", got)
+	}
+	source.cadence["scan"] = []string{"still not a cron"}
+	if err := runner.RunNow(t.Context()); err != nil {
+		t.Fatalf("RunNow: %v", err)
+	}
+	if got := strings.Count(logged.String(), "schedule override is invalid"); got != 2 {
+		t.Errorf("a different invalid cadence was logged %d times in all, want 2", got)
 	}
 }

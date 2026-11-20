@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -59,6 +60,11 @@ type TaskRunner struct {
 	logger  *slog.Logger
 	pauses  *Pauses
 	running sync.Mutex
+
+	// resolved remembers the last parse, so the cron strings are not parsed every minute and an invalid one is logged once.
+	resolvedMu  sync.Mutex
+	resolvedKey string
+	resolved    cron.Schedule
 }
 
 // UsePauses makes the runner skip its fires, and refuse manual ones, while its task is paused.
@@ -234,8 +240,15 @@ func (r *TaskRunner) ranWithinItsInterval(ctx context.Context) bool {
 // validation should have caught it, but a scheduler must never wedge on a bad value -- and falls
 // back to the already-validated DefaultCadence when none is left.
 func (r *TaskRunner) resolveSchedule() cron.Schedule {
+	cadences := r.source.Cadences(r.task.Key, r.task.DefaultCadence)
+	key := strings.Join(cadences, "\n")
+	r.resolvedMu.Lock()
+	defer r.resolvedMu.Unlock()
+	if r.resolved != nil && r.resolvedKey == key {
+		return r.resolved
+	}
 	var schedules earliest
-	for _, cadence := range r.source.Cadences(r.task.Key, r.task.DefaultCadence) {
+	for _, cadence := range cadences {
 		parsed, err := cronParser.Parse(cadence)
 		if err != nil {
 			r.logger.Error("schedule override is invalid, ignoring it",
@@ -246,8 +259,10 @@ func (r *TaskRunner) resolveSchedule() cron.Schedule {
 	}
 	if len(schedules) == 0 {
 		fallback, _ := cronParser.Parse(r.task.DefaultCadence)
+		r.resolvedKey, r.resolved = key, fallback
 		return fallback
 	}
+	r.resolvedKey, r.resolved = key, schedules
 	return schedules
 }
 
