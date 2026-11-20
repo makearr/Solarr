@@ -139,6 +139,9 @@ func (q *Queue) Fail(ctx context.Context, job Job, owner string, attempt Attempt
 	if affected == 0 {
 		return Resolution{}, fmt.Errorf("%w: job %d", ErrLeaseLost, job.ID)
 	}
+	if resolution.Retrying {
+		q.Nudge()
+	}
 	return resolution, nil
 }
 
@@ -178,6 +181,7 @@ func (q *Queue) release(ctx context.Context, job Job, owner string, attempt Atte
 	if affected == 0 {
 		return fmt.Errorf("%w: job %d", ErrLeaseLost, job.ID)
 	}
+	q.Nudge()
 	return nil
 }
 

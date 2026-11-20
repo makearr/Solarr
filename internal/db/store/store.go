@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -138,6 +139,8 @@ type Store struct {
 	fs         fsx.FS
 	queue      *writeQueue
 	writerDone chan struct{}
+
+	writesRun atomic.Int64
 
 	// Owned by the writer goroutine, so it needs no lock.
 	commitsSinceCheckpoint int

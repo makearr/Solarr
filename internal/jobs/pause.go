@@ -50,6 +50,9 @@ type Pauses struct {
 	mu     sync.Mutex
 	paused map[string]time.Time
 	active map[int64]activeJob
+
+	// OnResume runs after a resume so the held jobs start at once; set before use.
+	OnResume func()
 }
 
 // NewPauses builds the pauses over jobStore; call Load before use.
@@ -107,6 +110,9 @@ func (p *Pauses) Resume(ctx context.Context, scope string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	delete(p.paused, scope)
+	if p.OnResume != nil {
+		p.OnResume()
+	}
 	return nil
 }
 

@@ -39,6 +39,8 @@ type Queue struct {
 	// jitter spreads backoff. Injected so retry timing is deterministic in
 	// tests (ADR-17).
 	jitter func(time.Duration) time.Duration
+	// wake tells the dispatcher that work may be claimable now, so it need not poll for it with writes (SCHED-1).
+	wake chan struct{}
 }
 
 // NewQueue builds a queue. A nil jitter takes full jitter.
@@ -53,6 +55,18 @@ func NewQueue(jobStore *store.Store, cl clock.Clock, registry *Registry,
 		clock:    cl,
 		registry: registry,
 		jitter:   jitter,
+		wake:     make(chan struct{}, 1),
+	}
+}
+
+// Wake yields once after something may have become claimable; signals that arrive together collapse into one.
+func (q *Queue) Wake() <-chan struct{} { return q.wake }
+
+// Nudge asks the dispatcher to look for work now.
+func (q *Queue) Nudge() {
+	select {
+	case q.wake <- struct{}{}:
+	default:
 	}
 }
 
@@ -138,6 +152,7 @@ func (q *Queue) Enqueue(ctx context.Context, request Request) (EnqueueResult, er
 	if err != nil {
 		return EnqueueResult{}, fmt.Errorf("jobs: enqueue %s: %w", request.Type, err)
 	}
+	q.Nudge()
 	return result, nil
 }
 

@@ -322,3 +322,46 @@ func TestDispatcher_RunAbandonsAJobStillRunningAfterTheShutdownGrace(t *testing.
 		t.Errorf("Abandoned = %d, want 1", got)
 	}
 }
+
+// An enqueue starts its job although the clock never advances and no tick fires (SCHED-1).
+func TestDispatcher_RunStartsAJobOnEnqueueWithoutATick(t *testing.T) {
+	queue, fake := newQueue(t)
+	executor := newExecutor(t, queue, fake, jobs.ModeNormal)
+	ran := make(chan struct{})
+	executor.Handle(typeBackup, jobs.HandlerFunc(func(context.Context, jobs.Job) error {
+		close(ran)
+		return nil
+	}))
+	dispatcher := jobs.NewDispatcher(queue, fake, executor, jobs.DispatcherConfig{
+		Sizes: []jobs.PoolSize{{Pool: jobs.PoolMaintenance, Capacity: 1}}, Logger: quietLogger(),
+	})
+	ctx, stop := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() { dispatcher.Run(ctx); close(done) }()
+	defer func() { stop(); <-done }()
+
+	mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
+	select {
+	case <-ran:
+	case <-time.After(3 * time.Second):
+		t.Fatal("the job did not start without a tick")
+	}
+}
+
+// With nothing queued a tick reads and never writes (SCHED-1).
+func TestDispatcher_TickOnAnEmptyQueueWritesNothing(t *testing.T) {
+	queue, jobStore, fake := newQueueWithStore(t)
+	executor := newExecutor(t, queue, fake, jobs.ModeNormal)
+	dispatcher := jobs.NewDispatcher(queue, fake, executor, jobs.DispatcherConfig{
+		Sizes: []jobs.PoolSize{{Pool: jobs.PoolMaintenance, Capacity: 1}, {Pool: jobs.PoolImport, Capacity: 1}}, Logger: quietLogger(),
+	})
+	dispatcher.Tick(t.Context())
+	before := jobStore.WritesRun()
+	for range 5 {
+		fake.Advance(time.Second)
+		dispatcher.Tick(t.Context())
+	}
+	if after := jobStore.WritesRun(); after != before {
+		t.Errorf("five ticks on an empty queue ran %d writes, want 0", after-before)
+	}
+}

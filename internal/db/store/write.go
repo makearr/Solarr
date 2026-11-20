@@ -97,7 +97,11 @@ func (s *Store) writeLoop() {
 	}
 }
 
+// WritesRun counts the operations the writer has run, for tests that assert a path stays read-only.
+func (s *Store) WritesRun() int64 { return s.writesRun.Load() }
+
 func (s *Store) execute(op *writeOp) error {
+	s.writesRun.Add(1)
 	started := s.clock.Now()
 	queueWait := started.Sub(op.enqueued)
 

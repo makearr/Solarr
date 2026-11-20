@@ -565,6 +565,7 @@ func (p *process) startJobs(ctx context.Context) error {
 
 	p.running, p.jobRegistry = jobs.NewRunning(wall), registry
 	p.pauses = jobs.NewPauses(p.jobs, wall)
+	p.pauses.OnResume = queue.Nudge
 	if err := p.pauses.Load(ctx); err != nil {
 		return err
 	}

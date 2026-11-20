@@ -10,8 +10,8 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-// DefaultTick is how often the dispatcher looks for work.
-const DefaultTick = time.Second
+// DefaultTick is the safety net behind the wake-ups: it finds jobs whose run_after has come due and leases that expired.
+const DefaultTick = 5 * time.Second
 
 // PoolSize is one pool's worker count.
 type PoolSize struct {
@@ -28,6 +28,8 @@ type workerPool struct {
 	slots    chan struct{}
 	executor *Executor
 	running  sync.WaitGroup
+	// freed is told when a slot opens, so a waiting job starts without waiting for the next tick.
+	freed func()
 
 	activeMu sync.Mutex
 	active   map[int64]poolJob
@@ -39,14 +41,14 @@ type poolJob struct {
 	started time.Time
 }
 
-func newWorkerPool(pool Pool, capacity int, executor *Executor) *workerPool {
+func newWorkerPool(pool Pool, capacity int, executor *Executor, freed func()) *workerPool {
 	if pool == PoolImport {
 		capacity = ImportCapacity
 	}
 	if capacity < 1 {
 		capacity = 1
 	}
-	return &workerPool{pool: pool, slots: make(chan struct{}, capacity), executor: executor, active: map[int64]poolJob{}}
+	return &workerPool{pool: pool, slots: make(chan struct{}, capacity), executor: executor, freed: freed, active: map[int64]poolJob{}}
 }
 
 // freeCapacity reports how many jobs this pool could take right now.
@@ -67,6 +69,7 @@ func (w *workerPool) submit(ctx context.Context, job Job) bool {
 	w.activeMu.Unlock()
 	go func() {
 		defer w.running.Done()
+		defer w.freed()
 		defer func() { <-w.slots }()
 		defer func() {
 			w.activeMu.Lock()
@@ -127,6 +130,10 @@ type Dispatcher struct {
 	owner    string
 	grace    time.Duration
 
+	// slotFreed collects the pools' slot-opened signals; lastReclaim spaces the lease sweeps (SCHED-1).
+	slotFreed   chan struct{}
+	lastReclaim time.Time
+
 	abandoned atomic.Int64
 }
 
@@ -142,13 +149,20 @@ func NewDispatcher(queue *Queue, cl clock.Clock, executor *Executor, config Disp
 		config.Logger = slog.Default()
 	}
 
+	slotFreed := make(chan struct{}, 1)
+	freed := func() {
+		select {
+		case slotFreed <- struct{}{}:
+		default:
+		}
+	}
 	pools := make(map[Pool]*workerPool, len(config.Sizes))
 	order := make([]Pool, 0, len(config.Sizes))
 	for _, size := range config.Sizes {
 		if _, exists := pools[size.Pool]; exists {
 			continue
 		}
-		pools[size.Pool] = newWorkerPool(size.Pool, size.Capacity, executor)
+		pools[size.Pool] = newWorkerPool(size.Pool, size.Capacity, executor, freed)
 		order = append(order, size.Pool)
 	}
 
@@ -164,6 +178,8 @@ func NewDispatcher(queue *Queue, cl clock.Clock, executor *Executor, config Disp
 		// claims a lease must be the value that renews it.
 		leaseTTL: executor.LeaseTTL(),
 		owner:    executor.Owner(),
+
+		slotFreed: slotFreed,
 	}
 }
 
@@ -181,11 +197,15 @@ func (d *Dispatcher) Run(ctx context.Context) {
 			return
 		case <-ticker.C():
 			d.Tick(ctx)
+		case <-d.queue.Wake():
+			d.Tick(ctx)
+		case <-d.slotFreed:
+			d.Tick(ctx)
 		}
 	}
 }
 
-// Tick is one pass: reclaim, then fill each pool (ADR-17).
+// Tick is one pass: reclaim, then fill each pool (ADR-17). A pool with nothing claimable costs a read, not a write.
 func (d *Dispatcher) Tick(ctx context.Context) {
 	d.reclaim(ctx)
 
@@ -196,6 +216,9 @@ func (d *Dispatcher) Tick(ctx context.Context) {
 			continue
 		}
 
+		if waiting, err := d.queue.ClaimableIn(ctx, pool); err == nil && waiting == 0 {
+			continue
+		}
 		claimed, err := d.queue.Claim(ctx, pool, d.owner, capacity, d.leaseTTL)
 		if err != nil {
 			d.logger.Warn("could not claim jobs",
@@ -214,6 +237,11 @@ func (d *Dispatcher) Tick(ctx context.Context) {
 }
 
 func (d *Dispatcher) reclaim(ctx context.Context) {
+	now := d.clock.Now()
+	if !d.lastReclaim.IsZero() && now.Sub(d.lastReclaim) < d.leaseTTL/3 {
+		return
+	}
+	d.lastReclaim = now
 	reclaimed, err := d.queue.ReclaimExpired(ctx)
 	if err != nil {
 		d.logger.Warn("could not reclaim expired leases", slog.Any("error", err))
