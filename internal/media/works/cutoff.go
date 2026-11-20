@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/cutoff"
 	"github.com/makearr/Solarr/internal/acquiring/judge"
@@ -362,4 +363,21 @@ func countTarget(tally *cutoff.Tally, item library.CutoffItem, file File, judgem
 		percent = judgement.Target.Percent
 	}
 	tally.Worst = append(tally.Worst, cutoff.WorstFile{WorkID: item.WorkID, Ref: file.Ref, Percent: percent})
+}
+
+// OwnedBelowCutoff is the facts of the whole-item file an upgrade must strictly beat, nil when the item has none below its cutoff.
+func OwnedBelowCutoff(ctx context.Context, snapshot *settings.Snapshot, categoryID int64, files []File, now time.Time) *score.Facts {
+	owned, below := BelowCutoff(snapshot, categoryID, files, UpgradeNewest(ctx, now))[""]
+	if !below {
+		return nil
+	}
+	return &owned.Facts
+}
+
+// OwnedOf is Spec.Owned for an item that is one whole file: the facts under part zero.
+func OwnedOf(owned *score.Facts) map[int]score.Facts {
+	if owned == nil {
+		return nil
+	}
+	return map[int]score.Facts{0: *owned}
 }

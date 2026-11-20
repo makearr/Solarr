@@ -90,18 +90,13 @@ func (b sceneSpec) Wanted(ctx context.Context, item librarydb.DesiredItem, _ int
 	if err != nil {
 		return w, false, err
 	}
-	if owned, below := works.BelowCutoff(s.Settings.Snapshot(), item.CategoryID, files, works.UpgradeNewest(ctx, now))[""]; below {
-		w.owned = &owned.Facts
-	}
+	w.owned = works.OwnedBelowCutoff(ctx, s.Settings.Snapshot(), item.CategoryID, files, now)
 	return w, w.owned != nil, nil
 }
 
 // Owned implements works.Spec.
 func (sceneSpec) Owned(w wanted) map[int]score.Facts {
-	if w.owned == nil {
-		return nil
-	}
-	return map[int]score.Facts{0: *w.owned}
+	return works.OwnedOf(w.owned)
 }
 
 // Queries implements works.Spec: the studio and the day a scene group names a release by, then the studio and title, then
