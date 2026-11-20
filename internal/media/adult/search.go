@@ -9,14 +9,11 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/acquiring/releasefacts"
 	"github.com/makearr/Solarr/internal/db/library"
-	"github.com/makearr/Solarr/internal/db/settings"
-	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/identify/parseadult"
 	"github.com/makearr/Solarr/internal/identify/parsetv"
 	"github.com/makearr/Solarr/internal/identify/score"
 	"github.com/makearr/Solarr/internal/media/works"
-	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // ErrNotSearchable reports an item the scene search does not handle: not the one wanted item of a scene.
@@ -28,25 +25,14 @@ var FeedCategories = []int{6000, 6010, 6020, 6030, 6040, 6050, 6060, 6070, 6080,
 // Search is the scene specialisation of the shared candidate pipeline (works.Search): what a scene wants, the queries
 // scene groups' names answer to, and whether a release is the scene.
 type Search struct {
-	Desired    library.Desired
-	Reader     library.SeriesReader
-	Physical   library.Physical
-	Candidates statistics.Candidates
-	Settings   *settings.Cache
-	Clock      clock.Clock
-	Blocklist  *library.BlocklistStore
-	// Sightings, when set, remember what RSS showed for "fresh" (ADR-55).
-	Sightings *library.Sightings
-	// ReleaseFilters, when set, hold every release against the scene's own required, denied and preferred words and groups.
-	ReleaseFilters *library.ReleaseFilters
-	// IndexerDeadline bounds each tier's fan-out; zero is judge.GroupDeadline.
-	IndexerDeadline time.Duration
+	works.Deps
+	Reader   library.SeriesReader
+	Physical library.Physical
 }
 
 func (s Search) shared() works.Search[wanted] {
 	return works.Search[wanted]{
-		Name: MediaType, Spec: sceneSpec{s}, Desired: s.Desired, Candidates: s.Candidates, Settings: s.Settings, Clock: s.Clock,
-		Blocklist: s.Blocklist, Sightings: s.Sightings, ReleaseFilters: s.ReleaseFilters, IndexerDeadline: s.IndexerDeadline,
+		Name: MediaType, Spec: sceneSpec{s}, Deps: s.Deps,
 	}
 }
 

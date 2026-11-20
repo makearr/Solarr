@@ -69,11 +69,8 @@ type Release struct {
 	Share float64
 }
 
-// Search is the candidate pipeline over one wanted item at a time, a media type's Spec saying what is wanted.
-type Search[W any] struct {
-	// Name prefixes errors ("movie").
-	Name       string
-	Spec       Spec[W]
+// Deps are the stores and settings every media type's search is built over.
+type Deps struct {
 	Desired    library.Desired
 	Candidates statistics.Candidates
 	Settings   *settings.Cache
@@ -85,6 +82,14 @@ type Search[W any] struct {
 	ReleaseFilters *library.ReleaseFilters
 	// IndexerDeadline bounds each tier's fan-out; zero is judge.GroupDeadline.
 	IndexerDeadline time.Duration
+}
+
+// Search is the candidate pipeline over one wanted item at a time, a media type's Spec saying what is wanted.
+type Search[W any] struct {
+	Deps
+	// Name prefixes errors ("movie").
+	Name string
+	Spec Spec[W]
 }
 
 // SearchItem searches what one item is missing.

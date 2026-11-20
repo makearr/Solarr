@@ -17,6 +17,7 @@ import (
 	"github.com/makearr/Solarr/internal/media/book"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -144,13 +145,12 @@ func (p *process) tvGrab() tv.Grab {
 func (p *process) tvSearch() tv.Search {
 	blocklist, sightings, filters := library.NewBlocklistStore(p.library), library.NewSightings(p.library), library.NewReleaseFilters(p.library)
 	return tv.Search{
-		Desired: library.NewDesired(p.library), Series: library.NewSeriesReader(p.library),
-		Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist,
-		Sightings: &sightings, ReleaseFilters: &filters,
+		Series: library.NewSeriesReader(p.library),
 		InFlight: func(ctx context.Context, itemID int64) (map[string]bool, error) {
 			parts, _, err := library.NewAcquisitions(p.library).InFlightParts(ctx, itemID)
 			return parts, err
 		},
+		Deps: works.Deps{Desired: library.NewDesired(p.library), Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist, Sightings: &sightings, ReleaseFilters: &filters},
 	}
 }
 

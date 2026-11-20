@@ -14,13 +14,10 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/acquiring/releasefacts"
 	"github.com/makearr/Solarr/internal/db/library"
-	"github.com/makearr/Solarr/internal/db/settings"
-	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/identify/parsetv"
 	"github.com/makearr/Solarr/internal/identify/score"
 	"github.com/makearr/Solarr/internal/media/works"
-	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // ErrNotSearchable reports a desired item the TV search does not handle on its own (a single episode item).
@@ -37,18 +34,8 @@ type IndexerError = judge.IndexerError
 
 // Search is the TV candidate pipeline over one season item at a time.
 type Search struct {
-	Desired    library.Desired
-	Series     library.SeriesReader
-	Candidates statistics.Candidates
-	Settings   *settings.Cache
-	Clock      clock.Clock
-	Blocklist  *library.BlocklistStore
-	// Sightings, when set, remember what RSS showed for "fresh" (ADR-55).
-	Sightings *library.Sightings
-	// ReleaseFilters, when set, hold every release against the series' own required, denied and preferred words and groups.
-	ReleaseFilters *library.ReleaseFilters
-	// IndexerDeadline bounds each tier's fan-out; zero is judge.GroupDeadline.
-	IndexerDeadline time.Duration
+	works.Deps
+	Series library.SeriesReader
 	// InFlight, when set, answers the media refs of a season's episodes already being downloaded, which are not asked for again.
 	InFlight func(ctx context.Context, itemID int64) (map[string]bool, error)
 }
@@ -439,8 +426,7 @@ func (w wanted) absoluteQueries(names []string) []judge.Query {
 
 func (s Search) shared() works.Search[wanted] {
 	return works.Search[wanted]{
-		Name: "tv", Spec: seasonSpec{s}, Desired: s.Desired, Candidates: s.Candidates, Settings: s.Settings, Clock: s.Clock,
-		Blocklist: s.Blocklist, Sightings: s.Sightings, ReleaseFilters: s.ReleaseFilters, IndexerDeadline: s.IndexerDeadline,
+		Name: "tv", Spec: seasonSpec{s}, Deps: s.Deps,
 	}
 }
 

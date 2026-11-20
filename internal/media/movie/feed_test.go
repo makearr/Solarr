@@ -18,6 +18,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/movie"
+	"github.com/makearr/Solarr/internal/media/works"
 )
 
 // sender is a download client that takes everything and remembers what it was handed.
@@ -60,7 +61,10 @@ func TestFeed_OffersOnlyReleasesNamingTheFilmAndItsYear(t *testing.T) {
 		feedRaw("The.Example.Film.1080p.BluRay.x264-GRP", "no-year"),
 	}}}
 	candidates := statistics.NewCandidates(statisticstest.Open(t))
-	search := movie.Search{Desired: library.NewDesired(opened), Reader: library.NewSeriesReader(opened), Candidates: candidates, Settings: cache, Clock: atAddNow()}
+	search := movie.Search{
+		Reader: library.NewSeriesReader(opened),
+		Deps:   works.Deps{Desired: library.NewDesired(opened), Candidates: candidates, Settings: cache, Clock: atAddNow()},
+	}
 	source := movie.Feed{
 		Grab: movieGrab(t, opened, search), Reader: library.NewSeriesReader(opened), Logger: slog.New(slog.DiscardHandler),
 		Indexers: func(context.Context) ([]judge.Conn, error) {
@@ -118,7 +122,10 @@ func TestFeed_SendsTheAcceptedReleaseOnce(t *testing.T) {
 	}
 	client := &sender{}
 	candidates := statistics.NewCandidates(statisticstest.Open(t))
-	search := movie.Search{Desired: library.NewDesired(opened), Reader: library.NewSeriesReader(opened), Candidates: candidates, Settings: cache, Clock: atAddNow()}
+	search := movie.Search{
+		Reader: library.NewSeriesReader(opened),
+		Deps:   works.Deps{Desired: library.NewDesired(opened), Candidates: candidates, Settings: cache, Clock: atAddNow()},
+	}
 	source := movie.Feed{
 		Grab:   movieGrab(t, opened, search, dispatch.DownloaderConn{ID: 5, Protocol: "usenet", Client: client}),
 		Reader: library.NewSeriesReader(opened), Logger: slog.New(slog.DiscardHandler),
@@ -156,7 +163,10 @@ func TestFeed_GrabsAsRSSPastAFullQueue(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := &sender{}
-	search := movie.Search{Desired: library.NewDesired(opened), Reader: library.NewSeriesReader(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: atAddNow()}
+	search := movie.Search{
+		Reader: library.NewSeriesReader(opened),
+		Deps:   works.Deps{Desired: library.NewDesired(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: atAddNow()},
+	}
 	grab := movieGrab(t, opened, search, dispatch.DownloaderConn{ID: 5, Protocol: "usenet", Client: client, MaxQueued: 1, AlwaysSendRSS: true})
 	ready := library.NewReadyQueue(opened)
 	grab.Automatic.Dispatch.Ready = &ready

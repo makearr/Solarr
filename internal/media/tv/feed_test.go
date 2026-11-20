@@ -16,6 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/statistics/statisticstest"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/tv"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
 )
 
@@ -48,7 +49,10 @@ func TestFeed_OffersAReleaseToTheWantedSeasonOfTheSeriesItNames(t *testing.T) {
 		raw("Example.Show.S09E01.1080p.WEB-DL.DDP5.1.H.264-GRP", "no-such-season"),
 	}}}
 	candidates := statistics.NewCandidates(statisticstest.Open(t))
-	search := tv.Search{Desired: desired, Series: library.NewSeriesReader(opened), Candidates: candidates, Settings: cache, Clock: clockAt(addNow)}
+	search := tv.Search{
+		Series: library.NewSeriesReader(opened),
+		Deps:   works.Deps{Desired: desired, Candidates: candidates, Settings: cache, Clock: clockAt(addNow)},
+	}
 	noClient := func(context.Context) ([]dispatch.DownloaderConn, error) { return nil, nil }
 	grab := tv.Grab{Search: search, Dispatch: dispatch.Dispatch{
 		Candidates: candidates, Acquisitions: library.NewAcquisitions(opened), Desired: desired, Downloaders: noClient,

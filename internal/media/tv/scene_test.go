@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/db/statistics/statisticstest"
 	"github.com/makearr/Solarr/internal/media/tv"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/thexem"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
@@ -110,7 +111,10 @@ func TestSceneNumbersAreStoredSearchedByAndEitherNumberIsAccepted(t *testing.T) 
 		"Example Show S01":    {release(tvdbNumbered)},
 		"Example Show S03E01": {release("Example.Show.S03E01.1080p.WEB-DL.DDP5.1.H.264-GRP"), release(sceneNumbered)},
 	}}
-	search := tv.Search{Desired: library.NewDesired(opened), Series: reader, Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: clockAt(addNow)}
+	search := tv.Search{
+		Series: reader,
+		Deps:   works.Deps{Desired: library.NewDesired(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: clockAt(addNow)},
+	}
 	conns := []judge.Conn{{ID: 1, Impl: "newznab", Client: fake}}
 
 	first, err := search.SearchItem(t.Context(), seasonItem(t, library.NewDesired(opened), added.WorkID, "s01"), conns, addNow)

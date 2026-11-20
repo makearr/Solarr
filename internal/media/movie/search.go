@@ -11,14 +11,11 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/acquiring/releasefacts"
 	"github.com/makearr/Solarr/internal/db/library"
-	"github.com/makearr/Solarr/internal/db/settings"
-	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/identify/parsemovie"
 	"github.com/makearr/Solarr/internal/identify/parsetv"
 	"github.com/makearr/Solarr/internal/identify/score"
 	"github.com/makearr/Solarr/internal/media/works"
-	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // ErrNotSearchable reports an item the movie search does not handle: not the one wanted item of a movie.
@@ -36,24 +33,13 @@ type ItemSearchResult = judge.Result
 // Search is the movie specialisation of the shared candidate pipeline (works.Search): what a movie wants, the queries
 // Radarr asks, and whether a release is the film.
 type Search struct {
-	Desired    library.Desired
-	Reader     library.SeriesReader
-	Candidates statistics.Candidates
-	Settings   *settings.Cache
-	Clock      clock.Clock
-	Blocklist  *library.BlocklistStore
-	// Sightings, when set, remember what RSS showed for "fresh" (ADR-55).
-	Sightings *library.Sightings
-	// ReleaseFilters, when set, hold every release against the movie's own required, denied and preferred words and groups.
-	ReleaseFilters *library.ReleaseFilters
-	// IndexerDeadline bounds each tier's fan-out; zero is judge.GroupDeadline.
-	IndexerDeadline time.Duration
+	works.Deps
+	Reader library.SeriesReader
 }
 
 func (s Search) shared() works.Search[wanted] {
 	return works.Search[wanted]{
-		Name: "movie", Spec: movieSpec{s}, Desired: s.Desired, Candidates: s.Candidates, Settings: s.Settings, Clock: s.Clock,
-		Blocklist: s.Blocklist, Sightings: s.Sightings, ReleaseFilters: s.ReleaseFilters, IndexerDeadline: s.IndexerDeadline,
+		Name: "movie", Spec: movieSpec{s}, Deps: s.Deps,
 	}
 }
 

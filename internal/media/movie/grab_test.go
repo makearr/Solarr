@@ -11,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/db/statistics/statisticstest"
 	"github.com/makearr/Solarr/internal/media/movie"
+	"github.com/makearr/Solarr/internal/media/works"
 )
 
 // Radarr's automatic search sends the best accepted release of the film, and never searches a film already downloading.
@@ -28,8 +29,8 @@ func TestGrab_SendsTheBestReleaseAndNeverSearchesAFilmAlreadyDownloading(t *test
 	}}}
 	client := &sender{}
 	search := movie.Search{
-		Desired: library.NewDesired(opened), Reader: library.NewSeriesReader(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)),
-		Settings: cache, Clock: atAddNow(),
+		Reader: library.NewSeriesReader(opened),
+		Deps:   works.Deps{Desired: library.NewDesired(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: atAddNow()},
 	}
 	grab := movieGrab(t, opened, search, dispatch.DownloaderConn{ID: 5, Protocol: "usenet", Client: client})
 	conns := []judge.Conn{{ID: 1, Name: "test", Impl: "newznab", Client: fake}}
@@ -66,8 +67,8 @@ func TestGrab_NothingAcceptableSendsNothing(t *testing.T) {
 	fake := &fakeIndexer{byFunction: map[string][]indexer.RawItem{"movie": {feedRaw("The.Example.Film.1999.480p.DVDRip.x264-GRP", "small")}}}
 	client := &sender{}
 	search := movie.Search{
-		Desired: library.NewDesired(opened), Reader: library.NewSeriesReader(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)),
-		Settings: cache, Clock: atAddNow(),
+		Reader: library.NewSeriesReader(opened),
+		Deps:   works.Deps{Desired: library.NewDesired(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: atAddNow()},
 	}
 	grab := movieGrab(t, opened, search, dispatch.DownloaderConn{ID: 5, Protocol: "usenet", Client: client})
 	result, err := grab.SearchAndSend(t.Context(), added.ItemID, []judge.Conn{{ID: 1, Impl: "newznab", Client: fake}}, dispatch.GrabAutomatic, addNow)
@@ -91,8 +92,8 @@ func TestGrab_AlreadyInFlightSurvivesStatisticsEmptied(t *testing.T) {
 	fake := &fakeIndexer{byFunction: map[string][]indexer.RawItem{"movie": {feedRaw("The.Example.Film.1999.1080p.BluRay.x264-GRP", "right")}}}
 	stats := statisticstest.Open(t)
 	search := movie.Search{
-		Desired: library.NewDesired(opened), Reader: library.NewSeriesReader(opened), Candidates: statistics.NewCandidates(stats),
-		Settings: cache, Clock: atAddNow(),
+		Reader: library.NewSeriesReader(opened),
+		Deps:   works.Deps{Desired: library.NewDesired(opened), Candidates: statistics.NewCandidates(stats), Settings: cache, Clock: atAddNow()},
 	}
 	grab := movieGrab(t, opened, search, dispatch.DownloaderConn{ID: 5, Protocol: "usenet", Client: &sender{}})
 	conns := []judge.Conn{{ID: 1, Name: "test", Impl: "newznab", Client: fake}}

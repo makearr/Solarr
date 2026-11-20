@@ -16,6 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/statistics/statisticstest"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/media/tv"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -99,7 +100,10 @@ func TestSearchRecordsADecisionPerReleaseThatCoversAWantedEpisode(t *testing.T) 
 	conn := judge.Conn{ID: 1, Name: "test", Impl: "newznab", Client: fake}
 
 	candidates := statistics.NewCandidates(statisticstest.Open(t))
-	search := tv.Search{Desired: library.NewDesired(opened), Series: library.NewSeriesReader(opened), Candidates: candidates, Settings: cache, Clock: clockAt(addNow)}
+	search := tv.Search{
+		Series: library.NewSeriesReader(opened),
+		Deps:   works.Deps{Desired: library.NewDesired(opened), Candidates: candidates, Settings: cache, Clock: clockAt(addNow)},
+	}
 	result, err := search.SearchItem(t.Context(), season1, []judge.Conn{conn}, addNow)
 	if err != nil {
 		t.Fatal(err)
@@ -138,7 +142,10 @@ func TestSearchWidensToTextWhenTheIDQueryFindsNothing(t *testing.T) {
 	fake := &fakeIndexer{byFunction: map[string][]indexer.RawItem{"search": {
 		{Title: "Example Show S01 720p HDTV x264-GRP", GUID: "g", Link: "https://example.test/g"},
 	}}}
-	search := tv.Search{Desired: library.NewDesired(opened), Series: library.NewSeriesReader(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: clockAt(addNow)}
+	search := tv.Search{
+		Series: library.NewSeriesReader(opened),
+		Deps:   works.Deps{Desired: library.NewDesired(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: clockAt(addNow)},
+	}
 	result, err := search.SearchItem(t.Context(), season1, []judge.Conn{{ID: 1, Impl: "newznab", Client: fake}}, addNow)
 	if err != nil {
 		t.Fatal(err)
@@ -206,7 +213,10 @@ func TestAnAnimeSeasonIsAlsoSearchedByAbsoluteNumberAndFoundThatWay(t *testing.T
 	fake := &queryIndexer{answers: map[string][]indexer.RawItem{
 		"Example Show 002": {{Title: "[SubGroup] Example Show - 02 (1080p) [ABCD1234]", GUID: "g", Link: "https://example.test/g"}},
 	}}
-	search := tv.Search{Desired: library.NewDesired(opened), Series: library.NewSeriesReader(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: clockAt(addNow)}
+	search := tv.Search{
+		Series: library.NewSeriesReader(opened),
+		Deps:   works.Deps{Desired: library.NewDesired(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: clockAt(addNow)},
+	}
 	result, err := search.SearchItem(t.Context(), season1, []judge.Conn{{ID: 1, Impl: "newznab", Client: fake, Categories: []int{5000}}}, addNow)
 	if err != nil {
 		t.Fatal(err)
@@ -253,7 +263,10 @@ func TestOneEpisodeCanBeSearchedWhateverItsMonitoring(t *testing.T) {
 	fake := &fakeIndexer{byFunction: map[string][]indexer.RawItem{"tvsearch": {
 		{Title: "Example Show S01E02 720p HDTV x264-GRP", GUID: "g", Link: "https://example.test/g"},
 	}}}
-	search := tv.Search{Desired: library.NewDesired(opened), Series: library.NewSeriesReader(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: clockAt(addNow)}
+	search := tv.Search{
+		Series: library.NewSeriesReader(opened),
+		Deps:   works.Deps{Desired: library.NewDesired(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: clockAt(addNow)},
+	}
 	nothing, err := search.SearchItem(t.Context(), season1, []judge.Conn{{ID: 1, Impl: "newznab", Client: fake}}, addNow)
 	if err != nil || len(nothing.Decisions) != 0 || len(fake.requests) != 0 {
 		t.Fatalf("a season with nothing wanted asked %d times and found %d (err %v)", len(fake.requests), len(nothing.Decisions), err)
@@ -286,8 +299,10 @@ func TestSearchHoldsEveryReleaseAgainstTheSeriesOwnFilters(t *testing.T) {
 		{Title: "Example.Show.S01E01.1080p.WEB-DL.DDP5.1.H.264-BAD", GUID: "denied", Link: "https://example.test/denied", SizeBytes: 2e9},
 		{Title: "Example.Show.S01E02.1080p.WEB-DL.DDP5.1.H.264-GOOD", GUID: "fine", Link: "https://example.test/fine", SizeBytes: 2e9},
 	}}}
-	search := tv.Search{Desired: library.NewDesired(opened), Series: library.NewSeriesReader(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)),
-		Settings: cache, Clock: clockAt(addNow), ReleaseFilters: &filters}
+	search := tv.Search{
+		Series: library.NewSeriesReader(opened),
+		Deps:   works.Deps{Desired: library.NewDesired(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: clockAt(addNow), ReleaseFilters: &filters},
+	}
 	result, err := search.SearchItem(t.Context(), season1, []judge.Conn{{ID: 1, Name: "test", Impl: "newznab", Client: fake}}, addNow)
 	if err != nil {
 		t.Fatal(err)

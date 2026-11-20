@@ -23,6 +23,7 @@ import (
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/moving/sidecar"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -495,8 +496,8 @@ func (p *process) movieGrab() movie.Grab {
 	blocklist, sightings, filters := library.NewBlocklistStore(p.library), library.NewSightings(p.library), library.NewReleaseFilters(p.library)
 	return movie.Grab{
 		Search: movie.Search{
-			Desired: library.NewDesired(p.library), Reader: library.NewSeriesReader(p.library), Candidates: statistics.NewCandidates(p.statistics),
-			Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist, Sightings: &sightings, ReleaseFilters: &filters,
+			Reader: library.NewSeriesReader(p.library),
+			Deps:   works.Deps{Desired: library.NewDesired(p.library), Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist, Sightings: &sightings, ReleaseFilters: &filters},
 		},
 		Automatic: dispatch.Automatic{
 			Dispatch: p.dispatchFor(movie.MediaType), Name: "movie",
@@ -652,9 +653,10 @@ func (p *process) bookGrab(format book.Format) book.Grab {
 	blocklist, sightings, filters := library.NewBlocklistStore(p.library), library.NewSightings(p.library), library.NewReleaseFilters(p.library)
 	return book.Grab{
 		Search: book.Search{
-			Format: format, Desired: library.NewDesired(p.library), Reader: library.NewSeriesReader(p.library), Physical: library.NewPhysical(p.library),
-			Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist,
-			Sightings: &sightings, ReleaseFilters: &filters,
+			Format:   format,
+			Reader:   library.NewSeriesReader(p.library),
+			Physical: library.NewPhysical(p.library),
+			Deps:     works.Deps{Desired: library.NewDesired(p.library), Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist, Sightings: &sightings, ReleaseFilters: &filters},
 		},
 		Automatic: dispatch.Automatic{
 			Dispatch: p.dispatchFor(format.MediaType), Name: format.MediaType,
@@ -759,9 +761,9 @@ func (p *process) adultGrab() adult.Grab {
 	blocklist, sightings, filters := library.NewBlocklistStore(p.library), library.NewSightings(p.library), library.NewReleaseFilters(p.library)
 	return adult.Grab{
 		Search: adult.Search{
-			Desired: library.NewDesired(p.library), Reader: library.NewSeriesReader(p.library), Physical: library.NewPhysical(p.library),
-			Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist,
-			Sightings: &sightings, ReleaseFilters: &filters,
+			Reader:   library.NewSeriesReader(p.library),
+			Physical: library.NewPhysical(p.library),
+			Deps:     works.Deps{Desired: library.NewDesired(p.library), Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist, Sightings: &sightings, ReleaseFilters: &filters},
 		},
 		Automatic: dispatch.Automatic{
 			Dispatch: p.dispatchFor(adult.MediaType), Name: adult.MediaType,

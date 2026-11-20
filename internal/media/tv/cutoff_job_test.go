@@ -18,6 +18,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/tv"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
 )
 
@@ -222,8 +223,8 @@ func TestSearchOfAnUpgradableSeasonOnlyAcceptsAReleaseThatBeatsTheOwnedFile(t *t
 		{Title: "Example.Show.S01E02.1080p.WEB-DL.DDP5.1.H.264-GRP", GUID: "other-episode", Link: "https://example.test/other"},
 	}}}
 	search := tv.Search{
-		Desired: library.NewDesired(fixture.opened), Series: library.NewSeriesReader(fixture.opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)),
-		Settings: fixture.cache, Clock: clockAt(addNow),
+		Series: library.NewSeriesReader(fixture.opened),
+		Deps:   works.Deps{Desired: library.NewDesired(fixture.opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: fixture.cache, Clock: clockAt(addNow)},
 	}
 	result, err := search.SearchItem(t.Context(), fixture.season1, []judge.Conn{{ID: 1, Impl: "newznab", Client: fake}}, addNow)
 	if err != nil {
@@ -271,8 +272,8 @@ func TestSearchOfASeasonStillAiringUpgradesTheEpisodesItHas(t *testing.T) {
 		{Title: "Example.Show.S02E01.1080p.WEB-DL.DDP5.1.H.264-GRP", GUID: "better", Link: "https://example.test/better"},
 	}}}
 	search := tv.Search{
-		Desired: library.NewDesired(fixture.opened), Series: library.NewSeriesReader(fixture.opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)),
-		Settings: fixture.cache, Clock: clockAt(addNow),
+		Series: library.NewSeriesReader(fixture.opened),
+		Deps:   works.Deps{Desired: library.NewDesired(fixture.opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: fixture.cache, Clock: clockAt(addNow)},
 	}
 	result, err := search.SearchItem(t.Context(), season2, []judge.Conn{{ID: 1, Impl: "newznab", Client: fake}}, addNow)
 	if err != nil {

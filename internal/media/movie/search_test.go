@@ -16,6 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/statistics/statisticstest"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/media/movie"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/migrations"
 )
@@ -89,8 +90,8 @@ func TestSearchJudgesOnlyReleasesOfTheMovieAndAsksByIDFirst(t *testing.T) {
 		raw("The.Example.Film.1999.480p.DVDRip.x264-GRP", "small", 7e8),
 	}}}
 	search := movie.Search{
-		Desired: library.NewDesired(opened), Reader: library.NewSeriesReader(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)),
-		Settings: cache, Clock: atAddNow(),
+		Reader: library.NewSeriesReader(opened),
+		Deps:   works.Deps{Desired: library.NewDesired(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: atAddNow()},
 	}
 	result, err := search.SearchItem(t.Context(), added.ItemID, []judge.Conn{{ID: 1, Name: "test", Impl: "newznab", Client: fake}}, addNow)
 	if err != nil {
@@ -118,8 +119,8 @@ func TestSearchWidensToTextWhenTheIDQueryFindsNothing(t *testing.T) {
 		{Title: "The Example Film 1999 720p BluRay x264-GRP", GUID: "g", Link: "https://example.test/g"},
 	}}}
 	search := movie.Search{
-		Desired: library.NewDesired(opened), Reader: library.NewSeriesReader(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)),
-		Settings: cache, Clock: atAddNow(),
+		Reader: library.NewSeriesReader(opened),
+		Deps:   works.Deps{Desired: library.NewDesired(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: atAddNow()},
 	}
 	result, err := search.SearchItem(t.Context(), added.ItemID, []judge.Conn{{ID: 1, Impl: "newznab", Client: fake}}, addNow)
 	if err != nil {
@@ -149,8 +150,8 @@ func TestSearchOutageKeepsTheCountAndAnEmptyAnswerRaisesIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	search := movie.Search{
-		Desired: library.NewDesired(opened), Reader: library.NewSeriesReader(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)),
-		Settings: cache, Clock: atAddNow(),
+		Reader: library.NewSeriesReader(opened),
+		Deps:   works.Deps{Desired: library.NewDesired(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: atAddNow()},
 	}
 	hunt := library.NewHunt(opened)
 	count := func() int64 {
@@ -193,8 +194,8 @@ func TestSearchTrustsTheIDsAnIndexerAttached(t *testing.T) {
 		raw("The.Example.Film.1999.1080p.BluRay.x264-GRP", "namesake", "tt7777777"),
 	}}}
 	search := movie.Search{
-		Desired: library.NewDesired(opened), Reader: library.NewSeriesReader(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)),
-		Settings: cache, Clock: atAddNow(),
+		Reader: library.NewSeriesReader(opened),
+		Deps:   works.Deps{Desired: library.NewDesired(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: atAddNow()},
 	}
 	result, err := search.SearchItem(t.Context(), added.ItemID, []judge.Conn{{ID: 1, Impl: "newznab", Client: fake}}, addNow)
 	if err != nil {
