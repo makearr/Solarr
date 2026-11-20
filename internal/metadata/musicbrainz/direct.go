@@ -664,6 +664,24 @@ func (d direct) release(ctx context.Context, mbid string) (Release, error) {
 	return parsed.toRelease(), nil
 }
 
+// ReleaseGroupOf implements ReleaseGroupResolver.
+func (d direct) ReleaseGroupOf(ctx context.Context, releaseMBID string) (string, error) {
+	var parsed struct {
+		ReleaseGroup struct {
+			ID string `json:"id"`
+		} `json:"release-group"`
+	}
+	escaped := url.PathEscape(releaseMBID) // an id from a file tag is not trusted to be a bare MBID
+	url := fmt.Sprintf("%s/release/%s?fmt=json&inc=release-groups", d.baseURL, escaped)
+	if err := getJSON(ctx, d.client, url, &parsed); err != nil {
+		return "", fmt.Errorf("musicbrainz: release %s: %w", releaseMBID, err)
+	}
+	if parsed.ReleaseGroup.ID == "" {
+		return "", fmt.Errorf("musicbrainz: release %s names no release group", releaseMBID)
+	}
+	return parsed.ReleaseGroup.ID, nil
+}
+
 // directReleaseBrowseLimit is the page size asked for; with tracklists included MusicBrainz sends
 // at most 25 a page whatever is asked, so the pages are followed by offset.
 const directReleaseBrowseLimit = 100

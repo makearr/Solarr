@@ -2,6 +2,7 @@ package music
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"slices"
@@ -63,8 +64,24 @@ func RefineUnitByAlbum(
 	ctx context.Context, lookup AlbumLookup, unit inspect.Unit, probes map[string]mediatool.Probe, result model.ChainResult,
 	threshold float64, seeds []string,
 ) (model.ChainResult, *AlbumPlacement, error) {
-	if lookup == nil || (result.Best != nil && result.Best.Strategy == StrategyEmbeddedTag) {
+	if lookup == nil {
 		return result, nil, nil
+	}
+	if best := result.Best; best != nil && best.Strategy == StrategyEmbeddedTag {
+		if best.ExternalID == nil || best.ExternalID.Provider != ProviderRelease {
+			return result, nil, nil
+		}
+		release := best.ExternalID.ExternalID
+		group, err := lookup.ReleaseGroupOf(ctx, musicbrainz.PriorityIdentify, release)
+		if err == nil {
+			return releaseAsGroup(result, release, group), nil, nil
+		}
+		// Keyed by its release it would become a second album beside the one keyed by its group.
+		result = withoutRelease(result, release)
+		if !errors.Is(err, musicbrainz.ErrNotFound) {
+			return result, nil, fmt.Errorf("music: release group of unit %q: %w", unit.Directory, err)
+		}
+		// A release MusicBrainz does not know names no album: the tracklists decide, as for an untagged unit.
 	}
 	var locals []LocalTrack
 	var relPaths []string
@@ -80,6 +97,36 @@ func RefineUnitByAlbum(
 	}
 	refined, placement := albumResult(decision.Within(threshold), relPaths, result)
 	return refined, placement, nil
+}
+
+// releaseAsGroup keys every identification naming release by its release group, the key a followed album has.
+func releaseAsGroup(result model.ChainResult, release, group string) model.ChainResult {
+	rekey := func(identification model.Identification) model.Identification {
+		if id := identification.ExternalID; id != nil && id.Provider == ProviderRelease && id.ExternalID == release {
+			identification.ExternalID = &model.ExternalID{Provider: ProviderReleaseGroup, ExternalID: group, Confidence: id.Confidence}
+		}
+		return identification
+	}
+	out := model.ChainResult{Candidates: make([]model.Identification, len(result.Candidates))}
+	for index, candidate := range result.Candidates {
+		out.Candidates[index] = rekey(candidate)
+	}
+	if result.Best != nil {
+		best := rekey(*result.Best)
+		out.Best = &best
+	}
+	return out
+}
+
+// withoutRelease drops the identifications naming release, so neither DECIDE nor a review can add an album by it.
+func withoutRelease(result model.ChainResult, release string) model.ChainResult {
+	out := model.ChainResult{}
+	for _, candidate := range result.Candidates {
+		if id := candidate.ExternalID; id == nil || id.Provider != ProviderRelease || id.ExternalID != release {
+			out.Candidates = append(out.Candidates, candidate)
+		}
+	}
+	return out
 }
 
 // albumResult is an album decision as the chain's answer for a unit.

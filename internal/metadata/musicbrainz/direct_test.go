@@ -650,3 +650,27 @@ func TestDirect_SearchReleasesByBarcodeKeepsEachGroupOnce(t *testing.T) {
 		t.Errorf("matches = %+v\nwant %+v", got, want)
 	}
 }
+
+func TestDirect_ReleaseGroupOfReadsTheReleasesGroup(t *testing.T) {
+	body := `{"id":"` + okComputerRelease + `","title":"KI Pecezinu","release-group":{"id":"` + okComputerRG + `","title":"KI Pecezinu"}}`
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://musicbrainz.invalid/release/" + okComputerRelease + "?fmt=json&inc=release-groups": {status: http.StatusOK, body: body},
+	}}
+	source := musicbrainz.NewDirect(newTestClient(t, transport, musicbrainz.DirectName), "https://musicbrainz.invalid")
+
+	group, err := source.(musicbrainz.ReleaseGroupResolver).ReleaseGroupOf(t.Context(), okComputerRelease)
+	if err != nil || group != okComputerRG {
+		t.Fatalf("ReleaseGroupOf = %q, %v; want %q", group, err, okComputerRG)
+	}
+}
+
+func TestDirect_ReleaseGroupOfWithoutAGroupIsAnError(t *testing.T) {
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://musicbrainz.invalid/release/" + okComputerRelease + "?fmt=json&inc=release-groups": {status: http.StatusOK, body: `{"id":"x"}`},
+	}}
+	source := musicbrainz.NewDirect(newTestClient(t, transport, musicbrainz.DirectName), "https://musicbrainz.invalid")
+
+	if group, err := source.(musicbrainz.ReleaseGroupResolver).ReleaseGroupOf(t.Context(), okComputerRelease); err == nil {
+		t.Fatalf("ReleaseGroupOf = %q, want an error for a release naming no group", group)
+	}
+}

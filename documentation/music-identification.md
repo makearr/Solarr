@@ -41,6 +41,10 @@ A scan batch is one directory's files. Each pass only sees what the previous one
    per folder (cached; enrichment needs it anyway): a merged id is stored as the group it was
    merged into; a retired one, 404 at every source, is recorded `retired` and the files go on to
    album matching like untagged ones. An unreachable source trusts the tags.
+   A release id without a release group id is resolved to its group once per folder (`ReleaseGroupOf`:
+   MusicBrainz `/release/{id}?inc=release-groups`, the proxy's `/album/{release}` redirect), so the
+   album is keyed as a followed one is; an unknown release is `retired` as above, an unreachable source
+   leaves the files `failed` for the next scan rather than adding a second album keyed by the release.
    A merged *release* id is followed by enrichment instead: the edition takes the new id and keeps the
    old one as a lower-confidence alias, so files still tagged with it resolve to the same edition
    (tag write-back writes the new one). A placeholder that turns out to be an edition the work
@@ -81,10 +85,13 @@ A file identified to another album than its folder's is not moved by the scan: t
 rename (Settings -> the library's naming, "apply to library") previews and moves it.
 
 Import runs the chain per unit, then `RefineUnitByAlbum`, which replaces anything but an
-embedded-MBID answer with an album match. Enrichment's edition choice for a work identified
-without an edition uses the same scorer (`chooseRelease`): the best release a file fits, else
-the best-ranked release with a tracklist, logged as not fitting, so the album never waits for
-metadata for ever.
+embedded-MBID answer with an album match. An embedded release alone is rekeyed to its release
+group the same way; unknown, the unit is album-matched; unreachable, it goes the way of any
+unidentified unit (Review, or an unverified album) with no candidate keyed by the release (found
+2026-11-20: a grabbed album became a second album and the followed one stayed missing).
+Enrichment's edition choice for a work identified without an edition uses the same scorer
+(`chooseRelease`): the best release a file fits, else the best-ranked release with a tracklist,
+logged as not fitting, so the album never waits for metadata for ever.
 
 ## Recall
 

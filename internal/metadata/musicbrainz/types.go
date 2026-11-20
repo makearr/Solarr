@@ -174,6 +174,11 @@ type RecordingLookup interface {
 	Recording(ctx context.Context, mbid string) (RecordingMatch, error)
 }
 
+// ReleaseGroupResolver is an optional Source capability: the release group a release belongs to.
+type ReleaseGroupResolver interface {
+	ReleaseGroupOf(ctx context.Context, releaseMBID string) (string, error)
+}
+
 // RecordingMatch is one recording search result and every release group it appears on.
 type RecordingMatch struct {
 	RecordingMBID string

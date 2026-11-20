@@ -1,6 +1,7 @@
 package music_test
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -1154,6 +1155,99 @@ func TestObserve_ARetiredEmbeddedReleaseGroupIsMatchedAsAnAlbumInstead(t *testin
 	}
 	if first := slices.Index(lookup.asked, "album:"+retired); first < 0 || slices.Contains(lookup.asked[first+1:], "album:"+retired) {
 		t.Errorf("asked %v, want the retired id looked up exactly once for the folder", lookup.asked)
+	}
+}
+
+// releaseTaggedTraumaBatch is the untagged folder with every file naming only its release.
+func releaseTaggedTraumaBatch(t *testing.T, fsys *fsx.Mem) []scan.Observed {
+	t.Helper()
+	batch := untaggedTraumaBatch(t, fsys)
+	for i := range batch {
+		batch[i].Probe.Tags["musicbrainz_albumid"] = releaseMBID
+	}
+	return batch
+}
+
+// A release id alone joins the album keyed by its release group, never a second album keyed by the release.
+func TestObserve_AnEmbeddedReleaseIsKeptUnderItsReleaseGroup(t *testing.T) {
+	lookup := traumaLookup(releaseGroupMBID)
+	lookup.groupOf = map[string]string{releaseMBID: releaseGroupMBID}
+	consumer, opened, fsys := newAlbumConsumer(t, lookup, nil)
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+
+	if err := consumer.Observe(t.Context(), root, 0, releaseTaggedTraumaBatch(t, fsys)); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	queries := librarydb.New(opened.Read())
+	if _, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderRelease, ExternalID: releaseMBID,
+	}); err == nil {
+		t.Error("a work was created under the release id")
+	}
+	work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: releaseGroupMBID,
+	})
+	if err != nil {
+		t.Fatalf("GetWorkByExternalID: %v, want the album keyed by the release's group", err)
+	}
+	locations, err := library.NewIdentity(opened).WorkFileLocations(t.Context(), []int64{work.ID})
+	if err != nil || len(locations) != len(traumaTracks) {
+		t.Errorf("work files = %d (err %v), want all %d", len(locations), err, len(traumaTracks))
+	}
+	asks := 0
+	for _, asked := range lookup.asked {
+		if strings.HasPrefix(asked, "group-of:") {
+			asks++
+		}
+	}
+	if asks != 1 {
+		t.Errorf("asked %v, want one release lookup for the folder", lookup.asked)
+	}
+}
+
+// A release MusicBrainz does not know is no identity: the folder is matched by its album tags instead.
+func TestObserve_AnUnknownEmbeddedReleaseIsMatchedAsAnAlbumInstead(t *testing.T) {
+	lookup := traumaLookup(releaseGroupMBID)
+	consumer, opened, fsys := newAlbumConsumer(t, lookup, nil)
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+
+	if err := consumer.Observe(t.Context(), root, 0, releaseTaggedTraumaBatch(t, fsys)); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+
+	queries := librarydb.New(opened.Read())
+	if _, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderRelease, ExternalID: releaseMBID,
+	}); err == nil {
+		t.Error("a work was created under the release id")
+	}
+	if _, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: releaseGroupMBID,
+	}); err != nil {
+		t.Fatalf("GetWorkByExternalID: %v, want the album found by its tags", err)
+	}
+}
+
+// MusicBrainz unreachable: the folder waits for the next scan rather than becoming an album keyed by its release.
+func TestObserve_AnUnresolvedEmbeddedReleaseCreatesNoAlbum(t *testing.T) {
+	lookup := traumaLookup(releaseGroupMBID)
+	lookup.err = errors.New("down")
+	consumer, opened, fsys := newAlbumConsumer(t, lookup, nil)
+	root := settings.RootFolder{ID: 1, Path: testRoot, Online: true}
+
+	if err := consumer.Observe(t.Context(), root, 0, releaseTaggedTraumaBatch(t, fsys)); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if _, err := librarydb.New(opened.Read()).GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderRelease, ExternalID: releaseMBID,
+	}); err == nil {
+		t.Error("a work was created under the release id")
+	}
+	if _, err := librarydb.New(opened.Read()).GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: "",
+	}); err == nil {
+		t.Error("a work was created under an empty release group")
 	}
 }
 

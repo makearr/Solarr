@@ -111,6 +111,18 @@ func (p proxy) Album(ctx context.Context, releaseGroupMBID, releaseMBID string) 
 		"musicbrainz-proxy: release %s is not under release group %s: %w", releaseMBID, releaseGroupMBID, errReleaseNotInGroup)
 }
 
+// ReleaseGroupOf implements ReleaseGroupResolver: /album/{release} redirects to the release's group (seen live 2026-11-20).
+func (p proxy) ReleaseGroupOf(ctx context.Context, releaseMBID string) (string, error) {
+	rg, _, err := p.Album(ctx, releaseMBID, releaseMBID)
+	if err != nil {
+		return "", err
+	}
+	if rg.MBID == "" {
+		return "", fmt.Errorf("musicbrainz-proxy: album for release %s has no id", releaseMBID)
+	}
+	return rg.MBID, nil
+}
+
 // proxyArtistCredit is the album's artists, its own primary artist (artistid)
 // first, since credit order decides a work's primary artist. These were never
 // read, so an album enriched through the proxy -- the default first provider --

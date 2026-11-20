@@ -65,6 +65,8 @@ const (
 	cacheKindRecording = "musicbrainz:recording"
 	// cacheKindArtistSearch is an artist search's result set, keyed on query and limit.
 	cacheKindArtistSearch = "musicbrainz:artist-search"
+	// cacheKindReleaseGroupOf is the release group a release belongs to, keyed on the release's MBID.
+	cacheKindReleaseGroupOf = "musicbrainz:release-group-of"
 )
 
 // Provider is ADR-29 end to end: try each source in priority order, falling
@@ -315,6 +317,17 @@ func (p Provider) Recording(ctx context.Context, priority Priority, mbid string)
 	}
 	return through(ctx, p, priority, call, func(ctx context.Context, source RecordingLookup) (RecordingMatch, error) {
 		return source.Recording(ctx, mbid)
+	})
+}
+
+// ReleaseGroupOf answers the release group a release belongs to, cache first; ErrNotFound when no source knows the release.
+func (p Provider) ReleaseGroupOf(ctx context.Context, priority Priority, releaseMBID string) (string, error) {
+	call := lookup{
+		kind: cacheKindReleaseGroupOf, key: releaseMBID, what: "release group of " + releaseMBID, notFoundWhenAll404: true,
+		noSource: fmt.Errorf("musicbrainz: no source can look up a release (mbid %s)", releaseMBID),
+	}
+	return through(ctx, p, priority, call, func(ctx context.Context, source ReleaseGroupResolver) (string, error) {
+		return source.ReleaseGroupOf(ctx, releaseMBID)
 	})
 }
 

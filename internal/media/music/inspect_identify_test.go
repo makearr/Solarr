@@ -2,6 +2,7 @@ package music_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"testing"
@@ -149,6 +150,99 @@ func TestRefineUnitByAlbum_TheOneThresholdDecides(t *testing.T) {
 	}
 	if strict.Best != nil || placement != nil || len(strict.Candidates) == 0 {
 		t.Errorf("under 0.999: Best = %+v, want the match held for review as a candidate", strict.Best)
+	}
+}
+
+// releaseTaggedUnit is traumaUnit whose files carry the release id and no release group id, and the chain's answer.
+func releaseTaggedUnit(t *testing.T) (inspect.Unit, map[string]mediatool.Probe, *fakeAlbumLookup, model.ChainResult) {
+	t.Helper()
+	unit, probes, lookup := traumaUnit()
+	batch := make([]mediatool.Probe, 0, len(unit.Media))
+	for _, media := range unit.Media {
+		probe := probes[media.RelPath]
+		probe.Tags["musicbrainz_albumid"] = releaseMBID
+		probes[media.RelPath] = probe
+		batch = append(batch, probe)
+	}
+	identifiers := []model.Identifier{music.NewMBIDIdentifier(music.UnitTagSourceFor("/", batch))}
+	result, err := music.IdentifyUnit(t.Context(), unit, identifiers, model.ChainConfig{AcceptThreshold: 0.9, AmbiguityThreshold: 0.9})
+	if err != nil || result.Best == nil || result.Best.ExternalID.Provider != music.ProviderRelease {
+		t.Fatalf("IdentifyUnit = %+v (%+v), %v; want the embedded release", result.Best, result.Candidates, err)
+	}
+	return unit, probes, lookup, result
+}
+
+// A release id alone names its album through its release group, the key a followed album has (2026-11-20:
+// the import made a second album keyed by the release and the followed one stayed missing).
+func TestRefineUnitByAlbum_AnEmbeddedReleaseIsResolvedToItsReleaseGroup(t *testing.T) {
+	unit, probes, lookup, result := releaseTaggedUnit(t)
+	lookup.groupOf = map[string]string{releaseMBID: "rg-studio"}
+	other := model.Identification{
+		Strategy:   music.StrategyEmbeddedTag,
+		ExternalID: &model.ExternalID{Provider: music.ProviderRelease, ExternalID: "rel-other", Confidence: 1},
+		Confidence: 0.5,
+	}
+	result.Candidates = append(result.Candidates, other)
+
+	refined, placement, err := music.RefineUnitByAlbum(t.Context(), lookup, unit, probes, result, 0.9, nil)
+	if err != nil {
+		t.Fatalf("RefineUnitByAlbum: %v", err)
+	}
+	want := model.ExternalID{Provider: music.ProviderReleaseGroup, ExternalID: "rg-studio", Confidence: 1}
+	if refined.Best == nil || *refined.Best.ExternalID != want || refined.Best.Strategy != music.StrategyEmbeddedTag ||
+		refined.Best.Confidence != result.Best.Confidence || placement != nil {
+		t.Fatalf("Best = %+v (%+v), placement %v; want the embedded identity keyed by rg-studio", refined.Best, refined.Best.ExternalID, placement)
+	}
+	// A review picks from the candidates: the resolved one is rekeyed too, another release is not its to rename.
+	if len(refined.Candidates) != 2 || *refined.Candidates[0].ExternalID != want || *refined.Candidates[1].ExternalID != *other.ExternalID {
+		t.Errorf("candidates = %+v, want the resolved release rekeyed and the other kept", refined.Candidates)
+	}
+	if len(lookup.asked) != 1 || lookup.asked[0] != "group-of:"+releaseMBID {
+		t.Errorf("asked %v, want only the one release lookup", lookup.asked)
+	}
+}
+
+// A release MusicBrainz does not know names no album: the tracklists decide, as for an untagged unit.
+func TestRefineUnitByAlbum_AnUnknownEmbeddedReleaseFallsToAlbumMatching(t *testing.T) {
+	unit, probes, lookup, result := releaseTaggedUnit(t)
+
+	refined, placement, err := music.RefineUnitByAlbum(t.Context(), lookup, unit, probes, result, 0.9, nil)
+	if err != nil {
+		t.Fatalf("RefineUnitByAlbum: %v", err)
+	}
+	if refined.Best == nil || refined.Best.ExternalID.Provider != music.ProviderReleaseGroup ||
+		refined.Best.ExternalID.ExternalID != "rg-studio" || placement == nil {
+		t.Fatalf("Best = %+v, placement %v; want rg-studio matched by its tracklist", refined.Best, placement)
+	}
+}
+
+// MusicBrainz unreachable: the unit waits rather than becoming an album keyed by its release.
+func TestRefineUnitByAlbum_AnEmbeddedReleaseUnresolvedIsNotCommitted(t *testing.T) {
+	unit, probes, lookup, result := releaseTaggedUnit(t)
+	lookup.err = errors.New("down")
+
+	refined, _, err := music.RefineUnitByAlbum(t.Context(), lookup, unit, probes, result, 0.9, nil)
+	if err == nil || refined.Best != nil || len(refined.Candidates) != 0 || model.Decide(refined) != model.DecisionQueue {
+		t.Fatalf("result = %+v, err %v; want no identity, no candidate to pick, and the error", refined, err)
+	}
+	if len(lookup.asked) != 1 {
+		t.Errorf("asked %v, want no album matching against a source that just failed", lookup.asked)
+	}
+}
+
+// An embedded release group is already the album's key: nothing is looked up.
+func TestRefineUnitByAlbum_AnEmbeddedReleaseGroupIsKept(t *testing.T) {
+	unit, probes, lookup := traumaUnit()
+	best := model.Identification{
+		Strategy:   music.StrategyEmbeddedTag,
+		ExternalID: &model.ExternalID{Provider: music.ProviderReleaseGroup, ExternalID: "rg-studio", Confidence: 1},
+		Precedence: model.PrecedenceAsserted, Confidence: 0.98,
+	}
+	result := model.ChainResult{Best: &best, Candidates: []model.Identification{best}}
+
+	refined, _, err := music.RefineUnitByAlbum(t.Context(), lookup, unit, probes, result, 0.9, nil)
+	if err != nil || refined.Best != &best || len(lookup.asked) != 0 {
+		t.Errorf("Best = %+v, err %v, asked %v; want the tag kept and nothing asked", refined.Best, err, lookup.asked)
 	}
 }
 

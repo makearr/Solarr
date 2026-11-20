@@ -23,6 +23,8 @@ type fakeResponse struct {
 	status int
 	body   string
 	err    error
+	// location is the Location header of a redirect.
+	location string
 }
 
 func (f *fakeTransport) RoundTrip(request *http.Request) (*http.Response, error) {
@@ -36,9 +38,13 @@ func (f *fakeTransport) RoundTrip(request *http.Request) (*http.Response, error)
 	if response.err != nil {
 		return nil, response.err
 	}
+	header := make(http.Header)
+	if response.location != "" {
+		header.Set("Location", response.location)
+	}
 	return &http.Response{
 		StatusCode: response.status,
-		Header:     make(http.Header),
+		Header:     header,
 		Body:       io.NopCloser(strings.NewReader(response.body)),
 		Request:    request,
 	}, nil

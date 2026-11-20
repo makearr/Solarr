@@ -23,6 +23,8 @@ type fakeAlbumLookup struct {
 	releases   map[string][]musicbrainz.Release
 	// missing are release groups every source answers 404 for.
 	missing map[string]bool
+	// groupOf is each known release's release group; a release not in it is unknown.
+	groupOf map[string]string
 	err     error
 	mu      sync.Mutex
 	asked   []string
@@ -59,6 +61,17 @@ func (f *fakeAlbumLookup) Album(_ context.Context, _ musicbrainz.Priority, rg, _
 		return musicbrainz.ReleaseGroup{}, musicbrainz.Release{}, musicbrainz.ErrNotFound
 	}
 	return f.groups[rg], musicbrainz.Release{}, f.err
+}
+
+func (f *fakeAlbumLookup) ReleaseGroupOf(_ context.Context, _ musicbrainz.Priority, release string) (string, error) {
+	f.ask("group-of:" + release)
+	if f.err != nil {
+		return "", f.err
+	}
+	if group, found := f.groupOf[release]; found {
+		return group, nil
+	}
+	return "", musicbrainz.ErrNotFound
 }
 
 func (f *fakeAlbumLookup) Releases(_ context.Context, _ musicbrainz.Priority, rg string) ([]musicbrainz.Release, error) {

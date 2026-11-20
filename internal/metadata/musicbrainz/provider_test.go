@@ -898,3 +898,41 @@ func TestProvider_AnIdEverySourceAnswered404IsNotAskedAgainForADay(t *testing.T)
 		t.Errorf("after a day: err = %v, calls = %d, want ErrNotFound and 2", err, direct.calls)
 	}
 }
+
+type fakeReleaseGroupSource struct {
+	fakeSource
+	group     string
+	groupErr  error
+	groupAsks int
+}
+
+func (f *fakeReleaseGroupSource) ReleaseGroupOf(context.Context, string) (string, error) {
+	f.groupAsks++
+	return f.group, f.groupErr
+}
+
+// The release-to-group answer falls through a failing source and is asked once.
+func TestProvider_ReleaseGroupOfFallsThroughAndCaches(t *testing.T) {
+	proxy := &fakeReleaseGroupSource{fakeSource: fakeSource{name: "proxy"}, groupErr: errors.New("down")}
+	direct := &fakeReleaseGroupSource{fakeSource: fakeSource{name: "direct"}, group: "rg-1"}
+	provider := newProvider(t, proxy, direct)
+
+	for range 2 {
+		group, err := provider.ReleaseGroupOf(t.Context(), musicbrainz.PriorityIdentify, "release-1")
+		if err != nil || group != "rg-1" {
+			t.Fatalf("ReleaseGroupOf = %q, %v; want rg-1", group, err)
+		}
+	}
+	if proxy.groupAsks != 1 || direct.groupAsks != 1 {
+		t.Errorf("asks = proxy %d, direct %d; want 1 each (the second from cache)", proxy.groupAsks, direct.groupAsks)
+	}
+}
+
+// Down everywhere is not "no such release": only the latter may let an import drop the id.
+func TestProvider_ReleaseGroupOfOutageIsNotNotFound(t *testing.T) {
+	down := &fakeReleaseGroupSource{fakeSource: fakeSource{name: "direct"}, groupErr: errors.New("down")}
+	_, err := newProvider(t, down).ReleaseGroupOf(t.Context(), musicbrainz.PriorityIdentify, "release-1")
+	if err == nil || errors.Is(err, musicbrainz.ErrNotFound) {
+		t.Errorf("ReleaseGroupOf = %v, want an outage error that is not ErrNotFound", err)
+	}
+}

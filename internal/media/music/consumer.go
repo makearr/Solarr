@@ -328,7 +328,7 @@ func (c Consumer) identifyBatch(
 		rootFolderID: rootFolderID, rootPath: rootPath, observed: observed, mediaObjectIDs: mediaObjectIDs,
 		at:     c.clock.Now().Unix(),
 		passes: make(map[int][]library.AttemptPass), outcomes: make(map[int]string), unanswered: make(map[int]bool),
-		releaseGroups: make(map[string]string),
+		releaseGroups: make(map[string]string), groupOfRelease: make(map[string]resolvedRelease),
 	}
 	all := make([]pendingFile, len(observed))
 	for index := range observed {
@@ -403,6 +403,8 @@ type batchResult struct {
 
 	// releaseGroups is each embedded release group checked so far, to its current id; "" is retired.
 	releaseGroups map[string]string
+	// groupOfRelease is each embedded release resolved so far.
+	groupOfRelease map[string]resolvedRelease
 
 	links      []library.WorkLink
 	trackFiles []TrackFile
@@ -786,7 +788,17 @@ func (c Consumer) runChain(
 			pending = append(pending, file)
 			continue
 		}
-		externalID := result.Best.ExternalID.ExternalID
+		provider, externalID := result.Best.ExternalID.Provider, result.Best.ExternalID.ExternalID
+		if pass == PassEmbeddedTags && provider == ProviderRelease && c.albums != nil {
+			// Keyed by its release it would become a second album beside the one keyed by its group.
+			group, outcome := c.releaseGroupOf(ctx, out, externalID)
+			if outcome != PassOutcomeIdentified {
+				out.note(file.index, library.AttemptPass{Pass: pass, Outcome: outcome})
+				pending = append(pending, file)
+				continue
+			}
+			provider, externalID = ProviderReleaseGroup, group
+		}
 		if pass == PassEmbeddedTags && result.Best.ExternalID.Provider == ProviderReleaseGroup {
 			current, known := c.currentReleaseGroup(ctx, out, externalID)
 			if !known {
@@ -802,7 +814,7 @@ func (c Consumer) runChain(
 			})
 		}
 		out.identify(file.index, library.WorkLink{
-			Provider: result.Best.ExternalID.Provider, ExternalID: externalID,
+			Provider: provider, ExternalID: externalID,
 			Confidence: result.Best.ExternalID.Confidence, Work: newWorkIdentity(one),
 			Edition: newEditionLink(one), RootFolderID: out.rootFolderID, MediaObjectID: mediaObjectID,
 		}, ReadTrackFile(mediaObjectID, one.File.RelPath, one.Probe.Tags))
@@ -830,6 +842,26 @@ func (c Consumer) currentReleaseGroup(ctx context.Context, out *batchResult, mbi
 	out.releaseGroups[mbid] = current
 	return current, current != ""
 }
+
+// releaseGroupOf resolves an embedded release once per batch: unknown is retired, unreachable failed (retried next scan).
+func (c Consumer) releaseGroupOf(ctx context.Context, out *batchResult, release string) (string, string) {
+	if group, checked := out.groupOfRelease[release]; checked {
+		return group.id, group.outcome
+	}
+	group, err := c.albums.ReleaseGroupOf(ctx, musicbrainz.PriorityIdentify, release)
+	resolved := resolvedRelease{id: group, outcome: PassOutcomeIdentified}
+	switch {
+	case errors.Is(err, musicbrainz.ErrNotFound):
+		resolved = resolvedRelease{outcome: PassOutcomeRetired}
+	case err != nil:
+		resolved = resolvedRelease{outcome: PassOutcomeFailed}
+	}
+	out.groupOfRelease[release] = resolved
+	return resolved.id, resolved.outcome
+}
+
+// resolvedRelease is an embedded release's group, or the pass outcome that kept it from having one.
+type resolvedRelease struct{ id, outcome string }
 
 // identifyAlbums matches pending files album by album: identified links each file to the release,
 // ambiguous is queued rather than guessed per file, anything else stays pending for later passes.

@@ -25,6 +25,10 @@ func (namedAlbumLookup) SearchReleases(context.Context, musicbrainz.Priority, mu
 	return nil, nil
 }
 
+func (namedAlbumLookup) ReleaseGroupOf(context.Context, musicbrainz.Priority, string) (string, error) {
+	return "", musicbrainz.ErrNotFound
+}
+
 func (namedAlbumLookup) Album(_ context.Context, _ musicbrainz.Priority, rg, _ string) (musicbrainz.ReleaseGroup, musicbrainz.Release, error) {
 	return musicbrainz.ReleaseGroup{MBID: rg, Title: "Wind of Change", ArtistCredit: []musicbrainz.ArtistCredit{{Name: "Scorpions"}}}, musicbrainz.Release{}, nil
 }

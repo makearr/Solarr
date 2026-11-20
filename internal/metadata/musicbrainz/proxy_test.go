@@ -250,3 +250,45 @@ func TestProxy_ReleasesListsEveryReleaseWithItsTracks(t *testing.T) {
 		t.Errorf("Releases = %+v, want the CD with 2 tracks and the cassette with 1", releases)
 	}
 }
+
+// The proxy has no release lookup: /album/{release} redirects to the release's group, which lists the release.
+func TestProxy_ReleaseGroupOfFollowsTheRedirectToTheReleasesGroup(t *testing.T) {
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://lidarr.invalid/album/" + okComputerRelease: {
+			status: http.StatusPermanentRedirect, location: "https://lidarr.invalid/album/" + okComputerRG,
+		},
+		"https://lidarr.invalid/album/" + okComputerRG: {status: http.StatusOK, body: proxyAlbumBody},
+	}}
+	source := musicbrainz.NewProxy(newTestClient(t, transport, musicbrainz.ProxyName), "https://lidarr.invalid")
+
+	group, err := source.(musicbrainz.ReleaseGroupResolver).ReleaseGroupOf(t.Context(), okComputerRelease)
+	if err != nil || group != okComputerRG {
+		t.Fatalf("ReleaseGroupOf = %q, %v; want %q", group, err, okComputerRG)
+	}
+}
+
+// A release group id is not a release: the group answers for itself but lists no release of that id.
+func TestProxy_ReleaseGroupOfAGroupIDIsNotFound(t *testing.T) {
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://lidarr.invalid/album/" + okComputerRG: {status: http.StatusOK, body: proxyAlbumBody},
+	}}
+	source := musicbrainz.NewProxy(newTestClient(t, transport, musicbrainz.ProxyName), "https://lidarr.invalid")
+
+	_, err := newProvider(t, source).ReleaseGroupOf(t.Context(), musicbrainz.PriorityIdentify, okComputerRG)
+	if !errors.Is(err, musicbrainz.ErrNotFound) {
+		t.Errorf("ReleaseGroupOf = %v, want ErrNotFound", err)
+	}
+}
+
+// An album answered without its own id names no group, rather than an empty one.
+func TestProxy_ReleaseGroupOfWithoutAnAlbumIDIsAnError(t *testing.T) {
+	body := `{"id": "", "title": "KI Pecezinu", "Releases": [{"Id": "` + okComputerRelease + `", "Title": "KI Pecezinu"}]}`
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://lidarr.invalid/album/" + okComputerRelease: {status: http.StatusOK, body: body},
+	}}
+	source := musicbrainz.NewProxy(newTestClient(t, transport, musicbrainz.ProxyName), "https://lidarr.invalid")
+
+	if group, err := source.(musicbrainz.ReleaseGroupResolver).ReleaseGroupOf(t.Context(), okComputerRelease); err == nil {
+		t.Fatalf("ReleaseGroupOf = %q, want an error for an album with no id", group)
+	}
+}

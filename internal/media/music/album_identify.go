@@ -43,6 +43,7 @@ type AlbumLookup interface {
 	Album(ctx context.Context, priority musicbrainz.Priority, releaseGroupMBID, releaseMBID string) (musicbrainz.ReleaseGroup, musicbrainz.Release, error)
 	Releases(ctx context.Context, priority musicbrainz.Priority, releaseGroupMBID string) ([]musicbrainz.Release, error)
 	SearchReleases(ctx context.Context, priority musicbrainz.Priority, query musicbrainz.ReleaseQuery, limit int) ([]musicbrainz.ReleaseGroupMatch, error)
+	ReleaseGroupOf(ctx context.Context, priority musicbrainz.Priority, releaseMBID string) (string, error)
 }
 
 // recalled is one release group to score, and the credit to compare the folder's artist against.
