@@ -6,9 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
-	"strconv"
-
-	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
@@ -127,17 +124,6 @@ func nextCategoryPriorityRank(access authz.Access) int64 {
 	return highest + 1
 }
 
-// routeGetCategory parses the id path parameter, mirroring routeDeleteCategory.
-func (s *Server) routeGetCategory(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a category id must be a number")
-		return
-	}
-	s.GetCategory(w, r, id)
-}
-
 // GetCategory answers one category's full settings-side detail --
 // LibraryCategory (ListCategories) stays lean for the many navigation
 // callers that never need any of this. Administrator only. Reads through
@@ -159,17 +145,6 @@ func (s *Server) GetCategory(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, categorySettingsView(category))
-}
-
-// routeUpdateCategory parses the id path parameter, mirroring routeDeleteCategory.
-func (s *Server) routeUpdateCategory(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a category id must be a number")
-		return
-	}
-	s.UpdateCategory(w, r, id)
 }
 
 // UpdateCategory renames/reprioritises a category (todo 4.6's own remaining
@@ -419,17 +394,6 @@ func (s *Server) applyKindLanguage(ctx context.Context, updated settings.Categor
 	return updated, nil
 }
 
-// routeDeleteCategory parses the id path parameter, mirroring routeGetWork.
-func (s *Server) routeDeleteCategory(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a category id must be a number")
-		return
-	}
-	s.DeleteCategory(w, r, id)
-}
-
 // DeleteCategory removes a category (administrator only), refused with the
 // references that still hold it (Invariant 41, settings.ErrInUse via
 // writeError).
@@ -442,36 +406,6 @@ func (s *Server) DeleteCategory(w http.ResponseWriter, r *http.Request, id int64
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// routeAttachRootFolderToCategory parses the id path parameter, mirroring
-// routeDeleteCategory.
-func (s *Server) routeAttachRootFolderToCategory(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a category id must be a number")
-		return
-	}
-	s.AttachRootFolderToCategory(w, r, id)
-}
-
-// routeDetachRootFolderFromCategory parses the id and rootFolderId path
-// parameters, mirroring routeDeleteCategory.
-func (s *Server) routeDetachRootFolderFromCategory(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a category id must be a number")
-		return
-	}
-	rootFolderID, err := strconv.ParseInt(chi.URLParam(r, "rootFolderId"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a root folder id must be a number")
-		return
-	}
-	s.DetachRootFolderFromCategory(w, r, id, rootFolderID)
 }
 
 // AttachRootFolderToCategory puts a root folder into a category (section
@@ -577,16 +511,6 @@ func categoryOf(categories []settings.Category, id int64, fallback settings.Cate
 // CategoryMerger moves what the library holds for one category to another and answers how many wanted items moved.
 type CategoryMerger interface {
 	Merge(ctx context.Context, from, into int64) (int64, error)
-}
-
-// routeMergeCategory parses the id path parameter and the library to merge into.
-func (s *Server) routeMergeCategory(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a category id must be a number")
-		return
-	}
-	s.MergeCategory(w, r, id)
 }
 
 // MergeCategory merges library id into another of its media type: its works, requests and follows become the target's, its

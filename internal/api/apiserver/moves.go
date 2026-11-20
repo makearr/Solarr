@@ -132,18 +132,6 @@ type MoveJobRow struct {
 	Error                 string
 }
 
-// routeDrainRootFolder parses the id path parameter, mirroring
-// routeGetImportSession.
-func (s *Server) routeDrainRootFolder(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a root folder id must be a number")
-		return
-	}
-	s.DrainRootFolder(w, r, id)
-}
-
 // DrainRootFolder computes ADR-51's drain plan for one root, administrator
 // only -- it can force accepts_new = 0 and move real files, the same trust
 // boundary InspectImport's own doc comment states for a filesystem-wide
@@ -174,15 +162,6 @@ func (s *Server) DrainRootFolder(w http.ResponseWriter, r *http.Request, id int6
 	writeJSON(w, s.logger, http.StatusOK, drainPlanView(result))
 }
 
-func (s *Server) routeMoveWork(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a work id must be a number")
-		return
-	}
-	s.MoveWork(w, r, id)
-}
-
 // MoveWork moves one work's files to another root folder of its library, administrator only.
 func (s *Server) MoveWork(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -206,18 +185,6 @@ func (s *Server) MoveWork(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, drainPlanView(result))
-}
-
-// routeRenameRootFolder parses the id path parameter, mirroring
-// routeDrainRootFolder.
-func (s *Server) routeRenameRootFolder(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a root folder id must be a number")
-		return
-	}
-	s.RenameRootFolder(w, r, id)
 }
 
 // RenameRootFolder computes section 11.8's own rename plan for one root,
@@ -247,18 +214,6 @@ func (s *Server) RenameRootFolder(w http.ResponseWriter, r *http.Request, id int
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, drainPlanView(result))
-}
-
-// routeStopDrainingRootFolder parses the id path parameter, mirroring
-// routeGetImportSession.
-func (s *Server) routeStopDrainingRootFolder(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a root folder id must be a number")
-		return
-	}
-	s.StopDrainingRootFolder(w, r, id)
 }
 
 // StopDrainingRootFolder clears drain_state and restores accepts_new,

@@ -5,11 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
-
-	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
@@ -69,16 +66,6 @@ func (s *Server) AddIndexer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, s.logger, http.StatusCreated, indexerView(created))
-}
-
-// routeUpdateIndexer parses the id path parameter, mirroring routeUpdateArrInstance.
-func (s *Server) routeUpdateIndexer(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an indexer id must be a number")
-		return
-	}
-	s.UpdateIndexer(w, r, id)
 }
 
 // UpdateIndexer changes a connection's own facts. Administrator only. Never
@@ -187,16 +174,6 @@ func (s *Server) UseIndexerUpstream(w http.ResponseWriter, r *http.Request, id i
 	writeJSON(w, s.logger, http.StatusOK, indexerView(updated))
 }
 
-// routeDeleteIndexer parses the id path parameter, mirroring routeDeleteArrInstance.
-func (s *Server) routeDeleteIndexer(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an indexer id must be a number")
-		return
-	}
-	s.DeleteIndexer(w, r, id)
-}
-
 // DeleteIndexer removes a connection. Administrator only.
 func (s *Server) DeleteIndexer(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -211,16 +188,6 @@ func (s *Server) DeleteIndexer(w http.ResponseWriter, r *http.Request, id int64)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// routeSetIndexerAPIKey parses the id path parameter.
-func (s *Server) routeSetIndexerAPIKey(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an indexer id must be a number")
-		return
-	}
-	s.SetIndexerAPIKey(w, r, id)
 }
 
 // SetIndexerAPIKey replaces or clears a connection's own credential.
@@ -240,16 +207,6 @@ func (s *Server) SetIndexerAPIKey(w http.ResponseWriter, r *http.Request, id int
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// routeTestIndexer parses the id path parameter, mirroring routeUpdateIndexer.
-func (s *Server) routeTestIndexer(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an indexer id must be a number")
-		return
-	}
-	s.TestIndexer(w, r, id)
 }
 
 // IndexerTester runs todo 5.2's own "every connection tested before it is

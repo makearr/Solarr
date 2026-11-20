@@ -3,10 +3,7 @@ package apiserver
 import (
 	"errors"
 	"net/http"
-	"strconv"
 	"time"
-
-	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
@@ -58,16 +55,6 @@ func (s *Server) AddArrInstance(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusCreated, arrInstanceView(created))
 }
 
-// routeUpdateArrInstance parses the id path parameter, mirroring routeUpdateExclusionPattern.
-func (s *Server) routeUpdateArrInstance(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an instance id must be a number")
-		return
-	}
-	s.UpdateArrInstance(w, r, id)
-}
-
 // UpdateArrInstance changes a connection's own facts. Administrator only.
 // Never touches api_key -- SetArrInstanceKey's own job.
 func (s *Server) UpdateArrInstance(w http.ResponseWriter, r *http.Request, id int64) {
@@ -96,16 +83,6 @@ func (s *Server) UpdateArrInstance(w http.ResponseWriter, r *http.Request, id in
 	writeJSON(w, s.logger, http.StatusOK, arrInstanceView(updated))
 }
 
-// routeDeleteArrInstance parses the id path parameter, mirroring routeDeleteDownloadFolder.
-func (s *Server) routeDeleteArrInstance(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an instance id must be a number")
-		return
-	}
-	s.DeleteArrInstance(w, r, id)
-}
-
 // DeleteArrInstance removes a connection. Administrator only.
 func (s *Server) DeleteArrInstance(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -122,16 +99,6 @@ func (s *Server) DeleteArrInstance(w http.ResponseWriter, r *http.Request, id in
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// routeSetArrInstanceKey parses the id path parameter.
-func (s *Server) routeSetArrInstanceKey(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an instance id must be a number")
-		return
-	}
-	s.SetArrInstanceKey(w, r, id)
 }
 
 // SetArrInstanceKey replaces a connection's own credential. Administrator only.

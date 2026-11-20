@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 )
 
@@ -98,16 +96,6 @@ func (s *Server) ListPacks(w http.ResponseWriter, r *http.Request, params gen.Li
 		views[i] = packView(row)
 	}
 	writeJSON(w, s.logger, http.StatusOK, views)
-}
-
-// routeGetPack parses the id path parameter, mirroring routeGetImportSession.
-func (s *Server) routeGetPack(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a pack id must be a number")
-		return
-	}
-	s.GetPack(w, r, id)
 }
 
 // GetPack answers one pack and its own members.

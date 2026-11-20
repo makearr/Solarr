@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/httpx"
@@ -160,16 +158,6 @@ type ArrSync interface {
 // ArrPushResult is what one send of monitoring did; Unknown counts linked items Solarr holds no wanted item of, left alone.
 type ArrPushResult struct{ Checked, Changed, Unknown int64 }
 
-// routePushArrMonitoring parses the id path parameter.
-func (s *Server) routePushArrMonitoring(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an instance id must be a number")
-		return
-	}
-	s.PushArrMonitoring(w, r, id)
-}
-
 // PushArrMonitoring sends the monitoring of what an import brought in back to its *Arr, now. Administrator only.
 func (s *Server) PushArrMonitoring(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -188,16 +176,6 @@ func (s *Server) PushArrMonitoring(w http.ResponseWriter, r *http.Request, id in
 	default:
 		writeJSON(w, s.logger, http.StatusOK, map[string]int64{"checked": result.Checked, "changed": result.Changed, "unknown": result.Unknown})
 	}
-}
-
-// routeSyncArrInstance parses the id path parameter.
-func (s *Server) routeSyncArrInstance(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an instance id must be a number")
-		return
-	}
-	s.SyncArrInstance(w, r, id)
 }
 
 // SyncArrInstance runs one import. Administrator only -- it exercises a
@@ -265,16 +243,6 @@ func (s *Server) readArrSyncOptions(w http.ResponseWriter, r *http.Request) (Arr
 	return options, true
 }
 
-// routePreviewArrImport parses the id path parameter.
-func (s *Server) routePreviewArrImport(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an instance id must be a number")
-		return
-	}
-	s.PreviewArrImport(w, r, id)
-}
-
 // PreviewArrImport answers what an import with the options would do, reading the instance and changing nothing.
 func (s *Server) PreviewArrImport(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -331,16 +299,6 @@ func arrImportPreviewView(preview ArrImportPreview) gen.ArrImportPreview {
 		view.Settings[i] = gen.ArrPreviewSettings{LibraryId: library.LibraryID, Changes: changes}
 	}
 	return view
-}
-
-// routeListArrInstanceRootFolders parses the id path parameter, mirroring routeSyncArrInstance.
-func (s *Server) routeListArrInstanceRootFolders(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an instance id must be a number")
-		return
-	}
-	s.ListArrInstanceRootFolders(w, r, id)
 }
 
 // ListArrInstanceRootFolders reads one instance's own configured root
@@ -405,16 +363,6 @@ func (s *Server) ListArrImports(w http.ResponseWriter, r *http.Request, params g
 	writeJSON(w, s.logger, http.StatusOK, views)
 }
 
-// routeGetArrImport parses the id path parameter.
-func (s *Server) routeGetArrImport(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an import id must be a number")
-		return
-	}
-	s.GetArrImport(w, r, id)
-}
-
 // GetArrImport answers one run's own detail, including every item it touched.
 func (s *Server) GetArrImport(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -435,16 +383,6 @@ func (s *Server) GetArrImport(w http.ResponseWriter, r *http.Request, id int64) 
 		items[index] = arrImportItemView(item)
 	}
 	writeJSON(w, s.logger, http.StatusOK, gen.ArrImportDetail{Run: arrImportRunView(detail.Run), Items: items})
-}
-
-// routeRevertArrImport parses the id path parameter.
-func (s *Server) routeRevertArrImport(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an import id must be a number")
-		return
-	}
-	s.RevertArrImport(w, r, id)
 }
 
 // RevertArrImport undoes one run. Administrator only.

@@ -94,7 +94,7 @@ func (s *Server) ListSchedules(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, views)
 }
 
-// routeUpdateSchedule parses the key path parameter, mirroring routeGetWork.
+// routeUpdateSchedule parses the key path parameter.
 func (s *Server) routeUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	s.UpdateSchedule(w, r, chi.URLParam(r, "key"))
 }

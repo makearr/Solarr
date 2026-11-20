@@ -5,9 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"strconv"
-
-	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 )
@@ -49,17 +46,6 @@ type RemoveAndBlockOutput struct {
 // from sql.ErrNoRows so this package's handler does not have to know which
 // underlying query produced it.
 var ErrNoSuchFile = errors.New("apiserver: no such file")
-
-// routeRemoveAndBlockFile parses the mediaObjectId path parameter, mirroring routeResolveUnidentified.
-func (s *Server) routeRemoveAndBlockFile(w http.ResponseWriter, r *http.Request) {
-	mediaObjectID, err := strconv.ParseInt(chi.URLParam(r, "mediaObjectId"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a media object id must be a number")
-		return
-	}
-	s.RemoveAndBlockFile(w, r, mediaObjectID)
-}
 
 // RemoveAndBlockFile runs ADR-53 section 3's action for one file. Administrator only.
 func (s *Server) RemoveAndBlockFile(w http.ResponseWriter, r *http.Request, mediaObjectID int64) {

@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/platform/paginate"
@@ -98,16 +96,6 @@ func (s *Server) ListBlocklist(w http.ResponseWriter, r *http.Request, params ge
 		body.NextCursor = &next
 	}
 	writeJSON(w, s.logger, http.StatusOK, body)
-}
-
-func (s *Server) routeRemoveBlocklistEntry(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a blocklist id must be a number")
-		return
-	}
-	s.RemoveBlocklistEntry(w, r, id)
 }
 
 // RemoveBlocklistEntry lets a release be grabbed again.

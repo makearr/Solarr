@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -259,17 +258,6 @@ func (s *Server) CreateMyAPIKey(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// routeDeleteMyAPIKey parses the id path parameter, mirroring routeGetWork.
-func (s *Server) routeDeleteMyAPIKey(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "an api key id must be a number")
-		return
-	}
-	s.DeleteMyAPIKey(w, r, id)
-}
-
 // DeleteMyAPIKey revokes one of the caller's own keys. Refused (404, via
 // writeError's settings.ErrNotFound mapping) for a key belonging to someone
 // else -- settings.Cache.DeleteAPIKey checks ownership.
@@ -284,17 +272,6 @@ func (s *Server) DeleteMyAPIKey(w http.ResponseWriter, r *http.Request, id int64
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// routeRevealMyAPIKey parses the id path parameter, mirroring routeDeleteMyAPIKey.
-func (s *Server) routeRevealMyAPIKey(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "an api key id must be a number")
-		return
-	}
-	s.RevealMyAPIKey(w, r, id)
 }
 
 // RevealMyAPIKey shows one of the caller's own keys again (user, 2026-10-23); someone else's is 404.

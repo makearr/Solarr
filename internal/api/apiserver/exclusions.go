@@ -3,9 +3,6 @@ package apiserver
 import (
 	"errors"
 	"net/http"
-	"strconv"
-
-	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
@@ -56,16 +53,6 @@ func (s *Server) CreateExclusionPattern(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, s.logger, http.StatusCreated, exclusionPatternView(created))
 }
 
-// routeUpdateExclusionPattern parses the id path parameter, mirroring routeGetWork.
-func (s *Server) routeUpdateExclusionPattern(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an id must be a number")
-		return
-	}
-	s.UpdateExclusionPattern(w, r, id)
-}
-
 // UpdateExclusionPattern replaces a pattern's content. Administrator only.
 // Builtin never changes -- settings.Cache's own UpdateExclusionPattern does
 // not accept it as a field to change, so there is nothing here that could
@@ -101,16 +88,6 @@ func (s *Server) UpdateExclusionPattern(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, exclusionPatternView(updated))
-}
-
-// routeDeleteExclusionPattern parses the id path parameter, mirroring routeDeleteCategory.
-func (s *Server) routeDeleteExclusionPattern(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an id must be a number")
-		return
-	}
-	s.DeleteExclusionPattern(w, r, id)
 }
 
 // DeleteExclusionPattern removes a pattern, builtin or not (ADR-53's own

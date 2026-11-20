@@ -42,10 +42,14 @@ until a handler exists.
 spec does not describe is missing from the generated TypeScript client, so the UI cannot call it
 and nobody finds out until a feature does not work.
 
-## Routing stays hand-written
+## Routing stays hand-written; parameters are generated
 
 The generated router registers every route flat, which would dissolve the authenticated group.
 Its value is that adding a route outside it is a visible act.
+
+Path and query parameters are parsed by the generated `ServerInterfaceWrapper` (`wrapped.<OperationID>` in `New`), so a parameter in the spec cannot be
+forgotten; its parse errors answer 400 through `Server.badParameter`. A hand-written `route*` function stays only where it does more than parse
+(a 404 for a malformed id, a validated date window, a lenient body).
 
 ## `embedded-spec` is off
 

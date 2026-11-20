@@ -254,8 +254,7 @@ func (s *Server) InspectImport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusAccepted, gen.ImportInspectResult{Enqueued: true, AlreadyQueued: alreadyQueued})
 }
 
-// routeListImportSessions parses the state query parameter, mirroring
-// routeGetWork's own reasoning for path parameters.
+// routeListImportSessions parses the state query parameter.
 func (s *Server) routeListImportSessions(w http.ResponseWriter, r *http.Request) {
 	var params gen.ListImportSessionsParams
 	if raw := r.URL.Query().Get("state"); raw != "" {
@@ -289,78 +288,6 @@ func (s *Server) routeListImportSessions(w http.ResponseWriter, r *http.Request)
 		params.BeforeId, params.BeforeStartedAt = &beforeID, &beforeStarted
 	}
 	s.ListImportSessions(w, r, params)
-}
-
-// routeGetImportSession parses the id path parameter, mirroring routeGetWork.
-func (s *Server) routeGetImportSession(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a session id must be a number")
-		return
-	}
-	s.GetImportSession(w, r, id)
-}
-
-// routeCancelImportSession parses the id path parameter, mirroring routeGetImportSession.
-func (s *Server) routeCancelImportSession(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a session id must be a number")
-		return
-	}
-	s.CancelImportSession(w, r, id)
-}
-
-// routeRevertImportSession parses the id path parameter, mirroring routeCancelImportSession.
-func (s *Server) routeRevertImportSession(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a session id must be a number")
-		return
-	}
-	s.RevertImportSession(w, r, id)
-}
-
-// routeAssignImportCategory parses the id path parameter, mirroring routeCancelImportSession.
-func (s *Server) routeAssignImportCategory(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a session id must be a number")
-		return
-	}
-	s.AssignImportSessionCategory(w, r, id)
-}
-
-// routeCommitHeldImportUnits parses the id path parameter, mirroring routeAssignImportCategory.
-func (s *Server) routeCommitHeldImportUnits(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a session id must be a number")
-		return
-	}
-	s.CommitHeldImportUnits(w, r, id)
-}
-
-// routeCommitImportUnit parses the id and unitId path parameters, mirroring routeListImportUnits.
-func (s *Server) routeCommitImportUnit(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a session id must be a number")
-		return
-	}
-	unitID, err := strconv.ParseInt(chi.URLParam(r, "unitId"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a unit id must be a number")
-		return
-	}
-	s.CommitImportUnit(w, r, id, unitID)
 }
 
 // routeListImportUnits parses the id path parameter and the decision/
@@ -518,17 +445,6 @@ func (s *Server) DismissImportSession(w http.ResponseWriter, r *http.Request, id
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}
-}
-
-// routeDismissImportSession parses the id path parameter, mirroring routeCancelImportSession.
-func (s *Server) routeDismissImportSession(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a session id must be a number")
-		return
-	}
-	s.DismissImportSession(w, r, id)
 }
 
 // RevertImportSession undoes every file a session placed. Administrator

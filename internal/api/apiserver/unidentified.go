@@ -5,10 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"strconv"
 	"time"
-
-	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
@@ -138,18 +135,6 @@ type FilePlacement struct {
 // why) -- the caller's adapter translates.
 var ErrUnsupportedProvider = errors.New("apiserver: unsupported provider for manual resolve")
 
-// routeResolveUnidentified parses the mediaObjectId path parameter, mirroring
-// routeGetWork.
-func (s *Server) routeResolveUnidentified(w http.ResponseWriter, r *http.Request) {
-	mediaObjectID, err := strconv.ParseInt(chi.URLParam(r, "mediaObjectId"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a media object id must be a number")
-		return
-	}
-	s.ResolveUnidentified(w, r, mediaObjectID)
-}
-
 // ResolveUnidentified confirms a candidate for one queued file (section 21.3).
 // A file under a root folder the caller cannot read answers 404, the same as
 // missing (Invariant 37).
@@ -194,16 +179,6 @@ func (s *Server) ResolveUnidentified(w http.ResponseWriter, r *http.Request, med
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, map[string]int64{"work_id": workID, "resolved": resolved})
-}
-
-func (s *Server) routeMarkUnidentifiedNotMedia(w http.ResponseWriter, r *http.Request) {
-	mediaObjectID, err := strconv.ParseInt(chi.URLParam(r, "mediaObjectId"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a media object id must be a number")
-		return
-	}
-	s.MarkUnidentifiedNotMedia(w, r, mediaObjectID)
 }
 
 // MarkUnidentifiedNotMedia takes a queued file out of the queue for good (F29's "not media").
@@ -315,17 +290,6 @@ func toCandidateViews(from []UnidentifiedCandidate) []gen.UnidentifiedCandidate 
 		views[index] = view
 	}
 	return views
-}
-
-// routeListIdentificationAttempts parses the mediaObjectId path parameter, mirroring routeResolveUnidentified.
-func (s *Server) routeListIdentificationAttempts(w http.ResponseWriter, r *http.Request) {
-	mediaObjectID, err := strconv.ParseInt(chi.URLParam(r, "mediaObjectId"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a media object id must be a number")
-		return
-	}
-	s.ListIdentificationAttempts(w, r, mediaObjectID)
 }
 
 // ListIdentificationAttempts answers how identification of a queued file went. A file under a

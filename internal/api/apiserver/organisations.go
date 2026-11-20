@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/platform/paginate"
@@ -132,16 +130,6 @@ func (s *Server) ListOrganisations(w http.ResponseWriter, r *http.Request, param
 		page.NextCursor = &next
 	}
 	writeJSON(w, s.logger, http.StatusOK, page)
-}
-
-// routeGetOrganisation parses the id path parameter.
-func (s *Server) routeGetOrganisation(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an organisation id must be a number")
-		return
-	}
-	s.GetOrganisation(w, r, id)
 }
 
 // GetOrganisation answers one organisation with its works in every library the caller may read.

@@ -4,9 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"strconv"
-
-	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
@@ -103,15 +100,6 @@ func (s *Server) AddDownloadFolder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusCreated, downloadFolderView(created))
 }
 
-func (s *Server) routeUpdateDownloadFolder(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a download folder id must be a number")
-		return
-	}
-	s.UpdateDownloadFolder(w, r, id)
-}
-
 // UpdateDownloadFolder changes a folder's label, library hint, watching and transfer order.
 func (s *Server) UpdateDownloadFolder(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -145,16 +133,6 @@ func (s *Server) UpdateDownloadFolder(w http.ResponseWriter, r *http.Request, id
 	writeJSON(w, s.logger, http.StatusOK, downloadFolderView(updated))
 }
 
-// routeDeleteDownloadFolder parses the id path parameter, mirroring routeDrainRootFolder.
-func (s *Server) routeDeleteDownloadFolder(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a download folder id must be a number")
-		return
-	}
-	s.DeleteDownloadFolder(w, r, id)
-}
-
 // DeleteDownloadFolder stops watching a folder. Administrator only.
 func (s *Server) DeleteDownloadFolder(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -165,16 +143,6 @@ func (s *Server) DeleteDownloadFolder(w http.ResponseWriter, r *http.Request, id
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// routeListDownloadFolderContents parses the id path parameter, mirroring routeDrainRootFolder.
-func (s *Server) routeListDownloadFolderContents(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a download folder id must be a number")
-		return
-	}
-	s.ListDownloadFolderContents(w, r, id)
 }
 
 // ListDownloadFolderContents reads a folder's own top-level entries live,

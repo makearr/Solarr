@@ -271,18 +271,6 @@ type RemoveWorkResult struct {
 	FilesRecycled int64
 }
 
-// routeGetWork parses the id path parameter, mirroring routeUser: a malformed
-// id answers 400 the same way everywhere, before any lookup runs.
-func (s *Server) routeGetWork(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a work id must be a number")
-		return
-	}
-	s.GetWork(w, r, id)
-}
-
 // GetWork answers a work's structural detail; no scoring or Decision content
 // yet (stage 4). A work under no readable root folder answers 404, same as missing.
 func (s *Server) GetWork(w http.ResponseWriter, r *http.Request, id int64) {
@@ -470,17 +458,6 @@ func partFileFacts(file gen.PartFile) score.Facts {
 	return facts
 }
 
-// routeSetWorkMonitored parses the id path parameter, mirroring routeGetWork.
-func (s *Server) routeSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a work id must be a number")
-		return
-	}
-	s.SetWorkMonitored(w, r, id)
-}
-
 // SetWorkMonitored toggles a work's album-level monitored state. The
 // request body is decoded here, not by a generated wrapper, same as
 // SubscribePerson/ImportSettings (ADR-31).
@@ -544,23 +521,6 @@ func (s *Server) searchNowMonitored(r *http.Request, id int64) {
 	if _, err := s.candidateSearcher.SearchCategory(r.Context(), detail.CategoryIDs[0], []int64{id}); err != nil {
 		s.logger.Warn("search after monitoring", "work_id", id, "error", err)
 	}
-}
-
-// routeSetTrackWanted parses id and partId, mirroring routeSetPartMonitored.
-func (s *Server) routeSetTrackWanted(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a work id must be a number")
-		return
-	}
-	partID, err := strconv.ParseInt(chi.URLParam(r, "partId"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a part id must be a number")
-		return
-	}
-	s.SetTrackWanted(w, r, id, partID)
 }
 
 // SetTrackWanted wants (or stops wanting) one track on its own, independent
@@ -1013,16 +973,6 @@ func partFileView(file PartFileRow) *gen.PartFile {
 	return view
 }
 
-func (s *Server) routeRemoveWork(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a work id must be a number")
-		return
-	}
-	s.RemoveWork(w, r, id)
-}
-
 // RemoveWork stops wanting an album (revision 7.3). Administrator only, and
 // deliberately a POST rather than a DELETE: the files stay, and so does the
 // album itself when any of them are still in the library.
@@ -1061,22 +1011,6 @@ func (s *Server) RemoveWork(w http.ResponseWriter, r *http.Request, id int64) {
 		WorkDeleted: result.WorkDeleted, FilesKept: result.FilesKept,
 		FilesRecycled: &result.FilesRecycled,
 	})
-}
-
-func (s *Server) routeRemovePart(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a work id must be a number")
-		return
-	}
-	partID, err := strconv.ParseInt(chi.URLParam(r, "partId"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a part id must be a number")
-		return
-	}
-	s.RemovePart(w, r, id, partID)
 }
 
 // RemovePart stops wanting one track, RemoveWork's shape one level down.

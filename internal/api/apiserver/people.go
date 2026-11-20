@@ -252,17 +252,6 @@ func personSortValue(entry gen.PersonEntry, sort string) string {
 	}
 }
 
-// routeGetPerson parses the id path parameter, mirroring routeGetWork.
-func (s *Server) routeGetPerson(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a person id must be a number")
-		return
-	}
-	s.GetPerson(w, r, id)
-}
-
 // GetPerson answers one person with their credits in every library the caller may read.
 func (s *Server) GetPerson(w http.ResponseWriter, r *http.Request, id int64) {
 	if s.people == nil {
@@ -374,16 +363,6 @@ func personWorkView(row PersonWorkRow, now time.Time) gen.PersonWork {
 	return view
 }
 
-func (s *Server) routeRemovePerson(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a person id must be a number")
-		return
-	}
-	s.RemovePerson(w, r, id)
-}
-
 // RemovePerson stops following an artist and forgets them (revision 7.3).
 // Administrator only, and deliberately not a DELETE on /people/{id}: the
 // files stay, so this removes a relationship rather than the content.
@@ -426,15 +405,6 @@ func (s *Server) personVisibility(w http.ResponseWriter, r *http.Request) ([]int
 	return categoryIDs, true
 }
 
-func (s *Server) routeEditPerson(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a person id must be a number")
-		return
-	}
-	s.EditPerson(w, r, id)
-}
-
 // EditPerson renames a person or sets their gender and attributes by hand.
 func (s *Server) EditPerson(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -457,15 +427,6 @@ func (s *Server) EditPerson(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func (s *Server) routeMergePerson(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a person id must be a number")
-		return
-	}
-	s.MergePerson(w, r, id)
 }
 
 // MergePerson folds a person into another.

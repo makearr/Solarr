@@ -6,11 +6,8 @@ import (
 	"crypto/subtle"
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
-
-	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/auth"
@@ -285,17 +282,6 @@ func (s *Server) rootFolderView(folder settings.RootFolder) gen.RootFolder {
 	return view
 }
 
-// routeUpdateRootFolderPolicy parses the id path parameter, mirroring
-// routeDrainRootFolder.
-func (s *Server) routeUpdateRootFolderPolicy(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a root folder id must be a number")
-		return
-	}
-	s.UpdateRootFolderPolicy(w, r, id)
-}
-
 // UpdateRootFolderPolicy replaces a root's read_only/allow_rename/
 // min_free_bytes wholesale (Invariant 69). Administrator only.
 func (s *Server) UpdateRootFolderPolicy(w http.ResponseWriter, r *http.Request, id int64) {
@@ -331,17 +317,6 @@ func (s *Server) UpdateRootFolderPolicy(w http.ResponseWriter, r *http.Request, 
 	writeJSON(w, s.logger, http.StatusOK, s.rootFolderView(folder))
 }
 
-// routeDeleteRootFolder parses the id path parameter, mirroring
-// routeDrainRootFolder.
-func (s *Server) routeDeleteRootFolder(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a root folder id must be a number")
-		return
-	}
-	s.DeleteRootFolder(w, r, id)
-}
-
 // DeleteRootFolder removes a root folder, refused (settings.ErrInUse, via
 // writeError) while any category still attaches it. Administrator only.
 func (s *Server) DeleteRootFolder(w http.ResponseWriter, r *http.Request, id int64) {
@@ -353,17 +328,6 @@ func (s *Server) DeleteRootFolder(w http.ResponseWriter, r *http.Request, id int
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// routeSetRootFolderOnline parses the id path parameter, mirroring
-// routeDrainRootFolder.
-func (s *Server) routeSetRootFolderOnline(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a root folder id must be a number")
-		return
-	}
-	s.SetRootFolderOnline(w, r, id)
 }
 
 // SetRootFolderOnline declares a root online or offline (section 10.4).

@@ -96,7 +96,7 @@ func (s *Server) registerFinishedFolder(ctx context.Context, created settings.Do
 	}
 }
 
-// routeUpdateDownloader parses the id path parameter, mirroring routeUpdateIndexer.
+// routeUpdateDownloader parses the id path parameter.
 func (s *Server) routeUpdateDownloader(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -149,16 +149,6 @@ func (s *Server) UpdateDownloader(w http.ResponseWriter, r *http.Request, id int
 	writeJSON(w, s.logger, http.StatusOK, downloaderView(updated))
 }
 
-// routeDeleteDownloader parses the id path parameter, mirroring routeDeleteIndexer.
-func (s *Server) routeDeleteDownloader(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a downloader id must be a number")
-		return
-	}
-	s.DeleteDownloader(w, r, id)
-}
-
 // DeleteDownloader removes a connection. Administrator only.
 func (s *Server) DeleteDownloader(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -173,16 +163,6 @@ func (s *Server) DeleteDownloader(w http.ResponseWriter, r *http.Request, id int
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// routeSetDownloaderCredentials parses the id path parameter.
-func (s *Server) routeSetDownloaderCredentials(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a downloader id must be a number")
-		return
-	}
-	s.SetDownloaderCredentials(w, r, id)
 }
 
 // SetDownloaderCredentials replaces or clears a connection's own
@@ -201,16 +181,6 @@ func (s *Server) SetDownloaderCredentials(w http.ResponseWriter, r *http.Request
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// routeTestDownloader parses the id path parameter, mirroring routeTestIndexer.
-func (s *Server) routeTestDownloader(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a downloader id must be a number")
-		return
-	}
-	s.TestDownloader(w, r, id)
 }
 
 // DownloaderTester runs todo 5.2's own "every connection tested before it is

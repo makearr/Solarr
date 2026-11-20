@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 )
 
@@ -94,16 +92,6 @@ func (s *Server) ListBlockedContent(w http.ResponseWriter, r *http.Request, para
 		views[i] = blockedContentView(row)
 	}
 	writeJSON(w, s.logger, http.StatusOK, views)
-}
-
-// routeRemoveBlockedContent parses the id path parameter, mirroring routeDeleteCategory.
-func (s *Server) routeRemoveBlockedContent(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an id must be a number")
-		return
-	}
-	s.RemoveBlockedContent(w, r, id)
 }
 
 // RemoveBlockedContent reverses a block. Administrator only.

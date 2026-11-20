@@ -3,9 +3,6 @@ package apiserver
 import (
 	"errors"
 	"net/http"
-	"strconv"
-
-	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
@@ -56,16 +53,6 @@ func (s *Server) CreateQualityProfile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusCreated, qualityProfileView(created))
 }
 
-// routeUpdateQualityProfile parses the id path parameter, mirroring routeUpdateExclusionPattern.
-func (s *Server) routeUpdateQualityProfile(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an id must be a number")
-		return
-	}
-	s.UpdateQualityProfile(w, r, id)
-}
-
 // UpdateQualityProfile replaces a profile's policy. Administrator only.
 func (s *Server) UpdateQualityProfile(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -94,16 +81,6 @@ func (s *Server) UpdateQualityProfile(w http.ResponseWriter, r *http.Request, id
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, qualityProfileView(updated))
-}
-
-// routeDeleteQualityProfile parses the id path parameter, mirroring routeDeleteExclusionPattern.
-func (s *Server) routeDeleteQualityProfile(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an id must be a number")
-		return
-	}
-	s.DeleteQualityProfile(w, r, id)
 }
 
 // DeleteQualityProfile removes a profile, refused (settings.ErrInUse, via
@@ -162,16 +139,6 @@ func (s *Server) CreateLanguageProfile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusCreated, languageProfileView(created))
 }
 
-// routeUpdateLanguageProfile parses the id path parameter, mirroring routeUpdateQualityProfile.
-func (s *Server) routeUpdateLanguageProfile(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an id must be a number")
-		return
-	}
-	s.UpdateLanguageProfile(w, r, id)
-}
-
 // UpdateLanguageProfile replaces a profile's policy. Administrator only.
 func (s *Server) UpdateLanguageProfile(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -200,16 +167,6 @@ func (s *Server) UpdateLanguageProfile(w http.ResponseWriter, r *http.Request, i
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, languageProfileView(updated))
-}
-
-// routeDeleteLanguageProfile parses the id path parameter, mirroring routeDeleteQualityProfile.
-func (s *Server) routeDeleteLanguageProfile(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an id must be a number")
-		return
-	}
-	s.DeleteLanguageProfile(w, r, id)
 }
 
 // DeleteLanguageProfile removes a profile, refused (settings.ErrInUse, via

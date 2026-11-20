@@ -95,7 +95,7 @@ func (s *Server) importListID(w http.ResponseWriter, r *http.Request) (int64, bo
 	return id, true
 }
 
-// routeListImportLists parses the id path parameter, mirroring routeGetWork.
+// routeListImportLists parses the id path parameter.
 func (s *Server) routeListImportLists(w http.ResponseWriter, r *http.Request) {
 	if id, ok := s.importListID(w, r); ok {
 		s.ListImportLists(w, r, id)
@@ -186,7 +186,7 @@ func listChoiceViews(choices []MediaChoice) []gen.MediaChoice {
 	return views
 }
 
-// routeCreateImportList parses the id path parameter, mirroring routeGetWork.
+// routeCreateImportList parses the id path parameter.
 func (s *Server) routeCreateImportList(w http.ResponseWriter, r *http.Request) {
 	if id, ok := s.importListID(w, r); ok {
 		s.CreateImportList(w, r, id)
@@ -268,7 +268,7 @@ func (s *Server) writeImportList(w http.ResponseWriter, r *http.Request, status 
 	writeJSON(w, s.logger, status, importListView(list, listStatus))
 }
 
-// routeUpdateImportList parses the id path parameter, mirroring routeGetWork.
+// routeUpdateImportList parses the id path parameter.
 func (s *Server) routeUpdateImportList(w http.ResponseWriter, r *http.Request) {
 	if id, ok := s.importListID(w, r); ok {
 		s.UpdateImportList(w, r, id)
@@ -389,7 +389,7 @@ func (s *Server) RunImportList(w http.ResponseWriter, r *http.Request, id int64)
 	w.WriteHeader(http.StatusAccepted)
 }
 
-// routeDeleteImportList parses the id path parameter, mirroring routeDeleteCategory.
+// routeDeleteImportList parses the id path parameter.
 func (s *Server) routeDeleteImportList(w http.ResponseWriter, r *http.Request) {
 	if id, ok := s.importListID(w, r); ok {
 		s.DeleteImportList(w, r, id)

@@ -89,17 +89,6 @@ func (s *Server) lastLibraryLevel(ctx context.Context, userID, categoryID int64)
 	return &level
 }
 
-// routeSetLibraryLastLevel parses the id path parameter, mirroring routeGetWork.
-func (s *Server) routeSetLibraryLastLevel(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a library id must be a number")
-		return
-	}
-	s.SetLibraryLastLevel(w, r, id)
-}
-
 // SetLibraryLastLevel stores the level the caller last visited in one
 // library (ADR-54), so the sidebar tree costs one click on return.
 func (s *Server) SetLibraryLastLevel(w http.ResponseWriter, r *http.Request, id int64) {

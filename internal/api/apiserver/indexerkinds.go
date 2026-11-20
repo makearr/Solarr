@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
-	"strconv"
-
-	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
@@ -146,15 +143,6 @@ func (s *Server) TestIndexerConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, gen.ConnectionTestResult{Ok: result.OK, Message: result.Message, TestedAt: result.TestedAt})
 }
 
-func (s *Server) routeAddIndexerCompanion(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an indexer id must be a number")
-		return
-	}
-	s.AddIndexerCompanion(w, r, id)
-}
-
 // AddIndexerCompanion adds the download client an indexer's releases need, at its address and with its key.
 func (s *Server) AddIndexerCompanion(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
@@ -184,15 +172,6 @@ func (s *Server) AddIndexerCompanion(w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 	writeJSON(w, s.logger, http.StatusCreated, downloaderView(created))
-}
-
-func (s *Server) routeAddDownloaderCompanion(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a downloader id must be a number")
-		return
-	}
-	s.AddDownloaderCompanion(w, r, id)
 }
 
 // AddDownloaderCompanion adds the indexer that searches for a download client's releases, at its address and with
