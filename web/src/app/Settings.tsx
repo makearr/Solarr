@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp } from "lucide-react";
 
 import { api, ok } from "@/api/client";
+import { t } from "@/lib/i18n";
 import type { components } from "@/api/schema";
 
 import { Blocklist } from "./Blocklist";
@@ -74,6 +75,11 @@ export function GeneralSettings() {
   const generate = useMutation({
     mutationFn: (path: "/settings/general/video-previews/generate" | "/settings/general/video-hashes/generate") => ok(api.POST(path)),
   });
+  const retryUnreadable = useMutation({
+    mutationFn: () => ok(api.POST("/settings/general/unreadable-files/retry")),
+    meta: { handlesErrors: true },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["system-health"] }),
+  });
   return (
     <SettingsPage title="General">
       <Card title="Mode" help="How much of the outside world Solarr touches. SOLARR_MODE in the environment sets this at every start.">
@@ -142,6 +148,15 @@ export function GeneralSettings() {
         </label>
         <GenerateButton label="Generate missing previews" busy={generate.isPending} onClick={() => generate.mutate("/settings/general/video-previews/generate")} />
         </div>
+        <div className="flex items-start justify-between gap-3">
+          <span className="text-sm">
+            {t("settings.unreadable.title")}
+            <span className="block text-xs text-ink-muted">{t("settings.unreadable.help")}</span>
+          </span>
+          <GenerateButton label={t("settings.unreadable.button")} busy={retryUnreadable.isPending} onClick={() => retryUnreadable.mutate()} />
+        </div>
+        {retryUnreadable.isSuccess && <p className="text-sm text-ok">{t("settings.unreadable.started", { count: retryUnreadable.data.count })}</p>}
+        {retryUnreadable.isError && <p className="text-sm text-danger">{t("settings.unreadable.refused")}</p>}
         {change.isError && <p className="text-sm text-danger">That change was refused.</p>}
         {generate.isError && <p className="text-sm text-danger">That could not be started: it needs administrator access.</p>}
         {generate.isSuccess && <p className="text-sm text-ok">Started in the background, whatever the switches above say. Previews also hash the videos.</p>}

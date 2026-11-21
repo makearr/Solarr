@@ -94,3 +94,26 @@ func (s *Server) generateVideoPictures(w http.ResponseWriter, r *http.Request, w
 	}
 	w.WriteHeader(http.StatusAccepted)
 }
+
+// UnreadableFiles makes the files the probe gave up on due again.
+type UnreadableFiles interface {
+	// Retry answers how many files will be read again; the sweep that reads them is queued.
+	Retry(ctx context.Context) (int64, error)
+}
+
+// RetryUnreadableFiles has the probe read again every file it left alone because ffprobe could not read it. Administrator only.
+func (s *Server) RetryUnreadableFiles(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.unreadableFiles == nil {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "reading files again is not available here")
+		return
+	}
+	count, err := s.unreadableFiles.Retry(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusAccepted, gen.UnreadableFilesRetry{Count: count})
+}

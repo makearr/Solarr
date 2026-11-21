@@ -871,7 +871,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		SystemHealth: adapters.SystemHealth{
 			Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library), Vanished: p.vanishedFiles(), Registry: p.media,
 			AboveRating: library.NewWorks(p.library).CountAboveRating, Paused: p.outbound().breaker.Paused,
-			Media: p.tool, Tasks: p.taskRegistry.All, TaskRuns: p.scheduleStates,
+			Media: p.tool, ProbeFailures: library.NewPhysical(p.library).CountProbeFailures, Tasks: p.taskRegistry.All, TaskRuns: p.scheduleStates,
 			Backups: backupSource{FS: p.fsys, Directory: p.config.Paths.BackupDir}, Now: clock.NewSystem().Now,
 			BackupInterval: func(now time.Time) time.Duration {
 				return jobs.CadenceInterval(p.cache.Snapshot().ScheduleCadences("backup", backupScheduleCron), backupScheduleCron, now)
@@ -968,12 +968,13 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		IncompleteDiscographies: adapters.IncompleteDiscographies{
 			Coverage: statistics.NewRollup(p.statistics), People: library.NewPeople(p.library),
 		},
-		FS:            p.fsys,
-		ImagesDir:     p.imagesDir(),
-		MediaCoverDir: p.config.Paths.MediaCoverDir,
-		PreviewsDir:   filepath.Join(p.config.Paths.ConfigDir, "previews"),
-		VideoPictures: videoPictures{process: p},
-		ConfigPath:    p.configPath,
+		FS:              p.fsys,
+		ImagesDir:       p.imagesDir(),
+		MediaCoverDir:   p.config.Paths.MediaCoverDir,
+		PreviewsDir:     filepath.Join(p.config.Paths.ConfigDir, "previews"),
+		VideoPictures:   videoPictures{process: p},
+		UnreadableFiles: unreadableFiles{process: p},
+		ConfigPath:      p.configPath,
 		People: adapters.People{
 			People: library.NewPeople(p.library), Works: library.NewWorks(p.library), Roles: adapters.MediaTypes{Registry: p.media}.RoleKeys,
 			Categories: adapters.Categories{Cache: p.cache},

@@ -141,3 +141,16 @@ func TestUnreadableIndexers_NameEachEnabledIndexerWithoutCapabilities(t *testing
 		t.Errorf("checks = %+v, want one for the enabled indexer without capabilities", checks)
 	}
 }
+
+func TestUnreadableFiles_ReportsTheCountOnlyWhenThereAreSome(t *testing.T) {
+	count := int64(0)
+	health := SystemHealth{ProbeFailures: func(context.Context) (int64, error) { return count, nil }}
+	if checks := health.unreadableFiles(t.Context()); len(checks) != 0 {
+		t.Errorf("no failures: %+v, want none", checks)
+	}
+	count = 3
+	checks := health.unreadableFiles(t.Context())
+	if len(checks) != 1 || checks[0].ID != "unreadable_files" || !strings.Contains(checks[0].Message, "3 media files") {
+		t.Errorf("checks = %+v, want one naming 3 files", checks)
+	}
+}

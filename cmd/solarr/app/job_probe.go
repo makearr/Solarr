@@ -75,3 +75,15 @@ func (p *process) afterSweep(ctx context.Context) {
 	_, _ = p.enqueueCategoryCounts(ctx)
 	_, _ = p.enqueueProbe(ctx)
 }
+
+// unreadableFiles makes the files ffprobe could not read due again and queues the sweep that reads them.
+type unreadableFiles struct{ process *process }
+
+func (u unreadableFiles) Retry(ctx context.Context) (int64, error) {
+	count, err := library.NewPhysical(u.process.library).ForgetProbeFailures(ctx)
+	if err != nil {
+		return 0, err
+	}
+	_, err = u.process.enqueueProbe(ctx)
+	return count, err
+}

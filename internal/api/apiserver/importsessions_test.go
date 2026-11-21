@@ -814,3 +814,18 @@ func TestInspectImport_RefusesPathsAndOriginsThatSteerTheJobWrong(t *testing.T) 
 		t.Errorf("a cleaned adoption path: status %d, source %q; want 202 and the cleaned path", recorder.Code, fixture.importInspector.lastSourcePath)
 	}
 }
+
+func TestRetryUnreadableFiles_IsAnAdministratorsAndAnswersTheCount(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	fixture.createUser(t, "listener", settings.RoleUser)
+	listener := fixture.signIn(t, "listener")
+	if recorder := fixture.do(authedPost(t, listener, "/api/v1/settings/general/unreadable-files/retry", `{}`)); recorder.Code != http.StatusForbidden || fixture.unreadable.calls != 0 {
+		t.Errorf("a user: status %d, %d calls; want 403 and none", recorder.Code, fixture.unreadable.calls)
+	}
+	admin := fixture.signIn(t, "admin")
+	recorder := fixture.do(authedPost(t, admin, "/api/v1/settings/general/unreadable-files/retry", `{}`))
+	if recorder.Code != http.StatusAccepted || strings.TrimSpace(recorder.Body.String()) != `{"count":4}` || fixture.unreadable.calls != 1 {
+		t.Errorf("an administrator: status %d, body %s, %d calls; want 202 {\"count\":4} and one call", recorder.Code, recorder.Body, fixture.unreadable.calls)
+	}
+}

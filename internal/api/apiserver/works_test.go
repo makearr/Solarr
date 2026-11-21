@@ -81,6 +81,7 @@ type worksFixture struct {
 	removeAndBlocker     *fakeRemoveAndBlocker
 	importSessions       *fakeImportSessionLister
 	importInspector      *fakeImportInspector
+	unreadable           *fakeUnreadableFiles
 	fingerprintRetrier   *fakeFingerprintRetrier
 	drainStarter         *fakeDrainStarter
 	moveJobs             *fakeMoveJobLister
@@ -256,6 +257,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	removeAndBlocker := &fakeRemoveAndBlocker{}
 	importSessions := &fakeImportSessionLister{}
 	importInspector := &fakeImportInspector{}
+	unreadable := &fakeUnreadableFiles{count: 4}
 	fingerprintRetrier := &fakeFingerprintRetrier{}
 	drainStarter := &fakeDrainStarter{}
 	moveJobs := &fakeMoveJobLister{}
@@ -311,6 +313,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		RemoveAndBlocker:     removeAndBlocker,
 		ImportSessions:       importSessions,
 		ImportInspector:      importInspector,
+		UnreadableFiles:      unreadable,
 		FingerprintRetrier:   fingerprintRetrier,
 		DrainStarter:         drainStarter,
 		MoveJobs:             moveJobs,
@@ -365,7 +368,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		artwork: artwork, playback: playback, remoteImages: remoteImages, people: people, organisations: organisations, subscriber: subscriber, artistActions: artistActions,
 		follower:       follower,
 		blockedContent: blockedContent, favorites: favorites, packs: packs, removeAndBlocker: removeAndBlocker,
-		importSessions: importSessions, importInspector: importInspector,
+		importSessions: importSessions, importInspector: importInspector, unreadable: unreadable,
 		fingerprintRetrier: fingerprintRetrier,
 		drainStarter:       drainStarter, moveJobs: moveJobs, renameStarter: renameStarter, namingSchemes: namingSchemes, calendar: calendar,
 		history:       history,
@@ -826,4 +829,14 @@ func TestListWorks_ArtistSortedCursorRoundTrips(t *testing.T) {
 
 func itoa(v int64) string {
 	return strconv.FormatInt(v, 10)
+}
+
+type fakeUnreadableFiles struct {
+	count int64
+	calls int
+}
+
+func (f *fakeUnreadableFiles) Retry(context.Context) (int64, error) {
+	f.calls++
+	return f.count, nil
 }

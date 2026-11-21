@@ -4586,6 +4586,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/general/unreadable-files/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Have the probe read again every file it gave up on because ffprobe could not read it. Administrator only. */
+        post: operations["retryUnreadableFiles"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/video-hashing": {
         parameters: {
             query?: never;
@@ -7024,6 +7041,13 @@ export interface components {
         MoveCompanion: {
             source_rel_path: string;
             dest_rel_path: string;
+        };
+        UnreadableFilesRetry: {
+            /**
+             * Format: int64
+             * @description How many files will be read again.
+             */
+            count: number;
         };
         LibraryMoveRequest: {
             /**
@@ -19199,6 +19223,29 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    retryUnreadableFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The files are due again and a probe sweep is queued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnreadableFilesRetry"];
+                };
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];

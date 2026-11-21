@@ -7176,6 +7176,21 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /settings/general/unreadable-files/retry:
+    post:
+      operationId: retryUnreadableFiles
+      tags: [settings]
+      summary: Have the probe read again every file it gave up on because ffprobe could not read it. Administrator only.
+      responses:
+        "202":
+          description: The files are due again and a probe sweep is queued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnreadableFilesRetry" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /settings/video-hashing:
     get:
       operationId: getVideoHashing
@@ -10247,6 +10262,12 @@ components:
       properties:
         source_rel_path: { type: string }
         dest_rel_path: { type: string }
+
+    UnreadableFilesRetry:
+      type: object
+      required: [count]
+      properties:
+        count: { type: integer, format: int64, description: How many files will be read again. }
 
     LibraryMoveRequest:
       type: object

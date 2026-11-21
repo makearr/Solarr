@@ -4,6 +4,11 @@ type MediaTypeInfo = components["schemas"]["MediaTypeInfo"];
 
 // One English catalogue: every label of the shared pages, with {placeholders} filled from the media type's words.
 const catalogue = {
+  "settings.unreadable.title": "Files that could not be read",
+  "settings.unreadable.help": "The attribute probe leaves a damaged or unusual file alone and tries it again after growing waits. This tries every one of them now.",
+  "settings.unreadable.button": "Read unreadable files again",
+  "settings.unreadable.started": "{count} files will be read again in the background.",
+  "settings.unreadable.refused": "That could not be started: it needs administrator access.",
   "action.monitor": "Monitor",
   "action.unmonitor": "Unmonitor",
   "action.search": "Search",

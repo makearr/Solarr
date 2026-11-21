@@ -107,6 +107,8 @@ type Config struct {
 	PreviewsDir string
 	// VideoPictures starts the on-demand preview and hash sweeps; optional.
 	VideoPictures VideoPictures
+	// UnreadableFiles has the probe read again the files it gave up on; optional.
+	UnreadableFiles UnreadableFiles
 	// ConfigPath locates config.yml on disk. Optional: without it,
 	// UpdateNetworkSettings writes only settings.db and never touches the
 	// file, same as before ADR-58's precedence was revised (2026-09-12).
@@ -358,6 +360,7 @@ type Server struct {
 	mediaCoverDir           string
 	previewsDir             string
 	videoPictures           VideoPictures
+	unreadableFiles         UnreadableFiles
 	configPath              string
 	people                  PeopleReader
 	organisations           OrganisationsReader
@@ -511,6 +514,7 @@ func New(config Config) (*Server, error) {
 		mediaCoverDir:           config.MediaCoverDir,
 		previewsDir:             config.PreviewsDir,
 		videoPictures:           config.VideoPictures,
+		unreadableFiles:         config.UnreadableFiles,
 		configPath:              config.ConfigPath,
 		people:                  config.People,
 		organisations:           config.Organisations,
@@ -851,6 +855,7 @@ func New(config Config) (*Server, error) {
 			secured.Patch("/settings/general", server.PatchGeneralSettings)
 			secured.Post("/settings/general/video-previews/generate", server.GenerateVideoPreviews)
 			secured.Post("/settings/general/video-hashes/generate", server.GenerateVideoHashes)
+			secured.Post("/settings/general/unreadable-files/retry", server.RetryUnreadableFiles)
 			secured.Get("/settings/video-hashing", server.GetVideoHashing)
 			secured.Put("/settings/video-hashing", server.SetVideoHashing)
 			secured.Get("/settings/import-duplicates", server.GetImportDuplicates)

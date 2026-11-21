@@ -50,6 +50,8 @@ type SystemHealth struct {
 	}
 	// BackupInterval is the gap between two scheduled backups; zero when none is scheduled.
 	BackupInterval func(now time.Time) time.Duration
+	// ProbeFailures counts the files the probe leaves alone because ffprobe could not read them; nil skips that check.
+	ProbeFailures func(ctx context.Context) (int64, error)
 	// Now stamps the stale-backup check.
 	Now func() time.Time
 }
@@ -93,6 +95,7 @@ func (a SystemHealth) Checks(ctx context.Context) []apiserver.HealthCheck {
 	checks = append(checks, a.missingMediaTools(ctx)...)
 	checks = append(checks, a.failingTasks(ctx)...)
 	checks = append(checks, a.staleBackup(ctx)...)
+	checks = append(checks, a.unreadableFiles(ctx)...)
 	return append(checks, pausedForRoom(snapshot)...)
 }
 
@@ -123,6 +126,22 @@ func (a SystemHealth) missingMediaTools(ctx context.Context) []apiserver.HealthC
 	return []apiserver.HealthCheck{{
 		ID: "media_tools_missing", Severity: apiserver.HealthError,
 		Message: "Solarr cannot run the tools that read media files, so nothing can be scanned or imported: " + err.Error(),
+	}}
+}
+
+// unreadableFiles says how many media files ffprobe could not read; they are left alone and retried with growing waits.
+func (a SystemHealth) unreadableFiles(ctx context.Context) []apiserver.HealthCheck {
+	if a.ProbeFailures == nil {
+		return nil
+	}
+	count, err := a.ProbeFailures(ctx)
+	if err != nil || count == 0 {
+		return nil
+	}
+	return []apiserver.HealthCheck{{
+		ID: "unreadable_files", Severity: apiserver.HealthWarning,
+		Message: fmt.Sprintf("%d media files could not be read (damaged, copy-protected or an unusual format) and are tried again only after growing waits. \"Read unreadable files again\" in Settings, General tries them now.", count),
+		Link:    "/settings/general",
 	}}
 }
 
