@@ -480,15 +480,15 @@ WHERE monitored = 1 AND satisfaction_kind = 'SET' AND state IN ('COMPLETE', 'UPG
 ORDER BY desired_item.id
 LIMIT sqlc.arg(page_size);
 
--- Which of an album's files a Solarr download brought in: placed by an import session a download
--- started. Only those can replace an owned file (M1d).
+-- Which of an album's files arrived by a download or a manual import session. Only those can replace
+-- an owned file (M1d); a scan or an adoption never does.
 -- name: ListDownloadedFilesForWork :many
 SELECT DISTINCT wf.media_object_id
 FROM work_file wf
 JOIN import_unit_file iuf ON iuf.media_object_id = wf.media_object_id
 JOIN import_unit u ON u.id = iuf.unit_id
 JOIN import_session s ON s.id = u.session_id
-WHERE wf.work_id = ? AND s.acquisition_id IS NOT NULL
+WHERE wf.work_id = ? AND (s.acquisition_id IS NOT NULL OR s.origin = 'manual')
 ORDER BY wf.media_object_id;
 
 -- A release RSS showed for the item; the newest first-seen is kept.

@@ -692,8 +692,8 @@ type Querier interface {
 	ListDifferentContentPairs(ctx context.Context) ([]ListDifferentContentPairsRow, error)
 	// The planner reads the dirty set, not the whole library (ADR-6).
 	ListDirtyDesiredItems(ctx context.Context, arg ListDirtyDesiredItemsParams) ([]DesiredItem, error)
-	// Which of an album's files a Solarr download brought in: placed by an import session a download
-	// started. Only those can replace an owned file (M1d).
+	// Which of an album's files arrived by a download or a manual import session. Only those can replace
+	// an owned file (M1d); a scan or an adoption never does.
 	ListDownloadedFilesForWork(ctx context.Context, workID int64) ([]int64, error)
 	// The queued files whose automatic retry is due; ListUnidentified without the due test lists them all.
 	ListDueUnidentified(ctx context.Context, arg ListDueUnidentifiedParams) ([]IdentificationQueue, error)

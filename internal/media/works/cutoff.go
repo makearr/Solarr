@@ -159,6 +159,11 @@ func (c Cutoff) settle(ctx context.Context, snapshot *settings.Snapshot, item li
 		held := 0
 		keeper := part[0]
 		for _, file := range part {
+			if file.MediaObjectID < keeper.MediaObjectID {
+				keeper = file // every file arrived by an import: a tie keeps the one placed first
+			}
+		}
+		for _, file := range part {
 			if !downloaded[file.MediaObjectID] {
 				if held == 0 {
 					keeper = file

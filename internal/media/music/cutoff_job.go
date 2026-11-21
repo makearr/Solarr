@@ -112,7 +112,7 @@ func (j CutoffJob) replaceSuperseded(ctx context.Context, snapshot *settings.Sna
 		if len(track) < 2 || !anyDownloaded(track, downloaded) || !allMeasured(track) {
 			continue
 		}
-		keeper := track[0]
+		keeper := oldestFile(track)
 		for _, file := range track {
 			if !downloaded[file.MediaObjectID] {
 				keeper = file // the owned file is the incumbent
@@ -274,4 +274,15 @@ func measuredFacts(file library.MeasuredFile) score.Facts {
 		AudioBitrate: file.BitrateKbps * 1000, OverallBitrate: file.BitrateKbps * 1000,
 		AudioLanguages: file.AudioLanguages, LyricsLanguages: file.LyricsLanguages,
 	}}
+}
+
+// oldestFile is the incumbent when every file arrived by an import: a tie keeps the one placed first.
+func oldestFile(files []library.MeasuredFile) library.MeasuredFile {
+	oldest := files[0]
+	for _, file := range files {
+		if file.MediaObjectID < oldest.MediaObjectID {
+			oldest = file
+		}
+	}
+	return oldest
 }
