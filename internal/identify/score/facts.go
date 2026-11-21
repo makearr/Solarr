@@ -36,13 +36,15 @@ type FileFacts struct {
 	EditionTokens   []string
 	ReleaseGroup    string
 	ProperRepack    bool
-	VideoBitrate    int64 // bits/sec
-	AudioBitrate    int64
-	OverallBitrate  int64
-	DurationMs      int64
-	Width           int
-	Height          int
-	FrameRate       float64
+	// ReleaseKnown says Source, ReleaseGroup and ProperRepack are what was recorded when the file was grabbed, not a guess.
+	ReleaseKnown   bool
+	VideoBitrate   int64 // bits/sec
+	AudioBitrate   int64
+	OverallBitrate int64
+	DurationMs     int64
+	Width          int
+	Height         int
+	FrameRate      float64
 	// CRF is the constant rate factor the encoder states; 0 when the file states none.
 	CRF      float64
 	ScanType string // "progressive" | "interlaced"

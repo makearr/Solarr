@@ -188,6 +188,18 @@ WHERE id = sqlc.arg(id);
 INSERT INTO import_unit_file (unit_id, media_object_id, library_path_id, transfer_method)
 VALUES (?, ?, ?, ?);
 
+-- What was known of the release a file came in, kept with the file (QUAL-1).
+-- name: UpsertMediaObjectRelease :exec
+INSERT INTO media_object_release (media_object_id, release_title, source, release_group, revision, indexer_id, grabbed_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (media_object_id) DO UPDATE SET
+  release_title = excluded.release_title,
+  source = excluded.source,
+  release_group = excluded.release_group,
+  revision = excluded.revision,
+  indexer_id = excluded.indexer_id,
+  grabbed_at = excluded.grabbed_at;
+
 -- name: ListImportUnitFilesForSession :many
 SELECT iuf.unit_id, iuf.media_object_id, iuf.library_path_id, iuf.transfer_method
 FROM import_unit_file iuf

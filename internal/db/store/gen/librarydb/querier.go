@@ -1440,6 +1440,8 @@ type Querier interface {
 	UpsertCrossoverMissingPart(ctx context.Context, arg UpsertCrossoverMissingPartParams) error
 	UpsertFileTrackClaim(ctx context.Context, arg UpsertFileTrackClaimParams) error
 	UpsertHuntQueueEntry(ctx context.Context, arg UpsertHuntQueueEntryParams) error
+	// What was known of the release a file came in, kept with the file (QUAL-1).
+	UpsertMediaObjectRelease(ctx context.Context, arg UpsertMediaObjectReleaseParams) error
 	// The planner owns every column but the search record, which each search keeps itself.
 	UpsertPlannedHunt(ctx context.Context, arg UpsertPlannedHuntParams) error
 	UpsertProbeFailure(ctx context.Context, arg UpsertProbeFailureParams) error

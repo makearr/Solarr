@@ -26,3 +26,19 @@ func TestFromFile_SourceComesFromTheFileName(t *testing.T) {
 		})
 	}
 }
+
+// What the grab recorded outranks the library file's name, which a naming scheme may have stripped (QUAL-1).
+func TestFromFile_PrefersWhatTheGrabRecorded(t *testing.T) {
+	file := library.EpisodeFile{
+		RelPath:       "Show/Season 01/Show - S01E01 - Title.mkv",
+		ReleaseSource: "webdl", ReleaseGroup: "GRP", Revision: 2,
+	}
+	got := releasefacts.FromFile(file).File
+	if got.Source != "webdl" || got.ReleaseGroup != "GRP" || !got.ProperRepack || !got.ReleaseKnown {
+		t.Errorf("facts = %+v, want webdl, GRP, a repack, known", got)
+	}
+	scanned := releasefacts.FromFile(library.EpisodeFile{RelPath: "Show/Show.S01E01.1080p.BluRay.mkv"}).File
+	if scanned.Source != "bluray" || scanned.ReleaseKnown || scanned.ReleaseGroup != "" {
+		t.Errorf("a scanned file's facts = %+v, want the name's bluray and nothing recorded", scanned)
+	}
+}

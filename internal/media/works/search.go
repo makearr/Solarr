@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
@@ -250,8 +251,8 @@ func (y yardstick[W]) evaluate(raws []indexer.RawItem, conn judge.Conn) []judge.
 }
 
 // requireUpgrade rejects an accepted release that does not beat the file of every part it would replace by quality
-// (ADR-40: a tie keeps what is owned). Only what a file can show is compared: a release name states a source, a
-// group and a repack that the measured file does not, so with them it would always out-rank the file it replaces.
+// (ADR-40: a tie keeps what is owned). Only what a file can show is compared, unless its grab recorded the rest: a
+// release name states a source, a group and a repack that a measured file does not, so with them it would always out-rank it.
 func (y yardstick[W]) requireUpgrade(decision *model.Decision, release Release) {
 	if decision.Outcome != model.OutcomeAccept || len(y.incumbents) == 0 {
 		return
@@ -268,9 +269,11 @@ func (y yardstick[W]) requireUpgrade(decision *model.Decision, release Release) 
 		})
 		return
 	}
-	facts := release.Facts
-	facts.File.Source, facts.File.ReleaseGroup, facts.File.ProperRepack = "", "", false
-	likeForLike := judge.EvaluateInOrder(y.rules, facts, y.languagePolicy)
+	// What a file cannot show (source, group, repack) is left out of the comparison unless the file's grab recorded it.
+	blanked := release.Facts
+	blanked.File.Source, blanked.File.ReleaseGroup, blanked.File.ProperRepack = "", "", false
+	likeForLike := judge.EvaluateInOrder(y.rules, blanked, y.languagePolicy)
+	recordedAgainst := judge.EvaluateInOrder(y.rules, release.Facts, y.languagePolicy)
 	wanted := "better than the files you have"
 	if release.Parts == nil {
 		wanted = "better than the file you have"
@@ -280,7 +283,17 @@ func (y yardstick[W]) requireUpgrade(decision *model.Decision, release Release) 
 		if !replacing {
 			continue
 		}
-		if !judge.UpgradeBeats(y.rules, likeForLike, owned, y.ownedFiles[part], -1) {
+		candidate, ownedFile := likeForLike, y.ownedFiles[part]
+		if ownedFile.ReleaseKnown {
+			candidate = recordedAgainst
+			if y.preferPropers {
+				// Clipped, so the appended tier lands in a copy and never in the array the next part shares.
+				candidate.Quality.Tiers, owned.Quality.Tiers = slices.Clip(candidate.Quality.Tiers), slices.Clip(owned.Quality.Tiers)
+				candidate = judge.WithRevision(candidate, release.Revised, true)
+				owned = judge.WithRevision(owned, ownedFile.ProperRepack, true)
+			}
+		}
+		if !judge.UpgradeBeats(y.rules, candidate, owned, ownedFile, -1) {
 			decision.Outcome = model.OutcomeReject
 			decision.Rejections = append(decision.Rejections, model.Rejection{Rule: "upgrade", Field: "quality", Wanted: wanted, Got: "not better"})
 			return

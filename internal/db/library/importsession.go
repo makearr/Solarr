@@ -308,6 +308,17 @@ type Placement struct {
 	TransferMethods []string
 	// Extras are the extra files placed beside the media, so revert can find them.
 	Extras []UnitExtra
+	// Release is what was known of the release the files came in, kept with each file; nil when nothing was.
+	Release *ReleaseOrigin
+}
+
+// ReleaseOrigin is what Solarr knew of a release when it grabbed it (QUAL-1): the library file's own name may say none of it.
+type ReleaseOrigin struct {
+	Title, Source, Group string
+	// Revision is 1 for an original, 2 and up for a PROPER, REPACK or vN.
+	Revision  int
+	IndexerID *int64
+	GrabbedAt int64
 }
 
 // UnitExtra is one extra file an import placed, by root folder and path under it.
@@ -345,6 +356,17 @@ func (s ImportSessions) RecordPlacement(ctx context.Context, unitID int64, place
 				TransferMethod: transferMethod,
 			}); err != nil {
 				return fmt.Errorf("insert unit %d file %d: %w", unitID, mediaObjectID, err)
+			}
+		}
+		if placement.Release != nil {
+			for _, mediaObjectID := range placement.MediaObjectIDs {
+				if err := queries.UpsertMediaObjectRelease(ctx, librarydb.UpsertMediaObjectReleaseParams{
+					MediaObjectID: mediaObjectID, ReleaseTitle: placement.Release.Title, Source: placement.Release.Source,
+					ReleaseGroup: placement.Release.Group, Revision: int64(max(placement.Release.Revision, 1)),
+					IndexerID: nullInt64(placement.Release.IndexerID), GrabbedAt: placement.Release.GrabbedAt,
+				}); err != nil {
+					return fmt.Errorf("record release of file %d: %w", mediaObjectID, err)
+				}
 			}
 		}
 		for _, extra := range placement.Extras {

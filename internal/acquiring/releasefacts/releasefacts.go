@@ -91,8 +91,12 @@ func FromFile(file library.EpisodeFile) score.Facts {
 	if file.RelPath != "" {
 		source = Source(parsetv.ParseClaims(path.Base(file.RelPath)))
 	}
+	// What was recorded at grab outranks a guess from the library file's own name, which the naming scheme may have stripped.
+	if file.ReleaseKnown() {
+		source = file.ReleaseSource
+	}
 	return score.Facts{File: score.FileFacts{
-		Source:     source,
+		Source: source, ReleaseGroup: file.ReleaseGroup, ProperRepack: file.Revision > 1, ReleaseKnown: file.ReleaseKnown(),
 		Resolution: file.Resolution, VideoCodec: file.VideoCodec, HDR: file.HDR, AudioCodec: file.AudioCodec,
 		AudioChannels: file.AudioChannels, Container: file.Container, AudioLanguages: file.Languages, SubtitleLanguages: file.Subtitles,
 		FrameRate: file.FrameRate, VideoBitrate: file.VideoBitrate, AudioBitrate: file.AudioBitrate, CRF: file.CRF,

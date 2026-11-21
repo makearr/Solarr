@@ -81,6 +81,19 @@ type Importer interface {
 	ImportBatch(ctx context.Context, request Request) (Result, error)
 }
 
+// ReleaseFacts is what a media type reads from a release name: where it came from, who made it, and which revision.
+type ReleaseFacts struct {
+	Source, Group string
+	// Revision is 1 for an original, 2 and up for a PROPER, REPACK or vN.
+	Revision int
+}
+
+// ReleaseReader is an Importer that can read a release name, so the import keeps what it says with the files (QUAL-1).
+// The answer is false for a name that states nothing, such as an ordinary folder.
+type ReleaseReader interface {
+	ReleaseFactsOf(title string) (ReleaseFacts, bool)
+}
+
 // AcquisitionSource finds the desired item a finished download was grabbed for.
 type AcquisitionSource interface {
 	Get(ctx context.Context, id int64) (library.Acquisition, error)

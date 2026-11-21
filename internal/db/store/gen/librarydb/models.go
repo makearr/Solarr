@@ -598,6 +598,16 @@ type MediaObject struct {
 	Kind                  sql.NullString
 }
 
+type MediaObjectRelease struct {
+	MediaObjectID int64
+	ReleaseTitle  string
+	Source        string
+	ReleaseGroup  string
+	Revision      int64
+	IndexerID     sql.NullInt64
+	GrabbedAt     int64
+}
+
 type MediaProbe struct {
 	MediaObjectID int64
 	ProbeVersion  int64

@@ -46,9 +46,10 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 			}
 			return ""
 		},
-		Libraries: p.suggester().ImportLibraries,
-		Tracked:   p.trackedDownloadAt,
-		Workspace: filepath.Join(p.config.Paths.CacheDir, "import-workspace"),
+		Libraries:    p.suggester().ImportLibraries,
+		Tracked:      p.trackedDownloadAt,
+		Acquisitions: library.NewAcquisitions(p.library),
+		Workspace:    filepath.Join(p.config.Paths.CacheDir, "import-workspace"),
 		// The bin sits on the source's own disk, so an archive is renamed into it, never copied.
 		RecycleArchive: p.recycleSourceArchive,
 		Events:         p.bus,
@@ -219,7 +220,7 @@ func (p *process) manualCommitter() importjob.ManualCommitter {
 				return nil
 			}
 			return importers[category.MediaType]
-		})
+		}).WithReleases(library.NewAcquisitions(p.library), clock.NewSystem())
 }
 
 // batchImporters are each media type's own identify-and-place of an import, by type.

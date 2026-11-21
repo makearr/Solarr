@@ -1276,3 +1276,39 @@ func (q *Queries) SetImportUnitPlacement(ctx context.Context, arg SetImportUnitP
 	)
 	return err
 }
+
+const upsertMediaObjectRelease = `-- name: UpsertMediaObjectRelease :exec
+INSERT INTO media_object_release (media_object_id, release_title, source, release_group, revision, indexer_id, grabbed_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (media_object_id) DO UPDATE SET
+  release_title = excluded.release_title,
+  source = excluded.source,
+  release_group = excluded.release_group,
+  revision = excluded.revision,
+  indexer_id = excluded.indexer_id,
+  grabbed_at = excluded.grabbed_at
+`
+
+type UpsertMediaObjectReleaseParams struct {
+	MediaObjectID int64
+	ReleaseTitle  string
+	Source        string
+	ReleaseGroup  string
+	Revision      int64
+	IndexerID     sql.NullInt64
+	GrabbedAt     int64
+}
+
+// What was known of the release a file came in, kept with the file (QUAL-1).
+func (q *Queries) UpsertMediaObjectRelease(ctx context.Context, arg UpsertMediaObjectReleaseParams) error {
+	_, err := q.db.ExecContext(ctx, upsertMediaObjectRelease,
+		arg.MediaObjectID,
+		arg.ReleaseTitle,
+		arg.Source,
+		arg.ReleaseGroup,
+		arg.Revision,
+		arg.IndexerID,
+		arg.GrabbedAt,
+	)
+	return err
+}

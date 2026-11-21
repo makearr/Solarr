@@ -161,3 +161,12 @@ func fileNaming(basics library.WorkBasics, ids map[string]string, info parsemovi
 	naming.IDs.IMDb = ids[ProviderIMDb]
 	return naming
 }
+
+// ReleaseFactsOf reads a release name for the facts an import keeps with the files it brought (QUAL-1); false when it says none.
+func (Importer) ReleaseFactsOf(title string) (batch.ReleaseFacts, bool) {
+	info, found := parsemovie.Parse(title)
+	if !found || (!info.Claims.HasQuality() && info.ReleaseGroup == "") {
+		return batch.ReleaseFacts{}, false
+	}
+	return batch.ReleaseFacts{Source: releasefacts.Source(info.Claims), Group: info.ReleaseGroup, Revision: max(info.Claims.Version, 1)}, true
+}

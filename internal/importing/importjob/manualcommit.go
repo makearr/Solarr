@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/identify/model"
 	importbatch "github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/inspect"
+	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
@@ -27,6 +28,14 @@ type ManualCommitter struct {
 	packs library.Packs
 	// importerFor is the importer of a library's media type, nil for a type without one.
 	importerFor func(categoryID int64) importbatch.Importer
+	// releases keeps what a grabbed release said with the files it brought; records nothing until WithReleases.
+	releases releaseNotes
+}
+
+// WithReleases makes the committer keep a grabbed release's name facts with the files it places (QUAL-1).
+func (m ManualCommitter) WithReleases(acquisitions importbatch.AcquisitionSource, clk clock.Clock) ManualCommitter {
+	m.releases = releaseNotes{acquisitions: acquisitions, clock: clk}
+	return m
 }
 
 // ErrHeldCommitNotBuilt is a library whose media type cannot place a held unit by hand.
@@ -160,6 +169,7 @@ func (m ManualCommitter) placeHeld(
 			return library.Placement{}, fmt.Errorf("importjob: record decision override for unit %d: %w", unit.ID, err)
 		}
 	}
+	placement.Release = m.releases.originOf(ctx, importer, session.AcquisitionID, session.SourcePath)
 	if err := m.sessions.RecordPlacement(ctx, unit.ID, placement); err != nil {
 		return library.Placement{}, fmt.Errorf("importjob: record placement for unit %d: %w", unit.ID, err)
 	}

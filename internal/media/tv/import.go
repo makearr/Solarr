@@ -733,3 +733,12 @@ func notInGrabbedRelease(expected []string, found []library.ResolvedPart) *model
 	}
 	return rules.NotInRelease(grabbed, got, false)
 }
+
+// ReleaseFactsOf reads a release name for the facts an import keeps with the files it brought (QUAL-1); false when it says none.
+func (Importer) ReleaseFactsOf(title string) (batch.ReleaseFacts, bool) {
+	claims, group := parsetv.ParseClaims(title), parsetv.ParseReleaseGroup(title)
+	if !claims.HasQuality() && group == "" {
+		return batch.ReleaseFacts{}, false
+	}
+	return batch.ReleaseFacts{Source: releasefacts.Source(claims), Group: group, Revision: max(claims.Version, 1)}, true
+}

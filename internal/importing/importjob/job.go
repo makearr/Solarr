@@ -121,6 +121,8 @@ type Job struct {
 	onCommitted func(context.Context)
 	clock       clock.Clock
 	logger      *slog.Logger
+	// releases keeps what a grabbed release said with the files it brought; records nothing without Config.Acquisitions.
+	releases releaseNotes
 }
 
 // Config is what a Job needs. Every field is required except MediaTypeOf, Libraries, Workspace, ArchiveLimits, Events,
@@ -140,6 +142,8 @@ type Config struct {
 	// Tracked answers the download a folder belongs to while that download is still being followed; the folder watcher
 	// leaves such a folder to the download's own import. Nil tracks nothing.
 	Tracked func(ctx context.Context, sourcePath string) (acquisitionID int64, tracked bool)
+	// Acquisitions finds the download a session came in, whose release name is kept with the files; nil keeps none.
+	Acquisitions importbatch.AcquisitionSource
 	// RecycleArchive moves one archive file of an imported source to the recycle bin; nil keeps the archives in place.
 	RecycleArchive func(ctx context.Context, categoryID *int64, sourcePath, file string) error
 	// Workspace is where archives are opened (outside every library root); empty leaves archives unopened.
@@ -163,6 +167,7 @@ func NewJob(config Config) *Job {
 		workspace: config.Workspace, recycleArchive: config.RecycleArchive, archiveLimits: config.ArchiveLimits,
 		importers: config.Importers, mediaTypeOf: config.MediaTypeOf, unassigned: config.Unassigned, libraries: config.Libraries,
 		tracked: config.Tracked, events: config.Events, onCommitted: config.OnCommitted, clock: config.Clock, logger: logger,
+		releases: releaseNotes{acquisitions: config.Acquisitions, clock: config.Clock},
 	}
 }
 
@@ -716,12 +721,15 @@ func (j *Job) commitCluster(
 			return fmt.Errorf("importjob: record decisions: %w", err)
 		}
 		recordedAny = true
+		origin := j.releases.originOf(ctx, group.importer, session.AcquisitionID, sourcePath)
 		for k, i := range group.members {
 			if result.Placements[k] == nil {
 				continue
 			}
+			placed := *result.Placements[k]
+			placed.Release = origin
 			// A placement that is not recorded is a unit in the library the session cannot revert: not a thing to log and go on.
-			if err := j.sessions.RecordPlacement(ctx, ids[i], *result.Placements[k]); err != nil {
+			if err := j.sessions.RecordPlacement(ctx, ids[i], placed); err != nil {
 				return fmt.Errorf("importjob: record placement of unit %d: %w", ids[i], err)
 			}
 		}
