@@ -92,3 +92,42 @@ func TestLidarrImport_AdoptsFromLidarrsRecordAndNamesWhatItCreated(t *testing.T)
 		t.Errorf("second import = %+v, %v; want everything matched", again, err)
 	}
 }
+
+// A profile Lidarr's mapping chose for the artist is the person's choice: the album keeps it as an override of its own,
+// where the library has a list of its own that would otherwise decide.
+func TestLidarrImport_AMappedProfileIsKeptAsAnOverride(t *testing.T) {
+	opened, identity, _, _, fake := newResolveFixture(t, &refusingSource{})
+	libraryProfile, mappedProfile := int64(4), int64(9)
+	desired := library.NewDesired(opened)
+	importer := music.LidarrImport{
+		Categories: fakeCategories{addLibraryID: settings.Category{ID: addLibraryID, MediaType: string(music.MediaType), QualityProfileID: &libraryProfile}},
+		Identity:   identity, People: library.NewPeople(opened), Desired: desired, DefaultProfileID: 1, Clock: fake,
+	}
+	wall := clock.NewFakeAtEpoch()
+	client := httpx.NewClient(wall, httpx.NewGuard(nil, nil, nil),
+		httpx.NewLimiter(wall, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewBreaker(wall, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}),
+		httpx.ClientConfig{Provider: "lidarr-test", UserAgent: "test", Transport: lidarrAnswers{}})
+	var recorded []library.NewArrImportItem
+	run := arrmap.Run{
+		Client:   arrimport.NewLidarrClient(client, "http://lidarr.local", "key"),
+		Options:  arrmap.Options{Monitored: true, Albums: "all", ProfileMap: map[int64]*int64{2: &mappedProfile}},
+		Place:    func(string) (int64, bool) { return addLibraryID, true },
+		Progress: func(int64, int64) {},
+		Record: func(_ context.Context, item library.NewArrImportItem) error {
+			recorded = append(recorded, item)
+			return nil
+		},
+		Link: func(context.Context, string, int64, string, int64) {},
+	}
+	if _, err := importer.Import(t.Context(), run); err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	items, err := desired.AlbumItemsForWork(t.Context(), *recorded[1].WorkID)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("items = %+v, %v", items, err)
+	}
+	if got, found, err := desired.ProfileOverride(t.Context(), items[0].ID); err != nil || !found || got != mappedProfile {
+		t.Errorf("override = %d, found %v, err %v; want the mapped profile %d", got, found, err, mappedProfile)
+	}
+}

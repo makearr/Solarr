@@ -170,6 +170,15 @@ func (q *Queries) DeleteCategory(ctx context.Context, id int64) error {
 	return err
 }
 
+const deletePlacementAffinityOfRootFolder = `-- name: DeletePlacementAffinityOfRootFolder :exec
+DELETE FROM placement_affinity WHERE root_folder_id = ?
+`
+
+func (q *Queries) DeletePlacementAffinityOfRootFolder(ctx context.Context, rootFolderID int64) error {
+	_, err := q.db.ExecContext(ctx, deletePlacementAffinityOfRootFolder, rootFolderID)
+	return err
+}
+
 const deleteRootFolder = `-- name: DeleteRootFolder :exec
 DELETE FROM root_folder WHERE id = ?
 `

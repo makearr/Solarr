@@ -132,6 +132,14 @@ func (l LidarrImport) followFilters(categoryID int64) (string, error) {
 	return LibraryFollowFilters(category)
 }
 
+// libraryProfile is the profile an item of the library follows when it chose none.
+func (l LidarrImport) libraryProfile(categoryID int64) int64 {
+	if category, ok := l.Categories.Category(categoryID); ok && category.QualityProfileID != nil {
+		return *category.QualityProfileID
+	}
+	return l.DefaultProfileID
+}
+
 // adoptAlbum resolves-or-creates the work behind the album's release-group id and ensures its album-level item, recording
 // one item either way. A new work gets personID as primary artist; a matched one keeps the credits it has.
 func (l LidarrImport) adoptAlbum(
@@ -152,10 +160,7 @@ func (l LidarrImport) adoptAlbum(
 		}
 	}
 
-	profileID := l.DefaultProfileID
-	if category, ok := l.Categories.Category(categoryID); ok && category.QualityProfileID != nil {
-		profileID = *category.QualityProfileID
-	}
+	profileID := l.libraryProfile(categoryID)
 	if mapped != nil {
 		profileID = *mapped
 	}
@@ -164,6 +169,12 @@ func (l LidarrImport) adoptAlbum(
 	})
 	if err != nil {
 		return false, err
+	}
+	// The library's own profile list would decide over the stored id, so a mapped choice is kept as the item's own.
+	if mapped != nil && resolution.WorkCreated && profileID != l.libraryProfile(categoryID) {
+		if err := l.Desired.SetProfileOverride(ctx, item.ID, mapped); err != nil {
+			return false, fmt.Errorf("keep the mapped quality profile: %w", err)
+		}
 	}
 
 	workID, itemID := resolution.WorkID, item.ID

@@ -76,6 +76,7 @@ type Querier interface {
 	DeleteLanguageProfile(ctx context.Context, id int64) error
 	DeleteNamingFormats(ctx context.Context, namingProfileID int64) error
 	DeleteNamingProfile(ctx context.Context, id int64) error
+	DeletePlacementAffinityOfRootFolder(ctx context.Context, rootFolderID int64) error
 	DeleteProxy(ctx context.Context, id int64) error
 	DeleteQualityProfile(ctx context.Context, id int64) error
 	DeleteQualityTarget(ctx context.Context, id int64) error

@@ -102,6 +102,9 @@ UPDATE root_folder SET drain_state = ?, drain_job_id = ? WHERE id = ?;
 -- name: DeleteRootFolder :exec
 DELETE FROM root_folder WHERE id = ?;
 
+-- name: DeletePlacementAffinityOfRootFolder :exec
+DELETE FROM placement_affinity WHERE root_folder_id = ?;
+
 -- name: GetPlacementAffinity :one
 SELECT root_folder_id FROM placement_affinity WHERE category_id = ? AND affinity_key = ?;
 

@@ -646,3 +646,22 @@ func TestUpdateAccount_PromotionTierAndTheLastAdministrator(t *testing.T) {
 		t.Errorf("tier after a default-tier change = %q, want expert", got.Tier)
 	}
 }
+
+func TestDeleteRootFolder_ForgetsItsPlacementChoicesInsteadOfFailingOnThem(t *testing.T) {
+	cache, _ := newCache(t)
+	ctx := context.Background()
+	category, _ := cache.CreateCategory(ctx, "music", "Music", 10)
+	root, err := cache.CreateRootFolder(ctx, t.TempDir(), "once used")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetPlacementAffinity(ctx, category.ID, "artist:1", root.ID, 100); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.DeleteRootFolder(ctx, root.ID); err != nil {
+		t.Fatalf("DeleteRootFolder = %v, want the root gone with its remembered placements", err)
+	}
+	if _, found := cache.Snapshot().RootFolder(root.ID); found {
+		t.Error("the root is still there")
+	}
+}

@@ -1265,7 +1265,11 @@ func (c *Cache) DeleteRootFolder(ctx context.Context, id int64) error {
 		}
 	}
 
+	// Remembered placements are a cache of past choices; a row left behind would refuse the delete and then point at a reused id.
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		if err := queries.DeletePlacementAffinityOfRootFolder(ctx, id); err != nil {
+			return err
+		}
 		return queries.DeleteRootFolder(ctx, id)
 	})
 }
