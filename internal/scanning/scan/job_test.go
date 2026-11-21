@@ -18,6 +18,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/iogate"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -863,5 +864,38 @@ func TestJob_AnIncrementalSweepMarksTheFilesOfADirectoryItReadAgain(t *testing.T
 	}
 	if fixture.missingSince(t, untouchedID).Valid {
 		t.Error("a directory the sweep did not read had a file marked missing")
+	}
+}
+
+type recordedTurns struct {
+	mu    sync.Mutex
+	paths []string
+}
+
+func (r *recordedTurns) AcquirePaths(_ context.Context, _ string, paths []string) (func(), error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.paths = append(r.paths, paths...)
+	return func() {}, nil
+}
+
+// Listing a directory is one turn on its disk, so a scan of a whole library yields to a stream or an import between directories.
+func TestJob_ListingEachDirectoryTakesATurnOnItsDisk(t *testing.T) {
+	fixture := newJobFixture(t, "Vessa Lund/Quiet Harbour/01.flac", "Bokuf Lipad/Rupe of Fofu/01.flac")
+	handler := fixture.job(t, scan.IsAudio)
+	turns := &recordedTurns{}
+	fixture.clock.Advance(time.Second)
+	encoded, err := json.Marshal(scan.Payload{RootFolderID: 1, Full: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := iogate.WithTurns(t.Context(), turns)
+	if err := handler.Run(ctx, jobs.Job{Type: scan.JobType, Payload: encoded}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	for _, directory := range []string{"/Vessa Lund", "/Vessa Lund/Quiet Harbour", "/Bokuf Lipad/Rupe of Fofu"} {
+		if !slices.ContainsFunc(turns.paths, func(p string) bool { return strings.HasSuffix(p, directory) }) {
+			t.Errorf("no turn taken for directory %q; turns on %v", directory, turns.paths)
+		}
 	}
 }
