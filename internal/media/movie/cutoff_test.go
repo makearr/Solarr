@@ -43,6 +43,7 @@ func cutoffFilm(t *testing.T, files ...versionFile) (movie.CutoffJob, library.Cu
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, profile)
 	physical := library.NewPhysical(opened)
 	var registered []library.PhysicalFile
 	for index, file := range files {

@@ -189,7 +189,7 @@ type yardstick[W any] struct {
 
 func (s Search[W]) yardstick(ctx context.Context, item librarydb.DesiredItem, wanted W) (yardstick[W], error) {
 	snapshot := s.Settings.Snapshot()
-	rules, err := judge.LibraryProfiles(ctx, s.Desired, snapshot, item.ID, item.CategoryID, item.ProfileID)
+	rules, err := judge.LibraryProfiles(ctx, s.Desired, snapshot, item.ID, item.CategoryID)
 	if err != nil {
 		return yardstick[W]{}, err
 	}

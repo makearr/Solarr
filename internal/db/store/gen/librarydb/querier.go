@@ -1167,6 +1167,7 @@ type Querier interface {
 	NoteMissingRecount(ctx context.Context, arg NoteMissingRecountParams) error
 	// Pause, resume and cancel say how many rows changed so a job in the wrong state is told apart from a missing one.
 	PauseMoveJob(ctx context.Context, id int64) (int64, error)
+	PinOffDefaultProfiles(ctx context.Context, arg PinOffDefaultProfilesParams) (int64, error)
 	PresentPathsAtRootLevel(ctx context.Context, rootFolderID int64) ([]PresentPathsAtRootLevelRow, error)
 	// Direct and deeper children of a directory, by the (root_folder_id, rel_path) index range: prefix is "dir/" and
 	// prefix_end is "dir0" ('0' is the byte after '/').

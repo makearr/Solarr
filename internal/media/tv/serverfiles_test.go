@@ -31,6 +31,7 @@ func TestServerFilesWritesWhatIsMissingAndNothingElse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, profileID(t, cache, "Any"))
 	fake := clock.NewFakeAtEpoch()
 	fake.Set(addNow)
 	fsys := fsx.NewMem(fake)

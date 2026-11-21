@@ -54,6 +54,7 @@ func TestFeed_OffersOnlyReleasesNamingTheFilmAndItsYear(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, movieProfile(t, cache, "Movie HD 1080p"))
 	feed := &fakeIndexer{byFunction: map[string][]indexer.RawItem{"movie": {
 		feedRaw("The.Example.Film.1999.1080p.BluRay.x264-GRP", "wanted"),
 		feedRaw("Other.Film.1999.1080p.BluRay.x264-GRP", "other-film"),
@@ -120,6 +121,7 @@ func TestFeed_SendsTheAcceptedReleaseOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, movieProfile(t, cache, "Movie HD 1080p"))
 	client := &sender{}
 	candidates := statistics.NewCandidates(statisticstest.Open(t))
 	search := movie.Search{
@@ -157,6 +159,7 @@ func TestFeed_GrabsAsRSSPastAFullQueue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, movieProfile(t, cache, "Movie HD 1080p"))
 	if _, err := library.NewAcquisitions(opened).Create(t.Context(), library.NewAcquisition{
 		CandidateGUID: "filler", CandidateTitle: "Filler", DownloaderID: 5, DownloadClientRef: "nzo-0", Protocol: "usenet", State: "QUEUED", CreatedAt: 1, UpdatedAt: 1,
 	}); err != nil {

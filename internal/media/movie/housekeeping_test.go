@@ -33,6 +33,7 @@ func TestHousekeepingUnmonitorsOnlyTheMovieWhoseFileIsGone(t *testing.T) {
 	var items []int64
 	for index, id := range []int64{1, 2} {
 		added, err := service.Add(t.Context(), movie.AddRequest{IDs: movie.IDs{TMDB: id}, CategoryID: 5, ProfileID: 1, Monitor: movie.MonitorMovieOnly})
+		pinProfile(t, opened, added.WorkID, 1)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -145,6 +145,7 @@ func TestAddStoresTheMovieItsOneWantedItemItsReleaseDayAndFranchise(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, 1)
 	if !added.Created || added.WorkID == 0 || added.ItemID == 0 {
 		t.Fatalf("add = %+v", added)
 	}
@@ -173,6 +174,7 @@ func TestAddWithNoMonitoringLeavesTheItemUnmonitored(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, 1)
 	if item, _ := library.NewDesired(opened).Get(t.Context(), added.ItemID); item.Monitored != 0 {
 		t.Errorf("monitored = %d, want 0", item.Monitored)
 	}

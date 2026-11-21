@@ -41,6 +41,7 @@ func TestApplyNumberingMovesTheEpisodesAndTheirFilesAndKeepsTheOrdering(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, profileID(t, cache, "Any"))
 	registered, err := library.NewPhysical(opened).RegisterBatch(t.Context(), 9, []library.PhysicalFile{{RelPath: "Example Show/Season 1/e1.mkv", SizeBytes: 1, QuickHash: "e1", FirstSeenAt: addNow}})
 	if err != nil {
 		t.Fatal(err)

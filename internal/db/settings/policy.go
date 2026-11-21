@@ -64,3 +64,17 @@ func setInstanceSettings(ctx context.Context, queries *settingsdb.Queries, cl cl
 	}
 	return nil
 }
+
+// oneOffPrefix keys the repairs that run once per database, so a later change of a default never re-applies them.
+const oneOffPrefix = "repair."
+
+// OneOffDone says whether the named repair has been recorded.
+func (s *Snapshot) OneOffDone(name string) bool {
+	_, found := s.policy[oneOffPrefix+name]
+	return found
+}
+
+// MarkOneOffDone records that the named repair ran.
+func (c *Cache) MarkOneOffDone(ctx context.Context, cl clock.Clock, name string) error {
+	return c.setPolicy(ctx, cl, oneOffPrefix+name, "true")
+}

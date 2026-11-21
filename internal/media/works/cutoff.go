@@ -138,7 +138,7 @@ func (c Cutoff) settle(ctx context.Context, snapshot *settings.Snapshot, item li
 	if err != nil {
 		return 0, err
 	}
-	rules, err := judge.LibraryProfiles(ctx, c.Desired, snapshot, item.ID, item.CategoryID, item.ProfileID)
+	rules, err := judge.LibraryProfiles(ctx, c.Desired, snapshot, item.ID, item.CategoryID)
 	if errors.Is(err, judge.ErrNoQualityProfile) {
 		return 0, nil
 	}

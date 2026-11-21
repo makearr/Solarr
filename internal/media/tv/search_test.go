@@ -76,6 +76,7 @@ func TestSearchRecordsADecisionPerReleaseThatCoversAWantedEpisode(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, profileID(t, cache, "WEB 1080p"))
 	items, err := library.NewDesired(opened).AlbumItemsForWork(t.Context(), added.WorkID)
 	if err != nil {
 		t.Fatal(err)
@@ -132,6 +133,7 @@ func TestSearchWidensToTextWhenTheIDQueryFindsNothing(t *testing.T) {
 	cache := settingsCache(t)
 	service, opened := newService(t, fakeSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
 	added, _ := service.Add(t.Context(), tv.AddRequest{IDs: tv.IDs{TVDB: 1234}, CategoryID: 7, ProfileID: profileID(t, cache, "Any"), Monitor: tv.MonitorAll})
+	pinProfile(t, opened, added.WorkID, profileID(t, cache, "Any"))
 	items, _ := library.NewDesired(opened).AlbumItemsForWork(t.Context(), added.WorkID)
 	var season1 int64
 	for _, item := range items {
@@ -196,6 +198,7 @@ func TestAnAnimeSeasonIsAlsoSearchedByAbsoluteNumberAndFoundThatWay(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, profileID(t, cache, "Any"))
 	detail, err := library.NewSeriesReader(opened).Get(t.Context(), 7, added.WorkID, addNow)
 	if err != nil {
 		t.Fatal(err)
@@ -239,6 +242,7 @@ func TestASeriesAddedToAnAnimeLibraryIsAnime(t *testing.T) {
 		service.Reader = library.NewSeriesReader(opened)
 		service.KindOf = func(int64) string { return kind }
 		added, err := service.Add(t.Context(), tv.AddRequest{IDs: tv.IDs{TVDB: 1234}, CategoryID: 7, ProfileID: profileID(t, cache, "Any"), Monitor: tv.MonitorAll})
+		pinProfile(t, opened, added.WorkID, profileID(t, cache, "Any"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -253,6 +257,7 @@ func TestOneEpisodeCanBeSearchedWhateverItsMonitoring(t *testing.T) {
 	cache := settingsCache(t)
 	service, opened := newService(t, fakeSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
 	added, _ := service.Add(t.Context(), tv.AddRequest{IDs: tv.IDs{TVDB: 1234}, CategoryID: 7, ProfileID: profileID(t, cache, "Any"), Monitor: tv.MonitorNone})
+	pinProfile(t, opened, added.WorkID, profileID(t, cache, "Any"))
 	items, _ := library.NewDesired(opened).AlbumItemsForWork(t.Context(), added.WorkID)
 	var season1 int64
 	for _, item := range items {
@@ -284,6 +289,7 @@ func TestSearchHoldsEveryReleaseAgainstTheSeriesOwnFilters(t *testing.T) {
 	cache := settingsCache(t)
 	service, opened := newService(t, fakeSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
 	added, _ := service.Add(t.Context(), tv.AddRequest{IDs: tv.IDs{TVDB: 1234}, CategoryID: 7, ProfileID: profileID(t, cache, "WEB 1080p"), Monitor: tv.MonitorAll})
+	pinProfile(t, opened, added.WorkID, profileID(t, cache, "WEB 1080p"))
 	items, _ := library.NewDesired(opened).AlbumItemsForWork(t.Context(), added.WorkID)
 	var season1 int64
 	for _, item := range items {

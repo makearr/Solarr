@@ -72,15 +72,36 @@ func UpgradeBeats(profiles []RankedProfile, candidate, incumbent model.Decision,
 // rateDimensions are the target distances that follow how a file was encoded rather than what it is.
 var rateDimensions = map[string]bool{"video_bitrate": true, "audio_bitrate": true, "overall_bitrate": true}
 
-// LibraryProfiles is the profile an item picked for itself, else the library's ordered list, else the item's own; the
-// item's own target quality or else the library's, when there is one, leads each profile's ranking, whatever the media type.
+// DefaultProfileID is the quality profile a library without a list judges by: its own, else the shipped "Any"
+// ("Movie Any" for movies) of its media type, else any profile of it; 0 when the type has none.
+func DefaultProfileID(snapshot *settings.Snapshot, category settings.Category) int64 {
+	if category.QualityProfileID != nil {
+		return *category.QualityProfileID
+	}
+	var first int64
+	for _, profile := range snapshot.QualityProfiles() {
+		if profile.MediaType != category.MediaType {
+			continue
+		}
+		if profile.Name == "Any" || profile.Name == "Movie Any" {
+			return profile.ID
+		}
+		if first == 0 {
+			first = profile.ID
+		}
+	}
+	return first
+}
+
+// LibraryProfiles is the profile an item picked for itself, else the library's ordered list, else the library's
+// default; the item's own target quality or else the library's, when there is one, leads each profile's ranking, whatever the media type.
 func LibraryProfiles(
-	ctx context.Context, desired library.Desired, snapshot *settings.Snapshot, itemID, categoryID, itemProfileID int64,
+	ctx context.Context, desired library.Desired, snapshot *settings.Snapshot, itemID, categoryID int64,
 ) ([]RankedProfile, error) {
-	ids := []int64{itemProfileID}
 	category, categoryFound := snapshot.Category(categoryID)
-	if categoryFound && len(category.QualityProfileIDs) > 0 {
-		ids = category.QualityProfileIDs
+	ids := category.QualityProfileIDs
+	if len(ids) == 0 {
+		ids = []int64{DefaultProfileID(snapshot, category)}
 	}
 	profileOverride, targetOverride, err := desired.Overrides(ctx, itemID)
 	if err != nil {

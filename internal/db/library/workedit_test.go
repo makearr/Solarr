@@ -1,11 +1,15 @@
 package library_test
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 	"reflect"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 func TestProfileOverride_SetReadClear(t *testing.T) {
@@ -176,4 +180,46 @@ func TestOverrides_BothChoicesInOneRead(t *testing.T) {
 	if profile, target, err := desired.Overrides(t.Context(), item.ID); err != nil || profile != 7 || target != 9 {
 		t.Fatalf("overrides = %d %d %v, want 7 and 9", profile, target, err)
 	}
+}
+
+func TestPinOffDefaultProfiles_PinsOnlyUnpinnedItemsOfOtherProfiles(t *testing.T) {
+	opened, _ := newLibrary(t)
+	desired := library.NewDesired(opened)
+	workID := createWork(t, opened, "music", "Alpha").ID
+	onDefault := createDesired(t, opened, workID, "SINGLE", 1) // stored profile 1
+	other := createDesiredWithProfile(t, opened, createWork(t, opened, "music", "Beta").ID, 1, 5)
+	already := createDesiredWithProfile(t, opened, createWork(t, opened, "music", "Gamma").ID, 1, 6)
+	elsewhere := createDesiredWithProfile(t, opened, createWork(t, opened, "music", "Delta").ID, 2, 7)
+	alreadyOwn := int64(9)
+	if err := desired.SetProfileOverride(t.Context(), already.ID, &alreadyOwn); err != nil {
+		t.Fatalf("SetProfileOverride: %v", err)
+	}
+	pinned, err := desired.PinOffDefaultProfiles(t.Context(), 1, 1)
+	if err != nil || pinned != 1 {
+		t.Fatalf("pinned = %d, %v; want 1", pinned, err)
+	}
+	for _, want := range []struct {
+		id    int64
+		found bool
+		got   int64
+	}{{onDefault.ID, false, 0}, {other.ID, true, 5}, {already.ID, true, 9}, {elsewhere.ID, false, 0}} {
+		got, found, err := desired.ProfileOverride(t.Context(), want.id)
+		if err != nil || found != want.found || got != want.got {
+			t.Errorf("item %d: override = %d, %v, %v; want %d, %v", want.id, got, found, err, want.got, want.found)
+		}
+	}
+}
+
+func createDesiredWithProfile(t *testing.T, opened *store.Store, workID, categoryID, profileID int64) librarydb.DesiredItem {
+	t.Helper()
+	var item librarydb.DesiredItem
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		row, err := q.CreateDesiredItem(ctx, librarydb.CreateDesiredItemParams{
+			WorkID: workID, CategoryID: categoryID, ProfileID: profileID, Monitored: 1, Dirty: 1,
+			SatisfactionKind: "SINGLE", RequiredCount: sql.NullInt64{Int64: 1, Valid: true}, State: "MISSING",
+		})
+		item = row
+		return err
+	})
+	return item
 }

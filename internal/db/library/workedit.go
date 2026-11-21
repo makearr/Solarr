@@ -175,3 +175,26 @@ func userTag(ctx context.Context, queries *librarydb.Queries, genreTree, name st
 
 // ErrTagExists reports a rename onto a name another tag already has.
 var ErrTagExists = errors.New("library: a tag with that name exists")
+
+// PinOffDefaultProfiles gives every item of a library that was added under another profile than the library's
+// default an override of that profile, in chunks of 200, and says how many it pinned.
+func (d Desired) PinOffDefaultProfiles(ctx context.Context, categoryID, defaultProfileID int64) (int64, error) {
+	var total int64
+	for {
+		var pinned int64
+		err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			var err error
+			pinned, err = librarydb.New(tx).PinOffDefaultProfiles(ctx, librarydb.PinOffDefaultProfilesParams{
+				CategoryID: categoryID, DefaultProfileID: defaultProfileID, PageSize: 200,
+			})
+			return err
+		})
+		if err != nil {
+			return total, fmt.Errorf("library: pin items off the default profile in library %d: %w", categoryID, err)
+		}
+		total += pinned
+		if pinned < 200 {
+			return total, nil
+		}
+	}
+}

@@ -20,6 +20,7 @@ func TestServerFilesWritesTheNFOAndPicturesOnceAndOnlyOnWritableRoots(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, 1)
 	fake := clock.NewFakeAtEpoch()
 	fake.Set(addNow)
 	fsys := fsx.NewMem(fake)

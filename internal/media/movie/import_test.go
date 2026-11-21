@@ -309,6 +309,7 @@ func TestImportOfAGrabbedDownloadPlacesItsLargestFolderBeforeAnExtra(t *testing.
 		Exclusions: library.NewExclusions(opened), Clock: clock.NewFakeAtEpoch(),
 	}
 	added, err := service.Add(t.Context(), movie.AddRequest{IDs: movie.IDs{TMDB: 603}, CategoryID: 3, ProfileID: 1, Monitor: movie.MonitorMovieOnly})
+	pinProfile(t, opened, added.WorkID, 1)
 	if err != nil || !added.Created {
 		t.Fatalf("Add = %+v, %v", added, err)
 	}

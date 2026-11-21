@@ -54,6 +54,7 @@ func upgradeSeries(t *testing.T, owned, brought string) upgradeFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, profile)
 	items, err := library.NewDesired(opened).AlbumItemsForWork(t.Context(), added.WorkID)
 	if err != nil {
 		t.Fatal(err)

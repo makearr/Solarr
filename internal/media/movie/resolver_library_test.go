@@ -19,6 +19,7 @@ func TestAnAliasThatIsPartOfAnotherFilmsTitleDoesNotPlaceAFolderInTheLibrary(t *
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, 1)
 	year := int64(2022)
 	if _, err := service.Series.Upsert(t.Context(), addNow, library.SeriesWrite{
 		Work: library.WorkIdentity{MediaType: movie.MediaType, CanonicalTitle: example.Title, SortTitle: "zuuzxopva nen hife's saxewtvei"}, Year: &year,

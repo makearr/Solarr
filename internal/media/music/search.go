@@ -239,7 +239,7 @@ func (s Search) yardstickFor(ctx context.Context, item librarydb.DesiredItem) (y
 		return yardstick{}, fmt.Errorf("alternate titles: %w", err)
 	}
 	snapshot := s.Settings.Snapshot()
-	rules, err := judge.LibraryProfiles(ctx, s.Desired, snapshot, item.ID, item.CategoryID, item.ProfileID)
+	rules, err := judge.LibraryProfiles(ctx, s.Desired, snapshot, item.ID, item.CategoryID)
 	if err != nil {
 		return yardstick{}, err
 	}

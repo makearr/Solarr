@@ -33,3 +33,10 @@ ON CONFLICT (desired_item_id) DO UPDATE SET target_id = excluded.target_id;
 
 -- name: ClearDesiredTargetOverride :exec
 DELETE FROM desired_target_override WHERE desired_item_id = ?;
+
+-- name: PinOffDefaultProfiles :execrows
+INSERT INTO desired_profile_override (desired_item_id, profile_id)
+SELECT d.id, d.profile_id FROM desired_item d
+WHERE d.category_id = sqlc.arg(category_id) AND d.profile_id <> sqlc.arg(default_profile_id)
+  AND NOT EXISTS (SELECT 1 FROM desired_profile_override o WHERE o.desired_item_id = d.id)
+ORDER BY d.id LIMIT sqlc.arg(page_size);

@@ -19,6 +19,7 @@ func TestRefreshSweepReadsASeriesOnlyWhenItsStatusMakesItDue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, 1)
 	grown := fixtureSkyhook()
 	grown.Episodes = append(grown.Episodes, skyhook.Episode{TVDBID: 9, SeasonNumber: 2, EpisodeNumber: 4, Title: "New", AirDate: "2026-10-19"})
 	service.Skyhook = searchSkyhook{series: grown}

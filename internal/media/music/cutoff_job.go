@@ -94,7 +94,7 @@ func (j CutoffJob) replaceSuperseded(ctx context.Context, snapshot *settings.Sna
 	if err != nil {
 		return 0, err
 	}
-	rules, err := judge.LibraryProfiles(ctx, j.Desired, snapshot, item.ID, item.CategoryID, item.ProfileID)
+	rules, err := judge.LibraryProfiles(ctx, j.Desired, snapshot, item.ID, item.CategoryID)
 	if errors.Is(err, ErrNoQualityProfile) {
 		return 0, nil // a library without a usable profile has nothing to judge by
 	}

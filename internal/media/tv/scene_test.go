@@ -92,6 +92,7 @@ func TestSceneNumbersAreStoredSearchedByAndEitherNumberIsAccepted(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, profileID(t, cache, "Any"))
 	reader := library.NewSeriesReader(opened)
 	want := map[string]string{"s01:e01": "s01:e01", "s01:e02": "s01:e02", "s01:e03": "s02:e01", "s01:e04": "s02:e02", "s02:e01": "s03:e01"}
 	if got := sceneNumbersOf(t, reader, added.WorkID); !reflect.DeepEqual(got, want) {
@@ -156,6 +157,7 @@ func TestARefreshReplacesSceneNumbersAndAnOutageKeepsThem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, profileID(t, cache, "Any"))
 	refresh := func() map[string]string {
 		t.Helper()
 		if _, err := service.Refresh(t.Context(), tv.RefreshRequest{WorkID: added.WorkID, CategoryID: 7}); err != nil {

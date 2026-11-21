@@ -302,6 +302,7 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 	}
 	running.seedGenreTrees(ctx)
 	running.readCertificationAges(ctx)
+	running.pinProfilesOfLibrariesWithoutAList(ctx)
 	return running.startServer(ctx)
 }
 

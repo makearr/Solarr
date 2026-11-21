@@ -30,6 +30,7 @@ func TestFeed_OffersAReleaseToTheWantedSeasonOfTheSeriesItNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, profileID(t, cache, "WEB 1080p"))
 	desired := library.NewDesired(opened)
 	items, err := desired.AlbumItemsForWork(t.Context(), added.WorkID)
 	if err != nil {

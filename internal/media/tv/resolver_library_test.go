@@ -27,6 +27,7 @@ func TestAFolderYearThatTheTVDBQualifiesInTheTitleFindsTheHeldSeries(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, 1)
 	resolver := tv.Resolver{Service: service, Reader: library.NewSeriesReader(opened), Clock: service.Clock, DefaultProfileID: 1, Categories: categories{}}
 	got, _ := resolver.ResolveFolder(t.Context(), 3, "Example Show (2003)", []string{"Example Show (2003)/Specials/x - S00E01.mp4"}, tv.FolderGuess{})
 	if got != added.WorkID {
@@ -69,6 +70,7 @@ func TestAFolderNamedLikeAnAliasOfAHeldSeriesIsNotPlacedOnIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, 1)
 	write := tv.ToWrite(added.Series, tv.WriteOptions{Now: addNow})
 	write.Aliases = []string{"Example Show Classic"}
 	write.Parts = nil

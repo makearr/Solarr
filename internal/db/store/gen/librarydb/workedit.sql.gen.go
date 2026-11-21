@@ -108,6 +108,28 @@ func (q *Queries) ListTagNamesForSubjectBySource(ctx context.Context, arg ListTa
 	return items, nil
 }
 
+const pinOffDefaultProfiles = `-- name: PinOffDefaultProfiles :execrows
+INSERT INTO desired_profile_override (desired_item_id, profile_id)
+SELECT d.id, d.profile_id FROM desired_item d
+WHERE d.category_id = ?1 AND d.profile_id <> ?2
+  AND NOT EXISTS (SELECT 1 FROM desired_profile_override o WHERE o.desired_item_id = d.id)
+ORDER BY d.id LIMIT ?3
+`
+
+type PinOffDefaultProfilesParams struct {
+	CategoryID       int64
+	DefaultProfileID int64
+	PageSize         int64
+}
+
+func (q *Queries) PinOffDefaultProfiles(ctx context.Context, arg PinOffDefaultProfilesParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pinOffDefaultProfiles, arg.CategoryID, arg.DefaultProfileID, arg.PageSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const setDesiredProfileOverride = `-- name: SetDesiredProfileOverride :exec
 INSERT INTO desired_profile_override (desired_item_id, profile_id) VALUES (?, ?)
 ON CONFLICT (desired_item_id) DO UPDATE SET profile_id = excluded.profile_id

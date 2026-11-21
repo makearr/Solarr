@@ -22,6 +22,7 @@ func TestGrab_SendsTheBestReleaseAndNeverSearchesAFilmAlreadyDownloading(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, movieProfile(t, cache, "Movie HD 1080p"))
 	fake := &fakeIndexer{byFunction: map[string][]indexer.RawItem{"movie": {
 		feedRaw("The.Example.Film.1999.480p.DVDRip.x264-GRP", "small"),
 		feedRaw("The.Example.Film.1999.1080p.BluRay.x264-GRP", "right"),
@@ -64,6 +65,7 @@ func TestGrab_NothingAcceptableSendsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, movieProfile(t, cache, "Movie HD 1080p"))
 	fake := &fakeIndexer{byFunction: map[string][]indexer.RawItem{"movie": {feedRaw("The.Example.Film.1999.480p.DVDRip.x264-GRP", "small")}}}
 	client := &sender{}
 	search := movie.Search{
@@ -89,6 +91,7 @@ func TestGrab_AlreadyInFlightSurvivesStatisticsEmptied(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, movieProfile(t, cache, "Movie HD 1080p"))
 	fake := &fakeIndexer{byFunction: map[string][]indexer.RawItem{"movie": {feedRaw("The.Example.Film.1999.1080p.BluRay.x264-GRP", "right")}}}
 	stats := statisticstest.Open(t)
 	search := movie.Search{

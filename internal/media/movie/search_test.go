@@ -80,6 +80,7 @@ func TestSearchJudgesOnlyReleasesOfTheMovieAndAsksByIDFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, movieProfile(t, cache, "Movie HD 1080p"))
 	raw := func(title, guid string, size int64) indexer.RawItem {
 		return indexer.RawItem{Title: title, GUID: guid, Link: "https://example.test/" + guid, SizeBytes: size}
 	}
@@ -115,6 +116,7 @@ func TestSearchWidensToTextWhenTheIDQueryFindsNothing(t *testing.T) {
 	cache := settingsCache(t)
 	service, opened := newService(t, fakeTMDB{configured: true, movie: theExample()}, nil)
 	added, _ := service.Add(t.Context(), movie.AddRequest{IDs: movie.IDs{TMDB: 603}, CategoryID: 5, ProfileID: movieProfile(t, cache, "Movie Any"), Monitor: movie.MonitorMovieOnly})
+	pinProfile(t, opened, added.WorkID, movieProfile(t, cache, "Movie Any"))
 	fake := &fakeIndexer{byFunction: map[string][]indexer.RawItem{"search": {
 		{Title: "The Example Film 1999 720p BluRay x264-GRP", GUID: "g", Link: "https://example.test/g"},
 	}}}
@@ -149,6 +151,7 @@ func TestSearchOutageKeepsTheCountAndAnEmptyAnswerRaisesIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, movieProfile(t, cache, "Movie Any"))
 	search := movie.Search{
 		Reader: library.NewSeriesReader(opened),
 		Deps:   works.Deps{Desired: library.NewDesired(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: atAddNow()},
@@ -186,6 +189,7 @@ func TestSearchTrustsTheIDsAnIndexerAttached(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, movieProfile(t, cache, "Movie Any"))
 	raw := func(title, guid, imdb string) indexer.RawItem {
 		return indexer.RawItem{Title: title, GUID: guid, Link: "https://example.test/" + guid, SizeBytes: 9e9, IDs: map[string]string{"imdb": imdb}}
 	}

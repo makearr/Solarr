@@ -187,6 +187,9 @@ func (env *searchTestEnv) wantWork(t *testing.T, workID int64, title, rulesJSON 
 		t.Fatalf("CreateCategory: %v", err)
 	}
 
+	if err := env.settings.SetCategoryQualityProfile(t.Context(), category.ID, &profile.ID); err != nil {
+		t.Fatalf("SetCategoryQualityProfile: %v", err)
+	}
 	item, err := env.desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{
 		WorkID: workID, CategoryID: category.ID, ProfileID: profile.ID, Monitored: true,
 	})
@@ -1088,7 +1091,7 @@ func TestLibraryProfiles_CarryTheUpgradePolicyOfTheProfileThatRanked(t *testing.
 	if err := desired.SetProfileOverride(t.Context(), item.ID, &own.ID); err != nil {
 		t.Fatalf("SetProfileOverride: %v", err)
 	}
-	profiles, err := judge.LibraryProfiles(t.Context(), desired, env.settings.Snapshot(), item.ID, item.CategoryID, item.ProfileID)
+	profiles, err := judge.LibraryProfiles(t.Context(), desired, env.settings.Snapshot(), item.ID, item.CategoryID)
 	if err != nil || len(profiles) != 1 || profiles[0].Upgrade.MinDelta != 5 {
 		t.Fatalf("profiles = %+v, %v; want one carrying min_delta 5", profiles, err)
 	}
@@ -1105,8 +1108,60 @@ func TestLibraryProfiles_AnItemsOwnTargetReplacesTheLibrarys(t *testing.T) {
 	if err := desired.SetTargetOverride(t.Context(), item.ID, &target.ID); err != nil {
 		t.Fatalf("SetTargetOverride: %v", err)
 	}
-	profiles, err := judge.LibraryProfiles(t.Context(), desired, env.settings.Snapshot(), item.ID, item.CategoryID, item.ProfileID)
+	profiles, err := judge.LibraryProfiles(t.Context(), desired, env.settings.Snapshot(), item.ID, item.CategoryID)
 	if err != nil || len(profiles) == 0 || profiles[0].Target == nil || profiles[0].Target.ID != target.ID {
 		t.Fatalf("profiles = %+v, %v; want the item's own target on the first", profiles, err)
 	}
+}
+
+// QUAL-6: the profile stored when an item was added is not read; a library without a list judges by its default
+// unless the item carries an override.
+func TestLibraryProfiles_ALibraryWithoutAListIgnoresTheProfileStoredAtAdd(t *testing.T) {
+	env := newSearchTestEnv(t)
+	stored, err := env.settings.CreateQualityProfile(t.Context(), "stored-at-add", alwaysAcceptRules, "{}")
+	if err != nil {
+		t.Fatalf("CreateQualityProfile: %v", err)
+	}
+	category, err := env.settings.CreateCategory(t.Context(), "music", "no-list", 100)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	item, err := env.desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{
+		WorkID: env.createWork(t, "Stored", 2001), CategoryID: category.ID, ProfileID: stored.ID, Monitored: true,
+	})
+	if err != nil {
+		t.Fatalf("EnsureAlbumItem: %v", err)
+	}
+	desired := library.NewDesired(env.library)
+	names := func() []string {
+		profiles, err := judge.LibraryProfiles(t.Context(), desired, env.settings.Snapshot(), item.ID, item.CategoryID)
+		if err != nil {
+			t.Fatalf("LibraryProfiles: %v", err)
+		}
+		var got []string
+		for _, profile := range profiles {
+			got = append(got, profile.Name)
+		}
+		return got
+	}
+	wantDefault := judge.DefaultProfileID(env.settings.Snapshot(), mustCategory(t, env, item.CategoryID))
+	defaultProfile, _ := env.settings.Snapshot().QualityProfile(wantDefault)
+	if got := names(); !reflect.DeepEqual(got, []string{defaultProfile.Name}) || defaultProfile.ID == stored.ID {
+		t.Fatalf("without an override judged by %v, want the library default [%s]", got, defaultProfile.Name)
+	}
+	if err := desired.SetProfileOverride(t.Context(), item.ID, &stored.ID); err != nil {
+		t.Fatalf("SetProfileOverride: %v", err)
+	}
+	if got := names(); !reflect.DeepEqual(got, []string{"stored-at-add"}) {
+		t.Fatalf("with an override judged by %v, want [stored-at-add]", got)
+	}
+}
+
+func mustCategory(t *testing.T, env *searchTestEnv, id int64) settings.Category {
+	t.Helper()
+	category, found := env.settings.Snapshot().Category(id)
+	if !found {
+		t.Fatalf("category %d missing", id)
+	}
+	return category
 }

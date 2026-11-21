@@ -249,6 +249,7 @@ func TestRefreshMonitorsNewEpisodesByTheirSeasonAndNewSeasonsWhenTheSeriesIsWant
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, 1)
 
 	grown := fixtureSkyhook()
 	extra := func(id int64, season, number int, date string) skyhook.Episode {
@@ -287,6 +288,7 @@ func TestRefreshLeavesANewSeasonUnmonitoredWhenTheLibraryIgnoresNewSeasons(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, 1)
 	grown := fixtureSkyhook()
 	grown.Episodes = append(grown.Episodes, skyhook.Episode{TVDBID: 9, SeasonNumber: 3, EpisodeNumber: 1, Title: "New", AirDate: "2026-11-01"})
 	service.Skyhook = searchSkyhook{series: grown}
@@ -305,6 +307,7 @@ func TestRefreshRemovesAnEpisodeSkyhookNoLongerListsWhenNothingHoldsOnToIt(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, 1)
 	shrunk := fixtureSkyhook()
 	shrunk.Episodes = shrunk.Episodes[:len(shrunk.Episodes)-1]
 	service.Skyhook = searchSkyhook{series: shrunk}
@@ -327,6 +330,7 @@ func TestApplyMonitorReappliesSonarrsChoicesToAHeldSeries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, 1)
 	monitored := func() (map[string]int64, map[string]bool) {
 		parts := partMonitoring(t, opened, added.WorkID)
 		seasons, err := service.Reader.SeasonMonitoring(t.Context(), added.WorkID)
@@ -366,6 +370,7 @@ func TestSetEpisodeMonitoringChangesOnlyTheEpisodesItNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, 1)
 	if err := service.SetEpisodeMonitoring(t.Context(), 3, added.WorkID, map[tv.Key]bool{{Season: 1, Number: 2}: false, {Season: 2, Number: 1}: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -399,6 +404,7 @@ func TestRefreshIsSkippedWhileSkyhookIsDownSoTheFallbacksNumbersNeverReachTheLib
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, 1)
 	before := partMonitoring(t, opened, added.WorkID)
 
 	number := 9

@@ -43,6 +43,7 @@ func TestTheFranchisePassGathersTheSeriesTheLibraryHoldsAndOffersTheOthers(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinProfile(t, opened, added.WorkID, 1)
 	source := fakeFranchises{
 		ties: map[wikidata.SeriesRef]wikidata.SeriesTies{{TVDB: 1234}: {
 			Franchises: []wikidata.Franchise{{QID: "Q4321", Label: "Example Franchise", Named: true}},
