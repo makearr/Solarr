@@ -246,6 +246,10 @@ SET size_bytes = ?, quick_hash = ?, oshash = ?, content_hash = NULL, phash = NUL
     audio_fp_prefix = NULL, fingerprinted_at = NULL, measured_attributes_id = NULL
 WHERE id = ?;
 
+-- A file whose tags were rewritten in place has new bytes under the same identity: only what names the bytes changes.
+-- name: SetMediaObjectBytes :exec
+UPDATE media_object SET size_bytes = ?, quick_hash = ? WHERE id = ?;
+
 -- name: SetLibraryPathObject :exec
 UPDATE library_path SET media_object_id = ? WHERE id = ?;
 
@@ -327,6 +331,23 @@ WHERE library_path.root_folder_id = sqlc.arg(new_root_folder_id) AND library_pat
 -- name: RelocateLibraryPath :execrows
 UPDATE library_path SET root_folder_id = sqlc.arg(new_root_folder_id), rel_path = sqlc.arg(new_rel_path)
 WHERE root_folder_id = sqlc.arg(old_root_folder_id) AND rel_path = sqlc.arg(old_rel_path);
+
+-- A file that moved to another root: its works are on disk there now, and no longer in the old root unless another of
+-- their files still is.
+-- name: LinkWorksOfPathToRoot :exec
+INSERT OR IGNORE INTO work_root_folder (work_id, root_folder_id, first_seen_at)
+SELECT wf.work_id, lp.root_folder_id, lp.last_seen_at
+FROM library_path lp JOIN work_file wf ON wf.media_object_id = lp.media_object_id
+WHERE lp.root_folder_id = sqlc.arg(root_folder_id) AND lp.rel_path = sqlc.arg(rel_path);
+
+-- name: UnlinkWorksOfPathFromRoot :exec
+DELETE FROM work_root_folder
+WHERE work_root_folder.root_folder_id = sqlc.arg(old_root_folder_id)
+  AND work_root_folder.work_id IN (SELECT wf.work_id FROM library_path lp JOIN work_file wf ON wf.media_object_id = lp.media_object_id
+                  WHERE lp.root_folder_id = sqlc.arg(new_root_folder_id) AND lp.rel_path = sqlc.arg(new_rel_path))
+  AND NOT EXISTS (SELECT 1 FROM work_file other JOIN library_path held ON held.media_object_id = other.media_object_id
+                  WHERE other.work_id = work_root_folder.work_id AND held.root_folder_id = work_root_folder.root_folder_id
+                    AND held.missing_since IS NULL);
 
 -- What a full sweep would mark missing, against everything the root holds, before it marks anything.
 -- name: CountVanishingPaths :one

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -137,6 +138,48 @@ func TestRelocate_MovesTheLibraryPath(t *testing.T) {
 	}
 	if paths[0].MediaObjectID != object.ID {
 		t.Error("media_object_id changed across a relocation -- Invariant 70 violated")
+	}
+}
+
+// A work follows its file to the other root; the root it left stops listing it unless another of its files is still there.
+func TestRelocate_TheWorkLeavesTheRootItsLastFileLeft(t *testing.T) {
+	opened, queries := newLibrary(t)
+	work := createWork(t, opened, "music", "An Album")
+	var objects [2]librarydb.MediaObject
+	for index, rel := range []string{"A/one.flac", "A/two.flac"} {
+		objects[index] = createObject(t, opened, rel, 10)
+		write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+			if _, err := q.AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
+				MediaObjectID: objects[index].ID, RootFolderID: 1, RelPath: rel, LinkKind: "primary", IsPrimary: 1, CreatedAt: 1,
+			}); err != nil {
+				return err
+			}
+			if err := q.LinkWorkFile(ctx, librarydb.LinkWorkFileParams{WorkID: work.ID, MediaObjectID: objects[index].ID, FirstSeenAt: 1}); err != nil {
+				return err
+			}
+			return q.LinkWorkRootFolder(ctx, librarydb.LinkWorkRootFolderParams{WorkID: work.ID, RootFolderID: 1, FirstSeenAt: 1})
+		})
+	}
+	physical := library.NewPhysical(opened)
+	roots := func() []int64 {
+		ids, err := queries.ListRootFoldersForWork(t.Context(), work.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ids
+	}
+
+	if err := physical.Relocate(t.Context(), 1, "A/one.flac", 2, "B/one.flac"); err != nil {
+		t.Fatal(err)
+	}
+	if got := roots(); !slices.Equal(got, []int64{1, 2}) {
+		t.Errorf("roots after the first file moved = %v, want both: the second file is still in root 1", got)
+	}
+	if err := physical.Relocate(t.Context(), 1, "A/two.flac", 2, "B/two.flac"); err != nil {
+		t.Fatal(err)
+	}
+	if got := roots(); !slices.Equal(got, []int64{2}) {
+		t.Errorf("roots after the last file moved = %v, want only root 2", got)
 	}
 }
 

@@ -264,8 +264,29 @@ func (j *TagWritebackJob) writePage(ctx context.Context, run *tagRun, candidates
 			strings.Join(result.Changed, ","), failure); err != nil {
 			return err
 		}
+		// An in-place write has the file's only path; a swapped copy leaves the object to the next scan to split.
+		if result.Err == nil && len(result.Changed) > 0 && originals[k] == "" {
+			if err := j.rehash(ctx, editOf[k].MediaObjectID, edits[k].Path); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
+}
+
+// rehash records the size and quick hash the file has now; a file that cannot be read keeps its old record for the scan.
+func (j *TagWritebackJob) rehash(ctx context.Context, mediaObjectID int64, filePath string) error {
+	info, err := j.config.FS.Stat(filePath)
+	if err != nil {
+		j.config.Logger.Warn("tagged file not measured", slog.Int64("media_object_id", mediaObjectID), slog.Any("error", err))
+		return nil
+	}
+	quick, err := library.QuickHash(j.config.FS, filePath, info.Size)
+	if err != nil {
+		j.config.Logger.Warn("tagged file not hashed", slog.Int64("media_object_id", mediaObjectID), slog.Any("error", err))
+		return nil
+	}
+	return j.config.Files.Rehash(ctx, mediaObjectID, info.Size, quick)
 }
 
 // tagCopySuffix names the private copy a file is tagged on before it replaces the original.

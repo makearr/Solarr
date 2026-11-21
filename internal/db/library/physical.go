@@ -667,7 +667,18 @@ func (p Physical) Relocate(ctx context.Context, oldRootFolderID int64, oldRelPat
 		if affected == 0 {
 			return ErrPathNotFound
 		}
-		return nil
+		if oldRootFolderID == newRootFolderID {
+			return nil
+		}
+		// A move between roots takes the works' presence with it, so the library they left stops listing them.
+		if err := librarydb.New(tx).LinkWorksOfPathToRoot(ctx, librarydb.LinkWorksOfPathToRootParams{
+			RootFolderID: newRootFolderID, RelPath: newRelPath,
+		}); err != nil {
+			return err
+		}
+		return librarydb.New(tx).UnlinkWorksOfPathFromRoot(ctx, librarydb.UnlinkWorksOfPathFromRootParams{
+			OldRootFolderID: oldRootFolderID, NewRootFolderID: newRootFolderID, NewRelPath: newRelPath,
+		})
 	})
 	if sqliteUniqueViolation(err) {
 		err = fmt.Errorf("%w: %w", ErrDestinationOccupied, err)

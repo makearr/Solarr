@@ -66,6 +66,16 @@ func (t TagWriteback) Candidates(
 	return candidates, nil
 }
 
+// Rehash gives the object the size and quick hash its file has after its tags were rewritten in place, so later moves
+// and scans compare against what is on disk.
+func (t TagWriteback) Rehash(ctx context.Context, mediaObjectID, sizeBytes int64, quickHash string) error {
+	return t.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetMediaObjectBytes(ctx, librarydb.SetMediaObjectBytesParams{
+			SizeBytes: sizeBytes, QuickHash: quickHash, ID: mediaObjectID,
+		})
+	})
+}
+
 // Record notes what was asked of one file: its digest, the keys it changed, or why it failed.
 func (t TagWriteback) Record(ctx context.Context, mediaObjectID, at int64, digest, written, failure string) error {
 	return t.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {

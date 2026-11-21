@@ -136,6 +136,33 @@ func TestTagWriteback_FillsIdsOnceUntilSomethingChanges(t *testing.T) {
 	}
 }
 
+// A file rewritten in place has new bytes; the object follows, or a later move would refuse the copy for its size.
+func TestTagWriteback_TheObjectFollowsTheRewrittenFile(t *testing.T) {
+	fixture := newTagWritebackJob(t, music.TagRoot{ID: 1, Path: "/music", Options: idsOnly})
+	const name = "/music/Heka/Zanuvode/01.m4a"
+	if err := fixture.fs.MkdirAll("/music/Heka/Zanuvode", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := fsx.WriteAtomic(fixture.fs, name, func(w io.Writer) error { _, err := w.Write([]byte("x")); return err }); err != nil {
+		t.Fatal(err)
+	}
+	identifyFile(t, fixture.opened, "Heka/Zanuvode/01.m4a", "rg-1", "rel-1")
+	fixture.run(t)
+
+	wantQuick, err := library.QuickHash(fixture.fs, name, int64(len("tagged")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var size int64
+	var quick string
+	if err := fixture.opened.Read().QueryRowContext(t.Context(), "SELECT size_bytes, quick_hash FROM media_object").Scan(&size, &quick); err != nil {
+		t.Fatal(err)
+	}
+	if size != int64(len("tagged")) || quick != wantQuick {
+		t.Errorf("object = %d bytes, hash %q; want %d bytes, hash %q", size, quick, len("tagged"), wantQuick)
+	}
+}
+
 // "Write other tags": the providers' album and date are set, overwriting what the file says.
 func TestTagWriteback_WritesMetadataWhenAsked(t *testing.T) {
 	fixture := newTagWritebackJob(t, music.TagRoot{ID: 1, Path: "/music", Options: music.TagOptions{WriteMetadata: true}})

@@ -804,6 +804,25 @@ func (q *Queries) InternAttributes(ctx context.Context, arg InternAttributesPara
 	return i, err
 }
 
+const linkWorksOfPathToRoot = `-- name: LinkWorksOfPathToRoot :exec
+INSERT OR IGNORE INTO work_root_folder (work_id, root_folder_id, first_seen_at)
+SELECT wf.work_id, lp.root_folder_id, lp.last_seen_at
+FROM library_path lp JOIN work_file wf ON wf.media_object_id = lp.media_object_id
+WHERE lp.root_folder_id = ?1 AND lp.rel_path = ?2
+`
+
+type LinkWorksOfPathToRootParams struct {
+	RootFolderID int64
+	RelPath      string
+}
+
+// A file that moved to another root: its works are on disk there now, and no longer in the old root unless another of
+// their files still is.
+func (q *Queries) LinkWorksOfPathToRoot(ctx context.Context, arg LinkWorksOfPathToRootParams) error {
+	_, err := q.db.ExecContext(ctx, linkWorksOfPathToRoot, arg.RootFolderID, arg.RelPath)
+	return err
+}
+
 const listHashedVideos = `-- name: ListHashedVideos :many
 SELECT o.id, o.size_bytes, o.phash, o.duration_ms, o.width, o.height, lp.root_folder_id, lp.rel_path, f.frames
 FROM media_object o
@@ -2124,6 +2143,22 @@ func (q *Queries) SetMeasuredAttributes(ctx context.Context, arg SetMeasuredAttr
 	return err
 }
 
+const setMediaObjectBytes = `-- name: SetMediaObjectBytes :exec
+UPDATE media_object SET size_bytes = ?, quick_hash = ? WHERE id = ?
+`
+
+type SetMediaObjectBytesParams struct {
+	SizeBytes int64
+	QuickHash string
+	ID        int64
+}
+
+// A file whose tags were rewritten in place has new bytes under the same identity: only what names the bytes changes.
+func (q *Queries) SetMediaObjectBytes(ctx context.Context, arg SetMediaObjectBytesParams) error {
+	_, err := q.db.ExecContext(ctx, setMediaObjectBytes, arg.SizeBytes, arg.QuickHash, arg.ID)
+	return err
+}
+
 const setMediaObjectContent = `-- name: SetMediaObjectContent :exec
 UPDATE media_object
 SET size_bytes = ?, quick_hash = ?, oshash = ?, content_hash = NULL, phash = NULL, audio_fp = NULL,
@@ -2265,6 +2300,27 @@ type TouchLibraryPathParams struct {
 // for.
 func (q *Queries) TouchLibraryPath(ctx context.Context, arg TouchLibraryPathParams) error {
 	_, err := q.db.ExecContext(ctx, touchLibraryPath, arg.LastSeenAt, arg.ID)
+	return err
+}
+
+const unlinkWorksOfPathFromRoot = `-- name: UnlinkWorksOfPathFromRoot :exec
+DELETE FROM work_root_folder
+WHERE work_root_folder.root_folder_id = ?1
+  AND work_root_folder.work_id IN (SELECT wf.work_id FROM library_path lp JOIN work_file wf ON wf.media_object_id = lp.media_object_id
+                  WHERE lp.root_folder_id = ?2 AND lp.rel_path = ?3)
+  AND NOT EXISTS (SELECT 1 FROM work_file other JOIN library_path held ON held.media_object_id = other.media_object_id
+                  WHERE other.work_id = work_root_folder.work_id AND held.root_folder_id = work_root_folder.root_folder_id
+                    AND held.missing_since IS NULL)
+`
+
+type UnlinkWorksOfPathFromRootParams struct {
+	OldRootFolderID int64
+	NewRootFolderID int64
+	NewRelPath      string
+}
+
+func (q *Queries) UnlinkWorksOfPathFromRoot(ctx context.Context, arg UnlinkWorksOfPathFromRootParams) error {
+	_, err := q.db.ExecContext(ctx, unlinkWorksOfPathFromRoot, arg.OldRootFolderID, arg.NewRootFolderID, arg.NewRelPath)
 	return err
 }
 

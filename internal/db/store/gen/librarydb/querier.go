@@ -572,6 +572,9 @@ type Querier interface {
 	// covers a work with no root folder yet, e.g. subscription-discovered), but it is
 	// still real and still needed for that half.
 	LinkWorkRootFolder(ctx context.Context, arg LinkWorkRootFolderParams) error
+	// A file that moved to another root: its works are on disk there now, and no longer in the old root unless another of
+	// their files still is.
+	LinkWorksOfPathToRoot(ctx context.Context, arg LinkWorksOfPathToRootParams) error
 	// Startup reconciliation polls every non-terminal acquisition (section 10.9).
 	ListActiveAcquisitions(ctx context.Context) ([]Acquisition, error)
 	// Every download of an item still on its way, with the parts each covers (several may run at once).
@@ -1320,6 +1323,8 @@ type Querier interface {
 	// mismatch stays visible (ADR-39). The scalars land on the object, not the
 	// interned row, because they are unique per file.
 	SetMeasuredAttributes(ctx context.Context, arg SetMeasuredAttributesParams) error
+	// A file whose tags were rewritten in place has new bytes under the same identity: only what names the bytes changes.
+	SetMediaObjectBytes(ctx context.Context, arg SetMediaObjectBytesParams) error
 	// A file changed in place is the same object with new bytes: what was derived from the old bytes is cleared so the
 	// fingerprint and probe jobs measure it again.
 	SetMediaObjectContent(ctx context.Context, arg SetMediaObjectContentParams) error
@@ -1384,6 +1389,7 @@ type Querier interface {
 	UnblockTagSlugs(ctx context.Context, arg UnblockTagSlugsParams) error
 	UnlinkWorkFilePairs(ctx context.Context, pairs interface{}) error
 	UnlinkWorkFiles(ctx context.Context, workID int64) error
+	UnlinkWorksOfPathFromRoot(ctx context.Context, arg UnlinkWorksOfPathFromRootParams) error
 	// A library's "Unmonitor Deleted Tracks": items holding a file a full scan just found gone.
 	UnmonitorDesiredItemsWithMissingFiles(ctx context.Context, arg UnmonitorDesiredItemsWithMissingFilesParams) (int64, error)
 	// Every automatic search needs monitored = 1, so this is what keeps a work being removed from being grabbed again.
