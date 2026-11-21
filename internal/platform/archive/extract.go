@@ -35,7 +35,7 @@ func Extract(ctx context.Context, fsys fsx.FS, source, destDir string, limits Li
 		return err
 	}
 
-	b := &budget{limits: limits, sourceBytes: VolumesSize(fsys, source, info.Size)}
+	b := newBudget(fsys, source, info.Size, limits)
 	if format == FormatRar {
 		return extractRar(ctx, fsys, source, destDir, b)
 	}
@@ -93,6 +93,11 @@ type budget struct {
 	sourceBytes       int64
 	uncompressedTotal int64
 	entries           int
+}
+
+// newBudget measures the expansion ratio against every volume of the set, not the first alone.
+func newBudget(fsys fsx.FS, source string, primarySize int64, limits Limits) *budget {
+	return &budget{limits: limits, sourceBytes: VolumesSize(fsys, source, primarySize)}
 }
 
 func (b *budget) admitEntry() error {

@@ -629,3 +629,52 @@ func TestImportSessions_DismissFinishedHidesEveryBatchButNotWhatIsRunningOrHeld(
 		t.Errorf("still shown = %v, want the running session %d and the one holding units %d", ids, running, held)
 	}
 }
+
+// What a revert, a pack or a running import still needs is not history; a reverted session is, even with its placements.
+func TestImportSessions_DeleteOldSessionsLeavesPlacedPackedAndRunningOnes(t *testing.T) {
+	opened, _ := newLibrary(t)
+	sessions := library.NewImportSessions(opened)
+	packs := library.NewPacks(opened)
+	ctx := t.Context()
+	placedIn := func(finish string) int64 {
+		session, units := seedSessionWithUnits(t, sessions, 1)
+		work := createWork(t, opened, "music", "Fake Album "+finish).ID
+		if err := sessions.SetUnitDecisions(ctx, session, []library.UnitDecision{{UnitID: units[0], Decision: library.UnitCommit, Confidence: 1, WorkID: &work}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := sessions.Finish(ctx, session, finish, 100, ""); err != nil {
+			t.Fatal(err)
+		}
+		return session
+	}
+	placed, reverted := placedIn(library.ImportDone), placedIn(library.ImportReverted)
+
+	// A pack's members are skipped units here, so only the pack itself keeps its sessions.
+	skippedIn := func(finish string) (int64, int64) {
+		session, units := seedSessionWithUnits(t, sessions, 1)
+		if err := sessions.SetUnitDecisions(ctx, session, []library.UnitDecision{{UnitID: units[0], Decision: library.UnitSkip}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := sessions.Finish(ctx, session, finish, 100, ""); err != nil {
+			t.Fatal(err)
+		}
+		return session, units[0]
+	}
+	packSession, _ := skippedIn(library.ImportDone)
+	memberSession, memberUnit := skippedIn(library.ImportDone)
+	cancelling, _ := skippedIn(library.ImportCancelling)
+	if _, err := packs.Create(ctx, library.PackDiscography, library.PackDetectedFromStructureAndTitle, 0.85, "pack", packSession, 200,
+		[]library.NewPackItem{{ImportUnitID: memberUnit, State: library.PackItemQueued}}); err != nil {
+		t.Fatal(err)
+	}
+
+	if deleted, err := sessions.DeleteOldSessions(ctx, 1000, 200); err != nil || deleted != 1 {
+		t.Fatalf("deleted %d, %v; want only the reverted session", deleted, err)
+	}
+	for id, wantGone := range map[int64]bool{placed: false, reverted: true, cancelling: false, packSession: false, memberSession: false} {
+		_, err := sessions.Get(ctx, id)
+		if gone := err != nil; gone != wantGone {
+			t.Errorf("session %d gone = %v, want %v", id, gone, wantGone)
+		}
+	}
+}

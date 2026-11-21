@@ -257,6 +257,17 @@ func TestWalker_SubtitlesInASubsFolderBelongToTheUnit(t *testing.T) {
 	}
 }
 
+// Releases name the subtitle folder in several ways; every one is the unit's own.
+func TestWalker_EverySubtitleFolderNameBelongsToTheUnit(t *testing.T) {
+	for _, folder := range []string{"Sub", "Subtitles", "Subtitle", "VobSub", "idx"} {
+		tr := newTree(t, "Rel/S01E01.mkv", "Rel/"+folder+"/S01E01.English.srt")
+		units, _ := walkAll(t, tr, inspect.WalkOptions{})
+		if len(units) != 1 || len(units[0].Other) != 1 || units[0].Other[0].RelPath != "Rel/"+folder+"/S01E01.English.srt" {
+			t.Errorf("%s: units = %+v, want the subtitle with the unit", folder, units)
+		}
+	}
+}
+
 // The import walk and a held unit's re-read are the same reader: a symlink is never media and the recycle folder is never entered.
 func TestWalker_AndSplitDirectoryReadAFolderAlike(t *testing.T) {
 	tr := newTree(t, "Rel/01 One.flac", "Rel/02 Two.flac")
