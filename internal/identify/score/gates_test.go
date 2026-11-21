@@ -144,6 +144,13 @@ func TestRejectCodecsGate_CaseInsensitive(t *testing.T) {
 	}
 }
 
+func TestRejectCodecsGate_AnUnnamedCodecPasses(t *testing.T) {
+	outcome := rejectCodecsGate([]string{"xvid", "divx"}, "", "")
+	if outcome.status != gatePassed || !outcome.result.Passed {
+		t.Errorf("status = %v, passed = %v, want a pass for a release naming no codec", outcome.status, outcome.result.Passed)
+	}
+}
+
 func TestSizeRange_RejectsBelowTheMinimumAndAboveTheMaximumPerQuality(t *testing.T) {
 	profile, err := Parse([]byte(`{"quality_profile":"p","require":{"size":"reject_outside_range"},"compare":["score"],
 		"targets":{"overall_bitrate":[{"when":{"resolution":"1080p"},"min":"15MB/min","ideal":"60MB/min","max":"260MB/min"}]}}`))

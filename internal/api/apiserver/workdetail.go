@@ -582,6 +582,12 @@ func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !bulkSelectionNamed(body) {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request",
+			"the selection is empty: give ids, a category_id, filters or whole_library")
+		return
+	}
+
 	// Monitoring decides what is searched, as for one work; a preview only reads.
 	permission := actionLevels[actionSetMonitored]
 	if derefOr(body.Preview, false) {
@@ -609,6 +615,14 @@ func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, gen.BulkResult{Count: count})
+}
+
+// bulkSelectionNamed refuses a body that selects nothing: without it an empty selection means every visible work.
+func bulkSelectionNamed(body gen.BulkSetWorkMonitoredJSONRequestBody) bool {
+	return len(derefOr(body.Ids, nil)) > 0 || body.CategoryId != nil || derefOr(body.WholeLibrary, false) ||
+		derefOr(body.Fresh, false) || derefOr(body.Wanted, false) || derefOr(body.CutoffUnmet, false) ||
+		derefOr(body.AboveRating, false) || derefOr(body.Favorite, false) || derefOr(body.Where, "") != "" ||
+		derefOr(body.Tags, "") != "" || derefOr(body.MediaType, "") != "" || derefOr(body.PersonId, 0) != 0
 }
 
 // workVisible runs GetWork's own ADR-27 visibility check against id, writing

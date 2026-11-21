@@ -153,7 +153,8 @@ func sizeRangeGate(target Target, hasTarget bool, overallBitsPerSecond int64) ga
 func rejectCodecsGate(rejected []string, videoCodec, audioCodec string) gateOutcome {
 	wanted := "not [" + strings.Join(rejected, " ") + "]"
 	if videoCodec == "" && audioCodec == "" {
-		return gateOutcome{model.GateResult{Gate: "reject_codecs", Passed: false, Wanted: wanted, Got: unmeasuredFact}, gateMissing}
+		// A reject list rules out named codecs only; an unnamed one is allowed and the probe judges it after the grab.
+		return gateOutcome{model.GateResult{Gate: "reject_codecs", Passed: true, Wanted: wanted, Got: unmeasuredFact}, gatePassed}
 	}
 	for _, codec := range rejected {
 		if strings.EqualFold(codec, videoCodec) || strings.EqualFold(codec, audioCodec) {

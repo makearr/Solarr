@@ -636,3 +636,17 @@ func TestBulkSetWorkMonitored_ForwardsTheListFilters(t *testing.T) {
 		t.Errorf("selection = %+v, want fresh and cutoff_unmet only", got)
 	}
 }
+
+func TestBulkSetWorkMonitored_EmptySelectionIsRefused(t *testing.T) {
+	fixture, cookies := visibleWorksFixture(t)
+
+	for _, body := range []string{`{}`, `{"a":1}`, `{"monitored":true}`, `{"ids":[],"monitored":true}`} {
+		recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/bulk/monitor", body))
+		if recorder.Code != http.StatusBadRequest {
+			t.Errorf("body %s: status = %d, want 400", body, recorder.Code)
+		}
+	}
+	if fixture.worksMonitor.bulkCalls != 0 {
+		t.Errorf("bulkCalls = %d, want 0", fixture.worksMonitor.bulkCalls)
+	}
+}
