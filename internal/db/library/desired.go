@@ -300,14 +300,20 @@ func (d Desired) SetPartsMonitored(ctx context.Context, workID int64, partIDs []
 		err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 			queries := librarydb.New(tx)
 			refs := make([]string, 0, len(chunk))
+			// One read of the work's parts answers every id of the chunk, instead of one read per part.
+			own, err := queries.ListWorkParts(ctx, workID)
+			if err != nil {
+				return fmt.Errorf("list parts: %w", err)
+			}
+			ownByID := make(map[int64]librarydb.WorkPart, len(own))
+			for _, part := range own {
+				ownByID[part.ID] = part
+			}
 			for _, partID := range chunk {
 				// SetWorkPartMonitored is a bare UPDATE ... WHERE id = ? -- it would silently affect zero rows for a
 				// bogus or cross-work id rather than erroring, so existence and ownership are checked here first.
-				part, err := queries.GetWorkPart(ctx, partID)
-				if err != nil {
-					return fmt.Errorf("get part: %w", err)
-				}
-				if part.WorkID != workID {
+				part, found := ownByID[partID]
+				if !found {
 					return sql.ErrNoRows
 				}
 				if err := queries.SetWorkPartMonitored(ctx,
@@ -877,11 +883,12 @@ const recountMargin = 36 * time.Hour
 func (d Desired) RecountComingOut(ctx context.Context, longestGrace time.Duration) (int, error) {
 	now := d.store.Now()
 	since := now.Add(-longestGrace - recountMargin)
-	read := librarydb.New(d.store.Read())
+	reader := librarydb.New(d.store.Read())
+	partsOfWork := map[int64][]librarydb.WorkPart{}
 	changed := 0
 	var afterID int64
 	for {
-		page, err := read.ListItemsWithPartsComingOut(ctx, librarydb.ListItemsWithPartsComingOutParams{
+		page, err := reader.ListItemsWithPartsComingOut(ctx, librarydb.ListItemsWithPartsComingOutParams{
 			AfterID: afterID, Since: sql.NullInt64{Int64: since.Unix(), Valid: true},
 			SinceDate: sql.NullString{String: since.UTC().Format("2006-01-02"), Valid: true}, PageSize: 200,
 		})
@@ -890,13 +897,18 @@ func (d Desired) RecountComingOut(ctx context.Context, longestGrace time.Duratio
 		}
 		for _, row := range page {
 			afterID = row.ID
-			item, err := read.GetDesiredItem(ctx, row.ID)
+			item, err := reader.GetDesiredItem(ctx, row.ID)
 			if err != nil {
 				return changed, fmt.Errorf("library: get item %d: %w", row.ID, err)
 			}
-			parts, err := read.ListWorkParts(ctx, row.WorkID)
-			if err != nil {
-				return changed, fmt.Errorf("library: list parts of work %d: %w", row.WorkID, err)
+			// A series' seasons share its parts, which a recount does not change: read them once per work.
+			parts, read := partsOfWork[row.WorkID]
+			if !read {
+				var err error
+				if parts, err = reader.ListWorkParts(ctx, row.WorkID); err != nil {
+					return changed, fmt.Errorf("library: list parts of work %d: %w", row.WorkID, err)
+				}
+				partsOfWork[row.WorkID] = parts
 			}
 			if requiredOf(item, parts, now) == item.RequiredCount {
 				continue
