@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"path"
 	"strings"
 	"time"
@@ -67,6 +68,7 @@ type Committer struct {
 	extraFiles       ExtraFiles
 	groupID          GroupID
 	people           *library.People
+	logger           *slog.Logger
 }
 
 // TransferLadder answers the ordered transfer methods import should try, read
@@ -115,16 +117,23 @@ type CommitterConfig struct {
 	GroupID          GroupID
 	// People credits an unverified album's artist (D6); optional.
 	People *library.People
+	// Logger says what was kept despite a failure; optional.
+	Logger *slog.Logger
 }
 
 // NewCommitter builds one.
 func NewCommitter(config CommitterConfig) Committer {
+	logger := config.Logger
+	if logger == nil {
+		logger = slog.New(slog.DiscardHandler)
+	}
 	return Committer{
 		fsys: config.FS, roots: config.Roots, affinity: config.Affinity, physical: config.Physical,
 		identity: config.Identity, desired: config.Desired, categories: config.Categories,
 		blockedContent: config.BlockedContent, clock: config.Clock,
 		defaultProfileID: config.DefaultProfileID, transferLadder: config.TransferLadder,
 		renameOnImport: config.RenameOnImport, extraFiles: config.ExtraFiles, groupID: config.GroupID, people: config.People,
+		logger: logger,
 	}
 }
 
@@ -495,7 +504,8 @@ func (c Committer) CommitMatchedUnit(
 	if err := DiscoverWanted(
 		ctx, c.desired, c.categories, c.clock, c.defaultProfileID, categoryID, resolution.WorkID, trackFiles,
 	); err != nil {
-		return Placed{}, fmt.Errorf("music: discover wanted for unit %q: %w", unit.Directory, err)
+		// The files are placed and linked; the next scan finds the wanted parts again.
+		c.logger.Warn("wanted parts of a placed album not discovered", slog.String("unit", unit.Directory), slog.Any("error", err))
 	}
 
 	var extensions []string

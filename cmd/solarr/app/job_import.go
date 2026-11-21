@@ -162,6 +162,7 @@ func (p *process) importCommitter() music.Committer {
 		ExtraFiles:       p.extraFileExtensions,
 		GroupID:          lookupGroupID,
 		People:           &people,
+		Logger:           p.logger,
 	})
 }
 

@@ -1085,3 +1085,32 @@ func TestCommitUnit_ALateIdentityFailureTakesBackFilesAndRows(t *testing.T) {
 		t.Errorf("destination root holds files %v, want none", left)
 	}
 }
+
+// A wanted-parts failure after the files are placed and linked is the next scan's to repair, never a reason to report the album unplaced.
+func TestCommitUnit_AFailedWantedDiscoveryKeepsTheCommittedAlbum(t *testing.T) {
+	committer, opened, fsys := newCommitter(t, true)
+	track := []byte("airbag bytes")
+	source := "Katupoken/KI Pecezinu/01 Sesoge.flac"
+	writeCommitSourceFile(t, fsys, source, track)
+	unit := testUnit("Katupoken/KI Pecezinu", []inspect.File{{RelPath: source, SizeBytes: int64(len(track))}})
+	tags := music.UnitTagSourceFor(commitSourceRoot, []mediatool.Probe{{
+		Path: path.Join(commitSourceRoot, source),
+		Tags: mediatool.Tags{"album": "KI Pecezinu", "albumartist": "Katupoken", "date": "1997-06-16", "tracknumber": "1", "title": "Sesoge"},
+	}})
+	best := model.Identification{
+		Strategy: "embedded-tag", Confidence: 0.95,
+		ExternalID: &model.ExternalID{Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID, Confidence: 0.95},
+	}
+	if _, err := opened.WriteDB().ExecContext(t.Context(),
+		`CREATE TRIGGER refuse_wanted BEFORE INSERT ON desired_item BEGIN SELECT RAISE(ABORT, 'injected'); END`); err != nil {
+		t.Fatalf("create trigger: %v", err)
+	}
+
+	placed, err := committer.CommitUnit(t.Context(), commitSourceRoot, unit, best, tags, commitCategoryID)
+	if err != nil {
+		t.Fatalf("CommitUnit = %v, want the committed album kept although its wanted parts could not be discovered", err)
+	}
+	if placed.WorkID == 0 || len(placed.MediaObjectIDs) != 1 {
+		t.Errorf("placed = %+v, want the work and its one file", placed)
+	}
+}
