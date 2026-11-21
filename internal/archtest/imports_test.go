@@ -451,7 +451,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/identify/model", "internal/identify/parsetv", "internal/identify/quality", "internal/identify/score", "internal/jobs", "internal/media",
 		"internal/importing/batch", "internal/importing/inspect", "internal/importing/placer", "internal/scanning/scan",
 		"internal/platform/fsx", "internal/importing/rules", "internal/platform/mediatool", "internal/acquiring/releasefacts", "internal/moving/sidecar",
-		"internal/platform/clock", "internal/platform/parallel",
+		"internal/platform/clock", "internal/platform/parallel", "internal/moving/mover",
 	},
 	// The book providers: Open Library, Google Books, Audible's catalog with Audnexus.
 	"internal/metadata/openlibrary": {"internal/platform/httpx"},

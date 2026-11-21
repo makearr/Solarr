@@ -2,7 +2,6 @@ package adult
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -14,10 +13,8 @@ import (
 	"github.com/makearr/Solarr/internal/identify/parseadult"
 	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/inspect"
-	"github.com/makearr/Solarr/internal/importing/placer"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/works"
-	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
@@ -105,46 +102,21 @@ func (p placing) ResolveNamed(ctx context.Context, categoryID int64, named batch
 	return p.config.Resolver.ByIDs(ctx, categoryID, ids, Hint{}), nil
 }
 
-// placeUnit places the scene's file. A scene that already has a file takes another only as an upgrade.
 // Place implements works.UnitPlacer.
 func (p placing) Place(ctx context.Context, request batch.Request, unit inspect.Unit, workID int64, upgrade bool) (*library.Placement, error) {
-	now := p.config.Clock.Now()
-	file := works.LargestFile(unit.Media)
-	if file == nil {
-		return nil, batch.ErrNothingToPlace
-	}
-	roots, err := p.config.Identity.WorkFileRoots(ctx, workID)
-	if err != nil {
-		return nil, fmt.Errorf("scene %d: find existing roots: %w", workID, err)
-	}
-	if len(roots) > 0 && !upgrade {
-		return nil, batch.ErrNothingToPlace
-	}
-	basics, err := p.config.Reader.Basics(ctx, workID)
-	if err != nil {
-		return nil, fmt.Errorf("scene %d: %w", workID, err)
-	}
-	sourceAbs := path.Join(request.SourcePath, file.RelPath)
-	siblings := make([]string, 0, len(unit.Media))
-	for _, other := range unit.Media {
-		siblings = append(siblings, path.Join(request.SourcePath, other.RelPath))
-	}
-	// A scene is as long as its provider says; the sample check scales to it.
-	if rejection := works.ScreenVideo(ctx, p.config.Probe, sourceAbs, siblings, int(basics.RuntimeMs/60_000), defaultSceneMinutes); rejection != nil {
-		return nil, &batch.RejectedError{MediaType: MediaType, Rejections: []model.Rejection{*rejection}}
-	}
-	hashes, err := p.config.Placer.CheckBlocked(ctx, request.SourcePath, []placer.File{{RelPath: file.RelPath, SizeBytes: file.SizeBytes}})
-	if err != nil {
-		return nil, err
-	}
+	return works.PlaceSingleFile(ctx, p.config.ImportDeps, works.SingleFile{
+		MediaType: MediaType, Noun: "scene", DefaultMinutes: defaultSceneMinutes, Probe: p.config.Probe, OSHash: true,
+		AffinityKey: func(basics library.WorkBasics) string { return affinityKey(basics.Title) },
+		Name:        p.name,
+	}, request, unit, workID, upgrade)
+}
+
+// name renders where a scene's file goes below its root.
+func (p placing) name(ctx context.Context, request batch.Request, workID int64, _ library.WorkBasics, file *inspect.File, now time.Time) (string, settings.FileManagement, error) {
 	names, fileManagement := p.namingFor(request.CategoryID)
-	destRoot, err := p.config.Placer.ChooseRoot(ctx, request.CategoryID, workID, affinityKey(basics.Title), file.SizeBytes)
-	if err != nil {
-		return nil, err
-	}
 	facts, err := NamingFacts(ctx, p.config.Reader, request.CategoryID, workID, now)
 	if err != nil {
-		return nil, err
+		return "", fileManagement, err
 	}
 	facts.OriginalFilename = strings.TrimSuffix(path.Base(file.RelPath), path.Ext(file.RelPath))
 	if info, ok := parseadult.ParseName(facts.OriginalFilename); ok {
@@ -152,42 +124,9 @@ func (p placing) Place(ctx context.Context, request batch.Request, unit inspect.
 	}
 	destRel, _, err := names.RenderScene(facts, file.RelPath)
 	if err != nil {
-		return nil, fmt.Errorf("name %q: %w", file.RelPath, err)
+		return "", fileManagement, fmt.Errorf("name %q: %w", file.RelPath, err)
 	}
-	if upgrade {
-		destRel = p.config.Placer.FreeName(destRoot.Path, destRel)
-	}
-	destAbs := path.Join(destRoot.Path, destRel)
-	methods := p.config.Placer.Methods(request.Ladder)
-	method, err := mover.PlaceOneOnDisk(ctx, p.config.FS, sourceAbs, destAbs, file.SizeBytes, methods)
-	if err != nil {
-		return nil, fmt.Errorf("place %q: %w", file.RelPath, err)
-	}
-	placed := []placer.Placed{{Source: sourceAbs, Dest: destAbs, Rel: destRel, Hash: hashes[0], Size: file.SizeBytes, Method: method}}
-	var registered []library.RegisteredFile
-	undo := func(cause error) (*library.Placement, error) {
-		return nil, errors.Join(cause, p.config.Placer.Undo(placed), p.config.Physical.Unregister(context.WithoutCancel(ctx), registered))
-	}
-	if method != mover.PlaceSymlink {
-		p.config.Placer.Finish(destRoot, destAbs, fileManagement, time.Time{})
-	}
-	oshash, _ := library.OSHash(p.config.FS, destAbs, file.SizeBytes)
-	registered, err = p.config.Physical.RegisterBatch(ctx, destRoot.ID, []library.PhysicalFile{{RelPath: destRel, SizeBytes: file.SizeBytes, QuickHash: hashes[0], OSHash: oshash, FirstSeenAt: now}})
-	if err != nil {
-		return undo(fmt.Errorf("register placed file: %w", err))
-	}
-	if _, err := p.config.Series.AttachWholeFiles(ctx, now, workID, destRoot.ID, []int64{registered[0].MediaObjectID}); err != nil {
-		return undo(err)
-	}
-	placement := &library.Placement{
-		WorkID: workID, MediaObjectIDs: []int64{registered[0].MediaObjectID}, LibraryPathIDs: []int64{registered[0].LibraryPathID},
-		TransferMethods: []string{string(method)},
-	}
-	if p.config.ExtraFiles != nil {
-		owners := []placer.Owner{{SourceRel: file.RelPath, DestRel: destRel}}
-		placement.Extras = p.config.Placer.Extras(ctx, p.config.ExtraFiles(request.CategoryID), request.SourcePath, destRoot, unit.Other, owners, methods)
-	}
-	return placement, nil
+	return destRel, fileManagement, nil
 }
 
 func (p placing) namingFor(categoryID int64) (Naming, settings.FileManagement) {

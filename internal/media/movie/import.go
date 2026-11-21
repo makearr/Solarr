@@ -2,7 +2,6 @@ package movie
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path"
 	"strconv"
@@ -16,10 +15,8 @@ import (
 	"github.com/makearr/Solarr/internal/identify/parsemovie"
 	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/inspect"
-	"github.com/makearr/Solarr/internal/importing/placer"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/works"
-	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
@@ -109,84 +106,26 @@ func namedIDs(provider, externalID string) (IDs, error) {
 
 // Place implements works.UnitPlacer.
 func (p placing) Place(ctx context.Context, request batch.Request, unit inspect.Unit, workID int64, upgrade bool) (*library.Placement, error) {
-	now := p.config.Clock.Now()
-	file := works.LargestFile(unit.Media)
-	if file == nil {
-		return nil, batch.ErrNothingToPlace
-	}
-	// A second file is only for a film that wants a better one (Radarr's "existing file is better" rule).
-	roots, err := p.config.Identity.WorkFileRoots(ctx, workID)
-	if err != nil {
-		return nil, fmt.Errorf("movie %d: find existing roots: %w", workID, err)
-	}
-	if len(roots) > 0 && !upgrade {
-		return nil, batch.ErrNothingToPlace
-	}
-	basics, err := p.config.Reader.Basics(ctx, workID)
-	if err != nil {
-		return nil, fmt.Errorf("movie %d: %w", workID, err)
-	}
-	sourceAbs := path.Join(request.SourcePath, file.RelPath)
-	siblings := make([]string, 0, len(unit.Media))
-	for _, other := range unit.Media {
-		siblings = append(siblings, path.Join(request.SourcePath, other.RelPath))
-	}
-	if rejection := works.ScreenVideo(ctx, p.config.Probe, sourceAbs, siblings, int(basics.RuntimeMs/60_000), defaultMovieMinutes); rejection != nil {
-		return nil, &batch.RejectedError{MediaType: MediaType, Rejections: []model.Rejection{*rejection}}
-	}
-	info, _ := parsemovie.ParsePathAt(file.RelPath, now.Year())
+	return works.PlaceSingleFile(ctx, p.config.ImportDeps, works.SingleFile{
+		MediaType: MediaType, Noun: "movie", DefaultMinutes: defaultMovieMinutes, Probe: p.config.Probe,
+		AffinityKey: func(basics library.WorkBasics) string { return affinityKey(basics.Title, basics.Year) },
+		Name:        p.name,
+	}, request, unit, workID, upgrade)
+}
 
-	hashes, err := p.config.Placer.CheckBlocked(ctx, request.SourcePath, []placer.File{{RelPath: file.RelPath, SizeBytes: file.SizeBytes}})
-	if err != nil {
-		return nil, err
-	}
+// name renders where a film's file goes below its root.
+func (p placing) name(ctx context.Context, request batch.Request, workID int64, basics library.WorkBasics, file *inspect.File, now time.Time) (string, settings.FileManagement, error) {
 	names, fileManagement := p.namingFor(request.CategoryID)
-	destRoot, err := p.config.Placer.ChooseRoot(ctx, request.CategoryID, workID, affinityKey(basics.Title, basics.Year), file.SizeBytes)
-	if err != nil {
-		return nil, err
-	}
 	ids, err := p.config.Reader.ProviderIDs(ctx, workID)
 	if err != nil {
-		return nil, err
+		return "", fileManagement, err
 	}
+	info, _ := parsemovie.ParsePathAt(file.RelPath, now.Year())
 	destRel, _, err := names.RenderMovie(fileNaming(basics, ids, info, file), file.RelPath)
 	if err != nil {
-		return nil, fmt.Errorf("name %q: %w", file.RelPath, err)
+		return "", fileManagement, fmt.Errorf("name %q: %w", file.RelPath, err)
 	}
-	if upgrade {
-		destRel = p.config.Placer.FreeName(destRoot.Path, destRel)
-	}
-	destAbs := path.Join(destRoot.Path, destRel)
-	methods := p.config.Placer.Methods(request.Ladder)
-	method, err := mover.PlaceOneOnDisk(ctx, p.config.FS, sourceAbs, destAbs, file.SizeBytes, methods)
-	if err != nil {
-		return nil, fmt.Errorf("place %q: %w", file.RelPath, err)
-	}
-	placed := []placer.Placed{{Source: sourceAbs, Dest: destAbs, Rel: destRel, Hash: hashes[0], Size: file.SizeBytes, Method: method}}
-	var registered []library.RegisteredFile
-	undo := func(cause error) (*library.Placement, error) {
-		return nil, errors.Join(cause, p.config.Placer.Undo(placed), p.config.Physical.Unregister(context.WithoutCancel(ctx), registered))
-	}
-	if method != mover.PlaceSymlink {
-		p.config.Placer.Finish(destRoot, destAbs, fileManagement, time.Time{})
-	}
-
-	registered, err = p.config.Physical.RegisterBatch(ctx, destRoot.ID, []library.PhysicalFile{{RelPath: destRel, SizeBytes: file.SizeBytes, QuickHash: hashes[0], FirstSeenAt: now}})
-	if err != nil {
-		return undo(fmt.Errorf("register placed file: %w", err))
-	}
-	if _, err := p.config.Series.AttachWholeFiles(ctx, now, workID, destRoot.ID, []int64{registered[0].MediaObjectID}); err != nil {
-		return undo(err)
-	}
-	placement := &library.Placement{
-		WorkID: workID, MediaObjectIDs: []int64{registered[0].MediaObjectID}, LibraryPathIDs: []int64{registered[0].LibraryPathID},
-		TransferMethods: []string{string(method)},
-	}
-	if p.config.ExtraFiles != nil {
-		owners := []placer.Owner{{SourceRel: file.RelPath, DestRel: destRel}}
-		placement.Extras = p.config.Placer.Extras(ctx, p.config.ExtraFiles(request.CategoryID), request.SourcePath, destRoot, unit.Other, owners, methods)
-	}
-	return placement, nil
+	return destRel, fileManagement, nil
 }
 
 func (p placing) namingFor(categoryID int64) (Naming, settings.FileManagement) {

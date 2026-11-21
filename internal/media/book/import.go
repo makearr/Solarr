@@ -121,7 +121,7 @@ func (p placing) bookFiles(unit inspect.Unit) []inspect.File {
 
 // placeUnit places the book's files: an ebook's file (each format a version of it), or an audiobook's chapters as its
 // numbered parts. A book that already has files takes more only as an upgrade of an ebook.
-// Place implements works.UnitPlacer.
+// Place implements works.UnitPlacer; it places several files of an audiobook folder, so it is not works.PlaceSingleFile.
 func (p placing) Place(ctx context.Context, request batch.Request, unit inspect.Unit, workID int64, upgrade bool) (*library.Placement, error) {
 	now := p.config.Clock.Now()
 	format := p.format()
