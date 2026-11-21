@@ -57,7 +57,13 @@ func newImporterWithRoom(t *testing.T, free int64) (movie.Importer, *fsx.Mem, fu
 // newImporterOver is newImporterWithRoom whose downloads come from acquisitions, with the library's store.
 func newImporterOver(t *testing.T, free int64, acquisitions batch.AcquisitionSource) (movie.Importer, *fsx.Mem, func(rel string) inspect.File, library.Identity, *store.Store) {
 	t.Helper()
-	service, opened := newService(t, byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Example Film", "1999-03-30")}}, nil)
+	return newImporterFrom(t, byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Example Film", "1999-03-30")}}, free, acquisitions)
+}
+
+// newImporterFrom is newImporterOver over a chosen TMDB.
+func newImporterFrom(t *testing.T, source movie.TMDBSource, free int64, acquisitions batch.AcquisitionSource) (movie.Importer, *fsx.Mem, func(rel string) inspect.File, library.Identity, *store.Store) {
+	t.Helper()
+	service, opened := newService(t, source, nil)
 	fake := clock.NewFakeAtEpoch()
 	fake.Set(addNow)
 	fsys := fsx.NewMem(fake)
@@ -98,6 +104,43 @@ type grabbedFor struct{ desiredItemID *int64 }
 
 func (g grabbedFor) Get(context.Context, int64) (library.Acquisition, error) {
 	return library.Acquisition{DesiredItemID: g.desiredItemID}, nil
+}
+
+// searchCounter counts the searches a resolution makes.
+type searchCounter struct {
+	byTitle
+	searches *int
+}
+
+func (c searchCounter) SearchMovies(ctx context.Context, term string, year, page int) ([]tmdb.MovieHit, error) {
+	*c.searches++
+	return c.byTitle.SearchMovies(ctx, term, year, page)
+}
+
+// A download grabbed for a film is never looked up by its names: the provider is not asked.
+func TestImportOfAGrabbedDownloadMakesNoProviderLookup(t *testing.T) {
+	var searches int
+	var itemID int64
+	source := searchCounter{byTitle: byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Example Film", "1999-03-30")}}, searches: &searches}
+	importer, _, write, _, opened := newImporterFrom(t, source, 1<<40, grabbedFor{&itemID})
+	first, err := importer.ImportBatch(t.Context(), batch.Request{SessionID: 1, CategoryID: 3, SourcePath: "/downloads", UnitIDs: []int64{5},
+		Units: []inspect.Unit{{Directory: "The.Example.Film.1999.1080p", Media: []inspect.File{write("The.Example.Film.1999.1080p/film.mkv")}}}})
+	if err != nil || first.Decisions[0].WorkID == nil || searches == 0 {
+		t.Fatalf("first import = %+v, %v, searches %d; want the film found by a search", first.Decisions, err, searches)
+	}
+	items, err := library.NewDesired(opened).AlbumItemsForWork(t.Context(), *first.Decisions[0].WorkID)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("items = %+v, %v", items, err)
+	}
+	itemID = items[0].ID
+	before, acquisitionID := searches, int64(1)
+	if _, err := importer.ImportBatch(t.Context(), batch.Request{SessionID: 2, CategoryID: 3, SourcePath: "/downloads", UnitIDs: []int64{6}, AcquisitionID: &acquisitionID,
+		Units: []inspect.Unit{{Directory: "holiday", Media: []inspect.File{write("holiday/clip.mkv")}}}}); err != nil {
+		t.Fatal(err)
+	}
+	if searches != before {
+		t.Errorf("provider searches for a grabbed download = %d, want 0", searches-before)
+	}
 }
 
 // A download is the film it was grabbed for, whatever its folder is called.

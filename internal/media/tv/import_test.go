@@ -12,6 +12,7 @@ import (
 	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/media/tv"
+	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -411,4 +412,79 @@ func TestImportNamesAnObfuscatedFileFromItsFolderOrItsReleaseTitle(t *testing.T)
 			}
 		})
 	}
+}
+
+// searchCountingSkyhook counts the searches a resolution makes.
+type searchCountingSkyhook struct {
+	searchSkyhook
+	searches *int
+}
+
+func (s searchCountingSkyhook) Search(ctx context.Context, term string) ([]skyhook.Series, error) {
+	*s.searches++
+	return s.searchSkyhook.Search(ctx, term)
+}
+
+// A download grabbed for a series is never looked up by its folder names: the provider is not asked.
+func TestImportOfAGrabbedDownloadMakesNoProviderLookup(t *testing.T) {
+	var searches int
+	service, opened := newService(t, searchCountingSkyhook{searchSkyhook: searchSkyhook{series: fixtureSkyhook()}, searches: &searches}, fakeTVmaze{err: tvmaze.ErrNotFound})
+	fake := clock.NewFakeAtEpoch()
+	fake.Set(addNow)
+	fsys := fsx.NewMem(fake)
+	for _, dir := range []string{"/downloads", "/library"} {
+		if err := fsys.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write := func(rel string) inspect.File {
+		abs := path.Join("/downloads", rel)
+		_ = fsys.MkdirAll(path.Dir(abs), 0o755)
+		file, err := fsys.Create(abs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		content := []byte("episode " + rel)
+		_, _ = file.Write(content)
+		_ = file.Close()
+		return inspect.File{RelPath: rel, SizeBytes: int64(len(content)), Class: inspect.ClassMedia}
+	}
+	reader := library.NewSeriesReader(opened)
+	free, total := int64(1<<40), int64(1<<40)
+	var itemID int64
+	importer := tv.NewImporter(tv.ImporterConfig{
+		FS: fsys, Roots: oneRoot{settings.RootFolder{ID: 9, Path: "/library", Online: true, Writable: true, FreeBytes: &free, TotalBytes: &total}},
+		Affinity: memoryAffinity{}, Physical: library.NewPhysical(opened), Series: service.Series, Reader: reader,
+		Identity: library.NewIdentity(opened), Desired: library.NewDesired(opened), Acquisitions: acquisitionLate{&itemID},
+		Resolver:   tv.Resolver{Service: service, Reader: reader, Clock: fake, DefaultProfileID: 1, Categories: categories{}},
+		Categories: categories{}, Clock: fake,
+	})
+	first, err := importer.ImportBatch(t.Context(), batch.Request{SessionID: 1, CategoryID: 3, SourcePath: "/downloads", UnitIDs: []int64{1},
+		Units: []inspect.Unit{{Directory: "Example.Show.S01", Media: []inspect.File{write("Example.Show.S01/Example.Show.S01E01.mkv")}}}})
+	if err != nil || first.Decisions[0].WorkID == nil || searches == 0 {
+		t.Fatalf("first import = %+v, %v, searches %d; want the series found by a search", first.Decisions, err, searches)
+	}
+	items, err := library.NewDesired(opened).AlbumItemsForWork(t.Context(), *first.Decisions[0].WorkID)
+	if err != nil || len(items) == 0 {
+		t.Fatalf("items = %+v, %v", items, err)
+	}
+	itemID = items[0].ID
+	before, acquisitionID := searches, int64(1)
+	if _, err := importer.ImportBatch(t.Context(), batch.Request{SessionID: 2, CategoryID: 3, SourcePath: "/downloads", UnitIDs: []int64{2}, AcquisitionID: &acquisitionID,
+		Units: []inspect.Unit{{Directory: "holiday", Media: []inspect.File{write("holiday/Example.Show.S01E02.mkv")}}}}); err != nil {
+		t.Fatal(err)
+	}
+	if searches != before {
+		t.Errorf("provider searches for a grabbed download = %d, want 0", searches-before)
+	}
+}
+
+// acquisitionLate is a download grabbed for an item known only after the first import.
+type acquisitionLate struct{ itemID *int64 }
+
+func (a acquisitionLate) Get(context.Context, int64) (library.Acquisition, error) {
+	if *a.itemID == 0 {
+		return library.Acquisition{}, nil
+	}
+	return library.Acquisition{DesiredItemID: a.itemID}, nil
 }
