@@ -69,7 +69,7 @@ func (p placing) Resolve(ctx context.Context, request batch.Request, unit inspec
 	if file == nil {
 		return 0, nil
 	}
-	info, ok := parsemovie.ParsePath(file.RelPath)
+	info, ok := parsemovie.ParsePathAt(file.RelPath, p.config.Clock.Now().Year())
 	if !ok {
 		return 0, nil
 	}
@@ -134,7 +134,7 @@ func (p placing) Place(ctx context.Context, request batch.Request, unit inspect.
 	if rejection := works.ScreenVideo(ctx, p.config.Probe, sourceAbs, siblings, int(basics.RuntimeMs/60_000), defaultMovieMinutes); rejection != nil {
 		return nil, &batch.RejectedError{MediaType: MediaType, Rejections: []model.Rejection{*rejection}}
 	}
-	info, _ := parsemovie.ParsePath(file.RelPath)
+	info, _ := parsemovie.ParsePathAt(file.RelPath, now.Year())
 
 	hashes, err := p.config.Placer.CheckBlocked(ctx, request.SourcePath, []placer.File{{RelPath: file.RelPath, SizeBytes: file.SizeBytes}})
 	if err != nil {

@@ -41,6 +41,7 @@ type Consumer struct {
 type scanning struct {
 	fs       fsx.FS
 	resolver Resolver
+	clock    clock.Clock
 }
 
 // NewConsumer builds the consumer.
@@ -50,7 +51,7 @@ func NewConsumer(config ConsumerConfig) Consumer {
 		logger = slog.Default()
 	}
 	return Consumer{works.NewConsumer(works.ConsumerConfig{
-		MediaType: MediaType, Plural: "movies", OSHash: true, Resolver: scanning{fs: config.FS, resolver: config.Resolver},
+		MediaType: MediaType, Plural: "movies", OSHash: true, Resolver: scanning{fs: config.FS, resolver: config.Resolver, clock: config.Clock},
 		FS: config.FS, Physical: config.Physical, Unidentified: config.Unidentified, Series: config.Service.Series,
 		Clock: config.Clock, Logger: logger,
 	})}
@@ -65,13 +66,13 @@ func (scanning) Readable(observed scan.Observed) bool { return observed.Probe.Er
 func (s scanning) Resolve(ctx context.Context, root settings.RootFolder, categoryID int64, observed []scan.Observed, _ []library.PhysicalFile) []works.ScanMatch {
 	matches := make([]works.ScanMatch, len(observed))
 	for i, file := range observed {
-		info, ok := parsemovie.ParsePath(file.File.RelPath)
+		info, ok := parsemovie.ParsePathAt(file.File.RelPath, s.clock.Now().Year())
 		if !ok {
 			continue
 		}
 		named := NFOIDs(s.fs, path.Join(root.Path, file.File.RelPath))
 		workID, candidates := s.resolver.Resolve(ctx, categoryID, info, named)
-		if folderInfo, found := parsemovie.ParseFolderOf(file.File.RelPath); workID == 0 && found && folderInfo.Title != "" && (folderInfo.Year != info.Year || folderInfo.Title != info.Title) {
+		if folderInfo, found := parsemovie.ParseFolderAt(file.File.RelPath, s.clock.Now().Year()); workID == 0 && found && folderInfo.Title != "" && (folderInfo.Year != info.Year || folderInfo.Title != info.Title) {
 			// A file named after another year or spelling than its folder ("The Xbsebbxog Zxkuketjaz (2025)" in "... (2018)").
 			if foundID, more := s.resolver.Resolve(ctx, categoryID, folderInfo, named); foundID != 0 {
 				workID = foundID

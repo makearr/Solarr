@@ -242,3 +242,15 @@ func TestImportTakesBackFileAndRowsWhenAttachingTheFilmFails(t *testing.T) {
 		t.Errorf("film folder holds %v, want no placed file", entries)
 	}
 }
+
+// A number beyond next year is not the year, so the film's own year in the name still counts.
+func TestImportDoesNotTakeAFutureLookingNumberForTheYear(t *testing.T) {
+	importer, _, write, _ := newImporter(t)
+	unit := inspect.Unit{Directory: "The.Example.Film.1999.2049.1080p", Media: []inspect.File{write("The.Example.Film.1999.2049.1080p/film.mkv")}}
+	result, err := importer.ImportBatch(t.Context(), batch.Request{
+		SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{5},
+	})
+	if err != nil || result.Decisions[0].WorkID == nil || result.Placements[0] == nil {
+		t.Errorf("decision = %+v, %v; want The Example Film placed", result.Decisions[0], err)
+	}
+}

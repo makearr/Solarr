@@ -123,3 +123,20 @@ func TestParseAtDoesNotTakeAFutureNumberForTheYear(t *testing.T) {
 		t.Errorf("no clock: %+v", info)
 	}
 }
+
+func TestParsePathAtReadsFileFolderAndDiscParentWithTheYearItKnows(t *testing.T) {
+	info, _ := parsemovie.ParsePathAt("Sample Runner 2049 {tmdb-9}/Sample.Runner.2049.1080p.mkv", 2026)
+	if info.Title != "Sample Runner 2049" || info.Year != 0 || info.TMDB != 9 {
+		t.Errorf("file and folder: %+v", info)
+	}
+	info, _ = parsemovie.ParsePathAt("Sample Runner 2049 {tmdb-9}/Disc 1/Sample.Runner.2049.1080p.mkv", 2026)
+	if info.Year != 0 || info.TMDB != 9 {
+		t.Errorf("disc parent: %+v", info)
+	}
+	if folder, _ := parsemovie.ParseFolderAt("Sample Runner 2049/x.mkv", 2026); folder.Year != 0 {
+		t.Errorf("folder: %+v", folder)
+	}
+	if info, _ := parsemovie.ParsePath("Sample Runner 2049/Sample.Runner.2049.1080p.mkv"); info.Year != 2049 {
+		t.Errorf("no clock: %+v", info)
+	}
+}

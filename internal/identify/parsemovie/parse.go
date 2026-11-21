@@ -147,17 +147,20 @@ func parse(name string, thisYear int) (Info, bool) {
 // ParsePath reads a library or download path: the file name first; when it names no year the folder it is in
 // ("Title (2001)/movie.mkv") supplies the title and year. Ids the file name lacks come from the folder
 // ("Title (2001) {tmdb-1}/Title.mkv"), and from the film folder above a disc folder.
-func ParsePath(rel string) (Info, bool) {
+func ParsePath(rel string) (Info, bool) { return ParsePathAt(rel, 0) }
+
+// ParsePathAt is ParsePath for a caller that knows the year, as ParseAt is for Parse.
+func ParsePathAt(rel string, thisYear int) (Info, bool) {
 	rel = strings.ReplaceAll(rel, "\\", "/")
-	info, ok := parsePathNames(rel)
+	info, ok := parsePathNames(rel, thisYear)
 	if !ok {
 		return info, ok
 	}
 	if info.IMDb == "" || info.TMDB == 0 {
-		if folder, found := ParseFolderOf(rel); found {
+		if folder, found := ParseFolderAt(rel, thisYear); found {
 			info = info.withIDsOf(folder)
 		}
-		if parent, found := parseDiscParent(rel); found {
+		if parent, found := parseDiscParent(rel, thisYear); found {
 			info = info.withIDsOf(parent)
 		}
 	}
@@ -176,20 +179,20 @@ func (info Info) withIDsOf(other Info) Info {
 }
 
 // parseDiscParent reads the folder above a disc folder ("Film (2010) {tmdb-1}/Disc 1/x.mkv").
-func parseDiscParent(rel string) (Info, bool) {
+func parseDiscParent(rel string, thisYear int) (Info, bool) {
 	dir, _ := path.Split(rel)
 	parts := strings.Split(strings.Trim(dir, "/"), "/")
 	for i := len(parts) - 1; i >= 0; i-- {
 		if !discFolderRe.MatchString(parts[i]) {
-			return Parse(parts[i])
+			return ParseAt(parts[i], thisYear)
 		}
 	}
 	return Info{}, false
 }
 
-func parsePathNames(rel string) (Info, bool) {
+func parsePathNames(rel string, thisYear int) (Info, bool) {
 	dir, file := path.Split(rel)
-	info, ok := Parse(file)
+	info, ok := ParseAt(file, thisYear)
 	if ok && info.Year != 0 {
 		return info, true
 	}
@@ -197,7 +200,7 @@ func parsePathNames(rel string) (Info, bool) {
 	if folder == "" || folder == "." || folder == "/" {
 		return info, ok
 	}
-	if fromFolder, folderOK := Parse(folder); folderOK && (fromFolder.Year != 0 || !ok) {
+	if fromFolder, folderOK := ParseAt(folder, thisYear); folderOK && (fromFolder.Year != 0 || !ok) {
 		fromFolder.ReleaseTitle = info.ReleaseTitle
 		if info.Claims.HasQuality() || !fromFolder.Claims.HasQuality() {
 			fromFolder.Claims = info.Claims
@@ -215,13 +218,16 @@ func parsePathNames(rel string) (Info, bool) {
 
 // ParseFolderOf reads the name of the folder a path sits in, for a file named differently from its folder: the folder is
 // then the second opinion on which film it is.
-func ParseFolderOf(rel string) (Info, bool) {
+func ParseFolderOf(rel string) (Info, bool) { return ParseFolderAt(rel, 0) }
+
+// ParseFolderAt is ParseFolderOf for a caller that knows the year.
+func ParseFolderAt(rel string, thisYear int) (Info, bool) {
 	dir, _ := path.Split(strings.ReplaceAll(rel, "\\", "/"))
 	folder := path.Base(strings.TrimSuffix(dir, "/"))
 	if folder == "" || folder == "." || folder == "/" {
 		return Info{}, false
 	}
-	return Parse(folder)
+	return ParseAt(folder, thisYear)
 }
 
 func readIDs(info *Info, work string) string {
