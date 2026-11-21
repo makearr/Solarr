@@ -1971,3 +1971,70 @@ func TestEnrichJob_BackfillRetriesAnArtistWhoseSecondSourceFailed(t *testing.T) 
 		t.Fatalf("PeopleNeedingArtwork = %+v, want person %d still waiting", remaining, personID)
 	}
 }
+
+// albumFlakySource answers every release group except the ones listed as failing.
+type albumFlakySource struct {
+	fakeArtistSource
+	failing map[string]bool
+}
+
+func (f *albumFlakySource) Album(ctx context.Context, rgMBID, relMBID string) (musicbrainz.ReleaseGroup, musicbrainz.Release, error) {
+	rg, release, err := f.fakeArtistSource.Album(ctx, rgMBID, relMBID)
+	rg.MBID = rgMBID
+	if f.failing[rgMBID] {
+		return rg, release, errors.New("provider down")
+	}
+	return rg, release, err
+}
+
+// Fewer than half of the albums answering says the provider is the matter; half or more says the albums are.
+func TestEnrichJob_AnArtistIsRefreshedWhenHalfItsAlbumsAnswer(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		failing []string
+		wantErr bool
+	}{
+		{"one of three fails", []string{"rg-3"}, false},
+		{"two of four fail", []string{"rg-3", "rg-4"}, false},
+		{"two of three fail", []string{"rg-2", "rg-3"}, true},
+		{"all fail", []string{"rg-1", "rg-2", "rg-3"}, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			source := &albumFlakySource{
+				fakeArtistSource: fakeArtistSource{
+					fakeSource: fakeSource{
+						rg: musicbrainz.ReleaseGroup{
+							Title: "KI Pecezinu", PrimaryType: "Album",
+							ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "artist-1", Name: "Katupoken"}},
+						},
+						release: musicbrainz.Release{MBID: "rel-1", Title: "KI Pecezinu", Status: "official"},
+					},
+					artists: map[string]musicbrainz.Artist{"artist-1": {MBID: "artist-1", Name: "Katupoken", SortName: "Katupoken"}},
+				},
+				failing: map[string]bool{},
+			}
+			job, opened, queries := newEnrichJobRealigning(t, source, nil, nil, nil)
+			albums := 3
+			if len(test.failing) == 2 && test.failing[0] == "rg-3" {
+				albums = 4
+			}
+			for index := 1; index <= albums; index++ {
+				createPlaceholder(t, opened, fmt.Sprintf("rg-%d", index), fmt.Sprintf("rel-%d", index))
+			}
+			if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			person, err := queries.GetPersonByExternalID(t.Context(), librarydb.GetPersonByExternalIDParams{Provider: music.ProviderArtist, ExternalID: "artist-1"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, id := range test.failing {
+				source.failing[id] = true
+			}
+			err = job.RefreshArtist(t.Context(), person.ID, true)
+			if (err != nil) != test.wantErr {
+				t.Errorf("RefreshArtist error = %v, want error: %v", err, test.wantErr)
+			}
+		})
+	}
+}

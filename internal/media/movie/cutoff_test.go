@@ -9,6 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media/movie"
+	"github.com/makearr/Solarr/internal/media/works"
 )
 
 // versionFile is one file of the film: its resolution and whether a download brought it.
@@ -164,5 +165,33 @@ func TestCutoff_StateUnderAnotherTargetWritesNothing(t *testing.T) {
 	want := map[string]string{"now": movie.ItemStateUpgradable, "lower target": movie.ItemStateComplete}
 	if got["now"] != want["now"] || got["lower target"] != want["lower target"] {
 		t.Errorf("states %v, want %v", got, want)
+	}
+}
+
+// The check reads an item's files once, and again only after a file was recycled.
+func TestCutoff_AnItemsFilesAreReadOncePerCheck(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		files []versionFile
+		reads int
+	}{
+		{"nothing to settle", []versionFile{{"720p", false}, {"1080p", false}}, 1},
+		{"a download is recycled", []versionFile{{"720p", false}, {"1080p", true}}, 2},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			job, item, _, cache, _ := cutoffFilm(t, test.files...)
+			counted := 0
+			shared := works.VersionedCutoff(movie.MediaType, job.Desired, job.Reader, job.Recycle)
+			shared.Files = func(ctx context.Context, itemID int64) ([]works.File, error) {
+				counted++
+				return works.ItemFiles(ctx, job.Reader, itemID)
+			}
+			if _, err := shared.CheckCutoff(t.Context(), cache.Snapshot(), item); err != nil {
+				t.Fatal(err)
+			}
+			if counted != test.reads {
+				t.Errorf("Files was called %d times, want %d", counted, test.reads)
+			}
+		})
 	}
 }

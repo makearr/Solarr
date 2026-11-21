@@ -532,8 +532,11 @@ func TestArtworkJob_AnUndecodableImageIsRememberedAsAMiss(t *testing.T) {
 	job, opened, _ := newArtworkJob(t, coverArt, server.URL)
 	refineWithReleaseMBIDForArtworkJob(t, library.NewIdentity(opened), "rg-1", "release-1")
 
+	// A run that keeps asking for the same picture never ends; the deadline turns that into a failure.
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
 	for range 2 {
-		if err := job.Run(t.Context(), jobs.Job{Type: music.ArtworkJobType}); err != nil {
+		if err := job.Run(ctx, jobs.Job{Type: music.ArtworkJobType}); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
 	}

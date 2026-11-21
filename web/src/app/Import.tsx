@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Ban, ChevronDown, ChevronRight, HelpCircle, Undo2, X } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { api, ok } from "@/api/client";
 import { t } from "@/lib/i18n";
@@ -731,6 +732,14 @@ function SessionList({
       query.state.data?.pages[0]?.some((session) => RUNNING_STATES.has(session.state)) ? 5000 : false,
   });
   const rows = sessions.data?.pages.flat() ?? [];
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => SESSION_ROW_ESTIMATE,
+    getItemKey: (index) => rows[index]?.id ?? index,
+    overscan: 6,
+  });
   const queryClient = useQueryClient();
   const dismissFinished = useMutation({
     mutationFn: () => ok(api.POST("/import/sessions/dismiss")),
@@ -738,26 +747,13 @@ function SessionList({
   });
 
   return (
-    <div className="flex max-h-[75vh] w-full shrink-0 flex-col gap-2 overflow-y-auto md:sticky md:top-0 md:w-96">
-      <div className="flex gap-1" role="tablist" aria-label="Imports shown">
-        {[
-          { id: "attention", label: "Needs attention" },
-          { id: "all", label: "All" },
-        ].map((entry) => (
-          <button
-            key={entry.id}
-            type="button"
-            role="tab"
-            aria-selected={(entry.id === "attention") === attention}
-            onClick={() => void navigate({ to: ".", search: (prev: Record<string, unknown>) => ({ ...prev, sessions: entry.id === "all" ? "all" : undefined }) })}
-            className={`rounded-md border px-2 py-1 text-xs ${
-              (entry.id === "attention") === attention ? "border-accent text-ink" : "border-border-subtle text-ink-muted hover:text-ink"
-            }`}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </div>
+    <div className="flex max-h-[75vh] w-full shrink-0 flex-col gap-2 md:sticky md:top-0 md:w-96">
+      <SessionTabs
+        attention={attention}
+        onChange={(next) =>
+          void navigate({ to: ".", search: (prev: Record<string, unknown>) => ({ ...prev, sessions: next ? undefined : "all" }) })
+        }
+      />
       {attention && rows.some((session) => !RUNNING_STATES.has(session.state)) && (
         <div className="flex items-center gap-2">
           <button
@@ -777,15 +773,30 @@ function SessionList({
       {sessions.data && rows.length === 0 && (
         <Message>{attention ? "Nothing needs you." : "No import has run yet."}</Message>
       )}
-      {rows.map((session) => (
-        <SessionRow
-          key={session.id}
-          session={session}
-          selected={selectedId === session.id}
-          onSelect={() => onSelect(session.id)}
-          progress={liveProgress[session.id]}
-        />
-      ))}
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+        <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+          {virtualizer.getVirtualItems().map((item) => {
+            const session = rows[item.index];
+            if (!session) return null;
+            return (
+              <div
+                key={session.id}
+                ref={virtualizer.measureElement}
+                data-index={item.index}
+                className="absolute inset-x-0 pb-2"
+                style={{ transform: `translateY(${item.start}px)` }}
+              >
+                <SessionRow
+                  session={session}
+                  selected={selectedId === session.id}
+                  onSelect={() => onSelect(session.id)}
+                  progress={liveProgress[session.id]}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
       {sessions.hasNextPage && (
         <button
           type="button"
@@ -801,6 +812,32 @@ function SessionList({
 }
 
 const SESSION_PAGE = 50;
+const SESSION_ROW_ESTIMATE = 76;
+
+/** The two views of the session list: what needs the user, and everything ever run. */
+export function SessionTabs({ attention, onChange }: { attention: boolean; onChange: (attention: boolean) => void }) {
+  return (
+    <div className="flex gap-1" role="tablist" aria-label="Imports shown">
+      {[
+        { id: true, label: "Needs attention" },
+        { id: false, label: "All" },
+      ].map((entry) => (
+        <button
+          key={entry.label}
+          type="button"
+          role="tab"
+          aria-selected={entry.id === attention}
+          onClick={() => onChange(entry.id)}
+          className={`rounded-md border px-2 py-1 text-xs ${
+            entry.id === attention ? "border-accent text-ink" : "border-border-subtle text-ink-muted hover:text-ink"
+          }`}
+        >
+          {entry.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function SessionRow({
   session,
