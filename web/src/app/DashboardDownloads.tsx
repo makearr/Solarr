@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { appendSample, sparkPath, totalSpeed, type SpeedSample } from "@/lib/speedHistory";
 import { labelStyle } from "@/ui/form";
 
-import { formatBytes, formatDuration, ProgressBar, statusLabel, useQueue } from "./Queue";
+import { formatBytes, formatDuration, ProgressBar, statusLabel, useQueue, GLANCE_REFRESH_MS } from "./Queue";
 
 /** How many downloads the dashboard lists before "All downloads". */
 const SHOWN = 6;
@@ -12,7 +12,7 @@ const SHOWN = 6;
 /** The download clients' speed over the last minutes and what is downloading, as fillarr's dashboard shows it; the
  *  graph is drawn from the readings taken while the page is open. */
 export function DashboardDownloads() {
-  const queue = useQueue();
+  const queue = useQueue(undefined, GLANCE_REFRESH_MS);
   const [samples, setSamples] = useState<SpeedSample[]>([]);
   const clients = queue.data?.clients;
   const updatedAt = queue.dataUpdatedAt;

@@ -73,7 +73,8 @@ type QueueSnapshot struct {
 
 // Queue reads the downloads in flight live from their clients, and removes one.
 type Queue interface {
-	List(ctx context.Context) (QueueSnapshot, error)
+	// List reads the queue; a work id limits it to that work's downloads and held releases.
+	List(ctx context.Context, workID *int64) (QueueSnapshot, error)
 	Remove(ctx context.Context, id int64, blocklist bool) error
 	// SetClientPaused pauses or resumes Solarr's own downloads in one client.
 	SetClientPaused(ctx context.Context, downloaderID int64, paused bool) error
@@ -103,7 +104,7 @@ func (s *Server) ListQueue(w http.ResponseWriter, r *http.Request, params gen.Li
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "the queue is not available")
 		return
 	}
-	snapshot, err := s.queue.List(r.Context())
+	snapshot, err := s.queue.List(r.Context(), params.WorkId)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -211,7 +212,7 @@ func (s *Server) RemoveQueueItem(w http.ResponseWriter, r *http.Request, id int6
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "the queue is not available")
 		return
 	}
-	snapshot, err := s.queue.List(r.Context())
+	snapshot, err := s.queue.List(r.Context(), nil)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return

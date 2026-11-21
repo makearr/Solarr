@@ -251,6 +251,7 @@ function MemoryCopiesCard() {
       {current.database_enabled && (
         <p className="rounded-md border border-danger p-3 text-sm font-semibold text-danger">
           DATA LOSS RISK: the databases hold everything Solarr knows. A crash, a power cut or an out-of-memory kill loses all changes since the last copy to disk.
+          A normal stop copies them once more; give the container a stop_grace_period of at least 60s (compose: stop_grace_period: 60s) so that copy is not cut off.
         </p>
       )}
       {(current.cache_enabled || current.database_enabled) && (

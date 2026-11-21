@@ -12,6 +12,8 @@ type HeldRelease = components["schemas"]["HeldRelease"];
 
 // Read live from the clients, so refreshed as Lidarr's queue is rather than on events alone.
 const REFRESH_MS = 5_000;
+// The dashboard and a work page only glance at the queue, so they poll at half the queue screen's rate (PERF-22).
+export const GLANCE_REFRESH_MS = 10_000;
 
 /** Activity → Queue, as in Lidarr: what is downloading now, and each client's own state. */
 export function Queue() {
@@ -49,8 +51,8 @@ export function queueQuery(workId?: number) {
   };
 }
 
-export function useQueue(workId?: number) {
-  return useQuery({ ...queueQuery(workId), refetchInterval: REFRESH_MS });
+export function useQueue(workId?: number, refetchInterval = REFRESH_MS) {
+  return useQuery({ ...queueQuery(workId), refetchInterval });
 }
 
 function ClientList({ clients, items }: { clients: readonly QueueClient[]; items: readonly QueueItem[] }) {

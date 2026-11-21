@@ -118,6 +118,26 @@ func (p *process) newDescriber(ctx context.Context) func(library.Acquisition) (d
 	}
 }
 
+// newWorkLookup answers which work a download is for with one item read per distinct item, and no naming.
+func (p *process) newWorkLookup(ctx context.Context) func(library.Acquisition) int64 {
+	works := map[int64]int64{}
+	desired := library.NewDesired(p.library)
+	return func(acquisition library.Acquisition) int64 {
+		if acquisition.DesiredItemID == nil {
+			return 0
+		}
+		if workID, ok := works[*acquisition.DesiredItemID]; ok {
+			return workID
+		}
+		var workID int64
+		if item, err := desired.Get(ctx, *acquisition.DesiredItemID); err == nil {
+			workID = item.WorkID
+		}
+		works[*acquisition.DesiredItemID] = workID
+		return workID
+	}
+}
+
 // replacesFiles is true when an item already holds all it requires, so a download for it can only upgrade.
 func replacesFiles(required sql.NullInt64, present int64) bool {
 	return required.Valid && required.Int64 > 0 && present >= required.Int64

@@ -40,3 +40,19 @@ func TestSnapshotMemo_SharesOneReadAndKeepsNoFailure(t *testing.T) {
 		t.Errorf("after a failure: err = %v, reads = %d; want the read made", err, reads)
 	}
 }
+
+// A read for one work keeps only that work's elements, and asks nothing when no work is wanted (PERF-22 step 3).
+func TestKeepWork_KeepsOnlyTheWantedWork(t *testing.T) {
+	workOf := func(n int) int64 { return int64(n % 3) }
+	asked := 0
+	counting := func(n int) int64 { asked++; return workOf(n) }
+	all := []int{1, 2, 3, 4, 5, 6}
+	if got := keepWork(all, nil, counting); len(got) != 6 || asked != 0 {
+		t.Fatalf("no wanted work: kept %v after %d questions; want all, none asked", got, asked)
+	}
+	want := int64(1)
+	got := keepWork(all, &want, counting)
+	if len(got) != 2 || got[0] != 1 || got[1] != 4 || asked != 6 {
+		t.Errorf("work 1: kept %v after %d questions; want [1 4]", got, asked)
+	}
+}

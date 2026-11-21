@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -123,6 +124,7 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 				read = append(read, conn.Name+" not modified")
 				continue
 			}
+			raws = j.morePages(ctx, mark, conn, request, raws)
 			unread := j.unread(source.Name, conn.Name, mark, raws)
 			releases += len(unread)
 			read = append(read, fmt.Sprintf("%s %d new of %d", conn.Name, len(unread), len(raws)))
@@ -150,6 +152,44 @@ func (j *Job) fetch(ctx context.Context, mark readMark, conn judge.Conn, request
 		j.validators[mark] = validators
 	}
 	return raws, unchanged, err
+}
+
+// maxFeedPages bounds how many pages one sync reads when the feed moved on by more than a page.
+const maxFeedPages = 5
+
+// morePages reads the pages behind a full first page that holds nothing seen, until one holds a seen release, comes up short
+// or adds nothing (an indexer that ignores the offset), so a busy feed is not skipped over (RSS-1).
+func (j *Job) morePages(ctx context.Context, mark readMark, conn judge.Conn, request indexer.SearchRequest, first []indexer.RawItem) []indexer.RawItem {
+	seen := j.seenOf(mark)
+	all, last := first, first
+	have := make(map[string]struct{}, len(first))
+	for _, raw := range first {
+		have[releaseKey(raw)] = struct{}{}
+	}
+	for page := 1; page < maxFeedPages; page++ {
+		if len(seen.order) == 0 || len(last) < FeedLimit || slices.ContainsFunc(last, seen.has) {
+			break
+		}
+		request.Offset = page * FeedLimit
+		next, err := conn.Client.Search(ctx, request)
+		if err != nil {
+			j.config.Logger.Warn("rss sync: a further feed page failed", "indexer", conn.Name, "error", err)
+			break
+		}
+		added := 0
+		for _, raw := range next {
+			if _, dup := have[releaseKey(raw)]; !dup {
+				have[releaseKey(raw)] = struct{}{}
+				all = append(all, raw)
+				added++
+			}
+		}
+		if added == 0 {
+			break
+		}
+		last = next
+	}
+	return all
 }
 
 // unread keeps the releases this feed has not offered before. The feed is ordered by when the indexer listed a

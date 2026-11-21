@@ -176,3 +176,38 @@ func TestJob_WarnsWhenAFullPageHoldsNothingSeen(t *testing.T) {
 		t.Errorf("warnings = %d, want one (the first sync has nothing to compare with): %s", got, logged.String())
 	}
 }
+
+// paged answers a feed of numbered releases newest first, honouring the offset like a Newznab indexer.
+type paged struct{ total *int }
+
+func (p paged) Search(_ context.Context, request indexer.SearchRequest) ([]indexer.RawItem, error) {
+	var items []indexer.RawItem
+	for index := request.Offset; index < request.Offset+request.Limit && index < *p.total; index++ {
+		items = append(items, indexer.RawItem{GUID: fmt.Sprintf("r-%d", *p.total-index)})
+	}
+	return items, nil
+}
+
+// A feed that moved on by more than one page between syncs is read further back until it meets what was seen (RSS-1).
+func TestJob_AFeedThatMovedMoreThanAPageIsReadFurtherBack(t *testing.T) {
+	var offered [][]string
+	total := 300
+	feed := offering{conns: []judge.Conn{{ID: 1, Name: "Usenet", Client: paged{&total}}}, offered: &offered}
+	job := rss.NewJob(rss.Config{
+		Sources: func() []rss.Source { return []rss.Source{{Name: "music", Feed: feed}} },
+		Clock:   clock.NewFakeAtEpoch(),
+		Logger:  slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)),
+	})
+	run := func() {
+		t.Helper()
+		if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	}
+	run()
+	total = 450
+	run()
+	if len(offered) != 2 || len(offered[1]) != 150 {
+		t.Fatalf("second sync offered %d releases, want the 150 that arrived", len(offered[1]))
+	}
+}

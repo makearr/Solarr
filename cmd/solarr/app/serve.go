@@ -882,7 +882,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		History:   adapters.History{History: statistics.NewHistory(p.statistics)},
 		Queue: adapters.Queue{
 			Poll: p.pollJob(), Ready: library.NewReadyQueue(p.library),
-			Describer: p.newDescriber, Clock: clock.NewSystem(), Memo: &adapters.SnapshotMemo{},
+			Describer: p.newDescriber, WorkOf: p.newWorkLookup, Clock: clock.NewSystem(), Memo: &adapters.SnapshotMemo{},
 		},
 		LogReader: logSource{ring: p.logRing},
 		Calendar:  adapters.Calendar{Calendar: library.NewCalendar(p.library)},

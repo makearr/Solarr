@@ -23,7 +23,7 @@ type fakeQueue struct {
 	paused    []string
 }
 
-func (f *fakeQueue) List(context.Context) (apiserver.QueueSnapshot, error) {
+func (f *fakeQueue) List(context.Context, *int64) (apiserver.QueueSnapshot, error) {
 	return apiserver.QueueSnapshot{Rows: f.rows, Clients: f.clients, Held: f.held}, nil
 }
 

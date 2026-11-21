@@ -27,7 +27,7 @@ import { ChooseImage } from "../ChooseImage";
 import { InteractiveSearch, type SearchScope } from "../InteractiveSearch";
 import { RenamePlanner } from "../RenamePlanner";
 import { LibraryMoveDialog } from "./LibraryMoveDialog";
-import { statusLabel, useQueue } from "../Queue";
+import { statusLabel, useQueue, GLANCE_REFRESH_MS } from "../Queue";
 import { CrossoverBadges, CrossoverDialog, CrossoverGuestRows, useWorkCrossovers } from "../Crossovers";
 import { useLibrary } from "@/lib/useLibrary";
 import { EditWork } from "./EditWork";
@@ -821,7 +821,7 @@ function HistoryTab({ workId }: { workId: number }) {
 
 /** "Downloading 42%" while a release for this work is in a client, as Lidarr's and Sonarr's pages show it. */
 function DownloadingBadge({ workId }: { workId: number }) {
-  const queue = useQueue(workId);
+  const queue = useQueue(workId, GLANCE_REFRESH_MS);
   const item = queue.data?.items[0];
   if (!item) {
     return queue.data?.held.length ? (

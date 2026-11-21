@@ -20,6 +20,8 @@ type Queue struct {
 	Clock clock.Clock
 	// Describer starts one read's naming of downloads: their album, artist, library, indexer and client.
 	Describer func(ctx context.Context) func(library.Acquisition) (download.HistoryData, int64)
+	// WorkOf starts one read's cheap answer to "which work is this download for" (0: none), so a read for one work describes only its rows.
+	WorkOf func(ctx context.Context) func(library.Acquisition) int64
 	// Memo lets the screens that poll at once share one read; nil reads every time.
 	Memo *SnapshotMemo
 }
@@ -63,17 +65,41 @@ func (m *SnapshotMemo) get(ctx context.Context, now func() time.Time, read func(
 // heldShown bounds the held releases one queue read lists.
 const heldShown = 200
 
-func (a Queue) List(ctx context.Context) (apiserver.QueueSnapshot, error) {
-	if a.Memo == nil {
-		return a.read(ctx)
+// List answers the whole queue, shared between the screens that poll at once; a read for one work is cheap and not shared.
+func (a Queue) List(ctx context.Context, workID *int64) (apiserver.QueueSnapshot, error) {
+	if workID != nil && a.WorkOf != nil {
+		return a.read(ctx, workID)
 	}
-	return a.Memo.get(ctx, a.Clock.Now, a.read)
+	read := func(ctx context.Context) (apiserver.QueueSnapshot, error) { return a.read(ctx, nil) }
+	if a.Memo == nil {
+		return read(ctx)
+	}
+	return a.Memo.get(ctx, a.Clock.Now, read)
 }
 
-func (a Queue) read(ctx context.Context) (apiserver.QueueSnapshot, error) {
+// keepWork keeps the elements whose work is the wanted one; with no wanted work it keeps all, without asking.
+func keepWork[T any](all []T, workID *int64, workOf func(T) int64) []T {
+	if workID == nil {
+		return all
+	}
+	kept := make([]T, 0, len(all))
+	for _, one := range all {
+		if workOf(one) == *workID {
+			kept = append(kept, one)
+		}
+	}
+	return kept
+}
+
+func (a Queue) read(ctx context.Context, workID *int64) (apiserver.QueueSnapshot, error) {
 	entries, statuses, err := a.Poll.Queue(ctx)
 	if err != nil {
 		return apiserver.QueueSnapshot{}, err
+	}
+	var workOf func(library.Acquisition) int64
+	if workID != nil {
+		workOf = a.WorkOf(ctx)
+		entries = keepWork(entries, workID, func(entry poll.Entry) int64 { return workOf(entry.Acquisition) })
 	}
 	speeds := make(map[int64]int64, len(statuses))
 	clients := make([]apiserver.QueueClientRow, len(statuses))
@@ -118,17 +144,25 @@ func (a Queue) read(ctx context.Context) (apiserver.QueueSnapshot, error) {
 		}
 		rows[i] = row
 	}
-	held, err := a.held(ctx, describe)
+	held, err := a.held(ctx, describe, workID, workOf)
 	if err != nil {
 		return apiserver.QueueSnapshot{}, err
 	}
 	return apiserver.QueueSnapshot{Rows: rows, Clients: clients, Held: held}, nil
 }
 
-func (a Queue) held(ctx context.Context, describe func(library.Acquisition) (download.HistoryData, int64)) ([]apiserver.HeldRow, error) {
+func (a Queue) held(
+	ctx context.Context, describe func(library.Acquisition) (download.HistoryData, int64), workID *int64, workOf func(library.Acquisition) int64,
+) ([]apiserver.HeldRow, error) {
 	entries, err := a.Ready.Next(ctx, a.Clock.Now().Unix(), heldShown)
 	if err != nil {
 		return nil, err
+	}
+	if workID != nil {
+		entries = keepWork(entries, workID, func(entry library.ReadyEntry) int64 {
+			itemID := entry.DesiredItemID
+			return workOf(library.Acquisition{DesiredItemID: &itemID})
+		})
 	}
 	rows := make([]apiserver.HeldRow, 0, len(entries))
 	for _, entry := range entries {
