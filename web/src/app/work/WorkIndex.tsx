@@ -282,7 +282,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
         <IndexViewToggle view={view} onChange={setView} />
         <ToolbarAdd categoryId={categoryId} />
       </Toolbar>
-      {!list.selectionIsEmpty && list.selectionRequest && (
+      {!list.selectionIsEmpty && list.selectionRequest && library?.permission === "manage" && (
         <BulkBar
           request={list.selectionRequest}
           count={list.selectionCount}

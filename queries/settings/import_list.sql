@@ -37,3 +37,6 @@ DELETE FROM import_list WHERE id = ?;
 
 -- name: CountImportListsUsingQualityProfile :one
 SELECT CAST(COUNT(*) AS INTEGER) FROM import_list WHERE quality_profile_id = ?;
+
+-- name: RepointImportListsQualityProfile :exec
+UPDATE import_list SET quality_profile_id = sqlc.arg(to_id) WHERE quality_profile_id = sqlc.arg(from_id);

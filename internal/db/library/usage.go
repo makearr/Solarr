@@ -60,3 +60,39 @@ func (u Usage) ItemsPinnedToTarget(ctx context.Context, targetID int64) (int64, 
 	}
 	return count, nil
 }
+
+// RepointProfile moves every item that names one quality profile, by stored default or own choice, onto another, in chunks of 200.
+func (u Usage) RepointProfile(ctx context.Context, from, to int64) error {
+	return u.repoint(ctx, fmt.Sprintf("quality profile %d", from), func(ctx context.Context, queries *librarydb.Queries) (int64, error) {
+		stored, err := queries.RepointItemProfileChunk(ctx, librarydb.RepointItemProfileChunkParams{ToID: to, FromID: from})
+		if err != nil {
+			return 0, err
+		}
+		own, err := queries.RepointProfileOverrideChunk(ctx, librarydb.RepointProfileOverrideChunkParams{ToID: to, FromID: from})
+		return stored + own, err
+	})
+}
+
+// RepointTarget moves every item that chose one quality target onto another, in chunks of 200.
+func (u Usage) RepointTarget(ctx context.Context, from, to int64) error {
+	return u.repoint(ctx, fmt.Sprintf("quality target %d", from), func(ctx context.Context, queries *librarydb.Queries) (int64, error) {
+		return queries.RepointTargetOverrideChunk(ctx, librarydb.RepointTargetOverrideChunkParams{ToID: to, FromID: from})
+	})
+}
+
+func (u Usage) repoint(ctx context.Context, what string, chunk func(context.Context, *librarydb.Queries) (int64, error)) error {
+	for {
+		var moved int64
+		err := u.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			var err error
+			moved, err = chunk(ctx, librarydb.New(tx))
+			return err
+		})
+		if err != nil {
+			return fmt.Errorf("library: repoint items of %s: %w", what, err)
+		}
+		if moved == 0 {
+			return nil
+		}
+	}
+}

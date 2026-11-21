@@ -559,6 +559,62 @@ func (c *Cache) DeleteQualityProfile(ctx context.Context, id int64) error {
 	})
 }
 
+// ReplaceQualityProfile deletes a quality profile after moving the items and import lists that named it onto another of
+// the same media type; a library that still lists it refuses, as in DeleteQualityProfile.
+func (c *Cache) ReplaceQualityProfile(ctx context.Context, id, replacementID int64) error {
+	from, found := c.Snapshot().QualityProfile(id)
+	if !found {
+		return fmt.Errorf("%w: quality profile %d", ErrNotFound, id)
+	}
+	to, found := c.Snapshot().QualityProfile(replacementID)
+	if !found || replacementID == id || to.MediaType != from.MediaType {
+		return fmt.Errorf("%w: replacement quality profile %d must be another %s profile", ErrNotFound, replacementID, from.MediaType)
+	}
+	categories, err := c.queries.CountCategoryListsUsingQualityProfile(ctx, id)
+	if err != nil {
+		return fmt.Errorf("settings: count categories for quality profile %d: %w", id, err)
+	}
+	if categories > 0 {
+		return &InUseError{Entity: "quality profile", ID: id, References: []Reference{{Kind: "categories", Count: categories}}}
+	}
+	if c.libraryUsage != nil {
+		if err := c.libraryUsage.RepointProfile(ctx, id, replacementID); err != nil {
+			return err
+		}
+	}
+	if err := c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.RepointImportListsQualityProfile(ctx, settingsdb.RepointImportListsQualityProfileParams{
+			ToID: sql.NullInt64{Int64: replacementID, Valid: true}, FromID: sql.NullInt64{Int64: id, Valid: true},
+		})
+	}); err != nil {
+		return err
+	}
+	return c.DeleteQualityProfile(ctx, id)
+}
+
+// ReplaceQualityTarget deletes a quality target after moving the items that chose it onto another of the same media type.
+func (c *Cache) ReplaceQualityTarget(ctx context.Context, id, replacementID int64) error {
+	from, found := c.Snapshot().QualityTarget(id)
+	if !found {
+		return fmt.Errorf("%w: quality target %d", ErrNotFound, id)
+	}
+	to, found := c.Snapshot().QualityTarget(replacementID)
+	if !found || replacementID == id || to.MediaType != from.MediaType {
+		return fmt.Errorf("%w: replacement quality target %d must be another %s target", ErrNotFound, replacementID, from.MediaType)
+	}
+	for _, category := range c.Snapshot().Categories() {
+		if category.QualityTarget != nil && category.QualityTarget.ID == id {
+			return fmt.Errorf("%w: library %s still aims for this target", ErrInUse, category.Name)
+		}
+	}
+	if c.libraryUsage != nil {
+		if err := c.libraryUsage.RepointTarget(ctx, id, replacementID); err != nil {
+			return err
+		}
+	}
+	return c.DeleteQualityTarget(ctx, id)
+}
+
 // CreateLanguageProfile adds a language profile (section 19.8).
 func (c *Cache) CreateLanguageProfile(ctx context.Context, profile LanguageProfile) (LanguageProfile, error) {
 	if problems := validateLanguageProfile(profile.Name); len(problems) > 0 {

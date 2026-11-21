@@ -465,7 +465,14 @@ func TestSnapshot_ParsesAProfileOncePerSnapshot(t *testing.T) {
 
 type usageStub struct {
 	files, recycled, queued, onRoot, profileItems, targetItems int64
+	repointed                                                  *[][2]int64
 }
+
+func (u usageStub) RepointProfile(_ context.Context, from, to int64) error {
+	*u.repointed = append(*u.repointed, [2]int64{from, to})
+	return nil
+}
+func (u usageStub) RepointTarget(context.Context, int64, int64) error { return nil }
 
 func (u usageStub) RootFolderRows(context.Context, int64) (int64, int64, int64, error) {
 	return u.files, u.recycled, u.queued, nil
@@ -488,14 +495,14 @@ func TestDeletes_AskTheLibraryFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cache.EnableLibraryUsage(usageStub{profileItems: 3})
+	cache.EnableLibraryUsage(usageStub{profileItems: 3, repointed: new([][2]int64)})
 	var inUse *settings.InUseError
 	err = cache.DeleteQualityProfile(ctx, profile.ID)
 	want := []settings.Reference{{Kind: "items pinned to it", Count: 3}}
 	if !errors.As(err, &inUse) || !reflect.DeepEqual(inUse.References, want) {
 		t.Fatalf("pinned profile: %v, want references %v", err, want)
 	}
-	cache.EnableLibraryUsage(usageStub{})
+	cache.EnableLibraryUsage(usageStub{repointed: new([][2]int64)})
 	if err := cache.DeleteQualityProfile(ctx, profile.ID); err != nil {
 		t.Fatalf("unpinned profile: %v", err)
 	}
@@ -504,13 +511,13 @@ func TestDeletes_AskTheLibraryFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cache.EnableLibraryUsage(usageStub{files: 2, recycled: 1})
+	cache.EnableLibraryUsage(usageStub{files: 2, recycled: 1, repointed: new([][2]int64)})
 	err = cache.DeleteRootFolder(ctx, root.ID)
 	want = []settings.Reference{{Kind: "files in the library", Count: 2}, {Kind: "recycle bin entries", Count: 1}}
 	if !errors.As(err, &inUse) || !reflect.DeepEqual(inUse.References, want) {
 		t.Fatalf("root with files: %v, want references %v", err, want)
 	}
-	cache.EnableLibraryUsage(usageStub{onRoot: 4})
+	cache.EnableLibraryUsage(usageStub{onRoot: 4, repointed: new([][2]int64)})
 	if err := cache.DetachRootFolder(ctx, 1, root.ID); !errors.As(err, &inUse) {
 		t.Fatalf("detach with files: %v", err)
 	}
@@ -663,5 +670,33 @@ func TestDeleteRootFolder_ForgetsItsPlacementChoicesInsteadOfFailingOnThem(t *te
 	}
 	if _, found := cache.Snapshot().RootFolder(root.ID); found {
 		t.Error("the root is still there")
+	}
+}
+
+// DB-16: a profile in use is deleted when its items and import lists are moved to another profile of its type.
+func TestReplaceQualityProfile_MovesItsUsersThenDeletes(t *testing.T) {
+	cache, _ := newCache(t)
+	ctx := context.Background()
+	from, err := cache.CreateQualityProfile(ctx, "From", `{"compare":["score"]}`, `{}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	to, err := cache.CreateQualityProfile(ctx, "To", `{"compare":["score"]}`, `{}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var repointed [][2]int64
+	cache.EnableLibraryUsage(usageStub{repointed: &repointed})
+	if err := cache.ReplaceQualityProfile(ctx, from.ID, from.ID); !errors.Is(err, settings.ErrNotFound) {
+		t.Fatalf("replaced by itself: %v, want refusal", err)
+	}
+	if err := cache.ReplaceQualityProfile(ctx, from.ID, to.ID); err != nil {
+		t.Fatalf("ReplaceQualityProfile: %v", err)
+	}
+	if want := [][2]int64{{from.ID, to.ID}}; !reflect.DeepEqual(repointed, want) {
+		t.Errorf("items repointed %v, want %v", repointed, want)
+	}
+	if _, found := cache.Snapshot().QualityProfile(from.ID); found {
+		t.Error("the replaced profile still exists")
 	}
 }

@@ -302,6 +302,7 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 	}
 	running.seedGenreTrees(ctx)
 	running.readCertificationAges(ctx)
+	running.warnDangling(ctx)
 	running.pinProfilesOfLibrariesWithoutAList(ctx)
 	return running.startServer(ctx)
 }
@@ -473,16 +474,7 @@ func (p *process) reconcileRestore(ctx context.Context, cl clock.Clock, restored
 		return nil
 	}
 
-	snapshot := p.cache.Snapshot()
-	known := recovery.Known{}
-	for _, category := range snapshot.Categories() {
-		known.CategoryIDs = append(known.CategoryIDs, category.ID)
-	}
-	for _, root := range snapshot.RootFolders() {
-		known.RootFolderIDs = append(known.RootFolderIDs, root.ID)
-	}
-
-	report, err := recovery.Reconcile(ctx, cl, p.library, p.jobs, known, restored)
+	report, err := recovery.Reconcile(ctx, cl, p.library, p.jobs, p.knownReferences(), restored)
 	if err != nil {
 		return err
 	}
@@ -491,6 +483,41 @@ func (p *process) reconcileRestore(ctx context.Context, cl clock.Clock, restored
 		slog.Int64("desired_items_marked_dirty", report.DesiredItemsDirtied),
 		slog.Any("orphaned_references", report.Orphans))
 	return nil
+}
+
+// knownReferences is what settings.db holds that library.db rows point at by id.
+func (p *process) knownReferences() recovery.Known {
+	snapshot := p.cache.Snapshot()
+	known := recovery.Known{}
+	for _, category := range snapshot.Categories() {
+		known.CategoryIDs = append(known.CategoryIDs, category.ID)
+	}
+	for _, root := range snapshot.RootFolders() {
+		known.RootFolderIDs = append(known.RootFolderIDs, root.ID)
+	}
+	for _, profile := range snapshot.QualityProfiles() {
+		known.QualityProfileIDs = append(known.QualityProfileIDs, profile.ID)
+	}
+	return known
+}
+
+// dangling lists the library rows that name a library, root folder or quality profile that no longer exists.
+func (p *process) dangling(ctx context.Context) ([]recovery.OrphanedReference, error) {
+	return recovery.FindDangling(ctx, p.library, p.knownReferences())
+}
+
+// warnDangling logs one warning per missing id at start-up; the health page shows the same list (DB-16).
+func (p *process) warnDangling(ctx context.Context) {
+	dangling, err := p.dangling(ctx)
+	if err != nil {
+		p.logger.Warn("dangling references not checked", slog.Any("error", err))
+		return
+	}
+	for _, reference := range dangling {
+		p.logger.Warn("rows name a setting that no longer exists",
+			slog.String("table", reference.Table), slog.String("column", reference.Column),
+			slog.Int64("id", reference.ID), slog.Int64("rows", reference.Rows))
+	}
 }
 
 // databaseProfile sizes one database for what it holds. database.cache_size_kb is one ceiling for every database
@@ -872,7 +899,8 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		SystemHealth: adapters.SystemHealth{
 			Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library), Vanished: p.vanishedFiles(), Registry: p.media,
 			AboveRating: library.NewWorks(p.library).CountAboveRating, Paused: p.outbound().breaker.Paused,
-			Media: p.tool, ProbeFailures: library.NewPhysical(p.library).CountProbeFailures, Tasks: p.taskRegistry.All, TaskRuns: p.scheduleStates,
+			Media: p.tool, ProbeFailures: library.NewPhysical(p.library).CountProbeFailures, Dangling: p.dangling,
+			Folders: p.cache.DownloadFolders, ReadDir: func(path string) error { _, err := p.fsys.ReadDir(path); return err }, Tasks: p.taskRegistry.All, TaskRuns: p.scheduleStates,
 			Backups: backupSource{FS: p.fsys, Directory: p.config.Paths.BackupDir}, Now: clock.NewSystem().Now,
 			BackupInterval: func(now time.Time) time.Duration {
 				return jobs.CadenceInterval(p.cache.Snapshot().ScheduleCadences("backup", backupScheduleCron), backupScheduleCron, now)

@@ -152,6 +152,7 @@ type Querier interface {
 	MovePlacementAffinity(ctx context.Context, arg MovePlacementAffinityParams) error
 	RecordDiscoveryJobRun(ctx context.Context, arg RecordDiscoveryJobRunParams) error
 	RenameLeftoverImportLists(ctx context.Context, arg RenameLeftoverImportListsParams) error
+	RepointImportListsQualityProfile(ctx context.Context, arg RepointImportListsQualityProfileParams) error
 	RevokeCategoryAccess(ctx context.Context, arg RevokeCategoryAccessParams) error
 	// A separate statement from UpdateArrInstance so a caller that is not
 	// changing the key never re-seals and rewrites it -- Seal generates a fresh

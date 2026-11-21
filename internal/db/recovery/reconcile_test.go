@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -207,5 +208,22 @@ func TestReconcile_OnAnEmptyInstallStillRecordsTheRestore(t *testing.T) {
 	stored := f.recorded(t)
 	if len(stored.Restored) != 1 || stored.Restored[0].Backup != "/backups/one" {
 		t.Errorf("recorded Restored = %+v, want the one backup", stored.Restored)
+	}
+}
+
+func TestFindDangling_NamesAProfileAnItemChoseThatIsGone(t *testing.T) {
+	f := newFixture(t)
+	f.desiredItem(t, 1)
+	err := f.library.Write(t.Context(), store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `INSERT INTO desired_profile_override (desired_item_id, profile_id) SELECT id, 9 FROM desired_item`)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := recovery.FindDangling(t.Context(), f.library, recovery.Known{CategoryIDs: []int64{1}, QualityProfileIDs: []int64{1}})
+	want := []recovery.OrphanedReference{{Table: "desired_profile_override", Column: "profile_id", ID: 9, Rows: 1}}
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("FindDangling = %+v, %v; want %+v", got, err, want)
 	}
 }

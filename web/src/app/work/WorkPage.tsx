@@ -396,7 +396,7 @@ function WorkHeader({
                 {t("action.refresh")}
               </Button>
             )}
-            {work.can_request && (
+            {work.can_request && (administrator || library?.permission === "manage") && (
               <Button icon={<Pencil aria-hidden className="size-4" />} onClick={() => setEditing(true)}>
                 {t("action.edit")}
               </Button>

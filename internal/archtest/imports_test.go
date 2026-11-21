@@ -40,7 +40,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/secrets", "internal/scanning/probe", "internal/scanning/scan", "migrations",
 	},
 	"cmd/solarr/adapters": {"internal/moving/placement", "internal/scanning/watch", "internal/platform/disklatency", "internal/platform/disktopo", "internal/acquiring/indexer/spec", "internal/acquiring/cutoff", "internal/importing/arrmap", "internal/db/store", "internal/platform/secrets", "internal/media/works",
-		"internal/importing/batch", "internal/moving/renamejob",
+		"internal/importing/batch", "internal/moving/renamejob", "internal/db/recovery",
 		"internal/db/statistics", "internal/platform/parallel", "internal/service/follow", "internal/service/importlist", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/qbittorrent",
 		"internal/acquiring/sabnzbd", "internal/acquiring/nzbget", "internal/acquiring/deluge", "internal/acquiring/aria2",
 		"internal/acquiring/utorrent", "internal/acquiring/flood", "internal/acquiring/rtorrent", "internal/acquiring/transmission",

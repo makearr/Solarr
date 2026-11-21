@@ -212,6 +212,20 @@ func (q *Queries) ListImportListsForCategory(ctx context.Context, categoryID int
 	return items, nil
 }
 
+const repointImportListsQualityProfile = `-- name: RepointImportListsQualityProfile :exec
+UPDATE import_list SET quality_profile_id = ?1 WHERE quality_profile_id = ?2
+`
+
+type RepointImportListsQualityProfileParams struct {
+	ToID   sql.NullInt64
+	FromID sql.NullInt64
+}
+
+func (q *Queries) RepointImportListsQualityProfile(ctx context.Context, arg RepointImportListsQualityProfileParams) error {
+	_, err := q.db.ExecContext(ctx, repointImportListsQualityProfile, arg.ToID, arg.FromID)
+	return err
+}
+
 const updateImportList = `-- name: UpdateImportList :exec
 UPDATE import_list SET name = ?, type = ?, url = ?, cadence_hours = ?, monitor = ?,
                         quality_profile_id = ?, exclusions = ?, enabled = ?,

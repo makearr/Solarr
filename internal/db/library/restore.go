@@ -76,3 +76,16 @@ func (r Restored) RootFolderReferences(ctx context.Context) ([]ReferenceCount, e
 	}
 	return counts, nil
 }
+
+// ProfileReferences is the desired_profile_override.profile_id half of the same check.
+func (r Restored) ProfileReferences(ctx context.Context) ([]ReferenceCount, error) {
+	rows, err := librarydb.New(r.store.Read()).CountProfileOverridesByProfile(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("library: count profile overrides by profile: %w", err)
+	}
+	counts := make([]ReferenceCount, len(rows))
+	for index, row := range rows {
+		counts[index] = ReferenceCount{ID: row.ProfileID, Rows: row.Total}
+	}
+	return counts, nil
+}

@@ -106,11 +106,15 @@ func (s *Server) UpdateQualityProfile(w http.ResponseWriter, r *http.Request, id
 
 // DeleteQualityProfile removes a profile, refused (settings.ErrInUse, via
 // writeError) while any category still defaults to it. Administrator only.
-func (s *Server) DeleteQualityProfile(w http.ResponseWriter, r *http.Request, id int64) {
+func (s *Server) DeleteQualityProfile(w http.ResponseWriter, r *http.Request, id int64, params gen.DeleteQualityProfileParams) {
 	if !s.requireAdministrator(w, r) {
 		return
 	}
-	if err := s.auth.Settings.DeleteQualityProfile(r.Context(), id); err != nil {
+	remove := func() error { return s.auth.Settings.DeleteQualityProfile(r.Context(), id) }
+	if params.ReplaceWith != nil {
+		remove = func() error { return s.auth.Settings.ReplaceQualityProfile(r.Context(), id, *params.ReplaceWith) }
+	}
+	if err := remove(); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}

@@ -20,6 +20,7 @@ import { useQualityProfiles } from "@/lib/resources";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import { labelStyle } from "@/ui/form";
 import { RemoveButton } from "@/ui/RemoveButton";
+import { ReplaceOnRemove } from "@/ui/ReplaceOnRemove";
 
 import { LanguagePicker } from "./LanguagePicker";
 
@@ -76,11 +77,17 @@ export function QualityProfilesPage() {
   const tier = useTier();
   const [editing, setEditing] = useState<number | "new" | null>(null);
   const profiles = useQualityProfiles();
+  const [refused, setRefused] = useState<{ id: number; reason: string } | null>(null);
   const remove = useMutation({
-    mutationFn: async (id: number) => {
-      await ok(api.DELETE("/qualityprofiles/{id}", { params: { path: { id } } }));
+    mutationFn: async ({ id, replaceWith }: { id: number; replaceWith?: number }) => {
+      await ok(api.DELETE("/qualityprofiles/{id}", { params: { path: { id }, query: { replace_with: replaceWith } } }));
+    },
+    onError: (error, { id }) => {
+      const problem = error as { status?: number; detail?: string };
+      if (problem.status === 409) setRefused({ id, reason: problem.detail ?? "Something still uses that profile." });
     },
     onSuccess: () => {
+      setRefused(null);
       void queryClient.invalidateQueries({ queryKey: ["qualityProfiles"] });
       // A library's Quality page names its profiles and warns from them.
       void queryClient.invalidateQueries({ queryKey: ["libraryQuality"] });
@@ -112,7 +119,7 @@ export function QualityProfilesPage() {
           </button>
         }
       >
-      {remove.isError && (
+      {remove.isError && !refused && (
         <p className="text-xs text-danger">
           {(remove.error as { detail?: string }).detail ?? "That profile could not be removed."}
         </p>
@@ -123,6 +130,16 @@ export function QualityProfilesPage() {
       {groups.map((group) => (
         <section key={group.mediaType} className="flex flex-col gap-2">
           <h3 className="text-xs font-medium text-ink-muted">{mediaTypeName(group.mediaType)}</h3>
+          {refused && group.profiles.some((profile) => profile.id === refused.id) && (
+            <ReplaceOnRemove
+              name={group.profiles.find((profile) => profile.id === refused.id)?.name ?? "this profile"}
+              reason={refused.reason}
+              choices={group.profiles.filter((profile) => profile.id !== refused.id)}
+              pending={remove.isPending}
+              onReplace={(replaceWith) => remove.mutate({ id: refused.id, replaceWith })}
+              onCancel={() => setRefused(null)}
+            />
+          )}
           <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
             {group.profiles.map((profile) =>
               editing === profile.id ? (
@@ -142,7 +159,7 @@ export function QualityProfilesPage() {
                     aria-label={`Remove quality profile ${profile.name}`}
                     confirm={{ title: "Remove this quality profile?", body: `Removes ${profile.name}. Libraries and items that use it must be moved to another profile first.` }}
                     disabled={remove.isPending}
-                    onClick={() => remove.mutate(profile.id)}
+                    onClick={() => remove.mutate({ id: profile.id })}
                   />
                 </li>
               ),

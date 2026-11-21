@@ -138,7 +138,7 @@ export function PersonPage() {
   const leads = person.libraries.some((place) => typeOf(libraryOf(place.category_id))?.roles.some((role) => role.lead && role.key === place.role));
   const canRequestLead = person.libraries.some((place) => {
     const library = libraryOf(place.category_id);
-    return typeOf(library)?.roles.some((role) => role.lead && role.key === place.role) && (library?.permission === "request" || library?.permission === "manage");
+    return typeOf(library)?.roles.some((role) => role.lead && role.key === place.role) && (library?.permission === "add" || library?.permission === "manage");
   });
   const facts = [
     person.disambiguation,

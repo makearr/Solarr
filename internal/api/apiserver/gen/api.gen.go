@@ -7525,6 +7525,18 @@ type GetRequestPriorityParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
 }
 
+// DeleteQualityProfileParams defines parameters for DeleteQualityProfile.
+type DeleteQualityProfileParams struct {
+	// ReplaceWith Another profile of the same media type to move the items and import lists onto before deleting; without it the delete is refused while any use remains.
+	ReplaceWith *int64 `form:"replace_with,omitempty" json:"replace_with,omitempty"`
+}
+
+// DeleteQualityTargetParams defines parameters for DeleteQualityTarget.
+type DeleteQualityTargetParams struct {
+	// ReplaceWith Another target of the same media type to move the items onto before deleting; without it the delete is refused while any use remains.
+	ReplaceWith *int64 `form:"replace_with,omitempty" json:"replace_with,omitempty"`
+}
+
 // ListQueueParams defines parameters for ListQueue.
 type ListQueueParams struct {
 	WorkId *int64 `form:"work_id,omitempty" json:"work_id,omitempty"`
@@ -9234,7 +9246,7 @@ type ServerInterface interface {
 	ValidateQualityProfile(w http.ResponseWriter, r *http.Request)
 	// Remove a quality profile. Administrator only. Refused, with the categories that still default to it, while any category does (settings.ErrInUse).
 	// (DELETE /qualityprofiles/{id})
-	DeleteQualityProfile(w http.ResponseWriter, r *http.Request, id int64)
+	DeleteQualityProfile(w http.ResponseWriter, r *http.Request, id int64, params DeleteQualityProfileParams)
 	// Replace a quality profile's policy. Administrator only.
 	// (PATCH /qualityprofiles/{id})
 	UpdateQualityProfile(w http.ResponseWriter, r *http.Request, id int64)
@@ -9246,7 +9258,7 @@ type ServerInterface interface {
 	CreateQualityTarget(w http.ResponseWriter, r *http.Request)
 	// Remove a target quality no library aims for. Administrator only.
 	// (DELETE /qualitytargets/{id})
-	DeleteQualityTarget(w http.ResponseWriter, r *http.Request, id int64)
+	DeleteQualityTarget(w http.ResponseWriter, r *http.Request, id int64, params DeleteQualityTargetParams)
 	// Replace a target quality; the libraries aiming for it follow. Administrator only.
 	// (PUT /qualitytargets/{id})
 	UpdateQualityTarget(w http.ResponseWriter, r *http.Request, id int64)
@@ -11136,7 +11148,7 @@ func (_ Unimplemented) ValidateQualityProfile(w http.ResponseWriter, r *http.Req
 
 // Remove a quality profile. Administrator only. Refused, with the categories that still default to it, while any category does (settings.ErrInUse).
 // (DELETE /qualityprofiles/{id})
-func (_ Unimplemented) DeleteQualityProfile(w http.ResponseWriter, r *http.Request, id int64) {
+func (_ Unimplemented) DeleteQualityProfile(w http.ResponseWriter, r *http.Request, id int64, params DeleteQualityProfileParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11160,7 +11172,7 @@ func (_ Unimplemented) CreateQualityTarget(w http.ResponseWriter, r *http.Reques
 
 // Remove a target quality no library aims for. Administrator only.
 // (DELETE /qualitytargets/{id})
-func (_ Unimplemented) DeleteQualityTarget(w http.ResponseWriter, r *http.Request, id int64) {
+func (_ Unimplemented) DeleteQualityTarget(w http.ResponseWriter, r *http.Request, id int64, params DeleteQualityTargetParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -20213,8 +20225,19 @@ func (siw *ServerInterfaceWrapper) DeleteQualityProfile(w http.ResponseWriter, r
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteQualityProfileParams
+
+	// ------------- Optional query parameter "replace_with" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "replace_with", r.URL.Query(), &params.ReplaceWith)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "replace_with", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteQualityProfile(w, r, id)
+		siw.Handler.DeleteQualityProfile(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -20323,8 +20346,19 @@ func (siw *ServerInterfaceWrapper) DeleteQualityTarget(w http.ResponseWriter, r 
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteQualityTargetParams
+
+	// ------------- Optional query parameter "replace_with" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "replace_with", r.URL.Query(), &params.ReplaceWith)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "replace_with", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteQualityTarget(w, r, id)
+		siw.Handler.DeleteQualityTarget(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {

@@ -175,6 +175,8 @@ type Querier interface {
 	// Only 'primary' counts: a trailer belongs to the work without satisfying it.
 	CountPrimaryFiles(ctx context.Context, desiredItemID int64) (int64, error)
 	CountProbeFailures(ctx context.Context) (int64, error)
+	// The quality profile half of the same check: the profile an item chose for itself.
+	CountProfileOverridesByProfile(ctx context.Context) ([]CountProfileOverridesByProfileRow, error)
 	// A client's queue as Solarr fills it: sent and not finished downloading (ADR-57).
 	CountQueuedOnDownloader(ctx context.Context, downloaderID int64) (int64, error)
 	CountRecycleBin(ctx context.Context) (int64, error)
@@ -1232,6 +1234,9 @@ type Querier interface {
 	RenameCollectionByHand(ctx context.Context, arg RenameCollectionByHandParams) (int64, error)
 	RenamePersonByHand(ctx context.Context, arg RenamePersonByHandParams) error
 	RepointEditionExternalID(ctx context.Context, arg RepointEditionExternalIDParams) (int64, error)
+	RepointItemProfileChunk(ctx context.Context, arg RepointItemProfileChunkParams) (int64, error)
+	RepointProfileOverrideChunk(ctx context.Context, arg RepointProfileOverrideChunkParams) (int64, error)
+	RepointTargetOverrideChunk(ctx context.Context, arg RepointTargetOverrideChunkParams) (int64, error)
 	// A merged MusicBrainz id answers under its new id: the work follows it, unless another work
 	// already holds the new one (M1f, 2026-09-25).
 	RepointWorkExternalID(ctx context.Context, arg RepointWorkExternalIDParams) (int64, error)

@@ -76,6 +76,8 @@ type LibraryUsage interface {
 	CategoryFilesOnRoot(ctx context.Context, categoryID, rootFolderID int64) (int64, error)
 	ItemsPinnedToProfile(ctx context.Context, profileID int64) (int64, error)
 	ItemsPinnedToTarget(ctx context.Context, targetID int64) (int64, error)
+	RepointProfile(ctx context.Context, from, to int64) error
+	RepointTarget(ctx context.Context, from, to int64) error
 }
 
 // EnableLibraryUsage makes the deletes of a root folder, profile and target, and detaching a root, refuse while library rows name them.

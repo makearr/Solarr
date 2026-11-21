@@ -7,6 +7,7 @@ import type { components } from "@/api/schema";
 import { TARGET_FAMILIES, targetSpecs, targetTitle } from "@/lib/targetDisplay";
 import { Button } from "@/ui/Button";
 import { RemoveButton } from "@/ui/RemoveButton";
+import { ReplaceOnRemove } from "@/ui/ReplaceOnRemove";
 import { inputStyle } from "@/ui/form";
 
 import { applyProfile } from "@/lib/targetProfile";
@@ -370,11 +371,19 @@ export function QualityTargetsSection() {
     queryKey: ["qualityTargets"],
     queryFn: () => ok(api.GET("/qualitytargets")),
   });
+  const [refused, setRefused] = useState<{ id: number; reason: string } | null>(null);
   const remove = useMutation({
-    mutationFn: async (id: number) => {
-      await ok(api.DELETE("/qualitytargets/{id}", { params: { path: { id } } }));
+    mutationFn: async ({ id, replaceWith }: { id: number; replaceWith?: number }) => {
+      await ok(api.DELETE("/qualitytargets/{id}", { params: { path: { id }, query: { replace_with: replaceWith } } }));
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["qualityTargets"] }),
+    onError: (error, { id }) => {
+      const problem = error as { status?: number; detail?: string };
+      if (problem.status === 409) setRefused({ id, reason: problem.detail ?? "Something still uses that target." });
+    },
+    onSuccess: () => {
+      setRefused(null);
+      void queryClient.invalidateQueries({ queryKey: ["qualityTargets"] });
+    },
   });
   const done = () => {
     setEditing(null);
@@ -395,7 +404,7 @@ export function QualityTargetsSection() {
         </button>
       }
     >
-      {remove.isError && <p className="text-xs text-danger">{(remove.error as { detail?: string }).detail ?? "That target could not be removed."}</p>}
+      {remove.isError && !refused && <p className="text-xs text-danger">{(remove.error as { detail?: string }).detail ?? "That target could not be removed."}</p>}
       {editing === "new" && <TargetForm onDone={done} onCancel={() => setEditing(null)} />}
       {targets.data && groups.length === 0 && editing !== "new" && <p className="text-xs text-ink-muted">No targets yet.</p>}
       {groups.map((group) => (
@@ -406,6 +415,16 @@ export function QualityTargetsSection() {
               {group.family.holds} · {group.targets.length}
             </span>
           </summary>
+          {refused && group.targets.some((target) => target.id === refused.id) && (
+            <ReplaceOnRemove
+              name={group.targets.find((target) => target.id === refused.id)?.name ?? "this target"}
+              reason={refused.reason}
+              choices={group.targets.flatMap((target) => (target.id !== undefined && target.id !== refused.id ? [{ id: target.id, name: target.name ?? String(target.id) }] : []))}
+              pending={remove.isPending}
+              onReplace={(replaceWith) => remove.mutate({ id: refused.id, replaceWith })}
+              onCancel={() => setRefused(null)}
+            />
+          )}
           <ul className="mt-2 grid gap-2 sm:grid-cols-2">
             {group.targets.map((target) =>
               editing === target.id ? (
@@ -426,7 +445,7 @@ export function QualityTargetsSection() {
                     aria-label={`Remove target ${targetTitle(target)}`}
                     confirm={{ title: "Remove this quality target?", body: `Removes ${targetTitle(target)}. Libraries that use it fall back to their quality profile.` }}
                     disabled={remove.isPending}
-                    onClick={() => target.id && remove.mutate(target.id)}
+                    onClick={() => target.id && remove.mutate({ id: target.id })}
                   />
                 </li>
               ),

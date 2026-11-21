@@ -10,6 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/poll"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/recovery"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -52,6 +53,11 @@ type SystemHealth struct {
 	BackupInterval func(now time.Time) time.Duration
 	// ProbeFailures counts the files the probe leaves alone because ffprobe could not read them; nil skips that check.
 	ProbeFailures func(ctx context.Context) (int64, error)
+	// Dangling lists the library rows that name a setting that no longer exists; nil skips that check.
+	Dangling func(ctx context.Context) ([]recovery.OrphanedReference, error)
+	// Folders lists the download folders and ReadDir lists one, live: a finished folder Solarr cannot see fails every import; nil skips that check.
+	Folders func(ctx context.Context) ([]settings.DownloadFolder, error)
+	ReadDir func(path string) error
 	// Now stamps the stale-backup check.
 	Now func() time.Time
 }
@@ -96,6 +102,8 @@ func (a SystemHealth) Checks(ctx context.Context) []apiserver.HealthCheck {
 	checks = append(checks, a.failingTasks(ctx)...)
 	checks = append(checks, a.staleBackup(ctx)...)
 	checks = append(checks, a.unreadableFiles(ctx)...)
+	checks = append(checks, a.danglingReferences(ctx)...)
+	checks = append(checks, a.unreadableFinishedFolders(ctx)...)
 	return append(checks, pausedForRoom(snapshot)...)
 }
 
@@ -127,6 +135,51 @@ func (a SystemHealth) missingMediaTools(ctx context.Context) []apiserver.HealthC
 		ID: "media_tools_missing", Severity: apiserver.HealthError,
 		Message: "Solarr cannot run the tools that read media files, so nothing can be scanned or imported: " + err.Error(),
 	}}
+}
+
+// unreadableFinishedFolders names each watched download folder Solarr cannot list now: the classic remote-path mistake, after which every
+// import of that client's downloads fails.
+func (a SystemHealth) unreadableFinishedFolders(ctx context.Context) []apiserver.HealthCheck {
+	if a.Folders == nil || a.ReadDir == nil {
+		return nil
+	}
+	folders, err := a.Folders(ctx)
+	if err != nil {
+		return nil
+	}
+	var checks []apiserver.HealthCheck
+	for _, folder := range folders {
+		if !folder.Watch {
+			continue
+		}
+		if err := a.ReadDir(folder.Path); err != nil {
+			checks = append(checks, apiserver.HealthCheck{
+				ID: fmt.Sprintf("download_folder_unreadable_%d", folder.ID), Severity: apiserver.HealthError,
+				Message: fmt.Sprintf("Solarr cannot read %s, where finished downloads are expected: mount it into the container or set the remote and local path of the download client.", folder.Path),
+				Link:    "/storage/downloads",
+			})
+		}
+	}
+	return checks
+}
+
+// danglingReferences names each setting that library rows still point at after it was removed; nothing repairs them.
+func (a SystemHealth) danglingReferences(ctx context.Context) []apiserver.HealthCheck {
+	if a.Dangling == nil {
+		return nil
+	}
+	dangling, err := a.Dangling(ctx)
+	if err != nil {
+		return nil
+	}
+	var checks []apiserver.HealthCheck
+	for _, reference := range dangling {
+		checks = append(checks, apiserver.HealthCheck{
+			ID: fmt.Sprintf("dangling_%s_%d", reference.Column, reference.ID), Severity: apiserver.HealthWarning,
+			Message: fmt.Sprintf("%d rows of %s name %s %d, which no longer exists.", reference.Rows, reference.Table, strings.ReplaceAll(strings.TrimSuffix(reference.Column, "_id"), "_", " "), reference.ID),
+		})
+	}
+	return checks
 }
 
 // unreadableFiles says how many media files ffprobe could not read; they are left alone and retried with growing waits.

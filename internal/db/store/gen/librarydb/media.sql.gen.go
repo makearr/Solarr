@@ -131,6 +131,40 @@ func (q *Queries) CountProbeFailures(ctx context.Context) (int64, error) {
 	return total, err
 }
 
+const countProfileOverridesByProfile = `-- name: CountProfileOverridesByProfile :many
+SELECT profile_id, CAST(count(*) AS INTEGER) AS total
+FROM desired_profile_override GROUP BY profile_id ORDER BY profile_id
+`
+
+type CountProfileOverridesByProfileRow struct {
+	ProfileID int64
+	Total     int64
+}
+
+// The quality profile half of the same check: the profile an item chose for itself.
+func (q *Queries) CountProfileOverridesByProfile(ctx context.Context) ([]CountProfileOverridesByProfileRow, error) {
+	rows, err := q.db.QueryContext(ctx, countProfileOverridesByProfile)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountProfileOverridesByProfileRow{}
+	for rows.Next() {
+		var i CountProfileOverridesByProfileRow
+		if err := rows.Scan(&i.ProfileID, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countStaleProbes = `-- name: CountStaleProbes :one
 SELECT CAST(count(*) AS INTEGER) AS total
 FROM media_probe mp

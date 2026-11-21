@@ -77,3 +77,57 @@ func (q *Queries) CountRootRecycleEntries(ctx context.Context, rootFolderID sql.
 	err := row.Scan(&count)
 	return count, err
 }
+
+const repointItemProfileChunk = `-- name: RepointItemProfileChunk :execrows
+UPDATE desired_item SET profile_id = ?1
+WHERE id IN (SELECT s.id FROM desired_item s WHERE s.profile_id = ?2 ORDER BY s.id LIMIT 200)
+`
+
+type RepointItemProfileChunkParams struct {
+	ToID   int64
+	FromID int64
+}
+
+func (q *Queries) RepointItemProfileChunk(ctx context.Context, arg RepointItemProfileChunkParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, repointItemProfileChunk, arg.ToID, arg.FromID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const repointProfileOverrideChunk = `-- name: RepointProfileOverrideChunk :execrows
+UPDATE desired_profile_override SET profile_id = ?1
+WHERE desired_item_id IN (SELECT s.desired_item_id FROM desired_profile_override s WHERE s.profile_id = ?2 ORDER BY s.desired_item_id LIMIT 200)
+`
+
+type RepointProfileOverrideChunkParams struct {
+	ToID   int64
+	FromID int64
+}
+
+func (q *Queries) RepointProfileOverrideChunk(ctx context.Context, arg RepointProfileOverrideChunkParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, repointProfileOverrideChunk, arg.ToID, arg.FromID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const repointTargetOverrideChunk = `-- name: RepointTargetOverrideChunk :execrows
+UPDATE desired_target_override SET target_id = ?1
+WHERE desired_item_id IN (SELECT s.desired_item_id FROM desired_target_override s WHERE s.target_id = ?2 ORDER BY s.desired_item_id LIMIT 200)
+`
+
+type RepointTargetOverrideChunkParams struct {
+	ToID   int64
+	FromID int64
+}
+
+func (q *Queries) RepointTargetOverrideChunk(ctx context.Context, arg RepointTargetOverrideChunkParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, repointTargetOverrideChunk, arg.ToID, arg.FromID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}

@@ -17068,7 +17068,10 @@ export interface operations {
     };
     deleteQualityProfile: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Another profile of the same media type to move the items and import lists onto before deleting; without it the delete is refused while any use remains. */
+                replace_with?: number;
+            };
             header?: never;
             path: {
                 id: number;
@@ -17200,7 +17203,10 @@ export interface operations {
     };
     deleteQualityTarget: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Another target of the same media type to move the items onto before deleting; without it the delete is refused while any use remains. */
+                replace_with?: number;
+            };
             header?: never;
             path: {
                 id: number;

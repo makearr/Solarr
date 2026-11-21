@@ -30,6 +30,8 @@ const jobFailureReason = "failed by post-restore reconciliation: the database wa
 type Known struct {
 	CategoryIDs   []int64
 	RootFolderIDs []int64
+	// QualityProfileIDs are the profiles an item may have chosen for itself.
+	QualityProfileIDs []int64
 }
 
 // OrphanedReference is a library row pointing at configuration that is no longer
@@ -150,7 +152,19 @@ func findOrphans(ctx context.Context, restored library.Restored, known Known) ([
 		return nil, err
 	}
 
+	profiles, err := restored.ProfileReferences(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var orphans []OrphanedReference
+	for _, reference := range profiles {
+		if !slices.Contains(known.QualityProfileIDs, reference.ID) {
+			orphans = append(orphans, OrphanedReference{
+				Table: "desired_profile_override", Column: "profile_id", ID: reference.ID, Rows: reference.Rows,
+			})
+		}
+	}
 	for _, reference := range categories {
 		if !slices.Contains(known.CategoryIDs, reference.ID) {
 			orphans = append(orphans, OrphanedReference{
@@ -166,4 +180,9 @@ func findOrphans(ctx context.Context, restored library.Restored, known Known) ([
 		}
 	}
 	return orphans, nil
+}
+
+// FindDangling reports the library rows that name a category, root folder or quality profile the settings no longer have.
+func FindDangling(ctx context.Context, libraryStore *store.Store, known Known) ([]OrphanedReference, error) {
+	return findOrphans(ctx, library.NewRestored(libraryStore), known)
 }

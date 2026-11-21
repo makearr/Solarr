@@ -413,6 +413,11 @@ DELETE FROM media_object WHERE id = ?;
 SELECT root_folder_id, CAST(count(*) AS INTEGER) AS total
 FROM library_path GROUP BY root_folder_id ORDER BY root_folder_id;
 
+-- The quality profile half of the same check: the profile an item chose for itself.
+-- name: CountProfileOverridesByProfile :many
+SELECT profile_id, CAST(count(*) AS INTEGER) AS total
+FROM desired_profile_override GROUP BY profile_id ORDER BY profile_id;
+
 -- Media objects not yet given a kind, oldest first, each with its primary path: what the start-up pass classifies.
 -- name: ListUnclassifiedMediaObjects :many
 SELECT o.id, CAST(COALESCE((SELECT lp.rel_path FROM library_path lp WHERE lp.media_object_id = o.id

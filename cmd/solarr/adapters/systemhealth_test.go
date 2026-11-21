@@ -11,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/poll"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/recovery"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/httpx"
@@ -166,5 +167,47 @@ func TestUnreadableFiles_ReportsTheCountOnlyWhenThereAreSome(t *testing.T) {
 	checks := health.unreadableFiles(t.Context())
 	if len(checks) != 1 || checks[0].ID != "unreadable_files" || !strings.Contains(checks[0].Message, "3 media files") {
 		t.Errorf("checks = %+v, want one naming 3 files", checks)
+	}
+}
+
+func TestSystemHealth_NamesASettingLibraryRowsStillPointAt(t *testing.T) {
+	health := SystemHealth{Dangling: func(context.Context) ([]recovery.OrphanedReference, error) {
+		return []recovery.OrphanedReference{{Table: "desired_profile_override", Column: "profile_id", ID: 7, Rows: 12}}, nil
+	}}
+	want := []apiserver.HealthCheck{{
+		ID: "dangling_profile_id_7", Severity: apiserver.HealthWarning,
+		Message: "12 rows of desired_profile_override name profile 7, which no longer exists.",
+	}}
+	if got := health.danglingReferences(t.Context()); !reflect.DeepEqual(got, want) {
+		t.Fatalf("checks = %+v, want %+v", got, want)
+	}
+	if none := (SystemHealth{}).danglingReferences(t.Context()); len(none) != 0 {
+		t.Fatalf("checks = %+v, want none", none)
+	}
+}
+
+func TestSystemHealth_NamesAWatchedDownloadFolderItCannotRead(t *testing.T) {
+	health := SystemHealth{
+		Folders: func(context.Context) ([]settings.DownloadFolder, error) {
+			return []settings.DownloadFolder{
+				{ID: 1, Path: "/data/finished", Watch: true},
+				{ID: 2, Path: "/data/readable", Watch: true},
+				{ID: 3, Path: "/data/unwatched", Watch: false},
+			}, nil
+		},
+		ReadDir: func(path string) error {
+			if path == "/data/readable" {
+				return nil
+			}
+			return errors.New("no such file or directory")
+		},
+	}
+	want := []apiserver.HealthCheck{{
+		ID: "download_folder_unreadable_1", Severity: apiserver.HealthError,
+		Message: "Solarr cannot read /data/finished, where finished downloads are expected: mount it into the container or set the remote and local path of the download client.",
+		Link:    "/storage/downloads",
+	}}
+	if got := health.unreadableFinishedFolders(t.Context()); !reflect.DeepEqual(got, want) {
+		t.Fatalf("checks = %+v, want %+v", got, want)
 	}
 }

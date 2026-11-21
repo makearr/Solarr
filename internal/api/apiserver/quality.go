@@ -435,11 +435,15 @@ func (s *Server) UpdateQualityTarget(w http.ResponseWriter, r *http.Request, id 
 }
 
 // DeleteQualityTarget removes a target no library aims for. Administrator only.
-func (s *Server) DeleteQualityTarget(w http.ResponseWriter, r *http.Request, id int64) {
+func (s *Server) DeleteQualityTarget(w http.ResponseWriter, r *http.Request, id int64, params gen.DeleteQualityTargetParams) {
 	if !s.requireAdministrator(w, r) {
 		return
 	}
-	if err := s.auth.Settings.DeleteQualityTarget(r.Context(), id); err != nil {
+	remove := func() error { return s.auth.Settings.DeleteQualityTarget(r.Context(), id) }
+	if params.ReplaceWith != nil {
+		remove = func() error { return s.auth.Settings.ReplaceQualityTarget(r.Context(), id, *params.ReplaceWith) }
+	}
+	if err := remove(); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
