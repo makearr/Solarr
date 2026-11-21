@@ -613,6 +613,9 @@ type Querier interface {
 	// The monitored artists credited on a wanted album released within the window.
 	ListArtistsWithFreshRelease(ctx context.Context, arg ListArtistsWithFreshReleaseParams) ([]int64, error)
 	ListArtworkForSubject(ctx context.Context, arg ListArtworkForSubjectParams) ([]Artwork, error)
+	// Audio files with no raw fingerprint yet. An empty one means fpcalc could not read the file; it is asked again only
+	// when the file's bytes change (SetMediaObjectContent clears it).
+	ListAudioWithoutFingerprint(ctx context.Context, arg ListAudioWithoutFingerprintParams) ([]ListAudioWithoutFingerprintRow, error)
 	// Events a person has not edited, with the dates of their members, to merge halves a pass made apart.
 	ListAutoCrossovers(ctx context.Context, mediaType string) ([]ListAutoCrossoversRow, error)
 	ListBlockedContent(ctx context.Context, arg ListBlockedContentParams) ([]BlockedContent, error)
@@ -938,6 +941,9 @@ type Querier interface {
 	// The same, only the files a wanted album holds that met no track: a file already aligned has nothing to gain from
 	// being read again, and on a first import that was half the library (live_test 35).
 	ListUnalignedWorkFileLocations(ctx context.Context, workIds interface{}) ([]ListUnalignedWorkFileLocationsRow, error)
+	// Files of a library's works that cover no track (a second copy of an album's file, placed beside it): they cannot be
+	// told by a title, only by their audio fingerprint, so those with none are left out.
+	ListUnattachedAudioFiles(ctx context.Context, categoryID int64) ([]ListUnattachedAudioFilesRow, error)
 	// Media objects not yet given a kind, oldest first, each with its primary path: what the start-up pass classifies.
 	ListUnclassifiedMediaObjects(ctx context.Context, arg ListUnclassifiedMediaObjectsParams) ([]ListUnclassifiedMediaObjectsRow, error)
 	// Fingerprint generation is the lowest-priority background work and resumable,
@@ -1268,6 +1274,7 @@ type Querier interface {
 	SetAcquisitionState(ctx context.Context, arg SetAcquisitionStateParams) error
 	SetArrImportState(ctx context.Context, arg SetArrImportStateParams) error
 	SetArrLinkSynced(ctx context.Context, arg SetArrLinkSyncedParams) error
+	SetAudioFingerprint(ctx context.Context, arg SetAudioFingerprintParams) error
 	SetCertificationAge(ctx context.Context, arg SetCertificationAgeParams) error
 	// The claimed half (todo 4.2): derived once per release folder at scan time,
 	// from the release name rather than the file's own bytes, so it needs no

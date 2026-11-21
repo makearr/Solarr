@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -191,5 +194,86 @@ func TestDuplicates_ByNameFindsTheSameSongOnTwoEditions(t *testing.T) {
 	groups, err := library.NewDuplicates(opened).Groups(t.Context(), 1, []int64{1}, 50, true)
 	if err != nil || len(groups) != 1 || len(groups[0].Copies) != 2 {
 		t.Fatalf("Groups = %+v, %v; want one group of the two copies", groups, err)
+	}
+}
+
+// Fingerprints decide whenever both files have one: a song retitled on a compilation is still the same audio, and two
+// studio and live takes of one title are not.
+func TestDuplicates_AudioFingerprintsDecideBeforeTitles(t *testing.T) {
+	opened, _ := newLibrary(t)
+	studio := sample(900, 11)
+	type file struct {
+		title string
+		print []uint32
+		path  string
+	}
+	files := []file{
+		{"Lantern", studio, "A/01.flac"},
+		{"Lantern (Radio Edit)", noisy(studio, 2, 3), "B/05.mp3"}, // same audio, another title
+		{"Lantern", sample(900, 12), "C/02.flac"},                 // same title, other audio: a live take
+		{"Quiet", nil, "A/02.flac"},                               // no fingerprint yet: titles decide
+		{"Quiet", nil, "B/06.mp3"},
+	}
+	album := createWork(t, opened, "music", "Album")
+	item := createDesired(t, opened, album.ID, "SET", 10).ID
+	for index, f := range files {
+		ref := fmt.Sprintf("1:%d", index+1)
+		createPart(t, opened, album.ID, ref, fmt.Sprintf("%03d", index), f.title)
+		object := createObject(t, opened, fmt.Sprintf("h%d", index), 1000+int64(index))
+		err := opened.Write(t.Context(), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			if _, err := librarydb.New(tx).AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
+				MediaObjectID: object.ID, RootFolderID: 1, RelPath: f.path, LinkKind: "primary", IsPrimary: 1, CreatedAt: 1,
+			}); err != nil {
+				return err
+			}
+			_, err := tx.ExecContext(ctx, `UPDATE media_object SET duration_ms = 200000 WHERE id = ?`, object.ID)
+			if err != nil || f.print == nil {
+				return err
+			}
+			_, err = tx.ExecContext(ctx, `UPDATE media_object SET audio_fp = ? WHERE id = ?`, library.EncodeFingerprint(f.print), object.ID)
+			return err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		attach(t, opened, item, object.ID, "primary", ref)
+	}
+
+	// A further copy beside the album's file covers no track; its fingerprint still puts it with the song.
+	loose := createObject(t, opened, "loose", 5000)
+	err := opened.Write(t.Context(), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		if _, err := librarydb.New(tx).AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
+			MediaObjectID: loose.ID, RootFolderID: 1, RelPath: "D/01.ogg", LinkKind: "primary", IsPrimary: 1, CreatedAt: 1,
+		}); err != nil {
+			return err
+		}
+		if err := librarydb.New(tx).LinkWorkFile(ctx, librarydb.LinkWorkFileParams{WorkID: album.ID, MediaObjectID: loose.ID, FirstSeenAt: 1}); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `UPDATE media_object SET duration_ms = 200000, audio_fp = ? WHERE id = ?`,
+			library.EncodeFingerprint(noisy(studio, 3, 5)), loose.ID)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	groups, err := library.NewDuplicates(opened).Groups(t.Context(), 1, []int64{1}, 50, true)
+	if err != nil {
+		t.Fatalf("Groups: %v", err)
+	}
+	var got [][]string
+	for _, group := range groups {
+		var paths []string
+		for _, copy := range group.Copies {
+			paths = append(paths, copy.Paths[0].RelPath)
+		}
+		slices.Sort(paths)
+		got = append(got, paths)
+	}
+	slices.SortFunc(got, func(a, b []string) int { return strings.Compare(a[0], b[0]) })
+	want := [][]string{{"A/01.flac", "B/05.mp3", "D/01.ogg"}, {"A/02.flac", "B/06.mp3"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("groups = %v, want %v", got, want)
 	}
 }

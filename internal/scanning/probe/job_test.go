@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -725,5 +726,56 @@ func TestProbeRetryAfter_DoublesFromADayUpToThirtyDays(t *testing.T) {
 	want := []time.Duration{day, 2 * day, 4 * day, 8 * day, 16 * day, 30 * day, 30 * day}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("waits = %v, want %v", got, want)
+	}
+}
+
+// fingerprintingTool also answers the raw audio fingerprint; it fails for one file name to show the pass goes on.
+type fingerprintingTool struct {
+	fakeTool
+	failFor string
+}
+
+func (f *fingerprintingTool) AudioFingerprint(_ context.Context, path string) (mediatool.AudioFingerprint, error) {
+	if filepath.Base(path) == f.failFor {
+		return mediatool.AudioFingerprint{}, errors.New("fpcalc returned none")
+	}
+	return mediatool.AudioFingerprint{Values: []uint32{7, 8, 9}}, nil
+}
+
+func TestJob_RunFingerprintsAudioOnceAndRemembersAFileItCannotRead(t *testing.T) {
+	opened := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	root := t.TempDir()
+	var files []library.PhysicalFile
+	for _, name := range []string{"good.flac", "broken.flac"} {
+		if err := os.WriteFile(filepath.Join(root, name), make([]byte, 100), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, library.PhysicalFile{RelPath: name, SizeBytes: 100, QuickHash: name, FirstSeenAt: time.Unix(0, 0)})
+	}
+	ids, err := physical.RegisterBatch(t.Context(), 1, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool := &fingerprintingTool{fakeTool: fakeTool{measured: mediatool.Measured{FormatName: "flac", Duration: time.Second}}, failFor: "broken.flac"}
+	job := probe.NewJob(probe.Config{
+		Physical: physical, Coverage: library.NewProbeCoverage(opened, clock.NewFakeAtEpoch()),
+		Roots: fakeRoots{1: settings.RootFolder{ID: 1, Path: root, Online: true}}, Tool: tool, FS: fsx.NewOS(),
+		Clock: clock.NewFakeAtEpoch(), Logger: slog.New(slog.DiscardHandler),
+	})
+	if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	good, err := librarydb.New(opened.Read()).GetMediaObject(t.Context(), ids[0].MediaObjectID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := library.DecodeFingerprint(good.AudioFp); !slices.Equal(got, []uint32{7, 8, 9}) || good.AudioFpPrefix.Int64 != 7 {
+		t.Errorf("good fingerprint = %v prefix %d, want [7 8 9] prefix 7", got, good.AudioFpPrefix.Int64)
+	}
+	again, err := physical.ListAudioWithoutFingerprint(t.Context(), 0, 10)
+	if err != nil || len(again) != 0 {
+		t.Errorf("files still to fingerprint = %+v, %v; want none: the unreadable one is remembered as having none", again, err)
 	}
 }

@@ -354,6 +354,33 @@ func (p Physical) ListVideoWithoutOshash(ctx context.Context, afterID int64, pag
 	return files, nil
 }
 
+// ListAudioWithoutFingerprint pages through the audio files whose raw fingerprint was never taken, oldest id first.
+func (p Physical) ListAudioWithoutFingerprint(ctx context.Context, afterID int64, pageSize int64) ([]UnmeasuredFile, error) {
+	rows, err := librarydb.New(p.store.Read()).ListAudioWithoutFingerprint(ctx, librarydb.ListAudioWithoutFingerprintParams{AfterID: afterID, PageSize: pageSize})
+	if err != nil {
+		return nil, fmt.Errorf("library: list audio without fingerprint: %w", err)
+	}
+	files := make([]UnmeasuredFile, len(rows))
+	for index, row := range rows {
+		files[index] = UnmeasuredFile{MediaObjectID: row.ID, RootFolderID: row.RootFolderID, RelPath: row.RelPath}
+	}
+	return files, nil
+}
+
+// SetAudioFingerprint records a file's raw Chromaprint values (none, for a file fpcalc could not read, so it is not asked
+// again until its bytes change).
+func (p Physical) SetAudioFingerprint(ctx context.Context, mediaObjectID int64, values []uint32) error {
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetAudioFingerprint(ctx, librarydb.SetAudioFingerprintParams{
+			AudioFp: EncodeFingerprint(values), AudioFpPrefix: sql.NullInt64{Int64: int64(prefixOf(values)), Valid: len(values) > 0}, ID: mediaObjectID,
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("library: set audio fingerprint %d: %w", mediaObjectID, err)
+	}
+	return nil
+}
+
 // SetOshash records the hash of a file scanned before it was computed.
 func (p Physical) SetOshash(ctx context.Context, mediaObjectID int64, oshash string) error {
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {

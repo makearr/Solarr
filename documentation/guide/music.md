@@ -53,8 +53,10 @@ refreshes.
 
 ## Duplicates (🟡)
 
-**Library → Duplicates** lists tracks held more than once, found by artist, title and length (a flac and a
-96 kbit mp3 of one song, on any albums), and recommends the copy closer to the library's target quality.
+**Library → Duplicates** lists tracks held more than once, found by audio fingerprint (a flac and a 96 kbit mp3 of
+one song, on any albums, even under another title), and recommends the copy closer to the library's target quality.
+The fingerprint is taken in the background by the attribute probe, one file at a time (about half a second each on a
+network share); until a file has one, it is matched by artist, title and length.
 
 You choose the copy to keep (a radio per copy) and, for each other copy, one of:
 

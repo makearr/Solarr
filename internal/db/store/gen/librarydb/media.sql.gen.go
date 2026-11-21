@@ -823,6 +823,57 @@ func (q *Queries) LinkWorksOfPathToRoot(ctx context.Context, arg LinkWorksOfPath
 	return err
 }
 
+const listAudioWithoutFingerprint = `-- name: ListAudioWithoutFingerprint :many
+SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
+FROM media_object o
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+WHERE o.audio_fp IS NULL AND o.kind = 'audio' AND o.id > ?1
+ORDER BY o.id
+LIMIT ?2
+`
+
+type ListAudioWithoutFingerprintParams struct {
+	AfterID  int64
+	PageSize int64
+}
+
+type ListAudioWithoutFingerprintRow struct {
+	ID           int64
+	SizeBytes    int64
+	RootFolderID int64
+	RelPath      string
+}
+
+// Audio files with no raw fingerprint yet. An empty one means fpcalc could not read the file; it is asked again only
+// when the file's bytes change (SetMediaObjectContent clears it).
+func (q *Queries) ListAudioWithoutFingerprint(ctx context.Context, arg ListAudioWithoutFingerprintParams) ([]ListAudioWithoutFingerprintRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAudioWithoutFingerprint, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAudioWithoutFingerprintRow{}
+	for rows.Next() {
+		var i ListAudioWithoutFingerprintRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SizeBytes,
+			&i.RootFolderID,
+			&i.RelPath,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listHashedVideos = `-- name: ListHashedVideos :many
 SELECT o.id, o.size_bytes, o.phash, o.duration_ms, o.width, o.height, lp.root_folder_id, lp.rel_path, f.frames
 FROM media_object o
@@ -2040,6 +2091,21 @@ func (q *Queries) RootHoldsFiles(ctx context.Context, rootFolderID int64) (int64
 	var holds int64
 	err := row.Scan(&holds)
 	return holds, err
+}
+
+const setAudioFingerprint = `-- name: SetAudioFingerprint :exec
+UPDATE media_object SET audio_fp = ?, audio_fp_prefix = ? WHERE id = ?
+`
+
+type SetAudioFingerprintParams struct {
+	AudioFp       []byte
+	AudioFpPrefix sql.NullInt64
+	ID            int64
+}
+
+func (q *Queries) SetAudioFingerprint(ctx context.Context, arg SetAudioFingerprintParams) error {
+	_, err := q.db.ExecContext(ctx, setAudioFingerprint, arg.AudioFp, arg.AudioFpPrefix, arg.ID)
+	return err
 }
 
 const setClaimedAttributes = `-- name: SetClaimedAttributes :exec

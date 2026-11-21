@@ -4408,8 +4408,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Tracks one library holds more than once, found by artist, title and length (read only).
-         * @description Files that are one recording (the same artist and title, lengths within a few seconds), in whatever format and on whichever album, with the copy to keep: the one that meets the library's target quality, else its profiles' first choice. Nothing is changed by looking; the groups with the most to free come first.
+         * Tracks one library holds more than once, found by audio fingerprint, else by artist, title and length (read only).
+         * @description Files that are one recording (matching audio fingerprints, or for a file not yet fingerprinted the same artist and title, lengths within a few seconds), in whatever format and on whichever album, with the copy to keep: the one that meets the library's target quality, else its profiles' first choice. Nothing is changed by looking; the groups with the most to free come first.
          */
         get: operations["getCategoryDuplicates"];
         put?: never;

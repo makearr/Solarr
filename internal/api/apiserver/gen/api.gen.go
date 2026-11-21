@@ -8586,7 +8586,7 @@ type ServerInterface interface {
 	// The library's works whose rules point to another library, and the kinds of library that do not exist yet although some of its works would go there.
 	// (GET /categories/{id}/check)
 	CheckLibrary(w http.ResponseWriter, r *http.Request, id int64)
-	// Tracks one library holds more than once, found by artist, title and length (read only).
+	// Tracks one library holds more than once, found by audio fingerprint, else by artist, title and length (read only).
 	// (GET /categories/{id}/duplicates)
 	GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, id int64)
 	// Keep one copy of a duplicated track and link or recycle the others (manage access).
@@ -9864,7 +9864,7 @@ func (_ Unimplemented) CheckLibrary(w http.ResponseWriter, r *http.Request, id i
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Tracks one library holds more than once, found by artist, title and length (read only).
+// Tracks one library holds more than once, found by audio fingerprint, else by artist, title and length (read only).
 // (GET /categories/{id}/duplicates)
 func (_ Unimplemented) GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)

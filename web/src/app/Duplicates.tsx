@@ -239,7 +239,7 @@ function GroupCard({ group, categoryId, words, onDone }: { group: Group; categor
   );
 }
 
-/** Parts this library holds more than once, not found by their bytes: for music by artist, title and length, so a flac
+/** Parts this library holds more than once, not found by their bytes: for music by audio fingerprint (artist, title and length until a file is fingerprinted), so a flac
  *  and a 96 kbit mp3 of one song are one track twice; otherwise two files on one part. Choose the copy to keep. */
 /** How many groups are added each time the end of the list comes into view. */
 const GROUPS_PER_STEP = 20;

@@ -193,6 +193,16 @@ func (j *Job) Run(ctx context.Context, request jobs.Job) error {
 		}
 		j.forced.Store(PicturesMode(""))
 	}
+	if fingerprinter, canFingerprint := j.tool.(AudioFingerprinter); canFingerprint {
+		err := j.backfill(ctx, started, audioFingerprintPass, "audio fingerprint", j.physical.ListAudioWithoutFingerprint,
+			func(ctx context.Context, file library.UnmeasuredFile) error {
+				return j.fingerprintAudio(ctx, fingerprinter, file)
+			},
+			request.Progress)
+		if err != nil {
+			return err
+		}
+	}
 	j.logger.Info("probe sweep finished", slog.Int("processed", total), slog.Int("failed", failed))
 
 	// Best-effort: a coverage recompute failing is not a reason to fail a
@@ -210,7 +220,14 @@ func (j *Job) Run(ctx context.Context, request jobs.Job) error {
 const (
 	oshashPass = 3
 	phashPass  = 4
+	// audioFingerprintPass is the music duplicates' raw fingerprint, one file at a time: fpcalc reads two minutes of each.
+	audioFingerprintPass = 5
 )
+
+// AudioFingerprinter is the tool's raw Chromaprint; a Tool without it leaves audio unfingerprinted.
+type AudioFingerprinter interface {
+	AudioFingerprint(ctx context.Context, path string) (mediatool.AudioFingerprint, error)
+}
 
 // PerceptualHasher is the tool's frame hash (ADR-35); a Tool without it leaves video unhashed.
 type PerceptualHasher interface {
@@ -330,6 +347,31 @@ func (j *Job) writePreview(target string, data []byte) error {
 		return err
 	}
 	return j.fs.Rename(partial, target)
+}
+
+// fingerprintAudio takes one audio file's raw fingerprint; a file fpcalc cannot read is recorded as having none, so the
+// sweep does not read it again until its bytes change.
+func (j *Job) fingerprintAudio(ctx context.Context, fingerprinter AudioFingerprinter, file library.UnmeasuredFile) error {
+	root, found := j.roots.RootFolder(file.RootFolderID)
+	if !found {
+		return fmt.Errorf("root folder %d is not configured", file.RootFolderID)
+	}
+	absolute := path.Join(root.Path, file.RelPath)
+	var values []uint32
+	var readErr error
+	err := iogate.OnDisk(ctx, "", []string{absolute}, func() error {
+		var fingerprint mediatool.AudioFingerprint
+		fingerprint, readErr = fingerprinter.AudioFingerprint(ctx, absolute)
+		values = fingerprint.Values
+		return ctx.Err()
+	})
+	if err != nil {
+		return err
+	}
+	if readErr != nil {
+		j.logger.WarnContext(ctx, "audio fingerprint unreadable", slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", readErr))
+	}
+	return j.physical.SetAudioFingerprint(ctx, file.MediaObjectID, values)
 }
 
 func (j *Job) hashFile(ctx context.Context, file library.UnmeasuredFile) error {

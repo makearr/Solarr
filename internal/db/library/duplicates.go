@@ -60,9 +60,15 @@ func (d Duplicates) Groups(ctx context.Context, categoryID int64, rootFolderIDs 
 	if err != nil {
 		return nil, fmt.Errorf("library: duplicate tracks: %w", err)
 	}
+	if byName {
+		loose, err := librarydb.New(d.store.Read()).ListUnattachedAudioFiles(ctx, categoryID)
+		if err != nil {
+			return nil, fmt.Errorf("library: duplicate loose files: %w", err)
+		}
+		return d.groupsByRecording(rows, loose, inRoots, limit), nil
+	}
 	type key struct {
-		artist, title string
-		partID        int64
+		partID int64
 		// Different editions of a work are never one another's duplicates (Invariant 10).
 		editionID int64
 	}
@@ -73,23 +79,13 @@ func (d Duplicates) Groups(ctx context.Context, categoryID int64, rootFolderIDs 
 		if !inRoots[row.RootFolderID] || row.DurationMs <= 0 {
 			continue
 		}
-		// By name the same song on two albums is a duplicate whatever editions they are: the edition scopes only a part record.
-		k := key{artist: normaliseTrackText(row.Artist), title: normaliseTrackText(row.TrackTitle)}
-		if !byName {
-			k = key{partID: row.PartID, editionID: row.EditionID}
-		} else if k.title == "" {
-			continue
-		}
+		k := key{partID: row.PartID, editionID: row.EditionID}
 		path := DuplicatePath{RootFolderID: row.RootFolderID, RelPath: row.RelPath}
 		if existing, seen := copyOf[row.MediaObjectID]; seen {
 			existing.Paths = append(existing.Paths, path)
 			continue
 		}
-		stored := &DuplicateCopy{
-			MediaObjectID: row.MediaObjectID, WorkID: row.WorkID, Album: row.AlbumTitle, SizeBytes: row.SizeBytes,
-			DurationMs: row.DurationMs, BitrateKbps: row.Bitrate / 1000, AudioCodec: row.AudioCodec, Container: row.Container,
-			Lossless: row.Lossless == 1, BitDepth: row.BitDepth, Rate: row.SampleRate, Paths: []DuplicatePath{path},
-		}
+		stored := duplicateCopyOf(row, path)
 		copyOf[row.MediaObjectID] = stored
 		byTrack[k] = append(byTrack[k], stored)
 		// The plainest spelling names the group: "Song" rather than "Song (Radio Edit)".
@@ -103,28 +99,11 @@ func (d Duplicates) Groups(ctx context.Context, categoryID int64, rootFolderIDs 
 			continue
 		}
 		slices.SortFunc(copies, func(a, b *DuplicateCopy) int { return int(a.DurationMs - b.DurationMs) })
-		if k.partID != 0 {
-			group := DuplicateGroup{Artist: titles[k][0], Title: titles[k][1]}
-			for _, one := range copies {
-				group.Copies = append(group.Copies, *one)
-			}
-			groups = append(groups, group)
-			continue
+		group := DuplicateGroup{Artist: titles[k][0], Title: titles[k][1]}
+		for _, one := range copies {
+			group.Copies = append(group.Copies, *one)
 		}
-		start := 0
-		for index := 1; index <= len(copies); index++ {
-			if index < len(copies) && copies[index].DurationMs-copies[index-1].DurationMs <= durationToleranceMs {
-				continue
-			}
-			if index-start >= 2 {
-				group := DuplicateGroup{Artist: titles[k][0], Title: titles[k][1]}
-				for _, one := range copies[start:index] {
-					group.Copies = append(group.Copies, *one)
-				}
-				groups = append(groups, group)
-			}
-			start = index
-		}
+		groups = append(groups, group)
 	}
 	slices.SortFunc(groups, func(a, b DuplicateGroup) int {
 		if diff := b.ExtraBytes() - a.ExtraBytes(); diff != 0 {
@@ -136,6 +115,127 @@ func (d Duplicates) Groups(ctx context.Context, categoryID int64, rootFolderIDs 
 		groups = groups[:limit]
 	}
 	return groups, nil
+}
+
+func duplicateCopyOf(row librarydb.ListTrackFilesWithMetadataRow, path DuplicatePath) *DuplicateCopy {
+	return &DuplicateCopy{
+		MediaObjectID: row.MediaObjectID, WorkID: row.WorkID, Album: row.AlbumTitle, SizeBytes: row.SizeBytes,
+		DurationMs: row.DurationMs, BitrateKbps: row.Bitrate / 1000, AudioCodec: row.AudioCodec, Container: row.Container,
+		Lossless: row.Lossless == 1, BitDepth: row.BitDepth, Rate: row.SampleRate, Paths: []DuplicatePath{path},
+	}
+}
+
+// groupsByRecording finds one recording stored more than once, whatever album or edition each copy sits on: two files
+// within a few seconds of one length are one recording when their audio fingerprints match, and, for a file with no
+// fingerprint yet, when their artist and title do. Fingerprints decide whenever both files have one.
+func (d Duplicates) groupsByRecording(
+	rows []librarydb.ListTrackFilesWithMetadataRow, loose []librarydb.ListUnattachedAudioFilesRow, inRoots map[int64]bool, limit int,
+) []DuplicateGroup {
+	type candidate struct {
+		copy          *DuplicateCopy
+		artist, title string
+		spelling      [2]string
+		print         []uint32
+	}
+	var found []*candidate
+	byObject := map[int64]*candidate{}
+	for _, row := range rows {
+		if !inRoots[row.RootFolderID] || row.DurationMs <= 0 {
+			continue
+		}
+		path := DuplicatePath{RootFolderID: row.RootFolderID, RelPath: row.RelPath}
+		if existing, seen := byObject[row.MediaObjectID]; seen {
+			existing.copy.Paths = append(existing.copy.Paths, path)
+			continue
+		}
+		one := &candidate{
+			copy: duplicateCopyOf(row, path), artist: normaliseTrackText(row.Artist), title: normaliseTrackText(row.TrackTitle),
+			spelling: [2]string{row.Artist, row.TrackTitle}, print: DecodeFingerprint(row.AudioFp),
+		}
+		byObject[row.MediaObjectID] = one
+		found = append(found, one)
+	}
+	// A file covering no track has no title: it joins a group only through its fingerprint.
+	for _, row := range loose {
+		if !inRoots[row.RootFolderID] || row.DurationMs <= 0 {
+			continue
+		}
+		path := DuplicatePath{RootFolderID: row.RootFolderID, RelPath: row.RelPath}
+		if existing, seen := byObject[row.MediaObjectID]; seen {
+			existing.copy.Paths = append(existing.copy.Paths, path)
+			continue
+		}
+		one := &candidate{
+			copy: &DuplicateCopy{
+				MediaObjectID: row.MediaObjectID, WorkID: row.WorkID, Album: row.AlbumTitle, SizeBytes: row.SizeBytes,
+				DurationMs: row.DurationMs, BitrateKbps: row.Bitrate / 1000, AudioCodec: row.AudioCodec, Container: row.Container,
+				Lossless: row.Lossless == 1, BitDepth: row.BitDepth, Rate: row.SampleRate, Paths: []DuplicatePath{path},
+			},
+			print: DecodeFingerprint(row.AudioFp),
+		}
+		byObject[row.MediaObjectID] = one
+		found = append(found, one)
+	}
+	slices.SortFunc(found, func(a, b *candidate) int { return int(a.copy.DurationMs - b.copy.DurationMs) })
+	parent := make([]int, len(found))
+	for index := range parent {
+		parent[index] = index
+	}
+	root := func(index int) int {
+		for parent[index] != index {
+			parent[index] = parent[parent[index]]
+			index = parent[index]
+		}
+		return index
+	}
+	for first := range found {
+		for second := first + 1; second < len(found) && found[second].copy.DurationMs-found[first].copy.DurationMs <= durationToleranceMs; second++ {
+			a, b := found[first], found[second]
+			var same bool
+			if len(a.print) > 0 && len(b.print) > 0 {
+				same = SameRecording(a.print, b.print)
+			} else {
+				same = a.title != "" && a.title == b.title && a.artist == b.artist
+			}
+			if same {
+				parent[root(first)] = root(second)
+			}
+		}
+	}
+	members := map[int][]*candidate{}
+	for index, one := range found {
+		members[root(index)] = append(members[root(index)], one)
+	}
+	var groups []DuplicateGroup
+	for _, set := range members {
+		if len(set) < 2 {
+			continue
+		}
+		// The plainest spelling names the group: "Song" rather than "Song (Radio Edit)".
+		var named [2]string
+		group := DuplicateGroup{}
+		for _, one := range set {
+			if one.spelling[1] != "" && (named[1] == "" || len(one.spelling[1]) < len(named[1])) {
+				named = one.spelling
+			}
+			group.Copies = append(group.Copies, *one.copy)
+		}
+		group.Artist, group.Title = named[0], named[1]
+		if group.Title == "" {
+			group.Title = group.Copies[0].Album
+		}
+		groups = append(groups, group)
+	}
+	slices.SortFunc(groups, func(a, b DuplicateGroup) int {
+		if diff := b.ExtraBytes() - a.ExtraBytes(); diff != 0 {
+			return int(diff)
+		}
+		return strings.Compare(a.Title, b.Title)
+	})
+	if limit > 0 && len(groups) > limit {
+		groups = groups[:limit]
+	}
+	return groups
 }
 
 // ExtraBytes is what every copy but the largest holds, an upper bound on what dropping the extras would free.

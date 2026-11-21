@@ -152,6 +152,19 @@ WHERE o.oshash IS NULL AND o.kind = 'video' AND o.size_bytes >= 65536 AND o.id >
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
 
+-- Audio files with no raw fingerprint yet. An empty one means fpcalc could not read the file; it is asked again only
+-- when the file's bytes change (SetMediaObjectContent clears it).
+-- name: ListAudioWithoutFingerprint :many
+SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
+FROM media_object o
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+WHERE o.audio_fp IS NULL AND o.kind = 'audio' AND o.id > sqlc.arg(after_id)
+ORDER BY o.id
+LIMIT sqlc.arg(page_size);
+
+-- name: SetAudioFingerprint :exec
+UPDATE media_object SET audio_fp = ?, audio_fp_prefix = ? WHERE id = ?;
+
 -- The files the probe sweep still has to read, counted for its progress: ListUnmeasured, ListStaleProbes,
 -- ListStaleVideoProbes and ListVideoWithoutOshash without their page.
 -- name: CountUnmeasured :one
