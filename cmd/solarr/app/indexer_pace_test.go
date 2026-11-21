@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -29,5 +31,17 @@ func TestIndexerPacingStaysUnderTheLimitAndSlowsOnHits(t *testing.T) {
 	pacing.limitHit(2)
 	if got, _ := pacing.interval(2); got != 2*indexerBasePace {
 		t.Errorf("an unlimited indexer hit once %s, want twice the base pace", got)
+	}
+}
+
+// The owner's stated limit wins over the tracker's declared one (IDX-7 step 3).
+func TestAllowancePerHour_StatedLimitWinsOverTheTrackersOwn(t *testing.T) {
+	tracker := settings.Indexer{Impl: indexer.ImplBroadcastheNet}
+	if got := allowancePerHour(tracker); got != 150 {
+		t.Errorf("no stated limit: %d, want the tracker's 150", got)
+	}
+	tracker.SettingsJSON = `{"queries_per_hour":60}`
+	if got := allowancePerHour(tracker); got != 60 {
+		t.Errorf("stated 60: %d", got)
 	}
 }

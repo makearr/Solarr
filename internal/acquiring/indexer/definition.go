@@ -121,3 +121,14 @@ func SplitCredentials(credentials string) (user, secret string) {
 	}
 	return user, secret
 }
+
+// DefaultQueriesPerHour is the allowance a tracker's own rules set for an API key, used until its owner states another; 0 for none known.
+func DefaultQueriesPerHour(impl string) int64 {
+	switch impl {
+	case ImplBroadcastheNet:
+		return 150
+	case ImplRedacted, ImplOrpheus:
+		return 3600
+	}
+	return 0
+}

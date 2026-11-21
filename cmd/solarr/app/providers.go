@@ -253,10 +253,18 @@ func (p *process) flareSolverrTransport(site *httpx.Guard, solverURL string, pro
 	}
 }
 
+// allowancePerHour is the owner's stated limit, else the one the tracker's own rules set.
+func allowancePerHour(found settings.Indexer) int64 {
+	if stated := found.QueriesPerHour(); stated > 0 {
+		return stated
+	}
+	return indexer.DefaultQueriesPerHour(found.Impl)
+}
+
 // indexerDriver builds one configured indexer on its implementation; known is false for one Solarr has none of.
 func (p *process) indexerDriver(ctx context.Context, found settings.Indexer, apiKey string) (indexer.Driver, bool) {
 	if p.indexerPacing != nil {
-		p.indexerPacing.setLimit(found.ID, found.QueriesPerHour())
+		p.indexerPacing.setLimit(found.ID, allowancePerHour(found))
 	}
 	deps := adapters.IndexerDeps{HTTP: p.indexerClientFactory()(found.ID, found.BaseURL, p.cache.ResolveEgress(ctx, found)), Clock: clock.NewSystem()}
 	if p.indexerPacing != nil && found.Impl == indexer.ImplSpec {

@@ -136,3 +136,15 @@ func TestText_SpellsSpecialsSeasonsAndDailyEpisodes(t *testing.T) {
 		}
 	}
 }
+
+// The trackers whose rules limit an API key declare it; others state none (IDX-7 step 3).
+func TestDefaultQueriesPerHour(t *testing.T) {
+	got := map[string]int64{}
+	for _, impl := range []string{indexer.ImplBroadcastheNet, indexer.ImplRedacted, indexer.ImplOrpheus, indexer.ImplNewznab, indexer.ImplHDBits} {
+		got[impl] = indexer.DefaultQueriesPerHour(impl)
+	}
+	want := map[string]int64{indexer.ImplBroadcastheNet: 150, indexer.ImplRedacted: 3600, indexer.ImplOrpheus: 3600, indexer.ImplNewznab: 0, indexer.ImplHDBits: 0}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("allowances = %v, want %v", got, want)
+	}
+}
