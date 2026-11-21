@@ -27,6 +27,22 @@ ON CONFLICT (media_object_id) DO UPDATE SET
                      ELSE 0 END,
   tried_size = excluded.tried_size;
 
+-- name: UpsertUnidentifiedAfterOutage :exec
+-- The same record when a provider outage cut the attempt short: no try is counted and the file stays due.
+INSERT INTO identification_queue (media_object_id, root_folder_id, rel_path, candidates_json,
+                                   first_seen_at, last_seen_at, tries, next_try_at, tried_size)
+SELECT sqlc.arg(media_object_id), sqlc.arg(root_folder_id), sqlc.arg(rel_path),
+       sqlc.arg(candidates_json), sqlc.arg(first_seen_at), sqlc.arg(last_seen_at), 0, 0,
+       COALESCE((SELECT size_bytes FROM media_object WHERE id = sqlc.arg(media_object_id)), 0)
+WHERE NOT EXISTS (SELECT 1 FROM not_media nm WHERE nm.media_object_id = sqlc.arg(media_object_id))
+  AND NOT EXISTS (SELECT 1 FROM work_file wf WHERE wf.media_object_id = sqlc.arg(media_object_id)
+                    AND EXISTS (SELECT 1 FROM work_external_id vx
+                                WHERE vx.work_id = wf.work_id AND vx.provider NOT LIKE 'local:%'))
+ON CONFLICT (media_object_id) DO UPDATE SET
+  root_folder_id = excluded.root_folder_id, rel_path = excluded.rel_path,
+  candidates_json = excluded.candidates_json, last_seen_at = excluded.last_seen_at,
+  next_try_at = 0, tried_size = excluded.tried_size;
+
 -- A file that resolves on a later sweep leaves the queue entirely -- there is no
 -- "resolved" state to keep around.
 -- name: DeleteUnidentified :exec

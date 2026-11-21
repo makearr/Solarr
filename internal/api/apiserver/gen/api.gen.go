@@ -6383,8 +6383,11 @@ type UnidentifiedFile struct {
 	FirstSeenAt   time.Time               `json:"first_seen_at"`
 	LastSeenAt    time.Time               `json:"last_seen_at"`
 	MediaObjectId int64                   `json:"media_object_id"`
-	RelPath       string                  `json:"rel_path"`
-	RootFolderId  int64                   `json:"root_folder_id"`
+
+	// NextTryAt When the daily retry may ask again about this file; absent when it is due. "Identify again" overrides it.
+	NextTryAt    *time.Time `json:"next_try_at,omitempty"`
+	RelPath      string     `json:"rel_path"`
+	RootFolderId int64      `json:"root_folder_id"`
 }
 
 // UnidentifiedPage defines model for UnidentifiedPage.

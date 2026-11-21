@@ -9722,6 +9722,11 @@ export interface components {
             first_seen_at: string;
             /** Format: date-time */
             last_seen_at: string;
+            /**
+             * Format: date-time
+             * @description When the daily retry may ask again about this file; absent when it is due. "Identify again" overrides it.
+             */
+            next_try_at?: string;
         };
         /** @description One fact a verdict rests on. Kinds include title, artist, release_type, edition, edition_title, edition_date, edition_country, edition_status, edition_tracks, files_matched ("7/12"), files_supported, distance, accepted, contradicted, recall and outcome. */
         IdentificationEvidence: {

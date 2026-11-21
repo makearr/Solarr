@@ -226,6 +226,9 @@ func (c Consumer) Observe(
 	}
 	out := c.identifyBatch(ctx, root.ID, root.Path, readable, mediaObjectIDs, passes)
 	links, trackFiles, queued, resolved := out.links, out.trackFiles, out.queued, out.resolved
+	for i, index := range out.queuedIndexes {
+		queued[i].ProviderUnavailable = out.unanswered[index]
+	}
 	if c.attempts != nil {
 		if err := c.attempts.Record(ctx, out.attempts()); err != nil {
 			return fmt.Errorf("music: %w", err)
@@ -409,7 +412,9 @@ type batchResult struct {
 	links      []library.WorkLink
 	trackFiles []TrackFile
 	queued     []library.QueueEntry
-	resolved   []int64
+	// queuedIndexes is the batch index of each queued entry.
+	queuedIndexes []int
+	resolved      []int64
 	// unverifiedArtist names the artist of a folder added as an unverified album (D6); empty otherwise.
 	unverifiedArtist string
 
@@ -459,6 +464,7 @@ func (r *batchResult) linkUnverified(link library.WorkLink, file TrackFile) {
 }
 
 func (r *batchResult) queue(index int, candidates []model.Identification) {
+	r.queuedIndexes = append(r.queuedIndexes, index)
 	r.queued = append(r.queued, library.QueueEntry{
 		MediaObjectID: r.mediaObjectIDs[index], RootFolderID: r.rootFolderID,
 		RelPath: r.observed[index].File.RelPath, Candidates: candidates, At: r.at,

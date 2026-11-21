@@ -1438,6 +1438,8 @@ type Querier interface {
 	// unverified album (only local ids, D6) does not count: its files still await identification.
 	// Seen again with the same answer for the same bytes, the next automatic try moves out: a day, doubling, up to 30 days.
 	UpsertUnidentified(ctx context.Context, arg UpsertUnidentifiedParams) error
+	// The same record when a provider outage cut the attempt short: no try is counted and the file stays due.
+	UpsertUnidentifiedAfterOutage(ctx context.Context, arg UpsertUnidentifiedAfterOutageParams) error
 	// Series (TV works) refresh: provider data written without disturbing what a person set.
 	// A refresh never changes monitoring: monitored is left out of the update.
 	UpsertWorkPart(ctx context.Context, arg UpsertWorkPartParams) (WorkPart, error)

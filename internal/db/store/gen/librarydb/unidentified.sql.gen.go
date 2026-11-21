@@ -360,3 +360,41 @@ func (q *Queries) UpsertUnidentified(ctx context.Context, arg UpsertUnidentified
 	)
 	return err
 }
+
+const upsertUnidentifiedAfterOutage = `-- name: UpsertUnidentifiedAfterOutage :exec
+INSERT INTO identification_queue (media_object_id, root_folder_id, rel_path, candidates_json,
+                                   first_seen_at, last_seen_at, tries, next_try_at, tried_size)
+SELECT ?1, ?2, ?3,
+       ?4, ?5, ?6, 0, 0,
+       COALESCE((SELECT size_bytes FROM media_object WHERE id = ?1), 0)
+WHERE NOT EXISTS (SELECT 1 FROM not_media nm WHERE nm.media_object_id = ?1)
+  AND NOT EXISTS (SELECT 1 FROM work_file wf WHERE wf.media_object_id = ?1
+                    AND EXISTS (SELECT 1 FROM work_external_id vx
+                                WHERE vx.work_id = wf.work_id AND vx.provider NOT LIKE 'local:%'))
+ON CONFLICT (media_object_id) DO UPDATE SET
+  root_folder_id = excluded.root_folder_id, rel_path = excluded.rel_path,
+  candidates_json = excluded.candidates_json, last_seen_at = excluded.last_seen_at,
+  next_try_at = 0, tried_size = excluded.tried_size
+`
+
+type UpsertUnidentifiedAfterOutageParams struct {
+	MediaObjectID  int64
+	RootFolderID   int64
+	RelPath        string
+	CandidatesJson string
+	FirstSeenAt    int64
+	LastSeenAt     int64
+}
+
+// The same record when a provider outage cut the attempt short: no try is counted and the file stays due.
+func (q *Queries) UpsertUnidentifiedAfterOutage(ctx context.Context, arg UpsertUnidentifiedAfterOutageParams) error {
+	_, err := q.db.ExecContext(ctx, upsertUnidentifiedAfterOutage,
+		arg.MediaObjectID,
+		arg.RootFolderID,
+		arg.RelPath,
+		arg.CandidatesJson,
+		arg.FirstSeenAt,
+		arg.LastSeenAt,
+	)
+	return err
+}

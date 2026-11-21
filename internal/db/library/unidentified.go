@@ -31,6 +31,8 @@ type QueueEntry struct {
 	// (ChainResult.Best was nil either way).
 	Candidates []model.Identification
 	At         int64
+	// ProviderUnavailable marks an attempt a provider outage cut short: it is no try and the file stays due.
+	ProviderUnavailable bool
 }
 
 // Candidate is the queue's own, deliberately narrower shape for one ranked
@@ -96,11 +98,18 @@ func (u Unidentified) Record(ctx context.Context, entries []QueueEntry) error {
 			if err != nil {
 				return err
 			}
-			if err := queries.UpsertUnidentified(ctx, librarydb.UpsertUnidentifiedParams{
+			params := librarydb.UpsertUnidentifiedParams{
 				MediaObjectID: entry.MediaObjectID, RootFolderID: entry.RootFolderID,
 				RelPath: entry.RelPath, CandidatesJson: candidatesJSON,
 				FirstSeenAt: entry.At, LastSeenAt: entry.At,
-			}); err != nil {
+			}
+			upsert := queries.UpsertUnidentified
+			if entry.ProviderUnavailable {
+				upsert = func(ctx context.Context, arg librarydb.UpsertUnidentifiedParams) error {
+					return queries.UpsertUnidentifiedAfterOutage(ctx, librarydb.UpsertUnidentifiedAfterOutageParams(arg))
+				}
+			}
+			if err := upsert(ctx, params); err != nil {
 				return fmt.Errorf("upsert %s: %w", entry.RelPath, err)
 			}
 		}

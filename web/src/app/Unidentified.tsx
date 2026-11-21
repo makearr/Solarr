@@ -91,6 +91,12 @@ export function Unidentified() {
     },
     { key: "first_seen_at", header: "First seen", width: "12rem", render: (file) => file.first_seen_at },
     {
+      key: "next_try_at",
+      header: "Next automatic try",
+      width: "12rem",
+      render: (file) => file.next_try_at ?? "Next daily run",
+    },
+    {
       key: "actions",
       header: "",
       width: "13rem",

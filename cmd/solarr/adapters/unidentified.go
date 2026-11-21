@@ -34,6 +34,7 @@ func (a Unidentified) ListUnidentified(
 			MediaObjectID: row.MediaObjectID, RootFolderID: row.RootFolderID, RelPath: row.RelPath,
 			Candidates:  toCandidateRows(row.Candidates),
 			FirstSeenAt: time.Unix(row.FirstSeenAt, 0), LastSeenAt: time.Unix(row.LastSeenAt, 0),
+			NextTryAt: nextTry(row.NextTryAt),
 		}
 	}
 	return views, nil
@@ -67,6 +68,7 @@ func (a UnidentifiedResolver) GetUnidentified(
 		MediaObjectID: row.MediaObjectID, RootFolderID: row.RootFolderID, RelPath: row.RelPath,
 		Candidates:  toCandidateRows(row.Candidates),
 		FirstSeenAt: time.Unix(row.FirstSeenAt, 0), LastSeenAt: time.Unix(row.LastSeenAt, 0),
+		NextTryAt: nextTry(row.NextTryAt),
 	}, nil
 }
 
@@ -180,4 +182,12 @@ func toCandidateRows(from []library.Candidate) []apiserver.UnidentifiedCandidate
 		}
 	}
 	return views
+}
+
+// nextTry is the zero time for a file that is due now (stored as 0).
+func nextTry(unix int64) time.Time {
+	if unix == 0 {
+		return time.Time{}
+	}
+	return time.Unix(unix, 0)
 }

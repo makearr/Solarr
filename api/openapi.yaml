@@ -13199,6 +13199,10 @@ components:
           items: { $ref: "#/components/schemas/UnidentifiedCandidate" }
         first_seen_at: { type: string, format: date-time }
         last_seen_at: { type: string, format: date-time }
+        next_try_at:
+          type: string
+          format: date-time
+          description: When the daily retry may ask again about this file; absent when it is due. "Identify again" overrides it.
 
     IdentificationEvidence:
       type: object

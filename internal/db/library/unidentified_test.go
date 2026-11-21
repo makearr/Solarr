@@ -142,6 +142,12 @@ func TestUnidentified_ARepeatedAnswerBacksTheRetryOffAndAChangeResetsIt(t *testi
 		}
 		at += 10
 	}
+	entry.ProviderUnavailable = true
+	if row := record(at); row.Tries != 4 || row.NextTryAt != 0 {
+		t.Fatalf("a provider outage: tries %d next %d, want the count kept and the file due", row.Tries, row.NextTryAt)
+	}
+	entry.ProviderUnavailable = false
+	at += 10
 	entry.Candidates = []model.Identification{{Strategy: "tags", Confidence: 0.5}}
 	if row := record(at); row.Tries != 0 || row.NextTryAt != 0 {
 		t.Fatalf("a different answer: tries %d next %d, want a fresh start", row.Tries, row.NextTryAt)

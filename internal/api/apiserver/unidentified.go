@@ -38,6 +38,8 @@ type UnidentifiedRow struct {
 	Candidates    []UnidentifiedCandidate
 	FirstSeenAt   time.Time
 	LastSeenAt    time.Time
+	// NextTryAt is zero when the file is due now.
+	NextTryAt time.Time
 }
 
 // ListUnidentified returns a page of F29's manual identification queue, oldest
@@ -263,7 +265,7 @@ func buildUnidentifiedPage(rows []UnidentifiedRow, limit int) gen.UnidentifiedPa
 		views[index] = gen.UnidentifiedFile{
 			MediaObjectId: row.MediaObjectID, RootFolderId: row.RootFolderID, RelPath: row.RelPath,
 			Candidates:  toCandidateViews(row.Candidates),
-			FirstSeenAt: row.FirstSeenAt, LastSeenAt: row.LastSeenAt,
+			FirstSeenAt: row.FirstSeenAt, LastSeenAt: row.LastSeenAt, NextTryAt: optionalTime(row.NextTryAt),
 		}
 	}
 
@@ -356,6 +358,7 @@ func (s *Server) ListIdentificationAttempts(w http.ResponseWriter, r *http.Reque
 	file := gen.UnidentifiedFile{
 		MediaObjectId: entry.MediaObjectID, RootFolderId: entry.RootFolderID, RelPath: entry.RelPath,
 		Candidates: toCandidateViews(entry.Candidates), FirstSeenAt: entry.FirstSeenAt, LastSeenAt: entry.LastSeenAt,
+		NextTryAt: optionalTime(entry.NextTryAt),
 	}
 	writeJSON(w, s.logger, http.StatusOK, gen.IdentificationAttemptList{File: file, Items: views})
 }
@@ -366,4 +369,12 @@ func toEvidenceViews(from []IdentificationEvidence) []gen.IdentificationEvidence
 		views[i] = gen.IdentificationEvidence{Kind: evidence.Kind, Detail: evidence.Detail}
 	}
 	return views
+}
+
+// optionalTime is nil for the zero time, so a due file carries no next_try_at.
+func optionalTime(at time.Time) *time.Time {
+	if at.IsZero() {
+		return nil
+	}
+	return &at
 }
