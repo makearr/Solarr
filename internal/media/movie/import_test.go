@@ -221,3 +221,24 @@ func TestChooseRootFollowsTheWorksFilesOverAStaleAffinity(t *testing.T) {
 		t.Errorf("chose root %d, affinity now %d; want 9, where the film's file is", root.ID, stale["movie:the example film:1999"])
 	}
 }
+
+// A store error after the file was registered must take back the placed file and its rows.
+func TestImportTakesBackFileAndRowsWhenAttachingTheFilmFails(t *testing.T) {
+	importer, fsys, write, _, opened := newImporterOver(t, 1<<40, noAcquisition{})
+	unit := inspect.Unit{Directory: "The.Example.Film.1999.1080p", Media: []inspect.File{write("The.Example.Film.1999.1080p/film.mkv")}}
+	if _, err := opened.WriteDB().ExecContext(t.Context(),
+		`CREATE TRIGGER refuse_links BEFORE INSERT ON work_file BEGIN SELECT RAISE(ABORT, 'injected'); END`); err != nil {
+		t.Fatalf("create trigger: %v", err)
+	}
+
+	_, _ = importer.ImportBatch(t.Context(), batch.Request{SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{5}})
+	for _, table := range []string{"library_path", "media_object"} {
+		var rows int
+		if err := opened.Read().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+table).Scan(&rows); err != nil || rows != 0 {
+			t.Errorf("%s rows = %d (%v), want 0 after the take-back", table, rows, err)
+		}
+	}
+	if entries, _ := fsys.ReadDir("/library/The Example Film (1999)"); len(entries) != 0 {
+		t.Errorf("film folder holds %v, want no placed file", entries)
+	}
+}

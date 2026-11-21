@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"path"
 	"strings"
 	"testing"
 
@@ -17,6 +18,7 @@ type instrumentedFS struct {
 	fsx.FS
 	opens        map[string]int
 	synced       int
+	created      []string
 	failReadsOf  string
 	errReadBreak error
 }
@@ -31,6 +33,7 @@ func (f *instrumentedFS) Open(path string) (fsx.File, error) {
 }
 
 func (f *instrumentedFS) Create(path string) (io.WriteCloser, error) {
+	f.created = append(f.created, path)
 	writer, err := f.FS.Create(path)
 	if err != nil {
 		return nil, err
@@ -126,5 +129,16 @@ func TestCopy_ReadsTheSourceOnceAndFlushesBeforeReturning(t *testing.T) {
 		if strings.HasPrefix(name, mover.TempPrefix) {
 			t.Errorf("temporary file %q left behind", name)
 		}
+	}
+}
+
+func TestCopy_BytesAreWrittenUnderAnInFlightNameNeverTheFinalOne(t *testing.T) {
+	fsys, _ := crossFilesystemFixture(t)
+
+	if _, err := mover.PlaceOne(t.Context(), fsys, "/downloads/Old/track.flac", "/library/New/track.flac", int64(len("the bytes")), []mover.PlaceMethod{mover.PlaceCopy}); err != nil {
+		t.Fatalf("PlaceOne: %v", err)
+	}
+	if len(fsys.created) != 1 || fsys.created[0] == "/library/New/track.flac" || !strings.HasPrefix(path.Base(fsys.created[0]), mover.TempPrefix) {
+		t.Errorf("files created = %v, want one in-flight name next to the final one", fsys.created)
 	}
 }

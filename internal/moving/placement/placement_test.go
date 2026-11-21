@@ -3,6 +3,7 @@ package placement_test
 import (
 	"testing"
 
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/moving/placement"
 )
 
@@ -283,5 +284,22 @@ func TestResolve_MinFreeBytesReserveIsRespected(t *testing.T) {
 	}
 	if chosen.RootFolderID != 2 {
 		t.Errorf("chosen = %d, want 2 (the tight root's reserve leaves no room for a 100-byte item)", chosen.RootFolderID)
+	}
+}
+
+func TestCandidateOf_CopiesTheRootAndCountsAnUnprobedSizeAsZero(t *testing.T) {
+	free, total := int64(40), int64(90)
+	root := settings.RootFolder{ID: 4, FSID: "fs-a", Online: true, Writable: true, ReadOnly: false, FreeBytes: &free, TotalBytes: &total, MinFreeBytes: 7}
+
+	if got, want := placement.CandidateOf(root, true), (placement.RootCandidate{
+		RootFolderID: 4, FSID: "fs-a", Online: true, Writable: true, AcceptsNew: true, FreeBytes: 40, TotalBytes: 90, MinFreeBytes: 7,
+	}); got != want {
+		t.Errorf("CandidateOf = %+v, want %+v", got, want)
+	}
+	root.FreeBytes, root.TotalBytes, root.ReadOnly = nil, nil, true
+	if got, want := placement.CandidateOf(root, false), (placement.RootCandidate{
+		RootFolderID: 4, FSID: "fs-a", Online: true, Writable: true, ReadOnly: true, MinFreeBytes: 7,
+	}); got != want {
+		t.Errorf("CandidateOf unprobed = %+v, want %+v", got, want)
 	}
 }
