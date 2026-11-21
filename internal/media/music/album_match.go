@@ -73,7 +73,9 @@ func (c Claim) present() bool {
 // LocalTrack is one file of a folder, as album matching sees it.
 type LocalTrack struct {
 	Title, Artist, Album Claim
-	Disc, Track          int
+	// TrackArtist is the artist tag itself, which differs from Artist when an album-artist tag leads.
+	TrackArtist Claim
+	Disc, Track int
 	// Year is the edition's own date, OriginalYear the first release's.
 	Year, OriginalYear int
 	Duration           time.Duration

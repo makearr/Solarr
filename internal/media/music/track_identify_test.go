@@ -406,3 +406,24 @@ func TestObserve_ADescriptivelyQualifiedSongStaysOnTheSiblingsAlbum(t *testing.T
 		t.Errorf("identified as %q, want the siblings' album %q", got, releaseGroupMBID)
 	}
 }
+
+// An album-artist tag that MusicBrainz does not credit the recording to: the track's own artist is searched second.
+func TestObserve_ATrackWhoseAlbumArtistFindsNothingIsSearchedByItsOwnArtist(t *testing.T) {
+	tracks := fakeTrackLookup{searches: map[string][]musicbrainz.RecordingMatch{
+		"Lefite/Levels": {recordingOn("rec-levels", "Levels", 200, rgLevels)},
+	}}
+	consumer, opened, fsys := newTrackConsumer(t, &fakeAlbumLookup{}, nil, tracks)
+	content := []byte("tagged with an album artist")
+	writeMusicFile(t, fsys, "Misc/Playlist (2018)/01.m4a", content)
+	observed := observedFile("Misc/Playlist (2018)/01.m4a", int64(len(content)), mediatool.Tags{
+		"title": "Levels", "artist": "Lefite", "albumartist": "Pezupe Collective", "album": "Playlist",
+	})
+	observed.Probe.Measured.Duration = 201 * time.Second
+
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: testRoot, Online: true}, 0, []scan.Observed{observed}); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if got := releaseGroupOf(t, opened, "Misc/Playlist (2018)/01.m4a"); got != "rg-levels" {
+		t.Errorf("identified as %q, want rg-levels", got)
+	}
+}

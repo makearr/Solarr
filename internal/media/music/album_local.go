@@ -32,6 +32,7 @@ func ReadLocalTrack(tags mediatool.Tags, measured mediatool.Measured, relPath st
 	local := LocalTrack{
 		Title:         claimFrom(tags.First("title"), stemTitle),
 		Artist:        claimFrom(tags.First("albumartist", "album_artist", "artist"), stemArtist, folderArtist(relPath, folder)),
+		TrackArtist:   claimFrom(tags.First("artist")),
 		Album:         claimFrom(tags.First("album"), folder.Album),
 		Disc:          firstTrackNumber(tags.First("discnumber", "disc")),
 		Track:         firstTrackNumber(tags.First("tracknumber", "track")),

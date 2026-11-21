@@ -186,12 +186,21 @@ func (c Consumer) searchedRecordings(ctx context.Context, local LocalTrack) ([]m
 	}
 	// The search only has to bring the candidate: the title without its qualifiers and the first credited artist, since
 	// the phrase must match MusicBrainz's own spelling. Every local check below still decides.
-	title, artist := local.Title.Value, local.Artist.Value
+	title := local.Title.Value
 	if core := titleCore(title); core != "" {
 		title = core
 	}
-	artist = firstCredit(artist)
-	found, err := c.tracks.SearchRecordings(ctx, musicbrainz.PriorityIdentify, artist, title, trackSearchLimit)
+	fitting, err := c.searchFitting(ctx, local, local.Artist.Value, title)
+	if err != nil || len(fitting) > 0 || !local.TrackArtist.present() || firstCredit(local.TrackArtist.Value) == firstCredit(local.Artist.Value) {
+		return fitting, err
+	}
+	// The album artist found nothing: the track's own artist may be the one MusicBrainz credits.
+	return c.searchFitting(ctx, local, local.TrackArtist.Value, title)
+}
+
+// searchFitting searches by the first credit of artist and keeps the recordings that fit the file's length, title and artist.
+func (c Consumer) searchFitting(ctx context.Context, local LocalTrack, artist, title string) ([]musicbrainz.RecordingMatch, error) {
+	found, err := c.tracks.SearchRecordings(ctx, musicbrainz.PriorityIdentify, firstCredit(artist), title, trackSearchLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +209,7 @@ func (c Consumer) searchedRecordings(ctx context.Context, local LocalTrack) ([]m
 		length := time.Duration(recording.DurationMs) * time.Millisecond
 		if recording.DurationMs > 0 && (length-local.Duration).Abs() <= trackLengthTolerance &&
 			sameTrackTitle(local.Title.Value, recording.Title) &&
-			artistPenalty(local.Artist.Value, recording.ArtistCredit) <= maxArtistPenalty {
+			artistPenalty(artist, recording.ArtistCredit) <= maxArtistPenalty {
 			fitting = append(fitting, recording)
 		}
 	}
