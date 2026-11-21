@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -99,6 +100,15 @@ func (a LibraryMove) moveWork(ctx context.Context, request apiserver.LibraryMove
 		}
 		return apiserver.DrainPlanResult{}, "", err
 	}
+	if !request.Copy && jobID != 0 {
+		change, err := json.Marshal(libraryChange{WorkID: request.WorkID, FromCategoryID: source.ID, ToCategoryID: target.ID})
+		if err == nil {
+			err = a.MoveJobs.SetLibraryChange(ctx, jobID, string(change))
+		}
+		if err != nil {
+			return apiserver.DrainPlanResult{}, "", err
+		}
+	}
 	if planned != nil && jobID != 0 {
 		planned[dest] += result.BytesTotal
 	}
@@ -107,6 +117,36 @@ func (a LibraryMove) moveWork(ctx context.Context, request apiserver.LibraryMove
 	}
 	result.Accepted = true
 	return result, "", nil
+}
+
+// libraryChange is the library switch a move's files follow.
+type libraryChange struct {
+	WorkID         int64 `json:"work_id"`
+	FromCategoryID int64 `json:"from_category_id"`
+	ToCategoryID   int64 `json:"to_category_id"`
+}
+
+// UndoLibraryChange puts a work back in the library a move job was to take it from, once the job moved none of its files.
+func (a LibraryMove) UndoLibraryChange(ctx context.Context, moveJobID int64) error {
+	stored, err := a.MoveJobs.LibraryChange(ctx, moveJobID)
+	if err != nil || stored == "" {
+		return err
+	}
+	var change libraryChange
+	if err := json.Unmarshal([]byte(stored), &change); err != nil {
+		return fmt.Errorf("library change of move job %d: %w", moveJobID, err)
+	}
+	profileID := a.DefaultProfileID
+	if origin, found := a.Settings.Snapshot().Category(change.FromCategoryID); found && origin.QualityProfileID != nil {
+		profileID = *origin.QualityProfileID
+	}
+	if _, err := a.Desired.MoveWorkToLibrary(ctx, change.WorkID, change.ToCategoryID, change.FromCategoryID, profileID); err != nil {
+		return err
+	}
+	if a.OnMoved != nil {
+		a.OnMoved(ctx)
+	}
+	return a.MoveJobs.ForgetLibraryChange(ctx, moveJobID)
 }
 
 // sourceLibrary is the library the work leaves: the one named, else its first other library of the target's type.

@@ -94,6 +94,7 @@ type Job struct {
 	roots           RootFolders
 	drainCompletion DrainCompletion
 	finished        func(ctx context.Context)
+	failed          func(ctx context.Context, moveJobID int64)
 	permissions     Permissions
 	clock           clock.Clock
 	logger          *slog.Logger
@@ -111,6 +112,8 @@ type Config struct {
 	DrainCompletion DrainCompletion
 	// Finished runs after a job's files have moved, for the libraries' counts that follow the files; nil does nothing.
 	Finished func(ctx context.Context)
+	// Failed runs when a job moved no file at all, to undo what was changed for the files to follow; nil does nothing.
+	Failed func(ctx context.Context, moveJobID int64)
 	// Permissions is optional; a rename run for one library applies it to what it moves.
 	Permissions Permissions
 	Clock       clock.Clock
@@ -125,7 +128,7 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		fsys: config.FS, moveJobs: config.MoveJobs, physical: config.Physical, links: config.Links,
-		roots: config.Roots, drainCompletion: config.DrainCompletion, finished: config.Finished, permissions: config.Permissions,
+		roots: config.Roots, drainCompletion: config.DrainCompletion, finished: config.Finished, failed: config.Failed, permissions: config.Permissions,
 		clock: config.Clock, logger: logger,
 	}
 }
@@ -205,6 +208,18 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		}
 	}
 
+	if reason, none, err := j.movedNothing(ctx, moveJob); err != nil {
+		return err
+	} else if none {
+		j.logger.Warn("move job moved no file", slog.Int64("move_job_id", moveJob.ID), slog.String("error", reason))
+		if err := j.moveJobs.Finish(ctx, moveJob.ID, library.MoveJobFailed, j.clock.Now().Unix(), reason); err != nil {
+			return err
+		}
+		if j.failed != nil {
+			j.failed(ctx, moveJob.ID)
+		}
+		return nil
+	}
 	j.logger.Info("move job finished", slog.Int64("move_job_id", moveJob.ID))
 	if err := j.moveJobs.Finish(ctx, moveJob.ID, library.MoveJobDone, j.clock.Now().Unix(), ""); err != nil {
 		return err
@@ -224,6 +239,23 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		}
 	}
 	return nil
+}
+
+// movedNothing says whether every item of a job failed, and the first failure's text.
+func (j *Job) movedNothing(ctx context.Context, moveJob library.Job) (reason string, none bool, err error) {
+	items, err := j.moveJobs.ListItems(ctx, moveJob.ID)
+	if err != nil {
+		return "", false, fmt.Errorf("moverjob: list items of job %d: %w", moveJob.ID, err)
+	}
+	for _, item := range items {
+		if item.State != library.MoveItemFailed {
+			return "", false, nil
+		}
+		if reason == "" {
+			reason = item.Error
+		}
+	}
+	return reason, len(items) > 0, nil
 }
 
 // errAfterMove marks a failure after the bytes reached their destination, which must be retried and never ends the item.

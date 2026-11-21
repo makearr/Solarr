@@ -354,6 +354,42 @@ func TestJob_OneItemFailureDoesNotStopTheJob(t *testing.T) {
 	}
 }
 
+func TestJob_AJobThatMovedNoFileFailsAndTellsTheUndoHook(t *testing.T) {
+	fx := newFixture(t)
+	fx.writeFile(t, "/root1/broken.flac", "boom")
+	brokenID := fx.registerObject(t, 1, "broken.flac", "boom")
+	moveJobs := library.NewMoveJobs(fx.store)
+	jobID, err := moveJobs.Create(t.Context(), library.NewMoveJob{
+		Reason: string(mover.ReasonCategory), FilesTotal: 1, BytesTotal: 4, PlanJSON: "{}", CreatedAt: fx.clock.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := moveJobs.AddItems(t.Context(), jobID, []library.NewMoveItem{{MediaObjectID: brokenID, DestRootID: 99, DestRelPath: "broken.flac", Bytes: 4}}); err != nil {
+		t.Fatal(err)
+	}
+	var undone []int64
+	job := moverjob.NewJob(moverjob.Config{
+		FS: fx.fsys, MoveJobs: moveJobs, Physical: library.NewPhysical(fx.store), Links: library.NewObjectLinks(fx.store),
+		Roots: fakeRoots{1: {Path: "/root1", FSID: "fs-a"}}, Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
+		Failed:   func(_ context.Context, id int64) { undone = append(undone, id) },
+		Finished: func(context.Context) { fx.finished++ },
+	})
+	if err := fx.run(t, job, jobID); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got, err := moveJobs.Get(t.Context(), jobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.State != library.MoveJobFailed || got.Error == "" {
+		t.Errorf("job = %+v, want FAILED with the first failure's text", got)
+	}
+	if len(undone) != 1 || undone[0] != jobID || fx.finished != 0 {
+		t.Errorf("undo hook ran for %v, finished hook %d times; want the undo once for job %d and no finish", undone, fx.finished, jobID)
+	}
+}
+
 // TestJob_TidyStopsAtANonEmptyDirectory proves TIDY does not reach past a
 // sibling file still using the parent directory.
 func TestJob_TidyStopsAtANonEmptyDirectory(t *testing.T) {

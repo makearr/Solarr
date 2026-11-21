@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
@@ -30,7 +31,17 @@ func (p *process) registerMoverJob(registry *jobs.Registry, executor *jobs.Execu
 		DrainCompletion: drainjob.Completer{
 			Roots: adapters.DrainRoots{Cache: p.cache}, Files: library.NewPhysical(p.library),
 		},
-		Finished:    func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+		Finished: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+		Failed: func(ctx context.Context, moveJobID int64) {
+			undo := adapters.LibraryMove{
+				Settings: p.cache, Desired: library.NewDesired(p.library), MoveJobs: library.NewMoveJobs(p.library),
+				DefaultProfileID: p.defaultQualityProfileID,
+				OnMoved:          func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+			}
+			if err := undo.UndoLibraryChange(ctx, moveJobID); err != nil {
+				p.logger.Warn("library change of a failed move not undone", slog.Int64("move_job_id", moveJobID), slog.Any("error", err))
+			}
+		},
 		Permissions: p.libraryPermissions, Clock: clock.NewSystem(), Logger: p.logger,
 	})
 	executor.Handle(moverjob.JobType, job)

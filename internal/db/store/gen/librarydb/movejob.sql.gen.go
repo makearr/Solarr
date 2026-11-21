@@ -78,6 +78,15 @@ func (q *Queries) CreateMoveJob(ctx context.Context, arg CreateMoveJobParams) (M
 	return i, err
 }
 
+const deleteMoveJobLibraryChange = `-- name: DeleteMoveJobLibraryChange :exec
+DELETE FROM move_job_library_change WHERE move_job_id = ?
+`
+
+func (q *Queries) DeleteMoveJobLibraryChange(ctx context.Context, moveJobID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteMoveJobLibraryChange, moveJobID)
+	return err
+}
+
 const finishMoveJob = `-- name: FinishMoveJob :exec
 UPDATE move_job SET state = ?1, finished_at = ?2, error = ?3,
        plan_json = CASE WHEN ?1 = 'DONE' THEN '' ELSE plan_json END
@@ -143,6 +152,17 @@ func (q *Queries) GetMoveJob(ctx context.Context, id int64) (GetMoveJobRow, erro
 		&i.CategoryID,
 	)
 	return i, err
+}
+
+const getMoveJobLibraryChange = `-- name: GetMoveJobLibraryChange :one
+SELECT change_json FROM move_job_library_change WHERE move_job_id = ?
+`
+
+func (q *Queries) GetMoveJobLibraryChange(ctx context.Context, moveJobID int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getMoveJobLibraryChange, moveJobID)
+	var change_json string
+	err := row.Scan(&change_json)
+	return change_json, err
 }
 
 const getMoveJobPlan = `-- name: GetMoveJobPlan :one
@@ -435,6 +455,21 @@ func (q *Queries) SetMoveItemState(ctx context.Context, arg SetMoveItemStatePara
 		arg.MoveJobID,
 		arg.MediaObjectID,
 	)
+	return err
+}
+
+const setMoveJobLibraryChange = `-- name: SetMoveJobLibraryChange :exec
+INSERT INTO move_job_library_change (move_job_id, change_json) VALUES (?, ?)
+ON CONFLICT (move_job_id) DO UPDATE SET change_json = excluded.change_json
+`
+
+type SetMoveJobLibraryChangeParams struct {
+	MoveJobID  int64
+	ChangeJson string
+}
+
+func (q *Queries) SetMoveJobLibraryChange(ctx context.Context, arg SetMoveJobLibraryChangeParams) error {
+	_, err := q.db.ExecContext(ctx, setMoveJobLibraryChange, arg.MoveJobID, arg.ChangeJson)
 	return err
 }
 

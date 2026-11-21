@@ -309,6 +309,7 @@ type Querier interface {
 	DeleteLibraryPath(ctx context.Context, id int64) error
 	DeleteMediaObject(ctx context.Context, id int64) error
 	DeleteMissingRecount(ctx context.Context, arg DeleteMissingRecountParams) error
+	DeleteMoveJobLibraryChange(ctx context.Context, moveJobID int64) error
 	// Old finished sessions that placed nothing still in the library and hold nothing for a person; a pack keeps its session.
 	DeleteOldImportSessions(ctx context.Context, arg DeleteOldImportSessionsParams) (int64, error)
 	DeletePerson(ctx context.Context, id int64) error
@@ -484,6 +485,7 @@ type Querier interface {
 	// The plan is one value of tens of megabytes for a big library, so the job's own reads leave it out: the running job
 	// re-reads its state after every file, and a list of jobs would carry every past plan.
 	GetMoveJob(ctx context.Context, id int64) (GetMoveJobRow, error)
+	GetMoveJobLibraryChange(ctx context.Context, moveJobID int64) (string, error)
 	GetMoveJobPlan(ctx context.Context, id int64) (string, error)
 	GetOrganisation(ctx context.Context, id int64) (Organisation, error)
 	GetOrganisationByExternalID(ctx context.Context, arg GetOrganisationByExternalIDParams) (Organisation, error)
@@ -1332,6 +1334,7 @@ type Querier interface {
 	// What the probe read of one file, replacing an earlier probe.
 	SetMediaProbe(ctx context.Context, arg SetMediaProbeParams) error
 	SetMoveItemState(ctx context.Context, arg SetMoveItemStateParams) error
+	SetMoveJobLibraryChange(ctx context.Context, arg SetMoveJobLibraryChangeParams) error
 	SetMoveJobRunning(ctx context.Context, id int64) error
 	SetOrganisationLogo(ctx context.Context, arg SetOrganisationLogoParams) error
 	SetOrganisationLogoAsked(ctx context.Context, arg SetOrganisationLogoAskedParams) error

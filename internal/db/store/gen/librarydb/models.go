@@ -653,6 +653,11 @@ type MoveJob struct {
 	CategoryID   sql.NullInt64
 }
 
+type MoveJobLibraryChange struct {
+	MoveJobID  int64
+	ChangeJson string
+}
+
 type NotMedium struct {
 	MediaObjectID int64
 	MarkedAt      int64

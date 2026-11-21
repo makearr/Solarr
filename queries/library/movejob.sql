@@ -83,3 +83,13 @@ INSERT INTO move_item_companion (move_job_id, media_object_id, source_rel_path, 
 -- name: ListMoveItemCompanions :many
 SELECT move_job_id, media_object_id, source_rel_path, dest_rel_path
 FROM move_item_companion WHERE move_job_id = ? AND media_object_id = ? ORDER BY source_rel_path;
+
+-- name: SetMoveJobLibraryChange :exec
+INSERT INTO move_job_library_change (move_job_id, change_json) VALUES (?, ?)
+ON CONFLICT (move_job_id) DO UPDATE SET change_json = excluded.change_json;
+
+-- name: GetMoveJobLibraryChange :one
+SELECT change_json FROM move_job_library_change WHERE move_job_id = ?;
+
+-- name: DeleteMoveJobLibraryChange :exec
+DELETE FROM move_job_library_change WHERE move_job_id = ?;

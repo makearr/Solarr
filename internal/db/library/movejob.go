@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -265,6 +266,36 @@ func (m MoveJobs) Finish(ctx context.Context, jobID int64, state string, finishe
 		return fmt.Errorf("library: finish move job %d: %w", jobID, err)
 	}
 	return nil
+}
+
+// SetLibraryChange remembers the library change a job's files follow, as JSON the caller reads back to undo it.
+func (m MoveJobs) SetLibraryChange(ctx context.Context, jobID int64, changeJSON string) error {
+	err := m.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetMoveJobLibraryChange(ctx, librarydb.SetMoveJobLibraryChangeParams{MoveJobID: jobID, ChangeJson: changeJSON})
+	})
+	if err != nil {
+		return fmt.Errorf("library: record library change of move job %d: %w", jobID, err)
+	}
+	return nil
+}
+
+// LibraryChange is what SetLibraryChange stored; "" when the job changed no library.
+func (m MoveJobs) LibraryChange(ctx context.Context, jobID int64) (string, error) {
+	changeJSON, err := librarydb.New(m.store.Read()).GetMoveJobLibraryChange(ctx, jobID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("library: library change of move job %d: %w", jobID, err)
+	}
+	return changeJSON, nil
+}
+
+// ForgetLibraryChange drops the record once the change is settled.
+func (m MoveJobs) ForgetLibraryChange(ctx context.Context, jobID int64) error {
+	return m.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).DeleteMoveJobLibraryChange(ctx, jobID)
+	})
 }
 
 // Get answers one job by id.
