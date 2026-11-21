@@ -81,6 +81,21 @@ func TestGroupByAlbum(t *testing.T) {
 	}
 	otherArtist := []mediatool.Tags{lostID[0], {"album": "Invented Record", "albumartist": "Other Band", "track": "2"}}
 	namedArtist := []mediatool.Tags{lostID[0], lostID[1], {"album": "Invented Record", "albumartist": "Ixu Band", "track": "3"}}
+	strayTrackArtist := append(append([]mediatool.Tags{}, twoAlbums...), mediatool.Tags{"album": "Greatest Hits", "artist": "Z", "track": "7"})
+	oneNamedAmongSingles := []mediatool.Tags{
+		{"album": "Invented Mix", "albumartist": "Ixu Band"}, {"album": "Invented Mix", "artist": "Artist 1"},
+		{"album": "Invented Mix", "artist": "Artist 2"}, {"album": "Invented Mix", "artist": "Artist 3"},
+	}
+	oneCollision := []mediatool.Tags{
+		{"album": "Invented Hits", "artist": "Artist 1", "track": "1"}, {"album": "Invented Hits", "artist": "Artist 2", "track": "2"},
+		{"album": "Invented Hits", "artist": "Artist 3", "track": "3"}, {"album": "Invented Hits", "artist": "Artist 4", "track": "4"},
+		{"album": "Invented Hits", "artist": "Artist 5", "track": "5"}, {"album": "Invented Hits", "artist": "Artist 6", "track": "5"},
+	}
+	lostIDOtherArtist := []mediatool.Tags{lostID[0], {"album": "Invented Record", "artist": "Other Band", "track": "2"}}
+	idCase := []mediatool.Tags{
+		{"album": "Invented Record", "albumartist": "Ixu Band", "musicbrainz_albumid": "REL-1", "track": "1"},
+		{"album": "Invented Record", "albumartist": "Ixu Band", "musicbrainz_albumid": "rel-1", "track": "2"},
+	}
 	untagged := []mediatool.Tags{
 		{"album": "Invented Record", "albumartist": "Ixu Band"}, {"artist": "Ixu Band"}, {},
 	}
@@ -102,6 +117,11 @@ func TestGroupByAlbum(t *testing.T) {
 		"an album artist naming the release's track artist joins it":     {namedArtist, []int{3}},
 		"a file of another title does not join a release":                {otherTitle, []int{1, 1}},
 		"a file of another album artist does not join a release":         {otherArtist, []int{1, 1}},
+		"a file naming no album artist follows the largest album":        {strayTrackArtist, []int{7, 6}},
+		"one named album artist among singles is not a pile":             {oneNamedAmongSingles, []int{4}},
+		"one repeated track number does not make singles":                {oneCollision, []int{6}},
+		"a file with no album artists beside a release joins it":         {lostIDOtherArtist, []int{2}},
+		"a release id is compared without its case":                      {idCase, []int{2}},
 		"files with no album tag join the only album":                    {untagged, []int{3}},
 		"a title merely ending in cd and a number is not a disc marker":  {notADisc, []int{1, 1}},
 	} {

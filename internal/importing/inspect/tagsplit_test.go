@@ -97,6 +97,7 @@ func TestSplitByTags_AGrouperThatLosesOrRepeatsAFileIsNotTrusted(t *testing.T) {
 		"repeats":  {Groups: [][]int{{0, 1}, {1, 2}}, Signals: []inspect.Signal{{}, {}}},
 		"swaps":    {Groups: [][]int{{0, 0}, {2}}, Signals: []inspect.Signal{{}, {}}},
 		"overruns": {Groups: [][]int{{0, 1}, {3}}, Signals: []inspect.Signal{{}, {}}},
+		"negative": {Groups: [][]int{{0, 1}, {-1}}, Signals: []inspect.Signal{{}, {}}},
 		"unsigned": {Groups: [][]int{{0, 1}, {2}}, Signals: []inspect.Signal{{}}},
 	} {
 		units := runTagged(t, tr, func([]string) (inspect.TagGroups, bool) { return grouped, true })

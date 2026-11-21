@@ -83,6 +83,7 @@ func TestReadLocalTrack_ReadsWhatIsPrintedOnTheRelease(t *testing.T) {
 		"spaced upc":     {mediatool.Tags{"barcode": "0 12345 67890 5"}, "012345678905", "", 0},
 		"upc tag":        {mediatool.Tags{"UPC": "012345678905"}, "012345678905", "", 0},
 		"too short":      {mediatool.Tags{"barcode": "1234"}, "", "", 0},
+		"too long":       {mediatool.Tags{"barcode": "123456789012345"}, "", "", 0},
 		"catalogue":      {mediatool.Tags{"CATALOGNUMBER": " XYZ-123 "}, "", "XYZ-123", 0},
 		"total separate": {mediatool.Tags{"tracknumber": "3", "tracktotal": "12"}, "", "", 12},
 		"total slashed":  {mediatool.Tags{"tracknumber": "3/12"}, "", "", 12},

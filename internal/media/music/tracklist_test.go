@@ -1,6 +1,7 @@
 package music_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/media/music"
@@ -255,5 +256,74 @@ func TestAlign_ACloserTitleKeepsItsFileOverAnEarlierTrack(t *testing.T) {
 	files := []music.TrackFile{{MediaObjectID: 1, Title: "Some Song (Live)"}}
 	if got := boundIDs(music.Align(parts, files)); !equalIDs(got, []int64{0, 1}) {
 		t.Errorf("bound = %v, want the live file on the live track", got)
+	}
+}
+
+// basisOf is the basis each part was bound on, "" for a part left without a file.
+func basisOf(alignment music.Alignment) []string {
+	bases := make([]string, len(alignment.Parts))
+	for i, aligned := range alignment.Parts {
+		if aligned.File != nil {
+			bases[i] = aligned.Basis
+		}
+	}
+	return bases
+}
+
+func TestAlign_EachPassBindsOnItsOwnBasis(t *testing.T) {
+	twoDiscFiles := func(tagged bool) []music.TrackFile {
+		files := []music.TrackFile{
+			music.ReadTrackFile(1, "101 Alpha Song.flac", nil), music.ReadTrackFile(2, "102 Beta Song.flac", nil),
+			music.ReadTrackFile(3, "201 Gamma Song.flac", nil), music.ReadTrackFile(4, "202 Delta Song.flac", nil),
+		}
+		if tagged {
+			for i := range files {
+				files[i].TrackFrom = "tag"
+			}
+		}
+		return files
+	}
+	vinyl := []music.Part{part("disc1:track1", "", ""), part("disc1:track2", "", ""), part("disc1:track3", "", ""), part("disc1:track4", "", "")}
+	for name, test := range map[string]struct {
+		parts []music.Part
+		files []music.TrackFile
+		want  []string
+	}{
+		"a single disc album needs no disc tag": {
+			[]music.Part{part("disc1:track2", "Second Song", "")}, []music.TrackFile{{MediaObjectID: 1, Track: 2}}, []string{"position"},
+		},
+		"a hundreds number read from a name is disc and track": {
+			twoDiscParts(), twoDiscFiles(false), []string{"position", "position", "position", "position"},
+		},
+		"a hundreds number from a tag is a track": {
+			twoDiscParts(), twoDiscFiles(true), []string{"title", "title", "title", "title"},
+		},
+		"vinyl sides follow each other whatever order the files come in": {
+			vinyl, []music.TrackFile{
+				{MediaObjectID: 1, Side: 1, SideTrack: 2, Title: "Beta Song"}, {MediaObjectID: 2, Side: 1, SideTrack: 1, Title: "Alpha Song"},
+				{MediaObjectID: 3, Side: 2, SideTrack: 1, Title: "Gamma Song"}, {MediaObjectID: 4, Side: 2, SideTrack: 2, Title: "Delta Song"},
+			}, []string{"sequence", "sequence", "sequence", "sequence"},
+		},
+		"a file with a disc of its own never binds by sequence": {
+			twoDiscParts(), []music.TrackFile{{MediaObjectID: 1, Disc: 3, Track: 1, Title: "Alpha Song"}}, []string{"title", "", "", ""},
+		},
+		"a track beyond the tracklist binds nothing by sequence": {
+			twoDiscParts(), []music.TrackFile{{MediaObjectID: 1, Track: 9, Title: "Unrelated Words"}}, []string{"", "", "", ""},
+		},
+	} {
+		if got := basisOf(music.Align(test.parts, test.files)); fmt.Sprint(got) != fmt.Sprint(test.want) {
+			t.Errorf("%s: bases = %q, want %q", name, got, test.want)
+		}
+	}
+}
+
+func TestReadTrackFile_TagsOutrankThePath(t *testing.T) {
+	got := music.ReadTrackFile(0, "CD2 - Live/1-03 Some Title.flac", mediatool.Tags{"tracknumber": "9"})
+	got.RelPath = ""
+	if want := (music.TrackFile{Disc: 2, DiscFrom: "folder", Track: 9, TrackFrom: "tag", Title: "Some Title"}); got != want {
+		t.Errorf("%+v, want %+v", got, want)
+	}
+	if got := music.ReadTrackFile(0, "", mediatool.Tags{"tracknumber": "B2"}); got.Side != 2 || got.SideTrack != 2 || got.TrackFrom != "tag" {
+		t.Errorf("a vinyl position in the tag = %+v, want side 2 track 2", got)
 	}
 }

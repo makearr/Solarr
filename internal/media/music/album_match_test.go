@@ -557,6 +557,24 @@ func TestDecideAlbum_TheFoldersBarcodePicksTheEditionOverTheEarlierDate(t *testi
 	}
 }
 
+// A barcode that differs ranks editions apart but never refuses the only candidate (a rip may carry a wrong barcode),
+// and a release that prints none is not held against the folder's.
+func TestDecideAlbum_AWrongBarcodeDoesNotRefuseTheAlbumNorPenaliseAReleaseWithNone(t *testing.T) {
+	locals := folderOf(traumaTracks)
+	for i := range locals {
+		locals[i].Barcode = "12345678905"
+	}
+	other := withBarcode(releaseOf("rel-other", "Kebilegev Bibihi", "official", "1994-03-01", traumaTracks), "99999999999")
+	if decision := music.DecideAlbum(locals, []music.AlbumCandidate{candidateOf("rg-album", "Album", nil, other)}); decision.Outcome != music.AlbumIdentified {
+		t.Errorf("a lone release with another barcode = %s, want identified", decision.Outcome)
+	}
+	unprinted := releaseOf("rel-unprinted", "Kebilegev Bibihi", "official", "2009-05-01", traumaTracks)
+	decision := music.DecideAlbum(locals, []music.AlbumCandidate{candidateOf("rg-album", "Album", nil, other), candidateOf("rg-album", "Album", nil, unprinted)})
+	if decision.Best == nil || decision.Best.Candidate.Release.MBID != "rel-unprinted" {
+		t.Fatalf("best = %+v, want the release that prints no barcode over one that prints another", decision.Best)
+	}
+}
+
 func TestDecideAlbum_TheTrackTotalSeparatesTheTwelveTrackEditionFromTheNineTrackOne(t *testing.T) {
 	twelve := make([]trackSpec, 0, 12)
 	for i := range 12 {
@@ -565,6 +583,26 @@ func TestDecideAlbum_TheTrackTotalSeparatesTheTwelveTrackEditionFromTheNineTrack
 	nine := slices.Clone(twelve[:9])
 	locals := folderOf(twelve[:8])
 	for i := range locals {
+		locals[i].TrackTotal = 12
+	}
+	decision := music.DecideAlbum(locals, []music.AlbumCandidate{
+		candidateOf("rg-album", "Album", nil, releaseOf("rel-aaa-9", "Kebilegev Bibihi", "official", "1994-01-01", nine)),
+		candidateOf("rg-album", "Album", nil, releaseOf("rel-zzz-12", "Kebilegev Bibihi", "official", "1995-01-01", twelve)),
+	})
+	if decision.Best == nil || decision.Best.Candidate.Release.MBID != "rel-zzz-12" {
+		t.Fatalf("best = %+v, want the 12-track release", decision.Best)
+	}
+}
+
+// Files that state no total do not outvote the ones that do.
+func TestDecideAlbum_FilesWithNoTrackTotalDoNotOutvoteTheOnesThatHaveIt(t *testing.T) {
+	twelve := make([]trackSpec, 0, 12)
+	for i := range 12 {
+		twelve = append(twelve, trackSpec{fmt.Sprintf("Song %c", 'A'+i), 200})
+	}
+	nine := slices.Clone(twelve[:9])
+	locals := folderOf(twelve[:8])
+	for i := range 3 {
 		locals[i].TrackTotal = 12
 	}
 	decision := music.DecideAlbum(locals, []music.AlbumCandidate{

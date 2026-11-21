@@ -28,6 +28,8 @@ type fakeAlbumLookup struct {
 	err     error
 	mu      sync.Mutex
 	asked   []string
+	// printedQueries are the release searches by what is printed on the release, as they were asked.
+	printedQueries []musicbrainz.ReleaseQuery
 }
 
 func (f *fakeAlbumLookup) ask(what string) {
@@ -47,6 +49,9 @@ func (f *fakeAlbumLookup) SearchReleases(_ context.Context, _ musicbrainz.Priori
 		key = query.CatalogNumber
 	}
 	f.ask("printed:" + key)
+	f.mu.Lock()
+	f.printedQueries = append(f.printedQueries, query)
+	f.mu.Unlock()
 	return f.printed[key], f.err
 }
 
@@ -385,5 +390,50 @@ func TestIdentifyAlbum_TheBarcodeIsSearchedAndItsGroupComesFirst(t *testing.T) {
 	}
 	if got := bestReleaseGroup(decision); got != "rg-barcode" || decision.Best.Candidate.Recall != music.RecallBarcode {
 		t.Errorf("best = %q recalled %q, want rg-barcode recalled by barcode", got, decision.Best.Candidate.Recall)
+	}
+}
+
+func TestIdentifyAlbum_OnlyTheBarcodeIsSearchedWhenTheFilesCarryBothPrintedFacts(t *testing.T) {
+	for name, test := range map[string]struct {
+		barcode, catalogue string
+		want               []musicbrainz.ReleaseQuery
+	}{
+		"both":      {"012345678905", "XYZ-123", []musicbrainz.ReleaseQuery{{Barcode: "012345678905"}}},
+		"catalogue": {"", "XYZ-123", []musicbrainz.ReleaseQuery{{CatalogNumber: "XYZ-123"}}},
+		"neither":   {"", "", nil},
+	} {
+		lookup := &fakeAlbumLookup{}
+		locals := folderOf(traumaTracks)
+		for i := range locals {
+			locals[i].Barcode, locals[i].CatalogNumber = test.barcode, test.catalogue
+		}
+		if _, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, nil); err != nil {
+			t.Fatalf("%s: IdentifyAlbum: %v", name, err)
+		}
+		if !slices.Equal(lookup.printedQueries, test.want) {
+			t.Errorf("%s: printed searches = %+v, want %+v", name, lookup.printedQueries, test.want)
+		}
+	}
+}
+
+func TestIdentifyAlbum_TheBarcodeMostFilesCarryIsSearchedAndTheFirstWinsATie(t *testing.T) {
+	for name, test := range map[string]struct {
+		barcodes []string
+		want     string
+	}{
+		"a tie":    {[]string{"012345678905", "012345678912", "012345678905", "012345678912"}, "012345678905"},
+		"majority": {[]string{"012345678905", "012345678912", "012345678912", ""}, "012345678912"},
+	} {
+		lookup := &fakeAlbumLookup{}
+		locals := folderOf(traumaTracks[:4])
+		for i := range locals {
+			locals[i].Barcode = test.barcodes[i]
+		}
+		if _, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, nil); err != nil {
+			t.Fatalf("%s: IdentifyAlbum: %v", name, err)
+		}
+		if len(lookup.printedQueries) != 1 || lookup.printedQueries[0].Barcode != test.want {
+			t.Errorf("%s: printed searches = %+v, want the barcode %s", name, lookup.printedQueries, test.want)
+		}
 	}
 }

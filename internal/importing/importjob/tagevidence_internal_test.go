@@ -37,3 +37,23 @@ func TestWalkOptions_TagsForComesFromTheImporterThatReadsTags(t *testing.T) {
 		}
 	}
 }
+
+// A Best match folder is grouped by tags even when the unassigned library's type does not read them.
+func TestWalkOptions_BestMatchFindsAnyImporterThatReadsTags(t *testing.T) {
+	job := &Job{
+		importers:   map[string]importbatch.Importer{"music": taggingImporter{}, "tv": plainImporter{}},
+		mediaTypeOf: func(int64) string { return "" },
+		unassigned:  "tv",
+	}
+	for name, tc := range map[string]struct {
+		payload Payload
+		want    bool
+	}{
+		"best match, unassigned is tv": {Payload{BestMatch: true}, true},
+		"no library, unassigned is tv": {Payload{}, false},
+	} {
+		if got := job.walkOptions(tc.payload).TagsFor != nil; got != tc.want {
+			t.Errorf("%s: TagsFor set = %v, want %v", name, got, tc.want)
+		}
+	}
+}
