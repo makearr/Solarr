@@ -125,6 +125,11 @@ func (a ImportSessions) DismissImportSession(ctx context.Context, id int64) erro
 	return err
 }
 
+// DismissFinishedImportSessions hides every stopped session that holds nothing for review.
+func (a ImportSessions) DismissFinishedImportSessions(ctx context.Context) (int64, error) {
+	return a.Sessions.DismissFinished(ctx, a.Clock.Now().Unix())
+}
+
 // RevertImportSession maps library.ErrSessionNotRevertible to
 // apiserver.ErrImportSessionNotRevertible, the same translation
 // CancelImportSession already does for library.ErrSessionNotCancellable.

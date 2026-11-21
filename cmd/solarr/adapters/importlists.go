@@ -101,7 +101,7 @@ func (a ImportLists) Preview(ctx context.Context, listID int64) ([]apiserver.Imp
 		rows[i] = apiserver.ImportListPreviewRow{
 			Title: entry.Entry.Title, PosterURL: entry.Entry.PosterURL, Provider: key.Provider, ExternalID: key.ExternalID,
 			Verdict: string(entry.Verdict), Year: entry.Entry.Year, MatchProvider: entry.Match.Provider,
-			MatchExternalID: entry.Match.ExternalID, WorkID: entry.WorkID,
+			MatchExternalID: entry.Match.ExternalID, WorkID: entry.WorkID, Reason: entry.Reason,
 		}
 	}
 	return rows, nil

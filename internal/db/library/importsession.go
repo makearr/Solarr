@@ -576,6 +576,31 @@ func (s ImportSessions) Dismiss(ctx context.Context, sessionID, at int64) error 
 	return nil
 }
 
+// dismissBatch bounds one write when many sessions are hidden at once.
+const dismissBatch = 200
+
+// DismissFinished hides every stopped session that holds nothing for review, a batch per write, and answers how many.
+func (s ImportSessions) DismissFinished(ctx context.Context, at int64) (int64, error) {
+	var total int64
+	for {
+		var affected int64
+		err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			rows, err := librarydb.New(tx).DismissFinishedImportSessions(ctx, librarydb.DismissFinishedImportSessionsParams{
+				DismissedAt: sql.NullInt64{Int64: at, Valid: true}, BatchSize: dismissBatch,
+			})
+			affected = rows
+			return err
+		})
+		if err != nil {
+			return total, fmt.Errorf("library: dismiss finished import sessions: %w", err)
+		}
+		total += affected
+		if affected < dismissBatch {
+			return total, nil
+		}
+	}
+}
+
 // SetExtractDir records the workspace a session is using, so a startup sweep
 // can find and remove an orphan left behind by a crash (architecture.md §6.1).
 func (s ImportSessions) SetExtractDir(ctx context.Context, sessionID int64, dir string) error {

@@ -372,6 +372,8 @@ type Querier interface {
 	// Import sessions and packs are history too: they keep their rows, no longer pointing at the album.
 	DetachImportUnitsFromWork(ctx context.Context, workID sql.NullInt64) error
 	DetachPackItemsFromWork(ctx context.Context, workID sql.NullInt64) error
+	// Hides one bounded batch of stopped sessions that hold nothing for review; hiding never deletes.
+	DismissFinishedImportSessions(ctx context.Context, arg DismissFinishedImportSessionsParams) (int64, error)
 	// Hides a finished session from the Import screen without deleting anything:
 	// the row is still what a revert reads. Only from a state that has stopped,
 	// so a run in progress cannot be dismissed out from under itself. :execrows

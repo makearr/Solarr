@@ -26,8 +26,9 @@ type fakeImportSessionLister struct {
 	cancelled int64
 	// dismissErr is what DismissImportSession returns; dismissed is the last
 	// id it was asked to hide.
-	dismissErr error
-	dismissed  int64
+	dismissedAll int
+	dismissErr   error
+	dismissed    int64
 	// revertErr/revertResult are what RevertImportSession returns; reverted/lastRetainHours
 	// are the last id and retention it was asked to revert with.
 	revertErr       error
@@ -94,6 +95,11 @@ func (f *fakeImportSessionLister) CancelImportSession(_ context.Context, id int6
 func (f *fakeImportSessionLister) DismissImportSession(_ context.Context, id int64) error {
 	f.dismissed = id
 	return f.dismissErr
+}
+
+func (f *fakeImportSessionLister) DismissFinishedImportSessions(context.Context) (int64, error) {
+	f.dismissedAll++
+	return 7, nil
 }
 
 func (f *fakeImportSessionLister) RevertImportSession(
@@ -827,5 +833,20 @@ func TestRetryUnreadableFiles_IsAnAdministratorsAndAnswersTheCount(t *testing.T)
 	recorder := fixture.do(authedPost(t, admin, "/api/v1/settings/general/unreadable-files/retry", `{}`))
 	if recorder.Code != http.StatusAccepted || strings.TrimSpace(recorder.Body.String()) != `{"count":4}` || fixture.unreadable.calls != 1 {
 		t.Errorf("an administrator: status %d, body %s, %d calls; want 202 {\"count\":4} and one call", recorder.Code, recorder.Body, fixture.unreadable.calls)
+	}
+}
+
+func TestDismissFinishedImportSessions_IsAnAdministratorsAndAnswersTheCount(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	fixture.createUser(t, "listener", settings.RoleUser)
+	listener := fixture.signIn(t, "listener")
+	if recorder := fixture.do(authedPost(t, listener, "/api/v1/import/sessions/dismiss", `{}`)); recorder.Code != http.StatusForbidden || fixture.importSessions.dismissedAll != 0 {
+		t.Errorf("a user: status %d, %d calls; want 403 and none", recorder.Code, fixture.importSessions.dismissedAll)
+	}
+	admin := fixture.signIn(t, "admin")
+	recorder := fixture.do(authedPost(t, admin, "/api/v1/import/sessions/dismiss", `{}`))
+	if recorder.Code != http.StatusOK || strings.TrimSpace(recorder.Body.String()) != `{"count":7}` || fixture.importSessions.dismissedAll != 1 {
+		t.Errorf("an administrator: status %d, body %s; want 200 {\"count\":7} and one call", recorder.Code, recorder.Body)
 	}
 }

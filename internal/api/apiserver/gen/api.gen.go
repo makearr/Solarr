@@ -2396,6 +2396,11 @@ type DiskScanRoot struct {
 	Why string `json:"why"`
 }
 
+// DismissedImportSessions defines model for DismissedImportSessions.
+type DismissedImportSessions struct {
+	Count int64 `json:"count"`
+}
+
 // DownloadFolder One upstream-download destination (todo 4.18). Watched: each entry is imported once it has settled, once only.
 type DownloadFolder struct {
 	// CategoryId The library hint; absent means any library.
@@ -3431,7 +3436,10 @@ type ImportListPreviewEntry struct {
 	MatchProvider *string `json:"match_provider,omitempty"`
 	PosterUrl     *string `json:"poster_url,omitempty"`
 	Provider      string  `json:"provider"`
-	Title         string  `json:"title"`
+
+	// Reason Why the entry stayed unresolved when its lookup failed.
+	Reason *string `json:"reason,omitempty"`
+	Title  string  `json:"title"`
 
 	// Verdict What enabling would do: add it, or leave it (handled before, held, excluded, filtered by the list, not this type's, unknown, past the preview's bound on lookups).
 	Verdict ImportListPreviewEntryVerdict `json:"verdict"`
@@ -8883,6 +8891,9 @@ type ServerInterface interface {
 	// Import sessions (ADR-48), newest first, a page at a time.
 	// (GET /import/sessions)
 	ListImportSessions(w http.ResponseWriter, r *http.Request, params ListImportSessionsParams)
+	// Hide every stopped import that holds nothing for review. Administrator only.
+	// (POST /import/sessions/dismiss)
+	DismissFinishedImportSessions(w http.ResponseWriter, r *http.Request)
 	// One session's own progress and counts.
 	// (GET /import/sessions/{id})
 	GetImportSession(w http.ResponseWriter, r *http.Request, id int64)
@@ -10452,6 +10463,12 @@ func (_ Unimplemented) InspectImport(w http.ResponseWriter, r *http.Request) {
 // Import sessions (ADR-48), newest first, a page at a time.
 // (GET /import/sessions)
 func (_ Unimplemented) ListImportSessions(w http.ResponseWriter, r *http.Request, params ListImportSessionsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Hide every stopped import that holds nothing for review. Administrator only.
+// (POST /import/sessions/dismiss)
+func (_ Unimplemented) DismissFinishedImportSessions(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -16599,6 +16616,28 @@ func (siw *ServerInterfaceWrapper) ListImportSessions(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListImportSessions(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DismissFinishedImportSessions operation middleware
+func (siw *ServerInterfaceWrapper) DismissFinishedImportSessions(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DismissFinishedImportSessions(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -24651,6 +24690,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/import/sessions", wrapper.ListImportSessions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/import/sessions/dismiss", wrapper.DismissFinishedImportSessions)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/import/sessions/{id}", wrapper.GetImportSession)

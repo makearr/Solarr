@@ -5757,6 +5757,22 @@ paths:
           $ref: "#/components/responses/Problem"
           description: The session is not running.
 
+  /import/sessions/dismiss:
+    post:
+      operationId: dismissFinishedImportSessions
+      tags: [library]
+      summary: Hide every stopped import that holds nothing for review. Administrator only.
+      description: >-
+        Hides, never deletes, in batches of 200; a session still running or holding units for review stays.
+      responses:
+        "200":
+          description: How many were hidden.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DismissedImportSessions" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /import/sessions/{id}/dismiss:
     parameters:
       - name: id
@@ -10263,6 +10279,12 @@ components:
         source_rel_path: { type: string }
         dest_rel_path: { type: string }
 
+    DismissedImportSessions:
+      type: object
+      required: [count]
+      properties:
+        count: { type: integer, format: int64 }
+
     UnreadableFilesRetry:
       type: object
       required: [count]
@@ -14403,6 +14425,7 @@ components:
         match_provider: { type: string, description: The id the work is added by, when it was looked up. }
         match_external_id: { type: string }
         work_id: { type: integer, format: int64, description: The library's work, when held. }
+        reason: { type: string, description: Why the entry stayed unresolved when its lookup failed. }
 
     GateResult:
       type: object

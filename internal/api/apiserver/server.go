@@ -920,6 +920,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/import/sessions/{id}/category", wrapped.AssignImportSessionCategory)
 			secured.Post("/import/sessions/{id}/cancel", wrapped.CancelImportSession)
 			secured.Post("/import/sessions/{id}/dismiss", wrapped.DismissImportSession)
+			secured.Post("/import/sessions/dismiss", server.DismissFinishedImportSessions)
 			secured.Post("/import/sessions/{id}/commit", wrapped.CommitHeldImportUnits)
 			secured.Post("/import/sessions/{id}/revert", wrapped.RevertImportSession)
 			secured.Get("/import/sessions/{id}/units", server.routeListImportUnits)

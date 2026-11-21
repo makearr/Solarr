@@ -3688,6 +3688,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/import/sessions/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hide every stopped import that holds nothing for review. Administrator only.
+         * @description Hides, never deletes, in batches of 200; a session still running or holding units for review stays.
+         */
+        post: operations["dismissFinishedImportSessions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/import/sessions/{id}/dismiss": {
         parameters: {
             query?: never;
@@ -7041,6 +7061,10 @@ export interface components {
         MoveCompanion: {
             source_rel_path: string;
             dest_rel_path: string;
+        };
+        DismissedImportSessions: {
+            /** Format: int64 */
+            count: number;
         };
         UnreadableFilesRetry: {
             /**
@@ -10596,6 +10620,8 @@ export interface components {
              * @description The library's work
              */
             work_id?: number;
+            /** @description Why the entry stayed unresolved when its lookup failed. */
+            reason?: string;
         };
         /** @description A hard requirement, evaluated before any comparison (ADR-40 stage 1). */
         GateResult: {
@@ -17656,6 +17682,28 @@ export interface operations {
             404: components["responses"]["Problem"];
             /** @description The session is not running. */
             409: components["responses"]["Problem"];
+        };
+    };
+    dismissFinishedImportSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many were hidden. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DismissedImportSessions"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     dismissImportSession: {

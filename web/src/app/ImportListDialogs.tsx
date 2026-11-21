@@ -360,7 +360,8 @@ function PreviewRows({ entries }: { entries: PreviewEntry[] }) {
               <span className="hidden font-mono text-[0.6875rem] text-ink-muted md:inline">
                 {entry.match_provider ? `${entry.match_provider}:${entry.match_external_id}` : `${entry.provider}:${entry.external_id}`}
               </span>
-              <span className={`shrink-0 rounded-full border px-1.5 py-px text-[0.6875rem] ${VERDICT_STYLE[entry.verdict]}`}>
+              {entry.reason && <span className="hidden max-w-[40%] truncate text-[0.6875rem] text-ink-muted md:inline">{entry.reason}</span>}
+              <span className={`shrink-0 rounded-full border px-1.5 py-px text-[0.6875rem] ${VERDICT_STYLE[entry.verdict]}`} title={entry.reason}>
                 {t(`importLists.verdict.${entry.verdict}`)}
               </span>
             </div>

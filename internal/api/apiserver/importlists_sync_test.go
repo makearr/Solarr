@@ -57,8 +57,10 @@ func (f *fakeImportListSync) Preview(ctx context.Context, listID int64) ([]apise
 		return nil, err
 	}
 	f.previewed[listID] = previewKey(list)
-	return []apiserver.ImportListPreviewRow{{Title: "Example Show", Provider: "anilist", ExternalID: "21", Verdict: "add",
-		MatchProvider: "tvdb", MatchExternalID: "501", Year: 2026}}, nil
+	return []apiserver.ImportListPreviewRow{
+		{Title: "Example Show", Provider: "anilist", ExternalID: "21", Verdict: "add", MatchProvider: "tvdb", MatchExternalID: "501", Year: 2026},
+		{Title: "Odd Name", Provider: "anilist", ExternalID: "22", Verdict: "unresolved", Reason: "the provider answered 400"},
+	}, nil
 }
 
 func (f *fakeImportListSync) Run(_ context.Context, listID int64) error {
@@ -144,7 +146,8 @@ func TestEnablingNeedsAPreviewOfTheSettingsItIsSavedWith(t *testing.T) {
 		t.Fatal("a refused enable was stored")
 	}
 	recorder := f.post(t, "/api/v1/import-lists/"+strconv.FormatInt(list.ID, 10)+"/preview")
-	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"verdict":"add"`) || !strings.Contains(recorder.Body.String(), `"match_external_id":"501"`) {
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"verdict":"add"`) || !strings.Contains(recorder.Body.String(), `"match_external_id":"501"`) ||
+		!strings.Contains(recorder.Body.String(), `"reason":"the provider answered 400"`) {
 		t.Fatalf("preview: status = %d, body = %s", recorder.Code, recorder.Body)
 	}
 	if recorder := f.patch(t, list.ID, enableMine); recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"previewed":true`) {

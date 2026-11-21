@@ -75,6 +75,8 @@ type ImportListPreviewRow struct {
 	Year                                            int
 	MatchProvider, MatchExternalID                  string
 	WorkID                                          int64
+	// Reason is why an entry stayed unresolved when its lookup failed.
+	Reason string
 }
 
 // importListReadDetails word a read failure for the person.
@@ -300,6 +302,7 @@ func (s *Server) PreviewImportList(w http.ResponseWriter, r *http.Request, id in
 		entries[i] = gen.ImportListPreviewEntry{
 			Title: row.Title, Provider: row.Provider, ExternalId: row.ExternalID, Verdict: gen.ImportListPreviewEntryVerdict(row.Verdict),
 			PosterUrl: strPtr(row.PosterURL), MatchProvider: strPtr(row.MatchProvider), MatchExternalId: strPtr(row.MatchExternalID),
+			Reason: strPtr(row.Reason),
 		}
 		if row.Year > 0 {
 			entries[i].Year = &row.Year

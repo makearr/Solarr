@@ -1,11 +1,14 @@
 package library_test
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/store"
 )
 
 func TestImportSessions_CreateAndGet(t *testing.T) {
@@ -577,5 +580,52 @@ func TestImportSessions_DeleteOldSessionsKeepsWhatStillMatters(t *testing.T) {
 	}
 	if deleted, err := sessions.DeleteOldSessions(ctx, 50, 200); err != nil || deleted != 0 {
 		t.Errorf("a window before the finish deleted %d, %v; want none", deleted, err)
+	}
+}
+
+func TestImportSessions_DismissFinishedHidesEveryBatchButNotWhatIsRunningOrHeld(t *testing.T) {
+	opened, _ := newLibrary(t)
+	sessions := library.NewImportSessions(opened)
+	ctx := t.Context()
+	create := func(finished bool) int64 {
+		id, err := sessions.Create(ctx, library.NewSession{SourcePath: "/downloads/x", Origin: library.ImportOriginManual, Threshold: 0.9, StartedAt: 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if finished {
+			if err := sessions.Finish(ctx, id, library.ImportDone, 300, ""); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return id
+	}
+	running := create(false)
+	held := create(true)
+	for range 450 {
+		create(true)
+	}
+	err := opened.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `UPDATE import_session SET units_queued = 2 WHERE id = ?`, held)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count, err := sessions.DismissFinished(ctx, 400)
+	if err != nil || count != 450 {
+		t.Fatalf("DismissFinished = %d, %v; want 450 across three batches", count, err)
+	}
+	shown, err := sessions.List(ctx, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []int64
+	for _, session := range shown {
+		ids = append(ids, session.ID)
+	}
+	slices.Sort(ids)
+	if !slices.Equal(ids, []int64{running, held}) {
+		t.Errorf("still shown = %v, want the running session %d and the one holding units %d", ids, running, held)
 	}
 }

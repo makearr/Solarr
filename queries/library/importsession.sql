@@ -40,6 +40,13 @@ UPDATE import_session SET dismissed_at = sqlc.arg(dismissed_at)
 WHERE id = sqlc.arg(id) AND dismissed_at IS NULL
   AND state IN ('DONE', 'FAILED', 'CANCELLED', 'REVERTED');
 
+-- Hides one bounded batch of stopped sessions that hold nothing for review; hiding never deletes.
+-- name: DismissFinishedImportSessions :execrows
+UPDATE import_session SET dismissed_at = sqlc.arg(dismissed_at)
+WHERE id IN (SELECT s.id FROM import_session s
+             WHERE s.dismissed_at IS NULL AND s.state IN ('DONE', 'FAILED', 'CANCELLED', 'REVERTED') AND s.units_queued = 0
+             ORDER BY s.id LIMIT sqlc.arg(batch_size));
+
 -- name: SetImportSessionExtractDir :exec
 UPDATE import_session SET extract_dir = ? WHERE id = ?;
 

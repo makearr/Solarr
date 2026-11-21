@@ -4,6 +4,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import { ArrowDown, ArrowUp, Ban, ChevronDown, ChevronRight, HelpCircle, Undo2, X } from "lucide-react";
 
 import { api, ok } from "@/api/client";
+import { t } from "@/lib/i18n";
 import type { components } from "@/api/schema";
 import { subscribe } from "@/lib/eventStream";
 import { factsOf } from "@/lib/identificationEvidence";
@@ -730,6 +731,11 @@ function SessionList({
       query.state.data?.pages[0]?.some((session) => RUNNING_STATES.has(session.state)) ? 5000 : false,
   });
   const rows = sessions.data?.pages.flat() ?? [];
+  const queryClient = useQueryClient();
+  const dismissFinished = useMutation({
+    mutationFn: () => ok(api.POST("/import/sessions/dismiss")),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["import-sessions"] }),
+  });
 
   return (
     <div className="flex max-h-[75vh] w-full shrink-0 flex-col gap-2 overflow-y-auto md:sticky md:top-0 md:w-96">
@@ -752,6 +758,20 @@ function SessionList({
           </button>
         ))}
       </div>
+      {attention && rows.some((session) => !RUNNING_STATES.has(session.state)) && (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={dismissFinished.isPending}
+            onClick={() => dismissFinished.mutate()}
+            title={t("import.dismissFinishedHelp")}
+            className="rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50"
+          >
+            {t("import.dismissFinished")}
+          </button>
+          {dismissFinished.isSuccess && <span className="text-xs text-ok">{t("import.dismissedCount", { count: dismissFinished.data.count })}</span>}
+        </div>
+      )}
       {sessions.isLoading && <Message>Loading sessions…</Message>}
       {sessions.error !== null && <Message>Sessions could not be read.</Message>}
       {sessions.data && rows.length === 0 && (

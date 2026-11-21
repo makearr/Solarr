@@ -32,6 +32,8 @@ type ImportSessionLister interface {
 	// DismissImportSession hides a finished session from the screen without
 	// deleting anything it recorded.
 	DismissImportSession(ctx context.Context, id int64) error
+	// DismissFinishedImportSessions hides every stopped session holding nothing for review and answers how many.
+	DismissFinishedImportSessions(ctx context.Context) (int64, error)
 	// RevertImportSession undoes every file a session placed (ADR-48).
 	RevertImportSession(ctx context.Context, id int64, retainHours int) (ImportRevertResult, error)
 	// AssignImportCategory gives a session a destination category and places
@@ -448,6 +450,25 @@ func (s *Server) DismissImportSession(w http.ResponseWriter, r *http.Request, id
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// DismissFinishedImportSessions hides every stopped import that holds nothing for review, so a long list clears in one
+// click. Administrator only.
+func (s *Server) DismissFinishedImportSessions(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.importSessions == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
+			"Unavailable", "import sessions are not available")
+		return
+	}
+	count, err := s.importSessions.DismissFinishedImportSessions(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, gen.DismissedImportSessions{Count: count})
 }
 
 // RevertImportSession undoes every file a session placed. Administrator

@@ -202,6 +202,27 @@ func (q *Queries) DeleteOldImportSessions(ctx context.Context, arg DeleteOldImpo
 	return result.RowsAffected()
 }
 
+const dismissFinishedImportSessions = `-- name: DismissFinishedImportSessions :execrows
+UPDATE import_session SET dismissed_at = ?1
+WHERE id IN (SELECT s.id FROM import_session s
+             WHERE s.dismissed_at IS NULL AND s.state IN ('DONE', 'FAILED', 'CANCELLED', 'REVERTED') AND s.units_queued = 0
+             ORDER BY s.id LIMIT ?2)
+`
+
+type DismissFinishedImportSessionsParams struct {
+	DismissedAt sql.NullInt64
+	BatchSize   int64
+}
+
+// Hides one bounded batch of stopped sessions that hold nothing for review; hiding never deletes.
+func (q *Queries) DismissFinishedImportSessions(ctx context.Context, arg DismissFinishedImportSessionsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, dismissFinishedImportSessions, arg.DismissedAt, arg.BatchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const dismissImportSession = `-- name: DismissImportSession :execrows
 UPDATE import_session SET dismissed_at = ?1
 WHERE id = ?2 AND dismissed_at IS NULL
