@@ -1,6 +1,7 @@
 package cachebudget_test
 
 import (
+	"fmt"
 	"errors"
 	"log/slog"
 	"os"
@@ -216,6 +217,26 @@ func TestSweep_EnforceEvictsOldestMetadataWhenOverBudget(t *testing.T) {
 	}
 	if _, err := f.metadata.Get(t.Context(), "release", "oldest"); !errors.Is(err, metacache.ErrNotFound) {
 		t.Errorf("the oldest entry survived eviction: %v", err)
+	}
+}
+
+func TestSweep_EnforceStopsEvictingOnceTheRunningTotalIsUnderBudget(t *testing.T) {
+	f := newFixture(t)
+	for index := range 450 {
+		if err := f.metadata.Set(t.Context(), "release", fmt.Sprintf("entry-%03d", index), metacache.Entry{Body: "1234567890", FetchedAt: f.clock.Now()}); err != nil {
+			t.Fatal(err)
+		}
+		f.clock.Advance(time.Second)
+	}
+
+	// 4500 bytes against a 2600 budget: one 200-entry chunk (2000 bytes) brings it to 2500, so exactly one chunk goes.
+	budget := settings.CacheBudget{MaxBytes: 2600, MaxAgeDays: 3650, ImagesSharePercent: 0, MetadataSharePercent: 100}
+	result, err := f.sweep.Enforce(t.Context(), budget)
+	if err != nil {
+		t.Fatalf("Enforce: %v", err)
+	}
+	if result.MetadataEvicted != 200 {
+		t.Errorf("MetadataEvicted = %d, want 200", result.MetadataEvicted)
 	}
 }
 

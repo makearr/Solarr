@@ -100,3 +100,25 @@ func TestRun_FillsWhatTheProviderKnowsAndStampsEveryCollectionAsked(t *testing.T
 		t.Errorf("second run asked %v (err %v), want nothing within the week", asked, err)
 	}
 }
+
+func TestRun_AsksAboutAtMostPerLibraryCollectionsAPass(t *testing.T) {
+	var asked [][]int64
+	registry, err := media.NewRegistry(factsType{asked: &asked})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := &store{totals: map[int64]int64{}, posters: map[int64]string{}, checked: map[int64]int64{}}
+	for id := int64(1); id <= franchisefacts.PerLibrary+5; id++ {
+		rows.rows = append(rows.rows, library.FranchiseRow{ID: id, Kind: library.FranchiseKind})
+	}
+	fake := clock.NewFakeAtEpoch()
+	fake.Advance(30 * 24 * time.Hour)
+	service := franchisefacts.Service{Libraries: libraries{{ID: 1, MediaType: "fake"}}, Franchises: rows, Media: registry, Clock: fake, Logger: slog.New(slog.DiscardHandler)}
+
+	if err := service.Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(asked) != 1 || len(asked[0]) != franchisefacts.PerLibrary {
+		t.Errorf("asked = %v, want one call about %d collections", asked, franchisefacts.PerLibrary)
+	}
+}

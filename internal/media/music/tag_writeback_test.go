@@ -296,6 +296,17 @@ func TestTagWriteback_APageTheHelperRefusesDoesNotFailTheRun(t *testing.T) {
 	}
 }
 
+// A helper that is not installed fails the run: every later page would fail the same way.
+func TestTagWriteback_AMissingHelperStopsTheRun(t *testing.T) {
+	fixture := newTagWritebackJob(t, music.TagRoot{ID: 1, Path: "/music", Options: idsOnly})
+	identifyFile(t, fixture.opened, "Heka/Zanuvode/01.m4a", "rg-1", "rel-1")
+	fixture.tool.failBatch = mediatool.ErrToolMissing
+
+	if err := fixture.job.Run(t.Context(), jobs.Job{Type: music.TagWritebackJobType}); !errors.Is(err, mediatool.ErrToolMissing) {
+		t.Errorf("Run = %v, want ErrToolMissing", err)
+	}
+}
+
 // putFile creates a library file with content.
 func putFile(t *testing.T, fs fsx.FS, name, content string) {
 	t.Helper()
