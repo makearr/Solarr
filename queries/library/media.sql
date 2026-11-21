@@ -464,8 +464,8 @@ JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.m
 WHERE o.phash IS NOT NULL AND o.kind = 'video' AND f.algorithm_version = sqlc.arg(version)
 ORDER BY o.id;
 
--- What the duplicate screens show of a video: its measured facts and the work it belongs to.
--- name: GetVideoFacts :one
+-- What the duplicate screens show of videos: their measured facts and the work each belongs to. ids is a JSON array of media object ids.
+-- name: ListVideoFacts :many
 SELECT o.id, o.overall_bitrate, o.audio_bitrate, o.video_bitrate, o.size_bytes, o.height, o.duration_ms,
        a.audio_codec, a.video_codec, a.container, a.lossless, a.languages,
        a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
@@ -473,7 +473,8 @@ SELECT o.id, o.overall_bitrate, o.audio_bitrate, o.video_bitrate, o.size_bytes, 
        CAST(COALESCE((SELECT w.canonical_title FROM work_file wf JOIN work w ON w.id = wf.work_id WHERE wf.media_object_id = o.id ORDER BY wf.work_id LIMIT 1), '') AS TEXT) AS work_title
 FROM media_object o
 LEFT JOIN media_attributes a ON a.id = o.measured_attributes_id
-WHERE o.id = ?;
+WHERE o.id IN (SELECT value FROM json_each(sqlc.arg(ids)))
+ORDER BY o.id;
 
 -- Every live path of a work's files, with how each was placed.
 -- name: ListLivePathsForWork :many

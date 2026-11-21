@@ -643,69 +643,6 @@ func (q *Queries) GetProbeFailureRaw(ctx context.Context, mediaObjectID int64) (
 	return raw, err
 }
 
-const getVideoFacts = `-- name: GetVideoFacts :one
-SELECT o.id, o.overall_bitrate, o.audio_bitrate, o.video_bitrate, o.size_bytes, o.height, o.duration_ms,
-       a.audio_codec, a.video_codec, a.container, a.lossless, a.languages,
-       a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
-       CAST(COALESCE((SELECT wf.work_id FROM work_file wf WHERE wf.media_object_id = o.id ORDER BY wf.work_id LIMIT 1), 0) AS INTEGER) AS work_id,
-       CAST(COALESCE((SELECT w.canonical_title FROM work_file wf JOIN work w ON w.id = wf.work_id WHERE wf.media_object_id = o.id ORDER BY wf.work_id LIMIT 1), '') AS TEXT) AS work_title
-FROM media_object o
-LEFT JOIN media_attributes a ON a.id = o.measured_attributes_id
-WHERE o.id = ?
-`
-
-type GetVideoFactsRow struct {
-	ID             int64
-	OverallBitrate sql.NullInt64
-	AudioBitrate   sql.NullInt64
-	VideoBitrate   sql.NullInt64
-	SizeBytes      int64
-	Height         sql.NullInt64
-	DurationMs     sql.NullInt64
-	AudioCodec     sql.NullString
-	VideoCodec     sql.NullString
-	Container      sql.NullString
-	Lossless       sql.NullInt64
-	Languages      sql.NullString
-	Resolution     sql.NullString
-	Hdr            sql.NullString
-	AudioChannels  sql.NullString
-	Subtitles      sql.NullString
-	FrameRate      sql.NullFloat64
-	Crf            sql.NullFloat64
-	WorkID         int64
-	WorkTitle      string
-}
-
-// What the duplicate screens show of a video: its measured facts and the work it belongs to.
-func (q *Queries) GetVideoFacts(ctx context.Context, id int64) (GetVideoFactsRow, error) {
-	row := q.db.QueryRowContext(ctx, getVideoFacts, id)
-	var i GetVideoFactsRow
-	err := row.Scan(
-		&i.ID,
-		&i.OverallBitrate,
-		&i.AudioBitrate,
-		&i.VideoBitrate,
-		&i.SizeBytes,
-		&i.Height,
-		&i.DurationMs,
-		&i.AudioCodec,
-		&i.VideoCodec,
-		&i.Container,
-		&i.Lossless,
-		&i.Languages,
-		&i.Resolution,
-		&i.Hdr,
-		&i.AudioChannels,
-		&i.Subtitles,
-		&i.FrameRate,
-		&i.Crf,
-		&i.WorkID,
-		&i.WorkTitle,
-	)
-	return i, err
-}
-
 const internAttributes = `-- name: InternAttributes :one
 
 INSERT INTO media_attributes (attr_hash, resolution, source, video_codec, hdr,
@@ -1622,6 +1559,86 @@ func (q *Queries) ListUnmeasured(ctx context.Context, arg ListUnmeasuredParams) 
 			&i.SizeBytes,
 			&i.RootFolderID,
 			&i.RelPath,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVideoFacts = `-- name: ListVideoFacts :many
+SELECT o.id, o.overall_bitrate, o.audio_bitrate, o.video_bitrate, o.size_bytes, o.height, o.duration_ms,
+       a.audio_codec, a.video_codec, a.container, a.lossless, a.languages,
+       a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
+       CAST(COALESCE((SELECT wf.work_id FROM work_file wf WHERE wf.media_object_id = o.id ORDER BY wf.work_id LIMIT 1), 0) AS INTEGER) AS work_id,
+       CAST(COALESCE((SELECT w.canonical_title FROM work_file wf JOIN work w ON w.id = wf.work_id WHERE wf.media_object_id = o.id ORDER BY wf.work_id LIMIT 1), '') AS TEXT) AS work_title
+FROM media_object o
+LEFT JOIN media_attributes a ON a.id = o.measured_attributes_id
+WHERE o.id IN (SELECT value FROM json_each(?1))
+ORDER BY o.id
+`
+
+type ListVideoFactsRow struct {
+	ID             int64
+	OverallBitrate sql.NullInt64
+	AudioBitrate   sql.NullInt64
+	VideoBitrate   sql.NullInt64
+	SizeBytes      int64
+	Height         sql.NullInt64
+	DurationMs     sql.NullInt64
+	AudioCodec     sql.NullString
+	VideoCodec     sql.NullString
+	Container      sql.NullString
+	Lossless       sql.NullInt64
+	Languages      sql.NullString
+	Resolution     sql.NullString
+	Hdr            sql.NullString
+	AudioChannels  sql.NullString
+	Subtitles      sql.NullString
+	FrameRate      sql.NullFloat64
+	Crf            sql.NullFloat64
+	WorkID         int64
+	WorkTitle      string
+}
+
+// What the duplicate screens show of videos: their measured facts and the work each belongs to. ids is a JSON array of media object ids.
+func (q *Queries) ListVideoFacts(ctx context.Context, ids interface{}) ([]ListVideoFactsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listVideoFacts, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListVideoFactsRow{}
+	for rows.Next() {
+		var i ListVideoFactsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OverallBitrate,
+			&i.AudioBitrate,
+			&i.VideoBitrate,
+			&i.SizeBytes,
+			&i.Height,
+			&i.DurationMs,
+			&i.AudioCodec,
+			&i.VideoCodec,
+			&i.Container,
+			&i.Lossless,
+			&i.Languages,
+			&i.Resolution,
+			&i.Hdr,
+			&i.AudioChannels,
+			&i.Subtitles,
+			&i.FrameRate,
+			&i.Crf,
+			&i.WorkID,
+			&i.WorkTitle,
 		); err != nil {
 			return nil, err
 		}

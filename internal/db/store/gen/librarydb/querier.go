@@ -513,8 +513,6 @@ type Querier interface {
 	// file's own root_folder_id (to link work_root_folder), which the ranked
 	// candidates list alone does not carry.
 	GetUnidentified(ctx context.Context, mediaObjectID int64) (IdentificationQueue, error)
-	// What the duplicate screens show of a video: its measured facts and the work it belongs to.
-	GetVideoFacts(ctx context.Context, id int64) (GetVideoFactsRow, error)
 	GetWork(ctx context.Context, id int64) (Work, error)
 	// Resolving a provider id to a work is the first step of the Identifier chain (ADR-24).
 	GetWorkByExternalID(ctx context.Context, arg GetWorkByExternalIDParams) (Work, error)
@@ -977,6 +975,8 @@ type Querier interface {
 	ListUnverifiedWorkFilePairs(ctx context.Context, mediaObjectIds interface{}) ([]ListUnverifiedWorkFilePairsRow, error)
 	// Monitored albums below their library's cutoff: what the Cutoff Unmet search walks.
 	ListUpgradableDesiredItems(ctx context.Context, arg ListUpgradableDesiredItemsParams) ([]ListUpgradableDesiredItemsRow, error)
+	// What the duplicate screens show of videos: their measured facts and the work each belongs to. ids is a JSON array of media object ids.
+	ListVideoFacts(ctx context.Context, ids interface{}) ([]ListVideoFactsRow, error)
 	// Video files with no per-frame hash yet, those hashed before it included, and (when previews are wanted) those with no
 	// preview of the current algorithm: the lowest-priority pass of the probe sweep (ADR-35).
 	ListVideoWithoutFrameHashes(ctx context.Context, arg ListVideoWithoutFrameHashesParams) ([]ListVideoWithoutFrameHashesRow, error)

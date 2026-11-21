@@ -3,7 +3,9 @@ package library
 import (
 	"cmp"
 	"context"
+	"database/sql"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math/bits"
 	"path"
@@ -220,15 +222,38 @@ func (s SimilarVideos) Groups(ctx context.Context, rootFolderIDs []int64, level 
 	return groups, nil
 }
 
-// addFacts reads what the probe measured of each video that made a group, and the work it belongs to.
+// factsChunk is how many videos' facts one query reads.
+const factsChunk = 200
+
+// addFacts reads what the probe measured of each video that made a group, and the work it belongs to, a chunk of videos per query.
 func (s SimilarVideos) addFacts(ctx context.Context, groups []SimilarGroup) error {
 	queries := librarydb.New(s.store.Read())
+	var ids []int64
+	for _, group := range groups {
+		for _, video := range group.Videos {
+			ids = append(ids, video.MediaObjectID)
+		}
+	}
+	facts := make(map[int64]librarydb.ListVideoFactsRow, len(ids))
+	for start := 0; start < len(ids); start += factsChunk {
+		encoded, err := json.Marshal(ids[start:min(start+factsChunk, len(ids))])
+		if err != nil {
+			return fmt.Errorf("library: encode video ids: %w", err)
+		}
+		rows, err := queries.ListVideoFacts(ctx, string(encoded))
+		if err != nil {
+			return fmt.Errorf("library: video facts: %w", err)
+		}
+		for _, row := range rows {
+			facts[row.ID] = row
+		}
+	}
 	for _, group := range groups {
 		for index := range group.Videos {
 			video := &group.Videos[index]
-			row, err := queries.GetVideoFacts(ctx, video.MediaObjectID)
-			if err != nil {
-				return fmt.Errorf("library: video %d facts: %w", video.MediaObjectID, err)
+			row, found := facts[video.MediaObjectID]
+			if !found {
+				return fmt.Errorf("library: video %d facts: %w", video.MediaObjectID, sql.ErrNoRows)
 			}
 			video.WorkID, video.WorkTitle = row.WorkID, row.WorkTitle
 			video.File = PartFile{
