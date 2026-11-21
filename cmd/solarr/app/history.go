@@ -86,7 +86,7 @@ func (p *process) newDescriber(ctx context.Context) func(library.Acquisition) (d
 			described = &describedItem{
 				workID: item.WorkID, categoryID: item.CategoryID, mediaRef: item.MediaRef, upgrade: replacesFiles(item.RequiredCount, item.PresentCount),
 			}
-			if work, err := works.Detail(ctx, item.WorkID); err == nil {
+			if work, err := works.Headline(ctx, item.WorkID); err == nil {
 				key := media.Key(work.Work.MediaType)
 				described.workFound, described.title, described.mediaType = true, work.Work.CanonicalTitle, work.Work.MediaType
 				described.artist = leadName(p.media, key, work.Credits)

@@ -162,6 +162,30 @@ type PartCursor struct {
 // through desired_item_file.media_ref.
 func (d WorkDetail) OnDisk() bool { return d.HasFiles }
 
+// WorkHeadline is a work's own row and its credits: what a list of downloads needs to name one.
+type WorkHeadline struct {
+	Work    librarydb.Work
+	Credits []Credit
+}
+
+// Headline reads a work's row and credits in two queries, where Detail reads its editions, parts and files too.
+func (w Works) Headline(ctx context.Context, id int64) (WorkHeadline, error) {
+	queries := librarydb.New(w.store.Read())
+	work, err := queries.GetWork(ctx, id)
+	if err != nil {
+		return WorkHeadline{}, fmt.Errorf("library: work headline: get work: %w", err)
+	}
+	rows, err := queries.ListCreditsForWorkWithPerson(ctx, id)
+	if err != nil {
+		return WorkHeadline{}, fmt.Errorf("library: work headline: credits: %w", err)
+	}
+	credits := make([]Credit, len(rows))
+	for index, row := range rows {
+		credits[index] = Credit{PersonID: row.PersonID, PersonName: row.PersonName, Role: row.Role, Character: row.Character, ImageURL: row.ImageUrl}
+	}
+	return WorkHeadline{Work: work, Credits: credits}, nil
+}
+
 // Detail composes one work's full structural detail. A missing id surfaces
 // sql.ErrNoRows through GetWork, wrapped: callers use errors.Is to detect it.
 func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {

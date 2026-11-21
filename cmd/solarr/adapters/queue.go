@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
@@ -19,12 +20,57 @@ type Queue struct {
 	Clock clock.Clock
 	// Describer starts one read's naming of downloads: their album, artist, library, indexer and client.
 	Describer func(ctx context.Context) func(library.Acquisition) (download.HistoryData, int64)
+	// Memo lets the screens that poll at once share one read; nil reads every time.
+	Memo *SnapshotMemo
+}
+
+// snapshotShared is how long a queue read answers the next ones: under a poll interval, over a burst of tabs.
+const snapshotShared = 2 * time.Second
+
+// SnapshotMemo keeps the last queue read for snapshotShared; callers that arrive while one is read wait for it.
+type SnapshotMemo struct {
+	mutex sync.Mutex
+	at    time.Time
+	value apiserver.QueueSnapshot
+	held  bool
+}
+
+// forget drops what is kept, so the read after a person's action shows it; safe on nil.
+func (m *SnapshotMemo) forget() {
+	if m == nil {
+		return
+	}
+	m.mutex.Lock()
+	m.held = false
+	m.mutex.Unlock()
+}
+
+// get answers the memo while it is fresh, else the result of read, which it keeps when it succeeds.
+func (m *SnapshotMemo) get(ctx context.Context, now func() time.Time, read func(context.Context) (apiserver.QueueSnapshot, error)) (apiserver.QueueSnapshot, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	if m.held && now().Sub(m.at) < snapshotShared {
+		return m.value, nil
+	}
+	value, err := read(ctx)
+	if err != nil {
+		return apiserver.QueueSnapshot{}, err
+	}
+	m.value, m.at, m.held = value, now(), true
+	return value, nil
 }
 
 // heldShown bounds the held releases one queue read lists.
 const heldShown = 200
 
 func (a Queue) List(ctx context.Context) (apiserver.QueueSnapshot, error) {
+	if a.Memo == nil {
+		return a.read(ctx)
+	}
+	return a.Memo.get(ctx, a.Clock.Now, a.read)
+}
+
+func (a Queue) read(ctx context.Context) (apiserver.QueueSnapshot, error) {
 	entries, statuses, err := a.Poll.Queue(ctx)
 	if err != nil {
 		return apiserver.QueueSnapshot{}, err
@@ -107,11 +153,14 @@ func (a Queue) held(ctx context.Context, describe func(library.Acquisition) (dow
 }
 
 func (a Queue) SetClientPaused(ctx context.Context, downloaderID int64, paused bool) error {
+	a.Memo.forget()
 	return a.Poll.SetPaused(ctx, downloaderID, paused)
 }
 
 func (a Queue) Remove(ctx context.Context, id int64, blocklist bool) error {
+	a.Memo.forget()
 	err := a.Poll.Remove(ctx, id, blocklist)
+	a.Memo.forget()
 	if errors.Is(err, poll.ErrNotRemovable) {
 		return apiserver.ErrQueueItemNotRemovable
 	}

@@ -317,3 +317,34 @@ func TestWorkDetail_ReportsWhichPartsHaveAFile(t *testing.T) {
 			absent.MediaRef, got.Parts[1].File)
 	}
 }
+
+// A headline is the work's row and credits exactly as Detail reports them.
+func TestWorkHeadline_IsTheWorkAndCreditsOfItsDetail(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+	people := library.NewPeople(opened)
+	work := createWork(t, opened, "music", "KI Pecezinu")
+	personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
+		Provider: "musicbrainz:artist", ExternalID: "artist-1", Person: library.PersonIdentity{Name: "Katupoken"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := people.AddLeadCredit(t.Context(), work.ID, personID, "artist"); err != nil {
+		t.Fatal(err)
+	}
+	detail, err := works.Detail(t.Context(), work.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	headline, err := works.Headline(t.Context(), work.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (library.WorkHeadline{Work: detail.Work, Credits: detail.Credits}); !reflect.DeepEqual(headline, want) {
+		t.Errorf("headline = %+v, want %+v", headline, want)
+	}
+	if _, err := works.Headline(t.Context(), work.ID+99); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("a missing work: err = %v, want sql.ErrNoRows", err)
+	}
+}
