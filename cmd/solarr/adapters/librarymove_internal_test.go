@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -77,18 +78,35 @@ func TestDestinationRoot_FollowsThePlacementRules(t *testing.T) {
 	move := LibraryMove{}
 
 	// Equal room: the work's own filesystem breaks the tie, so the move can be a rename.
-	if got, ok := move.destinationRoot(snapshot, target, []int64{ids[0]}, nil); !ok || got != ids[0] {
+	if got, ok := move.destinationRoot(snapshot, target, []int64{ids[0]}, 0, nil); !ok || got != ids[0] {
 		t.Errorf("tie on room = %d, %v; want root A (the work's filesystem)", got, ok)
 	}
 	// Earlier works of the same request will fill A: the next one goes to B.
-	if got, ok := move.destinationRoot(snapshot, target, []int64{ids[0]}, map[int64]int64{ids[0]: 15 * gigabyte}); !ok || got != ids[1] {
+	if got, ok := move.destinationRoot(snapshot, target, []int64{ids[0]}, 0, map[int64]int64{ids[0]: 15 * gigabyte}); !ok || got != ids[1] {
 		t.Errorf("after 15 GB planned on A = %d, %v; want root B", got, ok)
 	}
 }
 
 func TestDestinationRoot_SkipsAnOfflineRoot(t *testing.T) {
 	snapshot, target, ids := twoRootLibrary(t, 50*gigabyte, false)
-	if got, ok := (LibraryMove{}).destinationRoot(snapshot, target, nil, nil); !ok || got != ids[0] {
+	if got, ok := (LibraryMove{}).destinationRoot(snapshot, target, nil, 0, nil); !ok || got != ids[0] {
 		t.Errorf("destination = %d, %v; want the online root A", got, ok)
+	}
+}
+
+func TestDestinationRoot_SkipsARootTheWorkDoesNotFitOn(t *testing.T) {
+	snapshot, target, ids := twoRootLibrary(t, 50*gigabyte, true)
+	if got, ok := (LibraryMove{}).destinationRoot(snapshot, target, []int64{ids[0]}, 30*gigabyte, nil); !ok || got != ids[1] {
+		t.Errorf("a 30 GB work with 20 GB free on its own filesystem = %d, %v; want root B", got, ok)
+	}
+}
+
+func TestWorkBytes_AddsTheFilesOfAWorkAndOfItsParts(t *testing.T) {
+	detail := library.WorkDetail{
+		Files: []library.PartFile{{SizeBytes: 5}},
+		Parts: []library.PartDetail{{File: &library.PartFile{SizeBytes: 7}}, {}},
+	}
+	if got := workBytes(detail); got != 12 {
+		t.Errorf("workBytes = %d, want 12", got)
 	}
 }

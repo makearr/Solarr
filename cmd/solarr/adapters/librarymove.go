@@ -67,7 +67,7 @@ func (a LibraryMove) moveWork(ctx context.Context, request apiserver.LibraryMove
 		return apiserver.DrainPlanResult{}, fmt.Sprintf("a %s library cannot name its files", target.MediaType), nil
 	}
 	sourceRoots := rootIDs(snapshot.RootFoldersForCategory(source.ID))
-	dest, found := a.destinationRoot(snapshot, target, detail.RootFolderIDs, planned)
+	dest, found := a.destinationRoot(snapshot, target, detail.RootFolderIDs, workBytes(detail), planned)
 	if !found {
 		return apiserver.DrainPlanResult{}, fmt.Sprintf("%s has no root folder that takes new files", target.Name), nil
 	}
@@ -171,10 +171,24 @@ func (a LibraryMove) sourceLibrary(
 	return settings.Category{}, "it is in no library to leave"
 }
 
+// workBytes is what a work's files on disk add up to, so a root without the room is not chosen.
+func workBytes(detail library.WorkDetail) int64 {
+	var total int64
+	for _, file := range detail.Files {
+		total += file.SizeBytes
+	}
+	for _, part := range detail.Parts {
+		if part.File != nil {
+			total += part.File.SizeBytes
+		}
+	}
+	return total
+}
+
 // destinationRoot is the target root the work's files go to, chosen by the library's placement rules from the roots taking
 // new files, preferring the filesystem the work is on (an instant move). planned is what earlier works of the same request
 // will already occupy on each root.
-func (a LibraryMove) destinationRoot(snapshot *settings.Snapshot, target settings.Category, workRoots []int64, planned map[int64]int64) (int64, bool) {
+func (a LibraryMove) destinationRoot(snapshot *settings.Snapshot, target settings.Category, workRoots []int64, sizeBytes int64, planned map[int64]int64) (int64, bool) {
 	filesystem := ""
 	for _, id := range workRoots {
 		if root, found := snapshot.RootFolder(id); found && root.FSID != "" {
@@ -195,7 +209,7 @@ func (a LibraryMove) destinationRoot(snapshot *settings.Snapshot, target setting
 		candidates = append(candidates, candidate)
 	}
 	chosen, decision, err := placement.Resolve(placement.Request{
-		CategoryID: target.ID, Strategy: placement.StrategyMostFreeSpace, SourceFSID: filesystem,
+		CategoryID: target.ID, SizeBytes: sizeBytes, Strategy: placement.StrategyMostFreeSpace, SourceFSID: filesystem,
 	}, candidates)
 	if err != nil || decision.Outcome != placement.OutcomePlaced {
 		return 0, false
