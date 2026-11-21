@@ -19,6 +19,7 @@ func TestWeightedGenresKeepsWhatTheVotesAgreeOn(t *testing.T) {
 		{"ties go by name and six at most", []musicbrainz.Genre{
 			{Name: "g", Count: 5}, {Name: "f", Count: 5}, {Name: "e", Count: 5}, {Name: "d", Count: 5}, {Name: "c", Count: 5}, {Name: "b", Count: 5}, {Name: "a", Count: 5},
 		}, []string{"a", "b", "c", "d", "e", "f"}},
+		{"a quarter of the top count stays, less goes", []musicbrainz.Genre{{Name: "x", Count: 8}, {Name: "y", Count: 2}, {Name: "z", Count: 1}}, []string{"x", "y"}},
 		{"none", nil, nil},
 	}
 	for _, c := range cases {

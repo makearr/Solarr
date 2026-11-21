@@ -490,6 +490,9 @@ func TestSeriesUpsertOfWhatIsStoredWritesNothingUnlessForcedOrAPartChanged(t *te
 	}
 
 	tamper("tampered")
+	if _, err := series.Upsert(t.Context(), seriesAt.Add(150*time.Minute), sampleSeries()); err != nil || description() != "tampered" {
+		t.Errorf("unforced write after a forced one: err = %v, description %q, want nothing written", err, description())
+	}
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
 		return q.DeleteWorkPart(ctx, first.PartIDs["s00e01"])
 	})

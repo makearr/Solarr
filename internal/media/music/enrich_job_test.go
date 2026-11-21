@@ -1937,6 +1937,14 @@ func TestEnrichJob_AnArtistTheProviderCouldNotAnswerForIsNotMarkedRefreshed(t *t
 	if due, _ := people.ArtistsDueRefresh(t.Context(), 1, 10); len(due) != 0 {
 		t.Errorf("due right after a failed scheduled refresh = %v, want it to wait for its retry", due)
 	}
+	// The retry is six hours after the failed run: not due five hours on, due seven hours on.
+	retryFrom := clock.NewFakeAtEpoch().Now().Add(-6 * 24 * time.Hour)
+	if due, _ := people.ArtistsDueRefresh(t.Context(), retryFrom.Add(5*time.Hour).Unix(), 10); len(due) != 0 {
+		t.Errorf("due five hours after a failed scheduled refresh = %v, want none", due)
+	}
+	if due, _ := people.ArtistsDueRefresh(t.Context(), retryFrom.Add(7*time.Hour).Unix(), 10); !slices.Equal(due, []int64{person.ID}) {
+		t.Errorf("due seven hours after a failed scheduled refresh = %v, want the artist", due)
+	}
 }
 
 // The second source being down says nothing about whether the artist has a photo: no marker, retried.

@@ -606,14 +606,18 @@ func TestClient_ACredentialHeaderDoesNotFollowARedirectToAnotherHost(t *testing.
 				t.Fatal(err)
 			}
 			request.Header.Set("X-Api-Key", "secret")
+			request.Header.Set("X-Emby-Token", "secret")
 
 			response, err := client.Do(t.Context(), request)
 			if err != nil {
 				t.Fatalf("Do: %v", err)
 			}
 			_ = response.Body.Close()
-			if got := transport.requests[len(transport.requests)-1].Header.Get("X-Api-Key"); got != test.wantHeader {
-				t.Errorf("X-Api-Key on the followed request = %q, want %q", got, test.wantHeader)
+			followed := transport.requests[len(transport.requests)-1].Header
+			for _, name := range []string{"X-Api-Key", "X-Emby-Token"} {
+				if got := followed.Get(name); got != test.wantHeader {
+					t.Errorf("%s on the followed request = %q, want %q", name, got, test.wantHeader)
+				}
 			}
 		})
 	}

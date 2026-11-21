@@ -136,3 +136,17 @@ func TestMergeAppendsAnEpisodeOnlyTheOtherSourceAnnouncedAndJoinsItLater(t *test
 		t.Errorf("after the basis lists it: %+v", merged.Episodes)
 	}
 }
+
+func TestMergeLeavesAnEpisodeAloneWhenSeveralOfTheOtherSourceAiredThatDay(t *testing.T) {
+	first := tv.Series{Episodes: []tv.Episode{episodeOf(1, 2, "Second Night", "2025-01-12", 2, tv.ConfidenceMedium)}}
+	second := tv.Series{Episodes: []tv.Episode{
+		episodeOf(1, 2, "Elsewhere", "2025-03-09", 31, tv.ConfidenceHigh),
+		episodeOf(1, 3, "Part A", "2025-01-12", 32, tv.ConfidenceHigh),
+		episodeOf(1, 4, "Part B", "2025-01-12", 33, tv.ConfidenceHigh),
+	}}
+	merged := tv.Merge(first, second)
+	want := episodeOf(1, 2, "Second Night", "2025-01-12", 2, tv.ConfidenceMedium)
+	if len(merged.Episodes) < 1 || !reflect.DeepEqual(merged.Episodes[0], want) {
+		t.Errorf("episodes = %+v, want the basis's untouched while two candidates aired that day", merged.Episodes)
+	}
+}

@@ -64,3 +64,25 @@ func TestAMalformedIDIsLeftOutOfTheBatchNotSentToFailIt(t *testing.T) {
 		t.Errorf("query = %s, want only the well-formed id", transport.query)
 	}
 }
+
+func TestAMalformedIDOfAnyKindIsLeftOutOfTheBatch(t *testing.T) {
+	cases := []struct {
+		kind wikidata.FactKind
+		good string
+		bad  string
+	}{
+		{wikidata.FactFilm, "603", "60\x7f3"},
+		{wikidata.FactSeries, "1396", "13x96"},
+		{wikidata.FactAlbum, "9546cacb-d515-4327-878c-123e2125eb70", "9546cacb\x7f-d515"},
+	}
+	for _, c := range cases {
+		transport := &bookTransport{}
+		fetcher := wikidata.New(wikidata.Config{WikidataClient: newTestClient(t, transport, "wikidata"), WikipediaClient: newTestClient(t, transport, "wikipedia"), Clock: clock.NewFakeAtEpoch()})
+		if _, err := fetcher.FactsOf(t.Context(), c.kind, []string{c.good, c.bad}); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(transport.query, `{ "`+c.good+`" }`) {
+			t.Errorf("kind %v: query = %s, want only the well-formed id", c.kind, transport.query)
+		}
+	}
+}
