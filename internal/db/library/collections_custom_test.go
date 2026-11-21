@@ -1,9 +1,12 @@
 package library_test
 
 import (
+	"context"
+	"database/sql"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/store"
 )
 
 func TestACollectionMadeByHandHoldsWorksOfItsLibraryAndNoOtherKindIsEditable(t *testing.T) {
@@ -232,5 +235,38 @@ func TestMergeFranchisesKeepsHandMembersMonitoringAndHandLinks(t *testing.T) {
 	}
 	if got, _ := franchises.LinkedWith(t.Context(), other); len(got) != 1 || got[0] != keep {
 		t.Errorf("films linked with %v, want [%d]", got, keep)
+	}
+}
+
+func TestMergeFranchisesCarriesDeclaredKeysAndRefusesACrossover(t *testing.T) {
+	opened, _ := newLibrary(t)
+	franchises := library.NewFranchises(opened)
+	keep, _ := franchises.CreateAuto(t.Context(), "tv", "Kept")
+	drop, _ := franchises.CreateAuto(t.Context(), "tv", "Dropped")
+	if err := opened.Write(t.Context(), store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `INSERT INTO collection_declared_key (collection_id, provider, external_id) VALUES (?, 'tmdb', '77')`, drop)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := franchises.MergeFranchises(t.Context(), keep, []int64{drop}); err != nil {
+		t.Fatal(err)
+	}
+	var kept int
+	if err := opened.Read().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM collection_declared_key WHERE collection_id = ? AND provider = 'tmdb' AND external_id = '77'`, keep).Scan(&kept); err != nil || kept != 1 {
+		t.Errorf("declared keys on the kept franchise = %d, %v; want the dropped one's key", kept, err)
+	}
+
+	crossover, _ := franchises.CreateAuto(t.Context(), "tv", "Crossover")
+	another, _ := franchises.CreateAuto(t.Context(), "tv", "Another")
+	if err := opened.Write(t.Context(), store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `UPDATE collection SET kind = ? WHERE id = ?`, library.CrossoverKind, crossover)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := franchises.MergeFranchises(t.Context(), another, []int64{crossover}); err == nil {
+		t.Error("merging a crossover collection succeeded, want a refusal")
 	}
 }
