@@ -107,6 +107,22 @@ func TestACoverageNamesTheSeriesAndItsYear(t *testing.T) {
 	}
 }
 
+// A year the release carries as a date or as a season number is not a claim about the series' own year (SRCH-1).
+func TestTitledIgnoresAYearThatIsADateOrASeasonNumber(t *testing.T) {
+	w := wanted{title: "Shameless", year: 2011}
+	w.names = parsetv.CleanTitleSet(w.title, w.aliases)
+	dated := parsetv.Info{TitleWithoutYear: "Shameless", Year: 2020, AirDate: "2020-01-22"}
+	if !w.titled(dated) {
+		t.Error("a release dated 2020-01-22 was refused for its year")
+	}
+	if namesake := (parsetv.Info{TitleWithoutYear: "Shameless", Year: 2020, SeasonNumber: 1}); w.titled(namesake) {
+		t.Error("a namesake of 2020 was accepted")
+	}
+	if !w.titled(parsed(t, "Shameless.2020.S2020E03.720p.HDTV.x264-GRP")) {
+		t.Error("a year-numbered season was refused for its year")
+	}
+}
+
 // The ids an indexer attached outrank the title: the same id is the series, another id is not (IDX-1).
 func TestAReleaseTaggedWithTheSeriesIDIsIt(t *testing.T) {
 	w := wanted{

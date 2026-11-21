@@ -297,3 +297,39 @@ func TestImportDoesNotTakeAFutureLookingNumberForTheYear(t *testing.T) {
 		t.Errorf("decision = %+v, %v; want The Example Film placed", result.Decisions[0], err)
 	}
 }
+
+// A download grabbed for a wanted film holds the film and an extra folder that sorts first: the film is the one placed,
+// and the extra adds nothing, not the other way round (TRACK-15).
+func TestImportOfAGrabbedDownloadPlacesItsLargestFolderBeforeAnExtra(t *testing.T) {
+	var desiredItemID int64
+	importer, _, write, _, opened := newImporterOver(t, 1<<40, grabbedFor{&desiredItemID})
+	service := movie.Service{
+		TMDB: byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Example Film", "1999-03-30")}}, Series: library.NewSeries(opened),
+		Reader: library.NewSeriesReader(opened), Desired: library.NewDesired(opened), Franchises: library.NewFranchises(opened),
+		Exclusions: library.NewExclusions(opened), Clock: clock.NewFakeAtEpoch(),
+	}
+	added, err := service.Add(t.Context(), movie.AddRequest{IDs: movie.IDs{TMDB: 603}, CategoryID: 3, ProfileID: 1, Monitor: movie.MonitorMovieOnly})
+	if err != nil || !added.Created {
+		t.Fatalf("Add = %+v, %v", added, err)
+	}
+	desiredItemID = added.ItemID
+
+	extra := write("Behind.The.Scenes/featurette.mkv")
+	extra.SizeBytes = 10
+	film := write("The.Example.Film.1999.1080p/film.mkv")
+	film.SizeBytes = 5000
+	acquisitionID := int64(1)
+	result, err := importer.ImportBatch(t.Context(), batch.Request{
+		SessionID: 1, CategoryID: 3, SourcePath: "/downloads", UnitIDs: []int64{5, 6}, AcquisitionID: &acquisitionID,
+		Units: []inspect.Unit{{Directory: "Behind.The.Scenes", Media: []inspect.File{extra}}, {Directory: "The.Example.Film.1999.1080p", Media: []inspect.File{film}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if extraDecision := result.Decisions[0]; extraDecision.Decision != library.UnitSkip || result.Placements[0] != nil {
+		t.Errorf("extra = %+v, placement %+v; want it skipped as nothing new", extraDecision, result.Placements[0])
+	}
+	if filmDecision := result.Decisions[1]; filmDecision.Decision != library.UnitCommit || result.Placements[1] == nil || filmDecision.WorkID == nil || *filmDecision.WorkID != added.WorkID {
+		t.Errorf("film = %+v, placement %+v; want it placed as the wanted film", filmDecision, result.Placements[1])
+	}
+}

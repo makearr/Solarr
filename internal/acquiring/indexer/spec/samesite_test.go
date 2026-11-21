@@ -55,3 +55,27 @@ func TestFetchSendsTheCookieAndHeadersOnlyToTheTracker(t *testing.T) {
 		t.Errorf("off the tracker: cookie %q key %q, want neither", seen.Get("Cookie"), seen.Get("X-Api-Key"))
 	}
 }
+
+// A tracker that redirects a download to another host does not carry the owner's cookie or key along (SEC-7).
+func TestFetchDropsTheCookieAndHeadersOnARedirectOffTheTracker(t *testing.T) {
+	var seen http.Header
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { seen = r.Header.Clone() }))
+	defer elsewhere.Close()
+	tracker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, elsewhere.URL+"/file", http.StatusFound)
+	}))
+	defer tracker.Close()
+	spec := htmlSpec()
+	spec.Login = &Login{Method: "cookie"}
+	driver := testDriver(t, spec, tracker, map[string]string{"cookie": "uid=1; pass=secret"})
+
+	if _, err := driver.fetch(t.Context(), http.MethodGet, tracker.URL+"/d", nil, map[string][]string{"X-Api-Key": {"key"}}); err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if seen == nil {
+		t.Fatal("the redirect was not followed")
+	}
+	if seen.Get("Cookie") != "" || seen.Get("X-Api-Key") != "" {
+		t.Errorf("after the redirect: cookie %q key %q, want neither", seen.Get("Cookie"), seen.Get("X-Api-Key"))
+	}
+}

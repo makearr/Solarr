@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parseadult"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -21,6 +22,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/whisparr"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
 type fakeServer struct {
@@ -754,5 +756,48 @@ func TestPerformerScenesListsOnlyScenesTheLibraryLacks(t *testing.T) {
 	}
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("KnownFor = %+v, %v; want %+v", got, err, want)
+	}
+}
+
+// panickingServer is a provider that panics on every question.
+type panickingServer struct{ *fakeServer }
+
+func (panickingServer) SearchScenes(context.Context, string, int) ([]stashbox.Scene, error) {
+	panic("provider down")
+}
+
+func (panickingServer) ScenesOnDate(context.Context, string, string, int) ([]stashbox.Scene, error) {
+	panic("provider down")
+}
+
+func (panickingServer) FindScene(context.Context, string) (stashbox.Scene, error) {
+	panic("provider down")
+}
+
+// A provider that panics has not answered; the others still count and the process lives on (RACE-3).
+func TestFetchForSurvivesAProviderThatPanics(t *testing.T) {
+	service := Service{
+		Servers: map[string]Server{
+			ProviderStashDB: &fakeServer{scenes: []stashbox.Scene{stashScene()}}, ProviderThePornDB: panickingServer{&fakeServer{}},
+		},
+		Sources: []string{ProviderThePornDB, ProviderStashDB},
+	}
+	scene, err := service.FetchFor(t.Context(), 0, IDs{}, Hint{Title: "Class Two", Date: "2020-05-14"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scene.IDs.StashDB != "sb-1" {
+		t.Errorf("scene = %+v, want the provider that answered", scene)
+	}
+}
+
+// A resolver that panics leaves its file unplaced; the scan's batch goes on (RACE-3).
+func TestScanningResolveSurvivesAResolverThatPanics(t *testing.T) {
+	// The zero Resolver has no library to look in, so resolving a titled file with no date panics.
+	observed := []scan.Observed{{File: scan.Found{RelPath: "Plain Film(2007)/Plain Film (2007).mp4"}}}
+	files := []library.PhysicalFile{{OSHash: "h1"}}
+	matches := scanning{}.Resolve(t.Context(), settings.RootFolder{}, 1, observed, files)
+	if len(matches) != 1 || matches[0].WorkID != 0 {
+		t.Errorf("matches = %+v, want one unplaced file", matches)
 	}
 }

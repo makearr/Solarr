@@ -1,16 +1,22 @@
 package music_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
@@ -109,5 +115,32 @@ func TestAdder_RefusesWhatItCannotAdd(t *testing.T) {
 	}
 	if _, err := adder.LookupWorks(t.Context(), media.AddLookup{CategoryID: addLibraryID, Query: "x"}); !errors.Is(err, media.ErrQueryTooShort) {
 		t.Errorf("one-letter lookup: err = %v, want ErrQueryTooShort", err)
+	}
+}
+
+// An album whose artists cannot be recorded is still added, and the failure is logged for the next refresh to mend.
+func TestAdder_AnAlbumIsAddedAndTheFailureToCreditItsArtistsIsLogged(t *testing.T) {
+	source := &fakeSource{rg: musicbrainz.ReleaseGroup{
+		MBID: addedAlbumMBID, Title: "Velvet Quarry",
+		ArtistCredit: []musicbrainz.ArtistCredit{{MBID: addedArtistMBID, Name: "Orla Fenwick"}},
+	}}
+	adder, _, _, _ := newAdder(t, source)
+	unmigrated, err := store.Open(t.Context(), clock.NewFakeAtEpoch(), store.Config{Name: "library", Path: filepath.Join(t.TempDir(), "library.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = unmigrated.Close() })
+	adder.People = library.NewPeople(unmigrated)
+	var logged bytes.Buffer
+	adder.Logger = slog.New(slog.NewTextHandler(&logged, nil))
+
+	result, err := adder.AddWork(t.Context(), media.AddRequest{
+		CategoryID: addLibraryID, UserID: 3, Kind: music.AddKindAlbum, Provider: music.ProviderReleaseGroup, ExternalID: addedAlbumMBID, Monitored: true,
+	})
+	if err != nil || !result.Created {
+		t.Fatalf("AddWork = %+v, %v; want the album added without its artists", result, err)
+	}
+	if line := logged.String(); !strings.Contains(line, "added album listed without all its artists") || !strings.Contains(line, "resolve "+addedArtistMBID) {
+		t.Errorf("log = %q, want the artist failure named", line)
 	}
 }
