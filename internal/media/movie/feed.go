@@ -85,7 +85,7 @@ type heldTitle struct {
 func (f Feed) heldByTitle(ctx context.Context) (map[string][]heldTitle, error) {
 	byTitle := map[string][]heldTitle{}
 	for _, categoryID := range f.Libraries() {
-		titles, err := f.Reader.TitlesOf(ctx, MediaType, categoryID)
+		titles, err := f.Reader.TitlesHeld(ctx, MediaType, categoryID)
 		if err != nil {
 			return nil, err
 		}

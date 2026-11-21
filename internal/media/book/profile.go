@@ -51,7 +51,7 @@ func (a AuthorWorks) KnownFor(ctx context.Context, personID, categoryID int64) (
 		return nil, err
 	}
 	held := map[string]bool{}
-	if titles, err := a.Reader.TitlesOf(ctx, a.Format.MediaType, categoryID); err == nil {
+	if titles, err := a.Reader.TitlesHeld(ctx, a.Format.MediaType, categoryID); err == nil {
 		for _, one := range titles {
 			held[foldTitle(one.Title)] = true
 		}

@@ -78,3 +78,24 @@ func TestTitleIndex_ReadsACategoryOncePerTTLAndAgainAfterInvalidate(t *testing.T
 		t.Fatalf("reads = %d, %v; want another category read of its own", source.reads, err)
 	}
 }
+
+func TestTitleIndex_AllReadsACategoryOncePerTTLAndAgainAfterInvalidate(t *testing.T) {
+	index, source, fake := newTitleIndexFixture()
+	for range 3 {
+		titles, err := index.All(t.Context(), "movie", 1)
+		if err != nil || len(titles) != len(source.titles) {
+			t.Fatalf("All = %d titles, %v; want every title", len(titles), err)
+		}
+	}
+	if source.reads != 1 {
+		t.Fatalf("reads = %d, want 1 for three calls inside the TTL", source.reads)
+	}
+	index.Invalidate("movie", 1)
+	if _, err := index.All(t.Context(), "movie", 1); err != nil || source.reads != 2 {
+		t.Fatalf("reads = %d, %v; want a read after Invalidate", source.reads, err)
+	}
+	fake.Advance(titleIndexTTL + time.Second)
+	if _, err := index.All(t.Context(), "movie", 1); err != nil || source.reads != 3 {
+		t.Fatalf("reads = %d, %v; want a read after the TTL", source.reads, err)
+	}
+}

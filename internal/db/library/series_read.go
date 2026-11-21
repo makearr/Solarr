@@ -364,6 +364,11 @@ func (r SeriesReader) TitlesMatching(ctx context.Context, mediaType string, cate
 	return r.titles.Lookup(ctx, mediaType, categoryID, key, wanted)
 }
 
+// TitlesHeld is TitlesOf from titles read at most once per few seconds, for callers that ask once per item of a feed.
+func (r SeriesReader) TitlesHeld(ctx context.Context, mediaType string, categoryID int64) ([]SeriesTitle, error) {
+	return r.titles.All(ctx, mediaType, categoryID)
+}
+
 // ForgetTitles drops the titles held for matching, after a work was added to the category.
 func (r SeriesReader) ForgetTitles(mediaType string, categoryID int64) {
 	r.titles.Invalidate(mediaType, categoryID)

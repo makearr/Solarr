@@ -55,7 +55,7 @@ func (f Following) FollowCandidates(ctx context.Context, follow media.Follow) ([
 		return nil, fmt.Errorf("book: follow %s: %w", person.Name, err)
 	}
 	held := map[string]bool{}
-	if titles, err := f.Authors.Reader.TitlesOf(ctx, f.Authors.Format.MediaType, follow.CategoryID); err == nil {
+	if titles, err := f.Authors.Reader.TitlesHeld(ctx, f.Authors.Format.MediaType, follow.CategoryID); err == nil {
 		for _, one := range titles {
 			held[foldTitle(one.Title)] = true
 		}

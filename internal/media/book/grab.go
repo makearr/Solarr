@@ -75,7 +75,7 @@ func (f Feed) matcher(ctx context.Context) (works.Matcher, error) {
 	held := map[string][]int64{}
 	if f.Libraries != nil {
 		for _, categoryID := range f.Libraries() {
-			titles, err := f.Reader.TitlesOf(ctx, f.Format.MediaType, categoryID)
+			titles, err := f.Reader.TitlesHeld(ctx, f.Format.MediaType, categoryID)
 			if err != nil {
 				return nil, err
 			}

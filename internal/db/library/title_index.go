@@ -36,22 +36,18 @@ type titleEntry struct {
 	built     bool
 	byKey     map[string][]SeriesTitle
 	canonical map[int64]SeriesTitle
+
+	// all is every title of the category as read, for callers that normalise them their own way.
+	all      []SeriesTitle
+	allBuilt bool
+	allAt    time.Time
 }
 
 // Lookup returns the held titles whose normalised form (key, one normaliser per media type) is one of wanted, with the
 // canonical title of each work they belong to, ordered by work.
 func (t *TitleIndex) Lookup(ctx context.Context, mediaType string, categoryID int64, key func(string) string, wanted []string) ([]SeriesTitle, error) {
 	scope := titleScope{mediaType, categoryID}
-	t.mu.Lock()
-	if t.entries == nil {
-		t.entries = map[titleScope]*titleEntry{}
-	}
-	entry, held := t.entries[scope]
-	if !held {
-		entry = &titleEntry{}
-		t.entries[scope] = entry
-	}
-	t.mu.Unlock()
+	entry := t.entry(scope)
 
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
@@ -102,6 +98,36 @@ func (t *TitleIndex) Lookup(ctx context.Context, mediaType string, categoryID in
 	return rows, nil
 }
 
+func (t *TitleIndex) entry(scope titleScope) *titleEntry {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.entries == nil {
+		t.entries = map[titleScope]*titleEntry{}
+	}
+	entry, held := t.entries[scope]
+	if !held {
+		entry = &titleEntry{}
+		t.entries[scope] = entry
+	}
+	return entry
+}
+
+// All returns every title of a category, read at most once per TTL: what a caller that matches by its own normaliser
+// asks for once per item.
+func (t *TitleIndex) All(ctx context.Context, mediaType string, categoryID int64) ([]SeriesTitle, error) {
+	entry := t.entry(titleScope{mediaType, categoryID})
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+	if !entry.allBuilt || t.clock.Now().Sub(entry.allAt) >= titleIndexTTL {
+		titles, err := t.source.TitlesOf(ctx, mediaType, categoryID)
+		if err != nil {
+			return nil, err
+		}
+		entry.all, entry.allBuilt, entry.allAt = titles, true, t.clock.Now()
+	}
+	return entry.all, nil
+}
+
 // Invalidate drops the titles held for a category, after a work was added to it.
 func (t *TitleIndex) Invalidate(mediaType string, categoryID int64) {
 	t.mu.Lock()
@@ -111,6 +137,6 @@ func (t *TitleIndex) Invalidate(mediaType string, categoryID int64) {
 		return
 	}
 	entry.mu.Lock()
-	entry.built = false
+	entry.built, entry.allBuilt = false, false
 	entry.mu.Unlock()
 }
