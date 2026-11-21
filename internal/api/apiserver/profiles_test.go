@@ -224,3 +224,47 @@ func TestDeleteLanguageProfile_RemovesIt(t *testing.T) {
 		t.Error("profile still exists after delete")
 	}
 }
+
+func TestValidateQualityProfile_ListsMistakesAndWritesNothing(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	before := len(fixture.cache.Snapshot().QualityProfiles())
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/qualityprofiles/validate",
+		`{"name":"Typo","rules":"{\"no_such_key\":1}","upgrade":"{}"}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	var answer struct {
+		Problems []struct {
+			Path        string `json:"path"`
+			Expectation string `json:"expectation"`
+		} `json:"problems"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &answer); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(answer.Problems) != 1 || answer.Problems[0].Path != "rules" {
+		t.Errorf("problems = %+v, want one on rules", answer.Problems)
+	}
+	if after := len(fixture.cache.Snapshot().QualityProfiles()); after != before {
+		t.Errorf("profiles %d -> %d, want nothing stored", before, after)
+	}
+
+	good := fixture.do(authedPost(t, cookies, "/api/v1/qualityprofiles/validate", `{"name":"Fine","rules":"{}","upgrade":"{}"}`))
+	if err := json.Unmarshal(good.Body.Bytes(), &answer); err != nil || good.Code != http.StatusOK || len(answer.Problems) != 0 {
+		t.Errorf("valid profile: status %d, problems %+v, err %v", good.Code, answer.Problems, err)
+	}
+}
+
+func TestValidateQualityProfile_RequiresAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	fixture.createUser(t, "kid", settings.RoleUser)
+	cookies := fixture.signIn(t, "kid")
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/qualityprofiles/validate", `{"name":"x","rules":"{}","upgrade":"{}"}`))
+	if recorder.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", recorder.Code)
+	}
+}

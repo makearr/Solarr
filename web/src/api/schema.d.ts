@@ -3330,6 +3330,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/qualityprofiles/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a quality profile's rules and upgrade documents without saving. Administrator only.
+         * @description The same checks a save runs (unknown keys, targets that do not parse, impossible ranges, regexes that do not compile). A profile with mistakes answers 200 with the list; nothing is stored either way.
+         */
+        post: operations["validateQualityProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/qualityprofiles/{id}": {
         parameters: {
             query?: never;
@@ -9788,6 +9808,14 @@ export interface components {
             media_type?: string;
             rules: string;
             upgrade: string;
+        };
+        QualityProfileCheck: {
+            problems: {
+                /** @description Where the mistake is: rules, rules.<key>, upgrade or name. */
+                path: string;
+                value: string;
+                expectation: string;
+            }[];
         };
         /** @description Section 19.8's policy: language is its own axis, belonging to a category rather than a media type. Required lists use any_of semantics -- at least one listed language must be present, evaluated from the probe, never the release name. An empty preferred/required list is valid (some categories, e.g. music, have no language policy at all). */
         LanguageProfile: {
@@ -16999,6 +17027,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QualityProfile"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    validateQualityProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QualityProfileWrite"];
+            };
+        };
+        responses: {
+            /** @description The mistakes found; empty when the profile would be accepted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualityProfileCheck"];
                 };
             };
             400: components["responses"]["Problem"];

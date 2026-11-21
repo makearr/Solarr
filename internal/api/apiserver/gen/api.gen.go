@@ -5283,6 +5283,17 @@ type QualityProfile struct {
 	Upgrade string `json:"upgrade"`
 }
 
+// QualityProfileCheck defines model for QualityProfileCheck.
+type QualityProfileCheck struct {
+	Problems []struct {
+		Expectation string `json:"expectation"`
+
+		// Path Where the mistake is: rules, rules.<key>, upgrade or name.
+		Path  string `json:"path"`
+		Value string `json:"value"`
+	} `json:"problems"`
+}
+
 // QualityProfileRef defines model for QualityProfileRef.
 type QualityProfileRef struct {
 	Id   int64  `json:"id"`
@@ -8310,6 +8321,9 @@ type UpdateProxyJSONRequestBody = ProxyRequest
 // CreateQualityProfileJSONRequestBody defines body for CreateQualityProfile for application/json ContentType.
 type CreateQualityProfileJSONRequestBody = QualityProfileWrite
 
+// ValidateQualityProfileJSONRequestBody defines body for ValidateQualityProfile for application/json ContentType.
+type ValidateQualityProfileJSONRequestBody = QualityProfileWrite
+
 // UpdateQualityProfileJSONRequestBody defines body for UpdateQualityProfile for application/json ContentType.
 type UpdateQualityProfileJSONRequestBody = QualityProfileWrite
 
@@ -9212,6 +9226,9 @@ type ServerInterface interface {
 	// Add a quality profile. Administrator only.
 	// (POST /qualityprofiles)
 	CreateQualityProfile(w http.ResponseWriter, r *http.Request)
+	// Check a quality profile's rules and upgrade documents without saving. Administrator only.
+	// (POST /qualityprofiles/validate)
+	ValidateQualityProfile(w http.ResponseWriter, r *http.Request)
 	// Remove a quality profile. Administrator only. Refused, with the categories that still default to it, while any category does (settings.ErrInUse).
 	// (DELETE /qualityprofiles/{id})
 	DeleteQualityProfile(w http.ResponseWriter, r *http.Request, id int64)
@@ -11105,6 +11122,12 @@ func (_ Unimplemented) ListQualityProfiles(w http.ResponseWriter, r *http.Reques
 // Add a quality profile. Administrator only.
 // (POST /qualityprofiles)
 func (_ Unimplemented) CreateQualityProfile(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Check a quality profile's rules and upgrade documents without saving. Administrator only.
+// (POST /qualityprofiles/validate)
+func (_ Unimplemented) ValidateQualityProfile(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -20143,6 +20166,28 @@ func (siw *ServerInterfaceWrapper) CreateQualityProfile(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// ValidateQualityProfile operation middleware
+func (siw *ServerInterfaceWrapper) ValidateQualityProfile(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ValidateQualityProfile(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteQualityProfile operation middleware
 func (siw *ServerInterfaceWrapper) DeleteQualityProfile(w http.ResponseWriter, r *http.Request) {
 
@@ -25011,6 +25056,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/qualityprofiles", wrapper.CreateQualityProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/qualityprofiles/validate", wrapper.ValidateQualityProfile)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/qualityprofiles/{id}", wrapper.DeleteQualityProfile)

@@ -893,6 +893,7 @@ func New(config Config) (*Server, error) {
 			secured.Delete("/exclusions/{id}", wrapped.DeleteExclusionPattern)
 			secured.Get("/qualityprofiles", server.ListQualityProfiles)
 			secured.Post("/qualityprofiles", server.CreateQualityProfile)
+			secured.Post("/qualityprofiles/validate", server.ValidateQualityProfile)
 			secured.Patch("/qualityprofiles/{id}", wrapped.UpdateQualityProfile)
 			secured.Delete("/qualityprofiles/{id}", wrapped.DeleteQualityProfile)
 			secured.Get("/qualitytargets", server.ListQualityTargets)

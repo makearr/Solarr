@@ -155,6 +155,11 @@ func validateImportTransferLadder(ladder []string) config.Problems {
 	return problems
 }
 
+// ValidateQualityProfile runs the checks a save runs and stores nothing.
+func ValidateQualityProfile(name, rulesJSON, upgradeJSON string) config.Problems {
+	return validateQualityProfile(name, rulesJSON, upgradeJSON)
+}
+
 // validateQualityProfile checks a quality profile before it is written (ADR-44):
 // a name, and rules/upgrade JSON that actually decodes as ADR-40's shape --
 // internal/identify/score.Parse/ParseUpgrade own that shape, so a typo like `"compare":

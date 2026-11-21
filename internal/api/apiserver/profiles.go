@@ -53,6 +53,27 @@ func (s *Server) CreateQualityProfile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusCreated, qualityProfileView(created))
 }
 
+// ValidateQualityProfile answers the mistakes a save would refuse the profile for, so the editor can check before saving.
+func (s *Server) ValidateQualityProfile(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	var body gen.ValidateQualityProfileJSONRequestBody
+	if !s.decodeBody(w, r, maxImportBody, &body, "the request body could not be read") {
+		return
+	}
+	found := settings.ValidateQualityProfile(body.Name, body.Rules, body.Upgrade)
+	answer := gen.QualityProfileCheck{Problems: make([]struct {
+		Expectation string `json:"expectation"`
+		Path        string `json:"path"`
+		Value       string `json:"value"`
+	}, len(found))}
+	for index, problem := range found {
+		answer.Problems[index].Path, answer.Problems[index].Value, answer.Problems[index].Expectation = problem.Path, problem.Value, problem.Expectation
+	}
+	writeJSON(w, s.logger, http.StatusOK, answer)
+}
+
 // UpdateQualityProfile replaces a profile's policy. Administrator only.
 func (s *Server) UpdateQualityProfile(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {

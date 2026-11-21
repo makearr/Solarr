@@ -5169,6 +5169,29 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /qualityprofiles/validate:
+    post:
+      operationId: validateQualityProfile
+      tags: [settings]
+      summary: Check a quality profile's rules and upgrade documents without saving. Administrator only.
+      description: >-
+        The same checks a save runs (unknown keys, targets that do not parse, impossible ranges, regexes that do
+        not compile). A profile with mistakes answers 200 with the list; nothing is stored either way.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QualityProfileWrite" }
+      responses:
+        "200":
+          description: The mistakes found; empty when the profile would be accepted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QualityProfileCheck" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /qualityprofiles/{id}:
     parameters:
       - name: id
@@ -13323,6 +13346,20 @@ components:
           description: Set when a profile is created, music when absent; an update cannot change it.
         rules: { type: string }
         upgrade: { type: string }
+
+    QualityProfileCheck:
+      type: object
+      required: [problems]
+      properties:
+        problems:
+          type: array
+          items:
+            type: object
+            required: [path, value, expectation]
+            properties:
+              path: { type: string, description: "Where the mistake is: rules, rules.<key>, upgrade or name." }
+              value: { type: string }
+              expectation: { type: string }
 
     LanguageProfile:
       type: object

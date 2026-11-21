@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { SubTabs } from "@/ui/SubTabs";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -216,6 +217,17 @@ export function ProfileForm({
     onSuccess: onDone,
   });
 
+  // The same checks a save runs, without saving: a mistyped key or target is named before it is stored.
+  const check = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST("/qualityprofiles/validate", {
+        body: { name, rules: hasForm && !asJSON ? built() : json, upgrade, media_type: mediaType },
+      });
+      if (error) throw error;
+      return data.problems;
+    },
+  });
+
   return (
     <form
       onSubmit={(event) => {
@@ -296,9 +308,29 @@ export function ProfileForm({
       {save.isError && (
         <p className="text-xs text-danger">{(save.error as { detail?: string }).detail ?? "The profile could not be saved."}</p>
       )}
+      {check.isSuccess && (
+        <div role="status" className="text-xs">
+          {check.data.length === 0 ? (
+            <p className="text-ink-muted">{t("profile.checkClean")}</p>
+          ) : (
+            <ul className="list-disc pl-5 text-danger">
+              {check.data.map((problem, index) => (
+                <li key={index}>
+                  {t("profile.checkFound", { path: problem.path, expectation: problem.expectation })}
+                  {problem.value ? t("profile.checkFoundValue", { value: problem.value }) : ""}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {check.isError && <p className="text-xs text-danger">{(check.error as { detail?: string }).detail ?? t("profile.checkFailed")}</p>}
       <div className="flex gap-2">
         <button type="submit" disabled={save.isPending} className="rounded-md bg-accent px-3 py-1.5 text-accent-ink disabled:opacity-50">
           Save
+        </button>
+        <button type="button" onClick={() => check.mutate()} disabled={check.isPending} className={smallButton}>
+          {t("profile.check")}
         </button>
         <button type="button" onClick={onCancel} className={smallButton}>
           Cancel
