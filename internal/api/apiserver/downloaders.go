@@ -24,8 +24,7 @@ import (
 // credentials is always masked -- settings.Downloader never carries the raw
 // value at all.
 func (s *Server) ListDownloaders(w http.ResponseWriter, r *http.Request) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	if !s.requireAdministrator(w, r) {
 		return
 	}
 

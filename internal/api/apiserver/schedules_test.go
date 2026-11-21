@@ -145,8 +145,8 @@ func TestListSchedules_ReturnsEveryTaskWithItsEffectiveSettings(t *testing.T) {
 		{Key: "scan", Name: "Library scan", DefaultCadence: "*/30 * * * *", Tier: "normal"},
 	}
 	fixture.scheduler.states["scan"] = jobs.ScheduleRun{TaskKey: "scan", LastOutcome: "enqueued"}
-	fixture.createUser(t, "listener", settings.RoleReadonly)
-	cookies := fixture.signIn(t, "listener")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/schedules"))
 	if recorder.Code != http.StatusOK {
@@ -177,8 +177,8 @@ func TestListSchedules_SupportsFullReflectsRunFull(t *testing.T) {
 			RunFull: func(context.Context) (jobs.EnqueueResult, error) { return jobs.EnqueueResult{}, nil }},
 		{Key: "enrichment", Name: "Music enrichment", DefaultCadence: "*/15 * * * *", Tier: "normal"},
 	}
-	fixture.createUser(t, "listener", settings.RoleReadonly)
-	cookies := fixture.signIn(t, "listener")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/schedules"))
 	if recorder.Code != http.StatusOK {

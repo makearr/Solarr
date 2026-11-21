@@ -115,7 +115,7 @@ paths:
     get:
       operationId: getEgress
       tags: [system]
-      summary: The address this host appears to come from.
+      summary: The address this host appears to come from. Administrator only.
       description: >-
         What the outside world sees when Solarr connects out, which is the
         number that matters for whether traffic is leaving past a VPN. Resolved
@@ -132,6 +132,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Egress" }
         "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
 
   /system/activity:
     get:
@@ -939,7 +940,7 @@ paths:
     get:
       operationId: listDownloadFolders
       tags: [setup]
-      summary: The configured download folders (todo 4.18, section 5.1).
+      summary: The configured download folders (todo 4.18, section 5.1). Administrator only.
       responses:
         "200":
           description: Every download folder.
@@ -949,6 +950,7 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/DownloadFolder" }
         "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
     post:
       operationId: addDownloadFolder
       tags: [setup]
@@ -1101,7 +1103,7 @@ paths:
     get:
       operationId: listSchedules
       tags: [settings]
-      summary: Every registered periodic task (ADR-59).
+      summary: Every registered periodic task (ADR-59). Administrator only.
       responses:
         "200":
           description: Every task, its effective cadence and its own run-state.
@@ -1111,6 +1113,7 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/Schedule" }
         "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
 
   /schedules/history:
     get:
@@ -1250,7 +1253,7 @@ paths:
     get:
       operationId: getNetworkSettings
       tags: [settings]
-      summary: Port resolution, egress proxy and IP allowlist (ADR-58).
+      summary: Port resolution, egress proxy and IP allowlist (ADR-58). Administrator only.
       responses:
         "200":
           description: The current policy, plus the port actually in effect.
@@ -1258,6 +1261,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/NetworkSettings" }
         "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
     patch:
       operationId: updateNetworkSettings
       tags: [settings]
@@ -2843,7 +2847,7 @@ paths:
     get:
       operationId: listArrInstances
       tags: [settings]
-      summary: Every configured *Arr connection (todo 4.13, ADR-52).
+      summary: Every configured *Arr connection (todo 4.13, ADR-52). Administrator only.
       responses:
         "200":
           description: Every connection. api_key is always masked.
@@ -2853,6 +2857,7 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/ArrInstance" }
         "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
     post:
       operationId: addArrInstance
       tags: [settings]
@@ -3341,7 +3346,7 @@ paths:
     get:
       operationId: listIndexers
       tags: [settings]
-      summary: Every configured indexer connection (stage 5, ADR-37/43/47).
+      summary: Every configured indexer connection (stage 5, ADR-37/43/47). Administrator only.
       responses:
         "200":
           description: Every connection. api_key is always masked.
@@ -3351,6 +3356,7 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/Indexer" }
         "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
     post:
       operationId: addIndexer
       tags: [settings]
@@ -3606,7 +3612,7 @@ paths:
     get:
       operationId: listDownloaders
       tags: [settings]
-      summary: Every configured download client connection (stage 5, ADR-46/57).
+      summary: Every configured download client connection (stage 5, ADR-46/57). Administrator only.
       responses:
         "200":
           description: Every connection. credentials is always masked.
@@ -3616,6 +3622,7 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/Downloader" }
         "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
     post:
       operationId: addDownloader
       tags: [settings]

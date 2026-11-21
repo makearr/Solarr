@@ -109,7 +109,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The address this host appears to come from.
+         * The address this host appears to come from. Administrator only.
          * @description What the outside world sees when Solarr connects out, which is the number that matters for whether traffic is leaving past a VPN. Resolved by asking a configurable echo service through httpx, cached, and absent rather than guessed when the check has not succeeded. Asking checks first when the last answer is older than the interval, so the check runs while the status bar shows the address even when not enabled. Per-indexer proxies (ADR-47) can egress differently; this is the app's own path out.
          */
         get: operations["getEgress"];
@@ -639,7 +639,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The configured download folders (todo 4.18, section 5.1). */
+        /** The configured download folders (todo 4.18, section 5.1). Administrator only. */
         get: operations["listDownloadFolders"];
         put?: never;
         /**
@@ -722,7 +722,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every registered periodic task (ADR-59). */
+        /** Every registered periodic task (ADR-59). Administrator only. */
         get: operations["listSchedules"];
         put?: never;
         post?: never;
@@ -837,7 +837,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Port resolution, egress proxy and IP allowlist (ADR-58). */
+        /** Port resolution, egress proxy and IP allowlist (ADR-58). Administrator only. */
         get: operations["getNetworkSettings"];
         put?: never;
         post?: never;
@@ -1958,7 +1958,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every configured *Arr connection (todo 4.13, ADR-52). */
+        /** Every configured *Arr connection (todo 4.13, ADR-52). Administrator only. */
         get: operations["listArrInstances"];
         put?: never;
         /**
@@ -2225,7 +2225,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every configured indexer connection (stage 5, ADR-37/43/47). */
+        /** Every configured indexer connection (stage 5, ADR-37/43/47). Administrator only. */
         get: operations["listIndexers"];
         put?: never;
         /**
@@ -2396,7 +2396,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every configured download client connection (stage 5, ADR-46/57). */
+        /** Every configured download client connection (stage 5, ADR-46/57). Administrator only. */
         get: operations["listDownloaders"];
         put?: never;
         /**
@@ -11220,6 +11220,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     getActivity: {
@@ -12141,6 +12142,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     addDownloadFolder: {
@@ -12316,6 +12318,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     getTaskHistory: {
@@ -12471,6 +12474,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     updateNetworkSettings: {
@@ -14349,6 +14353,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     addArrInstance: {
@@ -14946,6 +14951,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     addIndexer: {
@@ -15246,6 +15252,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     addDownloader: {

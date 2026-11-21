@@ -43,6 +43,21 @@ func TestAdministratorOnlyReads(t *testing.T) {
 	}
 }
 
+// The host's connections and schedules are configuration: an account of role user with no library sees none of them (Q-SEC1b).
+func TestAdministratorOnlyReads_HostConnections(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "member", settings.RoleUser)
+	cookies := fixture.signIn(t, "member")
+	for _, target := range []string{
+		"/api/v1/arr/instances", "/api/v1/downloaders", "/api/v1/indexers", "/api/v1/system/egress", "/api/v1/network",
+		"/api/v1/schedules", "/api/v1/downloadfolders",
+	} {
+		if recorder := fixture.do(authedGet(t, cookies, target)); recorder.Code != http.StatusForbidden {
+			t.Errorf("GET %s = %d, want 403 for a non-administrator", target, recorder.Code)
+		}
+	}
+}
+
 // A library manager sees the roots of the libraries they manage, not those they only read; an administrator sees all.
 func TestListRootFolders_ShowsOthersOnlyTheRootsOfLibrariesTheyManage(t *testing.T) {
 	fixture := newWorksFixture(t)

@@ -9,7 +9,6 @@ import (
 	"net/url"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
-	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/config"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -44,8 +43,7 @@ func (s *Server) ipAllowlist(next http.Handler) http.Handler {
 // GetNetworkSettings answers ADR-58's own policy, plus the port this
 // instance actually bound to at startup.
 func (s *Server) GetNetworkSettings(w http.ResponseWriter, r *http.Request) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	if !s.requireAdministrator(w, r) {
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, s.networkSettingsView())

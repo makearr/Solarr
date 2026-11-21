@@ -16,7 +16,7 @@ import (
 var openHandlers = []string{
 	"GetMyCalendarFeed", "CreateMyCalendarFeed", "DeleteMyCalendarFeed", "GetCalendarFeedICS", "ListPersonFollows",
 	"ListOrganisationFollows", "GetWorkArtworkOptions", "GetSetupStatus", "CreateFirstAdministrator", "GetLibraryNaming",
-	"SetLibraryNaming", "ListMediaTypes", "GetFilePreview", "ListTags", "ListFavorites", "ListWorkFranchises",
+	"SetLibraryNaming", "ListMediaTypes", "GetFilePreview", "ListTags", "ListFavorites",
 	"CreateFranchise", "DeleteFranchise", "SetMetadataProviderKey", "GetArrInstanceSyncOptions", "SetArrInstanceSyncOptions",
 	"ListArrInstanceIndexers", "ListArrInstanceDownloadClients", "GetArrInstancePull", "SetArrInstancePull", "GetOrganisation",
 	"GetAuthPolicy", "SetAuthPolicy", "GetTransportKey", "GetHealth", "GetReady", "GetAbout", "GetAboutLicense",

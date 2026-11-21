@@ -37,8 +37,8 @@ func TestGetNetworkSettings_RequiresAuthentication(t *testing.T) {
 
 func TestGetNetworkSettings_DefaultsToNothingConfigured(t *testing.T) {
 	fixture := newWorksFixture(t)
-	fixture.createUser(t, "listener", settings.RoleReadonly)
-	cookies := fixture.signIn(t, "listener")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/network"))
 	if recorder.Code != http.StatusOK {

@@ -115,7 +115,8 @@ func (s *Server) GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64
 		writeError(w, s.logger, err)
 		return
 	}
-	if !sharesAnID(rootFolderIDs, row.RootFolderIDs) && !sharesAnID(categoryIDs, row.CategoryIDs) {
+	if (!sharesAnID(rootFolderIDs, row.RootFolderIDs) && !sharesAnID(categoryIDs, row.CategoryIDs)) ||
+		s.keptFromWork(r.Context(), access, id) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no cover art for this work")
 		return
 	}

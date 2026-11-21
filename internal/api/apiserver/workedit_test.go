@@ -305,3 +305,31 @@ func TestBlockedTagsOfAnAccount_HideTheWorkFromThatAccount(t *testing.T) {
 		t.Errorf("the list excluded %v, want the blocked tag 1", excluded)
 	}
 }
+
+// SEC-13: every read below a work answers 404 for an account kept from it, as the work itself does.
+func TestBlockedTagsOfAnAccount_HideTheWorksFilesPartsAndCover(t *testing.T) {
+	fixture, cookies := visibleWorksFixture(t)
+	fixture.artwork.row = apiserver.WorkArtworkRow{CacheKey: "work-1-cover", Found: true, RootFolderIDs: fixture.workDetail.row.RootFolderIDs}
+	fixture.writeFixtureImage(t, "work-1-cover", "small", []byte("fake webp bytes"))
+	targets := []string{"/api/v1/works/1/file-details", "/api/v1/works/1/parts", "/api/v1/works/1/artwork"}
+	for _, target := range targets {
+		if recorder := fixture.do(authedGet(t, cookies, target)); recorder.Code != http.StatusOK {
+			t.Fatalf("GET %s before the block = %d (%s), want 200", target, recorder.Code, recorder.Body)
+		}
+	}
+	var userID int64
+	for _, user := range fixture.cache.Snapshot().Users() {
+		if user.Role == settings.RoleReadonly {
+			userID = user.ID
+		}
+	}
+	if err := fixture.cache.SetUserBlockedTags(t.Context(), userID, []settings.UserBlockedTag{{TagID: 1, Name: "Rock"}}); err != nil {
+		t.Fatal(err)
+	}
+	fixture.workEditor.carrying = map[int64]bool{1: true}
+	for _, target := range targets {
+		if recorder := fixture.do(authedGet(t, cookies, target)); recorder.Code != http.StatusNotFound {
+			t.Errorf("GET %s of a work with the blocked tag = %d, want 404", target, recorder.Code)
+		}
+	}
+}

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
-	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/config"
 	"github.com/makearr/Solarr/internal/platform/secrets"
@@ -15,8 +14,7 @@ import (
 // ListArrInstances answers every configured *Arr connection. api_key is
 // always masked -- settings.ArrInstance never carries the raw value at all.
 func (s *Server) ListArrInstances(w http.ResponseWriter, r *http.Request) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	if !s.requireAdministrator(w, r) {
 		return
 	}
 

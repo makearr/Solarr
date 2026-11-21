@@ -8457,7 +8457,7 @@ type ServerInterface interface {
 	// Undo one run. Administrator only.
 	// (POST /arr/imports/{id}/revert)
 	RevertArrImport(w http.ResponseWriter, r *http.Request, id int64)
-	// Every configured *Arr connection (todo 4.13, ADR-52).
+	// Every configured *Arr connection (todo 4.13, ADR-52). Administrator only.
 	// (GET /arr/instances)
 	ListArrInstances(w http.ResponseWriter, r *http.Request)
 	// Connect a new *Arr instance. Administrator only.
@@ -8715,7 +8715,7 @@ type ServerInterface interface {
 	// Artists in a library whose discography has albums the library does not hold.
 	// (GET /discover/incomplete)
 	ListIncompleteDiscographies(w http.ResponseWriter, r *http.Request, params ListIncompleteDiscographiesParams)
-	// Every configured download client connection (stage 5, ADR-46/57).
+	// Every configured download client connection (stage 5, ADR-46/57). Administrator only.
 	// (GET /downloaders)
 	ListDownloaders(w http.ResponseWriter, r *http.Request)
 	// Connect a new download client. Administrator only.
@@ -8751,7 +8751,7 @@ type ServerInterface interface {
 	// Fetch the client's own version (todo 5.2's own "every connection tested before it is accepted") -- the same read-only connection check as SABnzbd's own Version() call, never a queue or dispatch action.
 	// (POST /downloaders/{id}/test)
 	TestDownloader(w http.ResponseWriter, r *http.Request, id int64)
-	// The configured download folders (todo 4.18, section 5.1).
+	// The configured download folders (todo 4.18, section 5.1). Administrator only.
 	// (GET /downloadfolders)
 	ListDownloadFolders(w http.ResponseWriter, r *http.Request)
 	// Watch a folder upstream download clients write to. Administrator only.
@@ -8907,7 +8907,7 @@ type ServerInterface interface {
 	// Change the commit line or the transfer ladder. Administrator only.
 	// (PATCH /import/settings)
 	UpdateImportSettings(w http.ResponseWriter, r *http.Request)
-	// Every configured indexer connection (stage 5, ADR-37/43/47).
+	// Every configured indexer connection (stage 5, ADR-37/43/47). Administrator only.
 	// (GET /indexers)
 	ListIndexers(w http.ResponseWriter, r *http.Request)
 	// Connect a new indexer. Administrator only.
@@ -9081,7 +9081,7 @@ type ServerInterface interface {
 	// Continue a paused move job. Administrator only.
 	// (POST /moves/{id}/resume)
 	ResumeMoveJob(w http.ResponseWriter, r *http.Request, id int64)
-	// Port resolution, egress proxy and IP allowlist (ADR-58).
+	// Port resolution, egress proxy and IP allowlist (ADR-58). Administrator only.
 	// (GET /network)
 	GetNetworkSettings(w http.ResponseWriter, r *http.Request)
 	// Change the port, proxy or IP whitelist. Administrator only.
@@ -9276,7 +9276,7 @@ type ServerInterface interface {
 	// Each library scan under way, with how far it has come.
 	// (GET /scans)
 	ListScans(w http.ResponseWriter, r *http.Request)
-	// Every registered periodic task (ADR-59).
+	// Every registered periodic task (ADR-59). Administrator only.
 	// (GET /schedules)
 	ListSchedules(w http.ResponseWriter, r *http.Request)
 	// How long each kind of job ran in each hour of the last seven days.
@@ -9387,7 +9387,7 @@ type ServerInterface interface {
 	// Back up every database now. Administrator only.
 	// (POST /system/backups)
 	RunBackupNow(w http.ResponseWriter, r *http.Request)
-	// The address this host appears to come from.
+	// The address this host appears to come from. Administrator only.
 	// (GET /system/egress)
 	GetEgress(w http.ResponseWriter, r *http.Request)
 	// Configuration and operational problems with this instance (Lidarr's System health).
@@ -9606,7 +9606,7 @@ func (_ Unimplemented) RevertArrImport(w http.ResponseWriter, r *http.Request, i
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Every configured *Arr connection (todo 4.13, ADR-52).
+// Every configured *Arr connection (todo 4.13, ADR-52). Administrator only.
 // (GET /arr/instances)
 func (_ Unimplemented) ListArrInstances(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -10122,7 +10122,7 @@ func (_ Unimplemented) ListIncompleteDiscographies(w http.ResponseWriter, r *htt
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Every configured download client connection (stage 5, ADR-46/57).
+// Every configured download client connection (stage 5, ADR-46/57). Administrator only.
 // (GET /downloaders)
 func (_ Unimplemented) ListDownloaders(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -10194,7 +10194,7 @@ func (_ Unimplemented) TestDownloader(w http.ResponseWriter, r *http.Request, id
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// The configured download folders (todo 4.18, section 5.1).
+// The configured download folders (todo 4.18, section 5.1). Administrator only.
 // (GET /downloadfolders)
 func (_ Unimplemented) ListDownloadFolders(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -10506,7 +10506,7 @@ func (_ Unimplemented) UpdateImportSettings(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Every configured indexer connection (stage 5, ADR-37/43/47).
+// Every configured indexer connection (stage 5, ADR-37/43/47). Administrator only.
 // (GET /indexers)
 func (_ Unimplemented) ListIndexers(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -10854,7 +10854,7 @@ func (_ Unimplemented) ResumeMoveJob(w http.ResponseWriter, r *http.Request, id 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Port resolution, egress proxy and IP allowlist (ADR-58).
+// Port resolution, egress proxy and IP allowlist (ADR-58). Administrator only.
 // (GET /network)
 func (_ Unimplemented) GetNetworkSettings(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -11244,7 +11244,7 @@ func (_ Unimplemented) ListScans(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Every registered periodic task (ADR-59).
+// Every registered periodic task (ADR-59). Administrator only.
 // (GET /schedules)
 func (_ Unimplemented) ListSchedules(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -11466,7 +11466,7 @@ func (_ Unimplemented) RunBackupNow(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// The address this host appears to come from.
+// The address this host appears to come from. Administrator only.
 // (GET /system/egress)
 func (_ Unimplemented) GetEgress(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)

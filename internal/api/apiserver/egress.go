@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
-	"github.com/makearr/Solarr/internal/api/authz"
 )
 
 // EgressStatus is what the public-address check last learned. Mirrored here so
@@ -28,8 +27,7 @@ type EgressReporter interface {
 // GetEgress reports the address this host appears to connect from. Authenticated:
 // it is a fact about the operator's network, not build identity.
 func (s *Server) GetEgress(w http.ResponseWriter, r *http.Request) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	if !s.requireAdministrator(w, r) {
 		return
 	}
 

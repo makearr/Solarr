@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
-	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/config"
 )
@@ -23,8 +22,7 @@ type DownloadFolderChecker interface {
 
 // ListDownloadFolders answers every configured download folder.
 func (s *Server) ListDownloadFolders(w http.ResponseWriter, r *http.Request) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	if !s.requireAdministrator(w, r) {
 		return
 	}
 

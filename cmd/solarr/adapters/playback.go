@@ -22,20 +22,21 @@ func (a Playback) WorksOfFile(ctx context.Context, mediaObjectID int64) ([]int64
 	return a.Physical.WorksOfFile(ctx, mediaObjectID)
 }
 
-// LocatePlayback answers the first path of the file whose root folder is still configured.
-func (a Playback) LocatePlayback(ctx context.Context, mediaObjectID int64) (apiserver.PlaybackFile, error) {
+// LocatePlayback answers every path of the file that is not missing and whose root folder is still configured.
+func (a Playback) LocatePlayback(ctx context.Context, mediaObjectID int64) ([]apiserver.PlaybackFile, error) {
 	facts, err := a.Physical.PlaybackFacts(ctx, mediaObjectID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return apiserver.PlaybackFile{}, apiserver.ErrNoSuchFile
+		return nil, apiserver.ErrNoSuchFile
 	}
 	if err != nil {
-		return apiserver.PlaybackFile{}, err
+		return nil, err
 	}
 	paths, err := a.Physical.PathsForObject(ctx, mediaObjectID)
 	if err != nil {
-		return apiserver.PlaybackFile{}, err
+		return nil, err
 	}
 	snapshot := a.Cache.Snapshot()
+	var files []apiserver.PlaybackFile
 	for _, candidate := range paths {
 		if candidate.MissingSince.Valid {
 			continue
@@ -44,12 +45,15 @@ func (a Playback) LocatePlayback(ctx context.Context, mediaObjectID int64) (apis
 		if !found {
 			continue
 		}
-		return apiserver.PlaybackFile{
+		files = append(files, apiserver.PlaybackFile{
 			MediaObjectID: mediaObjectID, AbsolutePath: filepath.Join(root.Path, candidate.RelPath),
 			RootFolderID: candidate.RootFolderID, Kind: facts.Kind, DurationMs: facts.DurationMs,
 			Container: facts.Container, VideoCodec: facts.VideoCodec, AudioCodec: facts.AudioCodec,
 			Width: facts.Width, Height: facts.Height, OverallKbps: facts.OverallBitrate / 1000, VideoKbps: facts.VideoBitrate / 1000,
-		}, nil
+		})
 	}
-	return apiserver.PlaybackFile{}, apiserver.ErrNoSuchFile
+	if len(files) == 0 {
+		return nil, apiserver.ErrNoSuchFile
+	}
+	return files, nil
 }

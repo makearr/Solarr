@@ -5,6 +5,7 @@ import { Download, Globe, LoaderCircle } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
+import { useIsAdministrator } from "@/lib/useAdministrator";
 import { SKEW_TOLERANCE_MS, useServerClock } from "@/lib/useServerClock";
 import { useFooterItems, type FooterItem } from "@/lib/interfacePreferences";
 import { totalSpeed } from "@/lib/speedHistory";
@@ -18,6 +19,7 @@ import { formatBytes, queueQuery } from "./Queue";
 export function StatusBar() {
   const { recent, unread, connection, markRead } = useNotifications();
   const clock = useServerClock();
+  const administrator = useIsAdministrator();
   const [open, setOpen] = useState(false);
   const [items] = useFooterItems();
   const showing = (item: FooterItem) => items.some((entry) => entry.item === item && entry.shown);
@@ -31,14 +33,14 @@ export function StatusBar() {
   });
 
   // The address this host connects out from, which says whether traffic leaves past a VPN. Asking is what
-  // turns the server's check on; it asks its echo service at most once per its own interval.
+  // turns the server's check on; it asks its echo service at most once per its own interval. The host's address is an administrator's.
   const egress = useQuery({
     queryKey: ["egress"],
     queryFn: () => ok(api.GET("/system/egress")),
     staleTime: 5 * 60_000,
     refetchInterval: 30 * 60_000,
     retry: false,
-    enabled: showing("ip"),
+    enabled: showing("ip") && administrator,
   });
 
   // A fresh page has heard nothing live yet; the last download is still what just happened.

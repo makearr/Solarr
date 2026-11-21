@@ -11,15 +11,15 @@ import (
 )
 
 type fakePlayback struct {
-	file  apiserver.PlaybackFile
+	files []apiserver.PlaybackFile
 	err   error
 	works []int64
 }
 
 func (f *fakePlayback) WorksOfFile(context.Context, int64) ([]int64, error) { return f.works, nil }
 
-func (f *fakePlayback) LocatePlayback(context.Context, int64) (apiserver.PlaybackFile, error) {
-	return f.file, f.err
+func (f *fakePlayback) LocatePlayback(context.Context, int64) ([]apiserver.PlaybackFile, error) {
+	return f.files, f.err
 }
 
 func writeFixtureMedia(t *testing.T, fixture worksFixture, path string, content string) {
@@ -48,9 +48,9 @@ func TestPlayback_InfoAndRangedStream(t *testing.T) {
 	}
 	cookies := fixture.signIn(t, "listener")
 	writeFixtureMedia(t, fixture, "/media/music/a.flac", "0123456789")
-	fixture.playback.file = apiserver.PlaybackFile{
+	fixture.playback.files = []apiserver.PlaybackFile{{
 		MediaObjectID: 5, AbsolutePath: "/media/music/a.flac", RootFolderID: root.ID, DurationMs: 61000, AudioCodec: "flac",
-	}
+	}}
 
 	info := fixture.do(authedGet(t, cookies, "/api/v1/files/5/playback"))
 	if info.Code != http.StatusOK {
@@ -76,7 +76,7 @@ func TestPlayback_AFileOutsideTheCallersLibrariesDoesNotExist(t *testing.T) {
 	fixture.createUser(t, "stranger", settings.RoleReadonly)
 	cookies := fixture.signIn(t, "stranger")
 	writeFixtureMedia(t, fixture, "/media/music/a.flac", "0123456789")
-	fixture.playback.file = apiserver.PlaybackFile{MediaObjectID: 5, AbsolutePath: "/media/music/a.flac", RootFolderID: root.ID}
+	fixture.playback.files = []apiserver.PlaybackFile{{MediaObjectID: 5, AbsolutePath: "/media/music/a.flac", RootFolderID: root.ID}}
 
 	for _, path := range []string{"playback", "stream", "transcode"} {
 		if got := fixture.do(authedGet(t, cookies, "/api/v1/files/5/"+path)).Code; got != http.StatusNotFound {
@@ -93,7 +93,7 @@ func TestPlayback_ConvertingIsRefusedWithoutFFmpegWiring(t *testing.T) {
 		t.Fatalf("SetCategoryAccess: %v", err)
 	}
 	cookies := fixture.signIn(t, "viewer")
-	fixture.playback.file = apiserver.PlaybackFile{MediaObjectID: 6, AbsolutePath: "/media/video/a.mkv", RootFolderID: root.ID}
+	fixture.playback.files = []apiserver.PlaybackFile{{MediaObjectID: 6, AbsolutePath: "/media/video/a.mkv", RootFolderID: root.ID}}
 
 	if got := fixture.do(authedGet(t, cookies, "/api/v1/files/6/transcode")).Code; got != http.StatusServiceUnavailable {
 		t.Fatalf("transcode without a service = %d, want 503", got)
@@ -153,7 +153,7 @@ func TestFilePreview_ServedToWhoMayReadTheFileAndNotToAnyoneElse(t *testing.T) {
 		t.Fatal(err)
 	}
 	fixture.createUser(t, "stranger", settings.RoleReadonly)
-	fixture.playback.file = apiserver.PlaybackFile{MediaObjectID: 7, AbsolutePath: "/media/video/a.mkv", RootFolderID: root.ID, Kind: "video"}
+	fixture.playback.files = []apiserver.PlaybackFile{{MediaObjectID: 7, AbsolutePath: "/media/video/a.mkv", RootFolderID: root.ID, Kind: "video"}}
 	if err := fixture.fsys.MkdirAll("/config/previews/0", 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +192,7 @@ func TestPlayback_AFileOfABlockedWorkIsNotFound(t *testing.T) {
 	}
 	cookies := fixture.signIn(t, "listener")
 	writeFixtureMedia(t, fixture, "/media/music/a.flac", "0123456789")
-	fixture.playback.file = apiserver.PlaybackFile{MediaObjectID: 5, AbsolutePath: "/media/music/a.flac", RootFolderID: root.ID, AudioCodec: "flac"}
+	fixture.playback.files = []apiserver.PlaybackFile{{MediaObjectID: 5, AbsolutePath: "/media/music/a.flac", RootFolderID: root.ID, AudioCodec: "flac"}}
 	fixture.playback.works = []int64{7}
 	fixture.workEditor.carrying = map[int64]bool{7: true}
 
@@ -204,5 +204,30 @@ func TestPlayback_AFileOfABlockedWorkIsNotFound(t *testing.T) {
 	fixture.workEditor.carrying = map[int64]bool{}
 	if recorder := fixture.do(authedGet(t, cookies, "/api/v1/files/5/playback")); recorder.Code != http.StatusOK {
 		t.Errorf("a file of an unblocked work = %d, want 200", recorder.Code)
+	}
+}
+
+// SEC-13: a file placed in two roots plays from the root the caller may read, even when it is not the file's first path.
+func TestPlayback_AFileInSeveralRootsPlaysFromTheOneTheCallerMayRead(t *testing.T) {
+	fixture := newWorksFixture(t)
+	_, hidden := fixture.createCategoryWithRoot(t, "Hidden", "/media/hidden")
+	readable, shared := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	user := fixture.createUser(t, "listener", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, readable.ID, settings.PermissionRead); err != nil {
+		t.Fatal(err)
+	}
+	cookies := fixture.signIn(t, "listener")
+	writeFixtureMedia(t, fixture, "/media/music/a.flac", "readable")
+	fixture.playback.files = []apiserver.PlaybackFile{
+		{MediaObjectID: 5, AbsolutePath: "/media/hidden/a.flac", RootFolderID: hidden.ID, AudioCodec: "flac"},
+		{MediaObjectID: 5, AbsolutePath: "/media/music/a.flac", RootFolderID: shared.ID, AudioCodec: "flac"},
+	}
+
+	if stream := fixture.do(authedGet(t, cookies, "/api/v1/files/5/stream")); stream.Code != http.StatusOK || stream.Body.String() != "readable" {
+		t.Errorf("stream = %d %q, want 200 from the readable root", stream.Code, stream.Body)
+	}
+	fixture.playback.files = fixture.playback.files[:1]
+	if got := fixture.do(authedGet(t, cookies, "/api/v1/files/5/stream")).Code; got != http.StatusNotFound {
+		t.Errorf("stream of a file only in a hidden root = %d, want 404", got)
 	}
 }

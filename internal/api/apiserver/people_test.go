@@ -502,3 +502,41 @@ func TestFollowPerson_ARequestOnlyAccountIsRefused(t *testing.T) {
 		t.Errorf("unfollow: status %d, want 403", recorder.Code)
 	}
 }
+
+// V6 / SEC-13: a credit on a work carrying a tag the account is blocked from is left out of the person's page.
+func TestGetPerson_LeavesOutCreditsOnWorksWithATagTheAccountIsBlockedFrom(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, _ := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	user := fixture.createUser(t, "listener", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, settings.PermissionRead); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.cache.SetUserBlockedTags(t.Context(), user.ID, []settings.UserBlockedTag{{TagID: 1, Name: "Rock"}}); err != nil {
+		t.Fatal(err)
+	}
+	cookies := fixture.signIn(t, "listener")
+	fixture.people.detail = gen.PersonDetail{Id: 7, Name: "Vutu Doci", SortName: "Doci, Vutu", Aliases: []string{}, Genres: []string{}, Ids: map[string]string{}}
+	fixture.people.credits = []apiserver.PersonCreditRow{
+		{CategoryID: category.ID, Role: "artist", Work: apiserver.PersonWorkRow{ID: 41, MediaType: "music", Title: "Open Album", SortTitle: "open album"}},
+		{CategoryID: category.ID, Role: "artist", Work: apiserver.PersonWorkRow{ID: 42, MediaType: "music", Title: "Kept Album", SortTitle: "kept album"}},
+	}
+	fixture.workEditor.carrying = map[int64]bool{42: true}
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people/7"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	var body struct {
+		Credits []struct {
+			Work struct {
+				ID int64 `json:"id"`
+			} `json:"work"`
+		} `json:"credits"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Credits) != 1 || body.Credits[0].Work.ID != 41 {
+		t.Errorf("credits %+v, want only work 41", body.Credits)
+	}
+}

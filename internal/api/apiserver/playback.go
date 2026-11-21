@@ -28,8 +28,8 @@ import (
 // PlaybackLocator finds a file the built-in player may open. Defined here and implemented in
 // cmd/solarr/adapters, so this package never imports the library store.
 type PlaybackLocator interface {
-	// LocatePlayback answers ErrNoSuchFile for an id with no readable path.
-	LocatePlayback(ctx context.Context, mediaObjectID int64) (PlaybackFile, error)
+	// LocatePlayback answers every readable path of the file, one per root, and ErrNoSuchFile when there is none.
+	LocatePlayback(ctx context.Context, mediaObjectID int64) ([]PlaybackFile, error)
 }
 
 // PlaybackFile is a file's place and what the probe measured of it.
@@ -130,7 +130,7 @@ func (s *Server) playbackFile(w http.ResponseWriter, r *http.Request) (PlaybackF
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "the player is not available")
 		return PlaybackFile{}, "", false
 	}
-	file, err := s.playback.LocatePlayback(r.Context(), mediaObjectID)
+	files, err := s.playback.LocatePlayback(r.Context(), mediaObjectID)
 	if errors.Is(err, ErrNoSuchFile) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such file")
 		return PlaybackFile{}, "", false
@@ -139,11 +139,14 @@ func (s *Server) playbackFile(w http.ResponseWriter, r *http.Request) (PlaybackF
 		writeError(w, s.logger, err)
 		return PlaybackFile{}, "", false
 	}
+	// A file placed in several roots is the caller's through any root they may read, not only its first.
 	visibleRoots, _ := s.visibleAt(access, settings.PermissionRead)
-	if !slices.Contains(visibleRoots, file.RootFolderID) {
+	index := slices.IndexFunc(files, func(file PlaybackFile) bool { return slices.Contains(visibleRoots, file.RootFolderID) })
+	if index < 0 {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such file")
 		return PlaybackFile{}, "", false
 	}
+	file := files[index]
 	if s.fileKeptFrom(r.Context(), access, mediaObjectID) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such file")
 		return PlaybackFile{}, "", false

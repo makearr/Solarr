@@ -97,7 +97,8 @@ func (s *Server) workArtworkVisible(w http.ResponseWriter, r *http.Request, id i
 		writeError(w, s.logger, err)
 		return false
 	}
-	if !sharesAnID(rootFolderIDs, row.RootFolderIDs) && !sharesAnID(categoryIDs, row.CategoryIDs) {
+	if (!sharesAnID(rootFolderIDs, row.RootFolderIDs) && !sharesAnID(categoryIDs, row.CategoryIDs)) ||
+		s.keptFromWork(r.Context(), access, id) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
 		return false
 	}

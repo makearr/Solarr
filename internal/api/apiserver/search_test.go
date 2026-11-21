@@ -203,3 +203,44 @@ func TestSearch_UnauthenticatedAnswers401(t *testing.T) {
 		t.Errorf("status = %d, want 401", recorder.Code)
 	}
 }
+
+// V6 / SEC-13: a result carrying a tag the account is blocked from is left out of its search.
+func TestSearch_LeavesOutWorksWithATagTheAccountIsBlockedFrom(t *testing.T) {
+	fixture, search := newSearchFixture(t)
+	category, _ := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	user := fixture.createUser(t, "listener", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, settings.PermissionRead); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.cache.SetUserBlockedTags(t.Context(), user.ID, []settings.UserBlockedTag{{TagID: 1, Name: "Rock"}}); err != nil {
+		t.Fatal(err)
+	}
+	cookies := fixture.signIn(t, "listener")
+	search.rows = []apiserver.SearchResultRow{
+		{Work: apiserver.WorkRow{ID: 1, MediaType: "music", Title: "Kept Album", SortTitle: "kept album",
+			AddedAt: fixture.clock.Now(), UpdatedAt: fixture.clock.Now()}, Score: 0.1},
+		{Work: apiserver.WorkRow{ID: 2, MediaType: "music", Title: "Kept Album Live", SortTitle: "kept album live",
+			AddedAt: fixture.clock.Now(), UpdatedAt: fixture.clock.Now()}, Score: 0.2},
+	}
+	fixture.workEditor.carrying = map[int64]bool{2: true}
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/search?q=kept"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	var body []struct {
+		Work struct {
+			ID int64 `json:"id"`
+		} `json:"work"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	var ids []int64
+	for _, result := range body {
+		ids = append(ids, result.Work.ID)
+	}
+	if !slices.Equal(ids, []int64{1}) {
+		t.Errorf("results %v, want only work 1", ids)
+	}
+}

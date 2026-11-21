@@ -5,7 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/jobs"
 )
 
 func TestActionLevels(t *testing.T) {
@@ -41,5 +43,17 @@ func TestValidPassword(t *testing.T) {
 		if got := validPassword(password); got != want {
 			t.Errorf("validPassword(%q) = %q, want %q", password, got, want)
 		}
+	}
+}
+
+// Jobs of no library (backups, maintenance) are the administrator's and the system's (Q-SEC1b).
+func TestVisibilityFor_SystemJobsAreTheAdministrators(t *testing.T) {
+	for role, want := range map[settings.Role]bool{settings.RoleAdmin: true, settings.RoleUser: false, settings.RoleReadonly: false} {
+		if got := visibilityFor(authz.ForUser(nil, settings.User{ID: 1, Role: role})); !reflect.DeepEqual(got, jobs.Visibility{System: want}) {
+			t.Errorf("visibilityFor(%s) = %+v, want System %v", role, got, want)
+		}
+	}
+	if got := visibilityFor(authz.System(nil)); !got.System {
+		t.Errorf("visibilityFor(system) = %+v, want System", got)
 	}
 }

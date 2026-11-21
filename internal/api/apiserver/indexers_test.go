@@ -200,7 +200,7 @@ func TestDeleteIndexer_MissingAnswers404(t *testing.T) {
 }
 
 // A proxy's password is configuration only an administrator may read; the indexer list is open to everyone signed in.
-func TestListIndexers_RedactsTheProxyPasswordForANonAdministrator(t *testing.T) {
+func TestListIndexers_IsAnAdministratorsAndShowsTheProxyWhole(t *testing.T) {
 	fixture := newWorksFixture(t)
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	fixture.createUser(t, "viewer", settings.RoleReadonly)
@@ -211,24 +211,17 @@ func TestListIndexers_RedactsTheProxyPasswordForANonAdministrator(t *testing.T) 
 		t.Fatalf("CreateIndexer: %v", err)
 	}
 
-	proxyOf := func(username string) string {
-		t.Helper()
-		recorder := fixture.do(authedGet(t, fixture.signIn(t, username), "/api/v1/indexers"))
-		if recorder.Code != http.StatusOK {
-			t.Fatalf("%s: status = %d, body = %s", username, recorder.Code, recorder.Body)
-		}
-		var listed []struct {
-			EgressProxyURL string `json:"egress_proxy_url"`
-		}
-		if err := json.Unmarshal(recorder.Body.Bytes(), &listed); err != nil || len(listed) != 1 {
-			t.Fatalf("%s: decode %s: %v", username, recorder.Body, err)
-		}
-		return listed[0].EgressProxyURL
+	if recorder := fixture.do(authedGet(t, fixture.signIn(t, "viewer"), "/api/v1/indexers")); recorder.Code != http.StatusForbidden {
+		t.Errorf("viewer: status = %d, want 403", recorder.Code)
 	}
-	if got := proxyOf("viewer"); bytes.Contains([]byte(got), []byte("hunter2")) || got == "" {
-		t.Errorf("viewer sees proxy %q, want it without the password", got)
+	recorder := fixture.do(authedGet(t, fixture.signIn(t, "admin"), "/api/v1/indexers"))
+	var listed []struct {
+		EgressProxyURL string `json:"egress_proxy_url"`
 	}
-	if got := proxyOf("admin"); got != "socks5://user:hunter2@proxy.example:1080" {
+	if err := json.Unmarshal(recorder.Body.Bytes(), &listed); err != nil || len(listed) != 1 {
+		t.Fatalf("admin: status %d, decode %s: %v", recorder.Code, recorder.Body, err)
+	}
+	if got := listed[0].EgressProxyURL; got != "socks5://user:hunter2@proxy.example:1080" {
 		t.Errorf("admin sees proxy %q, want it whole", got)
 	}
 }

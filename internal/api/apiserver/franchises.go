@@ -113,6 +113,15 @@ func (s *Server) ListWorkFranchises(w http.ResponseWriter, r *http.Request, id i
 	if !ok {
 		return
 	}
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.keptFromWork(r.Context(), access, id) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
+		return
+	}
 	franchises, err := s.franchises.OfWork(r.Context(), category.ID, id)
 	if err != nil {
 		s.writeFranchiseError(w, err)

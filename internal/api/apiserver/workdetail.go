@@ -823,7 +823,8 @@ func (s *Server) ListWorkParts(w http.ResponseWriter, r *http.Request, id int64,
 		writeError(w, s.logger, err)
 		return
 	}
-	if !workDetailVisible(visibleRoots, visibleCategories, WorkDetailRow{RootFolderIDs: roots, CategoryIDs: categories}) {
+	if !workDetailVisible(visibleRoots, visibleCategories, WorkDetailRow{RootFolderIDs: roots, CategoryIDs: categories}) ||
+		s.keptFromWork(r.Context(), access, id) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
 		return
 	}
@@ -1129,7 +1130,8 @@ func (s *Server) GetWorkFileDetails(w http.ResponseWriter, r *http.Request, id i
 		writeError(w, s.logger, err)
 		return
 	}
-	if !workDetailVisible(visibleRoots, visibleCategories, WorkDetailRow{RootFolderIDs: roots, CategoryIDs: categories}) {
+	if !workDetailVisible(visibleRoots, visibleCategories, WorkDetailRow{RootFolderIDs: roots, CategoryIDs: categories}) ||
+		s.keptFromWork(r.Context(), access, id) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
 		return
 	}
