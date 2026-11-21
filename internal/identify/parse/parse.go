@@ -265,7 +265,7 @@ func parseTitle(title, knownArtist string) Result {
 
 	return Result{
 		Identity: identity, Attributes: attributes,
-		Confidence: confidenceOf(identity, claims.unparsed, core),
+		Confidence: confidenceOf(identity, claims.unparsed, core, group),
 		Unparsed:   claims.unparsed,
 	}
 }
@@ -695,7 +695,7 @@ func claimField(field string, claims *claimSet) bool {
 // confidenceOf is deliberately simple: it falls when identity did not resolve,
 // and further with how much of the core string went unclaimed. Tuned against the
 // golden corpus, not a formula handed down from elsewhere.
-func confidenceOf(identity Identity, unparsed []string, core string) float64 {
+func confidenceOf(identity Identity, unparsed []string, core, group string) float64 {
 	if identity.Artist == "" || identity.Album == "" {
 		return 0.2
 	}
@@ -708,8 +708,21 @@ func confidenceOf(identity Identity, unparsed []string, core string) float64 {
 	if confidence > 0.95 {
 		confidence = 0.95 // a parse is never certain the way an embedded MBID is
 	}
-	if confidence < 0.2 {
-		confidence = 0.2
+	// Words still glued with dots were never split into words, and an album that is the release group is the tail of
+	// the name read as a title: either way the split is doubtful.
+	if dottedRunRe.MatchString(identity.Artist) || dottedRunRe.MatchString(identity.Album) {
+		confidence -= dottedRunPenalty
 	}
-	return confidence
+	if group != "" && strings.EqualFold(identity.Album, group) {
+		confidence = min(confidence, albumIsGroupCeiling)
+	}
+	return max(confidence, 0.2)
 }
+
+// dottedRunRe is three or more words joined by dots ("Some.Album.Title"), which a parsed name has no reason to keep.
+var dottedRunRe = regexp.MustCompile(`[A-Za-z]{2,}\.[A-Za-z]{2,}\.[A-Za-z]{2,}`)
+
+const (
+	dottedRunPenalty    = 0.3
+	albumIsGroupCeiling = 0.4
+)
