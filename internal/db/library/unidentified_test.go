@@ -146,6 +146,15 @@ func TestUnidentified_ARepeatedAnswerBacksTheRetryOffAndAChangeResetsIt(t *testi
 	if row := record(at); row.Tries != 0 || row.NextTryAt != 0 {
 		t.Fatalf("a different answer: tries %d next %d, want a fresh start", row.Tries, row.NextTryAt)
 	}
+	if row := record(at + 10); row.Tries != 1 {
+		t.Fatalf("same answer again: tries %d, want 1", row.Tries)
+	}
+	if _, err := opened.WriteDB().ExecContext(t.Context(), `UPDATE media_object SET size_bytes = size_bytes + 1 WHERE id = ?`, id); err != nil {
+		t.Fatalf("grow the file: %v", err)
+	}
+	if row := record(at + 20); row.Tries != 0 || row.NextTryAt != 0 {
+		t.Fatalf("a changed file: tries %d next %d, want a fresh start", row.Tries, row.NextTryAt)
+	}
 }
 
 func TestUnidentified_ListDueSkipsFilesWhoseRetryIsNotDue(t *testing.T) {

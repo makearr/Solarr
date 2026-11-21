@@ -393,6 +393,15 @@ func TestManualCommitter_CommitHeldRefusesASharedFolderUnitWhoseFileIsGone(t *te
 	}
 }
 
+func TestManualCommitter_CommitHeldRefusesASharedFolderUnitWhoseFileChangedSize(t *testing.T) {
+	fx, units := sharedFolderSession(t)
+	writeFile(t, fx.fsys, filepath.Join(root, "Messy/02 Fourth.flac"), 7777)
+	_, err := manualCommitter(fx, &fakeCommitter{workID: seedWork(t, fx)}).CommitHeld(t.Context(), units[1].ID)
+	if !errors.Is(err, importjob.ErrUnitChanged) {
+		t.Errorf("err = %v, want ErrUnitChanged", err)
+	}
+}
+
 // A session's own placements were already undone by a revert (ClearImportUnitPlacement
 // does not touch decision, only work_id/edition_id) -- CommitHeld must not
 // resurrect anything into it.

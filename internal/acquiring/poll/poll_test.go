@@ -471,6 +471,23 @@ func TestPoll_AnArchiveAndItsLooseFilesAreJudgedTogether(t *testing.T) {
 	}
 }
 
+// A session still running holds the verdict back, even though another one of the download is over.
+func TestPoll_ADownloadWithAnUnfinishedSessionIsNotJudged(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	e.finishImport(t, sent, false, library.UnitSkip)
+	if _, err := e.sessions.Create(t.Context(), library.NewSession{
+		SourcePath: "/downloads/complete/Heka-Zanuvode", Origin: library.ImportOriginAcquisition,
+		AcquisitionID: &sent.ID, Threshold: 0.9, StartedAt: 4,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	e.run(t)
+	if got := e.state(t, sent.ID); got.State != poll.StateImporting {
+		t.Errorf("= %s, want IMPORTING while one of its sessions is unfinished", got.State)
+	}
+}
+
 // Between the two sessions the job is still running: the first alone is not judged.
 func TestPoll_AnImportStillRunningIsNotJudged(t *testing.T) {
 	e := newEnv(t)

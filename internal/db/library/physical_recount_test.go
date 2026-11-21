@@ -59,3 +59,67 @@ func TestFinishPendingRecounts_BringsItemsRightAfterAStopMidMarking(t *testing.T
 		t.Fatalf("pending after finishing = %v, %v; want none", pending, err)
 	}
 }
+
+// A marking whose recount failed (or never ran) stays on record, so the next start recounts it.
+func TestMarking_ARecountThatFailsLeavesTheMarkingForTheNextStart(t *testing.T) {
+	marks := map[string]struct {
+		mark    func(p library.Physical, firstPath int64, at time.Time) error
+		present int64
+		state   string
+	}{
+		"by id": {mark: func(p library.Physical, firstPath int64, at time.Time) error {
+			_, err := p.MarkPathsMissing(t.Context(), 1, []int64{firstPath}, at.Add(time.Hour))
+			return err
+		}, present: 1, state: "PARTIAL"},
+		"by sweep": {mark: func(p library.Physical, _ int64, at time.Time) error {
+			_, err := p.MarkMissing(t.Context(), 1, at.Add(time.Hour))
+			return err
+		}, present: 0, state: "MISSING"},
+	}
+	for name, c := range marks {
+		t.Run(name, func(t *testing.T) { checkFailedRecountStaysPending(t, c.mark, c.present, c.state) })
+	}
+}
+
+func checkFailedRecountStaysPending(t *testing.T, mark func(p library.Physical, firstPath int64, at time.Time) error, present int64, state string) {
+	t.Helper()
+	opened, queries := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	at := time.Unix(1_700_000_000, 0).UTC()
+	ids, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "Show/S01E01.mkv", SizeBytes: 1, QuickHash: "one", FirstSeenAt: at},
+		{RelPath: "Show/S01E02.mkv", SizeBytes: 1, QuickHash: "two", FirstSeenAt: at},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	work := createWork(t, opened, "tv", "Invented Show")
+	item := createDesired(t, opened, work.ID, "SET", 2)
+	attach(t, opened, item.ID, ids[0].MediaObjectID, "primary", "s1:e1")
+	attach(t, opened, item.ID, ids[1].MediaObjectID, "primary", "s1:e2")
+	if err := physical.RecomputeWorkItems(t.Context(), work.ID); err != nil {
+		t.Fatalf("RecomputeWorkItems: %v", err)
+	}
+	if _, err := opened.WriteDB().ExecContext(t.Context(),
+		`CREATE TRIGGER refuse_recount BEFORE UPDATE ON desired_item BEGIN SELECT RAISE(ABORT, 'injected'); END`); err != nil {
+		t.Fatalf("create trigger: %v", err)
+	}
+
+	if err := mark(physical, ids[0].LibraryPathID, at); err == nil {
+		t.Fatal("marking succeeded although the recount was refused")
+	}
+	pending, err := queries.ListMissingRecounts(t.Context())
+	if err != nil || len(pending) != 1 {
+		t.Fatalf("pending after the failed recount = %v, %v; want the one marking", pending, err)
+	}
+	if _, err := opened.WriteDB().ExecContext(t.Context(), `DROP TRIGGER refuse_recount`); err != nil {
+		t.Fatalf("drop trigger: %v", err)
+	}
+	if err := physical.FinishPendingRecounts(t.Context()); err != nil {
+		t.Fatalf("FinishPendingRecounts: %v", err)
+	}
+	got, err := queries.GetDesiredItem(t.Context(), item.ID)
+	if err != nil || got.State != state || got.PresentCount != present {
+		t.Fatalf("item = %+v, %v; want %s %d", got, err, state, present)
+	}
+}
