@@ -3,6 +3,8 @@ package apiserver
 import (
 	"context"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -36,5 +38,26 @@ func TestTellCompanion_APanickingCompanionIsLoggedNotFatal(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("the companion's panic was not reported")
+	}
+}
+
+// A request that wrote and succeeded is reported to the after-write hook; a read or a refusal is not (RAM-1).
+func TestLogRequest_ReportsOnlySuccessfulWrites(t *testing.T) {
+	writes := 0
+	server := &Server{logger: slog.New(slog.DiscardHandler), afterWrite: func() { writes++ }}
+	handler := server.logRequest(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/refused" {
+			w.WriteHeader(http.StatusConflict)
+		}
+	}))
+	for method, path := range map[string]string{http.MethodGet: "/ok", http.MethodDelete: "/refused"} {
+		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(method, path, nil))
+	}
+	if writes != 0 {
+		t.Fatalf("hook called %d times for a read and a refused write, want 0", writes)
+	}
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/ok", nil))
+	if writes != 1 {
+		t.Errorf("hook called %d times after a successful write, want 1", writes)
 	}
 }

@@ -260,6 +260,9 @@ type Config struct {
 	PlaybackTurns iogate.Turns
 	// ArrCompanion is told of each add when Solarr runs as an *Arr's companion. Optional.
 	ArrCompanion ArrCompanion
+	// AfterWrite is called after each API write that succeeded (a recycle, a removal, a setting), so state kept in RAM
+	// can be copied to disk soon after. Optional; it must not block.
+	AfterWrite func()
 	// MemoryCopies serves the Cache page's RAM options. Optional: nil answers 503.
 	MemoryCopies MemoryCopies
 	// Playback finds the file the built-in player opens; Transcoder converts it. Both optional: without them the player answers 503.
@@ -419,6 +422,7 @@ type Server struct {
 	taskHistory             TaskHistory
 	databaseAdmin           DatabaseAdmin
 	arrCompanion            ArrCompanion
+	afterWrite              func()
 	memoryCopies            MemoryCopies
 	playback                PlaybackLocator
 	transcoder              *transcode.Service
@@ -573,6 +577,7 @@ func New(config Config) (*Server, error) {
 		taskHistory:             config.TaskHistory,
 		databaseAdmin:           config.DatabaseAdmin,
 		arrCompanion:            config.ArrCompanion,
+		afterWrite:              config.AfterWrite,
 		memoryCopies:            config.MemoryCopies,
 		playback:                config.Playback,
 		transcoder:              config.Transcoder,
@@ -1149,6 +1154,10 @@ func (s *Server) logRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(recorder, r)
+		if s.afterWrite != nil && recorder.status < http.StatusBadRequest &&
+			(r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch || r.Method == http.MethodDelete) {
+			s.afterWrite()
+		}
 		s.logger.Debug("request",
 			slog.String("method", r.Method),
 			slog.String("path", r.URL.Path),
