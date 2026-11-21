@@ -126,11 +126,12 @@ func titleDistance(claimed, candidate string) (DistancePart, bool) {
 	if claimed == "" || candidate == "" {
 		return DistancePart{}, false
 	}
-	similarity, method := bestTitleSimilarity(claimed, candidate)
-	if distinctive, ok := distinctiveSimilarity(claimed, candidate); ok && distinctive < similarity {
+	normalizedClaimed, normalizedCandidate := normalizeTitle(claimed), normalizeTitle(candidate)
+	similarity, method := bestNormalizedSimilarity(claimed, candidate, normalizedClaimed, normalizedCandidate)
+	if distinctive, ok := distinctiveSimilarity(normalizedClaimed, normalizedCandidate); ok && distinctive < similarity {
 		similarity, method = distinctive, "distinctive words"
 	}
-	if differentNumbers(claimed, candidate) {
+	if differentNumbers(normalizedClaimed, normalizedCandidate) {
 		similarity, method = min(similarity, differentNumbersSimilarity), "different numbers"
 	}
 	return DistancePart{Dimension: DimensionTitle, Distance: 1 - similarity,
@@ -145,8 +146,8 @@ var romanNumerals = map[string]int{"ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, 
 
 // sequelNumbers are the standalone numbers of a title: one to three digits or a roman numeral from II, never a
 // year and never a disc number. A title with none is the first of its series, so it reads as {1}.
-func sequelNumbers(title string) map[int]bool {
-	tokens := strings.Fields(normalizeTitle(title))
+func sequelNumbers(normalized string) map[int]bool {
+	tokens := strings.Fields(normalized)
 	found := map[int]bool{}
 	for index, token := range tokens {
 		number, err := strconv.Atoi(token)
@@ -182,7 +183,12 @@ func differentNumbers(a, b string) bool {
 // bestTitleSimilarity is the shared "best of token-set overlap and Jaro-Winkler"
 // comparison behind both titleDistance and TitleSimilarity.
 func bestTitleSimilarity(a, b string) (score float64, method string) {
-	normalizedA, normalizedB := normalizeTitle(a), normalizeTitle(b)
+	return bestNormalizedSimilarity(a, b, normalizeTitle(a), normalizeTitle(b))
+}
+
+// bestNormalizedSimilarity is bestTitleSimilarity for titles already normalised, so a caller that normalised them
+// once does not do it again; the raw titles are only for the symbol-only fallback.
+func bestNormalizedSimilarity(a, b, normalizedA, normalizedB string) (score float64, method string) {
 	// Normalising empties a title of symbols ("+", "÷"): those are equal only as written, never all alike.
 	if normalizedA == "" || normalizedB == "" {
 		if symbolTitlesEqual(a, b) {
@@ -223,12 +229,12 @@ var descriptorWords = map[string]bool{
 	"ep": true, "single": true,
 }
 
-// distinctiveSimilarity compares two titles by the words that are not descriptors. ok is false when either has
-// none left, in which case the whole title is all there is to compare.
+// distinctiveSimilarity compares two normalised titles by the words that are not descriptors. ok is false when either
+// has none left, in which case the whole title is all there is to compare.
 func distinctiveSimilarity(a, b string) (float64, bool) {
-	strip := func(title string) string {
+	strip := func(normalized string) string {
 		var kept []string
-		for _, word := range strings.Fields(normalizeTitle(title)) {
+		for _, word := range strings.Fields(normalized) {
 			if !descriptorWords[word] {
 				kept = append(kept, word)
 			}
