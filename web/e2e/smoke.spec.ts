@@ -270,3 +270,28 @@ async function signIn(page: Page) {
   await page.getByRole("button", { name: /sign in|log in/i }).click();
   await expect(username).toBeHidden();
 }
+
+// 2026-11-21: screens that were built and never opened render without the error screen, and keep a screenshot to read.
+const SCREENS = [
+  "/settings/general", "/settings/scheduler", "/settings/database", "/settings/disk", "/settings/cache", "/settings/user",
+  "/settings/backups", "/settings/network", "/settings/tags", "/settings/logs", "/settings/metadata", "/settings/libraries",
+  "/storage/import", "/storage/rename", "/storage/duplicates", "/library/1/duplicates", "/library/health", "/unidentified",
+  "/connections/indexers", "/connections/downloaders",
+];
+for (const route of SCREENS) {
+  test(`${route} opens without the error screen`, async ({ page }) => {
+    await signIn(page);
+    await page.goto(route);
+    await expect(page.locator("main, [role=main], #root").first()).toBeVisible();
+    await page.waitForTimeout(800);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await page.screenshot({ path: `/e2e-out/screen${route.replace(/\//g, "-")}.png` });
+  });
+}
+
+test("General settings offers to read unreadable files again", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/settings/general");
+  await page.getByRole("button", { name: "Read unreadable files again" }).click();
+  await expect(page.getByText(/files will be read again in the background/)).toBeVisible();
+});

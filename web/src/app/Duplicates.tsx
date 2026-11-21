@@ -286,7 +286,7 @@ export function Duplicates() {
         <h1 className="text-lg font-semibold">Duplicates</h1>
         <p className="text-sm text-ink-muted">
           {info?.duplicates_by_name
-            ? `The same recording stored more than once: the same artist and title, lengths within a few seconds, in any format and on any ${words.work}.`
+            ? `The same recording stored more than once: the same audio by its fingerprint (the same artist and title until a file is fingerprinted), lengths within a few seconds, in any format and on any ${words.work}.`
             : `Two files on one ${words.part}.`}{" "}
           The library suggests the copy closer to its target quality; you decide. Giving a copy up either links its file to the
           kept one (so the other {words.work} keeps its {words.part}) or moves it to the recycle bin. Files the probe has not
