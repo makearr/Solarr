@@ -497,6 +497,7 @@ type Querier interface {
 	GetPersonArtistMBID(ctx context.Context, personID int64) (string, error)
 	GetPersonByExternalID(ctx context.Context, arg GetPersonByExternalIDParams) (Person, error)
 	GetProbeFailureAttempts(ctx context.Context, mediaObjectID int64) (int64, error)
+	GetProbeFailureRaw(ctx context.Context, mediaObjectID int64) (string, error)
 	GetRecycleBin(ctx context.Context, id int64) (RecycleBin, error)
 	GetRequest(ctx context.Context, id int64) (Request, error)
 	// Per-root sweep progress (section 10.4). Column lists follow table order, or sqlc

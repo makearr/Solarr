@@ -632,6 +632,17 @@ func (q *Queries) GetProbeFailureAttempts(ctx context.Context, mediaObjectID int
 	return attempts, err
 }
 
+const getProbeFailureRaw = `-- name: GetProbeFailureRaw :one
+SELECT raw FROM media_probe_failure WHERE media_object_id = ?
+`
+
+func (q *Queries) GetProbeFailureRaw(ctx context.Context, mediaObjectID int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getProbeFailureRaw, mediaObjectID)
+	var raw string
+	err := row.Scan(&raw)
+	return raw, err
+}
+
 const getVideoFacts = `-- name: GetVideoFacts :one
 SELECT o.id, o.overall_bitrate, o.audio_bitrate, o.video_bitrate, o.size_bytes, o.height, o.duration_ms,
        a.audio_codec, a.video_codec, a.container, a.lossless, a.languages,
@@ -2391,10 +2402,10 @@ func (q *Queries) UnlinkWorksOfPathFromRoot(ctx context.Context, arg UnlinkWorks
 }
 
 const upsertProbeFailure = `-- name: UpsertProbeFailure :exec
-INSERT INTO media_probe_failure (media_object_id, attempts, last_error, last_attempt_at, retry_at, size_bytes)
-VALUES (?1, 1, ?2, ?3, ?4, ?5)
+INSERT INTO media_probe_failure (media_object_id, attempts, last_error, last_attempt_at, retry_at, size_bytes, raw)
+VALUES (?1, 1, ?2, ?3, ?4, ?5, ?6)
 ON CONFLICT (media_object_id) DO UPDATE SET
-  attempts = media_probe_failure.attempts + 1, last_error = excluded.last_error,
+  attempts = media_probe_failure.attempts + 1, last_error = excluded.last_error, raw = excluded.raw,
   last_attempt_at = excluded.last_attempt_at, retry_at = excluded.retry_at, size_bytes = excluded.size_bytes
 `
 
@@ -2404,6 +2415,7 @@ type UpsertProbeFailureParams struct {
 	At            int64
 	RetryAt       int64
 	SizeBytes     int64
+	Raw           string
 }
 
 func (q *Queries) UpsertProbeFailure(ctx context.Context, arg UpsertProbeFailureParams) error {
@@ -2413,6 +2425,7 @@ func (q *Queries) UpsertProbeFailure(ctx context.Context, arg UpsertProbeFailure
 		arg.At,
 		arg.RetryAt,
 		arg.SizeBytes,
+		arg.Raw,
 	)
 	return err
 }

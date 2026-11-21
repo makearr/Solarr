@@ -159,11 +159,12 @@ func (j *Job) Run(ctx context.Context, request jobs.Job) error {
 			afterID = batch[len(batch)-1].MediaObjectID
 			total += len(batch)
 			request.Progress.Add(int64(len(batch)))
-			for file, err := range j.probeBatch(ctx, batch) {
+			for failure := range j.probeBatch(ctx, batch) {
+				file, err := failure.file, failure.err
 				failed++
 				// One file failing is not a reason to stop the sweep; it is remembered and asked again after a wait.
 				j.logger.WarnContext(ctx, "probe failed", slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", err))
-				if rememberErr := j.physical.RecordProbeFailure(ctx, file.MediaObjectID, file.SizeBytes, err.Error(), j.clock.Now()); rememberErr != nil {
+				if rememberErr := j.physical.RecordProbeFailure(ctx, file.MediaObjectID, file.SizeBytes, err.Error(), failure.raw, j.clock.Now()); rememberErr != nil {
 					j.logger.WarnContext(ctx, "remember probe failure failed", slog.Any("error", rememberErr))
 				}
 			}
@@ -398,7 +399,7 @@ func (j *Job) hashFile(ctx context.Context, file library.UnmeasuredFile) error {
 
 // probeBatch reads a whole batch at once (the tool runs its files side by side up to its own limit) and records what
 // each answered; it returns the files that failed, each with why.
-func (j *Job) probeBatch(ctx context.Context, files []library.UnmeasuredFile) func(yield func(library.UnmeasuredFile, error) bool) {
+func (j *Job) probeBatch(ctx context.Context, files []library.UnmeasuredFile) func(yield func(failedFile) bool) {
 	paths := make([]string, 0, len(files))
 	asked := make([]library.UnmeasuredFile, 0, len(files))
 	var failures []failedFile
@@ -409,7 +410,7 @@ func (j *Job) probeBatch(ctx context.Context, files []library.UnmeasuredFile) fu
 		}
 		root, found := j.roots.RootFolder(file.RootFolderID)
 		if !found {
-			failures = append(failures, failedFile{file, fmt.Errorf("root folder %d is not configured", file.RootFolderID)})
+			failures = append(failures, failedFile{file: file, err: fmt.Errorf("root folder %d is not configured", file.RootFolderID)})
 			continue
 		}
 		paths = append(paths, path.Join(root.Path, file.RelPath))
@@ -423,20 +424,20 @@ func (j *Job) probeBatch(ctx context.Context, files []library.UnmeasuredFile) fu
 	for index, file := range asked {
 		switch {
 		case err != nil:
-			failures = append(failures, failedFile{file, fmt.Errorf("ffprobe: %w", err)})
+			failures = append(failures, failedFile{file: file, err: fmt.Errorf("ffprobe: %w", err)})
 		case index >= len(probes):
-			failures = append(failures, failedFile{file, fmt.Errorf("ffprobe returned %d results for %d files", len(probes), len(asked))})
+			failures = append(failures, failedFile{file: file, err: fmt.Errorf("ffprobe returned %d results for %d files", len(probes), len(asked))})
 		case probes[index].Err != nil:
-			failures = append(failures, failedFile{file, probes[index].Err})
+			failures = append(failures, failedFile{file, probes[index].Err, probes[index].Raw})
 		default:
 			if recordErr := j.record(ctx, file, paths[index], probes[index]); recordErr != nil {
-				failures = append(failures, failedFile{file, recordErr})
+				failures = append(failures, failedFile{file: file, err: recordErr})
 			}
 		}
 	}
-	return func(yield func(library.UnmeasuredFile, error) bool) {
+	return func(yield func(failedFile) bool) {
 		for _, failure := range failures {
-			if !yield(failure.file, failure.err) {
+			if !yield(failure) {
 				return
 			}
 		}
@@ -446,6 +447,8 @@ func (j *Job) probeBatch(ctx context.Context, files []library.UnmeasuredFile) fu
 type failedFile struct {
 	file library.UnmeasuredFile
 	err  error
+	// raw is what ffprobe printed, kept with the failure.
+	raw string
 }
 
 func (j *Job) record(ctx context.Context, file library.UnmeasuredFile, absolute string, probe mediatool.Probe) error {

@@ -208,12 +208,12 @@ func (s *Subprocess) probeOne(ctx context.Context, path string) Probe {
 	output, err := s.runner.Run(bounded, ffprobeBinary,
 		"-v", "error", "-protocol_whitelist", "file", "-print_format", "json", "-show_format", "-show_streams", path)
 	if err != nil {
-		return Probe{Path: path, Err: err}
+		return Probe{Path: path, Err: err, Raw: rawOutput(output)}
 	}
 
 	probe, err := parseProbe(output)
 	if err != nil {
-		return Probe{Path: path, Err: fmt.Errorf("mediatool: probe %s: %w", path, err)}
+		return Probe{Path: path, Err: fmt.Errorf("mediatool: probe %s: %w", path, err), Raw: rawOutput(output)}
 	}
 	// The path asked for, never the filename ffprobe echoed: a tool's idea of the
 	// name it was given is not something a result should be matched on.
@@ -419,4 +419,9 @@ func firstTag(tags map[string]string, names ...string) string {
 		}
 	}
 	return ""
+}
+
+// rawOutput is the part of a failed probe's output that is kept.
+func rawOutput(output []byte) string {
+	return string(output[:min(len(output), RawLimit)])
 }

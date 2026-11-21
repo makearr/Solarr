@@ -611,6 +611,7 @@ type MediaProbeFailure struct {
 	LastAttemptAt int64
 	RetryAt       int64
 	SizeBytes     int64
+	Raw           string
 }
 
 type MissingRecount struct {

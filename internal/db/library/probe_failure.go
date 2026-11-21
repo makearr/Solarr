@@ -32,7 +32,7 @@ func ProbeRetryAfter(attempts int64) time.Duration {
 
 // RecordProbeFailure remembers that ffprobe could not read a file of this size, so the probe sweep leaves it alone
 // until the wait is over or the file changes size.
-func (p Physical) RecordProbeFailure(ctx context.Context, mediaObjectID, sizeBytes int64, reason string, at time.Time) error {
+func (p Physical) RecordProbeFailure(ctx context.Context, mediaObjectID, sizeBytes int64, reason, raw string, at time.Time) error {
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
 		attempts, err := queries.GetProbeFailureAttempts(ctx, mediaObjectID)
@@ -40,7 +40,7 @@ func (p Physical) RecordProbeFailure(ctx context.Context, mediaObjectID, sizeByt
 			return err
 		}
 		return queries.UpsertProbeFailure(ctx, librarydb.UpsertProbeFailureParams{
-			MediaObjectID: mediaObjectID, LastError: reason, At: at.Unix(),
+			MediaObjectID: mediaObjectID, LastError: reason, Raw: raw, At: at.Unix(),
 			RetryAt: at.Add(ProbeRetryAfter(attempts + 1)).Unix(), SizeBytes: sizeBytes,
 		})
 	})
@@ -71,4 +71,13 @@ func (p Physical) ForgetProbeFailures(ctx context.Context) (int64, error) {
 		return 0, fmt.Errorf("library: forget probe failures: %w", err)
 	}
 	return forgotten, nil
+}
+
+// ProbeFailureRaw is what ffprobe printed the last time it could not read the file; empty when it printed nothing.
+func (p Physical) ProbeFailureRaw(ctx context.Context, mediaObjectID int64) (string, error) {
+	raw, err := librarydb.New(p.store.Read()).GetProbeFailureRaw(ctx, mediaObjectID)
+	if err != nil {
+		return "", fmt.Errorf("library: probe failure raw %d: %w", mediaObjectID, err)
+	}
+	return raw, nil
 }

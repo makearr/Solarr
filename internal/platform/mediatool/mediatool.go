@@ -101,7 +101,12 @@ type Probe struct {
 	// Err is why this one file failed, when the rest of the batch succeeded. A
 	// batch does not fail because one file in it is unreadable.
 	Err error
+	// Raw is what ffprobe printed when the file failed, cut to RawLimit bytes; empty for a file that probed.
+	Raw string
 }
+
+// RawLimit is how much of a failed probe's output is kept.
+const RawLimit = 4096
 
 // Fingerprint is one file's acoustic fingerprint (ADR-35). Chromaprint identifies
 // the same audio across formats, which no hash can do.

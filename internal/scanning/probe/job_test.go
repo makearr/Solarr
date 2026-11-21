@@ -647,6 +647,7 @@ func (f *failingTool) ReadTags(ctx context.Context, paths []string) ([]mediatool
 		f.asked[filepath.Base(p)]++
 		if filepath.Base(p) == f.failOn {
 			probes[index].Err = errors.New("moov atom not found")
+			probes[index].Raw = "{ \"streams\": [] }"
 		}
 	}
 	return probes, err
@@ -689,6 +690,10 @@ func TestJob_AFileFfprobeCannotReadIsLeftAloneUntilItsWaitIsOverOrItChanges(t *t
 	}
 	if failures, err := physical.CountProbeFailures(t.Context()); err != nil || failures != 1 {
 		t.Fatalf("CountProbeFailures = %d, %v; want 1", failures, err)
+	}
+
+	if raw, err := physical.ProbeFailureRaw(t.Context(), ids[0].MediaObjectID); err != nil || raw != `{ "streams": [] }` {
+		t.Fatalf("ProbeFailureRaw = %q, %v; want what ffprobe printed", raw, err)
 	}
 
 	err = opened.Write(t.Context(), store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {

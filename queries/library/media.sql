@@ -527,11 +527,14 @@ SELECT root_folder_id, missing_since FROM missing_recount ORDER BY root_folder_i
 DELETE FROM missing_recount WHERE root_folder_id = ? AND missing_since = ?;
 
 -- name: UpsertProbeFailure :exec
-INSERT INTO media_probe_failure (media_object_id, attempts, last_error, last_attempt_at, retry_at, size_bytes)
-VALUES (sqlc.arg(media_object_id), 1, sqlc.arg(last_error), sqlc.arg(at), sqlc.arg(retry_at), sqlc.arg(size_bytes))
+INSERT INTO media_probe_failure (media_object_id, attempts, last_error, last_attempt_at, retry_at, size_bytes, raw)
+VALUES (sqlc.arg(media_object_id), 1, sqlc.arg(last_error), sqlc.arg(at), sqlc.arg(retry_at), sqlc.arg(size_bytes), sqlc.arg(raw))
 ON CONFLICT (media_object_id) DO UPDATE SET
-  attempts = media_probe_failure.attempts + 1, last_error = excluded.last_error,
+  attempts = media_probe_failure.attempts + 1, last_error = excluded.last_error, raw = excluded.raw,
   last_attempt_at = excluded.last_attempt_at, retry_at = excluded.retry_at, size_bytes = excluded.size_bytes;
+
+-- name: GetProbeFailureRaw :one
+SELECT raw FROM media_probe_failure WHERE media_object_id = ?;
 
 -- name: GetProbeFailureAttempts :one
 SELECT attempts FROM media_probe_failure WHERE media_object_id = ?;
