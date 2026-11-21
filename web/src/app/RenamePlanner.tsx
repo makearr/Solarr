@@ -26,6 +26,7 @@ export function RenamePlanner({
 }) {
   const [plan, setPlan] = useState<LibraryRenamePlan | undefined>();
   const run = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (preview: boolean) => ok(api.POST("/categories/{id}/rename", {
       params: { path: { id: categoryId } },
       body: { preview, work_id: workId },

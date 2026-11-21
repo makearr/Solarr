@@ -68,6 +68,7 @@ function DiskSettings() {
 
   const store = (data: DiskReport) => queryClient.setQueryData(["disk"], data);
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (overrides: Record<string, string>) => ok(api.PUT("/settings/disk", { body: { groups: overrides } })),
     onSuccess: store,
   });

@@ -38,6 +38,7 @@ export function RootFolderSection() {
   });
 
   const detachCategory = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (args: { rootFolderId: number; categoryId: number }) => {
       await ok(api.DELETE("/categories/{id}/rootfolders/{rootFolderId}", {
         params: { path: { id: args.categoryId, rootFolderId: args.rootFolderId } },
@@ -47,6 +48,7 @@ export function RootFolderSection() {
   });
 
   const setPolicy = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (args: { id: number; readOnly: boolean; allowRename: boolean; minFreeBytes: number }) => {
       await ok(api.PATCH("/rootfolders/{id}", {
         params: { path: { id: args.id } },
@@ -57,6 +59,7 @@ export function RootFolderSection() {
   });
 
   const setOnline = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (args: { id: number; online: boolean }) => {
       await ok(api.PATCH("/rootfolders/{id}/online", {
         params: { path: { id: args.id } },
@@ -68,6 +71,7 @@ export function RootFolderSection() {
 
   // Refused (409) while any library still holds this root: take it out of every library first (settings.ErrInUse).
   const remove = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (id: number) => {
       await ok(api.DELETE("/rootfolders/{id}", { params: { path: { id } } }));
     },
@@ -492,6 +496,7 @@ function AddRootFolder({
   }, [categories, libraryChoiceTouched]);
 
   const create = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       const { data: root, error: rootError } = await api.POST("/rootfolders", {
         body: { path, label: label || undefined },
@@ -593,6 +598,7 @@ function VanishedHeld({ root }: { root: RootFolder }) {
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState(false);
   const accept = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       await ok(api.POST("/rootfolders/{id}/vanished/accept", { params: { path: { id: root.id } } }));
     },

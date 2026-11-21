@@ -43,6 +43,7 @@ function UseIndexers({ instanceId }: { instanceId: number }) {
   const offered = (found.data ?? []).filter((entry) => entry.enabled && entry.music && !entry.already_added && entry.impl === "newznab");
   const selected = chosen ?? new Set(offered.map((entry) => entry.prowlarr_id));
   const use = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/arr/instances/{id}/indexers", {
       params: { path: { id: instanceId } },
       body: { prowlarr_ids: [...selected] },
@@ -167,6 +168,7 @@ function DownloadClientRow({ client, instanceId, keepCategory }: { client: ArrDo
   const withUser = kind?.user_name ?? false;
   const [username, setUsername] = useState(client.username ?? "");
   const add = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       if (!kind) return;
       const { error } = await api.POST("/downloaders", {
@@ -281,6 +283,7 @@ function ProwlarrSync({ instanceId }: { instanceId: number }) {
     onSuccess: (stored) => queryClient.setQueryData(["arr-sync-options", instanceId], stored),
   });
   const sync = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/arr/instances/{id}/prowlarr-sync", { params: { path: { id: instanceId } } })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["indexers"] });
@@ -350,10 +353,12 @@ function ArrPull({ instanceId, app }: { instanceId: number; app: ArrApp }) {
     queryFn: () => ok(api.GET("/arr/instances/{id}/pull", { params: { path: { id: instanceId } } })),
   });
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (body: PullOptions) => ok(api.PUT("/arr/instances/{id}/pull", { params: { path: { id: instanceId } }, body })),
     onSuccess: (stored) => queryClient.setQueryData(["arr-pull", instanceId], stored),
   });
   const pull = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/arr/instances/{id}/pull", { params: { path: { id: instanceId } } })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["arr-imports", instanceId] });

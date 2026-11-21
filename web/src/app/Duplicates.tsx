@@ -31,6 +31,7 @@ function IdenticalCopies({ categoryId }: { categoryId: number }) {
     queryFn: () => ok(api.GET("/categories/{id}/links", { params: { path: { id: categoryId } } })),
   });
   const start = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       await ok(api.POST("/categories/{id}/links", { params: { path: { id: categoryId } } }));
     },
@@ -123,6 +124,7 @@ function GroupCard({ group, categoryId, words, onDone }: { group: Group; categor
     return chosen ?? (linkable(copy, keep) ? "link" : "recycle");
   };
   const apply = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/categories/{id}/duplicates/resolve", {
       params: { path: { id: categoryId } },
       body: { keep_media_object_id: keep.media_object_id, drop: others.map((copy) => ({ media_object_id: copy.media_object_id, action: actionFor(copy) })) },

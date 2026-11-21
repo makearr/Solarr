@@ -29,6 +29,7 @@ export function LanguageProfiles() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["languageProfiles"] });
 
   const remove = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (id: number) => {
       await ok(api.DELETE("/languageprofiles/{id}", { params: { path: { id } } }));
     },
@@ -150,6 +151,7 @@ function LanguageProfileForm({
   const [rejectDubbed, setRejectDubbed] = useState(initial?.reject_dubbed ?? false);
 
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       const body = {
         name,

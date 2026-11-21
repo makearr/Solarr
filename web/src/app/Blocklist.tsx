@@ -28,6 +28,7 @@ export function Blocklist() {
   });
 
   const remove = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (id: number) => {
       await ok(api.DELETE("/blocklist/{id}", { params: { path: { id } } }));
     },

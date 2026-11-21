@@ -118,6 +118,7 @@ export function AddLibraryForm() {
   const queryClient = useQueryClient();
   const library = useNewLibrary();
   const create = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: library.create,
     onSuccess: () => {
       library.forgetName();

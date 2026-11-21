@@ -34,6 +34,7 @@ export function RecycleBin() {
     queryFn: () => ok(api.GET("/recyclebin/entries")),
   });
   const empty = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/recyclebin/empty")),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["recycleBinEntries"] }),
   });
@@ -44,6 +45,7 @@ export function RecycleBin() {
   const storedMinFree = limits.data?.min_free_bytes ?? 0;
   const minFreeBytes = minFreeGB === Math.round(storedMinFree / GB) ? storedMinFree : minFreeGB * GB;
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.PATCH("/recyclebin", {
       body: { max_bytes: maxBytes, max_percent_of_root: percent, min_free_bytes: minFreeBytes, min_free_percent: minFreePercent },
     })),

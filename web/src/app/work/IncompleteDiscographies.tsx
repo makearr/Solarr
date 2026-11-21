@@ -12,6 +12,7 @@ export function IncompleteDiscographies({ categoryId }: { categoryId: number }) 
     queryFn: () => ok(api.GET("/discover/incomplete", { params: { query: { category_id: categoryId, limit: 30 } } })),
   });
   const follow = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (personId: number) => {
       await ok(api.PUT("/people/{id}/follow", {
         params: { path: { id: personId } },

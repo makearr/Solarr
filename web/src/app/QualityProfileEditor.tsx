@@ -219,6 +219,7 @@ export function ProfileForm({
   const built = () => (isVideo ? buildVideoRules(initial?.rules ?? "", name, video) : buildAudioRules(initial?.rules ?? "", name, rules));
 
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       const body = {
         name,
@@ -236,6 +237,7 @@ export function ProfileForm({
 
   // The same checks a save runs, without saving: a mistyped key or target is named before it is stored.
   const check = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       const { data, error } = await api.POST("/qualityprofiles/validate", {
         body: { name, rules: hasForm && !asJSON ? built() : json, upgrade, media_type: mediaType },

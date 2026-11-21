@@ -26,6 +26,7 @@ export function InteractiveSearchResults({ workId, scope = {}, onSent }: { workI
     retry: false,
   });
   const send = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (decisionId: number) => {
       await ok(api.POST("/works/{id}/candidates/{decisionId}/send", {
         params: { path: { id: workId, decisionId }, query },

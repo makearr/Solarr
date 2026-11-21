@@ -113,6 +113,7 @@ function MergeSuggestion({ work, words, categoryId }: { work: Work; words: Vocab
     },
   });
   const merge = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (preview: boolean) => {
       const into = suggestion.data?.into_work_id ?? 0;
       return ok(api.POST("/works/{id}/merge", { params: { path: { id: work.id } }, body: { into, preview } }));
@@ -199,6 +200,7 @@ function WorkHeader({
   const [note, setNote] = useState<string>();
 
   const monitor = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (next: boolean) => {
       await ok(api.POST("/works/{id}/monitor", { params: { path: { id: work.id } }, body: { monitored: next, search: next && searchOnMonitor } }));
     },
@@ -223,12 +225,14 @@ function WorkHeader({
     onError: () => setNote(t("search.requestFailed")),
   });
   const refresh = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       await ok(api.POST("/works/{id}/refresh", { params: { path: { id: work.id } } }));
     },
     onSuccess: changed,
   });
   const remove = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/works/{id}/remove", { params: { path: { id: work.id } }, body: { delete_files: removal.deleteFiles, exclude: removal.exclude } })),
     onSuccess: (result) => {
       setRemoving(false);

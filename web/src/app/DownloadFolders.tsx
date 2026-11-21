@@ -29,6 +29,7 @@ export function DownloadFolderSection() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["downloadfolders"] });
 
   const remove = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (id: number) => {
       await ok(api.DELETE("/downloadfolders/{id}", { params: { path: { id } } }));
     },
@@ -98,6 +99,7 @@ function DownloadFolderCard({
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const importSettings = useImportSettings();
   const update = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (change: Partial<Pick<DownloadFolder, "category_id" | "watch" | "transfer_ladder">>) => {
       const next = { ...folder, ...change };
       await ok(api.PATCH("/downloadfolders/{id}", {
@@ -269,6 +271,7 @@ function AddDownloadFolder({
   const [categoryId, setCategoryId] = useState("");
 
   const create = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       await ok(api.POST("/downloadfolders", {
         body: {

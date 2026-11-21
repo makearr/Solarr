@@ -85,6 +85,7 @@ export function MetadataSettings() {
   const typeDefaults = useLibraryTypeDefaults();
   const patch = usePatchMetadataSettings(metadata.data);
   const switchProvider = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async ({ key, enabled }: { key: string; enabled: boolean }) => {
       await ok(api.PUT("/metadata/providers/{key}", { params: { path: { key } }, body: { enabled } }));
     },
@@ -289,6 +290,7 @@ function PaceForm({ provider }: { provider: Provider }) {
   const [unit, setUnit] = useState<"second" | "minute">(provider.per_minute % 60 === 0 ? "second" : "minute");
   const [draft, setDraft] = useState(String(unit === "second" ? provider.per_minute / 60 : provider.per_minute));
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (perMinute: number) => {
       await ok(api.PUT("/metadata/providers/{key}/pace", { params: { path: { key: provider.key } }, body: { per_minute: perMinute } }));
     },
@@ -429,6 +431,7 @@ function ProviderDetails({
 function GenericKeyForm({ provider }: { provider: Provider }) {
   const queryClient = useQueryClient();
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (key: string) => {
       await ok(api.PUT("/metadata/providers/{key}/apikey", { params: { path: { key: provider.key } }, body: { api_key: key } }));
     },
@@ -456,6 +459,7 @@ function ProviderTest() {
     queryFn: () => ok(api.GET("/metadata/tv/providers")),
   });
   const test = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/metadata/tv/providers/test")),
   });
   const results = new Map((test.data ?? []).map((result) => [result.id, result]));

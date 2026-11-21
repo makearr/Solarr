@@ -41,6 +41,7 @@ export function UnidentifiedReview() {
   const library = (libraries.data ?? []).find((candidate) => candidate.id === rootLibraries[0]?.id);
   const words = vocabularyOf(mediaTypes.find((type) => type.key === library?.media_type));
   const choose = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (candidate: Partial<IdentityChoice>) => {
       if (candidate.provider === undefined || candidate.external_id === undefined) return;
       await ok(api.POST("/library/unidentified/{mediaObjectId}/resolve", {
@@ -63,6 +64,7 @@ export function UnidentifiedReview() {
   });
 
   const notMedia = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       await ok(api.POST("/library/unidentified/{mediaObjectId}/not-media", {
         params: { path: { mediaObjectId: mediaObjectId as number } },

@@ -125,6 +125,7 @@ function APIKeysSection() {
   const [name, setName] = useState("");
 
   const create = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/me/apikeys", { body: { name } })),
     onSuccess: (created) => {
       if (created) setJustCreated({ name: created.name, key: created.key });
@@ -134,6 +135,7 @@ function APIKeysSection() {
   });
 
   const revoke = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (id: number) => {
       await ok(api.DELETE("/me/apikeys/{id}", { params: { path: { id } } }));
     },
@@ -423,6 +425,7 @@ export function Users({ currentUserId }: { currentUserId: number }) {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["users"] });
 
   const update = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (change: { id: number; role?: Role; password?: string; limits?: UserLimits; blocked?: BlockedTag[] }) => ok(api.PATCH("/users/{id}", {
       params: { path: { id: change.id } },
       body: { role: change.role, password: change.password, limits: change.limits, blocked_tag_ids: change.blocked?.map((tag) => tag.tag_id) },
@@ -431,6 +434,7 @@ export function Users({ currentUserId }: { currentUserId: number }) {
   });
 
   const grant = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (change: { id: number; categoryId: number; permission: Permission }) => {
       await ok(api.PUT("/users/{id}/access", {
         params: { path: { id: change.id } },
@@ -441,6 +445,7 @@ export function Users({ currentUserId }: { currentUserId: number }) {
   });
 
   const remove = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (id: number) => {
       await ok(api.DELETE("/users/{id}", { params: { path: { id } } }));
     },
@@ -948,6 +953,7 @@ function AddUser({ libraries, onAdded }: { libraries: readonly Library[]; onAdde
   };
 
   const create = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/users", {
       body: { username, password, role, access: grants, limits: shownLimits, blocked_tag_ids: blocked.map((tag) => tag.tag_id) },
     })),

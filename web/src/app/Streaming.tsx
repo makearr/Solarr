@@ -27,6 +27,7 @@ export function Streaming() {
   const store = (data: StreamingReport) => queryClient.setQueryData(["streaming"], data);
 
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (body: StreamingSettings) => ok(api.PATCH("/streaming", { body })),
     onSuccess: store,
   });

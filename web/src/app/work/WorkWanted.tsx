@@ -118,6 +118,7 @@ export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
   });
 
   const searchLibrary = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (workIds?: number[]) => {
       if (!categoryId) return undefined;
       return ok(api.POST("/categories/{id}/search", {

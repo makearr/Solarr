@@ -27,6 +27,7 @@ export function Requests() {
   });
   const decided = () => void queryClient.invalidateQueries({ queryKey: ["requests"] });
   const approve = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (id: number) => ok(api.POST("/requests/{id}/approve", { params: { path: { id } } })),
     onSuccess: () => {
       decided();
@@ -34,6 +35,7 @@ export function Requests() {
     },
   });
   const decline = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: ({ id, reason }: { id: number; reason: string }) =>
       ok(api.POST("/requests/{id}/decline", { params: { path: { id } }, body: { reason } })),
     onSuccess: decided,

@@ -29,6 +29,7 @@ export function LibraryMetadata() {
     queryFn: () => ok(api.GET("/categories/{id}/metadata-sources", { params: { path: { id } } })),
   });
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (sources: string[]) => ok(api.PUT("/categories/{id}/metadata-sources", { params: { path: { id } }, body: { sources } })),
     onSuccess: (data: Sources) => queryClient.setQueryData(key, data),
   });

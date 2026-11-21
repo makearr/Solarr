@@ -84,6 +84,7 @@ function GroupCard({ group, scope, libraryName }: { group: Group; scope: Similar
   const unkept = group.videos.filter((video) => !kept.has(video.media_object_id));
   const actionOf = (video: Video, action: Action): Action => (action === "link" && primary && mergeable(video, primary) ? "link" : "recycle");
   const apply = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: ({ drops, action }: Pending) => {
       const resolved = drops.map((video) => ({ media_object_id: video.media_object_id, action: actionOf(video, action) }));
       // Only a merge needs a file that stays; deleting works with none.

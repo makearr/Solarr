@@ -273,6 +273,7 @@ function SetupCard({
   kind, draft, onChange, outcome, companion,
 }: { kind: IndexerKind; draft: Draft; onChange: (change: Partial<Draft>) => void; outcome?: Outcome; companion?: string }) {
   const test = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/indexers/test", {
       body: { impl: kind.impl, definition: kind.id, base_url: draft.address.trim(), api_key: indexerSecret(kind, draft.user, draft.secret, draft.fields) || undefined },
     })),

@@ -304,6 +304,7 @@ export function BulkEditWork({
   const editable = (info?.facets ?? []).filter((facet) => facet.editable);
   const profiles = useQualityProfiles();
   const send = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (preview: boolean) => {
       const { data, error } = await api.POST("/works/bulk/edit", {
         body: {

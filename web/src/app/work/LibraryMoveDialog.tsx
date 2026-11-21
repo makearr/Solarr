@@ -29,6 +29,7 @@ export function LibraryMoveDialog({
   const one = "workId" in subject;
 
   const plan = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (preview: boolean): Promise<LibraryMovePlan | BulkLibraryMove> => {
       if ("workId" in subject) {
         return ok(api.POST("/works/{id}/library", {

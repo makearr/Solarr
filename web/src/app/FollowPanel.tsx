@@ -114,6 +114,7 @@ function FollowRow({
     invalidateWorkLists(queryClient);
   };
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (search: boolean) => {
       const body = { ...request, search };
       const { error } =

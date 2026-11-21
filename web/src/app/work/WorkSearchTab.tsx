@@ -40,6 +40,7 @@ export function WorkSearchTab({ work, info, words, lead }: { work: Work; info: M
   });
   const changed = () => void queryClient.invalidateQueries({ queryKey: ["work", work.id] });
   const search = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (terms?: Record<string, string>) => ok(api.POST("/works/{id}/search", { params: { path: { id: work.id }, query }, body: terms })),
     onSuccess: changed,
   });
@@ -51,10 +52,12 @@ export function WorkSearchTab({ work, info, words, lead }: { work: Work; info: M
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const grab = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/works/{id}/grab", { params: { path: { id: work.id }, query } })),
     onSuccess: changed,
   });
   const send = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (decisionId: number) => {
       await ok(api.POST("/works/{id}/candidates/{decisionId}/send", { params: { path: { id: work.id, decisionId }, query } }));
     },

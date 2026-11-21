@@ -27,6 +27,7 @@ export function Network() {
   });
 
   const update = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (body: NetworkUpdate) => {
       await ok(api.PATCH("/network", { body }));
     },

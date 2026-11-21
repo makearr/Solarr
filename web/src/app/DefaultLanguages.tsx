@@ -15,6 +15,7 @@ export function DefaultLanguagesEditor({ onSaved, saveLabel = "Save" }: { onSave
     if (current.data) setLanguages(current.data.languages.length > 0 ? current.data.languages : ["en"]);
   }, [current.data]);
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.PUT("/defaultlanguages", { body: { languages } })),
     onSuccess: (data) => {
       queryClient.setQueryData(["defaultLanguages"], data);

@@ -133,6 +133,7 @@ function ConnectArr({
   // The library an attempt made, so a retry after the connection failed reuses it rather than meet its own name taken.
   const [madeLibrary, setMadeLibrary] = useState<{ name: string; mediaType: string; id: number }>();
   const connect = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (): Promise<ConnectOutcome> => {
       let category = madeLibrary?.name === libraryName && madeLibrary.mediaType === mediaType ? { id: madeLibrary.id } : undefined;
       if (!category) {
@@ -393,6 +394,7 @@ function CreateAdministrator() {
   const [setupCode, setSetupCode] = useState("");
 
   const create = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/setup/admin", {
       body: { username, password, ...(setupCode.trim() ? { setup_code: setupCode.trim() } : {}) },
     })),
@@ -482,6 +484,7 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
   const categoryId = chosenCategory ?? existing[0]?.id ?? "new";
 
   const add = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       let attachTo = categoryId;
       if (attachTo === "new") {

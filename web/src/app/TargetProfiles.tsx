@@ -24,6 +24,7 @@ function ProfileForm({ initial, onDone, onCancel }: { initial?: TargetProfile; o
   const audio = profile.media_types.every((type) => AUDIO_MEDIA.has(type));
   const recommendable = [...new Set((targets.data ?? []).filter((target) => profile.media_types.includes(target.media_type ?? "")).map((target) => target.name ?? ""))];
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       const { error } = initial?.id
         ? await api.PUT("/targetprofiles/{id}", { params: { path: { id: initial.id } }, body: profile })
@@ -109,6 +110,7 @@ export function TargetProfilesSection() {
   const [editing, setEditing] = useState<number | "new" | null>(null);
   const profiles = useQuery({ queryKey: ["targetProfiles"], queryFn: () => ok(api.GET("/targetprofiles")) });
   const remove = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (id: number) => {
       await ok(api.DELETE("/targetprofiles/{id}", { params: { path: { id } } }));
     },

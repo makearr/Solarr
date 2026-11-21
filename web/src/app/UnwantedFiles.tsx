@@ -41,6 +41,7 @@ function ExclusionPatterns() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["exclusions"] });
 
   const update = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (pattern: ExclusionPattern) => {
       await ok(api.PATCH("/exclusions/{id}", {
         params: { path: { id: pattern.id } },
@@ -58,6 +59,7 @@ function ExclusionPatterns() {
   });
 
   const remove = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (id: number) => {
       await ok(api.DELETE("/exclusions/{id}", { params: { path: { id } } }));
     },
@@ -161,6 +163,7 @@ function AddPattern({ onAdded }: { onAdded: () => void }) {
   const [note, setNote] = useState("");
 
   const create = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/exclusions", {
       body: { pattern, action, note: note || undefined, enabled: true },
     })),
@@ -237,6 +240,7 @@ function BlockedContent() {
   });
 
   const remove = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (id: number) => {
       await ok(api.DELETE("/blocked/{id}", { params: { path: { id } } }));
     },

@@ -50,6 +50,7 @@ export function Categories() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["categories"] });
 
   const remove = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (id: number) => {
       await ok(api.DELETE("/categories/{id}", { params: { path: { id } } }));
     },
@@ -384,6 +385,7 @@ function EditCategoryFields({
   const queryClient = useQueryClient();
 
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       await ok(api.PATCH("/categories/{id}", {
         params: { path: { id: categoryId } },

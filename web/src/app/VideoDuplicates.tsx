@@ -9,6 +9,7 @@ function HashingSwitch() {
   const queryClient = useQueryClient();
   const saved = useQuery({ queryKey: ["video-hashing"], queryFn: () => ok(api.GET("/settings/video-hashing")) });
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (enabled: boolean) => ok(api.PUT("/settings/video-hashing", { body: { enabled } })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["video-hashing"] });
@@ -42,6 +43,7 @@ function ImportSwitches() {
   const queryClient = useQueryClient();
   const saved = useQuery({ queryKey: ["import-duplicates"], queryFn: () => ok(api.GET("/settings/import-duplicates")) });
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (body: { check: boolean; blocklist: boolean }) => ok(api.PUT("/settings/import-duplicates", { body })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["import-duplicates"] }),
   });

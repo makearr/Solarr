@@ -32,6 +32,7 @@ export function LibraryRules() {
     if (rules.data) setDraft(rules.data.rules);
   }, [rules.data]);
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (next: LibraryRule[] | null) => ok(api.PUT("/categories/{id}/rules", { params: { path: { id } }, body: { rules: next } })),
     onSuccess: (data) => {
       queryClient.setQueryData(["library-rules", id], data);

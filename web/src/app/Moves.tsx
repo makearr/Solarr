@@ -20,10 +20,12 @@ export function RootMoveControls({ root, children }: { root: RootFolder; childre
   const [draining, setDraining] = useState(false);
 
   const previewRename = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/rootfolders/{id}/rename", { params: { path: { id: root.id } }, body: { preview: true } })),
     onSuccess: (data) => setRenamePlan(data ?? null),
   });
   const commitRename = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/rootfolders/{id}/rename", { params: { path: { id: root.id } }, body: { preview: false } })),
     onSuccess: (data) => {
       setRenamePlan(data ?? null);
@@ -83,6 +85,7 @@ function DrainDialog({ root, onClose }: { root: RootFolder; onClose: () => void 
     queryFn: () => ok(api.POST("/rootfolders/{id}/drain", { params: { path: { id: root.id } }, body: { preview: true } })),
   });
   const drain = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/rootfolders/{id}/drain", { params: { path: { id: root.id } }, body: { preview: false } })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["rootfolders"] });
@@ -291,6 +294,7 @@ function MoveJobControls({ job }: { job: MoveJob }) {
   const queryClient = useQueryClient();
   const administrator = useIsAdministrator();
   const control = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (action: "pause" | "resume" | "cancel") => {
       const params = { params: { path: { id: job.id } } };
       if (action === "pause") await ok(api.POST("/moves/{id}/pause", params));

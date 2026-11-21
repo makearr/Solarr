@@ -15,6 +15,7 @@ export function Login() {
   const [remember, setRemember] = useState(false);
 
   const signIn = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/auth/login", {
       body: { username, password, remember },
     })),

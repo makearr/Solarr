@@ -139,6 +139,7 @@ function RenameOnImportControl() {
   const settings = useImportSettings();
 
   const update = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (rename: boolean) => {
       await ok(api.PATCH("/import/settings", {
         body: {
@@ -193,6 +194,7 @@ function ThresholdControl() {
   const settings = useImportSettings();
 
   const update = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (value: number) => {
       await ok(api.PATCH("/import/settings", {
         body: { auto_commit_confidence: value },
@@ -304,6 +306,7 @@ export function TransferLadderControl() {
   const settings = useImportSettings();
 
   const update = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (ladder: TransferMethod[]) => {
       await ok(api.PATCH("/import/settings", {
         body: {
@@ -508,6 +511,7 @@ function InspectForm() {
   const categories = useCategories();
 
   const addRoot = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       if (categoryId === "") return;
       const { data: root, error: rootError } = await api.POST("/rootfolders", { body: { path: sourcePath.trim() } });
@@ -526,6 +530,7 @@ function InspectForm() {
   });
 
   const inspect = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       return await ok(api.POST("/import/inspect", {
         body: {
@@ -881,6 +886,7 @@ function SessionRow({
   });
 
   const commitHeld = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/import/sessions/{id}/commit", {
       params: { path: { id: session.id } },
       body: {},
@@ -1007,6 +1013,7 @@ function AssignCategory({ sessionId }: { sessionId: number }) {
   const [categoryId, setCategoryId] = useState<number | "">("");
 
   const assign = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (id: number) => ok(api.POST("/import/sessions/{id}/category", {
       params: { path: { id: sessionId } },
       body: { category_id: id },
@@ -1069,6 +1076,7 @@ function UnitList({ sessionId }: { sessionId: number }) {
     (unit) => unit.decision === "QUEUE" && (unit.candidates?.length ?? 0) > 0 && unit.confidence >= threshold,
   );
   const placeAll = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (ids: number[]) => {
       for (const unitId of ids) {
         await ok(api.POST("/import/sessions/{id}/units/{unitId}/commit", {
@@ -1163,6 +1171,7 @@ function UnitRow({ sessionId, unit, categoryId: sessionCategoryId }: { sessionId
   const guessPlaceable = unit.work_id != null || topGuess >= (mediaType?.commit_guess_floor ?? 0);
 
   const commit = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (as?: IdentityChoice) => {
       await ok(api.POST("/import/sessions/{id}/units/{unitId}/commit", {
         params: { path: { id: sessionId, unitId: unit.id } },

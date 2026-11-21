@@ -85,6 +85,7 @@ export function ArrSyncOptions({
   const addsItems = !monitoringOnly && (monitored || unmonitored);
   const nothingChosen = !monitoringOnly && !monitored && !unmonitored && !indexers && !downloadClients;
   const previewing = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () =>
       ok(api.POST("/arr/instances/{id}/preview", {
         params: { path: { id: instance.id } },
@@ -98,6 +99,7 @@ export function ArrSyncOptions({
   });
 
   const start = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       const problems: string[] = [];
       // The library's folders first, so the import below finds each artist's library by them.

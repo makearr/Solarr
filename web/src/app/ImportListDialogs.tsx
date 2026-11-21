@@ -62,6 +62,7 @@ export function ImportListForm({
   const keepsEnabled = staysEnabled(list, type, options);
 
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       const kept: Record<string, string> = {};
       for (const field of kind?.fields ?? []) {
@@ -274,6 +275,7 @@ export function ImportListPreview({ list, onClose }: { list: ImportList; onClose
     queryFn: () => ok(api.POST("/import-lists/{id}/preview", { params: { path: { id: list.id } } })),
   });
   const enable = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       await ok(api.PATCH("/import-lists/{id}", { params: { path: { id: list.id } }, body: { ...writeOf(list), enabled: true } }));
       await ok(api.POST("/import-lists/{id}/run", { params: { path: { id: list.id } } }));

@@ -38,6 +38,7 @@ export function ArrImport() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["arr-instances"] });
 
   const remove = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (id: number) => {
       await ok(api.DELETE("/arr/instances/{id}", { params: { path: { id } } }));
     },
@@ -223,6 +224,7 @@ function EditInstance({ instance, onDone }: { instance: ArrInstance; onDone: () 
   const [categoryId, setCategoryId] = useState(instance.category_id ? String(instance.category_id) : "");
   const [enabled, setEnabled] = useState(instance.enabled);
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       await ok(api.PATCH("/arr/instances/{id}", {
         params: { path: { id: instance.id } },
@@ -288,6 +290,7 @@ function EditInstance({ instance, onDone }: { instance: ArrInstance; onDone: () 
 function PushMonitoring({ instance, onChanged }: { instance: ArrInstance; onChanged: () => void }) {
   const [result, setResult] = useState<{ checked: number; changed: number; unknown: number } | null>(null);
   const toggle = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (on: boolean) => {
       await ok(api.PATCH("/arr/instances/{id}", {
         params: { path: { id: instance.id } },
@@ -297,6 +300,7 @@ function PushMonitoring({ instance, onChanged }: { instance: ArrInstance; onChan
     onSuccess: onChanged,
   });
   const send = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/arr/instances/{id}/push", { params: { path: { id: instance.id } } })),
     onSuccess: (data) => {
       setResult(data);
@@ -374,6 +378,7 @@ function InstanceHistory({ instanceId }: { instanceId: number }) {
   });
 
   const revert = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (id: number) => {
       await ok(api.POST("/arr/imports/{id}/revert", { params: { path: { id } } }));
     },
@@ -434,6 +439,7 @@ function AddInstance({
   const [pushMonitoring, setPushMonitoring] = useState(false);
 
   const create = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       await ok(api.POST("/arr/instances", {
         body: {

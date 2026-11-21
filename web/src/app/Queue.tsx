@@ -139,6 +139,7 @@ function QueueRow({ item }: { item: QueueItem }) {
   const [confirming, setConfirming] = useState(false);
   const [blocklist, setBlocklist] = useState(false);
   const remove = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       await ok(api.DELETE("/queue/{id}", {
         params: { path: { id: item.id }, query: { blocklist } },

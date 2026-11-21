@@ -43,14 +43,17 @@ export function ImportLists({ library: chosen }: { library?: string } = {}) {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["importLists", id] });
 
   const setEnabled = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (args: { list: ImportList; enabled: boolean }) =>
       ok(api.PATCH("/import-lists/{id}", { params: { path: { id: args.list.id } }, body: { ...writeOf(args.list), enabled: args.enabled } })),
     onSuccess: invalidate,
   });
   const run = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (listId: number) => ok(api.POST("/import-lists/{id}/run", { params: { path: { id: listId } } })),
   });
   const remove = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (listId: number) => ok(api.DELETE("/import-lists/{id}", { params: { path: { id: listId } } })),
     onSuccess: () => {
       setRemoving(null);

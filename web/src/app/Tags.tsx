@@ -70,6 +70,7 @@ export function Tags() {
   };
   const failure = (status: number) => new Error(status === 409 ? "conflict" : "failed");
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (target: NonNullable<typeof editing>) => {
       const original = all.find((tag) => tag.id === target.id);
       if (target.mergeInto) {
@@ -90,6 +91,7 @@ export function Tags() {
     },
   });
   const create = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (target: NonNullable<typeof adding>) => {
       const { error, response } = await api.POST("/tags", { body: { name: target.name, genre_tree: genreTree, parent_id: target.parentId || null } });
       if (error) throw failure(response.status);
@@ -100,6 +102,7 @@ export function Tags() {
     },
   });
   const remove = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (id: number) => {
       const { error, response } = await api.DELETE("/tags/{id}", { params: { path: { id } } });
       if (error) throw failure(response.status);
@@ -108,6 +111,7 @@ export function Tags() {
   });
 
   const block = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (id: number) => {
       const { error, response } = await api.POST("/tags/{id}/block", { params: { path: { id } } });
       if (error) throw failure(response.status);
@@ -326,6 +330,7 @@ function BlockedTags() {
   const queryClient = useQueryClient();
   const blocked = useQuery({ queryKey: ["blocked-tags"], queryFn: () => ok(api.GET("/tags/blocked")) });
   const unblock = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (tag: components["schemas"]["BlockedTag"]) => {
       const { error } = await api.DELETE("/tags/blocked", { params: { query: { name: tag.name, genre_tree: tag.genre_tree } } });
       if (error) throw new Error("failed");

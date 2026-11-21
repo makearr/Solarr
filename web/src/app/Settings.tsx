@@ -66,6 +66,7 @@ export function GeneralSettings() {
   const queryClient = useQueryClient();
   const general = useQuery({ queryKey: ["general-settings"], queryFn: () => ok(api.GET("/settings/general")) });
   const change = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (body: components["schemas"]["GeneralSettings"]) => ok(api.PATCH("/settings/general", { body })),
     onSuccess: (data) => {
       queryClient.setQueryData(["general-settings"], data);
@@ -73,6 +74,7 @@ export function GeneralSettings() {
     },
   });
   const generate = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (path: "/settings/general/video-previews/generate" | "/settings/general/video-hashes/generate") => ok(api.POST(path)),
   });
   const retryUnreadable = useMutation({

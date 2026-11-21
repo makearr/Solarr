@@ -53,6 +53,7 @@ function ImagePicker({ subject, id, title, shape = "cover", onChosen, onClose }:
     retry: false,
   });
   const choose = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (url: string) => {
       const request = { params: { path: { id } }, body: { url } };
       const { error } = subject === "works" ? await api.PUT("/works/{id}/artwork", request) : await api.PUT("/people/{id}/artwork", request);

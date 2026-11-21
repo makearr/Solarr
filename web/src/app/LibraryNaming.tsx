@@ -84,6 +84,7 @@ export function LibraryNaming() {
   }, [tagging.data]);
 
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async ({ settings, tags }: { settings?: NamingSettings; tags?: Tagging }) => {
       if (settings) {
         const { data, error } = await api.PUT("/categories/{id}/naming", {

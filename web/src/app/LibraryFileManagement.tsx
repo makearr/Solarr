@@ -40,6 +40,7 @@ export function LibraryFileManagement() {
   }, [saved.data]);
 
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (body: FileManagement) => {
       const { data, error } = await api.PUT("/categories/{id}/file-management", {
         params: { path: { id: id! } },

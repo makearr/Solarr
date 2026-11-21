@@ -27,6 +27,7 @@ export function Indexers() {
   const kindOf = (indexer: Indexer) =>
     kinds.data?.find((kind) => kind.id === indexer.definition) ?? kinds.data?.find((kind) => kind.impl === indexer.impl);
   const addCompanion = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (id: number) => ok(api.POST("/indexers/{id}/companion", { params: { path: { id } } })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["downloaders"] }),
   });
@@ -41,6 +42,7 @@ export function Indexers() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["indexers"] });
 
   const update = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (args: { indexer: Indexer; enabled: boolean; priority: number }) => {
       // PATCH replaces every field this form can change -- egress_proxy_url
       // has to be resent from the current row or toggling "enabled" would
@@ -73,6 +75,7 @@ export function Indexers() {
   });
 
   const remove = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (id: number) => {
       await ok(api.DELETE("/indexers/{id}", { params: { path: { id } } }));
     },
@@ -246,6 +249,7 @@ function AddIndexer({ onAdded, expert }: { onAdded: () => void; expert: boolean 
   const [categories, setCategories] = useState("3000");
 
   const create = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       await ok(api.POST("/indexers", {
         body: {
@@ -379,6 +383,7 @@ function MusicCategories({ indexer, onSaved }: { indexer: Indexer; onSaved: () =
   const current = (indexer.music_categories ?? []).join(", ");
   const [text, setText] = useState(current);
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       await ok(api.PATCH("/indexers/{id}", {
         params: { path: { id: indexer.id } },
@@ -479,6 +484,7 @@ function Proxies() {
     void queryClient.invalidateQueries({ queryKey: ["indexers"] });
   };
   const add = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/proxies", { body: { name, kind, url: address } })),
     onSuccess: () => {
       setName("");
@@ -487,6 +493,7 @@ function Proxies() {
     },
   });
   const remove = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (id: number) => ok(api.DELETE("/proxies/{id}", { params: { path: { id } } })),
     onSuccess: refresh,
   });
@@ -541,6 +548,7 @@ function Proxies() {
 function UpstreamKey({ indexer, onSaved }: { indexer: Indexer; onSaved: () => void }) {
   const [key, setKey] = useState("");
   const use = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/indexers/{id}/use-upstream", { params: { path: { id: indexer.id } }, body: { api_key: key } })),
     onSuccess: () => {
       setKey("");

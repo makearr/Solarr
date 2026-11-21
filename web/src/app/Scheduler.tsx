@@ -812,6 +812,7 @@ export function BackupRetentionEditor() {
     queryFn: () => ok(api.GET("/settings/backups")),
   });
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (body: BackupRetention) => {
       await ok(api.PUT("/settings/backups", { body }));
     },

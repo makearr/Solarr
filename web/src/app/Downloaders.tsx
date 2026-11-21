@@ -27,6 +27,7 @@ export function Downloaders() {
   const indexers = useQuery({ queryKey: ["indexers"], queryFn: () => ok(api.GET("/indexers")) });
   const [dismissed, setDismissed] = usePreference<string[]>("companion.dismissed", []);
   const addCompanion = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (id: number) => ok(api.POST("/downloaders/{id}/companion", { params: { path: { id } } })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["indexers"] }),
   });
@@ -42,6 +43,7 @@ export function Downloaders() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["downloaders"] });
 
   const setEnabled = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (args: { downloader: Downloader; enabled: boolean }) => {
       await ok(api.PATCH("/downloaders/{id}", {
         params: { path: { id: args.downloader.id } },
@@ -55,6 +57,7 @@ export function Downloaders() {
   });
 
   const remove = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (id: number) => {
       await ok(api.DELETE("/downloaders/{id}", { params: { path: { id } } }));
     },
@@ -217,6 +220,7 @@ function AddReportedFolder({ path, label }: { path: string; label: string }) {
   const queryClient = useQueryClient();
   const folders = useDownloadFolders();
   const add = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       const { error } = await api.POST("/downloadfolders", { body: { path, label, watch: false } });
       if (error) throw new Error((error as { detail?: string }).detail ?? "It could not be added.");
@@ -242,6 +246,7 @@ function ReadyQueueLimitEditor() {
   const queryClient = useQueryClient();
   const saved = useQuery({ queryKey: ["downloaders", "queue-limit"], queryFn: () => ok(api.GET("/downloaders/queue-limit")) });
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (limit: number) => ok(api.PUT("/downloaders/queue-limit", { body: { limit } })),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["downloaders", "queue-limit"] }),
   });
@@ -311,6 +316,7 @@ function AddDownloader({ kinds, onAdded }: { kinds: DownloaderKind[]; onAdded: (
   const address = kind?.has_address ? baseUrl : "";
 
   const test = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/downloaders/test", {
       body: {
         impl, base_url: address, credentials: secret || undefined,
@@ -322,6 +328,7 @@ function AddDownloader({ kinds, onAdded }: { kinds: DownloaderKind[]; onAdded: (
   const reported = test.data?.ok ? (test.data.download_folder ?? "") : "";
 
   const create = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       if (!kind) return;
       // A folder the client names differently from Solarr is Lidarr's remote path mapping.
@@ -691,6 +698,7 @@ export function ClientOptionsForm({ downloader, kind, onDone }: { downloader: Do
   const queryClient = useQueryClient();
   const hasFolder = folderPath !== "" && (folders.data ?? []).some((folder) => folder.path.replace(/\/$/, "") === folderPath.replace(/\/$/, ""));
   const addFolder = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       const { error } = await api.POST("/downloadfolders", { body: { path: folderPath, label: downloader.name, watch: false } });
       if (error) throw new Error((error as { detail?: string }).detail ?? "It could not be added.");
@@ -698,6 +706,7 @@ export function ClientOptionsForm({ downloader, kind, onDone }: { downloader: Do
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["downloadfolders"] }),
   });
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       if (newSecret !== "") {
         const changed = await api.POST("/downloaders/{id}/credentials", {

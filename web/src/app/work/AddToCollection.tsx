@@ -18,6 +18,7 @@ export function AddToCollection({ categoryId, workId, title, onClose }: { catego
   });
   const mine = list.data?.franchises ?? [];
   const add = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       let id = Number(chosen);
       if (!chosen) {

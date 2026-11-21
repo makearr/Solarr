@@ -27,6 +27,7 @@ export function ReleaseFiltersDialog({ workId, title, onClose }: { workId: numbe
   const rules = edited ?? stored.data ?? [];
   const change = (index: number, patch: Partial<Rule>) => setEdited(rules.map((rule, at) => (at === index ? { ...rule, ...patch } : rule)));
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       const body = rules.filter((rule) => rule.value.trim() !== "");
       return ok(api.PUT("/works/{id}/release-filters", { params: { path: { id: workId } }, body }));

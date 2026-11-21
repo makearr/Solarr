@@ -274,6 +274,7 @@ function TargetForm({ initial, onDone, onCancel }: { initial?: QualityTarget; on
   const targets = useQuery({ queryKey: ["qualityTargets"], queryFn: () => ok(api.GET("/qualitytargets")) });
   const fitting = (profiles.data ?? []).filter((profile) => profile.media_types.includes(target.media_type ?? ""));
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       const { error } = initial?.id
         ? await api.PUT("/qualitytargets/{id}", { params: { path: { id: initial.id } }, body: target })

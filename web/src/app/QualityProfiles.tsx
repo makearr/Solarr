@@ -142,6 +142,7 @@ function LibraryQualityEditor() {
   }, [quality.data]);
 
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => {
       const stored = quality.data!;
       // A value still the media type's default is not sent, so saving something else does not make it the library's own.

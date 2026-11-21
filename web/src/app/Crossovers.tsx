@@ -392,6 +392,7 @@ export function CrossoverDialog({ part, categoryId, onClose }: { part: { id: num
     onClose();
   };
   const join = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       if (eventChoice === "new") {
         await ok(api.POST("/crossovers", { body: { category_id: Number(categoryId), name: name.trim(), part_ids: [part.id] } }));
@@ -407,6 +408,7 @@ export function CrossoverDialog({ part, categoryId, onClose }: { part: { id: num
     onSuccess: done,
   });
   const link = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       await ok(api.POST("/parts/{id}/same-content", { params: { path: { id: part.id } }, body: { part_id: otherPart! } }));
     },

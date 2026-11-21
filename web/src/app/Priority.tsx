@@ -66,6 +66,7 @@ export function Priority() {
   });
 
   const update = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async ({ body, minutes }: { body: PrioritySettings; minutes?: number }) => {
       await ok(api.PATCH("/priority", { body }));
       if (minutes !== undefined && minutes !== huntMinutes(huntCadences)) {

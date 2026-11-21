@@ -30,6 +30,7 @@ export function NumberingDialog({ workId, title, onClose }: { workId: number; ti
   const [basis, setBasis] = useState<string>();
   const chosen = basis ?? numbering.data?.current ?? "";
   const change = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (preview: boolean) => ok(api.POST("/works/{id}/numbering", { params: { path: { id: workId } }, body: { basis: chosen, preview } })),
     onSuccess: (_, preview) => {
       if (preview) return;

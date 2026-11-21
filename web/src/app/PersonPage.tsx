@@ -387,6 +387,7 @@ function EditPerson({ person, onClose }: { person: PersonDetail; onClose: () => 
   });
   const set = (key: keyof typeof text) => (event: { target: { value: string } }) => setText({ ...text, [key]: event.target.value });
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () =>
       ok(
         api.PATCH("/people/{id}", {
@@ -478,6 +479,7 @@ function MergePerson({ person, onClose }: { person: PersonDetail; onClose: () =>
   const navigate = useNavigate();
   const [target, setTarget] = useState<{ id: number; name: string }>();
   const merge = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/people/{id}/merge", { params: { path: { id: person.id } }, body: { into_id: target!.id } })),
     onSuccess: () => {
       invalidatePeopleLists(queryClient);

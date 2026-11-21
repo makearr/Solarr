@@ -19,6 +19,7 @@ export function Backups() {
   });
 
   const runNow = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       await ok(api.POST("/system/backups", {}));
     },
@@ -110,6 +111,7 @@ function SettingsDocument() {
   const [chosen, setChosen] = useState<File | null>(null);
 
   const download = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       const response = await fetch(`${API_PREFIX}/settings/export`, { credentials: "same-origin" });
       if (!response.ok) throw new Error(`export answered ${response.status}`);
@@ -122,6 +124,7 @@ function SettingsDocument() {
   });
 
   const restore = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (file: File): Promise<ImportWarning[]> => {
       const response = await fetch(`${API_PREFIX}/settings/import`, {
         method: "POST",

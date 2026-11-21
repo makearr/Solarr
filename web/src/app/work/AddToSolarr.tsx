@@ -80,6 +80,7 @@ export function AddToSolarr({
   const kind = info.add_kinds.some((entry) => entry.key === candidate.kind) ? candidate.kind : (info.add_kinds[0]?.key ?? "");
 
   const add = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (mode: "add" | "now" | "manual") => {
       // Another target than the library's is this work's own.
       const ownTarget = !person && target !== libraryTarget && target !== "" && target !== "auto" ? Number(target) : undefined;

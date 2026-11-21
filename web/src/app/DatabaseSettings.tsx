@@ -79,6 +79,7 @@ function PicturesCard() {
   });
   const [draft, setDraft] = useState<ImageSettings | null>(null);
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (body: ImageSettings) => ok(api.PUT("/database/images", { body })),
     onSuccess: () => {
       setDraft(null);
@@ -86,6 +87,7 @@ function PicturesCard() {
     },
   });
   const recompress = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/database/images/recompress", {})),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["database-images"] }),
   });
@@ -141,6 +143,7 @@ function BackupsCard() {
   const usage = useQuery({ queryKey: ["database"], queryFn: () => ok(api.GET("/database")) });
   const [confirming, setConfirming] = useState(false);
   const clear = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/database/backups/clear", {})),
     onSuccess: () => {
       setConfirming(false);
@@ -188,6 +191,7 @@ const TASKS = [
 function MaintenanceCard() {
   const queryClient = useQueryClient();
   const run = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: (key: string) => ok(api.POST("/schedules/{key}/run", { params: { path: { key } } })),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["database"] }),
   });

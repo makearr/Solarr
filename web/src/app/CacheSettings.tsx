@@ -57,6 +57,7 @@ export function CacheSettings() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["cache"] });
 
   const update = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (budget: Budget) => {
       await ok(api.PATCH("/cache", { body: budget }));
     },
@@ -64,6 +65,7 @@ export function CacheSettings() {
   });
 
   const clear = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       await ok(api.POST("/cache/clear", {}));
     },
@@ -71,6 +73,7 @@ export function CacheSettings() {
   });
 
   const shrink = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       await ok(api.POST("/cache/shrink", {}));
     },
@@ -160,6 +163,7 @@ function MemoryCopiesCard() {
   });
   const [draft, setDraft] = useState<MemoryCopySettings | null>(null);
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (body: MemoryCopySettings) => {
       await ok(api.PUT("/cache/memory-copies", { body }));
     },
@@ -336,6 +340,7 @@ function DatabaseMemoryCard() {
   });
   const [mib, setMib] = useState<number | null>(null);
   const save = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async (kilobytes: number) => {
       await ok(api.PUT("/cache/memory", { body: { cache_size_kb: kilobytes } }));
     },

@@ -153,10 +153,12 @@ function FeedPanel() {
   });
   const update = (data: { token?: string }) => queryClient.setQueryData(["calendarFeed"], data);
   const create = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: () => ok(api.POST("/me/calendar-feed")),
     onSuccess: update,
   });
   const revoke = useMutation({
+    meta: { handlesErrors: true },
     mutationFn: async () => {
       await ok(api.DELETE("/me/calendar-feed"));
     },
