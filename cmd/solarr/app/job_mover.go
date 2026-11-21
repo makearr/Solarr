@@ -30,6 +30,7 @@ func (p *process) registerMoverJob(registry *jobs.Registry, executor *jobs.Execu
 		DrainCompletion: drainjob.Completer{
 			Roots: adapters.DrainRoots{Cache: p.cache}, Files: library.NewPhysical(p.library),
 		},
+		Finished:    func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		Permissions: p.libraryPermissions, Clock: clock.NewSystem(), Logger: p.logger,
 	})
 	executor.Handle(moverjob.JobType, job)

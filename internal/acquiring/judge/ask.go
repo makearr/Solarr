@@ -32,6 +32,8 @@ type Conn struct {
 	Params map[string][]string
 	// Seal removes the indexer's credential from a download link before it is stored; nil leaves the link as it is.
 	Seal func(link string) string
+	// Unreadable says why the indexer is not asked: its capabilities were never read, so no category is known to search in.
+	Unreadable string
 }
 
 // Takes reports whether the indexer accepts every parameter a structured query uses; unknown caps accept anything.

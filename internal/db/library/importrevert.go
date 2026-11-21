@@ -18,6 +18,9 @@ import (
 // CANCELLED has nothing left.
 var ErrSessionNotRevertible = errors.New("library: import session cannot be reverted from its current state")
 
+// ErrRevertFileBlocked is a file the revert could not move to the recycle bin (a folder not writable, say); a retry may succeed.
+var ErrRevertFileBlocked = errors.New("a file could not be moved to the recycle bin")
+
 // Recycling is where a library's removed files go: how long recycle bin keeps them (Sonarr's
 // recycling bin cleanup) and whether folders they leave empty are removed.
 type Recycling struct {
@@ -236,7 +239,7 @@ func (r ImportRevert) recycleObject(ctx context.Context, file UnitFile, recyclin
 	if err != nil {
 		// A file deleted by hand since still has its rows go, or the revert never finishes.
 		if !errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("recycle bin %q: %w", target.RelPath, err)
+			return fmt.Errorf("%w: %q: %w", ErrRevertFileBlocked, target.RelPath, err)
 		}
 	} else {
 		result.RecycledPaths = append(result.RecycledPaths, entry)

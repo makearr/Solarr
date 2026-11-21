@@ -431,6 +431,9 @@ func TestImportRevert_AFailedUnitKeepsItsWorkForTheRetry(t *testing.T) {
 	if err == nil {
 		t.Fatal("Revert succeeded though a file could not be moved")
 	}
+	if !errors.Is(err, library.ErrRevertFileBlocked) {
+		t.Errorf("err = %v, want ErrRevertFileBlocked", err)
+	}
 	if first.UnitsReverted != 2 || first.WorksDeleted != 2 {
 		t.Fatalf("first revert = %+v, want the two other units done", first)
 	}

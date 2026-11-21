@@ -67,6 +67,9 @@ func (a SystemHealth) Checks(ctx context.Context) []apiserver.HealthCheck {
 			Link:    "/connections/indexers",
 		})
 	}
+	if indexers, err := a.Cache.Indexers(ctx); err == nil {
+		checks = append(checks, unreadableIndexers(indexers)...)
+	}
 	if a.searchingOffWithConnections(ctx) {
 		checks = append(checks, apiserver.HealthCheck{
 			ID: "searching_off", Severity: apiserver.HealthWarning,
@@ -91,6 +94,21 @@ func (a SystemHealth) Checks(ctx context.Context) []apiserver.HealthCheck {
 	checks = append(checks, a.failingTasks(ctx)...)
 	checks = append(checks, a.staleBackup(ctx)...)
 	return append(checks, pausedForRoom(snapshot)...)
+}
+
+// unreadableIndexers names each enabled indexer whose capabilities were never read: searches skip it and say why.
+func unreadableIndexers(indexers []settings.Indexer) []apiserver.HealthCheck {
+	var checks []apiserver.HealthCheck
+	for _, found := range indexers {
+		if found.Enabled && found.CategoriesJSON == "" {
+			checks = append(checks, apiserver.HealthCheck{
+				ID: fmt.Sprintf("indexer_unreadable_%d", found.ID), Severity: apiserver.HealthWarning,
+				Message: found.Name + " is not searched: its capabilities were never read (is the host reachable?).",
+				Link:    "/connections/indexers",
+			})
+		}
+	}
+	return checks
 }
 
 // missingMediaTools says ffprobe or ffmpeg cannot run: no file can be read, so no import or scan can work.

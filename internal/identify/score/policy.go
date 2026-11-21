@@ -1,8 +1,10 @@
 package score
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -198,4 +200,19 @@ func ParseUpgrade(data []byte) (UpgradePolicy, error) {
 		return UpgradePolicy{}, fmt.Errorf("score: parsing upgrade policy: %w", err)
 	}
 	return policy, nil
+}
+
+// ValidateUpgradeStrict names the key of an upgrade document that ParseUpgrade would ignore; stored documents keep loading.
+func ValidateUpgradeStrict(data []byte) []Problem {
+	if len(data) == 0 {
+		return nil
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var policy UpgradePolicy
+	err := decoder.Decode(&policy)
+	if field, found := strings.CutPrefix(fmt.Sprint(err), "json: unknown field "); found {
+		return []Problem{{Value: strings.Trim(field, `"`), Expectation: "a known upgrade key; this one would be ignored"}}
+	}
+	return nil
 }

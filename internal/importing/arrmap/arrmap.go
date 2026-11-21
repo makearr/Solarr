@@ -44,6 +44,8 @@ type Run struct {
 	Place func(rootFolder string) (int64, bool)
 	// Progress tells how far the walk is.
 	Progress func(done, total int64)
+	// Counted tells what the walk has added so far, after every item; nil is ignored.
+	Counted func(counts library.ArrImportCounts)
 	// Record adds one item to the run's list, which a revert reads.
 	Record func(ctx context.Context, item library.NewArrImportItem) error
 	// Link remembers what an *Arr item is here, for sending monitoring back.
@@ -191,6 +193,9 @@ func Walk[T any](ctx context.Context, run Run, source Source[T]) (library.ArrImp
 		}
 		walked++
 		run.Progress(walked, total)
+		if run.Counted != nil {
+			run.Counted(counts)
+		}
 		return nil
 	})
 	if message := summarise(unmapped, failures); message != "" {

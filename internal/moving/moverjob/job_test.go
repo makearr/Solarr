@@ -34,6 +34,8 @@ type fixture struct {
 	fsys  *fsx.Mem
 	store *store.Store
 	clock *clock.Fake
+	// finished counts the jobs whose files all moved.
+	finished int
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -119,6 +121,7 @@ func (f *fixture) job(roots moverjob.RootFolders) *moverjob.Job {
 	return moverjob.NewJob(moverjob.Config{
 		FS: f.fsys, MoveJobs: library.NewMoveJobs(f.store), Physical: library.NewPhysical(f.store), Links: library.NewObjectLinks(f.store),
 		Roots: roots, Clock: f.clock, Logger: slog.New(slog.DiscardHandler),
+		Finished: func(context.Context) { f.finished++ },
 	})
 }
 
@@ -186,6 +189,9 @@ func TestJob_MovesAFileCrossFilesystemAndRecordsIt(t *testing.T) {
 	}
 	if fx.exists("/root1/Artist/Album/track.flac") {
 		t.Error("source file still exists after a completed move")
+	}
+	if fx.finished != 1 {
+		t.Errorf("finished hook ran %d times, want once for the libraries' counts", fx.finished)
 	}
 
 	physical := library.NewPhysical(fx.store)

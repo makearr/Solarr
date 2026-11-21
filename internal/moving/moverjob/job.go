@@ -93,6 +93,7 @@ type Job struct {
 	links           library.ObjectLinks
 	roots           RootFolders
 	drainCompletion DrainCompletion
+	finished        func(ctx context.Context)
 	permissions     Permissions
 	clock           clock.Clock
 	logger          *slog.Logger
@@ -108,6 +109,8 @@ type Config struct {
 	Links           library.ObjectLinks
 	Roots           RootFolders
 	DrainCompletion DrainCompletion
+	// Finished runs after a job's files have moved, for the libraries' counts that follow the files; nil does nothing.
+	Finished func(ctx context.Context)
 	// Permissions is optional; a rename run for one library applies it to what it moves.
 	Permissions Permissions
 	Clock       clock.Clock
@@ -122,7 +125,7 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		fsys: config.FS, moveJobs: config.MoveJobs, physical: config.Physical, links: config.Links,
-		roots: config.Roots, drainCompletion: config.DrainCompletion, permissions: config.Permissions,
+		roots: config.Roots, drainCompletion: config.DrainCompletion, finished: config.Finished, permissions: config.Permissions,
 		clock: config.Clock, logger: logger,
 	}
 }
@@ -205,6 +208,9 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	j.logger.Info("move job finished", slog.Int64("move_job_id", moveJob.ID))
 	if err := j.moveJobs.Finish(ctx, moveJob.ID, library.MoveJobDone, j.clock.Now().Unix(), ""); err != nil {
 		return err
+	}
+	if j.finished != nil {
+		j.finished(ctx)
 	}
 
 	if j.drainCompletion != nil && moveJob.Reason == string(mover.ReasonDrain) && moveJob.SourceRootID != nil {

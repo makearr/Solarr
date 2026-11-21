@@ -81,7 +81,7 @@ func (a WorkAdding) Lookup(ctx context.Context, categoryID int64, kind, query st
 	}
 	found, err := adding.LookupWorks(ctx, media.AddLookup{CategoryID: categoryID, Kind: kind, Query: query, Limit: limit})
 	if err != nil {
-		return nil, notWired(err)
+		return nil, lookupFailure(err)
 	}
 	mediaType, _ := a.Categories.MediaTypeOf(categoryID)
 	rows := make([]apiserver.AddCandidateRow, len(found))
@@ -127,6 +127,15 @@ func (a WorkAdding) Add(ctx context.Context, request apiserver.AddWorkRequest) (
 		a.AfterAdd(ctx)
 	}
 	return apiserver.AddWorkResult{Kind: result.Kind, WorkID: result.WorkID, PersonID: result.PersonID, Searching: result.Searching}, nil
+}
+
+// lookupFailure is notWired for a lookup, where an error no sentinel names means the provider did not answer; it names the provider.
+func lookupFailure(err error) error {
+	if !errors.Is(err, media.ErrNotWired) && !errors.Is(err, media.ErrUnknownCandidate) && !errors.Is(err, media.ErrInvalidAdd) &&
+		!errors.Is(err, media.ErrQueryTooShort) && !errors.Is(err, media.ErrSourceUnavailable) {
+		return fmt.Errorf("%w: %w", apiserver.ErrSeriesSourceUnavailable, err)
+	}
+	return notWired(err)
 }
 
 func notWired(err error) error {

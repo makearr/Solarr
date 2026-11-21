@@ -49,15 +49,16 @@ func (p *process) indexerConns(ctx context.Context) ([]music.IndexerConn, error)
 			continue
 		}
 		categories := found.StoredMusicCategories()
+		var unreadable bool
 		if len(categories) == 0 {
 			var ask bool
-			if categories, ask = p.categoriesFor(ctx, found, client, indexer.RootMusic); !ask {
+			if categories, ask, unreadable = p.categoriesFor(ctx, found, client, indexer.RootMusic); !ask && !unreadable {
 				continue
 			}
 		}
 		conn := music.IndexerConn{
 			ID: found.ID, Name: found.Name, Impl: found.Impl, Priority: found.Priority, Client: client,
-			Categories: categories,
+			Categories: categories, Unreadable: unreadableReason(unreadable),
 		}
 		if p.indexerCaps != nil {
 			conn.Params = map[string][]string{"music": p.indexerCaps.musicParams(ctx, found.ID, found.BaseURL, client)}
@@ -65,6 +66,14 @@ func (p *process) indexerConns(ctx context.Context) ([]music.IndexerConn, error)
 		conns = append(conns, conn)
 	}
 	return conns, nil
+}
+
+// unreadableReason is what a search reports for an indexer whose capabilities could not be read; empty when they could.
+func unreadableReason(unreadable bool) string {
+	if !unreadable {
+		return ""
+	}
+	return "not searched: its capabilities could not be read, so no category is known"
 }
 
 // tvIndexerConns is indexerConns for TV: the same connections, searched in TV's categories with tvsearch's parameters.
@@ -117,14 +126,14 @@ func (p *process) searchConns(ctx context.Context, root int, wanted []int, funct
 		if !known {
 			continue
 		}
-		categories, ask := p.categoriesFor(ctx, found, client, root)
-		if !ask {
+		categories, ask, unreadable := p.categoriesFor(ctx, found, client, root)
+		if !ask && !unreadable {
 			continue
 		}
 		if wanted != nil {
 			categories = slices.Clone(wanted)
 		}
-		conn := judge.Conn{ID: found.ID, Name: found.Name, Impl: found.Impl, Priority: found.Priority, Client: client, Categories: categories,
+		conn := judge.Conn{ID: found.ID, Name: found.Name, Impl: found.Impl, Priority: found.Priority, Client: client, Categories: categories, Unreadable: unreadableReason(unreadable),
 			Seal: func(link string) string { return indexer.SealLink(link, apiKey.Reveal()) }}
 		if p.indexerCaps != nil {
 			if params := p.indexerCaps.searchParams(ctx, found.ID, found.BaseURL, client, capsSearch); params != nil {

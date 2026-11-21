@@ -65,12 +65,15 @@ type ArrSync struct {
 // ArrProgress is how far each running import has walked its artists; in memory, since it only matters while
 // the walk goroutine lives.
 type ArrProgress struct {
-	mu   sync.Mutex
-	runs map[int64][2]int64
+	mu     sync.Mutex
+	runs   map[int64][2]int64
+	counts map[int64]library.ArrImportCounts
 }
 
 // NewArrProgress builds an empty board.
-func NewArrProgress() *ArrProgress { return &ArrProgress{runs: map[int64][2]int64{}} }
+func NewArrProgress() *ArrProgress {
+	return &ArrProgress{runs: map[int64][2]int64{}, counts: map[int64]library.ArrImportCounts{}}
+}
 
 func (p *ArrProgress) set(importID, done, total int64) {
 	if p == nil {
@@ -81,6 +84,16 @@ func (p *ArrProgress) set(importID, done, total int64) {
 	p.runs[importID] = [2]int64{done, total}
 }
 
+// setCounts keeps what the walk has added so far, which the database only learns when the run ends.
+func (p *ArrProgress) setCounts(importID int64, counts library.ArrImportCounts) {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.counts[importID] = counts
+}
+
 func (p *ArrProgress) clear(importID int64) {
 	if p == nil {
 		return
@@ -88,6 +101,7 @@ func (p *ArrProgress) clear(importID int64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	delete(p.runs, importID)
+	delete(p.counts, importID)
 }
 
 // annotate adds the live figure to a run still walking.
@@ -99,6 +113,10 @@ func (p *ArrProgress) annotate(view apiserver.ArrImportRun) apiserver.ArrImportR
 	defer p.mu.Unlock()
 	if figure, found := p.runs[view.ID]; found {
 		view.ArtistsDone, view.ArtistsTotal = figure[0], figure[1]
+	}
+	if counts, found := p.counts[view.ID]; found {
+		view.ArtistsCreated, view.ArtistsMatched = counts.ArtistsCreated, counts.ArtistsMatched
+		view.AlbumsCreated, view.AlbumsMatched, view.ItemsParked = counts.AlbumsCreated, counts.AlbumsMatched, counts.ItemsParked
 	}
 	return view
 }
@@ -209,6 +227,7 @@ func (a ArrSync) run(importID int64, instance settings.ArrInstance, client arrim
 			return a.categoryFor(instance, rewritePath(rootFolder, options.PathRewrites), a.Cache.Snapshot().RootFolders())
 		},
 		Progress: func(done, total int64) { a.Progress.set(importID, done, total) },
+		Counted:  func(counts library.ArrImportCounts) { a.Progress.setCounts(importID, counts) },
 		Record: func(ctx context.Context, item library.NewArrImportItem) error {
 			_, err := a.Imports.AddItem(ctx, importID, item, a.Clock.Now().Unix())
 			return err

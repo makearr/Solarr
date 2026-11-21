@@ -49,3 +49,16 @@ func TestValidateStrict_UpgradeBelongsBesideTheRules(t *testing.T) {
 		t.Fatalf("ValidateStrict = %#v, want %#v", got, want)
 	}
 }
+
+func TestValidateUpgradeStrict(t *testing.T) {
+	if got := ValidateUpgradeStrict([]byte(`{"min_delta":2,"window":"24h"}`)); got != nil {
+		t.Errorf("a known document: %#v, want none", got)
+	}
+	if got := ValidateUpgradeStrict(nil); got != nil {
+		t.Errorf("an empty document: %#v, want none", got)
+	}
+	want := []Problem{{Value: "min_delt", Expectation: "a known upgrade key; this one would be ignored"}}
+	if got := ValidateUpgradeStrict([]byte(`{"min_delt":2}`)); !reflect.DeepEqual(got, want) {
+		t.Errorf("a typo: %#v, want %#v", got, want)
+	}
+}

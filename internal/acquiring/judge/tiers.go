@@ -110,8 +110,11 @@ func AskThroughTiers(
 	var walk TierWalk
 	found := make([][]Find, len(conns))
 	looking := make([]bool, len(conns))
-	for index := range looking {
-		looking[index] = true
+	for index, conn := range conns {
+		looking[index] = conn.Unreadable == ""
+		if conn.Unreadable != "" {
+			walk.IndexerErrors = append(walk.IndexerErrors, IndexerError{IndexerID: conn.ID, IndexerName: conn.Name, Error: conn.Unreadable})
+		}
 	}
 	for tierIndex, queries := range tiers {
 		var asked []int

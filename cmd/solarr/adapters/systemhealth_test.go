@@ -11,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/poll"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
@@ -127,5 +128,16 @@ func TestSystemHealth_StaleBackupWarnsPastTwoGapsAndIgnoresPreMigrationCopies(t 
 	}
 	if got := health().staleBackup(t.Context()); len(got) != 0 {
 		t.Fatalf("no backup yet: checks = %+v, want none", got)
+	}
+}
+
+func TestUnreadableIndexers_NameEachEnabledIndexerWithoutCapabilities(t *testing.T) {
+	checks := unreadableIndexers([]settings.Indexer{
+		{ID: 1, Name: "Read", Enabled: true, CategoriesJSON: "{}"},
+		{ID: 2, Name: "Dead", Enabled: true},
+		{ID: 3, Name: "Off", Enabled: false},
+	})
+	if len(checks) != 1 || checks[0].ID != "indexer_unreadable_2" || !strings.Contains(checks[0].Message, "Dead") {
+		t.Errorf("checks = %+v, want one for the enabled indexer without capabilities", checks)
 	}
 }

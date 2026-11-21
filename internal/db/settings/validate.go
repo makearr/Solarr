@@ -183,6 +183,10 @@ func validateQualityProfile(name, rulesJSON, upgradeJSON string) config.Problems
 		problems = append(problems, config.Problem{
 			Path: "upgrade", Value: upgradeJSON, Expectation: fmt.Sprintf("a valid upgrade document: %v", err),
 		})
+	} else {
+		for _, mistake := range score.ValidateUpgradeStrict([]byte(upgradeJSON)) {
+			problems = append(problems, config.Problem{Path: "upgrade", Value: mistake.Value, Expectation: mistake.Expectation})
+		}
 	}
 	return problems
 }

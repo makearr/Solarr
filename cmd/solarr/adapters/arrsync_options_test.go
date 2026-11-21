@@ -24,9 +24,10 @@ func TestRewritePath_TheFirstMatchingPrefixApplies(t *testing.T) {
 func TestArrProgress_OnlyARunningImportCarriesTheLiveFigure(t *testing.T) {
 	board := NewArrProgress()
 	board.set(7, 3, 10)
+	board.setCounts(7, library.ArrImportCounts{ArtistsCreated: 2, AlbumsCreated: 5})
 	running := board.annotate(apiserver.ArrImportRun{ID: 7, State: library.ArrImportRunning})
-	if running.ArtistsDone != 3 || running.ArtistsTotal != 10 {
-		t.Errorf("running = %+v, want 3 of 10", running)
+	if running.ArtistsDone != 3 || running.ArtistsTotal != 10 || running.ArtistsCreated != 2 || running.AlbumsCreated != 5 {
+		t.Errorf("running = %+v, want 3 of 10 with 2 artists and 5 albums created", running)
 	}
 	if done := board.annotate(apiserver.ArrImportRun{ID: 7, State: library.ArrImportDone}); done.ArtistsTotal != 0 {
 		t.Errorf("a finished run carries %+v", done)

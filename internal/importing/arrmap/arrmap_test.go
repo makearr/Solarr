@@ -49,9 +49,11 @@ func TestWalkArr_SyncsWhatTheOptionsWantAndKeepsGoing(t *testing.T) {
 		},
 	}
 	var figure [2]int64
+	var running library.ArrImportCounts
 	walk := Run{
 		Options:  Options{Monitored: true},
 		Progress: func(done, total int64) { figure = [2]int64{done, total} },
+		Counted:  func(counts library.ArrImportCounts) { running = counts },
 		Place: func(root string) (int64, bool) {
 			if strings.HasPrefix(root, "/arr/music/") {
 				return 4, true
@@ -64,6 +66,9 @@ func TestWalkArr_SyncsWhatTheOptionsWantAndKeepsGoing(t *testing.T) {
 	want := library.ArrImportCounts{ArtistsCreated: 2, ArtistsMatched: 1, AlbumsCreated: 5, ItemsParked: 1}
 	if counts != want {
 		t.Errorf("counts = %+v, want %+v", counts, want)
+	}
+	if running != want {
+		t.Errorf("the live counts ended at %+v, want %+v", running, want)
 	}
 	slices.Sort(synced)
 	if !slices.Equal(synced, []string{"Alpha", "Delta", "Echo"}) {

@@ -77,18 +77,18 @@ const capsRefreshAfter = 7 * 24 * time.Hour
 
 // categoriesFor answers the categories to search an indexer in for the media type rooted at root, from the capabilities
 // stored on it, read from the indexer first when none are stored or they are old. ask is false when the indexer lists
-// nothing for the type, or cannot be read: it is not worth a request. An indexer that lists no categories at all is
+// nothing for the type, or cannot be read (unreadable): it is not worth a request. An indexer that lists no categories at all is
 // asked without any.
-func (p *process) categoriesFor(ctx context.Context, found settings.Indexer, client indexer.Driver, root int) (ids []int, ask bool) {
+func (p *process) categoriesFor(ctx context.Context, found settings.Indexer, client indexer.Driver, root int) (ids []int, ask, unreadable bool) {
 	listed, readable := p.storedCategories(ctx, found, client)
 	if !readable {
-		return nil, false
+		return nil, false, true
 	}
 	if len(listed) == 0 {
-		return nil, true
+		return nil, true, false
 	}
 	ids = indexer.CategoriesIn(listed, root)
-	return ids, len(ids) > 0
+	return ids, len(ids) > 0, false
 }
 
 // storedCategories reads the categories kept on the indexer, refreshing them through its t=caps when missing or old.

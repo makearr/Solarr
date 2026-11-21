@@ -314,6 +314,19 @@ func TestSubtitleTracks_ListTextStreamsAndSidecarsAndSkipPictures(t *testing.T) 
 	}
 }
 
+func TestSubtitleVTT_ATrackTheFileLacksIsNoSuchTrack(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	if err := fsys.MkdirAll("/m", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []int{1, 7, transcode.SidecarBase} {
+		err := transcode.NewService(subtitleRunner{}, nil, fsys).SubtitleVTT(t.Context(), io.Discard, "/m/film.mkv", id, 0)
+		if !errors.Is(err, transcode.ErrNoSuchTrack) {
+			t.Errorf("track %d: err = %v, want ErrNoSuchTrack", id, err)
+		}
+	}
+}
+
 func TestStream_ANewerConversionByTheSameOwnerTakesTheSlot(t *testing.T) {
 	service := transcode.NewService(fakeRunner{}, waitingPiper{}, nil)
 	spec := transcode.Spec{Owner: "1//a", Kind: transcode.Audio, Path: "/a"}

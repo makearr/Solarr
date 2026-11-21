@@ -109,6 +109,8 @@ func (s *Service) SubtitleVTT(ctx context.Context, w io.Writer, filePath string,
 			return ErrNoSuchTrack
 		}
 		source, mapping = path.Join(path.Dir(filePath), names[id-SidecarBase]), nil
+	} else if tracks, err := s.SubtitleTracks(ctx, filePath); err == nil && !slices.ContainsFunc(tracks, func(track SubtitleTrack) bool { return track.ID == id }) {
+		return ErrNoSuchTrack // ffmpeg would fail on a stream the file lacks; that is a missing track, not a broken one
 	}
 	args := []string{"-v", "error"}
 	if startSecond > 0 {

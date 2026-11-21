@@ -145,6 +145,9 @@ func (a ImportSessions) RevertImportSession(ctx context.Context, id int64, retai
 	if errors.Is(err, library.ErrSessionNotRevertible) {
 		return apiserver.ImportRevertResult{}, apiserver.ErrImportSessionNotRevertible
 	}
+	if errors.Is(err, library.ErrRevertFileBlocked) {
+		return apiserver.ImportRevertResult{}, fmt.Errorf("%w: %w", apiserver.ErrImportRevertBlocked, err)
+	}
 	if err != nil {
 		return apiserver.ImportRevertResult{}, err
 	}

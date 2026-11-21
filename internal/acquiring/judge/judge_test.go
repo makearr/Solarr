@@ -208,6 +208,24 @@ func TestAskThroughTiersWidensEachIndexerOnItsOwn(t *testing.T) {
 	}
 }
 
+// An indexer whose capabilities were never read is not asked, and the search says so instead of dropping it silently.
+func TestAskThroughTiersReportsAnIndexerItCannotRead(t *testing.T) {
+	asked := &fakeSearcher{items: []indexer.RawItem{{GUID: "a"}}}
+	unread := &fakeSearcher{items: []indexer.RawItem{{GUID: "b"}}}
+	conns := []judge.Conn{{ID: 1, Name: "Good", Client: asked}, {ID: 2, Name: "Dead", Client: unread, Unreadable: "capabilities unread"}}
+	tiers := [][]judge.Query{{{Function: "search", Text: "show"}}}
+	walk, err := judge.AskThroughTiers(t.Context(), conns, tiers, time.Second, func(conn judge.Conn, _ []indexer.RawItem) ([]judge.Find, error) {
+		return []judge.Find{{Conn: conn, Raw: indexer.RawItem{GUID: "found"}}}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []judge.IndexerError{{IndexerID: 2, IndexerName: "Dead", Error: "capabilities unread"}}
+	if !slices.Equal(walk.IndexerErrors, want) || len(unread.seen) != 0 || len(asked.seen) != 1 {
+		t.Errorf("errors = %+v, unread asked %d times, good asked %d times", walk.IndexerErrors, len(unread.seen), len(asked.seen))
+	}
+}
+
 // limitRecorder answers nothing and remembers the limit each query asked with.
 type limitRecorder struct{ limits []int }
 

@@ -201,8 +201,11 @@ type TransferMethodCount struct {
 // workspace); answered as 409 naming it.
 var ErrImportSourceRefused = errors.New("apiserver: import source refused")
 
-// importOrigins are the origins a person may start an import with; "acquisition" and "watched" are Solarr's own.
-var importOrigins = []string{"manual", "adoption"}
+// ErrImportRevertBlocked is a revert that could not move a file; the text names the file and the reason, and a retry may work.
+var ErrImportRevertBlocked = errors.New("the revert stopped")
+
+// importOrigins are the origins the API accepts, the spec's enum.
+var importOrigins = []string{"manual", "acquisition", "watched", "adoption"}
 
 // InspectImport enqueues ADR-48's own inspection job. Administrator only --
 // it points a real filesystem walk at whatever path the caller names, the
