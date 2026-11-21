@@ -456,3 +456,45 @@ func TestASourceThatIsDownStopsThePassButKeepsWhatWasDecidedBefore(t *testing.T)
 		t.Errorf("state = %+v", state)
 	}
 }
+
+func TestFiveLookupsInARowThatFailAreASourceThatIsDown(t *testing.T) {
+	f := newSyncFixture(t, show(1, "A"), show(2, "B"), show(3, "C"), show(4, "D"), show(5, "E"), show(6, "F"))
+	broken := errors.New("500")
+	f.module.lookupErr = map[string]error{"A": broken, "B": broken, "C": broken, "D": broken, "E": broken}
+	f.run(t, 1)
+	if len(f.added) != 0 {
+		t.Errorf("added %v from a source that failed every lookup", f.addedIDs())
+	}
+	state, _ := f.records.State(t.Context(), 1)
+	if state.RunFailure != "source_unavailable" {
+		t.Errorf("state = %+v, want source_unavailable", state)
+	}
+}
+
+func TestLookupsThatFailBetweenSuccessesDoNotMakeASourceDown(t *testing.T) {
+	f := newSyncFixture(t, show(1, "A"), show(2, "B"), show(3, "C"), show(4, "D"), show(5, "E"), show(6, "F"), show(7, "G"), show(8, "H"))
+	broken := errors.New("500")
+	f.module.lookupErr = map[string]error{"A": broken, "B": broken, "C": broken, "D": broken, "F": broken, "G": broken}
+	f.run(t, 1)
+	if got := f.addedIDs(); !reflect.DeepEqual(got, []string{"tmdb:5", "tmdb:8"}) {
+		t.Errorf("added %v, want the two entries that resolved", got)
+	}
+}
+
+func TestAnEntryThatCannotBeLookedUpSaysWhyInThePreview(t *testing.T) {
+	f := newSyncFixture(t, show(1, "First"), show(2, "Odd"))
+	f.module.lookupErr = map[string]error{"Odd": errors.New("400 bad name")}
+	judged, err := f.service.Preview(t.Context(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reasons []string
+	for _, j := range judged {
+		if j.Verdict == importlist.VerdictUnknown {
+			reasons = append(reasons, j.Reason)
+		}
+	}
+	if !reflect.DeepEqual(reasons, []string{"400 bad name"}) {
+		t.Errorf("reasons = %v, want the lookup error", reasons)
+	}
+}
