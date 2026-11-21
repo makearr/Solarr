@@ -233,6 +233,7 @@ func (p *process) dispatchFor(mediaType string) music.Dispatch {
 	ready := library.NewReadyQueue(p.library)
 	blocklist := library.NewBlocklistStore(p.library)
 	return music.Dispatch{
+		MediaType:  mediaType,
 		Candidates: statistics.NewCandidates(p.statistics), Acquisitions: library.NewAcquisitions(p.library),
 		Desired:     library.NewDesired(p.library),
 		Downloaders: func(ctx context.Context) ([]music.DownloaderConn, error) { return p.downloaderConnsFor(ctx, mediaType) },

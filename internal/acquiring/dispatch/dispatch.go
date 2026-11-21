@@ -113,6 +113,8 @@ type Dispatch struct {
 	Fetch       ReleaseFetcher
 	// History is optional: told of every grab, for History and the album's page.
 	History func(ctx context.Context, kind download.HistoryKind, acquisition library.Acquisition, detail string)
+	// MediaType is the type this dispatch sends for, which SendHeld takes held releases of; empty takes every type's.
+	MediaType string
 	// Ready is optional: where an automatic send is held while its client's queue is full.
 	Ready *library.ReadyQueue
 	// ReadyLimit is optional: how many releases Ready may hold (DefaultReadyLimit when nil).

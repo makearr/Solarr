@@ -209,6 +209,17 @@ func (s *Snapshot) CategoryIDsOf(mediaType string) []int64 {
 	return ids
 }
 
+// CategoryMediaTypes returns the media types the categories (libraries) hold, each once, in the order they first appear.
+func (s *Snapshot) CategoryMediaTypes() []string {
+	var types []string
+	for _, category := range s.categories {
+		if !slices.Contains(types, category.MediaType) {
+			types = append(types, category.MediaType)
+		}
+	}
+	return types
+}
+
 // newSnapshot builds the indexes. It clones the slices it is given, so a caller
 // keeping a reference cannot mutate a published snapshot.
 func newSnapshot(users []User, categories []Category, rootFolders []RootFolder,

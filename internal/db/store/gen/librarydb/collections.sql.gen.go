@@ -2889,18 +2889,21 @@ SELECT candidate_id, desired_item_id, priority, queued_at, expires_at, size_byte
        indexer_id, guid, title, download_url, protocol, score, item_state
 FROM ready_queue
 WHERE expires_at > ?1
+  AND (CAST(?2 AS TEXT) = '' OR EXISTS (SELECT 1 FROM desired_item d JOIN work w ON w.id = d.work_id
+                                            WHERE d.id = ready_queue.desired_item_id AND w.media_type = CAST(?2 AS TEXT)))
 ORDER BY priority DESC, queued_at ASC
-LIMIT ?2
+LIMIT ?3
 `
 
 type NextReadyParams struct {
-	Now      int64
-	PageSize int64
+	Now       int64
+	MediaType string
+	PageSize  int64
 }
 
 // Revalidated at dispatch, so an expired entry is never handed to a downloader.
 func (q *Queries) NextReady(ctx context.Context, arg NextReadyParams) ([]ReadyQueue, error) {
-	rows, err := q.db.QueryContext(ctx, nextReady, arg.Now, arg.PageSize)
+	rows, err := q.db.QueryContext(ctx, nextReady, arg.Now, arg.MediaType, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}

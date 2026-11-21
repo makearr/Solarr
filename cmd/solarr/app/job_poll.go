@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -40,11 +41,18 @@ func (p *process) pollJob() *poll.Job {
 
 // sendHeld sends held releases to clients with room again (ADR-57's HELD, section 10.5).
 func (p *process) sendHeld(ctx context.Context) error {
-	sent, err := p.musicDispatch().SendHeld(ctx, clock.NewSystem().Now())
+	var failures []error
+	sent := 0
+	// Each media type sends its own held releases, under its own client category.
+	for _, mediaType := range p.cache.Snapshot().CategoryMediaTypes() {
+		count, err := p.dispatchOf(mediaType).SendHeld(ctx, clock.NewSystem().Now())
+		sent += count
+		failures = append(failures, err)
+	}
 	if sent > 0 {
 		p.logger.Info("held releases sent", slog.Int("sent", sent))
 	}
-	return err
+	return errors.Join(failures...)
 }
 
 func (p *process) enqueuePoll(ctx context.Context) (jobs.EnqueueResult, error) {

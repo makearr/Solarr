@@ -55,7 +55,12 @@ func (r ReadyQueue) Hold(ctx context.Context, entry ReadyEntry, limit int64) err
 
 // Next answers up to limit unexpired entries, highest priority first, then longest waiting.
 func (r ReadyQueue) Next(ctx context.Context, now int64, limit int) ([]ReadyEntry, error) {
-	rows, err := librarydb.New(r.store.Read()).NextReady(ctx, librarydb.NextReadyParams{Now: now, PageSize: int64(limit)})
+	return r.NextOf(ctx, now, limit, "")
+}
+
+// NextOf is Next for the items of one media type, whose releases go to that type's download category; "" is every type.
+func (r ReadyQueue) NextOf(ctx context.Context, now int64, limit int, mediaType string) ([]ReadyEntry, error) {
+	rows, err := librarydb.New(r.store.Read()).NextReady(ctx, librarydb.NextReadyParams{Now: now, PageSize: int64(limit), MediaType: mediaType})
 	if err != nil {
 		return nil, err
 	}

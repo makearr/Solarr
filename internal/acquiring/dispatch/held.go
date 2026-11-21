@@ -103,7 +103,7 @@ func (d Dispatch) SendHeld(ctx context.Context, at time.Time) (int, error) {
 	if err := d.Ready.PurgeExpired(ctx, at.Unix()); err != nil {
 		return 0, err
 	}
-	entries, err := d.Ready.Next(ctx, at.Unix(), heldBatch)
+	entries, err := d.Ready.NextOf(ctx, at.Unix(), heldBatch, d.MediaType)
 	if err != nil || len(entries) == 0 {
 		return 0, err
 	}

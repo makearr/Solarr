@@ -359,4 +359,7 @@ func TestCategoryIDsOf_AnswersOnlyThatMediaTypesLibraries(t *testing.T) {
 	if got := cache.Snapshot().CategoryIDsOf("movie"); got != nil {
 		t.Errorf("CategoryIDsOf(movie) = %v, want none", got)
 	}
+	if got := cache.Snapshot().CategoryMediaTypes(); !slices.Equal(got, []string{"music", "tv"}) {
+		t.Errorf("CategoryMediaTypes = %v, want each type once, in order of appearance", got)
+	}
 }

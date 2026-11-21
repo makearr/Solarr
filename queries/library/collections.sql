@@ -49,6 +49,8 @@ SELECT candidate_id, desired_item_id, priority, queued_at, expires_at, size_byte
        indexer_id, guid, title, download_url, protocol, score, item_state
 FROM ready_queue
 WHERE expires_at > sqlc.arg(now)
+  AND (CAST(sqlc.arg(media_type) AS TEXT) = '' OR EXISTS (SELECT 1 FROM desired_item d JOIN work w ON w.id = d.work_id
+                                            WHERE d.id = ready_queue.desired_item_id AND w.media_type = CAST(sqlc.arg(media_type) AS TEXT)))
 ORDER BY priority DESC, queued_at ASC
 LIMIT sqlc.arg(page_size);
 

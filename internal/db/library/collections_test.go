@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
@@ -149,6 +150,33 @@ func TestReadyQueueOrdersByPriorityThenAge(t *testing.T) {
 	if next[0].Priority != 90 || next[0].QueuedAt != 200 {
 		t.Errorf("first is priority %d queued at %d, want 90 at 200",
 			next[0].Priority, next[0].QueuedAt)
+	}
+}
+
+// A held release is sent under its own media type's download category, so each type asks for its own.
+func TestReadyQueueNextOfTakesOneMediaTypesReleases(t *testing.T) {
+	opened, _ := newLibrary(t)
+	film := createDesired(t, opened, createWork(t, opened, "movie", "Cige").ID, "SINGLE", 1)
+	album := createDesired(t, opened, createWork(t, opened, "music", "Ulem").ID, "SET", 1)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		for index, item := range []int64{film.ID, album.ID} {
+			if err := q.EnqueueReady(ctx, librarydb.EnqueueReadyParams{
+				CandidateID: int64(index + 1), DesiredItemID: item, Priority: 50, QueuedAt: 1, ExpiresAt: 9_000, Origin: "automatic",
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	ready := library.NewReadyQueue(opened)
+	for mediaType, want := range map[string]int64{"movie": film.ID, "music": album.ID} {
+		entries, err := ready.NextOf(t.Context(), 1_000, 10, mediaType)
+		if err != nil || len(entries) != 1 || entries[0].DesiredItemID != want {
+			t.Errorf("%s: %+v, %v; want only item %d", mediaType, entries, err, want)
+		}
+	}
+	if all, err := ready.Next(t.Context(), 1_000, 10); err != nil || len(all) != 2 {
+		t.Errorf("every type: %+v, %v; want both", all, err)
 	}
 }
 
