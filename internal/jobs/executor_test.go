@@ -528,3 +528,22 @@ func TestCompleteAndContinue_LostLeaseQueuesNothing(t *testing.T) {
 		t.Errorf("claimable = %d (%v), want 0: no continuation without the lease", claimable, err)
 	}
 }
+
+// A continuation that cannot be queued leaves the yielded job unfinished, so a failure cannot drop the rest of a sweep (SCHED-2).
+func TestCompleteAndContinue_AFailedContinuationLeavesTheJobRunning(t *testing.T) {
+	queue, _ := newQueue(t)
+	mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
+	job := claimOne(t, queue, jobs.PoolMaintenance, "worker-1")
+	attempt, err := queue.Start(t.Context(), job, "worker-1")
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	unqueueable := job
+	unqueueable.Type = "no.such.type"
+	if err := queue.CompleteAndContinue(t.Context(), unqueueable, "worker-1", attempt); !errors.Is(err, jobs.ErrUnknownType) {
+		t.Fatalf("CompleteAndContinue = %v, want ErrUnknownType", err)
+	}
+	if after, err := queue.Get(t.Context(), job.ID); err != nil || after.State != jobs.StateRunning {
+		t.Errorf("job = %+v, %v; want it still RUNNING", after, err)
+	}
+}

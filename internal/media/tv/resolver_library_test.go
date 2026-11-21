@@ -106,3 +106,24 @@ func TestAYearlessFolderIsNotPlacedOnTheNamesakeThatDiffersByAnArticle(t *testin
 		t.Errorf("the folder with an article was placed on the series without it, %d", got)
 	}
 }
+
+// RES-2: a folder the user excluded is not remembered as excluded, so lifting the exclusion takes effect at once.
+func TestLiftingAnExclusionPlacesTheFolderAtOnce(t *testing.T) {
+	service, opened := newService(t, searchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: errors.New("down")})
+	ids := []library.ExternalIDWrite{{Provider: "tvdb", ExternalID: "1234"}}
+	exclusions := library.NewExclusions(opened)
+	if err := exclusions.Exclude(t.Context(), addNow, "tv", "Example Show", ids); err != nil {
+		t.Fatal(err)
+	}
+	resolver := tv.Resolver{Service: service, Reader: library.NewSeriesReader(opened), Clock: service.Clock, DefaultProfileID: 1, Categories: categories{}, Resolved: &tv.FolderMemory{}}
+	files := []string{"Example Show/Season 1/Example Show - S01E01.mp4"}
+	if got, _ := resolver.ResolveFolder(t.Context(), 3, "Example Show", files, tv.FolderGuess{}); got != tv.ExcludedSeries {
+		t.Fatalf("resolved %d, want the excluded marker %d", got, tv.ExcludedSeries)
+	}
+	if err := exclusions.Unexclude(t.Context(), ids); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := resolver.ResolveFolder(t.Context(), 3, "Example Show", files, tv.FolderGuess{}); got <= 0 {
+		t.Errorf("resolved %d after the exclusion was lifted, want the series", got)
+	}
+}

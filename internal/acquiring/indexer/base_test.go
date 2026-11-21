@@ -91,6 +91,8 @@ func TestLimitReached(t *testing.T) {
 		`{"status":"failure","error":"Rate limit exceeded"}`:                               true,
 		`{"status":"failure","error":"Invalid API key"}`:                                   false,
 		`{"id":"1","result":{"torrents":[{"name":"Call Limit Exceeded"}]},"error":null}`:   false,
+		`{"status":"failure","error":"Too many requests"}`:                                 true,
+		`{"result":{"torrents":[]},"note":{"error":{"message":"call limit exceeded"}}}`:    false,
 	} {
 		if got := indexer.LimitReached([]byte(body)); got != want {
 			t.Errorf("LimitReached(%q) = %v, want %v", body, got, want)

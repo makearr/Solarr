@@ -488,3 +488,55 @@ func (a acquisitionLate) Get(context.Context, int64) (library.Acquisition, error
 	}
 	return library.Acquisition{DesiredItemID: a.itemID}, nil
 }
+
+// RES-1: a specials folder is placed on the series its season folder was placed on, by the memory of their shared parent.
+func TestImportPlacesASpecialsFolderOnTheSeriesItsSeasonFolderWasPlacedOn(t *testing.T) {
+	service, opened := newService(t, searchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
+	fake := clock.NewFakeAtEpoch()
+	fake.Set(addNow)
+	fsys := fsx.NewMem(fake)
+	for _, dir := range []string{"/downloads", "/library"} {
+		if err := fsys.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write := func(rel string) inspect.File {
+		abs := path.Join("/downloads", rel)
+		_ = fsys.MkdirAll(path.Dir(abs), 0o755)
+		file, err := fsys.Create(abs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = file.Write([]byte("episode " + rel))
+		_ = file.Close()
+		return inspect.File{RelPath: rel, SizeBytes: int64(len("episode " + rel)), Class: inspect.ClassMedia}
+	}
+	season := inspect.Unit{Directory: "Example Show", Media: []inspect.File{write("Example Show/Season 1/Example Show - S01E01 - Episode.mkv")}}
+	specials := inspect.Unit{Directory: "Example Show/Specials", Media: []inspect.File{write("Example Show/Specials/x - S00E01.mkv")}}
+
+	reader := library.NewSeriesReader(opened)
+	free, total := int64(1<<40), int64(1<<40)
+	importer := tv.NewImporter(tv.ImporterConfig{
+		FS: fsys, Roots: oneRoot{settings.RootFolder{ID: 9, Path: "/library", Online: true, Writable: true, FreeBytes: &free, TotalBytes: &total}},
+		Affinity: memoryAffinity{}, Physical: library.NewPhysical(opened), Series: service.Series, Reader: reader,
+		Identity: library.NewIdentity(opened), Desired: library.NewDesired(opened), Acquisitions: noAcquisition{},
+		Resolver:   tv.Resolver{Service: service, Reader: reader, Clock: fake, DefaultProfileID: 1, Categories: categories{}, Resolved: &tv.FolderMemory{}},
+		Categories: categories{}, Clock: fake,
+	})
+	var placed []int64
+	for index, unit := range []inspect.Unit{season, specials} {
+		result, err := importer.ImportBatch(t.Context(), batch.Request{
+			SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{int64(80 + index)},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Decisions[0].WorkID == nil {
+			t.Fatalf("unit %d was not placed on a series: %+v", index, result.Decisions[0])
+		}
+		placed = append(placed, *result.Decisions[0].WorkID)
+	}
+	if placed[0] != placed[1] {
+		t.Errorf("series = %v, want the specials on the season folder's series", placed)
+	}
+}

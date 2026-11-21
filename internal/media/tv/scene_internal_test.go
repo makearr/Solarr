@@ -81,6 +81,7 @@ func TestACoverageNamesTheSeriesAndItsYear(t *testing.T) {
 		"Shameless.2004.S01E03.720p.HDTV.x264-GRP":   false,
 		"Shameless.2011.S01E03.720p.HDTV.x264-GRP":   true,
 		"Shameless.2012.S01E03.720p.HDTV.x264-GRP":   true,
+		"Shameless.2014.S01E03.720p.HDTV.x264-GRP":   false,
 		"Shameless.US.S01E03.720p.HDTV.x264-GRP":     true,
 		"Shameless.S01E03.720p.HDTV.x264-GRP":        true,
 		"Titulo.AKA.Shameless.S01E03.720p.HDTV-GRP":  true,
@@ -90,6 +91,12 @@ func TestACoverageNamesTheSeriesAndItsYear(t *testing.T) {
 		if got, ok := w.coverage(parsed(t, name)); ok != want || ok && !reflect.DeepEqual(got, []int{3}) {
 			t.Errorf("%s: covers %v (%v), want covered = %v", name, got, ok, want)
 		}
+	}
+	// A daily release carries the air date, whose year says nothing about the series' own.
+	daily := wanted{season: 1, title: "Shameless", year: 2011, missing: map[int]library.SeriesEpisode{3: {Season: 1, Number: 3, Date: "2020-01-22"}}}
+	daily.names = parsetv.CleanTitleSet(daily.title, daily.aliases)
+	if _, ok := daily.coverage(parsed(t, "Shameless.2020.01.22.720p.HDTV.x264-GRP")); !ok {
+		t.Error("a daily release dated years after the series' first year was refused")
 	}
 	doctor := wanted{season: 1, title: "Doctor Who (2005)", year: 2005, missing: map[int]library.SeriesEpisode{1: {Season: 1, Number: 1}}}
 	doctor.names = parsetv.CleanTitleSet(doctor.title, doctor.aliases)

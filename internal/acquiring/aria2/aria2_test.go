@@ -109,11 +109,12 @@ func TestDownloader_AMagnetsMetadataFetchIsNeverAFinishedDownload(t *testing.T) 
 		active, stopped string
 		want            string
 	}{
-		"metadata alone":         {stopped: metadata, want: "eeee  downloading "},
-		"metadata then content":  {active: content, stopped: metadata, want: "eeee Album completed /downloads/Album"},
-		"content then metadata":  {active: metadata, stopped: content, want: "eeee Album completed /downloads/Album"},
-		"removed by a person":    {stopped: status("3", "removed", "eeee", "Album", "10", "2"), want: "eeee Album removed "},
-		"metadata that followed": {stopped: strings.Replace(metadata, `"bittorrent"`, `"followedBy":["2"],"bittorrent"`, 1), want: "eeee  downloading "},
+		"metadata alone":               {stopped: metadata, want: "eeee  downloading "},
+		"metadata then content":        {active: content, stopped: metadata, want: "eeee Album completed /downloads/Album"},
+		"content then metadata":        {active: metadata, stopped: content, want: "eeee Album completed /downloads/Album"},
+		"removed by a person":          {stopped: status("3", "removed", "eeee", "Album", "10", "2"), want: "eeee Album removed "},
+		"metadata that followed":       {stopped: strings.Replace(metadata, `"bittorrent"`, `"followedBy":["2"],"bittorrent"`, 1), want: "eeee  downloading "},
+		"named metadata that followed": {stopped: strings.Replace(status("1", "complete", "eeee", "Album", "0", "0"), `"bittorrent"`, `"followedBy":["2"],"bittorrent"`, 1), want: "eeee Album downloading "},
 	} {
 		server := rpc(map[string]string{
 			"aria2.tellActive": `[` + tc.active + `]`, "aria2.tellWaiting": `[]`, "aria2.tellStopped": `[` + tc.stopped + `]`,

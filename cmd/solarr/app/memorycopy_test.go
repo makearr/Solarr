@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/makearr/Solarr/internal/importing/importjob"
+	"github.com/makearr/Solarr/internal/moving/moverjob"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -116,5 +118,32 @@ func TestSyncAfterRequests_TwoRequestsMakeOneCopyAfterTheDebounce(t *testing.T) 
 	<-done
 	if len(copied) != 0 {
 		t.Errorf("%d further copies, want the two requests to make one", len(copied))
+	}
+}
+
+type noRunLog struct{}
+
+func (noRunLog) RecordRun(string, time.Time, time.Time) {}
+
+// Only jobs that place, move or recycle files ask for a database copy, and only while the databases run in RAM (RAM-1).
+func TestDiskWorkRunLog_AskForACopyOnlyAfterJobsThatChangeFiles(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		jobType   string
+		inRAM     bool
+		wantAsked bool
+	}{
+		{name: "an import", jobType: string(importjob.JobType), inRAM: true, wantAsked: true},
+		{name: "a move", jobType: string(moverjob.JobType), inRAM: true, wantAsked: true},
+		{name: "a job that touches no file", jobType: "scan.probe", inRAM: true},
+		{name: "an import with the databases on disk", jobType: string(importjob.JobType)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			memory := &memoryCopy{databaseRunning: test.inRAM, syncRequested: make(chan struct{}, 1)}
+			diskWorkRunLog{RunLog: noRunLog{}, memory: memory}.RecordRun(test.jobType, time.Time{}, time.Time{})
+			if asked := len(memory.syncRequested) == 1; asked != test.wantAsked {
+				t.Errorf("copy asked = %v, want %v", asked, test.wantAsked)
+			}
+		})
 	}
 }

@@ -16,9 +16,20 @@ import (
 type fakeTorrentSender struct {
 	fakeSabnzbdSender
 	held []download.Download
+	// lookupErr fails every look-up; heldAfterFirstLookup is what later look-ups find (the torrent arrived meanwhile).
+	lookupErr            error
+	heldAfterFirstLookup []download.Download
+	lookups              int
 }
 
 func (f *fakeTorrentSender) DownloadsByRef(context.Context, []string) ([]download.Download, error) {
+	f.lookups++
+	if f.lookupErr != nil {
+		return nil, f.lookupErr
+	}
+	if f.lookups > 1 && f.heldAfterFirstLookup != nil {
+		return f.heldAfterFirstLookup, nil
+	}
 	return f.held, nil
 }
 
@@ -26,7 +37,7 @@ func (f *fakeTorrentSender) Add(_ context.Context, request download.AddRequest) 
 	f.mu.Lock()
 	f.requests = append(f.requests, request)
 	f.mu.Unlock()
-	if len(f.held) > 0 {
+	if len(f.held) > 0 || f.heldAfterFirstLookup != nil {
 		return "", errors.Join(download.ErrRefused, errors.New("fails"))
 	}
 	return "added", nil
@@ -101,5 +112,35 @@ func TestDispatch_ATorrentTheClientDoesNotHoldIsAdded(t *testing.T) {
 	acquisition, err := env.torrentDispatch(client).Send(t.Context(), item.ID, detail.Decision.ID, env.clock.Now())
 	if err != nil || acquisition.DownloadClientRef != "added" || len(client.requests) != 1 {
 		t.Errorf("ref %q err %v adds %d, want one add", acquisition.DownloadClientRef, err, len(client.requests))
+	}
+}
+
+// A look-up that fails is no reason to hold the release back: the add goes ahead and the client decides.
+func TestDispatch_ATorrentWhoseLookUpFailsIsStillAdded(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	detail := env.torrentDecision(t, item.ID)
+	client := &fakeTorrentSender{lookupErr: errors.New("client unreachable")}
+
+	acquisition, err := env.torrentDispatch(client).Send(t.Context(), item.ID, detail.Decision.ID, env.clock.Now())
+	if err != nil || acquisition.DownloadClientRef != "added" || len(client.requests) != 1 {
+		t.Errorf("ref %q err %v adds %d, want one add", acquisition.DownloadClientRef, err, len(client.requests))
+	}
+}
+
+// A duplicate refused because the torrent arrived since the look-up is adopted, not reported as the release's fault.
+func TestDispatch_ATorrentRefusedAsADuplicateThatJustArrivedIsAdopted(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	detail := env.torrentDecision(t, item.ID)
+	hash, err := download.InfoHash(clienttest.TorrentFile("a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &fakeTorrentSender{heldAfterFirstLookup: []download.Download{{ClientRef: hash, Category: "music"}}}
+
+	acquisition, err := env.torrentDispatch(client).Send(t.Context(), item.ID, detail.Decision.ID, env.clock.Now())
+	if err != nil || acquisition.DownloadClientRef != hash {
+		t.Errorf("ref %q err %v, want the torrent adopted by its hash", acquisition.DownloadClientRef, err)
 	}
 }

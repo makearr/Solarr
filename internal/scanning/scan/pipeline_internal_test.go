@@ -170,3 +170,31 @@ func TestPipeline_CountsPartialBatchesWhenTheCursorPassesThem(t *testing.T) {
 		t.Errorf("counted = %v, want [3 4]", counted)
 	}
 }
+
+// A panic while identifying a directory fails the slice like any error, and the cursor stays before it (RACE-3).
+func TestPipeline_APanicIsTheDirectorysFailureNotTheProcesss(t *testing.T) {
+	var advanced []string
+	flow := pipeline{
+		observe: func(_ context.Context, batch Batch) error {
+			if batch.Directory == "b" {
+				panic("provider answer broke the parser")
+			}
+			return nil
+		},
+		advance: func(_ context.Context, directory string, _ int64) error {
+			advanced = append(advanced, directory)
+			return nil
+		},
+	}
+	for _, directory := range []string{"a", "b", "c"} {
+		if err := flow.submit(t.Context(), Batch{Directory: directory}); err != nil {
+			break
+		}
+	}
+	if err := flow.wait(t.Context()); err == nil {
+		t.Fatal("wait = nil, want the panic as an error")
+	}
+	if !slices.Equal(advanced, []string{"a"}) {
+		t.Errorf("advanced %q, want only the directory before the panic", advanced)
+	}
+}

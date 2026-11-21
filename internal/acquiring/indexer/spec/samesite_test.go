@@ -9,13 +9,14 @@ import (
 func TestSameSite(t *testing.T) {
 	driver := &Driver{
 		baseURL: "https://www.tracker.example/",
-		spec:    Spec{Links: []string{"https://tracker.example/"}, LegacyLinks: []string{"https://old-mirror.example/"}},
+		spec:    Spec{Links: []string{"https://tracker.example/", "https://mirror-two.example/"}, LegacyLinks: []string{"https://old-mirror.example/"}},
 	}
 	for target, want := range map[string]bool{
 		"https://www.tracker.example/download/1": true,
 		"https://TRACKER.example/x":              true,
 		"https://dl.tracker.example/x":           true,
 		"https://old-mirror.example/x":           true,
+		"https://mirror-two.example/x":           true,
 		"https://cdn.other.example/x":            false,
 		"https://tracker.example.evil.example/x": false,
 		"https://eviltracker.example/x":          false,

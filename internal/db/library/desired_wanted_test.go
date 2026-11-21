@@ -325,3 +325,29 @@ func TestSetPartsMonitored_RecomputesOnlyTheItemsThePartsBelongTo(t *testing.T) 
 		t.Errorf("dirty s01=%d s02=%d, want 1 and 0: only the season of the part is recomputed", dirty("s01"), dirty("s02"))
 	}
 }
+
+// PERF-12: more parts than one write takes are all changed, in chunks of 200.
+func TestSetPartsMonitored_ChangesEveryPartOfSeveralChunks(t *testing.T) {
+	opened, _ := newLibrary(t)
+	desired := library.NewDesired(opened)
+	work := createWork(t, opened, "tv", "Example Show")
+	var ids []int64
+	for number := range 450 {
+		part := createPart(t, opened, work.ID, fmt.Sprintf("s01:e%03d", number+1), fmt.Sprintf("%04d", number+1), "Episode")
+		ids = append(ids, part.ID)
+	}
+	if err := desired.SetPartsMonitored(t.Context(), work.ID, ids, false); err != nil {
+		t.Fatal(err)
+	}
+	parts, err := librarydb.New(opened.Read()).ListWorkParts(t.Context(), work.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	monitored := 0
+	for _, part := range parts {
+		monitored += int(part.Monitored)
+	}
+	if len(parts) != 450 || monitored != 0 {
+		t.Errorf("%d parts, %d still monitored; want 450 parts and none monitored", len(parts), monitored)
+	}
+}

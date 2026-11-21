@@ -1079,7 +1079,12 @@ func TestPoll_ALocalClientErrorKeepsTheDownloadWaiting(t *testing.T) {
 	sent := e.send(t, "nzo-1")
 	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "x", State: download.StateFailed, Error: "disk full", LocalError: true}}
 	e.run(t)
+	first := e.state(t, sent.ID)
+	e.clock.Advance(time.Minute)
 	e.run(t)
+	if again := e.state(t, sent.ID); again.UpdatedAt != first.UpdatedAt {
+		t.Errorf("updated at %d then %d; want the same waiting message not written again", first.UpdatedAt, again.UpdatedAt)
+	}
 
 	if got := e.state(t, sent.ID); got.State != poll.StateDownloading || got.LastError != "disk full" || len(e.searched) != 0 {
 		t.Errorf("= %s %q, searched %d; want DOWNLOADING with the client's message and no search", got.State, got.LastError, len(e.searched))

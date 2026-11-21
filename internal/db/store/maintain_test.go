@@ -191,3 +191,50 @@ func TestMaintain_DoesNotVacuumWithoutRoomBesideTheDatabase(t *testing.T) {
 type fullDisk struct{ fsx.OS }
 
 func (fullDisk) DiskUsage(string) (totalBytes, freeBytes int64, err error) { return 1 << 30, 1, nil }
+
+// roomDisk is the real filesystem with a set number of bytes free.
+type roomDisk struct {
+	fsx.OS
+	free *int64
+}
+
+func (d roomDisk) DiskUsage(string) (totalBytes, freeBytes int64, err error) {
+	return 1 << 40, *d.free, nil
+}
+
+// A rebuild needs the database's size plus a tenth beside it: just under that is a skip, a little over it vacuums.
+func TestMaintain_VacuumsOnlyWithTheDatabasesSizePlusATenthFree(t *testing.T) {
+	var free int64
+	opened := openTestStore(t, func(config *store.Config) { config.FS = roomDisk{OS: fsx.NewOS(), free: &free} })
+	if err := opened.Write(t.Context(), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "CREATE TABLE filler (body TEXT)"); err != nil {
+			return err
+		}
+		for range 100 {
+			if _, err := tx.ExecContext(ctx, "INSERT INTO filler (body) VALUES (?)", strings.Repeat("x", 4000)); err != nil {
+				return err
+			}
+		}
+		_, err := tx.ExecContext(ctx, "DELETE FROM filler")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var pages, pageSize int64
+	for pragma, into := range map[string]*int64{"page_count": &pages, "page_size": &pageSize} {
+		if err := opened.Read().QueryRowContext(t.Context(), "PRAGMA "+pragma).Scan(into); err != nil {
+			t.Fatal(err)
+		}
+	}
+	size := pages * pageSize
+	free = size + size/20
+	short, err := opened.Maintain(t.Context())
+	if err != nil || short.Vacuumed || !strings.Contains(short.VacuumSkipped, "free space") {
+		t.Fatalf("with %d free of a %d byte database: %+v, %v; want a skip for lack of room", free, size, short, err)
+	}
+	free = size + size/5
+	enough, err := opened.Maintain(t.Context())
+	if err != nil || !enough.Vacuumed {
+		t.Errorf("with %d free of a %d byte database: %+v, %v; want a vacuum", free, size, enough, err)
+	}
+}

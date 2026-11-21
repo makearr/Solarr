@@ -102,3 +102,17 @@ func BenchmarkRegexpFilter(b *testing.B) {
 		}
 	}
 }
+
+func TestAPatternIsCompiledOnce(t *testing.T) {
+	first, err := compiled(`(?i)once-only-\d+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := compiled(`(?i)once-only-\d+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Error("the same pattern compiled twice")
+	}
+}

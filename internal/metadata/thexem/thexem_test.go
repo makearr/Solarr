@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -188,8 +189,10 @@ func TestWholeSiteDocumentsAreReadOncePerFreshness(t *testing.T) {
 		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100}),
 		httpx.ClientConfig{Provider: "thexem-test", UserAgent: "test", Transport: standard()}), cache, fake)
+	var names []string
 	for range 100 {
-		if _, err := client.Names(t.Context(), 70001); err != nil {
+		var err error
+		if names, err = client.Names(t.Context(), 70001); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := client.Mappings(t.Context(), 70002); err != nil {
@@ -199,9 +202,18 @@ func TestWholeSiteDocumentsAreReadOncePerFreshness(t *testing.T) {
 	if cache.gets["thexem:names"] != 1 || cache.gets["thexem:havemap"] != 1 {
 		t.Errorf("reads = %v, want one of each document", cache.gets)
 	}
+	if want := []string{"Example Show", "Example Show US"}; !slices.Equal(names, want) {
+		t.Errorf("names after 100 reads = %q, want %q: a read must not alter the shared document", names, want)
+	}
 	fake.Advance(thexem.FreshFor + time.Minute)
 	if _, err := client.Names(t.Context(), 70001); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := client.Mappings(t.Context(), 70002); err != nil {
+		t.Fatal(err)
+	}
+	if cache.gets["thexem:havemap"] != 2 {
+		t.Errorf("havemap read %d times after going stale, want 2", cache.gets["thexem:havemap"])
 	}
 	if cache.gets["thexem:names"] != 2 {
 		t.Errorf("names read %d times after going stale, want 2", cache.gets["thexem:names"])
