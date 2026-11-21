@@ -214,6 +214,9 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool, order []st
 		merged.IDs.TVmaze = 0
 	}
 	merged.Failed = failed
+	if len(merged.NumberingDisagrees) > 0 && s.Logger != nil {
+		s.Logger.Info("sources number seasons differently; air times are matched by date", slog.Any("seasons", merged.NumberingDisagrees))
+	}
 	merged.Type = DetectType(merged)
 	if merged.AirTime != nil && merged.AirTime.Timezone == "" {
 		if zone := GuessZone(merged.OriginalCountry); zone != "" {

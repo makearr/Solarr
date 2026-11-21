@@ -150,3 +150,22 @@ func TestMergeLeavesAnEpisodeAloneWhenSeveralOfTheOtherSourceAiredThatDay(t *tes
 		t.Errorf("episodes = %+v, want the basis's untouched while two candidates aired that day", merged.Episodes)
 	}
 }
+
+func TestMergeNotesTheSeasonsTheSourcesNumberDifferently(t *testing.T) {
+	first := tv.Series{Episodes: []tv.Episode{
+		episodeOf(1, 1, "Alpha", "2025-01-05", 1, tv.ConfidenceMedium),
+		episodeOf(1, 2, "Beta", "2025-01-12", 2, tv.ConfidenceMedium),
+		episodeOf(2, 1, "Gamma", "2025-03-05", 3, tv.ConfidenceMedium),
+		episodeOf(2, 2, "Delta", "2025-03-12", 4, tv.ConfidenceMedium),
+	}}
+	// Season 1 agrees; season 2 is shifted by a week, so none of its numbers pairs the same episode.
+	second := tv.Series{Episodes: []tv.Episode{
+		episodeOf(1, 1, "Alpha", "2025-01-05", 11, tv.ConfidenceHigh),
+		episodeOf(1, 2, "Beta", "2025-01-12", 12, tv.ConfidenceHigh),
+		episodeOf(2, 1, "Delta", "2025-03-12", 13, tv.ConfidenceHigh),
+		episodeOf(2, 2, "Epsilon", "2025-03-19", 14, tv.ConfidenceHigh),
+	}}
+	if got := tv.Merge(first, second).NumberingDisagrees; !reflect.DeepEqual(got, []int{2}) {
+		t.Fatalf("NumberingDisagrees = %v, want [2]", got)
+	}
+}

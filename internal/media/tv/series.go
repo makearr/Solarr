@@ -190,6 +190,8 @@ type Series struct {
 	Sources []string
 	// Failed lists the sources that were asked and answered an error, not "no such series".
 	Failed []string
+	// NumberingDisagrees lists the seasons in which more than a quarter of the episodes of two sources, paired by number, are not the same episode.
+	NumberingDisagrees []int
 	// SceneMapped says TheXEM answered for the series, so its write replaces the scene numbers stored before.
 	SceneMapped bool
 }

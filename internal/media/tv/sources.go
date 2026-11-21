@@ -287,13 +287,16 @@ func mergeEpisodes(into *Series, other Series) {
 		byKey[Key{episode.Season, episode.Number}] = index
 	}
 	joined := make(map[int]bool, len(other.Episodes))
+	keyed, disagreeing := map[int]int{}, map[int]int{}
 	for index := range into.Episodes {
 		have := &into.Episodes[index]
 		at, found := byKey[Key{have.Season, have.Number}]
 		if !found {
 			continue
 		}
+		keyed[have.Season]++
 		if !sameEpisode(*have, other.Episodes[at]) {
+			disagreeing[have.Season]++
 			// The sources number this one differently: its counterpart is the one aired the same day, if there is one.
 			if at = counterpart(*have, other.Episodes); at < 0 {
 				continue
@@ -323,6 +326,12 @@ func mergeEpisodes(into *Series, other Series) {
 		}
 	}
 	into.Episodes = append(into.Episodes, announcedAhead(into.Episodes, other.Episodes, joined)...)
+	for season, total := range keyed {
+		if disagreeing[season]*4 > total && !slices.Contains(into.NumberingDisagrees, season) {
+			into.NumberingDisagrees = append(into.NumberingDisagrees, season)
+		}
+	}
+	slices.Sort(into.NumberingDisagrees)
 }
 
 // sameEpisode says two sources' entries under one number are one episode: aired within a day of each other, or, with a
