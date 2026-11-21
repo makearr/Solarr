@@ -136,6 +136,7 @@ type Status struct {
 	Dir             string `json:"dir"`
 	InfoHash        string `json:"infoHash"`
 	ErrorMessage    string `json:"errorMessage"`
+	ErrorCode       string `json:"errorCode"`
 	// FollowedBy names the downloads a magnet's metadata fetch led to; only that fetch has any.
 	FollowedBy []string `json:"followedBy"`
 	BitTorrent struct {

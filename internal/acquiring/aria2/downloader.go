@@ -73,7 +73,7 @@ func (d Downloader) Downloads(ctx context.Context, _ string) ([]download.Downloa
 		case download.StateCompleted:
 			entry.Path = download.ContentPath(status.Dir, entry.Name)
 		case download.StateFailed:
-			entry.Error = "aria2 reports " + status.ErrorMessage
+			entry.Error, entry.LocalError = "aria2 reports "+status.ErrorMessage, localErrorCodes[status.ErrorCode]
 		case download.StateRemoved:
 			entry.Error = "removed in aria2"
 		}
@@ -192,3 +192,6 @@ func (d Downloader) Probe(ctx context.Context) (download.Probe, error) {
 	probe.Notes = append(probe.Notes, "aria2 has no categories, and leaves a removed download's files in place.")
 	return probe, nil
 }
+
+// localErrorCodes are aria2's exit codes for a disk that is full, a file it could not rename, open or create, an I/O error and a directory it could not make.
+var localErrorCodes = map[string]bool{"9": true, "14": true, "15": true, "16": true, "17": true, "18": true}

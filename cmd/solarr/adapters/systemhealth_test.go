@@ -40,6 +40,20 @@ func TestSystemHealth_CountsOnlyDownloadsHeldForAPerson(t *testing.T) {
 	}
 }
 
+// A download kept DOWNLOADING with the client's own complaint is named; a waiting-for-review leftover is not (TRACK-10).
+func TestSystemHealth_NamesDownloadsWhoseClientCannotUseItsFiles(t *testing.T) {
+	health := SystemHealth{Acquisitions: fakeActive{
+		{State: poll.StateDownloading, LastError: "qBittorrent reports missingFiles"},
+		{State: poll.StateDownloading, LastError: "Deluge reports No space left"},
+		{State: poll.StateDownloading},
+		{State: poll.StateDownloading, LastError: poll.WaitingForReview},
+	}}
+	checks := health.waitingForReview(t.Context())
+	if len(checks) != 1 || checks[0].ID != "downloads_client_cannot_write" || !strings.HasPrefix(checks[0].Message, "2 downloads are waiting") {
+		t.Fatalf("checks = %+v, want one warning for 2 downloads", checks)
+	}
+}
+
 func TestSystemHealth_NamesAPausedMetadataProviderAndSkipsAnUnknownConnection(t *testing.T) {
 	retry := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
 	health := SystemHealth{Paused: func() []httpx.BreakerSnapshot {

@@ -277,8 +277,12 @@ func (a SystemHealth) waitingForReview(ctx context.Context) []apiserver.HealthCh
 	if err != nil {
 		return nil
 	}
-	waiting, noRoom := 0, 0
+	waiting, noRoom, clientFault := 0, 0, 0
 	for _, acquisition := range active {
+		if acquisition.State == poll.StateDownloading && acquisition.LastError != "" &&
+			acquisition.LastError != poll.WaitingForReview && acquisition.LastError != poll.WaitingForRoom {
+			clientFault++
+		}
 		if acquisition.State != poll.StateImporting {
 			continue
 		}
@@ -290,6 +294,14 @@ func (a SystemHealth) waitingForReview(ctx context.Context) []apiserver.HealthCh
 		}
 	}
 	var checks []apiserver.HealthCheck
+	if clientFault > 0 {
+		checks = append(checks, apiserver.HealthCheck{
+			ID: "downloads_client_cannot_write", Severity: apiserver.HealthWarning,
+			Message: fmt.Sprintf("%d %s waiting because %s download client cannot use its own files (a full disk or an unmounted share?): free the space or fix the mount, and %s on.",
+				clientFault, plural(clientFault, "download is", "downloads are"), plural(clientFault, "its", "their"), plural(clientFault, "it carries", "they carry")),
+			Link: "/activity/queue",
+		})
+	}
 	if waiting > 0 {
 		checks = append(checks, apiserver.HealthCheck{
 			ID: "downloads_waiting_for_review", Severity: apiserver.HealthWarning,

@@ -74,7 +74,7 @@ func (d Downloader) Downloads(ctx context.Context, _ string) ([]download.Downloa
 		case download.StateCompleted:
 			downloads[i].Path = download.TorrentPath(torrent.SavePath, torrent.Name)
 		case download.StateFailed:
-			downloads[i].Error = "µTorrent reports " + torrent.StatusText
+			downloads[i].Error, downloads[i].LocalError = "µTorrent reports "+torrent.StatusText, download.LocalFaultText(torrent.StatusText)
 		}
 	}
 	return downloads, nil

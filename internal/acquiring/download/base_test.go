@@ -148,3 +148,14 @@ func TestContentPath_RefusesANameThatIsAPath(t *testing.T) {
 		}
 	}
 }
+
+func TestLocalFaultText(t *testing.T) {
+	for message, want := range map[string]bool{
+		"No space left on device": true, "Disk full": true, "write failed: Permission denied": true,
+		"Tracker gone": false, "": false, "unregistered torrent": false,
+	} {
+		if got := download.LocalFaultText(message); got != want {
+			t.Errorf("LocalFaultText(%q) = %v, want %v", message, got, want)
+		}
+	}
+}

@@ -128,3 +128,21 @@ func TestDownloader_AMagnetsMetadataFetchIsNeverAFinishedDownload(t *testing.T) 
 		}
 	}
 }
+
+// A download aria2 stopped for its own disk is a local error; one stopped for the release is not (TRACK-10).
+func TestDownloader_DiskErrorCodesAreLocalErrors(t *testing.T) {
+	failed := func(gid, hash, code, message string) string {
+		return strings.Replace(status(gid, "error", hash, "Album", "10", "4"), `"dir"`, `"errorCode":"`+code+`","errorMessage":"`+message+`","dir"`, 1)
+	}
+	server := rpc(map[string]string{
+		"aria2.tellActive": `[]`, "aria2.tellWaiting": `[]`,
+		"aria2.tellStopped": `[` + failed("1", "aaaa", "9", "not enough disk space") + `,` + failed("2", "bbbb", "3", "resource not found") + `]`,
+	})
+	got, err := driver(t, server, "s3cret").Downloads(t.Context(), "")
+	if err != nil || len(got) != 2 {
+		t.Fatalf("Downloads = %+v, %v", got, err)
+	}
+	if !got[0].LocalError || got[1].LocalError || got[0].State != download.StateFailed {
+		t.Errorf("downloads = %+v, want the disk error local and the missing resource not", got)
+	}
+}

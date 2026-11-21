@@ -6,6 +6,7 @@ package download
 import (
 	"context"
 	"errors"
+	"strings"
 )
 
 // State is where a download stands, in Solarr's words rather than any one client's.
@@ -138,4 +139,18 @@ type Client interface {
 	// Pause and Resume act on the named downloads only, never the whole client: other apps share it.
 	Pause(ctx context.Context, clientRefs []string) error
 	Resume(ctx context.Context, clientRefs []string) error
+}
+
+// localFaultMarkers are what a client's own message says when it could not use its files rather than the release.
+var localFaultMarkers = []string{"no space left", "disk full", "not enough disk space", "input/output error", "i/o error", "permission denied", "read-only file system", "could not write", "cannot write", "no such file or directory"}
+
+// LocalFaultText says whether a client's failure message names its own storage (a full disk, an unmounted share).
+func LocalFaultText(message string) bool {
+	lowered := strings.ToLower(message)
+	for _, marker := range localFaultMarkers {
+		if strings.Contains(lowered, marker) {
+			return true
+		}
+	}
+	return false
 }

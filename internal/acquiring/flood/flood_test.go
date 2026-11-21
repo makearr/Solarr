@@ -126,3 +126,18 @@ func TestDownloader_ErrorAndCheckingOutrankComplete(t *testing.T) {
 		t.Errorf("complete+checking = %+v, want processing with no path", checking)
 	}
 }
+
+// A torrent Flood reports failed for a full disk is a local error, one for its tracker is not (TRACK-10).
+func TestDownloader_AFullDiskIsALocalError(t *testing.T) {
+	server := api(map[string]string{"/api/torrents": `{"id":1,"torrents":{
+	 "AAAA":{"name":"Full","status":["error"],"message":"No space left on device"},
+	 "BBBB":{"name":"Broken","status":["error"],"message":"Tracker gone"}}}`})
+	got, err := driver(t, server, "me:secret").Downloads(t.Context(), "")
+	if err != nil || len(got) != 2 {
+		t.Fatalf("Downloads = %+v, %v", got, err)
+	}
+	byName := map[string]bool{got[0].Name: got[0].LocalError, got[1].Name: got[1].LocalError}
+	if want := map[string]bool{"Full": true, "Broken": false}; !reflect.DeepEqual(byName, want) {
+		t.Errorf("local errors = %v, want %v", byName, want)
+	}
+}
