@@ -84,30 +84,51 @@ func (j decisionRetentionJob) Run(ctx context.Context, _ jobs.Job) error {
 	return nil
 }
 
-// historyRetentionJob deletes finished imports older than importHistoryKept that placed nothing, a batch at a time.
+// historyRetentionJob deletes finished imports, downloads and move jobs older than importHistoryKept that nothing
+// needs any more, a batch at a time.
 type historyRetentionJob struct {
-	sessions library.ImportSessions
-	clock    clock.Clock
-	logger   *slog.Logger
+	sessions     library.ImportSessions
+	acquisitions library.Acquisitions
+	moves        library.MoveJobs
+	clock        clock.Clock
+	logger       *slog.Logger
 }
 
 func (j historyRetentionJob) Run(ctx context.Context, _ jobs.Job) error {
 	before := j.clock.Now().Add(-importHistoryKept).Unix()
+	sessions, err := deleteInBatches(ctx, before, j.sessions.DeleteOldSessions)
+	if err != nil {
+		return err
+	}
+	acquisitions, err := deleteInBatches(ctx, before, j.acquisitions.DeleteOldFinished)
+	if err != nil {
+		return err
+	}
+	moves, err := deleteInBatches(ctx, before, j.moves.DeleteOldFinished)
+	if err != nil {
+		return err
+	}
+	if sessions+acquisitions+moves > 0 {
+		j.logger.Info("old history cleaned",
+			slog.Int64("import_sessions", sessions), slog.Int64("downloads", acquisitions), slog.Int64("move_jobs", moves))
+	}
+	return nil
+}
+
+// deleteInBatches calls remove until a batch comes back short or the page limit is reached, and sums what went.
+func deleteInBatches(ctx context.Context, before int64, remove func(ctx context.Context, before, limit int64) (int64, error)) (int64, error) {
 	var total int64
 	for range jobRetentionPages {
-		deleted, err := j.sessions.DeleteOldSessions(ctx, before, jobRetentionBatch)
+		deleted, err := remove(ctx, before, jobRetentionBatch)
 		if err != nil {
-			return err
+			return total, err
 		}
 		total += deleted
 		if deleted < jobRetentionBatch {
 			break
 		}
 	}
-	if total > 0 {
-		j.logger.Info("old import history cleaned", slog.Int64("sessions", total))
-	}
-	return nil
+	return total, nil
 }
 
 // jobRetentionJob deletes jobs finished more than finishedJobsKept ago, a page at a time.
@@ -301,7 +322,8 @@ func (p *process) registerMaintenanceJobs(registry *jobs.Registry, executor *job
 	executor.Handle(previewCleanupJobType, previewCleanupJob{
 		fs: p.fsys, dir: filepath.Join(p.config.Paths.ConfigDir, "previews"), physical: library.NewPhysical(p.library), logger: p.logger,
 	})
-	executor.Handle(historyRetentionJobType, historyRetentionJob{sessions: library.NewImportSessions(p.library), clock: clock.NewSystem(), logger: p.logger})
+	executor.Handle(historyRetentionJobType, historyRetentionJob{
+		sessions: library.NewImportSessions(p.library), acquisitions: library.NewAcquisitions(p.library), moves: library.NewMoveJobs(p.library), clock: clock.NewSystem(), logger: p.logger})
 	executor.Handle(jobRetentionJobType, jobRetentionJob{queue: p.queue, clock: clock.NewSystem(), logger: p.logger})
 	executor.Handle(backupJobType, backupJob{
 		backup: bundleBackup{

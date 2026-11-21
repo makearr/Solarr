@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store"
@@ -379,5 +380,38 @@ func TestAcquisitions_CreateSucceedsOnceThePriorOneIsTerminal(t *testing.T) {
 	}
 	if second.ID == first.ID {
 		t.Error("second acquisition reused the first one's id")
+	}
+}
+
+func TestAcquisitions_DeleteOldFinishedKeepsWhatIsRunningRecentOrStillProvesAFile(t *testing.T) {
+	opened, _ := newLibrary(t)
+	acquisitions := library.NewAcquisitions(opened)
+	physical := library.NewPhysical(opened)
+	registered, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{{RelPath: "Film.mkv", SizeBytes: 5, QuickHash: "h", FirstSeenAt: time.Unix(0, 0)}})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	failed := createAcquisition(t, opened, 0, "ref-failed", "FAILED")
+	cleaned := createAcquisition(t, opened, 0, "ref-cleaned", "CLEANED")
+	running := createAcquisition(t, opened, 0, "ref-running", "DOWNLOADING")
+	proves := createAcquisition(t, opened, 0, "ref-proves", "CLEANED")
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		_, err := q.RecordAcquiredFile(ctx, librarydb.RecordAcquiredFileParams{
+			AcquisitionID: proves.ID, SourcePath: "/downloads/Film.mkv", MediaObjectID: sql.NullInt64{Int64: registered[0].MediaObjectID, Valid: true},
+		})
+		return err
+	})
+
+	if deleted, err := acquisitions.DeleteOldFinished(t.Context(), 1, 200); err != nil || deleted != 0 {
+		t.Fatalf("a window before the update deleted %d, %v; want none", deleted, err)
+	}
+	if deleted, err := acquisitions.DeleteOldFinished(t.Context(), 1000, 200); err != nil || deleted != 2 {
+		t.Fatalf("deleted %d, %v; want the failed and the cleaned one without a file", deleted, err)
+	}
+	for id, wantGone := range map[int64]bool{failed.ID: true, cleaned.ID: true, running.ID: false, proves.ID: false} {
+		_, err := acquisitions.Get(t.Context(), id)
+		if gone := err != nil; gone != wantGone {
+			t.Errorf("acquisition %d gone = %v, want %v", id, gone, wantGone)
+		}
 	}
 }

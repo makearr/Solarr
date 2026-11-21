@@ -290,3 +290,21 @@ DELETE FROM import_session WHERE id IN (
     AND NOT EXISTS (SELECT 1 FROM pack_item pi JOIN import_unit u2 ON u2.id = pi.import_unit_id WHERE u2.session_id = s.id)
   ORDER BY s.id
   LIMIT sqlc.arg(row_limit));
+
+-- Old finished downloads nothing needs any more: none of their files is still in the library (that is what
+-- "which search caused this file" reads), and an unfinished download is never touched.
+-- name: DeleteOldAcquisitions :execrows
+DELETE FROM acquisition WHERE id IN (
+  SELECT a.id FROM acquisition a
+  WHERE a.state IN ('CLEANED', 'FAILED', 'CANCELLED') AND a.updated_at < sqlc.arg(updated_before)
+    AND NOT EXISTS (SELECT 1 FROM acquisition_file f WHERE f.acquisition_id = a.id AND f.media_object_id IS NOT NULL)
+  ORDER BY a.id
+  LIMIT sqlc.arg(row_limit));
+
+-- A move job that finished or was cancelled long ago; its items and plan go with it.
+-- name: DeleteOldMoveJobs :execrows
+DELETE FROM move_job WHERE id IN (
+  SELECT j.id FROM move_job j
+  WHERE j.state IN ('DONE', 'CANCELLED') AND j.finished_at IS NOT NULL AND j.finished_at < sqlc.arg(finished_before)
+  ORDER BY j.id
+  LIMIT sqlc.arg(row_limit));

@@ -165,3 +165,31 @@ func TestMoveJobs_ThePlanIsReadOnlyByItsOwnQueryAndDroppedWhenDone(t *testing.T)
 		t.Errorf("Plan after DONE = %d bytes, %v; want it dropped", len(read), err)
 	}
 }
+
+func TestMoveJobs_DeleteOldFinishedKeepsRunningFailedAndRecentOnes(t *testing.T) {
+	opened, _ := newLibrary(t)
+	jobs := library.NewMoveJobs(opened)
+	ctx := t.Context()
+	create := func(state string, finishedAt int64) int64 {
+		id, err := jobs.Create(ctx, library.NewMoveJob{Reason: "DRAIN", FilesTotal: 1, BytesTotal: 1, PlanJSON: "{}", CreatedAt: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := jobs.Finish(ctx, id, state, finishedAt, ""); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	done, cancelled, failed := create(library.MoveJobDone, 100), create(library.MoveJobCancelled, 100), create(library.MoveJobFailed, 100)
+	recent := create(library.MoveJobDone, 5000)
+
+	if deleted, err := jobs.DeleteOldFinished(ctx, 1000, 200); err != nil || deleted != 2 {
+		t.Fatalf("deleted %d, %v; want the done and the cancelled job", deleted, err)
+	}
+	for id, wantGone := range map[int64]bool{done: true, cancelled: true, failed: false, recent: false} {
+		_, err := jobs.Get(ctx, id)
+		if gone := err != nil; gone != wantGone {
+			t.Errorf("move job %d gone = %v, want %v", id, gone, wantGone)
+		}
+	}
+}

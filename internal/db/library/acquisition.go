@@ -81,6 +81,21 @@ type Acquisitions struct{ store *store.Store }
 // NewAcquisitions builds it over an open library store.
 func NewAcquisitions(opened *store.Store) Acquisitions { return Acquisitions{store: opened} }
 
+// DeleteOldFinished removes up to limit finished downloads last touched before updatedBefore whose files are no longer
+// in the library, and answers how many went.
+func (a Acquisitions) DeleteOldFinished(ctx context.Context, updatedBefore, limit int64) (int64, error) {
+	var deleted int64
+	err := a.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		var err error
+		deleted, err = librarydb.New(tx).DeleteOldAcquisitions(ctx, librarydb.DeleteOldAcquisitionsParams{UpdatedBefore: updatedBefore, RowLimit: limit})
+		return err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("library: delete old acquisitions: %w", err)
+	}
+	return deleted, nil
+}
+
 // Create dispatches one acquisition -- refusing outright when the desired
 // item already has one in flight (Invariant 15), checked and created in the
 // same transaction so a concurrent Create cannot both pass the check.

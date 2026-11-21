@@ -312,8 +312,13 @@ type Querier interface {
 	DeleteMediaObject(ctx context.Context, id int64) error
 	DeleteMissingRecount(ctx context.Context, arg DeleteMissingRecountParams) error
 	DeleteMoveJobLibraryChange(ctx context.Context, moveJobID int64) error
+	// Old finished downloads nothing needs any more: none of their files is still in the library (that is what
+	// "which search caused this file" reads), and an unfinished download is never touched.
+	DeleteOldAcquisitions(ctx context.Context, arg DeleteOldAcquisitionsParams) (int64, error)
 	// Old finished sessions that placed nothing still in the library and hold nothing for a person; a pack keeps its session.
 	DeleteOldImportSessions(ctx context.Context, arg DeleteOldImportSessionsParams) (int64, error)
+	// A move job that finished or was cancelled long ago; its items and plan go with it.
+	DeleteOldMoveJobs(ctx context.Context, arg DeleteOldMoveJobsParams) (int64, error)
 	DeletePerson(ctx context.Context, id int64) error
 	DeletePersonArtwork(ctx context.Context, subjectID int64) error
 	DeletePersonSubscriptions(ctx context.Context, subjectID int64) error

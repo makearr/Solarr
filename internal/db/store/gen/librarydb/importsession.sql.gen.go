@@ -175,6 +175,30 @@ func (q *Queries) DeleteImportUnits(ctx context.Context, arg DeleteImportUnitsPa
 	return err
 }
 
+const deleteOldAcquisitions = `-- name: DeleteOldAcquisitions :execrows
+DELETE FROM acquisition WHERE id IN (
+  SELECT a.id FROM acquisition a
+  WHERE a.state IN ('CLEANED', 'FAILED', 'CANCELLED') AND a.updated_at < ?1
+    AND NOT EXISTS (SELECT 1 FROM acquisition_file f WHERE f.acquisition_id = a.id AND f.media_object_id IS NOT NULL)
+  ORDER BY a.id
+  LIMIT ?2)
+`
+
+type DeleteOldAcquisitionsParams struct {
+	UpdatedBefore int64
+	RowLimit      int64
+}
+
+// Old finished downloads nothing needs any more: none of their files is still in the library (that is what
+// "which search caused this file" reads), and an unfinished download is never touched.
+func (q *Queries) DeleteOldAcquisitions(ctx context.Context, arg DeleteOldAcquisitionsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteOldAcquisitions, arg.UpdatedBefore, arg.RowLimit)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteOldImportSessions = `-- name: DeleteOldImportSessions :execrows
 DELETE FROM import_session WHERE id IN (
   SELECT s.id FROM import_session s
@@ -196,6 +220,28 @@ type DeleteOldImportSessionsParams struct {
 // Old finished sessions that placed nothing still in the library and hold nothing for a person; a pack keeps its session.
 func (q *Queries) DeleteOldImportSessions(ctx context.Context, arg DeleteOldImportSessionsParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, deleteOldImportSessions, arg.FinishedBefore, arg.RowLimit)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const deleteOldMoveJobs = `-- name: DeleteOldMoveJobs :execrows
+DELETE FROM move_job WHERE id IN (
+  SELECT j.id FROM move_job j
+  WHERE j.state IN ('DONE', 'CANCELLED') AND j.finished_at IS NOT NULL AND j.finished_at < ?1
+  ORDER BY j.id
+  LIMIT ?2)
+`
+
+type DeleteOldMoveJobsParams struct {
+	FinishedBefore sql.NullInt64
+	RowLimit       int64
+}
+
+// A move job that finished or was cancelled long ago; its items and plan go with it.
+func (q *Queries) DeleteOldMoveJobs(ctx context.Context, arg DeleteOldMoveJobsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteOldMoveJobs, arg.FinishedBefore, arg.RowLimit)
 	if err != nil {
 		return 0, err
 	}

@@ -254,6 +254,20 @@ func (m MoveJobs) transition(ctx context.Context, verb string, jobID int64, appl
 	return rows > 0, nil
 }
 
+// DeleteOldFinished removes up to limit move jobs that finished or were cancelled before finishedBefore, and answers how many went.
+func (m MoveJobs) DeleteOldFinished(ctx context.Context, finishedBefore, limit int64) (int64, error) {
+	var deleted int64
+	err := m.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		var err error
+		deleted, err = librarydb.New(tx).DeleteOldMoveJobs(ctx, librarydb.DeleteOldMoveJobsParams{FinishedBefore: sql.NullInt64{Int64: finishedBefore, Valid: true}, RowLimit: limit})
+		return err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("library: delete old move jobs: %w", err)
+	}
+	return deleted, nil
+}
+
 // Finish transitions a job to a terminal state (MoveJobDone/MoveJobFailed)
 // and records when and why.
 func (m MoveJobs) Finish(ctx context.Context, jobID int64, state string, finishedAt int64, errMsg string) error {
