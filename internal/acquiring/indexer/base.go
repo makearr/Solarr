@@ -277,3 +277,20 @@ func AccountRefused(start []byte) bool {
 	code := answerCode(start)
 	return (code >= 100 && code <= 102) || code == 910
 }
+
+// FlexText is text an API sends as a string or as a number (an id that may lose or keep its leading zeros).
+type FlexText string
+
+// UnmarshalJSON accepts a string, a number or null.
+func (f *FlexText) UnmarshalJSON(data []byte) error {
+	text := strings.TrimSpace(string(data))
+	if text == "null" {
+		*f = ""
+		return nil
+	}
+	if unquoted, err := strconv.Unquote(text); err == nil {
+		text = unquoted
+	}
+	*f = FlexText(text)
+	return nil
+}

@@ -184,6 +184,12 @@ func (d Dispatch) SendRelease(ctx context.Context, itemID int64, release library
 
 	category := downloader.Category
 	file, err := d.Fetch(ctx, detail.ReleaseCandidate.IndexerID, detail.ReleaseCandidate.DownloadURL)
+	if err != nil && detail.ReleaseCandidate.Protocol == "torrent" && detail.ReleaseCandidate.MagnetURL != "" {
+		// A dead .torrent link does not make the release unavailable when the indexer also listed its magnet link.
+		if magnet, magnetErr := d.Fetch(ctx, detail.ReleaseCandidate.IndexerID, detail.ReleaseCandidate.MagnetURL); magnetErr == nil {
+			file, err = magnet, nil
+		}
+	}
 	if err != nil {
 		var status *httpx.StatusError
 		if errors.As(err, &status) && (status.Status == http.StatusNotFound || status.Status == http.StatusGone) {

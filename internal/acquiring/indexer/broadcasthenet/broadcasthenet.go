@@ -65,6 +65,9 @@ type torrent struct {
 	Resolution  string          `json:"Resolution"`
 	InfoHash    string          `json:"InfoHash"`
 	DownloadURL string          `json:"DownloadURL"`
+	// TvdbID is a number; ImdbID a string of digits, both "0" or empty when the tracker knows none.
+	TvdbID indexer.FlexInt  `json:"TvdbID"`
+	ImdbID indexer.FlexText `json:"ImdbID"`
 }
 
 func (i Indexer) torrents(ctx context.Context, filter map[string]string, limit int) ([]torrent, error) {
@@ -137,6 +140,7 @@ func (i Indexer) Search(ctx context.Context, request indexer.SearchRequest) ([]i
 			Link: found.DownloadURL, Categories: []int{category}, SizeBytes: int64(found.Size),
 			PublishedAt: time.Unix(int64(found.Time), 0).UTC(), Seeders: int(found.Seeders),
 			Peers: int(found.Seeders + found.Leechers), InfoHash: strings.ToLower(found.InfoHash),
+			IDs: indexer.IDs(strconv.FormatInt(int64(found.TvdbID), 10), string(found.ImdbID)),
 		})
 	}
 	return indexer.Keep(request, items), nil

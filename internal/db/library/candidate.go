@@ -19,6 +19,8 @@ type ReleaseCandidate struct {
 	Source          string
 	FirstSeenAt     int64
 	ExpiresAt       int64
+	// MagnetURL is a magnet link the indexer listed beside the .torrent link; empty when it gave none.
+	MagnetURL string
 }
 
 // NewReleaseCandidate is what statistics.Candidates.Upsert needs to record or refresh one release.
@@ -36,6 +38,8 @@ type NewReleaseCandidate struct {
 	Source          string
 	FirstSeenAt     int64
 	ExpiresAt       int64
+	// MagnetURL is a magnet link the indexer listed beside the .torrent link; empty when it gave none.
+	MagnetURL string
 }
 
 // Decision is one candidate_decision row (ADR-10): the answer to "why (not)

@@ -24,6 +24,7 @@ type Candidate struct {
 	Source          string
 	FirstSeenAt     int64
 	ExpiresAt       int64
+	MagnetUrl       string
 }
 
 type CandidateDecision struct {

@@ -205,7 +205,7 @@ func findRecord(itemID, categoryID int64, find Find, source string, at time.Time
 			SizeBytes: sizeBytes, Seeders: seeders, Leechers: leechers, PublishedAt: publishedAt,
 			Protocol: ProtocolFor(find.Conn.Impl), DownloadURL: sealed(find.Conn, find.Raw.Link),
 			ParseConfidence: &confidence, Source: source,
-			FirstSeenAt: at.Unix(), ExpiresAt: at.Add(RetentionDefault).Unix(),
+			FirstSeenAt: at.Unix(), ExpiresAt: at.Add(RetentionDefault).Unix(), MagnetURL: find.Raw.MagnetURL,
 		},
 		Decision: library.NewDecision{
 			DesiredItemID: itemID, CategoryID: categoryID, Outcome: string(find.Decision.Outcome),

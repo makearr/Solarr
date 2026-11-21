@@ -1,6 +1,7 @@
 package hdbits_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -64,4 +65,18 @@ func httpClient(t *testing.T, server *clienttest.Server) *httpx.Client {
 	return httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), limiter, breaker, httpx.ClientConfig{
 		Provider: "indexer-test", UserAgent: "test", Transport: server,
 	})
+}
+
+// IDX-1: the ids the tracker lists with a release are carried; an absent or zero one is not.
+func TestSearch_CarriesTheIDsTheTrackerListed(t *testing.T) {
+	server := &clienttest.Server{Routes: map[string]clienttest.Route{"POST /api/torrents": {Body: `{"status":0,"data":[
+	 {"id":9,"hash":"ABC","name":"Show.S01E02.1080p","size":1,"seeders":1,"leechers":0,"added":"2020-01-02T03:04:05+0000","type_category":2,"imdb":{"id":133093},"tvdb":{"id":81189}},
+	 {"id":10,"hash":"DEF","name":"Other.1080p","size":1,"seeders":1,"leechers":0,"added":"2020-01-02T03:04:05+0000","type_category":2,"imdb":{"id":0},"tvdb":null}]}`}}}
+	got, err := hdbits.New(httpClient(t, server), "https://hdbits.org", "me:pk").Search(t.Context(), indexer.SearchRequest{Function: "tvsearch"})
+	if err != nil || len(got) != 2 {
+		t.Fatalf("Search = %+v, %v", got, err)
+	}
+	if fmt.Sprint(got[0].IDs) != "map[imdb:tt133093 tvdb:81189]" || got[1].IDs != nil {
+		t.Errorf("ids = %v and %v", got[0].IDs, got[1].IDs)
+	}
 }

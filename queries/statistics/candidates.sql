@@ -3,18 +3,19 @@
 -- name: UpsertCandidate :one
 INSERT INTO candidate (indexer_id, guid, title, attributes_id, size_bytes, seeders,
                        leechers, published_at, protocol, download_url,
-                       parse_confidence, source, first_seen_at, expires_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       parse_confidence, source, first_seen_at, expires_at, magnet_url)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (indexer_id, guid) DO UPDATE SET
   title = excluded.title,
   download_url = excluded.download_url,
+  magnet_url = excluded.magnet_url,
   size_bytes = COALESCE(excluded.size_bytes, candidate.size_bytes),
   seeders = excluded.seeders,
   leechers = excluded.leechers,
   expires_at = excluded.expires_at
 RETURNING id, indexer_id, guid, title, attributes_id, size_bytes, seeders, leechers,
           published_at, protocol, download_url, parse_confidence, source,
-          first_seen_at, expires_at;
+          first_seen_at, expires_at, magnet_url;
 
 -- When each release was first seen, for the ones a search lists again: an undated release waits its delay from then.
 -- name: CandidateFirstSeen :many
@@ -24,7 +25,7 @@ WHERE indexer_id = sqlc.arg(indexer_id) AND guid IN (sqlc.slice('guids'));
 -- name: GetCandidate :one
 SELECT id, indexer_id, guid, title, attributes_id, size_bytes, seeders, leechers,
        published_at, protocol, download_url, parse_confidence, source,
-       first_seen_at, expires_at
+       first_seen_at, expires_at, magnet_url
 FROM candidate WHERE id = ?;
 
 -- What a search last decided about a release for an item, to leave an unchanged finding alone.
@@ -49,7 +50,7 @@ RETURNING id, candidate_id, desired_item_id, category_id, outcome, score, compon
 SELECT cd.id, cd.candidate_id, cd.desired_item_id, cd.outcome, cd.score, cd.components_json,
        cd.rejections_json, cd.deferrals_json, cd.match_confidence, cd.decided_at,
        c.indexer_id, c.guid, c.title, c.size_bytes, c.seeders, c.leechers, c.published_at,
-       c.protocol, c.download_url, c.parse_confidence, c.source, c.first_seen_at, c.expires_at
+       c.protocol, c.download_url, c.parse_confidence, c.source, c.first_seen_at, c.expires_at, c.magnet_url
 FROM candidate_decision cd
 JOIN candidate c ON c.id = cd.candidate_id
 WHERE cd.desired_item_id = ? ORDER BY cd.decided_at DESC, cd.id ASC LIMIT ?;
@@ -58,7 +59,7 @@ WHERE cd.desired_item_id = ? ORDER BY cd.decided_at DESC, cd.id ASC LIMIT ?;
 SELECT cd.id, cd.candidate_id, cd.desired_item_id, cd.outcome, cd.score, cd.components_json,
        cd.rejections_json, cd.deferrals_json, cd.match_confidence, cd.decided_at,
        c.indexer_id, c.guid, c.title, c.size_bytes, c.seeders, c.leechers, c.published_at,
-       c.protocol, c.download_url, c.parse_confidence, c.source, c.first_seen_at, c.expires_at
+       c.protocol, c.download_url, c.parse_confidence, c.source, c.first_seen_at, c.expires_at, c.magnet_url
 FROM candidate_decision cd
 JOIN candidate c ON c.id = cd.candidate_id
 WHERE cd.desired_item_id = ? AND cd.id = ?;

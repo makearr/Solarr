@@ -3,6 +3,7 @@ package music_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/acquiring/clienttest"
@@ -142,5 +143,42 @@ func TestDispatch_ATorrentRefusedAsADuplicateThatJustArrivedIsAdopted(t *testing
 	acquisition, err := env.torrentDispatch(client).Send(t.Context(), item.ID, detail.Decision.ID, env.clock.Now())
 	if err != nil || acquisition.DownloadClientRef != hash {
 		t.Errorf("ref %q err %v, want the torrent adopted by its hash", acquisition.DownloadClientRef, err)
+	}
+}
+
+// A dead .torrent link falls back to the magnet link the indexer listed with it (IDX-1 step 1b.4).
+func TestDispatch_ADeadTorrentLinkFallsBackToTheMagnetLink(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	candidate, err := env.candidates.Upsert(t.Context(), library.NewReleaseCandidate{
+		IndexerID: 1, GUID: "guid-magnet", Title: "Nosi Zada-Discovery-2001-FLAC-GROUP", Protocol: "torrent",
+		DownloadURL: "https://indexer.example/t/dead", MagnetURL: "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567",
+		Source: "search", FirstSeenAt: env.clock.Now().Unix(), ExpiresAt: env.clock.Now().Unix() + 1_000_000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	decision, err := env.candidates.RecordDecision(t.Context(), library.NewDecision{
+		CandidateID: candidate.ID, DesiredItemID: item.ID, Outcome: "ACCEPT", Score: 10,
+		ComponentsJSON: "[]", RejectionsJSON: "[]", DeferralsJSON: "[]", DecidedAt: env.clock.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &fakeTorrentSender{}
+	d := env.dispatch([]music.DownloaderConn{{ID: 5, Protocol: "torrent", Client: client, Category: "music"}})
+	var asked []string
+	d.Fetch = func(_ context.Context, _ int64, link string) ([]byte, error) {
+		asked = append(asked, link)
+		if strings.HasPrefix(link, "magnet:") {
+			return []byte(link), nil
+		}
+		return nil, errors.New("404 gone")
+	}
+	if _, err := d.Send(t.Context(), item.ID, decision.ID, env.clock.Now()); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if len(asked) != 2 || len(client.requests) != 1 || !strings.HasPrefix(string(client.requests[0].File), "magnet:") {
+		t.Errorf("asked %v, client got %d requests; want the dead link then the magnet, sent once", asked, len(client.requests))
 	}
 }

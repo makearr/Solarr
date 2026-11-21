@@ -138,7 +138,7 @@ func (q *Queries) DeleteUnreferencedExpiredCandidates(ctx context.Context, arg D
 const getCandidate = `-- name: GetCandidate :one
 SELECT id, indexer_id, guid, title, attributes_id, size_bytes, seeders, leechers,
        published_at, protocol, download_url, parse_confidence, source,
-       first_seen_at, expires_at
+       first_seen_at, expires_at, magnet_url
 FROM candidate WHERE id = ?
 `
 
@@ -161,6 +161,7 @@ func (q *Queries) GetCandidate(ctx context.Context, id int64) (Candidate, error)
 		&i.Source,
 		&i.FirstSeenAt,
 		&i.ExpiresAt,
+		&i.MagnetUrl,
 	)
 	return i, err
 }
@@ -169,7 +170,7 @@ const getDecisionForItemWithCandidate = `-- name: GetDecisionForItemWithCandidat
 SELECT cd.id, cd.candidate_id, cd.desired_item_id, cd.outcome, cd.score, cd.components_json,
        cd.rejections_json, cd.deferrals_json, cd.match_confidence, cd.decided_at,
        c.indexer_id, c.guid, c.title, c.size_bytes, c.seeders, c.leechers, c.published_at,
-       c.protocol, c.download_url, c.parse_confidence, c.source, c.first_seen_at, c.expires_at
+       c.protocol, c.download_url, c.parse_confidence, c.source, c.first_seen_at, c.expires_at, c.magnet_url
 FROM candidate_decision cd
 JOIN candidate c ON c.id = cd.candidate_id
 WHERE cd.desired_item_id = ? AND cd.id = ?
@@ -204,6 +205,7 @@ type GetDecisionForItemWithCandidateRow struct {
 	Source          string
 	FirstSeenAt     int64
 	ExpiresAt       int64
+	MagnetUrl       string
 }
 
 func (q *Queries) GetDecisionForItemWithCandidate(ctx context.Context, arg GetDecisionForItemWithCandidateParams) (GetDecisionForItemWithCandidateRow, error) {
@@ -233,6 +235,7 @@ func (q *Queries) GetDecisionForItemWithCandidate(ctx context.Context, arg GetDe
 		&i.Source,
 		&i.FirstSeenAt,
 		&i.ExpiresAt,
+		&i.MagnetUrl,
 	)
 	return i, err
 }
@@ -312,7 +315,7 @@ const listDecisionsForItemWithCandidate = `-- name: ListDecisionsForItemWithCand
 SELECT cd.id, cd.candidate_id, cd.desired_item_id, cd.outcome, cd.score, cd.components_json,
        cd.rejections_json, cd.deferrals_json, cd.match_confidence, cd.decided_at,
        c.indexer_id, c.guid, c.title, c.size_bytes, c.seeders, c.leechers, c.published_at,
-       c.protocol, c.download_url, c.parse_confidence, c.source, c.first_seen_at, c.expires_at
+       c.protocol, c.download_url, c.parse_confidence, c.source, c.first_seen_at, c.expires_at, c.magnet_url
 FROM candidate_decision cd
 JOIN candidate c ON c.id = cd.candidate_id
 WHERE cd.desired_item_id = ? ORDER BY cd.decided_at DESC, cd.id ASC LIMIT ?
@@ -347,6 +350,7 @@ type ListDecisionsForItemWithCandidateRow struct {
 	Source          string
 	FirstSeenAt     int64
 	ExpiresAt       int64
+	MagnetUrl       string
 }
 
 // The interactive search view's own listing (F16): a decision means nothing without the release it was decided about.
@@ -383,6 +387,7 @@ func (q *Queries) ListDecisionsForItemWithCandidate(ctx context.Context, arg Lis
 			&i.Source,
 			&i.FirstSeenAt,
 			&i.ExpiresAt,
+			&i.MagnetUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -536,18 +541,19 @@ const upsertCandidate = `-- name: UpsertCandidate :one
 
 INSERT INTO candidate (indexer_id, guid, title, attributes_id, size_bytes, seeders,
                        leechers, published_at, protocol, download_url,
-                       parse_confidence, source, first_seen_at, expires_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       parse_confidence, source, first_seen_at, expires_at, magnet_url)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (indexer_id, guid) DO UPDATE SET
   title = excluded.title,
   download_url = excluded.download_url,
+  magnet_url = excluded.magnet_url,
   size_bytes = COALESCE(excluded.size_bytes, candidate.size_bytes),
   seeders = excluded.seeders,
   leechers = excluded.leechers,
   expires_at = excluded.expires_at
 RETURNING id, indexer_id, guid, title, attributes_id, size_bytes, seeders, leechers,
           published_at, protocol, download_url, parse_confidence, source,
-          first_seen_at, expires_at
+          first_seen_at, expires_at, magnet_url
 `
 
 type UpsertCandidateParams struct {
@@ -565,6 +571,7 @@ type UpsertCandidateParams struct {
 	Source          string
 	FirstSeenAt     int64
 	ExpiresAt       int64
+	MagnetUrl       string
 }
 
 // Candidates and decisions. Column lists follow table order.
@@ -584,6 +591,7 @@ func (q *Queries) UpsertCandidate(ctx context.Context, arg UpsertCandidateParams
 		arg.Source,
 		arg.FirstSeenAt,
 		arg.ExpiresAt,
+		arg.MagnetUrl,
 	)
 	var i Candidate
 	err := row.Scan(
@@ -602,6 +610,7 @@ func (q *Queries) UpsertCandidate(ctx context.Context, arg UpsertCandidateParams
 		&i.Source,
 		&i.FirstSeenAt,
 		&i.ExpiresAt,
+		&i.MagnetUrl,
 	)
 	return i, err
 }

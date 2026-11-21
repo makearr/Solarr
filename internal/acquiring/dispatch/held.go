@@ -60,7 +60,7 @@ func (d Dispatch) HoldIfFull(
 		CandidateID: release.ID, DesiredItemID: itemID, Priority: rank,
 		QueuedAt: at.Unix(), ExpiresAt: release.ExpiresAt, Origin: string(origin),
 		IndexerID: release.IndexerID, GUID: release.GUID, Title: release.Title, DownloadURL: release.DownloadURL,
-		Protocol: release.Protocol, SizeBytes: size, Score: detail.Decision.Score, ItemState: item.State,
+		Protocol: release.Protocol, SizeBytes: size, Score: detail.Decision.Score, ItemState: item.State, MagnetURL: release.MagnetURL,
 	}, limit)
 }
 
@@ -184,7 +184,7 @@ func (d Dispatch) stillSendable(ctx context.Context, entry library.ReadyEntry, a
 func heldRelease(entry library.ReadyEntry) library.ReleaseCandidate {
 	release := library.ReleaseCandidate{
 		ID: entry.CandidateID, IndexerID: entry.IndexerID, GUID: entry.GUID, Title: entry.Title,
-		DownloadURL: entry.DownloadURL, Protocol: entry.Protocol, ExpiresAt: entry.ExpiresAt,
+		DownloadURL: entry.DownloadURL, MagnetURL: entry.MagnetURL, Protocol: entry.Protocol, ExpiresAt: entry.ExpiresAt,
 	}
 	if entry.SizeBytes > 0 {
 		size := entry.SizeBytes

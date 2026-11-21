@@ -237,3 +237,24 @@ func parsePubDate(raw string) time.Time {
 	}
 	return time.Time{}
 }
+
+// IDs is the ids of a native tracker's answer, in RawItem.IDs' form; "0" and empty mean none and an IMDb id gets its "tt".
+func IDs(tvdb, imdb string) map[string]string {
+	var ids map[string]string
+	add := func(provider, value string) {
+		value = strings.TrimSpace(value)
+		if value == "" || strings.Trim(value, "0") == "" {
+			return
+		}
+		if provider == "imdb" && !strings.HasPrefix(value, "tt") {
+			value = "tt" + value
+		}
+		if ids == nil {
+			ids = map[string]string{}
+		}
+		ids[provider] = value
+	}
+	add("tvdb", tvdb)
+	add("imdb", imdb)
+	return ids
+}

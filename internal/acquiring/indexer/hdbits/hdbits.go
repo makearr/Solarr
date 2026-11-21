@@ -72,6 +72,8 @@ type torrent struct {
 	Leechers int    `json:"leechers"`
 	Added    string `json:"added"`
 	Category int    `json:"type_category"`
+	IMDb     *idRef `json:"imdb"`
+	TVDB     *idRef `json:"tvdb"`
 }
 
 func (i Indexer) call(ctx context.Context, ask query) ([]torrent, error) {
@@ -125,6 +127,7 @@ func (i Indexer) Search(ctx context.Context, request indexer.SearchRequest) ([]i
 			Link:       i.BaseURL + "/download.php?" + url.Values{"id": {id}, "passkey": {i.passkey}}.Encode(),
 			Categories: []int{category(found.Category)}, SizeBytes: found.Size, PublishedAt: published.UTC(),
 			Seeders: found.Seeders, Peers: found.Seeders + found.Leechers, InfoHash: strings.ToLower(found.Hash),
+			IDs: indexer.IDs(idText(found.TVDB), idText(found.IMDb)),
 		})
 	}
 	return indexer.Keep(request, items), nil
@@ -138,4 +141,17 @@ func category(id int) int {
 		return mapped
 	}
 	return 8000
+}
+
+// idRef is the nested id object HDBits lists for a release's IMDb and TVDB entries.
+type idRef struct {
+	ID int64 `json:"id"`
+}
+
+// idText is a nested id as text; empty when the tracker listed none.
+func idText(found *idRef) string {
+	if found == nil || found.ID == 0 {
+		return ""
+	}
+	return strconv.FormatInt(found.ID, 10)
 }

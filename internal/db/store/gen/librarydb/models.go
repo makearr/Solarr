@@ -768,6 +768,7 @@ type ReadyQueue struct {
 	Protocol      string
 	Score         sql.NullFloat64
 	ItemState     string
+	MagnetUrl     string
 }
 
 type RecycleBin struct {

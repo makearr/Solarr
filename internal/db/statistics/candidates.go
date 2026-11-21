@@ -37,7 +37,7 @@ func (c Candidates) Upsert(ctx context.Context, req library.NewReleaseCandidate)
 			SizeBytes: nullInt64(req.SizeBytes), Seeders: nullInt64(req.Seeders), Leechers: nullInt64(req.Leechers),
 			PublishedAt: nullInt64(req.PublishedAt), Protocol: req.Protocol, DownloadUrl: req.DownloadURL,
 			ParseConfidence: nullFloat64(req.ParseConfidence), Source: req.Source,
-			FirstSeenAt: req.FirstSeenAt, ExpiresAt: req.ExpiresAt,
+			FirstSeenAt: req.FirstSeenAt, ExpiresAt: req.ExpiresAt, MagnetUrl: req.MagnetURL,
 		})
 		return err
 	})
@@ -151,7 +151,7 @@ func recordFind(ctx context.Context, queries *statisticsdb.Queries, record FindR
 		SizeBytes: nullInt64(req.SizeBytes), Seeders: nullInt64(req.Seeders), Leechers: nullInt64(req.Leechers),
 		PublishedAt: nullInt64(req.PublishedAt), Protocol: req.Protocol, DownloadUrl: req.DownloadURL,
 		ParseConfidence: nullFloat64(req.ParseConfidence), Source: req.Source,
-		FirstSeenAt: req.FirstSeenAt, ExpiresAt: req.ExpiresAt,
+		FirstSeenAt: req.FirstSeenAt, ExpiresAt: req.ExpiresAt, MagnetUrl: req.MagnetURL,
 	})
 	if err != nil {
 		return library.DecisionDetail{}, err
@@ -212,7 +212,7 @@ func decisionDetailOf(row statisticsdb.ListDecisionsForItemWithCandidateRow) lib
 			SizeBytes: intPtr(row.SizeBytes), Seeders: intPtr(row.Seeders), Leechers: intPtr(row.Leechers),
 			PublishedAt: intPtr(row.PublishedAt), Protocol: row.Protocol, DownloadURL: row.DownloadUrl,
 			ParseConfidence: floatPtr(row.ParseConfidence), Source: row.Source,
-			FirstSeenAt: row.FirstSeenAt, ExpiresAt: row.ExpiresAt,
+			FirstSeenAt: row.FirstSeenAt, ExpiresAt: row.ExpiresAt, MagnetURL: row.MagnetUrl,
 		},
 	}
 }
@@ -384,7 +384,7 @@ func releaseFromRow(row statisticsdb.Candidate) library.ReleaseCandidate {
 		SizeBytes: intPtr(row.SizeBytes), Seeders: intPtr(row.Seeders), Leechers: intPtr(row.Leechers),
 		PublishedAt: intPtr(row.PublishedAt), Protocol: row.Protocol, DownloadURL: row.DownloadUrl,
 		ParseConfidence: floatPtr(row.ParseConfidence), Source: row.Source,
-		FirstSeenAt: row.FirstSeenAt, ExpiresAt: row.ExpiresAt,
+		FirstSeenAt: row.FirstSeenAt, ExpiresAt: row.ExpiresAt, MagnetURL: row.MagnetUrl,
 	}
 }
 
