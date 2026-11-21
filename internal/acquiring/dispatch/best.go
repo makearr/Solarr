@@ -76,8 +76,10 @@ func (d Dispatch) SendBest(
 	var best Best
 	var firstFetchFailure error
 	var sentParts []string
+	// Indexers that refused the account while a release was fetched: their other releases would only be refused alike.
+	refusedIndexers := map[int64]bool{}
 	for _, detail := range decisions {
-		if detail.Decision.Outcome != string(model.OutcomeAccept) {
+		if detail.Decision.Outcome != string(model.OutcomeAccept) || refusedIndexers[detail.ReleaseCandidate.IndexerID] {
 			continue
 		}
 		parts := d.partsOf(ctx, itemID, detail.ReleaseCandidate)
@@ -128,6 +130,10 @@ func (d Dispatch) SendBest(
 			continue
 		// Fetching failed this time: the next is tried, and the failure is reported if nothing else is sent.
 		case errors.Is(err, ErrReleaseFetchFailed):
+			var notRelease *download.NotAReleaseError
+			if errors.As(err, &notRelease) && notRelease.AccountRefused() {
+				refusedIndexers[detail.ReleaseCandidate.IndexerID] = true
+			}
 			if firstFetchFailure == nil {
 				firstFetchFailure = err
 			}

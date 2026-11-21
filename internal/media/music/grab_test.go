@@ -408,3 +408,28 @@ func TestGrab_EveryReleaseFailingToFetchIsStillAnError(t *testing.T) {
 		t.Errorf("err = %v, sent %d; want ErrReleaseFetchFailed and nothing sent", err, len(sender.requests))
 	}
 }
+
+// An indexer that refuses the account answers every fetch the same way, so one refusal ends its releases for the turn (IDX-9).
+func TestGrab_ARefusedAccountSkipsTheIndexersOtherReleases(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, losslessFirstRules)
+	searcher := &fakeIndexerSearcher{responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+		return []indexer.RawItem{
+			rawItem("guid-flac", "Nosi Zada-Discovery-2001-FLAC-GROUP"),
+			rawItem("guid-mp3", "Nosi Zada-Discovery-2001-MP3-320-GROUP"),
+		}, nil
+	}}
+	sender := &fakeSabnzbdSender{clientRef: "nzo-1"}
+	dispatch := env.dispatch([]music.DownloaderConn{{ID: 5, Protocol: "usenet", Client: sender}})
+	var fetched []string
+	dispatch.Fetch = func(_ context.Context, _ int64, link string) ([]byte, error) {
+		fetched = append(fetched, link)
+		return []byte(`<?xml version="1.0"?><error code="100" description="Incorrect user credentials"/>`), nil
+	}
+
+	_, err := music.Grab{Search: env.search(), Dispatch: dispatch}.SearchAndSend(t.Context(), item.ID,
+		[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}, music.GrabAutomatic, env.clock.Now())
+	if !errors.Is(err, music.ErrReleaseFetchFailed) || len(fetched) != 1 || len(sender.requests) != 0 {
+		t.Errorf("err = %v after %d fetches, sent %d; want one fetch, the failure reported and nothing sent", err, len(fetched), len(sender.requests))
+	}
+}

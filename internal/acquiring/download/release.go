@@ -33,6 +33,12 @@ func (e *NotAReleaseError) Gone() bool {
 	return e.Code == newznabNoSuchItem || e.Code == newznabItemGone
 }
 
+// AccountRefused says the indexer refuses this account (a wrong or suspended key, the API off), so no other release of
+// it can be fetched either.
+func (e *NotAReleaseError) AccountRefused() bool {
+	return (e.Code >= 100 && e.Code <= 102) || e.Code == 910
+}
+
 var newznabError = regexp.MustCompile(`(?is)<error\b[^>]*\bcode="(\d+)"[^>]*\bdescription="([^"]*)"`)
 
 // nzbHeadWindow is how much of an NZB is searched for its root element.

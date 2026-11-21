@@ -41,3 +41,11 @@ func TestCheckRelease_TellsAReleaseFromWhatAnIndexerSendsInstead(t *testing.T) {
 		})
 	}
 }
+
+func TestNotAReleaseError_AccountRefusedIsTheAccountCodes(t *testing.T) {
+	for code, want := range map[int]bool{100: true, 101: true, 102: true, 910: true, 99: false, 103: false, 300: false, 500: false, 0: false} {
+		if got := (&download.NotAReleaseError{Code: code}).AccountRefused(); got != want {
+			t.Errorf("code %d: AccountRefused = %v, want %v", code, got, want)
+		}
+	}
+}
