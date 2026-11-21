@@ -5,6 +5,7 @@ import { Pause, Play, Plus, X } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
+import { problemText } from "@/lib/useNotifications";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import { SubTabs } from "@/ui/SubTabs";
 import { ToolbarSort } from "@/ui/Toolbar";
@@ -342,6 +343,7 @@ export function Scheduler() {
         body: { cadences: args.cadences, enabled: args.enabled, run_at_startup: args.runAtStartup, paused: args.paused },
       }));
     },
+    meta: { handlesErrors: true },
     onSuccess: invalidate,
   });
 
@@ -349,6 +351,7 @@ export function Scheduler() {
     mutationFn: async (paused: boolean) => {
       await ok(api.PUT("/schedules/paused", { body: { paused } }));
     },
+    meta: { handlesErrors: true },
     onSuccess: invalidate,
   });
 
@@ -358,6 +361,7 @@ export function Scheduler() {
         params: { path: { key: args.key }, query: args.full ? { full: true } : undefined },
       }));
     },
+    meta: { handlesErrors: true },
     onSuccess: invalidate,
   });
 
@@ -381,7 +385,7 @@ export function Scheduler() {
         {allPaused ? "Resume all tasks" : "Pause all tasks"}
       </button>
       {allPaused && <span>Every task is paused; running jobs stopped and wait in the queue where they were.</span>}
-      {pauseAll.isError && <span className="text-danger">That change was refused.</span>}
+      {pauseAll.isError && <span className="text-danger">{problemText(pauseAll.error)}</span>}
     </div>
   );
 
@@ -413,7 +417,7 @@ export function Scheduler() {
             />
           ))}
         </ul>
-        {(update.isError || run.isError) && <p className="text-xs text-danger">That change was refused.</p>}
+        {(update.isError || run.isError) && <p className="text-xs text-danger">{problemText(update.error ?? run.error)}</p>}
       </section>
     );
   };
