@@ -608,3 +608,41 @@ func TestUpdateAccount_RefusalChangesNothingAndANameIsTakenOnce(t *testing.T) {
 		t.Errorf("two creations of one name: %v and %v, want one success and one ErrUsernameTaken", first, second)
 	}
 }
+
+func TestUpdateAccount_PromotionTierAndTheLastAdministrator(t *testing.T) {
+	cache, fake := newCache(t)
+	ctx := context.Background()
+	music, _ := cache.CreateCategory(ctx, "music", "Music", 10)
+	boss, err := cache.CreateUser(ctx, fake, "boss", "hash", settings.RoleAdmin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kid, err := cache.CreateUser(ctx, fake, "kid", "hash", settings.RoleReadonly)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	demote := settings.RoleUser
+	if err := cache.UpdateAccount(ctx, boss.ID, settings.AccountPatch{Role: &demote}); err == nil {
+		t.Error("the only administrator was demoted")
+	}
+	if after, _ := cache.Snapshot().User(boss.ID); after.Role != settings.RoleAdmin {
+		t.Errorf("a refused demotion changed the role to %q", after.Role)
+	}
+
+	promote := settings.RoleAdmin
+	if err := cache.UpdateAccount(ctx, kid.ID, settings.AccountPatch{Role: &promote}); err != nil {
+		t.Fatal(err)
+	}
+	if got := cache.Snapshot().Permission(kid.ID, music.ID); got != settings.PermissionManage {
+		t.Errorf("permission after promotion = %q, want manage", got)
+	}
+
+	limits := settings.UserLimits{TierDefault: settings.TierExpert, TierMax: settings.TierExpert, NewLibraryPermission: settings.PermissionRead}
+	if err := cache.UpdateAccount(ctx, kid.ID, settings.AccountPatch{Limits: &limits}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := cache.Snapshot().User(kid.ID); got.Tier != settings.TierExpert {
+		t.Errorf("tier after a default-tier change = %q, want expert", got.Tier)
+	}
+}

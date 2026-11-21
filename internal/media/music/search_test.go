@@ -1093,3 +1093,20 @@ func TestLibraryProfiles_CarryTheUpgradePolicyOfTheProfileThatRanked(t *testing.
 		t.Fatalf("profiles = %+v, %v; want one carrying min_delta 5", profiles, err)
 	}
 }
+
+func TestLibraryProfiles_AnItemsOwnTargetReplacesTheLibrarys(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	target, err := env.settings.CreateQualityTarget(t.Context(), settings.QualityTarget{Name: "own target", MediaType: "music", AudioCodec: "flac", Container: "flac", TolerancePct: 10})
+	if err != nil {
+		t.Fatalf("CreateQualityTarget: %v", err)
+	}
+	desired := library.NewDesired(env.library)
+	if err := desired.SetTargetOverride(t.Context(), item.ID, &target.ID); err != nil {
+		t.Fatalf("SetTargetOverride: %v", err)
+	}
+	profiles, err := judge.LibraryProfiles(t.Context(), desired, env.settings.Snapshot(), item.ID, item.CategoryID, item.ProfileID)
+	if err != nil || len(profiles) == 0 || profiles[0].Target == nil || profiles[0].Target.ID != target.ID {
+		t.Fatalf("profiles = %+v, %v; want the item's own target on the first", profiles, err)
+	}
+}

@@ -299,3 +299,13 @@ func TestLoginLimiter_CountsAnIPv6PrefixAsOneAddress(t *testing.T) {
 		t.Errorf("an unrelated mapped IPv4 address waited %v", wait)
 	}
 }
+
+func TestLoginLimiter_ACountedIPv4AddressAndItsMappedFormAreOne(t *testing.T) {
+	limiter := auth.NewLoginLimiter(clock.NewFakeAtEpoch())
+	for range auth.LoginAttempts {
+		limiter.Failed(netip.MustParseAddr("192.0.2.7"))
+	}
+	if wait := limiter.Begin(netip.MustParseAddr("::ffff:192.0.2.7")); wait == 0 {
+		t.Error("the IPv4-mapped form of a blocked address was admitted")
+	}
+}
