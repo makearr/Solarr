@@ -20,6 +20,8 @@ const (
 	BlocklistStalled        BlocklistReason = "STALLED"
 	BlocklistImportFailed   BlocklistReason = "IMPORT_FAILED"
 	BlocklistRejectedWorse  BlocklistReason = "REJECTED_WORSE"
+	// BlocklistGoneAtIndexer is a release its indexer stopped serving (404, 410, an item-gone answer): not a failed download.
+	BlocklistGoneAtIndexer BlocklistReason = "GONE_AT_INDEXER"
 	// BlocklistManual is what ADR-53's own "remove and block" action uses --
 	// FAKE is recorded on blocked_content instead; this row just stops the
 	// same release from being re-grabbed.

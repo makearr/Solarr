@@ -387,6 +387,12 @@ func TestGrab_PassesOverAReleaseTheIndexerDoesNotHandOver(t *testing.T) {
 			if err != nil || blocked != test.wantBlocklist {
 				t.Errorf("blocklisted = %v (%v), want %v", blocked, err, test.wantBlocklist)
 			}
+			if test.wantBlocklist {
+				entries, err := blocklist.List(t.Context(), 0, 10)
+				if err != nil || len(entries) != 1 || entries[0].Reason != library.BlocklistGoneAtIndexer {
+					t.Errorf("blocklist = %+v (%v), want one GONE_AT_INDEXER entry", entries, err)
+				}
+			}
 		})
 	}
 }

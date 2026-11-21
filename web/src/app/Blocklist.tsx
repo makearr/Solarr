@@ -4,6 +4,17 @@ import { api, ok } from "@/api/client";
 
 import { Card } from "./SettingsCard";
 
+/** The engine's reason codes in words; a code this build does not know is shown as it is. */
+const REASON_LABELS: Record<string, string> = {
+  DOWNLOAD_FAILED: "Download failed",
+  STALLED: "Stalled",
+  CORRUPT: "Corrupt",
+  IMPORT_FAILED: "Import failed",
+  REJECTED_WORSE: "Rejected as worse",
+  MANUAL: "Blocked by a person",
+  GONE_AT_INDEXER: "No longer at the indexer",
+};
+
 /** Section 10.11's failure memory, read and reversible. A release lands here
  *  when it fails; an automatic entry ages out on its own, a manual one stays
  *  until someone removes it. Removing one only allows it to be grabbed
@@ -44,7 +55,7 @@ export function Blocklist() {
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium">{entry.title}</div>
                 <div className="truncate text-xs text-ink-muted">
-                  {entry.reason}
+                  {REASON_LABELS[entry.reason] ?? entry.reason}
                   {" · "}
                   {entry.source}
                   {entry.expires_at == null ? " · permanent" : ` · until ${formatDate(entry.expires_at)}`}

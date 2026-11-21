@@ -169,7 +169,7 @@ func (d Dispatch) blocklistUnavailable(ctx context.Context, itemID int64, releas
 	expires := at.Add(unavailableMemory).Unix()
 	_, err := d.Blocklist.Create(ctx, library.NewBlocklistEntry{
 		IndexerID: &release.IndexerID, GUID: release.GUID, Title: release.Title, DesiredItemID: &itemID,
-		Reason: library.BlocklistDownloadFailed, DetailJSON: `{"cause":"unavailable"}`, Source: library.BlocklistSourceAuto,
+		Reason: library.BlocklistGoneAtIndexer, DetailJSON: `{"cause":"unavailable"}`, Source: library.BlocklistSourceAuto,
 		ExpiresAt: &expires, CreatedAt: at.Unix(),
 	})
 	return err
