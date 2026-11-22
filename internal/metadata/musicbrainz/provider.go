@@ -265,7 +265,7 @@ func (p Provider) SearchByQuery(ctx context.Context, priority Priority, query st
 // the first source able to list them. Album identification asks it for every candidate.
 func (p Provider) Releases(ctx context.Context, priority Priority, releaseGroupMBID string) ([]Release, error) {
 	call := lookup{
-		kind: cacheKindReleases, key: releaseGroupMBID, what: "listed releases of " + releaseGroupMBID,
+		kind: cacheKindReleases, key: releaseGroupMBID, what: "listed releases of " + releaseGroupMBID, notFoundWhenAll404: true,
 		noSource: fmt.Errorf("musicbrainz: no source can list releases (release group %s)", releaseGroupMBID),
 	}
 	return through(ctx, p, priority, call, func(ctx context.Context, lister ReleaseLister) ([]Release, error) {
@@ -336,7 +336,7 @@ func (p Provider) ReleaseGroupOf(ctx context.Context, priority Priority, release
 // Search, the proxy's artist shape is unverified live.
 func (p Provider) Artist(ctx context.Context, priority Priority, mbid string) (Artist, error) {
 	call := lookup{
-		kind: cacheKindArtist, key: mbid, what: "artist " + mbid,
+		kind: cacheKindArtist, key: mbid, what: "artist " + mbid, notFoundWhenAll404: true,
 		noSource: fmt.Errorf("musicbrainz: no source can look up an artist (mbid %s)", mbid),
 	}
 	return through(ctx, p, priority, call, func(ctx context.Context, source ArtistLookup) (Artist, error) {
@@ -349,7 +349,7 @@ func (p Provider) Artist(ctx context.Context, priority Priority, mbid string) (A
 // Artist.
 func (p Provider) ArtistReleaseGroups(ctx context.Context, priority Priority, artistMBID string) ([]ReleaseGroup, error) {
 	call := lookup{
-		kind: cacheKindDiscography, key: artistMBID, what: "discography " + artistMBID,
+		kind: cacheKindDiscography, key: artistMBID, what: "discography " + artistMBID, notFoundWhenAll404: true,
 		noSource: fmt.Errorf("%w: browse a discography (artist %s)", ErrNoCapableSource, artistMBID),
 	}
 	return through(ctx, p, priority, call, func(ctx context.Context, discography Discography) ([]ReleaseGroup, error) {

@@ -598,12 +598,13 @@ func TestProvider_OneStaleEntryForcesAFullRefetchOfBoth(t *testing.T) {
 type fakeReleaseListerSource struct {
 	fakeSource
 	releases     []musicbrainz.Release
+	releasesErr  error
 	releaseCalls int
 }
 
 func (f *fakeReleaseListerSource) Releases(context.Context, string) ([]musicbrainz.Release, error) {
 	f.releaseCalls++
-	return f.releases, nil
+	return f.releases, f.releasesErr
 }
 
 // Album identification lists releases for every candidate, so a repeat must not reach the network.
@@ -934,5 +935,28 @@ func TestProvider_ReleaseGroupOfOutageIsNotNotFound(t *testing.T) {
 	_, err := newProvider(t, down).ReleaseGroupOf(t.Context(), musicbrainz.PriorityIdentify, "release-1")
 	if err == nil || errors.Is(err, musicbrainz.ErrNotFound) {
 		t.Errorf("ReleaseGroupOf = %v, want an outage error that is not ErrNotFound", err)
+	}
+}
+
+// META-6: an artist, a discography or a release list every source answered 404 for is not asked again within the day.
+func TestProvider_AnArtistADiscographyAndAReleaseListThatAre404AreNotAskedAgain(t *testing.T) {
+	gone := &httpx.StatusError{Status: http.StatusNotFound}
+	artist := &fakeArtistLookupSource{fakeSource: fakeSource{name: "artist"}, artistErr: gone}
+	discography := &fakeDiscographySource{fakeSource: fakeSource{name: "discography"}, discographyErr: gone}
+	lister := &fakeReleaseListerSource{fakeSource: fakeSource{name: "lister"}, releasesErr: gone}
+	provider := newProvider(t, artist, discography, lister)
+	for range 2 {
+		if _, err := provider.Artist(t.Context(), musicbrainz.PriorityEnrich, "a1"); !errors.Is(err, musicbrainz.ErrNotFound) {
+			t.Fatalf("Artist err = %v, want ErrNotFound", err)
+		}
+		if _, err := provider.ArtistReleaseGroups(t.Context(), musicbrainz.PriorityEnrich, "a1"); !errors.Is(err, musicbrainz.ErrNotFound) {
+			t.Fatalf("ArtistReleaseGroups err = %v, want ErrNotFound", err)
+		}
+		if _, err := provider.Releases(t.Context(), musicbrainz.PriorityEnrich, "rg1"); !errors.Is(err, musicbrainz.ErrNotFound) {
+			t.Fatalf("Releases err = %v, want ErrNotFound", err)
+		}
+	}
+	if artist.artistCalls != 1 || discography.discographyCalls != 1 || lister.releaseCalls != 1 {
+		t.Errorf("calls = %d, %d, %d; want 1 each", artist.artistCalls, discography.discographyCalls, lister.releaseCalls)
 	}
 }
