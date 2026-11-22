@@ -128,6 +128,7 @@ type Hint struct {
 func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs, hint Hint) (Book, error) {
 	order := s.order(categoryID)
 	answers := map[string]Book{}
+	var failed []string
 	if ask := slices.Contains(order, settings.BookSourceAudible); ask && s.Audible != nil && ids.ASIN != "" {
 		if found, err := s.Audible.Book(ctx, ids.ASIN); err == nil {
 			answers[settings.BookSourceAudible] = FromAudible(found)
@@ -136,6 +137,7 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs, hint H
 			hint = Hint{Title: cmp.Or(hint.Title, heard.Title), Author: cmp.Or(hint.Author, first(heard.Authors()))}
 		} else if !errors.Is(err, audible.ErrNotFound) {
 			s.warn(sourceAudible, ids.ASIN, err)
+			failed = append(failed, sourceAudible)
 		}
 	}
 	ids = s.bridgeIDs(ctx, s.completeIDs(ctx, ids, hint), order)
@@ -147,7 +149,7 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs, hint H
 			if _, asked := answers[name]; asked {
 				continue
 			}
-			if answer, ok := s.ask(ctx, name, ids, hintFrom(hint, answers, order)); ok {
+			if answer, ok := s.ask(ctx, name, ids, hintFrom(hint, answers, order), &failed); ok {
 				answers[name] = answer
 				ids = Merge(Book{IDs: ids}, Book{IDs: answer.IDs}).IDs
 			}
@@ -176,14 +178,17 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs, hint H
 	if len(book.Genres) == 0 {
 		book.Genres = book.spareGenres
 	}
+	slices.Sort(failed)
+	book.Failed = slices.Compact(failed)
 	return book, nil
 }
 
 // ask asks one provider by the ids known; one without the id it needs, or that knows nothing, answers none.
-func (s Service) ask(ctx context.Context, name string, ids IDs, hint Hint) (Book, bool) {
+func (s Service) ask(ctx context.Context, name string, ids IDs, hint Hint, failed *[]string) (Book, bool) {
 	report := func(id string, err error, missing error) bool {
 		if err != nil && !errors.Is(err, missing) {
 			s.warn(name, id, err)
+			*failed = append(*failed, name)
 		}
 		return err == nil
 	}
@@ -687,6 +692,9 @@ func (s Service) Refresh(ctx context.Context, categoryID, workID int64) (Book, e
 	if err != nil {
 		return Book{}, err
 	}
+	if source, down := failedSupplier(stored, book.Failed); down {
+		return Book{}, fmt.Errorf("book %d: refresh skipped, %s did not answer: %w", workID, source, media.ErrSourceUnavailable)
+	}
 	if refreshedAnotherBook(basics.Title, book.Title, stored, book.IDs) {
 		return Book{}, fmt.Errorf("book %d: the refresh found %q for %q with other ids; nothing was stored: %w", workID, book.Title, basics.Title, ErrOtherBook)
 	}
@@ -694,6 +702,21 @@ func (s Service) Refresh(ctx context.Context, categoryID, workID int64) (Book, e
 		return Book{}, err
 	}
 	return book, nil
+}
+
+// failedSupplier is a source that holds the book's stored id and did not answer: a refresh built on the others would
+// replace what it supplied with their shorter lists.
+func failedSupplier(stored IDs, failed []string) (string, bool) {
+	holds := map[string]string{
+		settings.BookSourceOpenLibrary: stored.OpenLibrary, settings.BookSourceGoogleBooks: stored.GoogleBooks, settings.BookSourceAudible: stored.ASIN,
+		settings.BookSourceITunes: stored.ITunes, settings.BookSourceFantLab: stored.FantLab, settings.BookSourceHardcover: stored.Hardcover,
+	}
+	for _, name := range failed {
+		if holds[name] != "" {
+			return name, true
+		}
+	}
+	return "", false
 }
 
 // ErrOtherBook says a refresh found a different book than the one stored; the person can still identify it by hand.

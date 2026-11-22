@@ -248,7 +248,7 @@ func (p *process) bookImporter(format book.Format) book.Importer {
 			Blocked: library.NewBlockedContentStore(p.library), Clock: clock.NewSystem(), Logger: p.logger,
 			TransferLadder: p.transferLadder, GroupID: lookupGroupID,
 		}),
-		Resolver:   p.bookResolver(format), Tags: p.mediaTool(),
+		Resolver: p.bookResolver(format), Tags: p.mediaTool(),
 		Categories: categories, Clock: clock.NewSystem(), Logger: p.logger,
 		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
 		RenameOnImport: p.renameOnImport, ExtraFiles: p.extraFileExtensions,

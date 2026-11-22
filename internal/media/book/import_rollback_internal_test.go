@@ -17,7 +17,9 @@ import (
 
 type rollbackRoot struct{ root settings.RootFolder }
 
-func (o rollbackRoot) RootFolder(id int64) (settings.RootFolder, bool) { return o.root, id == o.root.ID }
+func (o rollbackRoot) RootFolder(id int64) (settings.RootFolder, bool) {
+	return o.root, id == o.root.ID
+}
 func (o rollbackRoot) CategoryRoots() []settings.CategoryRoot {
 	return []settings.CategoryRoot{{CategoryID: 3, RootFolderID: o.root.ID, AcceptsNew: true}}
 }

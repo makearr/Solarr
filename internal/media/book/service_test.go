@@ -11,13 +11,16 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parsebook"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/metadata/audible"
 	"github.com/makearr/Solarr/internal/metadata/googlebooks"
 	"github.com/makearr/Solarr/internal/metadata/openlibrary"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
+	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
@@ -383,5 +386,61 @@ func TestRefreshedAnotherBook_ANeighbourWithOtherIdsIsRefusedARetitledBookIsNot(
 		if got := refreshedAnotherBook(c.storedTitle, c.fetched, stored, c.fetchedIDs); got != c.want {
 			t.Errorf("%s: refreshedAnotherBook = %v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+// downOpenLibrary answers every work with an outage, as Open Library timing out does.
+type downOpenLibrary struct{ *fakeOpenLibrary }
+
+func (downOpenLibrary) Work(context.Context, string) (openlibrary.Work, error) {
+	return openlibrary.Work{}, errors.New("timeout")
+}
+
+func TestFetchFor_NamesTheSourcesThatAnsweredAnErrorNotTheOnesThatKnewNothing(t *testing.T) {
+	service := Service{Format: Ebook, OpenLibrary: downOpenLibrary{&fakeOpenLibrary{}}, GoogleBooks: fakeGoogle{}, Wikidata: fakeWikidata{},
+		PriorityFor: func(int64) []string { return []string{"openlibrary", "googlebooks"} }}
+	book, err := service.FetchFor(t.Context(), 7, IDs{OpenLibrary: "OL1001W", GoogleBooks: "gb1"}, Hint{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(book.Failed, []string{"openlibrary"}) {
+		t.Errorf("Failed = %v, want only openlibrary", book.Failed)
+	}
+}
+
+func TestFailedSupplier_OnlyASourceHoldingTheStoredIDStopsARefresh(t *testing.T) {
+	stored := IDs{OpenLibrary: "OL1001W", ASIN: "B000000001"}
+	for _, test := range []struct {
+		failed []string
+		source string
+		down   bool
+	}{
+		{[]string{"openlibrary"}, "openlibrary", true},
+		{[]string{"googlebooks"}, "", false},
+		{[]string{"googlebooks", "audible"}, "audible", true},
+		{nil, "", false},
+	} {
+		if source, down := failedSupplier(stored, test.failed); source != test.source || down != test.down {
+			t.Errorf("failedSupplier(%v) = %q, %v; want %q, %v", test.failed, source, down, test.source, test.down)
+		}
+	}
+}
+
+func TestRefresh_WhileTheSourceThatSuppliedTheBookIsDownNothingIsStored(t *testing.T) {
+	opened := openFollowLibrary(t)
+	now := clock.NewFakeAtEpoch().Now()
+	series := library.NewSeries(opened)
+	stored, err := series.Upsert(t.Context(), now, library.SeriesWrite{
+		Work: library.WorkIdentity{MediaType: "book", CanonicalTitle: "The Lantern Keeper", SortTitle: "lantern keeper"},
+		IDs:  []library.ExternalIDWrite{{Provider: ProviderOpenLibrary, ExternalID: "OL1001W"}, {Provider: ProviderGoogleBooks, ExternalID: "gb1"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := Service{Format: Ebook, OpenLibrary: downOpenLibrary{&fakeOpenLibrary{}}, GoogleBooks: fakeGoogle{}, Wikidata: fakeWikidata{},
+		Series: series, Reader: library.NewSeriesReader(opened), Clock: clock.NewFakeAtEpoch(),
+		PriorityFor: func(int64) []string { return []string{"openlibrary", "googlebooks"} }}
+	if _, err := service.Refresh(t.Context(), 7, stored.WorkID); !errors.Is(err, media.ErrSourceUnavailable) {
+		t.Fatalf("Refresh error = %v, want ErrSourceUnavailable", err)
 	}
 }

@@ -90,6 +90,8 @@ type Series struct {
 
 // Book is one book, merged from every source that knew it. Published is yyyy-MM-dd, yyyy-MM or yyyy, or empty.
 type Book struct {
+	// Failed lists the sources that were asked and answered an error, not "no such book".
+	Failed   []string
 	IDs      IDs
 	Title    string
 	Subtitle string
