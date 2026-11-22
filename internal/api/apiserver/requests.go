@@ -116,16 +116,8 @@ func (s *Server) fileRequest(w http.ResponseWriter, r *http.Request, access auth
 const requestKindSearch = "search"
 
 // RequestWorkSearch satisfies the generated interface; the mounted route reads the id itself.
-func (s *Server) RequestWorkSearch(w http.ResponseWriter, r *http.Request, _ int64) {
-	id, err := parsePathID(w, s, r, "id", "a work id must be a number")
-	if err != nil {
-		return
-	}
+func (s *Server) RequestWorkSearch(w http.ResponseWriter, r *http.Request, id int64) {
 	s.requestWorkSearch(w, r, id)
-}
-
-func (s *Server) routeRequestWorkSearch(w http.ResponseWriter, r *http.Request) {
-	s.RequestWorkSearch(w, r, 0)
 }
 
 // requestWorkSearch files the ask of an account that may not search: approval runs the automatic search as the library's administrator.

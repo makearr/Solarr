@@ -92,11 +92,6 @@ func (s *Server) ListSchedules(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, views)
 }
 
-// routeUpdateSchedule parses the key path parameter.
-func (s *Server) routeUpdateSchedule(w http.ResponseWriter, r *http.Request) {
-	s.UpdateSchedule(w, r, chi.URLParam(r, "key"))
-}
-
 // UpdateSchedule overrides a task's cadence and/or enabled flag.
 // Administrator only. Both fields are independent -- omitting one leaves it
 // unchanged.

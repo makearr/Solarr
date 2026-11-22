@@ -239,3 +239,16 @@ func TestRequestWorkSearch_ReadOnlyAccountIsRefused(t *testing.T) {
 		t.Errorf("read-only: %d, %d requests; want 403 and none", recorder.Code, len(fixture.requests.records))
 	}
 }
+
+// A work id that is not a number is the spec's 400, and files nothing.
+func TestRequestWorkSearch_ANonNumericWorkIsABadRequest(t *testing.T) {
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionRequest)
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/abc/request-search", "")); recorder.Code != http.StatusBadRequest || len(fixture.requests.records) != 0 {
+		t.Errorf("work abc: %d, %d requests; want 400 and none", recorder.Code, len(fixture.requests.records))
+	}
+	fixture.workDetail.row.CategoryIDs = []int64{1}
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/43/request-search", "")); recorder.Code != http.StatusOK ||
+		len(fixture.requests.records) != 1 || fixture.requests.records[0].WorkID != 43 {
+		t.Errorf("work 43: %d, %+v; want one request for work 43", recorder.Code, fixture.requests.records)
+	}
+}

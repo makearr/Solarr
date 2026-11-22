@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/config"
@@ -64,10 +62,6 @@ func (s *Server) ListLibraryTypeDefaults(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, s.logger, http.StatusOK, struct {
 		Types []gen.LibraryTypeDefaults `json:"types"`
 	}{types})
-}
-
-func (s *Server) routeSetLibraryTypeDefaults(w http.ResponseWriter, r *http.Request) {
-	s.SetLibraryTypeDefaults(w, r, chi.URLParam(r, "mediaType"))
 }
 
 // SetLibraryTypeDefaults changes a media type's defaults; a field left out stays as it is.

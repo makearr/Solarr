@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/apiserver/legal"
 	"github.com/makearr/Solarr/internal/api/auth"
@@ -329,10 +327,6 @@ func (s *Server) GetMyPreferences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, preferences)
-}
-
-func (s *Server) routeSetMyPreference(w http.ResponseWriter, r *http.Request) {
-	s.SetMyPreference(w, r, chi.URLParam(r, "key"))
 }
 
 // SetMyPreference stores one of them. Self-service, like SetMyTier.
