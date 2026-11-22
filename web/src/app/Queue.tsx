@@ -171,7 +171,7 @@ function QueueRow({ item }: { item: QueueItem }) {
           {item.release_title}
         </span>
         {item.error && (
-          <span className="block text-danger">
+          <span className={clientCannotUseItsDisk(item) ? "block text-warn" : "block text-danger"}>
             {item.error}
             {item.state === "IMPORTING" && (
               <>
@@ -184,7 +184,7 @@ function QueueRow({ item }: { item: QueueItem }) {
           </span>
         )}
       </td>
-      <td className="px-2 py-2">{statusLabel(item)}</td>
+      <td className={clientCannotUseItsDisk(item) ? "px-2 py-2 text-warn" : "px-2 py-2"}>{statusLabel(item)}</td>
       <td className="w-40 px-2 py-2">
         <ProgressBar item={item} />
       </td>
@@ -307,6 +307,11 @@ export function ProgressBar({ item }: { item: QueueItem }) {
   );
 }
 
+/** The client reports failed yet Solarr still counts the download as running: a local error of the client, not a bad release. */
+export function clientCannotUseItsDisk(item: QueueItem): boolean {
+  return item.state === "DOWNLOADING" && item.client_state === "failed";
+}
+
 /** Solarr's state, sharpened by the client's own where it says more. */
 export function statusLabel(item: QueueItem): string {
   switch (item.state) {
@@ -326,7 +331,7 @@ export function statusLabel(item: QueueItem): string {
     case "completed":
       return "Downloaded";
     case "failed":
-      return "Failed";
+      return clientCannotUseItsDisk(item) ? t("queue.clientCannotWrite") : "Failed";
     default:
       return "Queued";
   }

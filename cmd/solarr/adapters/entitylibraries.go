@@ -40,8 +40,24 @@ func (e EntityLibraries) OfPerson(ctx context.Context, personID int64) int64 {
 	if err != nil {
 		return 0
 	}
-	return e.first(e.Cache.Snapshot(), categoryIDs)
+	if categoryID := e.first(e.Cache.Snapshot(), categoryIDs); categoryID != 0 {
+		return categoryID
+	}
+	// An artist whose albums are only on disk has no wanted item to roll up, so the albums' own libraries answer.
+	albums, err := e.People.Discography(ctx, personID, "artist")
+	if err != nil {
+		return 0
+	}
+	for _, album := range albums[:min(len(albums), personAlbumsAsked)] {
+		if categoryID := e.OfWork(ctx, album.ID); categoryID != 0 {
+			return categoryID
+		}
+	}
+	return 0
 }
+
+// personAlbumsAsked bounds the albums looked at to name a person's library.
+const personAlbumsAsked = 20
 
 // first is the first of categoryIDs that is a library of MediaType, 0 for none.
 func (e EntityLibraries) first(snapshot *settings.Snapshot, categoryIDs []int64) int64 {

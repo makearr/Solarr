@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { formatBytes, formatDuration, statusLabel } from "./Queue";
+import { clientCannotUseItsDisk, formatBytes, formatDuration, statusLabel } from "./Queue";
 
 const item = { id: 1, client_disabled: false, release_title: "Heka-Zanuvode", client: "SABnzbd", added_at: "2026-09-29T00:00:00Z" };
 
@@ -20,4 +20,12 @@ test("sizes and times read as a person would say them", () => {
   expect(formatDuration(30)).toBe("under a minute");
   expect(formatDuration(600)).toBe("10 min");
   expect(formatDuration(3900)).toBe("1 h 5 min");
+});
+
+test("a download the client cannot write reads as that, not as a failed release", () => {
+  const stuck = { ...item, state: "DOWNLOADING" as const, client_state: "failed" as const, error: "No space left on device" };
+  expect(statusLabel(stuck)).toBe("Client cannot write");
+  expect(clientCannotUseItsDisk(stuck)).toBe(true);
+  expect(statusLabel({ ...stuck, state: "QUEUED" })).toBe("Failed");
+  expect(clientCannotUseItsDisk({ ...stuck, state: "QUEUED" })).toBe(false);
 });

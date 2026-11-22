@@ -98,7 +98,7 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 		}
 		decision.WorkID = &workID
 		if request.Preview {
-			decision.Reason = batch.ReasonPreview
+			decision.Reason, decision.Confidence = batch.ReasonPreview, 1
 			result.Decisions[index] = decision
 			continue
 		}

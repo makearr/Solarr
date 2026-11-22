@@ -70,6 +70,16 @@ func TestEntityLibraries_NameTheLibraryAnAlbumOrArtistIsLookedUpFor(t *testing.T
 		t.Fatal(err)
 	}
 
+	onDiskOnly, err := people.ResolvePerson(t.Context(), now, library.PersonLink{
+		Provider: "musicbrainz:artist", ExternalID: "on-disk-artist", Person: library.PersonIdentity{Name: "Heka Luvo"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := people.AddLeadCredit(t.Context(), onDisk, onDiskOnly, "artist"); err != nil {
+		t.Fatal(err)
+	}
+
 	libraries := adapters.EntityLibraries{MediaType: "music", Works: library.NewWorks(opened), People: people, Cache: cache}
 	got := map[string]int64{
 		"files only":        libraries.OfWork(t.Context(), onDisk),
@@ -78,6 +88,7 @@ func TestEntityLibraries_NameTheLibraryAnAlbumOrArtistIsLookedUpFor(t *testing.T
 		"no such work":      libraries.OfWork(t.Context(), 999_999),
 		"credited artist":   libraries.OfPerson(t.Context(), artist),
 		"uncredited artist": libraries.OfPerson(t.Context(), unheard),
+		"files only artist": libraries.OfPerson(t.Context(), onDiskOnly),
 		"no such artist":    libraries.OfPerson(t.Context(), 999_999),
 	}
 	want := map[string]int64{
@@ -87,6 +98,7 @@ func TestEntityLibraries_NameTheLibraryAnAlbumOrArtistIsLookedUpFor(t *testing.T
 		"no such work":      0,
 		"credited artist":   categories["Music"],
 		"uncredited artist": 0,
+		"files only artist": categories["Classical"],
 		"no such artist":    0,
 	}
 	if !maps.Equal(got, want) {

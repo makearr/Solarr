@@ -84,3 +84,51 @@ func TestEnrichJob_LooksEachAlbumAndArtistUpInItsOwnLibrary(t *testing.T) {
 		t.Errorf("the refresh asked the orders of libraries %v, want %v (artist, discography, album, its artist)", got, want)
 	}
 }
+
+// bootlegWatcher is a source whose discography records whether the lookup asked for bootleg-only groups.
+type bootlegWatcher struct {
+	*fakeArtistSource
+	asked []bool
+}
+
+func (b *bootlegWatcher) ArtistReleaseGroups(ctx context.Context, _ string) ([]musicbrainz.ReleaseGroup, error) {
+	b.asked = append(b.asked, musicbrainz.IncludesBootlegOnlyGroups(ctx))
+	return nil, nil
+}
+
+// An artist's refresh lists the discography under the artist's library, so its bootleg-only switch applies.
+func TestEnrichJob_ArtistRefreshFollowsTheLibrarysBootlegSwitch(t *testing.T) {
+	source := &bootlegWatcher{fakeArtistSource: &fakeArtistSource{
+		fakeSource: fakeSource{
+			rg: musicbrainz.ReleaseGroup{
+				MBID: "rg-1", Title: "KI Pecezinu", PrimaryType: "Album",
+				ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "artist-1", Name: "Katupoken"}},
+			},
+			release: musicbrainz.Release{MBID: "rel-1", Title: "KI Pecezinu", Status: "official"},
+		},
+		artists: map[string]musicbrainz.Artist{"artist-1": {MBID: "artist-1", Name: "Katupoken", SortName: "Katupoken"}},
+	}}
+	job, opened, queries := newEnrichJobRealigning(t, source, nil, nil, nil, func(config *music.EnrichJobConfig) {
+		config.Libraries = fakeLibraries{}
+		config.Provider = musicbrainz.New(musicbrainz.Config{
+			Sources: []musicbrainz.Source{source}, LiveBootlegs: func(library int64) bool { return library == 9 },
+			Cache: newMetadataCache(t), Clock: clock.NewFakeAtEpoch(), Logger: slog.New(slog.DiscardHandler),
+		})
+	})
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	person, err := queries.GetPersonByExternalID(t.Context(), librarydb.GetPersonByExternalIDParams{
+		Provider: music.ProviderArtist, ExternalID: "artist-1",
+	})
+	if err != nil {
+		t.Fatalf("GetPersonByExternalID: %v", err)
+	}
+	if err := job.RefreshArtist(t.Context(), person.ID, true); err != nil {
+		t.Fatalf("RefreshArtist: %v", err)
+	}
+	if want := []bool{true}; !slices.Equal(source.asked, want) {
+		t.Errorf("discography lookups asked for bootleg-only groups %v, want %v", source.asked, want)
+	}
+}

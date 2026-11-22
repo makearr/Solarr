@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
@@ -86,6 +87,9 @@ func (a WorkRefresher) RefreshWork(ctx context.Context, workID int64) (bool, err
 	duplicate, err := refreshing.RefreshWork(ctx, workID)
 	if errors.Is(err, media.ErrNotWired) {
 		return false, apiserver.ErrNotRefreshable
+	}
+	if errors.Is(err, media.ErrSourceUnavailable) {
+		return false, fmt.Errorf("%w: %w", apiserver.ErrSeriesSourceUnavailable, err)
 	}
 	return duplicate, err
 }

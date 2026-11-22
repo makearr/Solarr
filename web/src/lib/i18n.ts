@@ -66,6 +66,7 @@ const catalogue = {
   "arrImport.follows": "Followed release types",
   "arrImport.notes": "To do after this import",
   "queue.clientDisabled": "Client disabled",
+  "queue.clientCannotWrite": "Client cannot write",
   "arrImport.follows.line": "{name} ({items}): follows {types}; leaves out {excluded}",
   "arrImport.follows.none": "none",
   "work.numberingDisagrees": "Season(s) {seasons}: the metadata sources number the episodes differently, so air times are matched by date.",
