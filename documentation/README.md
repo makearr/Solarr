@@ -17,6 +17,7 @@ interface levels *normal / advanced / expert* in Settings → User.
 | [user-guide.md](user-guide.md) | The map of the guide, the interface levels, the colours |
 | [guide/music.md](guide/music.md) | Add, edit and follow music; duplicates |
 | [guide/tv.md](guide/tv.md) | TV and anime libraries, series, unidentified files, quality |
+| [guide/comics.md](guide/comics.md) | Comics and manga libraries, pull list, reading lists, reader files |
 | [guide/automation.md](guide/automation.md) | What Solarr does by itself, how to watch it, how to tune it |
 | [guide/people.md](guide/people.md) | People, labels, networks and following |
 | [guide/favorites.md](guide/favorites.md) | Hearts, apart from follows, and the Favorites filter |

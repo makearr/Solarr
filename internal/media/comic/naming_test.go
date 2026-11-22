@@ -70,3 +70,15 @@ func TestAMangaLibraryWithoutAProfileHasNoYearInItsSeriesFolder(t *testing.T) {
 		t.Fatalf("manga %q, comics %q", manga, comics)
 	}
 }
+
+func TestAVolumeRangeFileIsNamedForBothEnds(t *testing.T) {
+	file := FileNaming{Series: "Night Harbor", Year: 2019, Volume: 4, VolumeLast: 5}
+	got, _, err := NamingFor(nil).RenderFile(SlotVolumeFile, file, "x.cbz")
+	if err != nil || got != "Night Harbor (2019)/Night Harbor v04-05.cbz" {
+		t.Fatalf("range name = %q, %v", got, err)
+	}
+	file.VolumeLast = 0
+	if got, _, _ := NamingFor(nil).RenderFile(SlotVolumeFile, file, "x.cbz"); got != "Night Harbor (2019)/Night Harbor v04.cbz" {
+		t.Fatalf("one volume = %q", got)
+	}
+}

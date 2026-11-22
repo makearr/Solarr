@@ -49,3 +49,27 @@ states, becomes a part when its file is found.
 
 A file's median page edges are stored as its width and height, its page count and image format as claimed attributes, so
 a quality target can compare them. Unknown size (a PDF, avif pages) never fails a gate.
+
+## Library options
+
+A media type declares choice settings in its descriptor (`FileSettings` with options); a library stores the picks as module options (`category_file_management.module_options`) and File Management shows them under "Library options". The comic type declares three:
+
+- **Date type** (`date_type`: store or cover): which date dates an issue (`work_part.date`, `available_at`, the pull list, when it is searched for). It applies when a series is added or refreshed.
+- **A collected edition satisfies its issues** (`edition_satisfies_issues`, default off): see below.
+- **Kavita and Komga files** (`reader_files`: off, fill, replace): see below.
+
+## Collected editions
+
+`part_coverage(covering_part_id, covered_part_id, source)` says a held part stands for another: a trade paperback (its own work with a `whole` part) for the issues it collects. A row counts only while the covering part has a file on disk. With the library setting on, a covered issue is not searched for; the series page shows it as held in the edition (`in_edition` on a part). Rows are filled by a provider or by hand (`library.Coverage.Replace`; source `hand` is never replaced by a provider). Not built: Metron's reprint data filling rows, and an editor for the rows on the edition page.
+
+## Reading lists
+
+On a comic library's Story arcs page, *Import reading list* takes a ComicRack `.cbl` file (at most 1 MiB, `encoding/xml`, no external entities), matches each book to a held series (by title or alias, narrowed by the volume year) and issue, and previews matched, ambiguous and not-held books (`POST /categories/{id}/reading-list`, nothing saved). Creating the list makes an ordered crossover collection of the matched issues.
+
+## Files for readers
+
+With *Kavita and Komga files* on, a daily pass (and one when the setting is switched on) writes `series.json` beside each series' files and a `ComicInfo.xml` into each cbz: fill adds the elements a file lacks and never changes one it has, replace sets every element Solarr has a value for. A manga library writes `Manga` as `YesAndRightToLeft`. A cbz is rewritten only when the result differs, entry by entry with the compressed bytes untouched, through a copy swapped in whole; nothing is written on a read-only or offline root. The old bytes are not kept in the recycle bin (the music tag writer does the same).
+
+## Naming of ranges
+
+A file holding several volumes or issues is named for both ends: `v04-05`; `{Volume:00}` pads both.

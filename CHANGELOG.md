@@ -5,6 +5,7 @@ Earlier entries use older schemes; those at and below `0.0.x` predate both and a
 
 ## Unreleased
 
+- Comics: a file holding a range of volumes is named for both ends (v04-05), and number padding pads both.
 - Comics: a manga or hentai library says volumes where a comics library says issues, and a comic file shows its page count, median page size and image format beside its size.
 - Comics: a library can write what Kavita and Komga read (File Management > Library options > Kavita and Komga files): series.json beside each series and ComicInfo.xml inside each cbz, adding what is missing (fill) or replacing it. A file is rewritten only when the result differs. Off by default.
 - Comics: a library chooses its date type (store date or cover date) and whether a collected edition it holds satisfies the issues it collects (those are then not searched for and show as held in the edition); a ComicRack reading list (.cbl) can be imported on the Story arcs page: matched issues are kept in order as one list. Libraries gained a generic "Library options" section for settings a media type declares.

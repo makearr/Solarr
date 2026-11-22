@@ -160,6 +160,18 @@ func formatValue(name, value string, seg Segment, warnings *[]Warning) string {
 
 // padLeadingNumber pads the digits a value starts with and keeps the rest: "1.5" and "1AU" pad to "001.5" and "001AU".
 func padLeadingNumber(value string, width int) (string, bool) {
+	// A range pads both ends: "4-5" is "004-005".
+	if first, last, isRange := strings.Cut(value, "-"); isRange && first != "" && last != "" {
+		padded, ok := padLeadingNumber(first, width)
+		if !ok {
+			padded, ok = fmt.Sprintf("%0*s", width, first), isWhole(first)
+		}
+		paddedLast, okLast := padLeadingNumber(last, width)
+		if !okLast {
+			paddedLast, okLast = fmt.Sprintf("%0*s", width, last), isWhole(last)
+		}
+		return padded + "-" + paddedLast, ok && okLast
+	}
 	end := 0
 	for end < len(value) && value[end] >= '0' && value[end] <= '9' {
 		end++
@@ -172,6 +184,18 @@ func padLeadingNumber(value string, width int) (string, bool) {
 		return "", false
 	}
 	return fmt.Sprintf("%0*d", width, n) + value[end:], true
+}
+
+func isWhole(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // allTokensResolve reports whether every token directly inside segments

@@ -338,6 +338,9 @@ func namingOf(detail library.SeriesDetailRow, each importFile) (string, FileNami
 	switch kind {
 	case PartVolume:
 		named.Volume, _ = strconv.Atoi(number)
+		if lastNumber != number {
+			named.VolumeLast, _ = strconv.Atoi(lastNumber)
+		}
 		return SlotVolumeFile, named
 	case PartChapter:
 		named.Chapter = printed

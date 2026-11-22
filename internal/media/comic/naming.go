@@ -119,6 +119,8 @@ type FileNaming struct {
 	// Issue and Chapter are as printed ("1", "1.5", "1AU"); Volume is 0 when the file has none.
 	Issue, Chapter string
 	Volume         int
+	// VolumeLast is the last volume of a file holding a range; 0 or Volume for one volume.
+	VolumeLast int
 	// Format is the series' format key (tpb, hc, gn, omnibus, one-shot...); an ordinary run leaves it empty.
 	Format                                  string
 	Quality, ReleaseGroup, OriginalFilename string
@@ -147,7 +149,11 @@ func (f FileNaming) Context() naming.Context {
 	set(TokenIssue, f.Issue)
 	set(TokenIssueTitle, f.IssueTitle)
 	if f.Volume > 0 {
-		set(TokenVolume, strconv.Itoa(f.Volume))
+		printed := strconv.Itoa(f.Volume)
+		if f.VolumeLast > f.Volume {
+			printed += "-" + strconv.Itoa(f.VolumeLast)
+		}
+		set(TokenVolume, printed)
 	}
 	set(TokenChapter, f.Chapter)
 	set(TokenFormat, formatLabels[f.Format])

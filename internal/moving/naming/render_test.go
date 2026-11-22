@@ -252,3 +252,13 @@ func TestRenderPath_AMultiByteNameIsCutOnARuneBoundary(t *testing.T) {
 }
 
 func utf8Valid(s string) bool { return strings.ToValidUTF8(s, "�") == s }
+
+func TestPaddingANumberRangePadsBothEnds(t *testing.T) {
+	for value, want := range map[string]string{"4-5": "v04-05.flac", "12-14": "v12-14.flac", "4": "v04.flac", "1.5": "v01.5.flac", "3-4.5": "v03-04.5.flac"} {
+		ctx := naming.Context{"Volume": value}
+		got := renderPath(t, "v{Volume:00}", ctx, naming.Options{})
+		if got != want {
+			t.Errorf("pad %q = %q, want %q", value, got, want)
+		}
+	}
+}
