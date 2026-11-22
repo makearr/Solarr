@@ -51,6 +51,8 @@ type ImporterConfig struct {
 type Importer struct {
 	config ImporterConfig
 	logger *slog.Logger
+	// inspected holds the probes the inspection read, until the batch that follows takes them.
+	inspected *probeMemo
 }
 
 var (
@@ -65,7 +67,7 @@ func NewImporter(config ImporterConfig) Importer {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return Importer{config: config, logger: logger}
+	return Importer{config: config, logger: logger, inspected: &probeMemo{}}
 }
 
 // InspectTags implements batch.TagEvidence: the tags of the audio files among relPaths, read in one batch.
@@ -79,7 +81,35 @@ func (i Importer) InspectTags(ctx context.Context, root string, relPaths []strin
 	if len(audio) == 0 {
 		return nil, nil
 	}
-	return BuildInspectTagGrouper(ctx, i.config.Tool, root, audio)
+	return buildInspectTagGrouper(ctx, i.config.Tool, root, audio, i.inspected.put)
+}
+
+// probesFor reads the tags of the files, asking the tool only for those the inspection did not already read.
+func (i Importer) probesFor(ctx context.Context, absolute []string) ([]mediatool.Probe, error) {
+	probes := make([]mediatool.Probe, len(absolute))
+	var missing []string
+	var missingAt []int
+	for index, one := range absolute {
+		if probe, found := i.inspected.take(one); found {
+			probes[index] = probe
+			continue
+		}
+		missing = append(missing, one)
+		missingAt = append(missingAt, index)
+	}
+	if len(missing) == 0 {
+		return probes, nil
+	}
+	read, err := i.config.Tool.ReadTags(ctx, missing)
+	if err != nil {
+		return nil, err
+	}
+	for k, at := range missingAt {
+		if k < len(read) {
+			probes[at] = read[k]
+		}
+	}
+	return probes, nil
 }
 
 // identifyParallelism bounds IDENTIFY's fan-out across one batch's units; writes stay with the import job.
@@ -99,7 +129,7 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 	for index, rel := range relPaths {
 		absolute[index] = path.Join(request.SourcePath, rel)
 	}
-	probes, err := i.config.Tool.ReadTags(ctx, absolute)
+	probes, err := i.probesFor(ctx, absolute)
 	if err != nil {
 		return batch.Result{}, fmt.Errorf("music: probe batch: %w", err)
 	}

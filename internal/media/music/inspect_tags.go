@@ -16,6 +16,13 @@ import (
 func BuildInspectTagGrouper(
 	ctx context.Context, tool mediatool.Tool, root string, mediaRelPaths []string,
 ) (inspect.TagGrouper, error) {
+	return buildInspectTagGrouper(ctx, tool, root, mediaRelPaths, nil)
+}
+
+// buildInspectTagGrouper is BuildInspectTagGrouper that hands every probe it read to remember, when set.
+func buildInspectTagGrouper(
+	ctx context.Context, tool mediatool.Tool, root string, mediaRelPaths []string, remember func(absolute string, probe mediatool.Probe),
+) (inspect.TagGrouper, error) {
 	absolute := make([]string, len(mediaRelPaths))
 	for i, rel := range mediaRelPaths {
 		absolute[i] = filepath.Join(root, rel)
@@ -32,6 +39,9 @@ func BuildInspectTagGrouper(
 
 	byRelPath := make(map[string]AlbumTags, len(probes))
 	for i, probe := range probes {
+		if remember != nil {
+			remember(absolute[i], probe)
+		}
 		// A file ReadTags could not open (corrupt, not audio) carries no evidence: it stays untagged.
 		if probe.Err == nil {
 			byRelPath[mediaRelPaths[i]] = AlbumTagsOf(probe.Tags)
