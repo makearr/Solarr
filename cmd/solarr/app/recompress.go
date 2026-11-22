@@ -210,22 +210,3 @@ func reencodePreview(source []byte, maxEdge, quality int) ([]byte, error) {
 	}
 	return artwork.EncodeJPEGAt(artwork.ResizeLongestEdge(img, maxEdge), quality)
 }
-
-// shardCovers moves the pictures an older layout left in one folder into their shard folders; readers find either place meanwhile.
-func shardCovers(fsys fsx.FS, dir string, logger *slog.Logger) {
-	total := 0
-	for {
-		moved, err := artwork.ShardCovers(fsys, dir)
-		total += moved
-		if err != nil {
-			logger.Warn("library covers not sharded", "moved", total, "error", err)
-			return
-		}
-		if moved == 0 {
-			break
-		}
-	}
-	if total > 0 {
-		logger.Info("library covers moved into shard folders", "files", total)
-	}
-}

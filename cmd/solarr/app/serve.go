@@ -259,8 +259,6 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 		logger.Info("library covers moved out of the cache", "files", moved)
 	}
 
-	go shardCovers(fsys, loaded.Paths.MediaCoverDir, logger)
-
 	running := &process{
 		build: build, config: loaded, env: env, fsys: fsys, logger: logger, logRing: logRing,
 		timezone: timezone, configPath: configPath, tool: mediatool.New(nil, 0),
@@ -681,6 +679,9 @@ func (p *process) startJobs(ctx context.Context) error {
 		return err
 	}
 	if err := p.registerPeopleJobs(registry, executor); err != nil {
+		return err
+	}
+	if err := p.registerCoverJobs(registry, executor); err != nil {
 		return err
 	}
 	if err := p.registerPlanJobs(registry, executor); err != nil {
