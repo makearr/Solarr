@@ -1425,6 +1425,9 @@ type ArrImportItemKind string
 
 // ArrImportPreview defines model for ArrImportPreview.
 type ArrImportPreview struct {
+	// Follows Which release types the followed items take, one per *Arr follow profile in use (Lidarr's metadata profile).
+	Follows *[]ArrPreviewFollow `json:"follows,omitempty"`
+
 	// ItemKind What the counts count.
 	ItemKind ArrImportPreviewItemKind `json:"item_kind"`
 	Profiles []ArrPreviewProfile      `json:"profiles"`
@@ -1492,6 +1495,19 @@ type ArrInstance struct {
 	// PushMonitoring Send the monitored flag of what an import brought in back to the *Arr when it changes here. The one write Solarr ever makes to an *Arr; off unless turned on.
 	PushMonitoring *bool     `json:"push_monitoring,omitempty"`
 	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// ArrPreviewFollow defines model for ArrPreviewFollow.
+type ArrPreviewFollow struct {
+	// ExcludedSecondaryTypes The secondary types it leaves out.
+	ExcludedSecondaryTypes []string `json:"excluded_secondary_types"`
+
+	// Items Monitored items on it; each becomes a follow.
+	Items int64  `json:"items"`
+	Name  string `json:"name"`
+
+	// PrimaryTypes The primary release types the follow brings in.
+	PrimaryTypes []string `json:"primary_types"`
 }
 
 // ArrPreviewProfile defines model for ArrPreviewProfile.

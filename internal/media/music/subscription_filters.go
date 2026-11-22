@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/makearr/Solarr/internal/importing/arrimport"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 )
 
@@ -43,6 +44,27 @@ type SubscriptionFilters struct {
 	// silent "exclude nothing", which is exactly the behaviour that makes
 	// people turn discography monitoring off.
 	ExcludeSecondaryTypes *[]string `json:"exclude_secondary_types,omitempty"`
+}
+
+// studioAlbumType is Lidarr's name for "no secondary type": allowing it excludes nothing, so it never becomes an exclusion.
+const studioAlbumType = "studio"
+
+// FiltersOfLidarrProfile are the release types a Lidarr metadata profile allows: its allowed primary types, and every
+// secondary type it does not allow as an exclusion.
+func FiltersOfLidarrProfile(profile arrimport.LidarrMetadataProfile) SubscriptionFilters {
+	primary, excluded := []string{}, []string{}
+	for _, use := range profile.PrimaryAlbumTypes {
+		if use.Allowed {
+			primary = append(primary, use.AlbumType.Name)
+		}
+	}
+	for _, use := range profile.SecondaryAlbumTypes {
+		name := strings.ToLower(use.AlbumType.Name)
+		if !use.Allowed && name != studioAlbumType {
+			excluded = append(excluded, name)
+		}
+	}
+	return SubscriptionFilters{IncludePrimaryTypes: &primary, ExcludeSecondaryTypes: &excluded}
 }
 
 // ParseSubscriptionFilters decodes a stored subscription's opaque

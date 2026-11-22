@@ -138,8 +138,8 @@ func idOf(resource map[string]any) int64 {
 }
 
 // MetadataProfiles answers Lidarr's metadata profiles.
-func (c LidarrClient) MetadataProfiles(ctx context.Context) ([]LidarrQualityProfile, error) {
-	var profiles []LidarrQualityProfile
+func (c LidarrClient) MetadataProfiles(ctx context.Context) ([]LidarrMetadataProfile, error) {
+	var profiles []LidarrMetadataProfile
 	err := c.get(ctx, "/api/v1/metadataprofile", &profiles)
 	return profiles, err
 }

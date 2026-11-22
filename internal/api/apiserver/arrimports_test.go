@@ -157,6 +157,7 @@ func TestPreviewArrImport_ReadsTheMappingAndRendersThePreview(t *testing.T) {
 		ItemKind: "series",
 		Roots:    []apiserver.ArrPreviewRoot{{Path: "/tv", LocalPath: "/mnt/tv", LibraryID: &library, Chosen: 3, New: 1, InLibrary: 1, WithoutID: 1}},
 		Profiles: []apiserver.ArrPreviewProfile{{ArrProfileID: 6, Name: "Any", Items: 3, ProposedProfileID: &profile}},
+		Follows:  []apiserver.ArrPreviewFollow{{Name: "Standard", Items: 2, PrimaryTypes: []string{"Album"}, ExcludedSecondaryTypes: []string{"live"}}},
 		Settings: []apiserver.ArrPreviewSettings{{LibraryID: 4, Changes: []apiserver.ArrSettingChange{{Key: "delete_empty_folders", Label: "Delete empty folders", Current: "Off", Proposed: "On"}}}},
 	}
 
@@ -180,6 +181,7 @@ func TestPreviewArrImport_ReadsTheMappingAndRendersThePreview(t *testing.T) {
 		"roots": []any{map[string]any{"path": "/tv", "local_path": "/mnt/tv", "root_folder_id": nil, "library_id": float64(4), "chosen": float64(3),
 			"new": float64(1), "in_library": float64(1), "without_id": float64(1)}},
 		"profiles": []any{map[string]any{"arr_profile_id": float64(6), "name": "Any", "items": float64(3), "proposed_profile_id": float64(9)}},
+		"follows":  []any{map[string]any{"name": "Standard", "items": float64(2), "primary_types": []any{"Album"}, "excluded_secondary_types": []any{"live"}}},
 		"settings": []any{map[string]any{"library_id": float64(4), "changes": []any{map[string]any{
 			"key": "delete_empty_folders", "label": "Delete empty folders", "current": "Off", "proposed": "On"}}}},
 	}

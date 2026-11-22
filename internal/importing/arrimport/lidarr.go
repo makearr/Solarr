@@ -101,6 +101,22 @@ type LidarrQualityProfile struct {
 	Name string `json:"name"`
 }
 
+// LidarrMetadataProfile is GET /api/v1/metadataprofile's own shape: which album types an artist's discography brings in.
+type LidarrMetadataProfile struct {
+	ID                  int64                `json:"id"`
+	Name                string               `json:"name"`
+	PrimaryAlbumTypes   []LidarrAlbumTypeUse `json:"primaryAlbumTypes"`
+	SecondaryAlbumTypes []LidarrAlbumTypeUse `json:"secondaryAlbumTypes"`
+}
+
+// LidarrAlbumTypeUse is one album type of a metadata profile and whether the profile allows it.
+type LidarrAlbumTypeUse struct {
+	AlbumType struct {
+		Name string `json:"name"`
+	} `json:"albumType"`
+	Allowed bool `json:"allowed"`
+}
+
 // LidarrTag is GET /api/v1/tag's own shape.
 type LidarrTag struct {
 	ID    int64  `json:"id"`

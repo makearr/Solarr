@@ -8281,7 +8281,21 @@ export interface components {
             item_kind: "artists" | "series" | "movies" | "scenes";
             roots: components["schemas"]["ArrPreviewRoot"][];
             profiles: components["schemas"]["ArrPreviewProfile"][];
+            /** @description Which release types the followed items take, one per *Arr follow profile in use (Lidarr's metadata profile). */
+            follows?: components["schemas"]["ArrPreviewFollow"][];
             settings: components["schemas"]["ArrPreviewSettings"][];
+        };
+        ArrPreviewFollow: {
+            name: string;
+            /**
+             * Format: int64
+             * @description Monitored items on it; each becomes a follow.
+             */
+            items: number;
+            /** @description The primary release types the follow brings in. */
+            primary_types: string[];
+            /** @description The secondary types it leaves out. */
+            excluded_secondary_types: string[];
         };
         ArrPreviewRoot: {
             /** @description The root folder as the *Arr names it. */

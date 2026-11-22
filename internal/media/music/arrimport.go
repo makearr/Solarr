@@ -2,6 +2,7 @@ package music
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -29,6 +30,7 @@ type LidarrImport struct {
 // Import walks Lidarr's artists; one album failing does not stop the artist's others.
 func (l LidarrImport) Import(ctx context.Context, run arrmap.Run) (library.ArrImportCounts, error) {
 	client, options := run.Client, run.Options
+	profileFilters := l.profileFilters(ctx, run)
 	return arrmap.Walk(ctx, run, arrmap.Source[arrimport.LidarrArtist]{
 		Connect: func(ctx context.Context) error { _, err := client.SystemStatus(ctx); return err },
 		List:    client.Artists,
@@ -37,11 +39,11 @@ func (l LidarrImport) Import(ctx context.Context, run arrmap.Run) (library.ArrIm
 		},
 		Workers: 1,
 		Monitor: func(ctx context.Context, categoryID int64, artist arrimport.LidarrArtist) (library.ArrImportCounts, error) {
-			return l.monitorArtist(ctx, run, categoryID, artist)
+			return l.monitorArtist(ctx, run, categoryID, artist, profileFilters)
 		},
 		Sync: func(ctx context.Context, categoryID int64, artist arrimport.LidarrArtist) (library.ArrImportCounts, error) {
 			var counts library.ArrImportCounts
-			personID, created, err := l.adoptArtist(ctx, run, categoryID, artist)
+			personID, created, err := l.adoptArtist(ctx, run, categoryID, artist, profileFilters)
 			if err != nil {
 				return counts, err
 			}
@@ -80,7 +82,7 @@ func (l LidarrImport) Import(ctx context.Context, run arrmap.Run) (library.ArrIm
 
 // adoptArtist resolves-or-creates the person behind the artist's MusicBrainz id and ensures their subscription,
 // recording one item either way. A brand-new person cannot have had a subscription, so one is created exactly with them.
-func (l LidarrImport) adoptArtist(ctx context.Context, run arrmap.Run, categoryID int64, artist arrimport.LidarrArtist) (personID int64, created bool, err error) {
+func (l LidarrImport) adoptArtist(ctx context.Context, run arrmap.Run, categoryID int64, artist arrimport.LidarrArtist, profileFilters map[int64]SubscriptionFilters) (personID int64, created bool, err error) {
 	if artist.ForeignArtistID == "" {
 		return 0, false, errors.New("no MusicBrainz artist id")
 	}
@@ -100,7 +102,7 @@ func (l LidarrImport) adoptArtist(ctx context.Context, run arrmap.Run, categoryI
 	var subscription *int64
 	// Lidarr's "monitor new items: none" keeps the artist's albums as they are and follows nothing.
 	if artist.Monitored && artist.MonitorNewItems != "none" {
-		filtersJSON, err := l.followFilters(categoryID)
+		filtersJSON, err := l.followFilters(categoryID, profileFilters[artist.MetadataProfileID])
 		if err != nil {
 			return 0, false, err
 		}
@@ -123,8 +125,32 @@ func (l LidarrImport) adoptArtist(ctx context.Context, run arrmap.Run, categoryI
 	return personID, created, nil
 }
 
-// followFilters are the release types the library brings in, fixed onto the follow as adding an artist does.
-func (l LidarrImport) followFilters(categoryID int64) (string, error) {
+// profileFilters reads Lidarr's metadata profiles once per run; none readable leaves every artist on the library's types.
+func (l LidarrImport) profileFilters(ctx context.Context, run arrmap.Run) map[int64]SubscriptionFilters {
+	profiles, err := run.Client.MetadataProfiles(ctx)
+	if err != nil {
+		if run.Logger != nil {
+			run.Logger.Warn("lidarr metadata profiles unreadable; followed artists take the library's release types", "error", err)
+		}
+		return nil
+	}
+	filters := make(map[int64]SubscriptionFilters, len(profiles))
+	for _, profile := range profiles {
+		filters[profile.ID] = FiltersOfLidarrProfile(profile)
+	}
+	return filters
+}
+
+// followFilters are the release types a follow brings in, fixed onto it as adding an artist does: the artist's Lidarr
+// metadata profile when it was read, else the library's.
+func (l LidarrImport) followFilters(categoryID int64, profile SubscriptionFilters) (string, error) {
+	if profile.IncludePrimaryTypes != nil {
+		encoded, err := json.Marshal(profile)
+		if err != nil {
+			return "", fmt.Errorf("music: encode follow filters: %w", err)
+		}
+		return string(encoded), nil
+	}
 	category, found := l.Categories.Category(categoryID)
 	if !found {
 		return "", fmt.Errorf("library %d not found", categoryID)
@@ -191,11 +217,11 @@ func (l LidarrImport) adoptAlbum(
 }
 
 // monitorArtist gives the artist and the albums Solarr holds under their MusicBrainz ids the monitoring Lidarr holds.
-func (l LidarrImport) monitorArtist(ctx context.Context, run arrmap.Run, categoryID int64, artist arrimport.LidarrArtist) (library.ArrImportCounts, error) {
+func (l LidarrImport) monitorArtist(ctx context.Context, run arrmap.Run, categoryID int64, artist arrimport.LidarrArtist, profileFilters map[int64]SubscriptionFilters) (library.ArrImportCounts, error) {
 	filtersJSON := ""
 	if artist.Monitored {
 		var err error
-		if filtersJSON, err = l.followFilters(categoryID); err != nil {
+		if filtersJSON, err = l.followFilters(categoryID, profileFilters[artist.MetadataProfileID]); err != nil {
 			return library.ArrImportCounts{}, err
 		}
 	}
@@ -231,11 +257,18 @@ func (l LidarrImport) Preview(ctx context.Context, client arrimport.LidarrClient
 	}
 	for _, artist := range artists {
 		source.Items = append(source.Items, arrmap.PreviewItem{RootFolder: artist.RootFolderPath, Monitored: artist.Monitored,
-			ProfileID: artist.QualityProfileID, Provider: ProviderArtist, ExternalID: artist.ForeignArtistID, Person: true})
+			ProfileID: artist.QualityProfileID, FollowProfileID: artist.MetadataProfileID, Provider: ProviderArtist, ExternalID: artist.ForeignArtistID, Person: true})
 	}
 	names := arrmap.ProfileNames(ctx, client.QualityProfiles, func(profile arrimport.LidarrQualityProfile) (int64, string) {
 		return profile.ID, profile.Name
 	})
+	if profiles, err := client.MetadataProfiles(ctx); err == nil {
+		source.Follows = make(map[int64]arrmap.PreviewFollow, len(profiles))
+		for _, profile := range profiles {
+			filters := FiltersOfLidarrProfile(profile)
+			source.Follows[profile.ID] = arrmap.PreviewFollow{Name: profile.Name, PrimaryTypes: *filters.IncludePrimaryTypes, ExcludedSecondaryTypes: *filters.ExcludeSecondaryTypes}
+		}
+	}
 	return arrmap.ReadPreview(ctx, source, client, names)
 }
 

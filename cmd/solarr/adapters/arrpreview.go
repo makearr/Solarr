@@ -59,7 +59,7 @@ func (a ArrSync) Preview(ctx context.Context, instanceID int64, options apiserve
 		rootFor(path)
 	}
 
-	profileItems := map[int64]int64{}
+	profileItems, followItems := map[int64]int64{}, map[int64]int64{}
 	for _, item := range source.Items {
 		if (item.Monitored && !options.Monitored) || (!item.Monitored && !options.Unmonitored) {
 			continue
@@ -67,6 +67,9 @@ func (a ArrSync) Preview(ctx context.Context, instanceID int64, options apiserve
 		root := rootFor(item.RootFolder)
 		root.Chosen++
 		profileItems[item.ProfileID]++
+		if item.Monitored {
+			followItems[item.FollowProfileID]++
+		}
 		switch held, err := a.held(ctx, item); {
 		case err != nil:
 			return apiserver.ArrImportPreview{}, err
@@ -87,6 +90,14 @@ func (a ArrSync) Preview(ctx context.Context, instanceID int64, options apiserve
 		profile.ProposedProfileID = arrmap.SameNameProfile(snapshot.QualityProfiles(), source.MediaType, source.Profiles[id])
 		preview.Profiles = append(preview.Profiles, profile)
 	}
+	for id, count := range followItems {
+		if follow, known := source.Follows[id]; known {
+			preview.Follows = append(preview.Follows, apiserver.ArrPreviewFollow{
+				Name: follow.Name, Items: count, PrimaryTypes: follow.PrimaryTypes, ExcludedSecondaryTypes: follow.ExcludedSecondaryTypes,
+			})
+		}
+	}
+	slices.SortFunc(preview.Follows, func(x, y apiserver.ArrPreviewFollow) int { return int(y.Items - x.Items) })
 	slices.SortFunc(preview.Profiles, func(x, y apiserver.ArrPreviewProfile) int { return int(y.Items - x.Items) })
 
 	var libraries []int64

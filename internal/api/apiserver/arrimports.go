@@ -44,7 +44,17 @@ type ArrImportPreview struct {
 	ItemKind string
 	Roots    []ArrPreviewRoot
 	Profiles []ArrPreviewProfile
+	// Follows says which release types the followed items take, one entry per *Arr follow profile in use.
+	Follows  []ArrPreviewFollow
 	Settings []ArrPreviewSettings
+}
+
+// ArrPreviewFollow is one *Arr follow profile in use: the monitored items on it, and the release types they are followed for.
+type ArrPreviewFollow struct {
+	Name                   string
+	Items                  int64
+	PrimaryTypes           []string
+	ExcludedSecondaryTypes []string
 }
 
 // ArrPreviewRoot is one *Arr root folder: where it is here, its library, and what of it the options choose.
@@ -285,6 +295,15 @@ func arrImportPreviewView(preview ArrImportPreview) gen.ArrImportPreview {
 		view.Profiles[i] = gen.ArrPreviewProfile{
 			ArrProfileId: profile.ArrProfileID, Name: profile.Name, Items: profile.Items, ProposedProfileId: profile.ProposedProfileID,
 		}
+	}
+	if len(preview.Follows) > 0 {
+		follows := make([]gen.ArrPreviewFollow, len(preview.Follows))
+		for i, follow := range preview.Follows {
+			follows[i] = gen.ArrPreviewFollow{
+				Name: follow.Name, Items: follow.Items, PrimaryTypes: follow.PrimaryTypes, ExcludedSecondaryTypes: follow.ExcludedSecondaryTypes,
+			}
+		}
+		view.Follows = &follows
 	}
 	for i, library := range preview.Settings {
 		changes := make([]struct {

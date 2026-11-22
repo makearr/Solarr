@@ -66,10 +66,19 @@ type PreviewItem struct {
 	RootFolder string
 	Monitored  bool
 	ProfileID  int64
+	// FollowProfileID is the *Arr's own profile of which release types it follows (Lidarr's metadata profile); 0 for none.
+	FollowProfileID int64
 	// Provider and ExternalID find it here; an empty ExternalID is an item the import skips.
 	Provider, ExternalID string
 	// Person says the id is a person's (a Lidarr artist), not a work's.
 	Person bool
+}
+
+// PreviewFollow is what an *Arr follow profile brings in: the primary types allowed and the secondary ones left out.
+type PreviewFollow struct {
+	Name                   string
+	PrimaryTypes           []string
+	ExcludedSecondaryTypes []string
 }
 
 // PreviewSource is what one app gives a preview.
@@ -79,7 +88,9 @@ type PreviewSource struct {
 	Items     []PreviewItem
 	Roots     []string
 	Profiles  map[int64]string
-	Settings  arrimport.MediaManagement
+	// Follows says, per *Arr follow profile, which release types its items are followed for.
+	Follows  map[int64]PreviewFollow
+	Settings arrimport.MediaManagement
 }
 
 // PreviewClient is what a preview reads of every app beside its items.

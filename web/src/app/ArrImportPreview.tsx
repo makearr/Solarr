@@ -1,6 +1,7 @@
 import type { components } from "@/api/schema";
 import { useLibraries, useQualityProfiles } from "@/lib/resources";
 import { useLibraryLabel } from "@/lib/libraryLabel";
+import { t } from "@/lib/i18n";
 
 type Preview = components["schemas"]["ArrImportPreview"];
 
@@ -107,6 +108,22 @@ export function ArrImportPreviewPanel({
                 ))}
               </select>
             </label>
+          ))}
+        </div>
+      )}
+
+      {(preview.follows ?? []).length > 0 && (
+        <div className="flex flex-col gap-1">
+          <span className="font-medium text-ink">{t("arrImport.follows")}</span>
+          {(preview.follows ?? []).map((follow) => (
+            <span key={follow.name} className="text-ink-muted">
+              {t("arrImport.follows.line", {
+                name: follow.name,
+                items: follow.items,
+                types: follow.primary_types.join(", ") || t("arrImport.follows.none"),
+                excluded: follow.excluded_secondary_types.join(", ") || t("arrImport.follows.none"),
+              })}
+            </span>
           ))}
         </div>
       )}
