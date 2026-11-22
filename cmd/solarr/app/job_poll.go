@@ -86,6 +86,7 @@ func (p *process) pollClients(ctx context.Context) (map[int64]poll.Client, error
 		clients[downloader.ID] = poll.Client{
 			Name:            downloader.Name,
 			Client:          client,
+			Disabled:        !downloader.Enabled,
 			RemoveCompleted: options.RemovesCompleted(),
 			SeedRatio:       seedRatio, SeedMinutes: seedMinutes, SeedBoth: options.SeedBoth, MaxSeedMinutes: options.MaxSeedFor(),
 			LocalPath: options.LocalPathFor,

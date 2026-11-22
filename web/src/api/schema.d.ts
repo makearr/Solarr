@@ -8035,6 +8035,8 @@ export interface components {
             id: number;
             name: string;
             paused: boolean;
+            /** @description Switched off; still read so what it holds finishes. */
+            disabled: boolean;
             /** Format: int64 */
             speed_bytes_per_sec: number;
             items: number;
@@ -8056,6 +8058,8 @@ export interface components {
             release_title: string;
             indexer?: string;
             client: string;
+            /** @description The client is switched off; it still holds this download. */
+            client_disabled: boolean;
             /** @enum {string} */
             state: "QUEUED" | "DOWNLOADING" | "COMPLETED" | "IMPORTING";
             /**

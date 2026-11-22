@@ -5433,6 +5433,8 @@ type Queue struct {
 
 // QueueClient One download client's own queue, or why it could not be read.
 type QueueClient struct {
+	// Disabled Switched off; still read so what it holds finishes.
+	Disabled         bool    `json:"disabled"`
 	Error            *string `json:"error,omitempty"`
 	Id               int64   `json:"id"`
 	Items            int     `json:"items"`
@@ -5448,6 +5450,9 @@ type QueueItem struct {
 	Album   *string   `json:"album,omitempty"`
 	Artist  *string   `json:"artist,omitempty"`
 	Client  string    `json:"client"`
+
+	// ClientDisabled The client is switched off; it still holds this download.
+	ClientDisabled bool `json:"client_disabled"`
 
 	// ClientState The client's own view; absent while the client does not list it.
 	ClientState *QueueItemClientState `json:"client_state,omitempty"`

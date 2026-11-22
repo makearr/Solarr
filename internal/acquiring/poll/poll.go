@@ -52,8 +52,10 @@ const massVanishFloor = 3
 
 // Client is one configured download client as a poll needs it.
 type Client struct {
-	Name            string
-	Client          download.Client
+	Name   string
+	Client download.Client
+	// Disabled clients are still followed so what they hold finishes; the queue says so.
+	Disabled        bool
 	RemoveCompleted bool
 	// SeedRatio and SeedMinutes hold an imported download in the client until it has shared that much or for that
 	// long; both zero removes it at once.

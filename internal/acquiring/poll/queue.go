@@ -16,6 +16,8 @@ import (
 type Entry struct {
 	Acquisition library.Acquisition
 	ClientName  string
+	// ClientDisabled is true while the client is switched off: it still holds the download, nothing new is sent to it.
+	ClientDisabled bool
 	// Reported is false while the client does not list it: not fetched yet, or gone.
 	Reported bool
 	Download download.Download
@@ -23,10 +25,11 @@ type Entry struct {
 
 // ClientStatus is one client's own queue, or why it could not be read.
 type ClientStatus struct {
-	ID     int64
-	Name   string
-	Status download.QueueStatus
-	Err    error
+	ID       int64
+	Name     string
+	Disabled bool
+	Status   download.QueueStatus
+	Err      error
 }
 
 // Queue answers every download in flight and every enabled client's queue, read live as Lidarr's
@@ -44,7 +47,8 @@ func (j *Job) Queue(ctx context.Context) ([]Entry, []ClientStatus, error) {
 
 	entries := make([]Entry, len(active))
 	for i, acquisition := range active {
-		entry := Entry{Acquisition: acquisition, ClientName: clients[acquisition.DownloaderID].Name}
+		entry := Entry{Acquisition: acquisition, ClientName: clients[acquisition.DownloaderID].Name,
+			ClientDisabled: clients[acquisition.DownloaderID].Disabled}
 		entry.Download, entry.Reported = read.reported[acquisition.DownloaderID][acquisition.DownloadClientRef]
 		entries[i] = entry
 	}
@@ -114,7 +118,7 @@ func (j *Job) readClients(ctx context.Context, active []library.Acquisition, cli
 	failed := parallel.Do(ctx, len(ids), 0, func(ctx context.Context, i int) error {
 		id := ids[i]
 		client := clients[id]
-		status := ClientStatus{ID: id, Name: client.Name}
+		status := ClientStatus{ID: id, Name: client.Name, Disabled: client.Disabled}
 		status.Status, status.Err = client.Client.QueueStatus(ctx)
 		if open := activeOn(active, id); status.Err == nil && len(open) > 0 {
 			listed, err := listDownloads(ctx, client.Client, open)
@@ -130,7 +134,7 @@ func (j *Job) readClients(ctx context.Context, active []library.Acquisition, cli
 	})
 	for i, err := range failed {
 		if err != nil {
-			statuses[i] = ClientStatus{ID: ids[i], Name: clients[ids[i]].Name, Err: fmt.Errorf("download client: %w", err)}
+			statuses[i] = ClientStatus{ID: ids[i], Name: clients[ids[i]].Name, Disabled: clients[ids[i]].Disabled, Err: fmt.Errorf("download client: %w", err)}
 			downloads[i] = nil
 		}
 	}

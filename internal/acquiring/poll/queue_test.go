@@ -120,3 +120,25 @@ func TestQueue_APanickingClientIsItsOwnErrorAndTheOthersAreStillRead(t *testing.
 		t.Errorf("clients = %+v, want the first read and the second reported as an error", clients)
 	}
 }
+
+// A disabled client is still read, and what it holds is marked so the queue can say the downloads are not being sent to it.
+func TestQueue_MarksDownloadsOfADisabledClient(t *testing.T) {
+	e := newEnv(t)
+	held := e.send(t, "nzo-1")
+	job := poll.NewJob(poll.Config{
+		Acquisitions: e.acquisitions, Clock: e.clock,
+		Clients: func(context.Context) (map[int64]poll.Client, error) {
+			return map[int64]poll.Client{1: {Name: "Home SABnzbd", Client: e.client, Disabled: true}}, nil
+		},
+	})
+	entries, clients, err := job.Queue(t.Context())
+	if err != nil {
+		t.Fatalf("Queue: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Acquisition.ID != held.ID || !entries[0].ClientDisabled {
+		t.Errorf("entries = %+v, want the one download marked ClientDisabled", entries)
+	}
+	if len(clients) != 1 || !clients[0].Disabled {
+		t.Errorf("clients = %+v, want the client marked Disabled", clients)
+	}
+}

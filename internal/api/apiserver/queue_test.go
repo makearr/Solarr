@@ -67,12 +67,12 @@ func newQueueFixture(t *testing.T) queueFixture {
 	workID := int64(7)
 	fixture.queue.rows = []apiserver.QueueRow{
 		{ID: 1, WorkID: &workID, CategoryID: visible.ID, Album: "Zanuvode", Artist: "Heka", ReleaseTitle: "Heka-Zanuvode",
-			Client: "Home SABnzbd", State: "DOWNLOADING", ClientState: "downloading", SizeBytes: 1000, SizeLeftBytes: 400,
+			Client: "Home SABnzbd", ClientDisabled: true, State: "DOWNLOADING", ClientState: "downloading", SizeBytes: 1000, SizeLeftBytes: 400,
 			AddedAt: time.Unix(1, 0).UTC()},
 		{ID: 2, CategoryID: hidden.ID, ReleaseTitle: "Hidden-Album", Client: "Home SABnzbd", State: "QUEUED",
 			AddedAt: time.Unix(2, 0).UTC()},
 	}
-	fixture.queue.clients = []apiserver.QueueClientRow{{ID: 1, Name: "Home SABnzbd", Paused: true, Items: 2}}
+	fixture.queue.clients = []apiserver.QueueClientRow{{ID: 1, Name: "Home SABnzbd", Paused: true, Disabled: true, Items: 2}}
 	fixture.queue.held = []apiserver.HeldRow{
 		{WorkID: &workID, CategoryID: visible.ID, Album: "Zanuvode", ReleaseTitle: "Heka-Zanuvode-FLAC", Origin: "rss",
 			HeldAt: time.Unix(3, 0).UTC()},
@@ -106,14 +106,14 @@ func TestQueue_ScopedToTheCallersLibraries(t *testing.T) {
 	}
 	wantItems := []map[string]any{{
 		"id": 1.0, "work_id": 7.0, "album": "Zanuvode", "artist": "Heka", "release_title": "Heka-Zanuvode",
-		"client": "Home SABnzbd", "state": "DOWNLOADING", "client_state": "downloading",
+		"client": "Home SABnzbd", "client_disabled": true, "state": "DOWNLOADING", "client_state": "downloading",
 		"size_bytes": 1000.0, "size_left_bytes": 400.0, "added_at": "1970-01-01T00:00:01Z",
 	}}
 	if !reflect.DeepEqual(body.Items, wantItems) {
 		t.Errorf("items = %v\nwant %v", body.Items, wantItems)
 	}
 	wantClients := []map[string]any{{
-		"id": 1.0, "name": "Home SABnzbd", "paused": true, "speed_bytes_per_sec": 0.0, "items": 2.0, "size_left_bytes": 0.0,
+		"id": 1.0, "name": "Home SABnzbd", "paused": true, "disabled": true, "speed_bytes_per_sec": 0.0, "items": 2.0, "size_left_bytes": 0.0,
 	}}
 	if !reflect.DeepEqual(body.Clients, wantClients) {
 		t.Errorf("clients = %v\nwant %v", body.Clients, wantClients)

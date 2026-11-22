@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 
 import { formatBytes, formatDuration, statusLabel } from "./Queue";
 
-const item = { id: 1, release_title: "Heka-Zanuvode", client: "SABnzbd", added_at: "2026-09-29T00:00:00Z" };
+const item = { id: 1, client_disabled: false, release_title: "Heka-Zanuvode", client: "SABnzbd", added_at: "2026-09-29T00:00:00Z" };
 
 test("the status says what the client says, and Solarr's own steps once it has the files", () => {
   expect(statusLabel({ ...item, state: "QUEUED" })).toBe("Queued");
@@ -10,6 +10,7 @@ test("the status says what the client says, and Solarr's own steps once it has t
   expect(statusLabel({ ...item, state: "DOWNLOADING", client_state: "processing" })).toBe("Unpacking");
   expect(statusLabel({ ...item, state: "COMPLETED", error: "outside every download folder" })).toBe("Downloaded, waiting");
   expect(statusLabel({ ...item, state: "IMPORTING", client_state: "completed" })).toBe("Importing");
+  expect(statusLabel({ ...item, state: "DOWNLOADING", client_state: "downloading", client_disabled: true })).toBe("Client disabled");
 });
 
 test("sizes and times read as a person would say them", () => {

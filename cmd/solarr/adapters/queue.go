@@ -111,7 +111,7 @@ func (a Queue) read(ctx context.Context, workID *int64) (apiserver.QueueSnapshot
 		clients[i] = apiserver.QueueClientRow{
 			ID: status.ID, Name: status.Name, Paused: status.Status.Paused,
 			SpeedBytesPerSec: status.Status.SpeedBytesPerSec, Items: status.Status.Items,
-			SizeLeftBytes: status.Status.SizeLeftBytes,
+			SizeLeftBytes: status.Status.SizeLeftBytes, Disabled: status.Disabled,
 		}
 		if status.Err != nil {
 			clients[i].Error = status.Err.Error()
@@ -123,7 +123,7 @@ func (a Queue) read(ctx context.Context, workID *int64) (apiserver.QueueSnapshot
 		data, workID := describe(entry.Acquisition)
 		row := apiserver.QueueRow{
 			ID: entry.Acquisition.ID, CategoryID: data.CategoryID, Album: data.Album, Artist: data.Artist,
-			ReleaseTitle: entry.Acquisition.CandidateTitle, Indexer: data.Indexer, Client: entry.ClientName,
+			ReleaseTitle: entry.Acquisition.CandidateTitle, Indexer: data.Indexer, Client: entry.ClientName, ClientDisabled: entry.ClientDisabled,
 			State: entry.Acquisition.State, Error: entry.Acquisition.LastError,
 			AddedAt: time.Unix(entry.Acquisition.CreatedAt, 0).UTC(),
 		}

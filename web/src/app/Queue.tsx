@@ -314,6 +314,7 @@ export function statusLabel(item: QueueItem): string {
     case "COMPLETED":
       return item.error ? "Downloaded, waiting" : "Downloaded";
   }
+  if (item.client_disabled) return "Client disabled";
   switch (item.client_state) {
     case "paused":
       return "Paused";

@@ -22,21 +22,22 @@ var ErrQueueItemNotFound = errors.New("no such download in the queue")
 
 // QueueRow is one download in flight.
 type QueueRow struct {
-	ID            int64
-	WorkID        *int64
-	CategoryID    int64
-	Album         string
-	Artist        string
-	ReleaseTitle  string
-	Indexer       string
-	Client        string
-	State         string
-	ClientState   string
-	SizeBytes     int64
-	SizeLeftBytes int64
-	ETASeconds    *int64
-	Error         string
-	AddedAt       time.Time
+	ID             int64
+	WorkID         *int64
+	CategoryID     int64
+	Album          string
+	Artist         string
+	ReleaseTitle   string
+	Indexer        string
+	Client         string
+	ClientDisabled bool
+	State          string
+	ClientState    string
+	SizeBytes      int64
+	SizeLeftBytes  int64
+	ETASeconds     *int64
+	Error          string
+	AddedAt        time.Time
 }
 
 // QueueClientRow is one download client's own queue.
@@ -47,6 +48,7 @@ type QueueClientRow struct {
 	SpeedBytesPerSec int64
 	Items            int
 	SizeLeftBytes    int64
+	Disabled         bool
 	Error            string
 }
 
@@ -128,7 +130,7 @@ func (s *Server) ListQueue(w http.ResponseWriter, r *http.Request, params gen.Li
 	for i, client := range clients {
 		body.Clients[i] = gen.QueueClient{
 			Id: client.ID, Name: client.Name, Paused: client.Paused, SpeedBytesPerSec: client.SpeedBytesPerSec,
-			Items: client.Items, SizeLeftBytes: client.SizeLeftBytes, Error: strPtr(client.Error),
+			Items: client.Items, SizeLeftBytes: client.SizeLeftBytes, Disabled: client.Disabled, Error: strPtr(client.Error),
 		}
 	}
 	for _, row := range rows {
@@ -141,7 +143,8 @@ func (s *Server) ListQueue(w http.ResponseWriter, r *http.Request, params gen.Li
 		item := gen.QueueItem{
 			Id: row.ID, WorkId: row.WorkID, Album: strPtr(row.Album), Artist: strPtr(row.Artist),
 			ReleaseTitle: row.ReleaseTitle, Indexer: strPtr(row.Indexer), Client: row.Client,
-			State: gen.QueueItemState(row.State), EtaSeconds: row.ETASeconds, Error: strPtr(row.Error), AddedAt: row.AddedAt,
+			ClientDisabled: row.ClientDisabled,
+			State:          gen.QueueItemState(row.State), EtaSeconds: row.ETASeconds, Error: strPtr(row.Error), AddedAt: row.AddedAt,
 		}
 		if row.ClientState != "" {
 			state := gen.QueueItemClientState(row.ClientState)
