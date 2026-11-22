@@ -204,6 +204,18 @@ func sameLength(first, second int64) bool {
 
 // Groups answers the groups of similar videos among those with a path in rootFolderIDs, most files first.
 func (s SimilarVideos) Groups(ctx context.Context, rootFolderIDs []int64, level SimilarityLevel, limit int) ([]SimilarGroup, error) {
+	groups, err := s.compare(ctx, rootFolderIDs, level, limit)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.addFacts(ctx, groups); err != nil {
+		return nil, err
+	}
+	return groups, nil
+}
+
+// compare groups the hashed videos on the roots without reading their facts.
+func (s SimilarVideos) compare(ctx context.Context, rootFolderIDs []int64, level SimilarityLevel, limit int) ([]SimilarGroup, error) {
 	rows, err := librarydb.New(s.store.Read()).ListHashedVideos(ctx, VideoHashVersion)
 	if err != nil {
 		return nil, fmt.Errorf("library: list hashed videos: %w", err)
@@ -212,14 +224,7 @@ func (s SimilarVideos) Groups(ctx context.Context, rootFolderIDs []int64, level 
 	if err != nil {
 		return nil, err
 	}
-	groups, err := groupSimilarWith(ctx, videos, level.MaxBits(), s.frameBitsAt(level), limit, framesAlike)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.addFacts(ctx, groups); err != nil {
-		return nil, err
-	}
-	return groups, nil
+	return groupSimilarWith(ctx, videos, level.MaxBits(), s.frameBitsAt(level), limit, framesAlike)
 }
 
 // factsChunk is how many videos' facts one query reads.

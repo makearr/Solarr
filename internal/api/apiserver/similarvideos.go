@@ -32,9 +32,18 @@ type SimilarVideoGroupRow struct {
 	Videos      []SimilarVideoRow
 }
 
-// SimilarVideoReader finds the videos held in more than one encode; level is one of similarLevels.
+// SimilarVideoReportRow is the stored groups of one level and when they were compared.
+type SimilarVideoReportRow struct {
+	// ComputedAt is Unix seconds; zero when no comparison has finished.
+	ComputedAt int64
+	Groups     []SimilarVideoGroupRow
+}
+
+// SimilarVideoReader reads the videos held in more than one encode, as the report job last compared them; level is one of similarLevels.
 type SimilarVideoReader interface {
-	SimilarVideos(ctx context.Context, rootFolderIDs []int64, level string, limit int) ([]SimilarVideoGroupRow, error)
+	SimilarVideos(ctx context.Context, rootFolderIDs []int64, level string, limit int) (SimilarVideoReportRow, error)
+	// RefreshSimilarVideos queues the comparison of every level.
+	RefreshSimilarVideos(ctx context.Context) error
 }
 
 // similarVideoGroupLimit bounds one report.
@@ -126,11 +135,17 @@ func (s *Server) writeSimilarReport(w http.ResponseWriter, r *http.Request, fold
 			rootCategory[folder.ID] = categories[0]
 		}
 	}
-	groups, err := s.similarVideos.SimilarVideos(r.Context(), roots, level, similarVideoGroupLimit)
+	stored, err := s.similarVideos.SimilarVideos(r.Context(), roots, level, similarVideoGroupLimit)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
+	if stored.ComputedAt == 0 {
+		if err := s.similarVideos.RefreshSimilarVideos(r.Context()); err != nil {
+			s.logger.Warn("queue the first similar-videos comparison", "error", err)
+		}
+	}
+	groups := stored.Groups
 	type videoView struct {
 		MediaObjectID int64         `json:"media_object_id"`
 		SizeBytes     int64         `json:"size_bytes"`
@@ -150,10 +165,11 @@ func (s *Server) writeSimilarReport(w http.ResponseWriter, r *http.Request, fold
 		Videos      []videoView `json:"videos"`
 	}
 	report := struct {
+		ComputedAt     int64       `json:"computed_at"`
 		HashingEnabled bool        `json:"hashing_enabled"`
 		Limited        bool        `json:"limited"`
 		Groups         []groupView `json:"groups"`
-	}{HashingEnabled: snapshot.VideoPerceptualHash(), Groups: make([]groupView, 0, len(groups)), Limited: len(groups) >= similarVideoGroupLimit}
+	}{ComputedAt: stored.ComputedAt, HashingEnabled: snapshot.VideoPerceptualHash(), Groups: make([]groupView, 0, len(groups)), Limited: len(groups) >= similarVideoGroupLimit}
 	for _, group := range groups {
 		view := groupView{MaxDistance: group.MaxDistance, Videos: make([]videoView, 0, len(group.Videos))}
 		for _, video := range group.Videos {
@@ -171,6 +187,22 @@ func (s *Server) writeSimilarReport(w http.ResponseWriter, r *http.Request, fold
 		report.Groups = append(report.Groups, view)
 	}
 	writeJSON(w, s.logger, http.StatusOK, report)
+}
+
+// RefreshSimilarVideos queues the comparison now; administrators only.
+func (s *Server) RefreshSimilarVideos(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.similarVideos == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "similar videos are not available")
+		return
+	}
+	if err := s.similarVideos.RefreshSimilarVideos(r.Context()); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ResolveSimilarVideos keeps one video of a group and merges or recycles the others, whichever library they are in;

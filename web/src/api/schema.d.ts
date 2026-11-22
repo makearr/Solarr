@@ -4502,6 +4502,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/duplicates/similar-videos/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compare the videos again now instead of at the next scheduled run (administrator).
+         * @description Queues the job that compares every hashed video at each level and stores the groups. The reports keep showing the last groups, with their age, until it finishes.
+         */
+        post: operations["refreshSimilarVideos"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/duplicates/similar-videos/resolve": {
         parameters: {
             query?: never;
@@ -10936,6 +10956,11 @@ export interface components {
             }[];
         };
         SimilarVideoReport: {
+            /**
+             * Format: int64
+             * @description When the groups were compared, in Unix seconds; zero while the first comparison has not finished (it is queued).
+             */
+            computed_at: number;
             /** @description False when background hashing is switched off; only files hashed before are compared. */
             hashing_enabled: boolean;
             /** @description True when the library holds more groups than one report shows. */
@@ -19168,6 +19193,27 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    refreshSimilarVideos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The comparison is queued. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     resolveSimilarVideos: {

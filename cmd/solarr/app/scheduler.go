@@ -35,6 +35,7 @@ const (
 	statisticsScheduleCron         = "15 6 * * *"    // daily, after the counters; the statistics page reads what it wrote
 	categoryCountsScheduleCron     = "30 5 * * *"    // daily, after database maintenance; only corrects drift
 	freshCountsScheduleCron        = "40 * * * *"    // every hour
+	similarVideosScheduleCron      = "20 4 * * *"    // every night
 	comingOutScheduleCron          = "*/15 * * * *"  // every 15 minutes
 	serverFilesScheduleCron        = "30 4 * * *"    // daily at 04:30
 	probeScheduleCron              = "0 2 * * *"     // daily at 02:00
@@ -193,6 +194,11 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Key: "fresh_counts", Name: "Fresh works counter", DefaultCadence: freshCountsScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryStatistics, Startup: jobs.StartupOn,
 		Enqueue: p.enqueueFreshCounts,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "similar_videos", Name: "Compare videos that look alike", DefaultCadence: similarVideosScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary,
+		Enqueue: p.enqueueSimilarVideos,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "coming_out", Name: "Count what has come out", DefaultCadence: comingOutScheduleCron,

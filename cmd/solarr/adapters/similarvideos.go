@@ -8,15 +8,21 @@ import (
 )
 
 // SimilarVideos satisfies apiserver.SimilarVideoReader.
-type SimilarVideos struct{ Store library.SimilarVideos }
+type SimilarVideos struct {
+	Store library.SimilarVideos
+	// Queue asks for the comparison job of every level.
+	Queue func(ctx context.Context) error
+}
 
-func (s SimilarVideos) SimilarVideos(ctx context.Context, rootFolderIDs []int64, level string, limit int) ([]apiserver.SimilarVideoGroupRow, error) {
-	groups, err := s.Store.Groups(ctx, rootFolderIDs, library.SimilarityLevel(level), limit)
+func (s SimilarVideos) RefreshSimilarVideos(ctx context.Context) error { return s.Queue(ctx) }
+
+func (s SimilarVideos) SimilarVideos(ctx context.Context, rootFolderIDs []int64, level string, limit int) (apiserver.SimilarVideoReportRow, error) {
+	report, err := s.Store.Stored(ctx, rootFolderIDs, library.SimilarityLevel(level), limit)
 	if err != nil {
-		return nil, err
+		return apiserver.SimilarVideoReportRow{}, err
 	}
-	rows := make([]apiserver.SimilarVideoGroupRow, len(groups))
-	for i, group := range groups {
+	rows := make([]apiserver.SimilarVideoGroupRow, len(report.Groups))
+	for i, group := range report.Groups {
 		rows[i].MaxDistance = group.MaxDistance
 		for _, video := range group.Videos {
 			rows[i].Videos = append(rows[i].Videos, apiserver.SimilarVideoRow{
@@ -25,5 +31,5 @@ func (s SimilarVideos) SimilarVideos(ctx context.Context, rootFolderIDs []int64,
 			})
 		}
 	}
-	return rows, nil
+	return apiserver.SimilarVideoReportRow{ComputedAt: report.ComputedAt, Groups: rows}, nil
 }

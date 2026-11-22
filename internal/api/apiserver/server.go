@@ -855,6 +855,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/categories/{id}/similar-videos", server.routeGetCategorySimilarVideos)
 			secured.Post("/categories/{id}/duplicates/resolve", wrapped.ResolveCategoryDuplicates)
 			secured.Get("/duplicates/similar-videos", server.routeGetSimilarVideos)
+			secured.Post("/duplicates/similar-videos/refresh", server.RefreshSimilarVideos)
 			secured.Post("/duplicates/similar-videos/resolve", server.ResolveSimilarVideos)
 			secured.Get("/settings/general", server.GetGeneralSettings)
 			secured.Patch("/settings/general", server.PatchGeneralSettings)

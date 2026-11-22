@@ -7090,6 +7090,20 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /duplicates/similar-videos/refresh:
+    post:
+      operationId: refreshSimilarVideos
+      tags: [library]
+      summary: Compare the videos again now instead of at the next scheduled run (administrator).
+      description: >-
+        Queues the job that compares every hashed video at each level and stores the groups. The reports keep showing the
+        last groups, with their age, until it finishes.
+      responses:
+        "204": { description: The comparison is queued. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
   /duplicates/similar-videos/resolve:
     post:
       operationId: resolveSimilarVideos
@@ -14832,8 +14846,9 @@ components:
 
     SimilarVideoReport:
       type: object
-      required: [groups, limited, hashing_enabled]
+      required: [groups, limited, hashing_enabled, computed_at]
       properties:
+        computed_at: { type: integer, format: int64, description: "When the groups were compared, in Unix seconds; zero while the first comparison has not finished (it is queued)." }
         hashing_enabled: { type: boolean, description: "False when background hashing is switched off; only files hashed before are compared." }
         limited: { type: boolean, description: "True when the library holds more groups than one report shows." }
         groups:

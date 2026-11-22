@@ -54,6 +54,7 @@ func (f *fakeWorksReader) ListWorks(
 // through the real repository layer while the library answer stays a fake.
 type worksFixture struct {
 	crossovers           *fakeCrossovers
+	similarVideos        *fakeSimilarVideos
 	importLists          *fakeImportListSync
 	server               *apiserver.Server
 	running              *jobs.Running
@@ -281,6 +282,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	candidateSearcher := &fakeCandidateSearcher{}
 	wantedParts := &fakeWantedParts{}
 	crossovers := &fakeCrossovers{}
+	similarVideos := &fakeSimilarVideos{}
 	importLists := &fakeImportListSync{previewed: map[int64]string{}, cache: cache}
 	fsys := fsx.NewMem(fake)
 	running, jobRegistry := jobs.NewRunning(fake), jobs.NewRegistry()
@@ -293,7 +295,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		WorksMonitor:         worksMonitor,
 		WorkEditor:           workEditor,
 		Duplicates:           fakeDuplicates{},
-		SimilarVideos:        fakeSimilarVideos{},
+		SimilarVideos:        similarVideos,
 		Links:                &fakeLinks{},
 		Search:               search,
 		Unidentified:         unidentified,
@@ -363,7 +365,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	}
 	return worksFixture{
 		server: server, running: running, jobRegistry: jobRegistry, cache: cache, works: works, workDetail: workDetail, worksMonitor: worksMonitor, workEditor: workEditor,
-		wantedParts: wantedParts, crossovers: crossovers, importLists: importLists,
+		wantedParts: wantedParts, crossovers: crossovers, similarVideos: similarVideos, importLists: importLists,
 		search: search, unidentified: unidentified, unidentifiedResolver: unidentifiedResolver,
 		artwork: artwork, playback: playback, remoteImages: remoteImages, people: people, organisations: organisations, subscriber: subscriber, artistActions: artistActions,
 		follower:       follower,

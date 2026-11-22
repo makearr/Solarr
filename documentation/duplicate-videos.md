@@ -79,6 +79,12 @@ The per-frame bound is a quarter wider (`frameBitsFor`, scaled by the tolerance 
   and, per other file, either merge it into the kept one (every path becomes a link; the old file waits in the recycle
   bin) or recycle it. Recycling needs no kept file: the request may omit `keep_media_object_id`, and the interface offers Delete on every file and Delete all. A merge across libraries is refused: a merged file would belong to two libraries.
 
+The groups are not compared in the request. The job `library.similar_videos` (task "Compare videos that look alike", nightly, also queued by
+the first look at a level with nothing stored and by `POST /duplicates/similar-videos/refresh`) compares every hashed video at each level and stores
+the groups (the 1,000 largest) per level in `similar_report` with `computed_at`. A read filters the stored groups to the library's roots and to videos that
+still have a live path, re-reads their facts, and drops a group left with one video; the report carries `computed_at` and the screen shows its age.
+A rename after the comparison shows the old path until the next run.
+
 A file linked at several paths (one media object, many paths) is one video in a group with a `path_count`, not several copies; a group needs two different files. Found live on the docu library, where 42 of 238 groups were one file listed repeatedly.
 
 ## At import

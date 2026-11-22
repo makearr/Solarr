@@ -842,6 +842,12 @@ type ScanState struct {
 	FilesSeen       int64
 }
 
+type SimilarReport struct {
+	Level      string
+	ComputedAt int64
+	GroupsJson string
+}
+
 type Subscription struct {
 	ID                   int64
 	SubjectType          string

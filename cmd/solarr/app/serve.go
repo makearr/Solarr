@@ -642,6 +642,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerFreshCountsJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerSimilarVideosJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerComingOutJob(registry, executor); err != nil {
 		return err
 	}
@@ -996,7 +999,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		Duplicates: adapters.Duplicates{
 			Store: library.NewDuplicates(p.library), Settings: p.cache, ByName: adapters.MediaTypes{Registry: p.media}.DuplicatesByName,
 		},
-		SimilarVideos:      adapters.SimilarVideos{Store: p.similarVideos()},
+		SimilarVideos:      adapters.SimilarVideos{Store: p.similarVideos(), Queue: p.queueSimilarVideos},
 		RecycleBinContents: adapters.RecycleBinContents{Bin: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()).WithOnline(p.rootOnline)},
 		DuplicateResolver: adapters.DuplicateResolver{
 			FS: p.fsys, Physical: library.NewPhysical(p.library), Recycle: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()),

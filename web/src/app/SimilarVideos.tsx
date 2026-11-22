@@ -15,7 +15,7 @@ import { FileThumb } from "./FileThumb";
 import { PlayButton } from "./player/PlayButton";
 import { formatBytes } from "./Queue";
 import { TargetChip } from "./work/TargetChip";
-import { fileTagChips } from "./work/workFormat";
+import { fileTagChips, relativeTime } from "./work/workFormat";
 
 type Group = components["schemas"]["SimilarVideoReport"]["groups"][number];
 type Video = Group["videos"][number];
@@ -234,10 +234,15 @@ export function SimilarVideos({ scope }: { scope: SimilarScope }) {
   const report = useQuery({
     queryKey: ["similar-videos", scope === "everywhere" ? "everywhere" : scope.categoryId, level],
     refetchOnMount: "always",
+    // The first comparison is a queued job; look again until it has stored its groups.
+    refetchInterval: (query) => (query.state.data?.computed_at === 0 ? 5000 : false),
     queryFn: () =>
       scope === "everywhere"
         ? ok(api.GET("/duplicates/similar-videos", { params: { query: { level } } }))
         : ok(api.GET("/categories/{id}/similar-videos", { params: { path: { id: scope.categoryId }, query: { level } } })),
+  });
+  const refresh = useMutation({
+    mutationFn: () => ok(api.POST("/duplicates/similar-videos/refresh")),
   });
   const libraryName = (id: number) => libraries.data?.find((library) => library.id === id)?.name ?? `Library ${id}`;
   const data = report.data;
@@ -290,6 +295,16 @@ export function SimilarVideos({ scope }: { scope: SimilarScope }) {
         Only files the hash pass has reached are compared, so more can appear over time.
         {data?.limited ? " Only the largest groups are shown." : ""}
       </p>
+      {data && (
+        <p className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+          {data.computed_at === 0 ? "Comparing the videos for the first time, this can take a few minutes." : `Compared ${relativeTime(data.computed_at)}; the comparison runs every night.`}
+          {scope === "everywhere" && (
+            <Button busy={refresh.isPending} disabled={refresh.isSuccess} onClick={() => refresh.mutate()}>
+              {refresh.isSuccess ? "Queued, reload in a minute" : "Compare again now"}
+            </Button>
+          )}
+        </p>
+      )}
       {data && !data.hashing_enabled && (
         <p className="text-xs text-warn">
           Video hashing is switched off, so files added since are not compared.

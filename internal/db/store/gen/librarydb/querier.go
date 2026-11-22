@@ -317,6 +317,7 @@ type Querier interface {
 	// "which search caused this file" reads), and an unfinished download is never touched.
 	DeleteOldAcquisitions(ctx context.Context, arg DeleteOldAcquisitionsParams) (int64, error)
 	// Old finished sessions that placed nothing still in the library and hold nothing for a person; a pack keeps its session.
+	// A placed unit with no recorded file, or with a file that still has a live path, is what a revert acts on.
 	DeleteOldImportSessions(ctx context.Context, arg DeleteOldImportSessionsParams) (int64, error)
 	// A move job that finished or was cancelled long ago; its items and plan go with it.
 	DeleteOldMoveJobs(ctx context.Context, arg DeleteOldMoveJobsParams) (int64, error)
@@ -512,6 +513,7 @@ type Querier interface {
 	// stops reusing models.
 	GetScanState(ctx context.Context, rootFolderID int64) (ScanState, error)
 	GetSeriesInCategory(ctx context.Context, arg GetSeriesInCategoryParams) (GetSeriesInCategoryRow, error)
+	GetSimilarReport(ctx context.Context, level string) (SimilarReport, error)
 	// One follow per subject, user and library; "IS" matches NULL as the constraint's own NULLs do not.
 	GetSubscriptionForSubject(ctx context.Context, arg GetSubscriptionForSubjectParams) (Subscription, error)
 	// The tag tree: genre trees, aliases, moving and merging tags (plan 10-libraries L1). Column lists follow table order.
@@ -989,6 +991,8 @@ type Querier interface {
 	ListUpgradableDesiredItems(ctx context.Context, arg ListUpgradableDesiredItemsParams) ([]ListUpgradableDesiredItemsRow, error)
 	// What the duplicate screens show of videos: their measured facts and the work each belongs to. ids is a JSON array of media object ids.
 	ListVideoFacts(ctx context.Context, ids interface{}) ([]ListVideoFactsRow, error)
+	// Which of the given media object ids still have a live primary path. ids is a JSON array.
+	ListVideoIDsWithLivePath(ctx context.Context, ids interface{}) ([]int64, error)
 	// Video files with no per-frame hash yet, those hashed before it included, and (when previews are wanted) those with no
 	// preview of the current algorithm: the lowest-priority pass of the probe sweep (ADR-35).
 	ListVideoWithoutFrameHashes(ctx context.Context, arg ListVideoWithoutFrameHashesParams) ([]ListVideoWithoutFrameHashesRow, error)
@@ -1450,6 +1454,7 @@ type Querier interface {
 	// The planner owns every column but the search record, which each search keeps itself.
 	UpsertPlannedHunt(ctx context.Context, arg UpsertPlannedHuntParams) error
 	UpsertProbeFailure(ctx context.Context, arg UpsertProbeFailureParams) error
+	UpsertSimilarReport(ctx context.Context, arg UpsertSimilarReportParams) error
 	// F29: the manual identification queue (migration 0014). Column lists follow table
 	// order, or sqlc stops reusing models.
 	// A file marked "not media" is never queued again, nor one that already belongs to a work: a

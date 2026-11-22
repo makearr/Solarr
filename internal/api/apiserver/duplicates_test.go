@@ -72,18 +72,60 @@ func TestCategoryDuplicates_ALibraryTheCallerCannotReadIs404(t *testing.T) {
 	}
 }
 
-type fakeSimilarVideos struct{}
+type fakeSimilarVideos struct {
+	// notComputed answers a report that no comparison has produced yet.
+	notComputed bool
+	refreshes   int
+}
+
+func (f *fakeSimilarVideos) RefreshSimilarVideos(context.Context) error {
+	f.refreshes++
+	return nil
+}
 
 // SimilarVideos answers one group whose distance is the level's, so a test reads which level the request reached.
-func (fakeSimilarVideos) SimilarVideos(_ context.Context, roots []int64, level string, _ int) ([]apiserver.SimilarVideoGroupRow, error) {
-	if len(roots) == 0 {
-		return nil, nil
+func (f *fakeSimilarVideos) SimilarVideos(_ context.Context, roots []int64, level string, _ int) (apiserver.SimilarVideoReportRow, error) {
+	if len(roots) == 0 || f.notComputed {
+		return apiserver.SimilarVideoReportRow{}, nil
 	}
 	distance := map[string]int{"exact": 0, "high": 4, "medium": 8, "low": 10}[level]
-	return []apiserver.SimilarVideoGroupRow{{MaxDistance: distance, Videos: []apiserver.SimilarVideoRow{
+	return apiserver.SimilarVideoReportRow{ComputedAt: 1_700_000_000, Groups: []apiserver.SimilarVideoGroupRow{{MaxDistance: distance, Videos: []apiserver.SimilarVideoRow{
 		{MediaObjectID: 1, SizeBytes: 900, DurationMs: 5_400_000, Width: 1920, Height: 1080, RootFolderID: roots[0], RelPath: "A/film.mkv"},
 		{MediaObjectID: 2, SizeBytes: 300, RootFolderID: roots[0], RelPath: "B/film.mp4"},
-	}}}, nil
+	}}}}, nil
+}
+
+// A report nobody has computed yet says so and queues the comparison; a computed one carries its age; the refresh button is for administrators.
+func TestSimilarVideos_ReportCarriesItsAgeAndAnEmptyOneQueuesTheComparison(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createCategoryWithRoot(t, "Films", "/media/films")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	admin, listener := fixture.signIn(t, "admin"), fixture.signIn(t, "listener")
+
+	computedAt := func() int64 {
+		recorder := fixture.do(authedGet(t, admin, "/api/v1/duplicates/similar-videos"))
+		var body struct {
+			ComputedAt int64 `json:"computed_at"`
+		}
+		if recorder.Code != http.StatusOK || json.Unmarshal(recorder.Body.Bytes(), &body) != nil {
+			t.Fatalf("status %d, body %s", recorder.Code, recorder.Body)
+		}
+		return body.ComputedAt
+	}
+	if got := computedAt(); got != 1_700_000_000 || fixture.similarVideos.refreshes != 0 {
+		t.Fatalf("computed report: computed_at %d, refreshes %d; want its age and no refresh", got, fixture.similarVideos.refreshes)
+	}
+	fixture.similarVideos.notComputed = true
+	if got := computedAt(); got != 0 || fixture.similarVideos.refreshes != 1 {
+		t.Fatalf("empty report: computed_at %d, refreshes %d; want 0 and one refresh queued", got, fixture.similarVideos.refreshes)
+	}
+	if recorder := fixture.do(authedPost(t, listener, "/api/v1/duplicates/similar-videos/refresh", "")); recorder.Code != http.StatusForbidden || fixture.similarVideos.refreshes != 1 {
+		t.Fatalf("refresh as a listener: status %d, refreshes %d; want 403 and none queued", recorder.Code, fixture.similarVideos.refreshes)
+	}
+	if recorder := fixture.do(authedPost(t, admin, "/api/v1/duplicates/similar-videos/refresh", "")); recorder.Code != http.StatusNoContent || fixture.similarVideos.refreshes != 2 {
+		t.Fatalf("refresh as an administrator: status %d, refreshes %d; want 204 and one more queued", recorder.Code, fixture.similarVideos.refreshes)
+	}
 }
 
 func TestCategorySimilarVideos_ListsGroupsWithFullPaths(t *testing.T) {

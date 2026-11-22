@@ -5982,7 +5982,9 @@ type SetupStatus struct {
 
 // SimilarVideoReport defines model for SimilarVideoReport.
 type SimilarVideoReport struct {
-	Groups []struct {
+	// ComputedAt When the groups were compared, in Unix seconds; zero while the first comparison has not finished (it is queued).
+	ComputedAt int64 `json:"computed_at"`
+	Groups     []struct {
 		// MaxDistance The widest gap
 		MaxDistance int `json:"max_distance"`
 		Videos      []struct {
@@ -8852,6 +8854,9 @@ type ServerInterface interface {
 	// Videos held in more than one encode across every library, found by perceptual hash (administrator, read only).
 	// (GET /duplicates/similar-videos)
 	GetSimilarVideos(w http.ResponseWriter, r *http.Request, params GetSimilarVideosParams)
+	// Compare the videos again now instead of at the next scheduled run (administrator).
+	// (POST /duplicates/similar-videos/refresh)
+	RefreshSimilarVideos(w http.ResponseWriter, r *http.Request)
 	// Keep one video of a group and merge or delete the others, across libraries (administrator).
 	// (POST /duplicates/similar-videos/resolve)
 	ResolveSimilarVideos(w http.ResponseWriter, r *http.Request)
@@ -10319,6 +10324,12 @@ func (_ Unimplemented) ListDownloadFolderContents(w http.ResponseWriter, r *http
 // Videos held in more than one encode across every library, found by perceptual hash (administrator, read only).
 // (GET /duplicates/similar-videos)
 func (_ Unimplemented) GetSimilarVideos(w http.ResponseWriter, r *http.Request, params GetSimilarVideosParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Compare the videos again now instead of at the next scheduled run (administrator).
+// (POST /duplicates/similar-videos/refresh)
+func (_ Unimplemented) RefreshSimilarVideos(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -15277,6 +15288,28 @@ func (siw *ServerInterfaceWrapper) GetSimilarVideos(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetSimilarVideos(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RefreshSimilarVideos operation middleware
+func (siw *ServerInterfaceWrapper) RefreshSimilarVideos(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RefreshSimilarVideos(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -24712,6 +24745,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/duplicates/similar-videos", wrapper.GetSimilarVideos)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/duplicates/similar-videos/refresh", wrapper.RefreshSimilarVideos)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/duplicates/similar-videos/resolve", wrapper.ResolveSimilarVideos)
