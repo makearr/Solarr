@@ -199,8 +199,13 @@ func recallAlbums(
 
 	artist := consensusClaim(locals, func(t LocalTrack) Claim { return t.Artist })
 	album := consensusClaim(locals, func(t LocalTrack) Claim { return t.Album })
+	// A compilation's tracks name many artists and the folder none: the album is searched by its title alone.
+	artistless := compilationWithoutArtist(locals)
+	if artistless {
+		artist = Claim{}
+	}
 	var titles []string
-	if artist.present() && album.present() {
+	if (artist.present() || artistless) && album.present() {
 		// The raw tag is searched too: "(2008 mix)" is noise to cleanAlbumTag but part of a real title.
 		titles = []string{cleanAlbumTag(album.Value)}
 		if raw := strings.TrimSpace(album.Value); !strings.EqualFold(raw, titles[0]) {
@@ -211,7 +216,7 @@ func recallAlbums(
 	// names; searched last and never counted as the tags' recall, since a folder name misreads
 	// easily ("Mazotuz - The Remixes!" parses as artist "Runaway").
 	folder := cleanAlbumTag(folderAlbum(locals))
-	searchFolder := artist.present() && folder != "" &&
+	searchFolder := (artist.present() || artistless) && folder != "" &&
 		!slices.ContainsFunc(titles, func(title string) bool { return strings.EqualFold(title, folder) })
 
 	// The searches go out together, but their answers are merged in the order evidence is ranked in, so the
@@ -275,6 +280,27 @@ func recallAlbums(
 		addAnswer(answers[len(titles)], RecallAlbumTags)
 	}
 	return groups
+}
+
+// compilationWithoutArtist is true for a folder of at least three files, none with an album-artist tag, whose
+// track artists have no value on more than half of them.
+func compilationWithoutArtist(locals []LocalTrack) bool {
+	if len(locals) < 3 {
+		return false
+	}
+	counts := map[string]int{}
+	for _, local := range locals {
+		if local.Artist.present() && local.TrackArtist.Value != "" && !strings.EqualFold(local.Artist.Value, local.TrackArtist.Value) {
+			return false
+		}
+		counts[strings.ToLower(strings.TrimSpace(local.Artist.Value))]++
+	}
+	for _, count := range counts {
+		if count*2 > len(locals) {
+			return false
+		}
+	}
+	return true
 }
 
 // albumSearch is one album search's answer.

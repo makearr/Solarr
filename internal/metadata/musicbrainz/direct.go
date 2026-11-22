@@ -217,14 +217,21 @@ type directSearchReleaseGroup struct {
 // endpoint, scoped to artist and release-group (album) title -- the two fields a
 // caller with no MBID at all can actually claim to know (section 10.2).
 func (d direct) SearchReleaseGroups(ctx context.Context, artist, title string, limit int) ([]ReleaseGroupMatch, error) {
-	// artist is the credited name, artistname the artist's own: 2Ibe's live album is credited "Tupac".
-	query := fmt.Sprintf(`(artist:%s OR artistname:%s) AND releasegroup:%s`,
-		luceneQuoted(artist), luceneQuoted(artist), luceneQuoted(title))
+	query := releaseGroupQuery(artist, title)
 	matches, err := d.searchReleaseGroups(ctx, query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("musicbrainz: search release-group %q/%q: %w", artist, title, err)
 	}
 	return matches, nil
+}
+
+// releaseGroupQuery is the Lucene query for an album by title; an artist narrows it, and none (a compilation) leaves it out.
+// artist is the credited name, artistname the artist's own: 2Ibe's live album is credited "Tupac".
+func releaseGroupQuery(artist, title string) string {
+	if artist == "" {
+		return "releasegroup:" + luceneQuoted(title)
+	}
+	return fmt.Sprintf(`(artist:%s OR artistname:%s) AND releasegroup:%s`, luceneQuoted(artist), luceneQuoted(artist), luceneQuoted(title))
 }
 
 // directArtistSearchResponse is ws/2's artist search JSON. The artist

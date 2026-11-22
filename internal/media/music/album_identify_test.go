@@ -437,3 +437,29 @@ func TestIdentifyAlbum_TheBarcodeMostFilesCarryIsSearchedAndTheFirstWinsATie(t *
 		}
 	}
 }
+
+// A compilation tagged with no album artist is searched by its title alone, not by whichever track artist is commonest.
+func TestIdentifyAlbum_ACompilationWithoutAnAlbumArtistIsSearchedWithoutAnArtist(t *testing.T) {
+	lookup := &fakeAlbumLookup{
+		searches: map[string][]musicbrainz.ReleaseGroupMatch{"/Kebilegev Bibihi": {
+			{ReleaseGroup: musicbrainz.ReleaseGroup{MBID: "rg-comp", Title: "Kebilegev Bibihi", PrimaryType: "Album"}, ArtistCredit: "Various Artists"},
+		}},
+	}
+	locals := folderOf(traumaTracks)
+	for index := range locals {
+		locals[index].Artist = tagged([]string{"Artist A", "Artist B", "Artist C", "Artist D", "Artist E", "Artist F"}[index])
+		locals[index].TrackArtist = locals[index].Artist
+	}
+
+	if _, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, nil); err != nil {
+		t.Fatalf("IdentifyAlbum: %v", err)
+	}
+	if !slices.Contains(lookup.asked, "search:/Kebilegev Bibihi") {
+		t.Errorf("asked %v, want the album searched with no artist", lookup.asked)
+	}
+	for _, asked := range lookup.asked {
+		if strings.HasPrefix(asked, "search:Artist") {
+			t.Errorf("asked %v: a track artist was searched as the album's", lookup.asked)
+		}
+	}
+}
