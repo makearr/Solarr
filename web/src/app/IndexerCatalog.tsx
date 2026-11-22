@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
@@ -52,7 +53,7 @@ export function IndexerCatalog() {
           <input
             className={inputStyle}
             value={filter.text}
-            placeholder="Name or description"
+            placeholder={t("indexerCatalog.nameOrDescription")}
             onChange={(event) => setFilter({ ...filter, text: event.target.value })}
           />
         </label>
@@ -68,14 +69,14 @@ export function IndexerCatalog() {
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-1.5 pb-1.5 text-ink-muted" title="Some sites need something Solarr cannot do yet, such as answering a captcha">
+        <label className="flex items-center gap-1.5 pb-1.5 text-ink-muted" title={t("indexerCatalog.someSitesNeedSomething")}>
           <input type="checkbox" checked={filter.searchableOnly} onChange={(event) => setFilter({ ...filter, searchableOnly: event.target.checked })} />
           Searchable only
         </label>
       </div>
 
       {kinds.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-      {kinds.isError && <p className="text-sm text-danger">The indexer list could not be read.</p>}
+      {kinds.isError && <p className="text-sm text-danger">{t("indexerCatalog.theIndexerListCould")}</p>}
       {kinds.data && (
         <p className="text-xs text-ink-muted">
           {shown.length} of {kinds.data.length} indexers
@@ -239,7 +240,7 @@ export function IndexerSetup() {
       <header className="flex flex-col gap-1">
         <Link to="/connections/indexers/add" className="text-xs text-accent underline underline-offset-2">← Choose others</Link>
         <h1 className="text-lg font-semibold">Set up {chosen.length} indexer{chosen.length === 1 ? "" : "s"}</h1>
-        <p className="text-sm leading-relaxed text-ink-muted">Each needs its address and, for a private one, its key. Test any before adding.</p>
+        <p className="text-sm leading-relaxed text-ink-muted">{t("indexerCatalog.eachNeedsItsAddress")}</p>
       </header>
       {kinds.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
       {!kinds.isLoading && chosen.length === 0 && (
@@ -262,7 +263,7 @@ export function IndexerSetup() {
           <Button variant="primary" disabled={!ready || addAll.isPending} onClick={() => addAll.mutate()}>
             {addAll.isPending ? "Adding…" : `Add ${chosen.length} indexer${chosen.length === 1 ? "" : "s"}`}
           </Button>
-          {!ready && <span className="text-xs text-ink-muted">Fill in what each one still needs.</span>}
+          {!ready && <span className="text-xs text-ink-muted">{t("indexerCatalog.fillInWhatEach")}</span>}
         </div>
       )}
     </div>
@@ -359,7 +360,7 @@ function SetupCard({
       )}
       {missing.length > 0 && <p className="text-xs text-ink-muted">Still needed: {missing.join(", ")}.</p>}
       {test.data && <p className={`text-xs ${test.data.ok ? "text-ok" : "text-danger"}`}>{test.data.message}</p>}
-      {test.isError && <p className="text-xs text-danger">The test could not run.</p>}
+      {test.isError && <p className="text-xs text-danger">{t("indexerCatalog.theTestCouldNot")}</p>}
       {outcome?.state === "failed" && <p className="text-xs text-danger">{outcome.message}</p>}
     </section>
   );

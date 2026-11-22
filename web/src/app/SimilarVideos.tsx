@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { usePreference } from "@/lib/usePreference";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -132,7 +133,7 @@ function GroupCard({ group, scope, libraryName }: { group: Group; scope: Similar
                   to="/library/$categoryId/works/$workId"
                   params={{ categoryId: String(video.category_id), workId: String(video.work_id) }}
                   className="text-sm font-medium hover:underline"
-                  title="Open it in its library"
+                  title={t("similarVideos.openItInIts")}
                 >
                   {video.work_title || nameOf(video.path)}
                 </Link>
@@ -141,7 +142,7 @@ function GroupCard({ group, scope, libraryName }: { group: Group; scope: Similar
               )}
               <PlayButton extension={video.file.extension} item={{ mediaObjectId: video.media_object_id, title: video.work_title || nameOf(video.path), durationMs: video.duration_ms || undefined, file: video.file }} />
               {scope === "everywhere" && <Chip>{libraryName(video.category_id)}</Chip>}
-              {bits !== undefined && <Chip title="Bits of the 64-bit picture hash that differ from the kept file">{bits} {bits === 1 ? "bit" : "bits"} apart</Chip>}
+              {bits !== undefined && <Chip title={t("similarVideos.bitsOfThe64")}>{bits} {bits === 1 ? "bit" : "bits"} apart</Chip>}
               {video.duration_ms > 0 && <span className="text-ink-muted">{formatDuration(video.duration_ms)}</span>}
             </div>
             <div className="flex flex-wrap items-center gap-1">
@@ -160,7 +161,7 @@ function GroupCard({ group, scope, libraryName }: { group: Group; scope: Similar
                     title={canMerge ? undefined : primary ? "Only a file in the same library and of the same kind can be merged; delete it instead." : "Keep at least one file first."}
                     onClick={() => setPending({ drops: [video], action: "link" })}
                   >
-                    Merge into the kept file
+                    {t("similarVideos.mergeIntoTheKept")}
                   </Button>
                 )}
                 <Button onClick={() => setPending({ drops: [video], action: "recycle" })}>Delete</Button>
@@ -170,8 +171,8 @@ function GroupCard({ group, scope, libraryName }: { group: Group; scope: Similar
           </div>
         );
       })}
-      {namesOtherEpisodes(group) && <p className="text-warn">These file names say different episodes. Check them before keeping one.</p>}
-      {primary === undefined && !done && <p className="text-ink-muted">Tick a file to keep it, or delete them all.</p>}
+      {namesOtherEpisodes(group) && <p className="text-warn">{t("similarVideos.theseFileNamesSay")}</p>}
+      {primary === undefined && !done && <p className="text-ink-muted">{t("similarVideos.tickAFileTo")}</p>}
       {done ? (
         <p className="text-ok">
           Done: {done.linked} merged, {done.recycled} deleted.
@@ -312,8 +313,8 @@ export function SimilarVideos({ scope }: { scope: SimilarScope }) {
         </p>
       )}
       {report.isLoading && <p className="text-xs text-ink-muted">Looking…</p>}
-      {report.isError && <p className="text-xs text-danger">The report could not be made.</p>}
-      {data && shown.length === 0 && <p className="text-xs text-ink-muted">No similar videos found at this level.</p>}
+      {report.isError && <p className="text-xs text-danger">{t("duplicates.theReportCouldNot")}</p>}
+      {data && shown.length === 0 && <p className="text-xs text-ink-muted">{t("similarVideos.noSimilarVideosFound")}</p>}
       {data && shown.length > 0 && (
         <ul className="flex flex-col gap-3">
           {shown.map((group) => (

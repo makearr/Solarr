@@ -100,7 +100,7 @@ export function ArrImportPreviewPanel({
                 }
                 className={input}
               >
-                <option value="">The library's own</option>
+                <option value="">{t("arrImportPreview.theLibrarySOwn")}</option>
                 {ownProfiles.map((own) => (
                   <option key={own.id} value={own.id}>
                     {own.name}

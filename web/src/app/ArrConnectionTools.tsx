@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -95,7 +96,7 @@ function UseIndexers({ instanceId }: { instanceId: number }) {
         </button>
       )}
       {use.isSuccess && <p className="text-xs text-ink-muted">{use.data.added} added under Connections → Indexers.</p>}
-      {use.isError && <p className="text-xs text-danger">Not every indexer could be added.</p>}
+      {use.isError && <p className="text-xs text-danger">{t("arrConnectionTools.notEveryIndexerCould")}</p>}
     </section>
   );
 }
@@ -119,7 +120,7 @@ function UseDownloadClients({ instanceId, app }: { instanceId: number; app: ArrA
       <h3 className="text-xs font-medium text-ink-muted">Download clients</h3>
       {found.isLoading && <p className="text-xs text-ink-muted">Reading…</p>}
       {found.isError && <p className="text-xs text-danger">{(found.error as { detail?: string }).detail ?? "The connection could not be read."}</p>}
-      {found.data?.length === 0 && <p className="text-xs text-ink-muted">It has none.</p>}
+      {found.data?.length === 0 && <p className="text-xs text-ink-muted">{t("arrConnectionTools.itHasNone")}</p>}
       {found.data?.map((client) => (
         <DownloadClientRow key={`${client.name}-${client.base_url}`} client={client} instanceId={instanceId} keepCategory={app === "lidarr"} />
       ))}
@@ -205,7 +206,7 @@ function DownloadClientRow({ client, instanceId, keepCategory }: { client: ArrDo
             <input
               autoComplete="off"
               aria-label={`${client.name} user name`}
-              placeholder="User name"
+              placeholder={t("arrConnectionTools.userName")}
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               className={`${input} w-40`}
@@ -292,7 +293,7 @@ function ProwlarrSync({ instanceId }: { instanceId: number }) {
   });
   return (
     <section className="flex flex-col gap-1.5 text-sm">
-      <h3 className="text-xs font-medium text-ink-muted">Keep in step with Prowlarr</h3>
+      <h3 className="text-xs font-medium text-ink-muted">{t("arrConnectionTools.keepInStepWith")}</h3>
       {syncChoices.map((choice) => (
         <label key={choice.key} className="flex items-center gap-2 text-xs">
           <input
@@ -382,7 +383,7 @@ function ArrPull({ instanceId, app }: { instanceId: number; app: ArrApp }) {
   );
   return (
     <section className="flex flex-col gap-1.5 text-xs">
-      <h3 className="font-medium text-ink-muted">Pull from this connection</h3>
+      <h3 className="font-medium text-ink-muted">{t("arrConnectionTools.pullFromThisConnection")}</h3>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
         <span className="text-ink-muted">Content</span>
         {PULL_CONTENT.map(box)}
@@ -396,8 +397,8 @@ function ArrPull({ instanceId, app }: { instanceId: number; app: ArrApp }) {
               onChange={(event) => change({ albums: event.target.value as PullOptions["albums"] })}
             >
               <option value="all">All</option>
-              <option value="missing">Missing tracks in Lidarr</option>
-              <option value="complete">Complete in Lidarr</option>
+              <option value="missing">{t("arrConnectionTools.missingTracksInLidarr")}</option>
+              <option value="complete">{t("arrConnectionTools.completeInLidarr")}</option>
             </select>
           </label>
         )}
@@ -415,7 +416,7 @@ function ArrPull({ instanceId, app }: { instanceId: number; app: ArrApp }) {
             disabled={save.isPending}
             onChange={(event) => change({ library_id: event.target.value ? Number(event.target.value) : undefined })}
           >
-            <option value="">The connection's library</option>
+            <option value="">{t("arrConnectionTools.theConnectionSLibrary")}</option>
             {(libraries.data ?? []).map((library) => (
               <option key={library.id} value={library.id}>{libraryLabel(library)}</option>
             ))}
@@ -429,14 +430,14 @@ function ArrPull({ instanceId, app }: { instanceId: number; app: ArrApp }) {
             <input className={input} defaultValue={entry.from} aria-label="Path in the *Arr"
               onBlur={(event) => change({ path_rewrites: rewrites.map((old, i) => (i === index ? { ...old, from: event.target.value } : old)) })} />
             <span className="text-ink-muted">→</span>
-            <input className={input} defaultValue={entry.to} aria-label="Path here"
+            <input className={input} defaultValue={entry.to} aria-label={t("arrConnectionTools.pathHere")}
               onBlur={(event) => change({ path_rewrites: rewrites.map((old, i) => (i === index ? { ...old, to: event.target.value } : old)) })} />
             <button type="button" className={button} onClick={() => change({ path_rewrites: rewrites.filter((_, i) => i !== index) })}>Remove</button>
           </div>
         ))}
         <button type="button" className={button} disabled={!current}
           onClick={() => change({ path_rewrites: [...rewrites, { from: "/", to: "/" }] })}>
-          Add a path
+          {t("arrConnectionTools.addAPath")}
         </button>
       </div>
       <label className="flex items-center gap-1.5" title="Pull every hour; otherwise only when you press Pull now.">

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Download, File, Folder } from "lucide-react";
@@ -48,7 +49,7 @@ export function DownloadFolderSection() {
       </header>
 
       {folders.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-      {folders.error !== null && <p className="text-sm text-danger">Download folders could not be read.</p>}
+      {folders.error !== null && <p className="text-sm text-danger">{t("downloadFolders.downloadFoldersCouldNot")}</p>}
 
       {folders.data && folders.data.length > 0 ? (
         <ul className="flex flex-col gap-2">
@@ -67,12 +68,12 @@ export function DownloadFolderSection() {
       ) : (
         !folders.isLoading && (
           <p className="rounded-lg border border-border-subtle bg-surface p-3 text-sm text-ink-muted">
-            No download folder is configured.
+            {t("downloadFolders.noDownloadFolderIs")}
           </p>
         )
       )}
 
-      {remove.isError && <p className="text-xs text-danger">That folder could not be removed.</p>}
+      {remove.isError && <p className="text-xs text-danger">{t("downloadFolders.thatFolderCouldNot")}</p>}
 
       <AddDownloadFolder categories={categories.data ?? []} onAdded={invalidate} />
     </section>
@@ -163,7 +164,7 @@ function DownloadFolderCard({
             title={folder.category_id == null ? "Choose the library this folder's downloads go into first" : undefined}
             onChange={(event) => update.mutate({ watch: event.target.checked })}
           />
-          Watch for imports
+          {t("downloadFolders.watchForImports")}
         </label>
         <label className="flex items-center gap-1.5 text-ink-muted">
           Library
@@ -187,9 +188,9 @@ function DownloadFolderCard({
           </select>
         </label>
         {folder.watch && folder.category_id == null && (
-          <span className="text-warn">Nothing is imported from this folder until it names a library.</span>
+          <span className="text-warn">{t("downloadFolders.nothingIsImportedFrom")}</span>
         )}
-        {update.isError && <span className="text-danger">The change was refused.</span>}
+        {update.isError && <span className="text-danger">{t("downloadFolders.theChangeWasRefused")}</span>}
         <label className="flex items-center gap-1.5">
           <input
             type="checkbox"
@@ -215,7 +216,7 @@ function DownloadFolderCard({
           onChange={(ladder) => update.mutate({ transfer_ladder: ladder })}
         />
       )}
-      {update.isError && !ownLadder && <p className="text-xs text-danger">That could not be changed.</p>}
+      {update.isError && !ownLadder && <p className="text-xs text-danger">{t("downloadFolders.thatCouldNotBe")}</p>}
 
       {confirmingRemove && (
         <ConfirmDialog
@@ -234,7 +235,7 @@ function DownloadFolderCard({
       {expanded && (
         <div className="border-t border-border-subtle pt-2">
           {contents.isLoading && <p className="text-xs text-ink-muted">Reading…</p>}
-          {contents.error !== null && <p className="text-xs text-danger">Contents could not be read.</p>}
+          {contents.error !== null && <p className="text-xs text-danger">{t("downloadFolders.contentsCouldNotBe")}</p>}
           {contents.data && contents.data.length === 0 && (
             <p className="text-xs text-ink-muted">Empty.</p>
           )}
@@ -337,7 +338,7 @@ function AddDownloadFolder({
       </Button>
       {create.isError && (
         <p className="w-full text-xs text-danger">
-          That path could not be used -- check it exists and is mounted inside the container.
+          {t("downloadFolders.thatPathCouldNot")}
         </p>
       )}
     </form>

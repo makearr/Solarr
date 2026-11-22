@@ -26,12 +26,12 @@ export function Queue() {
       <h1 className="sr-only">Queue</h1>
       <div className="flex flex-col gap-4 p-4">
         {queue.isLoading && <Message>Loading the queue…</Message>}
-        {queue.error !== null && <Message>The queue could not be read.</Message>}
+        {queue.error !== null && <Message>{t("unidentified.theQueueCouldNot")}</Message>}
         {queue.data && (
           <>
             <ClientList clients={queue.data.clients} items={queue.data.items} />
             {queue.data.items.length === 0 ? (
-              <Message>Nothing is downloading. What is sent to a download client appears here until imported.</Message>
+              <Message>{t("queue.nothingIsDownloadingWhat")}</Message>
             ) : (
               <QueueTable items={queue.data.items} />
             )}
@@ -58,7 +58,7 @@ export function useQueue(workId?: number, refetchInterval = REFRESH_MS) {
 
 function ClientList({ clients, items }: { clients: readonly QueueClient[]; items: readonly QueueItem[] }) {
   if (clients.length === 0) {
-    return <Message>No download client is enabled, so nothing can be downloaded.</Message>;
+    return <Message>{t("queue.noDownloadClientIs")}</Message>;
   }
   return (
     <ul className="flex flex-wrap gap-2 text-xs">
@@ -195,7 +195,7 @@ function QueueRow({ item }: { item: QueueItem }) {
           <span className="flex flex-col items-end gap-1">
             <label className="flex items-center gap-1.5">
               <input type="checkbox" checked={blocklist} onChange={(event) => setBlocklist(event.target.checked)} />
-              Blocklist this release and search for another
+              {t("queue.blocklistThisReleaseAnd")}
             </label>
             <span className="flex gap-1.5">
               <button
@@ -214,14 +214,14 @@ function QueueRow({ item }: { item: QueueItem }) {
                 Cancel
               </button>
             </span>
-            {remove.isError && <span className="text-danger">It could not be removed.</span>}
+            {remove.isError && <span className="text-danger">{t("queue.itCouldNotBe")}</span>}
           </span>
         ) : (
           removable && (
             <button
               type="button"
               onClick={() => setConfirming(true)}
-              title="Remove from the download client, with its files"
+              title={t("queue.removeFromTheDownload")}
               className="rounded-md border border-border-subtle px-2 py-0.5 text-ink-muted hover:text-danger"
             >
               Remove
@@ -247,7 +247,7 @@ function HeldList({ held }: { held: readonly HeldRelease[] }) {
         in this order as downloads finish: your own grabs first, then RSS, then new releases, then older ones.
       </p>
       {held.length === 0 ? (
-        <Message>Nothing is waiting.</Message>
+        <Message>{t("queue.nothingIsWaiting")}</Message>
       ) : (
         <table className="w-full text-left text-xs">
           <thead className="text-ink-muted">

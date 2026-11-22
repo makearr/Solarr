@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useState } from "react";
 import { Link, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -170,13 +171,13 @@ function FeedPanel() {
 
   return (
     <section className="flex flex-wrap items-center gap-2 rounded-lg border border-border-subtle bg-surface px-3 py-2 text-xs">
-      <span className="font-medium">Calendar link</span>
+      <span className="font-medium">{t("calendar.calendarLink")}</span>
       {link ? (
         <>
           <input
             readOnly
             value={link}
-            aria-label="Calendar link"
+            aria-label={t("calendar.calendarLink")}
             onFocus={(event) => event.target.select()}
             className="min-w-0 flex-1 rounded-md border border-border-subtle bg-canvas px-2 py-1 font-mono text-[0.6875rem]"
           />
@@ -223,7 +224,7 @@ function FeedPanel() {
             onClick={() => create.mutate()}
             className="ml-auto rounded-md bg-accent px-2 py-1 text-accent-ink disabled:opacity-50"
           >
-            Get a link
+            {t("calendar.getALink")}
           </button>
         </>
       )}
@@ -258,7 +259,7 @@ function YearView({ year }: { year: number }) {
         <Link
           to="/calendar"
           search={{ view: "year", year: String(year - 1) }}
-          aria-label="Previous year"
+          aria-label={t("calendar.previousYear")}
           className="rounded-md border border-border-subtle p-1 text-ink-muted hover:text-ink"
         >
           <ChevronLeft aria-hidden className="size-4" />
@@ -267,7 +268,7 @@ function YearView({ year }: { year: number }) {
         <Link
           to="/calendar"
           search={{ view: "year", year: String(year + 1) }}
-          aria-label="Next year"
+          aria-label={t("calendar.nextYear")}
           className="rounded-md border border-border-subtle p-1 text-ink-muted hover:text-ink"
         >
           <ChevronRight aria-hidden className="size-4" />
@@ -282,7 +283,7 @@ function YearView({ year }: { year: number }) {
           </button>
         )}
         {dates.isLoading && <span className="text-xs text-ink-muted">Loading…</span>}
-        {dates.error !== null && <span className="text-xs text-danger">The calendar could not be read.</span>}
+        {dates.error !== null && <span className="text-xs text-danger">{t("calendarViews.theCalendarCouldNot")}</span>}
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -440,10 +441,10 @@ function ListView() {
         ))}
       </div>
       {entries.isLoading && <Message>Loading…</Message>}
-      {entries.error !== null && <Message>The calendar could not be read.</Message>}
+      {entries.error !== null && <Message>{t("calendarViews.theCalendarCouldNot")}</Message>}
       {entries.data && entries.data.length === 0 && (
         <Message>
-          Nothing in this window. Monitor an artist, or want an album, and its releases appear here.
+          {t("calendar.nothingInThisWindow")}
         </Message>
       )}
       {entries.data && <ReleaseList entries={entries.data} />}

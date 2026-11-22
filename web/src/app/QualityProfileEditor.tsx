@@ -106,7 +106,7 @@ export function QualityProfilesPage() {
 
   const profileCard = (
       <Card
-        title="Quality profiles"
+        title={t("qualityProfileEditor.qualityProfiles")}
         help="For experts and people coming from the *Arrs: what each kind of file is worth, as rules, tiers and ranges. A library does not need one; its target quality is enough. A library lists the profiles it accepts, in order, under its own Quality page; the same profile can serve several libraries."
         toggle={
           <button
@@ -313,7 +313,7 @@ export function ProfileForm({
                     setAsJSON(false);
                   }}
                 />
-                Edit the rules as JSON
+                {t("qualityProfileEditor.editTheRulesAs")}
               </label>
             )}
             <label className="flex flex-col gap-1">
@@ -373,7 +373,7 @@ function VideoRulesForm({ rules, onChange }: { rules: VideoRules; onChange: (rul
         onChange={(resolutions) => set({ resolutions })}
       />
       <fieldset className="flex flex-wrap items-end gap-3 text-xs">
-        <legend className="mb-1 font-medium">Accept only resolutions between</legend>
+        <legend className="mb-1 font-medium">{t("qualityProfileEditor.acceptOnlyResolutionsBetween")}</legend>
         <label className="flex flex-col gap-1 text-ink-muted">
           Lowest
           <select
@@ -500,7 +500,7 @@ function AudioRulesForm({ rules, onChange }: { rules: AudioRules; onChange: (rul
       <fieldset className="flex flex-col gap-2">
         <legend className="text-xs font-medium">Bitrate targets (kbps)</legend>
         <p className="text-xs text-ink-muted">
-          Nearest to the ideal ranks first, above or below. Lossless codecs have no bitrate target.
+          {t("qualityProfileEditor.nearestToTheIdeal")}
         </p>
         {rules.bitrates.map((target, index) => (
           <div key={index} className="flex flex-wrap items-end gap-2 text-xs">
@@ -524,7 +524,7 @@ function AudioRulesForm({ rules, onChange }: { rules: AudioRules; onChange: (rul
             />
             <button
               type="button"
-              aria-label="Remove this bitrate target"
+              aria-label={t("qualityProfileEditor.removeThisBitrateTarget")}
               onClick={() => set({ bitrates: rules.bitrates.filter((_, i) => i !== index) })}
               className="rounded-md border border-border-subtle p-1 text-ink-muted hover:text-danger"
             >
@@ -537,7 +537,7 @@ function AudioRulesForm({ rules, onChange }: { rules: AudioRules; onChange: (rul
           onClick={() => set({ bitrates: [...rules.bitrates, { codec: "mp3", min: "256", ideal: "320", max: "320" }] })}
           className={`${smallButton} w-fit`}
         >
-          Add a bitrate target
+          {t("qualityProfileEditor.addABitrateTarget")}
         </button>
       </fieldset>
 
@@ -618,7 +618,7 @@ function SizeRanges({ rules, onChange }: { rules: VideoRules; onChange: (patch: 
         </table>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <select value="" aria-label="Add a quality" onChange={(event) => event.target.value && onChange({ sizes: [...rules.sizes, { resolution: event.target.value, min: "", preferred: "", max: "" }] })} className={input}>
+        <select value="" aria-label={t("qualityProfileEditor.addAQuality")} onChange={(event) => event.target.value && onChange({ sizes: [...rules.sizes, { resolution: event.target.value, min: "", preferred: "", max: "" }] })} className={input}>
           <option value="">Add a quality…</option>
           {Object.keys(RESOLUTIONS).filter((name) => !used.has(name) && name !== "1080i" && name !== "360p").map((name) => (
             <option key={name} value={name}>
@@ -627,12 +627,12 @@ function SizeRanges({ rules, onChange }: { rules: VideoRules; onChange: (patch: 
           ))}
         </select>
         <button type="button" className={smallButton} onClick={() => onChange({ sizes: SUGGESTED_SIZES.map((size) => ({ ...size })) })}>
-          Use the suggested limits
+          {t("qualityProfileEditor.useTheSuggestedLimits")}
         </button>
         {rules.sizes.length > 0 && (
           <label className="flex items-center gap-1 text-ink-muted">
             <input type="checkbox" checked={rules.rankBySize} onChange={(event) => onChange({ rankBySize: event.target.checked })} />
-            Rank nearer the preferred size first
+            {t("qualityProfileEditor.rankNearerThePreferred")}
           </label>
         )}
       </div>
@@ -652,7 +652,7 @@ function PreferredGroups({ value, onChange }: { value: string[]; onChange: (grou
   };
   return (
     <fieldset className="flex flex-col gap-1.5">
-      <legend className="text-xs font-medium">Preferred release groups</legend>
+      <legend className="text-xs font-medium">{t("qualityProfileEditor.preferredReleaseGroups")}</legend>
       <p className="text-xs text-ink-muted">A release from one of these ranks above an otherwise equal one.</p>
       <div className="flex flex-wrap items-center gap-1 text-xs">
         {value.map((group) => (
@@ -670,8 +670,8 @@ function PreferredGroups({ value, onChange }: { value: string[]; onChange: (grou
         ))}
         <input
           value={typed}
-          placeholder="Group name, Enter to add"
-          aria-label="Add a preferred release group"
+          placeholder={t("qualityProfileEditor.groupNameEnterTo")}
+          aria-label={t("qualityProfileEditor.addAPreferredRelease")}
           onChange={(event) => setTyped(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") {

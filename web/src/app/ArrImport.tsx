@@ -61,7 +61,7 @@ export function ArrImport() {
       </header>
 
       {instances.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-      {instances.error !== null && <p className="text-sm text-danger">Connections could not be read.</p>}
+      {instances.error !== null && <p className="text-sm text-danger">{t("arrImport.connectionsCouldNotBe")}</p>}
 
       {instances.data && instances.data.length > 0 ? (
         <ul className="flex flex-col gap-2">
@@ -81,12 +81,12 @@ export function ArrImport() {
       ) : (
         !instances.isLoading && (
           <p className="rounded-lg border border-border-subtle bg-surface p-3 text-sm text-ink-muted">
-            No connection is configured.
+            {t("arrImport.noConnectionIsConfigured")}
           </p>
         )
       )}
 
-      {remove.isError && <p className="text-xs text-danger">That connection could not be removed.</p>}
+      {remove.isError && <p className="text-xs text-danger">{t("arrImport.thatConnectionCouldNot")}</p>}
 
       <AddInstance categories={categories.data ?? []} onAdded={invalidate} />
     </div>
@@ -168,7 +168,7 @@ function InstanceCard({
         <button
           type="button"
           aria-label={`Edit ${instance.name}`}
-          title="Change this connection's name, address, API key or library"
+          title={t("arrImport.changeThisConnectionS")}
           onClick={() => setEditing(!editing)}
           className={`${instance.app === "prowlarr" ? "ml-auto " : ""}flex shrink-0 items-center gap-1 rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`}
         >
@@ -264,7 +264,7 @@ function EditInstance({ instance, onDone }: { instance: ArrInstance; onDone: () 
       <label className={labelStyle}>
         Library
         <select className={inputStyle} value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
-          <option value="">Match by root folder path</option>
+          <option value="">{t("arrImport.matchByRootFolder")}</option>
           {(categories.data ?? []).map((category) => (
             <option key={category.id} value={category.id}>
               {libraryLabel(category)}
@@ -390,8 +390,8 @@ function InstanceHistory({ instanceId }: { instanceId: number }) {
   return (
     <div className="border-t border-border-subtle pt-2">
       {runs.isLoading && <p className="text-xs text-ink-muted">Reading…</p>}
-      {runs.error !== null && <p className="text-xs text-danger">History could not be read.</p>}
-      {runs.data && runs.data.length === 0 && <p className="text-xs text-ink-muted">No run yet.</p>}
+      {runs.error !== null && <p className="text-xs text-danger">{t("history.readFailed")}</p>}
+      {runs.data && runs.data.length === 0 && <p className="text-xs text-ink-muted">{t("arrImport.noRunYet")}</p>}
       {runs.data && runs.data.length > 0 && (
         <ul className="flex flex-col gap-1">
           {runs.data.map((run) => (
@@ -420,7 +420,7 @@ function InstanceHistory({ instanceId }: { instanceId: number }) {
           ))}
         </ul>
       )}
-      {revert.isError && <p className="text-xs text-danger">That run could not be reverted.</p>}
+      {revert.isError && <p className="text-xs text-danger">{t("arrImport.thatRunCouldNot")}</p>}
     </div>
   );
 }
@@ -487,7 +487,7 @@ function AddInstance({
         <input
           className={inputStyle}
           value={name}
-          placeholder="Home Lidarr"
+          placeholder={t("arrImport.homeLidarr")}
           autoComplete="off"
           onChange={(event) => setName(event.target.value)}
         />
@@ -515,7 +515,7 @@ function AddInstance({
       <label className={labelStyle}>
         Library
         <select className={inputStyle} value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
-          <option value="">Match by root folder path</option>
+          <option value="">{t("arrImport.matchByRootFolder")}</option>
           {categories.map((category) => (
             <option key={category.id} value={category.id}>
               {libraryLabel(category)}
@@ -525,7 +525,7 @@ function AddInstance({
       </label>
       <label className="flex items-center gap-1.5 text-xs text-ink-muted">
         <input type="checkbox" checked={pushMonitoring} onChange={(event) => setPushMonitoring(event.target.checked)} />
-        Send monitoring back
+        {t("arrImport.sendMonitoringBack")}
       </label>
       <Button
         variant="primary"
@@ -535,7 +535,7 @@ function AddInstance({
         {create.isPending ? "Connecting…" : "Connect"}
       </Button>
       {create.isError && (
-        <p className="w-full text-xs text-danger">That connection could not be created.</p>
+        <p className="w-full text-xs text-danger">{t("arrImport.thatConnectionCouldNot2")}</p>
       )}
     </form>
   );

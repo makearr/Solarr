@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
@@ -129,12 +130,12 @@ export function CacheSettings() {
       <DatabaseMemoryCard />
 
       <BudgetForm report={report.data} onSave={(budget) => update.mutate(budget)} busy={update.isPending} />
-      {update.isError && <p className="text-sm text-danger">That budget was refused.</p>}
+      {update.isError && <p className="text-sm text-danger">{t("cacheSettings.thatBudgetWasRefused")}</p>}
 
       <MemoryCopiesCard />
 
       <Card
-        title="Shrink or clear the cache"
+        title={t("cacheSettings.shrinkOrClearThe")}
         help="Shrink drops what has not been used for seven days. Clear throws everything away; either is fetched again as it is needed."
       >
         <div className="flex flex-wrap items-center gap-3">
@@ -142,9 +143,9 @@ export function CacheSettings() {
             {shrink.isPending ? "Shrinking…" : "Shrink cache"}
           </Button>
         </div>
-        {shrink.isError && <p className="text-xs text-danger">The cache could not be shrunk.</p>}
+        {shrink.isError && <p className="text-xs text-danger">{t("cacheSettings.theCacheCouldNot")}</p>}
         <ClearButton onClear={() => clear.mutate()} busy={clear.isPending} />
-        {clear.isError && <p className="text-xs text-danger">The cache could not be cleared.</p>}
+        {clear.isError && <p className="text-xs text-danger">{t("cacheSettings.theCacheCouldNot2")}</p>}
       </Card>
     </section>
   );
@@ -196,7 +197,7 @@ function MemoryCopiesCard() {
 
   return (
     <Card
-      title="Keep the cache and databases in RAM"
+      title={t("cacheSettings.keepTheCacheAnd")}
       tone="warn"
       help="Runs them from memory and copies them back to disk on an interval. Faster, but it takes a lot of additional RAM, and what changed since the last copy is lost if Solarr or the machine dies."
     >
@@ -364,7 +365,7 @@ function DatabaseMemoryCard() {
       }}
     >
       <Card
-        title="Database memory"
+        title={t("cacheSettings.databaseMemory")}
         help="One ceiling for the page caches SQLite keeps in memory, all databases and connections together. The library takes most of it. A bigger ceiling means fewer reads from disk; it is a limit, not memory held from the start."
       >
         <div className="flex flex-wrap items-end gap-4">
@@ -399,7 +400,7 @@ function DatabaseMemoryCard() {
             Saved as {Math.round(data.configured_kb / 1024)} MB; the databases run with {Math.round(data.running_kb / 1024)} MB until Solarr restarts.
           </p>
         )}
-        {save.isError && <p className="text-xs text-danger">That size was refused.</p>}
+        {save.isError && <p className="text-xs text-danger">{t("cacheSettings.thatSizeWasRefused")}</p>}
         <ul className="flex flex-col gap-2">
           {data.databases.map((row) => (
             <li key={row.name} className="flex flex-col gap-1">
@@ -424,7 +425,7 @@ function DatabaseMemoryCard() {
             </li>
           ))}
         </ul>
-        <p className="text-xs text-ink-muted">Hit ratios count since Solarr started.</p>
+        <p className="text-xs text-ink-muted">{t("cacheSettings.hitRatiosCountSince")}</p>
       </Card>
     </form>
   );

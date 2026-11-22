@@ -104,7 +104,7 @@ export function GeneralSettings() {
           ))}
         </fieldset>
       </Card>
-      <Card title="Background work" help="Switches for work Solarr does by itself. A search you start yourself works whatever these say.">
+      <Card title={t("settings.backgroundWork")} help="Switches for work Solarr does by itself. A search you start yourself works whatever these say.">
         <label className="flex items-start gap-2 text-sm">
           <input
             type="checkbox"
@@ -115,7 +115,7 @@ export function GeneralSettings() {
           />
           <span>
             Search for old missing items
-            <span className="block text-xs text-ink-muted">The automatic search also looks for missing items released before the freshness window. Off, only new releases and upgrades are searched.</span>
+            <span className="block text-xs text-ink-muted">{t("settings.theAutomaticSearchAlso")}</span>
           </span>
         </label>
         <div className="flex items-start justify-between gap-3">
@@ -159,9 +159,9 @@ export function GeneralSettings() {
         </div>
         {retryUnreadable.isSuccess && <p className="text-sm text-ok">{t("settings.unreadable.started", { count: retryUnreadable.data.count })}</p>}
         {retryUnreadable.isError && <p className="text-sm text-danger">{t("settings.unreadable.refused")}</p>}
-        {change.isError && <p className="text-sm text-danger">That change was refused.</p>}
+        {change.isError && <p className="text-sm text-danger">{t("importLists.refused")}</p>}
         {generate.isError && <p className="text-sm text-danger">That could not be started: it needs administrator access.</p>}
-        {generate.isSuccess && <p className="text-sm text-ok">Started in the background, whatever the switches above say. Previews also hash the videos.</p>}
+        {generate.isSuccess && <p className="text-sm text-ok">{t("settings.startedInTheBackground")}</p>}
       </Card>
     </SettingsPage>
   );
@@ -231,19 +231,19 @@ export function WebUISettings() {
   const [showFooter, setShowFooter] = useShowFooter();
   const [showThumbnails, setShowThumbnails] = useShowThumbnails();
   return (
-    <SettingsPage title="Web UI">
+    <SettingsPage title={t("settings.webUi")}>
       <Card title="Layout" help="Your own view only; every other account keeps its own.">
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={showCalendar} onChange={(event) => setShowCalendar(event.target.checked)} />
-          Show Calendar in the sidebar
+          {t("settings.showCalendarInThe")}
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={showFooter} onChange={(event) => setShowFooter(event.target.checked)} />
-          Show the status bar along the bottom
+          {t("settings.showTheStatusBar")}
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={showThumbnails} onChange={(event) => setShowThumbnails(event.target.checked)} />
-          Show thumbnails of videos
+          {t("settings.showThumbnailsOfVideos")}
         </label>
       </Card>
       {showFooter && <FooterItems />}
@@ -269,7 +269,7 @@ function FooterItems() {
     setItems(next);
   };
   return (
-    <Card title="Status bar" help="Which items the bar along the bottom shows, left to right. IP address and time start off, so screenshots give neither away. Showing the IP address asks an outside service which address this host connects from.">
+    <Card title={t("settings.statusBar")} help="Which items the bar along the bottom shows, left to right. IP address and time start off, so screenshots give neither away. Showing the IP address asks an outside service which address this host connects from.">
       <ul className="flex max-w-md flex-col">
         {items.map((entry, at) => (
           <li key={entry.item} className="flex items-center gap-2 border-b border-border-subtle py-1 text-sm last:border-0">

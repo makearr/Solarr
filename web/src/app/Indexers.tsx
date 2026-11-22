@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -104,7 +105,7 @@ export function Indexers() {
         <h2 className="text-sm font-medium">Connected, by priority</h2>
         <button
           type="button"
-          aria-label="What priority means"
+          aria-label={t("indexers.whatPriorityMeans")}
           aria-expanded={explainPriority}
           onClick={() => setExplainPriority(!explainPriority)}
           className="rounded-full text-ink-muted hover:text-ink"
@@ -122,7 +123,7 @@ export function Indexers() {
       )}
 
       {indexers.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-      {indexers.error !== null && <p className="text-sm text-danger">Indexers could not be read.</p>}
+      {indexers.error !== null && <p className="text-sm text-danger">{t("indexers.indexersCouldNotBe")}</p>}
 
       {indexers.data && indexers.data.length > 0 ? (
         <ul className="flex flex-col gap-2">
@@ -202,7 +203,7 @@ export function Indexers() {
                     <button type="button" onClick={() => setDismissed([...dismissed, key])} className="hover:text-ink">
                       Not now
                     </button>
-                    {addCompanion.isError && <span className="text-danger">It could not be added.</span>}
+                    {addCompanion.isError && <span className="text-danger">{t("indexers.itCouldNotBe")}</span>}
                   </span>
                 );
               })()}
@@ -218,7 +219,7 @@ export function Indexers() {
       ) : (
         !indexers.isLoading && (
           <p className="rounded-lg border border-border-subtle bg-surface p-3 text-sm text-ink-muted">
-            No indexer is configured.
+            {t("indexers.noIndexerIsConfigured")}
           </p>
         )
       )}
@@ -230,7 +231,7 @@ export function Indexers() {
       )}
 
       <details className="rounded-lg border border-border-subtle bg-surface p-3">
-        <summary className="cursor-pointer text-sm">Add one indexer by hand</summary>
+        <summary className="cursor-pointer text-sm">{t("indexers.addOneIndexerBy")}</summary>
         <div className="mt-3">
           <AddIndexer onAdded={invalidate} expert={expert} />
         </div>
@@ -512,7 +513,7 @@ function Proxies() {
             </span>
           </li>
         ))}
-        {proxies.data?.length === 0 && <li className="text-ink-muted">None yet. Prowlarr's can be synced from its connection.</li>}
+        {proxies.data?.length === 0 && <li className="text-ink-muted">{t("indexers.noneYetProwlarrS")}</li>}
       </ul>
       {remove.isError && <p className="mt-1 text-xs text-danger">{(remove.error as { detail?: string }).detail ?? "It could not be removed."}</p>}
       <form
@@ -573,7 +574,7 @@ function UpstreamKey({ indexer, onSaved }: { indexer: Indexer; onSaved: () => vo
         onClick={() => use.mutate()}
         className="rounded-md border border-border-subtle px-2 py-0.5 text-ink hover:border-accent disabled:opacity-50"
       >
-        Use it directly
+        {t("indexers.useItDirectly")}
       </button>
       {use.isError && <span className="text-danger">{(use.error as { detail?: string }).detail ?? "It could not be changed."}</span>}
     </span>

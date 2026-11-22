@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
@@ -147,10 +148,10 @@ export function ArrSyncOptions({
     <section className="flex flex-col gap-2 rounded-md border border-border-subtle bg-canvas p-3 text-xs">
       <h3 className="font-medium text-ink">Import from {instance.name}</h3>
       <fieldset className="flex flex-col gap-1">
-        <legend className="mb-1 text-ink-muted">What to bring in</legend>
+        <legend className="mb-1 text-ink-muted">{t("arrSyncOptions.whatToBringIn")}</legend>
         <label className="flex items-center gap-1.5">
           <input type="radio" name={`arr-mode-${instance.id}`} checked={!monitoringOnly} onChange={() => setMonitoringOnly(false)} />
-          <span title="Bring in what the *Arr holds, as chosen below: its root folders, its items and how its paths read here.">Items and settings</span>
+          <span title="Bring in what the *Arr holds, as chosen below: its root folders, its items and how its paths read here.">{t("arrSyncOptions.itemsAndSettings")}</span>
         </label>
         <label className="flex items-center gap-1.5">
           <input type="radio" name={`arr-mode-${instance.id}`} checked={monitoringOnly} onChange={() => setMonitoringOnly(true)} />
@@ -158,7 +159,7 @@ export function ArrSyncOptions({
         </label>
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={indexers} onChange={(event) => setIndexers(event.target.checked)} />
-          <span title="Copy its Newznab and Torznab indexers, switched on or off as they are there.">Indexers</span>
+          <span title={t("arrSyncOptions.copyItsNewznabAnd")}>Indexers</span>
         </label>
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={downloadClients} onChange={(event) => setDownloadClients(event.target.checked)} />
@@ -171,13 +172,13 @@ export function ArrSyncOptions({
         <input type="checkbox" checked={importFolders} onChange={(event) => setImportFolders(event.target.checked)} />
         <span title="Add the *Arr's root folders to the library chosen here and scan them.">Libraries</span>
         <select
-          aria-label="Into which library"
+          aria-label={t("arrSyncOptions.intoWhichLibrary")}
           value={libraryId ?? ""}
           disabled={!importFolders}
           onChange={(event) => setLibraryId(event.target.value ? Number(event.target.value) : undefined)}
           className={input}
         >
-          <option value="">Choose a library</option>
+          <option value="">{t("arrSyncOptions.chooseALibrary")}</option>
           {appLibraries.map((library) => (
             <option key={library.id} value={library.id}>
               {libraryLabel(library)}
@@ -191,7 +192,7 @@ export function ArrSyncOptions({
       )}
       <label className="flex items-center gap-2">
         Try it on the first
-        <input type="number" min={0} aria-label="How many items to try" placeholder="all" value={limit}
+        <input type="number" min={0} aria-label={t("arrSyncOptions.howManyItemsTo")} placeholder="all" value={limit}
           onChange={(event) => setLimit(event.target.value)} className={`${input} w-16`} />
         items only
       </label>
@@ -206,13 +207,13 @@ export function ArrSyncOptions({
             <span className="text-ink-muted">→</span>
             <input className={input} placeholder={`/mnt/media${words.path}`} value={entry.to}
               onChange={(event) => setRewrites(rewrites.map((old, i) => (i === index ? { ...old, to: event.target.value } : old)))} />
-            <button type="button" aria-label="Remove this path" onClick={() => setRewrites(rewrites.filter((_, i) => i !== index))} className={button}>
+            <button type="button" aria-label={t("arrSyncOptions.removeThisPath")} onClick={() => setRewrites(rewrites.filter((_, i) => i !== index))} className={button}>
               <X aria-hidden className="size-3" />
             </button>
           </div>
         ))}
         <button type="button" onClick={() => setRewrites([...rewrites, { from: "", to: "" }])} className={`${button} flex w-fit items-center gap-1`}>
-          <Plus aria-hidden className="size-3" /> Add a path
+          <Plus aria-hidden className="size-3" /> {t("arrConnectionTools.addAPath")}
         </button>
       </div>
       <div className="flex flex-wrap items-center gap-3">
@@ -229,8 +230,8 @@ export function ArrSyncOptions({
           Albums
           <select value={albums} onChange={(event) => setAlbums(event.target.value as typeof albums)} className={input}>
             <option value="all">All</option>
-            <option value="missing">Missing tracks in Lidarr</option>
-            <option value="complete">Complete in Lidarr</option>
+            <option value="missing">{t("arrConnectionTools.missingTracksInLidarr")}</option>
+            <option value="complete">{t("arrConnectionTools.completeInLidarr")}</option>
           </select>
         </label>
         )}

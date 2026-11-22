@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { RepeatPassword, passwordReady } from "./NewPassword";
 import { DefaultLanguagesEditor } from "./DefaultLanguages";
 import { TargetChoiceField, useTargetChoice } from "./LibraryTargetChoice";
@@ -38,16 +39,16 @@ export function Setup({ onDone }: { onDone: () => void }) {
   });
 
   if (status.isPending) return <Centered>Checking what still needs doing…</Centered>;
-  if (status.isError) return <Centered>Could not reach the server.</Centered>;
+  if (status.isError) return <Centered>{t("about.unreachable")}</Centered>;
 
   return (
     <Centered>
       <div className="w-full max-w-md space-y-6">
         <header className="space-y-1">
           <img src="/favicon.svg" alt="" className="mb-3 size-16" />
-          <h1 className="text-lg font-semibold tracking-tight">Set up Solarr</h1>
+          <h1 className="text-lg font-semibold tracking-tight">{t("setup.setUpSolarr")}</h1>
           <p className="text-sm text-ink-muted">
-            Four steps. You can skip any of them and change it later.
+            {t("setup.fourStepsYouCan")}
           </p>
         </header>
 
@@ -282,7 +283,7 @@ function ConnectArr({
           <input
             className={inputStyle}
             value={name}
-            placeholder="Home Lidarr"
+            placeholder={t("arrImport.homeLidarr")}
             autoComplete="off"
             onChange={(event) => setName(event.target.value)}
           />
@@ -357,7 +358,7 @@ function ConnectArr({
             {outcome.rootFolderErrors.map((message, index) => (
               <p key={index}>{message}</p>
             ))}
-            <p>Connected regardless -- fix the rest from Settings, or add the folder manually next.</p>
+            <p>{t("setup.connectedRegardlessFixThe")}</p>
           </div>
         )}
 
@@ -377,7 +378,7 @@ function ConnectArr({
             </button>
           ) : (
             <button type="button" onClick={onSkip} className={quietButtonStyle}>
-              Skip for now
+              {t("setup.skipForNow")}
             </button>
           )}
         </div>
@@ -593,7 +594,7 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
             {add.isPending ? "Checking…" : "Add folder"}
           </button>
           <button type="button" onClick={onSkip} className={quietButtonStyle}>
-            Skip for now
+            {t("setup.skipForNow")}
           </button>
         </div>
       </form>

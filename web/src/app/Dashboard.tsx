@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Plus, XCircle } from "lucide-react";
@@ -101,7 +102,7 @@ export function Dashboard() {
                            focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
                 <Plus aria-hidden className="size-4" />
-                Add to library
+                {t("addAnywhere.addToLibrary")}
               </Link>
             )}
             <Link
@@ -116,7 +117,7 @@ export function Dashboard() {
         </section>
 
         {checks && checks.length > 0 && (
-          <Section title="Needs attention">
+          <Section title={t("dashboard.needsAttention")}>
             <ul className="flex flex-col gap-1">
               {checks.map((check) => (
                 <li
@@ -158,11 +159,11 @@ export function Dashboard() {
           <DashboardDownloads />
         </Section>
 
-        <Section title="Recently added">
+        <Section title={t("dashboard.recentlyAdded")}>
           {recent.isLoading && <Note>Loading…</Note>}
-          {recent.error != null && <Note>Recently added could not be read.</Note>}
+          {recent.error != null && <Note>{t("dashboard.recentlyAddedCouldNot")}</Note>}
           {recent.data && recent.data.items.length === 0 && (
-            <Note>Nothing yet. Imported releases show up here as they land.</Note>
+            <Note>{t("dashboard.nothingYetImportedReleases")}</Note>
           )}
           {recent.data && recent.data.items.length > 0 && (
             <ul className="grid grid-cols-3 gap-4 sm:grid-cols-5">
@@ -202,7 +203,7 @@ export function Dashboard() {
 
         {summary.isLoading && <Note>Loading…</Note>}
         {(summary.error !== null || !summary.data) && !summary.isLoading && (
-          <Note>The status panels could not be read.</Note>
+          <Note>{t("dashboard.theStatusPanelsCould")}</Note>
         )}
         {summary.data && <StatusPanels summary={summary.data} />}
       </div>

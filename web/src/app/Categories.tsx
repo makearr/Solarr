@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -101,8 +102,8 @@ export function Categories() {
 
   return (
     <>
-    <Card title="Default languages" help="What a library you add prefers to hear. Each library keeps its own language, set in its row below or on its Quality page; no quality profile is needed."><DefaultLanguagesEditor /></Card>
-    <Card title="Every library" help="A library holds one or more kinds of media (Anime: series and movies), each kind in its own root folders with its own quality, naming and searching; name, priority, maximum rating and access are the library's.">
+    <Card title={t("categories.defaultLanguages")} help="What a library you add prefers to hear. Each library keeps its own language, set in its row below or on its Quality page; no quality profile is needed."><DefaultLanguagesEditor /></Card>
+    <Card title={t("categories.everyLibrary")} help="A library holds one or more kinds of media (Anime: series and movies), each kind in its own root folders with its own quality, naming and searching; name, priority, maximum rating and access are the library's.">
       {categories.data && categories.data.length > 0 ? (
         <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
           {libraryOrder(categories.data).map((category) =>
@@ -145,7 +146,7 @@ export function Categories() {
         </ul>
       ) : (
         <p className="rounded-lg border border-border-subtle bg-surface p-3 text-xs text-ink-muted">
-          No category is configured yet.
+          {t("categories.noCategoryIsConfigured")}
         </p>
       )}
 
@@ -184,7 +185,7 @@ function AddLibraryType({ libraryId, held, disabled }: { libraryId: number; held
   });
   return (
     <select
-      aria-label="Also holds"
+      aria-label={t("categories.alsoHolds")}
       value=""
       disabled={add.isPending || disabled || missing.length === 0}
       onChange={(event) => event.target.value && add.mutate(event.target.value)}
@@ -336,7 +337,7 @@ export function EditCategoryForm({
 
   if (detail.isLoading) return <p className="text-xs text-ink-muted">Loading…</p>;
   if (detail.error !== null || !detail.data) {
-    return <p className="text-xs text-danger">This library could not be read.</p>;
+    return <p className="text-xs text-danger">{t("categories.thisLibraryCouldNot")}</p>;
   }
 
   return (
@@ -513,7 +514,7 @@ function EditCategoryFields({
         {info?.ratings && !isFurtherType && maxAge !== null && (
           <label className="flex items-center gap-2 self-end pb-2 text-sm">
             <input type="checkbox" checked={allowUnrated} onChange={(event) => setAllowUnrated(event.target.checked)} />
-            Also allow unrated
+            {t("categories.alsoAllowUnrated")}
           </label>
         )}
       </div>

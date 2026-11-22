@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -70,7 +71,7 @@ function ExclusionPatterns() {
 
   return (
     <Card
-      title="Unwanted files"
+      title={t("unwantedFiles.unwantedFiles")}
       help="A file shaped like this is not media: by name or extension, never by content. Shipped defaults stay editable and removable, the same as anything added here."
     >
       {patterns.data && patterns.data.length > 0 ? (
@@ -87,12 +88,12 @@ function ExclusionPatterns() {
         </ul>
       ) : (
         <p className="rounded-lg border border-border-subtle bg-surface p-3 text-xs text-ink-muted">
-          No pattern is configured.
+          {t("unwantedFiles.noPatternIsConfigured")}
         </p>
       )}
 
       {(update.isError || remove.isError) && (
-        <p className="text-xs text-danger">That change was refused.</p>
+        <p className="text-xs text-danger">{t("importLists.refused")}</p>
       )}
 
       <AddPattern onAdded={invalidate} />
@@ -211,7 +212,7 @@ function AddPattern({ onAdded }: { onAdded: () => void }) {
         <input
           className={inputStyle}
           value={note}
-          placeholder="Why this pattern exists"
+          placeholder={t("unwantedFiles.whyThisPatternExists")}
           autoComplete="off"
           onChange={(event) => setNote(event.target.value)}
         />
@@ -225,7 +226,7 @@ function AddPattern({ onAdded }: { onAdded: () => void }) {
       </Button>
       {create.isError && (
         <p className="w-full text-xs text-danger">
-          That pattern could not be created. Check the pattern and action are valid.
+          {t("unwantedFiles.thatPatternCouldNot")}
         </p>
       )}
     </form>
@@ -251,7 +252,7 @@ function BlockedContent() {
 
   return (
     <Card
-      title="Blocked content"
+      title={t("unwantedFiles.blockedContent")}
       help={'Bytes that never enter the library again, keyed on content hashes, never on a filename. Made by "Remove and block" on a file.'}
     >
       {blocked.data && blocked.data.length > 0 ? (
@@ -267,11 +268,11 @@ function BlockedContent() {
         </ul>
       ) : (
         <p className="rounded-lg border border-border-subtle bg-surface p-3 text-xs text-ink-muted">
-          Nothing is blocked.
+          {t("unwantedFiles.nothingIsBlocked")}
         </p>
       )}
 
-      {remove.isError && <p className="text-xs text-danger">That block could not be removed.</p>}
+      {remove.isError && <p className="text-xs text-danger">{t("unwantedFiles.thatBlockCouldNot")}</p>}
     </Card>
   );
 }

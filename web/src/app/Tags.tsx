@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
@@ -170,7 +171,7 @@ export function Tags() {
       title="Tags"
       help="Genres are tags in a tree per kind of media: choosing Rock in a library's Tags filter finds Metal too. Providers' genres land in it by name or alias; yours are never removed by a refresh. Your tags are labels of your own outside any tree. A refresh adds tags to an item but never removes one; delete a tag here to remove it. Press a tag to see its items, the heart to make it a favorite."
     >
-      <div className="flex flex-wrap items-center gap-1" role="tablist" aria-label="Genre tree">
+      <div className="flex flex-wrap items-center gap-1" role="tablist" aria-label={t("tags.genreTree")}>
         {[...genreTrees, ["", "Your tags"] as [string, string]].map(([key, label]) => (
           <button
             key={key || "free"}
@@ -201,7 +202,7 @@ export function Tags() {
             create.mutate(adding);
           }}
         >
-          <input autoFocus value={adding.name} onChange={(event) => setAdding({ ...adding, name: event.target.value })} aria-label="New tag name" placeholder="Name" className={`min-w-0 flex-1 ${field}`} />
+          <input autoFocus value={adding.name} onChange={(event) => setAdding({ ...adding, name: event.target.value })} aria-label={t("tags.newTagName")} placeholder="Name" className={`min-w-0 flex-1 ${field}`} />
           {genreTree !== "" && (
             <select value={adding.parentId} onChange={(event) => setAdding({ ...adding, parentId: Number(event.target.value) })} aria-label="Under" className={field}>
               <option value={0}>(top)</option>
@@ -217,7 +218,7 @@ export function Tags() {
         </form>
       )}
       {tree.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-      {tree.error !== null && !tree.isLoading && <p className="text-sm text-danger">The tags could not be read.</p>}
+      {tree.error !== null && !tree.isLoading && <p className="text-sm text-danger">{t("tags.theTagsCouldNot")}</p>}
       {tree.data && rows.length === 0 && (
         <p className="text-sm text-ink-muted">{genreTree === "" ? favoritesOnly ? "No favorite tags here." : "No tags of your own yet. Add one here or from an Edit dialog." : "No genres yet; a refresh brings the providers'."}</p>
       )}
@@ -261,7 +262,7 @@ export function Tags() {
                     <button
                       type="button"
                       disabled={block.isPending}
-                      title="Delete it and never let it come back, not from a provider and not from anyone's edit"
+                      title={t("tags.deleteItAndNever")}
                       onClick={() => {
                         if (confirm(`Block the tag "${tag.name}"? It comes off ${tag.works} ${tag.works === 1 ? "item" : "items"} and is not created again until you unblock it below.`)) {
                           block.mutate(tag.id);
@@ -283,8 +284,8 @@ export function Tags() {
           {(save.error ?? create.error)?.message === "conflict" ? "Another tag already has that name, or it cannot go there." : "That could not be saved."}
         </p>
       )}
-      {remove.isError && <p className="text-xs text-danger">That could not be deleted.</p>}
-      {block.isError && <p className="text-xs text-danger">That could not be blocked.</p>}
+      {remove.isError && <p className="text-xs text-danger">{t("tags.thatCouldNotBe")}</p>}
+      {block.isError && <p className="text-xs text-danger">{t("tags.thatCouldNotBe2")}</p>}
       {administrator && <BlockedTags />}
       {openTag && <TagItems tag={openTag} />}
     </Card>
@@ -304,8 +305,8 @@ function TagItems({ tag }: { tag: TagNode }) {
     <section className="flex max-w-3xl flex-col gap-1" aria-label={`Items tagged ${tag.name}`}>
       <h3 className="text-sm font-medium">Items tagged {tag.name}</h3>
       {items.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-      {items.isError && <p className="text-sm text-danger">The items could not be read.</p>}
-      {items.isSuccess && rows.length === 0 && <p className="text-sm text-ink-muted">Nothing carries this tag yet.</p>}
+      {items.isError && <p className="text-sm text-danger">{t("tags.theItemsCouldNot")}</p>}
+      {items.isSuccess && rows.length === 0 && <p className="text-sm text-ink-muted">{t("tags.nothingCarriesThisTag")}</p>}
       <ul className="flex flex-col rounded-md border border-border-subtle">
         {rows.map((work) => (
           <li key={work.id} className="flex items-center gap-3 border-b border-border-subtle px-2 py-0.5 text-sm last:border-0">
@@ -339,9 +340,9 @@ function BlockedTags() {
   });
   const rows = blocked.data ?? [];
   return (
-    <section className="flex max-w-3xl flex-col gap-1" aria-label="Blocked tags">
-      <h3 className="text-sm font-medium">Blocked tags</h3>
-      {blocked.isSuccess && rows.length === 0 && <p className="text-sm text-ink-muted">No tag is blocked. Block puts a tag here.</p>}
+    <section className="flex max-w-3xl flex-col gap-1" aria-label={t("tags.blockedTags")}>
+      <h3 className="text-sm font-medium">{t("tags.blockedTags")}</h3>
+      {blocked.isSuccess && rows.length === 0 && <p className="text-sm text-ink-muted">{t("tags.noTagIsBlocked")}</p>}
       <ul className="flex flex-col rounded-md border border-border-subtle">
         {rows.map((tag) => (
           <li key={`${tag.genre_tree}/${tag.name}`} className="flex items-center gap-3 border-b border-border-subtle px-2 py-0.5 text-sm last:border-0">
@@ -353,7 +354,7 @@ function BlockedTags() {
           </li>
         ))}
       </ul>
-      {unblock.isError && <p className="text-xs text-danger">That could not be unblocked.</p>}
+      {unblock.isError && <p className="text-xs text-danger">{t("tags.thatCouldNotBe3")}</p>}
     </section>
   );
 }

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
@@ -153,15 +154,15 @@ function TargetFields({ target, onChange }: { target: QualityTarget; onChange: (
           any={audioOnly || documentOnly ? null : "any"}
         />
       </Group>
-      <Group title="Over and under the target">
-        <label className="flex items-start gap-2 text-sm" title="When upgrading a file you have, a release above the target ranks before one clearly below it">
+      <Group title={t("qualityTargets.overAndUnderThe")}>
+        <label className="flex items-start gap-2 text-sm" title={t("qualityTargets.whenUpgradingAFile")}>
           <input type="checkbox" className="mt-1" checked={target.prefer_over ?? false} onChange={(event) => set({ prefer_over: event.target.checked })} />
           <span>
             Prefer over
             <span className="block text-xs text-ink-muted">A new item always prefers a download a little above the target to one below it (transcoding can bring quality down, never up), while a number just under the target still counts as on it. Tick this to apply the same preference when upgrading a file you already have.</span>
           </span>
         </label>
-        <label className="flex items-start gap-2 text-sm" title="Everything below the target only wins when nothing at or above it exists">
+        <label className="flex items-start gap-2 text-sm" title={t("qualityTargets.everythingBelowTheTarget")}>
           <input type="checkbox" className="mt-1" checked={target.ignore_below ?? false} onChange={(event) => set({ ignore_below: event.target.checked })} />
           <span>
             Ignore everything below the target while anything at or above it exists
@@ -294,8 +295,8 @@ function TargetForm({ initial, onDone, onCancel }: { initial?: QualityTarget; on
           Short name (the title in lists)
           <input value={target.label ?? ""} placeholder="e.g. Space conscious" onChange={(event) => setTarget({ ...target, label: event.target.value })} className={`${inputStyle} w-44`} />
         </label>
-        <button type="button" onClick={() => setTarget({ ...target, name: nameFromSpecs(target) })} className={smallButton} title="Name it after what it asks for">
-          Name from specs
+        <button type="button" onClick={() => setTarget({ ...target, name: nameFromSpecs(target) })} className={smallButton} title={t("qualityTargets.nameItAfterWhat")}>
+          {t("qualityTargets.nameFromSpecs")}
         </button>
         {fitting.length > 0 && (
           <>
@@ -316,7 +317,7 @@ function TargetForm({ initial, onDone, onCancel }: { initial?: QualityTarget; on
               className={smallButton}
               title="Fill in the settings that suit the profile; you can change every one afterwards"
             >
-              Apply its recommended settings
+              {t("qualityTargets.applyItsRecommendedSettings")}
             </button>
           </>
         )}
@@ -396,7 +397,7 @@ export function QualityTargetsSection() {
   );
   return (
     <Card
-      title="Target qualities"
+      title={t("qualityTargets.targetQualities")}
       help="The goal of a library, and the one setting it needs: the quality you would pick if you could choose freely, and what a later transcode aims for. Pick one per library under Settings > Libraries or its own Quality page. Shipped presets are here to use or change; a file or release is judged by how near it is."
       toggle={
         <button type="button" onClick={() => setEditing("new")} className="flex shrink-0 items-center gap-1 rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted hover:text-ink">
@@ -407,7 +408,7 @@ export function QualityTargetsSection() {
     >
       {remove.isError && !refused && <p className="text-xs text-danger">{(remove.error as { detail?: string }).detail ?? "That target could not be removed."}</p>}
       {editing === "new" && <TargetForm onDone={done} onCancel={() => setEditing(null)} />}
-      {targets.data && groups.length === 0 && editing !== "new" && <p className="text-xs text-ink-muted">No targets yet.</p>}
+      {targets.data && groups.length === 0 && editing !== "new" && <p className="text-xs text-ink-muted">{t("qualityTargets.noTargetsYet")}</p>}
       {groups.map((group) => (
         <details key={group.family.key} open className="group flex flex-col gap-2">
           <summary className="flex cursor-pointer select-none items-baseline gap-2 text-sm font-medium text-ink focus-visible:outline-2 focus-visible:outline-accent">

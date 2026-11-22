@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { HardDrive, Pencil, Plus, X } from "lucide-react";
@@ -90,7 +91,7 @@ export function RootFolderSection() {
       </header>
 
       {roots.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-      {roots.error !== null && <p className="text-sm text-danger">Root folders could not be read.</p>}
+      {roots.error !== null && <p className="text-sm text-danger">{t("rootFolders.rootFoldersCouldNot")}</p>}
 
       {roots.data && roots.data.length > 0 ? (
         <div className="flex flex-col gap-4">
@@ -130,13 +131,13 @@ export function RootFolderSection() {
       ) : (
         !roots.isLoading && (
           <p className="rounded-lg border border-border-subtle bg-surface p-3 text-sm text-ink-muted">
-            No library root is configured.
+            {t("rootFolders.noLibraryRootIs")}
           </p>
         )
       )}
 
       {(setPolicy.isError || setOnline.isError || detachCategory.isError) && (
-        <p className="text-xs text-danger">That change was refused.</p>
+        <p className="text-xs text-danger">{t("importLists.refused")}</p>
       )}
 
       <AddRootFolder
@@ -363,7 +364,7 @@ function RootFolderCard({
         </Button>
       </RootMoveControls>
       {attached.length === 0 && (
-        <p className="text-warn">Not in any library -- nothing will place files here until it is added to one.</p>
+        <p className="text-warn">{t("rootFolders.notInAnyLibrary")}</p>
       )}
       {editingLibraryId !== undefined && attached.some((category) => category.id === editingLibraryId) && (
         <div className="rounded-md border border-border-subtle bg-canvas p-3">
@@ -641,7 +642,7 @@ function VanishedHeld({ root }: { root: RootFolder }) {
             Accept as gone…
           </button>
         )}
-        {accept.isError && <span className="text-xs text-danger">That was refused.</span>}
+        {accept.isError && <span className="text-xs text-danger">{t("rootFolders.thatWasRefused")}</span>}
       </div>
     </div>
   );

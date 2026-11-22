@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -49,7 +50,7 @@ export function DiskSettingsPage() {
         {isTierVisible(tier, "expert") ? (
           <DiskSettings />
         ) : (
-          <p className="text-sm text-ink-muted">The disk layout is an expert-tier setting. Raise your own tier on the User settings page to see it.</p>
+          <p className="text-sm text-ink-muted">{t("diskSettings.theDiskLayoutIs")}</p>
         )}
       </div>
     </div>
@@ -93,7 +94,7 @@ function DiskSettings() {
         Detected from the container's mount table and /sys; correct a group here when the guess is wrong, for example two datasets on different pools that you know share a disk.
       </p>
 
-      <Card title="Detected layout" help="Each folder Solarr uses, and the disk group it was placed in. Type the same group name on two rows to make them share a disk; clear a row to go back to the detected group.">
+      <Card title={t("diskSettings.detectedLayout")} help="Each folder Solarr uses, and the disk group it was placed in. Type the same group name on two rows to make them share a disk; clear a row to go back to the detected group.">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="text-ink-muted">
@@ -169,13 +170,13 @@ function DiskSettings() {
       </Card>
 
       <Card
-        title="Library scans"
+        title={t("diskSettings.libraryScans")}
         help="Solarr scans a root when it has reason to: right after start if the last scan is over 12 hours old, then weekly where its folders are watched, daily while its size and entry count are unchanged, every 6 hours otherwise. Changes inside watched folders are rescanned as they happen."
       >
         <label className="flex items-center gap-3 text-xs">
-          Time between scans
+          {t("diskSettings.timeBetweenScans")}
           <select
-            aria-label="Time between scans"
+            aria-label={t("diskSettings.timeBetweenScans")}
             className="rounded border border-border-subtle bg-surface px-2 py-1"
             value={SCAN_CHOICES.some((choice) => choice.hours === data.scan.interval_hours) ? data.scan.interval_hours : -1}
             disabled={setScan.isPending}
@@ -211,15 +212,15 @@ function DiskSettings() {
         </table>
       </Card>
 
-      <Card title="Inotify watches" help="Solarr watches folders for changes so it does not have to rescan; it never takes more than half of what the host allows.">
+      <Card title={t("diskSettings.inotifyWatches")} help="Solarr watches folders for changes so it does not have to rescan; it never takes more than half of what the host allows.">
         <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1 text-xs">
           <dt className="text-ink-muted">Host limit</dt>
           <dd title={RAISE_WATCHES_HELP}>{data.inotify.max_user_watches > 0 ? data.inotify.max_user_watches.toLocaleString() : "unreadable"}</dd>
           <dt className="text-ink-muted">Solarr's budget (50%)</dt>
           <dd>{data.inotify.budget_watches.toLocaleString()}</dd>
-          <dt className="text-ink-muted">Held by Solarr</dt>
+          <dt className="text-ink-muted">{t("diskSettings.heldBySolarr")}</dt>
           <dd>{data.inotify.used_by_us.toLocaleString()} of {data.inotify.directories.toLocaleString()} folders with files</dd>
-          <dt className="text-ink-muted">Recommended host limit</dt>
+          <dt className="text-ink-muted">{t("diskSettings.recommendedHostLimit")}</dt>
           <dd title={RAISE_WATCHES_HELP}>
             {data.inotify.recommended_watches.toLocaleString()}
             {data.inotify.max_user_watches > 0 && data.inotify.max_user_watches < data.inotify.recommended_watches && (

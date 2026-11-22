@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { SubTabs } from "@/ui/SubTabs";
 import { Fragment, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -122,12 +123,12 @@ export function MetadataSettings() {
           </Fragment>
         ))}
       </ul>
-      {(switchProvider.isError || patch.isError) && <p className="text-sm text-danger">That change was refused.</p>}
+      {(switchProvider.isError || patch.isError) && <p className="text-sm text-danger">{t("importLists.refused")}</p>}
     </section>
   );
   const airTimes = settings.availability_grace_hours ? (
     <Card
-          title="Air times"
+          title={t("metadataSettings.airTimes")}
           help="How long after an episode airs it is waited for before it counts as missing and is searched for: releases need a while to appear."
         >
           <GraceForm
@@ -259,7 +260,7 @@ function ProviderRow({
         {provider.can_disable ? (
           <Toggle label={provider.enabled ? "On" : "Off"} checked={provider.enabled} disabled={busy} onChange={onSwitch} />
         ) : (
-          <span className="text-xs text-ink-muted" title="Every music lookup asks one of BrainzMash, Lidarr's service and MusicBrainz">
+          <span className="text-xs text-ink-muted" title={t("metadataSettings.everyMusicLookupAsks")}>
             last music source on
           </span>
         )}
@@ -361,7 +362,7 @@ function ProviderDetails({
   const tvdb = useKeySaver("/metadata/tvdb/apikey");
   const audiodb = useKeySaver("/metadata/theaudiodb/apikey");
   const acoustid = useKeySaver("/metadata/acoustid/apikey");
-  const failed = <p className="text-xs text-danger">That key could not be stored.</p>;
+  const failed = <p className="text-xs text-danger">{t("metadataSettings.thatKeyCouldNot")}</p>;
   switch (providerKey) {
     case "brainzmash":
       return <UserAgentForm key={settings.brainzmash_user_agent} stored={settings.brainzmash_user_agent} onSave={(agent) => onPatch({ brainzmash_user_agent: agent })} busy={patching} />;
@@ -447,7 +448,7 @@ function GenericKeyForm({ provider }: { provider: Provider }) {
         </a>
         . Without a key the provider is simply not asked.
       </ApiKeyForm>
-      {save.isError && <p className="text-xs text-danger">That key could not be stored.</p>}
+      {save.isError && <p className="text-xs text-danger">{t("metadataSettings.thatKeyCouldNot")}</p>}
     </>
   );
 }
@@ -474,7 +475,7 @@ function ProviderTest() {
       >
         {test.isPending ? "Testing..." : "Test the series providers"}
       </button>
-      {test.isError && <span className="text-danger">The test could not run.</span>}
+      {test.isError && <span className="text-danger">{t("indexerCatalog.theTestCouldNot")}</span>}
       {(providers.data ?? []).map((provider) => {
         const result = results.get(provider.id);
         return result ? (

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -108,9 +109,9 @@ export function LibraryNaming() {
   const [builderSlot, setBuilderSlot] = useState<string | undefined>();
   const inputs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  if (id === undefined) return <Message>No library in the URL.</Message>;
+  if (id === undefined) return <Message>{t("libraryFiles.noLibrary")}</Message>;
   if (naming.isLoading || !draft) return <Message>Loading…</Message>;
-  if (naming.error !== null || !naming.data) return <Message>This library's naming could not be read.</Message>;
+  if (naming.error !== null || !naming.data) return <Message>{t("libraryNaming.thisLibrarySNaming")}</Message>;
 
   const scheme = naming.data.scheme;
   const isTV = scheme.slots.some((slot) => slot.key === "standard_episode");
@@ -164,7 +165,7 @@ export function LibraryNaming() {
           onChange={(checked) => setDraft({ ...draft, replace_illegal_characters: checked })}
         />
         <label className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-          <span className="w-48 shrink-0">Rename Existing Files</span>
+          <span className="w-48 shrink-0">{t("libraryNaming.renameExistingFiles")}</span>
           <select
             value={draft.rename_existing ?? "on_request"}
             onChange={(event) => setDraft({ ...draft, rename_existing: event.target.value as RenameExisting })}
@@ -197,7 +198,7 @@ export function LibraryNaming() {
               ))}
             </select>
             <span className="text-xs text-ink-muted">
-              Applies to the whole name, so a colon you type in a format is replaced too.
+              {t("libraryNaming.appliesToTheWhole")}
             </span>
           </label>
         )}
@@ -240,7 +241,7 @@ export function LibraryNaming() {
                 </option>
               ))}
             </select>
-            <span className="text-xs text-ink-muted">How one file covering several episodes writes its numbers.</span>
+            <span className="text-xs text-ink-muted">{t("libraryNaming.howOneFileCovering")}</span>
           </label>
         )}
 
@@ -264,7 +265,7 @@ export function LibraryNaming() {
               <button
                 type="button"
                 aria-label={`Tokens for ${slot.label}`}
-                title="Every token, explained"
+                title={t("libraryNaming.everyTokenExplained")}
                 onClick={() => setBuilderSlot(slot.key)}
                 className="shrink-0 rounded-md border border-border-subtle px-2 text-ink-muted hover:text-ink"
               >
@@ -553,7 +554,7 @@ function ApplyToLibrary({ categoryId, unsaved }: { categoryId: number; unsaved: 
   return (
     <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
       {/* Keyed: a plan belongs to one library, and another library's tab reuses this page. */}
-      <RenamePlanner key={categoryId} title={<h2 className="text-sm font-medium">Apply to library</h2>} categoryId={categoryId} unsaved={unsaved} />
+      <RenamePlanner key={categoryId} title={<h2 className="text-sm font-medium">{t("libraryNaming.applyToLibrary")}</h2>} categoryId={categoryId} unsaved={unsaved} />
     </section>
   );
 }

@@ -26,7 +26,7 @@ export function LibraryHealth() {
 
   if (health.isLoading) return <Placeholder>Loading…</Placeholder>;
   if (health.error !== null || !health.data) {
-    return <Placeholder>Library health could not be read.</Placeholder>;
+    return <Placeholder>{t("libraryHealth.libraryHealthCouldNot")}</Placeholder>;
   }
   const report = health.data;
 
@@ -41,17 +41,17 @@ export function LibraryHealth() {
           </p>
         </header>
 
-        <Section title="Unprobed files" count={report.unprobed_count}>
+        <Section title={t("libraryHealth.unprobedFiles")} count={report.unprobed_count}>
           {report.unprobed_count === 0 ? (
-            <Note>Every file has measured attributes.</Note>
+            <Note>{t("libraryHealth.everyFileHasMeasured")}</Note>
           ) : (
             <FileList files={report.unprobed_files} />
           )}
         </Section>
 
-        <Section title="Unmatched files" count={report.unmatched_count}>
+        <Section title={t("libraryHealth.unmatchedFiles")} count={report.unmatched_count}>
           {report.unmatched_count === 0 ? (
-            <Note>Nothing is waiting for manual identification.</Note>
+            <Note>{t("libraryHealth.nothingIsWaitingFor")}</Note>
           ) : (
             <Link to="/unidentified" className="text-xs text-accent underline underline-offset-2">
               Review in the identification queue →
@@ -59,33 +59,33 @@ export function LibraryHealth() {
           )}
         </Section>
 
-        <Section title="Incomplete works" count={report.incomplete_count}>
+        <Section title={t("libraryHealth.incompleteWorks")} count={report.incomplete_count}>
           {report.incomplete_count === 0 ? (
-            <Note>Every monitored work has everything it wants.</Note>
+            <Note>{t("libraryHealth.everyMonitoredWorkHas")}</Note>
           ) : (
             <IncompleteWorkList works={report.incomplete_works} />
           )}
         </Section>
 
-        <Section title="Roots near reserve" count={report.roots_near_reserve.length}>
+        <Section title={t("libraryHealth.rootsNearReserve")} count={report.roots_near_reserve.length}>
           {report.roots_near_reserve.length === 0 ? (
-            <Note>No root is close to its own configured reserve.</Note>
+            <Note>{t("libraryHealth.noRootIsClose")}</Note>
           ) : (
             <RootList roots={report.roots_near_reserve} />
           )}
         </Section>
 
-        <Section title="Blocked hashes present" count={report.blocked_present.length}>
+        <Section title={t("libraryHealth.blockedHashesPresent")} count={report.blocked_present.length}>
           {report.blocked_present.length === 0 ? (
-            <Note>No blocked hash was found still sitting in the library.</Note>
+            <Note>{t("libraryHealth.noBlockedHashWas")}</Note>
           ) : (
             <BlockedList entries={report.blocked_present} />
           )}
         </Section>
 
-        <Section title="Categories affected by an offline root" count={report.categories_offline_files.length}>
+        <Section title={t("libraryHealth.categoriesAffectedByAn")} count={report.categories_offline_files.length}>
           {report.categories_offline_files.length === 0 ? (
-            <Note>No category currently has files on an offline root.</Note>
+            <Note>{t("libraryHealth.noCategoryCurrentlyHas")}</Note>
           ) : (
             <CategoryOfflineList categories={report.categories_offline_files} />
           )}
