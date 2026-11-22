@@ -249,21 +249,21 @@ ORDER BY w.sort_title, w.id
 LIMIT sqlc.arg(page_size);
 
 -- name: CreateWorkPart :one
-INSERT INTO work_part (work_id, media_ref, sort_key, title, runtime_ms, date, monitored)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace;
+INSERT INTO work_part (work_id, media_ref, sort_key, title, runtime_ms, date, monitored, optional)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace, optional;
 
 -- name: GetWorkPart :one
-SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace, optional
 FROM work_part WHERE id = ?;
 
 -- name: FindWorkPart :one
-SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace, optional
 FROM work_part WHERE work_id = ? AND media_ref = ?;
 
 -- Ordered by the module's sort key. Core never parses media_ref to order parts.
 -- name: ListWorkParts :many
-SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace, optional
 FROM work_part WHERE work_id = ? ORDER BY sort_key, id;
 
 -- What a SET requires follows the monitored parts, so unmonitoring an episode
@@ -287,7 +287,7 @@ ON CONFLICT (provider, external_id, part_id) DO UPDATE SET
 -- One recording appears on many albums, so this returns every part sharing the
 -- identifier. That is the cross-album duplicate question (ADR-35).
 -- name: FindPartsByExternalID :many
-SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored, p.available_at, p.available_confidence, p.available_basis, p.available_grace
+SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored, p.available_at, p.available_confidence, p.available_basis, p.available_grace, p.optional
 FROM work_part p
 JOIN work_part_external_id e ON e.part_id = p.id
 WHERE e.provider = ? AND e.external_id = ?
@@ -325,7 +325,7 @@ ORDER BY part_id, scheme, provider;
 -- Anime absolute numbering: episode 137 of a series resolves to the part that
 -- aired numbers do not name (ADR-41). Scoped to the work, or two series collide.
 -- name: FindPartByAltNumber :one
-SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored, p.available_at, p.available_confidence, p.available_basis, p.available_grace
+SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored, p.available_at, p.available_confidence, p.available_basis, p.available_grace, p.optional
 FROM work_part p
 JOIN alt_numbering a ON a.part_id = p.id
 WHERE p.work_id = sqlc.arg(work_id)
@@ -558,7 +558,7 @@ ORDER BY p.date;
 
 -- One page of a work's parts, in one group (its parts "<group>:..."), or all of them with group ''.
 -- name: ListWorkPartsPage :many
-SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace, optional
 FROM work_part
 WHERE work_id = sqlc.arg(work_id)
   AND (CAST(sqlc.arg(group_ref) AS TEXT) = '' OR substr(media_ref, 1, length(CAST(sqlc.arg(group_ref) AS TEXT)) + 1) = CAST(sqlc.arg(group_ref) AS TEXT) || ':')
@@ -571,7 +571,7 @@ SELECT p.id AS part_id, p.work_id, w.canonical_title AS work_title, p.media_ref,
 FROM work_part p
 JOIN work w ON w.id = p.work_id
 WHERE EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id))
-  AND p.monitored = 1
+  AND p.monitored = 1 AND p.optional = 0
   AND ((p.available_at IS NOT NULL
         AND p.available_at + COALESCE(p.available_grace, CASE p.available_confidence WHEN 'high' THEN 7200 WHEN 'medium' THEN 43200 ELSE 129600 END) <= sqlc.arg(now))
        OR (p.available_at IS NULL AND p.date IS NOT NULL

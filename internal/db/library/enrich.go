@@ -177,6 +177,8 @@ type PartIdentity struct {
 	SortKey   string
 	Title     string
 	RuntimeMs *int64
+	// Optional is a part the work may carry without owing it (a hidden pregap): matched when present, never missing.
+	Optional bool
 	// ExternalID links the resolved (or created) part to a provider id, e.g. a
 	// MusicBrainz recording MBID. Optional: not every source names one.
 	ExternalID *PartExternalID
@@ -414,12 +416,19 @@ func findOrCreatePart(ctx context.Context, queries *librarydb.Queries, workID in
 	created, err := queries.CreateWorkPart(ctx, librarydb.CreateWorkPartParams{
 		WorkID: workID, MediaRef: part.MediaRef, SortKey: part.SortKey,
 		Title: nullString(part.Title), RuntimeMs: nullInt64(part.RuntimeMs),
-		Monitored: 1,
+		Monitored: 1, Optional: optionalFlag(part.Optional),
 	})
 	if err != nil {
 		return 0, fmt.Errorf("create part: %w", err)
 	}
 	return created.ID, nil
+}
+
+func optionalFlag(optional bool) int64 {
+	if optional {
+		return 1
+	}
+	return 0
 }
 
 func nullString(s string) sql.NullString {

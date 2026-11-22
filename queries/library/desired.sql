@@ -135,13 +135,16 @@ SELECT COUNT(DISTINCT media_ref) AS covered
 FROM desired_item_file WHERE desired_item_id = ? AND role = 'primary';
 
 -- The reconciliation job compares this against present_count. Drift is
--- inevitable, so the repair path is not optional. A file whose every path a sweep found gone holds nothing.
+-- inevitable, so the repair path is not optional. A file whose every path a sweep found gone holds nothing;
+-- a file on an optional part (a pregap) is not counted, or it would stand in for a track the album lacks.
 -- name: RecomputePresentCount :exec
 UPDATE desired_item
 SET present_count = (
       SELECT COUNT(DISTINCT f.media_ref)
       FROM desired_item_file f
       WHERE f.desired_item_id = desired_item.id AND f.role = 'primary'
+        AND NOT EXISTS (SELECT 1 FROM work_part extra WHERE extra.work_id = desired_item.work_id
+                          AND extra.media_ref = f.media_ref AND extra.optional = 1)
         AND NOT (EXISTS (SELECT 1 FROM library_path gone WHERE gone.media_object_id = f.media_object_id
                            AND gone.missing_since IS NOT NULL)
                  AND NOT EXISTS (SELECT 1 FROM library_path held WHERE held.media_object_id = f.media_object_id

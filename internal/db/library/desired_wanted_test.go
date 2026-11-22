@@ -351,3 +351,35 @@ func TestSetPartsMonitored_ChangesEveryPartOfSeveralChunks(t *testing.T) {
 		t.Errorf("%d parts, %d still monitored; want 450 parts and none monitored", len(parts), monitored)
 	}
 }
+
+// A hidden pregap is recorded and matched, but a file on it never stands in for a track the album lacks.
+func TestRecordAlignment_AnOptionalPartIsNeverOwedNorCounted(t *testing.T) {
+	opened, _ := newLibrary(t)
+	desired := library.NewDesired(opened)
+	work := createWork(t, opened, "music", "Quiet Harbour")
+	createPart(t, opened, work.ID, "disc1:track1", "00010001", "Track One")
+	createPart(t, opened, work.ID, "disc1:track2", "00010002", "Track Two")
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		_, err := q.CreateWorkPart(ctx, librarydb.CreateWorkPartParams{
+			WorkID: work.ID, MediaRef: "disc1:track0", SortKey: "00010000", Monitored: 1, Optional: 1,
+		})
+		return err
+	})
+	item, err := desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{WorkID: work.ID, CategoryID: 1, ProfileID: 1, Monitored: true})
+	if err != nil {
+		t.Fatalf("EnsureAlbumItem: %v", err)
+	}
+	first, pregap := createObject(t, opened, "quick-1", 4096), createObject(t, opened, "quick-0", 1024)
+	files := []library.AlignedFile{{MediaObjectID: first.ID, MediaRef: "disc1:track1"}, {MediaObjectID: pregap.ID, MediaRef: "disc1:track0"}}
+	if err := desired.RecordAlignment(t.Context(), item.ID, work.ID, files, 1); err != nil {
+		t.Fatalf("RecordAlignment: %v", err)
+	}
+
+	got, err := librarydb.New(opened.Read()).GetDesiredItem(t.Context(), item.ID)
+	if err != nil {
+		t.Fatalf("GetDesiredItem: %v", err)
+	}
+	if got.RequiredCount.Int64 != 2 || got.PresentCount != 1 || got.State != "PARTIAL" {
+		t.Errorf("want required 2, present 1, PARTIAL; got required %d, present %d, %s", got.RequiredCount.Int64, got.PresentCount, got.State)
+	}
+}

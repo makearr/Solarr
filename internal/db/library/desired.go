@@ -792,6 +792,10 @@ func requiredOf(item librarydb.DesiredItem, parts []librarydb.WorkPart, now time
 		if !partInScope(part.MediaRef, item.MediaRef) {
 			continue
 		}
+		if part.Optional == 1 {
+			// A pregap is recorded and matched, but the work never owes it.
+			continue
+		}
 		scoped++
 		if part.Monitored == 1 && PartOut(part.AvailableAt.Int64, PartGrace(part.AvailableGrace, part.AvailableConfidence), part.Date.String, part.AvailableBasis, now) {
 			owed++

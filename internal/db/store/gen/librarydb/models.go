@@ -1030,6 +1030,7 @@ type WorkPart struct {
 	AvailableConfidence string
 	AvailableBasis      string
 	AvailableGrace      sql.NullInt64
+	Optional            int64
 }
 
 type WorkPartExternalID struct {

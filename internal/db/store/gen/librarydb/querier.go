@@ -1211,7 +1211,8 @@ type Querier interface {
 	// the same drift-and-repair shape RecomputeImportSessionCounts already uses.
 	RecomputePackCounts(ctx context.Context, packID int64) error
 	// The reconciliation job compares this against present_count. Drift is
-	// inevitable, so the repair path is not optional. A file whose every path a sweep found gone holds nothing.
+	// inevitable, so the repair path is not optional. A file whose every path a sweep found gone holds nothing;
+	// a file on an optional part (a pregap) is not counted, or it would stand in for a track the album lacks.
 	RecomputePresentCount(ctx context.Context, id int64) error
 	RecordAcquiredFile(ctx context.Context, arg RecordAcquiredFileParams) (AcquisitionFile, error)
 	RecordArtworkMiss(ctx context.Context, arg RecordArtworkMissParams) error

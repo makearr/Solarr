@@ -1188,7 +1188,7 @@ ON CONFLICT (work_id, media_ref) DO UPDATE SET
   available_confidence = excluded.available_confidence,
   available_basis = excluded.available_basis,
   available_grace = excluded.available_grace
-RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace
+RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace, optional
 `
 
 type UpsertWorkPartParams struct {
@@ -1235,6 +1235,7 @@ func (q *Queries) UpsertWorkPart(ctx context.Context, arg UpsertWorkPartParams) 
 		&i.AvailableConfidence,
 		&i.AvailableBasis,
 		&i.AvailableGrace,
+		&i.Optional,
 	)
 	return i, err
 }

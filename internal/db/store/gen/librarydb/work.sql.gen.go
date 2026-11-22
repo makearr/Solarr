@@ -425,9 +425,9 @@ func (q *Queries) CreateWork(ctx context.Context, arg CreateWorkParams) (Work, e
 }
 
 const createWorkPart = `-- name: CreateWorkPart :one
-INSERT INTO work_part (work_id, media_ref, sort_key, title, runtime_ms, date, monitored)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace
+INSERT INTO work_part (work_id, media_ref, sort_key, title, runtime_ms, date, monitored, optional)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace, optional
 `
 
 type CreateWorkPartParams struct {
@@ -438,6 +438,7 @@ type CreateWorkPartParams struct {
 	RuntimeMs sql.NullInt64
 	Date      sql.NullString
 	Monitored int64
+	Optional  int64
 }
 
 func (q *Queries) CreateWorkPart(ctx context.Context, arg CreateWorkPartParams) (WorkPart, error) {
@@ -449,6 +450,7 @@ func (q *Queries) CreateWorkPart(ctx context.Context, arg CreateWorkPartParams) 
 		arg.RuntimeMs,
 		arg.Date,
 		arg.Monitored,
+		arg.Optional,
 	)
 	var i WorkPart
 	err := row.Scan(
@@ -464,6 +466,7 @@ func (q *Queries) CreateWorkPart(ctx context.Context, arg CreateWorkPartParams) 
 		&i.AvailableConfidence,
 		&i.AvailableBasis,
 		&i.AvailableGrace,
+		&i.Optional,
 	)
 	return i, err
 }
@@ -577,7 +580,7 @@ func (q *Queries) FindEditionTwin(ctx context.Context, arg FindEditionTwinParams
 }
 
 const findPartByAltNumber = `-- name: FindPartByAltNumber :one
-SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored, p.available_at, p.available_confidence, p.available_basis, p.available_grace
+SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored, p.available_at, p.available_confidence, p.available_basis, p.available_grace, p.optional
 FROM work_part p
 JOIN alt_numbering a ON a.part_id = p.id
 WHERE p.work_id = ?1
@@ -609,12 +612,13 @@ func (q *Queries) FindPartByAltNumber(ctx context.Context, arg FindPartByAltNumb
 		&i.AvailableConfidence,
 		&i.AvailableBasis,
 		&i.AvailableGrace,
+		&i.Optional,
 	)
 	return i, err
 }
 
 const findPartsByExternalID = `-- name: FindPartsByExternalID :many
-SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored, p.available_at, p.available_confidence, p.available_basis, p.available_grace
+SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored, p.available_at, p.available_confidence, p.available_basis, p.available_grace, p.optional
 FROM work_part p
 JOIN work_part_external_id e ON e.part_id = p.id
 WHERE e.provider = ? AND e.external_id = ?
@@ -650,6 +654,7 @@ func (q *Queries) FindPartsByExternalID(ctx context.Context, arg FindPartsByExte
 			&i.AvailableConfidence,
 			&i.AvailableBasis,
 			&i.AvailableGrace,
+			&i.Optional,
 		); err != nil {
 			return nil, err
 		}
@@ -665,7 +670,7 @@ func (q *Queries) FindPartsByExternalID(ctx context.Context, arg FindPartsByExte
 }
 
 const findWorkPart = `-- name: FindWorkPart :one
-SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace, optional
 FROM work_part WHERE work_id = ? AND media_ref = ?
 `
 
@@ -690,6 +695,7 @@ func (q *Queries) FindWorkPart(ctx context.Context, arg FindWorkPartParams) (Wor
 		&i.AvailableConfidence,
 		&i.AvailableBasis,
 		&i.AvailableGrace,
+		&i.Optional,
 	)
 	return i, err
 }
@@ -1025,7 +1031,7 @@ func (q *Queries) GetWorkOfTypeByExternalID(ctx context.Context, arg GetWorkOfTy
 }
 
 const getWorkPart = `-- name: GetWorkPart :one
-SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace, optional
 FROM work_part WHERE id = ?
 `
 
@@ -1045,6 +1051,7 @@ func (q *Queries) GetWorkPart(ctx context.Context, id int64) (WorkPart, error) {
 		&i.AvailableConfidence,
 		&i.AvailableBasis,
 		&i.AvailableGrace,
+		&i.Optional,
 	)
 	return i, err
 }
@@ -1607,7 +1614,7 @@ SELECT p.id AS part_id, p.work_id, w.canonical_title AS work_title, p.media_ref,
 FROM work_part p
 JOIN work w ON w.id = p.work_id
 WHERE EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1)
-  AND p.monitored = 1
+  AND p.monitored = 1 AND p.optional = 0
   AND ((p.available_at IS NOT NULL
         AND p.available_at + COALESCE(p.available_grace, CASE p.available_confidence WHEN 'high' THEN 7200 WHEN 'medium' THEN 43200 ELSE 129600 END) <= ?2)
        OR (p.available_at IS NULL AND p.date IS NOT NULL
@@ -1981,7 +1988,7 @@ func (q *Queries) ListWorkPartTitles(ctx context.Context, partID int64) ([]WorkP
 }
 
 const listWorkParts = `-- name: ListWorkParts :many
-SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace, optional
 FROM work_part WHERE work_id = ? ORDER BY sort_key, id
 `
 
@@ -2008,6 +2015,7 @@ func (q *Queries) ListWorkParts(ctx context.Context, workID int64) ([]WorkPart, 
 			&i.AvailableConfidence,
 			&i.AvailableBasis,
 			&i.AvailableGrace,
+			&i.Optional,
 		); err != nil {
 			return nil, err
 		}
@@ -2023,7 +2031,7 @@ func (q *Queries) ListWorkParts(ctx context.Context, workID int64) ([]WorkPart, 
 }
 
 const listWorkPartsPage = `-- name: ListWorkPartsPage :many
-SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace, optional
 FROM work_part
 WHERE work_id = ?1
   AND (CAST(?2 AS TEXT) = '' OR substr(media_ref, 1, length(CAST(?2 AS TEXT)) + 1) = CAST(?2 AS TEXT) || ':')
@@ -2068,6 +2076,7 @@ func (q *Queries) ListWorkPartsPage(ctx context.Context, arg ListWorkPartsPagePa
 			&i.AvailableConfidence,
 			&i.AvailableBasis,
 			&i.AvailableGrace,
+			&i.Optional,
 		); err != nil {
 			return nil, err
 		}
