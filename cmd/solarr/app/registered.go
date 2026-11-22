@@ -5,9 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
-
-	"github.com/makearr/Solarr/internal/media/adult"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/dispatch"
@@ -17,6 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/adult"
 	"github.com/makearr/Solarr/internal/media/book"
 	"github.com/makearr/Solarr/internal/media/comic"
 	"github.com/makearr/Solarr/internal/media/housekeeping"
@@ -25,9 +25,16 @@ import (
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/media/works"
+	"github.com/makearr/Solarr/internal/metadata/anilist"
+	"github.com/makearr/Solarr/internal/metadata/comicvine"
+	"github.com/makearr/Solarr/internal/metadata/gcd"
+	"github.com/makearr/Solarr/internal/metadata/mangadex"
+	"github.com/makearr/Solarr/internal/metadata/mangaupdates"
+	"github.com/makearr/Solarr/internal/metadata/metron"
 	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/moving/sidecar"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 	"github.com/makearr/Solarr/internal/service/follow"
 )
@@ -35,7 +42,7 @@ import (
 // registerMedia builds the one list of media types in the binary, each wired to what it needs from the process.
 // A new type is one more module here; nothing else in this package names a type's scan.
 func (p *process) registerMedia() error {
-	modules := []media.Module{p.musicModule(), p.tvModule(), p.movieModule(), p.adultModule(), comic.Module{}}
+	modules := []media.Module{p.musicModule(), p.tvModule(), p.movieModule(), p.adultModule(), p.comicModule()}
 	for _, format := range book.Formats {
 		modules = append(modules, p.bookModule(format))
 	}
@@ -828,5 +835,76 @@ func (p *process) adultResolver() adult.Resolver {
 	return adult.Resolver{
 		Service: p.adultService(), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID,
 		Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold, Locks: p.locksFor("adult"),
+	}
+}
+
+// comicService is the comic service over the six providers, each on its own bucket and pace.
+func (p *process) comicService() comic.Service {
+	client := func(name string) *httpx.Client { return p.providerClient(name, nil, httpx.ClientConfig{}) }
+	metronKey := p.providerKey(settings.ComicSourceMetron)
+	return comic.Service{
+		Sources: comic.Sources{
+			ComicVine:    comicvine.New(client(settings.ComicSourceComicVine), p.providerKey(settings.ComicSourceComicVine)),
+			Metron:       metron.New(client(settings.ComicSourceMetron), func() (string, string) { user, password, _ := strings.Cut(metronKey(), ":"); return user, password }),
+			GCD:          gcd.New(client(settings.ComicSourceGCD)),
+			AniList:      anilist.New(client(providerAniList)),
+			MangaUpdates: mangaupdates.New(client(settings.ComicSourceMangaUpdates)),
+			MangaDex:     mangadex.New(client(settings.ComicSourceMangaDex)),
+			Logger:       p.logger,
+		},
+		KindOf: func(categoryID int64) string {
+			category, found := p.cache.Snapshot().Category(categoryID)
+			if !found {
+				return comic.KindComics
+			}
+			return category.Kind
+		},
+		ProvidersOf: func(categoryID int64) []string {
+			snapshot := p.cache.Snapshot()
+			category, found := snapshot.Category(categoryID)
+			if !found {
+				return nil
+			}
+			return snapshot.MetadataSourcesFor(category)
+		},
+		Series: library.NewSeries(p.library), Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library),
+		Clock: clock.NewSystem(),
+	}
+}
+
+// comicModule wires the comic type: the add and refresh over the providers and the jobs that keep its metadata current.
+func (p *process) comicModule() comic.Module {
+	service := p.comicService()
+	catalog := comic.Catalog{Service: service, Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID}
+	return comic.Module{
+		Registrations: []media.JobRegistration{
+			{Definition: comic.RefreshDefinition(), Handler: comic.NewRefreshJob(library.NewSeriesReader(p.library), service, clock.NewSystem(), p.logger)},
+			{Definition: comic.ArtworkDefinition(), Handler: comic.NewArtworkJob(library.NewSeriesReader(p.library), p.remoteImages(), p.logger)},
+		},
+		Service: service,
+		Passes: media.Passes{
+			WorksPass: func(ctx context.Context, _ bool) (bool, error) {
+				result, err := comic.EnqueueRefresh(ctx, p.queue)
+				return result.Duplicate, err
+			},
+			PicturesPass: func(ctx context.Context, _ bool) (bool, error) {
+				result, err := comic.EnqueueArtwork(ctx, p.queue)
+				return result.Duplicate, err
+			},
+		},
+		Wiring: media.Wiring{
+			Adder:    catalog,
+			Pictures: adapters.ProviderPictures{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library), Clock: clock.NewSystem()},
+			Refresh: func(ctx context.Context, workID int64) (bool, error) {
+				_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
+				if err != nil {
+					return false, err
+				}
+				if len(libraries) == 0 {
+					return false, fmt.Errorf("%s %d is in no library", comic.MediaType, workID)
+				}
+				return false, catalog.Refresh(ctx, libraries[0], workID)
+			},
+		},
 	}
 }

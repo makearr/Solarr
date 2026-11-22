@@ -1392,8 +1392,8 @@
     "file_settings": [],
     "follow_options": [],
     "genre_tree": {
-      "key": "",
-      "label": ""
+      "key": "comics",
+      "label": "Comics"
     },
     "group": {
       "many": "Volumes",

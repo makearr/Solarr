@@ -1,6 +1,9 @@
 package comic
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/media"
@@ -29,13 +32,40 @@ const (
 	RoleEditor      = "editor"
 )
 
-// Module is the comic media type as the media registry sees it; a zero value declares the type.
-type Module struct{}
+// Module is the comic media type as the media registry sees it; a zero value declares the type, the wiring brings its services.
+type Module struct {
+	// Registrations are the job types the type brings, with their handlers.
+	Registrations []media.JobRegistration
+	// Wiring is the add, pictures, refresh and hunt services.
+	media.Wiring
+	// Passes are the type's periodic metadata passes.
+	media.Passes
+	// Service applies a monitor option to a series a library holds.
+	Service Service
+}
 
 var (
-	_ media.Module = Module{}
-	_ media.Naming = Module{}
+	_ media.Module     = Module{}
+	_ media.Naming     = Module{}
+	_ media.Jobs       = Module{}
+	_ media.Monitoring = Module{}
+	_ media.Adding     = Module{}
+	_ media.Refreshing = Module{}
+	_ media.Enriching  = Module{}
 )
+
+// RegisterJobs implements media.Jobs.
+func (m Module) RegisterJobs(register media.JobRegistrar) error {
+	return media.RegisterAll(register, m.Registrations)
+}
+
+// ApplyMonitorOption implements media.Monitoring.
+func (m Module) ApplyMonitorOption(ctx context.Context, _, workID int64, option string, _ bool) error {
+	if !MonitorOption(option).Valid() {
+		return fmt.Errorf("%w: %q", media.ErrUnknownMonitorOption, option)
+	}
+	return m.Service.ApplyMonitor(ctx, workID, MonitorOption(option))
+}
 
 // NamingScheme implements media.Naming.
 func (Module) NamingScheme() naming.Scheme { return NamingScheme() }
@@ -74,7 +104,8 @@ func (Module) Descriptor() media.Descriptor {
 			LeadPeople:   media.Term{One: "Writer", Many: "Writers"},
 			Organisation: media.Term{One: "Publisher", Many: "Publishers"},
 		},
-		Levels: levels(),
+		GenreTree: GenreTree,
+		Levels:    levels(),
 		Roles: []media.Role{
 			{Key: RoleWriter, Label: "Writer", Lead: true, Followable: true},
 			{Key: RolePenciller, Label: "Penciller", Followable: true},
