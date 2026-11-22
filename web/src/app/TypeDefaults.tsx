@@ -42,7 +42,8 @@ export function MetadataTypeTab({ entry }: { entry: TypeDefaults }) {
   const name = mediaTypeName(entry.media_type);
   const sources = entry.metadata_sources;
   const info = (key: string) => entry.metadata_available.find((provider) => provider.key === key);
-  const unused = entry.metadata_available.filter((provider) => !sources.includes(provider.key));
+  // A local server is offered per library (its connection maps libraries), never as a type default.
+  const unused = entry.metadata_available.filter((provider) => !provider.provisional && !sources.includes(provider.key));
   const set = (next: string[]) => save.mutate({ metadata_sources: next });
   return (
     <section className="flex flex-col gap-3">

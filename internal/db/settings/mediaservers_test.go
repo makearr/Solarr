@@ -70,3 +70,37 @@ func TestCreateMediaServer_RefusesAnEmptyCredential(t *testing.T) {
 		t.Fatal("CreateMediaServer accepted an empty credential")
 	}
 }
+
+func TestSetMediaServerLibraries_OffersTheLocalProviderToTheLibraryAtOnce(t *testing.T) {
+	cache, fake := newCache(t)
+	cipher, err := secrets.New(testCipherKey())
+	if err != nil {
+		t.Fatalf("secrets.New: %v", err)
+	}
+	cache.EnableSecrets(cipher)
+	ctx := t.Context()
+	library, err := cache.CreateCategory(ctx, "tv", "Series", 10)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	created, err := cache.CreateMediaServer(ctx, settings.MediaServerRequest{
+		Kind: "jellyfin", Name: "Den", BaseURL: "http://media.local:8096", Enabled: true,
+		MediaServerUse: settings.MediaServerUse{AsMetadata: true},
+	}, secrets.Secret("key-123"), fake.Now().Unix())
+	if err != nil {
+		t.Fatalf("CreateMediaServer: %v", err)
+	}
+	mapping := []settings.MediaServerLibrary{{CategoryID: library.ID, ServerLibraryID: "lib-1"}}
+	if err := cache.SetMediaServerLibraries(ctx, created.ID, mapping); err != nil {
+		t.Fatalf("SetMediaServerLibraries: %v", err)
+	}
+	if !cache.Snapshot().LocalSourceOffered(library.ID, settings.LocalSource("jellyfin")) {
+		t.Error("the local provider is not offered to the mapped library")
+	}
+	if err := cache.DeleteMediaServer(ctx, created.ID); err != nil {
+		t.Fatalf("DeleteMediaServer: %v", err)
+	}
+	if cache.Snapshot().LocalSourceOffered(library.ID, settings.LocalSource("jellyfin")) {
+		t.Error("the local provider is still offered after the connection is deleted")
+	}
+}

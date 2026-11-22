@@ -131,6 +131,9 @@ func (c *Cache) CreateMediaServer(ctx context.Context, request MediaServerReques
 	if err != nil {
 		return MediaServer{}, fmt.Errorf("settings: create media server: %w", err)
 	}
+	if err := c.Reload(ctx); err != nil {
+		return MediaServer{}, err
+	}
 	return convertMediaServer(created), nil
 }
 
@@ -151,6 +154,9 @@ func (c *Cache) UpdateMediaServer(ctx context.Context, id int64, request MediaSe
 	})
 	if err != nil {
 		return MediaServer{}, fmt.Errorf("settings: update media server %d: %w", id, err)
+	}
+	if err := c.Reload(ctx); err != nil {
+		return MediaServer{}, err
 	}
 	return c.GetMediaServer(ctx, id)
 }
@@ -213,7 +219,7 @@ func (c *Cache) DeleteMediaServer(ctx context.Context, id int64) error {
 	if err != nil {
 		return fmt.Errorf("settings: delete media server %d: %w", id, err)
 	}
-	return nil
+	return c.Reload(ctx)
 }
 
 // MediaServerLibraries answers the library mapping of one connection.
@@ -272,7 +278,8 @@ func (c *Cache) SetMediaServerLibraries(ctx context.Context, serverID int64, lib
 	if err != nil {
 		return fmt.Errorf("settings: set media server %d libraries: %w", serverID, err)
 	}
-	return nil
+	// The snapshot holds which libraries a local provider is offered to.
+	return c.Reload(ctx)
 }
 
 // MediaServerPaths answers the path pairs of one connection.
