@@ -707,3 +707,20 @@ func TestDirect_AnUnratedReleaseGroupHasNoRating(t *testing.T) {
 		t.Errorf("Rating = %+v, want none", rg.Rating)
 	}
 }
+
+func TestDirect_ArtistReleaseGroupsAsksForBootlegOnlyGroupsWhenTheLibraryDoes(t *testing.T) {
+	url := "https://musicbrainz.invalid/release-group?artist=" + radioheadMBID + "&limit=100&offset=0&fmt=json"
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		url: {status: http.StatusOK, body: `{"release-group-count": 1, "release-groups": [{"id": "11111111-1111-1111-1111-111111111111", "title": "Live Only"}]}`},
+	}}
+	client := newTestClient(t, transport, musicbrainz.DirectName)
+	source := discographyFor(t, musicbrainz.NewDirect(client, "https://musicbrainz.invalid"))
+
+	groups, err := source.ArtistReleaseGroups(musicbrainz.WithBootlegOnlyGroups(t.Context()), radioheadMBID)
+	if err != nil {
+		t.Fatalf("ArtistReleaseGroups: %v", err)
+	}
+	if len(groups) != 1 || groups[0].Title != "Live Only" {
+		t.Errorf("groups = %+v, want the one the unfiltered browse answered", groups)
+	}
+}

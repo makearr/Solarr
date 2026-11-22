@@ -318,6 +318,12 @@ func (s *Snapshot) MusicSourceOrder(categoryID int64) []string {
 	return order
 }
 
+// IncludesBootlegOnly says the library lists release groups that only exist as bootlegs; no library (0) leaves them out.
+func (s *Snapshot) IncludesBootlegOnly(categoryID int64) bool {
+	library, found := s.Category(categoryID)
+	return found && library.IncludeBootlegOnly
+}
+
 func validSourceFor(mediaType, source string) bool {
 	return slices.ContainsFunc(MetadataProvidersFor(mediaType), func(provider MetadataProvider) bool { return provider.Key == source })
 }
@@ -349,5 +355,18 @@ func (c *Cache) SetCategoryMetadataSources(ctx context.Context, id int64, source
 			}
 		}
 		return nil
+	})
+}
+
+// SetCategoryIncludeBootlegOnly switches a library's listing of bootleg-only release groups on or off.
+func (c *Cache) SetCategoryIncludeBootlegOnly(ctx context.Context, id int64, include bool) error {
+	if _, found := c.Snapshot().Category(id); !found {
+		return fmt.Errorf("%w: category %d", ErrNotFound, id)
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		if include {
+			return queries.SetCategoryBootlegOnly(ctx, id)
+		}
+		return queries.ClearCategoryBootlegOnly(ctx, id)
 	})
 }

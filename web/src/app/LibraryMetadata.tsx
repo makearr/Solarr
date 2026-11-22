@@ -8,6 +8,7 @@ import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
 import { EmptyState } from "@/ui/EmptyState";
 import { PageHeader } from "@/ui/PageHeader";
+import { t } from "@/lib/i18n";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaType } from "@/lib/useMediaTypes";
 import { useMetadataSettings } from "@/lib/resources";
@@ -30,7 +31,8 @@ export function LibraryMetadata() {
   });
   const save = useMutation({
     meta: { handlesErrors: true },
-    mutationFn: (sources: string[]) => ok(api.PUT("/categories/{id}/metadata-sources", { params: { path: { id } }, body: { sources } })),
+    mutationFn: (body: { sources?: string[]; include_bootleg_only?: boolean }) =>
+      ok(api.PUT("/categories/{id}/metadata-sources", { params: { path: { id } }, body })),
     onSuccess: (data: Sources) => queryClient.setQueryData(key, data),
   });
   if (saved.isLoading) return <p className="p-6 text-sm text-ink-muted">Loading…</p>;
@@ -46,7 +48,7 @@ export function LibraryMetadata() {
     if (other === undefined || moving === undefined) return;
     next[index + delta] = moving;
     next[index] = other;
-    save.mutate(next);
+    save.mutate({ sources: next });
   };
   return (
     <div className="h-full overflow-y-auto">
@@ -60,7 +62,7 @@ export function LibraryMetadata() {
             <h2 className="text-sm font-semibold">Order</h2>
             <Chip>{custom ? "this library's own" : "following the default of its type"}</Chip>
             {custom && (
-              <Button className="ml-auto" busy={save.isPending} onClick={() => save.mutate([])}>
+              <Button className="ml-auto" busy={save.isPending} onClick={() => save.mutate({ sources: [] })}>
                 Use the type's default order
               </Button>
             )}
@@ -80,7 +82,7 @@ export function LibraryMetadata() {
                   <Button variant="icon" aria-label={`Move ${info?.label ?? provider} down`} disabled={index === sources.length - 1 || save.isPending} onClick={() => move(index, 1)}>
                     <ArrowDown aria-hidden className="size-4" />
                   </Button>
-                  <Button disabled={sources.length === 1 || save.isPending} onClick={() => save.mutate(sources.filter((entry) => entry !== provider))}>
+                  <Button disabled={sources.length === 1 || save.isPending} onClick={() => save.mutate({ sources: sources.filter((entry) => entry !== provider) })}>
                     Stop using
                   </Button>
                 </li>
@@ -95,7 +97,7 @@ export function LibraryMetadata() {
                   <span>{provider.label}</span>
                   <span className="min-w-0 flex-1 text-xs text-ink-muted">{provider.carries.join(", ")}</span>
                   {provider.enabled ? (
-                    <Button busy={save.isPending} onClick={() => save.mutate([...sources, provider.key])}>
+                    <Button busy={save.isPending} onClick={() => save.mutate({ sources: [...sources, provider.key] })}>
                       Use last
                     </Button>
                   ) : (
@@ -107,6 +109,20 @@ export function LibraryMetadata() {
           )}
           {save.isError && <p className="text-xs text-danger">That could not be saved.</p>}
         </section>
+        {library?.media_type === "music" && (
+          <section className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface p-3">
+            <label className="flex items-center gap-2 text-sm font-semibold">
+              <input
+                type="checkbox"
+                checked={saved.data.include_bootleg_only ?? false}
+                disabled={save.isPending}
+                onChange={(event) => save.mutate({ include_bootleg_only: event.target.checked })}
+              />
+              {t("libraryMetadata.bootlegOnly")}
+            </label>
+            <p className="text-xs text-ink-muted">{t("libraryMetadata.bootlegOnlyHelp")}</p>
+          </section>
+        )}
         {mediaType?.cover_sources && <CoverOrder />}
         <p className="text-xs text-ink-muted">
           A library follows the default of its library type, set under Settings, Metadata, until it keeps an order of its own here; the shipped one asks Wikidata first, since the ids its item records steer the others to the right

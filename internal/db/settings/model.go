@@ -135,6 +135,8 @@ type Category struct {
 	FileManagement FileManagement
 	// MetadataSources are the providers the library asks, best first; empty follows its type's default order.
 	MetadataSources []string
+	// IncludeBootlegOnly lists the release groups that only exist as bootlegs, promos or pseudo-releases; off by default.
+	IncludeBootlegOnly bool
 	// The *Inherited flags say the value above is its media type's default, not the library's own.
 	QualityProfilesInherited, QualityTargetInherited, LanguageProfileInherited bool
 }

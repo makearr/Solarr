@@ -76,6 +76,7 @@ const (
 type Provider struct {
 	sources      []Source
 	liveOrder    func(library int64) []string
+	liveBootlegs func(library int64) bool
 	cache        metacache.Cache
 	clock        clock.Clock
 	logger       *slog.Logger
@@ -83,6 +84,22 @@ type Provider struct {
 }
 
 type libraryKey struct{}
+
+type bootlegOnlyKey struct{}
+
+const bootlegOnlyKeySuffix = "+bootleg-only"
+
+// WithBootlegOnlyGroups asks the discography lookups under ctx to list bootleg-only release groups too.
+func WithBootlegOnlyGroups(ctx context.Context) context.Context {
+	return context.WithValue(ctx, bootlegOnlyKey{}, true)
+}
+
+// IncludesBootlegOnlyGroups says the discography under ctx also lists release groups whose releases are all bootlegs,
+// promos or pseudo-releases.
+func IncludesBootlegOnlyGroups(ctx context.Context) bool {
+	include, _ := ctx.Value(bootlegOnlyKey{}).(bool)
+	return include
+}
 
 // ForLibrary makes every lookup under ctx follow that music library's own source order; 0 is no library, the default order.
 func ForLibrary(ctx context.Context, categoryID int64) context.Context {
@@ -151,9 +168,12 @@ type Config struct {
 	// LiveOrder answers the source names to try, in order, for a music library (0: none, the default order); called
 	// once per lookup. Optional: nil keeps Sources' own order.
 	LiveOrder func(library int64) []string
-	Cache     metacache.Cache
-	Clock     clock.Clock
-	Logger    *slog.Logger
+	// LiveBootlegs says whether a music library lists release groups that only exist as bootlegs; called once per
+	// discography lookup. Optional: nil leaves them out.
+	LiveBootlegs func(library int64) bool
+	Cache        metacache.Cache
+	Clock        clock.Clock
+	Logger       *slog.Logger
 	// RefreshAfter is how old a cache entry may be before it is treated as a miss
 	// (ADR-29's staleness policy). Zero means never expire -- today's behaviour.
 	RefreshAfter time.Duration
@@ -166,7 +186,7 @@ func New(config Config) Provider {
 		logger = slog.Default()
 	}
 	return Provider{
-		sources: config.Sources, liveOrder: config.LiveOrder, cache: config.Cache, clock: config.Clock, logger: logger,
+		sources: config.Sources, liveOrder: config.LiveOrder, liveBootlegs: config.LiveBootlegs, cache: config.Cache, clock: config.Clock, logger: logger,
 		refreshAfter: config.RefreshAfter,
 	}
 }
@@ -348,8 +368,13 @@ func (p Provider) Artist(ctx context.Context, priority Priority, mbid string) (A
 // sources that implement Discography are tried, same reasoning as Search and
 // Artist.
 func (p Provider) ArtistReleaseGroups(ctx context.Context, priority Priority, artistMBID string) ([]ReleaseGroup, error) {
+	key := artistMBID
+	if p.liveBootlegs != nil && p.liveBootlegs(LibraryOf(ctx)) {
+		// The library's switch names the cache entry: the same artist lists differently with and without bootleg-only groups.
+		ctx, key = WithBootlegOnlyGroups(ctx), artistMBID+bootlegOnlyKeySuffix
+	}
 	call := lookup{
-		kind: cacheKindDiscography, key: artistMBID, what: "discography " + artistMBID, notFoundWhenAll404: true,
+		kind: cacheKindDiscography, key: key, what: "discography " + artistMBID, notFoundWhenAll404: true,
 		noSource: fmt.Errorf("%w: browse a discography (artist %s)", ErrNoCapableSource, artistMBID),
 	}
 	return through(ctx, p, priority, call, func(ctx context.Context, discography Discography) ([]ReleaseGroup, error) {

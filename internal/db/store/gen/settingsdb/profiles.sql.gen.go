@@ -10,6 +10,15 @@ import (
 	"database/sql"
 )
 
+const clearCategoryBootlegOnly = `-- name: ClearCategoryBootlegOnly :exec
+DELETE FROM category_bootleg_only WHERE category_id = ?
+`
+
+func (q *Queries) ClearCategoryBootlegOnly(ctx context.Context, categoryID int64) error {
+	_, err := q.db.ExecContext(ctx, clearCategoryBootlegOnly, categoryID)
+	return err
+}
+
 const clearCategoryTarget = `-- name: ClearCategoryTarget :exec
 DELETE FROM category_target WHERE category_id = ?
 `
@@ -275,6 +284,33 @@ func (q *Queries) InsertCategoryQualityProfile(ctx context.Context, arg InsertCa
 	return err
 }
 
+const listCategoryBootlegOnly = `-- name: ListCategoryBootlegOnly :many
+SELECT category_id FROM category_bootleg_only
+`
+
+func (q *Queries) ListCategoryBootlegOnly(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listCategoryBootlegOnly)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var category_id int64
+		if err := rows.Scan(&category_id); err != nil {
+			return nil, err
+		}
+		items = append(items, category_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCategoryMetadataSources = `-- name: ListCategoryMetadataSources :many
 SELECT category_id, source, ord FROM category_metadata_source ORDER BY category_id, ord
 `
@@ -518,6 +554,15 @@ func (q *Queries) ListQualityTargets(ctx context.Context) ([]QualityTarget, erro
 		return nil, err
 	}
 	return items, nil
+}
+
+const setCategoryBootlegOnly = `-- name: SetCategoryBootlegOnly :exec
+INSERT OR IGNORE INTO category_bootleg_only (category_id) VALUES (?)
+`
+
+func (q *Queries) SetCategoryBootlegOnly(ctx context.Context, categoryID int64) error {
+	_, err := q.db.ExecContext(ctx, setCategoryBootlegOnly, categoryID)
+	return err
 }
 
 const setCategoryLanguageProfile = `-- name: SetCategoryLanguageProfile :exec

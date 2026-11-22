@@ -514,14 +514,18 @@ const artistReleaseGroupsPageSize = 100
 const artistReleaseGroupsMaxPages = 20
 
 // ArtistReleaseGroups implements Discography by browsing musicbrainz.org's
-// release-group endpoint (website-default: no bootleg-only groups) until a page
+// release-group endpoint (website-default: no bootleg-only groups, unless the library asks for them) until a page
 // comes back short or the reported total is reached.
 func (d direct) ArtistReleaseGroups(ctx context.Context, artistMBID string) ([]ReleaseGroup, error) {
 	var all []ReleaseGroup
 	for page := 0; page < artistReleaseGroupsMaxPages; page++ {
 		offset := page * artistReleaseGroupsPageSize
-		requestURL := fmt.Sprintf("%s/release-group?artist=%s&release-group-status=website-default&limit=%d&offset=%d&fmt=json",
-			d.baseURL, url.QueryEscape(artistMBID), artistReleaseGroupsPageSize, offset)
+		status := "&release-group-status=website-default"
+		if IncludesBootlegOnlyGroups(ctx) {
+			status = ""
+		}
+		requestURL := fmt.Sprintf("%s/release-group?artist=%s%s&limit=%d&offset=%d&fmt=json",
+			d.baseURL, url.QueryEscape(artistMBID), status, artistReleaseGroupsPageSize, offset)
 
 		var parsed directBrowseResponse
 		if err := getJSON(ctx, d.client, requestURL, &parsed); err != nil {

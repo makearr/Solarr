@@ -125,10 +125,12 @@ type fakeDiscographySource struct {
 	groups           []musicbrainz.ReleaseGroup
 	discographyErr   error
 	discographyCalls int
+	sawBootlegOnly   []bool
 }
 
-func (f *fakeDiscographySource) ArtistReleaseGroups(context.Context, string) ([]musicbrainz.ReleaseGroup, error) {
+func (f *fakeDiscographySource) ArtistReleaseGroups(ctx context.Context, _ string) ([]musicbrainz.ReleaseGroup, error) {
 	f.discographyCalls++
+	f.sawBootlegOnly = append(f.sawBootlegOnly, musicbrainz.IncludesBootlegOnlyGroups(ctx))
 	if f.discographyErr != nil {
 		return nil, f.discographyErr
 	}
@@ -958,5 +960,23 @@ func TestProvider_AnArtistADiscographyAndAReleaseListThatAre404AreNotAskedAgain(
 	}
 	if artist.artistCalls != 1 || discography.discographyCalls != 1 || lister.releaseCalls != 1 {
 		t.Errorf("calls = %d, %d, %d; want 1 each", artist.artistCalls, discography.discographyCalls, lister.releaseCalls)
+	}
+}
+
+func TestProvider_DiscographyFollowsTheLibrarysBootlegSwitchAndCachesEachAnswerApart(t *testing.T) {
+	direct := &fakeDiscographySource{fakeSource: fakeSource{name: "direct"},
+		groups: []musicbrainz.ReleaseGroup{{MBID: "rg-1", Title: "KI Pecezinu"}}}
+	included := map[int64]bool{1: false, 2: true}
+	provider := musicbrainz.New(musicbrainz.Config{
+		Sources: []musicbrainz.Source{direct}, LiveBootlegs: func(library int64) bool { return included[library] },
+		Cache: newTestCache(t), Clock: clock.NewFakeAtEpoch(), Logger: slog.New(slog.DiscardHandler),
+	})
+	for _, library := range []int64{1, 2, 1, 2} {
+		if _, err := provider.ArtistReleaseGroups(musicbrainz.ForLibrary(t.Context(), library), musicbrainz.PriorityBackfill, "artist-1"); err != nil {
+			t.Fatalf("ArtistReleaseGroups library %d: %v", library, err)
+		}
+	}
+	if want := []bool{false, true}; !slices.Equal(direct.sawBootlegOnly, want) {
+		t.Errorf("source saw bootleg-only = %v, want %v: one fetch per switch position, the repeats served from the cache", direct.sawBootlegOnly, want)
 	}
 }

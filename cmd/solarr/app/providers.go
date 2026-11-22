@@ -121,7 +121,7 @@ func (p *process) acoustIDKey() string {
 func (p *process) musicBrainzProvider() musicbrainz.Provider {
 	sources := p.config.Metadata.MusicBrainz
 	return musicbrainz.New(musicbrainz.Config{
-		Sources: p.musicBrainzSources(sources), LiveOrder: p.liveMetadataSourceOrder,
+		Sources: p.musicBrainzSources(sources), LiveOrder: p.liveMetadataSourceOrder, LiveBootlegs: p.liveIncludesBootlegOnly,
 		Cache: metacache.New(p.metadata).Counting(&p.metadataLookups), Clock: clock.NewSystem(),
 		Logger: p.logger, RefreshAfter: sources.RefreshAfter.AsDuration(),
 	})
@@ -131,6 +131,11 @@ func (p *process) musicBrainzProvider() musicbrainz.Provider {
 // hold one Provider for the life of the process, so a captured order would stay stale until a restart.
 func (p *process) liveMetadataSourceOrder(library int64) []string {
 	return p.cache.Snapshot().MusicSourceOrder(library)
+}
+
+// liveIncludesBootlegOnly answers the library's switch on every discography lookup, like liveMetadataSourceOrder.
+func (p *process) liveIncludesBootlegOnly(library int64) bool {
+	return p.cache.Snapshot().IncludesBootlegOnly(library)
 }
 
 // musicBrainzSources builds every source config.yml enables. Which of them are

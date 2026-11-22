@@ -4,6 +4,8 @@ type MediaTypeInfo = components["schemas"]["MediaTypeInfo"];
 
 // One English catalogue: every label of the shared pages, with {placeholders} filled from the media type's words.
 const catalogue = {
+  "libraryMetadata.bootlegOnly": "Include release groups that only exist as bootlegs",
+  "libraryMetadata.bootlegOnlyHelp": "Off lists what musicbrainz.org's artist page shows. On adds groups whose releases are all bootlegs, promos or pseudo-releases; a prolific live artist can gain hundreds. Takes effect when an artist's discography is next fetched.",
   "replace.move": "Move what uses {name} to",
   "replace.button": "Move them and remove {name}",
   "replace.none": "There is no other one of this kind to move them to.",

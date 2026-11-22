@@ -245,3 +245,29 @@ func TestGoogleBooksStartsOffUntilSwitchedOn(t *testing.T) {
 		t.Error("switching it on did not stick")
 	}
 }
+
+func TestALibraryLeavesBootlegOnlyReleaseGroupsOutUntilItIsToldOtherwise(t *testing.T) {
+	cache, _ := newCache(t)
+	music, err := cache.CreateCategory(t.Context(), "music", "Music", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cache.Snapshot().IncludesBootlegOnly(music.ID) || cache.Snapshot().IncludesBootlegOnly(0) {
+		t.Fatal("a new library, and no library, leave bootleg-only groups out")
+	}
+	if err := cache.SetCategoryIncludeBootlegOnly(t.Context(), music.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if !cache.Snapshot().IncludesBootlegOnly(music.ID) {
+		t.Error("the switch was not kept")
+	}
+	if err := cache.SetCategoryIncludeBootlegOnly(t.Context(), music.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if cache.Snapshot().IncludesBootlegOnly(music.ID) {
+		t.Error("the switch did not go off again")
+	}
+	if err := cache.SetCategoryIncludeBootlegOnly(t.Context(), 9999, true); err == nil {
+		t.Error("a library that does not exist has no switch")
+	}
+}

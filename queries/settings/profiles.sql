@@ -118,3 +118,12 @@ INSERT OR IGNORE INTO category_target_auto (category_id) VALUES (?);
 
 -- name: ClearCategoryTargetAuto :exec
 DELETE FROM category_target_auto WHERE category_id = ?;
+
+-- name: ListCategoryBootlegOnly :many
+SELECT category_id FROM category_bootleg_only;
+
+-- name: SetCategoryBootlegOnly :exec
+INSERT OR IGNORE INTO category_bootleg_only (category_id) VALUES (?);
+
+-- name: ClearCategoryBootlegOnly :exec
+DELETE FROM category_bootleg_only WHERE category_id = ?;

@@ -236,6 +236,11 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 		return nil, fmt.Errorf("settings: list category metadata sources: %w", err)
 	}
 
+	bootlegOnly, err := c.queries.ListCategoryBootlegOnly(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list bootleg-only libraries: %w", err)
+	}
+
 	stored, err := c.queries.ListInstanceSettings(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("settings: list instance settings: %w", err)
@@ -261,8 +266,8 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 	snapshot := newSnapshot(
 		convertUsers(users),
 		withTypeDefaults(
-			withMetadataSources(withFileManagement(withQuality(convertCategories(categories, convertNamingProfiles(namingProfiles, namingFormats)),
-				qualityLists, convertQualityTargets(qualityTargets), categoryTargets, automaticTargets, convertQualityProfiles(qualityProfiles)), fileManagement), metadataSources),
+			withMetadataSources(withBootlegOnly(withFileManagement(withQuality(convertCategories(categories, convertNamingProfiles(namingProfiles, namingFormats)),
+				qualityLists, convertQualityTargets(qualityTargets), categoryTargets, automaticTargets, convertQualityProfiles(qualityProfiles)), fileManagement), bootlegOnly), metadataSources),
 			policy, convertQualityTargets(qualityTargets), convertQualityProfiles(qualityProfiles), convertedLanguageProfiles),
 		convertRootFolders(rootFolders),
 		convertAttachments(attachments),
@@ -559,6 +564,16 @@ func decodeReleaseTypes(raw string) []string {
 		return DefaultMonitorReleaseTypes
 	}
 	return types
+}
+
+// withBootlegOnly marks the libraries that list bootleg-only release groups.
+func withBootlegOnly(categories []Category, ids []int64) []Category {
+	for _, id := range ids {
+		if i := slices.IndexFunc(categories, func(category Category) bool { return category.ID == id }); i >= 0 {
+			categories[i].IncludeBootlegOnly = true
+		}
+	}
+	return categories
 }
 
 // withMetadataSources attaches each library's own provider order.

@@ -4020,6 +4020,9 @@ type LibraryMetadataSources struct {
 	// Default The order a library of this type and kind starts with.
 	Default []string `json:"default"`
 
+	// IncludeBootlegOnly The library lists release groups that only exist as bootlegs; off by default.
+	IncludeBootlegOnly *bool `json:"include_bootleg_only,omitempty"`
+
 	// Sources The providers asked
 	Sources []string `json:"sources"`
 }
@@ -7016,7 +7019,11 @@ type MergeCategoryJSONBody struct {
 
 // SetLibraryMetadataSourcesJSONBody defines parameters for SetLibraryMetadataSources.
 type SetLibraryMetadataSourcesJSONBody struct {
-	Sources []string `json:"sources"`
+	// IncludeBootlegOnly List release groups that only exist as bootlegs
+	IncludeBootlegOnly *bool `json:"include_bootleg_only,omitempty"`
+
+	// Sources The providers to ask
+	Sources *[]string `json:"sources,omitempty"`
 }
 
 // RenameLibraryJSONBody defines parameters for RenameLibrary.

@@ -21,7 +21,7 @@ func (s *Server) metadataSourcesView(category settings.Category) gen.LibraryMeta
 	defaults := snapshot.TypeMetadataSources(category.MediaType, category.Kind)
 	view := gen.LibraryMetadataSources{
 		Sources: snapshot.MetadataSourcesFor(current), Custom: boolPtr(len(current.MetadataSources) > 0 && !slices.Equal(current.MetadataSources, defaults)),
-		Default:   defaults,
+		Default: defaults, IncludeBootlegOnly: boolPtr(current.IncludeBootlegOnly),
 		Available: []gen.MetadataProviderInfo{},
 	}
 	for _, provider := range settings.MetadataProvidersFor(category.MediaType) {
@@ -184,12 +184,19 @@ func (s *Server) SetLibraryMetadataSources(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var body struct {
-		Sources []string `json:"sources"`
+		Sources            *[]string `json:"sources"`
+		IncludeBootlegOnly *bool     `json:"include_bootleg_only"`
 	}
-	if !s.decodeBody(w, r, maxSetupBody, &body, "expected sources") {
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected sources or include_bootleg_only") {
 		return
 	}
-	if err := s.auth.Settings.SetCategoryMetadataSources(r.Context(), id, body.Sources); err != nil {
+	if body.Sources != nil {
+		err = s.auth.Settings.SetCategoryMetadataSources(r.Context(), id, *body.Sources)
+	}
+	if err == nil && body.IncludeBootlegOnly != nil {
+		err = s.auth.Settings.SetCategoryIncludeBootlegOnly(r.Context(), id, *body.IncludeBootlegOnly)
+	}
+	if err != nil {
 		var problems config.Problems
 		if errors.As(err, &problems) {
 			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "The providers have problems", problems.Report("the providers", "Nothing was changed."))

@@ -78,6 +78,10 @@ type Category struct {
 	RulesJson              sql.NullString
 }
 
+type CategoryBootlegOnly struct {
+	CategoryID int64
+}
+
 type CategoryFileManagement struct {
 	CategoryID               int64
 	PropersRepacks           string

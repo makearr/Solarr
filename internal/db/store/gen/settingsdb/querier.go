@@ -12,6 +12,7 @@ import (
 type Querier interface {
 	AddDefaultLanguage(ctx context.Context, arg AddDefaultLanguageParams) error
 	AttachRootFolderToCategory(ctx context.Context, arg AttachRootFolderToCategoryParams) error
+	ClearCategoryBootlegOnly(ctx context.Context, categoryID int64) error
 	ClearCategoryTarget(ctx context.Context, categoryID int64) error
 	ClearCategoryTargetAuto(ctx context.Context, categoryID int64) error
 	ClearDefaultLanguages(ctx context.Context) error
@@ -115,6 +116,7 @@ type Querier interface {
 	ListAllUserBlockedTags(ctx context.Context) ([]UserBlockedTag, error)
 	ListArrInstances(ctx context.Context) ([]ArrInstance, error)
 	ListCategories(ctx context.Context) ([]Category, error)
+	ListCategoryBootlegOnly(ctx context.Context) ([]int64, error)
 	ListCategoryFileManagement(ctx context.Context) ([]CategoryFileManagement, error)
 	ListCategoryMetadataSources(ctx context.Context) ([]CategoryMetadataSource, error)
 	ListCategoryQualityProfiles(ctx context.Context) ([]CategoryQualityProfile, error)
@@ -163,6 +165,7 @@ type Querier interface {
 	SetArrInstanceSyncOptions(ctx context.Context, arg SetArrInstanceSyncOptionsParams) error
 	SetArrInstanceSyncResult(ctx context.Context, arg SetArrInstanceSyncResultParams) error
 	SetCategoryAccess(ctx context.Context, arg SetCategoryAccessParams) error
+	SetCategoryBootlegOnly(ctx context.Context, categoryID int64) error
 	SetCategoryKind(ctx context.Context, arg SetCategoryKindParams) error
 	SetCategoryLanguageProfile(ctx context.Context, arg SetCategoryLanguageProfileParams) error
 	SetCategoryLibrary(ctx context.Context, arg SetCategoryLibraryParams) error

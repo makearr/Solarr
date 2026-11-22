@@ -6742,9 +6742,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [sources]
               properties:
-                sources: { type: array, items: { type: string } }
+                sources: { type: array, items: { type: string }, description: The providers to ask, best first; empty returns to the type's order. Absent leaves the order as it is. }
+                include_bootleg_only: { type: boolean, description: List release groups that only exist as bootlegs, promos or pseudo-releases. Absent leaves it as it is. }
       responses:
         "200":
           description: The library's providers.
@@ -10028,6 +10028,7 @@ components:
       properties:
         sources: { type: array, items: { type: string }, description: The providers asked, best first. }
         custom: { type: boolean, description: The library has its own order; false follows the instance's. }
+        include_bootleg_only: { type: boolean, description: "The library lists release groups that only exist as bootlegs; off by default." }
         default: { type: array, items: { type: string }, description: The order a library of this type and kind starts with. }
         available:
           type: array

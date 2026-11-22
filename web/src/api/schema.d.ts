@@ -6834,6 +6834,8 @@ export interface components {
             sources: string[];
             /** @description The library has its own order; false follows the instance's. */
             custom?: boolean;
+            /** @description The library lists release groups that only exist as bootlegs; off by default. */
+            include_bootleg_only?: boolean;
             /** @description The order a library of this type and kind starts with. */
             default: string[];
             available: components["schemas"]["MetadataProviderInfo"][];
@@ -18785,7 +18787,10 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    sources: string[];
+                    /** @description The providers to ask */
+                    sources?: string[];
+                    /** @description List release groups that only exist as bootlegs */
+                    include_bootleg_only?: boolean;
                 };
             };
         };
