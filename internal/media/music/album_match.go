@@ -281,10 +281,7 @@ func tracklistKey(release musicbrainz.Release) string {
 	return key.String()
 }
 
-// fitTracklist pairs the files with a release's tracks by optimal assignment.
-//
-// ignoreTitles pairs by length, position and recording alone: for a release the folder was grabbed as, whose titles
-// are written in another script or not at all.
+// fitTracklist pairs the files with a release's tracks by optimal assignment; ignoreTitles pairs by length, position and recording alone.
 func fitTracklist(locals []LocalTrack, release musicbrainz.Release, ignoreTitles bool) tracklistFit {
 	var tracks []ReleaseTrack
 	var releaseTracks []musicbrainz.Track
