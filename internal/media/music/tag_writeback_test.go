@@ -3,7 +3,6 @@ package music_test
 import (
 	"context"
 	"errors"
-	"github.com/makearr/Solarr/internal/platform/clock"
 	"image"
 	"io"
 	"path"
@@ -16,6 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/platform/artwork"
+	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
