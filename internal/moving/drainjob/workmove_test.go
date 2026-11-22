@@ -46,8 +46,8 @@ func TestStartWorkMove_BringsTheWorksFilesOntoTheChosenRoot(t *testing.T) {
 		t.Fatalf("result = %+v, want an accepted move job", result)
 	}
 	want := fakeMoveJob{Reason: "MOVE", FilesTotal: 2, BytesTotal: 30, Items: []library.NewMoveItem{
-		{MediaObjectID: 5, AffinityKey: "Show", DestRootID: 3, DestRelPath: "Show/Season 1/e1.mkv", Bytes: 10},
-		{MediaObjectID: 6, AffinityKey: "Show", DestRootID: 3, DestRelPath: "Show/Season 2/e1.mkv", Bytes: 20},
+		{MediaObjectID: 5, AffinityKey: "Show", DestRootID: 3, DestRelPath: "Show/Season 1/e1.mkv", Bytes: 10, SourceRootID: 1, SourceRelPath: "Show/Season 1/e1.mkv"},
+		{MediaObjectID: 6, AffinityKey: "Show", DestRootID: 3, DestRelPath: "Show/Season 2/e1.mkv", Bytes: 20, SourceRootID: 2, SourceRelPath: "Show/Season 2/e1.mkv"},
 	}}
 	if !reflect.DeepEqual(moveJobs.created, want) {
 		t.Errorf("move job = %+v\nwant %+v", moveJobs.created, want)

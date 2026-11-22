@@ -177,8 +177,8 @@ func (q *Queries) GetMoveJobPlan(ctx context.Context, id int64) (string, error) 
 }
 
 const insertMoveItem = `-- name: InsertMoveItem :exec
-INSERT INTO move_item (move_job_id, media_object_id, affinity_key, dest_root_id, dest_rel_path, bytes, state, keep_source)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO move_item (move_job_id, media_object_id, affinity_key, dest_root_id, dest_rel_path, bytes, state, keep_source, source_root_id, source_rel_path)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertMoveItemParams struct {
@@ -190,6 +190,8 @@ type InsertMoveItemParams struct {
 	Bytes         int64
 	State         string
 	KeepSource    int64
+	SourceRootID  int64
+	SourceRelPath string
 }
 
 // One row per call, looped inside one transaction by the caller (the same
@@ -205,6 +207,8 @@ func (q *Queries) InsertMoveItem(ctx context.Context, arg InsertMoveItemParams) 
 		arg.Bytes,
 		arg.State,
 		arg.KeepSource,
+		arg.SourceRootID,
+		arg.SourceRelPath,
 	)
 	return err
 }
@@ -269,7 +273,7 @@ func (q *Queries) ListMoveItemCompanions(ctx context.Context, arg ListMoveItemCo
 }
 
 const listMoveItems = `-- name: ListMoveItems :many
-SELECT move_job_id, media_object_id, affinity_key, dest_root_id, dest_rel_path, bytes, state, error, keep_source
+SELECT move_job_id, media_object_id, affinity_key, dest_root_id, dest_rel_path, bytes, state, error, keep_source, source_root_id, source_rel_path
 FROM move_item WHERE move_job_id = ? ORDER BY media_object_id
 `
 
@@ -292,6 +296,8 @@ func (q *Queries) ListMoveItems(ctx context.Context, moveJobID int64) ([]MoveIte
 			&i.State,
 			&i.Error,
 			&i.KeepSource,
+			&i.SourceRootID,
+			&i.SourceRelPath,
 		); err != nil {
 			return nil, err
 		}
@@ -371,7 +377,7 @@ func (q *Queries) ListMoveJobs(ctx context.Context, arg ListMoveJobsParams) ([]L
 }
 
 const nextPendingMoveItem = `-- name: NextPendingMoveItem :one
-SELECT move_job_id, media_object_id, affinity_key, dest_root_id, dest_rel_path, bytes, state, error, keep_source
+SELECT move_job_id, media_object_id, affinity_key, dest_root_id, dest_rel_path, bytes, state, error, keep_source, source_root_id, source_rel_path
 FROM move_item WHERE move_job_id = ? AND state != 'DONE' AND state != 'FAILED'
 ORDER BY media_object_id LIMIT 1
 `
@@ -392,6 +398,8 @@ func (q *Queries) NextPendingMoveItem(ctx context.Context, moveJobID int64) (Mov
 		&i.State,
 		&i.Error,
 		&i.KeepSource,
+		&i.SourceRootID,
+		&i.SourceRelPath,
 	)
 	return i, err
 }

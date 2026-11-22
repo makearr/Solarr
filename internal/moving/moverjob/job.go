@@ -158,19 +158,9 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 			return fmt.Errorf("moverjob: set move job %d running: %w", moveJob.ID, err)
 		}
 	}
-	var plan mover.MovePlan
-	planJSON, err := j.moveJobs.Plan(ctx, moveJob.ID)
+	olderPlan, err := j.olderJobPlan(ctx, moveJob.ID)
 	if err != nil {
-		return fmt.Errorf("moverjob: read plan of move job %d: %w", moveJob.ID, err)
-	}
-	if planJSON != "" {
-		if err := json.Unmarshal([]byte(planJSON), &plan); err != nil {
-			return fmt.Errorf("moverjob: decode plan for job %d: %w", moveJob.ID, err)
-		}
-	}
-	planned := make(map[int64]mover.PlannedMove, len(plan.Moves))
-	for _, move := range plan.Moves {
-		planned[move.MediaObjectID] = move
+		return err
 	}
 
 	permissions := j.permissionsFor(moveJob)
@@ -191,7 +181,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 			return fmt.Errorf("moverjob: next pending item for job %d: %w", moveJob.ID, err)
 		}
 
-		if err := j.applyItem(ctx, item, diskKind(moveJob.Reason), permissions, planned[item.MediaObjectID]); err != nil {
+		if err := j.applyItem(ctx, item, diskKind(moveJob.Reason), permissions, plannedMoveOf(item, olderPlan)); err != nil {
 			if errors.Is(err, errAfterMove) {
 				// The bytes are already at the new path: FAILED is terminal, so the job fails retryably and the next run's
 				// recovery (destination present, source gone) finishes the bookkeeping.
@@ -381,6 +371,37 @@ func (j *Job) applyItem(
 	j.tidy(path.Dir(sourceAbs), sourceRoot.Path)
 
 	return j.moveJobs.SetItemState(ctx, item.MoveJobID, item.MediaObjectID, library.MoveItemDone, "")
+}
+
+// olderJobPlan is the saved plan of a job made before items carried their own source; empty for any newer job.
+func (j *Job) olderJobPlan(ctx context.Context, jobID int64) (map[int64]mover.PlannedMove, error) {
+	planJSON, err := j.moveJobs.Plan(ctx, jobID)
+	if err != nil {
+		return nil, fmt.Errorf("moverjob: read plan of move job %d: %w", jobID, err)
+	}
+	if planJSON == "" {
+		return nil, nil
+	}
+	var plan mover.MovePlan
+	if err := json.Unmarshal([]byte(planJSON), &plan); err != nil {
+		return nil, fmt.Errorf("moverjob: decode plan for job %d: %w", jobID, err)
+	}
+	planned := make(map[int64]mover.PlannedMove, len(plan.Moves))
+	for _, move := range plan.Moves {
+		planned[move.MediaObjectID] = move
+	}
+	return planned, nil
+}
+
+// plannedMoveOf is what the item itself says of its move, or the older job's saved plan when it says nothing.
+func plannedMoveOf(item library.Item, older map[int64]mover.PlannedMove) mover.PlannedMove {
+	if item.SourceRelPath == "" {
+		return older[item.MediaObjectID]
+	}
+	return mover.PlannedMove{
+		MediaObjectID: item.MediaObjectID, SourceRootFolderID: item.SourceRootID, SourceRelPath: item.SourceRelPath,
+		DestRootFolderID: item.DestRootID, DestRelPath: item.DestRelPath, SizeBytes: item.Bytes, AffinityKey: item.AffinityKey,
+	}
 }
 
 func (j *Job) removeMovedSource(move mover.PlannedMove) {

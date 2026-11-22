@@ -639,6 +639,8 @@ type MoveItem struct {
 	State         string
 	Error         sql.NullString
 	KeepSource    int64
+	SourceRootID  int64
+	SourceRelPath string
 }
 
 type MoveItemCompanion struct {

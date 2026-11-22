@@ -4,7 +4,6 @@ package renamejob
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -125,15 +124,12 @@ func commit(ctx context.Context, cfg Config, plan mover.MovePlan, categoryID *in
 		items[i] = library.NewMoveItem{
 			MediaObjectID: move.MediaObjectID, AffinityKey: move.AffinityKey, KeepSource: keepSource,
 			DestRootID: move.DestRootFolderID, DestRelPath: move.DestRelPath, Bytes: move.SizeBytes,
+			SourceRootID: move.SourceRootFolderID, SourceRelPath: move.SourceRelPath,
 		}
 		for _, companion := range move.Companions {
 			items[i].Companions = append(items[i].Companions, library.MoveCompanion(companion))
 		}
 		bytesTotal += move.SizeBytes
-	}
-	planJSON, err := json.Marshal(plan)
-	if err != nil {
-		return 0, fmt.Errorf("encode the plan: %w", err)
 	}
 	now := cfg.Clock
 	if now == nil {
@@ -141,7 +137,7 @@ func commit(ctx context.Context, cfg Config, plan mover.MovePlan, categoryID *in
 	}
 	jobID, err := cfg.MoveJobs.Create(ctx, library.NewMoveJob{
 		Reason: string(plan.Reason), FilesTotal: int64(len(items)), BytesTotal: bytesTotal,
-		PlanJSON: string(planJSON), CreatedAt: now.Now().Unix(), CategoryID: categoryID,
+		CreatedAt: now.Now().Unix(), CategoryID: categoryID,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("create the move job: %w", err)

@@ -242,12 +242,12 @@ func TestEngine_MovesAWorkToAnotherLibrarysRoot(t *testing.T) {
 	}
 	want := map[string]library.NewMoveItem{
 		"Show/Season 1/Show - S01E01 - Pilot.mkv": {MediaObjectID: 1, AffinityKey: "work:5", DestRootID: 2, DestRelPath: "Show/Season 1/Show - S01E01 - Pilot.mkv",
-			Bytes: 10, KeepSource: true, Companions: []library.MoveCompanion{
+			Bytes: 10, KeepSource: true, SourceRootID: 1, SourceRelPath: "Show/Season 1/Show - S01E01.mkv", Companions: []library.MoveCompanion{
 				{SourceRelPath: "Show/Season 1/Show - S01E01.en.srt", DestRelPath: "Show/Season 1/Show - S01E01 - Pilot.en.srt"},
 				{SourceRelPath: "Show/tvshow.nfo", DestRelPath: "Show/tvshow.nfo"},
 			}},
 		"Show/Season 1/Show - S01E02.mkv": {MediaObjectID: 2, AffinityKey: "work:5", DestRootID: 2, DestRelPath: "Show/Season 1/Show - S01E02.mkv",
-			Bytes: 10, KeepSource: true},
+			Bytes: 10, KeepSource: true, SourceRootID: 1, SourceRelPath: "Show/Season 1/Show - S01E02.mkv"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("items = %+v\nwant %+v", got, want)

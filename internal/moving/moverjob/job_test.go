@@ -748,9 +748,11 @@ func TestJob_ResumeKeepsAnOldSourceWhoseContentDiffers(t *testing.T) {
 	for _, tc := range []struct {
 		name, oldContent string
 		wantKept         bool
+		savedPlan        bool
 	}{
-		{"identical copy is removed", "the bytes", false},
-		{"same size, different bytes is kept", "thE bytes", true},
+		{"identical copy is removed", "the bytes", false, false},
+		{"same size, different bytes is kept", "thE bytes", true, false},
+		{"older job: identical copy is removed by the saved plan", "the bytes", false, true},
 	} {
 		fx := newFixture(t)
 		fx.writeFile(t, "/root2/Artist/Album/track.flac", "the bytes")
@@ -764,16 +766,22 @@ func TestJob_ResumeKeepsAnOldSourceWhoseContentDiffers(t *testing.T) {
 		if err != nil {
 			t.Fatalf("marshal plan: %v", err)
 		}
+		item := library.NewMoveItem{
+			MediaObjectID: objectID, DestRootID: 2, DestRelPath: "Artist/Album/track.flac", Bytes: 9,
+			SourceRootID: 1, SourceRelPath: "Artist/Album/track.flac",
+		}
+		planJSON := ""
+		if tc.savedPlan {
+			planJSON, item.SourceRootID, item.SourceRelPath = string(plan), 0, ""
+		}
 		moveJobs := library.NewMoveJobs(fx.store)
 		jobID, err := moveJobs.Create(t.Context(), library.NewMoveJob{
-			Reason: string(mover.ReasonCategory), FilesTotal: 1, BytesTotal: 9, PlanJSON: string(plan), CreatedAt: fx.clock.Now().Unix(),
+			Reason: string(mover.ReasonCategory), FilesTotal: 1, BytesTotal: 9, PlanJSON: planJSON, CreatedAt: fx.clock.Now().Unix(),
 		})
 		if err != nil {
 			t.Fatalf("Create: %v", err)
 		}
-		if err := moveJobs.AddItems(t.Context(), jobID, []library.NewMoveItem{{
-			MediaObjectID: objectID, DestRootID: 2, DestRelPath: "Artist/Album/track.flac", Bytes: 9,
-		}}); err != nil {
+		if err := moveJobs.AddItems(t.Context(), jobID, []library.NewMoveItem{item}); err != nil {
 			t.Fatalf("AddItems: %v", err)
 		}
 		roots := fakeRoots{1: {Path: "/root1", FSID: "fs-a"}, 2: {Path: "/root2", FSID: "fs-b"}}

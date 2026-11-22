@@ -84,6 +84,9 @@ type Item struct {
 	Error         string
 	// KeepSource copies the file to its destination as a further path instead of moving it.
 	KeepSource bool
+	// SourceRootID and SourceRelPath say where the file was when planned; zero and empty on an item of an older job.
+	SourceRootID  int64
+	SourceRelPath string
 }
 
 // NewMoveItem is what AddItems needs for one file a plan approved.
@@ -97,6 +100,9 @@ type NewMoveItem struct {
 	Companions []MoveCompanion
 	// KeepSource copies instead of moving: the file stays and the copy is a further path of it.
 	KeepSource bool
+	// SourceRootID and SourceRelPath are where the file is when planned, kept so a resumed job can tidy the old path.
+	SourceRootID  int64
+	SourceRelPath string
 }
 
 // MoveCompanion is one file that moves with an item, within the item's root.
@@ -140,6 +146,7 @@ func (m MoveJobs) AddItems(ctx context.Context, jobID int64, items []NewMoveItem
 					MoveJobID: jobID, MediaObjectID: item.MediaObjectID, AffinityKey: item.AffinityKey,
 					DestRootID: item.DestRootID, DestRelPath: item.DestRelPath, Bytes: item.Bytes,
 					State: MoveItemPending, KeepSource: boolToInt(item.KeepSource),
+					SourceRootID: item.SourceRootID, SourceRelPath: item.SourceRelPath,
 				}); err != nil {
 					return fmt.Errorf("insert item for media object %d: %w", item.MediaObjectID, err)
 				}
@@ -373,5 +380,6 @@ func itemFromRow(row librarydb.MoveItem) Item {
 		MoveJobID: row.MoveJobID, MediaObjectID: row.MediaObjectID, AffinityKey: row.AffinityKey,
 		DestRootID: row.DestRootID, DestRelPath: row.DestRelPath, Bytes: row.Bytes,
 		State: row.State, Error: row.Error.String, KeepSource: row.KeepSource == 1,
+		SourceRootID: row.SourceRootID, SourceRelPath: row.SourceRelPath,
 	}
 }

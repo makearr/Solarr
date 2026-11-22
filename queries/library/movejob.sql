@@ -49,14 +49,14 @@ WHERE id = sqlc.arg(id);
 -- shape ImportSessions.AddUnits already uses) -- modernc's sqlite driver
 -- does not support :copyfrom (pgx/mysql only).
 -- name: InsertMoveItem :exec
-INSERT INTO move_item (move_job_id, media_object_id, affinity_key, dest_root_id, dest_rel_path, bytes, state, keep_source)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO move_item (move_job_id, media_object_id, affinity_key, dest_root_id, dest_rel_path, bytes, state, keep_source, source_root_id, source_rel_path)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- Oldest (insertion order, via rowid on a WITHOUT ROWID table's own implicit
 -- ordering by the primary key) pending item first -- Apply works through a
 -- job's own items one at a time, resumable: a restart just asks again.
 -- name: NextPendingMoveItem :one
-SELECT move_job_id, media_object_id, affinity_key, dest_root_id, dest_rel_path, bytes, state, error, keep_source
+SELECT move_job_id, media_object_id, affinity_key, dest_root_id, dest_rel_path, bytes, state, error, keep_source, source_root_id, source_rel_path
 FROM move_item WHERE move_job_id = ? AND state != 'DONE' AND state != 'FAILED'
 ORDER BY media_object_id LIMIT 1;
 
@@ -74,7 +74,7 @@ UPDATE move_job SET
 WHERE id = sqlc.arg(move_job_id);
 
 -- name: ListMoveItems :many
-SELECT move_job_id, media_object_id, affinity_key, dest_root_id, dest_rel_path, bytes, state, error, keep_source
+SELECT move_job_id, media_object_id, affinity_key, dest_root_id, dest_rel_path, bytes, state, error, keep_source, source_root_id, source_rel_path
 FROM move_item WHERE move_job_id = ? ORDER BY media_object_id;
 
 -- name: InsertMoveItemCompanion :exec

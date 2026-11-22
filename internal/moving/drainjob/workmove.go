@@ -2,7 +2,6 @@ package drainjob
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -94,16 +93,13 @@ func commitMove(ctx context.Context, cfg Config, plan mover.MovePlan) (Result, e
 		items[i] = library.NewMoveItem{
 			MediaObjectID: m.MediaObjectID, AffinityKey: m.AffinityKey,
 			DestRootID: m.DestRootFolderID, DestRelPath: m.DestRelPath, Bytes: m.SizeBytes,
+			SourceRootID: m.SourceRootFolderID, SourceRelPath: m.SourceRelPath,
 		}
 		bytesTotal += m.SizeBytes
 	}
-	planJSON, err := json.Marshal(plan)
-	if err != nil {
-		return Result{}, fmt.Errorf("drainjob: encode plan: %w", err)
-	}
 	jobID, err := cfg.MoveJobs.Create(ctx, library.NewMoveJob{
 		Reason: string(mover.ReasonMove), FilesTotal: int64(len(items)), BytesTotal: bytesTotal,
-		PlanJSON: string(planJSON), CreatedAt: cfg.Clock.Now().Unix(),
+		CreatedAt: cfg.Clock.Now().Unix(),
 	})
 	if err != nil {
 		return Result{}, fmt.Errorf("drainjob: create move job: %w", err)
