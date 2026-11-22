@@ -311,3 +311,27 @@ unverified album (D6), unmonitored, under the name a scan of its folder would gi
 gives up its files and stays wanted.
 
 An automatic refresh rescans only the folders of files that met no track of a wanted album; a person's refresh reads them all.
+
+## Release-name parser
+
+`internal/identify/parse` ports the vocabulary and cascades of Lidarr's `Parser.cs` and `QualityParser.cs` (ADR-18, commit in `ATTRIBUTION.md`):
+music identity, the quality vocabulary and the media-type-independent regexes. Captures land on `model.Attributes`' orthogonal fields, never on
+Lidarr's flat quality enum (ADR-18, ADR-40). The golden corpus in `testdata/releases` is the proof; there is no .NET runtime to compare against.
+
+- **RE2 rewrites.** RE2 has no backreferences or lookaround. Each pattern that used one is an explicit two-pass match: match without the
+  assertion, then check the neighbouring bytes (`versionRe` checks the three bytes before "v2" so "MP3" is not a version; the air-date regexes
+  check the bytes around the date so an 8-digit id is not one; `NormalizeRegex` skips a filler word at either edge of the string).
+- **Release group.** The original `ReleaseGroupRegex` reuses a group name across alternatives and uses lookahead. The rewrite collects every
+  `-token` and `[-._ ]\[token\]$` candidate, drops those with a codec word after them and takes the last, as `MatchCollection.Last()` does. A name
+  ending bare in a codec word is its own group, as in the original. A candidate that is wholly a codec or source name is never a group.
+- **Differences from upstream.** The artist portion is stripped before group extraction (a hyphenated artist such as "Jay-Z" would collide with
+  the dash-token scan), so a bracketed anime sub-group is recognised only at the start of the album segment. The leading-artist alternative of
+  `CleanReleaseGroupRegex` is not carried: `extractReleaseGroup` already takes the last valid candidate, and a leading strip risks eating a dash
+  inside an artist name. The artist/album segmentation is the project's own; it measured more accurate than `ReportAlbumTitleRegex`.
+- **Segmentation.** A lone remainder is checked first for a plain-dash scene-tag tail after the artist (`findUnspacedTagRun`, which fires only
+  where the following token is recognised vocabulary or a bare barcode, and skips a year range such as "1969-1982"). `stripNoiseSegments` works
+  from the end, trims word by word and drops the group by exact match on the group already extracted from the uncleaned title. Phrases are
+  matched by whole word, never substring ("ep" inside a title word, "album" inside "Random Album Title").
+- **Claims.** A container (M4A) is claimed on `Attributes.Container`, not as a codec. A barcode run is discarded from the title and not stored;
+  `EnrichJob` sets it once a release is matched. Bare fixed-rate MP3 numbers ("320") and scene abbreviations (VLS, CDM, CDS) are public format
+  conventions, not upstream code.

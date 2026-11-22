@@ -6,16 +6,7 @@ import (
 	"strings"
 )
 
-// This file is the ADR-18 port proper: regex vocabulary and cascades taken from
-// Lidarr's Parser.cs and QualityParser.cs (commit recorded in ATTRIBUTION.md), at
-// the scope decided 2026-09-04 -- music identity, the quality vocabulary, and the
-// 21 media-type-independent regexes. Go's RE2 has no backreferences or lookaround;
-// every pattern that used either is rewritten as an explicit two-pass match, noted
-// at each one, and proven against the golden corpus rather than against the
-// original .NET engine (this project has no .NET runtime to compare against).
-//
-// The port takes vocabulary and structure, never Lidarr's flat Quality enum
-// (ADR-18, ADR-40): captures land on model.Attributes' orthogonal fields instead.
+// The ADR-18 port of Lidarr's parser vocabulary and cascades; RE2 rewrites and deviations: documentation/music-identification.md#release-name-parser.
 
 // isHashedRelease ports Lidarr's RejectHashedReleasesRegex -- release names that
 // are actually just a hash or a known junk pattern, never real identity. None of
@@ -76,13 +67,7 @@ var (
 	commonWordRe     = regexp.MustCompile(`(?i)\b(a|an|the|and|or|of)\b\s?`)
 	duplicateSpaceRe = regexp.MustCompile(`\s{2,}`)
 
-	// cleanReleaseGroupSuffixRe strips known non-group junk suffixes (NZBGeek
-	// reposting artifacts) before release-group extraction. Ported from the
-	// second alternative of CleanReleaseGroupRegex; the first alternative
-	// (`^(.*?[-._ ])`, stripping the leading artist token) is deliberately not
-	// carried -- see ATTRIBUTION.md: extractReleaseGroup already picks the last
-	// valid candidate, so a leading strip buys nothing and risks eating a real
-	// dash inside a multi-word artist name (e.g. "Bovo Thugs-n-Sabedup").
+	// cleanReleaseGroupSuffixRe strips known junk suffixes before group extraction; the leading-artist alternative is not carried (documentation/music-identification.md#release-name-parser).
 	cleanReleaseGroupSuffixRe = regexp.MustCompile(`(?i)(?:-(?:RP|1|NZBGeek|Obfuscated|Scrambled|sample|Pre|postbot|xpost|Rakuv[a-z0-9]*|WhiteRev|BUYMORE|AsRequested|AlternativeToRequested|GEROV|Z0iDS3N|Chamele0n|4P|4Planet|AlteZachen|RePACKPOST))+$`)
 
 	// exceptionReleaseGroupExactRe has no lookaround in the original -- ported
@@ -95,10 +80,7 @@ var (
 // step is worth attempting -- title starts with a bracketed subgroup tag.
 var animeReleaseGroupRe = regexp.MustCompile(`^\[([^\s].*?[^\s])\](?:_|-|\s|\.)?`)
 
-// exceptionReleaseGroupWords is ExceptionReleaseGroupRegex's fixed vocabulary.
-// The original used lookbehind `(?<=[._ \[])` and lookahead `(?=\]|\))` --
-// rewritten below as an explicit boundary check (isSeparatorByte /
-// isCloserByte) rather than regex assertions RE2 cannot express.
+// exceptionReleaseGroupWords is ExceptionReleaseGroupRegex's vocabulary; its lookarounds are an explicit boundary check (isSeparatorByte, isCloserByte).
 var exceptionReleaseGroupWords = []string{
 	"Silence", "afm72", "Panda", "Ghost", "MONOLITH", "Tigole", "Joy", "ImE", "UTR",
 	"t3nzin", "Anime Time", "Project Angel", "Hakata Ramen", "HONE", "Vyndros",
@@ -146,23 +128,10 @@ var releaseGroupCandidateRe = regexp.MustCompile(`(?i)-([a-z0-9]+)`)
 var releaseGroupBracketRe = regexp.MustCompile(`(?i)[-._ ]\[([a-z0-9]+)\]$`)
 var codecWordRe = regexp.MustCompile(`(?i)MP3|ALAC|FLAC|WEB`)
 
-// releaseGroupTag ports ReleaseGroupRegex, whose original form is
-// `-(?<releasegroup>[a-z0-9]+(?!.+?(?:MP3|ALAC|FLAC|WEB)))(?<!.*?MP3|ALAC|FLAC|WEB)(?:\b|[-._ ]|$)|[-._ ]\[(?<releasegroup>[a-z0-9]+)\]$`.
-// RE2 rejects it twice over: lookaround, and a duplicate group name reused
-// across the alternation. Rewritten as an explicit two-pass match: collect every
-// `-token` and `[-._ ]\[token\]$` candidate, keep the ones with no codec word
-// anywhere after them (the lookahead's actual effect), and take the last
-// survivor -- exactly what MatchCollection.Last() picks in the original. A name
-// ending bare in a codec word with nothing after it (e.g. "...-FLAC") is
-// captured as its own release group by the original regex too; this rewrite
-// keeps that faithfully rather than "fixing" it.
-// codecWordExact excludes a candidate whose entire value IS a codec/source
-// name -- found necessary against real corpus fixtures ending "... [FLAC]" or
-// "... [WEB]" with no real scene group at all (the bracket form has no
-// codec-word lookahead in the original regex to catch this, only the dash
-// form does). A release group is never literally the name of an audio codec.
+// codecWordExact names the values that are a codec or source and never a release group ("... [FLAC]" has no group).
 var codecWordExact = map[string]bool{"mp3": true, "alac": true, "flac": true, "web": true}
 
+// releaseGroupTag is ReleaseGroupRegex as a two-pass match that keeps the last candidate with no codec word after it.
 func releaseGroupTag(title string) string {
 	type candidate struct {
 		start, end int
@@ -199,13 +168,7 @@ func releaseGroupTag(title string) string {
 	return last.value
 }
 
-// stripArtistPrefixForGroup removes the artist portion before release-group
-// extraction runs -- Lidarr's own ParseReleaseGroup runs on the whole release
-// title, but a hyphenated artist name ("Jay-Z", "Bovo Thugs-n-Sabedup") then
-// collides with ReleaseGroupRegex's dash-token scan, which was designed for a
-// scene tag, not a name. Found against this project's own golden corpus
-// (ATTRIBUTION.md); dropping the artist first removes the false match without
-// touching a genuine trailing group tag, which always sits well past it.
+// stripArtistPrefixForGroup removes the artist first so a hyphenated artist name does not collide with the dash-token scan.
 func stripArtistPrefixForGroup(s string) string {
 	if loc := splitDashRe.FindStringIndex(s); loc != nil {
 		return s[loc[1]:]
@@ -216,13 +179,7 @@ func stripArtistPrefixForGroup(s string) string {
 	return s
 }
 
-// extractReleaseGroup ports ParseReleaseGroup's cascade: anime bracket, then the
-// known-junk-suffix strip, then the two exception vocabularies, then the general
-// ReleaseGroupRegex rewrite above. title is expected to already have the file
-// extension AND the artist portion removed (stripArtistPrefixForGroup) --
-// unlike upstream, which runs this on the whole release title; a bracketed
-// anime subgroup tag is consequently only recognised when it leads the album
-// segment itself, not the very start of an "Artist - Album" release name.
+// extractReleaseGroup is ParseReleaseGroup's cascade; title must already lack the extension and the artist portion.
 func extractReleaseGroup(title string) string {
 	title = strings.TrimSpace(title)
 	title = websitePrefixRe.ReplaceAllString(title, "")
@@ -269,20 +226,13 @@ func removeFileExtension(title string) string {
 // requires, so replacing the whole `digits%` match is exactly equivalent.
 var percentRe = regexp.MustCompile(`\b(\d+)%`)
 
-// fillerWordRe and nonWordRe two-pass NormalizeRegex
-// (`((?:\b|_)(?<!^)([aà](?!$)|an|the|and|or|of)(?!$)(?:\b|_))|\W|_`): the
-// lookaround only ever excluded a filler word that was itself the entire
-// leading or trailing token, so matches at either edge of the (underscore-
-// normalised) string are simply skipped rather than removed.
+// fillerWordRe and nonWordRe two-pass NormalizeRegex: a filler word that is the whole leading or trailing token is skipped, not removed.
 var (
 	fillerWordRe = regexp.MustCompile(`(?i)\b(a|à|an|the|and|or|of)\b`)
 	nonWordRe    = regexp.MustCompile(`[^\w]`)
 )
 
-// CleanArtistName ports Parser.CleanArtistName: a lowercase, punctuation-free
-// key for exact-match lookups, with the common filler words dropped unless one
-// of them is the whole name. A pure-numeric name (a track number mistaken for
-// a name) is returned unchanged, matching the original's own guard.
+// CleanArtistName is a lowercase punctuation-free lookup key without filler words; a purely numeric name is returned unchanged.
 func CleanArtistName(name string) string {
 	if _, err := strconv.Atoi(name); err == nil {
 		return name
@@ -308,10 +258,7 @@ func replacePercent(s string) string {
 	return percentRe.ReplaceAllString(s, "${1}percent")
 }
 
-// NormalizeTitle ports Parser.NormalizeTitle: word delimiters collapse to a
-// single space, punctuation drops, then the common filler words drop too --
-// used for loose title-key comparisons, distinct from this package's own
-// Normalize (matching-oriented, casing/whitespace only).
+// NormalizeTitle collapses delimiters, drops punctuation and filler words for loose title keys, unlike this package's Normalize.
 func NormalizeTitle(title string) string {
 	title = wordDelimiterRe.ReplaceAllString(title, " ")
 	title = punctuationRe.ReplaceAllString(title, "")
@@ -346,23 +293,13 @@ func RemoveAfterDash(s string) string {
 	return strings.TrimSpace(afterDashRe.ReplaceAllString(s, ""))
 }
 
-// airDateRe and sixDigitAirDateRe two-pass AirDateRegex and SixDigitAirDateRegex:
-// both used `(?<!\d)`/`(?=...)` purely to stop a longer digit run from being
-// mistaken for a date (e.g. an 8-digit ID). Matched without the assertion, then
-// filtered by checking the surrounding bytes directly against where the
-// assertion sat -- immediately before and after the date span itself, not the
-// (.*?) prefix capture.
+// airDateRe and sixDigitAirDateRe check the bytes around the date in place of the original's lookaround, so a longer digit run is not a date.
 var (
 	airDateRe         = regexp.MustCompile(`^(.*?)((\d{4})[_.-]([0-1][0-9])[_.-]([0-3][0-9])|([0-1][0-9])[_.-]([0-3][0-9])[_.-](\d{4}))`)
 	sixDigitAirDateRe = regexp.MustCompile(`[_.-]([1-9]\d)([0-1][0-9])([0-3][0-9])[_.-]`)
 )
 
-// normalizeAirDate rewrites an embedded YYYY-MM-DD or MM-DD-YYYY date to
-// "prefix" + "YYYY.MM.DD", matching Lidarr's own AirDateRegex substitution --
-// used for dated live recordings and bootlegs, a real shape in this project's
-// own library ("Safav Jam ... 04 12 94" uses spaces and is intentionally not
-// touched here; only the underscore/dot/dash separated form is dated content
-// this regex ever claimed).
+// normalizeAirDate rewrites an embedded YYYY-MM-DD or MM-DD-YYYY date to YYYY.MM.DD for dated live recordings; space-separated dates are left alone.
 func normalizeAirDate(s string) string {
 	m := airDateRe.FindStringSubmatchIndex(s)
 	if m == nil {
@@ -401,12 +338,7 @@ func normalizeSixDigitAirDate(s string) string {
 
 func isDigit(b byte) bool { return b >= '0' && b <= '9' }
 
-// Quality-modifier vocabulary, ported from QualityParser.cs. properRe, repackRe
-// and realRe have no lookaround. versionRe's original,
-// `(?:\d(?<!\bMP3\b))[-._ ]?v(?<version>\d)[-._ ]|\[v(?<version>\d)\]|repack(?<version>\d)|rerip(?<version>\d)`,
-// uses a lookbehind to stop the "3" in "MP3" from being read as the digit
-// before "v2" -- rewritten as a plain digit-before-v match, filtered by
-// checking the three preceding bytes directly.
+// Quality-modifier vocabulary; versionRe's lookbehind becomes a digit-before-v match that checks the three preceding bytes so "MP3" is not a version.
 var (
 	properRe         = regexp.MustCompile(`(?i)\b(proper)\b`)
 	repackRe         = regexp.MustCompile(`(?i)\b(repack\d?|rerip\d?)\b`)
@@ -446,10 +378,7 @@ func parseVersion(lower string) (int, bool) {
 	return 0, false
 }
 
-// isProperRepack ports ParseQualityModifiers' three revision signals into one
-// bool -- model.Attributes tracks "was this release flagged as a corrected
-// re-release" (mirroring media_attributes.proper_repack, ADR-39's claim side),
-// not Lidarr's own version-number bookkeeping, which nothing here consumes yet.
+// isProperRepack folds the three revision signals into the one flag model.Attributes keeps (a corrected re-release).
 func isProperRepack(name string) bool {
 	lower := strings.ToLower(name)
 	if properRe.MatchString(lower) || repackRe.MatchString(lower) {
@@ -461,21 +390,10 @@ func isProperRepack(name string) bool {
 	return realRe.MatchString(name)
 }
 
-// barcodeRe recognises a bare EAN/UPC run (12-14 digits is standard, widened
-// slightly for shorter catalogue-style codes) as a segment to discard rather
-// than treat as part of the album title -- a real shape in WEB releases
-// (architecture.md 4.1's own "EAN-numbered WEB releases" corpus note). The
-// value itself is not persisted: model.Attributes has no barcode field yet,
-// that is EnrichJob's job once a release is matched (architecture.md Appendix D).
+// barcodeRe discards a bare EAN/UPC run from the title; the value is not stored (EnrichJob sets it once a release is matched).
 var barcodeRe = regexp.MustCompile(`^\d{6,14}$`)
 
-// findUnspacedTagRun looks for a scene-tag tail glued onto a title by plain
-// (unspaced) dashes after the title itself was already separated from the
-// artist by " - " -- e.g. "Never Dulaz Nupi Vehupip-5021732472793-WEB-2024-
-// ZzZz". Splitting blindly on every dash is unsafe (it would butcher a title
-// like "The Very Best Of '75-'94"), so this only fires at the first dash whose
-// following token is independently recognisable vocabulary or a bare barcode,
-// never on an unrecognised token.
+// findUnspacedTagRun finds a scene-tag tail glued on by plain dashes, only at a dash whose next token is recognised vocabulary or a barcode.
 func findUnspacedTagRun(s string) (head string, tail []string, ok bool) {
 	parts := strings.Split(s, "-")
 	if len(parts) < 2 {
@@ -486,11 +404,7 @@ func findUnspacedTagRun(s string) (head string, tail []string, ok bool) {
 		if token == "" || strings.Contains(token, " ") {
 			continue
 		}
-		// "1969-1982" is a year range, not a title followed by a tag run --
-		// splitting it here would feed claimField two bare years instead of
-		// letting yearRangeRe recognise the pair as one claim. Skip past it
-		// rather than stopping, so a genuine tag run further along (e.g.
-		// "Title 1969-1982-WEB-2020-GROUP") is still found.
+		// A year range such as "1969-1982" is one claim: skip past it, and keep looking for a tag run further along.
 		prevWords := strings.Fields(parts[i-1])
 		if len(prevWords) > 0 && yearRe.MatchString(prevWords[len(prevWords)-1]) && yearRe.MatchString(token) {
 			continue

@@ -143,8 +143,6 @@ internal/identify/model/decision.go 1
 internal/identify/model/extension.go 3
 internal/identify/model/identify.go 2
 internal/identify/model/navigation.go 2
-internal/identify/parse/lidarr.go 16
-internal/identify/parse/parse.go 17
 internal/identify/parsebook/names.go 1
 internal/identify/parsebook/parse.go 1
 internal/identify/priority/priority.go 9
