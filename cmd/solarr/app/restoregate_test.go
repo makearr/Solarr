@@ -1,7 +1,13 @@
 package app
 
 import (
+	"reflect"
 	"testing"
+
+	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/importing/importjob"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 
 	"github.com/makearr/Solarr/internal/jobs"
 )
@@ -22,5 +28,23 @@ func TestScansIdle(t *testing.T) {
 		if got := scansIdle(test.counts); got != test.want {
 			t.Errorf("%s: idle = %v, want %v", name, got, test.want)
 		}
+	}
+}
+
+// A finished single-file download is imported as the one file of its folder; a folder download whole (V1).
+func TestUntrackedImportPayload(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	putFile(t, fsys, "/dl/solarr/Movie.mp4", "x")
+	putFile(t, fsys, "/dl/solarr/Album/01.flac", "x")
+
+	got := untrackedImportPayload(fsys, "/dl/solarr/Movie.mp4")
+	want := importjob.Payload{SourcePath: "/dl/solarr", Origin: library.ImportOriginWatched, Only: []string{"Movie.mp4"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("file download = %+v, want %+v", got, want)
+	}
+	got = untrackedImportPayload(fsys, "/dl/solarr/Album")
+	want = importjob.Payload{SourcePath: "/dl/solarr/Album", Origin: library.ImportOriginWatched}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("folder download = %+v, want %+v", got, want)
 	}
 }

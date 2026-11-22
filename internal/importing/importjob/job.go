@@ -360,6 +360,14 @@ func (j *Job) runSession(ctx context.Context, job jobs.Job, payload Payload) err
 		j.publishProgress(ctx, sessionID, importPhaseCancelled, "")
 		return j.sessions.Finish(ctx, sessionID, library.ImportCancelled, j.clock.Now().Unix(), "")
 	}
+	if info, statErr := j.fsys.Stat(payload.SourcePath); statErr == nil && !info.IsDir {
+		const reason = "the source is a file, not a folder"
+		if err := j.sessions.Finish(context.WithoutCancel(ctx), sessionID, library.ImportFailed, j.clock.Now().Unix(), reason); err != nil {
+			return err
+		}
+		j.publishProgress(context.WithoutCancel(ctx), sessionID, importPhaseFailed, "")
+		return jobs.Terminalf("importjob.source", payload.SourcePath, errors.New(reason))
+	}
 	j.estimateOnce(ctx, sessionID, payload.SourcePath)
 	j.publishProgress(ctx, sessionID, importPhaseWalking, "")
 	j.reportProgress(ctx, sessionID, job.Progress)

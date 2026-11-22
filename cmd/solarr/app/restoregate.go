@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -149,6 +150,17 @@ func scansIdle(counts map[jobs.State]map[jobs.Pool]int64) bool {
 	return true
 }
 
+// untrackedImportPayload imports a single-file download as the one file of its folder, the shape every download
+// with an Only list already has; a folder is imported whole.
+func untrackedImportPayload(fsys fsx.FS, downloadPath string) importjob.Payload {
+	payload := importjob.Payload{SourcePath: downloadPath, Origin: library.ImportOriginWatched}
+	if info, err := fsys.Stat(downloadPath); err == nil && !info.IsDir {
+		payload.SourcePath = path.Dir(downloadPath)
+		payload.Only = []string{path.Base(downloadPath)}
+	}
+	return payload
+}
+
 // importUntrackedAfterRestore queues an import of every finished download the restore found that nothing references;
 // the import identifies the files by inspection, as every import does, so no item is guessed.
 func (p *process) importUntrackedAfterRestore(ctx context.Context) {
@@ -156,7 +168,7 @@ func (p *process) importUntrackedAfterRestore(ctx context.Context) {
 		if !found.Finished || found.Path == "" {
 			continue
 		}
-		if _, err := importjob.Enqueue(ctx, p.queue, importjob.Payload{SourcePath: found.Path, Origin: library.ImportOriginWatched}); err != nil {
+		if _, err := importjob.Enqueue(ctx, p.queue, untrackedImportPayload(p.fsys, found.Path)); err != nil {
 			p.logger.Warn("restore: a finished download was not queued for import", slog.String("name", found.Name), slog.Any("error", err))
 			continue
 		}

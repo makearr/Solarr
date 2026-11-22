@@ -500,6 +500,25 @@ func TestJob_RecordsFailedForAnUnreadableUnit(t *testing.T) {
 	}
 }
 
+// A source that is a file, not a folder, cannot be walked: the session fails with that reason at once instead of
+// the executor retrying an inspection that never ends.
+func TestJob_FailsASessionWhoseSourceIsAFile(t *testing.T) {
+	fx := newFixture(t, "Artist/Album/01.flac")
+
+	job := fx.job(t, 0.90)
+	err := fx.run(t, job, importjob.Payload{SourcePath: filepath.Join(root, "Artist/Album/01.flac"), Origin: library.ImportOriginWatched})
+	if err == nil || jobs.Classify(err) == jobs.ClassRetryable {
+		t.Fatalf("Run error = %v, want a terminal failure", err)
+	}
+	failed, err := fx.sessions().List(t.Context(), library.ImportFailed, false)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(failed) != 1 || failed[0].Error != "the source is a file, not a folder" {
+		t.Fatalf("failed sessions = %+v, want one with the reason", failed)
+	}
+}
+
 // The exact scenario resumeOrCreate exists for: a job's own executor retries
 // on a plain error, and a retry of the same payload must resume the session
 // an interrupted first attempt already started, not duplicate it or its
