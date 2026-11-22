@@ -1097,7 +1097,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		LibraryMover: adapters.LibraryMove{
 			Registry: p.media, Settings: p.cache, Engine: p.renameEngine(), Works: library.NewWorks(p.library),
 			Desired: library.NewDesired(p.library), MoveJobs: library.NewMoveJobs(p.library), Clock: clock.NewSystem(),
-			Selection: p.worksMonitor(), DefaultProfileID: p.defaultQualityProfileID,
+			Selection: p.worksMonitor(), DefaultProfileID: p.defaultQualityProfileID, Affinity: p.cache,
 			OnMoved: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		},
 		Replanning:    library.NewDesired(p.library),

@@ -32,6 +32,10 @@ type LibraryMove struct {
 	Selection WorksMonitor
 	// DefaultProfileID is the profile items take in a library that names none.
 	DefaultProfileID int64
+	// Affinity answers which root a group of works was placed on; nil means no affinity.
+	Affinity interface {
+		PlacementAffinity(ctx context.Context, categoryID int64, affinityKey string) (int64, bool, error)
+	}
 	// OnMoved is told when a work changed libraries, for the libraries' counts; nil tells nobody.
 	OnMoved func(ctx context.Context)
 }
@@ -67,7 +71,7 @@ func (a LibraryMove) moveWork(ctx context.Context, request apiserver.LibraryMove
 		return apiserver.DrainPlanResult{}, fmt.Sprintf("a %s library cannot name its files", target.MediaType), nil
 	}
 	sourceRoots := rootIDs(snapshot.RootFoldersForCategory(source.ID))
-	dest, found := a.destinationRoot(snapshot, target, detail.RootFolderIDs, workBytes(detail), planned)
+	dest, found := a.destinationRoot(ctx, snapshot, target, detail, planned)
 	if !found {
 		return apiserver.DrainPlanResult{}, fmt.Sprintf("%s has no root folder that takes new files", target.Name), nil
 	}
@@ -188,9 +192,11 @@ func workBytes(detail library.WorkDetail) int64 {
 // destinationRoot is the target root the work's files go to, chosen by the library's placement rules from the roots taking
 // new files, preferring the filesystem the work is on (an instant move). planned is what earlier works of the same request
 // will already occupy on each root.
-func (a LibraryMove) destinationRoot(snapshot *settings.Snapshot, target settings.Category, workRoots []int64, sizeBytes int64, planned map[int64]int64) (int64, bool) {
+func (a LibraryMove) destinationRoot(
+	ctx context.Context, snapshot *settings.Snapshot, target settings.Category, detail library.WorkDetail, planned map[int64]int64,
+) (int64, bool) {
 	filesystem := ""
-	for _, id := range workRoots {
+	for _, id := range detail.RootFolderIDs {
 		if root, found := snapshot.RootFolder(id); found && root.FSID != "" {
 			filesystem = root.FSID
 			break
@@ -208,13 +214,39 @@ func (a LibraryMove) destinationRoot(snapshot *settings.Snapshot, target setting
 		candidate.FreeBytes = max(candidate.FreeBytes-planned[root.ID], 0)
 		candidates = append(candidates, candidate)
 	}
-	chosen, decision, err := placement.Resolve(placement.Request{
-		CategoryID: target.ID, SizeBytes: sizeBytes, Strategy: placement.StrategyMostFreeSpace, SourceFSID: filesystem,
-	}, candidates)
+	request := placement.Request{
+		CategoryID: target.ID, SizeBytes: workBytes(detail), Strategy: placement.StrategyMostFreeSpace, SourceFSID: filesystem,
+	}
+	if key := a.affinityKey(detail, target); key != "" && a.Affinity != nil {
+		request.AffinityEnabled, request.AffinityKey = true, key
+		if rootID, found, err := a.Affinity.PlacementAffinity(ctx, target.ID, key); err == nil && found {
+			request.ExistingAffinityRoot = &rootID
+		}
+	}
+	chosen, decision, err := placement.Resolve(request, candidates)
 	if err != nil || decision.Outcome != placement.OutcomePlaced {
 		return 0, false
 	}
 	return chosen.RootFolderID, true
+}
+
+// affinityKey is the key the target's media type places the work under, empty for a type without one.
+func (a LibraryMove) affinityKey(detail library.WorkDetail, target settings.Category) string {
+	if a.Registry == nil {
+		return ""
+	}
+	keyer, ok := media.Capability[media.AffinityKeyer](a.Registry, media.Key(target.MediaType))
+	if !ok {
+		return ""
+	}
+	subject := media.PlacementSubject{Title: detail.Work.CanonicalTitle, Year: detail.Work.Year.Int64}
+	for _, credit := range detail.Credits {
+		if detail.Work.LeadPersonID.Valid && credit.PersonID == detail.Work.LeadPersonID.Int64 {
+			subject.Lead = credit.PersonName
+			break
+		}
+	}
+	return keyer.PlacementKey(subject)
 }
 
 // MoveSelectionToLibrary moves or copies every work of a selection, each on its own: a work that cannot go is

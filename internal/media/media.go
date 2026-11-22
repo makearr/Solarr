@@ -700,6 +700,20 @@ type Jobs interface {
 	RegisterJobs(register JobRegistrar) error
 }
 
+// PlacementSubject is what a type's placement affinity key is drawn from.
+type PlacementSubject struct {
+	Title string
+	Year  int64
+	// Lead is the name of the work's lead person, empty when it has none.
+	Lead string
+}
+
+// AffinityKeyer is the capability of a media type that keeps the works of one group on one root folder.
+type AffinityKeyer interface {
+	// PlacementKey is the key the subject places under, empty when it has none and so no affinity applies.
+	PlacementKey(subject PlacementSubject) string
+}
+
 // Registry holds the media types compiled into the binary, in registration order.
 type Registry struct {
 	modules map[Key]Module

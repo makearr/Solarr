@@ -105,6 +105,9 @@ func (Module) RecogniseRelease(title string) []media.ReleaseClaim {
 	return works.RecogniseVideoRelease(title)
 }
 
+// PlacementKey implements media.AffinityKeyer.
+func (Module) PlacementKey(subject media.PlacementSubject) string { return PlacementKey(subject.Title) }
+
 func (Module) Descriptor() media.Descriptor {
 	return media.Descriptor{
 		Key:       MediaType,
@@ -182,3 +185,5 @@ func (m Module) PlaceFile(ctx context.Context, categoryID, mediaObjectID int64, 
 	}
 	return m.Files.PlaceFile(ctx, categoryID, mediaObjectID, placement, wholeFolder)
 }
+
+var _ media.AffinityKeyer = Module{}

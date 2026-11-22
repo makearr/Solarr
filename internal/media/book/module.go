@@ -144,6 +144,11 @@ func (f Format) fileSettings() []media.FileSetting {
 	}
 }
 
+// PlacementKey implements media.AffinityKeyer.
+func (m Module) PlacementKey(subject media.PlacementSubject) string {
+	return PlacementKey(m.Format, subject.Title)
+}
+
 // Descriptor implements media.Module.
 func (m Module) Descriptor() media.Descriptor {
 	format := m.Format
@@ -196,3 +201,5 @@ func (m Module) PlaceFile(ctx context.Context, categoryID, mediaObjectID int64, 
 	}
 	return m.Files.PlaceFile(ctx, categoryID, mediaObjectID, placement, wholeFolder)
 }
+
+var _ media.AffinityKeyer = Module{}

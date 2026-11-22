@@ -137,6 +137,11 @@ func (Module) RecogniseRelease(title string) []media.ReleaseClaim {
 	return out
 }
 
+// PlacementKey implements media.AffinityKeyer: an album places under its artist.
+func (Module) PlacementKey(subject media.PlacementSubject) string {
+	return artistAffinityKey(subject.Lead)
+}
+
 func (Module) Descriptor() media.Descriptor {
 	return media.Descriptor{
 		Key:       MediaType,
@@ -196,3 +201,5 @@ func (Module) NamingExamples(profile settings.NamingProfile) []media.NamingExamp
 	}
 	return out
 }
+
+var _ media.AffinityKeyer = Module{}
