@@ -211,3 +211,18 @@ func TestSystemHealth_NamesAWatchedDownloadFolderItCannotRead(t *testing.T) {
 		t.Fatalf("checks = %+v, want %+v", got, want)
 	}
 }
+
+func TestSystemHealth_CountsFollowsThatHaveNoLibrary(t *testing.T) {
+	health := SystemHealth{FollowsWithoutLibrary: func(context.Context) (int64, error) { return 3, nil }}
+	want := []apiserver.HealthCheck{{
+		ID: "follows_without_library", Severity: apiserver.HealthWarning,
+		Message: "3 follows have no library, so the daily check skips them. Open one and choose where its releases go.",
+	}}
+	if got := health.followsWithoutLibrary(t.Context()); !reflect.DeepEqual(got, want) {
+		t.Fatalf("checks = %+v, want %+v", got, want)
+	}
+	none := SystemHealth{FollowsWithoutLibrary: func(context.Context) (int64, error) { return 0, nil }}
+	if got := none.followsWithoutLibrary(t.Context()); len(got) != 0 {
+		t.Fatalf("checks = %+v, want none", got)
+	}
+}

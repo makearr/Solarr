@@ -58,6 +58,8 @@ type SystemHealth struct {
 	// Folders lists the download folders and ReadDir lists one, live: a finished folder Solarr cannot see fails every import; nil skips that check.
 	Folders func(ctx context.Context) ([]settings.DownloadFolder, error)
 	ReadDir func(path string) error
+	// FollowsWithoutLibrary counts the enabled follows no library was recorded for; nil skips that check.
+	FollowsWithoutLibrary func(ctx context.Context) (int64, error)
 	// Now stamps the stale-backup check.
 	Now func() time.Time
 }
@@ -103,6 +105,7 @@ func (a SystemHealth) Checks(ctx context.Context) []apiserver.HealthCheck {
 	checks = append(checks, a.staleBackup(ctx)...)
 	checks = append(checks, a.unreadableFiles(ctx)...)
 	checks = append(checks, a.danglingReferences(ctx)...)
+	checks = append(checks, a.followsWithoutLibrary(ctx)...)
 	checks = append(checks, a.unreadableFinishedFolders(ctx)...)
 	return append(checks, pausedForRoom(snapshot)...)
 }
@@ -161,6 +164,21 @@ func (a SystemHealth) unreadableFinishedFolders(ctx context.Context) []apiserver
 		}
 	}
 	return checks
+}
+
+// followsWithoutLibrary says how many follows have no library: they are skipped until one is chosen.
+func (a SystemHealth) followsWithoutLibrary(ctx context.Context) []apiserver.HealthCheck {
+	if a.FollowsWithoutLibrary == nil {
+		return nil
+	}
+	count, err := a.FollowsWithoutLibrary(ctx)
+	if err != nil || count == 0 {
+		return nil
+	}
+	return []apiserver.HealthCheck{{
+		ID: "follows_without_library", Severity: apiserver.HealthWarning,
+		Message: fmt.Sprintf("%d follows have no library, so the daily check skips them. Open one and choose where its releases go.", count),
+	}}
 }
 
 // danglingReferences names each setting that library rows still point at after it was removed; nothing repairs them.

@@ -53,6 +53,15 @@ func (s Subscriptions) ListEnabled(ctx context.Context) ([]Subscription, error) 
 	return out, nil
 }
 
+// CountWithoutLibrary counts the enabled follows made with no library, which add nothing until they are given one.
+func (s Subscriptions) CountWithoutLibrary(ctx context.Context) (int64, error) {
+	count, err := librarydb.New(s.store.Read()).CountEnabledSubscriptionsWithoutLibrary(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("library: count follows without a library: %w", err)
+	}
+	return count, nil
+}
+
 func subscriptionFrom(row librarydb.Subscription) Subscription {
 	var mediaTypes []string
 	_ = json.Unmarshal([]byte(row.MediaTypesJson), &mediaTypes)

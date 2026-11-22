@@ -131,6 +131,7 @@ type Querier interface {
 	CountDesiredItemsInCategory(ctx context.Context, arg CountDesiredItemsInCategoryParams) (int64, error)
 	CountEditionFiles(ctx context.Context, editionID sql.NullInt64) (int64, error)
 	CountEnabledSubscriptionsForSubject(ctx context.Context, arg CountEnabledSubscriptionsForSubjectParams) (int64, error)
+	CountEnabledSubscriptionsWithoutLibrary(ctx context.Context) (int64, error)
 	// The dashboard's fresh-works count (ADR-55, todo 4.20): every work with a
 	// work_date of kind on or after the cutoff. Distinct since a work can carry
 	// more than one region's own date row for the same kind.

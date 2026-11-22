@@ -906,7 +906,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		SystemHealth: adapters.SystemHealth{
 			Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library), Vanished: p.vanishedFiles(), Registry: p.media,
 			AboveRating: library.NewWorks(p.library).CountAboveRating, Paused: p.outbound().breaker.Paused,
-			Media: p.tool, ProbeFailures: library.NewPhysical(p.library).CountProbeFailures, Dangling: p.dangling,
+			Media: p.tool, ProbeFailures: library.NewPhysical(p.library).CountProbeFailures, Dangling: p.dangling, FollowsWithoutLibrary: library.NewSubscriptions(p.library).CountWithoutLibrary,
 			Folders: p.cache.DownloadFolders, ReadDir: func(path string) error { _, err := p.fsys.ReadDir(path); return err }, Tasks: p.taskRegistry.All, TaskRuns: p.scheduleStates,
 			Backups: backupSource{FS: p.fsys, Directory: p.config.Paths.BackupDir}, Now: clock.NewSystem().Now,
 			BackupInterval: func(now time.Time) time.Duration {

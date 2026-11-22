@@ -257,6 +257,9 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, subject_type, subject_id, media_types_json, roles_json, category_id,
           profile_id, filters_json, monitor_back_catalogue, enabled, user_id, created_at;
 
+-- name: CountEnabledSubscriptionsWithoutLibrary :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM subscription WHERE enabled = 1 AND category_id IS NULL;
+
 -- name: ListEnabledSubscriptions :many
 SELECT id, subject_type, subject_id, media_types_json, roles_json, category_id,
        profile_id, filters_json, monitor_back_catalogue, enabled, user_id, created_at

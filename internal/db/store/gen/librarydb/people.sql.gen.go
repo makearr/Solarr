@@ -249,6 +249,17 @@ func (q *Queries) CountEnabledSubscriptionsForSubject(ctx context.Context, arg C
 	return follows, err
 }
 
+const countEnabledSubscriptionsWithoutLibrary = `-- name: CountEnabledSubscriptionsWithoutLibrary :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM subscription WHERE enabled = 1 AND category_id IS NULL
+`
+
+func (q *Queries) CountEnabledSubscriptionsWithoutLibrary(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countEnabledSubscriptionsWithoutLibrary)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createOrganisation = `-- name: CreateOrganisation :one
 
 INSERT INTO organisation (name, sort_name, kind, parent_id, country, fields_json, monitored)
