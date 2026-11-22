@@ -154,6 +154,7 @@ func (s ArrSetup) downloadClients(ctx context.Context, app settings.ArrApp, clie
 	if err != nil {
 		return fmt.Errorf("download clients: %w", err)
 	}
+	mappings := remotePathMappingsOf(ctx, app, client)
 	known := map[string]bool{}
 	for _, existing := range have {
 		known[strings.TrimRight(existing.BaseURL, "/")] = true
@@ -166,10 +167,20 @@ func (s ArrSetup) downloadClients(ctx context.Context, app settings.ArrApp, clie
 			continue
 		}
 		request := settings.DownloaderRequest{Name: entry.Name, Impl: impl, BaseURL: entry.BaseURL(), Enabled: false, Protocol: string(definition.Protocol)}
-		// Its priority carries over; its category does not, since two apps sharing one category fight over the files.
+		// Its priority and the remote path mapping of its host carry over; its category does not, since two apps sharing one category fight over the files.
+		options := settings.DownloaderOptions{}
 		if entry.Priority >= 1 && entry.Priority <= 50 {
 			priority := entry.Priority
-			if encoded, err := json.Marshal(settings.DownloaderOptions{Priority: &priority}); err == nil {
+			options.Priority = &priority
+		}
+		for _, mapping := range mappings {
+			if strings.EqualFold(mapping.Host, entry.Host) && mapping.RemotePath != "" && mapping.LocalPath != "" {
+				options.RemotePath, options.LocalPath = mapping.RemotePath, mapping.LocalPath
+				break
+			}
+		}
+		if options != (settings.DownloaderOptions{}) {
+			if encoded, err := json.Marshal(options); err == nil {
 				request.SettingsJSON = string(encoded)
 			}
 		}
@@ -181,4 +192,24 @@ func (s ArrSetup) downloadClients(ctx context.Context, app settings.ArrApp, clie
 		}
 	}
 	return errors.Join(failures...)
+}
+
+// remotePathMappingsOf reads the *Arr's Remote Path Mappings; unreadable ones leave the clients without a mapping, which the person sets by hand.
+func remotePathMappingsOf(ctx context.Context, app settings.ArrApp, client arrimport.LidarrClient) []arrimport.RemotePathMapping {
+	var mappings []arrimport.RemotePathMapping
+	var err error
+	switch app {
+	case settings.ArrAppSonarr:
+		mappings, err = client.Sonarr().RemotePathMappings(ctx)
+	case settings.ArrAppRadarr:
+		mappings, err = client.Radarr().RemotePathMappings(ctx)
+	case settings.ArrAppWhisparr:
+		mappings, err = client.Whisparr().RemotePathMappings(ctx)
+	default:
+		mappings, err = client.RemotePathMappings(ctx)
+	}
+	if err != nil {
+		return nil
+	}
+	return mappings
 }

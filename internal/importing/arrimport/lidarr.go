@@ -230,6 +230,24 @@ func (c LidarrClient) DownloadClients(ctx context.Context) ([]DownloadClient, er
 	return c.downloadClients(ctx, "/api/v1/downloadclient")
 }
 
+// RemotePathMapping is one of an *Arr's Remote Path Mappings: where a download client's host says a download is, and where the *Arr sees it.
+type RemotePathMapping struct {
+	Host       string `json:"host"`
+	RemotePath string `json:"remotePath"`
+	LocalPath  string `json:"localPath"`
+}
+
+// RemotePathMappings answers the instance's Remote Path Mappings.
+func (c LidarrClient) RemotePathMappings(ctx context.Context) ([]RemotePathMapping, error) {
+	return c.remotePathMappings(ctx, "/api/v1/remotepathmapping")
+}
+
+func (c LidarrClient) remotePathMappings(ctx context.Context, path string) ([]RemotePathMapping, error) {
+	var mappings []RemotePathMapping
+	err := c.get(ctx, path, &mappings)
+	return mappings, err
+}
+
 // downloadClients reads one *Arr's download clients from its own API version's path; the field shapes are shared.
 func (c LidarrClient) downloadClients(ctx context.Context, path string) ([]DownloadClient, error) {
 	var wire []downloadClientWire

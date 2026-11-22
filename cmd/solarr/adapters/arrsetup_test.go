@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -192,5 +193,45 @@ func TestPusherSendsOnlyWhatSolarrChangedAndNeverForAnUnknownItem(t *testing.T) 
 	}
 	if push.result.Unknown != 1 || push.result.Changed != 1 || push.result.Checked != 3 {
 		t.Errorf("result = %+v, want 3 checked, 1 changed, 1 unknown", push.result)
+	}
+}
+
+// SYNC-7: the remote path mapping of an imported download client's host comes along, so its finished downloads are found.
+func TestArrSetupCarriesTheRemotePathMappingOfAClientsHost(t *testing.T) {
+	cache := newSetupCache(t)
+	fake := clock.NewFakeAtEpoch()
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter)
+	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute})
+	answers := map[string]string{
+		"/api/v1/downloadclient": `[{"name":"Box","implementation":"Sabnzbd","protocol":"usenet","enable":true,"priority":3,
+			"fields":[{"name":"host","value":"sab.example"},{"name":"port","value":8080}]},
+			{"name":"Other","implementation":"Sabnzbd","protocol":"usenet","enable":true,"fields":[{"name":"host","value":"elsewhere.example"},{"name":"port","value":8081}]}]`,
+		"/api/v1/remotepathmapping": `[{"id":1,"host":"SAB.example","remotePath":"/downloads/","localPath":"/data/usenet/"}]`,
+	}
+	client := arrimport.NewLidarrClient(httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), limiter, breaker, httpx.ClientConfig{
+		Provider: "arr-setup-test", UserAgent: "test", Transport: servedBody(func(request *http.Request) string { return answers[request.URL.Path] }),
+	}), "http://lidarr.local", "key")
+	if err := (ArrSetup{Cache: cache, Clock: fake}).downloadClients(t.Context(), settings.ArrAppLidarr, client); err != nil {
+		t.Fatalf("downloadClients: %v", err)
+	}
+	have, err := cache.Downloaders(t.Context())
+	if err != nil || len(have) != 2 {
+		t.Fatalf("downloaders = %v, %v", have, err)
+	}
+	options := map[string]settings.DownloaderOptions{}
+	for _, entry := range have {
+		var parsed settings.DownloaderOptions
+		if entry.SettingsJSON != "" {
+			if err := json.Unmarshal([]byte(entry.SettingsJSON), &parsed); err != nil {
+				t.Fatal(err)
+			}
+		}
+		options[entry.Name] = parsed
+	}
+	if got := options["Box"]; got.RemotePath != "/downloads/" || got.LocalPath != "/data/usenet/" || got.Priority == nil || *got.Priority != 3 {
+		t.Errorf("Box options = %+v, want its host's mapping and priority 3", got)
+	}
+	if got := options["Other"]; got.RemotePath != "" || got.LocalPath != "" {
+		t.Errorf("Other options = %+v, want no mapping: it is another host", got)
 	}
 }

@@ -127,6 +127,11 @@ func (c WhisparrClient) DownloadClients(ctx context.Context) ([]DownloadClient, 
 	return c.inner.downloadClients(ctx, "/api/v3/downloadclient")
 }
 
+// RemotePathMappings answers the instance's Remote Path Mappings.
+func (c WhisparrClient) RemotePathMappings(ctx context.Context) ([]RemotePathMapping, error) {
+	return c.inner.remotePathMappings(ctx, "/api/v3/remotepathmapping")
+}
+
 // MediaManagement answers the instance's Media Management settings.
 func (c WhisparrClient) MediaManagement(ctx context.Context) (MediaManagement, error) {
 	var settings MediaManagement

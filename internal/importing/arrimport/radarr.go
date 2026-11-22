@@ -73,6 +73,11 @@ func (c RadarrClient) DownloadClients(ctx context.Context) ([]DownloadClient, er
 	return c.inner.downloadClients(ctx, "/api/v3/downloadclient")
 }
 
+// RemotePathMappings answers the instance's Remote Path Mappings.
+func (c RadarrClient) RemotePathMappings(ctx context.Context) ([]RemotePathMapping, error) {
+	return c.inner.remotePathMappings(ctx, "/api/v3/remotepathmapping")
+}
+
 // MediaManagement answers the instance's Media Management settings.
 func (c RadarrClient) MediaManagement(ctx context.Context) (MediaManagement, error) {
 	var settings MediaManagement
