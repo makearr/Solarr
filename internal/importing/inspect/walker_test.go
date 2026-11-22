@@ -3,6 +3,7 @@ package inspect_test
 import (
 	"context"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/importing/inspect"
@@ -330,5 +331,20 @@ func TestClassify_AFileInASampleFolderIsJunk(t *testing.T) {
 		if got := inspect.Classify(relPath, big, 0); got != want {
 			t.Errorf("Classify(%q) = %s, want %s", relPath, got, want)
 		}
+	}
+}
+
+// The artwork and sidecars of a disc subfolder follow the album the discs make.
+func TestWalker_TheSidecarsOfDiscSubfoldersFollowTheAlbum(t *testing.T) {
+	tr := newTree(t, "Album/CD1/01.flac", "Album/CD1/cover.jpg", "Album/CD2/01.flac", "Album/CD2/rip.log", "Album/folder.jpg")
+	units, _ := walkAll(t, tr, inspect.WalkOptions{})
+	var got []string
+	for _, other := range units[0].Other {
+		got = append(got, other.RelPath)
+	}
+	slices.Sort(got)
+	want := []string{"Album/CD1/cover.jpg", "Album/CD2/rip.log", "Album/folder.jpg"}
+	if len(units) != 1 || !slices.Equal(got, want) {
+		t.Errorf("units = %d, other = %v, want %v", len(units), got, want)
 	}
 }

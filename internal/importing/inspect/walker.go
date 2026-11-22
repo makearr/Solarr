@@ -94,6 +94,8 @@ func EstimateUnits(ctx context.Context, fsys fsx.FS, root string) (int, error) {
 type clusterFiles struct {
 	media    []File
 	children []string
+	// other are the sidecars and artwork of the disc subfolders, which follow the unit the parent makes of them.
+	other []File
 }
 
 // walkerRun is one Walk call's mutable state, kept off Walker so a Walker
@@ -179,6 +181,7 @@ func (w *walkerRun) visit(ctx context.Context, relative string) (clusterFiles, e
 		if len(child.media) > 0 {
 			bubbled.media = append(bubbled.media, child.media...)
 			bubbled.children = append(bubbled.children, child.children...)
+			ownOther = append(ownOther, child.other...)
 		}
 	}
 
@@ -187,7 +190,7 @@ func (w *walkerRun) visit(ctx context.Context, relative string) (clusterFiles, e
 	if relative != "" && discSubfolderRe.MatchString(path.Base(relative)) {
 		// Defer to the parent, exactly mergeDiscSubfolders' own rule -- a
 		// directory shaped like "CD1" never becomes a unit on its own.
-		return clusterFiles{media: allMedia, children: []string{relative}}, nil
+		return clusterFiles{media: allMedia, children: []string{relative}, other: ownOther}, nil
 	}
 
 	if len(allMedia) == 0 {
