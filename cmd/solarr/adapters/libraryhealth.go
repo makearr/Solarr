@@ -2,6 +2,8 @@ package adapters
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -25,6 +27,23 @@ type LibraryHealth struct {
 	Counters       library.Counters
 }
 
+// unprobedSample lists files with no measured attributes, each with what ffprobe said when it last failed on it.
+func (a LibraryHealth) unprobedSample(ctx context.Context) ([]apiserver.UnprobedFile, error) {
+	unprobed, err := a.Physical.ListUnmeasured(ctx, 0, healthSampleSize, library.IncludeProbeFailures)
+	if err != nil {
+		return nil, fmt.Errorf("library health: unprobed sample: %w", err)
+	}
+	files := make([]apiserver.UnprobedFile, len(unprobed))
+	for i, f := range unprobed {
+		raw, err := a.Physical.ProbeFailureRaw(ctx, f.MediaObjectID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("library health: probe output: %w", err)
+		}
+		files[i] = apiserver.UnprobedFile{RootFolderID: f.RootFolderID, RelPath: f.RelPath, FFprobeOutput: raw}
+	}
+	return files, nil
+}
+
 func (a LibraryHealth) Report(ctx context.Context) (apiserver.LibraryHealthReport, error) {
 	counts, err := a.Counters.Counters(ctx, "library")
 	if err != nil {
@@ -32,13 +51,9 @@ func (a LibraryHealth) Report(ctx context.Context) (apiserver.LibraryHealthRepor
 	}
 	unprobedCount := int(counts["total_files"] - counts["probed"])
 
-	unprobed, err := a.Physical.ListUnmeasured(ctx, 0, healthSampleSize, library.IncludeProbeFailures)
+	unprobedFiles, err := a.unprobedSample(ctx)
 	if err != nil {
-		return apiserver.LibraryHealthReport{}, fmt.Errorf("library health: unprobed sample: %w", err)
-	}
-	unprobedFiles := make([]apiserver.UnprobedFile, len(unprobed))
-	for i, f := range unprobed {
-		unprobedFiles[i] = apiserver.UnprobedFile{RootFolderID: f.RootFolderID, RelPath: f.RelPath}
+		return apiserver.LibraryHealthReport{}, err
 	}
 
 	unmatchedCount, err := a.Unidentified.Count(ctx)

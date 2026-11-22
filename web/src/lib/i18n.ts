@@ -8,6 +8,7 @@ const catalogue = {
   "replace.button": "Move them and remove {name}",
   "replace.none": "There is no other one of this kind to move them to.",
   "replace.keep": "Keep {name}",
+  "health.ffprobeOutput": "What ffprobe said",
   "settings.unreadable.title": "Files that could not be read",
   "settings.unreadable.help": "The attribute probe leaves a damaged or unusual file alone and tries it again after growing waits. This tries every one of them now.",
   "settings.unreadable.button": "Read unreadable files again",

@@ -6419,8 +6419,9 @@ type UnidentifiedPage struct {
 
 // UnprobedFile defines model for UnprobedFile.
 type UnprobedFile struct {
-	RelPath      string `json:"rel_path"`
-	RootFolderId int64  `json:"root_folder_id"`
+	FfprobeOutput string `json:"ffprobe_output"`
+	RelPath       string `json:"rel_path"`
+	RootFolderId  int64  `json:"root_folder_id"`
 }
 
 // UnreadableFilesRetry defines model for UnreadableFilesRetry.

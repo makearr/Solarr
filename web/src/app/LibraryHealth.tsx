@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
+import { t } from "@/lib/i18n";
 
 type UnprobedFile = components["schemas"]["UnprobedFile"];
 type IncompleteWork = components["schemas"]["IncompleteWork"];
@@ -98,8 +99,14 @@ function FileList({ files }: { files: UnprobedFile[] }) {
   return (
     <ul className="divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface text-xs">
       {files.map((file) => (
-        <li key={`${file.root_folder_id}:${file.rel_path}`} className="truncate px-3 py-2 font-mono">
-          {file.rel_path}
+        <li key={`${file.root_folder_id}:${file.rel_path}`} className="px-3 py-2">
+          <div className="truncate font-mono">{file.rel_path}</div>
+          {file.ffprobe_output !== "" && (
+            <details className="mt-1">
+              <summary className="cursor-pointer text-ink-muted">{t("health.ffprobeOutput")}</summary>
+              <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap font-mono text-ink-muted">{file.ffprobe_output}</pre>
+            </details>
+          )}
         </li>
       ))}
     </ul>

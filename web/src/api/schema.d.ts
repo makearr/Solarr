@@ -7445,6 +7445,7 @@ export interface components {
             /** Format: int64 */
             root_folder_id: number;
             rel_path: string;
+            ffprobe_output: string;
         };
         IncompleteWork: {
             /** Format: int64 */

@@ -33,6 +33,8 @@ type LibraryHealthReport struct {
 type UnprobedFile struct {
 	RootFolderID int64
 	RelPath      string
+	// FFprobeOutput is what ffprobe printed the last time it could not read the file; empty when it never failed.
+	FFprobeOutput string
 }
 
 // IncompleteWork is one monitored work still short of its own required track count.
@@ -153,7 +155,7 @@ func categoriesOfflineFilesView(rows []CategoryOfflineFiles) []gen.CategoryOffli
 func unprobedFilesView(files []UnprobedFile) []gen.UnprobedFile {
 	views := make([]gen.UnprobedFile, len(files))
 	for i, f := range files {
-		views[i] = gen.UnprobedFile{RootFolderId: f.RootFolderID, RelPath: f.RelPath}
+		views[i] = gen.UnprobedFile{RootFolderId: f.RootFolderID, RelPath: f.RelPath, FfprobeOutput: f.FFprobeOutput}
 	}
 	return views
 }

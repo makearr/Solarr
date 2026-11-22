@@ -10755,10 +10755,12 @@ components:
 
     UnprobedFile:
       type: object
-      required: [root_folder_id, rel_path]
+      required: [root_folder_id, rel_path, ffprobe_output]
       properties:
         root_folder_id: { type: integer, format: int64 }
         rel_path: { type: string }
+        # What ffprobe printed the last time it could not read the file, empty for a file never tried or one that printed nothing.
+        ffprobe_output: { type: string }
 
     IncompleteWork:
       type: object
