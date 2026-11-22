@@ -19,3 +19,4 @@
 {"input":"Fields.of.Static.-.Songs.for.the.Quiet.Hours.1998.FLAC","artist":"Fields of Static","album":"Songs for the Quiet Hours","year":1998,"format":"flac","lossless":true,"min_confidence":0.5}
 {"input":"Invented Artist - Some.Album.Title [FLAC]","artist":"Invented Artist","album":"Some.Album.Title","format":"flac","lossless":true,"max_confidence":0.7}
 {"input":"Invented Artist-Kaya-WEB-2020-KAYA","artist":"Invented Artist","album":"Kaya","year":2020,"source":"web","release_group":"KAYA","max_confidence":0.4}
+{"input":"Invented_Artist-Some_Album-(CAT123)-WEB-2020-GRP","artist":"Invented Artist","album":"Some Album","year":2020,"source":"web","release_group":"GRP","catalogue_number":"CAT123","min_confidence":0.9}

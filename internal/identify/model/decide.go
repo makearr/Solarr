@@ -39,6 +39,8 @@ const (
 const (
 	ReasonBlockedPattern = "BLOCKED_PATTERN"
 	ReasonBlockedContent = "BLOCKED_CONTENT"
+	// ReasonDiscStructure holds a Blu-ray or DVD folder for a person; it is never placed automatically.
+	ReasonDiscStructure = "DISC_STRUCTURE"
 )
 
 // Decide is ADR-48's DECIDE step, the confidence half: whether IDENTIFY's result

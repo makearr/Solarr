@@ -52,4 +52,6 @@ type Attributes struct {
 	// namesake (ADR-39): the release name flags itself a corrected re-release
 	// ("PROPER", "REPACK", "REAL", or an explicit version bump).
 	ProperRepack bool
+	// CatalogueNumber is the label's number a bracket carried ("LAB12345") or a bare barcode; kept out of the title.
+	CatalogueNumber string
 }

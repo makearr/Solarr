@@ -260,7 +260,7 @@ func parseTitle(title, knownArtist string) Result {
 		BitrateMode: claims.bitrateMode, VBRPreset: claims.vbrPreset, Container: claims.container,
 		Source: claims.source, Edition: claims.edition, ReleaseGroup: group,
 		Discs: claims.discs, BitDepth: claims.bitDepth, SampleRate: claims.sampleRate,
-		ProperRepack: properRepack,
+		ProperRepack: properRepack, CatalogueNumber: claims.catalogue,
 	}
 
 	return Result{
@@ -305,6 +305,7 @@ type claimSet struct {
 	format, source, edition, bitrateMode, vbrPreset, container string
 	lossless                                                   bool
 	unparsed                                                   []string
+	catalogue                                                  string
 }
 
 // extractBrackets removes every (...)/[...]/{...} group that classifies as noise
@@ -319,12 +320,23 @@ func extractBrackets(title, group string, claims *claimSet) string {
 		if group != "" && strings.EqualFold(strings.TrimSpace(inner), group) {
 			return " "
 		}
-		if isNoise(inner, claims) {
+		number := strings.TrimSpace(inner)
+		// A barcode is checked first: claimField would swallow it unrecorded.
+		if !barcodeRe.MatchString(number) && isNoise(inner, claims) {
+			return " "
+		}
+		if catalogueRe.MatchString(number) || barcodeRe.MatchString(number) {
+			if claims.catalogue == "" {
+				claims.catalogue = number
+			}
 			return " "
 		}
 		return match
 	})
 }
+
+// catalogueRe is a label catalogue number in a bracket ("LAB12345", "ABC 123"); upper case only, so "(Skit)" stays a title.
+var catalogueRe = regexp.MustCompile(`^[A-Z]{2,6}[- ]?\d{2,6}$`)
 
 // isNoise reports whether a phrase (bracket contents or a dash segment) is a
 // technical claim, edition marker or collaborator credit -- and if so, records
