@@ -177,6 +177,56 @@ func TestImportPlacesAFolderOfEpisodesUnderTheSeriesAndCoversThem(t *testing.T) 
 	}
 }
 
+// A store error after the episodes were registered must take back the placed files and their rows.
+func TestImportTakesBackEpisodesAndRowsWhenAttachingThemFails(t *testing.T) {
+	service, opened := newService(t, searchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
+	fake := clock.NewFakeAtEpoch()
+	fake.Set(addNow)
+	fsys := fsx.NewMem(fake)
+	for _, dir := range []string{"/downloads", "/library"} {
+		if err := fsys.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	folder := "Example.Show.S01.1080p.WEB-DL.DDP5.1.H.264-GRP"
+	unit := inspect.Unit{Directory: folder}
+	for _, name := range []string{"S01E01", "S01E02"} {
+		rel := folder + "/Example.Show." + name + ".1080p.WEB-DL.DDP5.1.H.264-GRP.mkv"
+		_ = fsys.MkdirAll(path.Dir("/downloads/"+rel), 0o755)
+		file, err := fsys.Create("/downloads/" + rel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = file.Write([]byte("episode " + name))
+		_ = file.Close()
+		unit.Media = append(unit.Media, inspect.File{RelPath: rel, SizeBytes: int64(len("episode " + name)), Class: inspect.ClassMedia})
+	}
+	if _, err := opened.WriteDB().ExecContext(t.Context(),
+		`CREATE TRIGGER refuse_links BEFORE INSERT ON work_file BEGIN SELECT RAISE(ABORT, 'injected'); END`); err != nil {
+		t.Fatalf("create trigger: %v", err)
+	}
+	free := int64(1 << 40)
+	reader := library.NewSeriesReader(opened)
+	importer := tv.NewImporter(tv.ImporterConfig{
+		FS: fsys, Roots: oneRoot{settings.RootFolder{ID: 9, Path: "/library", Online: true, Writable: true, FreeBytes: &free, TotalBytes: &free}},
+		Affinity: memoryAffinity{}, Physical: library.NewPhysical(opened), Series: service.Series, Reader: reader,
+		Identity: library.NewIdentity(opened), Desired: library.NewDesired(opened), Acquisitions: noAcquisition{},
+		Resolver:   tv.Resolver{Service: service, Reader: reader, Clock: fake, DefaultProfileID: 1, Categories: categories{}},
+		Categories: categories{}, Clock: fake,
+	})
+
+	_, _ = importer.ImportBatch(t.Context(), batch.Request{SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{5}})
+	for _, table := range []string{"library_path", "media_object"} {
+		var rows int
+		if err := opened.Read().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+table).Scan(&rows); err != nil || rows != 0 {
+			t.Errorf("%s rows = %d (%v), want 0 after the take-back", table, rows, err)
+		}
+	}
+	if _, err := fsys.Stat("/library/Example Show/Season 1/Example Show - S01E01 - Episode.mkv"); err == nil {
+		t.Error("a placed episode is still on disk after the take-back")
+	}
+}
+
 func TestPreviewHoldsTheUnitForAPersonWithoutPlacingIt(t *testing.T) {
 	service, opened := newService(t, searchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
 	fake := clock.NewFakeAtEpoch()

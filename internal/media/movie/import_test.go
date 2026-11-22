@@ -265,24 +265,31 @@ func TestChooseRootFollowsTheWorksFilesOverAStaleAffinity(t *testing.T) {
 	}
 }
 
-// A store error after the file was registered must take back the placed file and its rows.
-func TestImportTakesBackFileAndRowsWhenAttachingTheFilmFails(t *testing.T) {
-	importer, fsys, write, _, opened := newImporterOver(t, 1<<40, noAcquisition{})
-	unit := inspect.Unit{Directory: "The.Example.Film.1999.1080p", Media: []inspect.File{write("The.Example.Film.1999.1080p/film.mkv")}}
-	if _, err := opened.WriteDB().ExecContext(t.Context(),
-		`CREATE TRIGGER refuse_links BEFORE INSERT ON work_file BEGIN SELECT RAISE(ABORT, 'injected'); END`); err != nil {
-		t.Fatalf("create trigger: %v", err)
-	}
+// A store error at any step after the file was placed must take back the placed file and its rows.
+func TestImportTakesBackFileAndRowsWhenALaterStepFails(t *testing.T) {
+	for _, step := range []struct{ name, table string }{
+		{"registering the file", "library_path"},
+		{"attaching the file to the film", "work_file"},
+	} {
+		t.Run(step.name, func(t *testing.T) {
+			importer, fsys, write, _, opened := newImporterOver(t, 1<<40, noAcquisition{})
+			unit := inspect.Unit{Directory: "The.Example.Film.1999.1080p", Media: []inspect.File{write("The.Example.Film.1999.1080p/film.mkv")}}
+			if _, err := opened.WriteDB().ExecContext(t.Context(),
+				`CREATE TRIGGER refuse BEFORE INSERT ON `+step.table+` BEGIN SELECT RAISE(ABORT, 'injected'); END`); err != nil {
+				t.Fatalf("create trigger: %v", err)
+			}
 
-	_, _ = importer.ImportBatch(t.Context(), batch.Request{SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{5}})
-	for _, table := range []string{"library_path", "media_object"} {
-		var rows int
-		if err := opened.Read().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+table).Scan(&rows); err != nil || rows != 0 {
-			t.Errorf("%s rows = %d (%v), want 0 after the take-back", table, rows, err)
-		}
-	}
-	if entries, _ := fsys.ReadDir("/library/The Example Film (1999)"); len(entries) != 0 {
-		t.Errorf("film folder holds %v, want no placed file", entries)
+			_, _ = importer.ImportBatch(t.Context(), batch.Request{SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{5}})
+			for _, table := range []string{"library_path", "media_object"} {
+				var rows int
+				if err := opened.Read().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+table).Scan(&rows); err != nil || rows != 0 {
+					t.Errorf("%s rows = %d (%v), want 0 after the take-back", table, rows, err)
+				}
+			}
+			if entries, _ := fsys.ReadDir("/library/The Example Film (1999)"); len(entries) != 0 {
+				t.Errorf("film folder holds %v, want no placed file", entries)
+			}
+		})
 	}
 }
 
