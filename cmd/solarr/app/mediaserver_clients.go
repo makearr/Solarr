@@ -42,6 +42,9 @@ func (p *process) mediaServerClients(kind, baseURL, username string, credential 
 	case "calibre":
 		return calibre.New(doer, baseURL, username, secret, randomToken), nil
 	case "stash":
+		if username != "" {
+			return stash.NewLogin(doer, baseURL, username, secret), nil
+		}
 		return stash.New(doer, baseURL, secret), nil
 	}
 	return nil, fmt.Errorf("media server: unknown kind %q", kind)

@@ -44,7 +44,7 @@ func (c *Client) signIn(ctx context.Context, username, password string) (string,
 		Username string `json:"Username"`
 		Pw       string `json:"Pw"`
 	}{username, password}
-	header := http.Header{"X-Emby-Authorization": {"MediaBrowser " + clientIdentity}}
+	header := http.Header{"Authorization": {"MediaBrowser " + clientIdentity}}
 	if err := mediaserver.Call(ctx, c.doer, http.MethodPost, mediaserver.Join(c.base, "/Users/AuthenticateByName"), header, body, &reply); err != nil {
 		return "", mediaserver.Refused(err)
 	}

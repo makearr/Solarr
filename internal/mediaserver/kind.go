@@ -32,7 +32,7 @@ type CredentialShape string
 const (
 	CredentialKey      CredentialShape = "key"
 	CredentialPassword CredentialShape = "password"
-	// CredentialKeyOrPassword is a key alone, or a user name with a password the server may leave empty (Jellyfin, Kavita).
+	// CredentialKeyOrPassword is a key alone, or a user name with a password the server may leave empty (Jellyfin, Kavita, Stash).
 	CredentialKeyOrPassword CredentialShape = "key_or_password"
 	// CredentialOptionalPassword is a password the server may not need (Calibre without authentication).
 	CredentialOptionalPassword CredentialShape = "optional_password"
@@ -73,7 +73,7 @@ var kinds = map[string]Kind{
 		MediaTypes: []string{"book"}, DefaultPortHint: "8080",
 	},
 	"stash": {
-		Key: "stash", Label: "Stash", Credential: CredentialKey, CanMetadata: true,
+		Key: "stash", Label: "Stash", Credential: CredentialKeyOrPassword, CanMetadata: true,
 		MediaTypes: []string{"adult"}, DefaultPortHint: "9999",
 	},
 }

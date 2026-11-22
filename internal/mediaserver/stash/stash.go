@@ -1,9 +1,12 @@
-// Package stash is the client for a Stash server over its GraphQL endpoint, signed in with an API key.
+// Package stash is the client for a Stash server over its GraphQL endpoint, signed in with an API key or with a user name and password.
 package stash
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/mediaserver"
 )
@@ -13,6 +16,37 @@ type Client struct {
 	doer mediaserver.Doer
 	base string
 	key  string
+	// session is set when the connection signs in with a user name and password; the key is then empty.
+	session *mediaserver.Session
+}
+
+// NewLogin builds a client that signs in on Stash's login form and sends the session cookie it answers.
+func NewLogin(doer mediaserver.Doer, base, username, password string) *Client {
+	client := &Client{doer: doer, base: base}
+	client.session = mediaserver.NewSession(func(ctx context.Context) (string, error) {
+		return client.signIn(ctx, username, password)
+	})
+	return client
+}
+
+func (c *Client) signIn(ctx context.Context, username, password string) (string, error) {
+	form := url.Values{"username": {username}, "password": {password}, "returnURL": {"/"}}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, mediaserver.Join(c.base, "/login"), strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", fmt.Errorf("stash: build login: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response, err := c.doer.Do(ctx, request)
+	if err != nil {
+		return "", mediaserver.Refused(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	for _, cookie := range response.Cookies() {
+		if cookie.Name == "session" && cookie.Value != "" {
+			return cookie.Name + "=" + cookie.Value, nil
+		}
+	}
+	return "", fmt.Errorf("%w: the server sent no session", mediaserver.ErrRejected)
 }
 
 // New builds a client for the server at base; an empty key is sent as none, for a server without authentication.
@@ -21,11 +55,16 @@ func New(doer mediaserver.Doer, base, key string) *Client {
 }
 
 func (c *Client) query(ctx context.Context, query string, into any) error {
-	header := http.Header{}
-	if c.key != "" {
-		header.Set("ApiKey", c.key)
+	header := func(cookie string) http.Header {
+		if c.session != nil {
+			return http.Header{"Cookie": {cookie}}
+		}
+		if c.key != "" {
+			return http.Header{"ApiKey": {c.key}}
+		}
+		return http.Header{}
 	}
-	err := mediaserver.Call(ctx, c.doer, http.MethodPost, mediaserver.Join(c.base, "/graphql"), header, map[string]string{"query": query}, into)
+	err := mediaserver.CallSigned(ctx, c.doer, c.session, header, http.MethodPost, mediaserver.Join(c.base, "/graphql"), map[string]string{"query": query}, into)
 	return mediaserver.Refused(err)
 }
 

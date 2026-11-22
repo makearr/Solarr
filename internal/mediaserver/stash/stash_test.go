@@ -37,3 +37,24 @@ func TestClient_TestAndLibraries(t *testing.T) {
 		t.Errorf("request = %q, want %q", bodies[0], want)
 	}
 }
+
+func TestClient_LoginSendsTheSessionCookie(t *testing.T) {
+	var cookie, form string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/login" {
+			raw, _ := io.ReadAll(r.Body)
+			form = string(raw)
+			http.SetCookie(w, &http.Cookie{Name: "session", Value: "abc"})
+			return
+		}
+		cookie = r.Header.Get("Cookie")
+		_, _ = w.Write([]byte(`{"data":{"version":{"version":"v1"}}}`))
+	}))
+	defer server.Close()
+	if _, err := stash.NewLogin(mediaservertest.Direct(), server.URL, "home", "pw").Test(t.Context()); err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	if cookie != "session=abc" || form != "password=pw&returnURL=%2F&username=home" {
+		t.Errorf("cookie %q, form %q", cookie, form)
+	}
+}

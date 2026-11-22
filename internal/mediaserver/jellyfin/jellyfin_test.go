@@ -115,13 +115,14 @@ func TestClient_AnnounceMessagesActiveSessionsOnly(t *testing.T) {
 
 func TestClient_LoginWithAnEmptyPasswordSendsTheToken(t *testing.T) {
 	var body string
-	var auth string
+	var auth, loginAuth string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/Users/AuthenticateByName":
 			raw, _ := io.ReadAll(r.Body)
 			body = string(raw)
 			_, _ = w.Write([]byte(`{"AccessToken":"tok"}`))
+			loginAuth = r.Header.Get("Authorization")
 		case "/Users":
 			auth = r.Header.Get("Authorization")
 			_, _ = w.Write([]byte(`[{"Id":"1","Name":"a"}]`))
@@ -132,7 +133,7 @@ func TestClient_LoginWithAnEmptyPasswordSendsTheToken(t *testing.T) {
 	if err != nil || len(users) != 1 {
 		t.Fatalf("Users = %+v, %v", users, err)
 	}
-	if body != `{"Username":"home","Pw":""}` || !strings.Contains(auth, `Token="tok"`) {
+	if !strings.HasPrefix(loginAuth, "MediaBrowser Client=") || body != `{"Username":"home","Pw":""}` || !strings.Contains(auth, `Token="tok"`) {
 		t.Errorf("login body %q, header %q", body, auth)
 	}
 }
