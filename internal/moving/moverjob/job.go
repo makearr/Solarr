@@ -70,7 +70,7 @@ type Job struct {
 	links           library.ObjectLinks
 	roots           RootFolders
 	drainCompletion DrainCompletion
-	finished        func(ctx context.Context)
+	finished        func(ctx context.Context, moveJobID int64)
 	failed          func(ctx context.Context, moveJobID int64)
 	permissions     Permissions
 	clock           clock.Clock
@@ -88,7 +88,7 @@ type Config struct {
 	Roots           RootFolders
 	DrainCompletion DrainCompletion
 	// Finished runs after a job's files have moved, for the libraries' counts that follow the files; nil does nothing.
-	Finished func(ctx context.Context)
+	Finished func(ctx context.Context, moveJobID int64)
 	// Failed runs when a job moved no file at all, to undo what was changed for the files to follow; nil does nothing.
 	Failed func(ctx context.Context, moveJobID int64)
 	// Permissions is optional; a rename run for one library applies it to what it moves.
@@ -186,7 +186,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		return err
 	}
 	if j.finished != nil {
-		j.finished(ctx)
+		j.finished(ctx, moveJob.ID)
 	}
 
 	if j.drainCompletion != nil && moveJob.Reason == string(mover.ReasonDrain) && moveJob.SourceRootID != nil {

@@ -985,7 +985,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		SimilarVideos:      adapters.SimilarVideos{Store: p.similarVideos(), Queue: p.queueSimilarVideos},
 		RecycleBinContents: adapters.RecycleBinContents{Bin: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()).WithOnline(p.rootOnline)},
 		DuplicateResolver: adapters.DuplicateResolver{
-			FS: p.fsys, Physical: library.NewPhysical(p.library), Recycle: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()),
+			FS: p.fsys, Physical: library.NewPhysical(p.library), Recycle: p.recycleBin(),
 			Recycler: p.fileRemover(), Settings: p.cache, Desired: library.NewDesired(p.library),
 			Realign: adapters.WorkMerger{Identity: library.NewIdentity(p.library), Registry: p.media, Logger: p.logger}.Realign,
 		},
@@ -1032,7 +1032,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Sessions: library.NewImportSessions(p.library),
 			Revert: library.NewImportRevert(
 				library.NewImportSessions(p.library), library.NewPhysical(p.library), library.NewIdentity(p.library),
-				library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()), adapters.RootFolderPath(p.cache),
+				p.recycleBin(), adapters.RootFolderPath(p.cache),
 			),
 			Manual: p.manualCommitter(), Libraries: adapters.Categories{Cache: p.cache}, RootPath: adapters.RootFolderPath(p.cache),
 			Rescan: func(ctx context.Context, rootFolderID, categoryID int64, directories []string) {
@@ -1194,7 +1194,7 @@ func (p *process) worksMonitor() adapters.WorksMonitor {
 func (p *process) fileRemover() adapters.RemoveAndBlock {
 	return adapters.RemoveAndBlock{
 		Action: library.NewRemoveAndBlock(
-			library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()),
+			p.recycleBin(),
 			library.NewBlockedContentStore(p.library), library.NewBlocklistStore(p.library),
 			library.NewDesired(p.library), library.NewPhysical(p.library),
 			adapters.RootFolderPath(p.cache),

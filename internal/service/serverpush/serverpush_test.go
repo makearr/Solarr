@@ -30,6 +30,8 @@ func (f *fakeSettings) AllMediaServerLibraries(context.Context) (map[int64][]set
 func (f *fakeSettings) MediaServerPaths(_ context.Context, id int64) ([]settings.MediaServerPath, error) {
 	return f.paths[id], nil
 }
+func (f *fakeSettings) MediaServerPushDebounceSeconds() int64 { return 0 }
+
 func (f *fakeSettings) SetMediaServerResult(_ context.Context, id, _ int64, message string) error {
 	f.results[id] = message
 	return nil

@@ -121,7 +121,7 @@ func (f *fixture) job(roots moverjob.RootFolders) *moverjob.Job {
 	return moverjob.NewJob(moverjob.Config{
 		FS: f.fsys, MoveJobs: library.NewMoveJobs(f.store), Physical: library.NewPhysical(f.store), Links: library.NewObjectLinks(f.store),
 		Roots: roots, Clock: f.clock, Logger: slog.New(slog.DiscardHandler),
-		Finished: func(context.Context) { f.finished++ },
+		Finished: func(context.Context, int64) { f.finished++ },
 	})
 }
 
@@ -373,7 +373,7 @@ func TestJob_AJobThatMovedNoFileFailsAndTellsTheUndoHook(t *testing.T) {
 		FS: fx.fsys, MoveJobs: moveJobs, Physical: library.NewPhysical(fx.store), Links: library.NewObjectLinks(fx.store),
 		Roots: fakeRoots{1: {Path: "/root1", FSID: "fs-a"}}, Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
 		Failed:   func(_ context.Context, id int64) { undone = append(undone, id) },
-		Finished: func(context.Context) { fx.finished++ },
+		Finished: func(context.Context, int64) { fx.finished++ },
 	})
 	if err := fx.run(t, job, jobID); err != nil {
 		t.Fatalf("Run: %v", err)

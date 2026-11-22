@@ -354,3 +354,11 @@ func convertMediaServer(row settingsdb.MediaServer) MediaServer {
 		},
 	}
 }
+
+// KeyMediaServerPushDebounce is the instance setting for how long a queued push waits, in seconds.
+const KeyMediaServerPushDebounce = "media_server.push_debounce_seconds"
+
+// MediaServerPushDebounceSeconds is the configured wait; zero means the service default.
+func (c *Cache) MediaServerPushDebounceSeconds() int64 {
+	return c.Snapshot().policyInt(KeyMediaServerPushDebounce, 0)
+}

@@ -87,6 +87,14 @@ type RecycleBin struct {
 	clock clock.Clock
 	// online says whether a root folder is reachable; nil takes every root for online.
 	online func(rootFolderID int64) bool
+	// recycled runs after a file went into the bin; nil does nothing.
+	recycled func(ctx context.Context, entry Entry)
+}
+
+// WithOnRecycled returns the bin telling recycled after every file it takes, for the media servers.
+func (q RecycleBin) WithOnRecycled(recycled func(ctx context.Context, entry Entry)) RecycleBin {
+	q.recycled = recycled
+	return q
 }
 
 // ErrRootOffline reports an entry whose root folder is not reachable (a disk not mounted, a share down): its file may
@@ -151,7 +159,11 @@ func (q RecycleBin) Put(ctx context.Context, req PutRequest) (Entry, error) {
 	if req.RemoveEmptyFolders {
 		q.removeEmptyFolders(filepath.Dir(req.OriginalPath), req.RootPath)
 	}
-	return recycleBinEntryFromRow(row), nil
+	entry := recycleBinEntryFromRow(row)
+	if q.recycled != nil {
+		q.recycled(ctx, entry)
+	}
+	return entry, nil
 }
 
 // relocate renames, and across filesystems copies, verifies and only then unlinks: nothing is deleted directly

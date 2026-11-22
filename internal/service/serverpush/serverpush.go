@@ -36,6 +36,7 @@ type Settings interface {
 	AllMediaServerLibraries(ctx context.Context) (map[int64][]settings.MediaServerLibrary, error)
 	MediaServerPaths(ctx context.Context, serverID int64) ([]settings.MediaServerPath, error)
 	SetMediaServerResult(ctx context.Context, id, at int64, message string) error
+	MediaServerPushDebounceSeconds() int64
 }
 
 // Roots answers a root folder's path.
@@ -78,6 +79,9 @@ type Service struct {
 func (s Service) debounce() time.Duration {
 	if s.Debounce > 0 {
 		return s.Debounce
+	}
+	if seconds := s.Settings.MediaServerPushDebounceSeconds(); seconds > 0 {
+		return time.Duration(seconds) * time.Second
 	}
 	return DefaultDebounce
 }

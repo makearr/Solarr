@@ -378,7 +378,7 @@ func (p *process) recycleSourceArchive(ctx context.Context, categoryID *int64, s
 		categoryIDs = []int64{*categoryID}
 	}
 	recycling := adapters.RecyclingFor(adapters.Categories{Cache: p.cache}, categoryIDs)
-	_, err := library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()).WithOnline(p.rootOnline).Put(ctx, library.PutRequest{
+	_, err := p.recycleBin().WithOnline(p.rootOnline).Put(ctx, library.PutRequest{
 		RootPath: root, OriginalPath: file, Reason: library.ReasonImported, Retain: recycling.Retain,
 	})
 	return err

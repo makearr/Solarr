@@ -26,7 +26,10 @@ func (p *process) registerMoverJob(registry *jobs.Registry, executor *jobs.Execu
 		DrainCompletion: drainjob.Completer{
 			Roots: adapters.DrainRoots{Cache: p.cache}, Files: library.NewPhysical(p.library),
 		},
-		Finished: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+		Finished: func(ctx context.Context, moveJobID int64) {
+			_, _ = p.enqueueCategoryCounts(ctx)
+			p.recordMoveJobPush(ctx, moveJobID)
+		},
 		Failed: func(ctx context.Context, moveJobID int64) {
 			undo := adapters.LibraryMove{
 				Settings: p.cache, Desired: library.NewDesired(p.library), MoveJobs: library.NewMoveJobs(p.library),

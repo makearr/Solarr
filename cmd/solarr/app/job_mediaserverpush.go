@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
 	"strconv"
 	"time"
 
@@ -115,4 +116,51 @@ func (p *process) enqueueMediaServerPushes(ctx context.Context) (jobs.EnqueueRes
 // afterPlacing is the seam of the media types that have no server files to write: only the media servers are told.
 func (p *process) afterPlacing(ctx context.Context, categoryID, workID int64) {
 	p.recordServerPush(ctx, categoryID, workID, library.PendingCreated)
+}
+
+// recycleBin is the bin of the places that delete a library file for the user: the media servers hear of each file.
+func (p *process) recycleBin() library.RecycleBin {
+	return library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()).WithOnRecycled(func(ctx context.Context, entry library.Entry) {
+		if entry.RootFolderID != nil {
+			p.recordServerFolder(ctx, *entry.RootFolderID, path.Dir(entry.OriginalPath), library.PendingDeleted)
+		}
+	})
+}
+
+// recordServerFolder queues a folder for every library that keeps files under the root folder.
+func (p *process) recordServerFolder(ctx context.Context, rootFolderID int64, folder, change string) {
+	for _, attached := range p.cache.Snapshot().CategoryRoots() {
+		if attached.RootFolderID != rootFolderID {
+			continue
+		}
+		if err := p.serverPush().Record(ctx, attached.CategoryID, 0, change, []string{folder}); err != nil {
+			p.logger.Warn("could not queue a media server push", "folder", folder, "error", err)
+		}
+	}
+}
+
+// recordMoveJobPush queues the folders a finished move or rename left and entered.
+func (p *process) recordMoveJobPush(ctx context.Context, moveJobID int64) {
+	items, err := library.NewMoveJobs(p.library).ListItems(ctx, moveJobID)
+	if err != nil {
+		p.logger.Warn("could not list a move job for the media servers", "move_job_id", moveJobID, "error", err)
+		return
+	}
+	roots := adapters.DrainRoots{Cache: p.cache}
+	for _, item := range items {
+		if item.State != library.MoveItemDone {
+			continue
+		}
+		if root, ok := roots.RootFolder(item.DestRootID); ok {
+			p.recordServerFolder(ctx, root.ID, path.Dir(path.Join(root.Path, item.DestRelPath)), library.PendingModified)
+		}
+		root, ok := roots.RootFolder(item.SourceRootID)
+		if !ok || item.KeepSource || item.SourceRelPath == "" {
+			continue
+		}
+		left := path.Dir(path.Join(root.Path, item.SourceRelPath))
+		if item.SourceRootID != item.DestRootID || path.Dir(item.SourceRelPath) != path.Dir(item.DestRelPath) {
+			p.recordServerFolder(ctx, root.ID, left, library.PendingDeleted)
+		}
+	}
 }
