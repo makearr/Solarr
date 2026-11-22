@@ -119,7 +119,7 @@ func (j *EnrichJob) refreshAlbums(ctx, fresh context.Context, workIDs []int64, m
 	var answers []albumAnswer
 	asked := 0
 	var firstFailure error
-	artists := artistMemo{}
+	artists := newArtistMemo()
 	for _, workID := range workIDs {
 		if ctx.Err() != nil {
 			return refreshed, nil, ctx.Err()
