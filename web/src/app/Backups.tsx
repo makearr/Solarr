@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { t } from "@/lib/i18n";
 
 import { api, API_PREFIX, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -34,7 +35,7 @@ export function Backups() {
       <SettingsDocument />
 
       <Card
-        title="Database backups"
+        title={t("backups.databaseBackups")}
         help="Taken automatically, and before every migration. Restoring a database is an offline procedure: stop the server and put the file back. There is no button for it on purpose."
         toggle={
           <button
@@ -48,12 +49,12 @@ export function Backups() {
         }
       >
         {files.isLoading && <Message>Loading…</Message>}
-        {files.error !== null && <Message>The backup directory could not be read.</Message>}
-        {files.data && files.data.length === 0 && <Message>No backups yet.</Message>}
+        {files.error !== null && <Message>{t("backups.theBackupDirectoryCould")}</Message>}
+        {files.data && files.data.length === 0 && <Message>{t("backups.noBackupsYet")}</Message>}
         {groups.map((group) => (
           <BackupGroup key={group.database} group={group} />
         ))}
-        {runNow.isError && <p className="text-xs text-danger">The backup did not complete.</p>}
+        {runNow.isError && <p className="text-xs text-danger">{t("backups.theBackupDidNot")}</p>}
       </Card>
     </div>
   );
@@ -146,7 +147,7 @@ function SettingsDocument() {
 
   return (
     <Card
-      title="Settings file"
+      title={t("backups.settingsFile")}
       help="Libraries, root folders, profiles, naming, schedules and every setting, as one file. Accounts and API keys are never in it."
     >
       <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -205,7 +206,7 @@ function SettingsDocument() {
         </div>
       )}
       {restore.isError && <pre className="whitespace-pre-wrap font-mono text-danger">{restore.error.message}</pre>}
-      {download.isError && <p className="text-xs text-danger">The settings could not be downloaded.</p>}
+      {download.isError && <p className="text-xs text-danger">{t("backups.theSettingsCouldNot")}</p>}
     </Card>
   );
 }

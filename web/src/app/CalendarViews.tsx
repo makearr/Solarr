@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -102,7 +103,7 @@ function UndatedStrip({ entries, today }: { entries: readonly CalendarEntry[]; t
   if (partial.length === 0) return null;
   return (
     <section className="flex flex-col gap-1.5">
-      <h3 className="text-xs font-medium text-ink-muted">Dated only by month or year</h3>
+      <h3 className="text-xs font-medium text-ink-muted">{t("calendarViews.datedOnlyByMonth")}</h3>
       <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
         {partial.map((entry) => (
           <ReleaseCard key={entryKey(entry)} entry={entry} today={today} />
@@ -160,7 +161,7 @@ export function MonthView({ anchor, today }: { anchor: Date; today: string }) {
         })}
       </div>
       {releases.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-      {releases.error !== null && <p className="text-sm text-danger">The calendar could not be read.</p>}
+      {releases.error !== null && <p className="text-sm text-danger">{t("calendarViews.theCalendarCouldNot")}</p>}
       <UndatedStrip entries={partial} today={today} />
     </>
   );
@@ -196,7 +197,7 @@ export function DaysView({ start, days, today }: { start: Date; days: number; to
         })}
       </div>
       {releases.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-      {releases.error !== null && <p className="text-sm text-danger">The calendar could not be read.</p>}
+      {releases.error !== null && <p className="text-sm text-danger">{t("calendarViews.theCalendarCouldNot")}</p>}
     </>
   );
 }
@@ -208,7 +209,7 @@ export function DayView({ date, today }: { date: Date; today: string }) {
     <section className="flex max-w-2xl flex-col gap-2">
       <h3 className="text-sm font-medium">{date.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</h3>
       {releases.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-      {releases.data && releases.data.length === 0 && <p className="text-sm text-ink-muted">No releases on this day.</p>}
+      {releases.data && releases.data.length === 0 && <p className="text-sm text-ink-muted">{t("calendarViews.noReleasesOnThis")}</p>}
       {(releases.data ?? []).map((entry) => (
         <ReleaseCard key={entryKey(entry)} entry={entry} today={today} />
       ))}

@@ -2,6 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { useState } from "react";
+import { t } from "@/lib/i18n";
 
 import { api } from "@/api/client";
 import { useIsAdministrator } from "@/lib/useAdministrator";
@@ -83,17 +84,17 @@ function ImagePicker({ subject, id, title, shape = "cover", onChosen, onClose }:
             </Dialog.Close>
           </div>
           <Dialog.Description className="text-xs text-ink-muted">
-            What the metadata providers hold. The one you pick is kept over later refreshes.
+            {t("chooseImage.whatTheMetadataProviders")}
           </Dialog.Description>
           {options.isLoading && <p className="text-sm text-ink-muted">Asking the providers…</p>}
           {options.error !== null && !options.isLoading && (
-            <p className="text-sm text-danger">The providers could not be asked. Try again in a moment.</p>
+            <p className="text-sm text-danger">{t("chooseImage.theProvidersCouldNot")}</p>
           )}
           {options.data && list.length === 0 && (
-            <p className="text-sm text-ink-muted">No provider has a picture for this.</p>
+            <p className="text-sm text-ink-muted">{t("chooseImage.noProviderHasA")}</p>
           )}
           {choose.error !== null && (
-            <p className="text-sm text-danger">That image could not be fetched. Pick another.</p>
+            <p className="text-sm text-danger">{t("chooseImage.thatImageCouldNot")}</p>
           )}
           <ul className="grid grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3 md:grid-cols-4">
             {list.map((option) => (

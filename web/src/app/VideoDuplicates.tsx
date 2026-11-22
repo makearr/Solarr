@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
+import { t } from "@/lib/i18n";
 
 import { SimilarVideos } from "./SimilarVideos";
 
@@ -27,12 +28,12 @@ function HashingSwitch() {
         onChange={(event) => save.mutate(event.target.checked)}
       />
       <span className="flex flex-col gap-0.5">
-        <span className="font-medium">Hash videos in the background</span>
+        <span className="font-medium">{t("videoDuplicates.hashVideosInThe")}</span>
         <span className="text-ink-muted">
           Reads nine frames of every video with ffmpeg so re-encodes can be found. Switch it off to save the load; hashes already
           stored keep working.
         </span>
-        {save.isError && <span className="text-danger">That change was refused.</span>}
+        {save.isError && <span className="text-danger">{t("importLists.refused")}</span>}
       </span>
     </label>
   );
@@ -60,7 +61,7 @@ function ImportSwitches() {
           onChange={(event) => save.mutate({ ...current, check: event.target.checked })}
         />
         <span className="flex flex-col gap-0.5">
-          <span className="font-medium">Check imports for duplicates</span>
+          <span className="font-medium">{t("videoDuplicates.checkImportsForDuplicates")}</span>
           <span className="text-ink-muted">
             A downloaded episode is compared by its picture with the series&apos; files. A copy counts as the episode it shows, whatever the
             release called it, and replaces that file only when it is better.
@@ -76,11 +77,11 @@ function ImportSwitches() {
           onChange={(event) => save.mutate({ ...current, blocklist: event.target.checked })}
         />
         <span className="flex flex-col gap-0.5">
-          <span className="font-medium">Blocklist releases that duplicate a file</span>
+          <span className="font-medium">{t("videoDuplicates.blocklistReleasesThatDuplicate")}</span>
           <span className="text-ink-muted">
             Off, the same release can be grabbed again by a later search. On, it is kept out for 30 days.
           </span>
-          {save.isError && <span className="text-danger">That change was refused.</span>}
+          {save.isError && <span className="text-danger">{t("importLists.refused")}</span>}
         </span>
       </label>
     </div>

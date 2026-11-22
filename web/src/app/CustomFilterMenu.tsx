@@ -2,6 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Check, Filter, Plus, Trash2, X } from "lucide-react";
 import { useState } from "react";
+import { t } from "@/lib/i18n";
 
 import { usePreference } from "@/lib/usePreference";
 import { Button } from "@/ui/Button";
@@ -164,7 +165,7 @@ function FilterBuilder({
               <X aria-hidden className="size-4" />
             </Dialog.Close>
           </div>
-          <Dialog.Description className="text-xs text-ink-muted">Everything in the list must match every condition. Give it a name to keep it in the Filter menu.</Dialog.Description>
+          <Dialog.Description className="text-xs text-ink-muted">{t("customFilterMenu.everythingInTheList")}</Dialog.Description>
           <label className="flex items-center gap-2 text-xs text-ink-muted">
             Name
             <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Optional" className={`${control} w-64`} />
@@ -212,7 +213,7 @@ function FilterBuilder({
                   )}
                   <button
                     type="button"
-                    aria-label="Remove condition"
+                    aria-label={t("customFilterMenu.removeCondition")}
                     disabled={conditions.length === 1 && kept.length === 0}
                     onClick={() => setConditions(conditions.filter((_, i) => i !== index))}
                     className="rounded-md p-1 text-ink-muted hover:text-danger disabled:opacity-30"
@@ -227,7 +228,7 @@ function FilterBuilder({
             <p className="text-xs text-ink-muted">Also keeps the list's {kept.map(([key, value]) => `${key} “${value}”`).join(", ")}.</p>
           )}
           <button type="button" onClick={() => setConditions([...conditions, blankCondition(fields)])} className="flex w-fit items-center gap-1 text-xs text-accent hover:underline">
-            <Plus aria-hidden className="size-3.5" /> Add a condition
+            <Plus aria-hidden className="size-3.5" /> {t("customFilterMenu.addACondition")}
           </button>
           <div className="flex items-center gap-2">
             <Button variant="primary" type="button" disabled={!complete} onClick={() => finish(true)}>

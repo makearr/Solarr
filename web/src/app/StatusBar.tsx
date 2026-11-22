@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { Fragment, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -104,7 +105,7 @@ export function StatusBar() {
         type="button"
         onClick={() => setJobsOpen(!jobsOpen)}
         aria-expanded={jobsOpen}
-        title="Work running now"
+        title={t("statusBar.workRunningNow")}
         className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-ink-muted hover:text-ink
                    focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
@@ -116,7 +117,7 @@ export function StatusBar() {
       </button>
     ),
     queue: queue.data && queue.data.clients.length > 0 && (
-      <Link to="/activity/queue" title="Download queue" className="flex shrink-0 items-center gap-1.5 text-ink-muted hover:text-ink hover:underline">
+      <Link to="/activity/queue" title={t("statusBar.downloadQueue")} className="flex shrink-0 items-center gap-1.5 text-ink-muted hover:text-ink hover:underline">
         <Download aria-hidden className="size-3" />
         {queueItems === 0 ? "Queue idle" : `${queueItems} downloading${speed > 0 ? ` · ${formatBytes(speed)}/s` : ""}`}
       </Link>
@@ -137,7 +138,7 @@ export function StatusBar() {
     time: clock.time && (
       <span className="flex shrink-0 items-center gap-3 font-mono tabular-nums text-ink-muted">
         {clock.skewMs !== null && Math.abs(clock.skewMs) > SKEW_TOLERANCE_MS && (
-          <span className="font-sans text-warn" title="This browser's clock disagrees with the server's">
+          <span className="font-sans text-warn" title={t("statusBar.thisBrowserSClock")}>
             clock skew {Math.round(clock.skewMs / 1000)}s
           </span>
         )}
@@ -148,7 +149,7 @@ export function StatusBar() {
       </span>
     ),
     version: about.data?.version && (
-      <a href="/about" className="shrink-0 font-mono text-ink-muted hover:text-ink hover:underline" title="About Solarr">
+      <a href="/about" className="shrink-0 font-mono text-ink-muted hover:text-ink hover:underline" title={t("statusBar.aboutSolarr")}>
         v{about.data.version}
       </a>
     ),

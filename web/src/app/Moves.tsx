@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { type ReactNode, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -53,7 +54,7 @@ export function RootMoveControls({ root, children }: { root: RootFolder; childre
             <Button variant="ghost" busy={previewRename.isPending} busyLabel="Computing…" disabled={!root.online} onClick={() => previewRename.mutate()}>
               Preview rename
             </Button>
-            <Button variant="ghost" disabled={!root.online} title="Move every file to the library's other roots" onClick={() => setDraining(true)}>
+            <Button variant="ghost" disabled={!root.online} title={t("moves.moveEveryFileTo")} onClick={() => setDraining(true)}>
               Drain…
             </Button>
           </>
@@ -116,7 +117,7 @@ function DrainDialog({ root, onClose }: { root: RootFolder; onClose: () => void 
         {preview.isLoading && <p className="text-ink-muted">Working out what would move…</p>}
         {preview.isError && <p className="text-danger">{problemDetail(preview.error, "The drain could not be planned.")}</p>}
         {plan && refusal && <p className="text-danger">It cannot drain: {refusal}</p>}
-        {plan && !refusal && plan.moves.length === 0 && <p className="text-ink-muted">Nothing on it to move.</p>}
+        {plan && !refusal && plan.moves.length === 0 && <p className="text-ink-muted">{t("moves.nothingOnItTo")}</p>}
         {ready && (
           <>
             <p>
@@ -276,8 +277,8 @@ export function MoveJobList() {
     <div className="rounded-lg border border-border-subtle bg-surface">
       <h3 className="border-b border-border-subtle px-3 py-2 text-xs font-medium text-ink-muted">Move jobs</h3>
       {jobs.isLoading && <Message>Loading move jobs…</Message>}
-      {jobs.error !== null && <Message>Move jobs could not be read.</Message>}
-      {jobs.data && jobs.data.length === 0 && <Message>No move has run yet.</Message>}
+      {jobs.error !== null && <Message>{t("moves.moveJobsCouldNot")}</Message>}
+      {jobs.data && jobs.data.length === 0 && <Message>{t("moves.noMoveHasRun")}</Message>}
       {jobs.data && jobs.data.length > 0 && (
         <ul className="divide-y divide-border-subtle">
           {jobs.data.map((job) => (
@@ -311,11 +312,11 @@ function MoveJobControls({ job }: { job: MoveJob }) {
           Resume
         </Button>
       ) : (
-        <Button variant="ghost" busy={control.isPending} title="Stops after the file being moved" onClick={() => control.mutate("pause")}>
+        <Button variant="ghost" busy={control.isPending} title={t("moves.stopsAfterTheFile")} onClick={() => control.mutate("pause")}>
           Pause
         </Button>
       )}
-      <Button variant="ghost" busy={control.isPending} title="Files already moved stay where they are" onClick={() => control.mutate("cancel")}>
+      <Button variant="ghost" busy={control.isPending} title={t("moves.filesAlreadyMovedStay")} onClick={() => control.mutate("cancel")}>
         Cancel
       </Button>
       {control.isError && <span className="text-danger">{problemDetail(control.error, "That was refused.")}</span>}

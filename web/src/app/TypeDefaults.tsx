@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -56,7 +57,7 @@ export function MetadataTypeTab({ entry }: { entry: TypeDefaults }) {
           <Chip>{entry.metadata_custom ? "changed here" : "the shipped order"}</Chip>
           {entry.metadata_custom && (
             <Button className="ml-auto" busy={save.isPending} onClick={() => set([])}>
-              Use the shipped order
+              {t("typeDefaults.useTheShippedOrder")}
             </Button>
           )}
         </div>
@@ -87,13 +88,13 @@ export function MetadataTypeTab({ entry }: { entry: TypeDefaults }) {
                 <span>{provider.label}</span>
                 <span className="min-w-0 flex-1 text-xs text-ink-muted">{provider.carries.join(", ")}</span>
                 <Button busy={save.isPending} onClick={() => set([...sources, provider.key])}>
-                  Turn on, last
+                  {t("typeDefaults.turnOnLast")}
                 </Button>
               </div>
             ))}
           </div>
         )}
-        {save.isError && <p className="text-xs text-danger">That could not be saved.</p>}
+        {save.isError && <p className="text-xs text-danger">{t("libraryMetadata.saveFailed")}</p>}
       </div>
     </section>
   );
@@ -173,7 +174,7 @@ function TypeQualityCard({ entry }: { entry: TypeDefaults }) {
       </div>
       {entry.available_profiles.length > 0 && (
         <div className="flex flex-col gap-1 text-sm">
-          <span className="text-xs text-ink-muted">Quality profiles, best first</span>
+          <span className="text-xs text-ink-muted">{t("typeDefaults.qualityProfilesBestFirst")}</span>
           {ids.length === 0 && <span className="text-xs text-ink-muted">None: libraries choose, or aim for their target alone.</span>}
           {ids.map((id, index) => (
             <div key={id} className="flex items-center gap-2">
@@ -208,7 +209,7 @@ function TypeQualityCard({ entry }: { entry: TypeDefaults }) {
           )}
         </div>
       )}
-      {save.isError && <p className="text-xs text-danger">That could not be saved.</p>}
+      {save.isError && <p className="text-xs text-danger">{t("libraryMetadata.saveFailed")}</p>}
     </Card>
   );
 }

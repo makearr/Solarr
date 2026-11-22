@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import { Button } from "@/ui/Button";
@@ -68,7 +69,7 @@ export function RecycleBin() {
       </p>
       <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4 text-sm">
         <label className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="w-56 shrink-0">All recycle bins together</span>
+          <span className="w-56 shrink-0">{t("recycleBin.allRecycleBinsTogether")}</span>
           <input type="number" min={0} value={maxGB} onChange={(event) => setMaxGB(Math.max(0, Number(event.target.value)))} className={`${inputStyle} w-24`} />
           <span className="text-xs text-ink-muted">GB; 0 is no limit.</span>
         </label>
@@ -79,7 +80,7 @@ export function RecycleBin() {
         </label>
         <p className="text-xs text-ink-muted">Or by what the root folder has left: its bin is emptied, oldest first, while the root has less free space than the larger of these. 0 is no floor.</p>
         <label className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="w-56 shrink-0">Keep free on a root folder</span>
+          <span className="w-56 shrink-0">{t("recycleBin.keepFreeOnA")}</span>
           <input type="number" min={0} value={minFreeGB} onChange={(event) => setMinFreeGB(Math.max(0, Number(event.target.value)))} className={`${inputStyle} w-24`} />
           <span className="text-xs text-ink-muted">GB</span>
           <input type="number" min={0} max={100} value={minFreePercent} onChange={(event) => setMinFreePercent(Number(event.target.value))} className={`${inputStyle} w-24`} />
@@ -95,7 +96,7 @@ export function RecycleBin() {
         >
           {save.isPending ? "Saving…" : "Save"}
         </Button>
-        {save.isError && <span className="text-xs text-danger">That was not saved -- the limits have a problem.</span>}
+        {save.isError && <span className="text-xs text-danger">{t("recycleBin.thatWasNotSaved")}</span>}
         {save.isSuccess && !dirty && <span className="text-xs text-ink-muted">Saved; the next cleanup applies it.</span>}
       </div>
       <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4 text-sm">
@@ -121,7 +122,7 @@ export function RecycleBin() {
             {empty.data.failed > 0 ? `; ${empty.data.failed} could not be removed` : ""}.
           </p>
         )}
-        {contents.data && contents.data.entries.length === 0 && <p className="text-xs text-ink-muted">The recycle bin is empty.</p>}
+        {contents.data && contents.data.entries.length === 0 && <p className="text-xs text-ink-muted">{t("recycleBin.theRecycleBinIs")}</p>}
         {contents.data && contents.data.entries.length > 0 && (
           <ul className="flex flex-col divide-y divide-border-subtle text-xs">
             {contents.data.entries.map((entry) => (

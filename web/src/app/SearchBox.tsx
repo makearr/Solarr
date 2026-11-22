@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Search } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -149,9 +150,9 @@ export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" 
                      rounded-md border border-border-subtle bg-surface text-sm shadow-lg"
         >
           {results.isLoading && <li className="px-3 py-2 text-ink-muted">Searching…</li>}
-          {results.error != null && <li className="px-3 py-2 text-danger">The search could not be completed.</li>}
+          {results.error != null && <li className="px-3 py-2 text-danger">{t("searchBox.theSearchCouldNot")}</li>}
           {results.data?.length === 0 && artists.data?.length === 0 && (
-            <li className="px-3 py-2 text-ink-muted">No matches in your library.</li>
+            <li className="px-3 py-2 text-ink-muted">{t("searchBox.noMatchesInYour")}</li>
           )}
           {artists.data?.map((person) => (
             <li key={`person-${person.id}`} className="border-b border-border-subtle last:border-b-0">
@@ -170,10 +171,10 @@ export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" 
           {results.data?.map((result) => <ResultRow key={result.work.id} result={result} />)}
           {destination && (
             <li className="flex items-center gap-2 border-t border-border-subtle bg-canvas px-3 py-1.5 text-xs text-ink-muted">
-              <span className="flex-1">Not in your library yet</span>
+              <span className="flex-1">{t("searchBox.notInYourLibrary")}</span>
               {addable.length > 1 && (
                 <select
-                  aria-label="Add to which library"
+                  aria-label={t("searchBox.addToWhichLibrary")}
                   value={destination.id}
                   onMouseDown={(event) => event.stopPropagation()}
                   onChange={(event) => setChosenLibrary(Number(event.target.value))}
@@ -190,9 +191,9 @@ export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" 
           )}
           {destination && discovered.isLoading && <li className="px-3 py-2 text-ink-muted">Searching the metadata sources…</li>}
           {destination && discovered.error != null && (
-            <li className="px-3 py-2 text-danger">The metadata sources could not be searched.</li>
+            <li className="px-3 py-2 text-danger">{t("searchBox.theMetadataSourcesCould")}</li>
           )}
-          {destination && discovered.data?.length === 0 && <li className="px-3 py-2 text-ink-muted">Nothing new found.</li>}
+          {destination && discovered.data?.length === 0 && <li className="px-3 py-2 text-ink-muted">{t("searchBox.nothingNewFound")}</li>}
           {destination &&
             discovered.data?.map((result) => (
               <NewResultRow

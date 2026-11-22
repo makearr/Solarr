@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import { invalidateWorkLists } from "@/lib/resources";
@@ -121,14 +122,14 @@ export function Unidentified() {
       <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-2">
         <h1 className="text-sm font-medium">Unidentified</h1>
         <span className="text-xs text-ink-muted">
-          Files a scan could not match to a work, and import units held for your decision
+          {t("unidentified.filesAScanCould")}
         </span>
         {canRetry && categoryId && (
         <button
           type="button"
           disabled={retry.isPending}
           onClick={() => retry.mutate()}
-          title="Ask the providers about this library's waiting files again, now"
+          title={t("unidentified.askTheProvidersAbout")}
           className="ml-auto rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50"
         >
           {retry.isSuccess ? `${retry.data.folders} folders queued: it runs in the background` : "Identify again"}
@@ -140,9 +141,9 @@ export function Unidentified() {
 
       <div className="min-h-0 flex-1">
         {list.isLoading && <Message>Loading the queue…</Message>}
-        {list.error !== null && <Message>The queue could not be read.</Message>}
+        {list.error !== null && <Message>{t("unidentified.theQueueCouldNot")}</Message>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (
-          <Message>Nothing here -- every scanned file identified confidently.</Message>
+          <Message>{t("unidentified.nothingHereEveryScanned")}</Message>
         )}
 
         {list.items.length > 0 && (
@@ -165,8 +166,8 @@ function HeldImports({ categoryId }: { categoryId?: number }) {
   );
   if (held.length === 0) return null;
   return (
-    <section className="flex shrink-0 flex-col gap-1 border-b border-border-subtle bg-surface px-4 py-2" aria-label="Held imports">
-      <h2 className="text-xs font-medium">Held in imports</h2>
+    <section className="flex shrink-0 flex-col gap-1 border-b border-border-subtle bg-surface px-4 py-2" aria-label={t("unidentified.heldImports")}>
+      <h2 className="text-xs font-medium">{t("unidentified.heldInImports")}</h2>
       <ul className="flex flex-col gap-1">
         {held.map((session) => (
           <li key={session.id} className="flex items-center gap-2 text-xs">

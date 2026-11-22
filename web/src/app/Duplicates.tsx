@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
-import { type Vocabulary, vocabularyOf } from "@/lib/i18n";
+import { type Vocabulary, t, vocabularyOf } from "@/lib/i18n";
 import { invalidateWorkLists } from "@/lib/resources";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaTypes } from "@/lib/useMediaTypes";
@@ -56,7 +56,7 @@ function IdenticalCopies({ categoryId }: { categoryId: number }) {
           <span className="font-medium">{formatBytes(data.reclaimable_bytes)}</span>.
         </p>
       ) : (
-        <p className="text-sm text-ink-muted">Nothing left to link.</p>
+        <p className="text-sm text-ink-muted">{t("duplicates.nothingLeftToLink")}</p>
       )}
       {data.skipped.length > 0 && (
         <ul className="text-xs text-ink-muted">
@@ -167,7 +167,7 @@ function GroupCard({ group, categoryId, words, onDone }: { group: Group; categor
                     <option value="link" disabled={!linkable(copy, keep)}>
                       Link to the kept file (hardlink or reflink)
                     </option>
-                    <option value="recycle">Move to the recycle bin</option>
+                    <option value="recycle">{t("duplicates.moveToTheRecycle")}</option>
                   </select>
                 </label>
               )}
@@ -298,7 +298,7 @@ export function Duplicates() {
       {categoryId !== undefined && <IdenticalCopies categoryId={Number(categoryId)} />}
       {categoryId !== undefined && <SimilarVideos scope={{ categoryId: Number(categoryId) }} />}
       {report.isLoading && <p className="text-sm text-ink-muted">Looking…</p>}
-      {report.error !== null && !report.isLoading && <p className="text-sm text-danger">The report could not be made.</p>}
+      {report.error !== null && !report.isLoading && <p className="text-sm text-danger">{t("duplicates.theReportCouldNot")}</p>}
       {data && data.groups.length === 0 && <p className="text-sm text-ink-muted">No duplicate {words.parts} found.</p>}
       {data && data.groups.length > 0 && (
         <>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -26,12 +27,12 @@ export function Packs() {
       <div className="flex items-center gap-3">
         <h1 className="text-sm font-medium">Packs</h1>
         <span className="text-xs text-ink-muted">
-          One source, many works -- a discography, box set, anthology or compilation
+          {t("packs.oneSourceManyWorks")}
         </span>
       </div>
 
       {packs.isLoading && <Message>Loading packs…</Message>}
-      {packs.error !== null && <Message>Packs could not be read.</Message>}
+      {packs.error !== null && <Message>{t("packs.packsCouldNotBe")}</Message>}
       {packs.data && packs.data.length === 0 && (
         <Message>
           No pack has been detected yet -- point Import at a source with several sibling releases
@@ -87,7 +88,7 @@ function PackItems({ packId }: { packId: number }) {
   return (
     <div className="border-t border-border-subtle">
       {detail.isLoading && <Message>Loading members…</Message>}
-      {detail.error !== null && <Message>Members could not be read.</Message>}
+      {detail.error !== null && <Message>{t("packs.membersCouldNotBe")}</Message>}
       {detail.data && (
         <ul className="divide-y divide-border-subtle">
           {detail.data.items.map((item) => (
@@ -112,7 +113,7 @@ function PackItemRow({ item }: { item: PackItem }) {
           Work #{item.work_id}
         </Link>
       ) : (
-        <span className="text-ink-muted">Not yet resolved</span>
+        <span className="text-ink-muted">{t("packs.notYetResolved")}</span>
       )}
     </li>
   );

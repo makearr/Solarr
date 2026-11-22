@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellRing } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -177,14 +178,14 @@ function FollowRow({
         <div className="flex max-w-xl flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3">
           {roles.length > 1 && (
             <fieldset className="flex flex-col gap-1">
-              <legend className="mb-1 text-ink-muted">Follow them as</legend>
+              <legend className="mb-1 text-ink-muted">{t("followPanel.followThemAs")}</legend>
               {roles.map((role) => (
                 <label key={role.key} className="flex items-center gap-2">
                   <input type="checkbox" checked={chosen.includes(role.key)} onChange={() => toggleRole(role.key)} />
                   {role.label}
                 </label>
               ))}
-              <span className="text-[0.6875rem] text-ink-muted">Nothing ticked means any role.</span>
+              <span className="text-[0.6875rem] text-ink-muted">{t("followPanel.nothingTickedMeansAny")}</span>
             </fieldset>
           )}
           {mediaType.follow_options.map((option) =>
@@ -231,7 +232,7 @@ function FollowRow({
             Also add older {works}, not only new ones
           </label>
           <div className="flex flex-col gap-1.5" aria-live="polite">
-            <span className="text-ink-muted">What this would add right now</span>
+            <span className="text-ink-muted">{t("followPanel.whatThisWouldAdd")}</span>
             {preview.isLoading && <span className="text-ink-muted">Looking…</span>}
             {preview.isError && <span className="text-ink-muted">{problemOf(preview.error) ?? "The preview is not available."}</span>}
             {preview.data && preview.data.would_add.length === 0 && (
@@ -282,7 +283,7 @@ function FollowRow({
                 onClick={() => save.mutate(true)}
                 className="rounded-md border border-border-subtle px-3 py-1 text-ink-muted hover:text-ink disabled:opacity-50"
               >
-                Follow and search
+                {t("followPanel.followAndSearch")}
               </button>
             )}
             {save.isError && <span className="text-danger">{problemOf(save.error) ?? "That could not be saved."}</span>}

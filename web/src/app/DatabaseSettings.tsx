@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import { isTierVisible, useTier } from "@/lib/useTier";
@@ -22,7 +23,7 @@ export function DatabaseSettingsPage() {
         {isTierVisible(tier, "expert") ? (
           <DatabaseSettings />
         ) : (
-          <p className="text-sm text-ink-muted">Database maintenance is an expert-tier setting. Raise your own tier on the User settings page to see it.</p>
+          <p className="text-sm text-ink-muted">{t("databaseSettings.databaseMaintenanceIsAn")}</p>
         )}
       </div>
     </div>
@@ -50,7 +51,7 @@ function UsageCard() {
     ["Backups", usage.data.backups_bytes],
   ] as const;
   return (
-    <Card title="Disk use" help="What Solarr's own folders hold, apart from the databases themselves (see Cache for those).">
+    <Card title={t("databaseSettings.diskUse")} help="What Solarr's own folders hold, apart from the databases themselves (see Cache for those).">
       <dl className="grid grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-sm">
         {rows.map(([label, bytes]) => (
           <div key={label} className="contents">
@@ -163,11 +164,11 @@ function BackupsCard() {
       </p>
       {!confirming ? (
         <Button variant="secondary" onClick={() => setConfirming(true)} disabled={!usage.data || usage.data.backup_count < 2}>
-          Clear old backups
+          {t("databaseSettings.clearOldBackups")}
         </Button>
       ) : (
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-ink-muted">Checks that the newest backup is valid, then removes all older ones.</span>
+          <span className="text-ink-muted">{t("databaseSettings.checksThatTheNewest")}</span>
           <Button variant="danger" onClick={() => clear.mutate()} disabled={clear.isPending}>
             {clear.isPending ? "Checking…" : "Check and clear"}
           </Button>
@@ -176,7 +177,7 @@ function BackupsCard() {
           </Button>
         </div>
       )}
-      {clear.isError && <p className="text-xs text-danger">The newest backup did not pass its check, so nothing was removed.</p>}
+      {clear.isError && <p className="text-xs text-danger">{t("databaseSettings.theNewestBackupDid")}</p>}
       {clear.isSuccess && <p className="text-xs text-ink-muted">Removed {clear.data.removed}; kept {clear.data.kept}.</p>}
     </Card>
   );
@@ -207,7 +208,7 @@ function MaintenanceCard() {
           </li>
         ))}
       </ul>
-      {run.isError && <p className="text-xs text-danger">That task could not be started.</p>}
+      {run.isError && <p className="text-xs text-danger">{t("databaseSettings.thatTaskCouldNot")}</p>}
       {run.isSuccess && <p className="text-xs text-ink-muted">Started; watch Scheduler or Activity for the result.</p>}
     </Card>
   );

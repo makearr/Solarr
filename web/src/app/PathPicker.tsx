@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronUp, Clock, Folder, FolderOpen } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import { usePreference } from "@/lib/usePreference";
@@ -94,7 +95,7 @@ export function PathPicker({
         />
         <button
           type="button"
-          aria-label="Browse folders"
+          aria-label={t("pathPicker.browseFolders")}
           aria-expanded={open}
           className="shrink-0 rounded-md border border-border-subtle p-1.5 text-ink-muted hover:text-ink
                      focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
@@ -118,7 +119,7 @@ export function PathPicker({
               ))}
             </div>
           )}
-          {listing.isError && <p className="p-2 text-danger">No such folder.</p>}
+          {listing.isError && <p className="p-2 text-danger">{t("pathPicker.noSuchFolder")}</p>}
           {listing.data && (
             <>
               <p className="px-2 py-1 font-mono text-[0.6875rem] text-ink-muted">{listing.data.path}</p>
@@ -130,7 +131,7 @@ export function PathPicker({
                 />
               )}
               {listing.data.entries.length === 0 && (
-                <p className="p-2 text-ink-muted">No folders here.</p>
+                <p className="p-2 text-ink-muted">{t("pathPicker.noFoldersHere")}</p>
               )}
               {listing.data.entries.map((entry) => (
                 <Row
@@ -141,7 +142,7 @@ export function PathPicker({
                 />
               ))}
               {listing.data.truncated && (
-                <p className="p-2 text-ink-muted">More folders here than can be listed -- keep typing.</p>
+                <p className="p-2 text-ink-muted">{t("pathPicker.moreFoldersHereThan")}</p>
               )}
             </>
           )}

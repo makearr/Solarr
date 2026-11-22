@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -38,7 +39,7 @@ export function LanguageProfiles() {
 
   return (
     <Card
-      title="Language profiles"
+      title={t("languageProfiles.languageProfiles")}
       help="A required list means at least one listed language must be present, evaluated from the probe, never the release name. An empty profile carries no language policy at all."
     >
       {remove.isError && (
@@ -103,7 +104,7 @@ export function LanguageProfiles() {
       ) : (
         !profiles.isLoading && (
           <p className="rounded-lg border border-border-subtle bg-surface p-3 text-xs text-ink-muted">
-            No language profile exists yet.
+            {t("languageProfiles.noLanguageProfileExists")}
           </p>
         )
       )}
@@ -126,7 +127,7 @@ export function LanguageProfiles() {
                      hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2
                      focus-visible:outline-accent"
         >
-          New language profile
+          {t("languageProfiles.newLanguageProfile")}
         </button>
       )}
     </Card>
@@ -201,7 +202,7 @@ function LanguageProfileForm({
           onChange={(event) => setPreferOriginalAudio(event.target.checked)}
           className="size-3.5"
         />
-        Prefer original audio
+        {t("languageProfiles.preferOriginalAudio")}
       </label>
       <label className="flex items-center gap-2 text-xs text-ink-muted">
         <input

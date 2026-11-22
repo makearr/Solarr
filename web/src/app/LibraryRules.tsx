@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -45,7 +46,7 @@ export function LibraryRules() {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4">
       <Card
-        title="Suggested for"
+        title={t("libraryRules.suggestedFor")}
         help="When you add something from anywhere, this library is suggested for it when every condition of one of these rules holds; the library whose rule matches the most wins. A genre matches the genres below it too."
       >
         <p className="text-xs text-ink-muted">
@@ -84,7 +85,7 @@ export function LibraryRules() {
                   )}
                   <button
                     type="button"
-                    aria-label="Remove this condition"
+                    aria-label={t("libraryRules.removeThisCondition")}
                     onClick={() => {
                       const conditions = rule.conditions.filter((_, i) => i !== at);
                       setDraft(conditions.length === 0 ? draft.filter((_, i) => i !== index) : draft.map((entry, i) => (i === index ? { conditions } : entry)))
@@ -106,13 +107,13 @@ export function LibraryRules() {
           ))}
         </ul>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setDraft([...draft, { conditions: [{ field: "genre", value: "" }] }])}>Add a rule</Button>
+          <Button onClick={() => setDraft([...draft, { conditions: [{ field: "genre", value: "" }] }])}>{t("libraryRules.addARule")}</Button>
           <Button variant="primary" busy={save.isPending} onClick={() => save.mutate(draft)}>
             Save
           </Button>
           {rules.data.own && rules.data.kind_rules.length > 0 && (
             <Button variant="ghost" onClick={() => save.mutate(null)}>
-              Back to its kind's rules
+              {t("libraryRules.backToItsKind")}
             </Button>
           )}
         </div>

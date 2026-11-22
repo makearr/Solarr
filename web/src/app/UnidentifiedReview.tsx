@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -79,7 +80,7 @@ export function UnidentifiedReview() {
 
   if (review.isLoading) return <Message>Loading…</Message>;
   if (review.error !== null || !review.data) {
-    return <Message>This file is not waiting for a decision any more.</Message>;
+    return <Message>{t("unidentifiedReview.thisFileIsNot")}</Message>;
   }
 
   const [latest, ...older] = review.data.items;
@@ -131,14 +132,14 @@ export function UnidentifiedReview() {
                 title="A cover scan, a booklet, a sample: nothing to identify. The file stays where it is."
                 className="rounded-md border border-border-subtle px-2 py-0.5 text-ink-muted hover:text-ink"
               >
-                This is not media
+                {t("unidentifiedReview.thisIsNotMedia")}
               </button>
             )}
           </span>
         </div>
 
         {choose.isError && <p className="text-xs text-danger">That {words.work} could not be applied.</p>}
-        {notMedia.isError && <p className="text-xs text-danger">The file could not be marked.</p>}
+        {notMedia.isError && <p className="text-xs text-danger">{t("unidentifiedReview.theFileCouldNot")}</p>}
 
         {suggestions.length > 0 && (
           <section aria-label="Suggested" className="flex flex-col gap-1.5 rounded-lg border border-border-subtle bg-surface p-3 text-xs">
@@ -173,7 +174,7 @@ export function UnidentifiedReview() {
 
         {latest === undefined ? (
           <p className="text-xs text-ink-muted">
-            No identification run was recorded for this file yet -- it will be after the next scan.
+            {t("unidentifiedReview.noIdentificationRunWas")}
           </p>
         ) : (
           <Attempt attempt={latest} onChoose={(candidate) => choose.mutate(candidate)} busy={choose.isPending} />

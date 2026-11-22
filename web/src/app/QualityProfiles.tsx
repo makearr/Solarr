@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import { parseAudioRules } from "@/lib/qualityRules";
@@ -32,7 +33,7 @@ export function QualityProfiles() {
       <div className="flex items-baseline gap-3">
         <h1 className="text-lg font-semibold">Quality</h1>
         <Link to="/quality-profiles" className="ml-auto text-xs text-ink-muted hover:text-ink hover:underline">
-          Create and edit targets
+          {t("qualityProfiles.createAndEditTargets")}
         </Link>
       </div>
       <LibraryQualityEditor />
@@ -207,7 +208,7 @@ function LibraryQualityEditor() {
           release by how near it is, and Solarr aims a little over rather than under. Automatic works the target out from
           the first quality profile.{" "}
           <Link to="/quality-profiles" className="underline hover:text-ink">
-            Create and edit targets
+            {t("qualityProfiles.createAndEditTargets")}
           </Link>
         </p>
         <select
@@ -276,7 +277,7 @@ function LibraryQualityEditor() {
               onClick={() => setOrder(quality.data.available.map((profile) => profile.id))}
               className="rounded-md border border-border-subtle px-2 py-1 text-xs hover:border-accent"
             >
-              Use the suggested order
+              {t("qualityProfiles.useTheSuggestedOrder")}
             </button>
           </div>
         ) : (
@@ -360,7 +361,7 @@ function LibraryQualityEditor() {
           </span>
         </label>
         <p className="text-xs text-ink-muted">
-          Once a file is at least this good, or meets the target, it is not upgraded any further.
+          {t("qualityProfiles.onceAFileIs")}
         </p>
         <select
           disabled={!upgrades}
@@ -416,7 +417,7 @@ function LibraryQualityEditor() {
         <p key={warning} className="rounded-md border border-warn/50 bg-warn/10 px-3 py-2 text-xs">
           {warning}{" "}
           <Link to="/quality-profiles" className="underline hover:text-ink">
-            Edit quality profiles
+            {t("qualityProfiles.editQualityProfiles")}
           </Link>
         </p>
       ))}

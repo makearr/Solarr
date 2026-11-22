@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
+import { t } from "@/lib/i18n";
 
 import { Card } from "./SettingsCard";
 
@@ -37,13 +38,13 @@ export function Blocklist() {
 
   return (
     <Card
-      title="Failed releases"
+      title={t("blocklist.failedReleases")}
       help="Releases that failed and will not be grabbed again. Removing an entry lets the next search choose it; it downloads nothing now."
     >
       {entries.isLoading && <Message>Loading…</Message>}
-      {entries.error !== null && <Message>The blocklist could not be read.</Message>}
+      {entries.error !== null && <Message>{t("blocklist.theBlocklistCouldNot")}</Message>}
       {entries.data && entries.data.items.length === 0 && (
-        <Message>Nothing is blocked. Failed releases land here as they happen.</Message>
+        <Message>{t("blocklist.nothingIsBlockedFailed")}</Message>
       )}
 
       {entries.data && entries.data.items.length > 0 && (
@@ -76,7 +77,7 @@ export function Blocklist() {
         </ul>
       )}
 
-      {remove.isError && <p className="text-xs text-danger">That could not be removed.</p>}
+      {remove.isError && <p className="text-xs text-danger">{t("blocklist.thatCouldNotBe")}</p>}
     </Card>
   );
 }
