@@ -331,6 +331,30 @@ func TestJob_PoisonsAUnitCarryingARefusedFile(t *testing.T) {
 	}
 }
 
+// A Blu-ray folder is one unit that is queued for a person with the disc-structure reason and never reaches an importer.
+func TestJob_HoldsADiscStructureForReview(t *testing.T) {
+	fx := newFixture(t, "Invented Film (2001)/BDMV/STREAM/00000.m2ts", "Invented Film (2001)/BDMV/STREAM/00001.m2ts")
+	job := importjob.NewJob(importjob.Config{
+		FS: fx.fsys, Sessions: library.NewImportSessions(fx.store), Policy: poisoningPolicy{refuseName: "none.exe"},
+		Importers: musicImporters(fx.tool, nil, nil), Unassigned: "music", Packs: library.NewPacks(fx.store), Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
+	})
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	sessions := fx.sessions()
+	list, err := sessions.List(t.Context(), library.ImportDone, false)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("List = %+v, %v, want one done session", list, err)
+	}
+	units, err := sessions.ListUnits(t.Context(), list[0].ID)
+	if err != nil {
+		t.Fatalf("ListUnits: %v", err)
+	}
+	if len(units) != 1 || units[0].Decision != library.UnitQueue || !strings.HasPrefix(units[0].Reason, "DISC_STRUCTURE") {
+		t.Errorf("units = %+v, want one QUEUE with the DISC_STRUCTURE reason", units)
+	}
+}
+
 // recordingImporter is a media type's own importer that commits every unit it is handed and remembers them.
 type recordingImporter struct{ handed []string }
 

@@ -613,6 +613,16 @@ func packItemStateFor(unit library.Unit) string {
 	}
 }
 
+// discStructureOf reports whether a unit is a Blu-ray or DVD folder, and which folders say so.
+func discStructureOf(unit inspect.Unit) (string, bool) {
+	for _, signal := range unit.Evidence.Signals {
+		if signal.Kind == inspect.SignalDiscStructure {
+			return signal.Detail, true
+		}
+	}
+	return "", false
+}
+
 // poisonedByExclusion checks every file a unit carries, Media and Other alike (a ".exe" beside audio lands in
 // Other), against ADR-53's refuse action; "" for a unit not poisoned.
 func (j *Job) poisonedByExclusion(unit inspect.Unit, mediaType string, categoryID *int64) string {
@@ -687,6 +697,13 @@ func (j *Job) commitCluster(
 		}
 		if reason != "" {
 			decisions[i] = library.UnitDecision{UnitID: ids[i], Decision: library.UnitSkip, Reason: reason}
+			continue
+		}
+		if detail, isDisc := discStructureOf(route.unit); isDisc {
+			decisions[i] = library.UnitDecision{
+				UnitID: ids[i], Decision: library.UnitQueue,
+				Reason: model.ReasonDiscStructure + ": disc structure (" + detail + ") is held for review, never placed automatically",
+			}
 			continue
 		}
 		groups = addToGroup(groups, route, i)

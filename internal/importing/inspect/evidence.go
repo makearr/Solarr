@@ -10,6 +10,8 @@ const (
 	SignalDiscSubfolder     SignalKind = "disc_subfolder"
 	SignalDirectoryBoundary SignalKind = "directory_boundary"
 	SignalTrackContinuity   SignalKind = "track_continuity"
+	// SignalDiscStructure marks a Blu-ray or DVD folder (BDMV, VIDEO_TS) kept as one unit; Detail names the folders.
+	SignalDiscStructure SignalKind = "disc_structure"
 )
 
 // Signal is one piece of evidence that shaped a unit's boundary.

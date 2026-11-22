@@ -348,3 +348,16 @@ func TestWalker_TheSidecarsOfDiscSubfoldersFollowTheAlbum(t *testing.T) {
 		t.Errorf("units = %d, other = %v, want %v", len(units), got, want)
 	}
 }
+
+func TestWalker_ABlurayFolderIsOneUnitHeldAsADiscStructure(t *testing.T) {
+	tr := newTree(t, "Invented Film (2001)/BDMV/STREAM/00000.m2ts", "Invented Film (2001)/BDMV/STREAM/00001.m2ts",
+		"Invented Film (2001)/BDMV/index.bdmv", "Invented Film (2001)/poster.jpg")
+	units, _ := walkAll(t, tr, inspect.WalkOptions{})
+	if len(units) != 1 || units[0].Directory != "Invented Film (2001)" || len(units[0].Media) != 2 {
+		t.Fatalf("units = %+v, want one unit of the folder holding both streams", units)
+	}
+	want := []inspect.Signal{{Kind: inspect.SignalDiscStructure, Detail: "BDMV"}}
+	if !slices.Equal(units[0].Evidence.Signals, want) {
+		t.Errorf("Signals = %+v, want %+v", units[0].Evidence.Signals, want)
+	}
+}

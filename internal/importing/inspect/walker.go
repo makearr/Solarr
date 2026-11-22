@@ -170,7 +170,18 @@ func (w *walkerRun) visit(ctx context.Context, relative string) (clusterFiles, e
 	}
 
 	var bubbled clusterFiles
+	var discFolders []string
 	for _, entry := range dirs {
+		if isDiscStructureFolder(entry.Name) {
+			discMedia, discOther, err := w.readWholeTree(ctx, path.Join(relative, entry.Name))
+			if err != nil {
+				return clusterFiles{}, err
+			}
+			bubbled.media = append(bubbled.media, discMedia...)
+			ownOther = append(ownOther, discOther...)
+			discFolders = append(discFolders, entry.Name)
+			continue
+		}
 		if isSubtitleFolder(entry.Name) {
 			ownOther = append(ownOther, w.subtitleFiles(path.Join(relative, entry.Name))...)
 		}
@@ -223,6 +234,13 @@ func (w *walkerRun) visit(ctx context.Context, relative string) (clusterFiles, e
 			if read, err := w.opts.TagsFor(ctx, relPaths); err == nil {
 				tags = read
 			}
+		}
+		if len(discFolders) > 0 {
+			units = []Unit{{
+				Directory: relative, Media: allMedia,
+				Evidence: Evidence{Signals: []Signal{{Kind: SignalDiscStructure, Detail: strings.Join(discFolders, ", ")}}},
+			}}
+			return nil
 		}
 		units = splitByEvidence(relative, allMedia, tags, extra)
 		return nil
@@ -295,6 +313,31 @@ func readDirectory(
 		}
 	}
 	return media, other, dirs, nil
+}
+
+// isDiscStructureFolder names the folders a Blu-ray or DVD keeps its streams in; the disc is one unit, never its clips.
+func isDiscStructureFolder(name string) bool {
+	switch strings.ToUpper(name) {
+	case "BDMV", "VIDEO_TS", "AUDIO_TS", "CERTIFICATE":
+		return true
+	}
+	return false
+}
+
+// readWholeTree lists every file below a folder without turning any subfolder into a unit of its own.
+func (w *walkerRun) readWholeTree(ctx context.Context, relative string) (media, other []File, err error) {
+	m, o, dirs, err := readDirectory(ctx, w.fsys, path.Join(w.root, relative), relative, w.opts)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, entry := range dirs {
+		childMedia, childOther, err := w.readWholeTree(ctx, path.Join(relative, entry.Name))
+		if err != nil {
+			return nil, nil, err
+		}
+		m, o = append(m, childMedia...), append(o, childOther...)
+	}
+	return m, o, nil
 }
 
 // isSubtitleFolder is the folder scene releases keep their subtitles in, beside the video.
