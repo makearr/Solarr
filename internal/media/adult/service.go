@@ -120,11 +120,12 @@ func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, hint Hint
 		answers[seed.Sources[0]] = *seed
 		ids = mergeIDs(ids, seed.IDs)
 		if quick && enough(*seed) {
-			return finish(answers, order, ids)
+			return finish(answers, order, ids, nil)
 		}
 	}
 	// A provider early in the order may lack the title a later one teaches it: it is asked again once the first round ran.
 	askedWith := map[string]askedAbout{}
+	var failed []string
 	type question struct {
 		name  string
 		ids   IDs
@@ -145,18 +146,31 @@ func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, hint Hint
 		}
 		scenes := make([]Scene, len(questions))
 		answered := make([]bool, len(questions))
+		failures := make([]error, len(questions))
 		ask := func(i int) {
 			asking, cancel := context.WithTimeout(ctx, providerPatience)
 			defer cancel()
-			scenes[i], answered[i] = s.ask(asking, questions[i].name, questions[i].ids, questions[i].known)
+			scenes[i], answered[i], failures[i] = s.ask(asking, questions[i].name, questions[i].ids, questions[i].known)
+		}
+		// A source that answered is not counted failed: an error beside an answer (a film search after a scene lookup) lost nothing.
+		noteFailures := func() {
+			for i, q := range questions {
+				if failures[i] != nil && !answered[i] {
+					failed = append(failed, q.name)
+				}
+			}
 		}
 		if quick {
 			for i, q := range questions {
-				if ask(i); answered[i] {
+				ask(i)
+				if failures[i] != nil && !answered[i] {
+					failed = append(failed, q.name)
+				}
+				if answered[i] {
 					answers[q.name] = scenes[i]
 					ids = mergeIDs(ids, scenes[i].IDs)
 					if enough(mergeAnswers(answers, order)) {
-						return finish(answers, order, ids)
+						return finish(answers, order, ids, failed)
 					}
 				}
 			}
@@ -173,6 +187,7 @@ func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, hint Hint
 			}()
 		}
 		asking.Wait()
+		noteFailures()
 		for i, q := range questions {
 			if answered[i] {
 				answers[q.name] = scenes[i]
@@ -180,7 +195,18 @@ func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, hint Hint
 			}
 		}
 	}
-	return finish(answers, order, ids)
+	return finish(answers, order, ids, failed)
+}
+
+// failedSupplier is a source that holds the scene's stored id and did not answer: a refresh built on the others would
+// replace what it supplied with their shorter lists.
+func failedSupplier(stored IDs, failed []string) (string, bool) {
+	for _, name := range failed {
+		if idOf(stored, name) != "" {
+			return name, true
+		}
+	}
+	return "", false
 }
 
 // mergeAnswers is the answers so far as one scene, the first in the order supplying and the later filling.
@@ -205,12 +231,14 @@ func enough(scene Scene) bool {
 	return scene.Title != "" && scene.Date != "" && scene.Studio != "" && len(scene.Performers()) > 0 && len(scene.Images) > 0
 }
 
-func finish(answers map[string]Scene, order []string, ids IDs) (Scene, error) {
+func finish(answers map[string]Scene, order []string, ids IDs, failed []string) (Scene, error) {
 	scene := mergeAnswers(answers, order)
 	if scene.Title == "" {
 		return Scene{}, ErrNoSource
 	}
 	scene.IDs = mergeIDs(scene.IDs, ids)
+	slices.Sort(failed)
+	scene.Failed = slices.Compact(failed)
 	return scene, nil
 }
 
@@ -236,94 +264,99 @@ func hintFrom(hint Hint, answers map[string]Scene, order []string) Hint {
 }
 
 // ask asks one provider by the ids known, else by the name; one that knows nothing answers none.
-func (s Service) ask(ctx context.Context, name string, ids IDs, hint Hint) (Scene, bool) {
+// A provider that answered an error other than "not found" returns it as the third value; the first two say what it knew.
+func (s Service) ask(ctx context.Context, name string, ids IDs, hint Hint) (Scene, bool, error) {
 	if name == sourceWhisparr {
 		return s.askWhisparr(ctx, ids, hint)
 	}
-	if scene, ok := s.askServer(ctx, name, ids, hint); ok {
-		return scene, true
+	scene, ok, failure := s.askServer(ctx, name, ids, hint)
+	if ok {
+		return scene, true, failure
 	}
 	if name == ProviderThePornDB {
-		return s.askMovie(ctx, ids, hint)
+		scene, ok, movieFailure := s.askMovie(ctx, ids, hint)
+		return scene, ok, cmp.Or(failure, movieFailure)
 	}
-	return Scene{}, false
+	return Scene{}, false, failure
 }
 
-func (s Service) askServer(ctx context.Context, name string, ids IDs, hint Hint) (Scene, bool) {
+func (s Service) askServer(ctx context.Context, name string, ids IDs, hint Hint) (Scene, bool, error) {
 	server, ok := s.Servers[name]
 	if !ok || server == nil || !server.Configured() {
-		return Scene{}, false
+		return Scene{}, false, nil
 	}
 	if id := idOf(ids, name); id != "" {
 		found, err := server.FindScene(ctx, id)
 		if err != nil {
 			if !errors.Is(err, stashbox.ErrNotFound) {
 				s.warn(name, id, err)
+				return Scene{}, false, err
 			}
-			return Scene{}, false
+			return Scene{}, false, nil
 		}
-		return FromStashBox(name, found), true
+		return FromStashBox(name, found), true, nil
 	}
 	if hint.Title == "" {
-		return Scene{}, false
+		return Scene{}, false, nil
 	}
 	onDay, _ := s.onDate(ctx, name, server, hint.Title, hint.Date, searchLimit)
 	for _, scene := range onDay {
 		if sameScene(scene, hint) {
-			return scene, true
+			return scene, true, nil
 		}
 	}
 	for _, term := range searchTerms(hint) {
 		found, err := memoized(ctx, s.Memo, name, term, func() ([]stashbox.Scene, error) { return server.SearchScenes(ctx, term, searchLimit) })
 		if err != nil {
 			s.warn(name, term, err)
-			return Scene{}, false
+			return Scene{}, false, err
 		}
 		for _, candidate := range found {
 			if scene := FromStashBox(name, candidate); sameScene(scene, hint) {
-				return scene, true
+				return scene, true, nil
 			}
 		}
 	}
-	return Scene{}, false
+	return Scene{}, false, nil
 }
 
 // askMovie asks ThePornDB's films, by the id a scene lookup did not know or by the name.
-func (s Service) askMovie(ctx context.Context, ids IDs, hint Hint) (Scene, bool) {
+func (s Service) askMovie(ctx context.Context, ids IDs, hint Hint) (Scene, bool, error) {
 	if s.Movies == nil || !s.Movies.Configured() {
-		return Scene{}, false
+		return Scene{}, false, nil
 	}
 	if ids.ThePornDB != "" {
 		found, err := s.Movies.Movie(ctx, ids.ThePornDB)
 		if err != nil {
 			if !errors.Is(err, theporndb.ErrNotFound) {
 				s.warn(ProviderThePornDB, ids.ThePornDB, err)
+				return Scene{}, false, err
 			}
-			return Scene{}, false
+			return Scene{}, false, nil
 		}
-		return FromMovie(found), true
+		return FromMovie(found), true, nil
 	}
 	if hint.Title == "" {
-		return Scene{}, false
+		return Scene{}, false, nil
 	}
 	for _, term := range searchTerms(hint) {
 		found, err := memoized(ctx, s.Memo, ProviderThePornDB+":movies", term, func() ([]theporndb.Movie, error) { return s.Movies.SearchMovies(ctx, term, searchLimit) })
 		if err != nil {
 			s.warn(ProviderThePornDB, term, err)
-			return Scene{}, false
+			return Scene{}, false, err
 		}
 		for _, candidate := range found {
 			if scene := FromMovie(candidate); sameScene(scene, hint) {
-				return scene, true
+				return scene, true, nil
 			}
 		}
 	}
-	return Scene{}, false
+	return Scene{}, false, nil
 }
 
-func (s Service) askWhisparr(ctx context.Context, ids IDs, hint Hint) (Scene, bool) {
+func (s Service) askWhisparr(ctx context.Context, ids IDs, hint Hint) (Scene, bool, error) {
 	if s.Whisparr == nil || hint.Title == "" {
-		return Scene{}, false
+		return Scene{}, false, nil
 	}
 	for _, term := range searchTerms(hint) {
 		found, err := memoized(ctx, s.Memo, sourceWhisparr, term, func() ([]whisparr.Scene, error) { return s.Whisparr.SearchScenes(ctx, term) })
@@ -332,17 +365,17 @@ func (s Service) askWhisparr(ctx context.Context, ids IDs, hint Hint) (Scene, bo
 		}
 		if err != nil {
 			s.warn(sourceWhisparr, term, err)
-			return Scene{}, false
+			return Scene{}, false, err
 		}
 		for _, candidate := range found {
 			scene := FromWhisparr(candidate)
 			if (ids.ThePornDB != "" && ids.ThePornDB == candidate.ForeignGUID) || (ids.ThePornDB == "" && sameScene(scene, hint)) {
 				s.nameWhisparrSite(ctx, &scene, candidate.SiteID, hint.Studio)
-				return scene, true
+				return scene, true, nil
 			}
 		}
 	}
-	return Scene{}, false
+	return Scene{}, false, nil
 }
 
 // nameWhisparrSite gives a scene Whisparr's server answered the studio of its site, which that server names only by number:
@@ -717,9 +750,13 @@ func (s Service) Refresh(ctx context.Context, categoryID, workID int64) (Scene, 
 	if err != nil {
 		return Scene{}, err
 	}
-	scene, err := s.FetchFor(ctx, categoryID, idsOf(provider), Hint{Title: basics.Title})
+	stored := idsOf(provider)
+	scene, err := s.FetchFor(ctx, categoryID, stored, Hint{Title: basics.Title})
 	if err != nil {
 		return Scene{}, err
+	}
+	if source, down := failedSupplier(stored, scene.Failed); down {
+		return Scene{}, fmt.Errorf("adult: refresh of work %d skipped, %s did not answer: %w", workID, source, media.ErrSourceUnavailable)
 	}
 	now := s.Clock.Now()
 	if _, err := s.Series.Upsert(ctx, now, ToWrite(scene, now)); err != nil {

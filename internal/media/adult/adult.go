@@ -95,6 +95,8 @@ type Scene struct {
 	Fingerprint []Fingerprint
 	// Sources names the providers that supplied it, in the order they were read.
 	Sources []string
+	// Failed lists the sources that were asked and answered an error, not "no such scene".
+	Failed []string
 	// Members are the scenes of a film built from them; empty for anything a provider holds as one.
 	Members []IDs
 }

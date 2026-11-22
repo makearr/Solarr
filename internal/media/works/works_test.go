@@ -3,6 +3,7 @@ package works_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"sync"
 	"testing"
@@ -146,6 +147,31 @@ func TestRefreshJob_OneFailingNeverStopsTheRestAndIsMarked(t *testing.T) {
 	slices.Sort(refreshed)
 	if !slices.Equal(refreshed, []int64{1, 3}) || !slices.Equal(marked, []int64{2}) {
 		t.Errorf("refreshed %v, marked %v", refreshed, marked)
+	}
+}
+
+func TestRefreshJob_ASourceOutageIsARetryAndNotAFailure(t *testing.T) {
+	var marked []int64
+	job := works.RefreshJob{
+		Name: "book", JobType: jobs.Type("book.refresh"), Clock: clock.NewFake(time.Unix(1_800_000_000, 0)),
+		Due: func(context.Context) ([]library.RefreshCandidate, error) {
+			return []library.RefreshCandidate{{WorkID: 7}}, nil
+		},
+		Refresh: func(context.Context, library.RefreshCandidate) error {
+			return fmt.Errorf("book: refresh skipped: %w", media.ErrSourceUnavailable)
+		},
+		MarkAttempt: func(_ context.Context, workID int64) error {
+			marked = append(marked, workID)
+			return nil
+		},
+	}
+	err := job.Run(t.Context(), jobs.Job{})
+	var failure *jobs.Error
+	if !errors.As(err, &failure) || failure.Class != jobs.ClassRetryable || !errors.Is(err, media.ErrSourceUnavailable) {
+		t.Errorf("the sweep after an outage: %v", err)
+	}
+	if !slices.Equal(marked, []int64{7}) {
+		t.Errorf("marked %v", marked)
 	}
 }
 

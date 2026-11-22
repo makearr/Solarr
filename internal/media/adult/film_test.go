@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -181,5 +182,49 @@ func TestAddFilm_RefusesAScenePlacedOnItsOwn(t *testing.T) {
 	_, err := service.AddFilm(t.Context(), AddFilmRequest{Members: []IDs{{StashDB: "s1"}, {StashDB: "s2"}}, CategoryID: 3, ProfileID: 1})
 	if !errors.Is(err, media.ErrInvalidAdd) || !strings.Contains(err.Error(), "on its own") {
 		t.Errorf("err = %v, want a refusal naming why", err)
+	}
+}
+
+// downServer answers every scene question with a transport error, as a provider in an outage does.
+type downServer struct{ *fakeServer }
+
+var errProviderDown = errors.New("provider down")
+
+func (downServer) FindScene(context.Context, string) (stashbox.Scene, error) {
+	return stashbox.Scene{}, errProviderDown
+}
+
+func (downServer) SearchScenes(context.Context, string, int) ([]stashbox.Scene, error) {
+	return nil, errProviderDown
+}
+
+func (downServer) ScenesOnDate(context.Context, string, string, int) ([]stashbox.Scene, error) {
+	return nil, errProviderDown
+}
+
+// A refresh while the provider that holds the scene's stored id is down must not store the shorter merge of the others (META-14).
+func TestRefresh_WhileTheProviderThatSuppliedTheSceneIsDownStoresNothing(t *testing.T) {
+	service := newFilmService(t, &fakeServer{scenes: []stashbox.Scene{stashScene()}})
+	added, err := service.Add(t.Context(), AddRequest{IDs: IDs{StashDB: "sb-1"}, CategoryID: 3, ProfileID: 1})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	other := stashScene()
+	other.ID, other.Details = "tp-1", "Shorter."
+	service.Servers = map[string]Server{ProviderStashDB: downServer{&fakeServer{}}, ProviderThePornDB: &fakeServer{scenes: []stashbox.Scene{other}}}
+	service.Sources = []string{ProviderStashDB, ProviderThePornDB}
+	if _, err := service.Refresh(t.Context(), 3, added.WorkID); !errors.Is(err, media.ErrSourceUnavailable) {
+		t.Fatalf("Refresh = %v, want ErrSourceUnavailable", err)
+	}
+}
+
+func TestFetchFor_NamesTheSourcesThatAnsweredAnError(t *testing.T) {
+	service := Service{
+		Servers: map[string]Server{ProviderStashDB: downServer{&fakeServer{}}, ProviderThePornDB: &fakeServer{scenes: []stashbox.Scene{stashScene()}}},
+		Sources: []string{ProviderStashDB, ProviderThePornDB},
+	}
+	scene, err := service.FetchFor(t.Context(), 0, IDs{}, Hint{Title: "Class Two", Date: "2020-05-14"})
+	if err != nil || !slices.Equal(scene.Failed, []string{ProviderStashDB}) {
+		t.Errorf("Failed = %v, %v", scene.Failed, err)
 	}
 }

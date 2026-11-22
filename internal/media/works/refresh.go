@@ -8,6 +8,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 	"github.com/makearr/Solarr/internal/platform/parallel"
@@ -68,11 +69,14 @@ func (j RefreshJob) Run(ctx context.Context, _ jobs.Job) error {
 	if err := ctx.Err(); err != nil {
 		return jobs.Retryablef(j.Name+".refresh.context", string(j.JobType), err)
 	}
-	refreshed, failed := 0, 0
+	refreshed, failed, unavailable := 0, 0, 0
 	for index, err := range outcomes {
 		switch {
 		case err == nil:
 			refreshed++
+		case errors.Is(err, media.ErrSourceUnavailable):
+			unavailable++
+			logger.InfoContext(ctx, j.Name+" refresh: a source did not answer, kept as it was", slog.Int64("work_id", due[index].WorkID), slog.Any("error", err))
 		case j.NoSource != nil && errors.Is(err, j.NoSource):
 			failed++
 			logger.WarnContext(ctx, j.Name+" refresh: no provider answered", slog.Int64("work_id", due[index].WorkID))
@@ -81,6 +85,10 @@ func (j RefreshJob) Run(ctx context.Context, _ jobs.Job) error {
 			logger.WarnContext(ctx, j.Name+" refresh failed", slog.Int64("work_id", due[index].WorkID), slog.Any("error", err))
 		}
 	}
-	logger.Info(j.Name+" refresh sweep finished", slog.Int("refreshed", refreshed), slog.Int("failed", failed))
+	logger.Info(j.Name+" refresh sweep finished", slog.Int("refreshed", refreshed), slog.Int("failed", failed), slog.Int("source_unavailable", unavailable))
+	// An outage is not the work's fault: the job asks to run again, the stored metadata untouched.
+	if unavailable > 0 {
+		return jobs.Retryablef(j.Name+".refresh.source", string(j.JobType), media.ErrSourceUnavailable)
+	}
 	return nil
 }
