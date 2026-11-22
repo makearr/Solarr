@@ -15,6 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/adult"
 	"github.com/makearr/Solarr/internal/media/book"
+	"github.com/makearr/Solarr/internal/media/comic"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/media/works"
@@ -90,6 +91,11 @@ func (p *process) bookIndexerConns(format book.Format) func(ctx context.Context)
 	return func(ctx context.Context) ([]judge.Conn, error) {
 		return p.searchConns(ctx, indexer.RootBooks, slices.Clone(format.FeedCategories), "book", "book-search")
 	}
+}
+
+// comicIndexerConns is indexerConns for comics: the same connections, searched in Newznab's comic and book categories by text.
+func (p *process) comicIndexerConns(ctx context.Context) ([]judge.Conn, error) {
+	return p.searchConns(ctx, indexer.RootBooks, slices.Clone(comic.FeedCategories), "search", "search")
 }
 
 // adultIndexerConns is indexerConns for the adult type: the same connections, searched in Newznab's XXX categories by text.

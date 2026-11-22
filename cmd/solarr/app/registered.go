@@ -880,6 +880,21 @@ func (p *process) comicService() comic.Service {
 	}
 }
 
+// comicGrab builds the comic type's automatic search over the real stores.
+func (p *process) comicGrab() comic.Grab {
+	blocklist, sightings, filters := library.NewBlocklistStore(p.library), library.NewSightings(p.library), library.NewReleaseFilters(p.library)
+	return comic.Grab{
+		Search: comic.Search{
+			Reader: library.NewSeriesReader(p.library), KindOf: p.comicService().KindOf,
+			Deps: works.Deps{Desired: library.NewDesired(p.library), Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist, Sightings: &sightings, ReleaseFilters: &filters},
+		},
+		Automatic: dispatch.Automatic{
+			Dispatch: p.dispatchFor(comic.MediaType), Name: comic.MediaType,
+			FreeSpace: func(categoryID int64) (int64, bool) { return p.cache.Snapshot().AcquisitionHeadroom(categoryID) },
+		},
+	}
+}
+
 // comicResolver finds or adds the series a file or a download names.
 func (p *process) comicResolver() comic.Resolver {
 	return comic.Resolver{
@@ -893,7 +908,16 @@ func (p *process) comicModule() comic.Module {
 	service := p.comicService()
 	catalog := comic.Catalog{Service: service, Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID}
 	resolver := p.comicResolver()
+	grab := p.comicGrab()
+	conns := p.comicIndexerConns
 	return comic.Module{
+		Feed: comic.Feed{
+			Grab: grab, Reader: library.NewSeriesReader(p.library), Indexers: conns, Logger: p.logger, Libraries: p.libraryIDsOf(comic.MediaType),
+		},
+		CutoffJob: comic.CutoffJob{
+			Desired: library.NewDesired(p.library), Reader: library.NewSeriesReader(p.library), Settings: p.cache, Recycle: p.recycleSuperseded, Logger: p.logger,
+		},
+		Searching: comic.NewSearching(grab, conns, clock.NewSystem()),
 		Files: comic.Files{
 			Resolver: resolver, FS: p.fsys, Unidentified: library.NewUnidentified(p.library), Physical: library.NewPhysical(p.library), Clock: clock.NewSystem(),
 			AllowAgain: catalog.AllowAgain, RootPath: func(id int64) (string, bool) {
@@ -931,6 +955,24 @@ func (p *process) comicModule() comic.Module {
 		Wiring: media.Wiring{
 			Adder:    catalog,
 			Pictures: adapters.ProviderPictures{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library), Clock: clock.NewSystem()},
+			Hunt: func(ctx context.Context, itemID int64) (plan.Outcome, error) {
+				found, err := conns(ctx)
+				if err != nil {
+					return plan.OutcomeSearched, err
+				}
+				result, err := grab.SearchAndSend(ctx, itemID, found, dispatch.GrabAutomatic, clock.NewSystem().Now())
+				switch {
+				case errors.Is(err, comic.ErrNotSearchable):
+					return plan.OutcomeNotWanted, nil
+				case err != nil:
+					return plan.OutcomeSearched, err
+				case result.AlreadyInFlight:
+					return plan.OutcomeInFlight, nil
+				case result.Search.Answered == 0:
+					return plan.OutcomeNoAnswer, nil
+				}
+				return plan.OutcomeSearched, nil
+			},
 			Refresh: func(ctx context.Context, workID int64) (bool, error) {
 				_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
 				if err != nil {

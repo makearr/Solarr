@@ -8,6 +8,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/moving/naming"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
@@ -46,6 +47,12 @@ type Module struct {
 	Service Service
 	// Sweep is the scan of the type's files.
 	Sweep scan.Sweep
+	// Feed is the type's part of the RSS sync.
+	Feed
+	// CutoffJob is the type's part of the cutoff check.
+	CutoffJob
+	// Searching is the type's part of a search a person asks for (NewSearching).
+	works.Searching
 	// Files places a queued file by a person's word.
 	Files media.PlacingFiles
 }
