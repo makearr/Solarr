@@ -29,6 +29,8 @@ type ReleaseGroup struct {
 	// Genres are the release group's own genre tags with MusicBrainz's vote
 	// count, best first -- ADR-33's tag system, source "musicbrainz".
 	Genres []Genre
+	// Rating is absent (zero) from a source that does not carry it.
+	Rating Rating
 	// WikidataQID is extracted from the release group's own "wikidata" URL
 	// relation, when one exists -- ADR-8's bridge, same reasoning as
 	// Artist.WikidataQID, for a work-level description rather than a
@@ -49,6 +51,12 @@ type ArtistCredit struct {
 type Genre struct {
 	Name  string
 	Count int
+}
+
+// Rating is a release group's community rating: MusicBrainz's own 0 to 5 scale, and how many voted. The zero value is no rating.
+type Rating struct {
+	Value float64
+	Votes int
 }
 
 // Artist is a MusicBrainz artist's own detail: ADR-32's person facts. Fetched

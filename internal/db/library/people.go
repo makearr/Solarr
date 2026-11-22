@@ -307,6 +307,19 @@ func (p People) addCredit(ctx context.Context, workID, personID int64, role stri
 	return nil
 }
 
+// SetRating records one provider's community rating of a work, normalised to 0..10, replacing that provider's earlier one.
+func (p People) SetRating(ctx context.Context, workID int64, provider string, score float64, votes int64, at int64) error {
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetWorkRating(ctx, librarydb.SetWorkRatingParams{
+			WorkID: workID, Provider: provider, Score: score, Votes: sql.NullInt64{Int64: votes, Valid: votes > 0}, FetchedAt: at,
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("library: set %s rating of work %d: %w", provider, workID, err)
+	}
+	return nil
+}
+
 // AssignGenres replaces a work's provider genres of the genre tree with MusicBrainz's; a person's own stay (ADR-33).
 func (p People) AssignGenres(ctx context.Context, workID int64, genreTree string, genres []GenreLink) error {
 	return p.AssignGenresFrom(ctx, workID, genreTree, providerSourceMusicBrainz, genres)

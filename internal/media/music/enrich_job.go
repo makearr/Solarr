@@ -867,6 +867,13 @@ func (j *EnrichJob) enrichCreditsAndGenres(
 		}
 	}
 
+	if rg.Rating.Votes > 0 {
+		// MusicBrainz rates 0 to 5; the library keeps every provider's on 0 to 10.
+		if err := j.people.SetRating(ctx, workID, "musicbrainz", rg.Rating.Value*2, int64(rg.Rating.Votes), j.clock.Now().Unix()); err != nil {
+			j.logger.WarnContext(ctx, "set rating failed", slog.Int64("work_id", workID), slog.Any("error", err))
+		}
+	}
+
 	names := weightedGenres(rg.Genres)
 	source := library.GenreSourceMusicBrainz
 	if len(names) == 0 {

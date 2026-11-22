@@ -43,7 +43,7 @@ const (
 const (
 	// cacheKindReleaseGroup and cacheKindRelease are internal/metadata/metacache's "kind"
 	// for this package's two entities.
-	cacheKindReleaseGroup = "musicbrainz:release-group"
+	cacheKindReleaseGroup = "musicbrainz:release-group:v2"
 	cacheKindRelease      = "musicbrainz:release"
 	// cacheKindSearch is a text search's result set, keyed on searchCacheKey
 	// rather than an MBID -- there is no id to key it on until a search answers.

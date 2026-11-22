@@ -2090,3 +2090,31 @@ func TestEnrichJob_AnAlbumWithoutGenresTakesItsArtistsUntilItHasItsOwn(t *testin
 		t.Fatalf("tag sources after the album got genres = %v, want only musicbrainz", got)
 	}
 }
+
+// The community rating of a release group is kept on the 0 to 10 scale every provider's is, and an unrated one leaves none.
+func TestEnrichJob_StoresTheReleaseGroupsCommunityRatingOnTenPoints(t *testing.T) {
+	source := &fakeSource{
+		rg: musicbrainz.ReleaseGroup{
+			MBID: "rg-1", Title: "Quiet Harbour", PrimaryType: "Album", FirstReleaseDate: "1997-05-21",
+			Rating: musicbrainz.Rating{Value: 4.2, Votes: 12},
+		},
+		release: musicbrainz.Release{MBID: "rel-1", Title: "Quiet Harbour", Status: "official"},
+	}
+	job, opened, queries := newEnrichJob(t, source)
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{Provider: music.ProviderReleaseGroup, ExternalID: "rg-1"})
+	if err != nil {
+		t.Fatalf("GetWorkByExternalID: %v", err)
+	}
+	ratings, err := queries.ListWorkRatings(t.Context(), work.ID)
+	if err != nil {
+		t.Fatalf("ListWorkRatings: %v", err)
+	}
+	want := []librarydb.ListWorkRatingsRow{{Provider: "musicbrainz", Score: 8.4, Votes: 12}}
+	if !reflect.DeepEqual(ratings, want) {
+		t.Errorf("ratings = %+v, want %+v", ratings, want)
+	}
+}

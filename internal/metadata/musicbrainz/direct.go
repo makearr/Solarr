@@ -77,7 +77,7 @@ func wikidataQIDFromRelations(relations []directRelation) string {
 }
 
 // directReleaseGroup is musicbrainz.org's release-group JSON with
-// inc=artist-credits+genres+url-rels -- ArtistCredit, Genres and the
+// inc=artist-credits+genres+ratings+url-rels -- ArtistCredit, Genres, Rating and the
 // WikidataQID need those incs, every other field is already in the default
 // response.
 type directReleaseGroup struct {
@@ -97,13 +97,17 @@ type directReleaseGroup struct {
 		Name  string `json:"name"`
 		Count int    `json:"count"`
 	} `json:"genres"`
+	Rating struct {
+		Value      *float64 `json:"value"`
+		VotesCount int      `json:"votes-count"`
+	} `json:"rating"`
 	Relations []directRelation `json:"relations"`
 }
 
 func (d direct) releaseGroup(ctx context.Context, mbid string) (ReleaseGroup, error) {
 	var parsed directReleaseGroup
 	escaped := url.PathEscape(mbid) // an id from a file tag is not trusted to be a bare MBID
-	url := fmt.Sprintf("%s/release-group/%s?fmt=json&inc=artist-credits+genres+url-rels", d.baseURL, escaped)
+	url := fmt.Sprintf("%s/release-group/%s?fmt=json&inc=artist-credits+genres+ratings+url-rels", d.baseURL, escaped)
 	if err := getJSON(ctx, d.client, url, &parsed); err != nil {
 		return ReleaseGroup{}, fmt.Errorf("musicbrainz: release-group %s: %w", mbid, err)
 	}
@@ -120,7 +124,7 @@ func (d direct) releaseGroup(ctx context.Context, mbid string) (ReleaseGroup, er
 	return ReleaseGroup{
 		MBID: parsed.ID, Title: parsed.Title,
 		PrimaryType: parsed.PrimaryType, SecondaryTypes: parsed.SecondaryTypes, FirstReleaseDate: parsed.FirstReleaseDate,
-		ArtistCredit: credits, Genres: genres,
+		ArtistCredit: credits, Genres: genres, Rating: ratingOf(parsed.Rating.Value, parsed.Rating.VotesCount),
 		WikidataQID: wikidataQIDFromRelations(parsed.Relations),
 	}, nil
 }
@@ -818,4 +822,12 @@ func firstNonNil(values ...*int64) int64 {
 		}
 	}
 	return 0
+}
+
+// ratingOf is a release group's community rating; MusicBrainz sends no value while nobody has voted.
+func ratingOf(value *float64, votes int) Rating {
+	if value == nil {
+		return Rating{}
+	}
+	return Rating{Value: *value, Votes: votes}
 }
