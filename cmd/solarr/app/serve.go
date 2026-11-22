@@ -228,14 +228,6 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 	if err != nil {
 		return err
 	}
-	loaded, moves, err := config.MigrateLegacyLayout(fsys, configPath, loaded)
-	if err != nil {
-		return err
-	}
-	for _, move := range moves {
-		_, _ = fmt.Fprintf(out, "moved %s to %s\n", move.From, move.To)
-	}
-
 	env, err := config.OSEnv(fsys)
 	if err != nil {
 		return err

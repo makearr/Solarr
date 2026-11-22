@@ -59,9 +59,6 @@ func ParseWithEnv(data []byte, lookup Lookup) (Config, error) {
 		return config, problems
 	}
 
-	if config.Database.CacheSizeKB == legacyCacheSizeKB {
-		config.Database.CacheSizeKB = DefaultCacheSizeKB
-	}
 	if !namesKey(document, "paths", "mediacover_dir") {
 		config.Paths.MediaCoverDir = filepath.Join(config.Paths.ConfigDir, "mediacover")
 	}

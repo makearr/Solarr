@@ -18,12 +18,10 @@
           nord: [null, "nord"], paper: ["paper", null],
         };
         try {
-          const legacy = localStorage.getItem("solarr.theme");
           const mode = localStorage.getItem("solarr.mode") || "system";
           const pair = SCHEMES[localStorage.getItem("solarr.scheme")] || SCHEMES.solarr;
           const dark = mode === "dark" || (mode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
           let theme = (dark ? pair[1] : pair[0]) || pair[0] || pair[1];
-          if (legacy && !localStorage.getItem("solarr.mode")) theme = legacy;
           document.documentElement.dataset.theme = theme;
           document.documentElement.classList.toggle("dark", Object.values(SCHEMES).some((p) => p[1] === theme));
         } catch {

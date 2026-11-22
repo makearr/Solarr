@@ -1,5 +1,5 @@
--- Every migration up to 0071, squashed into the schema and seed rows they built (documentation/database-layout.md).
--- migrate:baseline replaces=e3233a2c384fe250294aa8d03b73cd69d2823935ba095e2c08a15ee58b79dab5
+-- Every migration up to 0077, squashed into the schema and seed rows they built (documentation/database-layout.md).
+-- migrate:baseline replaces=6795459e137b5e2a9b13b679c173aa62c3e8ab8a9cf7e7fcfc36696273a19ffd
 
 CREATE TABLE root_folder (
   id     INTEGER PRIMARY KEY,
@@ -164,6 +164,8 @@ CREATE TABLE import_list (
   enabled            INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
   options TEXT NOT NULL DEFAULT '',
   monitor_option TEXT NOT NULL DEFAULT '',
+  root_folder_id INTEGER,
+  search_on_add  INTEGER NOT NULL DEFAULT 0 CHECK (search_on_add IN (0, 1)),
   UNIQUE (category_id, name)
 );
 
@@ -186,8 +188,10 @@ CREATE TABLE naming_profile (
   name            TEXT    NOT NULL UNIQUE,
   rename_files INTEGER NOT NULL DEFAULT 1,
   replace_illegal_characters INTEGER NOT NULL DEFAULT 1,
-  colon_replacement TEXT NOT NULL DEFAULT 'smart', rename_existing TEXT NOT NULL DEFAULT 'on_request'
-  CHECK (rename_existing IN ('never', 'on_request', 'automatic')));
+  colon_replacement TEXT NOT NULL DEFAULT 'smart',
+  rename_existing TEXT NOT NULL DEFAULT 'on_request'
+  CHECK (rename_existing IN ('never', 'on_request', 'automatic'))
+);
 
 CREATE TABLE indexer (
   id              INTEGER PRIMARY KEY,
@@ -277,11 +281,12 @@ CREATE TABLE category_file_management (
   shared_file_fallback TEXT NOT NULL DEFAULT 'copy' CHECK (shared_file_fallback IN ('copy', 'symlink')),
   ignore_new_seasons INTEGER NOT NULL DEFAULT 0 CHECK (ignore_new_seasons IN (0, 1)),
   episode_title_required TEXT NOT NULL DEFAULT 'always'
-  CHECK (episode_title_required IN ('always', 'bulk_season', 'never'))
+  CHECK (episode_title_required IN ('always', 'bulk_season', 'never')),
+  tag_copy_linked_files INTEGER NOT NULL DEFAULT 0 CHECK (tag_copy_linked_files IN (0, 1))
 );
 
 CREATE TABLE arr_instance (
-  id               INTEGER PRIMARY KEY,
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
   app              TEXT    NOT NULL CHECK (app IN ('lidarr', 'sonarr', 'radarr', 'readarr', 'whisparr', 'prowlarr')),
   name             TEXT    NOT NULL,
   base_url         TEXT    NOT NULL,
@@ -294,6 +299,7 @@ CREATE TABLE arr_instance (
   last_sync_error  TEXT,
   push_monitoring INTEGER NOT NULL DEFAULT 0 CHECK (push_monitoring IN (0, 1)),
   last_pushed_at INTEGER,
+  sync_json TEXT,
   UNIQUE (app, name)
 );
 
@@ -314,7 +320,20 @@ CREATE TABLE quality_target (
   audio_bitrate_kbps INTEGER,
   video_bitrate_kbps INTEGER,
   frame_rate         REAL,
-  crf                REAL, prefer_over INTEGER NOT NULL DEFAULT 0 CHECK (prefer_over IN (0, 1)), ignore_below INTEGER NOT NULL DEFAULT 0 CHECK (ignore_below IN (0, 1)), label TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', sample_rate_hz INTEGER, bit_depth INTEGER, encoder_preset TEXT NOT NULL DEFAULT '', max_frame_rate REAL, chapters INTEGER NOT NULL DEFAULT 0 CHECK (chapters IN (0, 1)), builtin INTEGER NOT NULL DEFAULT 0 CHECK (builtin IN (0, 1)), profile_id INTEGER REFERENCES target_profile(id) ON DELETE SET NULL, encoder_tune TEXT NOT NULL DEFAULT '', deinterlace INTEGER NOT NULL DEFAULT 0 CHECK (deinterlace IN (0, 1)),
+  crf                REAL,
+  prefer_over        INTEGER NOT NULL DEFAULT 0 CHECK (prefer_over IN (0, 1)),
+  ignore_below       INTEGER NOT NULL DEFAULT 0 CHECK (ignore_below IN (0, 1)),
+  label              TEXT NOT NULL DEFAULT '',
+  description        TEXT NOT NULL DEFAULT '',
+  sample_rate_hz     INTEGER,
+  bit_depth          INTEGER,
+  encoder_preset     TEXT NOT NULL DEFAULT '',
+  max_frame_rate     REAL,
+  chapters           INTEGER NOT NULL DEFAULT 0 CHECK (chapters IN (0, 1)),
+  builtin            INTEGER NOT NULL DEFAULT 0 CHECK (builtin IN (0, 1)),
+  profile_id         INTEGER REFERENCES target_profile(id) ON DELETE SET NULL,
+  encoder_tune       TEXT NOT NULL DEFAULT '',
+  deinterlace        INTEGER NOT NULL DEFAULT 0 CHECK (deinterlace IN (0, 1)),
   UNIQUE (media_type, name)
 );
 
@@ -487,3 +506,20 @@ INSERT INTO target_profile (id, name, media_types, description, resolution, vide
 INSERT INTO target_profile (id, name, media_types, description, resolution, video_codec, frame_rate, max_frame_rate, crf, encoder_preset, encoder_tune, deinterlace, audio_codec, audio_channels, audio_bitrate_kbps, sample_rate_hz, bit_depth, bitrate_kbps, recommended_target, builtin) VALUES (10, 'Lossless', 'music', 'Studio and download releases: lossless at 48 kHz and 16-bit.', '', '', NULL, NULL, NULL, '', '', 0, 'flac', '2.0', NULL, 48000, 16, NULL, 'FLAC, stereo, 48 kHz, 16-bit, FLAC', 1);
 INSERT INTO target_profile (id, name, media_types, description, resolution, video_codec, frame_rate, max_frame_rate, crf, encoder_preset, encoder_tune, deinterlace, audio_codec, audio_channels, audio_bitrate_kbps, sample_rate_hz, bit_depth, bitrate_kbps, recommended_target, builtin) VALUES (11, 'Spoken', 'spoken', 'Audiobooks with music or effects: stereo AAC with chapters.', '', '', NULL, NULL, NULL, '', '', 0, 'aac', '2.0', NULL, NULL, NULL, 96, 'AAC, stereo, 96 kbit/s, M4B, chapters', 1);
 INSERT INTO target_profile (id, name, media_types, description, resolution, video_codec, frame_rate, max_frame_rate, crf, encoder_preset, encoder_tune, deinterlace, audio_codec, audio_channels, audio_bitrate_kbps, sample_rate_hz, bit_depth, bitrate_kbps, recommended_target, builtin) VALUES (12, 'Spoken (mono)', 'spoken', 'Narration only: mono AAC is half the size and loses nothing.', '', '', NULL, NULL, NULL, '', '', 0, 'aac', '1.0', NULL, NULL, NULL, 64, 'AAC, mono, 64 kbit/s, M4B, chapters', 1);
+
+-- Proxies an indexer's requests can go through; referenced by id from indexer.settings_json, so no foreign key.
+CREATE TABLE proxy (
+  id                 INTEGER PRIMARY KEY,
+  name               TEXT    NOT NULL UNIQUE,
+  kind               TEXT    NOT NULL CHECK (kind IN ('http', 'socks5', 'flaresolverr')),
+  url                TEXT    NOT NULL,
+  source_arr_id      INTEGER,
+  source_external_id INTEGER,
+  created_at         INTEGER NOT NULL,
+  updated_at         INTEGER NOT NULL
+);
+
+-- A music library lists release groups that only exist as bootlegs, promos or pseudo-releases only when it is in this table.
+CREATE TABLE category_bootleg_only (
+  category_id INTEGER PRIMARY KEY REFERENCES category(id) ON DELETE CASCADE
+);

@@ -1,5 +1,5 @@
--- Every migration up to 0006, squashed into the schema and seed rows they built (documentation/database-layout.md).
--- migrate:baseline replaces=e3402eadac18b5221dae0aecbe2ab752064429bcca196b659ebba238dbb58e84
+-- Every migration up to 0008, squashed into the schema and seed rows they built (documentation/database-layout.md).
+-- migrate:baseline replaces=b9a08469366115e84f5d5bf71c6afb16a4c05a73f16f13f3ee49a91e4e3c6bda
 
 CREATE TABLE history (
   id             INTEGER PRIMARY KEY,
@@ -16,7 +16,9 @@ CREATE TABLE history (
   lead_name      TEXT    NOT NULL DEFAULT '',
   indexer        TEXT    NOT NULL DEFAULT '',
   client         TEXT    NOT NULL DEFAULT '',
-  detail         TEXT    NOT NULL DEFAULT '', event_id INTEGER NOT NULL DEFAULT 0);
+  detail         TEXT    NOT NULL DEFAULT '',
+  event_id       INTEGER NOT NULL DEFAULT 0
+);
 
 CREATE TABLE stat_rollup (
   metric      TEXT    NOT NULL,
@@ -46,6 +48,7 @@ CREATE TABLE candidate (
   source           TEXT    NOT NULL,
   first_seen_at    INTEGER NOT NULL,
   expires_at       INTEGER NOT NULL,
+  magnet_url       TEXT NOT NULL DEFAULT '',
   UNIQUE(indexer_id, guid)
 );
 
@@ -106,3 +109,15 @@ CREATE INDEX search_log_category_at ON search_log(category_id, at);
 CREATE INDEX search_log_at ON search_log(at);
 CREATE INDEX download_speed_client_at ON download_speed(downloader_id, at);
 CREATE INDEX download_speed_at ON download_speed(at);
+
+-- How long each kind of job ran in each hour, for the scheduler's heatmap of the last seven days. Kept by job type
+-- rather than by schedule: it is what the workers actually did, including work no schedule asked for.
+CREATE TABLE task_hour (
+  job_type  TEXT    NOT NULL,
+  -- Unix seconds of the start of the hour, in UTC.
+  hour_start INTEGER NOT NULL,
+  run_ms    INTEGER NOT NULL,
+  runs      INTEGER NOT NULL,
+  PRIMARY KEY (job_type, hour_start)
+) WITHOUT ROWID;
+CREATE INDEX task_hour_by_hour ON task_hour(hour_start);

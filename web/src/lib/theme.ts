@@ -55,7 +55,6 @@ export const MODES: readonly { id: Mode; label: string }[] = [
 // index.html's pre-paint script reads the same two keys.
 const MODE_KEY = "solarr.mode";
 const SCHEME_KEY = "solarr.scheme";
-const LEGACY_KEY = "solarr.theme";
 const DEFAULT_BASE: ThemeDefinition = { id: "light", label: "Light", base: "light" };
 
 export function definition(id: string): ThemeDefinition {
@@ -88,31 +87,21 @@ export function apply(mode: Mode, schemeID: string): void {
   try {
     localStorage.setItem(MODE_KEY, mode);
     localStorage.setItem(SCHEME_KEY, scheme(schemeID).id);
-    localStorage.removeItem(LEGACY_KEY);
   } catch {
     // Denied storage loses only the next load's pre-paint hint.
   }
 }
 
-/** The stored mode and scheme; a single theme stored before the split becomes its scheme and base. */
+/** The stored mode and scheme. */
 export function stored(): { mode: Mode; scheme: string } {
   try {
     const mode = localStorage.getItem(MODE_KEY);
     const schemeID = localStorage.getItem(SCHEME_KEY);
-    if (mode || schemeID) {
-      return {
-        mode: MODES.some((entry) => entry.id === mode) ? (mode as Mode) : "system",
-        scheme: scheme(schemeID ?? "").id,
-      };
-    }
-    return fromLegacy(localStorage.getItem(LEGACY_KEY));
+    return {
+      mode: MODES.some((entry) => entry.id === mode) ? (mode as Mode) : "system",
+      scheme: scheme(schemeID ?? "").id,
+    };
   } catch {
     return { mode: "system", scheme: "solarr" };
   }
-}
-
-export function fromLegacy(themeID: string | null): { mode: Mode; scheme: string } {
-  const owner = SCHEMES.find((entry) => entry.light === themeID || entry.dark === themeID);
-  if (!themeID || !owner) return { mode: "system", scheme: "solarr" };
-  return { mode: definition(themeID).base, scheme: owner.id };
 }

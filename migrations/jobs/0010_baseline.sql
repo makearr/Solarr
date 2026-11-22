@@ -1,5 +1,5 @@
--- Every migration up to 0007, squashed into the schema and seed rows they built (documentation/database-layout.md).
--- migrate:baseline replaces=5bf6a33222393d68b65128b1b75855cd279f9ac476f1a3428cbbc54c7643e6e4
+-- Every migration up to 0010, squashed into the schema and seed rows they built (documentation/database-layout.md).
+-- migrate:baseline replaces=fb972824bcade04c6af5709b1c50d92ba1e52c1c943563d9249e48e788a60106
 
 CREATE TABLE job (
   id           INTEGER PRIMARY KEY,
@@ -35,7 +35,12 @@ CREATE TABLE job (
   last_error     TEXT,
 
   created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL, category_id INTEGER, reclaims INTEGER NOT NULL DEFAULT 0);
+  updated_at INTEGER NOT NULL,
+  category_id INTEGER,
+  reclaims   INTEGER NOT NULL DEFAULT 0
+);
+-- A page of one state pages on the index instead of walking the other states' rows.
+CREATE INDEX job_by_state_page ON job(state, updated_at DESC, id DESC);
 
 CREATE TABLE job_attempt (
   id          INTEGER PRIMARY KEY,
@@ -59,6 +64,9 @@ CREATE TABLE event_log (
   correlation_id TEXT,
   data_json      TEXT    NOT NULL
 );
+-- Listing events of a few kinds newest first walked the whole log for a rare kind; these indexes lead with the filter and end in the order.
+CREATE INDEX event_kind_id ON event_log(kind, id DESC);
+CREATE INDEX event_subject_id ON event_log(subject_type, subject_id, id DESC);
 
 CREATE TABLE retention_state (
   stream         TEXT    NOT NULL PRIMARY KEY,
@@ -90,3 +98,16 @@ CREATE INDEX event_at ON event_log(at DESC);
 CREATE INDEX event_kind_at ON event_log(kind, at DESC);
 CREATE INDEX job_by_dependency ON job(depends_on) WHERE depends_on IS NOT NULL;
 CREATE INDEX job_by_updated ON job(updated_at DESC, id DESC);
+
+-- A paused task: its scheduled fires are skipped and its jobs stay queued until it is resumed. scope is a task key, or '*' for all.
+CREATE TABLE task_pause (
+  scope     TEXT    NOT NULL PRIMARY KEY,
+  paused_at INTEGER NOT NULL
+) WITHOUT ROWID;
+
+-- Which task caused a job, so a pause can find it; absent for work no task started (a person's search, an import).
+CREATE TABLE job_task (
+  job_id   INTEGER NOT NULL PRIMARY KEY REFERENCES job(id) ON DELETE CASCADE,
+  task_key TEXT    NOT NULL
+) WITHOUT ROWID;
+CREATE INDEX job_task_by_key ON job_task(task_key);

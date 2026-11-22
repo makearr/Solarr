@@ -1,5 +1,9 @@
--- Every migration up to 0116, squashed into the schema they built (documentation/database-layout.md).
--- migrate:baseline replaces=af89e47a7add60e42375c30885b845204892936b7ff59a7992cdf1943207a113
+-- Every migration up to 0146, squashed into the schema and seed rows they built (documentation/database-layout.md).
+-- migrate:baseline replaces=13af7d611c9bfb1433ad32f13167194b15b2af2e90c5e7ab19a0550f33d7cbff
+
+-- A deleted row's id is never handed out again: jobs, caches and open pages outside library.db still hold it.
+CREATE TABLE id_high_water (name TEXT PRIMARY KEY, value INTEGER NOT NULL) WITHOUT ROWID;
+INSERT INTO id_high_water (name, value) VALUES ('work', 0), ('media_object', 0), ('desired_item', 0), ('acquisition', 0);
 
 CREATE TABLE work (
   id                INTEGER PRIMARY KEY,
@@ -19,6 +23,9 @@ CREATE TABLE work (
   lead_person_sort_name TEXT,
   subtype TEXT
 );
+CREATE TRIGGER work_high_water AFTER DELETE ON work BEGIN
+  UPDATE id_high_water SET value = MAX(value, OLD.id) WHERE name = 'work';
+END;
 CREATE INDEX work_type_sort ON work(media_type, sort_title);
 CREATE INDEX work_sort ON work(sort_title);
 CREATE INDEX work_year_sort ON work(year, id);
@@ -97,8 +104,21 @@ CREATE TABLE work_part (
   CHECK (available_confidence IN ('unknown', 'low', 'medium', 'high')),
   available_basis TEXT NOT NULL DEFAULT '',
   available_grace INTEGER,
+  optional        INTEGER NOT NULL DEFAULT 0 CHECK (optional IN (0, 1)),
   UNIQUE(work_id, media_ref)
 );
+CREATE TRIGGER work_part_insert_drops_digest AFTER INSERT ON work_part
+BEGIN
+  DELETE FROM work_write_digest WHERE work_id = NEW.work_id;
+END;
+CREATE TRIGGER work_part_update_drops_digest AFTER UPDATE ON work_part
+BEGIN
+  DELETE FROM work_write_digest WHERE work_id IN (OLD.work_id, NEW.work_id);
+END;
+CREATE TRIGGER work_part_delete_drops_digest AFTER DELETE ON work_part
+BEGIN
+  DELETE FROM work_write_digest WHERE work_id = OLD.work_id;
+END;
 CREATE INDEX work_part_order ON work_part(work_id, sort_key);
 CREATE INDEX work_part_monitored ON work_part(work_id) WHERE monitored = 1;
 CREATE INDEX work_part_available ON work_part(available_at) WHERE available_at IS NOT NULL;
@@ -227,11 +247,14 @@ CREATE TABLE media_object (
   video_bitrate    INTEGER,
   audio_bitrate    INTEGER,
   overall_bitrate  INTEGER,
-  probe_json       TEXT,
   first_seen_at    INTEGER NOT NULL,
   verified_at      INTEGER,
   kind TEXT
 );
+CREATE INDEX media_object_by_claimed_attributes ON media_object(claimed_attributes_id) WHERE claimed_attributes_id IS NOT NULL;
+CREATE TRIGGER media_object_high_water AFTER DELETE ON media_object BEGIN
+  UPDATE id_high_water SET value = MAX(value, OLD.id) WHERE name = 'media_object';
+END;
 CREATE INDEX media_object_quick ON media_object(quick_hash);
 CREATE INDEX media_object_oshash ON media_object(oshash) WHERE oshash IS NOT NULL;
 CREATE INDEX media_object_unfp ON media_object(id) WHERE fingerprinted_at IS NULL;
@@ -294,6 +317,7 @@ CREATE TABLE request (
   decline_reason TEXT,
   created_at     INTEGER NOT NULL
 );
+CREATE INDEX request_by_work ON request(work_id) WHERE work_id IS NOT NULL;
 CREATE INDEX request_pending ON request(state, created_at) WHERE state = 'PENDING';
 CREATE INDEX request_by_user ON request(user_id, created_at DESC);
 
@@ -307,7 +331,8 @@ CREATE TABLE hunt_queue (
   eligible_after   INTEGER NOT NULL DEFAULT 0,
   search_count     INTEGER NOT NULL DEFAULT 0,
   queued_since INTEGER NOT NULL DEFAULT 0,
-  after_failure INTEGER NOT NULL DEFAULT 0
+  after_failure INTEGER NOT NULL DEFAULT 0,
+  postponed_until INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX hunt_by_release ON hunt_queue(class, eligible_after, priority DESC, release_date ASC);
 
@@ -330,7 +355,7 @@ CREATE TABLE blocklisted_release (
   desired_item_id INTEGER REFERENCES desired_item(id) ON DELETE SET NULL,
   reason          TEXT    NOT NULL
                   CHECK (reason IN ('DOWNLOAD_FAILED', 'STALLED', 'CORRUPT',
-                                    'IMPORT_FAILED', 'REJECTED_WORSE', 'MANUAL')),
+                                    'IMPORT_FAILED', 'REJECTED_WORSE', 'MANUAL', 'GONE_AT_INDEXER')),
   detail_json     TEXT,
   source          TEXT    NOT NULL CHECK (source IN ('auto', 'user')),
   -- Null is permanent; auto entries expire because indexers repair things.
@@ -338,6 +363,7 @@ CREATE TABLE blocklisted_release (
   created_at      INTEGER NOT NULL,
   CHECK (guid IS NOT NULL OR content_hash IS NOT NULL)
 );
+CREATE INDEX blocklisted_release_by_desired_item ON blocklisted_release(desired_item_id) WHERE desired_item_id IS NOT NULL;
 CREATE UNIQUE INDEX blocklist_by_guid ON blocklisted_release(indexer_id, guid)
   WHERE guid IS NOT NULL;
 CREATE INDEX blocklist_by_hash ON blocklisted_release(content_hash)
@@ -358,10 +384,13 @@ CREATE TABLE import_decision (
   overridden_by       INTEGER,
   overridden_at       INTEGER
 );
+CREATE INDEX import_decision_by_incumbent_object ON import_decision(incumbent_object_id) WHERE incumbent_object_id IS NOT NULL;
+CREATE INDEX import_decision_by_acquisition ON import_decision(acquisition_id) WHERE acquisition_id IS NOT NULL;
+CREATE INDEX import_decision_by_desired_item ON import_decision(desired_item_id);
 CREATE INDEX import_decision_pending ON import_decision(decided_at DESC)
   WHERE outcome = 'NEEDS_REVIEW';
 
-CREATE TABLE "recycle_bin" (
+CREATE TABLE recycle_bin (
   id              INTEGER PRIMARY KEY,
   original_path   TEXT    NOT NULL,
   recycled_path TEXT    NOT NULL UNIQUE,
@@ -374,8 +403,12 @@ CREATE TABLE "recycle_bin" (
   size_bytes      INTEGER NOT NULL,
   recycled_at  INTEGER NOT NULL,
   expires_at      INTEGER NOT NULL,
-  restored_at     INTEGER
+  restored_at     INTEGER,
+  replaced_by_media_object_id INTEGER
 );
+CREATE INDEX recycle_bin_by_acquisition ON recycle_bin(acquisition_id) WHERE acquisition_id IS NOT NULL;
+CREATE INDEX recycle_bin_by_media_object ON recycle_bin(media_object_id) WHERE media_object_id IS NOT NULL;
+CREATE INDEX recycle_bin_by_replacement ON recycle_bin(replaced_by_media_object_id) WHERE replaced_by_media_object_id IS NOT NULL AND restored_at IS NULL;
 CREATE INDEX recycle_bin_expiry ON recycle_bin(expires_at) WHERE restored_at IS NULL;
 CREATE INDEX recycle_bin_by_root ON recycle_bin(root_folder_id) WHERE restored_at IS NULL;
 
@@ -387,6 +420,8 @@ CREATE TABLE acquisition_file (
   library_path_id INTEGER REFERENCES library_path(id),
   imported_at     INTEGER
 );
+CREATE INDEX acquisition_file_by_library_path ON acquisition_file(library_path_id) WHERE library_path_id IS NOT NULL;
+CREATE INDEX acquisition_file_by_acquisition ON acquisition_file(acquisition_id);
 CREATE INDEX acq_file_object ON acquisition_file(media_object_id);
 
 CREATE TABLE person (
@@ -436,6 +471,18 @@ CREATE TABLE credit (
   ord        INTEGER,
   PRIMARY KEY (person_id, work_id, edition_id, part_id, role, character)
 );
+CREATE TRIGGER credit_insert_drops_digest AFTER INSERT ON credit
+BEGIN
+  DELETE FROM work_write_digest WHERE work_id = NEW.work_id;
+END;
+CREATE TRIGGER credit_update_drops_digest AFTER UPDATE ON credit
+BEGIN
+  DELETE FROM work_write_digest WHERE work_id IN (OLD.work_id, NEW.work_id);
+END;
+CREATE TRIGGER credit_delete_drops_digest AFTER DELETE ON credit
+BEGIN
+  DELETE FROM work_write_digest WHERE work_id = OLD.work_id;
+END;
 CREATE INDEX credit_by_work ON credit(work_id, role);
 CREATE INDEX credit_by_person ON credit(person_id, role);
 CREATE INDEX credit_by_part ON credit(part_id, role) WHERE part_id != 0;
@@ -529,7 +576,8 @@ CREATE TABLE collection (
   added_at    INTEGER NOT NULL,
   poster_url TEXT NOT NULL DEFAULT '',
   category_id INTEGER NOT NULL DEFAULT 0,
-  name_locked INTEGER NOT NULL DEFAULT 0 CHECK (name_locked IN (0, 1))
+  name_locked INTEGER NOT NULL DEFAULT 0 CHECK (name_locked IN (0, 1)),
+  facts_checked_at INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX collection_monitored ON collection(id) WHERE monitored = 1;
 
@@ -539,6 +587,7 @@ CREATE TABLE collection_external_id (
   collection_id INTEGER NOT NULL REFERENCES collection(id) ON DELETE CASCADE,
   PRIMARY KEY (provider, external_id)
 ) WITHOUT ROWID;
+CREATE INDEX collection_external_id_by_collection ON collection_external_id(collection_id);
 
 CREATE TABLE artwork (
   id           INTEGER PRIMARY KEY,
@@ -578,6 +627,7 @@ CREATE TABLE group_observation (
   observed_at     INTEGER NOT NULL,
   was_exploration INTEGER NOT NULL DEFAULT 0 CHECK (was_exploration IN (0, 1))
 );
+CREATE INDEX group_observation_by_media_object ON group_observation(media_object_id) WHERE media_object_id IS NOT NULL;
 CREATE INDEX group_observation_grp ON group_observation(release_group, observed_at DESC);
 
 CREATE VIRTUAL TABLE title_search USING fts5(
@@ -630,8 +680,12 @@ CREATE TABLE identification_queue (
   rel_path        TEXT    NOT NULL,
   candidates_json TEXT    NOT NULL,
   first_seen_at   INTEGER NOT NULL,
-  last_seen_at    INTEGER NOT NULL
+  last_seen_at    INTEGER NOT NULL,
+  tries           INTEGER NOT NULL DEFAULT 0,
+  next_try_at     INTEGER NOT NULL DEFAULT 0,
+  tried_size      INTEGER NOT NULL DEFAULT 0
 );
+CREATE INDEX identification_queue_due ON identification_queue(root_folder_id, next_try_at);
 CREATE INDEX identification_queue_root ON identification_queue(root_folder_id);
 CREATE INDEX identification_queue_cursor ON identification_queue(first_seen_at, media_object_id);
 
@@ -658,6 +712,8 @@ CREATE TABLE import_session (
   dismissed_at INTEGER,
   preview INTEGER NOT NULL DEFAULT 0 CHECK (preview IN (0, 1))
 );
+-- A source folder's earlier imports are looked up by path on every import; without an index that read every session.
+CREATE INDEX idx_import_session_source ON import_session(source_path, started_at DESC);
 CREATE INDEX idx_import_session_state ON import_session(state, started_at DESC);
 
 CREATE TABLE import_unit (
@@ -680,6 +736,8 @@ CREATE TABLE import_unit (
   -- The library a Best match import routed this unit to; NULL places it into its session's. No FK: category lives in settings.db.
   category_id INTEGER
 );
+CREATE INDEX import_unit_by_edition ON import_unit(edition_id) WHERE edition_id IS NOT NULL;
+CREATE INDEX import_unit_by_work ON import_unit(work_id) WHERE work_id IS NOT NULL;
 CREATE INDEX idx_import_unit_session ON import_unit(session_id, decision);
 CREATE INDEX idx_import_unit_queue   ON import_unit(decision, confidence DESC)
   WHERE decision = 'QUEUE';
@@ -737,6 +795,8 @@ CREATE TABLE move_item (
   state           TEXT    NOT NULL,       -- PENDING | COPIED | VERIFIED | DONE | FAILED
   error           TEXT,
   keep_source INTEGER NOT NULL DEFAULT 0 CHECK (keep_source IN (0, 1)),
+  source_root_id INTEGER NOT NULL DEFAULT 0,
+  source_rel_path TEXT NOT NULL DEFAULT '',
   PRIMARY KEY (move_job_id, media_object_id)
 ) WITHOUT ROWID;
 CREATE INDEX idx_move_item_pending ON move_item(move_job_id, state);
@@ -748,6 +808,7 @@ CREATE TABLE import_unit_file (
   library_path_id INTEGER REFERENCES library_path(id) ON DELETE SET NULL,
   transfer_method TEXT
 );
+CREATE INDEX import_unit_file_by_library_path ON import_unit_file(library_path_id) WHERE library_path_id IS NOT NULL;
 CREATE INDEX idx_import_unit_file_unit   ON import_unit_file(unit_id);
 CREATE INDEX idx_import_unit_file_object ON import_unit_file(media_object_id);
 
@@ -774,6 +835,8 @@ CREATE TABLE pack_item (
   state           TEXT    NOT NULL,       -- RESOLVED | QUEUED | FAILED | SKIPPED
   PRIMARY KEY (pack_id, ord)
 ) WITHOUT ROWID;
+CREATE INDEX pack_item_by_import_unit ON pack_item(import_unit_id) WHERE import_unit_id IS NOT NULL;
+CREATE INDEX pack_item_by_edition ON pack_item(edition_id) WHERE edition_id IS NOT NULL;
 CREATE INDEX idx_pack_item_work ON pack_item(work_id);
 
 CREATE TABLE arr_import (
@@ -788,8 +851,10 @@ CREATE TABLE arr_import (
   artists_matched  INTEGER NOT NULL DEFAULT 0,
   albums_created   INTEGER NOT NULL DEFAULT 0,
   albums_matched   INTEGER NOT NULL DEFAULT 0,
-  items_parked     INTEGER NOT NULL DEFAULT 0
+  items_parked     INTEGER NOT NULL DEFAULT 0,
+  notes            TEXT
 );
+CREATE UNIQUE INDEX arr_import_one_running ON arr_import(instance_id) WHERE state = 'RUNNING';
 CREATE INDEX idx_arr_import_instance ON arr_import(instance_id);
 
 CREATE TABLE arr_import_item (
@@ -808,9 +873,13 @@ CREATE TABLE arr_import_item (
   payload_json          TEXT,
   created_at            INTEGER NOT NULL
 );
+CREATE INDEX arr_import_item_by_desired_item ON arr_import_item(desired_item_id) WHERE desired_item_id IS NOT NULL;
+CREATE INDEX arr_import_item_by_work ON arr_import_item(work_id) WHERE work_id IS NOT NULL;
+CREATE INDEX arr_import_item_by_subscription ON arr_import_item(subscription_id) WHERE subscription_id IS NOT NULL;
+CREATE INDEX arr_import_item_by_person ON arr_import_item(person_id) WHERE person_id IS NOT NULL;
 CREATE INDEX idx_arr_import_item_import ON arr_import_item(import_id);
 
-CREATE TABLE "desired_item" (
+CREATE TABLE desired_item (
   id                   INTEGER PRIMARY KEY,
   work_id              INTEGER NOT NULL REFERENCES work(id) ON DELETE CASCADE,
   edition_id           INTEGER REFERENCES edition(id),
@@ -835,8 +904,11 @@ CREATE TABLE "desired_item" (
   generation           INTEGER NOT NULL DEFAULT 0,
   last_planned_at      INTEGER,
   added_by             INTEGER,
-  UNIQUE(work_id, edition_id, media_ref, profile_id)
+  UNIQUE(work_id, edition_id, media_ref, category_id, profile_id)
 );
+CREATE TRIGGER desired_item_high_water AFTER DELETE ON desired_item BEGIN
+  UPDATE id_high_water SET value = MAX(value, OLD.id) WHERE name = 'desired_item';
+END;
 CREATE INDEX desired_dirty ON desired_item(id) WHERE dirty = 1;
 CREATE INDEX desired_active ON desired_item(state, work_id) WHERE monitored = 1;
 CREATE INDEX desired_by_work ON desired_item(work_id, media_sort_key);
@@ -879,6 +951,7 @@ CREATE TABLE manual_identification (
   work_id         INTEGER NOT NULL REFERENCES work(id) ON DELETE CASCADE,
   decided_at      INTEGER NOT NULL
 );
+CREATE INDEX manual_identification_by_work ON manual_identification(work_id);
 
 CREATE TABLE person_refresh (
   person_id    INTEGER PRIMARY KEY REFERENCES person(id) ON DELETE CASCADE,
@@ -984,7 +1057,7 @@ CREATE TABLE "subscription" (
 );
 CREATE INDEX subscription_subject ON subscription(subject_type, subject_id) WHERE enabled = 1;
 
-CREATE TABLE "ready_queue" (
+CREATE TABLE ready_queue (
   candidate_id    INTEGER PRIMARY KEY,
   desired_item_id INTEGER NOT NULL REFERENCES desired_item(id) ON DELETE CASCADE,
   priority        INTEGER NOT NULL,
@@ -997,11 +1070,14 @@ CREATE TABLE "ready_queue" (
   title           TEXT    NOT NULL,
   download_url    TEXT    NOT NULL,
   protocol        TEXT    NOT NULL,
-  score           REAL
+  score           REAL,
+  item_state      TEXT NOT NULL DEFAULT '',
+  magnet_url      TEXT NOT NULL DEFAULT ''
 );
+CREATE INDEX ready_queue_by_desired_item ON ready_queue(desired_item_id);
 CREATE INDEX ready_queue_order ON ready_queue(priority DESC, queued_at ASC);
 
-CREATE TABLE "acquisition" (
+CREATE TABLE acquisition (
   id                  INTEGER PRIMARY KEY,
   desired_item_id     INTEGER REFERENCES desired_item(id),
   candidate_id        INTEGER,
@@ -1025,9 +1101,15 @@ CREATE TABLE "acquisition" (
   updated_at          INTEGER NOT NULL,
   content_hash        TEXT,
   size_bytes          INTEGER,
+  parts_json          TEXT NOT NULL DEFAULT '[]',
   UNIQUE(downloader_id, download_client_ref)
 );
-CREATE UNIQUE INDEX acquisition_one_inflight ON acquisition(desired_item_id)
+-- Download history of one item, newest first; also the lookup behind the foreign key from acquisition to desired_item.
+CREATE INDEX acquisition_by_item ON acquisition(desired_item_id, created_at DESC) WHERE desired_item_id IS NOT NULL;
+CREATE TRIGGER acquisition_high_water AFTER DELETE ON acquisition BEGIN
+  UPDATE id_high_water SET value = MAX(value, OLD.id) WHERE name = 'acquisition';
+END;
+CREATE INDEX acquisition_inflight_by_item ON acquisition(desired_item_id)
   WHERE state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED');
 CREATE INDEX acquisition_active ON acquisition(state)
   WHERE state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED');
@@ -1040,8 +1122,7 @@ CREATE TABLE rss_sighting (
 CREATE TABLE media_probe (
   media_object_id INTEGER PRIMARY KEY REFERENCES media_object(id) ON DELETE CASCADE,
   probe_version   INTEGER NOT NULL,
-  probed_at       INTEGER NOT NULL,
-  json            TEXT    NOT NULL
+  probed_at       INTEGER NOT NULL
 );
 CREATE INDEX media_probe_version ON media_probe(probe_version, media_object_id);
 
@@ -1115,6 +1196,7 @@ CREATE TABLE arr_link (
   source_id   TEXT    NOT NULL,
   local_kind  TEXT    NOT NULL CHECK (local_kind IN ('work', 'person', 'organisation')),
   local_id    INTEGER NOT NULL,
+  synced_monitored INTEGER,
   PRIMARY KEY (instance_id, source_kind, source_id)
 ) WITHOUT ROWID;
 
@@ -1329,4 +1411,86 @@ CREATE TABLE favorite (
   subject_id   INTEGER NOT NULL,
   created_at   INTEGER NOT NULL,
   PRIMARY KEY (user_id, subject_type, subject_id)
+) WITHOUT ROWID;
+
+-- When the download client first failed to list a download; a download is declared removed only after it stays gone.
+CREATE TABLE acquisition_missing (
+  acquisition_id INTEGER PRIMARY KEY REFERENCES acquisition(id) ON DELETE CASCADE,
+  since          INTEGER NOT NULL
+);
+
+-- A marking of paths missing whose recount of the works is not finished; a stop between the two leaves it for the next start.
+CREATE TABLE missing_recount (
+  root_folder_id INTEGER NOT NULL,
+  missing_since  INTEGER NOT NULL,
+  PRIMARY KEY (root_folder_id, missing_since)
+) WITHOUT ROWID;
+
+-- A file ffprobe could not read: not asked again until retry_at, or until the file's size changes.
+CREATE TABLE media_probe_failure (
+  media_object_id INTEGER PRIMARY KEY REFERENCES media_object(id) ON DELETE CASCADE,
+  attempts        INTEGER NOT NULL,
+  last_error      TEXT    NOT NULL,
+  last_attempt_at INTEGER NOT NULL,
+  retry_at        INTEGER NOT NULL,
+  size_bytes      INTEGER NOT NULL,
+  raw             TEXT NOT NULL DEFAULT ''
+) WITHOUT ROWID;
+
+-- The media files a unit held when it was inspected, kept for units that share a folder: a held unit is found again by
+-- what it is, not by its position in a new split of the folder. Paths are relative to the unit's own folder.
+CREATE TABLE import_unit_media (
+  unit_id    INTEGER NOT NULL REFERENCES import_unit(id) ON DELETE CASCADE,
+  rel_path   TEXT    NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  PRIMARY KEY (unit_id, rel_path)
+) WITHOUT ROWID;
+
+-- What the last full metadata write of a work held, so a refresh that finds the provider unchanged writes nothing.
+-- Any change to a work's parts or credits made by another writer drops the digest, so the next refresh writes in full.
+CREATE TABLE work_write_digest (
+  work_id    INTEGER PRIMARY KEY REFERENCES work(id) ON DELETE CASCADE,
+  digest     BLOB    NOT NULL,
+  written_at INTEGER NOT NULL
+) WITHOUT ROWID;
+
+-- What a library move changed besides the files, so a move job that moved no file can put it back.
+CREATE TABLE move_job_library_change (
+  move_job_id INTEGER PRIMARY KEY REFERENCES move_job(id) ON DELETE CASCADE,
+  change_json TEXT    NOT NULL
+);
+
+-- What Solarr knew of a release when it grabbed it, kept with the file it brought: the library file's own name may say none of it.
+-- A side table: most media objects (scanned ones) have no row.
+CREATE TABLE media_object_release (
+  media_object_id INTEGER PRIMARY KEY REFERENCES media_object(id) ON DELETE CASCADE,
+  release_title   TEXT    NOT NULL,
+  source          TEXT    NOT NULL DEFAULT '',
+  release_group   TEXT    NOT NULL DEFAULT '',
+  revision        INTEGER NOT NULL DEFAULT 1,
+  indexer_id      INTEGER,
+  grabbed_at      INTEGER NOT NULL
+) WITHOUT ROWID;
+
+-- The similar-videos report is computed by a job and stored per level, so the screen reads it instead of comparing every hash in the request.
+CREATE TABLE similar_report (
+  level       TEXT    NOT NULL PRIMARY KEY,
+  computed_at INTEGER NOT NULL,
+  groups_json TEXT    NOT NULL
+) WITHOUT ROWID;
+
+-- What tells editions and tracks apart: kept beside edition and work_part so their column lists stay as they are.
+CREATE TABLE edition_detail (
+  edition_id     INTEGER PRIMARY KEY REFERENCES edition(id) ON DELETE CASCADE,
+  disambiguation TEXT NOT NULL DEFAULT '',
+  packaging      TEXT NOT NULL DEFAULT '',
+  language       TEXT NOT NULL DEFAULT '',
+  script         TEXT NOT NULL DEFAULT ''
+) WITHOUT ROWID;
+
+CREATE TABLE work_part_detail (
+  part_id       INTEGER PRIMARY KEY REFERENCES work_part(id) ON DELETE CASCADE,
+  medium_title  TEXT NOT NULL DEFAULT '',
+  -- The track's credited artists as one display string ("A feat. B"); empty means the album artist.
+  artist_credit TEXT NOT NULL DEFAULT ''
 ) WITHOUT ROWID;

@@ -189,10 +189,9 @@ To squash again: build a database from the current chain, dump `sqlite_master` (
 FTS5 excluded) and the seed rows into a new baseline at the last version, delete the older files,
 and check that a database built from the baseline is identical (schema text, `table_xinfo`, foreign
 keys, indexes, CHECKs, rows) both to the chain and to a live database. The original files stay in git history.
-The last squash (2026-11-07: library 0116, settings 0071, jobs 0007, statistics 0006; metadata stays 0003) did this in
-Python's `sqlite3`: the library baseline is the old one with the later migrations folded in by hand (comments kept), the
-others a dump of the built schema plus seed rows. A database from release 2026.10.001.515 stays refused, by the user's decision.
-A database already at the old last version takes the baseline as applied, so only `library/0117` runs on it.
+The last squash (2026-11-22: library 0146, settings 0077, jobs 0010, statistics 0008, metadata 0004) folded every
+later migration into the previous baselines in Python's `sqlite3`, comments kept, columns added by `ALTER TABLE` written
+inline. Only a database at those versions upgrades; anything older (release 2026.11.1.0882 included) is refused, by the user's decision.
 
 Every migration is preceded by a backup, and a failure restores from it rather than leaving a
 half-applied schema (Invariant 7).

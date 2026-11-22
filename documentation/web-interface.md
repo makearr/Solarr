@@ -41,8 +41,7 @@ made. View state stays server-side per architecture section 21.2.
 Two settings (2026-09-30): the mode (System, Light, Dark) and the colour scheme. A scheme in
 `SCHEMES` (`src/lib/theme.ts`) names its light and dark token set; one with a single set (Jellyfin,
 Arr, Nord, Paper) keeps it whatever the mode, and the mode picker is disabled for it. Stored as
-`solarr.mode` and `solarr.scheme`; a single `solarr.theme` from before the split is read once and
-mapped to its scheme and base.
+`solarr.mode` and `solarr.scheme`.
 
 The top bar carries one switch that flips light and dark (`ThemeToggle`); the mode including System and the
 colour scheme are in the user menu under Appearance. Both read and write one shared choice (`src/lib/useTheme.ts`),

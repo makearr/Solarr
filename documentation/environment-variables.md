@@ -50,7 +50,7 @@ environment:
 | `SOLARR_MEDIACOVER_DIR` | `paths.mediacover_dir` | `/config/mediacover` | Pictures of items in the library. A picture moves here from the cache when its item is added, without asking the provider again; the cache budget never touches it |
 | `SOLARR_BACKUP_DIR` | `paths.backup_dir` | `/config/backups` | Database backups |
 
-`paths.data_dir` is ignored. An older `config.yml` that names `/config/data/db`, `/config/data/cache` or `/config/data/backups` is moved to the new places at the first start, and the file is rewritten; a path set to anything else is left alone, and a start where both the old and the new folder exist is refused.
+`paths.data_dir` is ignored.
 | `SOLARR_PORT` | `server.port` | `5454` | HTTP port. Always wins over the Network screen, and is written to it so the screen shows it in effect |
 | `SOLARR_BIND` | `server.bind` | `0.0.0.0` | Address to listen on |
 | `SOLARR_BASE_URL` | `server.base_url` | `/` | Path prefix when served behind a reverse proxy under a sub-path, e.g. `/solarr` |

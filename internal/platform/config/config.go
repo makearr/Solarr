@@ -122,10 +122,6 @@ type Security struct {
 // DefaultCacheSizeKB is the ceiling for the page caches of every database and connection together.
 const DefaultCacheSizeKB = 393216
 
-// legacyCacheSizeKB was the per-connection default before the figure became one ceiling; a file that still holds it
-// was never tuned, so it reads as the new default.
-const legacyCacheSizeKB = 65536
-
 // Database tunes SQLite (ADR-2, ADR-3).
 type Database struct {
 	BusyTimeout Duration `yaml:"busy_timeout"`
