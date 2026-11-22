@@ -8594,10 +8594,10 @@ export interface components {
             key: string;
             label: string;
             /**
-             * @description What the dialog asks for, a key or token alone, or a user name and password.
+             * @description What the dialog asks for, a key or token alone, a user name and password, or either (key_or_password; a user name selects the login).
              * @enum {string}
              */
-            credential: "key" | "password" | "optional_password";
+            credential: "key" | "password" | "optional_password" | "key_or_password";
             /** @description The server can be told of new files. */
             can_push: boolean;
             /** @description The server takes the exact path rather than only a library scan. */
@@ -8619,7 +8619,7 @@ export interface components {
             name: string;
             base_url: string;
             username?: string;
-            /** @description Required when adding; on a replace, sent only to change it. */
+            /** @description Required when adding unless a user name is given (a login may have an empty password); on a replace, sent only to change it. */
             credential?: string;
             /** @default true */
             enabled: boolean;

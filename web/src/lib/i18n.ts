@@ -28,6 +28,8 @@ const catalogue = {
   "mediaServers.name": "Name",
   "mediaServers.address": "Address",
   "mediaServers.username": "User name",
+  "mediaServers.usernameOptional": "User name (leave empty to use an API key)",
+  "mediaServers.keyOrPassword": "API key, or the password of the user name",
   "mediaServers.key": "API key or token",
   "mediaServers.password": "Password",
   "mediaServers.keepStored": "Leave empty to keep the stored one",

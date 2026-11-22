@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/mediaserver"
@@ -39,8 +40,8 @@ func TestClient_TestAndLibraries(t *testing.T) {
 	}
 	wantSeen := []string{
 		"GET /System/Info/Public ",
-		`GET /Library/VirtualFolders MediaBrowser Token="k1"`,
-		`GET /Library/VirtualFolders MediaBrowser Token="k1"`,
+		`GET /Library/VirtualFolders MediaBrowser Client="Solarr", Device="Solarr", DeviceId="solarr", Version="1", Token="k1"`,
+		`GET /Library/VirtualFolders MediaBrowser Client="Solarr", Device="Solarr", DeviceId="solarr", Version="1", Token="k1"`,
 	}
 	if !reflect.DeepEqual(seen, wantSeen) {
 		t.Errorf("requests = %q, want %q", seen, wantSeen)
@@ -64,7 +65,7 @@ func TestClient_TestReportsAKeyThatIsNotAnAdministrators(t *testing.T) {
 
 func TestClient_ChangedSendsOnePathUpdateBatch(t *testing.T) {
 	var seen []string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		seen = append(seen, r.Method+" "+r.URL.Path+" "+string(body))
 	}))
@@ -109,5 +110,29 @@ func TestClient_AnnounceMessagesActiveSessionsOnly(t *testing.T) {
 	want := []string{"GET /Sessions ", `POST /Sessions/s1/Message {"Header":"Solarr","Text":"Now available: Dune","TimeoutMs":8000}`}
 	if !reflect.DeepEqual(seen, want) {
 		t.Errorf("requests = %q, want %q", seen, want)
+	}
+}
+
+func TestClient_LoginWithAnEmptyPasswordSendsTheToken(t *testing.T) {
+	var body string
+	var auth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/Users/AuthenticateByName":
+			raw, _ := io.ReadAll(r.Body)
+			body = string(raw)
+			_, _ = w.Write([]byte(`{"AccessToken":"tok"}`))
+		case "/Users":
+			auth = r.Header.Get("Authorization")
+			_, _ = w.Write([]byte(`[{"Id":"1","Name":"a"}]`))
+		}
+	}))
+	defer server.Close()
+	users, err := jellyfin.NewLogin(mediaservertest.Direct(), server.URL, "home", "").Users(t.Context())
+	if err != nil || len(users) != 1 {
+		t.Fatalf("Users = %+v, %v", users, err)
+	}
+	if body != `{"Username":"home","Pw":""}` || !strings.Contains(auth, `Token="tok"`) {
+		t.Errorf("login body %q, header %q", body, auth)
 	}
 }

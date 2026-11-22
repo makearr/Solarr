@@ -1,6 +1,7 @@
 package kavita_test
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -48,5 +49,38 @@ func TestClient_ChangedScansEachLibraryOnce(t *testing.T) {
 	}
 	if want := []string{"POST /api/Library/scan?libraryId=3"}; !reflect.DeepEqual(seen, want) {
 		t.Errorf("requests = %q, want %q", seen, want)
+	}
+}
+
+func TestClient_LoginSignsInAgainOnA401(t *testing.T) {
+	var logins int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/Account/login":
+			logins++
+			_, _ = w.Write([]byte(`{"token":"jwt` + string(rune('0'+logins)) + `"}`))
+		case "/api/Library/libraries":
+			if r.Header.Get("Authorization") != "Bearer jwt2" && logins < 2 {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			_, _ = w.Write([]byte(`[]`))
+		}
+	}))
+	defer server.Close()
+	if _, err := kavita.NewLogin(mediaservertest.Direct(), server.URL, "u", "p").Libraries(t.Context()); err != nil {
+		t.Fatalf("Libraries: %v", err)
+	}
+	if logins != 2 {
+		t.Errorf("logins = %d, want 2 (first token refused)", logins)
+	}
+}
+
+func TestClient_LoginRefusedIsRejected(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusUnauthorized) }))
+	defer server.Close()
+	_, err := kavita.NewLogin(mediaservertest.Direct(), server.URL, "u", "bad").Libraries(t.Context())
+	if !errors.Is(err, mediaserver.ErrRejected) {
+		t.Errorf("err = %v, want ErrRejected", err)
 	}
 }

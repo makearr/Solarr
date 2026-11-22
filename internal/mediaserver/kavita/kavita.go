@@ -1,9 +1,10 @@
-// Package kavita is the client for a Kavita server, signed in with an auth key sent as x-api-key.
+// Package kavita is the client for a Kavita server, signed in with an auth key sent as x-api-key or with a user name and password.
 package kavita
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -16,6 +17,8 @@ type Client struct {
 	doer mediaserver.Doer
 	base string
 	key  string
+	// session is set when the connection signs in with a user name and password; the key is then empty.
+	session *mediaserver.Session
 }
 
 // New builds a client for the server at base with the auth key.
@@ -23,7 +26,42 @@ func New(doer mediaserver.Doer, base, key string) *Client {
 	return &Client{doer: doer, base: base, key: key}
 }
 
-func (c *Client) header() http.Header { return http.Header{"X-Api-Key": {c.key}} }
+// NewLogin builds a client that signs in as username and sends the token Kavita answers.
+func NewLogin(doer mediaserver.Doer, base, username, password string) *Client {
+	client := &Client{doer: doer, base: base}
+	client.session = mediaserver.NewSession(func(ctx context.Context) (string, error) {
+		return client.signIn(ctx, username, password)
+	})
+	return client
+}
+
+func (c *Client) signIn(ctx context.Context, username, password string) (string, error) {
+	var reply struct {
+		Token string `json:"token"`
+	}
+	body := struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}{username, password}
+	if err := mediaserver.Call(ctx, c.doer, http.MethodPost, mediaserver.Join(c.base, "/api/Account/login"), nil, body, &reply); err != nil {
+		return "", mediaserver.Refused(err)
+	}
+	if reply.Token == "" {
+		return "", fmt.Errorf("%w: the server sent no token", mediaserver.ErrRejected)
+	}
+	return reply.Token, nil
+}
+
+func (c *Client) header(token string) http.Header {
+	if c.session == nil {
+		return http.Header{"X-Api-Key": {c.key}}
+	}
+	return http.Header{"Authorization": {"Bearer " + token}}
+}
+
+func (c *Client) call(ctx context.Context, method, address string, body, into any) error {
+	return mediaserver.CallSigned(ctx, c.doer, c.session, c.header, method, address, body, into)
+}
 
 // Test asks for the libraries to prove the key, then for the user list, which only an administrator may read.
 func (c *Client) Test(ctx context.Context) (mediaserver.Info, error) {
@@ -34,7 +72,7 @@ func (c *Client) Test(ctx context.Context) (mediaserver.Info, error) {
 	var server struct {
 		KavitaVersion string `json:"kavitaVersion"`
 	}
-	if err := mediaserver.Call(ctx, c.doer, http.MethodGet, mediaserver.Join(c.base, "/api/Server/server-info-slim"), c.header(), nil, &server); err == nil {
+	if err := c.call(ctx, http.MethodGet, mediaserver.Join(c.base, "/api/Server/server-info-slim"), nil, &server); err == nil {
 		info.Version = server.KavitaVersion
 	}
 	_, err := c.Users(ctx)
@@ -56,7 +94,7 @@ func (c *Client) Libraries(ctx context.Context) ([]mediaserver.Library, error) {
 		Type    int      `json:"type"`
 		Folders []string `json:"folders"`
 	}
-	if err := mediaserver.Call(ctx, c.doer, http.MethodGet, mediaserver.Join(c.base, "/api/Library/libraries"), c.header(), nil, &reply); err != nil {
+	if err := c.call(ctx, http.MethodGet, mediaserver.Join(c.base, "/api/Library/libraries"), nil, &reply); err != nil {
 		return nil, mediaserver.Refused(err)
 	}
 	libraries := make([]mediaserver.Library, len(reply))
@@ -86,7 +124,7 @@ func (c *Client) Users(ctx context.Context) ([]mediaserver.User, error) {
 		ID       int    `json:"id"`
 		Username string `json:"username"`
 	}
-	if err := mediaserver.Call(ctx, c.doer, http.MethodGet, mediaserver.Join(c.base, "/api/Users"), c.header(), nil, &reply); err != nil {
+	if err := c.call(ctx, http.MethodGet, mediaserver.Join(c.base, "/api/Users"), nil, &reply); err != nil {
 		return nil, mediaserver.Refused(err)
 	}
 	users := make([]mediaserver.User, len(reply))
@@ -100,7 +138,7 @@ func (c *Client) Users(ctx context.Context) ([]mediaserver.User, error) {
 func (c *Client) Changed(ctx context.Context, changes []mediaserver.Change) error {
 	for _, id := range mediaserver.LibraryIDsOf(changes) {
 		address := mediaserver.Join(c.base, "/api/Library/scan") + mediaserver.Query(url.Values{"libraryId": {id}})
-		if err := mediaserver.Call(ctx, c.doer, http.MethodPost, address, c.header(), nil, nil); err != nil {
+		if err := c.call(ctx, http.MethodPost, address, nil, nil); err != nil {
 			return err
 		}
 	}

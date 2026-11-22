@@ -161,7 +161,7 @@ function ServerForm({ kinds, server, onDone, onCancel }: { kinds: Kind[]; server
   });
 
   const fitting = (categories.data ?? []).filter((category) => kind?.media_types.includes(category.media_type));
-  const needsCredential = server === undefined && !credential;
+  const needsCredential = server === undefined && !credential && !(kind?.credential === "key_or_password" && username.trim() !== "");
   const switches: { key: keyof typeof uses; label: string; offered: boolean | undefined }[] = [
     { key: "as_metadata", label: t("mediaServers.switchMetadata"), offered: kind?.can_metadata },
     { key: "push_files", label: t("mediaServers.switchPush"), offered: kind?.can_push },
@@ -201,14 +201,14 @@ function ServerForm({ kinds, server, onDone, onCancel }: { kinds: Kind[]; server
             placeholder={kind?.default_port_hint ? `http://host:${kind.default_port_hint}` : "http://host:port"}
           />
         </label>
-        {(kind?.credential === "password" || kind?.credential === "optional_password") && (
+        {(kind?.credential === "password" || kind?.credential === "optional_password" || kind?.credential === "key_or_password") && (
           <label className={labelStyle}>
-            {t("mediaServers.username")}
+            {kind?.credential === "key_or_password" ? t("mediaServers.usernameOptional") : t("mediaServers.username")}
             <input className={inputStyle} value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="off" />
           </label>
         )}
         <label className={labelStyle}>
-          {kind?.credential === "key" ? t("mediaServers.key") : t("mediaServers.password")}
+          {kind?.credential === "key" ? t("mediaServers.key") : kind?.credential === "key_or_password" ? t("mediaServers.keyOrPassword") : t("mediaServers.password")}
           <input
             className={inputStyle} type="password" value={credential} autoComplete="new-password"
             onChange={(event) => setCredential(event.target.value)}

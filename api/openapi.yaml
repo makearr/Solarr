@@ -12071,8 +12071,8 @@ components:
         label: { type: string }
         credential:
           type: string
-          enum: [key, password, optional_password]
-          description: What the dialog asks for, a key or token alone, or a user name and password.
+          enum: [key, password, optional_password, key_or_password]
+          description: What the dialog asks for, a key or token alone, a user name and password, or either (key_or_password; a user name selects the login).
         can_push: { type: boolean, description: The server can be told of new files. }
         push_by_path: { type: boolean, description: The server takes the exact path rather than only a library scan. }
         can_announce: { type: boolean, description: The server can show a message to people watching. }
@@ -12095,7 +12095,7 @@ components:
         username: { type: string }
         credential:
           type: string
-          description: Required when adding; on a replace, sent only to change it.
+          description: Required when adding unless a user name is given (a login may have an empty password); on a replace, sent only to change it.
         enabled: { type: boolean, default: true }
         as_metadata: { type: boolean, default: false }
         push_files: { type: boolean, default: false }

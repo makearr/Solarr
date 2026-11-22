@@ -108,8 +108,8 @@ func (c *Cache) CreateMediaServer(ctx context.Context, request MediaServerReques
 		return MediaServer{}, ErrSecretsUnavailable
 	}
 	problems := validateMediaServer(request)
-	if credential.IsZero() {
-		problems = append(problems, config.Problem{Path: "credential", Expectation: "not empty"})
+	if credential.IsZero() && request.Username == "" {
+		problems = append(problems, config.Problem{Path: "credential", Expectation: "not empty without a user name"})
 	}
 	if len(problems) > 0 {
 		return MediaServer{}, problems

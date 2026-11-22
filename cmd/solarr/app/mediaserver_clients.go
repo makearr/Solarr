@@ -26,12 +26,18 @@ func (p *process) mediaServerClients(kind, baseURL, username string, credential 
 	secret := credential.Reveal()
 	switch kind {
 	case "jellyfin":
+		if username != "" {
+			return jellyfin.NewLogin(doer, baseURL, username, secret), nil
+		}
 		return jellyfin.New(doer, baseURL, secret), nil
 	case "navidrome":
 		return navidrome.New(doer, baseURL, username, secret, randomToken), nil
 	case "audiobookshelf":
 		return audiobookshelf.New(doer, baseURL, secret), nil
 	case "kavita":
+		if username != "" {
+			return kavita.NewLogin(doer, baseURL, username, secret), nil
+		}
 		return kavita.New(doer, baseURL, secret), nil
 	case "calibre":
 		return calibre.New(doer, baseURL, username, secret, randomToken), nil

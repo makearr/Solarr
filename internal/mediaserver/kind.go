@@ -32,6 +32,8 @@ type CredentialShape string
 const (
 	CredentialKey      CredentialShape = "key"
 	CredentialPassword CredentialShape = "password"
+	// CredentialKeyOrPassword is a key alone, or a user name with a password the server may leave empty (Jellyfin, Kavita).
+	CredentialKeyOrPassword CredentialShape = "key_or_password"
 	// CredentialOptionalPassword is a password the server may not need (Calibre without authentication).
 	CredentialOptionalPassword CredentialShape = "optional_password"
 )
@@ -48,7 +50,7 @@ func (k Kind) Takes(mediaType string) bool {
 
 var kinds = map[string]Kind{
 	"jellyfin": {
-		Key: "jellyfin", Label: "Jellyfin", Credential: CredentialKey, CanPush: true, PushByPath: true, CanAnnounce: true,
+		Key: "jellyfin", Label: "Jellyfin", Credential: CredentialKeyOrPassword, CanPush: true, PushByPath: true, CanAnnounce: true,
 		CanPlayback: true, PerUserPlayback: true, CanMetadata: true, HasUsers: true, NeedsAdmin: true,
 		MediaTypes: []string{"tv", "movie", "music"}, DefaultPortHint: "8096",
 	},
@@ -63,7 +65,7 @@ var kinds = map[string]Kind{
 		MediaTypes: []string{"audiobook", "book"}, DefaultPortHint: "13378",
 	},
 	"kavita": {
-		Key: "kavita", Label: "Kavita", Credential: CredentialKey, CanPush: true, HasUsers: true,
+		Key: "kavita", Label: "Kavita", Credential: CredentialKeyOrPassword, CanPush: true, HasUsers: true,
 		MediaTypes: []string{"book", "comic"}, DefaultPortHint: "5000",
 	},
 	"calibre": {

@@ -587,6 +587,7 @@ const (
 // Defines values for MediaServerKindCredential.
 const (
 	MediaServerKindCredentialKey              MediaServerKindCredential = "key"
+	MediaServerKindCredentialKeyOrPassword    MediaServerKindCredential = "key_or_password"
 	MediaServerKindCredentialOptionalPassword MediaServerKindCredential = "optional_password"
 	MediaServerKindCredentialPassword         MediaServerKindCredential = "password"
 )
@@ -4394,7 +4395,7 @@ type MediaServerKind struct {
 	// CanPush The server can be told of new files.
 	CanPush bool `json:"can_push"`
 
-	// Credential What the dialog asks for, a key or token alone, or a user name and password.
+	// Credential What the dialog asks for, a key or token alone, a user name and password, or either (key_or_password; a user name selects the login).
 	Credential      MediaServerKindCredential `json:"credential"`
 	DefaultPortHint *string                   `json:"default_port_hint,omitempty"`
 	HasUsers        bool                      `json:"has_users"`
@@ -4411,7 +4412,7 @@ type MediaServerKind struct {
 	PushByPath bool `json:"push_by_path"`
 }
 
-// MediaServerKindCredential What the dialog asks for, a key or token alone, or a user name and password.
+// MediaServerKindCredential What the dialog asks for, a key or token alone, a user name and password, or either (key_or_password; a user name selects the login).
 type MediaServerKindCredential string
 
 // MediaServerLibraryMap defines model for MediaServerLibraryMap.
@@ -4492,7 +4493,7 @@ type MediaServerWrite struct {
 	AsMetadata *bool  `json:"as_metadata,omitempty"`
 	BaseUrl    string `json:"base_url"`
 
-	// Credential Required when adding; on a replace, sent only to change it.
+	// Credential Required when adding unless a user name is given (a login may have an empty password); on a replace, sent only to change it.
 	Credential   *string `json:"credential,omitempty"`
 	Enabled      *bool   `json:"enabled,omitempty"`
 	Kind         string  `json:"kind"`

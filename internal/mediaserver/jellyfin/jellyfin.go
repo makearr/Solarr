@@ -1,4 +1,4 @@
-// Package jellyfin is the client for a Jellyfin server, signed in with an API key from its dashboard.
+// Package jellyfin is the client for a Jellyfin server, signed in with an API key from its dashboard or with a user name and password.
 package jellyfin
 
 import (
@@ -16,6 +16,8 @@ type Client struct {
 	doer mediaserver.Doer
 	base string
 	key  string
+	// session is set when the connection signs in with a user name and password; the key is then empty.
+	session *mediaserver.Session
 }
 
 // New builds a client for the server at base with the API key.
@@ -23,8 +25,44 @@ func New(doer mediaserver.Doer, base, key string) *Client {
 	return &Client{doer: doer, base: base, key: key}
 }
 
-func (c *Client) header() http.Header {
-	return http.Header{"Authorization": {fmt.Sprintf("MediaBrowser Token=%q", c.key)}}
+// NewLogin builds a client that signs in as username; the password may be empty, as Jellyfin allows.
+func NewLogin(doer mediaserver.Doer, base, username, password string) *Client {
+	client := &Client{doer: doer, base: base}
+	client.session = mediaserver.NewSession(func(ctx context.Context) (string, error) {
+		return client.signIn(ctx, username, password)
+	})
+	return client
+}
+
+const clientIdentity = `Client="Solarr", Device="Solarr", DeviceId="solarr", Version="1"`
+
+func (c *Client) signIn(ctx context.Context, username, password string) (string, error) {
+	var reply struct {
+		AccessToken string `json:"AccessToken"`
+	}
+	body := struct {
+		Username string `json:"Username"`
+		Pw       string `json:"Pw"`
+	}{username, password}
+	header := http.Header{"X-Emby-Authorization": {"MediaBrowser " + clientIdentity}}
+	if err := mediaserver.Call(ctx, c.doer, http.MethodPost, mediaserver.Join(c.base, "/Users/AuthenticateByName"), header, body, &reply); err != nil {
+		return "", mediaserver.Refused(err)
+	}
+	if reply.AccessToken == "" {
+		return "", fmt.Errorf("%w: the server sent no token", mediaserver.ErrRejected)
+	}
+	return reply.AccessToken, nil
+}
+
+func (c *Client) header(token string) http.Header {
+	if c.session == nil {
+		token = c.key
+	}
+	return http.Header{"Authorization": {fmt.Sprintf("MediaBrowser %s, Token=%q", clientIdentity, token)}}
+}
+
+func (c *Client) call(ctx context.Context, method, address string, body, into any) error {
+	return mediaserver.CallSigned(ctx, c.doer, c.session, c.header, method, address, body, into)
 }
 
 // Test reads the public server facts, then asks for the library list, which only an administrator's key may do.
@@ -59,7 +97,7 @@ func (c *Client) Libraries(ctx context.Context) ([]mediaserver.Library, error) {
 		CollectionType string   `json:"CollectionType"`
 		Locations      []string `json:"Locations"`
 	}
-	if err := mediaserver.Call(ctx, c.doer, http.MethodGet, mediaserver.Join(c.base, "/Library/VirtualFolders"), c.header(), nil, &folders); err != nil {
+	if err := c.call(ctx, http.MethodGet, mediaserver.Join(c.base, "/Library/VirtualFolders"), nil, &folders); err != nil {
 		return nil, mediaserver.Refused(err)
 	}
 	libraries := make([]mediaserver.Library, len(folders))
@@ -75,7 +113,7 @@ func (c *Client) Users(ctx context.Context) ([]mediaserver.User, error) {
 		ID   string `json:"Id"`
 		Name string `json:"Name"`
 	}
-	if err := mediaserver.Call(ctx, c.doer, http.MethodGet, mediaserver.Join(c.base, "/Users"), c.header(), nil, &accounts); err != nil {
+	if err := c.call(ctx, http.MethodGet, mediaserver.Join(c.base, "/Users"), nil, &accounts); err != nil {
 		return nil, mediaserver.Refused(err)
 	}
 	users := make([]mediaserver.User, len(accounts))
@@ -94,7 +132,7 @@ func (c *Client) Changed(ctx context.Context, changes []mediaserver.Change) erro
 		return nil
 	}
 	if len(changes) > maxTargetedPaths {
-		return mediaserver.Call(ctx, c.doer, http.MethodPost, mediaserver.Join(c.base, "/Library/Refresh"), c.header(), nil, nil)
+		return c.call(ctx, http.MethodPost, mediaserver.Join(c.base, "/Library/Refresh"), nil, nil)
 	}
 	type update struct {
 		Path       string `json:"Path"`
@@ -107,7 +145,7 @@ func (c *Client) Changed(ctx context.Context, changes []mediaserver.Change) erro
 	body := struct {
 		Updates []update `json:"Updates"`
 	}{updates}
-	return mediaserver.Call(ctx, c.doer, http.MethodPost, mediaserver.Join(c.base, "/Library/Media/Updated"), c.header(), body, nil)
+	return c.call(ctx, http.MethodPost, mediaserver.Join(c.base, "/Library/Media/Updated"), body, nil)
 }
 
 func updateType(kind string) string {
@@ -128,7 +166,7 @@ func (c *Client) Announce(ctx context.Context, text string) error {
 		IsActive              bool   `json:"IsActive"`
 		SupportsRemoteControl bool   `json:"SupportsRemoteControl"`
 	}
-	if err := mediaserver.Call(ctx, c.doer, http.MethodGet, mediaserver.Join(c.base, "/Sessions"), c.header(), nil, &sessions); err != nil {
+	if err := c.call(ctx, http.MethodGet, mediaserver.Join(c.base, "/Sessions"), nil, &sessions); err != nil {
 		return err
 	}
 	message := struct {
@@ -141,7 +179,7 @@ func (c *Client) Announce(ctx context.Context, text string) error {
 			continue
 		}
 		address := mediaserver.Join(c.base, "/Sessions/"+url.PathEscape(session.ID)+"/Message")
-		if err := mediaserver.Call(ctx, c.doer, http.MethodPost, address, c.header(), message, nil); err != nil {
+		if err := c.call(ctx, http.MethodPost, address, message, nil); err != nil {
 			return err
 		}
 	}
