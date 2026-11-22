@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -16,28 +17,30 @@ import (
 // the architecture's 10,000+ target; this seed file starts that growth with real
 // release names (collecting them is safe under any licence -- ADR-18's own text).
 type corpusCase struct {
-	Input           string  `json:"input"`
-	Artist          string  `json:"artist"`
-	Album           string  `json:"album"`
-	Year            int     `json:"year"`
-	YearEnd         int     `json:"year_end"`
-	Format          string  `json:"format"`
-	Lossless        bool    `json:"lossless"`
-	Container       string  `json:"container"`
-	BitrateKbps     int     `json:"bitrate_kbps"`
-	BitrateMode     string  `json:"bitrate_mode"`
-	VBRPreset       string  `json:"vbr_preset"`
-	SampleRate      int     `json:"sample_rate"`
-	BitDepth        int     `json:"bit_depth"`
-	ProperRepack    bool    `json:"proper_repack"`
-	Source          string  `json:"source"`
-	Edition         string  `json:"edition"`
-	ReleaseGroup    string  `json:"release_group"`
-	Discs           int     `json:"discs"`
-	CatalogueNumber string  `json:"catalogue_number"`
-	VariousArtists  bool    `json:"various_artists"`
-	Discography     bool    `json:"discography"`
-	MinConfidence   float64 `json:"min_confidence"`
+	Input           string `json:"input"`
+	Artist          string `json:"artist"`
+	Album           string `json:"album"`
+	Year            int    `json:"year"`
+	YearEnd         int    `json:"year_end"`
+	Format          string `json:"format"`
+	Lossless        bool   `json:"lossless"`
+	Container       string `json:"container"`
+	BitrateKbps     int    `json:"bitrate_kbps"`
+	BitrateMode     string `json:"bitrate_mode"`
+	VBRPreset       string `json:"vbr_preset"`
+	SampleRate      int    `json:"sample_rate"`
+	BitDepth        int    `json:"bit_depth"`
+	ProperRepack    bool   `json:"proper_repack"`
+	Source          string `json:"source"`
+	Edition         string `json:"edition"`
+	ReleaseGroup    string `json:"release_group"`
+	Discs           int    `json:"discs"`
+	CatalogueNumber string `json:"catalogue_number"`
+	// Unparsed is checked only when the row lists it.
+	Unparsed       []string `json:"unparsed"`
+	VariousArtists bool     `json:"various_artists"`
+	Discography    bool     `json:"discography"`
+	MinConfidence  float64  `json:"min_confidence"`
 	// MaxConfidence is optional (zero means "no ceiling checked"): used for the
 	// no-artist fixtures to prove ADR-18's "report confidence, never guess
 	// silently" actually holds, not just that confidence clears some floor.
@@ -109,6 +112,10 @@ func TestGoldenCorpus(t *testing.T) {
 			}
 			if result.Attributes != wantAttributes {
 				t.Errorf("Attributes = %+v, want %+v", result.Attributes, wantAttributes)
+			}
+
+			if c.Unparsed != nil && !slices.Equal(result.Unparsed, c.Unparsed) {
+				t.Errorf("Unparsed = %q, want %q", result.Unparsed, c.Unparsed)
 			}
 
 			if result.Confidence < c.MinConfidence {

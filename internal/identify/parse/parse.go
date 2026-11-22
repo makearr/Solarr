@@ -348,6 +348,7 @@ func isNoise(phrase string, claims *claimSet) bool {
 		return true
 	}
 	noise := false
+	var edition []string
 	for _, prefix := range creditPrefixes {
 		if strings.HasPrefix(lower, prefix) {
 			noise = true
@@ -366,9 +367,7 @@ func isNoise(phrase string, claims *claimSet) bool {
 			for _, word := range strings.Fields(token) {
 				if editionWords[word] {
 					noise = true
-					if claims.edition == "" {
-						claims.edition = lower
-					}
+					edition = append(edition, word)
 				}
 				if noiseWords[word] {
 					noise = true
@@ -379,14 +378,25 @@ func isNoise(phrase string, claims *claimSet) bool {
 	// Run regardless of the verdict above: a phrase already marked noise can
 	// still carry a real claim inside it ("(FLAC Lossless)" is noise because of
 	// "lossless", but format=flac is still worth recording).
+	claimed := false
 	for _, token := range bracketTokenRe.Split(lower, -1) {
 		for _, field := range strings.Fields(token) {
 			if claimField(strings.Trim(field, ",."), claims) {
 				noise = true
+				claimed = true
 				if yearRe.MatchString(strings.Trim(field, ",.")) {
 					claims.bracketYear = true
 				}
 			}
+		}
+	}
+	// A bracket that is only an edition marker is the edition ("Japan Deluxe Edition"); one that also carries
+	// technical claims ("2019, CD, FLAC, lossless") contributes just its edition words.
+	if len(edition) > 0 && claims.edition == "" {
+		if claimed {
+			claims.edition = strings.Join(edition, " ")
+		} else {
+			claims.edition = lower
 		}
 	}
 	return noise
@@ -513,6 +523,7 @@ func stripTrailingTokens(s string, claims *claimSet, segment bool) string {
 		last := strings.ToLower(strings.Trim(words[len(words)-1], ",."))
 		secondLast := strings.ToLower(strings.Trim(words[len(words)-2], ",."))
 		if !isVocabWord(last) && isStrictVocabWord(secondLast) && isPlausibleGroupTag(words[len(words)-1]) {
+			claims.unparsed = append(claims.unparsed, words[len(words)-1])
 			words = words[:len(words)-1]
 		}
 	}

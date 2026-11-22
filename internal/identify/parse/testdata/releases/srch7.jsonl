@@ -20,3 +20,6 @@
 {"input":"Invented Artist - Some.Album.Title [FLAC]","artist":"Invented Artist","album":"Some.Album.Title","format":"flac","lossless":true,"max_confidence":0.7}
 {"input":"Invented Artist-Kaya-WEB-2020-KAYA","artist":"Invented Artist","album":"Kaya","year":2020,"source":"web","release_group":"KAYA","max_confidence":0.4}
 {"input":"Invented_Artist-Some_Album-(CAT123)-WEB-2020-GRP","artist":"Invented Artist","album":"Some Album","year":2020,"source":"web","release_group":"GRP","catalogue_number":"CAT123","min_confidence":0.9}
+{"input":"Invented Artist-Some Title-DE-CD-FLAC-2003-GRP","artist":"Invented Artist","album":"Some Title","year":2003,"format":"flac","lossless":true,"source":"cd","release_group":"GRP","min_confidence":0.8}
+{"input":"Invented Artist - Some Title [2019, CD, FLAC (tracks+.cue), lossless]","artist":"Invented Artist","album":"Some Title","year":2019,"format":"flac","lossless":true,"source":"cd","edition":"lossless","min_confidence":0.9}
+{"input":"Invented Artist - Some Title 192kbps RIP","artist":"Invented Artist","album":"Some Title","bitrate_kbps":192,"bitrate_mode":"cbr","unparsed":["RIP"],"min_confidence":0.9}
