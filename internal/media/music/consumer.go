@@ -534,7 +534,7 @@ func (c Consumer) fingerprintPass(
 	if len(named) == 0 {
 		return pending
 	}
-	decision, err := IdentifyAlbum(ctx, c.albums, musicbrainz.PriorityIdentify, locals, seeds)
+	decision, err := IdentifyAlbum(ctx, c.albums, musicbrainz.PriorityIdentify, locals, Seeds{Siblings: seeds})
 	if err != nil {
 		c.logger.Warn("album identification from fingerprints failed",
 			slog.String("path", out.observed[named[0].index].File.RelPath), slog.Any("error", err))
@@ -938,7 +938,7 @@ func (c Consumer) matchAlbum(ctx context.Context, out *batchResult, group []pend
 		one := out.observed[file.index]
 		locals[i] = ReadLocalTrack(one.Probe.Tags, one.Probe.Measured, one.File.RelPath)
 	}
-	decision, err := IdentifyAlbum(ctx, c.albums, musicbrainz.PriorityIdentify, locals, seeds)
+	decision, err := IdentifyAlbum(ctx, c.albums, musicbrainz.PriorityIdentify, locals, Seeds{Siblings: seeds})
 	if err != nil {
 		c.logger.Warn("album identification failed",
 			slog.String("path", out.observed[group[0].index].File.RelPath), slog.Any("error", err))

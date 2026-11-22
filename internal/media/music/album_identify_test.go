@@ -95,7 +95,7 @@ func TestIdentifyAlbum_FromTheAlbumTags(t *testing.T) {
 		releases: map[string][]musicbrainz.Release{"rg-studio": {studioRelease}},
 	}
 
-	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, folderOf(traumaTracks), nil)
+	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, folderOf(traumaTracks), music.Seeds{})
 	if err != nil {
 		t.Fatalf("IdentifyAlbum: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestIdentifyAlbum_RecordingSearchWhenTheAlbumTagIsMissing(t *testing.T) {
 		releases:   map[string][]musicbrainz.Release{"rg-studio": {studioRelease}},
 	}
 
-	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, nil)
+	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, music.Seeds{})
 	if err != nil {
 		t.Fatalf("IdentifyAlbum: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestIdentifyAlbum_ScoresTheSiblingSeed(t *testing.T) {
 		releases: map[string][]musicbrainz.Release{"rg-studio": {studioRelease}},
 	}
 
-	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, folderOf(traumaTracks), []string{"rg-studio"})
+	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, folderOf(traumaTracks), music.Seeds{Siblings: []string{"rg-studio"}})
 	if err != nil {
 		t.Fatalf("IdentifyAlbum: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestIdentifyAlbum_ScoresTheSiblingSeed(t *testing.T) {
 // Every lookup failing says nothing about the folder, so it must not read as "no candidate".
 func TestIdentifyAlbum_EveryLookupFailingIsAnError(t *testing.T) {
 	lookup := &fakeAlbumLookup{err: errors.New("provider down")}
-	if _, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, folderOf(traumaTracks), nil); err == nil {
+	if _, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, folderOf(traumaTracks), music.Seeds{}); err == nil {
 		t.Fatal("IdentifyAlbum succeeded with every lookup failing")
 	}
 }
@@ -190,7 +190,7 @@ func TestIdentifyAlbum_ASeedCreditedUnderAnotherNameFitsThroughTheArtistsOwnName
 		Track: 8, Duration: 248 * time.Second,
 	}}
 
-	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, lone, []string{"rg-debut"})
+	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, lone, music.Seeds{Siblings: []string{"rg-debut"}})
 	if err != nil {
 		t.Fatalf("IdentifyAlbum: %v", err)
 	}
@@ -217,7 +217,7 @@ func TestIdentifyAlbum_AMergedGroupListedTwiceIsScoredOnceUnderItsCurrentID(t *t
 				releases: map[string][]musicbrainz.Release{"rg-old": {studioRelease}, "rg-current": {studioRelease}},
 			}
 
-			decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, folderOf(traumaTracks), nil)
+			decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, folderOf(traumaTracks), music.Seeds{})
 			if err != nil {
 				t.Fatalf("IdentifyAlbum: %v", err)
 			}
@@ -243,7 +243,7 @@ func TestIdentifyAlbum_TheFoldersAlbumNameRecallsWhatAMalformedTagHides(t *testi
 		locals[i].FolderAlbum = "Kebilegev Bibihi"
 	}
 
-	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, nil)
+	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, music.Seeds{})
 	if err != nil {
 		t.Fatalf("IdentifyAlbum: %v", err)
 	}
@@ -277,7 +277,7 @@ func TestIdentifyAlbum_AFolderNameRecallDoesNotStandInForTheTags(t *testing.T) {
 		locals[i].FolderAlbum = "The Remixes!"
 	}
 
-	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, nil)
+	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, music.Seeds{})
 	if err != nil {
 		t.Fatalf("IdentifyAlbum: %v", err)
 	}
@@ -305,7 +305,7 @@ func TestIdentifyAlbum_TheSiblingsAlbumDecidesACloseTie(t *testing.T) {
 		},
 	}
 
-	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, folderOf(traumaTracks[:1]), []string{"rg-seed"})
+	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, folderOf(traumaTracks[:1]), music.Seeds{Siblings: []string{"rg-seed"}})
 	if err != nil {
 		t.Fatalf("IdentifyAlbum: %v", err)
 	}
@@ -351,7 +351,7 @@ func TestIdentifyAlbum_SearchesGoOutTogetherAndAreRankedByEvidence(t *testing.T)
 		locals[i].FolderAlbum = "Folder Name"
 	}
 
-	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, nil)
+	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, music.Seeds{})
 	if err != nil {
 		t.Fatalf("IdentifyAlbum: %v", err)
 	}
@@ -381,7 +381,7 @@ func TestIdentifyAlbum_TheBarcodeIsSearchedAndItsGroupComesFirst(t *testing.T) {
 	for i := range locals {
 		locals[i].Barcode = "012345678905"
 	}
-	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, nil)
+	decision, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, music.Seeds{})
 	if err != nil {
 		t.Fatalf("IdentifyAlbum: %v", err)
 	}
@@ -407,7 +407,7 @@ func TestIdentifyAlbum_OnlyTheBarcodeIsSearchedWhenTheFilesCarryBothPrintedFacts
 		for i := range locals {
 			locals[i].Barcode, locals[i].CatalogNumber = test.barcode, test.catalogue
 		}
-		if _, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, nil); err != nil {
+		if _, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, music.Seeds{}); err != nil {
 			t.Fatalf("%s: IdentifyAlbum: %v", name, err)
 		}
 		if !slices.Equal(lookup.printedQueries, test.want) {
@@ -429,7 +429,7 @@ func TestIdentifyAlbum_TheBarcodeMostFilesCarryIsSearchedAndTheFirstWinsATie(t *
 		for i := range locals {
 			locals[i].Barcode = test.barcodes[i]
 		}
-		if _, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, nil); err != nil {
+		if _, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, music.Seeds{}); err != nil {
 			t.Fatalf("%s: IdentifyAlbum: %v", name, err)
 		}
 		if len(lookup.printedQueries) != 1 || lookup.printedQueries[0].Barcode != test.want {
@@ -451,7 +451,7 @@ func TestIdentifyAlbum_ACompilationWithoutAnAlbumArtistIsSearchedWithoutAnArtist
 		locals[index].TrackArtist = locals[index].Artist
 	}
 
-	if _, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, nil); err != nil {
+	if _, err := music.IdentifyAlbum(t.Context(), lookup, musicbrainz.PriorityIdentify, locals, music.Seeds{}); err != nil {
 		t.Fatalf("IdentifyAlbum: %v", err)
 	}
 	if !slices.Contains(lookup.asked, "search:/Kebilegev Bibihi") {

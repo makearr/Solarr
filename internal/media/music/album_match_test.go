@@ -467,6 +467,9 @@ func TestWithin_TheSiblingsAlbumIsNotSentToReviewForAWeakFit(t *testing.T) {
 	if got := weak(music.RecallSibling).Within(0.9); got.Outcome != music.AlbumIdentified {
 		t.Errorf("siblings' album = %s, want identified", got.Outcome)
 	}
+	if got := weak(music.RecallGrabbed).Within(0.9); got.Outcome != music.AlbumIdentified {
+		t.Errorf("the grabbed album = %s, want identified", got.Outcome)
+	}
 	if got := weak(music.RecallAlbumTags).Within(0.9); got.Outcome != music.AlbumAmbiguous {
 		t.Errorf("album recalled by its tags = %s, want ambiguous below the threshold", got.Outcome)
 	}

@@ -389,7 +389,7 @@ func (i Importer) namedAlbumPlacement(ctx context.Context, request batch.HeldReq
 			relPaths = append(relPaths, media.RelPath)
 		}
 	}
-	decision, err := IdentifyAlbum(ctx, i.config.Albums, musicbrainz.PriorityIdentify, locals, []string{request.As.ExternalID})
+	decision, err := IdentifyAlbum(ctx, i.config.Albums, musicbrainz.PriorityIdentify, locals, Seeds{Grabbed: []string{request.As.ExternalID}})
 	if err == nil && decision.Best != nil && decision.Best.Candidate.ReleaseGroup.MBID == request.As.ExternalID {
 		return PlacementOf(decision, relPaths)
 	}

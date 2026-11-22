@@ -91,7 +91,7 @@ func RefineUnitByAlbum(
 			relPaths = append(relPaths, media.RelPath)
 		}
 	}
-	decision, err := IdentifyAlbum(ctx, lookup, musicbrainz.PriorityIdentify, locals, seeds)
+	decision, err := IdentifyAlbum(ctx, lookup, musicbrainz.PriorityIdentify, locals, Seeds{Grabbed: seeds})
 	if err != nil {
 		return result, nil, fmt.Errorf("music: identify unit %q as an album: %w", unit.Directory, err)
 	}
@@ -212,7 +212,7 @@ func RefineUnitByAudio(
 		return result, nil, nil
 	}
 	slices.SortStableFunc(order, func(a, b string) int { return counts[b] - counts[a] })
-	decision, err := IdentifyAlbum(ctx, naming.Albums, musicbrainz.PriorityIdentify, locals, append(slices.Clone(seeds), order...))
+	decision, err := IdentifyAlbum(ctx, naming.Albums, musicbrainz.PriorityIdentify, locals, Seeds{Grabbed: seeds, Siblings: order})
 	if err != nil {
 		return result, nil, fmt.Errorf("music: identify unit %q from its audio: %w", unit.Directory, err)
 	}

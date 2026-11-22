@@ -31,6 +31,7 @@ const (
 // Recall names how a release group came to be scored.
 const (
 	RecallSibling         = "sibling"
+	RecallGrabbed         = "grabbed"
 	RecallAlbumTags       = "album_tags"
 	RecallRecordingSearch = "recording_search"
 	RecallBarcode         = "barcode"
@@ -46,6 +47,12 @@ type AlbumLookup interface {
 	ReleaseGroupOf(ctx context.Context, priority musicbrainz.Priority, releaseMBID string) (string, error)
 }
 
+// Seeds are release groups scored whatever else is recalled. Grabbed is the album a download was acquired as, which
+// the acquisition alone vouches for; Siblings are the albums the folder's already-identified files name.
+type Seeds struct{ Grabbed, Siblings []string }
+
+func (s Seeds) count() int { return len(s.Grabbed) + len(s.Siblings) }
+
 // recalled is one release group to score, and the credit to compare the folder's artist against.
 type recalled struct {
 	group  musicbrainz.ReleaseGroup
@@ -59,7 +66,7 @@ type recalled struct {
 // IdentifyAlbum recalls release groups for a folder (seeds: identified siblings'), scores every
 // release of each against its files, and decides. An error means every lookup failed.
 func IdentifyAlbum(
-	ctx context.Context, lookup AlbumLookup, priority musicbrainz.Priority, locals []LocalTrack, seeds []string,
+	ctx context.Context, lookup AlbumLookup, priority musicbrainz.Priority, locals []LocalTrack, seeds Seeds,
 ) (AlbumDecision, error) {
 	if len(locals) == 0 {
 		return AlbumDecision{Outcome: AlbumNoCandidate}, nil
@@ -181,7 +188,7 @@ func keepCurrentGroup(
 // recallAlbums gathers release groups in order of evidence: seeds, the album tags, then
 // recording search when the tags alone did not recall enough.
 func recallAlbums(
-	ctx context.Context, lookup AlbumLookup, priority musicbrainz.Priority, locals []LocalTrack, seeds []string,
+	ctx context.Context, lookup AlbumLookup, priority musicbrainz.Priority, locals []LocalTrack, seeds Seeds,
 	failures *[]error,
 ) []recalled {
 	var groups []recalled
@@ -193,7 +200,10 @@ func recallAlbums(
 		seen[group.group.MBID] = true
 		groups = append(groups, group)
 	}
-	for _, seed := range seeds {
+	for _, seed := range seeds.Grabbed {
+		add(recalled{group: musicbrainz.ReleaseGroup{MBID: seed}, recall: RecallGrabbed})
+	}
+	for _, seed := range seeds.Siblings {
 		add(recalled{group: musicbrainz.ReleaseGroup{MBID: seed}, recall: RecallSibling})
 	}
 
@@ -265,7 +275,7 @@ func recallAlbums(
 		addAnswer(answers[len(queries)], RecallAlbumTags)
 	}
 
-	tagsRecalledEnough := artist.present() && album.present() && len(groups)-len(seeds) >= 2
+	tagsRecalledEnough := artist.present() && album.present() && len(groups)-seeds.count() >= 2
 	if !tagsRecalledEnough {
 		sample := recordingSampleLimit
 		if artist.present() && album.present() {
@@ -416,7 +426,7 @@ func albumConfidence(score ReleaseScore) float64 {
 // match goes to review like an ambiguous one. The album the folder's tagged files name is exempt:
 // their embedded ids already prove it, the fit only places the rest.
 func (d AlbumDecision) Within(threshold float64) AlbumDecision {
-	if d.Outcome == AlbumIdentified && d.Best != nil && d.Best.Candidate.Recall != RecallSibling &&
+	if d.Outcome == AlbumIdentified && d.Best != nil && d.Best.Candidate.Recall != RecallSibling && d.Best.Candidate.Recall != RecallGrabbed &&
 		albumConfidence(*d.Best) < threshold {
 		d.Outcome = AlbumAmbiguous
 	}

@@ -744,7 +744,7 @@ func withoutCollidingDiscs(locals []LocalTrack) []LocalTrack {
 // remix beside seven tagged ones (Hazi Tufa's "Pakidoviv", the main library). -1 when none.
 func siblingsAlbumWithinMargin(scores []ReleaseScore) int {
 	return slices.IndexFunc(scores, func(score ReleaseScore) bool {
-		return score.Accepted && score.Candidate.Recall == RecallSibling && score.Distance-scores[0].Distance < winnerMargin
+		return score.Accepted && (score.Candidate.Recall == RecallSibling || score.Candidate.Recall == RecallGrabbed) && score.Distance-scores[0].Distance < winnerMargin
 	})
 }
 
