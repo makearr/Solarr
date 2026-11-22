@@ -278,6 +278,22 @@ func (a Acquisitions) ListActive(ctx context.Context) ([]Acquisition, error) {
 	return acquisitions, nil
 }
 
+// ClientRefs are the references clients were given for downloads of any state, by downloader.
+func (a Acquisitions) ClientRefs(ctx context.Context) (map[int64]map[string]bool, error) {
+	rows, err := librarydb.New(a.store.Read()).ListAcquisitionClientRefs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("library: list acquisition client references: %w", err)
+	}
+	refs := map[int64]map[string]bool{}
+	for _, row := range rows {
+		if refs[row.DownloaderID] == nil {
+			refs[row.DownloaderID] = map[string]bool{}
+		}
+		refs[row.DownloaderID][row.DownloadClientRef] = true
+	}
+	return refs, nil
+}
+
 // ListImported answers the imported downloads that may still sit in their client, oldest first.
 func (a Acquisitions) ListImported(ctx context.Context) ([]Acquisition, error) {
 	rows, err := librarydb.New(a.store.Read()).ListImportedAcquisitions(ctx)

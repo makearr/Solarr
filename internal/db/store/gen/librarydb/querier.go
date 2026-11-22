@@ -585,6 +585,8 @@ type Querier interface {
 	// A file that moved to another root: its works are on disk there now, and no longer in the old root unless another of
 	// their files still is.
 	LinkWorksOfPathToRoot(ctx context.Context, arg LinkWorksOfPathToRootParams) error
+	// Every reference a client was given for a download, of any state: what the client holds that is not here is untracked (TRACK-18).
+	ListAcquisitionClientRefs(ctx context.Context) ([]ListAcquisitionClientRefsRow, error)
 	// Startup reconciliation polls every non-terminal acquisition (section 10.9).
 	ListActiveAcquisitions(ctx context.Context) ([]Acquisition, error)
 	// Every download of an item still on its way, with the parts each covers (several may run at once).

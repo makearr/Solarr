@@ -131,7 +131,7 @@ func TestReconcile_FailsTheQueueDirtiesTheLibraryAndRecordsWhy(t *testing.T) {
 		[]store.RecoveryReport{{
 			Database: "library", Recovered: true, BackupAt: takenAt,
 			From: "/backups/library.db.rotation.x", CorruptPath: "/db/library.db.corrupt.x",
-		}})
+		}}, nil)
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestReconcile_ReportsAReferenceTheRestoreOrphaned(t *testing.T) {
 	// not the other looks like (ADR-25).
 	report, err := recovery.Reconcile(t.Context(), f.clock, f.library, f.jobs,
 		recovery.Known{CategoryIDs: []int64{1}},
-		[]store.RecoveryReport{{Database: "library", Recovered: true}})
+		[]store.RecoveryReport{{Database: "library", Recovered: true}}, nil)
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestReconcile_OnAnEmptyInstallStillRecordsTheRestore(t *testing.T) {
 
 	report, err := recovery.Reconcile(t.Context(), f.clock, f.library, f.jobs,
 		recovery.Known{},
-		[]store.RecoveryReport{{Database: "library", Recovered: true, From: "/backups/one"}})
+		[]store.RecoveryReport{{Database: "library", Recovered: true, From: "/backups/one"}}, nil)
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}

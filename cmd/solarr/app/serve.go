@@ -154,6 +154,8 @@ type process struct {
 	scheduleStates *jobs.ScheduleStates
 	taskRunners    map[string]*jobs.TaskRunner
 	pauses         *jobs.Pauses
+	// restoredUntracked are the downloads a restore found in a client that no record references, imported once the queue runs.
+	restoredUntracked []recovery.UntrackedDownload
 	// settingsRegistry is ADR-26's own registry of every scalar setting
 	// (todo 4.14), built once alongside cache -- write paths refuse a key
 	// this does not know about (settings.ErrSettingNotRegistered).
@@ -474,13 +476,15 @@ func (p *process) reconcileRestore(ctx context.Context, cl clock.Clock, restored
 		return nil
 	}
 
-	report, err := recovery.Reconcile(ctx, cl, p.library, p.jobs, p.knownReferences(), restored)
+	report, err := recovery.Reconcile(ctx, cl, p.library, p.jobs, p.knownReferences(), restored, p.restoreDownloadClients(ctx))
 	if err != nil {
 		return err
 	}
+	p.holdForRestore(report)
 	p.logger.Warn("post-restore reconciliation",
 		slog.Int64("jobs_failed", report.JobsFailed),
 		slog.Int64("desired_items_marked_dirty", report.DesiredItemsDirtied),
+		slog.Int64("downloads_closed", report.DownloadsClosed), slog.Int("downloads_untracked", len(report.Untracked)),
 		slog.Any("orphaned_references", report.Orphans))
 	return nil
 }
@@ -746,6 +750,7 @@ func (p *process) startServer(ctx context.Context) error {
 	p.closeOrphanedImportSessions(ctx)
 	p.startTaskHistory(background)
 	p.startLibraryWatch(background)
+	p.startRestoreGate(background)
 	p.startSchedulers(background)
 	if err := p.seedAuthPolicy(ctx); err != nil {
 		return err

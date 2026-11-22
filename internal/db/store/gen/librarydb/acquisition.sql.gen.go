@@ -499,6 +499,40 @@ func (q *Queries) LargestFailedBytesForItem(ctx context.Context, arg LargestFail
 	return largest, err
 }
 
+const listAcquisitionClientRefs = `-- name: ListAcquisitionClientRefs :many
+SELECT downloader_id, download_client_ref FROM acquisition
+WHERE download_client_ref <> '' AND downloader_id <> 0
+`
+
+type ListAcquisitionClientRefsRow struct {
+	DownloaderID      int64
+	DownloadClientRef string
+}
+
+// Every reference a client was given for a download, of any state: what the client holds that is not here is untracked (TRACK-18).
+func (q *Queries) ListAcquisitionClientRefs(ctx context.Context) ([]ListAcquisitionClientRefsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAcquisitionClientRefs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAcquisitionClientRefsRow{}
+	for rows.Next() {
+		var i ListAcquisitionClientRefsRow
+		if err := rows.Scan(&i.DownloaderID, &i.DownloadClientRef); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listActiveAcquisitions = `-- name: ListActiveAcquisitions :many
 SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,

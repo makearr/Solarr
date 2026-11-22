@@ -68,23 +68,22 @@ type Report struct {
 	JobsFailed          int64               `json:"jobs_failed"`
 	DesiredItemsDirtied int64               `json:"desired_items_dirtied"`
 	Orphans             []OrphanedReference `json:"orphans,omitempty"`
-	Gaps                []Gap               `json:"gaps"`
+	// DownloadsClosed are downloads the restored library called active that their client no longer holds.
+	DownloadsClosed int64 `json:"downloads_closed"`
+	// Untracked are downloads clients hold under Solarr's categories that no acquisition references.
+	Untracked []UntrackedDownload `json:"untracked,omitempty"`
+	Gaps      []Gap               `json:"gaps"`
 }
 
-// unbuildable is what ADR-15 names that no subsystem exists to do yet. Downloader
-// clients arrive at stage 5 and the planner at stage 6.
-var unbuildable = []Gap{
-	{
-		What:    "re-derive in-flight acquisitions from downloader state",
-		Because: "no downloader client exists yet (stage 5)",
-	},
+// notChecked is what ADR-15 names that is still not done: the indexer and downloader ids the restored rows carry are not compared with the settings.
+var notChecked = []Gap{
 	{
 		What:    "check candidate.indexer_id and acquisition.downloader_id",
-		Because: "indexers and downloaders are not configurable yet (stage 5)",
+		Because: "the references are not compared with the indexers and download clients now configured",
 	},
 }
 
-// Reconcile fails unfinished jobs, marks the library for re-planning, reports the
+// Reconcile fails unfinished jobs, closes the downloads their client lost, marks the library for re-planning, reports the
 // configuration references the restore orphaned, and records all of it (ADR-15). It
 // runs before workers start, so nothing contends with it.
 func Reconcile(
@@ -93,8 +92,9 @@ func Reconcile(
 	libraryStore, jobsStore *store.Store,
 	known Known,
 	causes []store.RecoveryReport,
+	clients []DownloadClient,
 ) (Report, error) {
-	report := Report{Gaps: unbuildable}
+	report := Report{Gaps: slices.Clone(notChecked)}
 	for _, cause := range causes {
 		report.Restored = append(report.Restored, RestoredFrom{
 			Database:           cause.Database,
@@ -119,6 +119,10 @@ func Reconcile(
 		return report, err
 	}
 	report.DesiredItemsDirtied = dirtied
+
+	if err := reconcileDownloads(ctx, cl, libraryStore, clients, &report); err != nil {
+		return report, err
+	}
 
 	orphans, err := findOrphans(ctx, restored, known)
 	if err != nil {

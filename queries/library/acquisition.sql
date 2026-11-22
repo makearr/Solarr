@@ -265,3 +265,8 @@ INSERT OR IGNORE INTO acquisition_missing (acquisition_id, since) VALUES (?, ?);
 
 -- name: DeleteAcquisitionMissing :exec
 DELETE FROM acquisition_missing WHERE acquisition_id = ?;
+
+-- Every reference a client was given for a download, of any state: what the client holds that is not here is untracked (TRACK-18).
+-- name: ListAcquisitionClientRefs :many
+SELECT downloader_id, download_client_ref FROM acquisition
+WHERE download_client_ref <> '' AND downloader_id <> 0;
