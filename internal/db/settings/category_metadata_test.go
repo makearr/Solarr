@@ -36,7 +36,7 @@ func TestALibraryStartsWithTheProvidersOfItsTypeAndMayReorderThem(t *testing.T) 
 	}
 	snapshot = cache.Snapshot()
 	again, _ := snapshot.Category(movies.ID)
-	if !slices.Equal(snapshot.MetadataSourcesFor(again), settings.DefaultMovieSources) {
+	if !slices.Equal(snapshot.MetadataSourcesFor(again), shippedOn(settings.DefaultMovieSources)) {
 		t.Errorf("an emptied order follows the default: %v", snapshot.MetadataSourcesFor(again))
 	}
 }
@@ -270,4 +270,9 @@ func TestALibraryLeavesBootlegOnlyReleaseGroupsOutUntilItIsToldOtherwise(t *test
 	if err := cache.SetCategoryIncludeBootlegOnly(t.Context(), 9999, true); err == nil {
 		t.Error("a library that does not exist has no switch")
 	}
+}
+
+// shippedOn is an order as a library asks it with the providers that ship switched off left out.
+func shippedOn(order []string) []string {
+	return slices.DeleteFunc(slices.Clone(order), func(key string) bool { return slices.Contains(settings.DefaultDisabledProviders, key) })
 }

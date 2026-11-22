@@ -19,6 +19,7 @@ import (
 	"github.com/makearr/Solarr/internal/mediaserver"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/fanart"
+	"github.com/makearr/Solarr/internal/metadata/imdbdata"
 	"github.com/makearr/Solarr/internal/metadata/kitsu"
 	"github.com/makearr/Solarr/internal/metadata/metaresolve"
 	"github.com/makearr/Solarr/internal/metadata/omdb"
@@ -100,6 +101,8 @@ type Service struct {
 	AniList AnimeSource
 	// OMDb adds the IMDb rating and the English plot, Fanart the clear logos and banners; nil skips either.
 	OMDb RatingSource
+	// IMDb is IMDb's downloaded ratings dataset; nil, or never downloaded, answers none.
+	IMDb DatasetRatings
 	// Kitsu adds an anime's synopsis, rating and the ids of the other anime sites; nil skips it.
 	Kitsu AnimeEntrySource
 	// Local asks the media servers the library takes metadata from; nil asks none.
@@ -198,7 +201,7 @@ func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, recentOnl
 	var rich Series
 	haveRich := false
 	var wrongTVmaze atomic.Int64
-	asked := slices.DeleteFunc([]string{settings.TVSourceTMDB, settings.TVSourceAniList, settings.TVSourceTVmaze, settings.TVSourceKitsu, settings.TVSourceOMDb, settings.TVSourceFanart}, func(source string) bool { return !slices.Contains(order, source) })
+	asked := slices.DeleteFunc([]string{settings.TVSourceTMDB, settings.TVSourceAniList, settings.TVSourceTVmaze, settings.TVSourceKitsu, settings.MovieSourceIMDb, settings.TVSourceOMDb, settings.TVSourceFanart}, func(source string) bool { return !slices.Contains(order, source) })
 	for _, source := range order {
 		if strings.HasPrefix(source, settings.LocalSourcePrefix) {
 			asked = append(asked, source)
@@ -215,6 +218,9 @@ func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, recentOnl
 				return fetched{series, found}, nil
 			case settings.TVSourceKitsu:
 				series, found := s.fetchKitsu(ctx, ids)
+				return fetched{series, found}, nil
+			case settings.MovieSourceIMDb:
+				series, found := s.fetchIMDb(ctx, ids)
 				return fetched{series, found}, nil
 			case settings.TVSourceOMDb:
 				series, found := s.fetchOMDb(ctx, ids)
@@ -317,6 +323,26 @@ func (s Service) fetchKitsu(ctx context.Context, ids IDs) (Series, bool) {
 		return Series{}, false
 	}
 	return FromKitsu(entry), true
+}
+
+// DatasetRatings is IMDb's ratings dataset as the service needs it.
+type DatasetRatings interface {
+	Rating(ctx context.Context, title string) (score float64, votes int64, err error)
+}
+
+// fetchIMDb reads the series' rating from IMDb's dataset by its IMDb id.
+func (s Service) fetchIMDb(ctx context.Context, ids IDs) (Series, bool) {
+	if s.IMDb == nil || ids.IMDb == "" {
+		return Series{}, false
+	}
+	score, votes, err := s.IMDb.Rating(ctx, ids.IMDb)
+	if err != nil {
+		if !errors.Is(err, imdbdata.ErrNotFound) {
+			s.warn("imdb", ids.TVDB, err)
+		}
+		return Series{}, false
+	}
+	return Series{Rating: score, RatingVotes: int(votes), Sources: []string{settings.MovieSourceIMDb}}, true
 }
 
 // fetchOMDb asks OMDb for the series by its IMDb id; a series without one, or a missing key, is not asked.

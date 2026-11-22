@@ -11,3 +11,10 @@ CREATE TABLE metadata_cache (
   PRIMARY KEY (kind, external_id)
 ) WITHOUT ROWID;
 CREATE INDEX metadata_cache_by_age ON metadata_cache(fetched_at, body_bytes);
+
+-- IMDb's daily ratings dataset (metadata-providers: IMDb datasets); disposable like the rest of metadata.db.
+CREATE TABLE imdb_rating (
+  tconst TEXT    NOT NULL PRIMARY KEY,
+  rating REAL    NOT NULL,
+  votes  INTEGER NOT NULL
+) WITHOUT ROWID;

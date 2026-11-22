@@ -1,6 +1,7 @@
 package settings_test
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
@@ -102,5 +103,48 @@ func TestSetMediaServerLibraries_OffersTheLocalProviderToTheLibraryAtOnce(t *tes
 	}
 	if cache.Snapshot().LocalSourceOffered(library.ID, settings.LocalSource("jellyfin")) {
 		t.Error("the local provider is still offered after the connection is deleted")
+	}
+}
+
+func TestDeleteMediaServer_RefusedWhileALibraryOrderNamesItUnlessAnotherOfItsKindAnswers(t *testing.T) {
+	cache, fake := newCache(t)
+	cipher, err := secrets.New(testCipherKey())
+	if err != nil {
+		t.Fatalf("secrets.New: %v", err)
+	}
+	cache.EnableSecrets(cipher)
+	ctx := t.Context()
+	library, err := cache.CreateCategory(ctx, "tv", "Series", 10)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	add := func(name string) settings.MediaServer {
+		server, err := cache.CreateMediaServer(ctx, settings.MediaServerRequest{
+			Kind: "jellyfin", Name: name, BaseURL: "http://media.local:8096", Enabled: true,
+			MediaServerUse: settings.MediaServerUse{AsMetadata: true},
+		}, secrets.Secret("key"), fake.Now().Unix())
+		if err != nil {
+			t.Fatalf("CreateMediaServer: %v", err)
+		}
+		if err := cache.SetMediaServerLibraries(ctx, server.ID, []settings.MediaServerLibrary{{CategoryID: library.ID, ServerLibraryID: "lib"}}); err != nil {
+			t.Fatalf("SetMediaServerLibraries: %v", err)
+		}
+		return server
+	}
+	first, second := add("Den"), add("Attic")
+	if err := cache.SetCategoryMetadataSources(ctx, library.ID, []string{"wikidata", settings.LocalSource("jellyfin")}); err != nil {
+		t.Fatalf("SetCategoryMetadataSources: %v", err)
+	}
+	if err := cache.DeleteMediaServer(ctx, first.ID); err != nil {
+		t.Errorf("deleting one of two connections of a kind = %v, want nil", err)
+	}
+	if err := cache.DeleteMediaServer(ctx, second.ID); !errors.Is(err, settings.ErrInUse) {
+		t.Errorf("deleting the last connection a library's order names = %v, want ErrInUse", err)
+	}
+	if err := cache.SetCategoryMetadataSources(ctx, library.ID, nil); err != nil {
+		t.Fatalf("SetCategoryMetadataSources: %v", err)
+	}
+	if err := cache.DeleteMediaServer(ctx, second.ID); err != nil {
+		t.Errorf("deleting once the order no longer names it = %v, want nil", err)
 	}
 }

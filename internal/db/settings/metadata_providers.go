@@ -19,6 +19,7 @@ const (
 	MovieSourceRadarr  = "radarr"
 	MovieSourceMDBList = "mdblist"
 	MovieSourceOMDb    = "omdb"
+	MovieSourceIMDb    = "imdb"
 	MovieSourceFanart  = "fanart"
 )
 
@@ -81,13 +82,13 @@ const (
 const KeyMetadataDisabledProviders = "metadata.disabled_providers"
 
 // DefaultDisabledProviders start off: Google Books answers 429 without a key of the owner's own, and the comic providers are new.
-var DefaultDisabledProviders = []string{BookSourceGoogleBooks, ComicSourceComicVine, ComicSourceMetron, ComicSourceGCD, ComicSourceMangaUpdates, ComicSourceMangaDex}
+var DefaultDisabledProviders = []string{BookSourceGoogleBooks, MovieSourceIMDb, ComicSourceComicVine, ComicSourceMetron, ComicSourceGCD, ComicSourceMangaUpdates, ComicSourceMangaDex}
 
 // KeyMetadataMovieSources orders the movie providers: the first to hold a field supplies it, the others fill what is missing.
 const KeyMetadataMovieSources = "metadata.movie_sources"
 
 // DefaultMovieSources is Wikidata to steer, TMDB, then Radarr's keyless service, which answers where there is no key.
-var DefaultMovieSources = []string{SourceWikidata, MovieSourceTMDB, MovieSourceRadarr, MovieSourceMDBList, MovieSourceOMDb, TVSourceTVDB, MovieSourceFanart}
+var DefaultMovieSources = []string{SourceWikidata, MovieSourceTMDB, MovieSourceRadarr, MovieSourceIMDb, MovieSourceMDBList, MovieSourceOMDb, TVSourceTVDB, MovieSourceFanart}
 
 // MetadataProvider is one source of metadata: where it is useful and what it carries. The list is in
 // documentation/metadata-providers.md, with the sources not built yet.
@@ -181,6 +182,8 @@ var MetadataProviders = []MetadataProvider{
 		PerMinute: 240, Published: "none published; shared by every Radarr"},
 	{Key: MovieSourceMDBList, Label: "MDBList", MediaTypes: []string{"movie"}, Carries: []string{"ratings of IMDb, TMDB, Trakt, Letterboxd, Rotten Tomatoes and Metacritic"}, NeedsKey: true,
 		PerMinute: 200, MaxPerMinute: 200, Published: "1,000 a day on a free key"},
+	{Key: MovieSourceIMDb, Label: "IMDb ratings", MediaTypes: []string{"movie", "tv"}, Carries: []string{"IMDb rating and votes, from IMDb's daily download (personal, non-commercial use)"},
+		Published: "one download a day; no key, no quota"},
 	{Key: MovieSourceOMDb, Label: "OMDb", MediaTypes: []string{"movie", "tv"}, Carries: []string{"IMDb, Rotten Tomatoes and Metacritic ratings", "English plots"}, NeedsKey: true,
 		PerMinute: 60, Published: "1,000 a day on a free key"},
 	{Key: MovieSourceFanart, Label: "fanart.tv", MediaTypes: []string{"movie", "tv"}, AlsoFor: []string{"music"}, Carries: []string{"clear logos", "clear art", "disc art", "banners", "backgrounds", "artist backgrounds and logos", "album covers"}, NeedsKey: true,
@@ -353,9 +356,9 @@ func DefaultMetadataSources(mediaType, kind string) []string {
 	switch mediaType {
 	case "tv":
 		if kind == "anime" {
-			return []string{SourceWikidata, TVSourceAniList, TVSourceSkyhook, TVSourceTMDB, TVSourceTVDB, TVSourceTVmaze, TVSourceKitsu, TVSourceOMDb, TVSourceFanart}
+			return []string{SourceWikidata, TVSourceAniList, TVSourceSkyhook, TVSourceTMDB, TVSourceTVDB, TVSourceTVmaze, TVSourceKitsu, MovieSourceIMDb, TVSourceOMDb, TVSourceFanart}
 		}
-		return []string{SourceWikidata, TVSourceSkyhook, TVSourceTMDB, TVSourceTVDB, TVSourceTVmaze, TVSourceOMDb, TVSourceFanart}
+		return []string{SourceWikidata, TVSourceSkyhook, TVSourceTMDB, TVSourceTVDB, TVSourceTVmaze, MovieSourceIMDb, TVSourceOMDb, TVSourceFanart}
 	case "movie":
 		return slices.Clone(DefaultMovieSources)
 	case "book":

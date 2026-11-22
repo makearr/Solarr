@@ -4,6 +4,12 @@
 
 package metadatadb
 
+type ImdbRating struct {
+	Tconst string
+	Rating float64
+	Votes  int64
+}
+
 type MetadataCache struct {
 	Kind       string
 	ExternalID string

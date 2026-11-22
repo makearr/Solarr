@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -213,6 +214,9 @@ func (c *Cache) SetMediaServerResult(ctx context.Context, id, at int64, message 
 
 // DeleteMediaServer removes a connection and, by cascade, its mappings.
 func (c *Cache) DeleteMediaServer(ctx context.Context, id int64) error {
+	if err := c.refuseWhileOrderNamesIt(ctx, id); err != nil {
+		return err
+	}
 	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		return c.queries.WithTx(tx).DeleteMediaServer(ctx, id)
 	})
@@ -220,6 +224,37 @@ func (c *Cache) DeleteMediaServer(ctx context.Context, id int64) error {
 		return fmt.Errorf("settings: delete media server %d: %w", id, err)
 	}
 	return c.Reload(ctx)
+}
+
+// refuseWhileOrderNamesIt keeps a connection that a library's own metadata order still names, unless another connection of
+// the same kind answers for that library (Invariant 41: a reference is removed by its owner, not by a delete elsewhere).
+func (c *Cache) refuseWhileOrderNamesIt(ctx context.Context, id int64) error {
+	server, err := c.GetMediaServer(ctx, id)
+	if err != nil {
+		return err
+	}
+	servers, err := c.MediaServers(ctx)
+	if err != nil {
+		return err
+	}
+	mapped, err := c.AllMediaServerLibraries(ctx)
+	if err != nil {
+		return err
+	}
+	source := LocalSource(server.Kind)
+	for _, category := range c.Snapshot().Categories() {
+		if !slices.Contains(category.MetadataSources, source) {
+			continue
+		}
+		covered := slices.ContainsFunc(servers, func(other MediaServer) bool {
+			return other.ID != id && other.Kind == server.Kind && other.Enabled && other.AsMetadata &&
+				slices.ContainsFunc(mapped[other.ID], func(library MediaServerLibrary) bool { return library.CategoryID == category.ID })
+		})
+		if !covered {
+			return fmt.Errorf("%w: library %s still asks %s in its metadata order", ErrInUse, category.Name, server.Name)
+		}
+	}
+	return nil
 }
 
 // MediaServerLibraries answers the library mapping of one connection.

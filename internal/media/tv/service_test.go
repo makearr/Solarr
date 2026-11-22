@@ -552,3 +552,20 @@ func TestFetchForAsksNoMediaServerWithoutALibrary(t *testing.T) {
 		t.Errorf("asked = %q, want none", local.asked)
 	}
 }
+
+type fakeDataset struct{}
+
+func (fakeDataset) Rating(context.Context, string) (float64, int64, error) { return 7.4, 3100, nil }
+
+func TestFetchFillsASeriesRatingFromTheIMDbDatasetWhereNoOtherHoldsOne(t *testing.T) {
+	service, _ := newService(t, fakeSkyhook{err: errors.New("proxy down")}, fakeTVmaze{show: tvmaze.Show{ID: 42, Name: "Example Show"}})
+	service.IMDb = fakeDataset{}
+	service.Priority = func() []string { return []string{settings.TVSourceTVmaze, settings.MovieSourceIMDb} }
+	series, err := service.Fetch(t.Context(), tv.IDs{TVDB: 1234, IMDb: "tt0000001"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if series.Rating != 7.4 || series.RatingVotes != 3100 {
+		t.Errorf("rating = %v/%d, want 7.4/3100 from the dataset", series.Rating, series.RatingVotes)
+	}
+}

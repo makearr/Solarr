@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sync"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/movie"
+	"github.com/makearr/Solarr/internal/metadata/imdbdata"
 	"github.com/makearr/Solarr/internal/metadata/radarrmeta"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -345,5 +347,46 @@ func TestFetchAsksEverySourceAtOnce(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("the sources were asked one after another: neither call left while the other waited")
+	}
+}
+
+type fakeDataset struct{ err error }
+
+func (f fakeDataset) Rating(context.Context, string) (float64, int64, error) {
+	return 7.4, 3100, f.err
+}
+
+func TestFetchTakesIMDbsRatingFromTheDatasetAheadOfTheProxysNumber(t *testing.T) {
+	proxy := fakeProxy{movie: radarrmeta.Movie{TMDBID: 603, MovieRatings: map[string]radarrmeta.Rating{"Imdb": {Count: 10, Value: 8.7}}}}
+	service, _ := newService(t, fakeTMDB{configured: true, movie: theExample()}, proxy)
+	service.IMDb = fakeDataset{}
+	service.PriorityFor = func(int64) []string { return []string{"tmdb", "imdb", "radarr"} }
+	fetched, err := service.FetchFor(t.Context(), 1, movie.IDs{TMDB: 603, IMDb: "tt0000001"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var imdb []movie.Rating
+	for _, rating := range fetched.Ratings {
+		if rating.Provider == "imdb" {
+			imdb = append(imdb, rating)
+		}
+	}
+	if want := []movie.Rating{{Provider: "imdb", Score: 7.4, Votes: 3100}}; !reflect.DeepEqual(imdb, want) {
+		t.Errorf("imdb ratings = %+v, want %+v", imdb, want)
+	}
+}
+
+func TestFetchLeavesOutTheDatasetRatingForATitleItDoesNotHold(t *testing.T) {
+	service, _ := newService(t, fakeTMDB{configured: true, movie: theExample()}, nil)
+	service.IMDb = fakeDataset{err: imdbdata.ErrNotFound}
+	service.PriorityFor = func(int64) []string { return []string{"tmdb", "imdb"} }
+	fetched, err := service.FetchFor(t.Context(), 1, movie.IDs{TMDB: 603, IMDb: "tt0000001"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rating := range fetched.Ratings {
+		if rating.Provider == "imdb" {
+			t.Errorf("a rating the dataset does not hold appeared: %+v", rating)
+		}
 	}
 }

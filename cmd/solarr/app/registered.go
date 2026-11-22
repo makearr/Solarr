@@ -491,6 +491,7 @@ func (p *process) movieModule() movie.Module {
 // movieJobs are the job types the movie module brings.
 func (p *process) movieJobs() []media.JobRegistration {
 	return []media.JobRegistration{
+		p.imdbJob(),
 		{Definition: movie.RefreshDefinition, Handler: movie.NewRefreshJob(movie.RefreshConfig{
 			Reader: library.NewSeriesReader(p.library), Service: p.movieService(), Clock: clock.NewSystem(), Logger: p.logger,
 		})},

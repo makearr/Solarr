@@ -31,6 +31,7 @@ const (
 	providerRadarrMeta      = "radarr-meta"
 	providerMDBList         = "mdblist"
 	providerOMDb            = "omdb"
+	providerIMDb            = "imdb"
 	providerFanart          = "fanart"
 	providerOpenLibrary     = "openlibrary"
 	providerGoogleBooks     = "googlebooks"

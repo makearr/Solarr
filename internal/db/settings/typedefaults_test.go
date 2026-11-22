@@ -39,7 +39,7 @@ func TestAMetadataOrderIsTheLibrarysOwnElseTheTypesElseTheShippedOne(t *testing.
 	if err := cache.SetTypeDefaults(t.Context(), fake, "movie", settings.TypeDefaults{}); err != nil {
 		t.Fatal(err)
 	}
-	if got := order(); !slices.Equal(got, settings.DefaultMovieSources) {
+	if got := order(); !slices.Equal(got, shippedOn(settings.DefaultMovieSources)) {
 		t.Errorf("reset type default = %v, want the shipped order", got)
 	}
 }

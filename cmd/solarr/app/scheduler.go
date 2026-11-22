@@ -97,6 +97,7 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	registry.MustRegister(p.outageRetryTask())
 	registry.MustRegister(p.importRetryTask())
 	registry.MustRegister(p.tvTitleRenameTask())
+	registry.MustRegister(p.imdbTask())
 	registry.MustRegister(p.automaticRenameTask())
 	registry.MustRegister(p.peopleConvergeTask())
 	registry.MustRegister(p.coverShardTask())

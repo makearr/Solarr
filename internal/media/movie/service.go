@@ -15,6 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/mediaserver"
 	"github.com/makearr/Solarr/internal/metadata/fanart"
+	"github.com/makearr/Solarr/internal/metadata/imdbdata"
 	"github.com/makearr/Solarr/internal/metadata/mdblist"
 	"github.com/makearr/Solarr/internal/metadata/metaresolve"
 	"github.com/makearr/Solarr/internal/metadata/omdb"
@@ -54,6 +55,8 @@ type Service struct {
 	MDBList RatingsSource
 	OMDb    PlotSource
 	Fanart  ArtSource
+	// IMDb is IMDb's downloaded ratings dataset; nil, or never downloaded, answers none.
+	IMDb DatasetRatings
 	// Local asks the media servers the library takes metadata from; nil asks none.
 	Local mediaserver.LocalAsker
 	TVDB  TVDBSource
@@ -155,6 +158,11 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs) (Movie
 	return movie, nil
 }
 
+// DatasetRatings is IMDb's ratings dataset as the service needs it.
+type DatasetRatings interface {
+	Rating(ctx context.Context, title string) (score float64, votes int64, err error)
+}
+
 // askMore asks one of the providers beyond TMDB and Radarr's service; one without a key, or that knows nothing, answers none.
 func (s Service) askMore(ctx context.Context, name string, ids IDs) (Movie, bool) {
 	report := func(err error, missing ...error) bool {
@@ -181,6 +189,11 @@ func (s Service) askMore(ctx context.Context, name string, ids IDs) (Movie, bool
 		if s.MDBList != nil && s.MDBList.Configured() {
 			media, err := s.MDBList.Movie(ctx, ids.TMDB, ids.IMDb)
 			return FromMDBList(media), report(err, mdblist.ErrNotFound)
+		}
+	case settings.MovieSourceIMDb:
+		if s.IMDb != nil && ids.IMDb != "" {
+			score, votes, err := s.IMDb.Rating(ctx, ids.IMDb)
+			return Movie{Ratings: []Rating{{Provider: "imdb", Score: score, Votes: votes}}, Sources: []string{settings.MovieSourceIMDb}}, report(err, imdbdata.ErrNotFound)
 		}
 	case settings.MovieSourceOMDb:
 		if s.OMDb != nil && s.OMDb.Configured() && ids.IMDb != "" {
