@@ -35,13 +35,7 @@ type Document struct {
 	Schedules map[string]ScheduleEntry `yaml:"schedules,omitempty"`
 }
 
-// ScalarSettingsEntry is every todo-4.14-registered scalar setting (ADR-21,
-// ADR-26's own registry), flat and named for readability rather than
-// mirroring instance_setting's dotted keys. A pointer on Document: nil on
-// import means the document says nothing about them, so Import leaves every
-// one alone (a hand-edited document need not repeat every setting just to
-// change a category); Export always populates it, since these are
-// always-existing global singletons, never legitimately absent.
+// ScalarSettingsEntry flattens every registered scalar setting; nil on import leaves them all alone, while Export always fills it since they are never absent.
 type ScalarSettingsEntry struct {
 	AuthRequired               bool     `yaml:"auth_required"`
 	ImportAutoCommitConfidence float64  `yaml:"import_auto_commit_confidence"`
@@ -462,13 +456,7 @@ type RootEntry struct {
 	Label string `yaml:"label,omitempty"`
 }
 
-// ExclusionPatternEntry is one ADR-53 part 1 pattern. Category is a natural
-// key ("media_type/name", CategoryEntry's own shape), not an id -- ids are
-// never portable across instances. Builtin patterns (shipped migration
-// defaults) are never exported: every fresh install already gets them from
-// its own migration, and CreateExclusionPattern has no way to mark a
-// created row builtin, so re-importing an exported one would only ever
-// create a second, non-builtin copy of it.
+// ExclusionPatternEntry is one ADR-53 pattern keyed by natural category (ids are not portable); builtin patterns are not exported because every install gets them from its migration and an import would only add a non-builtin copy.
 type ExclusionPatternEntry struct {
 	Pattern   string `yaml:"pattern"`
 	Action    string `yaml:"action"`
@@ -708,12 +696,7 @@ func prefixed(section string, problem config.Problem) config.Problem {
 	return problem
 }
 
-// Validate reports every problem with a document, not the first (section
-// 14.4). callerAddress is the same "must not lock itself out" check
-// SetNetworkSettings applies (Invariant 89) -- an invalid address (the zero
-// value, e.g. from a caller with no real one to give) can never satisfy a
-// non-empty allow_cidrs, refusing conservatively rather than risking a
-// lockout it cannot verify against.
+// Validate reports every problem, not the first (section 14.4); callerAddress feeds the Invariant 89 lockout check, and an invalid one refuses a non-empty allow_cidrs conservatively.
 func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 	var problems config.Problems
 	problems = append(problems, validateScheduleEntries(d.Schedules)...)
@@ -1023,13 +1006,7 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 
 	for index, pattern := range d.ExclusionPatterns {
 		where := fmt.Sprintf("exclusion_patterns[%d]", index)
-		// categoryExists always true here: category existence is checked
-		// against this same document below, by name, the same self-
-		// consistency rule quality_profile/language_profile already apply
-		// on a category entry -- an id has no meaning until Import resolves
-		// one, and this function never touches the database (Validate is a
-		// pure function of the document, same doc comment as every other
-		// validator here).
+		// categoryExists is always true: existence is checked against this document by name, and Validate is a pure function that never touches the database.
 		for _, problem := range validateExclusionPattern(
 			pattern.Pattern, pattern.Action, pattern.MediaType, nil, func(int64) bool { return true },
 		) {
@@ -1047,12 +1024,7 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 	return problems
 }
 
-// Import applies a document in one transaction, or changes nothing. Merges on
-// natural keys. See documentation/configuration-export.md. callerAddress is
-// Document.Validate's own Invariant 89 check -- the real remote address for
-// an HTTP-driven import (ImportSettings), the zero value for anything else,
-// which conservatively refuses a document setting a non-empty allow_cidrs
-// rather than risk a lockout it cannot verify.
+// Import applies a document in one transaction or changes nothing, merging on natural keys (documentation/configuration-export.md); callerAddress is the Invariant 89 lockout check, zero for non-HTTP callers.
 func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.Addr, document Document) error {
 	problems := document.Validate(callerAddress)
 	if c.validateNaming != nil {
@@ -1402,21 +1374,12 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 	})
 }
 
-// exclusionPatternKey is an exclusion pattern's own identity for Import's
-// idempotency check: it has no single natural-key field the way a profile
-// has Name, so every field that distinguishes one pattern from another goes
-// into the key instead.
+// exclusionPatternKey is a pattern's identity for Import's idempotency check: no single natural field exists, so every distinguishing field goes in.
 func exclusionPatternKey(pattern, action, mediaType, category string) string {
 	return pattern + "\x00" + action + "\x00" + mediaType + "\x00" + category
 }
 
-// importScalarSettings writes every todo-4.14-registered scalar setting
-// straight through SetInstanceSetting, inside Import's own transaction --
-// not through the typed Cache.Set* wrappers (SetNetworkSettings and
-// friends), each of which is its own c.write (validate, commit, reload,
-// maybe back up): calling five of those from inside one already-open write
-// would nest transactions. Validation already happened in Document.Validate
-// before this runs.
+// importScalarSettings writes through SetInstanceSetting inside Import's transaction, since the typed Cache.Set* wrappers each open their own write and would nest; Validate already ran.
 func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl clock.Clock, entry ScalarSettingsEntry) error {
 	proxyBypass, err := json.Marshal(entry.NetworkProxyBypass)
 	if err != nil {

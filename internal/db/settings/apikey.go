@@ -151,11 +151,7 @@ func (c *Cache) RevealAPIKey(ctx context.Context, userID, keyID int64) (secrets.
 	return "", fmt.Errorf("%w: api key %d", ErrNotFound, keyID)
 }
 
-// DeleteAPIKey revokes a key, refused (ErrNotFound, indistinguishable from
-// missing -- ADR-27's "hidden = 404") unless it belongs to userID. The
-// underlying query deletes by a bare id with no ownership check of its own,
-// so this is the one place that has to make revoking someone else's key by
-// guessing its id impossible.
+// DeleteAPIKey refuses (ErrNotFound, ADR-27 hidden = 404) unless the key belongs to userID, because the query deletes by bare id.
 func (c *Cache) DeleteAPIKey(ctx context.Context, userID, keyID int64) error {
 	keys, err := c.ListAPIKeys(ctx, userID)
 	if err != nil {

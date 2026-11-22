@@ -8,12 +8,7 @@ import (
 	"sync"
 )
 
-// ErrSettingNotRegistered is what a write path returns for a key the
-// registry has never heard of (ADR-26: "a setting not in the registry
-// cannot be written"). Reaching this in production is a bug -- every key an
-// API write path uses must be registered alongside it -- not a user input
-// problem, so callers surface it as an internal error rather than a
-// validation Problem.
+// ErrSettingNotRegistered means a write used a key the registry lacks (ADR-26); that is a bug, surfaced as an internal error, not a validation Problem.
 var ErrSettingNotRegistered = errors.New("settings: key is not registered")
 
 // SettingKind is the shape a registered setting's value takes -- enough for
@@ -29,24 +24,11 @@ const (
 	KindFloat      SettingKind = "float"
 	KindBool       SettingKind = "bool"
 	KindStringList SettingKind = "string_list"
-	// KindEntity is the registry's own audit-pass extension (todo 4.14, "none
-	// of these fit this registry's current shape without a design pass"):
-	// a whole settings surface -- quality profiles, categories, and the rest
-	// of what queries/settings/*.sql shapes as real rows, never a single
-	// scalar instance_setting -- registered for its tier alone. Default is
-	// always empty: there is no one serializable value for "a quality
-	// profile" the way there is for a port number, and nothing here reads
-	// it. Declarative only: unlike a scalar key, there is no runtime
-	// "unregistered key" check to add for an entity, since its own write
-	// path (CreateQualityProfile and so on) is a fixed compiled-in method,
-	// never a caller-supplied string that could name something unregistered.
+	// KindEntity registers a whole row-based settings surface (profiles, categories) for its tier alone: Default is empty and no unregistered-key check applies, since its write path is a compiled-in method.
 	KindEntity SettingKind = "entity"
 )
 
-// SettingDef is one setting registered once in Go (ADR-26): its key, shape,
-// tier, default and help text -- the single source the API, the forms and,
-// eventually, the YAML export and write-time validation are meant to read
-// from instead of each inventing their own copy.
+// SettingDef is one setting registered once in Go (ADR-26): key, shape, tier, default and help, the single source for the API, forms, export and validation.
 type SettingDef struct {
 	// Key matches the instance_setting row this setting is stored under.
 	Key  string
@@ -63,12 +45,7 @@ type SettingDef struct {
 	Default string
 }
 
-// Registry holds every scalar setting declared this way. One
-// instance for the whole process, built once at startup --
-// jobs.TaskRegistry's own shape, duplicated rather than shared: internal/jobs
-// and internal/db/settings import neither of each other (architecture §2),
-// and a setting's own extra fields (kind, default, help text) do not fit
-// a task's shape anyway.
+// Registry holds every scalar setting, built once at startup; it mirrors jobs.TaskRegistry's shape by duplication because internal/jobs and this package import neither (architecture section 2).
 type Registry struct {
 	mu   sync.RWMutex
 	defs map[string]SettingDef
@@ -144,13 +121,7 @@ func (r *Registry) All() []SettingDef {
 	return defs
 }
 
-// NewDefaultRegistry registers every scalar setting this process currently
-// writes through Cache.setPolicy's shared chokepoint. Deliberately excludes
-// two things that flow through the same table but are not this registry's
-// concern: schedule.<task>.cadence/enabled, dynamic per registered task and
-// already tier-tagged via jobs.Task.Tier (gated by jobs.TaskRegistry.Lookup
-// in the adapter, not here); and cache.measured.*, a probe's own facts,
-// never a policy write (ADR-44 governs user input, not what a sweep found).
+// NewDefaultRegistry registers every scalar written through Cache.setPolicy, excluding schedule.<task>.* (tiered via jobs.Task.Tier) and cache.measured.* (probe facts, not policy writes).
 func NewDefaultRegistry() *Registry {
 	registry := NewRegistry()
 
@@ -323,10 +294,7 @@ func NewDefaultRegistry() *Registry {
 		Default:  strconv.Itoa(DefaultStreamingMaxSessions),
 	})
 
-	// Network (ADR-58): self-hosted networking, tuned by someone running
-	// this behind a reverse proxy or restricting it to a LAN -- advanced,
-	// not normal (a working library needs none of it changed) and not
-	// expert (it is user-facing policy, not internal tuning).
+	// Network (ADR-58) is advanced: someone behind a reverse proxy or LAN restriction tunes it, a working library needs no change, and it is policy, not expert tuning.
 	registry.MustRegister(SettingDef{
 		Key: KeyNetworkPort, Kind: KindInt, Tier: TierAdvanced,
 		Name: "Port", HelpText: "0 (unset) defers to config.yml/the built-in default.", Default: "0",
@@ -631,15 +599,7 @@ func NewDefaultRegistry() *Registry {
 		Default:  DefaultBrainzMashUserAgent,
 	})
 
-	// The non-scalar audit (todo 4.14, taken deep on the user's own word,
-	// 2026-09-12): every settings surface that is real rows rather than a
-	// single instance_setting value, tiered at the whole-surface level --
-	// the same granularity ADR-26's own table already tiers Network and
-	// Cache at, not a field-by-field pass nothing has asked for. Root
-	// folders and categories are normal: every install needs at least one
-	// of each (Setup's own onboarding flow creates both). The rest are
-	// advanced: a shipped default quality/language profile and no arr
-	// connection is a working library.
+	// Non-scalar surfaces are tiered whole (todo 4.14): root folders and categories are normal since setup creates both; the rest are advanced because shipped defaults work.
 	registry.MustRegister(SettingDef{
 		Key: EntityRootFolder, Kind: KindEntity, Tier: TierNormal,
 		Name: "Root folders", HelpText: "Where the library actually lives.",
@@ -684,10 +644,7 @@ func NewDefaultRegistry() *Registry {
 	return registry
 }
 
-// Entity keys (todo 4.14's deep audit pass): each names a whole settings
-// surface for KindEntity registration, never an instance_setting row --
-// see KindEntity's own doc comment for why there is no matching Set/Get
-// pair the way a scalar Key constant has.
+// Entity keys name a whole KindEntity surface, never an instance_setting row, so they have no Set/Get pair.
 const (
 	EntityRootFolder       = "entity.root_folder"
 	EntityCategory         = "entity.category"

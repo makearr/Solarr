@@ -122,12 +122,7 @@ func validTVSource(name string) bool {
 // MetadataSettings is the metadata providers' own policy.
 type MetadataSettings struct {
 	BrainzMashUserAgent string
-	// SourceOrder is the order sources are tried. A source left out is not
-	// consulted at all -- except direct MusicBrainz while it is switched on,
-	// the fallback after the others (ADR-29). Empty on a write
-	// means "leave the stored order alone", so a caller changing only the
-	// agent need not restate it -- the same convention SubscriptionFilters
-	// already uses for an unset field.
+	// SourceOrder is the order sources are tried; a source left out is not consulted except direct MusicBrainz as the last fallback (ADR-29); empty on write keeps the stored order.
 	SourceOrder []string
 	// CoverSources is the order covers are taken in; nil on a write leaves it alone, and an empty
 	// non-nil list turns every cover source off.

@@ -12,12 +12,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
-// Downloader is one download client connection (stage 5, ADR-46/57): SABnzbd
-// today, more as later stages need them. The raw credential is never part
-// of this type -- it exists only between Cipher.Open and the one outbound
-// request that needs it (DecryptedDownloaderCredentials), the same shape
-// Indexer already uses. HasCredentials may be false while a connection is
-// still being set up, the same way an indexer's own key can be absent.
+// Downloader is one download client connection; like Indexer its raw credential exists only between Cipher.Open and the outbound request, and HasCredentials may be false mid-setup.
 type Downloader struct {
 	ID             int64
 	Name           string
@@ -34,10 +29,7 @@ type Downloader struct {
 	UpdatedAt    int64
 }
 
-// DownloaderRequest is what CreateDownloader/UpdateDownloader accept for a
-// connection's own facts -- never its credential, which has its own
-// dedicated path (Create's own credentials argument, SetDownloaderCredentials),
-// the same split IndexerRequest already uses.
+// DownloaderRequest carries a connection's facts, never its credential, which has its own path (Create's argument, SetDownloaderCredentials).
 type DownloaderRequest struct {
 	Name         string
 	Impl         string
@@ -203,11 +195,7 @@ func (c *Cache) SetDownloaderCredentials(ctx context.Context, id int64, credenti
 	return nil
 }
 
-// DecryptedDownloaderCredentials opens id's own sealed credential -- the one
-// place the raw secret exists, for the one call site (the downloader
-// client) that must actually send it. Every other reader sees only
-// HasCredentials. Returns a zero Secret, no error, for a connection that
-// has none configured at all.
+// DecryptedDownloaderCredentials is the one place the raw secret exists, for the downloader client; no credentials configured returns a zero Secret, no error.
 func (c *Cache) DecryptedDownloaderCredentials(ctx context.Context, id int64) (secrets.Secret, error) {
 	row, err := c.queries.GetDownloader(ctx, id)
 	if err != nil {

@@ -33,10 +33,7 @@ const (
 // Neither list does anything until its own enable flag is turned on.
 var DefaultLocalRanges = []string{"127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}
 
-// NetworkSettings is ADR-58's own policy. Port 0 means unset -- config.yml
-// governs until the Network screen writes one. The proxy and the whitelist
-// each have their own enable flag, off until someone turns it on
-// (2026-09-19), so a prefilled list is a suggestion rather than a rule.
+// NetworkSettings is ADR-58's policy; port 0 means unset (config.yml governs), and the proxy and whitelist each default off so a prefilled list is a suggestion.
 type NetworkSettings struct {
 	Port         int
 	ProxyEnabled bool

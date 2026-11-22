@@ -199,10 +199,7 @@ func (s *Snapshot) AcquisitionHeadroom(categoryID int64) (bytes int64, measured 
 	return bytes, measured
 }
 
-// CategoriesForRootFolder returns the category ids a root folder is
-// attached to, in attachment order -- the reverse of RootFoldersForCategory,
-// for ADR-51 drain's own "eligible destinations share a category with the
-// root being drained" scoping.
+// CategoriesForRootFolder returns attached category ids in attachment order, the reverse of RootFoldersForCategory, for ADR-51 drain destination scoping.
 func (s *Snapshot) CategoriesForRootFolder(rootFolderID int64) []int64 {
 	var categoryIDs []int64
 	for _, attachment := range s.categoryRoot {

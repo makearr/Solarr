@@ -17,19 +17,10 @@ import (
 	"github.com/makearr/Solarr/internal/platform/config"
 )
 
-// scheduleCronParser matches internal/jobs' own cronParser (five fields:
-// minute, hour, day-of-month, month, day-of-week) exactly, so a cadence
-// accepted here is guaranteed to parse identically when internal/jobs.
-// TaskRunner reads it back -- duplicated rather than imported, since
-// internal/jobs and internal/db/settings share no dependency edge in either
-// direction (architecture §2) and this is one five-field constant, not
-// a third occurrence of a shared concept worth extracting yet.
+// scheduleCronParser matches internal/jobs' five-field parser so a cadence accepted here parses there; duplicated because the packages share no dependency edge (architecture section 2).
 var scheduleCronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 
-// ADR-59: every registered task's own cadence and enabled flag live in
-// settings.db (policy, ADR-25), keyed dynamically per task since the set of
-// registered tasks is internal/jobs.TaskRegistry's own, not a fixed set
-// settings.db enumerates.
+// ADR-59: each task's cadence and enabled flag live in settings.db (policy, ADR-25), keyed dynamically because the task set belongs to jobs.TaskRegistry.
 func scheduleCadenceKey(taskKey string) string { return "schedule." + taskKey + ".cadence" }
 func scheduleEnabledKey(taskKey string) string { return "schedule." + taskKey + ".enabled" }
 

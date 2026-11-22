@@ -19,10 +19,7 @@ const KeyAcoustIDAPIKey = "metadata.acoustid.api_key"
 // itself, and a screen asking for one should not decrypt it to render.
 func (s *Snapshot) AcoustIDConfigured() bool { return s.policy[KeyAcoustIDAPIKey] != "" }
 
-// AcoustIDAPIKey opens the stored key. Empty when none is set, which is the
-// disabled state rather than an error (D12). No context: the sealed value is
-// already in the in-memory snapshot, so this reads nothing and blocks on
-// nothing.
+// AcoustIDAPIKey opens the stored key; empty means disabled (D12), and it reads the in-memory snapshot so it needs no context.
 func (c *Cache) AcoustIDAPIKey() (secrets.Secret, error) {
 	return c.openSealedPolicy(KeyAcoustIDAPIKey)
 }

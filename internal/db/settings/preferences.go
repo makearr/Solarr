@@ -10,13 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
 )
 
-// SetPreference stores one user's preference value as raw JSON, encoded by
-// the caller. Deliberately bypasses Cache's own write path (c.write, which
-// reloads the whole snapshot and can trigger a settings.db backup on every
-// call): unlike every other setting in this package, a preference changes on
-// ordinary UI interaction (ADR-54's last-visited level, on every navigation
-// click) rather than a rare config edit, and nothing else in this process
-// needs to see it through the snapshot.
+// SetPreference stores raw JSON and bypasses Cache's write path (snapshot reload, backup) because preferences change on every navigation click and nothing else needs them in the snapshot.
 func (c *Cache) SetPreference(ctx context.Context, userID int64, key, valueJSON string) error {
 	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		return c.queries.WithTx(tx).SetPreference(ctx, settingsdb.SetPreferenceParams{

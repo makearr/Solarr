@@ -51,13 +51,7 @@ const (
 	maxRSSFreshHours     = 24 * 365
 )
 
-// ADR-36/ADR-55's own shipped defaults -- duplicated from
-// internal/identify/priority's own DefaultWeights/DefaultNewReleaseDays
-// rather than imported: internal/db/settings and internal/identify/priority
-// share no dependency edge (architecture §2), the same reasoning
-// schedule.go's own cron parser duplication already gives, and a stage 5/6
-// caller composing internal/identify/priority.Weights from this policy is
-// where the two shapes meet, not here.
+// ADR-36/55 defaults duplicated from internal/identify/priority because the two packages share no dependency edge (architecture section 2).
 const (
 	DefaultPriorityUserRequestWeight = 40
 	DefaultPriorityNewReleaseWeight  = 30
@@ -66,10 +60,7 @@ const (
 	DefaultPriorityNewReleaseDays    = 7
 )
 
-// PrioritySettings is ADR-36's own policy: the four trigger weights (bigger
-// is more urgent) and ADR-55's release-date freshness window, in days. One
-// set for the whole instance -- unlike a quality or language profile, ADR-36
-// never scoped these per category.
+// PrioritySettings is ADR-36's policy: four trigger weights (bigger is more urgent) and ADR-55's freshness window in days, one set per instance.
 type PrioritySettings struct {
 	UserRequestWeight, NewReleaseWeight, GapWeight, UpgradeWeight int64
 	NewReleaseDays                                                int64

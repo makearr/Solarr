@@ -58,11 +58,7 @@ func (c *Cache) CreateCategory(ctx context.Context, mediaType, name string, prio
 	if problems := validateCategory(mediaType, name, priorityRank); len(problems) > 0 {
 		return Category{}, problems
 	}
-	// category(media_type, name) is UNIQUE (migration 0001); checked here
-	// rather than left to that constraint's own raw error, which writeError
-	// has nothing to map and so answers a bare "the request could not be
-	// completed" -- found live via the setup wizard's own *Arr connect step
-	// re-submitted against a category that already existed.
+	// Checked here because the UNIQUE(media_type, name) constraint's raw error maps to nothing writeError can say; the setup wizard hit it re-submitting an existing category.
 	for _, existing := range c.Snapshot().Categories() {
 		if existing.MediaType == mediaType && existing.Name == name {
 			return Category{}, config.Problems{{
@@ -100,22 +96,7 @@ func (c *Cache) CreateCategory(ctx context.Context, mediaType, name string, prio
 		MonitorReleaseTypes: decodeReleaseTypes(created.MonitorReleaseTypes)}, nil
 }
 
-// UpdateCategory renames a category, changes its priority rank, and sets its
-// default quality/language profile and monitor-discovered policy, all as one
-// write. media_type never changes -- it is the category's own identity
-// alongside name (the same UNIQUE(media_type, name) CreateCategory's own
-// duplicate check protects), not a policy field. Todo 4.6's own remaining
-// gap: creation and deletion existed, editing did not (queries.UpdateCategory
-// itself was scaffolded ahead of this caller, the same "ready ahead of the
-// consumer" shape quality/language profiles and placement.Resolve already
-// had, 2026-09-12). One method rather than SetCategoryQualityProfile/
-// SetCategoryLanguageProfile/SetCategoryMonitorDiscovered called separately
-// by the caller (those three still stand alone for a future caller that
-// wants just one of them): an apiserver handler that wrote through each and
-// then read its own (necessarily request-frozen, ADR-27) Access back for the
-// response would see the category as it was when the request began, not
-// what it had just written -- found live verifying this exact endpoint.
-// qualityProfileID/languageProfileID nil clears the default.
+// UpdateCategory renames, re-ranks and sets default profiles and monitor policy in one write, because a handler writing each then reading its request-frozen Access back would see stale values; media_type never changes; nil profile ids clear the default.
 func (c *Cache) UpdateCategory(
 	ctx context.Context, id int64, name string, priorityRank int64,
 	qualityProfileID, languageProfileID *int64, monitorDiscovered string,
@@ -479,11 +460,7 @@ func (c *Cache) DeleteCategory(ctx context.Context, id int64) error {
 	})
 }
 
-// CreateQualityProfile adds a quality profile (ADR-40). Deep validation of
-// rulesJSON's shape belongs to internal/identify/score, the only package that interprets
-// it; this layer checks only what settings.db itself must never hold: a name and
-// syntactically valid JSON (ADR-44 -- a bad policy must be refused on write, not
-// discovered later at startup).
+// CreateQualityProfile validates only what settings.db must never hold (a name and syntactically valid JSON, ADR-44); deep shape validation belongs to internal/identify/score.
 func (c *Cache) CreateQualityProfile(ctx context.Context, name, rulesJSON, upgradeJSON string) (QualityProfile, error) {
 	return c.CreateQualityProfileFor(ctx, UnstatedProfileMediaType, name, rulesJSON, upgradeJSON)
 }
@@ -530,11 +507,7 @@ func (c *Cache) UpdateQualityProfile(ctx context.Context, id int64, name, rulesJ
 	})
 }
 
-// DeleteQualityProfile removes a quality profile, or refuses and says which
-// categories still default to it. A desired_item in library.db may also still
-// reference it (ADR-25 forbids the cross-database FK that would let this check
-// see that) -- not yet possible to create, since desired_item creation for music
-// is itself blocked on this profile system existing at all.
+// DeleteQualityProfile refuses and names the categories still defaulting to it; a desired_item in library.db may also reference it, which ADR-25 stops this check from seeing.
 func (c *Cache) DeleteQualityProfile(ctx context.Context, id int64) error {
 	profile, found := c.Snapshot().QualityProfile(id)
 	if !found {
@@ -1185,10 +1158,7 @@ func (c *Cache) CreateRootFolder(ctx context.Context, path, label string) (RootF
 	return convertRootFolder(created), nil
 }
 
-// SetRootFolderPolicy writes the user's own placement policy for one root
-// (section 11.7, Invariant 69) -- read_only, allow_rename and the reserve.
-// Never touched by the capacity job, which only ever writes probed facts
-// via SetRootFolderCapacity.
+// SetRootFolderPolicy writes the user's placement policy (read_only, allow_rename, reserve); the capacity job never touches it (section 11.7, Invariant 69).
 func (c *Cache) SetRootFolderPolicy(ctx context.Context, id int64, readOnly, allowRename bool, minFreeBytes int64) error {
 	if _, found := c.Snapshot().RootFolder(id); !found {
 		return fmt.Errorf("%w: root folder %d", ErrNotFound, id)
@@ -1204,10 +1174,7 @@ func (c *Cache) SetRootFolderPolicy(ctx context.Context, id int64, readOnly, all
 	})
 }
 
-// RootFolderCapacity is everything a capacity probe found about one root,
-// for SetRootFolderCapacity -- grouped so the job that calls it (the only
-// writer of these columns) passes one value rather than seven positional
-// ones.
+// RootFolderCapacity groups what one capacity probe found so SetRootFolderCapacity takes one value, not seven positional ones.
 type RootFolderCapacity struct {
 	Writable         bool
 	WritableReason   string
@@ -1218,11 +1185,7 @@ type RootFolderCapacity struct {
 	CapabilitiesJSON string
 }
 
-// SetRootFolderCapacity records what the capacity-polling job found --
-// section 11.7: "capacity is polled, not assumed". The only writer of
-// writable/total_bytes/free_bytes/fs_id; user policy lives in
-// SetRootFolderPolicy instead, so the two paths can never race each other's
-// columns.
+// SetRootFolderCapacity is the capacity job's only write (writable, total, free, fs_id), kept apart from SetRootFolderPolicy so the two never race on columns (section 11.7).
 func (c *Cache) SetRootFolderCapacity(ctx context.Context, id int64, capacity RootFolderCapacity) error {
 	return c.writeFact(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		return queries.SetRootFolderCapacity(ctx, settingsdb.SetRootFolderCapacityParams{
@@ -1238,12 +1201,7 @@ func (c *Cache) SetRootFolderCapacity(ctx context.Context, id int64, capacity Ro
 	})
 }
 
-// SetAcceptsNewForRootFolder flips accepts_new across every category this
-// root is attached to -- ADR-51's own "draining forces accepts_new = 0"
-// (section 11.7), applied uniformly since a drain evacuates the whole disk,
-// not one category's share of it. Reuses AttachRootFolder's own upsert per
-// attachment rather than a new query, preserving each attachment's ord and
-// weight.
+// SetAcceptsNewForRootFolder flips accepts_new on every attached category because a drain evacuates the whole disk (ADR-51), keeping each attachment's ord and weight.
 func (c *Cache) SetAcceptsNewForRootFolder(ctx context.Context, rootFolderID int64, acceptsNew bool) error {
 	for _, attachment := range c.Snapshot().CategoryRoots() {
 		if attachment.RootFolderID != rootFolderID {
@@ -1338,10 +1296,7 @@ func (c *Cache) DeleteRootFolder(ctx context.Context, id int64) error {
 	})
 }
 
-// SetRootFolderOnline declares a root online or offline (section 10.4): the
-// user's own durable call, never overwritten by a probe finding a declared-
-// offline disk back (Invariant 87 -- "never auto-cleared"). An offline root
-// is unavailable, never free space (Invariant 20a).
+// SetRootFolderOnline records the user's durable online/offline call, never overwritten by a probe (Invariant 87); an offline root is unavailable, never free space (Invariant 20a).
 func (c *Cache) SetRootFolderOnline(ctx context.Context, id int64, online bool) error {
 	if _, found := c.Snapshot().RootFolder(id); !found {
 		return fmt.Errorf("%w: root folder %d", ErrNotFound, id)
@@ -1353,10 +1308,7 @@ func (c *Cache) SetRootFolderOnline(ctx context.Context, id int64, online bool) 
 	})
 }
 
-// RecordRootFolderReach records whether a probe reached a root: an online root it cannot reach goes offline as
-// Solarr's own declaration, and only such a root comes back online once reached (user, 2026-10-23). A root a person
-// declared offline is left alone (Invariant 87). entries is what a reached root holds; only whether it held any is
-// kept, so a new folder in it is not a settings change (each of which takes a backup).
+// RecordRootFolderReach marks an unreachable online root offline as Solarr's own declaration and only such a root comes back online; a user-declared offline root is left alone (Invariant 87); only whether entries is empty is kept, so a new folder is not a backed-up settings change.
 func (c *Cache) RecordRootFolderReach(ctx context.Context, id int64, reached bool, reason string, entries int64) error {
 	root, found := c.Snapshot().RootFolder(id)
 	if !found {
@@ -1496,14 +1448,7 @@ func (c *Cache) SetRole(ctx context.Context, id int64, role Role) error {
 	})
 }
 
-// SetUserTier changes how much of the settings surface a user is shown
-// (ADR-26). Self-service, unlike SetRole: raising or lowering it never
-// changes behaviour, only what is displayed, so there is nothing here for
-// wouldStrandTheInstance's own reasoning to protect against -- the caller
-// (a user changing their own tier, PATCH /me/tier) is trusted the same way
-// picking a theme would be. queries.SetUserTier itself was scaffolded ahead
-// of this caller (migration 0001's own ui_tier column), the same "ready
-// ahead of the consumer" shape several other todo 4.14 pieces already had.
+// SetUserTier is self-service, unlike SetRole: it changes only what is displayed, so wouldStrandTheInstance has nothing to guard.
 func (c *Cache) SetUserTier(ctx context.Context, id int64, tier Tier) error {
 	user, found := c.Snapshot().User(id)
 	if !found {
@@ -1539,10 +1484,7 @@ func (c *Cache) RevokeCategoryAccess(ctx context.Context, userID, categoryID int
 // administer the instance.
 var ErrLastAdministrator = errors.New("settings: that would leave no administrator")
 
-// wouldStrandTheInstance refuses removing or demoting the only administrator.
-// Nothing else can restore the role, so the interface would be locked out of its
-// own settings with no way back that does not involve the database file
-// (ADR-44).
+// wouldStrandTheInstance refuses removing or demoting the only administrator, since only the database file could restore the role (ADR-44).
 func (c *Cache) wouldStrandTheInstance(user User, becoming Role) error {
 	if user.Role != RoleAdmin || becoming == RoleAdmin {
 		return nil
@@ -1699,11 +1641,7 @@ func (c *Cache) administratorIDs() []int64 {
 	return ids
 }
 
-// UserPreferences reads one user's stored interface state -- sort order,
-// chosen columns and the like (migration 0001's own user_preference table,
-// unused until 2026-09-19). Read straight from the database rather than the
-// snapshot: preferences scale with users times screens, and nothing outside
-// the one request that asked for them ever needs them in memory.
+// UserPreferences reads from the database, not the snapshot: preferences scale with users times screens and only the asking request needs them.
 func (c *Cache) UserPreferences(ctx context.Context, userID int64) (map[string]string, error) {
 	rows, err := c.queries.ListPreferencesForUser(ctx, userID)
 	if err != nil {

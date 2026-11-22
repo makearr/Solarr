@@ -269,12 +269,7 @@ const (
 	ExclusionRefuse = "refuse"
 )
 
-// ExclusionPattern is ADR-53 part 1: "a file shaped like this is not media",
-// by name/extension glob, never by content -- the hash-based half
-// (blocked_content) lives in library.db instead, since it is a fact about
-// content rather than policy. MediaType nil means every media type;
-// CategoryID nil means every category of that media type -- .iso is poison
-// in a music release and legitimate in a ROM one, which is why both exist.
+// ExclusionPattern is ADR-53 part 1: a name/extension glob saying a file is not media; nil MediaType or CategoryID means every one, since .iso is poison in music and fine for ROMs.
 type ExclusionPattern struct {
 	ID         int64
 	Pattern    string
@@ -288,10 +283,7 @@ type ExclusionPattern struct {
 	Enabled bool
 }
 
-// QualityProfile is ADR-40's policy, evaluated by internal/identify/score: hard gates, then
-// lexicographic tiers, then an additive score. RulesJSON and UpgradeJSON are kept
-// as raw JSON here -- internal/identify/score owns the parsed shape, since it is the only
-// package that interprets them.
+// QualityProfile is ADR-40's policy for internal/identify/score; RulesJSON and UpgradeJSON stay raw because score is the only package that interprets them.
 type QualityProfile struct {
 	ID          int64
 	Name        string
@@ -319,10 +311,7 @@ type LanguageProfile struct {
 // with: 8 GB, asked for 2026-09-19.
 const DefaultMinFreeBytes int64 = 8_000_000_000
 
-// RootFolder is a directory the library is stored in. Section 11.7's three
-// separate concepts, never conflated: Writable is a probed fact, ReadOnly is
-// the user's own policy, AcceptsNew (CategoryRoot, per category) is
-// draining -- none of the three is derived from either of the others.
+// RootFolder is a library directory; Writable is a probed fact, ReadOnly the user's policy and AcceptsNew (per category) draining, and none derives from another (section 11.7).
 type RootFolder struct {
 	ID    int64
 	Path  string
@@ -335,10 +324,7 @@ type RootFolder struct {
 	// before it has ever been checked.
 	Writable       bool
 	WritableReason string
-	// ReadOnly means "this is curated, look but do not touch": blocks new
-	// placement, upgrade-in-place and tag write-back, and blocks renaming
-	// unless AllowRename is also set (Invariant 69). It blocks nothing on
-	// the read side.
+	// ReadOnly blocks new placement, upgrade-in-place, tag write-back and (unless AllowRename) renaming (Invariant 69), never reads.
 	ReadOnly    bool
 	AllowRename bool
 	// TotalBytes and FreeBytes are nil until the capacity job has run once.

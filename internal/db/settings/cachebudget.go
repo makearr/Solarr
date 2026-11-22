@@ -122,10 +122,7 @@ func validateCacheBudget(budget CacheBudget) config.Problems {
 	return problems
 }
 
-// ADR-60's own measured facts -- probed by internal/jobs/cachebudget's own
-// scheduled task, never by a policy write, the same split
-// root_folder.writable/total_bytes already keeps from read_only/
-// min_free_bytes.
+// ADR-60 measured facts are probed by the cachebudget task, never by a policy write, like root_folder.writable versus read_only.
 const (
 	keyCacheImagesBytes   = "cache.measured.images_bytes"
 	keyCacheMetadataBytes = "cache.measured.metadata_bytes"

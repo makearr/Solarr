@@ -110,10 +110,7 @@ func validateRootFolderPolicy(minFreeBytes int64) config.Problems {
 	return nil
 }
 
-// validateImportAutoCommitConfidence checks ADR-48's commit line before it is
-// written (ADR-44) -- architecture.md's own table explicitly welcomes "a raw
-// number ... for anyone who wants one" beyond the five named levels, so this only
-// bounds it to a real confidence, not to one of the five.
+// validateImportAutoCommitConfidence bounds ADR-48's commit line to a real confidence (ADR-44), allowing any raw number beyond the five named levels.
 func validateImportAutoCommitConfidence(confidence float64) config.Problems {
 	if math.IsNaN(confidence) || math.IsInf(confidence, 0) || confidence < 0 || confidence > 1 {
 		return config.Problems{{
@@ -124,10 +121,7 @@ func validateImportAutoCommitConfidence(confidence float64) config.Problems {
 	return nil
 }
 
-// validateImportTransferLadder checks the order before it is written (ADR-44).
-// An empty ladder is refused rather than silently meaning the default: a user
-// who cleared every method asked for something impossible, and answering that
-// with a hidden fallback is how a setting stops meaning what it says.
+// validateImportTransferLadder refuses an empty ladder (ADR-44) rather than hide a default behind a user who cleared every method.
 func validateImportTransferLadder(ladder []string) config.Problems {
 	var problems config.Problems
 	if len(ladder) == 0 {
@@ -160,12 +154,7 @@ func ValidateQualityProfile(name, rulesJSON, upgradeJSON string) config.Problems
 	return validateQualityProfile(name, rulesJSON, upgradeJSON)
 }
 
-// validateQualityProfile checks a quality profile before it is written (ADR-44):
-// a name, and rules/upgrade JSON that actually decodes as ADR-40's shape --
-// internal/identify/score.Parse/ParseUpgrade own that shape, so a typo like `"compare":
-// "resolution"` (a string where the schema wants a list) is caught here, not only
-// a first evaluation. The interpreter never rejects what it cannot read -- it just contributes no evidence -- so
-// score.ValidateStrict names those mistakes here, on save and import only, never on load.
+// validateQualityProfile requires a name and rules/upgrade JSON that decode as ADR-40's shape; score.ValidateStrict names mistakes on save and import only, since the interpreter silently ignores what it cannot read.
 func validateQualityProfile(name, rulesJSON, upgradeJSON string) config.Problems {
 	var problems config.Problems
 	if strings.TrimSpace(name) == "" {
@@ -207,10 +196,7 @@ func validateLanguageProfile(name string) config.Problems {
 	return problems
 }
 
-// validateExclusionPattern checks an unwanted-file pattern before it is
-// written (ADR-53 part 1). categoryExists is a lookup rather than a direct
-// Snapshot dependency, so this stays a pure function of its inputs like
-// every other validator here.
+// validateExclusionPattern takes categoryExists as a lookup so it stays a pure function of its inputs (ADR-53 part 1).
 func validateExclusionPattern(
 	pattern, action, mediaType string, categoryID *int64, categoryExists func(int64) bool,
 ) config.Problems {

@@ -35,10 +35,7 @@ const (
 // rather than ever stored in plaintext (Invariant 61).
 var ErrSecretsUnavailable = errors.New("settings: no cipher configured, cannot seal or open a secret")
 
-// ArrInstance is one connection: an app, a base URL and an API key. The raw
-// key is never part of this type -- it exists only between Cipher.Open and
-// the one outbound request that needs it (DecryptedAPIKey), and an API
-// response shows secrets.Secret's own Mask() instead.
+// ArrInstance is one *Arr connection; the raw key never lives here, only between Cipher.Open and the outbound request (DecryptedAPIKey).
 type ArrInstance struct {
 	ID            int64
 	App           ArrApp
@@ -282,10 +279,7 @@ func (c *Cache) UpdateArrInstance(ctx context.Context, id int64, request ArrInst
 	return c.GetArrInstance(ctx, id)
 }
 
-// SetArrInstanceAPIKey reseals one connection's own credential -- a separate
-// statement from UpdateArrInstance (Seal generates a fresh nonce every
-// call, so writing it back unconditionally on every unrelated edit would be
-// silent, pointless churn).
+// SetArrInstanceAPIKey is separate from UpdateArrInstance because Seal makes a fresh nonce each call, so resealing on every edit would be churn.
 func (c *Cache) SetArrInstanceAPIKey(ctx context.Context, id int64, apiKey secrets.Secret, at int64) error {
 	if c.cipher == nil {
 		return ErrSecretsUnavailable

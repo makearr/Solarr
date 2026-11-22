@@ -14,12 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
-// Indexer is one search provider connection (stage 5, ADR-37/43/47): Newznab
-// or Torznab, spoken natively rather than through Cardigann (ADR-43). The
-// raw key is never part of this type -- it exists only between Cipher.Open
-// and the one outbound request that needs it (DecryptedIndexerAPIKey), the
-// same shape ArrInstance already uses. Unlike ArrInstance's own key,
-// HasAPIKey may be false: a public Torznab endpoint can need none at all.
+// Indexer is one Newznab/Torznab connection (ADR-37/43/47); the raw key never lives here, and HasAPIKey may be false because a public Torznab endpoint can need none.
 type Indexer struct {
 	ID        int64
 	Name      string
@@ -32,19 +27,13 @@ type Indexer struct {
 	// never assumed (ADR-43) -- empty until the first caps fetch.
 	CategoriesJSON string
 	CapsFetchedAt  *int64
-	// SettingsJSON is ADR-47's own egress block ({proxy_url, flaresolverr_url}),
-	// expert tier. FlareSolverr is not wired yet (needs its own cached-cookie
-	// state, not just a client-construction change) -- Egress only ever reads
-	// ProxyURL from it today.
+	// SettingsJSON holds ADR-47's egress block (expert tier); FlareSolverr is not wired yet, so only ProxyURL is read.
 	SettingsJSON string
 	CreatedAt    int64
 	UpdatedAt    int64
 }
 
-// IndexerEgress is ADR-47's own egress block, encoded into Indexer.
-// SettingsJSON under the "egress" key. FlareSolverr's own cached-cookie
-// state deliberately has no field here yet -- it needs more than a URL to
-// represent (todo, private/questions.md).
+// IndexerEgress is ADR-47's egress block under Indexer.SettingsJSON key "egress"; FlareSolverr has no field yet because it needs cookie state, not just a URL.
 type IndexerEgress struct {
 	ProxyURL string `json:"proxy_url,omitempty"`
 	// FlareSolverrURL is set only by ResolveEgress, from the indexer's chosen FlareSolverr proxy.
@@ -174,10 +163,7 @@ func buildIndexerSettingsJSON(request IndexerRequest) string {
 	return string(encoded)
 }
 
-// IndexerRequest is what CreateIndexer/UpdateIndexer accept for a
-// connection's own facts -- never the API key, which has its own dedicated
-// path (Create's own apiKey argument, SetIndexerAPIKey), the same split
-// ArrInstanceRequest already uses.
+// IndexerRequest carries a connection's facts, never the API key, which has its own path (Create's apiKey argument, SetIndexerAPIKey).
 type IndexerRequest struct {
 	Name           string
 	Impl           string
@@ -357,11 +343,7 @@ func (c *Cache) UpdateIndexer(ctx context.Context, id int64, request IndexerRequ
 	return c.GetIndexer(ctx, id)
 }
 
-// SetIndexerAPIKey reseals one connection's own credential, or clears it
-// (apiKey.IsZero()) -- a separate statement from UpdateIndexer, the same
-// reasoning ArrInstance's own SetArrInstanceAPIKey gives: Seal generates a
-// fresh nonce every call, so writing it back unconditionally on every
-// unrelated edit would be silent, pointless churn.
+// SetIndexerAPIKey reseals or clears (apiKey.IsZero()) the key, separate from UpdateIndexer because Seal makes a fresh nonce each call.
 func (c *Cache) SetIndexerAPIKey(ctx context.Context, id int64, apiKey secrets.Secret, at int64) error {
 	if !apiKey.IsZero() && c.cipher == nil {
 		return ErrSecretsUnavailable
@@ -381,10 +363,7 @@ func (c *Cache) SetIndexerAPIKey(ctx context.Context, id int64, apiKey secrets.S
 	return nil
 }
 
-// DecryptedIndexerAPIKey opens id's own sealed key -- the one place the raw
-// credential exists, for the one call site (the search/caps client) that
-// must actually send it. Every other reader sees only HasAPIKey. Returns a
-// zero Secret, no error, for an indexer that has no key configured at all.
+// DecryptedIndexerAPIKey is the one place the raw key exists, for the search/caps client; no key configured returns a zero Secret, no error.
 func (c *Cache) DecryptedIndexerAPIKey(ctx context.Context, id int64) (secrets.Secret, error) {
 	row, err := c.queries.GetIndexer(ctx, id)
 	if err != nil {

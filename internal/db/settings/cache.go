@@ -103,10 +103,7 @@ type backupOnChange struct {
 	keep int
 }
 
-// EnableBackupOnChange makes every successful write back settings.db up and prune to
-// keep, best-effort: a failed backup is logged, never returned to the caller whose
-// settings change already committed. Without calling this, Cache never backs up on
-// its own -- a plain NewCache never does, which is what every existing caller gets.
+// EnableBackupOnChange backs up and prunes settings.db after every write, best-effort: a failed backup is logged, never returned; plain NewCache never backs up.
 func (c *Cache) EnableBackupOnChange(dir string, keep int, logger *slog.Logger) {
 	c.backupOnChange = &backupOnChange{dir: dir, keep: keep}
 	if logger != nil {
@@ -114,10 +111,7 @@ func (c *Cache) EnableBackupOnChange(dir string, keep int, logger *slog.Logger) 
 	}
 }
 
-// EnableSecrets equips the cache to seal and open an *Arr instance's own API
-// key -- optional the same way EnableBackupOnChange is: without calling
-// this, CreateArrInstance/SetArrInstanceAPIKey/DecryptedAPIKey all refuse
-// with ErrSecretsUnavailable rather than ever writing an unencrypted key.
+// EnableSecrets lets the cache seal and open *Arr keys; without it those paths refuse with ErrSecretsUnavailable rather than write a plaintext key.
 func (c *Cache) EnableSecrets(cipher *secrets.Cipher) {
 	c.cipher = cipher
 }

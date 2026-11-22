@@ -23,10 +23,7 @@ type profileShape struct {
 	} `json:"targets"`
 }
 
-// AutoTarget is the target a library aims for when it asks for none of its own: the average of its first quality
-// profile, taking what the profile ranks first for each kind of thing (resolution, codec, channels, file type) and the
-// middle of each number's range (its ideal, else the mean of its minimum and maximum). ok is false when the profile
-// says nothing a target could aim for.
+// AutoTarget is what a library aims for with no target of its own: the first quality profile's top-ranked kinds and mid-range numbers; ok is false when it says nothing to aim for.
 func AutoTarget(profile QualityProfile, mediaType string) (target QualityTarget, ok bool) {
 	var shape profileShape
 	if json.Unmarshal([]byte(profile.RulesJSON), &shape) != nil {

@@ -18,10 +18,7 @@ type DownloadFolder struct {
 	Path       string
 	Label      string
 	CategoryID *int64
-	// Readable is probed once, at creation, by the caller (apiserver owns
-	// the real filesystem check, the same split AddRootFolder already
-	// keeps). Nothing refreshes it after -- the same gap root_folder.writable
-	// had before the capacity job existed to poll it.
+	// Readable is probed once at creation by the caller (apiserver owns the filesystem check) and nothing refreshes it afterwards.
 	Readable       bool
 	ReadableReason string
 	// Watch imports each settled entry once (2026-09-19 review).
