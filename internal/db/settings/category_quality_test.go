@@ -152,6 +152,8 @@ func TestDeleteQualityProfile_RefusedWhileAnyLibraryListsIt(t *testing.T) {
 	var inUse *settings.InUseError
 	if err := cache.DeleteQualityProfile(t.Context(), ids["Space conscious"]); !errors.As(err, &inUse) {
 		t.Errorf("deleting a fallback profile: err = %v, want InUseError", err)
+	} else if want := `settings: quality profile "Space conscious" is still referenced by 1 categories`; !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("message = %q, want it to start with %q", err.Error(), want)
 	}
 }
 

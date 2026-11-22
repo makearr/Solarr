@@ -28,6 +28,8 @@ type Reference struct {
 type InUseError struct {
 	Entity     string
 	ID         int64
+	// Name is what the user calls the entity; the message shows it instead of the internal id when set.
+	Name       string
 	References []Reference
 	// Hint says what to do instead, when there is something.
 	Hint string
@@ -38,7 +40,11 @@ func (e *InUseError) Error() string {
 	for _, reference := range e.References {
 		parts = append(parts, fmt.Sprintf("%d %s", reference.Count, reference.Kind))
 	}
-	message := fmt.Sprintf("settings: %s %d is still referenced by %s", e.Entity, e.ID, strings.Join(parts, " and "))
+	subject := strconv.FormatInt(e.ID, 10)
+	if e.Name != "" {
+		subject = strconv.Quote(e.Name)
+	}
+	message := fmt.Sprintf("settings: %s %s is still referenced by %s", e.Entity, subject, strings.Join(parts, " and "))
 	if e.Hint != "" {
 		message += "; " + e.Hint
 	}
@@ -530,7 +536,8 @@ func (c *Cache) UpdateQualityProfile(ctx context.Context, id int64, name, rulesJ
 // see that) -- not yet possible to create, since desired_item creation for music
 // is itself blocked on this profile system existing at all.
 func (c *Cache) DeleteQualityProfile(ctx context.Context, id int64) error {
-	if _, found := c.Snapshot().QualityProfile(id); !found {
+	profile, found := c.Snapshot().QualityProfile(id)
+	if !found {
 		return fmt.Errorf("%w: quality profile %d", ErrNotFound, id)
 	}
 	categories, err := c.queries.CountCategoryListsUsingQualityProfile(ctx, id)
@@ -538,7 +545,7 @@ func (c *Cache) DeleteQualityProfile(ctx context.Context, id int64) error {
 		return fmt.Errorf("settings: count categories for quality profile %d: %w", id, err)
 	}
 	if categories > 0 {
-		return &InUseError{Entity: "quality profile", ID: id,
+		return &InUseError{Entity: "quality profile", ID: id, Name: profile.Name,
 			References: []Reference{{Kind: "categories", Count: categories}}}
 	}
 	lists, err := c.queries.CountImportListsUsingQualityProfile(ctx, sql.NullInt64{Int64: id, Valid: true})
@@ -552,7 +559,7 @@ func (c *Cache) DeleteQualityProfile(ctx context.Context, id int64) error {
 		}
 	}
 	if references := countedReferences(Reference{"import lists", lists}, Reference{"items pinned to it", pinned}); len(references) > 0 {
-		return &InUseError{Entity: "quality profile", ID: id, References: references}
+		return &InUseError{Entity: "quality profile", ID: id, Name: profile.Name, References: references}
 	}
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		return queries.DeleteQualityProfile(ctx, id)
@@ -575,7 +582,7 @@ func (c *Cache) ReplaceQualityProfile(ctx context.Context, id, replacementID int
 		return fmt.Errorf("settings: count categories for quality profile %d: %w", id, err)
 	}
 	if categories > 0 {
-		return &InUseError{Entity: "quality profile", ID: id, References: []Reference{{Kind: "categories", Count: categories}}}
+		return &InUseError{Entity: "quality profile", ID: id, Name: from.Name, References: []Reference{{Kind: "categories", Count: categories}}}
 	}
 	if c.libraryUsage != nil {
 		if err := c.libraryUsage.RepointProfile(ctx, id, replacementID); err != nil {
@@ -702,7 +709,8 @@ func (c *Cache) UpdateLanguageProfile(ctx context.Context, id int64, profile Lan
 // DeleteLanguageProfile removes a language profile, or refuses and says which
 // categories still default to it.
 func (c *Cache) DeleteLanguageProfile(ctx context.Context, id int64) error {
-	if _, found := c.Snapshot().LanguageProfile(id); !found {
+	profile, found := c.Snapshot().LanguageProfile(id)
+	if !found {
 		return fmt.Errorf("%w: language profile %d", ErrNotFound, id)
 	}
 	categories, err := c.queries.CountCategoriesUsingLanguageProfile(ctx, sql.NullInt64{Int64: id, Valid: true})
@@ -710,7 +718,7 @@ func (c *Cache) DeleteLanguageProfile(ctx context.Context, id int64) error {
 		return fmt.Errorf("settings: count categories for language profile %d: %w", id, err)
 	}
 	if categories > 0 {
-		return &InUseError{Entity: "language profile", ID: id,
+		return &InUseError{Entity: "language profile", ID: id, Name: profile.Name,
 			References: []Reference{{Kind: "categories", Count: categories}}}
 	}
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
