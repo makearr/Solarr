@@ -26,8 +26,8 @@ type Reference struct {
 
 // InUseError reports a refused deletion and everything that caused it.
 type InUseError struct {
-	Entity     string
-	ID         int64
+	Entity string
+	ID     int64
 	// Name is what the user calls the entity; the message shows it instead of the internal id when set.
 	Name       string
 	References []Reference

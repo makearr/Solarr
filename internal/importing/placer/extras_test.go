@@ -2,6 +2,7 @@ package placer_test
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -79,7 +80,7 @@ func TestExtrasCarryALanguageNamedSubsFileOfASingleVideo(t *testing.T) {
 	if err := fsys.Remove("/lib/Film (2001)/Film (2001).en.srt"); err != nil {
 		t.Fatal(err)
 	}
-	two := append(owners, placer.Owner{SourceRel: "Film/Film2.mkv", DestRel: "Film (2001)/Film2.mkv"})
+	two := append(slices.Clone(owners), placer.Owner{SourceRel: "Film/Film2.mkv", DestRel: "Film (2001)/Film2.mkv"})
 	if got := p.Extras(t.Context(), []string{"srt"}, "/in", settings.RootFolder{ID: 7, Path: "/lib"}, others, two, []mover.PlaceMethod{mover.PlaceCopy}); len(got) != 0 {
 		t.Fatalf("with two videos the subtitle belongs to neither: %+v", got)
 	}
