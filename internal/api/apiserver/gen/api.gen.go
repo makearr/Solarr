@@ -1056,6 +1056,20 @@ const (
 	WorkPartAvailableConfidenceUnknown WorkPartAvailableConfidence = "unknown"
 )
 
+// Defines values for WorkPlaybackScope.
+const (
+	WorkPlaybackScopeEveryone WorkPlaybackScope = "everyone"
+	WorkPlaybackScopeNone     WorkPlaybackScope = "none"
+	WorkPlaybackScopeOwn      WorkPlaybackScope = "own"
+)
+
+// Defines values for WorkWatchStatus.
+const (
+	WorkWatchStatusInProgress WorkWatchStatus = "in_progress"
+	WorkWatchStatusNo         WorkWatchStatus = "no"
+	WorkWatchStatusYes        WorkWatchStatus = "yes"
+)
+
 // Defines values for GetCategorySimilarVideosParamsLevel.
 const (
 	GetCategorySimilarVideosParamsLevelExact  GetCategorySimilarVideosParamsLevel = "exact"
@@ -1205,6 +1219,34 @@ const (
 const (
 	ListWorksParamsDirAsc  ListWorksParamsDir = "asc"
 	ListWorksParamsDirDesc ListWorksParamsDir = "desc"
+)
+
+// Defines values for ListWorksParamsWatched.
+const (
+	ListWorksParamsWatchedInProgress ListWorksParamsWatched = "in_progress"
+	ListWorksParamsWatchedNo         ListWorksParamsWatched = "no"
+	ListWorksParamsWatchedYes        ListWorksParamsWatched = "yes"
+)
+
+// Defines values for BulkEditWorksJSONBodyWatched.
+const (
+	BulkEditWorksJSONBodyWatchedInProgress BulkEditWorksJSONBodyWatched = "in_progress"
+	BulkEditWorksJSONBodyWatchedNo         BulkEditWorksJSONBodyWatched = "no"
+	BulkEditWorksJSONBodyWatchedYes        BulkEditWorksJSONBodyWatched = "yes"
+)
+
+// Defines values for BulkMoveWorksToLibraryJSONBodyWatched.
+const (
+	BulkMoveWorksToLibraryJSONBodyWatchedInProgress BulkMoveWorksToLibraryJSONBodyWatched = "in_progress"
+	BulkMoveWorksToLibraryJSONBodyWatchedNo         BulkMoveWorksToLibraryJSONBodyWatched = "no"
+	BulkMoveWorksToLibraryJSONBodyWatchedYes        BulkMoveWorksToLibraryJSONBodyWatched = "yes"
+)
+
+// Defines values for BulkSetWorkMonitoredJSONBodyWatched.
+const (
+	BulkSetWorkMonitoredJSONBodyWatchedInProgress BulkSetWorkMonitoredJSONBodyWatched = "in_progress"
+	BulkSetWorkMonitoredJSONBodyWatchedNo         BulkSetWorkMonitoredJSONBodyWatched = "no"
+	BulkSetWorkMonitoredJSONBodyWatchedYes        BulkSetWorkMonitoredJSONBodyWatched = "yes"
 )
 
 // Defines values for GetWorkArtworkParamsSize.
@@ -5713,6 +5755,21 @@ type RecycleBinLimits struct {
 	MinFreePercent *int64 `json:"min_free_percent,omitempty"`
 }
 
+// RecycleWatchedRequest defines model for RecycleWatchedRequest.
+type RecycleWatchedRequest struct {
+	Days      *int    `json:"days,omitempty"`
+	Preview   *bool   `json:"preview,omitempty"`
+	Unmonitor *bool   `json:"unmonitor,omitempty"`
+	WorkIds   []int64 `json:"work_ids"`
+}
+
+// RecycleWatchedResult defines model for RecycleWatchedResult.
+type RecycleWatchedResult struct {
+	Bytes int64 `json:"bytes"`
+	Files int   `json:"files"`
+	Works int   `json:"works"`
+}
+
 // Rejection One failed gate, as data rather than a formatted string (ADR-10).
 type Rejection struct {
 	Field  string `json:"field"`
@@ -6758,6 +6815,25 @@ type WantedPartPage struct {
 	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
+// WatchedPage defines model for WatchedPage.
+type WatchedPage struct {
+	CountedUsers int           `json:"counted_users"`
+	Items        []WatchedWork `json:"items"`
+	NextCursor   *string       `json:"next_cursor,omitempty"`
+}
+
+// WatchedWork defines model for WatchedWork.
+type WatchedWork struct {
+	FileCount    int64  `json:"file_count"`
+	LastPlayedAt *int64 `json:"last_played_at,omitempty"`
+	Of           int    `json:"of"`
+	SizeBytes    int64  `json:"size_bytes"`
+	Title        string `json:"title"`
+	WatchedBy    int    `json:"watched_by"`
+	WorkId       int64  `json:"work_id"`
+	Year         *int   `json:"year,omitempty"`
+}
+
 // Work defines model for Work.
 type Work struct {
 	AddedAt time.Time `json:"added_at"`
@@ -6823,6 +6899,7 @@ type Work struct {
 
 	// WantedState Set when this work has a monitored desired_item, regardless of whether the wanted filter was used.
 	WantedState *WorkWantedState `json:"wanted_state,omitempty"`
+	Watch       *WorkWatch       `json:"watch,omitempty"`
 	Year        *int             `json:"year,omitempty"`
 }
 
@@ -7079,6 +7156,37 @@ type WorkPartPage struct {
 	NextCursor *string    `json:"next_cursor,omitempty"`
 }
 
+// WorkPlay defines model for WorkPlay.
+type WorkPlay struct {
+	DurationMs   int64  `json:"duration_ms"`
+	LastPlayedAt *int64 `json:"last_played_at,omitempty"`
+	Played       bool   `json:"played"`
+	PositionMs   int64  `json:"position_ms"`
+
+	// User The server user's name; empty for the caller's own.
+	User string `json:"user"`
+}
+
+// WorkPlayback defines model for WorkPlayback.
+type WorkPlayback struct {
+	CountedUsers int                `json:"counted_users"`
+	Parts        []WorkPlaybackPart `json:"parts"`
+	Scope        WorkPlaybackScope  `json:"scope"`
+}
+
+// WorkPlaybackScope defines model for WorkPlayback.Scope.
+type WorkPlaybackScope string
+
+// WorkPlaybackPart defines model for WorkPlaybackPart.
+type WorkPlaybackPart struct {
+	MediaRef string `json:"media_ref"`
+
+	// PartId 0 is the whole work.
+	PartId int64      `json:"part_id"`
+	Plays  []WorkPlay `json:"plays"`
+	Title  string     `json:"title"`
+}
+
 // WorkScore One metadata provider's rating of a work, normalised to 0 to 10.
 type WorkScore struct {
 	Provider string  `json:"provider"`
@@ -7087,6 +7195,21 @@ type WorkScore struct {
 	// Votes Votes behind the score; 0 when the provider gave none.
 	Votes int64 `json:"votes"`
 }
+
+// WorkWatch defines model for WorkWatch.
+type WorkWatch struct {
+	LastPlayedAt *int64 `json:"last_played_at,omitempty"`
+
+	// Of Counted users; shown to an administrator only.
+	Of     *int            `json:"of,omitempty"`
+	Status WorkWatchStatus `json:"status"`
+
+	// WatchedBy Counted users who played all of it; shown to an administrator only.
+	WatchedBy *int `json:"watched_by,omitempty"`
+}
+
+// WorkWatchStatus defines model for WorkWatch.Status.
+type WorkWatchStatus string
 
 // SearchGroup defines model for SearchGroup.
 type SearchGroup = string
@@ -7495,6 +7618,13 @@ type ListJobsParams struct {
 // SetLibraryLastLevelJSONBody defines parameters for SetLibraryLastLevel.
 type SetLibraryLastLevelJSONBody struct {
 	Level string `json:"level"`
+}
+
+// ListWatchedWorksParams defines parameters for ListWatchedWorks.
+type ListWatchedWorksParams struct {
+	Days   *int    `form:"days,omitempty" json:"days,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListLibraryLevelParams defines parameters for ListLibraryLevel.
@@ -8005,6 +8135,9 @@ type ListWorksParams struct {
 	// Favorite Only the works the caller hearted.
 	Favorite *bool `form:"favorite,omitempty" json:"favorite,omitempty"`
 
+	// Watched Only works with this watch status as the caller sees it (a user mapped to a media server user sees their own, an administrator without a mapping sees any counted user's); nothing is filtered for a caller who sees no watch state.
+	Watched *ListWorksParamsWatched `form:"watched,omitempty" json:"watched,omitempty"`
+
 	// MediaType Only works of this media type (the All list's type chip).
 	MediaType *string `form:"media_type,omitempty" json:"media_type,omitempty"`
 
@@ -8017,6 +8150,9 @@ type ListWorksParams struct {
 
 // ListWorksParamsDir defines parameters for ListWorks.
 type ListWorksParamsDir string
+
+// ListWorksParamsWatched defines parameters for ListWorks.
+type ListWorksParamsWatched string
 
 // BulkEditWorksJSONBody defines parameters for BulkEditWorks.
 type BulkEditWorksJSONBody struct {
@@ -8051,12 +8187,18 @@ type BulkEditWorksJSONBody struct {
 	RemoveTags *[]string `json:"remove_tags,omitempty"`
 
 	// Specials With monitor_option
-	Specials     *bool   `json:"specials,omitempty"`
-	Tags         *string `json:"tags,omitempty"`
-	Wanted       *bool   `json:"wanted,omitempty"`
-	Where        *string `json:"where,omitempty"`
-	WholeLibrary *bool   `json:"whole_library,omitempty"`
+	Specials *bool   `json:"specials,omitempty"`
+	Tags     *string `json:"tags,omitempty"`
+	Wanted   *bool   `json:"wanted,omitempty"`
+
+	// Watched The list's watch-status filter as the caller sees it.
+	Watched      *BulkEditWorksJSONBodyWatched `json:"watched,omitempty"`
+	Where        *string                       `json:"where,omitempty"`
+	WholeLibrary *bool                         `json:"whole_library,omitempty"`
 }
+
+// BulkEditWorksJSONBodyWatched defines parameters for BulkEditWorks.
+type BulkEditWorksJSONBodyWatched string
 
 // BulkMoveWorksToLibraryJSONBody defines parameters for BulkMoveWorksToLibrary.
 type BulkMoveWorksToLibraryJSONBody struct {
@@ -8081,13 +8223,19 @@ type BulkMoveWorksToLibraryJSONBody struct {
 	OwnProfile *bool `json:"own_profile,omitempty"`
 
 	// PersonId The list's person filter.
-	PersonId     *int64  `json:"person_id,omitempty"`
-	Preview      *bool   `json:"preview,omitempty"`
-	Tags         *string `json:"tags,omitempty"`
-	Wanted       *bool   `json:"wanted,omitempty"`
-	Where        *string `json:"where,omitempty"`
-	WholeLibrary *bool   `json:"whole_library,omitempty"`
+	PersonId *int64  `json:"person_id,omitempty"`
+	Preview  *bool   `json:"preview,omitempty"`
+	Tags     *string `json:"tags,omitempty"`
+	Wanted   *bool   `json:"wanted,omitempty"`
+
+	// Watched The list's watch-status filter as the caller sees it.
+	Watched      *BulkMoveWorksToLibraryJSONBodyWatched `json:"watched,omitempty"`
+	Where        *string                                `json:"where,omitempty"`
+	WholeLibrary *bool                                  `json:"whole_library,omitempty"`
 }
+
+// BulkMoveWorksToLibraryJSONBodyWatched defines parameters for BulkMoveWorksToLibrary.
+type BulkMoveWorksToLibraryJSONBodyWatched string
 
 // BulkSetWorkMonitoredJSONBody defines parameters for BulkSetWorkMonitored.
 type BulkSetWorkMonitoredJSONBody struct {
@@ -8125,12 +8273,18 @@ type BulkSetWorkMonitoredJSONBody struct {
 	// Wanted The list's Wanted filter.
 	Wanted *bool `json:"wanted,omitempty"`
 
+	// Watched The list's watch-status filter as the caller sees it.
+	Watched *BulkSetWorkMonitoredJSONBodyWatched `json:"watched,omitempty"`
+
 	// Where The list's custom filter (the JSON the list carried)
 	Where *string `json:"where,omitempty"`
 
 	// WholeLibrary The selection is of the library's All list.
 	WholeLibrary *bool `json:"whole_library,omitempty"`
 }
+
+// BulkSetWorkMonitoredJSONBodyWatched defines parameters for BulkSetWorkMonitored.
+type BulkSetWorkMonitoredJSONBodyWatched string
 
 // RemoveWorkExclusionParams defines parameters for RemoveWorkExclusion.
 type RemoveWorkExclusionParams struct {
@@ -8490,6 +8644,9 @@ type CreateImportListJSONRequestBody = ImportListWrite
 
 // SetLibraryLastLevelJSONRequestBody defines body for SetLibraryLastLevel for application/json ContentType.
 type SetLibraryLastLevelJSONRequestBody SetLibraryLastLevelJSONBody
+
+// RecycleWatchedWorksJSONRequestBody defines body for RecycleWatchedWorks for application/json ContentType.
+type RecycleWatchedWorksJSONRequestBody = RecycleWatchedRequest
 
 // SetLibraryTypeDefaultsJSONRequestBody defines body for SetLibraryTypeDefaults for application/json ContentType.
 type SetLibraryTypeDefaultsJSONRequestBody = LibraryTypeDefaultsWrite
@@ -9282,6 +9439,12 @@ type ServerInterface interface {
 	// Remember the level last visited in this library (ADR-54).
 	// (PUT /libraries/{id}/last-level)
 	SetLibraryLastLevel(w http.ResponseWriter, r *http.Request, id int64)
+	// Works every counted user has played, last played at least so many days ago, that still have files. Administrator only.
+	// (GET /libraries/{id}/watched)
+	ListWatchedWorks(w http.ResponseWriter, r *http.Request, id int64, params ListWatchedWorksParams)
+	// Move the files of watched works to the recycle bin, optionally unmonitoring them. Administrator only.
+	// (POST /libraries/{id}/watched/recycle)
+	RecycleWatchedWorks(w http.ResponseWriter, r *http.Request, id int64)
 	// One page of one navigation level (ADR-54).
 	// (GET /libraries/{id}/{level})
 	ListLibraryLevel(w http.ResponseWriter, r *http.Request, id int64, level string, params ListLibraryLevelParams)
@@ -9369,6 +9532,9 @@ type ServerInterface interface {
 	// Replace the path pairs that turn a Solarr path into the server's.
 	// (PUT /media-servers/{id}/paths)
 	SetMediaServerPaths(w http.ResponseWriter, r *http.Request, id int64)
+	// Read the connection's watch state now instead of at the next tick.
+	// (POST /media-servers/{id}/sync-playback)
+	SyncMediaServerPlayback(w http.ResponseWriter, r *http.Request, id int64)
 	// Replace the server's users as known here, which Solarr user each is and whether they count.
 	// (PUT /media-servers/{id}/users)
 	SetMediaServerUsers(w http.ResponseWriter, r *http.Request, id int64)
@@ -9894,6 +10060,9 @@ type ServerInterface interface {
 	// Want (or stop wanting) this one track on its own, independent of the album (section 19.6's track-level SINGLE, todo 4.4).
 	// (POST /works/{id}/parts/{partId}/wanted)
 	SetTrackWanted(w http.ResponseWriter, r *http.Request, id int64, partId int64)
+	// What media server users have played of a work, per part, as the caller may see it.
+	// (GET /works/{id}/playback)
+	GetWorkPlayback(w http.ResponseWriter, r *http.Request, id int64)
 	// Read the work again from its sources, past the cache. An album is refreshed in the background (a second request while one runs is folded in); a series at once, adding new episodes. Request on its library.
 	// (POST /works/{id}/refresh)
 	RefreshWork(w http.ResponseWriter, r *http.Request, id int64)
@@ -11010,6 +11179,18 @@ func (_ Unimplemented) SetLibraryLastLevel(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Works every counted user has played, last played at least so many days ago, that still have files. Administrator only.
+// (GET /libraries/{id}/watched)
+func (_ Unimplemented) ListWatchedWorks(w http.ResponseWriter, r *http.Request, id int64, params ListWatchedWorksParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Move the files of watched works to the recycle bin, optionally unmonitoring them. Administrator only.
+// (POST /libraries/{id}/watched/recycle)
+func (_ Unimplemented) RecycleWatchedWorks(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // One page of one navigation level (ADR-54).
 // (GET /libraries/{id}/{level})
 func (_ Unimplemented) ListLibraryLevel(w http.ResponseWriter, r *http.Request, id int64, level string, params ListLibraryLevelParams) {
@@ -11181,6 +11362,12 @@ func (_ Unimplemented) SetMediaServerLibraries(w http.ResponseWriter, r *http.Re
 // Replace the path pairs that turn a Solarr path into the server's.
 // (PUT /media-servers/{id}/paths)
 func (_ Unimplemented) SetMediaServerPaths(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Read the connection's watch state now instead of at the next tick.
+// (POST /media-servers/{id}/sync-playback)
+func (_ Unimplemented) SyncMediaServerPlayback(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12231,6 +12418,12 @@ func (_ Unimplemented) RemovePart(w http.ResponseWriter, r *http.Request, id int
 // Want (or stop wanting) this one track on its own, independent of the album (section 19.6's track-level SINGLE, todo 4.4).
 // (POST /works/{id}/parts/{partId}/wanted)
 func (_ Unimplemented) SetTrackWanted(w http.ResponseWriter, r *http.Request, id int64, partId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What media server users have played of a work, per part, as the caller may see it.
+// (GET /works/{id}/playback)
+func (_ Unimplemented) GetWorkPlayback(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -18153,6 +18346,99 @@ func (siw *ServerInterfaceWrapper) SetLibraryLastLevel(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// ListWatchedWorks operation middleware
+func (siw *ServerInterfaceWrapper) ListWatchedWorks(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWatchedWorksParams
+
+	// ------------- Optional query parameter "days" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "days", r.URL.Query(), &params.Days)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "days", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWatchedWorks(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RecycleWatchedWorks operation middleware
+func (siw *ServerInterfaceWrapper) RecycleWatchedWorks(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RecycleWatchedWorks(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListLibraryLevel operation middleware
 func (siw *ServerInterfaceWrapper) ListLibraryLevel(w http.ResponseWriter, r *http.Request) {
 
@@ -19041,6 +19327,39 @@ func (siw *ServerInterfaceWrapper) SetMediaServerPaths(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetMediaServerPaths(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SyncMediaServerPlayback operation middleware
+func (siw *ServerInterfaceWrapper) SyncMediaServerPlayback(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SyncMediaServerPlayback(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -23530,6 +23849,14 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// ------------- Optional query parameter "watched" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "watched", r.URL.Query(), &params.Watched)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "watched", Err: err})
+		return
+	}
+
 	// ------------- Optional query parameter "media_type" -------------
 
 	err = runtime.BindQueryParameter("form", true, false, "media_type", r.URL.Query(), &params.MediaType)
@@ -24800,6 +25127,39 @@ func (siw *ServerInterfaceWrapper) SetTrackWanted(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetWorkPlayback operation middleware
+func (siw *ServerInterfaceWrapper) GetWorkPlayback(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWorkPlayback(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RefreshWork operation middleware
 func (siw *ServerInterfaceWrapper) RefreshWork(w http.ResponseWriter, r *http.Request) {
 
@@ -25677,6 +26037,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Put(options.BaseURL+"/libraries/{id}/last-level", wrapper.SetLibraryLastLevel)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/libraries/{id}/watched", wrapper.ListWatchedWorks)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/libraries/{id}/watched/recycle", wrapper.RecycleWatchedWorks)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/libraries/{id}/{level}", wrapper.ListLibraryLevel)
 	})
 	r.Group(func(r chi.Router) {
@@ -25762,6 +26128,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/media-servers/{id}/paths", wrapper.SetMediaServerPaths)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/media-servers/{id}/sync-playback", wrapper.SyncMediaServerPlayback)
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/media-servers/{id}/users", wrapper.SetMediaServerUsers)
@@ -26287,6 +26656,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/wanted", wrapper.SetTrackWanted)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works/{id}/playback", wrapper.GetWorkPlayback)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/refresh", wrapper.RefreshWork)

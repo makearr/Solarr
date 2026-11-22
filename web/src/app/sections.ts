@@ -109,7 +109,10 @@ function ownSections(categoryId: string): readonly Section[] {
     {
       key: `library:${categoryId}:wanted`,
       label: "Wanted",
-      tabs: [{ label: "Wanted", path: `${base}/wanted`, tier: "normal" }],
+      tabs: [
+        { label: "Wanted", path: `${base}/wanted`, tier: "normal" },
+        { label: "Watched", path: `${base}/watched`, tier: "advanced", administrator: true },
+      ],
     },
     {
       key: `library:${categoryId}:insights`,

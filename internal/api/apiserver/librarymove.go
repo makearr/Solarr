@@ -93,6 +93,7 @@ func (s *Server) BulkMoveWorksToLibrary(w http.ResponseWriter, r *http.Request) 
 		Where: derefOr(body.Where, ""), AboveRating: derefOr(body.AboveRating, false), OwnProfile: derefOr(body.OwnProfile, false), MediaType: derefOr(body.MediaType, ""),
 		PersonID: derefOr(body.PersonId, 0), FavoriteUserID: favoriteViewer(body.Favorite, access),
 	}
+	selection.Watched, selection.WatchPairs = s.watchFilterOf(r.Context(), access, enumString(body.Watched))
 	if selection.TagIDs, selection.ExcludedTagIDs, err = parseTagChips(derefOr(body.Tags, "")); err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "tags must be tag ids, a negative one to leave out")
 		return

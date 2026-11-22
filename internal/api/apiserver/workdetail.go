@@ -225,6 +225,9 @@ type BulkSelection struct {
 	PersonID int64
 	// FavoriteUserID is the list's favorites-only filter as the viewer's id, 0 for none.
 	FavoriteUserID int64
+	// Watched and WatchPairs are the list's watch-status filter as the viewer sees it.
+	Watched    string
+	WatchPairs []WatchPair
 }
 
 // WorksMonitor toggles monitored state at the album and part level (section
@@ -599,6 +602,7 @@ func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 		Where: derefOr(body.Where, ""), AboveRating: derefOr(body.AboveRating, false), OwnProfile: derefOr(body.OwnProfile, false), MediaType: derefOr(body.MediaType, ""),
 		PersonID: derefOr(body.PersonId, 0), FavoriteUserID: favoriteViewer(body.Favorite, access),
 	}
+	selection.Watched, selection.WatchPairs = s.watchFilterOf(r.Context(), access, enumString(body.Watched))
 	if selection.TagIDs, selection.ExcludedTagIDs, err = parseTagChips(derefOr(body.Tags, "")); err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "tags must be tag ids, a negative one to leave out")
 		return
@@ -615,7 +619,7 @@ func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 func bulkSelectionNamed(body gen.BulkSetWorkMonitoredJSONRequestBody) bool {
 	return len(derefOr(body.Ids, nil)) > 0 || body.CategoryId != nil || derefOr(body.WholeLibrary, false) ||
 		derefOr(body.Fresh, false) || derefOr(body.Wanted, false) || derefOr(body.CutoffUnmet, false) ||
-		derefOr(body.AboveRating, false) || derefOr(body.OwnProfile, false) || derefOr(body.Favorite, false) || derefOr(body.Where, "") != "" ||
+		derefOr(body.AboveRating, false) || derefOr(body.OwnProfile, false) || derefOr(body.Favorite, false) || body.Watched != nil || derefOr(body.Where, "") != "" ||
 		derefOr(body.Tags, "") != "" || derefOr(body.MediaType, "") != "" || derefOr(body.PersonId, 0) != 0
 }
 

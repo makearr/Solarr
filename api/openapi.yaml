@@ -2294,6 +2294,7 @@ paths:
                 own_profile: { type: boolean, default: false, description: The list's own quality profile filter. }
                 person_id: { type: integer, format: int64, description: The list's person filter. }
                 favorite: { type: boolean, default: false, description: The list's favorites-only filter. }
+                watched: { type: string, enum: [yes, no, in_progress], description: The list's watch-status filter as the caller sees it. }
                 whole_library: { type: boolean, default: false }
                 media_type: { type: string }
                 wanted: { type: boolean, default: false }
@@ -2768,6 +2769,12 @@ paths:
           in: query
           description: Only the works the caller hearted.
           schema: { type: boolean, default: false }
+        - name: watched
+          in: query
+          description: >-
+            Only works with this watch status as the caller sees it (a user mapped to a media server user sees their own, an
+            administrator without a mapping sees any counted user's); nothing is filtered for a caller who sees no watch state.
+          schema: { type: string, enum: [yes, no, in_progress] }
         - name: media_type
           in: query
           description: Only works of this media type (the All list's type chip).
@@ -3041,6 +3048,22 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/MediaServer" }
         "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /media-servers/{id}/sync-playback:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: syncMediaServerPlayback
+      tags: [settings]
+      summary: Read the connection's watch state now instead of at the next tick.
+      responses:
+        "202": { description: Queued. }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
@@ -4298,6 +4321,88 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /works/{id}/playback:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getWorkPlayback
+      tags: [library]
+      summary: What media server users have played of a work, per part, as the caller may see it.
+      description: >-
+        A user mapped to a media server user sees their own state; an administrator sees everyone counted, named; anyone
+        else gets an empty answer.
+      responses:
+        "200":
+          description: The state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkPlayback" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /libraries/{id}/watched:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: listWatchedWorks
+      tags: [library]
+      summary: Works every counted user has played, last played at least so many days ago, that still have files. Administrator only.
+      parameters:
+        - name: days
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 3650, default: 30 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: One page, in work order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WatchedPage" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /libraries/{id}/watched/recycle:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: recycleWatchedWorks
+      tags: [library]
+      summary: Move the files of watched works to the recycle bin, optionally unmonitoring them. Administrator only.
+      description: >-
+        Only works still on the watched list qualify; the rest of the ids are skipped. With preview the consequences are
+        counted and nothing changes. Everything goes through the recycle bin and can be restored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecycleWatchedRequest" }
+      responses:
+        "200":
+          description: What was, or with preview would be, done.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecycleWatchedResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /works/{id}/parts:
     parameters:
       - name: id
@@ -4662,6 +4767,7 @@ paths:
                 own_profile: { type: boolean, default: false, description: The list's own quality profile filter. }
                 person_id: { type: integer, format: int64, description: The list's person filter. }
                 favorite: { type: boolean, default: false, description: The list's favorites-only filter. }
+                watched: { type: string, enum: [yes, no, in_progress], description: The list's watch-status filter as the caller sees it. }
                 whole_library: { type: boolean, default: false, description: The selection is of the library's All list. }
                 media_type: { type: string, description: The All list's type chip. }
                 wanted: { type: boolean, default: false, description: The list's Wanted filter. }
@@ -4711,6 +4817,7 @@ paths:
                 own_profile: { type: boolean, default: false, description: The list's own quality profile filter. }
                 person_id: { type: integer, format: int64, description: The list's person filter. }
                 favorite: { type: boolean, default: false, description: The list's favorites-only filter. }
+                watched: { type: string, enum: [yes, no, in_progress], description: The list's watch-status filter as the caller sees it. }
                 whole_library: { type: boolean, default: false }
                 media_type: { type: string }
                 wanted: { type: boolean, default: false }
@@ -11365,6 +11472,72 @@ components:
         acquisitions: { type: integer, format: int64 }
         import_units: { type: integer, format: int64 }
 
+    WorkWatch:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [yes, no, in_progress] }
+        watched_by: { type: integer, description: Counted users who played all of it; shown to an administrator only. }
+        of: { type: integer, description: Counted users; shown to an administrator only. }
+        last_played_at: { type: integer, format: int64 }
+    WorkPlay:
+      type: object
+      required: [user, played, position_ms, duration_ms]
+      properties:
+        user: { type: string, description: The server user's name; empty for the caller's own. }
+        played: { type: boolean }
+        position_ms: { type: integer, format: int64 }
+        duration_ms: { type: integer, format: int64 }
+        last_played_at: { type: integer, format: int64 }
+    WorkPlaybackPart:
+      type: object
+      required: [part_id, media_ref, title, plays]
+      properties:
+        part_id: { type: integer, format: int64, description: 0 is the whole work. }
+        media_ref: { type: string }
+        title: { type: string }
+        plays: { type: array, items: { $ref: "#/components/schemas/WorkPlay" } }
+    WorkPlayback:
+      type: object
+      required: [scope, counted_users, parts]
+      properties:
+        scope: { type: string, enum: [own, everyone, none] }
+        counted_users: { type: integer }
+        parts: { type: array, items: { $ref: "#/components/schemas/WorkPlaybackPart" } }
+    WatchedWork:
+      type: object
+      required: [work_id, title, watched_by, of, size_bytes, file_count]
+      properties:
+        work_id: { type: integer, format: int64 }
+        title: { type: string }
+        year: { type: integer }
+        watched_by: { type: integer }
+        of: { type: integer }
+        last_played_at: { type: integer, format: int64 }
+        size_bytes: { type: integer, format: int64 }
+        file_count: { type: integer, format: int64 }
+    WatchedPage:
+      type: object
+      required: [items, counted_users]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/WatchedWork" } }
+        counted_users: { type: integer }
+        next_cursor: { type: string }
+    RecycleWatchedRequest:
+      type: object
+      required: [work_ids]
+      properties:
+        work_ids: { type: array, items: { type: integer, format: int64 }, maxItems: 200 }
+        days: { type: integer, minimum: 0, maximum: 3650, default: 30 }
+        unmonitor: { type: boolean, default: false }
+        preview: { type: boolean, default: false }
+    RecycleWatchedResult:
+      type: object
+      required: [works, files, bytes]
+      properties:
+        works: { type: integer }
+        files: { type: integer }
+        bytes: { type: integer, format: int64 }
     Work:
       type: object
       required: [id, media_type, title, sort_title, added_at, updated_at]
@@ -11373,6 +11546,7 @@ components:
         badge_url: { type: string, description: "The logo that marks the work's tile, its organisation in the type's badge role (a series' network); absent for none." }
         badge_name: { type: string, description: The name of the organisation the badge is the logo of. }
         narrators: { type: string, description: "An audiobook's readers, comma-joined; absent on any other work." }
+        watch: { $ref: "#/components/schemas/WorkWatch" }
         lead_id:
           type: integer
           format: int64

@@ -53,6 +53,19 @@ from its Connections page, with the user name filled in for you.
 
 Adding a client that reports a finished-downloads folder Solarr can read also watches that folder. If the client names its download folder differently from Solarr, set the path mapping on the client.
 
+## Media servers
+
+**Connections → Media servers → Add**: pick Jellyfin, Navidrome, Audiobookshelf, Kavita, Calibre or Stash, enter the
+address and key (or user name and password), press **Test**, then map each Solarr library to one of the server's and,
+when the server sees the folders under another path, add the path pair.
+
+- **Told about new files**: after an import, move, rename or recycle the server is asked to look at just those folders.
+- **Watch state**: tick it, save, press **Read watch state now**, then match the server's people to Solarr accounts.
+  Work tiles then show a check or an eye, and the work list can filter by watched.
+- **Watched** (under Wanted, advanced tier, administrator): what everyone has played and can go to the recycle bin.
+
+Details: [media-servers.md](../media-servers.md).
+
 ## What the dashboard tells you
 
 It lists what is missing (no indexer, no client, a root folder out of space) until it is fixed. For how

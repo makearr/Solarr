@@ -15,6 +15,7 @@ import { MenuCheck } from "@/ui/MenuCheck";
 import { CoverArt } from "./CoverArt";
 import { ActionButtons, MonitorToggle, useItemActions } from "./LevelItemActions";
 import { ArtistCoverMark, Poster } from "./Poster";
+import { WatchBadge } from "./WatchBadge";
 import { formatBytes } from "./Queue";
 
 /** One album or artist as Radarr's index views show it (asked 2026-09-30), whichever list it came from. */
@@ -41,6 +42,8 @@ export interface IndexEntry {
   badgeTitle?: string;
   /** What the counts count: "tracks", "episodes". */
   partsLabel?: string;
+  /** The caller's watch state of the work, from the list read. */
+  watch?: Work["watch"];
   link: LinkProps | null;
 }
 
@@ -60,6 +63,7 @@ export function workEntry(work: Work, categoryId?: string, info?: MediaTypeInfo)
     imageSrc: work.poster_url ? remoteImage(work.poster_url, "small") : undefined,
     badgeSrc: work.badge_url ? remoteImage(work.badge_url, "thumb") : undefined,
     badgeTitle: work.badge_name,
+    watch: work.watch,
     portrait: info?.work_image === "poster",
     partsLabel: info?.part.many.toLowerCase() || undefined,
     link: categoryId
@@ -128,7 +132,14 @@ export function IndexPoster({ entry, options }: { entry: IndexEntry; options: Po
         link={entry.link}
         imageSrc={entry.imageSrc}
         portrait={entry.portrait}
-        badge={entry.artistCover ? <ArtistCoverMark /> : entry.badgeSrc ? <LogoBadge src={entry.badgeSrc} title={entry.badgeTitle} /> : undefined}
+        badge={
+          entry.watch || entry.artistCover || entry.badgeSrc ? (
+            <span className="flex items-center gap-1">
+              <WatchBadge watch={entry.watch} />
+              {entry.artistCover ? <ArtistCoverMark /> : entry.badgeSrc ? <LogoBadge src={entry.badgeSrc} title={entry.badgeTitle} /> : undefined}
+            </span>
+          ) : undefined
+        }
         topLeft={options.showMonitored ? <MonitorToggle actions={actions} /> : undefined}
         heart={<EntryHeart entry={entry} />}
         hoverActions={actionable(entry) ? <ActionButtons actions={actions} showNote={false} /> : undefined}

@@ -45,6 +45,7 @@ interface levels *normal / advanced / expert* in Settings → User.
 | [mixed-libraries.md](mixed-libraries.md) | A library of several media types |
 | [rating-limit.md](rating-limit.md) | A library's maximum rating |
 | [tags.md](tags.md) | Tags and genre trees |
+| [media-servers.md](media-servers.md) | Jellyfin, Navidrome and the others: path mapping, what is pushed, watch state, the Watched list |
 | [metadata-providers.md](metadata-providers.md) | What each provider carries and which library it serves |
 | [outbound-requests.md](outbound-requests.md) | The user, fresh and background request lanes and their shares |
 | [books.md](books.md) | Books and audiobooks |

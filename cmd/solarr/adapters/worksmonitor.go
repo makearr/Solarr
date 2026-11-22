@@ -279,6 +279,7 @@ func (a WorksMonitor) matchingWorkIDs(ctx context.Context, selection apiserver.B
 		Where: where, TagIDs: selection.TagIDs, ExcludedTagIDs: selection.ExcludedTagIDs,
 		AboveRating: aboveRating(selection.AboveRating, categoryIDs, a.RatingLimit), MediaType: selection.MediaType, OwnProfileOnly: selection.OwnProfile,
 		PersonID: selection.PersonID, FavoriteUserID: selection.FavoriteUserID,
+		Watched: selection.Watched, WatchPairs: libraryPairs(selection.WatchPairs),
 	}
 	if selection.Fresh {
 		filter.FreshSince, filter.FreshRSSSince = a.Fresh.Cutoffs(a.Clock)

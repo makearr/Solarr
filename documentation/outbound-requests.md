@@ -19,3 +19,5 @@ lane and cannot pull a user's request out of the first one.
 
 "Fresh" reads the hunt queue's release dates, so an episode only the provider knows about becomes fresh once a refresh
 has stored it.
+
+Media server calls (Test, push, watch state) go through `httpx` on a bucket per connection host, Background unless marked otherwise.

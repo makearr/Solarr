@@ -165,6 +165,7 @@ const routes = [
     },
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/wanted", component: lazyRouteComponent(() => import("./work/WantedPage"), "WantedPage") }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/watched", component: lazyRouteComponent(() => import("./work/WatchedPage"), "WatchedPage") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/statistics", component: lazyRouteComponent(() => import("./Statistics"), "Statistics") }),
   // Packs moved here from Storage 2026-09-11 (a pack is one library's own
   // provenance fact, ADR-50, not a storage concern) -- still the same

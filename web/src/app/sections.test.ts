@@ -49,6 +49,6 @@ test("a page's tier is its tab's, and normal when no section lists it", () => {
 test("a library of several types has each type's pages in its sections", () => {
   const kinds = [{ categoryId: "7", label: "Series" }, { categoryId: "9", label: "Movies" }];
   const [wanted] = librarySections("7", kinds);
-  expect(labels(wanted!.tabs)).toEqual(["Wanted · Series", "Wanted · Movies"]);
+  expect(labels(wanted!.tabs)).toEqual(["Wanted · Series", "Watched · Series", "Wanted · Movies", "Watched · Movies"]);
   expect(sectionAt({ path: "/library/9/wanted" }, "7", kinds)?.key).toBe("library:7:wanted");
 });

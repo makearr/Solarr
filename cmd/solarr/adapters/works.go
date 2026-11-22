@@ -98,6 +98,8 @@ func (a Works) ListWorks(
 			MediaTypes:      filter.MediaTypes,
 			PersonID:        filter.PersonID,
 			FavoriteUserID:  filter.FavoriteUserID,
+			Watched:         filter.Watched,
+			WatchPairs:      libraryPairs(filter.WatchPairs),
 		},
 		library.WorkCursor{
 			SortTitle: cursor.SortTitle, SortYear: cursor.SortYear, SortAdded: cursor.SortAdded,
@@ -218,4 +220,12 @@ func (f FreshWindow) Cutoffs(cl clock.Clock) (since string, rssSince int64) {
 // FreshSinceCutoff resolves ADR-55's freshness window to a cutoff date string, shared by the Library list and the dashboard fresh counter so they cannot disagree.
 func FreshSinceCutoff(cl clock.Clock, days int64) string {
 	return cl.Now().AddDate(0, 0, -int(days)).Format(time.DateOnly)
+}
+
+func libraryPairs(pairs []apiserver.WatchPair) []library.PlaybackPair {
+	out := make([]library.PlaybackPair, len(pairs))
+	for i, pair := range pairs {
+		out[i] = library.PlaybackPair(pair)
+	}
+	return out
 }

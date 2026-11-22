@@ -296,6 +296,10 @@ type Config struct {
 	MediaServerClients MediaServerClients
 	// AfterMediaServerDelete drops what is queued or stored for a deleted connection; nil does nothing.
 	AfterMediaServerDelete func(ctx context.Context, serverID int64)
+	// WatchState reads the watch state stored from media servers; nil hides it.
+	WatchState WatchStateReads
+	// SyncMediaServerPlayback queues a read of one connection's watch state.
+	SyncMediaServerPlayback func(ctx context.Context, serverID int64) error
 	// CategoryMerger moves what the library holds for one category to another; nil leaves merging unavailable.
 	CategoryMerger CategoryMerger
 	// LibraryHealth answers todo 4.8's own aggregate report (unprobed files,
@@ -433,6 +437,8 @@ type Server struct {
 	arrSync                 ArrSync
 	mediaServerClients      MediaServerClients
 	afterMediaServerDelete  func(ctx context.Context, serverID int64)
+	watchState              WatchStateReads
+	syncMediaServerPlayback func(ctx context.Context, serverID int64) error
 	categoryMerger          CategoryMerger
 	libraryHealth           LibraryHealth
 	systemHealth            SystemHealthSource
@@ -577,6 +583,7 @@ func New(config Config) (*Server, error) {
 		afterWrite:              config.AfterWrite,
 		memoryCopies:            config.MemoryCopies,
 		playback:                config.Playback,
+		watchState:              config.WatchState,
 		transcoder:              config.Transcoder,
 		databaseMemory:          config.DatabaseMemory,
 		workAdder:               config.WorkAdder,
@@ -584,6 +591,7 @@ func New(config Config) (*Server, error) {
 		arrSync:                 config.ArrSync,
 		mediaServerClients:      config.MediaServerClients,
 		afterMediaServerDelete:  config.AfterMediaServerDelete,
+		syncMediaServerPlayback: config.SyncMediaServerPlayback,
 		categoryMerger:          config.CategoryMerger,
 		libraryHealth:           config.LibraryHealth,
 		systemHealth:            config.SystemHealth,
@@ -786,6 +794,10 @@ func New(config Config) (*Server, error) {
 			secured.Put("/media-servers/{id}/libraries", wrapped.SetMediaServerLibraries)
 			secured.Put("/media-servers/{id}/paths", wrapped.SetMediaServerPaths)
 			secured.Put("/media-servers/{id}/users", wrapped.SetMediaServerUsers)
+			secured.Post("/media-servers/{id}/sync-playback", wrapped.SyncMediaServerPlayback)
+			secured.Get("/works/{id}/playback", wrapped.GetWorkPlayback)
+			secured.Get("/libraries/{id}/watched", wrapped.ListWatchedWorks)
+			secured.Post("/libraries/{id}/watched/recycle", wrapped.RecycleWatchedWorks)
 			secured.Get("/arr/instances", server.ListArrInstances)
 			secured.Post("/arr/instances", server.AddArrInstance)
 			secured.Patch("/arr/instances/{id}", wrapped.UpdateArrInstance)
@@ -1315,6 +1327,10 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 	if raw := query.Get("favorite"); raw != "" {
 		favorite := raw == "true"
 		params.Favorite = &favorite
+	}
+	switch raw := gen.ListWorksParamsWatched(query.Get("watched")); raw {
+	case gen.ListWorksParamsWatchedYes, gen.ListWorksParamsWatchedNo, gen.ListWorksParamsWatchedInProgress:
+		params.Watched = &raw
 	}
 	if raw := query.Get("where"); raw != "" {
 		params.Where = &raw

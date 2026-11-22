@@ -2069,6 +2069,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/media-servers/{id}/sync-playback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read the connection's watch state now instead of at the next tick. */
+        post: operations["syncMediaServerPlayback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media-servers/{id}/users": {
         parameters: {
             query?: never;
@@ -2824,6 +2843,69 @@ export interface paths {
         get: operations["getWorkFileDetails"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/works/{id}/playback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * What media server users have played of a work, per part, as the caller may see it.
+         * @description A user mapped to a media server user sees their own state; an administrator sees everyone counted, named; anyone else gets an empty answer.
+         */
+        get: operations["getWorkPlayback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/libraries/{id}/watched": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** Works every counted user has played, last played at least so many days ago, that still have files. Administrator only. */
+        get: operations["listWatchedWorks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/libraries/{id}/watched/recycle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move the files of watched works to the recycle bin, optionally unmonitoring them. Administrator only.
+         * @description Only works still on the watched list qualify; the rest of the ids are skipped. With preview the consequences are counted and nothing changes. Everything goes through the recycle bin and can be restored.
+         */
+        post: operations["recycleWatchedWorks"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7933,6 +8015,77 @@ export interface components {
             /** Format: int64 */
             import_units: number;
         };
+        WorkWatch: {
+            /** @enum {string} */
+            status: "yes" | "no" | "in_progress";
+            /** @description Counted users who played all of it; shown to an administrator only. */
+            watched_by?: number;
+            /** @description Counted users; shown to an administrator only. */
+            of?: number;
+            /** Format: int64 */
+            last_played_at?: number;
+        };
+        WorkPlay: {
+            /** @description The server user's name; empty for the caller's own. */
+            user: string;
+            played: boolean;
+            /** Format: int64 */
+            position_ms: number;
+            /** Format: int64 */
+            duration_ms: number;
+            /** Format: int64 */
+            last_played_at?: number;
+        };
+        WorkPlaybackPart: {
+            /**
+             * Format: int64
+             * @description 0 is the whole work.
+             */
+            part_id: number;
+            media_ref: string;
+            title: string;
+            plays: components["schemas"]["WorkPlay"][];
+        };
+        WorkPlayback: {
+            /** @enum {string} */
+            scope: "own" | "everyone" | "none";
+            counted_users: number;
+            parts: components["schemas"]["WorkPlaybackPart"][];
+        };
+        WatchedWork: {
+            /** Format: int64 */
+            work_id: number;
+            title: string;
+            year?: number;
+            watched_by: number;
+            of: number;
+            /** Format: int64 */
+            last_played_at?: number;
+            /** Format: int64 */
+            size_bytes: number;
+            /** Format: int64 */
+            file_count: number;
+        };
+        WatchedPage: {
+            items: components["schemas"]["WatchedWork"][];
+            counted_users: number;
+            next_cursor?: string;
+        };
+        RecycleWatchedRequest: {
+            work_ids: number[];
+            /** @default 30 */
+            days: number;
+            /** @default false */
+            unmonitor: boolean;
+            /** @default false */
+            preview: boolean;
+        };
+        RecycleWatchedResult: {
+            works: number;
+            files: number;
+            /** Format: int64 */
+            bytes: number;
+        };
         Work: {
             /** @description The work's poster at its provider; absent for a work whose picture is its artwork (an album's cover). */
             poster_url?: string;
@@ -7942,6 +8095,7 @@ export interface components {
             badge_name?: string;
             /** @description An audiobook's readers, comma-joined; absent on any other work. */
             narrators?: string;
+            watch?: components["schemas"]["WorkWatch"];
             /**
              * Format: int64
              * @description The person the work is listed under (an album's artist), for a type with a lead role.
@@ -14226,6 +14380,11 @@ export interface operations {
                      * @default false
                      */
                     favorite?: boolean;
+                    /**
+                     * @description The list's watch-status filter as the caller sees it.
+                     * @enum {string}
+                     */
+                    watched?: "yes" | "no" | "in_progress";
                     /** @default false */
                     whole_library?: boolean;
                     media_type?: string;
@@ -14701,6 +14860,8 @@ export interface operations {
                 person_id?: number;
                 /** @description Only the works the caller hearted. */
                 favorite?: boolean;
+                /** @description Only works with this watch status as the caller sees it (a user mapped to a media server user sees their own, an administrator without a mapping sees any counted user's); nothing is filtered for a caller who sees no watch state. */
+                watched?: "yes" | "no" | "in_progress";
                 /** @description Only works of this media type (the All list's type chip). */
                 media_type?: string;
                 /** @description A custom filter, a JSON array of conditions (field, op, value) that must all hold: title, artist, genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status. */
@@ -15043,6 +15204,29 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    syncMediaServerPlayback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
@@ -16493,6 +16677,90 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
+    getWorkPlayback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkPlayback"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listWatchedWorks: {
+        parameters: {
+            query?: {
+                days?: number;
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page, in work order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchedPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    recycleWatchedWorks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecycleWatchedRequest"];
+            };
+        };
+        responses: {
+            /** @description What was, or with preview would be, done. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecycleWatchedResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
     listWorkParts: {
         parameters: {
             query?: {
@@ -16908,6 +17176,11 @@ export interface operations {
                      */
                     favorite?: boolean;
                     /**
+                     * @description The list's watch-status filter as the caller sees it.
+                     * @enum {string}
+                     */
+                    watched?: "yes" | "no" | "in_progress";
+                    /**
                      * @description The selection is of the library's All list.
                      * @default false
                      */
@@ -16980,6 +17253,11 @@ export interface operations {
                      * @default false
                      */
                     favorite?: boolean;
+                    /**
+                     * @description The list's watch-status filter as the caller sees it.
+                     * @enum {string}
+                     */
+                    watched?: "yes" | "no" | "in_progress";
                     /** @default false */
                     whole_library?: boolean;
                     media_type?: string;

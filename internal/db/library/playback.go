@@ -128,3 +128,6 @@ func (p Playback) ClearServer(ctx context.Context, serverID int64) error {
 		return librarydb.New(tx).DeletePlaybackSyncOf(ctx, serverID)
 	})
 }
+
+// Store is the opened library database, for the readers that sit beside it.
+func (p Playback) Store() *store.Store { return p.store }

@@ -125,6 +125,13 @@ function ServerForm({ kinds, server, onDone, onCancel }: { kinds: Kind[]; server
     Object.fromEntries((server?.libraries ?? []).map((library) => [library.category_id, library.server_library_id])),
   );
   const [pairs, setPairs] = useState<PathPair[]>(server?.paths ?? []);
+  const [people, setPeople] = useState(server?.users ?? []);
+  const accounts = useQuery({ queryKey: ["users"], queryFn: () => ok(api.GET("/users")), enabled: server !== undefined });
+  const [queued, setQueued] = useState(false);
+  const syncNow = useMutation({
+    mutationFn: () => ok(api.POST("/media-servers/{id}/sync-playback", { params: { path: { id: server?.id ?? 0 } } })),
+    onSuccess: () => setQueued(true),
+  });
   const [tested, setTested] = useState<TestResult | undefined>();
   const [failure, setFailure] = useState<string | undefined>();
 
@@ -155,6 +162,7 @@ function ServerForm({ kinds, server, onDone, onCancel }: { kinds: Kind[]; server
       await ok(api.PUT("/media-servers/{id}/paths", {
         params: { path: { id: saved.id } }, body: pairs.filter((pair) => pair.solarr_prefix && pair.server_prefix),
       }));
+      if (server && people.length > 0) await ok(api.PUT("/media-servers/{id}/users", { params: { path: { id: saved.id } }, body: people }));
     },
     onSuccess: onDone,
     onError: (error) => setFailure((error as { detail?: string }).detail ?? t("mediaServers.refused")),
@@ -288,6 +296,37 @@ function ServerForm({ kinds, server, onDone, onCancel }: { kinds: Kind[]; server
               </label>
             ))}
           </fieldset>
+          {server && uses.sync_playback && (
+            <fieldset className="flex flex-col gap-2">
+              <legend className="text-sm font-medium">{t("mediaServers.usersTitle")}</legend>
+              <p className="text-xs text-ink-muted">{t("mediaServers.usersHelp")}</p>
+              {people.map((person, index) => (
+                <div key={person.server_user_id} className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="w-40 truncate">{person.name}</span>
+                  <select
+                    className={inputStyle} aria-label={t("mediaServers.solarrUser", { name: person.name })} value={person.user_id ?? ""}
+                    onChange={(event) => setPeople(people.map((entry, at) => (at === index ? { ...entry, user_id: event.target.value === "" ? undefined : Number(event.target.value) } : entry)))}
+                  >
+                    <option value="">{t("mediaServers.noSolarrUser")}</option>
+                    {(accounts.data ?? []).map((account) => (
+                      <option key={account.id} value={account.id}>{account.username}</option>
+                    ))}
+                  </select>
+                  <label className="flex items-center gap-1">
+                    <input
+                      type="checkbox" checked={person.counted}
+                      onChange={(event) => setPeople(people.map((entry, at) => (at === index ? { ...entry, counted: event.target.checked } : entry)))}
+                    />
+                    {t("mediaServers.counted")}
+                  </label>
+                </div>
+              ))}
+              <div className="flex items-center gap-2">
+                <Button busy={syncNow.isPending} onClick={() => { setQueued(false); syncNow.mutate(); }}>{t("mediaServers.syncNow")}</Button>
+                {queued && <span role="status" className="text-xs text-ink-muted">{t("mediaServers.syncQueued")}</span>}
+              </div>
+            </fieldset>
+          )}
         </>
       )}
       {failure && <p className="text-sm text-danger">{failure}</p>}

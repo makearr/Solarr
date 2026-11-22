@@ -80,6 +80,7 @@ type worksFixture struct {
 	favorites            *fakeFavorites
 	packs                *fakePackLister
 	removeAndBlocker     *fakeRemoveAndBlocker
+	watchState           *fakeWatchState
 	importSessions       *fakeImportSessionLister
 	importInspector      *fakeImportInspector
 	unreadable           *fakeUnreadableFiles
@@ -256,6 +257,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	favorites := &fakeFavorites{}
 	packs := &fakePackLister{}
 	removeAndBlocker := &fakeRemoveAndBlocker{}
+	watchState := &fakeWatchState{}
 	importSessions := &fakeImportSessionLister{}
 	importInspector := &fakeImportInspector{}
 	unreadable := &fakeUnreadableFiles{count: 4}
@@ -313,6 +315,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		Favorites:            favorites,
 		Packs:                packs,
 		RemoveAndBlocker:     removeAndBlocker,
+		WatchState:           watchState,
 		ImportSessions:       importSessions,
 		ImportInspector:      importInspector,
 		UnreadableFiles:      unreadable,
@@ -369,7 +372,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		search: search, unidentified: unidentified, unidentifiedResolver: unidentifiedResolver,
 		artwork: artwork, playback: playback, remoteImages: remoteImages, people: people, organisations: organisations, subscriber: subscriber, artistActions: artistActions,
 		follower:       follower,
-		blockedContent: blockedContent, favorites: favorites, packs: packs, removeAndBlocker: removeAndBlocker,
+		blockedContent: blockedContent, favorites: favorites, packs: packs, removeAndBlocker: removeAndBlocker, watchState: watchState,
 		importSessions: importSessions, importInspector: importInspector, unreadable: unreadable,
 		fingerprintRetrier: fingerprintRetrier,
 		drainStarter:       drainStarter, moveJobs: moveJobs, renameStarter: renameStarter, namingSchemes: namingSchemes, calendar: calendar,

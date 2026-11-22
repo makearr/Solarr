@@ -92,6 +92,9 @@ type WorksFilter struct {
 	PersonID int64
 	// FavoriteUserID keeps only the works this user hearted, 0 any.
 	FavoriteUserID int64
+	// Watched keeps one watch status (yes, no, in_progress) as WatchPairs saw it, "" any.
+	Watched    string
+	WatchPairs []WatchPair
 	// Where is the custom filter as the JSON the request carried; malformed answers ErrInvalidChoice.
 	Where string
 }
@@ -213,8 +216,11 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
 		return
 	}
+	scope := s.watchScopeOf(r.Context(), access)
+	watched, watchPairs := watchFilterOfScope(scope, enumString(params.Watched))
 	rows, err := s.works.ListWorks(r.Context(),
 		WorksFilter{
+			Watched: watched, WatchPairs: watchPairs,
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Sort: sort, Direction: direction,
 			Fresh: derefOr(params.Fresh, false), Wanted: derefOr(params.Wanted, false), CutoffUnmet: derefOr(params.CutoffUnmet, false),
 			Where: derefOr(params.Where, ""), TagIDs: carry, ExcludedTagIDs: append(without, blockedTagIDs(access)...), AboveRating: derefOr(params.AboveRating, false), OwnProfile: derefOr(params.OwnProfile, false),
@@ -228,7 +234,19 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		writeError(w, s.logger, err)
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, buildWorkPage(rows, limit, sort, s.wall.Now()))
+	page := buildWorkPage(rows, limit, sort, s.wall.Now())
+	ids := make([]int64, len(page.Items))
+	for index, item := range page.Items {
+		ids[index] = item.Id
+	}
+	if watches := s.watchViews(r.Context(), scope, ids); len(watches) > 0 {
+		for index := range page.Items {
+			if watch, ok := watches[page.Items[index].Id]; ok {
+				page.Items[index].Watch = &watch
+			}
+		}
+	}
+	writeJSON(w, s.logger, http.StatusOK, page)
 }
 
 // libraryMediaTypes are the media types of the library the list is of: its own, and with whole the types of its further

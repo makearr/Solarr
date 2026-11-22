@@ -9,6 +9,9 @@ Earlier entries use older schemes; those at and below `0.0.x` predate both and a
 - Connections > Media servers: connect Jellyfin, Navidrome, Audiobookshelf, Kavita, a Calibre content server or Stash with a tested address and credential, and map Solarr libraries and paths to the server's. Settings schema 0078 adds the connection tables. Telling servers about new files, local metadata and watch state follow.
 - Media servers: Jellyfin, Kavita and Stash sign in with a user name and password as well as an API key (Jellyfin may have an empty password); the session is kept and renewed when the server refuses it.
 
+- Media servers: after Solarr places, moves, renames or recycles files, connected Jellyfin, Audiobookshelf, Kavita and Navidrome servers are told (targeted where the server can, one library scan otherwise); Jellyfin can also show "Now available" to people watching. Library schema 0147 adds the queue.
+- Media servers: watch state is read from Jellyfin, Audiobookshelf and Navidrome every 30 minutes (or on demand) and kept by work and part. Work tiles and rows show a check or an eye, the work list filters by watched, in progress or not watched, and Libraries > Watched lists what everyone has played so its files can be moved to the recycle bin (optionally unmonitoring the works).
+
 ## 2026.11.2.1311 — 2026-11-22
 
 **Upgrading:** each database is one squashed baseline again. Only databases from build 1298 or later (schema
