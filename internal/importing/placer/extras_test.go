@@ -54,3 +54,33 @@ func baseOf(p string) string {
 	}
 	return p
 }
+
+func TestExtrasCarryALanguageNamedSubsFileOfASingleVideo(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	for _, dir := range []string{"/in/Film/Subs", "/lib/Film (2001)"} {
+		if err := fsys.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w, err := fsys.Create("/in/Film/Subs/English.srt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = w.Write([]byte("x"))
+	_ = w.Close()
+	p := placer.New(placer.Config{FS: fsys})
+	others := []inspect.File{{RelPath: "Film/Subs/English.srt", SizeBytes: 1}}
+	owners := []placer.Owner{{SourceRel: "Film/Film.mkv", DestRel: "Film (2001)/Film (2001).mkv"}}
+	got := p.Extras(t.Context(), []string{"srt"}, "/in", settings.RootFolder{ID: 7, Path: "/lib"}, others, owners, []mover.PlaceMethod{mover.PlaceCopy})
+	want := []library.UnitExtra{{RootFolderID: 7, RelPath: "Film (2001)/Film (2001).en.srt"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("extras = %+v, want %+v", got, want)
+	}
+	if err := fsys.Remove("/lib/Film (2001)/Film (2001).en.srt"); err != nil {
+		t.Fatal(err)
+	}
+	two := append(owners, placer.Owner{SourceRel: "Film/Film2.mkv", DestRel: "Film (2001)/Film2.mkv"})
+	if got := p.Extras(t.Context(), []string{"srt"}, "/in", settings.RootFolder{ID: 7, Path: "/lib"}, others, two, []mover.PlaceMethod{mover.PlaceCopy}); len(got) != 0 {
+		t.Fatalf("with two videos the subtitle belongs to neither: %+v", got)
+	}
+}

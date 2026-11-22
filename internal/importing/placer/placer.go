@@ -278,6 +278,9 @@ func (p Placer) Extras(
 		if owner == nil {
 			owner, suffix = ownerOf(owners, outOfSubsFolder(other.RelPath))
 		}
+		if owner == nil && len(owners) == 1 {
+			owner, suffix = loneVideoSubtitle(owners[0], other.RelPath)
+		}
 		if owner == nil {
 			continue
 		}
@@ -317,4 +320,17 @@ func outOfSubsFolder(rel string) string {
 		return path.Join(path.Dir(dir), name)
 	}
 	return rel
+}
+
+// loneVideoSubtitle is the owner of a "Subs/English.srt" that names only a language, when the unit holds one video.
+func loneVideoSubtitle(owner Owner, rel string) (*Owner, string) {
+	if outOfSubsFolder(rel) == rel {
+		return nil, ""
+	}
+	name := path.Base(rel)
+	stem := strings.TrimSuffix(name, path.Ext(name))
+	if stem == "" || !parsetv.IsSubtitleSuffix(stem) {
+		return nil, ""
+	}
+	return &owner, "." + stem + path.Ext(name)
 }
