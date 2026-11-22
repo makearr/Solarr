@@ -36,9 +36,9 @@ export function LibraryMetadata() {
     onSuccess: (data: Sources) => queryClient.setQueryData(key, data),
   });
   if (saved.isLoading) return <p className="p-6 text-sm text-ink-muted">Loading…</p>;
-  if (!saved.data) return <p className="p-6 text-sm text-danger">The providers could not be read.</p>;
+  if (!saved.data) return <p className="p-6 text-sm text-danger">{t("libraryMetadata.readFailed")}</p>;
   const { sources, available, custom } = saved.data;
-  if (available.length === 0) return <EmptyState title="This kind of library has no metadata providers to choose from." />;
+  if (available.length === 0) return <EmptyState title={t("libraryMetadata.noProviders")} />;
   const labelOf = (provider: string) => available.find((entry) => entry.key === provider);
   const unused = available.filter((provider) => !sources.includes(provider.key));
   const move = (index: number, delta: number) => {
@@ -54,7 +54,7 @@ export function LibraryMetadata() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4">
         <PageHeader
-          title="Metadata providers"
+          title={t("libraryMetadata.providers")}
           subtitle="Where this library's titles, descriptions, people and pictures come from. The first provider that has a field supplies it; each one after it only fills in what the ones before left empty. A provider left out is not asked."
         />
         <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
@@ -63,7 +63,7 @@ export function LibraryMetadata() {
             <Chip>{custom ? "this library's own" : "following the default of its type"}</Chip>
             {custom && (
               <Button className="ml-auto" busy={save.isPending} onClick={() => save.mutate({ sources: [] })}>
-                Use the type's default order
+                {t("libraryMetadata.defaultOrder")}
               </Button>
             )}
           </div>
@@ -91,7 +91,7 @@ export function LibraryMetadata() {
           </ol>
           {unused.length > 0 && (
             <div className="flex flex-col gap-1 border-t border-border-subtle pt-2 text-sm">
-              <span className="text-xs text-ink-muted">Not used by this library</span>
+              <span className="text-xs text-ink-muted">{t("libraryMetadata.notUsed")}</span>
               {unused.map((provider) => (
                 <div key={provider.key} className="flex flex-wrap items-center gap-2">
                   <span>{provider.label}</span>
@@ -107,7 +107,7 @@ export function LibraryMetadata() {
               ))}
             </div>
           )}
-          {save.isError && <p className="text-xs text-danger">That could not be saved.</p>}
+          {save.isError && <p className="text-xs text-danger">{t("libraryMetadata.saveFailed")}</p>}
         </section>
         {library?.media_type === "music" && (
           <section className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface p-3">
@@ -156,7 +156,7 @@ function CoverOrder() {
         busy={patch.isPending}
         onChange={(order) => patch.mutate({ cover_sources: order })}
       />
-      {patch.isError && <p className="text-xs text-danger">That could not be saved.</p>}
+      {patch.isError && <p className="text-xs text-danger">{t("libraryMetadata.saveFailed")}</p>}
     </section>
   );
 }

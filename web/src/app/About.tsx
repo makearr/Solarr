@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
 import { ThemeToggle } from "./ThemeToggle";
+import { t } from "@/lib/i18n";
 
 /** AGPL section 13's own screen (documentation/licence-compliance.md): build
  *  identity, the Corresponding Source offer, the full licence text and
@@ -40,11 +41,11 @@ export function About() {
       <main className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="mx-auto flex max-w-2xl flex-col gap-6">
           <section className="rounded-lg border border-border-subtle bg-surface p-5">
-            <h1 className="text-sm font-medium">About this instance</h1>
+            <h1 className="text-sm font-medium">{t("about.title")}</h1>
 
             {about.isLoading && <p className="mt-2 text-xs text-ink-muted">Loading…</p>}
             {about.error !== null && (
-              <p className="mt-2 text-xs text-danger">Could not reach the server.</p>
+              <p className="mt-2 text-xs text-danger">{t("about.unreachable")}</p>
             )}
 
             {about.data && (
@@ -132,7 +133,7 @@ function LegalSection({
     <details className="rounded-lg border border-border-subtle bg-surface p-5">
       <summary className="cursor-pointer text-sm font-medium">{title}</summary>
       {loading && <p className="mt-2 text-xs text-ink-muted">Loading…</p>}
-      {error && <p className="mt-2 text-xs text-danger">Could not load this text.</p>}
+      {error && <p className="mt-2 text-xs text-danger">{t("about.textFailed")}</p>}
       {text && (
         <pre className="mt-3 max-h-[32rem] overflow-auto whitespace-pre-wrap break-words
                         rounded-md bg-canvas p-3 font-mono text-[0.6875rem] leading-relaxed">

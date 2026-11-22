@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Film } from "lucide-react";
 import { useState } from "react";
+import { t } from "@/lib/i18n";
 
 import { API_PREFIX, api, ok } from "@/api/client";
 import { Dialog } from "@/ui/Dialog";
@@ -22,7 +23,7 @@ export function FileThumb({ mediaObjectId, kind, wide = false, placeholder = fal
     <>
       <button
         type="button"
-        aria-label="Show the picture at full size"
+        aria-label={t("fileThumb.fullSize")}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -63,7 +64,7 @@ function PreviewPlaceholder({ wide = false, className = "" }: { wide?: boolean; 
   const size = `self-start aspect-video ${wide ? "w-[clamp(8rem,16vw,16rem)]" : "w-[clamp(4rem,9vw,9rem)]"}`;
   return (
     <div
-      title="No preview picture yet. Open Settings, General to generate the missing previews."
+      title={t("fileThumb.none")}
       className={`flex shrink-0 flex-col items-center justify-center gap-0.5 rounded border border-dashed border-border-subtle text-ink-muted ${size} ${className}`}
     >
       <Film aria-hidden className="size-4" />

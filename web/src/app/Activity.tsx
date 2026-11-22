@@ -7,6 +7,7 @@ import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView } from "@/list/useRouteView";
 import { useNarrow } from "@/list/useNarrow";
 import type { components } from "@/api/schema";
+import { t } from "@/lib/i18n";
 
 type Job = components["schemas"]["Job"];
 
@@ -57,7 +58,7 @@ export function Activity() {
         <h1 className="text-sm font-medium">Jobs</h1>
 
         <select
-          aria-label="Filter by state"
+          aria-label={t("activity.filterState")}
           className="rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs"
           value={list.query.filters.state ?? ""}
           onChange={(event) => list.filterBy("state", event.target.value)}
@@ -82,7 +83,7 @@ export function Activity() {
             </>
           )}
           <button type="button" onClick={list.selectAllMatching} className={quietButton}>
-            Select all matching
+            {t("activity.selectAll")}
           </button>
           <button
             type="button"
@@ -96,9 +97,9 @@ export function Activity() {
 
       <div className="min-h-0 flex-1">
         {list.isLoading && <Message>Loading jobs…</Message>}
-        {list.error !== null && <Message>The job queue could not be read.</Message>}
+        {list.error !== null && <Message>{t("activity.readFailed")}</Message>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (
-          <Message>Nothing queued. Jobs appear here as the system works.</Message>
+          <Message>{t("activity.empty")}</Message>
         )}
 
         {list.items.length > 0 &&

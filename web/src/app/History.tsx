@@ -5,6 +5,7 @@ import { ListTable, type Column } from "@/list/ListTable";
 import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView } from "@/list/useRouteView";
 import { HistoryKind, historySource, historyWhen, type HistoryEntry } from "@/lib/downloadHistory";
+import { t } from "@/lib/i18n";
 
 const COLUMNS: readonly Column<HistoryEntry>[] = [
   { key: "at", header: "When", width: "11rem", render: historyWhen },
@@ -64,9 +65,9 @@ export function History() {
       <h1 className="sr-only">History</h1>
       <div className="min-h-0 flex-1">
         {list.isLoading && <Message>Loading history…</Message>}
-        {list.error !== null && <Message>History could not be read.</Message>}
+        {list.error !== null && <Message>{t("history.readFailed")}</Message>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (
-          <Message>Nothing has been downloaded yet. Every release grabbed, imported or failed appears here.</Message>
+          <Message>{t("history.empty")}</Message>
         )}
         {list.items.length > 0 && <ListTable list={list} columns={COLUMNS} idOf={(entry) => entry.id} />}
       </div>

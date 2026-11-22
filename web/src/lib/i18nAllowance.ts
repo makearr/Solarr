@@ -1,7 +1,5 @@
 // English literals each screen still writes into JSX; the i18n coverage test fails when a count grows. Lower an entry when its strings move into lib/i18n.
 export const hardcodedStringAllowance: Record<string, number> = {
-  "app/About.tsx": 3,
-  "app/Activity.tsx": 4,
   "app/App.tsx": 1,
   "app/ArrConnectionTools.tsx": 11,
   "app/ArrImport.tsx": 13,
@@ -23,10 +21,7 @@ export const hardcodedStringAllowance: Record<string, number> = {
   "app/DownloadFolders.tsx": 10,
   "app/Downloaders.tsx": 26,
   "app/Duplicates.tsx": 4,
-  "app/ErrorBoundary.tsx": 1,
-  "app/FileThumb.tsx": 2,
   "app/FollowPanel.tsx": 5,
-  "app/History.tsx": 2,
   "app/IdentificationCandidates.tsx": 1,
   "app/IdentifyAs.tsx": 2,
   "app/Import.tsx": 27,
@@ -40,7 +35,6 @@ export const hardcodedStringAllowance: Record<string, number> = {
   "app/LibraryFileManagement.tsx": 1,
   "app/LibraryHealth.tsx": 13,
   "app/LibraryLevelList.tsx": 3,
-  "app/LibraryMetadata.tsx": 7,
   "app/LibraryNaming.tsx": 9,
   "app/LibraryRules.tsx": 4,
   "app/Login.tsx": 1,

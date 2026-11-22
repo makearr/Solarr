@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { t } from "@/lib/i18n";
 
 import { Button } from "@/ui/Button";
 
@@ -31,7 +32,7 @@ export function RouteError({ error }: { error: unknown }) {
   const router = useRouter();
   return (
     <Failure
-      title="This page failed to load"
+      title={t("errorBoundary.title")}
       error={error}
       where={window.location.pathname}
       onRetry={() => void router.invalidate()}
