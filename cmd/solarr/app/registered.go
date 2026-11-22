@@ -877,7 +877,23 @@ func (p *process) comicService() comic.Service {
 func (p *process) comicModule() comic.Module {
 	service := p.comicService()
 	catalog := comic.Catalog{Service: service, Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID}
+	resolver := comic.Resolver{
+		Service: service, Logger: p.logger, Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID,
+		Locks: p.locksFor("comic"), Threshold: p.acceptThreshold,
+	}
 	return comic.Module{
+		Sweep: scan.Sweep{
+			Consumer: comic.NewConsumer(comic.ConsumerConfig{
+				FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library), Service: service,
+				Clock: clock.NewSystem(), Logger: p.logger, Resolver: resolver,
+			}),
+			Include: comic.Includes, Probe: func(string) bool { return false },
+			Housekeeping: housekeeping.Sweep{
+				Categories: adapters.Categories{Cache: p.cache}, Desired: library.NewDesired(p.library),
+				Grain: comic.Module{}.Descriptor().WantedGrain, FS: p.fsys, Logger: p.logger,
+			},
+			OnSwept: p.afterSweep,
+		},
 		Registrations: []media.JobRegistration{
 			{Definition: comic.RefreshDefinition(), Handler: comic.NewRefreshJob(library.NewSeriesReader(p.library), service, clock.NewSystem(), p.logger)},
 			{Definition: comic.ArtworkDefinition(), Handler: comic.NewArtworkJob(library.NewSeriesReader(p.library), p.remoteImages(), p.logger)},

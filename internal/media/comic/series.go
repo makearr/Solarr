@@ -42,6 +42,9 @@ const (
 	FormatGallery       = "gallery"
 )
 
+// AltSchemeChapter is the alternate numbering of a manga volume part: the chapters the provider lists in it.
+const AltSchemeChapter = "chapter"
+
 // FieldFormat is the stored field a series' format is read from.
 const FieldFormat = "comic_format"
 
@@ -271,6 +274,12 @@ func partWrite(part Part, monitored bool) library.SeriesPartWrite {
 		}
 	} else {
 		write.AvailableBasis = library.AvailabilityUnannounced
+	}
+	for _, chapter := range part.Chapters {
+		write.AltNumbers = append(write.AltNumbers, library.AltNumberWrite{Scheme: AltSchemeChapter, Provider: ProviderMangaDex, Ref: chapter})
+	}
+	if len(part.Chapters) > 0 {
+		write.ReplaceAltProviders = []string{ProviderMangaDex}
 	}
 	for provider, id := range part.IDs {
 		write.ExternalIDs = append(write.ExternalIDs, library.ExternalIDWrite{Provider: provider + ":part", ExternalID: id})

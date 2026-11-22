@@ -251,9 +251,9 @@ type AddRequest struct {
 
 // AddResult is what an add stored.
 type AddResult struct {
-	WorkID, ItemID int64
-	Created        bool
-	Series         Series
+	WorkID  int64
+	Created bool
+	Series  Series
 }
 
 // Add stores a series, its parts and its one wanted item. Adding what the library already holds is not an error: the
@@ -281,14 +281,28 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 	if err != nil {
 		return AddResult{}, err
 	}
-	item, err := s.Desired.EnsureAlbumItem(ctx, library.AlbumRequest{
-		WorkID: stored.WorkID, CategoryID: request.CategoryID, ProfileID: request.ProfileID,
-		Monitored: monitor != MonitorNone, AddedBy: request.AddedBy,
-	})
-	if err != nil {
-		return AddResult{}, fmt.Errorf("comic: wanted item: %w", err)
+	if err := s.ensureItems(ctx, stored.WorkID, request.CategoryID, request.ProfileID, request.AddedBy, series.Parts, Monitored(series.Parts, monitor, now)); err != nil {
+		return AddResult{}, err
 	}
-	return AddResult{WorkID: stored.WorkID, ItemID: item.ID, Created: stored.Created, Series: series}, nil
+	return AddResult{WorkID: stored.WorkID, Created: stored.Created, Series: series}, nil
+}
+
+// ensureItems gives the series one wanted item for each kind of part it holds (issues, annuals, volumes, loose chapters),
+// as a TV series has one per season: a file covers parts of the item its kind names. An item that exists keeps its
+// own monitoring (Invariant 71).
+func (s Service) ensureItems(ctx context.Context, workID, categoryID, profileID int64, addedBy *int64, parts []Part, wanted map[string]bool) error {
+	monitored := map[string]bool{}
+	for _, part := range parts {
+		monitored[part.Kind] = monitored[part.Kind] || wanted[part.Ref()]
+	}
+	for kind, any := range monitored {
+		if _, err := s.Desired.EnsureSeasonItem(ctx, library.SeasonRequest{
+			WorkID: workID, MediaRef: kind, SortKey: SortKey(kind, "0"), CategoryID: categoryID, ProfileID: profileID, Monitored: any, AddedBy: addedBy,
+		}); err != nil {
+			return fmt.Errorf("comic: wanted item: %w", err)
+		}
+	}
+	return nil
 }
 
 // Refresh reads a held series again. A part it creates is monitored when the series is; monitoring of the parts it
@@ -319,6 +333,20 @@ func (s Service) Refresh(ctx context.Context, categoryID, workID int64) (Series,
 	if _, err := s.Series.Upsert(ctx, now, ToWrite(series, WriteOptions{Now: now, NewPart: func(part Part) bool { return monitored && part.Kind != PartChapter }})); err != nil {
 		return Series{}, err
 	}
+	// A kind of part the series gains (its first annual) gets an item beside the others, under the same profile.
+	items, err := s.Desired.AlbumItemsForWork(ctx, workID)
+	if err != nil {
+		return Series{}, err
+	}
+	if len(items) > 0 {
+		kept := map[string]bool{}
+		for _, part := range series.Parts {
+			kept[part.Ref()] = monitored && part.Kind != PartChapter
+		}
+		if err := s.ensureItems(ctx, workID, categoryID, items[0].ProfileID, nil, series.Parts, kept); err != nil {
+			return Series{}, err
+		}
+	}
 	return series, nil
 }
 
@@ -341,12 +369,12 @@ func holdsID(ids map[string]string, source string) bool {
 }
 
 func (s Service) monitoredNow(ctx context.Context, workID int64) (bool, error) {
-	items, err := s.Desired.AlbumItemsForWork(ctx, workID)
+	parts, err := s.Desired.AllParts(ctx, workID)
 	if err != nil {
 		return false, err
 	}
-	for _, item := range items {
-		if item.Monitored != 0 {
+	for _, part := range parts {
+		if part.Monitored != 0 {
 			return true, nil
 		}
 	}

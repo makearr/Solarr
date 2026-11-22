@@ -8,6 +8,7 @@ import (
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/moving/naming"
+	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
 // MediaType is the key of the comic type in every table and API.
@@ -42,17 +43,23 @@ type Module struct {
 	media.Passes
 	// Service applies a monitor option to a series a library holds.
 	Service Service
+	// Sweep is the scan of the type's files.
+	Sweep scan.Sweep
 }
 
 var (
 	_ media.Module     = Module{}
 	_ media.Naming     = Module{}
 	_ media.Jobs       = Module{}
+	_ media.Scanning   = Module{}
 	_ media.Monitoring = Module{}
 	_ media.Adding     = Module{}
 	_ media.Refreshing = Module{}
 	_ media.Enriching  = Module{}
 )
+
+// ScanSweep implements media.Scanning.
+func (m Module) ScanSweep() scan.Sweep { return m.Sweep }
 
 // RegisterJobs implements media.Jobs.
 func (m Module) RegisterJobs(register media.JobRegistrar) error {

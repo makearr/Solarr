@@ -54,7 +54,7 @@ var lanternIssues = []comicvine.Issue{
 	{ID: 4, Number: "Annual 1", CoverDate: "2019-12-00"},
 }
 
-func comicService(t *testing.T, sources Sources) Service {
+func comicStore(t *testing.T) *store.Store {
 	t.Helper()
 	directory := t.TempDir()
 	opened, err := store.Open(t.Context(), clock.NewFakeAtEpoch(), store.Config{
@@ -71,6 +71,12 @@ func comicService(t *testing.T, sources Sources) Service {
 	if err := store.Migrate(t.Context(), opened, directory, owner); err != nil {
 		t.Fatal(err)
 	}
+	return opened
+}
+
+func comicService(t *testing.T, sources Sources) Service { return serviceOn(comicStore(t), sources) }
+
+func serviceOn(opened *store.Store, sources Sources) Service {
 	return Service{
 		Sources: sources, Series: library.NewSeries(opened), Reader: library.NewSeriesReader(opened), Desired: library.NewDesired(opened),
 		Clock: clock.NewFakeAtEpoch(), KindOf: func(int64) string { return KindComics },
