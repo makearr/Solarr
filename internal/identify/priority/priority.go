@@ -1,11 +1,4 @@
-// Package priority computes ADR-36's single composite acquisition priority --
-// pure arithmetic over caller-supplied facts, no I/O and no database of its
-// own, the same separation internal/identify/score and internal/moving/placement keep from
-// their own callers. What creates a hunt_queue row and reads this number back
-// out is stage 5/6's planner, which does not exist yet (§10.5's "ready
-// queue"); this package is ready ahead of that consumer, the same shape
-// internal/moving/placement and internal/moving/naming already were before acquisition
-// existed to call them.
+// Package priority computes ADR-36's composite acquisition priority: pure arithmetic over supplied facts, no I/O or database.
 package priority
 
 import "time"
@@ -24,10 +17,7 @@ const (
 	TriggerUpgrade    Trigger = "upgrade"
 )
 
-// Weights are the trigger weights -- ADR-36's 2026-09-05 amendment made
-// these advanced-tier settings rather than constants, so a user who wants
-// gaps filled before new releases changes two numbers rather than losing the
-// feature. Bigger means more urgent.
+// Weights are the trigger weights, advanced-tier settings (ADR-36 amendment) so a user can favour gaps over new releases; bigger is more urgent.
 type Weights struct {
 	UserRequest int64
 	RSS         int64
@@ -60,19 +50,10 @@ func (w Weights) forTrigger(t Trigger) int64 {
 	}
 }
 
-// AgingInterval is how much waiting is worth one point of priority, the same
-// linear-aging shape internal/db/store's own write queue uses for the same
-// reason (section 4.2): without it, a steady stream of high-rank items means
-// the bottom of the list never acquires anything.
+// AgingInterval is how much waiting is worth one priority point, linear aging like the store's write queue, so low-rank items are not starved (section 4.2).
 const AgingInterval = time.Hour
 
-// DefaultNewReleaseDays is ADR-55's release-date freshness window: an item is
-// "new" for 7 days after its release date, not from when it was added to the
-// library. Narrowed from ADR-36's original 30 on 2026-09-05 -- ADR-55's own
-// "consequence, accepted" is that a three-week-old album now competes as a
-// gap rather than a new release, which the second window (rss_fresh_hours,
-// not yet built: it needs candidate.first_seen_at, stage 5) exists to soften
-// for anything that actually shows up on an indexer.
+// DefaultNewReleaseDays is ADR-55's freshness window: new for 7 days from the release date, so older albums compete as gaps; the RSS window softens that.
 const DefaultNewReleaseDays = 7
 
 // RSSFreshHours is ADR-55's availability window: an item an RSS feed showed a release for is new to this library
@@ -89,20 +70,11 @@ type Input struct {
 	// and anything else additive -- this package has no opinion on their
 	// individual sizes, only that they add in before aging does.
 	Modifiers int64
-	// QueuedSince is when this item first became eligible to search --
-	// aging is measured from here, not from when it was created or last
-	// searched (a distinct concept hunt_queue's own last_searched_at already
-	// carries for backoff, section 9.3).
+	// QueuedSince is when the item first became eligible; aging runs from here, not creation or last search (hunt_queue.last_searched_at serves backoff, section 9.3).
 	QueuedSince time.Time
 }
 
-// Compute returns ADR-36's single composite priority at now. Bigger sorts
-// first (hunt_queue's own index is priority DESC, section 5.3's schema).
-//
-// CategoryRank is negated rather than inverted against a category count: rank
-// 1 (most preferred) becomes -100, rank 6 becomes -600, and -100 > -600 sorts
-// rank 1 first under the same DESC order the trigger term already assumes --
-// without this package ever needing to know how many categories exist.
+// Compute returns ADR-36's priority at now, bigger first (hunt_queue index is priority DESC); CategoryRank is negated so rank 1 sorts first without knowing the category count.
 func Compute(weights Weights, input Input, now time.Time) int64 {
 	triggerScore := weights.forTrigger(input.Trigger) * 1000
 	categoryScore := -input.CategoryRank * 100
@@ -110,13 +82,7 @@ func Compute(weights Weights, input Input, now time.Time) int64 {
 	return triggerScore + categoryScore + input.Modifiers + agingBonus
 }
 
-// ClassifyTrigger decides new_release vs gap from a release date (ADR-36's
-// 2026-09-05 amendment) -- user_request and upgrade are never derived this
-// way, since they come from why the caller is searching at all, not from a
-// date. A nil or future releaseDate is new_release either way: an unreleased
-// item costs nothing to rank highly, since ADR-23's AvailabilityWindow is
-// what actually gates the search before the item exists, not this
-// classification.
+// ClassifyTrigger decides new_release or gap from a release date; user_request and upgrade come from why the caller searches. A nil or future date is new_release, as AvailabilityWindow (ADR-23) gates the search.
 func ClassifyTrigger(releaseDate *time.Time, now time.Time, newReleaseDays int) Trigger {
 	if releaseDate == nil || releaseDate.After(now) {
 		return TriggerNewRelease
@@ -127,27 +93,13 @@ func ClassifyTrigger(releaseDate *time.Time, now time.Time, newReleaseDays int) 
 	return TriggerGap
 }
 
-// ParseReleaseDate reads a work_date-shaped value (ADR-23: "2024", "2024-03"
-// or "2024-03-01") at day precision only -- todo 4.20's own accepted
-// simplification. A value shorter than a full date cannot say whether
-// something released in the last week, so it parses as unknown (ok=false)
-// rather than guessing from whatever precision is there.
+// ParseReleaseDate reads a work_date value at day precision only; a shorter value parses as unknown rather than guessed.
 func ParseReleaseDate(raw string) (parsed time.Time, ok bool) {
 	parsed, err := time.Parse(time.DateOnly, raw)
 	return parsed, err == nil
 }
 
-// IsFresh is ADR-55's release-date window alone; the RSS half lives in SQL and the planner (RSSFreshHours).
-// This is the one definition the new_release trigger, the
-// Fresh list filter and the dashboard panel all read from.
-//
-// Deliberately not just ClassifyTrigger: that function treats a nil or
-// unparsed release date as new_release too, because for *searching* an
-// unknown release date should cost nothing to rank eagerly (ADR-23's
-// AvailabilityWindow is what actually gates the search, not this). Showing
-// something as freshly released is a different claim, and nothing supports
-// answering "yes" to it without a real date -- so here, and only here, a
-// nil date is never fresh.
+// IsFresh is ADR-55's release-date window alone, the one definition the trigger, Fresh filter and dashboard read; unlike ClassifyTrigger a nil date is never fresh, since showing an item as freshly released needs a real date.
 func IsFresh(releasedAt *time.Time, now time.Time, newReleaseDays int) bool {
 	if releasedAt == nil {
 		return false

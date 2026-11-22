@@ -72,10 +72,7 @@ func parseSampleRate(raw string) (float64, error) {
 	return value, nil
 }
 
-// measuredFieldFor is where a target dimension's own name differs from the
-// Facts field it is measured against -- only bitrate does; every other
-// dimension (sample_rate, bit_depth, ...) already shares its name with a
-// Facts.numberField entry.
+// measuredFieldFor maps a target dimension to its Facts field where the names differ, which only bitrate does.
 func measuredFieldFor(dimension string) string {
 	if dimension == "bitrate" {
 		return "overall_bitrate"
@@ -123,10 +120,7 @@ func targetMatches(when map[string]string, facts Facts) bool {
 	return true
 }
 
-// targetDistance is |log2(measured/ideal)|, scaled by the over/under weight
-// (ADR-40, amended to any numeric dimension). ok is false when there is
-// nothing to measure against: no matching target, no ideal, or the dimension
-// itself was not probed.
+// targetDistance is |log2(measured/ideal)| scaled by the over/under weight (ADR-40); ok is false when there is no target, ideal or probed value.
 func targetDistance(dimension string, target Target, hasTarget bool, facts Facts) (distance float64, ok bool) {
 	if !hasTarget {
 		return 0, false

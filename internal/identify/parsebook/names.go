@@ -5,10 +5,7 @@ import (
 	"unicode"
 )
 
-// Names says a release or file name is the book: its title (or the title before a subtitle) appears in the name as
-// whole words, and so does one of its authors, by full name, by surname or as "Surname, First". This is Readarr's
-// search-criteria match: a name is held against the wanted book rather than parsed alone. With no authors known, or none
-// in a script a Latin name can be compared with, the title alone decides.
+// Names says a name is the book when its title appears as whole words with one of its authors (full name, surname or "Surname, First"), Readarr's search-criteria match; with no comparable authors the title alone decides.
 func Names(name, title string, authors []string) bool {
 	words := " " + CleanTitle(dotsToSpaces(name)) + " "
 	if !containsTitle(words, title) {

@@ -64,11 +64,7 @@ type DistancePart struct {
 	Detail    string
 }
 
-// Compute measures the Distance between a claimed identity and one candidate.
-// Each dimension is skipped entirely, weight and all, when neither side has data
-// for it; a dimension with data on both sides that simply disagrees still counts
-// against the total. When nothing was comparable at all, Total is 1 -- an empty
-// comparison carries no evidence either way and must never look like a match.
+// Compute measures the Distance between a claimed identity and a candidate; a dimension with no data on either side is skipped with its weight, disagreement counts, and nothing comparable gives Total 1.
 func Compute(claimed Claimed, candidate Candidate, weights Weights) Distance {
 	resolved := resolveWeights(weights)
 	var parts []DistancePart
@@ -273,11 +269,7 @@ func ExtraDistinctiveWords(wanted, claimed string) bool {
 	return true
 }
 
-// TitleSimilarity is section 10.2's title comparison (the better of token-set
-// overlap and Jaro-Winkler similarity, over case/accent/punctuation-normalised
-// titles), exported for a caller matching two titles directly rather than through
-// Compute's full Distance -- internal/media/music's tracklist alignment (section 19.6)
-// is the first of these.
+// TitleSimilarity is section 10.2's title comparison (best of token-set and Jaro-Winkler over normalised titles), exported for callers matching two titles directly, such as tracklist alignment (section 19.6).
 func TitleSimilarity(a, b string) float64 {
 	score, _ := bestTitleSimilarity(a, b)
 	return score
@@ -322,10 +314,7 @@ func itemCountDistance(claimed, candidate int) (DistancePart, bool) {
 		Detail: fmt.Sprintf("count %d vs %d", claimed, candidate)}, true
 }
 
-// setDistance is a Jaccard distance over whole normalized elements -- shared by
-// numbering (every known scheme at once) and path (folder segments), both
-// "does this set of strings overlap" comparisons where the element, not the
-// word, is the atomic unit.
+// setDistance is a Jaccard distance over whole normalized elements, shared by numbering and path comparisons where the element, not the word, is the unit.
 func setDistance(dimension string, claimed, candidate []string) (DistancePart, bool) {
 	if len(claimed) == 0 || len(candidate) == 0 {
 		return DistancePart{}, false

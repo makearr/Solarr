@@ -37,10 +37,7 @@ func (d Decision) Score() float64 {
 	return total
 }
 
-// GateResult is one hard requirement, evaluated before any comparison (ADR-40
-// stage 1). The first failing gate rejects the candidate, but every gate is still
-// evaluated and recorded, so the UI can show everything wrong at once rather than
-// only the first thing found.
+// GateResult is one hard requirement evaluated before any comparison (ADR-40 stage 1); every gate is recorded so the UI shows all failures at once.
 type GateResult struct {
 	Gate   string // "audio_language" | "bitrate_min" | "resolution_range"
 	Passed bool

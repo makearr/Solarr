@@ -24,10 +24,7 @@ const (
 	LevelEntityFranchise LevelEntity = "franchise"
 )
 
-// Level is one browsable entry in a library's tree (ADR-54). Key is the
-// stable identifier a URL and an API call use; Label is shown in the
-// sidebar. Core renders Levels() without ever learning what an album or a
-// season is -- the vocabulary is entirely the media type's.
+// Level is one browsable entry (ADR-54): Key for URLs and APIs, Label for the sidebar; the vocabulary is the media type's, not core's.
 type Level struct {
 	Key         string
 	Label       string
@@ -37,10 +34,7 @@ type Level struct {
 	Role string
 }
 
-// NavigationLevels is an ADR-23 extension point, alongside SetCoverage and
-// AvailabilityWindow: a media type declares what it can be browsed by. Core
-// renders the declaration and never names an album, a season or an issue
-// (Invariant 85).
+// NavigationLevels is an ADR-23 extension point: a media type declares what it can be browsed by, and core never names an album or season (Invariant 85).
 type NavigationLevels interface {
 	Levels() []Level
 }

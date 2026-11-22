@@ -1,7 +1,4 @@
-// Package parsebook reads what a book or audiobook release name, or a library file's path, says: author, title, year,
-// the formats it claims (EPUB, M4B), bitrate, abridgement and the ids some names carry (ISBN, ASIN). The patterns are
-// Readarr's: "Author - Title (Year) [Format]", "Title by Author", and scene names with dots. Whether a release is a
-// wanted book is decided by Names, Readarr's fuzzy search-criteria match, not by the parse alone.
+// Package parsebook reads author, title, year, formats, bitrate, abridgement and ISBN/ASIN from book release names, using Readarr's patterns; whether a release is the wanted book is decided by Names.
 package parsebook
 
 import (

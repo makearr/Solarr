@@ -1,5 +1,2 @@
-// Package score is ADR-40's quality/language interpreter: hard gates, then
-// lexicographic tiers, then an additive score, producing a model.Decision. Pure
-// rule evaluation, no I/O -- a caller decodes a settings.QualityProfile's raw JSON
-// and passes the parsed rules in.
+// Package score is ADR-40's quality/language interpreter: hard gates, lexicographic tiers, then an additive score into a model.Decision; pure rules, no I/O.
 package score

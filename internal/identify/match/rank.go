@@ -21,20 +21,13 @@ type RankedCandidate struct {
 	Distance Distance
 }
 
-// Result is Rank's answer. Candidates is always populated, best (lowest total
-// distance) first, so a manual-identification-queue UI has everything it needs
-// whether or not Best resolved -- Best is nil exactly when nothing cleared both
-// thresholds, the same "do not guess" shape as model.ChainResult.
+// Result is Rank's answer: Candidates is always populated best first for the manual queue, and Best is nil unless both thresholds cleared (do not guess).
 type Result struct {
 	Best       *RankedCandidate
 	Candidates []RankedCandidate
 }
 
-// Rank scores claimed against every candidate and decides whether the best one
-// is confident enough to resolve automatically: its distance must clear
-// MaxDistance, and beat the runner-up by more than AmbiguityMargin. A single
-// candidate still has to clear MaxDistance -- being the only option considered
-// is not evidence on its own.
+// Rank scores claimed against every candidate; the best must clear MaxDistance and beat the runner-up by more than AmbiguityMargin, and a lone candidate is no evidence on its own.
 func Rank(claimed Claimed, candidates []Candidate, weights Weights, thresholds Thresholds) Result {
 	if len(candidates) == 0 {
 		return Result{}

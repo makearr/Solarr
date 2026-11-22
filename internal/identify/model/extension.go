@@ -23,10 +23,7 @@ type MatchEvidence struct {
 	Detail string // "MUSICBRAINZ_TRACKID=abc-123" -- human-readable, not user input
 }
 
-// Match is one candidate satisfying a set of desired items at once -- a season pack
-// closing ten gaps, a box set, a various-artists compilation (ADR-23 extension point
-// 1). A per-item loop cannot express this, which is why Evaluate returns matches over
-// a set rather than a single item.
+// Match is one candidate satisfying a set of desired items at once, such as a season pack or box set (ADR-23 extension point 1), which a per-item loop cannot express.
 type Match struct {
 	DesiredItemIDs []int64
 	Coverage       Coverage
@@ -94,12 +91,7 @@ const (
 	ConfidenceUnknown Confidence = "unknown"
 )
 
-// AvailabilityWindow is when a desired item becomes worth searching for -- computed
-// by the plugin from whatever release-date concept its media type actually has (air
-// date and network timezone for TV, theatrical/digital/physical for movies, release
-// date for music). Core does not plan a search before AvailableFrom plus the grace
-// period Confidence implies, and never learns what an air date is (ADR-23 extension
-// point 2).
+// AvailabilityWindow is when a desired item becomes worth searching, computed by the media type from its own release-date concept; core never learns what an air date is (ADR-23 extension point 2).
 type AvailabilityWindow struct {
 	AvailableFrom time.Time // zero value means not yet known
 	Confidence    Confidence
@@ -133,10 +125,7 @@ const (
 	ItemStateUpgradable ItemState = "UPGRADABLE"
 )
 
-// Satisfaction is how close a desired item is to complete -- a plugin call, not a
-// core rule, because a movie is satisfied by one file and an album by N of them, and
-// "75% complete" has to be a meaningful, plannable, searchable state rather than a
-// music special case (ADR-23 extension point 4).
+// Satisfaction is how close a desired item is to complete, a plugin call because a movie needs one file and an album N (ADR-23 extension point 4).
 type Satisfaction struct {
 	Kind     SatisfactionKind
 	Required int // meaningful for SatisfactionSet only

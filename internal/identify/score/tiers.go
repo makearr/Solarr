@@ -58,10 +58,7 @@ func tierValueFor(dimension string, tiers map[string][][]string, facts Facts, di
 	return numericTier(dimension, facts)
 }
 
-// distanceTier renders any dimension's own "<dimension>_distance" entry --
-// ADR-40 amended 2026-09-04 so this is a lookup, not a dimension-specific
-// branch: the interpreter gains no new code per dimension, only the profile's
-// own "targets" data does.
+// distanceTier renders any dimension's "<dimension>_distance" entry as a lookup (ADR-40), so only profile data grows per dimension.
 func distanceTier(compareName string, result targetResult) model.TierValue {
 	if !result.distanceOK {
 		return model.TierValue{Dimension: compareName, Rank: math.MaxInt32, Label: "unmeasured", Detail: "no matching target or dimension not probed"}

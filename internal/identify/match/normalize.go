@@ -20,11 +20,7 @@ func moveTrailingArticle(s string) string {
 	return s
 }
 
-// normalizeTitle applies section 10.2's normalisation: case fold, accent fold,
-// leading-article handling, punctuation strip, separator collapse. Roman-numeral
-// normalisation and embedded-year extraction are deliberately skipped -- Year is
-// already its own Identity field, and folding "II" against "2" is disproportionate
-// for this pass.
+// normalizeTitle applies section 10.2's case, accent, article, punctuation and separator folding; roman numerals and embedded years are skipped since Year is its own field.
 func normalizeTitle(s string) string {
 	return titlekey.Fold(moveTrailingArticle(strings.TrimSpace(strings.ToLower(s))), titlekey.Words)
 }

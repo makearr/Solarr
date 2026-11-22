@@ -1,11 +1,6 @@
 package model
 
-// Attributes is what a release name *claims* about the file itself, as opposed to
-// Identity's claim about what work it is (ADR-39: "release name = claims, ffprobe =
-// facts. Facts win. Both stored" -- this is the claims half; the measured half is
-// media_attributes/media_object, populated by a probe at import, stage 5). Scoped to
-// what music release names actually carry -- video fields (resolution, codec, HDR)
-// have no music equivalent and are not anticipated here.
+// Attributes is what a release name claims about the file (ADR-39: claims here, measured facts in media_attributes, and facts win); it holds only fields music names carry.
 type Attributes struct {
 	// Format is the audio codec/container a release name names: "flac", "mp3",
 	// "aac", "alac", "ogg", "wav" -- empty when the name says nothing about it.
@@ -13,10 +8,7 @@ type Attributes struct {
 	// Lossless is derived from Format, not asserted independently, so the two can
 	// never disagree.
 	Lossless bool
-	// BitrateKbps is 0 when unknown, when Lossless makes it meaningless, or when
-	// BitrateMode is "vbr" without a named preset -- a fixed number and "variable"
-	// are different claims, kept in separate fields rather than the negative-value
-	// sentinel this package used before todo 4.2 added BitrateMode.
+	// BitrateKbps is 0 when unknown, when Lossless makes it meaningless, or for BitrateMode "vbr" without a preset; a fixed number and "variable" are separate claims.
 	BitrateKbps int
 	// BitrateMode is "cbr" or "vbr" when the name states or implies one, empty
 	// otherwise. A bare numeric claim ("-320-") implies "cbr"; a named preset
@@ -26,10 +18,7 @@ type Attributes struct {
 	// "vbr" and the release named one -- empty for a bare "VBR" claim with no
 	// preset, or when BitrateMode is not "vbr" at all.
 	VBRPreset string
-	// SampleRate in Hz, 0 when unstated. Lidarr's own SampleSizeRegex has no
-	// sample-rate concept at all (ADR-18's port expands the model); a bare
-	// "96KHZ"/"44.1KHZ" token was previously recognised and discarded, not
-	// recorded -- todo 4.2 gives it a field to land on.
+	// SampleRate in Hz, 0 when unstated; Lidarr has no sample-rate concept, so ADR-18's port expands the model.
 	SampleRate int
 	// Container is empty unless a release name states one distinct from its
 	// codec (e.g. an M4A container around an AAC or ALAC stream) -- todo 4.2's

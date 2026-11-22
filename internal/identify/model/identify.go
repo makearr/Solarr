@@ -2,28 +2,14 @@ package model
 
 import "context"
 
-// ExternalID is one provider's identity for a work -- a MusicBrainz release group, a
-// TVDB series, a ROM's DAT entry. Confidence is the provider's own confidence in the
-// mapping, distinct from an Identification's confidence in having found the right
-// ExternalID for a given file.
+// ExternalID is one provider's identity for a work; its Confidence is the provider's mapping confidence, distinct from an Identification's.
 type ExternalID struct {
 	Provider   string
 	ExternalID string
 	Confidence float64
 }
 
-// FileRef is what an Identifier strategy has to work with: enough to locate the
-// bytes and enough to look up what the library already knows about them. FileRef
-// carries no behaviour of its own -- a strategy combines it with fsx (to read the
-// file) or the store (to look up prior identity) to actually do either; this package
-// stays free of both.
-//
-// MediaObjectID and RootFolderID are both optional (ADR-48): a scan-time file
-// already has both, but an import-inspection unit (a download folder, a manual
-// import target) is identified before it has a media_object row or a root folder
-// at all -- that is the entire point of inspecting it first. RelPath is always
-// present, relative to whatever base the caller's PathOf/TagSource resolves it
-// against, which differs between the two callers rather than this type.
+// FileRef is what an Identifier needs to locate bytes and look up prior identity, with no behaviour of its own. MediaObjectID and RootFolderID are optional (ADR-48) because import units are identified before either exists; RelPath is always set.
 type FileRef struct {
 	MediaObjectID *int64
 	RootFolderID  *int64

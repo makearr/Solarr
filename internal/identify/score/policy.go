@@ -15,11 +15,7 @@ type Profile struct {
 	Require Requirements          `json:"require"`
 	Compare []string              `json:"compare"`
 	Tiers   map[string][][]string `json:"tiers"`
-	// Targets keys on a dimension name ("bitrate", "sample_rate", "bit_depth", ...)
-	// -- ADR-40 amended 2026-09-04: any numeric dimension may carry a target, not
-	// just bitrate. A dimension's own "<dimension>_distance" compare entry reads
-	// this; a dimension absent here keeps the plain "higher is better" numeric
-	// comparison, so an existing bitrate-only profile needs no changes at all.
+	// Targets keys on a dimension name; any numeric dimension may carry one (ADR-40), and a dimension absent here keeps plain higher-is-better comparison.
 	Targets map[string][]Target `json:"targets"`
 	Scoring []ScoringRule       `json:"scoring"`
 }
@@ -49,11 +45,7 @@ type AnyOfClause struct {
 	AnyOf []string `json:"any_of"`
 }
 
-// Target supplies the ideal/min/max for one dimension, for files matching When,
-// checked in declaration order -- the first match wins. Values are strings so a
-// dimension can carry a human-readable unit ("20Mbps", "48kHz") the way a release
-// name or a *Arr-style quality definition would state it; parseTargetValue
-// converts a dimension's own unit to the number Facts reports.
+// Target supplies ideal/min/max for files matching When, first match wins; values are strings with units ("20Mbps") converted by parseTargetValue.
 type Target struct {
 	When    map[string]string `json:"when"`
 	Min     string            `json:"min,omitempty"`
@@ -65,10 +57,7 @@ type Target struct {
 	Lenience float64 `json:"lenience,omitempty"`
 }
 
-// TargetWeights scales the over/under asymmetry of a dimension's distance
-// (ADR-40). Parse defaults a zero field per-dimension: bitrate defaults to
-// symmetric 1/1, sample_rate and bit_depth default over below under (0.5/1),
-// so a name is not required to also copy the asymmetry that makes it useful.
+// TargetWeights scales a dimension's over/under asymmetry (ADR-40); Parse defaults zero fields per dimension (bitrate 1/1, sample_rate and bit_depth 0.5/1).
 type TargetWeights struct {
 	Over  float64 `json:"over"`
 	Under float64 `json:"under"`
@@ -171,12 +160,7 @@ func Parse(data []byte) (Profile, error) {
 	return profile, nil
 }
 
-// defaultTargetWeights fills a zero Over or Under with the dimension's own
-// default, not a single global one: bitrate stays symmetric (1/1), sample_rate
-// and bit_depth over-weight below under-weight (0.5/1) so overshooting a target
-// costs less than undershooting it -- ADR-40's amendment, confirmed with the
-// user. A caller who sets one side explicitly keeps it; only a zero field
-// (JSON omitted it) is defaulted.
+// defaultTargetWeights fills a zero Over or Under with the dimension's own default (ADR-40 amendment), keeping explicit sides.
 func defaultTargetWeights(dimension string, weights *TargetWeights) {
 	over, under := 1.0, 1.0
 	if dimension == "sample_rate" || dimension == "bit_depth" {

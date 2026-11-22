@@ -6,36 +6,18 @@ package model
 type UnitDecision string
 
 const (
-	// DecisionCommit is the chain resolved (Best is set) -- confident enough to
-	// import automatically. What "confident enough" means is entirely
-	// ChainConfig.AmbiguityThreshold's job (import.auto_commit_confidence, for
-	// an import caller); Decide adds no second threshold of its own.
+	// DecisionCommit is the chain resolved (Best set); how confident that must be is ChainConfig.AmbiguityThreshold's job, Decide adds no threshold.
 	DecisionCommit UnitDecision = "COMMIT"
 	// DecisionQueue is nothing cleared AmbiguityThreshold -- route to F29 rather
 	// than guess.
 	DecisionQueue UnitDecision = "QUEUE"
-	// DecisionSkip is an exclusion_pattern refuse-action file poisoning the
-	// whole unit, or a hash matching blocked_content (ADR-53, todo 4.15's
-	// import gate). Not produced by Decide itself -- a caller
-	// (internal/importing/importjob) checks both before and after IDENTIFY
-	// runs and overrides the decision with this value plus a structured
-	// Reason (ReasonBlockedPattern/ReasonBlockedContent below) when either
-	// gate fires.
+	// DecisionSkip is an exclusion-pattern refuse file or a blocked_content hash (ADR-53); set by the importjob caller with a structured Reason, never by Decide.
 	DecisionSkip UnitDecision = "SKIP"
-	// DecisionFailed marks a unit where every file could not even be read. Not
-	// produced by Decide either -- it is a caller's own IdentifyUnit error
-	// path, not a property of a ChainResult, which by definition only exists
-	// when identification ran to completion.
+	// DecisionFailed is no file in the unit could be read; set by the caller's IdentifyUnit error path, not by Decide.
 	DecisionFailed UnitDecision = "FAILED"
 )
 
-// import_unit.reason's own structured prefixes for the two ADR-53 import-gate
-// rejections (todo 4.15) -- a stable code a caller can match on
-// (strings.HasPrefix), followed by human-readable detail after a colon.
-// ReasonBlockedPattern always pairs with DecisionSkip (the file matched
-// before IDENTIFY ever ran); ReasonBlockedContent can be recorded after the
-// fact, once a unit already DECIDE-chose DecisionCommit and only then had
-// its hash checked against blocked_content at COMMIT time.
+// import_unit.reason prefixes for the ADR-53 gates, matchable by strings.HasPrefix with detail after a colon; ReasonBlockedPattern pairs with DecisionSkip, ReasonBlockedContent can follow a commit decision at COMMIT time.
 const (
 	ReasonBlockedPattern = "BLOCKED_PATTERN"
 	ReasonBlockedContent = "BLOCKED_CONTENT"
@@ -43,12 +25,7 @@ const (
 	ReasonDiscStructure = "DISC_STRUCTURE"
 )
 
-// Decide is ADR-48's DECIDE step, the confidence half: whether IDENTIFY's result
-// commits automatically or goes to the manual identification queue. This is
-// exactly "did Best get set", already decided by RunChain/RunChainForFiles against
-// whatever AmbiguityThreshold the caller configured -- Decide exists so a caller
-// has one named place to ask the question, not a second comparison to keep in sync
-// with the chain's own.
+// Decide is ADR-48's confidence half of DECIDE: commit if Best was set by the chain, else the manual queue; it exists so there is one named place to ask, not a second comparison.
 func Decide(result ChainResult) UnitDecision {
 	if result.Best != nil {
 		return DecisionCommit
