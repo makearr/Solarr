@@ -31,10 +31,19 @@ func Find(ctx context.Context, fsys fsx.FS, root string) ([]string, error) {
 	return primaries(files), nil
 }
 
+// isComicBook says the file is a comic archive: a book's media, not a package to open.
+func isComicBook(name string) bool {
+	switch strings.ToLower(path.Ext(name)) {
+	case ".cbz", ".cbr", ".cb7", ".cbt":
+		return true
+	}
+	return false
+}
+
 func primaries(files []inspect.File) []string {
 	byDirectory := map[string][]string{}
 	for _, file := range files {
-		if file.Class == inspect.ClassArchive {
+		if file.Class == inspect.ClassArchive && !isComicBook(file.RelPath) {
 			byDirectory[path.Dir(file.RelPath)] = append(byDirectory[path.Dir(file.RelPath)], path.Base(file.RelPath))
 		}
 	}

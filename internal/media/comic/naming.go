@@ -102,6 +102,15 @@ func NamingFor(profile *settings.NamingProfile) Naming {
 	return Naming(NamingScheme().Resolve(profile, defaultOptions))
 }
 
+// NamingForKind is NamingFor, with a manga library's own default: a series folder without a year, as its readers expect.
+func NamingForKind(profile *settings.NamingProfile, kind string) Naming {
+	names := NamingFor(profile)
+	if profile == nil && isMangaKind(kind) {
+		names.Formats[SlotSeriesFolder] = "{Series Title}"
+	}
+	return names
+}
+
 // FileNaming is every fact a comic file's name can draw on; a zero field renders as absent.
 type FileNaming struct {
 	Series, Publisher, IssueTitle string

@@ -87,7 +87,7 @@ func TestExpand_OpensNestedArchivesIntoTheWorkspaceAndLeavesTheSource(t *testing
 
 func TestFind_OneEntryPerMultipartSetAndPerSingleArchive(t *testing.T) {
 	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
-	for _, name := range []string{"Album.part01.rar", "Album.part02.rar", "Album.part03.rar", "Other.zip", "notes.txt", "Old.rar", "Old.r00", "Old.r01"} {
+	for _, name := range []string{"Album.part01.rar", "Album.part02.rar", "Album.part03.rar", "Other.zip", "notes.txt", "Old.rar", "Old.r00", "Old.r01", "Night Harbor 001.cbz", "Night Harbor 002.cbr"} {
 		put(t, fsys, "/dl/"+name, []byte("x"))
 	}
 	found, err := unpack.Find(t.Context(), fsys, "/dl")

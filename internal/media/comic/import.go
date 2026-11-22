@@ -294,7 +294,7 @@ func (p placing) placeFiles(ctx context.Context, request batch.Request, chosen [
 
 func (p placing) namingFor(categoryID int64) (Naming, settings.FileManagement) {
 	profile, fileManagement, mayRename := works.CategoryNaming(p.config.Categories, categoryID, p.config.RenameOnImport)
-	names := NamingFor(profile)
+	names := NamingForKind(profile, p.kindOf(categoryID))
 	names.RenameFiles = names.RenameFiles && mayRename
 	return names, fileManagement
 }

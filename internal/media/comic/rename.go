@@ -24,7 +24,7 @@ func (cfg RenameConfig) NameFiles(ctx context.Context, category settings.Categor
 	if err != nil {
 		return nil, err
 	}
-	names := NamingFor(category.Naming)
+	names := NamingForKind(category.Naming, category.Kind)
 	named := make([]renamejob.Named, 0, len(files))
 	taken := map[string]bool{}
 	for _, file := range files {

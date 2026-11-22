@@ -61,3 +61,12 @@ func TestModuleNamingIsValidAndExampled(t *testing.T) {
 		t.Fatalf("examples = %+v", examples)
 	}
 }
+
+func TestAMangaLibraryWithoutAProfileHasNoYearInItsSeriesFolder(t *testing.T) {
+	facts := FileNaming{Series: "Night Harbor", Year: 2019, Volume: 2}
+	manga, _, _ := NamingForKind(nil, KindManga).RenderFile(SlotVolumeFile, facts, "x.cbz")
+	comics, _, _ := NamingForKind(nil, KindComics).RenderFile(SlotVolumeFile, facts, "x.cbz")
+	if manga != "Night Harbor/Night Harbor v02.cbz" || comics != "Night Harbor (2019)/Night Harbor v02.cbz" {
+		t.Fatalf("manga %q, comics %q", manga, comics)
+	}
+}
