@@ -126,6 +126,9 @@ func (s *Server) DeleteMediaServer(w http.ResponseWriter, r *http.Request, id in
 		writeError(w, s.logger, err)
 		return
 	}
+	if s.afterMediaServerDelete != nil {
+		s.afterMediaServerDelete(r.Context(), id)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -785,6 +785,25 @@ type PersonRefresh struct {
 	RefreshedAt int64
 }
 
+type PlaybackState struct {
+	ServerID     int64
+	ServerUserID string
+	WorkID       int64
+	PartID       int64
+	Played       int64
+	PlayCount    int64
+	PositionMs   int64
+	DurationMs   int64
+	LastPlayedAt sql.NullInt64
+	UpdatedAt    int64
+}
+
+type PlaybackSync struct {
+	ServerID     int64
+	ServerUserID string
+	Since        int64
+}
+
 type ReadyQueue struct {
 	CandidateID   int64
 	DesiredItemID int64

@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/makearr/Solarr/internal/mediaserver"
 )
@@ -184,4 +187,45 @@ func (c *Client) Announce(ctx context.Context, text string) error {
 		}
 	}
 	return nil
+}
+
+// Played lists a user's items by last play, newest first, with their files and provider ids.
+func (c *Client) Played(ctx context.Context, userID string, since int64, offset, limit int) ([]mediaserver.Play, bool, error) {
+	query := url.Values{
+		"Recursive": {"true"}, "SortBy": {"DatePlayed"}, "SortOrder": {"Descending"}, "Fields": {"Path,ProviderIds"},
+		"IncludeItemTypes": {"Movie,Episode,Audio,AudioBook,Book,Video"}, "EnableUserData": {"true"}, "EnableImages": {"false"},
+		"StartIndex": {strconv.Itoa(offset)}, "Limit": {strconv.Itoa(limit)},
+	}
+	var page struct {
+		Items []struct {
+			Path        string            `json:"Path"`
+			RunTime     int64             `json:"RunTimeTicks"`
+			ProviderIDs map[string]string `json:"ProviderIds"`
+			UserData    struct {
+				Played    bool       `json:"Played"`
+				PlayCount int64      `json:"PlayCount"`
+				Position  int64      `json:"PlaybackPositionTicks"`
+				Last      *time.Time `json:"LastPlayedDate"`
+			} `json:"UserData"`
+		} `json:"Items"`
+	}
+	if err := c.call(ctx, http.MethodGet, mediaserver.Join(c.base, "/Users/"+url.PathEscape(userID)+"/Items?"+query.Encode()), nil, &page); err != nil {
+		return nil, false, mediaserver.Refused(err)
+	}
+	plays := make([]mediaserver.Play, 0, len(page.Items))
+	for _, item := range page.Items {
+		data := item.UserData
+		if data.Last == nil || data.Last.Unix() < since {
+			return plays, true, nil
+		}
+		ids := make(map[string]string, len(item.ProviderIDs))
+		for name, id := range item.ProviderIDs {
+			ids[strings.ToLower(name)] = id
+		}
+		plays = append(plays, mediaserver.Play{
+			Path: item.Path, ProviderIDs: ids, Played: data.Played, PlayCount: data.PlayCount,
+			PositionMS: data.Position / 10000, DurationMS: item.RunTime / 10000, LastPlayed: data.Last.Unix(),
+		})
+	}
+	return plays, len(page.Items) < limit, nil
 }

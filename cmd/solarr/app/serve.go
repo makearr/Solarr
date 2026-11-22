@@ -631,6 +631,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerMediaServerPushJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerMediaServerPlaybackJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerSimilarVideosJob(registry, executor); err != nil {
 		return err
 	}
@@ -935,8 +938,8 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		},
 		LibrarySuggester:   p.suggester(),
 		ArrSync:            p.arrSync(),
-		MediaServerClients: p.mediaServerClients,
-		ArrCompanion:       p.arrSync(), AfterWrite: p.memory.requestSync,
+		MediaServerClients: p.mediaServerClients, AfterMediaServerDelete: p.forgetMediaServer,
+		ArrCompanion: p.arrSync(), AfterWrite: p.memory.requestSync,
 		CategoryMerger: libraryMerger{merges: library.NewCategoryMerges(p.library), queue: p.queue},
 		Prowlarr:       adapters.Prowlarr{Cache: p.cache, List: p.listProwlarr},
 		ArrConnections: adapters.Prowlarr{

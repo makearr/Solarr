@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/makearr/Solarr/internal/mediaserver"
 )
@@ -49,6 +50,20 @@ type answer struct {
 	ScanStatus struct {
 		Scanning bool `json:"scanning"`
 	} `json:"scanStatus"`
+	AlbumList2 struct {
+		Album []struct {
+			ID            string `json:"id"`
+			PlayCount     int64  `json:"playCount"`
+			Played        string `json:"played"`
+			Duration      int64  `json:"duration"`
+			MusicBrainzID string `json:"musicBrainzId"`
+		} `json:"album"`
+	} `json:"albumList2"`
+	Album struct {
+		Song []struct {
+			Path string `json:"path"`
+		} `json:"song"`
+	} `json:"album"`
 	MusicFolders struct {
 		MusicFolder []struct {
 			ID   int    `json:"id"`
@@ -114,4 +129,35 @@ func (c *Client) Changed(ctx context.Context, _ []mediaserver.Change) error {
 	}
 	_, err = c.call(ctx, "startScan", url.Values{"fullScan": {"false"}})
 	return err
+}
+
+// Played lists the signed-in user's albums by last play; the server keeps no per-user list for anyone else.
+func (c *Client) Played(ctx context.Context, _ string, since int64, offset, limit int) ([]mediaserver.Play, bool, error) {
+	reply, err := c.call(ctx, "getAlbumList2", url.Values{"type": {"recent"}, "size": {strconv.Itoa(limit)}, "offset": {strconv.Itoa(offset)}})
+	if err != nil {
+		return nil, false, err
+	}
+	plays := make([]mediaserver.Play, 0, len(reply.AlbumList2.Album))
+	for _, album := range reply.AlbumList2.Album {
+		last, parsed := time.Parse(time.RFC3339Nano, album.Played)
+		if parsed != nil || last.Unix() < since {
+			return plays, true, nil //nolint:nilerr // an album never played has no date, and the list is newest first
+		}
+		detail, err := c.call(ctx, "getAlbum", url.Values{"id": {album.ID}})
+		if err != nil {
+			return nil, false, err
+		}
+		play := mediaserver.Play{
+			Whole: true, Played: true, PlayCount: max(album.PlayCount, 1), DurationMS: album.Duration * 1000, LastPlayed: last.Unix(),
+			ProviderIDs: map[string]string{},
+		}
+		if len(detail.Album.Song) > 0 {
+			play.Path = detail.Album.Song[0].Path
+		}
+		if album.MusicBrainzID != "" {
+			play.ProviderIDs["musicbrainz:release"] = album.MusicBrainzID
+		}
+		plays = append(plays, play)
+	}
+	return plays, len(reply.AlbumList2.Album) < limit, nil
 }

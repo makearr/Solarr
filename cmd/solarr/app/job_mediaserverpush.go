@@ -164,3 +164,13 @@ func (p *process) recordMoveJobPush(ctx context.Context, moveJobID int64) {
 		}
 	}
 }
+
+// forgetMediaServer drops the push rows of a deleted connection; a failure is logged, the delete stands.
+func (p *process) forgetMediaServer(ctx context.Context, serverID int64) {
+	if err := library.NewMediaServerPending(p.library).ClearServer(ctx, serverID); err != nil {
+		p.logger.Warn("media server push rows not cleared", "server", serverID, "err", err)
+	}
+	if err := library.NewPlayback(p.library).ClearServer(ctx, serverID); err != nil {
+		p.logger.Warn("media server watch state not cleared", "server", serverID, "err", err)
+	}
+}

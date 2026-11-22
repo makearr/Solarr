@@ -294,6 +294,8 @@ type Config struct {
 	ArrSync  ArrSync
 	// MediaServerClients builds the client of a media server connection; nil leaves testing one unavailable.
 	MediaServerClients MediaServerClients
+	// AfterMediaServerDelete drops what is queued or stored for a deleted connection; nil does nothing.
+	AfterMediaServerDelete func(ctx context.Context, serverID int64)
 	// CategoryMerger moves what the library holds for one category to another; nil leaves merging unavailable.
 	CategoryMerger CategoryMerger
 	// LibraryHealth answers todo 4.8's own aggregate report (unprobed files,
@@ -430,6 +432,7 @@ type Server struct {
 	importLists             ImportListSync
 	arrSync                 ArrSync
 	mediaServerClients      MediaServerClients
+	afterMediaServerDelete  func(ctx context.Context, serverID int64)
 	categoryMerger          CategoryMerger
 	libraryHealth           LibraryHealth
 	systemHealth            SystemHealthSource
@@ -580,6 +583,7 @@ func New(config Config) (*Server, error) {
 		importLists:             config.ImportLists,
 		arrSync:                 config.ArrSync,
 		mediaServerClients:      config.MediaServerClients,
+		afterMediaServerDelete:  config.AfterMediaServerDelete,
 		categoryMerger:          config.CategoryMerger,
 		libraryHealth:           config.LibraryHealth,
 		systemHealth:            config.SystemHealth,

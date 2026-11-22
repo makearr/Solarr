@@ -334,6 +334,9 @@ type Querier interface {
 	// A file that covers an episode is identified, whoever placed it and whenever. TV only: an unverified album's files
 	// are attached to it and still await identification (D6).
 	DeletePlacedUnidentified(ctx context.Context) error
+	DeletePlaybackStateChunk(ctx context.Context, serverID int64) (int64, error)
+	DeletePlaybackStateOfUserChunk(ctx context.Context, arg DeletePlaybackStateOfUserChunkParams) (int64, error)
+	DeletePlaybackSyncOf(ctx context.Context, serverID int64) error
 	DeleteProbeFailure(ctx context.Context, mediaObjectID int64) error
 	DeleteRecycleBinEntry(ctx context.Context, id int64) error
 	DeleteRelationship(ctx context.Context, arg DeleteRelationshipParams) error
@@ -511,6 +514,7 @@ type Querier interface {
 	GetPerson(ctx context.Context, id int64) (Person, error)
 	GetPersonArtistMBID(ctx context.Context, personID int64) (string, error)
 	GetPersonByExternalID(ctx context.Context, arg GetPersonByExternalIDParams) (Person, error)
+	GetPlaybackSince(ctx context.Context, arg GetPlaybackSinceParams) (int64, error)
 	GetProbeFailureAttempts(ctx context.Context, mediaObjectID int64) (int64, error)
 	GetProbeFailureRaw(ctx context.Context, mediaObjectID int64) (string, error)
 	GetRecycleBin(ctx context.Context, id int64) (RecycleBin, error)
@@ -1277,6 +1281,9 @@ type Querier interface {
 	// to belong to a pack) moves that one member from QUEUED to RESOLVED --
 	// RecomputePackCounts is then what updates the pack's own resolved_count.
 	ResolvePackItem(ctx context.Context, arg ResolvePackItemParams) error
+	ResolvePlaybackFile(ctx context.Context, arg ResolvePlaybackFileParams) (ResolvePlaybackFileRow, error)
+	ResolvePlaybackPartByExternalID(ctx context.Context, arg ResolvePlaybackPartByExternalIDParams) (ResolvePlaybackPartByExternalIDRow, error)
+	ResolvePlaybackWorkByExternalID(ctx context.Context, arg ResolvePlaybackWorkByExternalIDParams) (int64, error)
 	ResumeMoveJob(ctx context.Context, id int64) (int64, error)
 	// Whether the library still has a file on a root that is not missing: an empty root then is an unmounted disk.
 	RootHoldsFiles(ctx context.Context, rootFolderID int64) (int64, error)
@@ -1391,6 +1398,7 @@ type Querier interface {
 	SetPersonImageURL(ctx context.Context, arg SetPersonImageURLParams) error
 	SetPersonMonitored(ctx context.Context, arg SetPersonMonitoredParams) error
 	SetPhash(ctx context.Context, arg SetPhashParams) error
+	SetPlaybackSince(ctx context.Context, arg SetPlaybackSinceParams) error
 	SetRecycleBinPath(ctx context.Context, arg SetRecycleBinPathParams) error
 	// Progress mid-sweep: the cursor advances, the watermark does not.
 	SetScanCursor(ctx context.Context, arg SetScanCursorParams) error
@@ -1468,6 +1476,8 @@ type Querier interface {
 	UpsertMediaObjectRelease(ctx context.Context, arg UpsertMediaObjectReleaseParams) error
 	// The planner owns every column but the search record, which each search keeps itself.
 	UpsertPlannedHunt(ctx context.Context, arg UpsertPlannedHuntParams) error
+	// What media server users have played. Column lists follow table order.
+	UpsertPlaybackState(ctx context.Context, arg UpsertPlaybackStateParams) error
 	UpsertProbeFailure(ctx context.Context, arg UpsertProbeFailureParams) error
 	UpsertSimilarReport(ctx context.Context, arg UpsertSimilarReportParams) error
 	// F29: the manual identification queue (migration 0014). Column lists follow table

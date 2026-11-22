@@ -362,3 +362,11 @@ const KeyMediaServerPushDebounce = "media_server.push_debounce_seconds"
 func (c *Cache) MediaServerPushDebounceSeconds() int64 {
 	return c.Snapshot().policyInt(KeyMediaServerPushDebounce, 0)
 }
+
+// KeyMediaServerPlayedPercent is how much of an item counts as played where a server gives only a position.
+const KeyMediaServerPlayedPercent = "media_server.played_percent"
+
+// MediaServerPlayedPercent is the configured share; zero means the service default.
+func (c *Cache) MediaServerPlayedPercent() int64 {
+	return c.Snapshot().policyInt(KeyMediaServerPlayedPercent, 0)
+}

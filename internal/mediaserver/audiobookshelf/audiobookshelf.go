@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/mediaserver"
 )
@@ -93,4 +94,64 @@ func (c *Client) Changed(ctx context.Context, changes []mediaserver.Change) erro
 		}
 	}
 	return nil
+}
+
+type progress struct {
+	LibraryItemID string  `json:"libraryItemId"`
+	EpisodeID     string  `json:"episodeId"`
+	Duration      float64 `json:"duration"`
+	CurrentTime   float64 `json:"currentTime"`
+	IsFinished    bool    `json:"isFinished"`
+	LastUpdate    int64   `json:"lastUpdate"`
+}
+
+// Played lists a user's books by last progress, newest first; the files come from one item read each.
+func (c *Client) Played(ctx context.Context, userID string, since int64, offset, limit int) ([]mediaserver.Play, bool, error) {
+	var reply struct {
+		MediaProgress []progress `json:"mediaProgress"`
+	}
+	if err := mediaserver.Call(ctx, c.doer, http.MethodGet, mediaserver.Join(c.base, "/api/users/"+url.PathEscape(userID)), c.header(), nil, &reply); err != nil {
+		return nil, false, mediaserver.Refused(err)
+	}
+	books := slices.DeleteFunc(reply.MediaProgress, func(one progress) bool { return one.EpisodeID != "" })
+	slices.SortFunc(books, func(a, b progress) int { return int(b.LastUpdate/1000 - a.LastUpdate/1000) })
+	var plays []mediaserver.Play
+	for position := offset; position < min(offset+limit, len(books)); position++ {
+		one := books[position]
+		if one.LastUpdate/1000 < since {
+			return plays, true, nil
+		}
+		var item struct {
+			Path  string `json:"path"`
+			Media struct {
+				Metadata struct {
+					ASIN string `json:"asin"`
+					ISBN string `json:"isbn"`
+				} `json:"metadata"`
+			} `json:"media"`
+		}
+		address := mediaserver.Join(c.base, "/api/items/"+url.PathEscape(one.LibraryItemID))
+		if err := mediaserver.Call(ctx, c.doer, http.MethodGet, address, c.header(), nil, &item); err != nil {
+			return nil, false, mediaserver.Refused(err)
+		}
+		ids := map[string]string{}
+		if item.Media.Metadata.ASIN != "" {
+			ids["asin"] = item.Media.Metadata.ASIN
+		}
+		if item.Media.Metadata.ISBN != "" {
+			ids["isbn"] = item.Media.Metadata.ISBN
+		}
+		plays = append(plays, mediaserver.Play{
+			Path: item.Path, ProviderIDs: ids, Whole: true, Played: one.IsFinished, PlayCount: boolCount(one.IsFinished),
+			PositionMS: int64(one.CurrentTime * 1000), DurationMS: int64(one.Duration * 1000), LastPlayed: one.LastUpdate / 1000,
+		})
+	}
+	return plays, offset+limit >= len(books), nil
+}
+
+func boolCount(finished bool) int64 {
+	if finished {
+		return 1
+	}
+	return 0
 }

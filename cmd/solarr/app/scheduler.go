@@ -211,6 +211,11 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Enqueue: p.enqueueMediaServerPushes,
 	})
 	registry.MustRegister(jobs.Task{
+		Key: "media_server_playback", Name: "Read what media server users watched", DefaultCadence: mediaServerPlaybackScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueMediaServerPlayback,
+	})
+	registry.MustRegister(jobs.Task{
 		Key: "media_server_files", Name: "Write Jellyfin and Kodi files", DefaultCadence: serverFilesScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary, Startup: jobs.StartupOff,
 		Enqueue: p.enqueueServerFiles,

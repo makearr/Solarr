@@ -79,3 +79,26 @@ type Announcer interface {
 type Pusher interface {
 	Changed(ctx context.Context, changes []Change) error
 }
+
+// Play is one item a user has played or started, in the server's own terms.
+type Play struct {
+	// Path is the item's file on the server; empty where the kind lists none.
+	Path string
+	// ProviderIDs are the item's ids by lower-case provider name, as Solarr names them where the kind knows.
+	ProviderIDs map[string]string
+	// Whole says the play is of the whole work (an album), whatever file Path names.
+	Whole      bool
+	Played     bool
+	PlayCount  int64
+	PositionMS int64
+	DurationMS int64
+	// LastPlayed is unix seconds; zero when unknown.
+	LastPlayed int64
+}
+
+// PlaybackReader is implemented by the kinds that tell what a user has played; reads only.
+type PlaybackReader interface {
+	// Played answers a page of the user's items, newest play first, and whether the end or an item older than since
+	// (unix seconds) was reached. userID is empty for a kind that serves only the signed-in user.
+	Played(ctx context.Context, userID string, since int64, offset, limit int) (items []Play, done bool, err error)
+}
