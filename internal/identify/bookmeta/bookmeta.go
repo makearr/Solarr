@@ -43,6 +43,19 @@ func Read(fsys fsx.FS, absPath string) (Meta, bool) {
 	return Meta{}, false
 }
 
+// FromTags is what an audiobook file's tags say of the book: the album is its title, the album artist (else the artist)
+// its author, and the ISBN or ASIN tags that Audible rips and most taggers write its ids. tag answers the first present
+// value of the names asked, as mediatool.Tags.First does.
+func FromTags(tag func(names ...string) string) (Meta, bool) {
+	meta := Meta{
+		Title: tag("album"), ISBN: isbnOf(tag("isbn")), ASIN: strings.ToUpper(strings.TrimSpace(tag("asin", "audible_asin"))),
+	}
+	if author := tag("albumartist", "artist"); author != "" {
+		meta.Authors = []string{author}
+	}
+	return meta, meta.Title != "" || len(meta.Authors) > 0 || meta.ISBN != "" || meta.ASIN != ""
+}
+
 func readSidecar(fsys fsx.FS, opfPath string) (Meta, bool) {
 	file, err := fsys.Open(opfPath)
 	if err != nil {

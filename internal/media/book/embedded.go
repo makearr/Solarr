@@ -4,6 +4,7 @@ import (
 	"github.com/makearr/Solarr/internal/identify/bookmeta"
 	"github.com/makearr/Solarr/internal/identify/parsebook"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // withEmbedded reads what the book says of itself (a Calibre metadata.opf beside it, or an EPUB's own package file)
@@ -17,6 +18,19 @@ func withEmbedded(fsys fsx.FS, absolutePath string, info parsebook.Info) parsebo
 	if !ok {
 		return info
 	}
+	return layered(info, meta)
+}
+
+// withTags is withEmbedded for an audiobook: what the tags of its first file say of the book is laid over its name's reading.
+func withTags(info parsebook.Info, tags mediatool.Tags) parsebook.Info {
+	meta, ok := bookmeta.FromTags(tags.First)
+	if !ok {
+		return info
+	}
+	return layered(info, meta)
+}
+
+func layered(info parsebook.Info, meta bookmeta.Meta) parsebook.Info {
 	if meta.ISBN != "" {
 		info.ISBN = meta.ISBN
 	}

@@ -74,7 +74,8 @@ of itself, in this order: a Calibre `metadata.opf` in the file's folder (any for
 file named by its `META-INF/container.xml` (at most 5,000 archive entries, a rootfile path that is absolute or climbs out
 is refused). It yields the title, authors, a valid ISBN-10 or ISBN-13, an ASIN, the language and Calibre's series. A scan
 and an import lay it over the name's reading: the ids win, the title and first author lead, and the name's title stays as
-another reading. Audiobook tags are not read yet.
+another reading. For an audiobook the tags of the folder's first file are laid over the name the same way: the album is the title,
+the album artist (else the artist) the author, the ISBN and ASIN tags the ids (a scan uses the probe it already made; an import reads the one file).
 
 ## Searching
 

@@ -22,6 +22,7 @@ import (
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/moving/mover"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // GuessFloor is the least confidence a held folder's guessed book is placed at by "Commit anyway".
@@ -32,6 +33,13 @@ const GuessFloor = 0.75
 type ImporterConfig struct {
 	works.ImportDeps
 	Resolver Resolver
+	// Tags reads an audiobook's tags; nil leaves a folder to its name.
+	Tags TagReader
+}
+
+// TagReader reads the tags of audio files, one result per path, as mediatool.Tool does.
+type TagReader interface {
+	ReadTags(ctx context.Context, paths []string) ([]mediatool.Probe, error)
 }
 
 // Importer is the book module's batch importer: it works out which book a download holds, names and places its files
@@ -79,7 +87,13 @@ func (p placing) Resolve(ctx context.Context, request batch.Request, unit inspec
 	}
 	var candidates []model.Identification
 	if info, ok := p.format().Parse(files[0].RelPath); ok {
-		info = withEmbedded(p.config.FS, path.Join(request.SourcePath, files[0].RelPath), info)
+		absolute := path.Join(request.SourcePath, files[0].RelPath)
+		info = withEmbedded(p.config.FS, absolute, info)
+		if p.format().ByFolder && p.config.Tags != nil {
+			if probes, err := p.config.Tags.ReadTags(ctx, []string{absolute}); err == nil && len(probes) == 1 && probes[0].Err == nil {
+				info = withTags(info, probes[0].Tags)
+			}
+		}
 		workID, found := p.config.Resolver.Resolve(ctx, request.CategoryID, info)
 		if workID != 0 {
 			return workID, nil
