@@ -324,6 +324,7 @@ func (p *process) enqueueServerFilesFor(ctx context.Context, categoryID, workID 
 	if _, err := tv.EnqueueServerFilesFor(ctx, p.queue, categoryID, workID); err != nil {
 		p.logger.Warn("could not queue the media server files of an imported series", "work_id", workID, "error", err)
 	}
+	p.recordServerPush(ctx, categoryID, workID, library.PendingCreated)
 }
 
 // enqueueMovieServerFilesFor submits the pass for one movie, right after an import placed a file of it.
@@ -331,6 +332,7 @@ func (p *process) enqueueMovieServerFilesFor(ctx context.Context, categoryID, wo
 	if _, err := movie.EnqueueServerFilesFor(ctx, p.queue, categoryID, workID); err != nil {
 		p.logger.Warn("could not queue the media server files of an imported movie", "work_id", workID, "error", err)
 	}
+	p.recordServerPush(ctx, categoryID, workID, library.PendingCreated)
 }
 
 // enqueueServerFiles submits the passes writing Jellyfin and Kodi files, one per media type that has them.

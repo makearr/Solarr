@@ -628,6 +628,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerFreshCountsJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerMediaServerPushJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerSimilarVideosJob(registry, executor); err != nil {
 		return err
 	}

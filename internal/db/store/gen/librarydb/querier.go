@@ -31,6 +31,8 @@ type Querier interface {
 	AddFavorite(ctx context.Context, arg AddFavoriteParams) error
 	// The second half of importing a file, and execlastid for the same reason.
 	AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) (int64, error)
+	// Paths a media server has still to be told about. Column lists follow table order.
+	AddMediaServerPending(ctx context.Context, arg AddMediaServerPendingParams) error
 	AddPersonAlias(ctx context.Context, arg AddPersonAliasParams) error
 	// A further id of a person: the first person to claim it keeps it, so a key never moves between same-named people.
 	AddPersonExternalID(ctx context.Context, arg AddPersonExternalIDParams) error
@@ -78,6 +80,7 @@ type Querier interface {
 	// Which of a result list's guids an indexer has blocklisted: one read for the list.
 	BlockedGuidsAmong(ctx context.Context, arg BlockedGuidsAmongParams) ([]sql.NullString, error)
 	BlocklistRelease(ctx context.Context, arg BlocklistReleaseParams) (BlocklistedRelease, error)
+	BumpMediaServerPending(ctx context.Context, ids interface{}) error
 	CancelMoveJob(ctx context.Context, arg CancelMoveJobParams) (int64, error)
 	ClearClassificationGenres(ctx context.Context, workID int64) error
 	ClearCrossoverMemberGuesses(ctx context.Context, collectionID int64) error
@@ -311,6 +314,8 @@ type Querier interface {
 	DeleteImportUnits(ctx context.Context, arg DeleteImportUnitsParams) error
 	DeleteLibraryPath(ctx context.Context, id int64) error
 	DeleteMediaObject(ctx context.Context, id int64) error
+	DeleteMediaServerPending(ctx context.Context, ids interface{}) error
+	DeleteMediaServerPendingOf(ctx context.Context, serverID int64) error
 	DeleteMissingRecount(ctx context.Context, arg DeleteMissingRecountParams) error
 	DeleteMoveJobLibraryChange(ctx context.Context, moveJobID int64) error
 	// Old finished downloads nothing needs any more: none of their files is still in the library (that is what
@@ -718,6 +723,7 @@ type Querier interface {
 	// Which of an album's files arrived by a download or a manual import session. Only those can replace
 	// an owned file (M1d); a scan or an adoption never does.
 	ListDownloadedFilesForWork(ctx context.Context, workID int64) ([]int64, error)
+	ListDueMediaServerPending(ctx context.Context, arg ListDueMediaServerPendingParams) ([]MediaServerPending, error)
 	// The queued files whose automatic retry is due; ListUnidentified without the due test lists them all.
 	ListDueUnidentified(ctx context.Context, arg ListDueUnidentifiedParams) ([]IdentificationQueue, error)
 	ListEditionExternalIDs(ctx context.Context, editionID int64) ([]EditionExternalID, error)
@@ -808,6 +814,7 @@ type Querier interface {
 	ListLivePathsForWork(ctx context.Context, workID int64) ([]ListLivePathsForWorkRow, error)
 	// Which of a batch's files a person already identified; ids is a JSON array.
 	ListManuallyIdentified(ctx context.Context, mediaObjectIds string) ([]int64, error)
+	ListMediaServerPendingServers(ctx context.Context, queuedAt int64) ([]int64, error)
 	// The artists credited on a library's albums, with what a merge needs to rank them. shared is set
 	// when the person also has work in another library, which a merge in this one must leave alone.
 	ListMergeCandidatesForCategory(ctx context.Context, categoryID int64) ([]ListMergeCandidatesForCategoryRow, error)
@@ -1018,6 +1025,7 @@ type Querier interface {
 	ListWorkFilePaths(ctx context.Context, workID int64) ([]ListWorkFilePathsRow, error)
 	// Every file of one work, for deleting an album's files along with it.
 	ListWorkFiles(ctx context.Context, workID int64) ([]int64, error)
+	ListWorkFilesForPush(ctx context.Context, workID int64) ([]ListWorkFilesForPushRow, error)
 	// The files only this work holds: one a crossover episode shares with another work stays with it.
 	ListWorkFilesNotShared(ctx context.Context, workID int64) ([]int64, error)
 	ListWorkGenreTreesInCategory(ctx context.Context, categoryID int64) ([]ListWorkGenreTreesInCategoryRow, error)

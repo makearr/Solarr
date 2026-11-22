@@ -633,6 +633,17 @@ type MediaProbeFailure struct {
 	Raw           string
 }
 
+type MediaServerPending struct {
+	ID         int64
+	ServerID   int64
+	CategoryID int64
+	Path       string
+	Change     string
+	WorkID     int64
+	QueuedAt   int64
+	Attempts   int64
+}
+
 type MissingRecount struct {
 	RootFolderID int64
 	MissingSince int64

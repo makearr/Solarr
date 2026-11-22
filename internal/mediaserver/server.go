@@ -43,3 +43,17 @@ var ErrNotAdmin = errors.New("mediaserver: the credential is not an administrato
 
 // ErrRejected means the server refused the credential.
 var ErrRejected = errors.New("mediaserver: the server refused the credential")
+
+// Change is one path a media server is told of; Path is in the server's own terms.
+type Change struct {
+	Path string
+	// Kind is "created", "modified" or "deleted".
+	Kind string
+	// LibraryIDs are the server's libraries the path belongs to, for a server that can only scan a library.
+	LibraryIDs []string
+}
+
+// Pusher is implemented by the kinds that can be told of new files; the kind decides between a targeted update and a scan.
+type Pusher interface {
+	Changed(ctx context.Context, changes []Change) error
+}

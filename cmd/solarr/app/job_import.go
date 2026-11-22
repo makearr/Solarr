@@ -11,9 +11,11 @@ import (
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/quality"
 	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/importjob"
+	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/importing/placer"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/adult"
@@ -243,7 +245,7 @@ func (p *process) bookImporter(format book.Format) book.Importer {
 		Resolver: p.bookResolver(format), Tags: p.mediaTool(),
 		Categories: categories, Clock: clock.NewSystem(), Logger: p.logger,
 		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
-		RenameOnImport: p.renameOnImport, ExtraFiles: p.extraFileExtensions,
+		RenameOnImport: p.renameOnImport, ExtraFiles: p.extraFileExtensions, AfterPlacing: p.afterPlacing,
 	})
 }
 
@@ -251,7 +253,7 @@ func (p *process) bookImporter(format book.Format) book.Importer {
 func (p *process) musicImporter() music.Importer {
 	return music.NewImporter(music.ImporterConfig{
 		Tool: p.mediaTool(), Search: p.musicBrainzProvider(), Albums: p.musicBrainzProvider(), AcoustID: p.acoustIDLookup(),
-		Committer: p.importCommitter(), Provenance: p.acquisitionReleaseGroups, Logger: p.logger,
+		Committer: pushingCommitter{inner: p.importCommitter(), push: p.afterPlacing}, Provenance: p.acquisitionReleaseGroups, Logger: p.logger,
 	})
 }
 
@@ -355,7 +357,7 @@ func (p *process) adultImporter() adult.Importer {
 		Resolver:   p.adultResolver(),
 		Categories: categories, Clock: clock.NewSystem(), Logger: p.logger,
 		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
-		RenameOnImport: p.renameOnImport, ExtraFiles: p.extraFileExtensions, Probe: p.probeMeasured,
+		RenameOnImport: p.renameOnImport, ExtraFiles: p.extraFileExtensions, Probe: p.probeMeasured, AfterPlacing: p.afterPlacing,
 	})
 }
 
@@ -380,4 +382,39 @@ func (p *process) recycleSourceArchive(ctx context.Context, categoryID *int64, s
 		RootPath: root, OriginalPath: file, Reason: library.ReasonImported, Retain: recycling.Retain,
 	})
 	return err
+}
+
+// pushingCommitter tells the media servers of each album the music committer placed.
+type pushingCommitter struct {
+	inner music.Committer
+	push  func(ctx context.Context, categoryID, workID int64)
+}
+
+func (c pushingCommitter) CommitMatchedUnit(
+	ctx context.Context, sourceRoot string, unit inspect.Unit, best model.Identification, tags music.Resolved,
+	categoryID int64, matched *music.AlbumPlacement, ladder []string,
+) (music.Placed, error) {
+	placed, err := c.inner.CommitMatchedUnit(ctx, sourceRoot, unit, best, tags, categoryID, matched, ladder)
+	if err == nil {
+		c.push(ctx, categoryID, placed.WorkID)
+	}
+	return placed, err
+}
+
+func (c pushingCommitter) CommitUnverifiedUnit(
+	ctx context.Context, sourceRoot string, unit inspect.Unit, tags music.Resolved, categoryID int64, ladder []string,
+) (music.Placed, error) {
+	placed, err := c.inner.CommitUnverifiedUnit(ctx, sourceRoot, unit, tags, categoryID, ladder)
+	if err == nil {
+		c.push(ctx, categoryID, placed.WorkID)
+	}
+	return placed, err
+}
+
+func (c pushingCommitter) IdentifyUnverified(ctx context.Context, fromWorkID int64, best model.Identification, categoryID int64) (music.Placed, error) {
+	placed, err := c.inner.IdentifyUnverified(ctx, fromWorkID, best, categoryID)
+	if err == nil {
+		c.push(ctx, categoryID, placed.WorkID)
+	}
+	return placed, err
 }
