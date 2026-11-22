@@ -18,6 +18,7 @@ import (
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/fanart"
+	"github.com/makearr/Solarr/internal/metadata/kitsu"
 	"github.com/makearr/Solarr/internal/metadata/metaresolve"
 	"github.com/makearr/Solarr/internal/metadata/omdb"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
@@ -68,6 +69,11 @@ type RatingSource interface {
 	Movie(ctx context.Context, imdb string) (omdb.Movie, error)
 }
 
+// AnimeEntrySource is the Kitsu client as the service needs it.
+type AnimeEntrySource interface {
+	ByAniList(ctx context.Context, anilistID int64) (kitsu.Anime, error)
+}
+
 // PictureSource is the fanart.tv client as the service needs it.
 type PictureSource interface {
 	Configured() bool
@@ -92,7 +98,9 @@ type Service struct {
 	// AniList adds the titles anime is released under; nil skips it.
 	AniList AnimeSource
 	// OMDb adds the IMDb rating and the English plot, Fanart the clear logos and banners; nil skips either.
-	OMDb   RatingSource
+	OMDb RatingSource
+	// Kitsu adds an anime's synopsis, rating and the ids of the other anime sites; nil skips it.
+	Kitsu  AnimeEntrySource
 	Fanart PictureSource
 	// Priority is the configured TV source order, read per fetch; nil is the default order.
 	Priority func() []string
@@ -182,7 +190,7 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool, order []st
 	var rich Series
 	haveRich := false
 	var wrongTVmaze atomic.Int64
-	asked := slices.DeleteFunc([]string{settings.TVSourceTMDB, settings.TVSourceAniList, settings.TVSourceTVmaze, settings.TVSourceOMDb, settings.TVSourceFanart}, func(source string) bool { return !slices.Contains(order, source) })
+	asked := slices.DeleteFunc([]string{settings.TVSourceTMDB, settings.TVSourceAniList, settings.TVSourceTVmaze, settings.TVSourceKitsu, settings.TVSourceOMDb, settings.TVSourceFanart}, func(source string) bool { return !slices.Contains(order, source) })
 	answers := metaresolve.AskAll(ctx, asked,
 		func(ctx context.Context, source string) (fetched, error) {
 			switch source {
@@ -191,6 +199,9 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool, order []st
 				return fetched{series, found}, nil
 			case settings.TVSourceAniList:
 				series, found := s.fetchAniList(ctx, ids)
+				return fetched{series, found}, nil
+			case settings.TVSourceKitsu:
+				series, found := s.fetchKitsu(ctx, ids)
 				return fetched{series, found}, nil
 			case settings.TVSourceOMDb:
 				series, found := s.fetchOMDb(ctx, ids)
@@ -274,6 +285,21 @@ func (s Service) wikidataFacts(ctx context.Context, ids IDs, order []string) (wi
 	}
 	found, known := facts[id]
 	return found, known
+}
+
+// fetchKitsu asks Kitsu for the first AniList entry of an anime; a series AniList does not know is not asked.
+func (s Service) fetchKitsu(ctx context.Context, ids IDs) (Series, bool) {
+	if s.Kitsu == nil || len(ids.AniList) == 0 {
+		return Series{}, false
+	}
+	entry, err := s.Kitsu.ByAniList(ctx, ids.AniList[0])
+	if err != nil {
+		if !errors.Is(err, kitsu.ErrNotFound) {
+			s.warn("kitsu", ids.TVDB, err)
+		}
+		return Series{}, false
+	}
+	return FromKitsu(entry), true
 }
 
 // fetchOMDb asks OMDb for the series by its IMDb id; a series without one, or a missing key, is not asked.

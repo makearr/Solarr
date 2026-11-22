@@ -35,6 +35,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/googlebooks"
 	"github.com/makearr/Solarr/internal/metadata/hardcover"
 	"github.com/makearr/Solarr/internal/metadata/itunes"
+	"github.com/makearr/Solarr/internal/metadata/kitsu"
 	"github.com/makearr/Solarr/internal/metadata/mdblist"
 	"github.com/makearr/Solarr/internal/metadata/metacache"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
@@ -342,6 +343,7 @@ func (p *process) tvService() tv.Service {
 		p.xemShared = thexem.New(client(providerTheXEM), metacache.New(p.metadata).Counting(&p.metadataLookups), wall)
 		p.tvShared = tv.Service{
 			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared, AniList: p.anilistShared, Wikidata: p.wikidataFacts(),
+			Kitsu:  kitsu.New(p.providerClient(providerKitsu, nil, httpx.ClientConfig{})),
 			OMDb:   omdb.New(p.providerClient(providerOMDb, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceOMDb)),
 			Fanart: fanart.New(p.providerClient(providerFanart, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceFanart)),
 			Scene:  sceneSource{client: p.xemShared, enabled: func() bool { return p.cache.Snapshot().ProviderEnabled(settings.SourceTheXEM) }},

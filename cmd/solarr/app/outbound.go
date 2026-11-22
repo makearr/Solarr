@@ -25,6 +25,7 @@ const (
 	providerTMDB           = "tmdb"
 	providerTVDB           = "tvdb"
 	providerAniList        = "anilist"
+	providerKitsu          = "kitsu"
 	providerTheXEM         = "thexem"
 	providerRadarrMeta     = "radarr-meta"
 	providerMDBList        = "mdblist"

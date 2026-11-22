@@ -10,6 +10,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/fanart"
+	"github.com/makearr/Solarr/internal/metadata/kitsu"
 	"github.com/makearr/Solarr/internal/metadata/omdb"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
@@ -21,7 +22,29 @@ const (
 	sourceAniList = "anilist"
 	sourceOMDb    = "omdb"
 	sourceFanart  = "fanart"
+	sourceKitsu   = "kitsu"
 )
+
+// FromKitsu is an anime's synopsis, age rating, average rating (Kitsu writes 0 to 100), poster and the MyAnimeList and AniDB ids its mappings name.
+func FromKitsu(in kitsu.Anime) Series {
+	series := Series{Title: in.Title, Overview: in.Synopsis, ContentRating: in.AgeRating, RuntimeMin: in.EpisodeLength, FirstAired: in.StartDate, Sources: []string{sourceKitsu}}
+	if len(in.StartDate) >= 4 {
+		series.Year, _ = strconv.Atoi(in.StartDate[:4])
+	}
+	if score, err := strconv.ParseFloat(in.AverageRating, 64); err == nil && score > 0 && score <= 100 {
+		series.Rating, series.RatingVotes = score/10, in.UserCount
+	}
+	if in.Poster != "" {
+		series.Images = []Image{{Kind: "poster", URL: in.Poster, Source: sourceKitsu}}
+	}
+	if id, err := strconv.ParseInt(in.Mappings["myanimelist/anime"], 10, 64); err == nil {
+		series.IDs.MAL = []int64{id}
+	}
+	if id, err := strconv.ParseInt(in.Mappings["anidb"], 10, 64); err == nil {
+		series.IDs.AniDB = []int64{id}
+	}
+	return series
+}
 
 // FromOMDb is a series' English plot and IMDb rating; "N/A" is what OMDb writes for what it does not know.
 func FromOMDb(in omdb.Movie) Series {

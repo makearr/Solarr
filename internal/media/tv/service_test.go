@@ -16,6 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/fanart"
+	"github.com/makearr/Solarr/internal/metadata/kitsu"
 	"github.com/makearr/Solarr/internal/metadata/omdb"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
@@ -450,5 +451,22 @@ func TestFetchTakesOMDbsRatingAndFanartsLogoWhereNoOneElseHasThem(t *testing.T) 
 	want := []tv.Image{{Kind: "logo", URL: "https://assets.example/logo.png", Source: "fanart"}}
 	if !reflect.DeepEqual(series.Images, want) {
 		t.Errorf("images = %+v, want %+v", series.Images, want)
+	}
+}
+
+type fakeKitsu struct{ anime kitsu.Anime }
+
+func (f fakeKitsu) ByAniList(context.Context, int64) (kitsu.Anime, error) { return f.anime, nil }
+
+func TestFetchFillsAnAnimesIDsAndRatingFromKitsu(t *testing.T) {
+	service, _ := newService(t, fakeSkyhook{err: errors.New("proxy down")}, fakeTVmaze{show: tvmaze.Show{ID: 42, Name: "Example Show"}})
+	service.Kitsu = fakeKitsu{anime: kitsu.Anime{Synopsis: "A story.", AverageRating: "80.5", UserCount: 900, StartDate: "2006-10-04",
+		Mappings: map[string]string{"myanimelist/anime": "55", "anidb": "146"}}}
+	series, err := service.Fetch(t.Context(), tv.IDs{TVDB: 1234, AniList: []int64{77}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if series.Rating != 8.05 || series.RatingVotes != 900 || series.Overview != "A story." || !reflect.DeepEqual(series.IDs.MAL, []int64{55}) || !reflect.DeepEqual(series.IDs.AniDB, []int64{146}) {
+		t.Errorf("series = rating %v/%d, overview %q, ids %+v", series.Rating, series.RatingVotes, series.Overview, series.IDs)
 	}
 }

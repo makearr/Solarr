@@ -159,6 +159,8 @@ var MetadataProviders = []MetadataProvider{
 		PerMinute: 120, MaxPerMinute: 120, Published: "20 every 10 seconds"},
 	{Key: TVSourceAniList, Label: "AniList", MediaTypes: []string{"tv"}, Carries: []string{"anime titles in every language", "cours", "relations", "genres", "images"},
 		PerMinute: 30, MaxPerMinute: 90, Published: "90 a minute, 30 while it runs degraded"},
+	{Key: TVSourceKitsu, Label: "Kitsu", MediaTypes: []string{"tv"}, Carries: []string{"anime synopses", "age ratings", "average ratings", "posters", "ids on AniList, MyAnimeList and AniDB"},
+		PerMinute: 60, Published: "none published; asked at 60 a minute"},
 	{Key: MovieSourceRadarr, Label: "Radarr's metadata service", MediaTypes: []string{"movie"}, Carries: []string{"overview", "release dates", "certification", "ratings", "collections", "ids"},
 		PerMinute: 240, Published: "none published; shared by every Radarr"},
 	{Key: MovieSourceMDBList, Label: "MDBList", MediaTypes: []string{"movie"}, Carries: []string{"ratings of IMDb, TMDB, Trakt, Letterboxd, Rotten Tomatoes and Metacritic"}, NeedsKey: true,
@@ -323,7 +325,7 @@ func DefaultMetadataSources(mediaType, kind string) []string {
 	switch mediaType {
 	case "tv":
 		if kind == "anime" {
-			return []string{SourceWikidata, TVSourceAniList, TVSourceSkyhook, TVSourceTMDB, TVSourceTVDB, TVSourceTVmaze, TVSourceOMDb, TVSourceFanart}
+			return []string{SourceWikidata, TVSourceAniList, TVSourceSkyhook, TVSourceTMDB, TVSourceTVDB, TVSourceTVmaze, TVSourceKitsu, TVSourceOMDb, TVSourceFanart}
 		}
 		return []string{SourceWikidata, TVSourceSkyhook, TVSourceTMDB, TVSourceTVDB, TVSourceTVmaze, TVSourceOMDb, TVSourceFanart}
 	case "movie":

@@ -108,6 +108,7 @@ const (
 	TVSourceTMDB    = "tmdb"
 	TVSourceTVDB    = "tvdb"
 	TVSourceAniList = "anilist"
+	TVSourceKitsu   = "kitsu"
 	// TVSourceOMDb and TVSourceFanart are the movie providers, asked about series too.
 	TVSourceOMDb   = MovieSourceOMDb
 	TVSourceFanart = MovieSourceFanart
@@ -116,7 +117,7 @@ const (
 // DefaultTVSources is the measured order (documentation/tv-providers-benchmark.md, 2026-10-03): Skyhook answers fastest
 // and complete, TMDB adds cast, logos and certification quickly, TheTVDB direct is slower for the same facts, TVmaze
 // is slowest and thinnest but alone knows time zones, and AniList, which only knows anime, comes last.
-var DefaultTVSources = []string{SourceWikidata, TVSourceSkyhook, TVSourceTMDB, TVSourceTVDB, TVSourceTVmaze, TVSourceAniList, TVSourceOMDb, TVSourceFanart}
+var DefaultTVSources = []string{SourceWikidata, TVSourceSkyhook, TVSourceTMDB, TVSourceTVDB, TVSourceTVmaze, TVSourceAniList, TVSourceKitsu, TVSourceOMDb, TVSourceFanart}
 
 func validTVSource(name string) bool {
 	return slices.Contains(DefaultTVSources, name)
