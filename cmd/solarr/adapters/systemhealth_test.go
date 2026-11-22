@@ -226,3 +226,13 @@ func TestSystemHealth_CountsFollowsThatHaveNoLibrary(t *testing.T) {
 		t.Fatalf("checks = %+v, want none", got)
 	}
 }
+
+// A switched-off client is named while it still holds running downloads, and not otherwise.
+func TestDisabledClientChecks_NameASwitchedOffClientStillHoldingDownloads(t *testing.T) {
+	downloaders := []settings.Downloader{{ID: 3, Name: "Box", Enabled: false}, {ID: 4, Name: "Idle", Enabled: false}, {ID: 5, Name: "Live", Enabled: true}}
+	active := []library.Acquisition{{DownloaderID: 3}, {DownloaderID: 3}, {DownloaderID: 5}}
+	checks := disabledClientChecks(downloaders, active)
+	if len(checks) != 1 || checks[0].ID != "disabled_client_holding_3" || !strings.Contains(checks[0].Message, "Box is switched off but still holds 2 downloads") {
+		t.Fatalf("checks = %+v, want one warning for client 3 holding 2 downloads", checks)
+	}
+}

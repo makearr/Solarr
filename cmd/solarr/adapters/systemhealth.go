@@ -95,6 +95,7 @@ func (a SystemHealth) Checks(ctx context.Context) []apiserver.HealthCheck {
 		})
 	}
 	checks = append(checks, a.waitingForReview(ctx)...)
+	checks = append(checks, a.disabledClientsHolding(ctx)...)
 	snapshot := a.Cache.Snapshot()
 	checks = append(checks, a.vanishedHeld(ctx, snapshot)...)
 	checks = append(checks, a.mediaChecks(snapshot)...)
@@ -450,6 +451,44 @@ func anyEnabledIndexer(indexers []settings.Indexer) bool {
 		}
 	}
 	return false
+}
+
+// disabledClientsHolding names each switched-off download client that still holds running downloads: they are polled
+// to their end, but nothing new is sent to it.
+func (a SystemHealth) disabledClientsHolding(ctx context.Context) []apiserver.HealthCheck {
+	if a.Acquisitions == nil {
+		return nil
+	}
+	downloaders, err := a.Cache.Downloaders(ctx)
+	if err != nil {
+		return nil
+	}
+	active, err := a.Acquisitions.ListActive(ctx)
+	if err != nil {
+		return nil
+	}
+	return disabledClientChecks(downloaders, active)
+}
+
+func disabledClientChecks(downloaders []settings.Downloader, active []library.Acquisition) []apiserver.HealthCheck {
+	held := map[int64]int{}
+	for _, acquisition := range active {
+		held[acquisition.DownloaderID]++
+	}
+	var checks []apiserver.HealthCheck
+	for _, downloader := range downloaders {
+		if downloader.Enabled || held[downloader.ID] == 0 {
+			continue
+		}
+		count := held[downloader.ID]
+		checks = append(checks, apiserver.HealthCheck{
+			ID: fmt.Sprintf("disabled_client_holding_%d", downloader.ID), Severity: apiserver.HealthWarning,
+			Message: fmt.Sprintf("Download client %s is switched off but still holds %d %s: they are followed to their end, and nothing new is sent to it.",
+				downloader.Name, count, plural(count, "download", "downloads")),
+			Link: "/connections/downloaders",
+		})
+	}
+	return checks
 }
 
 func anyEnabledDownloader(downloaders []settings.Downloader) bool {
