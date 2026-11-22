@@ -233,7 +233,7 @@ func (s Service) searchOne(ctx context.Context, key, kind, query string) []Candi
 				ids[ProviderMAL] = one.Links["mal"]
 			}
 			out = append(out, Candidate{Title: one.Title, Overview: stripMarkup(one.Description), Year: one.Year, Count: one.LastVolume,
-				Adult: one.ContentRating == "erotica" || one.ContentRating == "pornographic", IDs: ids})
+				Adult: one.ContentRating == "pornographic", IDs: ids})
 		}
 	}
 	return out
@@ -283,7 +283,7 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 	if err != nil {
 		return AddResult{}, err
 	}
-	if err := s.ensureItems(ctx, stored.WorkID, request.CategoryID, request.ProfileID, request.AddedBy, series.Parts, Monitored(series.Parts, monitor, now)); err != nil {
+	if err := s.ensureItems(ctx, stored.WorkID, request.CategoryID, request.ProfileID, request.AddedBy, series.primaryKind(), series.Parts, Monitored(series.Parts, monitor, now)); err != nil {
 		return AddResult{}, err
 	}
 	return AddResult{WorkID: stored.WorkID, Created: stored.Created, Series: series}, nil
@@ -292,8 +292,12 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 // ensureItems gives the series one wanted item for each kind of part it holds (issues, annuals, volumes, loose chapters),
 // as a TV series has one per season: a file covers parts of the item its kind names. An item that exists keeps its
 // own monitoring (Invariant 71).
-func (s Service) ensureItems(ctx context.Context, workID, categoryID, profileID int64, addedBy *int64, parts []Part, wanted map[string]bool) error {
+func (s Service) ensureItems(ctx context.Context, workID, categoryID, profileID int64, addedBy *int64, primary string, parts []Part, wanted map[string]bool) error {
+	// The series' main kind of part always has an item, so a series whose parts no provider lists yet is still in its library.
 	monitored := map[string]bool{}
+	if primary != "" {
+		monitored[primary] = false
+	}
 	for _, part := range parts {
 		monitored[part.Kind] = monitored[part.Kind] || wanted[part.Ref()]
 	}
@@ -354,7 +358,7 @@ func (s Service) Refresh(ctx context.Context, categoryID, workID int64) (Series,
 	for _, part := range series.Parts {
 		kept[part.Ref()] = monitored && part.Kind != PartChapter
 	}
-	if err := s.ensureItems(ctx, workID, categoryID, s.profileOf(ctx, workID, categoryID), nil, series.Parts, kept); err != nil {
+	if err := s.ensureItems(ctx, workID, categoryID, s.profileOf(ctx, workID, categoryID), nil, series.primaryKind(), series.Parts, kept); err != nil {
 		return Series{}, err
 	}
 	return series, nil

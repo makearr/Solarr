@@ -20,6 +20,9 @@ type Catalog struct {
 	AllowAgain func(ctx context.Context, provider, externalID string) error
 }
 
+// AddKindSeries is the one thing the type is added by, the key of its add kind.
+const AddKindSeries = "series"
+
 var _ media.Adding = Catalog{}
 
 func (c Catalog) shared() works.Catalog {
@@ -71,7 +74,7 @@ func (s catalogSource) Lookup(ctx context.Context, lookup media.AddLookup) ([]me
 			subtitle = strings.TrimPrefix(subtitle+", "+strconv.Itoa(one.Count)+" "+unit, ", ")
 		}
 		candidates = append(candidates, media.AddCandidate{
-			Kind: MediaType, Provider: one.Provider, ExternalID: one.ID, Title: one.Title, Subtitle: subtitle,
+			Kind: AddKindSeries, Provider: one.Provider, ExternalID: one.ID, Title: one.Title, Subtitle: subtitle,
 			Overview: one.Overview, PosterURL: one.Cover, Year: int64(one.Year),
 			Traits: media.Traits{AniList: one.IDs[ProviderAniListManga] != ""},
 		})
@@ -113,5 +116,5 @@ func (s catalogSource) Add(ctx context.Context, request works.Add) (media.AddRes
 	if err != nil {
 		return media.AddResult{}, err
 	}
-	return media.AddResult{Kind: MediaType, WorkID: result.WorkID, Created: result.Created}, nil
+	return media.AddResult{Kind: AddKindSeries, WorkID: result.WorkID, Created: result.Created}, nil
 }

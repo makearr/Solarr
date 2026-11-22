@@ -18,7 +18,7 @@ item its kind names. Adding, refresh, the picture sweep, Review and the scan use
 
 All five comic providers ship switched off (Settings > Metadata). ComicVine takes your own key; Metron takes your account
 as one secret `user:password`. The Grand Comics Database, MangaUpdates and MangaDex need none. AniList also serves comic
-libraries. A result a provider flags as adult (AniList `isAdult`, MangaDex content rating erotica or pornographic) is
+libraries. A result a provider flags as adult (AniList `isAdult`, MangaDex content rating pornographic; MangaDex rates much mainstream manga "erotica", which is not adult) is
 offered only to the two adult kinds and refused by the others.
 
 - **ComicVine**: 200 requests an hour for each kind of request; a series' issue list is read a hundred issues a request,

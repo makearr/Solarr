@@ -211,7 +211,7 @@ func (c Consumer) ensureParts(ctx context.Context, categoryID, workID int64, key
 		return
 	}
 	profile := c.config.Service.profileOf(ctx, workID, categoryID)
-	if err := c.config.Service.ensureItems(ctx, workID, categoryID, profile, nil, missing, map[string]bool{}); err != nil {
+	if err := c.config.Service.ensureItems(ctx, workID, categoryID, profile, nil, "", missing, map[string]bool{}); err != nil {
 		c.logger.Warn("comic part items not stored", slog.Int64("work_id", workID), slog.Any("error", err))
 	}
 }

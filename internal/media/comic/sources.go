@@ -292,8 +292,9 @@ func (s Sources) askGCD(ctx context.Context, series *Series, hint Hint) {
 	series.Sources = append(series.Sources, settings.ComicSourceGCD)
 }
 
+// mangaDexRatings are the content ratings asked for: MangaDex rates mainstream manga with nudity "erotica", so only "pornographic" is adult.
 var mangaDexRatings = struct{ safe, adult []string }{
-	safe: []string{"safe", "suggestive"}, adult: []string{"safe", "suggestive", "erotica", "pornographic"},
+	safe: []string{"safe", "suggestive", "erotica"}, adult: []string{"safe", "suggestive", "erotica", "pornographic"},
 }
 
 func (s Sources) fetchManga(ctx context.Context, series *Series, order []string, hint Hint) {
@@ -484,7 +485,7 @@ func (s Sources) askMangaDex(ctx context.Context, series *Series, hint Hint) (ma
 	if series.OriginalLanguage == "" {
 		series.OriginalLanguage = dex.OriginalLanguage
 	}
-	series.Adult = series.Adult || dex.ContentRating == "erotica" || dex.ContentRating == "pornographic"
+	series.Adult = series.Adult || dex.ContentRating == "pornographic"
 	if series.Status == "" {
 		series.Status = dex.Status
 	}

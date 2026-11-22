@@ -152,7 +152,7 @@ func (Module) Descriptor() media.Descriptor {
 		MonitorOptions: monitorChoices,
 		WorkImage:      media.ImagePoster,
 		WantedGrain:    media.WantedParts,
-		AddKinds:       []media.Choice{{Key: "series", Label: "Series"}},
+		AddKinds:       []media.Choice{{Key: AddKindSeries, Label: "Series"}},
 		Kinds:          Kinds(),
 		ExtraFiles:     media.ExtraFilesDefault{Import: true, Extensions: []string{"jpg", "xml", "json"}},
 		GuessFloor:     0.9,

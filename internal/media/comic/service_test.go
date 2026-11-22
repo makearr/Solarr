@@ -164,13 +164,16 @@ func (f fakeAniList) SearchManga(ctx context.Context, _ string, _ int) ([]anilis
 	return []anilist.Manga{m}, false, nil
 }
 
-type fakeMangaDex struct{ volumes []mangadex.Volume }
+type fakeMangaDex struct {
+	volumes []mangadex.Volume
+	rating  string
+}
 
 func (fakeMangaDex) SearchManga(context.Context, string, int, []string) ([]mangadex.Manga, bool, error) {
 	return []mangadex.Manga{{ID: "dex-1", Title: "Moon Orchard", Links: map[string]string{"al": "5"}}}, false, nil
 }
-func (fakeMangaDex) Manga(context.Context, string) (mangadex.Manga, error) {
-	return mangadex.Manga{ID: "dex-1", Title: "Moon Orchard", OriginalLanguage: "ja", ContentRating: "safe", Links: map[string]string{"al": "5", "mal": "9"}}, nil
+func (f fakeMangaDex) Manga(context.Context, string) (mangadex.Manga, error) {
+	return mangadex.Manga{ID: "dex-1", Title: "Moon Orchard", OriginalLanguage: "ja", ContentRating: firstNonEmpty(f.rating, "safe"), Links: map[string]string{"al": "5", "mal": "9"}}, nil
 }
 func (f fakeMangaDex) Aggregate(context.Context, string, string) ([]mangadex.Volume, error) {
 	return f.volumes, nil
@@ -240,4 +243,30 @@ func TestMonitorOptionsPickIssuesTheWayTheyAreNamed(t *testing.T) {
 		}
 	}
 
+}
+
+func TestOnlyAPornographicMangaDexRatingMakesASeriesAdult(t *testing.T) {
+	for rating, want := range map[string]bool{"safe": false, "suggestive": false, "erotica": false, "pornographic": true} {
+		service := comicService(t, Sources{MangaDex: fakeMangaDex{rating: rating}})
+		service.KindOf = func(int64) string { return KindManga }
+		service.ProvidersOf = func(int64) []string { return []string{settings.ComicSourceMangaDex} }
+		series, err := service.Fetch(t.Context(), 1, map[string]string{ProviderMangaDex: "dex-1"}, Hint{})
+		if err != nil || series.Adult != want {
+			t.Errorf("rating %s: adult = %v, %v, want %v", rating, series.Adult, err, want)
+		}
+	}
+}
+
+func TestASeriesNoProviderListsPartsOfIsStillInItsLibrary(t *testing.T) {
+	service := comicService(t, Sources{AniList: fakeAniList{bare: true}})
+	service.KindOf = func(int64) string { return KindManga }
+	service.ProvidersOf = func(int64) []string { return []string{settings.TVSourceAniList} }
+	result, err := service.Add(t.Context(), AddRequest{IDs: map[string]string{ProviderAniListManga: "5"}, CategoryID: 3, ProfileID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, err := service.Desired.AlbumItemsForWork(t.Context(), result.WorkID)
+	if err != nil || len(items) != 1 || items[0].MediaRef != PartVolume || items[0].CategoryID != 3 {
+		t.Fatalf("items = %+v, %v: the series must hold its volume item so a library lists it", items, err)
+	}
 }

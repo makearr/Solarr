@@ -88,6 +88,14 @@ type Part struct {
 	Chapters []string
 }
 
+// primaryKind is the kind of part a series is read by: volumes for manga, issues for comics.
+func (s Series) primaryKind() string {
+	if s.Manga {
+		return PartVolume
+	}
+	return PartIssue
+}
+
 // Ref is the part's media_ref.
 func (p Part) Ref() string { return p.Kind + ":" + p.Number }
 
