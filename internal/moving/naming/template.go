@@ -14,11 +14,7 @@ const (
 	segConditional
 )
 
-// Segment is one piece of a compiled template: literal text, a token
-// (possibly a fallback chain, with an optional zero-padding or truncation
-// spec), or a conditional block of child segments emitted only when every
-// token directly inside it resolves to a non-empty value (section 11.8's
-// "[ - {Edition}]", emitted only when Edition is non-empty).
+// Segment is one piece of a compiled template: literal text, a token (fallback chain, optional padding or truncation), or a conditional block emitted only when every token directly inside it resolves non-empty (section 11.8).
 type Segment struct {
 	kind     segmentKind
 	literal  string
@@ -42,21 +38,12 @@ const (
 // tokenWordSeparators are the characters Lidarr accepts in place of a token name's spaces.
 const tokenWordSeparators = "._-"
 
-// Compile parses one template line (a folder or file spec) into segments.
-// An unknown escape, an unclosed brace or bracket, or an unrecognised spec
-// is a compile error here -- never a runtime "{Unknown Token}" in a
-// filename (section 11.8). Compile does not know what token names are
-// valid: that vocabulary is declared by the caller (ADR-23), checked
-// separately by ValidateTokens.
+// Compile parses one template line into segments; unknown escapes, unclosed braces or brackets and unrecognised specs are compile errors (section 11.8), while token names are the caller's vocabulary (ADR-23) checked by ValidateTokens.
 func Compile(spec string) ([]Segment, error) {
 	return parse([]rune(spec), false)
 }
 
-// ValidateTokens reports every token name in segments (including inside
-// conditional blocks and fallback chains) that known does not recognise --
-// the "unknown token is a compile-time error" half of section 11.8, kept
-// separate from Compile because the vocabulary is the caller's, not this
-// package's.
+// ValidateTokens reports every token name known does not recognise, including inside blocks and fallback chains; separate from Compile because the vocabulary is the caller's.
 func ValidateTokens(segments []Segment, known map[string]bool) error {
 	if unknown := UnknownTokens(segments, known); len(unknown) > 0 {
 		return fmt.Errorf("naming: unknown token(s): %s", strings.Join(unknown, ", "))
@@ -183,10 +170,7 @@ func indexRune(runes []rune, start int, target rune) int {
 	return -1
 }
 
-// parseToken parses one `{...}` body: a `|`-separated fallback chain of
-// names, with an optional `:spec` suffix applying to whichever alternative
-// resolves. "00" (all digits) is a zero-padding width; ".60" is a
-// truncation length.
+// parseToken parses one {...} body: a |-separated fallback chain with an optional :spec suffix, where "00" is a zero-padding width and ".60" a truncation length.
 func parseToken(body string) (Segment, error) {
 	namesPart, spec, hasSpec := strings.Cut(body, ":")
 

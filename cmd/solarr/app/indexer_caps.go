@@ -75,10 +75,7 @@ func (c *indexerCapsCache) searchParams(ctx context.Context, indexerID int64, ba
 // capsRefreshAfter is how old the stored categories of an indexer get before they are read again.
 const capsRefreshAfter = 7 * 24 * time.Hour
 
-// categoriesFor answers the categories to search an indexer in for the media type rooted at root, from the capabilities
-// stored on it, read from the indexer first when none are stored or they are old. ask is false when the indexer lists
-// nothing for the type, or cannot be read (unreadable): it is not worth a request. An indexer that lists no categories at all is
-// asked without any.
+// categoriesFor returns the categories to search an indexer in for a root's media type from stored capabilities (re-read when missing or old); ask is false when the indexer lists none for the type or is unreadable.
 func (p *process) categoriesFor(ctx context.Context, found settings.Indexer, client indexer.Driver, root int) (ids []int, ask, unreadable bool) {
 	listed, readable := p.storedCategories(ctx, found, client)
 	if !readable {

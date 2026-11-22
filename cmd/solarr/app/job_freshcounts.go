@@ -21,12 +21,7 @@ var freshCountsDefinition = jobs.Definition{
 	Type: freshCountsJobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3,
 }
 
-// freshCountsJob recomputes ADR-55's dashboard "new arrivals" figure
-// (library.FreshCounts) -- wiring only, so it lives here rather than in
-// internal/db/library, which never calls time.Now() itself (forbidigo).
-// The cutoff is resolved by adapters.FreshSinceCutoff, the same helper the
-// Library list's own fresh=true filter uses, so the dashboard panel and the
-// list toggle can never disagree about what "fresh" means.
+// freshCountsJob recomputes ADR-55's dashboard new-arrivals figure; wiring only, using adapters.FreshSinceCutoff so the panel and the list's fresh filter agree.
 type freshCountsJob struct {
 	counts library.FreshCounts
 	clock  clock.Clock

@@ -43,10 +43,7 @@ var jobClasses = map[jobs.Type]iogate.Class{
 // kindClasses overrides a job type's class for a batch that says what it is.
 var kindClasses = map[string]iogate.Class{moverjob.DiskKindRename: iogate.ClassRename}
 
-// stallPolicies is when a job of each class counts as hung and how long it waits before running again. The delays
-// are the user's (2026-11-10): imports 15 s, drains 60 s, scans 5 min, thumbnails and hashes 15 min; the classes the
-// brief did not name sit between their neighbours. The floors are generous on purpose: a copy of a large file reports
-// nothing until it ends, and cancelling it would only start it again from nothing.
+// stallPolicies sets when each job class counts as hung and its retry delay (user, 2026-11-10); floors are generous because a large copy reports nothing until it ends and cancelling restarts it from zero.
 var stallPolicies = map[iogate.Class]jobs.StallPolicy{
 	iogate.ClassImport:       {Floor: 45 * time.Minute, Restart: 15 * time.Second},
 	iogate.ClassRename:       {Floor: 30 * time.Minute, Restart: 30 * time.Second},

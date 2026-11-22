@@ -30,11 +30,7 @@ func (p *process) announceOpenAccess() {
 		slog.Int("port", p.config.Server.Port))
 }
 
-// ensureOpenAccessAdministrator creates the account everyone is when
-// authentication is off. A real row, so user_id on a job or a request still
-// names somebody and ADR-27's multi-user work needs no special case. It carries
-// no password hash, which is exactly what settings.db already models for an
-// account that does not authenticate by password.
+// ensureOpenAccessAdministrator creates the account everyone is when authentication is off: a real passwordless row, so user_id on jobs and requests names somebody and ADR-27 needs no special case.
 func (p *process) ensureOpenAccessAdministrator(ctx context.Context) error {
 	if p.cache.Snapshot().AuthRequired() {
 		return nil

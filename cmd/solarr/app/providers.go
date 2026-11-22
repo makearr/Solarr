@@ -72,10 +72,7 @@ func (p *process) liveProxyPolicy() httpx.LiveProxyPolicy {
 	}
 }
 
-// wikidataFetcher builds ADR-8's biography lookup: two hosts, two ADR-13
-// rate-limit/breaker buckets, neither shared with MusicBrainz's own (a
-// Wikidata or Wikipedia outage must never count against the MusicBrainz
-// breaker, and vice versa).
+// wikidataFetcher builds ADR-8's biography lookup with two hosts in two ADR-13 buckets, separate from MusicBrainz's so a Wikidata outage never trips its breaker.
 func (p *process) wikidataFetcher() wikidata.Fetcher {
 	return wikidata.New(wikidata.Config{
 		// The query service answers a batch of a library's series in seconds, but takes a minute when busy.
@@ -157,22 +154,11 @@ func (p *process) musicBrainzSources(sources config.MusicBrainzConfig) []musicbr
 	return append(ordered, musicbrainz.NewDirect(direct, sources.BaseURL))
 }
 
-// arrClientFactory builds adapters.LidarrClientFactory: one rate-limit/breaker bucket per *Arr instance (named by its
-// host), deliberately gentle (2 req/s, a timeout well above httpx's 30s default): the instance on the other end is
-// someone's own real server, often busy with its own imports.
-//
-// The guard is built fresh per call, allowing baseURL's own host -- an
-// *Arr instance lives on the LAN or a Docker network in almost every real
-// deployment (ADR-52 is explicitly about a self-hosted instance), and an
-// admin-entered, persisted connection is exactly the "opt-out for indexers
-// that genuinely live on the LAN" httpx.Guard's own allowedHosts already
-// exists for (its own doc comment), not the attacker-controlled, per-request
-// URL the guard exists to stop. Found needed live: a real sync against the
-// user's own Lidarr on a private address was refused outright until this.
-// arrRequestTimeout is long because a Whisparr library answers its scene list as one response of over a hundred megabytes,
-// minutes in coming.
+// arrRequestTimeout is long because a Whisparr scene list is one response of over a hundred megabytes.
 const arrRequestTimeout = 20 * time.Minute
 
+// arrClientFactory builds adapters.LidarrClientFactory: one gentle bucket per *Arr host (2 req/s), since the far end is someone's busy server.
+// The guard allows baseURL's host: an admin-entered, persisted *Arr connection is the LAN opt-out httpx.Guard allows (ADR-52), unlike an attacker-controlled URL.
 func (p *process) arrClientFactory() adapters.LidarrClientFactory {
 	return func(baseURL, apiKey string) arrimport.LidarrClient {
 		client := p.providerClient(providerArrPrefix+arrHost(baseURL), connectionGuard(baseURL), httpx.ClientConfig{Timeout: arrRequestTimeout})
@@ -201,12 +187,7 @@ func (p *process) listProwlarrProxies(ctx context.Context, baseURL, apiKey strin
 	return indexer.ListProwlarrProxies(ctx, client, baseURL, apiKey)
 }
 
-// indexerLiveProxyPolicy resolves ADR-47's own per-indexer egress proxy when
-// the connection has one configured, falling back to ADR-58's global egress
-// proxy otherwise -- an indexer with no egress block behaves exactly as
-// before. The SSRF guard is unaffected either way: Proxy only ever selects
-// which URL a request is tunnelled through, never which host the guard
-// resolves and checks (httpx.ProxyDial's own job, unchanged here).
+// indexerLiveProxyPolicy resolves ADR-47's per-indexer egress proxy, falling back to ADR-58's global one; the SSRF guard is unaffected since Proxy only picks the tunnel, not the checked host.
 func (p *process) indexerLiveProxyPolicy(egress settings.IndexerEgress) httpx.LiveProxyPolicy {
 	if egress.ProxyURL == "" {
 		return p.liveProxyPolicy()
@@ -219,13 +200,7 @@ func (p *process) indexerLiveProxyPolicy(egress settings.IndexerEgress) httpx.Li
 	return func() httpx.ProxyPolicy { return httpx.ProxyPolicy{URL: parsed} }
 }
 
-// indexerClientFactory builds adapters.IndexerClientFactory. Each indexer
-// connection gets its own rate-limit/breaker bucket, keyed by id -- ADR-37's
-// own "each indexer draws on its own bucket, so parallelism never turns into
-// a burst against one provider", needed the moment a search fans out to more
-// than one indexer concurrently (stage 5's own candidate pipeline). A bucket
-// is created lazily by the limiter/breaker registries the first time an id
-// is used, so a newly added indexer needs no code change here.
+// indexerClientFactory builds adapters.IndexerClientFactory with one rate-limit/breaker bucket per indexer id (ADR-37), created lazily by the registries, so parallel searches never burst one provider.
 func (p *process) indexerClientFactory() adapters.IndexerHTTPFactory {
 	return func(indexerID int64, baseURL string, egress settings.IndexerEgress) *httpx.Client {
 		guard := connectionGuard(baseURL)
@@ -280,10 +255,7 @@ func (p *process) indexerDriver(ctx context.Context, found settings.Indexer, api
 	return adapters.NewIndexer(found.Impl, deps, indexer.Connection{BaseURL: found.BaseURL, APIKey: apiKey, Definition: found.Definition()})
 }
 
-// downloaderClientFactory builds adapters.DownloaderHTTPFactory, one
-// rate-limit/breaker bucket per connection id -- gentle by default (a
-// downloader is polled, not fanned out to), the global egress proxy applies
-// like any other outbound client (ADR-47 is indexer-specific, not this).
+// downloaderClientFactory builds adapters.DownloaderHTTPFactory with one gentle bucket per connection id, since a downloader is polled, and the global egress proxy applies (ADR-47 is indexer-specific).
 func (p *process) downloaderClientFactory() adapters.DownloaderHTTPFactory {
 	return func(downloaderID int64, baseURL string) *httpx.Client {
 		name, guard, proxy := providerDownloaderPrefix+strconv.FormatInt(downloaderID, 10), connectionGuard(baseURL), p.liveProxyPolicy()

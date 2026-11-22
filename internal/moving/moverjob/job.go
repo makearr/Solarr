@@ -1,9 +1,4 @@
-// Package moverjob is ADR-51's resumable Apply: it works through one
-// library.MoveJobs job's own move_item rows, calling internal/moving/mover.ApplyOne
-// per file, then RECORDs (library.Physical.Relocate), UNLINKs the old path,
-// and TIDYs now-empty source directories -- the same pure-engine/persist-in-
-// library/orchestrate-separately split internal/importing/importjob already
-// established for WALK/CLASSIFY/GROUP/EVIDENCE/IDENTIFY/SHAPE/DECIDE.
+// Package moverjob is ADR-51's resumable Apply: per move_item it calls mover.ApplyOne, RECORDs (Physical.Relocate), UNLINKs the old path and TIDYs empty directories, mirroring importjob's pure-engine/persist/orchestrate split.
 package moverjob
 
 import (
@@ -47,36 +42,18 @@ type Payload struct {
 	MoveJobID int64 `json:"move_job_id"`
 }
 
-// RootFolder is the subset of settings.RootFolder Apply needs: where a root
-// lives, and which filesystem it is on. FSID is not persisted on move_item
-// (mover.Plan decided SameFilesystem once at planning time, but that
-// decision is not carried into the schema), so Apply re-derives it fresh
-// from whichever root the file currently lives under -- the same "ask
-// fresh, never cache" discipline every settings-backed job dependency in
-// this codebase already follows.
+// RootFolder is the subset of settings.RootFolder Apply needs; FSID is not persisted on move_item, so Apply re-derives it fresh from the root the file lives under.
 type RootFolder struct {
 	Path string
 	FSID string
 }
 
-// RootFolders resolves a root folder id to its current path and filesystem.
-// internal/moving/moverjob does not import internal/db/settings directly, the same
-// separation internal/moving/mover and internal/importing/importjob already keep -- a
-// cmd/solarr adapter bridges this to the real settings cache.
+// RootFolders resolves a root id to its path and filesystem; the package does not import internal/db/settings, and a cmd/solarr adapter bridges the cache.
 type RootFolders interface {
 	RootFolder(rootFolderID int64) (RootFolder, bool)
 }
 
-// DrainCompletion closes ADR-51's own drain lifecycle: once a DRAIN job's
-// files have all moved, the source root may hold nothing left, at which
-// point drain_state should advance from DRAINING to DRAINED ("holds no
-// library files and can be unmounted"). Optional -- nil leaves a DRAIN
-// job's own drain_state exactly where starting it put it, the same gap
-// live verification against a real container found (the state stayed
-// DRAINING forever with no caller ever checking back). internal/moving/moverjob
-// itself has no way to answer "is this root now empty" (that needs
-// internal/db/library.Physical.PathsForRoot, which this package does not
-// import), so a cmd/solarr adapter over internal/moving/drainjob answers it.
+// DrainCompletion closes ADR-51's drain lifecycle, advancing DRAINING to DRAINED when a root is emptied; optional (nil leaves drain_state alone), and an adapter over drainjob answers it since this package cannot list a root's paths.
 type DrainCompletion interface {
 	CompleteDrainIfEmpty(ctx context.Context, rootFolderID, moveJobID int64) error
 }
@@ -133,13 +110,7 @@ func NewJob(config Config) *Job {
 	}
 }
 
-// Run works through moveJob's own pending items until none remain. One
-// item's failure is recorded as MoveItemFailed and does not stop the rest --
-// the same "one bad file does not fail the batch" reasoning already applied
-// to import.inspect's own per-unit errors -- so the job itself only fails on
-// something that stops it from making progress at all (a bad payload, a
-// store error). A retried Run resumes rather than repeats: NextPendingItem
-// only ever returns items that have not yet reached DONE or FAILED.
+// Run works through the job's pending items until none remain; one item's failure is recorded as MoveItemFailed without stopping the rest, and a retry resumes since NextPendingItem skips DONE and FAILED.
 func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	var payload Payload
 	if err := json.Unmarshal(job.Payload, &payload); err != nil {
@@ -266,11 +237,7 @@ func diskKind(reason string) string {
 	return ""
 }
 
-// applyItem moves one file: locate its current path, copy/verify or rename
-// it into place (mover.ApplyOne), RECORD the new location, UNLINK the old
-// one, then TIDY now-empty source directories -- ADR-51's own
-// copy-verify-repoint-unlink order (Invariant 77), repoint and unlink both
-// the caller's job since ApplyOne imports no store.
+// applyItem moves one file in ADR-51's copy-verify-repoint-unlink order (Invariant 77): ApplyOne, RECORD, UNLINK, then TIDY; repoint and unlink are here because ApplyOne imports no store.
 func (j *Job) applyItem(
 	ctx context.Context, item library.Item, kind string, permissions *mover.Permissions, planned mover.PlannedMove,
 ) error {

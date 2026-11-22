@@ -1,19 +1,4 @@
 # Long (4+ line) comment blocks each file still holds; the test fails when a count grows. Lower an entry when a block moves to documentation/.
-cmd/solarr/app/backups_source.go 1
-cmd/solarr/app/diskio.go 1
-cmd/solarr/app/fingerprint_retry.go 1
-cmd/solarr/app/indexer_caps.go 1
-cmd/solarr/app/job_categorycounts.go 2
-cmd/solarr/app/job_freshcounts.go 1
-cmd/solarr/app/job_import.go 2
-cmd/solarr/app/job_mover.go 1
-cmd/solarr/app/job_probe.go 1
-cmd/solarr/app/job_scan.go 4
-cmd/solarr/app/job_search.go 1
-cmd/solarr/app/openaccess.go 1
-cmd/solarr/app/providers.go 5
-cmd/solarr/app/scheduler.go 1
-cmd/solarr/app/serve.go 4
 internal/acquiring/blackhole/blackhole.go 1
 internal/acquiring/dispatch/dispatch.go 2
 internal/acquiring/download/contenthash.go 1
@@ -50,16 +35,6 @@ internal/metadata/musicbrainz/provider.go 4
 internal/metadata/musicbrainz/proxy.go 1
 internal/metadata/musicbrainz/types.go 9
 internal/metadata/wikidata/wikidata.go 8
-internal/moving/drainjob/start.go 6
-internal/moving/mover/apply.go 5
-internal/moving/mover/drain.go 4
-internal/moving/mover/plan.go 15
-internal/moving/moverjob/job.go 6
-internal/moving/naming/doc.go 1
-internal/moving/naming/render.go 2
-internal/moving/naming/template.go 4
-internal/moving/placement/placement.go 7
-internal/moving/renamejob/renamejob.go 1
 internal/platform/archive/archive.go 6
 internal/platform/archive/extract.go 6
 internal/platform/archive/list.go 1

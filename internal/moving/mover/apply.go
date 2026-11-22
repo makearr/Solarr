@@ -27,21 +27,10 @@ const copyBufferBytes = 1 << 20
 // own tagSourceFor already keeps from this kind of package.
 type RootPath func(rootFolderID int64) (string, bool)
 
-// ErrHashMismatch means a cross-filesystem copy's destination bytes did not
-// match its source once written -- corruption during the copy itself, not a
-// planning problem. The file at the temporary path is left in place for
-// inspection rather than silently discarded.
+// ErrHashMismatch means a cross-filesystem copy's bytes differ from the source: corruption, not a planning problem; the temporary file is kept for inspection.
 var ErrHashMismatch = errors.New("mover: copied file does not match its source")
 
-// ApplyOne moves one file exactly as Plan approved it -- ADR-51's own
-// Apply algorithm's SAME FS?/COPY/VERIFY steps (2-3). RECORD, UNLINK and
-// TIDY are deliberately not this function's job: they touch library.db,
-// which this package does not import (the same separation Plan already
-// keeps from internal/db/library/internal/db/settings), and "step 5 after step
-// 4" (unlink only after library_path is recorded) can only be enforced by
-// whichever caller owns that transaction. ApplyOne returns once the bytes
-// are safely and verifiably at the destination; the source file is left
-// exactly where it was.
+// ApplyOne performs ADR-51's SAME FS?/COPY/VERIFY steps only; RECORD, UNLINK and TIDY belong to the caller owning the library.db transaction (unlink only after the path is recorded), and the source is left in place.
 func ApplyOne(ctx context.Context, fsys fsx.FS, move PlannedMove, roots RootPath) error {
 	sourceRoot, ok := roots(move.SourceRootFolderID)
 	if !ok {
@@ -126,11 +115,7 @@ func RootRelativePath(fsys fsx.FS, root, relative string) (string, error) {
 	return resolved, nil
 }
 
-// PlaceMethod names which rung of the import ladder actually placed a file --
-// recorded in the import decision (ADR-11: "the reason is recorded"),
-// distinct from PlannedMove's SameFilesystem, which is about the four
-// already-library-owned move reasons (RENAME/CATEGORY/REBALANCE/DRAIN), not
-// import's first placement of a file the library does not own yet.
+// PlaceMethod names the import-ladder rung that placed a file (ADR-11: the reason is recorded), unlike PlannedMove's SameFilesystem which covers moves of files the library already owns.
 type PlaceMethod string
 
 // The five rungs a ladder may name. PlaceMove consumes the source and
@@ -165,20 +150,8 @@ func ValidMethod(method PlaceMethod) bool {
 	}
 }
 
-// PlaceOne places one file at destAbs from sourceAbs by walking ladder in
-// order and returns the rung that succeeded, so a caller can report what
-// actually happened rather than what was asked for -- a reflink and a copy
-// are indistinguishable on disk, which is exactly how an XFS import read as
-// "it copied everything" (2026-09-18). An empty ladder means DefaultLadder.
-// Only PlaceMove removes sourceAbs, and only when the ladder named it: every
-// other rung leaves the source exactly where it was, since an import source
-// is not otherwise the library's to delete.
-// A failed rung falls through to the next on *any* error, not only
-// fsx.ErrUnsupported: fsx.FS.Link's own doc comment promises ErrUnsupported
-// across filesystems, but neither the real nor the fake implementation
-// actually returns it there (both return a raw EXDEV) -- falling through on
-// any error is the contract that is actually honoured. When every rung
-// fails the last rung's own error is returned, wrapped in ErrNoRungSucceeded.
+// PlaceOne walks ladder in order and returns the rung that succeeded, because a reflink and a copy look identical on disk; an empty ladder means DefaultLadder, and only PlaceMove removes sourceAbs.
+// A failed rung falls through on any error, not just fsx.ErrUnsupported, since both implementations return raw EXDEV across filesystems; when all fail the last error is wrapped in ErrNoRungSucceeded.
 func PlaceOne(ctx context.Context, fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64, ladder []PlaceMethod) (PlaceMethod, error) {
 	if len(ladder) == 0 {
 		ladder = DefaultLadder
@@ -345,12 +318,7 @@ func verifyAgainst(fsys fsx.FS, destAbs string, expectedSize int64, sourceHash s
 	return nil
 }
 
-// Verify checks size then a full content hash, never skipped for a
-// cross-filesystem copy (ADR-51's own text: "verified (size plus hash)") --
-// unlike library.QuickHash's head-and-tail sample (cheap identity, not
-// proof), this reads every byte of both files, since the entire reason for
-// a cross-filesystem copy's own verify step is catching corruption
-// anywhere in the file, not just its ends.
+// Verify checks size then a full content hash, never skipped for a cross-filesystem copy (ADR-51), unlike library.QuickHash's sample, because the point is catching corruption anywhere in the file.
 func Verify(fsys fsx.FS, sourceAbs, destAbs string, expectedSize int64) error {
 	destInfo, err := fsys.Stat(destAbs)
 	if err != nil {

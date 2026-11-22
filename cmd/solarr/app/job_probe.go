@@ -13,10 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/scanning/probe"
 )
 
-// registerProbeJob wires ADR-39's measured-half sweep into the registry and the
-// executor: its own mediatool.Tool instance, separate from the scan's, since the
-// two run independently and at different priorities (todo 4.2, confirmed with the
-// user: probing is background work, never inside the scan).
+// registerProbeJob wires ADR-39's measured-half sweep with its own mediatool.Tool, separate from the scan's, since probing is background work at another priority (todo 4.2).
 func (p *process) registerProbeJob(registry *jobs.Registry, executor *jobs.Executor) error {
 	if err := registry.Register(probe.Definition); err != nil {
 		return err

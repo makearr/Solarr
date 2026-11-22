@@ -300,10 +300,7 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 // heavyStartupDelay lets the process settle before a startup run of database maintenance or a backup.
 const heavyStartupDelay = 5 * time.Minute
 
-// startSchedulers builds one TaskRunner per registered task and drives each
-// on its own goroutine, the same per-task isolation the old flat Scheduler
-// loop already had: one misbehaving task (an invalid override, refused at
-// TaskRunner.resolveSchedule's own fallback) never affects another.
+// startSchedulers drives one TaskRunner per registered task on its own goroutine, so one misbehaving task (an invalid override falls back in resolveSchedule) never affects another.
 func (p *process) startSchedulers(ctx context.Context) {
 	wall := clock.NewSystem()
 	source := adapters.ScheduleSource{Cache: p.cache}

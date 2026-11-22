@@ -60,11 +60,7 @@ func (p *process) registerMediaJobs(registry *jobs.Registry, executor *jobs.Exec
 	return nil
 }
 
-// reportToolReadiness logs what ADR-30's external tools are missing, once, at
-// startup -- the same "reported, never enforced" shape section 20.2 already uses
-// for host permissions: every scanned file would otherwise fail its own probe
-// individually, which finds the same fact one file at a time instead of once,
-// loudly, before the first scan even runs.
+// reportToolReadiness logs once at startup which ADR-30 external tools are missing (reported, never enforced, like section 20.2), instead of every file failing its probe.
 func reportToolReadiness(ctx context.Context, tool mediatool.Tool, logger *slog.Logger) {
 	if err := tool.Available(ctx); err != nil {
 		logger.Warn("media tools unavailable; file identification will fail until they are installed",
@@ -72,12 +68,7 @@ func reportToolReadiness(ctx context.Context, tool mediatool.Tool, logger *slog.
 	}
 }
 
-// enqueueLibraryScans submits an incremental sweep for every online root
-// folder attached to a library whose media type is scanned. An incremental sweep of a root that
-// has never been swept reads everything regardless, so this is also what
-// makes a freshly attached root browsable. Registered as a task with
-// internal/jobs.TaskRunner (todo 4.19), so it also fires on its own
-// schedule, not only once at startup.
+// enqueueLibraryScans submits an incremental sweep per online root of a scanned library, also scheduled via jobs.TaskRunner (todo 4.19); a never-swept root reads everything, so this makes a new root browsable.
 func (p *process) enqueueLibraryScans(ctx context.Context) (jobs.EnqueueResult, error) {
 	return p.enqueueScans(ctx, false, false, !p.scanStarted.Swap(true))
 }
@@ -88,24 +79,13 @@ func (p *process) enqueueManualLibraryScans(ctx context.Context) (jobs.EnqueueRe
 	return p.enqueueScans(ctx, false, true, false)
 }
 
-// enqueueFullLibraryScans is scan's own jobs.Task.RunFull: every directory is
-// re-read regardless of mtime, the one way today to backfill todo 4.2's
-// claimed attributes across a library that predates that landing, or more
-// generally to catch up a library the incremental watermark has skipped
-// (private/questions.md). Manual only -- there is no scheduled cadence for
-// it, since re-reading everything on a timer would defeat the point of the
-// incremental sweep the ordinary schedule already runs.
+// enqueueFullLibraryScans is scan's RunFull: it re-reads every directory regardless of mtime to backfill claimed attributes or catch up past the incremental watermark; manual only, since a timer would defeat the incremental sweep.
 func (p *process) enqueueFullLibraryScans(ctx context.Context) (jobs.EnqueueResult, error) {
 	p.scanStarted.Store(true)
 	return p.enqueueScans(ctx, true, true, false)
 }
 
-// enqueueScans fans out to several jobs, one per online root, unlike
-// every other task in this file -- the aggregate EnqueueResult reports
-// Duplicate only when every attempted root was already active, and joins
-// every root's own error (each still logged individually below) rather than
-// reporting only the first, so the scheduler's own recorded outcome does not
-// hide a partial failure across several roots.
+// enqueueScans fans out one job per online root: the aggregate reports Duplicate only when every root was active and joins every root's error, so a partial failure is not hidden.
 func (p *process) enqueueScans(ctx context.Context, full, manual, startup bool) (jobs.EnqueueResult, error) {
 	snapshot := p.cache.Snapshot()
 	var errs []error

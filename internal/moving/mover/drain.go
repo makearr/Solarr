@@ -23,19 +23,11 @@ type DrainRequest struct {
 	SourceReadOnly    bool
 	SourceAllowRename bool
 	Files             []FileOnRoot
-	// Destinations are the other root folders sharing a category with
-	// Source, excluding Source itself -- gathering them is the caller's job
-	// (internal/db/settings), the same separation Plan's own Roots parameter
-	// already keeps from this package.
+	// Destinations are the other roots sharing a category with Source; gathering them is the caller's job (internal/db/settings), as with Plan's Roots.
 	Destinations []placement.RootCandidate
 }
 
-// AffinityKeyForPath groups files by the top-level directory of their
-// rel_path -- the same directory every shipped naming template already
-// nests one artist, show or series beneath (section 19.1), so this needs no
-// media-type knowledge at all: it reads path structure only, unlike a
-// caller deriving FileToMove.AffinityKey from real credits. A file directly
-// under the root (no separator) is its own group.
+// AffinityKeyForPath groups files by the top-level directory of rel_path, where every shipped template nests one artist or series (section 19.1), so it needs no media-type knowledge; a file directly under the root is its own group.
 func AffinityKeyForPath(relPath string) string {
 	if i := strings.IndexByte(relPath, '/'); i >= 0 {
 		return relPath[:i]
@@ -73,17 +65,7 @@ func groupFilesOnRoot(files []FileOnRoot) []rootGroup {
 	return groups
 }
 
-// PlanDrain groups every file on Source by AffinityKeyForPath, then asks
-// internal/moving/placement.Resolve to place each group (largest first) on
-// whichever destination has the most free space -- decrementing that
-// destination's own remaining bytes before resolving the next group, so
-// later groups see the capacity earlier ones already claimed, rather than
-// every group racing for the same "most free" root as of the start of the
-// drain. A group Resolve cannot place anywhere refuses the whole drain up
-// front (ADR-51's own "refuses to start if the remaining roots cannot hold
-// the content"), naming the shortfall, without ever calling Plan with a
-// partial assignment. Once every group has a destination, the real guards
-// (read-only, reserve, online) are Plan's own job, unchanged.
+// PlanDrain groups files by AffinityKeyForPath and places each group, largest first, on the destination with most free space, decrementing it as it goes; an unplaceable group refuses the whole drain (ADR-51) before Plan, whose guards are unchanged.
 func PlanDrain(req DrainRequest) (MovePlan, error) {
 	groups := groupFilesOnRoot(req.Files)
 	sort.SliceStable(groups, func(i, j int) bool { return groups[i].totalBytes > groups[j].totalBytes })
@@ -131,11 +113,7 @@ func PlanDrain(req DrainRequest) (MovePlan, error) {
 	})
 }
 
-// refusedDrainPlan names the shortfall across the whole drain, not just the
-// one group placement.Resolve could not place -- an honest approximation
-// (total bytes vs. total headroom, not a real bin-packing proof) rather
-// than a precise guarantee, the same spirit as Plan's own per-root shortfall
-// message.
+// refusedDrainPlan names the shortfall across the whole drain, an approximation (total bytes versus headroom, not bin packing) like Plan's per-root message.
 func refusedDrainPlan(req DrainRequest, groups []rootGroup) MovePlan {
 	var totalBytes int64
 	for _, g := range groups {

@@ -1,15 +1,4 @@
-// Package mover is ADR-51's move engine: one mechanism behind renaming to
-// another root, category migration, rebalancing and draining a disk. Plan is
-// pure logic over caller-supplied facts, no I/O of its own -- the same
-// separation internal/moving/placement already keeps from internal/db/settings, reused
-// here rather than reinvented. This is a deliberate reading of architecture.md
-// section 11.11's own sketch ("func Plan(ctx, req) (Plan, error) // pure; no
-// I/O beyond DB reads" -- Plan's own result is named MovePlan here since Go
-// does not allow a function and a type to share one name): the DB reads
-// are the caller's, the same way
-// placement.Resolve takes an already-fetched []RootCandidate rather than
-// reading settings.db itself. Apply (the resumable job that actually copies,
-// verifies and repoints) is a later, separate piece built on top of this one.
+// Package mover is ADR-51's move engine for rename, category migration, rebalance and drain; Plan is pure logic over caller-supplied facts (named MovePlan since Go forbids a function and type sharing a name), and Apply is built on top.
 package mover
 
 import (
@@ -40,18 +29,9 @@ type FileToMove struct {
 	SourceRootFolderID int64
 	SourceRelPath      string
 	SizeBytes          int64
-	// AffinityKey groups files that must move together (an artist's whole
-	// discography, a series' whole run) so a drain or rebalance never
-	// splits one across roots. Opaque to this package -- deriving it from
-	// a work's own credits is media-type knowledge that stays out of core
-	// (ADR-23), the identical choice placement.Request.AffinityKey already
-	// made.
+	// AffinityKey groups files that must move together so a drain or rebalance never splits them; it is opaque here because deriving it is media-type knowledge (ADR-23), as in placement.Request.
 	AffinityKey string
-	// DestRootFolderID is already resolved by the caller: the user's
-	// explicit choice (RENAME/CATEGORY), or placement.Resolve's own answer
-	// for this file's AffinityKey and the group's total size (REBALANCE/
-	// DRAIN). Plan decides nothing about *where*; it only checks whether
-	// the choice is safe and affordable.
+	// DestRootFolderID is resolved by the caller (the user's choice, or placement.Resolve for REBALANCE/DRAIN); Plan only checks whether it is safe and affordable.
 	DestRootFolderID int64
 	// DestRelPath is already computed by the caller (internal/moving/naming for a
 	// rename, unchanged for category/rebalance/drain).
@@ -71,26 +51,14 @@ type Companion struct {
 type Request struct {
 	Reason Reason
 	Files  []FileToMove
-	// Roots is every root folder any file in Files reads from or writes
-	// to, keyed by id -- the same RootCandidate shape internal/moving/placement
-	// already uses for its own guard checks, reused rather than duplicated
-	// (this project's own established lesson: two independent copies of
-	// one policy shape is how they drift).
+	// Roots is every root any file reads from or writes to, keyed by id, reusing placement.RootCandidate so two copies of one policy shape cannot drift.
 	Roots map[int64]placement.RootCandidate
-	// SourceReadOnly and SourceAllowRename answer Invariant 78's other
-	// half -- placement.RootCandidate has ReadOnly but no AllowRename
-	// field of its own (a destination is never read from a read-only
-	// root's own perspective the way a source moving *out* of one needs).
-	// Keyed by root folder id; a root absent here is treated as not
-	// read-only (never blocks a move out).
+	// SourceReadOnly and SourceAllowRename answer Invariant 78's other half, which RootCandidate lacks; keyed by root folder id, and an absent root is treated as not read-only.
 	SourceReadOnly    map[int64]bool
 	SourceAllowRename map[int64]bool
 }
 
-// PlannedMove is one file Plan approved, in the order Apply should run them
-// (largest affinity group first, ADR-51's own drain requirement generalised
-// to every reason -- moving a whole artist or a whole series as one unit
-// benefits every caller, not only drain).
+// PlannedMove is one approved file in Apply order, largest affinity group first (ADR-51 drain, generalised since moving a whole artist as a unit helps every reason).
 type PlannedMove struct {
 	MediaObjectID      int64
 	SourceRootFolderID int64
@@ -99,10 +67,7 @@ type PlannedMove struct {
 	DestRelPath        string
 	SizeBytes          int64
 	AffinityKey        string
-	// SameFilesystem tells Apply whether to rename(2) (atomic) or copy,
-	// verify and unlink (ADR-51's own two-path Apply algorithm) -- decided
-	// once, here, from both roots' FSID, rather than re-derived per file
-	// during Apply.
+	// SameFilesystem tells Apply whether to rename(2) or copy, verify and unlink (ADR-51), decided once here from both roots' FSID.
 	SameFilesystem bool
 	Companions     []Companion
 }
@@ -116,10 +81,7 @@ type RefusedFile struct {
 	Reason        string
 }
 
-// RootDelta is one root's own preview: what moves in, what moves out, and
-// what its free space becomes -- Invariant 73's "preview first", the exact
-// figures ADR-51's own text promises ("how many bytes and how much free
-// space each root ends with").
+// RootDelta is one root's preview of bytes in, bytes out and resulting free space (Invariant 73, ADR-51).
 type RootDelta struct {
 	RootFolderID       int64
 	BytesIn            int64
@@ -135,24 +97,14 @@ type MovePlan struct {
 	RootDeltas []RootDelta
 }
 
-// group is one affinity key's own files, kept together through refusal and
-// ordering decisions -- ADR-51's "whole artists and whole series move
-// together, never file-by-file" applies to being refused too: a shortfall
-// that blocks one file in a group blocks the whole group, not a partial move
-// that leaves an artist split across two roots.
+// group is one affinity key's files, kept together through refusal and ordering: a shortfall for one file refuses the group, so no artist is split across roots (ADR-51).
 type group struct {
 	affinityKey string
 	files       []FileToMove
 	totalBytes  int64
 }
 
-// Plan checks every file's move against its destination's policy and the
-// whole batch's space, then returns what may proceed, largest affinity group
-// first. Refusing is per-group (ADR-51's own "whole artists... together"),
-// except for ReasonDrain: architecture.md is explicit that a drain "refuses
-// to start if the remaining roots cannot hold the content" rather than
-// partially evacuating and getting stuck, so a single shortfall refuses
-// every group in a drain request, not just the one that could not fit.
+// Plan checks every file's move against the destination's policy and the batch's space and returns what may proceed, largest group first; refusal is per group except ReasonDrain, where one shortfall refuses every group rather than evacuating partially.
 func Plan(req Request) (MovePlan, error) {
 	groups, err := groupByAffinity(req.Files)
 	if err != nil {
@@ -188,13 +140,7 @@ func Plan(req Request) (MovePlan, error) {
 		}
 
 		dest := deltaFor(g.files[0].DestRootFolderID)
-		// A same-root group (every file's source equals its own destination
-		// -- RENAME's own in-place case) consumes no new capacity at all: it
-		// is always a rename(2), which duplicates no bytes. Checking the
-		// reserve against g.totalBytes here would count space leaving and
-		// arriving on the very same root as pure consumption, wrongly
-		// refusing a rename of a large, otherwise perfectly affordable
-		// group purely because it is large.
+		// A same-root group (RENAME in place) consumes no new capacity since it is always rename(2), so checking the reserve would wrongly refuse a large but affordable rename.
 		if !allSameRoot(g) && dest.ResultingFreeBytes-g.totalBytes < minFreeBytes(req.Roots, g.files[0].DestRootFolderID) {
 			shortfall := minFreeBytes(req.Roots, g.files[0].DestRootFolderID) - (dest.ResultingFreeBytes - g.totalBytes)
 			reason := fmt.Sprintf("insufficient space on root %d: %d bytes short of the reserve",
@@ -264,11 +210,7 @@ func firstReasonFor(refused []RefusedFile, affinityKey string) string {
 	return "the remaining roots cannot hold the content"
 }
 
-// groupByAffinity partitions files by AffinityKey, refusing outright a group
-// whose files disagree about their own destination -- ADR-51 has no
-// provision for splitting one affinity group across two destinations, so a
-// caller that tried would be masking a bug in how it built the request, not
-// expressing a real move.
+// groupByAffinity partitions files by AffinityKey and refuses a group whose files disagree on destination, since ADR-51 never splits a group and that would mask a caller bug.
 func groupByAffinity(files []FileToMove) ([]group, error) {
 	order := make([]string, 0, len(files))
 	byKey := map[string]*group{}
@@ -307,15 +249,7 @@ func guardGroup(req Request, g group) (reason string, ok bool) {
 	if !dest.Writable {
 		return fmt.Sprintf("destination root %d is not writable", destID), false
 	}
-	// section 11.8's own permitted-check table is explicit that RENAME is
-	// the one reason where source and destination are the same root
-	// ("APPLY: atomic rename within the root; cross-root is a move, not a
-	// rename"), and for exactly that case read_only + allow_rename together
-	// permit it (read_only=1 AND allow_rename=1 -> allowed) -- the
-	// destination-side override this comment used to say did not exist.
-	// Every other reason keeps the unconditional refusal: a category
-	// migration, rebalance or drain always targets a different root, where
-	// "read-only into" has no rename-style escape hatch at all.
+	// Section 11.8 allows RENAME within one root with read_only plus allow_rename together; every other reason targets a different root and keeps the unconditional read-only refusal.
 	if dest.ReadOnly && !isSameRootRename(req, g, destID) {
 		return fmt.Sprintf("destination root %d is read-only", destID), false
 	}
@@ -335,12 +269,7 @@ func guardGroup(req Request, g group) (reason string, ok bool) {
 	return "", true
 }
 
-// allSameRoot reports whether every file in g has its own destination equal
-// to its own source -- true in-place movement, regardless of Reason. Used
-// for the reserve check's own "no new capacity consumed" exemption above;
-// isSameRootRename below additionally requires ReasonRename and
-// allow_rename, since read_only's own exemption is deliberately narrower
-// than "physically the same disk" alone.
+// allSameRoot reports whether every file's destination equals its source, for the reserve exemption; isSameRootRename is narrower because read_only's exemption needs ReasonRename and allow_rename.
 func allSameRoot(g group) bool {
 	for _, f := range g.files {
 		if f.SourceRootFolderID != f.DestRootFolderID {
@@ -350,11 +279,7 @@ func allSameRoot(g group) bool {
 	return true
 }
 
-// isSameRootRename reports whether every file in g is a true in-place
-// rename (source root == destination root) under ReasonRename, with the
-// one root's own allow_rename set -- the narrow condition section 11.8's
-// permitted-check table describes, never true for the other three reasons
-// (which always target a different root).
+// isSameRootRename reports a true in-place rename (same root, ReasonRename, allow_rename set), the narrow case section 11.8 permits; never true for the other three reasons.
 func isSameRootRename(req Request, g group, destID int64) bool {
 	if req.Reason != ReasonRename || !req.SourceAllowRename[destID] {
 		return false

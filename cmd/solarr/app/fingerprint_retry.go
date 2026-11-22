@@ -18,11 +18,7 @@ const retryPageSize = 500
 // not covered here is still recovered by a full rescan.
 const retryMaxPages = 40
 
-// fingerprintRetrier is apiserver.FingerprintRetrier: once an AcoustID key is
-// entered, the files the fingerprint pass skipped for the want of one are
-// rescanned (D12). It re-runs them through the ordinary scan rather than a
-// pass of its own -- scan.Payload.Directories already exists for exactly this,
-// and a rung that re-ran outside the chain could disagree with it.
+// fingerprintRetrier is apiserver.FingerprintRetrier: once an AcoustID key exists, files skipped for lack of one are rescanned (D12) through the ordinary scan (Payload.Directories), so no second path can disagree.
 type fingerprintRetrier struct{ p *process }
 
 func (f fingerprintRetrier) RetryFingerprintSkipped(ctx context.Context) (int, error) {

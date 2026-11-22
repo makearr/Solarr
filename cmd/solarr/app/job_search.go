@@ -21,10 +21,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-// indexerConns resolves every enabled indexer connection fresh, the same
-// "ask, don't cache" discipline every settings-backed job dependency in
-// this codebase already follows -- a connection added or disabled between
-// runs takes effect on the very next search with no restart.
+// indexerConns resolves every enabled indexer connection fresh (ask, don't cache), so an added or disabled indexer takes effect on the next search.
 func (p *process) indexerConns(ctx context.Context) ([]music.IndexerConn, error) {
 	if p.solarrMode().SearchesStopped() {
 		return nil, nil

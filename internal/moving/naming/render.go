@@ -65,11 +65,7 @@ type Warning struct {
 	Message string
 }
 
-// Render turns one compiled template line into text -- a folder line's own
-// literal "/" characters stay as path structure; RenderPath is what splits
-// them into sanitised components. separator substitutes for a "/" that
-// arrives inside a token's resolved value, never for one in the template's
-// own literal text.
+// Render turns one compiled template line into text; a folder line's literal "/" stays path structure (RenderPath splits it), and separator replaces only a "/" inside a resolved token value.
 func Render(segments []Segment, ctx Context, opts Options) (string, []Warning) {
 	var warnings []Warning
 	return renderSegments(segments, ctx, opts, &warnings), warnings
@@ -197,14 +193,7 @@ func substituteSlashes(value string, opts Options) string {
 	}, value)
 }
 
-// MaxRecommendedRelPathBytes is the per-component limit's own total-path
-// counterpart (section 11.8's checklist: "the per-component limit is
-// enforced" already, the combined length was not). RenderPath sees only the
-// relative path, never the root folder it will be joined under, so this
-// leaves headroom for a root's own path length within Windows' conventional
-// 260-byte MAX_PATH rather than checking the true final absolute path --
-// the part the naming interpreter actually controls, not a guarantee about
-// the placed file's own final path.
+// MaxRecommendedRelPathBytes is the total-path counterpart of the per-component limit; RenderPath sees only the relative path, so this leaves headroom for the root within the 260-byte Windows MAX_PATH.
 const MaxRecommendedRelPathBytes = 240
 
 // RenderPath renders one template into a relative path: its literal "/" characters separate

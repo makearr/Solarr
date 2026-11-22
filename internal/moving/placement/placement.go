@@ -1,9 +1,4 @@
-// Package placement implements section 11.7: choosing which root folder a
-// new item lands on. Core decides which disk; the media module decides only
-// the path within it (internal/moving/naming's job). Pure logic, no I/O -- the
-// caller fetches candidates from settings.db and commits the chosen
-// affinity back, the same separation internal/identify/score keeps from
-// internal/db/settings.
+// Package placement implements section 11.7: core picks the root folder for a new item (the media module picks the path within it); pure logic, the caller fetches candidates and commits the affinity.
 package placement
 
 import (
@@ -27,11 +22,7 @@ const (
 	StrategyManual          Strategy = "manual"
 )
 
-// RootCandidate is one root folder's state, as the caller last read it from
-// settings.db -- Resolve trusts these values rather than probing anything
-// itself; a stale reading is the caller's problem to refresh before calling
-// (section 11.7: "immediately before any placement decision involving a
-// root whose reading is stale").
+// RootCandidate is one root's state as the caller last read it; Resolve trusts it, and refreshing a stale reading is the caller's job (section 11.7).
 type RootCandidate struct {
 	RootFolderID   int64
 	FSID           string
@@ -63,19 +54,13 @@ func CandidateOf(root settings.RootFolder, acceptsNew bool) RootCandidate {
 	}
 }
 
-// Request is what Resolve needs to decide -- Placement's own fields
-// (section 11.7's Go sketch) plus the strategy and tiebreak inputs a real
-// caller must supply, since this package has no settings.db of its own to
-// read them from.
+// Request is what Resolve needs: Placement's fields (section 11.7) plus the strategy and tiebreak inputs, since this package has no settings.db.
 type Request struct {
 	CategoryID      int64
 	SizeBytes       int64
 	AffinityEnabled bool
 	AffinityKey     string
-	// ExistingAffinityRoot is the root_folder_id the caller already looked up
-	// in placement_affinity for AffinityKey, nil when there is no recorded
-	// affinity yet -- Resolve is pure, so the lookup itself is the caller's
-	// job (the same separation internal/identify/score keeps from internal/db/settings).
+	// ExistingAffinityRoot is the root_folder_id recorded in placement_affinity for AffinityKey, nil when none; the lookup is the caller's because Resolve is pure.
 	ExistingAffinityRoot *int64
 	Strategy             Strategy
 	// SourceFSID is the download's own filesystem id, for the tiebreak that
@@ -107,11 +92,7 @@ type RejectedRoot struct {
 	Reason       string
 }
 
-// Decision explains what Resolve chose, or why it deferred (ADR-10:
-// structured data, no separate explain path). Its own shape, not
-// model.Decision's -- that type is ADR-40's quality-scoring vocabulary
-// (gates, tiers, additive score), which does not fit "why did this land on
-// disk 2" any better than forcing a placement outcome through gates would.
+// Decision explains what Resolve chose or why it deferred (ADR-10: structured data), its own shape because model.Decision is ADR-40's quality-scoring vocabulary.
 type Decision struct {
 	Outcome      Outcome
 	AffinityUsed bool
@@ -123,11 +104,7 @@ type Decision struct {
 	Reason string
 }
 
-// Resolve runs section 11.7's five-step order: affinity first (not a
-// strategy), then the CANDIDATES filter, then the chosen Strategy ranks
-// what is left, then the fs_id tiebreak. COMMIT (recording the choice in
-// placement_affinity) is the caller's job -- Resolve is pure and commits
-// nothing itself.
+// Resolve runs section 11.7's order: affinity (not a strategy), the CANDIDATES filter, the Strategy ranking, then the fs_id tiebreak; COMMIT to placement_affinity is the caller's job.
 func Resolve(req Request, candidates []RootCandidate) (RootCandidate, Decision, error) {
 	decision := Decision{Strategy: req.Strategy}
 
@@ -259,10 +236,7 @@ func weightedPick(candidates []RootCandidate, random func() float64) RootCandida
 	return candidates[len(candidates)-1]
 }
 
-// tiebreak prefers a root sharing the download's own filesystem id, so
-// import can reflink or hardlink instead of copying (ADR-11) -- applied
-// only among candidates already tied at the front of the strategy's own
-// ranking, never overriding the strategy's choice of best candidate.
+// tiebreak prefers a root sharing the download's filesystem id so import can reflink or hardlink (ADR-11), only among candidates tied at the front of the ranking.
 func tiebreak(ranked []RootCandidate, sourceFSID string) RootCandidate {
 	if sourceFSID == "" || len(ranked) == 0 {
 		return ranked[0]

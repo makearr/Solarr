@@ -147,11 +147,7 @@ type process struct {
 	// defaultQualityProfileID is ensureDefaultQualityProfile's fallback,
 	// used when a category has none of its own configured (todo 4.4).
 	defaultQualityProfileID int64
-	// taskRegistry is ADR-59's own registry of every periodic action;
-	// taskRunners is one live TaskRunner per registered task, keyed by Key,
-	// so the API's Run now can reach the exact runner already driving that
-	// task's own mutex (todo 4.19) rather than starting a second, unrelated
-	// enqueue path.
+	// taskRegistry is ADR-59's registry of periodic actions; taskRunners holds one live runner per task by Key so Run now reaches the runner owning that task's mutex (todo 4.19).
 	taskRegistry   *jobs.TaskRegistry
 	scheduleStates *jobs.ScheduleStates
 	taskRunners    map[string]*jobs.TaskRunner
@@ -414,11 +410,7 @@ func (p *process) openDatabases(ctx context.Context) error {
 		}
 	}
 
-	// Equips the cache to seal/open an *Arr instance's own API key
-	// (todo 4.13): the same encryption key authConfig decodes for session
-	// signing, config.Create already having generated one on first run
-	// (Invariant 61 -- validated at startup, so this decode cannot fail here
-	// having already succeeded once during config load).
+	// Equips the cache to seal/open *Arr API keys (todo 4.13) with the key authConfig already decoded for sessions (Invariant 61: validated at startup, so this cannot fail).
 	encryptionKey, err := config.DecodeKey(p.config.Security.EncryptionKey)
 	if err != nil {
 		return err
@@ -470,10 +462,7 @@ func (p *process) logRestore(report store.RecoveryReport) {
 		slog.Any("backups_rejected_as_corrupt", report.Rejected))
 }
 
-// reconcileRestore runs ADR-15's post-restore pass. Section 15.1 puts it at step 3,
-// before migrations; it runs after them here because it queries both databases at
-// the current schema and needs settings.db's configuration to find orphaned
-// references. It is still well before workers start, which is what ADR-15 requires.
+// reconcileRestore runs ADR-15's post-restore pass after migrations (section 15.1 puts it before) because it needs both databases at the current schema and settings.db to find orphans, still before workers start.
 func (p *process) reconcileRestore(ctx context.Context, cl clock.Clock, restored []store.RecoveryReport) error {
 	if len(restored) == 0 {
 		return nil
@@ -723,14 +712,7 @@ func (p *process) startJobs(ctx context.Context) error {
 	return nil
 }
 
-// resolvedServerPort applies ADR-58's revised order (2026-09-12, on the
-// user's own word): env, then config.yml, then settings.db. config.yml's
-// own server.port is never absent (the template always sets one, default
-// 5454), so in practice this makes it the value that wins whenever it
-// disagrees with settings.db -- UpdateNetworkSettings writes both together
-// now, so the two should agree except right after an operator hand-edits
-// config.yml directly. settings.db stays checked, for a setting that
-// someday has a config.yml side that can genuinely be absent.
+// resolvedServerPort applies ADR-58's order (env, config.yml, settings.db); config.yml always has a port so it wins on disagreement, and UpdateNetworkSettings writes both, so they differ only after a hand edit.
 func (p *process) resolvedServerPort() (port int, source string) {
 	if config.EnvSet("server.port", p.env) {
 		return p.config.Server.Port, "env"

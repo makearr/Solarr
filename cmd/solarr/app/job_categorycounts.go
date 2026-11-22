@@ -23,10 +23,7 @@ var categoryCountsDefinition = jobs.Definition{
 	Type: categoryCountsJobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3,
 }
 
-// categoryCountsJob recomputes every category's "works"/"files" counters
-// (internal/db/library.CategoryCounters) from whichever categories and root folders
-// settings.db currently declares -- wiring only, so it lives here rather than in
-// internal/db/library, which does not know settings.db exists at all (ADR-25).
+// categoryCountsJob recomputes each category's works/files counters from settings.db's categories and roots; wiring only, since internal/db/library does not know settings.db (ADR-25).
 type categoryCountsJob struct {
 	counters library.CategoryCounters
 	cache    *settings.Cache
@@ -79,10 +76,7 @@ func (p *process) registerCategoryCountsJob(registry *jobs.Registry, executor *j
 	return nil
 }
 
-// enqueueCategoryCounts submits one sweep. Registered as a task with
-// internal/jobs.TaskRunner (todo 4.19), so it also fires on its own
-// schedule, not only once at startup. Normal priority: a few seconds of work that every count on
-// screen waits for, which at low priority queued behind every pending rescan (2026-09-28).
+// enqueueCategoryCounts submits one sweep, also scheduled via jobs.TaskRunner (todo 4.19); normal priority because every count on screen waits for it and low queued behind rescans.
 func (p *process) enqueueCategoryCounts(ctx context.Context) (jobs.EnqueueResult, error) {
 	result, err := p.queue.Enqueue(ctx, jobs.Request{
 		Type: categoryCountsJobType, ActionKey: categoryCountsActionKey, Priority: jobs.PriorityNormal,

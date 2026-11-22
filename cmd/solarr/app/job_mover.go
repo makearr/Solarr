@@ -15,12 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-// registerMoverJob wires ADR-51's move.apply job into the registry and the
-// executor. The trigger is whichever caller accepts a plan and persists a
-// move_job -- adapters.Drain, for now. DrainCompletion closes the
-// drain lifecycle: once a DRAIN job's own files have all moved, this checks
-// whether the source root is now empty and advances drain_state to
-// DRAINED.
+// registerMoverJob wires ADR-51's move.apply into the registry and executor; DrainCompletion marks the source root DRAINED once a DRAIN job's files have all moved and it is empty.
 func (p *process) registerMoverJob(registry *jobs.Registry, executor *jobs.Executor) error {
 	if err := registry.Register(moverjob.Definition); err != nil {
 		return err

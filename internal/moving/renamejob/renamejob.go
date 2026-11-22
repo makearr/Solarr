@@ -48,10 +48,7 @@ type Config struct {
 	Clock    clock.Clock
 }
 
-// Start plans the targets on one root (one affinity group per work, so a work renames as one unit under mover.Plan's
-// own guards: read-only plus allow_rename, and the same-root reserve exemption). With preview true, or when the plan
-// refuses or has nothing to move, nothing is persisted and the job id is 0. Otherwise the move job is persisted and its
-// apply enqueued. warnings are keyed by media object id. categoryScope, when not zero, limits the job to one library.
+// Start plans the targets on one root (one affinity group per work, under mover.Plan's guards); when previewing or the plan refuses or is empty nothing is persisted and the job id is 0, else the move job is persisted and applied; warnings are keyed by media object id and a non-zero categoryScope limits it to one library.
 func Start(
 	ctx context.Context, cfg Config, rootFolderID, categoryScope int64, targets []Target, preview bool,
 ) (mover.MovePlan, int64, map[int64][]string, error) {

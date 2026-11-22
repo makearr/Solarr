@@ -1,10 +1,4 @@
-// Package drainjob is ADR-51's own POST /rootfolders/{id}/drain: gathers
-// real facts (every file on the root, every other root sharing a category
-// with it), calls mover.PlanDrain, and -- unless previewing or the plan
-// refuses -- persists the accepted plan (internal/db/library.MoveJobs), forces
-// accepts_new = 0 and drain_state = DRAINING, and enqueues internal/moving/moverjob
-// to actually move the files. This is the first real caller of
-// internal/moving/placement.Resolve.
+// Package drainjob is ADR-51's POST /rootfolders/{id}/drain: it gathers facts, plans via mover.PlanDrain, persists an accepted plan, sets accepts_new = 0 and DRAINING, and enqueues moverjob; the first caller of placement.Resolve.
 package drainjob
 
 import (
@@ -21,10 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-// Roots is the settings-side facts and writes Start needs. Only the types
-// are taken from internal/db/settings (the same lightweight use
-// internal/scanning/scan's own Roots interface already makes) -- the actual cache
-// access stays behind this interface, a cmd/solarr adapter bridging it.
+// Roots is the settings-side facts and writes Start needs; only the types come from internal/db/settings, and a cmd/solarr adapter bridges the cache.
 type Roots interface {
 	RootFolder(id int64) (settings.RootFolder, bool)
 	CategoryRoots() []settings.CategoryRoot
@@ -71,12 +62,7 @@ type Result struct {
 	Accepted  bool
 }
 
-// Start computes ADR-51's drain plan for one root. With preview true, or
-// when the plan refuses outright (nothing in Plan.Moves), nothing is
-// persisted -- the caller gets the plan back to show why. Otherwise it
-// creates and persists the move job, forces accepts_new = 0 and
-// drain_state = DRAINING across every category the root shares (section
-// 11.7), and enqueues moverjob's own Apply.
+// Start computes ADR-51's drain plan for one root; when previewing or the plan refuses, nothing is persisted, else it persists the move job, forces accepts_new = 0 and DRAINING across shared categories (section 11.7) and enqueues Apply.
 func Start(ctx context.Context, cfg Config, rootFolderID int64, preview bool) (Result, error) {
 	source, ok := cfg.Roots.RootFolder(rootFolderID)
 	if !ok {
@@ -148,11 +134,7 @@ func commit(ctx context.Context, cfg Config, rootFolderID int64, plan mover.Move
 	return Result{Plan: plan, MoveJobID: jobID, Accepted: true}, nil
 }
 
-// eligibleDestinations answers every other root sharing at least one
-// category with rootFolderID, real facts only. accepts_new is collapsed to
-// "true if any shared category admits new placements" -- library.FileOnRoot
-// carries no per-file category to check any finer than that against, the
-// same all-categories scoping Start's own doc comment already states.
+// eligibleDestinations answers every other root sharing a category with rootFolderID; accepts_new is true if any shared category admits placements, as library.FileOnRoot has no per-file category.
 func eligibleDestinations(roots Roots, rootFolderID int64) []placement.RootCandidate {
 	sourceCategories := map[int64]bool{}
 	for _, attachment := range roots.CategoryRoots() {
@@ -188,23 +170,13 @@ func eligibleDestinations(roots Roots, rootFolderID int64) []placement.RootCandi
 	return candidates
 }
 
-// Completer satisfies moverjob.DrainCompletion: once a DRAIN job's own
-// moverjob.Job.Run finishes, it checks whether the drained root now holds
-// no files at all, and if so advances drain_state from DRAINING to
-// DRAINED. A live container run found this transition never happened
-// before Completer existed -- nothing had ever checked back once a drain's
-// own move job finished.
+// Completer satisfies moverjob.DrainCompletion: when a DRAIN job finishes with the root holding no files it advances drain_state DRAINING to DRAINED, a transition nothing performed before.
 type Completer struct {
 	Roots Roots
 	Files Files
 }
 
-// CompleteDrainIfEmpty is a no-op unless rootFolderID's own drain_state is
-// still DRAINING for exactly this moveJobID -- a stale or already-advanced
-// state, or a moveJobID that is not the root's own current drain, means
-// this is not this drain's job to complete (a concurrent drain replaced it,
-// or StopDrain already reset it). Files left behind (a partial failure)
-// leave drain_state at DRAINING rather than falsely advancing it.
+// CompleteDrainIfEmpty is a no-op unless drain_state is still DRAINING for this moveJobID (a concurrent drain or StopDrain may have replaced it); leftover files keep it DRAINING.
 func (c Completer) CompleteDrainIfEmpty(ctx context.Context, rootFolderID, moveJobID int64) error {
 	root, ok := c.Roots.RootFolder(rootFolderID)
 	if !ok || root.DrainState != settings.DrainStateDraining || root.DrainJobID == nil || *root.DrainJobID != moveJobID {

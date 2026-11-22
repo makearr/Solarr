@@ -139,12 +139,7 @@ func (p *process) acquisitionReleaseGroups(ctx context.Context, acquisitionID in
 	return groups, nil
 }
 
-// importCommitter builds ADR-48's own COMMIT step. A fresh instance each
-// call, the same "ask, don't cache" style p.musicBrainzProvider() already
-// uses -- every field it closes over is itself cheap to construct or already
-// long-lived (p.cache, p.library). Shared by the import.inspect job's own
-// inline WALK-time placement and manualCommitter's own ManualCommitter below,
-// so the two never drift apart on how a unit gets placed.
+// importCommitter builds ADR-48's COMMIT step fresh per call (ask, don't cache), shared by import.inspect's inline placement and manualCommitter so they never drift.
 func (p *process) importCommitter() music.Committer {
 	desired := library.NewDesired(p.library)
 	people := library.NewPeople(p.library)
@@ -203,10 +198,7 @@ func lookupGroupID(name string) (int, error) {
 	return strconv.Atoi(group.Gid)
 }
 
-// mediaTool builds the ffprobe reader every import path needs -- the same
-// mediatool.New(nil, 0) registerImportJob already used, named so
-// manualCommitter can build the identical instance without importing
-// mediatool.New's own zero-value convention twice.
+// mediaTool builds the ffprobe reader every import path needs, so manualCommitter builds the identical instance.
 func (p *process) mediaTool() mediatool.Tool {
 	return mediatool.New(nil, 0)
 }

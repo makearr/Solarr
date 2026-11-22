@@ -13,12 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
-// backupSource satisfies apiserver.Backups over the backup directory and the
-// open stores. It lives here rather than in adapters because it needs the
-// *store.Store values themselves, which the adapters layer deliberately
-// cannot reach -- every other adapter goes through db/library or db/settings.
-// It reads the directory rather than a record of what was taken: a backup
-// that is not on disk is not a backup.
+// backupSource satisfies apiserver.Backups from the backup directory (not a record, since a backup not on disk is not one); it lives here because it needs the *store.Store values the adapters layer cannot reach.
 type backupSource struct {
 	FS         fsx.FS
 	Directory  string
