@@ -116,7 +116,7 @@ func TestSyncResolvesByPathThenIDAndSkipsMisses(t *testing.T) {
 		{Path: "/elsewhere/x.mkv", ProviderIDs: map[string]string{"tmdb": "99"}, Played: true, LastPlayed: 900},
 		{Path: "/media/tv/Gone.mkv", LastPlayed: 800},
 	})
-	outcome, err := service.Sync(context.Background(), 3)
+	outcome, err := service.Sync(context.Background(), 3, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestSyncCountsAPositionPastTheThresholdAsPlayed(t *testing.T) {
 	service, _, store, _ := setup([]mediaserver.Play{
 		{Path: "/media/tv/Show/s01e01.mkv", PositionMS: 91, DurationMS: 100, LastPlayed: 10},
 	})
-	if _, err := service.Sync(context.Background(), 3); err != nil {
+	if _, err := service.Sync(context.Background(), 3, false); err != nil {
 		t.Fatal(err)
 	}
 	if !store.states[0].Played {
@@ -147,17 +147,17 @@ func TestSyncCountsAPositionPastTheThresholdAsPlayed(t *testing.T) {
 func TestSyncMovesTheMarkOnlyAfterTheStoreSucceeded(t *testing.T) {
 	service, config, store, reader := setup([]mediaserver.Play{{Path: "/media/tv/Show/s01e01.mkv", Played: true, LastPlayed: 1000}})
 	store.failNext = true
-	if _, err := service.Sync(context.Background(), 3); err == nil {
+	if _, err := service.Sync(context.Background(), 3, false); err == nil {
 		t.Fatal("a failed store must fail the sync")
 	}
 	if store.since["u1"] != 0 || config.result == "" {
 		t.Fatalf("mark %d, result %q", store.since["u1"], config.result)
 	}
 	store.failNext = false
-	if _, err := service.Sync(context.Background(), 3); err != nil {
+	if _, err := service.Sync(context.Background(), 3, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Sync(context.Background(), 3); err != nil {
+	if _, err := service.Sync(context.Background(), 3, false); err != nil {
 		t.Fatal(err)
 	}
 	if store.since["u1"] != 1000 || !reflect.DeepEqual(reader.asked, []int64{0, 0, 1000}) || config.result != "" {
@@ -165,10 +165,23 @@ func TestSyncMovesTheMarkOnlyAfterTheStoreSucceeded(t *testing.T) {
 	}
 }
 
+func TestSyncFullAsksForEverythingAgain(t *testing.T) {
+	service, _, store, reader := setup([]mediaserver.Play{{Path: "/media/tv/Show/s01e01.mkv", Played: true, LastPlayed: 1000}})
+	if _, err := service.Sync(context.Background(), 3, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Sync(context.Background(), 3, true); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(reader.asked, []int64{0, 0}) || store.since["u1"] != 1000 {
+		t.Fatalf("asked %v mark %d", reader.asked, store.since["u1"])
+	}
+}
+
 func TestSyncSkipsAConnectionWithTheSwitchOff(t *testing.T) {
 	service, config, store, reader := setup(nil)
 	config.server.SyncPlayback = false
-	if _, err := service.Sync(context.Background(), 3); err != nil || len(reader.asked) != 0 || len(store.states) != 0 {
+	if _, err := service.Sync(context.Background(), 3, false); err != nil || len(reader.asked) != 0 || len(store.states) != 0 {
 		t.Fatalf("err %v asked %v", err, reader.asked)
 	}
 }

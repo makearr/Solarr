@@ -28,6 +28,7 @@ var mediaServerPlaybackDefinition = jobs.Definition{
 
 type mediaServerPlaybackPayload struct {
 	ServerID int64 `json:"server_id"`
+	Full     bool  `json:"full"`
 }
 
 type mediaServerPlaybackJob struct{ service playback.Service }
@@ -37,7 +38,7 @@ func (j mediaServerPlaybackJob) Run(ctx context.Context, job jobs.Job) error {
 	if err := json.Unmarshal(job.Payload, &payload); err != nil {
 		return jobs.Fatalf("media_server_playback", "payload", err)
 	}
-	_, err := j.service.Sync(ctx, payload.ServerID)
+	_, err := j.service.Sync(ctx, payload.ServerID, payload.Full)
 	return err
 }
 
@@ -81,7 +82,7 @@ func (p *process) enqueueMediaServerPlayback(ctx context.Context) (jobs.EnqueueR
 	}
 	for _, server := range servers {
 		if server.Enabled && server.SyncPlayback {
-			if err := p.syncMediaServerPlayback(ctx, server.ID); err != nil {
+			if err := p.syncMediaServerPlayback(ctx, server.ID, false); err != nil {
 				return jobs.EnqueueResult{}, err
 			}
 		}
@@ -89,14 +90,14 @@ func (p *process) enqueueMediaServerPlayback(ctx context.Context) (jobs.EnqueueR
 	return jobs.EnqueueResult{}, nil
 }
 
-// syncMediaServerPlayback queues one connection's sync; the same call serves Run now on the connection.
-func (p *process) syncMediaServerPlayback(ctx context.Context, serverID int64) error {
-	payload, err := json.Marshal(mediaServerPlaybackPayload{ServerID: serverID})
+// syncMediaServerPlayback queues one connection's sync; Run now on the connection reads everything again.
+func (p *process) syncMediaServerPlayback(ctx context.Context, serverID int64, full bool) error {
+	payload, err := json.Marshal(mediaServerPlaybackPayload{ServerID: serverID, Full: full})
 	if err != nil {
 		return err
 	}
 	_, err = p.queue.Enqueue(ctx, jobs.Request{
-		Type: mediaServerPlaybackJobType, ActionKey: "media-server-playback:" + strconv.FormatInt(serverID, 10),
+		Type: mediaServerPlaybackJobType, ActionKey: "media-server-playback:" + strconv.FormatInt(serverID, 10) + ":" + strconv.FormatBool(full),
 		Priority: jobs.PriorityLow, Payload: payload,
 	})
 	return err

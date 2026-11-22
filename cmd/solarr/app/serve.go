@@ -939,7 +939,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		LibrarySuggester:   p.suggester(),
 		ArrSync:            p.arrSync(),
 		MediaServerClients: p.mediaServerClients, AfterMediaServerDelete: p.forgetMediaServer,
-		WatchState: adapters.WatchState{Store: library.NewPlayback(p.library)}, SyncMediaServerPlayback: p.syncMediaServerPlayback,
+		WatchState: adapters.WatchState{Store: library.NewPlayback(p.library)}, SyncMediaServerPlayback: func(ctx context.Context, id int64) error { return p.syncMediaServerPlayback(ctx, id, true) },
 		ArrCompanion: p.arrSync(), AfterWrite: p.memory.requestSync,
 		CategoryMerger: libraryMerger{merges: library.NewCategoryMerges(p.library), queue: p.queue},
 		Prowlarr:       adapters.Prowlarr{Cache: p.cache, List: p.listProwlarr},

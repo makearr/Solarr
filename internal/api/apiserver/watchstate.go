@@ -214,9 +214,6 @@ func (s *Server) cleanupPairs(ctx context.Context, categoryID int64) ([]WatchPai
 }
 
 func (s *Server) watchedSelection(w http.ResponseWriter, r *http.Request, categoryID int64, days int) (WatchedSelection, bool) {
-	if !s.requireAdministrator(w, r) {
-		return WatchedSelection{}, false
-	}
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
 		writeError(w, s.logger, err)
@@ -244,6 +241,9 @@ func (s *Server) watchedSelection(w http.ResponseWriter, r *http.Request, catego
 
 // ListWatchedWorks answers the cleanup list of one library.
 func (s *Server) ListWatchedWorks(w http.ResponseWriter, r *http.Request, id int64, params gen.ListWatchedWorksParams) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
 	selection, ok := s.watchedSelection(w, r, id, derefOr(params.Days, 30))
 	if !ok {
 		return

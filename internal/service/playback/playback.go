@@ -71,9 +71,10 @@ var providerNames = map[string]string{
 	"musicbrainztrack": "musicbrainz:recording", "musicbrainzrecording": "musicbrainz:recording",
 }
 
-// Sync reads every user's plays since the last sync of one connection and stores them. The mark of a user moves only
+// Sync reads every user's plays since the last sync of one connection and stores them; full reads them all again, which
+// picks up what an earlier sync could not place because the library did not hold the file yet. The mark of a user moves only
 // after all its pages are stored, because a server answers newest first.
-func (s Service) Sync(ctx context.Context, serverID int64) (Outcome, error) {
+func (s Service) Sync(ctx context.Context, serverID int64, full bool) (Outcome, error) {
 	servers, err := s.Settings.MediaServers(ctx)
 	if err != nil {
 		return Outcome{}, err
@@ -87,7 +88,7 @@ func (s Service) Sync(ctx context.Context, serverID int64) (Outcome, error) {
 	if server.ID == 0 || !server.Enabled || !server.SyncPlayback {
 		return Outcome{}, nil
 	}
-	outcome, err := s.sync(ctx, server)
+	outcome, err := s.sync(ctx, server, full)
 	message := ""
 	if err != nil {
 		message = "watch state: " + err.Error()
@@ -100,7 +101,7 @@ func (s Service) Sync(ctx context.Context, serverID int64) (Outcome, error) {
 	return outcome, err
 }
 
-func (s Service) sync(ctx context.Context, server settings.MediaServer) (Outcome, error) {
+func (s Service) sync(ctx context.Context, server settings.MediaServer, full bool) (Outcome, error) {
 	client, err := s.Clients.Playback(ctx, server)
 	if err != nil {
 		return Outcome{}, err
@@ -122,7 +123,7 @@ func (s Service) sync(ctx context.Context, server settings.MediaServer) (Outcome
 	}
 	var total Outcome
 	for _, user := range users {
-		done, err := s.syncUser(ctx, server, client.Reader, pairs, user.ServerUserID)
+		done, err := s.syncUser(ctx, server, client.Reader, pairs, user.ServerUserID, full)
 		total.Stored += done.Stored
 		total.Unresolved += done.Unresolved
 		if err != nil {
@@ -169,10 +170,13 @@ func (s Service) users(ctx context.Context, server settings.MediaServer, client 
 	return merged, nil
 }
 
-func (s Service) syncUser(ctx context.Context, server settings.MediaServer, reader mediaserver.PlaybackReader, pairs []mediaserver.PathPair, userID string) (Outcome, error) {
+func (s Service) syncUser(ctx context.Context, server settings.MediaServer, reader mediaserver.PlaybackReader, pairs []mediaserver.PathPair, userID string, full bool) (Outcome, error) {
 	since, err := s.Store.Since(ctx, server.ID, userID)
 	if err != nil {
 		return Outcome{}, err
+	}
+	if full {
+		since = 0
 	}
 	newest := since
 	var outcome Outcome
