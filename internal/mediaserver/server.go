@@ -58,6 +58,9 @@ func LibraryIDsOf(changes []Change) []string {
 	return ids
 }
 
+// ErrItemNotFound means the server holds no item under that id.
+var ErrItemNotFound = errors.New("mediaserver: the server has no such item")
+
 // ErrRejected means the server refused the credential.
 var ErrRejected = errors.New("mediaserver: the server refused the credential")
 
@@ -101,4 +104,60 @@ type PlaybackReader interface {
 	// Played answers a page of the user's items, newest play first, and whether the end or an item older than since
 	// (unix seconds) was reached. userID is empty for a kind that serves only the signed-in user.
 	Played(ctx context.Context, userID string, since int64, offset, limit int) (items []Play, done bool, err error)
+}
+
+// Credit is a person on an item and what they did there.
+type Credit struct {
+	Name string
+	Role string
+	// Kind is "actor", "director", "writer" or the server's own word.
+	Kind string
+}
+
+// Image is a picture of an item; URL is the server's, fetched with the connection's guard.
+type Image struct {
+	Kind string
+	URL  string
+}
+
+// ItemRef names an item's parent: the series of an episode, the album of a track.
+type ItemRef struct {
+	ID    string
+	Title string
+}
+
+// Item is what a media server knows of one work, in its own words; a type's FromServer turns it into the type's record.
+type Item struct {
+	ID            string
+	MediaType     string
+	Title         string
+	OriginalTitle string
+	SortTitle     string
+	Overview      string
+	Year          int
+	// Date is the premiere or release day, YYYY-MM-DD, or empty.
+	Date      string
+	Genres    []string
+	Tags      []string
+	Rating    float64
+	AgeRating string
+	Language  string
+	RuntimeMS int64
+	// IDs are the provider ids by lower-case name (tmdb, imdb, tvdb, musicbrainzalbum, asin, ...).
+	IDs           map[string]string
+	People        []Credit
+	Organisations []string
+	Images        []Image
+	Parent        *ItemRef
+	Index         int
+	ParentIndex   int
+	Path          string
+}
+
+// Catalog is implemented by the kinds that answer what they know of a work; reads only.
+type Catalog interface {
+	// ItemByPath answers the item whose file is serverPath, in the server's own terms.
+	ItemByPath(ctx context.Context, serverPath string) (Item, bool, error)
+	Search(ctx context.Context, mediaType, query string, limit int) ([]Item, error)
+	Item(ctx context.Context, id string) (Item, error)
 }

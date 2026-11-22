@@ -137,3 +137,40 @@ func TestClient_LoginWithAnEmptyPasswordSendsTheToken(t *testing.T) {
 		t.Errorf("login body %q, header %q", body, auth)
 	}
 }
+
+func TestClient_ItemByPathMatchesOnlyAnItemAboveTheFile(t *testing.T) {
+	var terms []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		terms = append(terms, r.URL.Query().Get("searchTerm"))
+		_, _ = w.Write([]byte(`{"Items":[
+{"Id":"x1","Type":"Movie","Name":"Other Film","Path":"/data/films/Other Film (2001)/Other Film.mkv"},
+{"Id":"m1","Type":"Movie","Name":"Harbor Lights","OriginalTitle":"Lumieres du Port","Overview":"A ferry pilot.","ProductionYear":1999,
+ "PremiereDate":"1999-05-04T00:00:00.0000000Z","Genres":["Drama"],"CommunityRating":7.5,"OfficialRating":"PG","RunTimeTicks":54000000000,
+ "ProviderIds":{"Tmdb":"123","Imdb":"tt0000123"},"Path":"/data/films/Harbor Lights (1999)/Harbor Lights (1999).mkv",
+ "People":[{"Name":"Ada Quill","Role":"Pilot","Type":"Actor"}],"Studios":[{"Name":"Reef Pictures"}],"ImageTags":{"Primary":"t"}}]}`))
+	}))
+	defer server.Close()
+	client := jellyfin.New(mediaservertest.Direct(), server.URL, "k1")
+	item, found, err := client.ItemByPath(t.Context(), "/data/films/Harbor Lights (1999)/Harbor Lights (1999).mkv")
+	if err != nil || !found {
+		t.Fatalf("ItemByPath = %v, %v", found, err)
+	}
+	want := mediaserver.Item{
+		ID: "m1", MediaType: "movie", Title: "Harbor Lights", OriginalTitle: "Lumieres du Port", Overview: "A ferry pilot.", Year: 1999,
+		Date: "1999-05-04", Genres: []string{"Drama"}, Rating: 7.5, AgeRating: "PG", RuntimeMS: 5400000,
+		IDs:           map[string]string{"tmdb": "123", "imdb": "tt0000123"},
+		People:        []mediaserver.Credit{{Name: "Ada Quill", Role: "Pilot", Kind: "actor"}},
+		Organisations: []string{"Reef Pictures"},
+		Images:        []mediaserver.Image{{Kind: "primary", URL: server.URL + "/Items/m1/Images/Primary"}},
+		Path:          "/data/films/Harbor Lights (1999)/Harbor Lights (1999).mkv",
+	}
+	if !reflect.DeepEqual(item, want) {
+		t.Errorf("item = %+v,\nwant %+v", item, want)
+	}
+	if terms[0] != "Harbor Lights" {
+		t.Errorf("first search term = %q", terms[0])
+	}
+	if _, found, _ := client.ItemByPath(t.Context(), "/data/films/Unknown (2020)/Unknown (2020).mkv"); found {
+		t.Error("an unrelated path matched an item")
+	}
+}
