@@ -67,6 +67,15 @@ media when the importer says so (`batch.BookFiles`), so a PDF booklet beside an 
 The resolver takes an id in the name (ISBN, ASIN), else a title the library holds, else the provider's exact title by the
 named author among its first three hits, which it adds; anything less is left for Review.
 
+## What a book says of itself
+
+A book is first read from its file and folder names. Beside that, `internal/identify/bookmeta` reads what the book says
+of itself, in this order: a Calibre `metadata.opf` in the file's folder (any format), else, for an `.epub`, the package
+file named by its `META-INF/container.xml` (at most 5,000 archive entries, a rootfile path that is absolute or climbs out
+is refused). It yields the title, authors, a valid ISBN-10 or ISBN-13, an ASIN, the language and Calibre's series. A scan
+and an import lay it over the name's reading: the ids win, the title and first author lead, and the name's title stays as
+another reading. Audiobook tags are not read yet.
+
 ## Searching
 
 `Search` asks Newznab's book search by author and title first, then "Author Title", then the title alone. A release is

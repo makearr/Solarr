@@ -36,6 +36,7 @@ type Consumer struct {
 type scanning struct {
 	format   Format
 	resolver Resolver
+	fs       fsx.FS
 }
 
 // NewConsumer builds the consumer.
@@ -45,7 +46,7 @@ func NewConsumer(config ConsumerConfig) Consumer {
 		logger = slog.Default()
 	}
 	return Consumer{works.NewConsumer(works.ConsumerConfig{
-		MediaType: config.Service.Format.MediaType, Plural: "books", Resolver: scanning{format: config.Service.Format, resolver: config.Resolver},
+		MediaType: config.Service.Format.MediaType, Plural: "books", Resolver: scanning{format: config.Service.Format, resolver: config.Resolver, fs: config.FS},
 		FS: config.FS, Physical: config.Physical, Unidentified: config.Unidentified, Series: config.Service.Series,
 		Clock: config.Clock, Logger: logger,
 	})}
@@ -60,7 +61,7 @@ func (s scanning) Readable(observed scan.Observed) bool {
 
 // Resolve implements works.ScanResolver: from each book's author and title, once per audiobook folder, since its
 // chapters are one book.
-func (s scanning) Resolve(ctx context.Context, _ settings.RootFolder, categoryID int64, observed []scan.Observed, _ []library.PhysicalFile) []works.ScanMatch {
+func (s scanning) Resolve(ctx context.Context, root settings.RootFolder, categoryID int64, observed []scan.Observed, _ []library.PhysicalFile) []works.ScanMatch {
 	byUnit := map[string]works.ScanMatch{}
 	matches := make([]works.ScanMatch, len(observed))
 	for i, file := range observed {
@@ -71,6 +72,7 @@ func (s scanning) Resolve(ctx context.Context, _ settings.RootFolder, categoryID
 		found, seen := byUnit[unit]
 		if !seen {
 			if info, ok := s.format.Parse(file.File.RelPath); ok {
+				info = withEmbedded(s.fs, path.Join(root.Path, file.File.RelPath), info)
 				found.WorkID, found.Candidates = s.resolver.Resolve(ctx, categoryID, info)
 			}
 			byUnit[unit] = found

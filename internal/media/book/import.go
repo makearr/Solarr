@@ -79,6 +79,7 @@ func (p placing) Resolve(ctx context.Context, request batch.Request, unit inspec
 	}
 	var candidates []model.Identification
 	if info, ok := p.format().Parse(files[0].RelPath); ok {
+		info = withEmbedded(p.config.FS, path.Join(request.SourcePath, files[0].RelPath), info)
 		workID, found := p.config.Resolver.Resolve(ctx, request.CategoryID, info)
 		if workID != 0 {
 			return workID, nil

@@ -30,7 +30,7 @@ internal/
 ├── metadata/   musicbrainz  wikidata  acoustid  metacache  metaresolve
 │               skyhook  tvmaze  tmdb  tvdb  thexem  anilist  omdb  mdblist  fanart  radarrmeta  theaudiodb
 │               openlibrary  googlebooks  audible  itunes  fantlab  hardcover  stashbox  theporndb  whisparr
-├── identify/   model  parse  parsetv  parsemovie  parsebook  parseadult  match  score  priority
+├── identify/   model  parse  parsetv  parsemovie  parsebook  bookmeta  parseadult  match  score  priority
 ├── scanning/   scan  probe
 ├── importing/  inspect  importjob  batch  placer  rules  unpack (archives into a workspace)  downloadwatch  arrimport  arrmap
 ├── moving/     mover  moverjob  drainjob  renamejob  placement  naming  sidecar  linker  linkjob (identical copies become links)
