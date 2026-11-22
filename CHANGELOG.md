@@ -3,6 +3,49 @@
 Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM.RRR.BBB` before); see `documentation/versioning.md`.
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
+## 2026.11.2.1311 — 2026-11-22
+
+**Upgrading:** each database is one squashed baseline again. Only databases from build 1298 or later (schema
+library 0146, settings 0077, jobs 0010, statistics 0008) are upgraded. Anything older, **2026.11.1.0882 included**, is
+refused at start-up: use the *Arr import or start with a fresh config folder. The automatic move of the old
+`data/{db,cache,backups}` layout and the old browser theme setting are gone too.
+
+- **Indexers without Prowlarr.** Our own indexer spec engine with a **581-site catalog**, a proxy list with
+  FlareSolverr, indexer priority and per-indexer download client binding, categories read from the indexer itself,
+  and stated API allowances respected (back-off on a limit answer, one sign-in shared by parallel searches).
+  Prowlarr can still be followed: its indexers, proxies and clients sync hourly.
+- **Disk-aware I/O.** Settings → Disk shows the disk topology and latency; probing, tag write-back, moves, linking and
+  imports wait their turn per disk, idle disks are left alone, and inotify folder watching lets scans trust it.
+- **Scheduler.** Pause and resume any task (or all), a *Running now* list with time left and estimated load, a
+  heatmap of real run time, a hung-job watchdog, and a task that missed its time while Solarr was down runs once.
+- **Imports.** Blu-ray/DVD folders are one unit held for review; Calibre `metadata.opf` and EPUB metadata name a book;
+  audiobook tags lead the folder name; disc subfolders, subtitle folders and hidden pregap tracks are handled;
+  every failing step takes back what it placed; the Import screen pages, has a *Needs attention* tab and dismisses
+  all finished sessions in one click. How long import history is kept is a setting.
+- **Music.** Bootleg-only release groups per library, optional tracks, release detail (edition names, disc titles,
+  track artists, ISRCs), duplicates by **audio fingerprint**, community ratings, vote-weighted genres, Lidarr import
+  takes over naming formats and metadata profiles.
+- **TV.** Daily series searched by air date, a season missing a few episodes searched episode by episode, several
+  downloads of one season in parallel when they do not overlap, specials leave the missing count, and seasons that two
+  sources number differently are shown on the work page.
+- **Downloads.** A title can be wanted by two libraries; a dead `.torrent` falls back to its magnet; BitTorrent v2
+  hashes; a full client disk keeps downloads waiting instead of blocklisting them; a release an indexer stopped
+  serving is blocklisted as *gone at indexer*; renamed and blackhole downloads are still recognised; a removed
+  download is only declared gone after ten minutes.
+- **Similar videos** are compared by a nightly job and stored, so the report opens at once; a pair is compared only
+  when their lengths agree.
+- **Safety.** Deleting anything in use is refused or offers to move its users first; a fresh install claimed from a
+  public address needs the setup code from the log; access levels per action (add, manage) in one table; files of a
+  blocked work are a 404 everywhere; passwords of 8+ characters asked twice; credentials never follow a redirect to
+  another host; API writes trigger a database copy to disk when running from RAM.
+- **Faster and lighter.** A metadata refresh that finds nothing changed writes nothing; library covers sit in 256
+  shard folders; one event stream per tab; JSON answers gzipped; provider outages serve the stored answer;
+  backups and vacuum no longer hold the database writer; the job dispatcher no longer polls.
+- **Health** names unreadable files (with ffprobe's message), missing media tools, failing tasks, stale backups,
+  disabled clients still holding downloads and a missing AcoustID key.
+- **The whole interface is translatable**: every sentence comes from one i18n catalogue (English only for now).
+
+
 ## 2026.11.1.0882 — 2026-11-08
 
 **Upgrading:** databases created by 2026.10.001.515 or earlier are refused at start-up (one baseline migration per database now); import from the *Arrs or start a fresh config folder.
