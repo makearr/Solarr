@@ -581,6 +581,18 @@ func NewDefaultRegistry() *Registry {
 		Default:  "",
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyComicVineAPIKey, Kind: KindString, Tier: TierNormal,
+		Name:     "ComicVine key",
+		HelpText: "Your own API key from your ComicVine account (comicvine.gamespot.com/api): comic series, issues and credits.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyMetronAccount, Kind: KindString, Tier: TierNormal,
+		Name:     "Metron account",
+		HelpText: "Your Metron account as user:password (metron.cloud): comic series, issues, page counts and reprints.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyTMDBAPIKey, Kind: KindString, Tier: TierNormal,
 		Name:     "TMDB key",
 		HelpText: "Your own TMDB read access token or API key (themoviedb.org, free). Adds cast, crew, guest stars, artwork and alternative orderings to TV.",

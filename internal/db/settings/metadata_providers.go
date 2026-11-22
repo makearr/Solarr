@@ -39,6 +39,21 @@ var DefaultBookSources = []string{SourceWikidata, BookSourceOpenLibrary, BookSou
 // DefaultAudiobookSources is Wikidata to steer, Audible for the reading (narrators, length, series), then the book providers.
 var DefaultAudiobookSources = []string{SourceWikidata, BookSourceAudible, BookSourceITunes, BookSourceOpenLibrary, BookSourceGoogleBooks, BookSourceHardcover}
 
+// The comic and manga providers.
+const (
+	ComicSourceComicVine    = "comicvine"
+	ComicSourceMetron       = "metron"
+	ComicSourceGCD          = "gcd"
+	ComicSourceMangaUpdates = "mangaupdates"
+	ComicSourceMangaDex     = "mangadex"
+)
+
+// DefaultComicSources is ComicVine, which names a series and numbers its issues, Metron, then the Grand Comics Database.
+var DefaultComicSources = []string{ComicSourceComicVine, ComicSourceMetron, ComicSourceGCD}
+
+// DefaultMangaSources is AniList, which names a manga, then MangaUpdates and MangaDex, whose chapter map gives the volumes.
+var DefaultMangaSources = []string{TVSourceAniList, ComicSourceMangaUpdates, ComicSourceMangaDex}
+
 // The adult providers: Whisparr's server, backed by ThePornDB, and three stash-box servers.
 const (
 	AdultSourceWhisparr  = "whisparr"
@@ -65,8 +80,8 @@ const (
 // KeyMetadataDisabledProviders lists the providers switched off for every library.
 const KeyMetadataDisabledProviders = "metadata.disabled_providers"
 
-// DefaultDisabledProviders start off: Google Books answers 429 without a key of the owner's own.
-var DefaultDisabledProviders = []string{BookSourceGoogleBooks}
+// DefaultDisabledProviders start off: Google Books answers 429 without a key of the owner's own, and the comic providers are new.
+var DefaultDisabledProviders = []string{BookSourceGoogleBooks, ComicSourceComicVine, ComicSourceMetron, ComicSourceGCD, ComicSourceMangaUpdates, ComicSourceMangaDex}
 
 // KeyMetadataMovieSources orders the movie providers: the first to hold a field supplies it, the others fill what is missing.
 const KeyMetadataMovieSources = "metadata.movie_sources"
@@ -158,7 +173,7 @@ var MetadataProviders = []MetadataProvider{
 		PerMinute: 1200, Published: "none published"},
 	{Key: TVSourceTVmaze, Label: "TVmaze", MediaTypes: []string{"tv"}, Carries: []string{"air times and time zones", "networks", "cast", "images"},
 		PerMinute: 120, MaxPerMinute: 120, Published: "20 every 10 seconds"},
-	{Key: TVSourceAniList, Label: "AniList", MediaTypes: []string{"tv"}, Carries: []string{"anime titles in every language", "cours", "relations", "genres", "images"},
+	{Key: TVSourceAniList, Label: "AniList", MediaTypes: []string{"tv", "comic"}, Carries: []string{"anime titles in every language", "cours", "relations", "genres", "images"},
 		PerMinute: 30, MaxPerMinute: 90, Published: "90 a minute, 30 while it runs degraded"},
 	{Key: TVSourceKitsu, Label: "Kitsu", MediaTypes: []string{"tv"}, Carries: []string{"anime synopses", "age ratings", "average ratings", "posters", "ids on AniList, MyAnimeList and AniDB"},
 		PerMinute: 60, Published: "none published; asked at 60 a minute"},
@@ -184,6 +199,16 @@ var MetadataProviders = []MetadataProvider{
 		PerMinute: 20, MaxPerMinute: 20, Published: "about 20 a minute"},
 	{Key: BookSourceFantLab, Label: "FantLab", MediaTypes: []string{"book", "audiobook"}, Carries: []string{"fantasy and science fiction works", "original titles", "descriptions", "ratings", "covers"},
 		PerMinute: 60, Published: "none published"},
+	{Key: ComicSourceComicVine, Label: "ComicVine", MediaTypes: []string{"comic"}, Carries: []string{"series", "issues and their numbers", "cover and store dates", "credits", "story arcs", "covers"}, NeedsKey: true,
+		PerMinute: 3, MaxPerMinute: 3, Published: "200 requests an hour for each kind of request; faster gets the key blocked"},
+	{Key: ComicSourceMetron, Label: "Metron (account as user:password)", MediaTypes: []string{"comic"}, Carries: []string{"series and their type", "issues", "page counts", "age ratings", "credits", "reprints", "ComicVine and GCD ids"}, NeedsKey: true,
+		PerMinute: 20, MaxPerMinute: 30, Published: "about 30 a minute and a daily cap"},
+	{Key: ComicSourceGCD, Label: "Grand Comics Database (comics.org, CC BY-SA 4.0)", MediaTypes: []string{"comic"}, Carries: []string{"series", "issues", "publishers", "bibliographic detail"},
+		PerMinute: 30, Published: "none published; asked at 30 a minute"},
+	{Key: ComicSourceMangaUpdates, Label: "MangaUpdates", MediaTypes: []string{"comic"}, Carries: []string{"titles and associated names", "type", "status and volumes", "publishers", "genres", "authors"},
+		PerMinute: 30, Published: "none published; asked at 30 a minute"},
+	{Key: ComicSourceMangaDex, Label: "MangaDex", MediaTypes: []string{"comic"}, Carries: []string{"titles", "content rating", "volumes and their chapters", "covers", "ids on AniList and MangaUpdates"},
+		PerMinute: 240, MaxPerMinute: 300, Published: "about 5 a second; faster gets the address banned"},
 	{Key: AdultSourceWhisparr, Label: "Whisparr's metadata server", MediaTypes: []string{"adult"}, Carries: []string{"scenes", "performer credits", "sites and studios", "genres", "images"},
 		PerMinute: 240, Published: "none published; shared by every Whisparr"},
 	{Key: AdultSourceStashDB, Label: "StashDB", MediaTypes: []string{"adult"}, Carries: []string{"scenes", "performers", "studios and networks", "tags", "fingerprints", "images"}, NeedsKey: true,
@@ -339,6 +364,11 @@ func DefaultMetadataSources(mediaType, kind string) []string {
 		return slices.Clone(DefaultAudiobookSources)
 	case "adult":
 		return slices.Clone(DefaultAdultSources)
+	case "comic":
+		if kind == "manga" || kind == "hentai" {
+			return slices.Clone(DefaultMangaSources)
+		}
+		return slices.Clone(DefaultComicSources)
 	case "music":
 		return slices.Clone(DefaultMetadataSourceOrder)
 	}

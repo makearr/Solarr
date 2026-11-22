@@ -6,6 +6,7 @@ Earlier entries use older schemes; those at and below `0.0.x` predate both and a
 ## Unreleased
 
 - Comics: a new media type with four library kinds (Comics, Manga, Adult comics, Hentai) that can be created and are empty for now; the two adult kinds ask for a confirmation before the library is added. Under the hood: the file-name parser, ComicInfo.xml / MetronInfo.xml / series.json readers, the page probe and clients for ComicVine, Metron, the Grand Comics Database, MangaUpdates, MangaDex and AniList manga are built but not yet connected.
+- Comics: ComicVine, Metron, the Grand Comics Database, MangaUpdates and MangaDex appear under Settings > Metadata (switched off until you turn them on; ComicVine takes your key, Metron your account as user:password); AniList also serves comic libraries. Comics libraries default to ComicVine, Metron, GCD; Manga and Hentai to AniList, MangaUpdates, MangaDex.
 - Development moves to branch `dev`; `main` on GitHub stays at the last release.
 - Metadata: OMDb (IMDb rating, English plot) and fanart.tv (clear logos, banners, posters) now also serve TV libraries, last in the default order; media servers used as metadata will rank after every other provider.
 - Metadata: a Jellyfin connection used as metadata fills a TV or film library's missing fields (overview, genres, cast, age rating, ids) and names files and folders it already knows during a scan; it ranks after every other provider and never replaces an id.
