@@ -74,6 +74,8 @@ const (
 	SourceTheAudioDB      = "theaudiodb"
 	SourceCoverArtArchive = "coverartarchive"
 	SourceAcoustID        = "acoustid"
+	SourceListenBrainz    = "listenbrainz"
+	SourceDeezer          = "deezer"
 	// SourceTheXEM maps TheTVDB's episode numbers to the ones scene releases carry.
 	SourceTheXEM = "thexem"
 )
@@ -234,6 +236,10 @@ var MetadataProviders = []MetadataProvider{
 		PerMinute: 120, Published: "none published for the free key"},
 	{Key: SourceCoverArtArchive, Role: RoleEnrich, Label: "Cover Art Archive", AlsoFor: []string{"music"}, Carries: []string{"album covers"},
 		Published: "none published; served by the Internet Archive"},
+	{Key: SourceListenBrainz, Role: RoleEnrich, Label: "ListenBrainz", AlsoFor: []string{"music"}, Carries: []string{"how often an album was listened to"},
+		PerMinute: 60, MaxPerMinute: 60, Published: "none published; asked at 60 a minute"},
+	{Key: SourceDeezer, Role: RoleEnrich, Label: "Deezer", AlsoFor: []string{"music"}, Carries: []string{"an album's fans", "explicit flag"},
+		PerMinute: 120, Published: "50 requests every 5 seconds"},
 	{Key: SourceAcoustID, Role: RoleEnrich, Label: "AcoustID", AlsoFor: []string{"music"}, Carries: []string{"files identified by their sound"}, NeedsKey: true,
 		PerMinute: 180, MaxPerMinute: 180, Published: "3 a second"},
 	{Key: SourceTheXEM, Role: RoleEnrich, Label: "TheXEM", AlsoFor: []string{"tv"}, Carries: []string{"scene numbering", "scene names"},

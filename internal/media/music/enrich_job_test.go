@@ -2118,3 +2118,40 @@ func TestEnrichJob_StoresTheReleaseGroupsCommunityRatingOnTenPoints(t *testing.T
 		t.Errorf("ratings = %+v, want %+v", ratings, want)
 	}
 }
+
+func TestEnrichJob_StoresTheOtherProvidersRatingsBesideMusicBrainzs(t *testing.T) {
+	source := &fakeSource{
+		rg: musicbrainz.ReleaseGroup{
+			MBID: "rg-1", Title: "Quiet Harbour", PrimaryType: "Album", FirstReleaseDate: "1997-05-21",
+			ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "ar-1", Name: "Harbour Lights", ArtistName: "Harbour Lights"}},
+			Rating:       musicbrainz.Rating{Value: 4.2, Votes: 12},
+		},
+		release: musicbrainz.Release{MBID: "rel-1", Title: "Quiet Harbour", Status: "official"},
+	}
+	var asked [3]string
+	job, opened, queries := newEnrichJobRealigning(t, source, nil, nil, nil, func(config *music.EnrichJobConfig) {
+		config.AlbumRatings = func(_ context.Context, mbid, artist, title string) []music.AlbumRating {
+			asked = [3]string{mbid, artist, title}
+			return []music.AlbumRating{{Provider: "deezer", Score: 6, Votes: 999}, {Provider: "listenbrainz", Score: 4, Votes: 99}}
+		}
+	})
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{Provider: music.ProviderReleaseGroup, ExternalID: "rg-1"})
+	if err != nil {
+		t.Fatalf("GetWorkByExternalID: %v", err)
+	}
+	ratings, err := queries.ListWorkRatings(t.Context(), work.ID)
+	if err != nil {
+		t.Fatalf("ListWorkRatings: %v", err)
+	}
+	want := []librarydb.ListWorkRatingsRow{{Provider: "deezer", Score: 6, Votes: 999}, {Provider: "listenbrainz", Score: 4, Votes: 99}, {Provider: "musicbrainz", Score: 8.4, Votes: 12}}
+	if !reflect.DeepEqual(ratings, want) {
+		t.Errorf("ratings = %+v, want %+v", ratings, want)
+	}
+	if asked != [3]string{"rg-1", "Harbour Lights", "Quiet Harbour"} {
+		t.Errorf("asked = %v, want the release group, credited artist and title", asked)
+	}
+}

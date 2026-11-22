@@ -1,6 +1,7 @@
 package music
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -112,10 +113,37 @@ type EnrichJob struct {
 	clock           clock.Clock
 	logger          *slog.Logger
 	wikidataEnabled func() bool
+	albumRatings    AlbumRatings
 	backfillPerRun  func() int
 	checkpointEvery int
 	// editionlessAfter carries enrichEditionless' place between runs, so works that never gain an edition cannot hold every later one back.
 	editionlessAfter atomic.Int64
+}
+
+// AlbumRating is one provider's rating of an album on the library's 0..10, with the people behind it.
+type AlbumRating struct {
+	Provider string
+	Score    float64
+	Votes    int64
+}
+
+// AlbumRatings answers the ratings the outside providers hold of an album, found by its release group and its credited artist and title.
+type AlbumRatings func(ctx context.Context, releaseGroupMBID, artist, title string) []AlbumRating
+
+// rateFromOthers records the popularity ListenBrainz and Deezer hold; a provider that knows nothing leaves no rating.
+func (j *EnrichJob) rateFromOthers(ctx context.Context, workID int64, rg musicbrainz.ReleaseGroup) {
+	if j.albumRatings == nil {
+		return
+	}
+	artist := ""
+	if len(rg.ArtistCredit) > 0 {
+		artist = cmp.Or(rg.ArtistCredit[0].ArtistName, rg.ArtistCredit[0].Name)
+	}
+	for _, rating := range j.albumRatings(ctx, rg.MBID, artist, rg.Title) {
+		if err := j.people.SetRating(ctx, workID, rating.Provider, rating.Score, rating.Votes, j.clock.Now().Unix()); err != nil {
+			j.logger.WarnContext(ctx, "set rating failed", slog.Int64("work_id", workID), slog.String("provider", rating.Provider), slog.Any("error", err))
+		}
+	}
 }
 
 // TagReader reads the tags a set of files carry -- mediatool.Tool's own
@@ -145,6 +173,8 @@ type EnrichJobConfig struct {
 	WikidataEnabled func() bool
 	// PeopleBackfillPerRun is the configured budget, read per run; nil is 200.
 	PeopleBackfillPerRun func() int
+	// AlbumRatings asks the providers beyond MusicBrainz about an album's popularity; nil asks none.
+	AlbumRatings AlbumRatings
 	// ArtistArt is optional: without it an artist Wikidata has no photo for keeps none.
 	ArtistArt ArtistArt
 	Artworks  library.Artworks
@@ -179,7 +209,7 @@ func NewEnrichJob(config EnrichJobConfig) *EnrichJob {
 	}
 	return &EnrichJob{
 		identity: config.Identity, people: config.People, organisations: config.Organisations, provider: config.Provider,
-		biography: config.Biography, wikidataEnabled: config.WikidataEnabled,
+		biography: config.Biography, wikidataEnabled: config.WikidataEnabled, albumRatings: config.AlbumRatings,
 		backfillPerRun: config.PeopleBackfillPerRun, checkpointEvery: config.CheckpointBatches,
 		artworks: config.Artworks, realigner: config.Realigner, libraries: config.Libraries, desired: config.Desired, onRefined: config.OnRefined,
 		artistArt: config.ArtistArt,
@@ -834,6 +864,8 @@ func (j *EnrichJob) enrichCreditsAndGenres(
 			j.logger.WarnContext(ctx, "set rating failed", slog.Int64("work_id", workID), slog.Any("error", err))
 		}
 	}
+
+	j.rateFromOthers(ctx, workID, rg)
 
 	if len(rg.Aliases) > 0 {
 		if err := j.people.SetAliases(ctx, workID, "musicbrainz", rg.Aliases, j.clock.Now().Unix()); err != nil {

@@ -32,6 +32,8 @@ const (
 	providerMDBList         = "mdblist"
 	providerOMDb            = "omdb"
 	providerIMDb            = "imdb"
+	providerListenBrainz    = "listenbrainz"
+	providerDeezer          = "deezer"
 	providerFanart          = "fanart"
 	providerOpenLibrary     = "openlibrary"
 	providerGoogleBooks     = "googlebooks"

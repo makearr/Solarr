@@ -2,12 +2,16 @@ package app
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/metadata/deezer"
+	"github.com/makearr/Solarr/internal/metadata/listenbrainz"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
@@ -32,9 +36,10 @@ func (p *process) enrichJobs() []media.JobRegistration {
 		PeopleBackfillPerRun: func() int {
 			return int(*p.cache.Snapshot().MetadataSettings().PeopleBackfillPerRun)
 		},
-		ArtistArt: p.theAudioDBArtist(p.theAudioDB()),
-		Artworks:  library.NewArtworks(p.library),
-		Realigner: realigner{p: p},
+		ArtistArt:    p.theAudioDBArtist(p.theAudioDB()),
+		AlbumRatings: p.albumRatings(),
+		Artworks:     library.NewArtworks(p.library),
+		Realigner:    realigner{p: p},
 		Libraries: adapters.EntityLibraries{
 			MediaType: string(music.MediaType), Works: library.NewWorks(p.library), People: library.NewPeople(p.library), Cache: p.cache,
 		},
@@ -69,4 +74,33 @@ func (p *process) enrichmentPass(ctx context.Context, manual bool) (duplicate bo
 		p.logger.Warn("enqueue music enrichment", slog.Any("error", err))
 	}
 	return result.Duplicate, err
+}
+
+// albumRatings is the popularity ListenBrainz and Deezer hold of an album, each asked only while switched on; both are keyless.
+func (p *process) albumRatings() music.AlbumRatings {
+	lb := listenbrainz.New(p.providerClient(providerListenBrainz, nil, httpx.ClientConfig{}))
+	dz := deezer.New(p.providerClient(providerDeezer, nil, httpx.ClientConfig{}))
+	return func(ctx context.Context, releaseGroupMBID, artist, title string) []music.AlbumRating {
+		snapshot := p.cache.Snapshot()
+		var ratings []music.AlbumRating
+		if snapshot.ProviderEnabled(settings.SourceListenBrainz) && releaseGroupMBID != "" {
+			found, err := lb.ReleaseGroup(ctx, releaseGroupMBID)
+			switch {
+			case err == nil:
+				ratings = append(ratings, music.AlbumRating{Provider: settings.SourceListenBrainz, Score: music.PopularityScore(found.Listeners), Votes: found.Listeners})
+			case !errors.Is(err, listenbrainz.ErrNotFound):
+				p.logger.Warn("listenbrainz popularity", slog.String("mbid", releaseGroupMBID), slog.Any("error", err))
+			}
+		}
+		if snapshot.ProviderEnabled(settings.SourceDeezer) && artist != "" && title != "" {
+			found, err := dz.Find(ctx, artist, title)
+			switch {
+			case err == nil && found.Fans > 0:
+				ratings = append(ratings, music.AlbumRating{Provider: settings.SourceDeezer, Score: music.PopularityScore(found.Fans), Votes: found.Fans})
+			case err != nil && !errors.Is(err, deezer.ErrNotFound):
+				p.logger.Warn("deezer album", slog.String("mbid", releaseGroupMBID), slog.Any("error", err))
+			}
+		}
+		return ratings
+	}
 }

@@ -23,7 +23,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/db/store", "internal/platform/clock", "internal/platform/config", "internal/platform/fsx",
 		"migrations",
 	},
-	"cmd/solarr/app": {"internal/metadata/imdbdata", "internal/metadata/comicvine", "internal/metadata/gcd", "internal/metadata/mangadex", "internal/metadata/mangaupdates", "internal/metadata/metron", "internal/identify/titlekey", "internal/service/serverpush", "internal/service/playback", "internal/identify/model", "internal/importing/inspect", "internal/mediaserver", "internal/mediaserver/jellyfin", "internal/mediaserver/navidrome", "internal/mediaserver/audiobookshelf", "internal/mediaserver/kavita", "internal/mediaserver/calibre", "internal/mediaserver/stash", "internal/media/works", "internal/platform/iogate", "internal/platform/fswatch", "internal/scanning/watch", "internal/platform/disklatency", "internal/acquiring/indexer/flaresolverr", "internal/acquiring/indexer/spec", "internal/service/franchisewatch", "internal/service/franchisefacts", "internal/service/franchiselink", "internal/importing/arrmap", "internal/platform/hitcount", "internal/media/adult", "internal/media/book", "internal/media/comic", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/itunes", "internal/metadata/fantlab", "internal/metadata/hardcover", "internal/metadata/stashbox", "internal/metadata/theporndb", "internal/metadata/whisparr", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/kitsu", "internal/metadata/internetarchive", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow", "internal/service/importlist",
+	"cmd/solarr/app": {"internal/metadata/listenbrainz", "internal/metadata/deezer", "internal/metadata/imdbdata", "internal/metadata/comicvine", "internal/metadata/gcd", "internal/metadata/mangadex", "internal/metadata/mangaupdates", "internal/metadata/metron", "internal/identify/titlekey", "internal/service/serverpush", "internal/service/playback", "internal/identify/model", "internal/importing/inspect", "internal/mediaserver", "internal/mediaserver/jellyfin", "internal/mediaserver/navidrome", "internal/mediaserver/audiobookshelf", "internal/mediaserver/kavita", "internal/mediaserver/calibre", "internal/mediaserver/stash", "internal/media/works", "internal/platform/iogate", "internal/platform/fswatch", "internal/scanning/watch", "internal/platform/disklatency", "internal/acquiring/indexer/flaresolverr", "internal/acquiring/indexer/spec", "internal/service/franchisewatch", "internal/service/franchisefacts", "internal/service/franchiselink", "internal/importing/arrmap", "internal/platform/hitcount", "internal/media/adult", "internal/media/book", "internal/media/comic", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/itunes", "internal/metadata/fantlab", "internal/metadata/hardcover", "internal/metadata/stashbox", "internal/metadata/theporndb", "internal/metadata/whisparr", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/kitsu", "internal/metadata/internetarchive", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow", "internal/service/importlist",
 		"internal/media", "internal/platform/remoteimage", "cmd/solarr/adapters", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/plan",
 		"internal/acquiring/poll", "internal/acquiring/qbittorrent", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
@@ -385,12 +385,14 @@ var allowedInternalImports = map[string][]string{
 	"internal/metadata/theaudiodb": {"internal/platform/httpx"},
 	"internal/metadata/wikidata":   {"internal/platform/parallel", "internal/platform/httpx", "internal/platform/clock"},
 	// Stage 8's keyless TV source (T4): a client over httpx, nothing else.
-	"internal/metadata/tvmaze":   {"internal/platform/httpx"},
-	"internal/metadata/imdbdata": {"internal/metadata/metacache"},
-	"internal/metadata/thexem":   {"internal/platform/clock", "internal/platform/httpx", "internal/metadata/metacache"},
-	"internal/metadata/tmdb":     {"internal/platform/httpx"},
-	"internal/metadata/tvdb":     {"internal/platform/httpx"},
-	"internal/metadata/anilist":  {"internal/platform/httpx"},
+	"internal/metadata/tvmaze":       {"internal/platform/httpx"},
+	"internal/metadata/imdbdata":     {"internal/metadata/metacache"},
+	"internal/metadata/listenbrainz": {"internal/platform/httpx"},
+	"internal/metadata/deezer":       {},
+	"internal/metadata/thexem":       {"internal/platform/clock", "internal/platform/httpx", "internal/metadata/metacache"},
+	"internal/metadata/tmdb":         {"internal/platform/httpx"},
+	"internal/metadata/tvdb":         {"internal/platform/httpx"},
+	"internal/metadata/anilist":      {"internal/platform/httpx"},
 	// The TV module (stage 8): provider records merged into series, written through db/library.
 	// The media-type registry: what core asks instead of naming a type (ADR-23).
 	// Bounded fan-out with panic recovery; no dependencies.

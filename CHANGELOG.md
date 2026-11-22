@@ -5,6 +5,7 @@ Earlier entries use older schemes; those at and below `0.0.x` predate both and a
 
 ## Unreleased
 
+- Metadata: ListenBrainz and Deezer add how popular an album is (listeners and fans, shown as a rating beside MusicBrainz's) when a music library's albums are enriched; both need no key and can be switched off under Settings > Metadata.
 - Metadata: IMDb ratings from IMDb's own daily download (switched off; no key, no quota, personal and non-commercial use) fill the rating of films and series, and outrank the IMDb number MDBList and OMDb give; switch it on under Settings > Metadata and Run now under Scheduler.
 - Media servers: a connection a library's metadata order still names can no longer be deleted by mistake, and connecting a media server as a metadata source takes effect at once.
 - Comics: a new media type with four library kinds (Comics, Manga, Adult comics, Hentai) that can be created and are empty for now; the two adult kinds ask for a confirmation before the library is added. Under the hood: the file-name parser, ComicInfo.xml / MetronInfo.xml / series.json readers, the page probe and clients for ComicVine, Metron, the Grand Comics Database, MangaUpdates, MangaDex and AniList manga are built but not yet connected.

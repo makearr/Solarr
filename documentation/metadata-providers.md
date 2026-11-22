@@ -95,6 +95,8 @@ A connection a library's order still names is not deleted (409) unless another o
 | TheAudioDB | artist biographies, thumbs, fanart, logos, banners; album art, descriptions, mood, style | yes | free key |
 | Wikidata, Wikipedia | the id bridge between providers, biographies, photos (Commons) | yes | people |
 | AcoustID | an audio fingerprint to a recording id | yes | an identifier, not a source |
+| ListenBrainz | how many people listened to an album (by release group id) | yes | no key; shown as a rating on 0..10, two points a power of ten of listeners; enrichment only, no place in the order |
+| Deezer | an album's fans, found by exact artist and title; explicit flag and cover are read but not yet shown | yes | no key; rating on the same scale; enrichment only |
 | fanart.tv | artist backgrounds, logos, banners, album covers, disc art | no | a free key; best for images |
 | Discogs | credits, labels, catalogue numbers, pressings | no | needs a token |
 | Last.fm | tags, biographies, similar artists, listening counts | no | |
