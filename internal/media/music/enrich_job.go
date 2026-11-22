@@ -232,7 +232,7 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 	if j.backfillPerRun != nil {
 		backfill.budget = j.backfillPerRun()
 	}
-	artists := artistMemo{}
+	artists := newArtistMemo()
 	if waiting, err := j.identity.CountPlaceholderEditions(ctx); err == nil {
 		job.Progress.Set(0, waiting)
 	}
@@ -871,7 +871,7 @@ func (j *EnrichJob) enrichCreditsAndGenres(
 	source := library.GenreSourceMusicBrainz
 	if len(names) == 0 {
 		// An album nobody voted genres onto takes its lead artist's, under a source of their own that a later real genre replaces.
-		names, source = j.leadArtistGenres(ctx, rg), library.GenreSourceArtist
+		names, source = leadArtistGenres(rg, artists), library.GenreSourceArtist
 		if len(names) == 0 {
 			return
 		}
@@ -887,16 +887,12 @@ func (j *EnrichJob) enrichCreditsAndGenres(
 	}
 }
 
-// leadArtistGenres are the weighted genres of the release group's first credited artist; the lookup is cached, so a run that already resolved them asks nothing.
-func (j *EnrichJob) leadArtistGenres(ctx context.Context, rg musicbrainz.ReleaseGroup) []string {
-	if len(rg.ArtistCredit) == 0 || rg.ArtistCredit[0].MBID == "" {
+// leadArtistGenres are the weighted genres of the release group's first credited artist, resolved a moment ago.
+func leadArtistGenres(rg musicbrainz.ReleaseGroup, artists artistMemo) []string {
+	if len(rg.ArtistCredit) == 0 {
 		return nil
 	}
-	artist, err := j.provider.Artist(ctx, musicbrainz.PriorityEnrich, rg.ArtistCredit[0].MBID)
-	if err != nil {
-		return nil
-	}
-	return weightedGenres(artist.Genres)
+	return artists.genres[rg.ArtistCredit[0].MBID]
 }
 
 // maxAlbumGenres is the most genres one album takes from the votes.
@@ -960,13 +956,21 @@ func (j *EnrichJob) enrichDescription(ctx context.Context, workID int64, album a
 // credit worth having is worth having even without one.
 // artistMemo is the artists one run has already resolved, by MusicBrainz id: their biography and
 // photo cost a Wikidata request each, once per album before, ~1.2 s an album (measured 2026-09-28).
-type artistMemo map[string]int64
+type artistMemo struct {
+	ids map[string]int64
+	// genres are each looked-up artist's weighted genres, for an album nobody voted genres onto.
+	genres map[string][]string
+}
+
+func newArtistMemo() artistMemo {
+	return artistMemo{ids: map[string]int64{}, genres: map[string][]string{}}
+}
 
 func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.ArtistCredit, artists artistMemo) (int64, error) {
 	if credit.MBID == "" {
 		return 0, fmt.Errorf("artist credit %q has no id", credit.Name)
 	}
-	if personID, done := artists[credit.MBID]; done {
+	if personID, done := artists.ids[credit.MBID]; done {
 		return personID, nil
 	}
 
@@ -1005,7 +1009,8 @@ func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.Artist
 	// it here, rather than only when someone opens the Artists screen, worth
 	// doing proactively.
 	_ = j.fetchPersonImage(ctx, personID, bio.ImageURL)
-	artists[credit.MBID] = personID
+	artists.ids[credit.MBID] = personID
+	artists.genres[credit.MBID] = weightedGenres(artist.Genres)
 	return personID, nil
 }
 
