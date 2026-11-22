@@ -234,3 +234,24 @@ func TestDistance_ResolutionsOffTheTargetLadderStillCount(t *testing.T) {
 		t.Errorf("the probe's container wins over the extension: %d%%", got.Percent)
 	}
 }
+
+func TestMeetsTarget_ComicPagesReachTheTargetsSizeAndUnknownIsFree(t *testing.T) {
+	target := settings.QualityTarget{MediaType: "book", Container: "cbz", PageLong: 3056, PageShort: 1988}
+	cases := []struct {
+		name string
+		file score.FileFacts
+		want bool
+	}{
+		{"meets", score.FileFacts{Extension: "cbz", Width: 2000, Height: 3100}, true},
+		{"trimmed within two percent", score.FileFacts{Extension: "cbz", Width: 1960, Height: 3000}, true},
+		{"too small", score.FileFacts{Extension: "cbz", Width: 1280, Height: 1968}, false},
+		{"only the long edge short", score.FileFacts{Extension: "cbz", Width: 2000, Height: 2000}, false},
+		{"pages not measured", score.FileFacts{Extension: "cbz"}, true},
+		{"other container at equal size", score.FileFacts{Extension: "cbr", Width: 2000, Height: 3100}, false},
+	}
+	for _, c := range cases {
+		if got := quality.MeetsTarget(target, c.file); got != c.want {
+			t.Errorf("%s: MeetsTarget = %v, want %v", c.name, got, c.want)
+		}
+	}
+}

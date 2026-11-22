@@ -109,6 +109,9 @@ func Distance(target settings.QualityTarget, file score.FileFacts) (closeness Cl
 		}
 		add("container", target.Container, name, 1, value)
 	}
+	if target.PageLong > 0 && file.Height > 0 {
+		number("page size", float64(target.PageLong), float64(file.Height), 2, " px", 100*(1-pageSizeTolerance), true)
+	}
 	if want, have := rung(target.Resolution), rung(file.Resolution); want >= 0 && have >= 0 {
 		value := 1 - resolutionStepCost*math.Abs(float64(want-have))
 		if target.PreferOver && have < want {

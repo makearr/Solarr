@@ -5606,6 +5606,12 @@ type QualityTarget struct {
 	// IgnoreBelow A release below the target ranks after every one at or above it, so it is only chosen when nothing at or above exists.
 	IgnoreBelow *bool `json:"ignore_below,omitempty"`
 
+	// ImageFormat A comic target: the page image format wanted (jpg, webp, avif...); empty when any.
+	ImageFormat *string `json:"image_format,omitempty"`
+
+	// ImageQuality A comic target: the page image quality (1-100) a re-encode would use; 0 or absent when none.
+	ImageQuality *int64 `json:"image_quality,omitempty"`
+
 	// Label A short tag shown beside the name, e.g. "Space conscious". Empty when none.
 	Label *string `json:"label,omitempty"`
 
@@ -5617,6 +5623,12 @@ type QualityTarget struct {
 
 	// Name What the target is called in a library's choice.
 	Name *string `json:"name,omitempty"`
+
+	// PageLong A comic target: the median long page edge in pixels pages should reach; 0 or absent when it does not care.
+	PageLong *int64 `json:"page_long,omitempty"`
+
+	// PageShort A comic target: the median short page edge in pixels pages should reach; 0 or absent when it does not care.
+	PageShort *int64 `json:"page_short,omitempty"`
 
 	// PreferOver More quality beats less: a release above the target ranks before one below it, and overshooting a number costs less than undershooting it.
 	PreferOver *bool `json:"prefer_over,omitempty"`

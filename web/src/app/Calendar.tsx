@@ -7,7 +7,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { api, API_PREFIX, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useNarrow } from "@/list/useNarrow";
-import { addDays, DayView, DaysView, entryKey, entryTarget, isoDate, MonthView, parseIso, weekStart } from "./CalendarViews";
+import { useLibraries } from "@/lib/resources";
+import { addDays, DayView, DaysView, entryKey, entryTarget, isoDate, MonthView, parseIso, weekStart, wednesdayStart } from "./CalendarViews";
 
 type CalendarEntry = components["schemas"]["CalendarEntry"];
 
@@ -24,6 +25,7 @@ const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"] as const;
 const VIEWS = [
   ["month", "Month"],
   ["week", "Week"],
+  ["pull", "Pull list"],
   ["forecast", "Forecast"],
   ["day", "Day"],
   ["agenda", "Agenda"],
@@ -40,17 +42,21 @@ export function Calendar() {
   const fallback: View = useNarrow() ? "agenda" : "month";
   const view: View = VIEWS.some(([id]) => id === requested) ? (requested as View) : fallback;
   const year = Number(search.year) || new Date().getFullYear();
+  const comicLibraries = new Set((useLibraries().data ?? []).filter((library) => library.media_type === "comic").map((library) => library.id));
+  const isComicRelease = (entry: components["schemas"]["CalendarEntry"]) => entry.category_id != null && comicLibraries.has(entry.category_id);
   const today = isoDate(new Date());
   const anchor = parseIso(search.date);
   const moved = (direction: number) => {
     const next = new Date(anchor);
     if (view === "month") next.setMonth(next.getMonth() + direction, 1);
-    else next.setDate(next.getDate() + direction * (view === "week" ? 7 : 1));
+    else next.setDate(next.getDate() + direction * (view === "week" || view === "pull" ? 7 : 1));
     return isoDate(next);
   };
   const heading =
     view === "month"
       ? `${MONTHS[anchor.getMonth()]} ${anchor.getFullYear()}`
+      : view === "pull"
+        ? `${wednesdayStart(anchor).toLocaleDateString(undefined, { day: "numeric", month: "short" })} - ${addDays(wednesdayStart(anchor), 6).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`
       : view === "week"
         ? `${weekStart(anchor).toLocaleDateString(undefined, { day: "numeric", month: "short" })} - ${addDays(weekStart(anchor), 6).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`
         : view === "day"
@@ -60,7 +66,7 @@ export function Calendar() {
             : view === "year"
               ? String(year)
               : "Coming and recent";
-  const stepped = view === "month" || view === "week" || view === "day";
+  const stepped = view === "month" || view === "week" || view === "pull" || view === "day";
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto p-4">
@@ -126,6 +132,7 @@ export function Calendar() {
       <FeedPanel />
       {view === "month" && <MonthView anchor={anchor} today={today} />}
       {view === "week" && <DaysView start={weekStart(anchor)} days={7} today={today} />}
+      {view === "pull" && <DaysView start={wednesdayStart(anchor)} days={7} today={today} only={isComicRelease} />}
       {view === "forecast" && <DaysView start={parseIso(today)} days={7} today={today} />}
       {view === "day" && <DayView date={anchor} today={today} />}
       {view === "agenda" && <ListView />}

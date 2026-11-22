@@ -89,6 +89,9 @@ func MeetsTarget(target settings.QualityTarget, file score.FileFacts) bool {
 	if target.AudioChannels != "" && file.AudioChannels != "" && target.AudioChannels != file.AudioChannels {
 		return false
 	}
+	if !pagesReach(target, file) {
+		return false
+	}
 	// A file at the sample rate and depth or above meets it, as a transcode only lowers them; 44.1 kHz meets 48 kHz,
 	// which is what a transcode of a CD rip leaves.
 	if target.SampleRateHz > 0 && file.SampleRate > 0 && float64(file.SampleRate) < float64(target.SampleRateHz)*sampleRateFloor {
@@ -105,6 +108,18 @@ func MeetsTarget(target settings.QualityTarget, file score.FileFacts) bool {
 	want := float64(*target.BitrateKbps)
 	got := float64(file.AudioBitrate) / 1000
 	return got >= want*math.Min(audioBitrateFloor, 1-float64(target.TolerancePct)/100)
+}
+
+// pageSizeTolerance is the share of a target's page edges a file's median pages may fall short by: trimmed scans.
+const pageSizeTolerance = 0.98
+
+// pagesReach says a comic file's median pages (Width the short edge, Height the long one) reach the target's; a target
+// without a page size, and a file whose pages were not measured, never fail it.
+func pagesReach(target settings.QualityTarget, file score.FileFacts) bool {
+	if target.PageLong <= 0 || file.Width <= 0 || file.Height <= 0 {
+		return true
+	}
+	return float64(file.Height) >= float64(target.PageLong)*pageSizeTolerance && float64(file.Width) >= float64(target.PageShort)*pageSizeTolerance
 }
 
 // frameRateMargin is how far a frame rate may be from the target's: 23.976 is 24 and 29.97 is 30.

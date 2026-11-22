@@ -68,21 +68,23 @@ UPDATE category SET preferred_protocol = ?, protocol_delay_minutes = ? WHERE id 
 SELECT id, name, media_type, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
        audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate, crf,
        prefer_over, ignore_below, label, description, sample_rate_hz, bit_depth, encoder_preset, max_frame_rate, chapters, builtin,
-       profile_id, encoder_tune, deinterlace
+       profile_id, encoder_tune, deinterlace, page_long, page_short, image_format, image_quality
 FROM quality_target ORDER BY media_type, name;
 
 -- name: CreateQualityTarget :one
 INSERT INTO quality_target (name, media_type, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
   audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate, crf, prefer_over, ignore_below,
-  label, description, sample_rate_hz, bit_depth, encoder_preset, max_frame_rate, chapters, profile_id, encoder_tune, deinterlace)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  label, description, sample_rate_hz, bit_depth, encoder_preset, max_frame_rate, chapters, profile_id, encoder_tune, deinterlace,
+  page_long, page_short, image_format, image_quality)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id;
 
 -- name: UpdateQualityTarget :exec
 UPDATE quality_target SET name = ?, audio_codec = ?, container = ?, bitrate_kbps = ?, tolerance_pct = ?, resolution = ?,
   video_codec = ?, hdr = ?, audio_channels = ?, audio_languages = ?, subtitle_languages = ?, audio_bitrate_kbps = ?,
   video_bitrate_kbps = ?, frame_rate = ?, crf = ?, prefer_over = ?, ignore_below = ?, label = ?, description = ?,
-  sample_rate_hz = ?, bit_depth = ?, encoder_preset = ?, max_frame_rate = ?, chapters = ?, profile_id = ?, encoder_tune = ?, deinterlace = ?
+  sample_rate_hz = ?, bit_depth = ?, encoder_preset = ?, max_frame_rate = ?, chapters = ?, profile_id = ?, encoder_tune = ?, deinterlace = ?,
+  page_long = ?, page_short = ?, image_format = ?, image_quality = ?
 WHERE id = ?;
 
 -- name: DeleteQualityTarget :exec

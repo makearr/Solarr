@@ -5,6 +5,8 @@ Earlier entries use older schemes; those at and below `0.0.x` predate both and a
 
 ## Unreleased
 
+- Calendar: a Pull list view (comic libraries only, weeks starting on Wednesday).
+- Comics: four shipped CBZ quality targets (any page size, SD, HD, manga HD) with a page size the median page of a file must reach (a file whose pages were not measured is never held against it), comic quality profiles (CBZ preferred, Any comic, High resolution), a Pages section in the quality target editor, and Rename now names comic files by the library's naming scheme. The "also the specials" box shows only for TV.
 - Comics: wanted issues, annuals, volumes and chapters are searched (Newznab comic and book categories) with the series title and the number as releases print it, in the hunt, the RSS sync and interactive search; a release must name the series and a wanted part, alone or in a range; the cutoff check keeps the better file of a part.
 - Comics: downloads of comics and manga are imported (issues, volumes and chapters named by file, folder or ComicInfo, ranges, placed below the series' folder and named by the library's naming scheme), files waiting in Review can be assigned to a series, and a series you removed with "do not add it back" is no longer re-added by the next scan.
 - Metadata: ListenBrainz and Deezer add how popular an album is (listeners and fans, shown as a rating beside MusicBrainz's) when a music library's albums are enriched; both need no key and can be switched off under Settings > Metadata.

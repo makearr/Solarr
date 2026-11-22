@@ -137,8 +137,9 @@ func (q *Queries) CreateQualityProfile(ctx context.Context, arg CreateQualityPro
 const createQualityTarget = `-- name: CreateQualityTarget :one
 INSERT INTO quality_target (name, media_type, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
   audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate, crf, prefer_over, ignore_below,
-  label, description, sample_rate_hz, bit_depth, encoder_preset, max_frame_rate, chapters, profile_id, encoder_tune, deinterlace)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  label, description, sample_rate_hz, bit_depth, encoder_preset, max_frame_rate, chapters, profile_id, encoder_tune, deinterlace,
+  page_long, page_short, image_format, image_quality)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id
 `
 
@@ -171,6 +172,10 @@ type CreateQualityTargetParams struct {
 	ProfileID         sql.NullInt64
 	EncoderTune       string
 	Deinterlace       int64
+	PageLong          sql.NullInt64
+	PageShort         sql.NullInt64
+	ImageFormat       string
+	ImageQuality      sql.NullInt64
 }
 
 func (q *Queries) CreateQualityTarget(ctx context.Context, arg CreateQualityTargetParams) (int64, error) {
@@ -203,6 +208,10 @@ func (q *Queries) CreateQualityTarget(ctx context.Context, arg CreateQualityTarg
 		arg.ProfileID,
 		arg.EncoderTune,
 		arg.Deinterlace,
+		arg.PageLong,
+		arg.PageShort,
+		arg.ImageFormat,
+		arg.ImageQuality,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -498,7 +507,7 @@ const listQualityTargets = `-- name: ListQualityTargets :many
 SELECT id, name, media_type, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
        audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate, crf,
        prefer_over, ignore_below, label, description, sample_rate_hz, bit_depth, encoder_preset, max_frame_rate, chapters, builtin,
-       profile_id, encoder_tune, deinterlace
+       profile_id, encoder_tune, deinterlace, page_long, page_short, image_format, image_quality
 FROM quality_target ORDER BY media_type, name
 `
 
@@ -542,6 +551,10 @@ func (q *Queries) ListQualityTargets(ctx context.Context) ([]QualityTarget, erro
 			&i.ProfileID,
 			&i.EncoderTune,
 			&i.Deinterlace,
+			&i.PageLong,
+			&i.PageShort,
+			&i.ImageFormat,
+			&i.ImageQuality,
 		); err != nil {
 			return nil, err
 		}
@@ -717,7 +730,8 @@ const updateQualityTarget = `-- name: UpdateQualityTarget :exec
 UPDATE quality_target SET name = ?, audio_codec = ?, container = ?, bitrate_kbps = ?, tolerance_pct = ?, resolution = ?,
   video_codec = ?, hdr = ?, audio_channels = ?, audio_languages = ?, subtitle_languages = ?, audio_bitrate_kbps = ?,
   video_bitrate_kbps = ?, frame_rate = ?, crf = ?, prefer_over = ?, ignore_below = ?, label = ?, description = ?,
-  sample_rate_hz = ?, bit_depth = ?, encoder_preset = ?, max_frame_rate = ?, chapters = ?, profile_id = ?, encoder_tune = ?, deinterlace = ?
+  sample_rate_hz = ?, bit_depth = ?, encoder_preset = ?, max_frame_rate = ?, chapters = ?, profile_id = ?, encoder_tune = ?, deinterlace = ?,
+  page_long = ?, page_short = ?, image_format = ?, image_quality = ?
 WHERE id = ?
 `
 
@@ -749,6 +763,10 @@ type UpdateQualityTargetParams struct {
 	ProfileID         sql.NullInt64
 	EncoderTune       string
 	Deinterlace       int64
+	PageLong          sql.NullInt64
+	PageShort         sql.NullInt64
+	ImageFormat       string
+	ImageQuality      sql.NullInt64
 	ID                int64
 }
 
@@ -781,6 +799,10 @@ func (q *Queries) UpdateQualityTarget(ctx context.Context, arg UpdateQualityTarg
 		arg.ProfileID,
 		arg.EncoderTune,
 		arg.Deinterlace,
+		arg.PageLong,
+		arg.PageShort,
+		arg.ImageFormat,
+		arg.ImageQuality,
 		arg.ID,
 	)
 	return err

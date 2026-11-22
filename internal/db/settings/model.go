@@ -179,6 +179,11 @@ type QualityTarget struct {
 	EncoderPreset string
 	MaxFrameRate  float64
 	Chapters      bool
+	// PageLong and PageShort are a comic library's aim for the median page edges in pixels, ImageFormat the page image format
+	// and ImageQuality its quality; 0 or empty when the target does not care.
+	PageLong, PageShort int64
+	ImageFormat         string
+	ImageQuality        int64
 	// Builtin marks a preset Solarr shipped; it is editable like any other.
 	Builtin bool
 	// ProfileID is the content profile the target is tuned for; EncoderTune ("animation", "grain") and Deinterlace

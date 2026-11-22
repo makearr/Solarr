@@ -353,6 +353,10 @@ type QualityTargetEntry struct {
 	Chapters          bool     `yaml:"chapters,omitempty"`
 	EncoderTune       string   `yaml:"encoder_tune,omitempty"`
 	Deinterlace       bool     `yaml:"deinterlace,omitempty"`
+	PageLong          int64    `yaml:"page_long,omitempty"`
+	PageShort         int64    `yaml:"page_short,omitempty"`
+	ImageFormat       string   `yaml:"image_format,omitempty"`
+	ImageQuality      int64    `yaml:"image_quality,omitempty"`
 	// Profile is the name of the content profile the target is tuned for.
 	Profile string `yaml:"profile,omitempty"`
 }

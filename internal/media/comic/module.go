@@ -10,6 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/moving/naming"
+	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
@@ -55,6 +56,18 @@ type Module struct {
 	works.Searching
 	// Files places a queued file by a person's word.
 	Files media.PlacingFiles
+	// Rename names a series' files for a rename; nil leaves comics without one.
+	Rename *RenameConfig
+}
+
+var _ media.Renaming = Module{}
+
+// NameFiles implements media.Renaming.
+func (m Module) NameFiles(ctx context.Context, category settings.Category, workID int64, files []renamejob.File) ([]renamejob.Named, error) {
+	if m.Rename == nil {
+		return nil, media.ErrNotWired
+	}
+	return m.Rename.NameFiles(ctx, category, workID, files)
 }
 
 var _ media.PlacingFiles = Module{}

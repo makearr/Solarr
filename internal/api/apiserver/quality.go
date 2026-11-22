@@ -238,7 +238,7 @@ func suggestTargets(snapshot *settings.Snapshot, category settings.Category, pro
 	}
 	var preferred *settings.QualityTarget
 	for _, candidate := range snapshot.QualityTargets() {
-		if candidate.MediaType == settings.TargetFamily(category.MediaType) && candidate.Label == settings.PreferredTargetLabel {
+		if candidate.MediaType == settings.TargetFamily(category.MediaType) && candidate.Label == settings.PreferredTargetLabelFor(category.MediaType, category.Kind) {
 			preferred = &candidate
 			break
 		}
@@ -347,6 +347,7 @@ func qualityTargetView(target settings.QualityTarget) gen.QualityTarget {
 	view.PreferOver, view.IgnoreBelow = &target.PreferOver, &target.IgnoreBelow
 	view.Label, view.Description, view.EncoderPreset = &target.Label, &target.Description, &target.EncoderPreset
 	view.ProfileId, view.EncoderTune, view.Deinterlace = target.ProfileID, &target.EncoderTune, &target.Deinterlace
+	view.PageLong, view.PageShort, view.ImageFormat, view.ImageQuality = &target.PageLong, &target.PageShort, &target.ImageFormat, &target.ImageQuality
 	view.Chapters, view.Builtin = &target.Chapters, &target.Builtin
 	if target.SampleRateHz > 0 {
 		view.SampleRateHz = &target.SampleRateHz
@@ -382,6 +383,7 @@ func qualityTargetFromBody(body gen.QualityTarget) settings.QualityTarget {
 		EncoderPreset: strings.ToLower(strings.TrimSpace(derefOr(body.EncoderPreset, ""))),
 		MaxFrameRate:  float64(derefOr(body.MaxFrameRate, 0)), Chapters: derefOr(body.Chapters, false),
 		ProfileID: body.ProfileId, EncoderTune: strings.ToLower(strings.TrimSpace(derefOr(body.EncoderTune, ""))), Deinterlace: derefOr(body.Deinterlace, false),
+		PageLong: derefOr(body.PageLong, 0), PageShort: derefOr(body.PageShort, 0), ImageFormat: strings.ToLower(strings.TrimSpace(derefOr(body.ImageFormat, ""))), ImageQuality: derefOr(body.ImageQuality, 0),
 	}
 }
 

@@ -158,7 +158,7 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
                     </option>
                   ))}
                 </select>
-                {form.option && (
+                {form.option && info?.key === "tv" && (
                   <label className="flex items-center gap-1 text-xs text-ink-muted">
                     <input type="checkbox" checked={form.specials} onChange={(event) => change({ specials: event.target.checked })} /> also the specials
                   </label>
@@ -379,7 +379,7 @@ export function BulkEditWork({
                   </option>
                 ))}
               </select>
-              {option && (
+              {option && info?.key === "tv" && (
                 <label className="flex items-center gap-1 text-xs text-ink-muted">
                   <input type="checkbox" checked={specials} onChange={(event) => setSpecials(event.target.checked)} /> also the specials
                 </label>

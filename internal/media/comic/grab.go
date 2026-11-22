@@ -143,7 +143,7 @@ func (j CutoffJob) CheckCutoff(ctx context.Context, snapshot *settings.Snapshot,
 
 // partFiles are an item's files as the cutoff check judges them, one per part a file holds; Ref is the part's number.
 func partFiles(ctx context.Context, reader library.SeriesReader, itemID int64) ([]works.File, error) {
-	files, err := reader.SeasonFiles(ctx, itemID)
+	files, err := reader.ArchivePartFiles(ctx, itemID)
 	if err != nil {
 		return nil, err
 	}
@@ -151,11 +151,20 @@ func partFiles(ctx context.Context, reader library.SeriesReader, itemID int64) (
 	for index, file := range files {
 		_, number, _ := strings.Cut(file.Ref, ":")
 		out[index] = works.File{
-			MediaObjectID: file.File.MediaObjectID, Ref: number, AddedAt: file.AddedAt, Measured: file.File.Container != "",
-			Monitored: file.Monitored, Facts: score.Facts{File: score.FileFacts{Container: file.File.Container, Extension: file.File.Container}},
+			MediaObjectID: file.MediaObjectID, Ref: number, AddedAt: file.AddedAt, Measured: file.Container != "",
+			Monitored: file.Monitored, Facts: FileFacts(file),
 		}
 	}
 	return out, nil
+}
+
+// FileFacts is what the probe measured of a comic file, as the facts a profile or a target judges: the archive format and
+// the median page edges (Width is the short edge, Height the long one).
+func FileFacts(file library.ArchivePartFile) score.Facts {
+	return score.Facts{File: score.FileFacts{
+		Container: file.Container, Extension: file.Container, Width: file.Short, Height: file.Long,
+		Source: file.ReleaseSource, ReleaseGroup: file.ReleaseGroup, ProperRepack: file.Revision > 1, ReleaseKnown: file.Revision > 0,
+	}}
 }
 
 // parseSeries is the series name a release title states.

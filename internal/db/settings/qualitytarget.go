@@ -40,6 +40,7 @@ func targetFromRow(row settingsdb.QualityTarget) QualityTarget {
 		Label: row.Label, Description: row.Description, SampleRateHz: row.SampleRateHz.Int64, BitDepth: row.BitDepth.Int64,
 		EncoderPreset: row.EncoderPreset, MaxFrameRate: row.MaxFrameRate.Float64, Chapters: row.Chapters == 1, Builtin: row.Builtin == 1,
 		ProfileID: nullInt64Ptr(row.ProfileID), EncoderTune: row.EncoderTune, Deinterlace: row.Deinterlace == 1,
+		PageLong: row.PageLong.Int64, PageShort: row.PageShort.Int64, ImageFormat: row.ImageFormat, ImageQuality: row.ImageQuality.Int64,
 	}
 }
 
@@ -55,6 +56,7 @@ func (t QualityTarget) createParams() settingsdb.CreateQualityTargetParams {
 		Label: t.Label, Description: t.Description, SampleRateHz: positiveToNull(t.SampleRateHz), BitDepth: positiveToNull(t.BitDepth),
 		EncoderPreset: t.EncoderPreset, MaxFrameRate: floatToNull(t.MaxFrameRate), Chapters: boolToInt(t.Chapters),
 		ProfileID: int64PtrToNull(t.ProfileID), EncoderTune: t.EncoderTune, Deinterlace: boolToInt(t.Deinterlace),
+		PageLong: positiveToNull(t.PageLong), PageShort: positiveToNull(t.PageShort), ImageFormat: t.ImageFormat, ImageQuality: positiveToNull(t.ImageQuality),
 	}
 }
 
@@ -70,6 +72,7 @@ func (t QualityTarget) updateParams() settingsdb.UpdateQualityTargetParams {
 		Label: t.Label, Description: t.Description, SampleRateHz: positiveToNull(t.SampleRateHz), BitDepth: positiveToNull(t.BitDepth),
 		EncoderPreset: t.EncoderPreset, MaxFrameRate: floatToNull(t.MaxFrameRate), Chapters: boolToInt(t.Chapters),
 		ProfileID: int64PtrToNull(t.ProfileID), EncoderTune: t.EncoderTune, Deinterlace: boolToInt(t.Deinterlace),
+		PageLong: positiveToNull(t.PageLong), PageShort: positiveToNull(t.PageShort), ImageFormat: t.ImageFormat, ImageQuality: positiveToNull(t.ImageQuality),
 	}
 }
 
@@ -83,6 +86,7 @@ func (t QualityTarget) entry() QualityTargetEntry {
 		AudioBitrateKbps: t.AudioBitrateKbps, VideoBitrateKbps: t.VideoBitrateKbps, FrameRate: t.FrameRate, CRF: t.CRF, PreferOver: t.PreferOver, IgnoreBelow: t.IgnoreBelow,
 		Label: t.Label, Description: t.Description, SampleRateHz: t.SampleRateHz, BitDepth: t.BitDepth, EncoderPreset: t.EncoderPreset,
 		MaxFrameRate: t.MaxFrameRate, Chapters: t.Chapters, EncoderTune: t.EncoderTune, Deinterlace: t.Deinterlace,
+		PageLong: t.PageLong, PageShort: t.PageShort, ImageFormat: t.ImageFormat, ImageQuality: t.ImageQuality,
 	}
 }
 
@@ -96,6 +100,7 @@ func (e QualityTargetEntry) target() QualityTarget {
 		AudioBitrateKbps: e.AudioBitrateKbps, VideoBitrateKbps: e.VideoBitrateKbps, FrameRate: e.FrameRate, CRF: e.CRF, PreferOver: e.PreferOver, IgnoreBelow: e.IgnoreBelow,
 		Label: e.Label, Description: e.Description, SampleRateHz: e.SampleRateHz, BitDepth: e.BitDepth, EncoderPreset: e.EncoderPreset,
 		MaxFrameRate: e.MaxFrameRate, Chapters: e.Chapters, EncoderTune: e.EncoderTune, Deinterlace: e.Deinterlace,
+		PageLong: e.PageLong, PageShort: e.PageShort, ImageFormat: e.ImageFormat, ImageQuality: e.ImageQuality,
 	}
 }
 
@@ -118,6 +123,17 @@ func TargetFamily(mediaType string) string {
 
 // PreferredTargetLabel tags the shipped target that holds the user's own preferred settings.
 const PreferredTargetLabel = "Space conscious"
+
+// PreferredTargetLabelFor is the label of the target a new library of the media type and kind starts with: comics have their own.
+func PreferredTargetLabelFor(mediaType, kind string) string {
+	if mediaType == "comic" {
+		if kind == "manga" || kind == "hentai" {
+			return "Manga default"
+		}
+		return "Comic default"
+	}
+	return PreferredTargetLabel
+}
 
 // AudioMediaTypes are the media types whose target is an audio codec and file type, whatever channel layout it names.
 var AudioMediaTypes = map[string]bool{"music": true, "spoken": true, "audiobook": true, "podcast": true}

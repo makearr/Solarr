@@ -26,7 +26,17 @@ const AUDIO_MEDIA = new Set(["music", "spoken"]);
 export const AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac", "alac"] as const;
 const LOSSLESS = new Set(["flac", "alac"]);
 const AUDIO_FILE_TYPES: [string, string][] = [["m4a", ".m4a"], ["m4b", ".m4b"], ["mp3", ".mp3"], ["opus", ".opus"], ["ogg", ".ogg"], ["flac", ".flac"]];
-const DOCUMENT_FILE_TYPES: [string, string][] = [["epub", "EPUB (.epub)"], ["pdf", "PDF (.pdf)"], ["azw3", "Kindle (.azw3)"], ["mobi", "Mobi (.mobi)"], ["cbz", "Comic archive (.cbz)"]];
+const DOCUMENT_FILE_TYPES: [string, string][] = [["epub", "EPUB (.epub)"], ["pdf", "PDF (.pdf)"], ["azw3", "Kindle (.azw3)"], ["mobi", "Mobi (.mobi)"], ["cbz", "Comic archive (.cbz)"], ["cbr", "Comic archive (.cbr)"], ["cb7", "Comic archive (.cb7)"], ["cbt", "Comic archive (.cbt)"]];
+const COMIC_CONTAINERS = new Set(["cbz", "cbr", "cb7", "cbt"]);
+const PAGE_FORMATS = ["jpg", "png", "webp", "avif"];
+
+/** "3056 x 1988" in either order as long and short edge; undefined when it is not two numbers. */
+export function parsePageSize(text: string): { long: number; short: number } | undefined {
+  const match = /^\s*(\d{2,5})\s*[x\u00d7*]\s*(\d{2,5})\s*$/i.exec(text);
+  if (!match) return undefined;
+  const [a, b] = [Number(match[1]), Number(match[2])];
+  return { long: Math.max(a, b), short: Math.min(a, b) };
+}
 const DOCUMENT_MEDIA = new Set(["book"]);
 export const ENCODER_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"] as const;
 export const ENCODER_TUNES = ["animation", "grain", "film", "stillimage", "fastdecode", "zerolatency"] as const;
@@ -44,7 +54,10 @@ export function nameFromSpecs(target: QualityTarget): string {
     const channels = target.audio_channels ? (CHANNEL_WORD[target.audio_channels] ?? target.audio_channels) : "";
     return [codec, channels].filter(Boolean).join(" ");
   };
-  if (DOCUMENT_MEDIA.has(target.media_type ?? "")) return (target.container ?? "").toUpperCase();
+  if (DOCUMENT_MEDIA.has(target.media_type ?? "")) {
+    const pages = target.page_long && target.page_short ? ` (${target.page_long} x ${target.page_short})` : "";
+    return `${(target.container ?? "").toUpperCase()}${pages}`;
+  }
   if (AUDIO_MEDIA.has(target.media_type ?? "")) {
     const rate = target.sample_rate_hz ? `${target.sample_rate_hz / 1000} kHz` : "";
     const depth = target.bit_depth ? `${target.bit_depth}-bit` : "";
@@ -138,6 +151,30 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
+/** A comic target's pages: the size the median page must reach and the image format wanted. */
+function PageFields({ target, set }: { target: QualityTarget; set: (change: Partial<QualityTarget>) => void }) {
+  const [text, setText] = useState(target.page_long && target.page_short ? `${target.page_long} x ${target.page_short}` : "");
+  return (
+    <Group title={t("qualityTargets.pages")}>
+      <label className="flex flex-col gap-1 text-ink-muted" title={t("qualityTargets.pageSizeHelp")}>
+        {t("qualityTargets.pageSize")}
+        <input
+          value={text}
+          placeholder="any"
+          className="w-40 rounded border border-line bg-surface px-2 py-1 text-ink"
+          onChange={(event) => {
+            setText(event.target.value);
+            const size = parsePageSize(event.target.value);
+            if (size) set({ page_long: size.long, page_short: size.short });
+            else if (event.target.value.trim() === "") set({ page_long: undefined, page_short: undefined });
+          }}
+        />
+      </label>
+      <Pick label={t("qualityTargets.imageFormat")} value={target.image_format ?? ""} options={PAGE_FORMATS} onChange={(image_format) => set({ image_format })} />
+    </Group>
+  );
+}
+
 /** One target's fields in the order a file is read: its container, then the picture, then the sound, then subtitles. */
 function TargetFields({ target, onChange }: { target: QualityTarget; onChange: (target: QualityTarget) => void }) {
   const set = (change: Partial<QualityTarget>) => onChange({ ...target, ...change });
@@ -154,6 +191,7 @@ function TargetFields({ target, onChange }: { target: QualityTarget; onChange: (
           any={audioOnly || documentOnly ? null : "any"}
         />
       </Group>
+      {documentOnly && COMIC_CONTAINERS.has(target.container ?? "") && <PageFields target={target} set={set} />}
       <Group title={t("qualityTargets.overAndUnderThe")}>
         <label className="flex items-start gap-2 text-sm" title={t("qualityTargets.whenUpgradingAFile")}>
           <input type="checkbox" className="mt-1" checked={target.prefer_over ?? false} onChange={(event) => set({ prefer_over: event.target.checked })} />

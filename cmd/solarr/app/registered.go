@@ -911,6 +911,7 @@ func (p *process) comicModule() comic.Module {
 	grab := p.comicGrab()
 	conns := p.comicIndexerConns
 	return comic.Module{
+		Rename: &comic.RenameConfig{Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},
 		Feed: comic.Feed{
 			Grab: grab, Reader: library.NewSeriesReader(p.library), Indexers: conns, Logger: p.logger, Libraries: p.libraryIDsOf(comic.MediaType),
 		},

@@ -264,9 +264,11 @@ export function AddToSolarr({
                       </option>
                     ))}
                   </select>
-                  <label className="flex items-center gap-1 text-ink-muted">
-                    <input type="checkbox" checked={specials} onChange={(event) => setSpecials(event.target.checked)} /> also the specials
-                  </label>
+                  {info.key === "tv" && (
+                    <label className="flex items-center gap-1 text-ink-muted">
+                      <input type="checkbox" checked={specials} onChange={(event) => setSpecials(event.target.checked)} /> also the specials
+                    </label>
+                  )}
                 </label>
               )}
               <label className="flex flex-wrap items-center gap-2">

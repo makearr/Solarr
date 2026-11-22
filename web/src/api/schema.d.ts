@@ -6927,6 +6927,23 @@ export interface components {
             encoder_tune?: string;
             /** @description An encode of this quality deinterlaces; an interlaced file counts as short of it. */
             deinterlace?: boolean;
+            /**
+             * Format: int64
+             * @description A comic target: the median long page edge in pixels pages should reach; 0 or absent when it does not care.
+             */
+            page_long?: number;
+            /**
+             * Format: int64
+             * @description A comic target: the median short page edge in pixels pages should reach; 0 or absent when it does not care.
+             */
+            page_short?: number;
+            /** @description A comic target: the page image format wanted (jpg, webp, avif...); empty when any. */
+            image_format?: string;
+            /**
+             * Format: int64
+             * @description A comic target: the page image quality (1-100) a re-encode would use; 0 or absent when none.
+             */
+            image_quality?: number;
         };
         DefaultLanguages: {
             /** @description Two-letter codes, best first: ["en", "de"]. */

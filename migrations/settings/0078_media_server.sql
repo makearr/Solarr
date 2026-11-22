@@ -44,3 +44,18 @@ CREATE TABLE media_server_user (
 ) WITHOUT ROWID;
 
 CREATE INDEX media_server_user_user ON media_server_user(user_id);
+
+-- A comic target's aim: the median page edges (long and short, pixels) and the page image format and quality.
+ALTER TABLE quality_target ADD COLUMN page_long INTEGER;
+ALTER TABLE quality_target ADD COLUMN page_short INTEGER;
+ALTER TABLE quality_target ADD COLUMN image_format TEXT NOT NULL DEFAULT '';
+ALTER TABLE quality_target ADD COLUMN image_quality INTEGER;
+
+INSERT INTO quality_target (id, name, media_type, container, tolerance_pct, label, description, builtin, page_long, page_short) VALUES (59, 'CBZ, any page size', 'book', 'cbz', 0, '', 'A CBZ archive of any page size.', 1, NULL, NULL);
+INSERT INTO quality_target (id, name, media_type, container, tolerance_pct, label, description, builtin, page_long, page_short) VALUES (60, 'CBZ, SD (1968 x 1280)', 'book', 'cbz', 0, '', 'Smaller pages: a CBZ at least 1968 x 1280 pixels a page.', 1, 1968, 1280);
+INSERT INTO quality_target (id, name, media_type, container, tolerance_pct, label, description, builtin, page_long, page_short) VALUES (61, 'CBZ, HD (3056 x 1988)', 'book', 'cbz', 0, 'Comic default', 'The default: a CBZ at least 3056 x 1988 pixels a page, as digital releases are.', 1, 3056, 1988);
+INSERT INTO quality_target (id, name, media_type, container, tolerance_pct, label, description, builtin, page_long, page_short) VALUES (62, 'CBZ, manga HD (2400 x 1600)', 'book', 'cbz', 0, 'Manga default', 'Manga volumes as scanned: a CBZ at least 2400 x 1600 pixels a page.', 1, 2400, 1600);
+
+INSERT INTO quality_profile (id, name, rules_json, upgrade_json, suggested_rank, media_type) VALUES (23, 'CBZ preferred', '{"quality_profile":"CBZ preferred","compare":["extension","source","score"],"tiers":{"extension":[["cbz"],["cb7"],["cbr"],["cbt"],["epub"],["pdf"]],"source":[["digital"],["webrip"],["hybrid","c2c"],["scan"]]}}', '{"min_delta":15,"min_file_age":"24h","max_per_window":3,"window":"168h"}', 1, 'comic');
+INSERT INTO quality_profile (id, name, rules_json, upgrade_json, suggested_rank, media_type) VALUES (24, 'Any comic', '{"quality_profile":"Any comic","compare":["extension","score"],"tiers":{"extension":[["cbz"],["cb7"],["cbr"],["cbt"],["epub"],["pdf"]]}}', '{"min_delta":15,"min_file_age":"24h","max_per_window":3,"window":"168h"}', 2, 'comic');
+INSERT INTO quality_profile (id, name, rules_json, upgrade_json, suggested_rank, media_type) VALUES (25, 'High resolution', '{"quality_profile":"High resolution","compare":["source","extension","score"],"tiers":{"source":[["digital"],["webrip"],["hybrid","c2c"],["scan"]],"extension":[["cbz"],["cb7"],["cbr"],["cbt"],["epub"],["pdf"]]}}', '{"min_delta":15,"min_file_age":"24h","max_per_window":3,"window":"168h"}', 3, 'comic');

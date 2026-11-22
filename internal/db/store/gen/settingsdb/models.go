@@ -354,6 +354,10 @@ type QualityTarget struct {
 	ProfileID         sql.NullInt64
 	EncoderTune       string
 	Deinterlace       int64
+	PageLong          sql.NullInt64
+	PageShort         sql.NullInt64
+	ImageFormat       string
+	ImageQuality      sql.NullInt64
 }
 
 type RootFolder struct {

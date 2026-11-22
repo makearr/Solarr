@@ -10285,6 +10285,10 @@ components:
         profile_id: { type: integer, format: int64, description: The content profile the target is tuned for; absent when none. }
         encoder_tune: { type: string, description: 'The encoder tune an encode of this quality uses, e.g. animation or grain; empty when none.' }
         deinterlace: { type: boolean, description: An encode of this quality deinterlaces; an interlaced file counts as short of it. }
+        page_long: { type: integer, format: int64, description: 'A comic target: the median long page edge in pixels pages should reach; 0 or absent when it does not care.' }
+        page_short: { type: integer, format: int64, description: 'A comic target: the median short page edge in pixels pages should reach; 0 or absent when it does not care.' }
+        image_format: { type: string, description: 'A comic target: the page image format wanted (jpg, webp, avif...); empty when any.' }
+        image_quality: { type: integer, format: int64, description: 'A comic target: the page image quality (1-100) a re-encode would use; 0 or absent when none.' }
 
     DefaultLanguages:
       type: object

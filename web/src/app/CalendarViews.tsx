@@ -30,6 +30,11 @@ export function weekStart(date: Date): Date {
   return addDays(date, -((date.getDay() + 6) % 7));
 }
 
+/** The week a comic is out in starts on Wednesday, new-comics day. */
+export function wednesdayStart(date: Date): Date {
+  return addDays(date, -((date.getDay() + 4) % 7));
+}
+
 const WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
 function useReleases(from: string, to: string) {
@@ -168,9 +173,20 @@ export function MonthView({ anchor, today }: { anchor: Date; today: string }) {
 }
 
 /** Seven columns from a start date: the week view and Lidarr's forecast. */
-export function DaysView({ start, days, today }: { start: Date; days: number; today: string }) {
+export function DaysView({
+  start,
+  days,
+  today,
+  only,
+}: {
+  start: Date;
+  days: number;
+  today: string;
+  /** Keeps the releases it answers true for; the pull list keeps comics. */
+  only?: (entry: CalendarEntry) => boolean;
+}) {
   const releases = useReleases(isoDate(start), isoDate(addDays(start, days - 1)));
-  const grouped = byDate(releases.data);
+  const grouped = byDate(only ? releases.data?.filter(only) : releases.data);
   return (
     <>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
