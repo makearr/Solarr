@@ -17,7 +17,9 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
+	"github.com/makearr/Solarr/internal/metadata/fanart"
 	"github.com/makearr/Solarr/internal/metadata/metaresolve"
+	"github.com/makearr/Solarr/internal/metadata/omdb"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
@@ -60,6 +62,18 @@ type AnimeSource interface {
 	Media(ctx context.Context, id int64) (anilist.Media, error)
 }
 
+// RatingSource is the OMDb client as the service needs it.
+type RatingSource interface {
+	Configured() bool
+	Movie(ctx context.Context, imdb string) (omdb.Movie, error)
+}
+
+// PictureSource is the fanart.tv client as the service needs it.
+type PictureSource interface {
+	Configured() bool
+	Show(ctx context.Context, tvdb int64) (fanart.Show, error)
+}
+
 // maxAnimeEntries bounds how many of an anime's cours are asked of AniList, which splits one series into several entries.
 const maxAnimeEntries = 5
 
@@ -77,6 +91,9 @@ type Service struct {
 	TMDB RichSource
 	// AniList adds the titles anime is released under; nil skips it.
 	AniList AnimeSource
+	// OMDb adds the IMDb rating and the English plot, Fanart the clear logos and banners; nil skips either.
+	OMDb   RatingSource
+	Fanart PictureSource
 	// Priority is the configured TV source order, read per fetch; nil is the default order.
 	Priority func() []string
 	// PriorityFor is a library's own order; nil, or an empty answer, follows Priority.
@@ -165,7 +182,7 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool, order []st
 	var rich Series
 	haveRich := false
 	var wrongTVmaze atomic.Int64
-	asked := slices.DeleteFunc([]string{settings.TVSourceTMDB, settings.TVSourceAniList, settings.TVSourceTVmaze}, func(source string) bool { return !slices.Contains(order, source) })
+	asked := slices.DeleteFunc([]string{settings.TVSourceTMDB, settings.TVSourceAniList, settings.TVSourceTVmaze, settings.TVSourceOMDb, settings.TVSourceFanart}, func(source string) bool { return !slices.Contains(order, source) })
 	answers := metaresolve.AskAll(ctx, asked,
 		func(ctx context.Context, source string) (fetched, error) {
 			switch source {
@@ -174,6 +191,12 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool, order []st
 				return fetched{series, found}, nil
 			case settings.TVSourceAniList:
 				series, found := s.fetchAniList(ctx, ids)
+				return fetched{series, found}, nil
+			case settings.TVSourceOMDb:
+				series, found := s.fetchOMDb(ctx, ids)
+				return fetched{series, found}, nil
+			case settings.TVSourceFanart:
+				series, found := s.fetchFanart(ctx, ids)
 				return fetched{series, found}, nil
 			}
 			if s.TVmaze == nil {
@@ -251,6 +274,36 @@ func (s Service) wikidataFacts(ctx context.Context, ids IDs, order []string) (wi
 	}
 	found, known := facts[id]
 	return found, known
+}
+
+// fetchOMDb asks OMDb for the series by its IMDb id; a series without one, or a missing key, is not asked.
+func (s Service) fetchOMDb(ctx context.Context, ids IDs) (Series, bool) {
+	if s.OMDb == nil || !s.OMDb.Configured() || ids.IMDb == "" {
+		return Series{}, false
+	}
+	movie, err := s.OMDb.Movie(ctx, ids.IMDb)
+	if err != nil {
+		if !errors.Is(err, omdb.ErrNotFound) {
+			s.warn("omdb", ids.TVDB, err)
+		}
+		return Series{}, false
+	}
+	return FromOMDb(movie), true
+}
+
+// fetchFanart asks fanart.tv for the series' pictures by its TheTVDB id.
+func (s Service) fetchFanart(ctx context.Context, ids IDs) (Series, bool) {
+	if s.Fanart == nil || !s.Fanart.Configured() || ids.TVDB == 0 {
+		return Series{}, false
+	}
+	show, err := s.Fanart.Show(ctx, ids.TVDB)
+	if err != nil {
+		if !errors.Is(err, fanart.ErrNotFound) {
+			s.warn("fanart", ids.TVDB, err)
+		}
+		return Series{}, false
+	}
+	return FromFanart(show), true
 }
 
 // fetchAniList asks AniList for each cour of an anime Skyhook knows by AniList id; a series with none is not asked.

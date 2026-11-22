@@ -15,6 +15,8 @@ import (
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/tv"
+	"github.com/makearr/Solarr/internal/metadata/fanart"
+	"github.com/makearr/Solarr/internal/metadata/omdb"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -418,5 +420,35 @@ func TestRefreshIsSkippedWhileSkyhookIsDownSoTheFallbacksNumbersNeverReachTheLib
 	}
 	if after := partMonitoring(t, opened, added.WorkID); !reflect.DeepEqual(after, before) {
 		t.Errorf("parts = %v, want %v unchanged", after, before)
+	}
+}
+
+type fakeOMDb struct {
+	movie omdb.Movie
+	err   error
+}
+
+func (fakeOMDb) Configured() bool                                    { return true }
+func (f fakeOMDb) Movie(context.Context, string) (omdb.Movie, error) { return f.movie, f.err }
+
+type fakeFanart struct{ show fanart.Show }
+
+func (fakeFanart) Configured() bool                                   { return true }
+func (f fakeFanart) Show(context.Context, int64) (fanart.Show, error) { return f.show, nil }
+
+func TestFetchTakesOMDbsRatingAndFanartsLogoWhereNoOneElseHasThem(t *testing.T) {
+	service, _ := newService(t, fakeSkyhook{err: errors.New("proxy down")}, fakeTVmaze{show: tvmaze.Show{ID: 42, Name: "Example Show", Status: "Running"}})
+	service.OMDb = fakeOMDb{movie: omdb.Movie{IMDbID: "tt9000009", Plot: "A longer plot.", IMDbRating: "8.4", IMDbVotes: "1,200"}}
+	service.Fanart = fakeFanart{show: fanart.Show{Logos: []fanart.Image{{URL: "https://assets.example/logo.png", Lang: "en", Likes: "3"}}}}
+	series, err := service.Fetch(t.Context(), tv.IDs{TVDB: 1234, IMDb: "tt9000009"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if series.Rating != 8.4 || series.RatingVotes != 1200 || series.Overview != "A longer plot." {
+		t.Errorf("rating = %v/%d, overview = %q", series.Rating, series.RatingVotes, series.Overview)
+	}
+	want := []tv.Image{{Kind: "logo", URL: "https://assets.example/logo.png", Source: "fanart"}}
+	if !reflect.DeepEqual(series.Images, want) {
+		t.Errorf("images = %+v, want %+v", series.Images, want)
 	}
 }

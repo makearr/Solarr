@@ -112,27 +112,7 @@ func FromFanart(in fanart.Movie) Movie {
 	return movie
 }
 
-func bestFanart(images []fanart.Image) (fanart.Image, bool) {
-	rank := func(image fanart.Image) int {
-		switch image.Lang {
-		case "en":
-			return 0
-		case "", "00":
-			return 1
-		}
-		return 2
-	}
-	sorted := slices.Clone(images)
-	slices.SortStableFunc(sorted, func(a, b fanart.Image) int {
-		likesA, _ := strconv.Atoi(a.Likes)
-		likesB, _ := strconv.Atoi(b.Likes)
-		return cmp.Or(cmp.Compare(rank(a), rank(b)), cmp.Compare(likesB, likesA))
-	})
-	if len(sorted) == 0 || sorted[0].URL == "" {
-		return fanart.Image{}, false
-	}
-	return sorted[0], true
-}
+func bestFanart(images []fanart.Image) (fanart.Image, bool) { return fanart.Best(images) }
 
 // tvdbArtworkKinds are TheTVDB's numbered picture kinds of a film, as the others name them.
 var tvdbArtworkKinds = map[int]string{14: "poster", 15: "fanart", 16: "banner", 22: "clearart", 25: "logo"}

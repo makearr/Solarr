@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/metadata/anilist"
+	"github.com/makearr/Solarr/internal/metadata/fanart"
+	"github.com/makearr/Solarr/internal/metadata/omdb"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
 )
@@ -17,7 +19,39 @@ const (
 	sourceSkyhook = "skyhook"
 	sourceTVmaze  = "tvmaze"
 	sourceAniList = "anilist"
+	sourceOMDb    = "omdb"
+	sourceFanart  = "fanart"
 )
+
+// FromOMDb is a series' English plot and IMDb rating; "N/A" is what OMDb writes for what it does not know.
+func FromOMDb(in omdb.Movie) Series {
+	series := Series{IDs: IDs{IMDb: in.IMDbID}, Sources: []string{sourceOMDb}}
+	if in.Plot != "N/A" {
+		series.Overview = in.Plot
+	}
+	if score, err := strconv.ParseFloat(in.IMDbRating, 64); err == nil && score > 0 && score <= 10 {
+		series.Rating = score
+		votes, _ := strconv.Atoi(strings.ReplaceAll(in.IMDbVotes, ",", ""))
+		series.RatingVotes = votes
+	}
+	return series
+}
+
+// FromFanart is the best liked picture of each kind fanart.tv has of a series, English or without text first.
+func FromFanart(in fanart.Show) Series {
+	series := Series{Sources: []string{sourceFanart}}
+	for _, kind := range []struct {
+		name   string
+		images []fanart.Image
+	}{
+		{"logo", in.Logos}, {"clearart", in.ClearArt}, {"banner", in.Banners}, {"poster", in.Posters}, {"fanart", in.Backgrounds}, {"thumb", in.Thumbs},
+	} {
+		if best, ok := fanart.Best(kind.images); ok {
+			series.Images = append(series.Images, Image{Kind: kind.name, URL: best.URL, Source: sourceFanart})
+		}
+	}
+	return series
+}
 
 // FromSkyhook reads Sonarr's TheTVDB proxy answer into the module's own types.
 func FromSkyhook(in skyhook.Series) Series {

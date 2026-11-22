@@ -43,3 +43,27 @@ func TestAFilmIsReadByIMDbIDAndNotFoundIsToldApartFromAFailure(t *testing.T) {
 		t.Errorf("err = %v; want OMDb's own error, not 'not found'", err)
 	}
 }
+
+type seasonAnswer struct{}
+
+func (seasonAnswer) RoundTrip(request *http.Request) (*http.Response, error) {
+	body := `{"Response":"False","Error":"Series or season not found!"}`
+	if request.URL.Query().Get("i") == "tt9000003" && request.URL.Query().Get("Season") == "2" {
+		body = `{"Title":"Example Show","Season":"2","Episodes":[{"Title":"Pilot","Released":"2001-01-02","Episode":"1","imdbRating":"8.4","imdbID":"tt9100001"},{"Title":"Next","Released":"2001-01-09","Episode":"2","imdbRating":"N/A","imdbID":"tt9100002"}],"Response":"True"}`
+	}
+	return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: request}, nil
+}
+
+func TestASeasonListsItsEpisodesWithTheirRatings(t *testing.T) {
+	fake := clock.NewFakeAtEpoch()
+	http := httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}), httpx.ClientConfig{Provider: "omdb", UserAgent: "test", Transport: seasonAnswer{}})
+	shows := omdb.New(http, func() string { return "owner-key" })
+	season, err := shows.Season(t.Context(), "tt9000003", 2)
+	if err != nil || season.Number != "2" || len(season.Episodes) != 2 || season.Episodes[0].IMDbRating != "8.4" || season.Episodes[1].IMDbRating != "N/A" {
+		t.Fatalf("season = %+v, %v", season, err)
+	}
+	if _, err := shows.Season(t.Context(), "tt9000003", 9); !errors.Is(err, omdb.ErrNotFound) {
+		t.Errorf("err = %v; want ErrNotFound", err)
+	}
+}

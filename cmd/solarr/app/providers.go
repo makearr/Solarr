@@ -342,7 +342,9 @@ func (p *process) tvService() tv.Service {
 		p.xemShared = thexem.New(client(providerTheXEM), metacache.New(p.metadata).Counting(&p.metadataLookups), wall)
 		p.tvShared = tv.Service{
 			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared, AniList: p.anilistShared, Wikidata: p.wikidataFacts(),
-			Scene: sceneSource{client: p.xemShared, enabled: func() bool { return p.cache.Snapshot().ProviderEnabled(settings.SourceTheXEM) }},
+			OMDb:   omdb.New(p.providerClient(providerOMDb, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceOMDb)),
+			Fanart: fanart.New(p.providerClient(providerFanart, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceFanart)),
+			Scene:  sceneSource{client: p.xemShared, enabled: func() bool { return p.cache.Snapshot().ProviderEnabled(settings.SourceTheXEM) }},
 			Priority: func() []string {
 				return p.cache.Snapshot().MetadataSourcesFor(settings.Category{MediaType: tv.MediaType})
 			},

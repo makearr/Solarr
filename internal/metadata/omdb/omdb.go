@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -53,6 +54,9 @@ type Movie struct {
 	IMDbID     string   `json:"imdbID"`
 	IMDbVotes  string   `json:"imdbVotes"`
 	Ratings    []Rating `json:"Ratings"`
+	Type       string   `json:"Type"`
+	Seasons    string   `json:"totalSeasons"`
+	IMDbRating string   `json:"imdbRating"`
 	Response   string   `json:"Response"`
 	ErrorShown string   `json:"Error"`
 }
@@ -74,4 +78,40 @@ func (c Client) Movie(ctx context.Context, imdb string) (Movie, error) {
 		return Movie{}, fmt.Errorf("omdb: %s", movie.ErrorShown)
 	}
 	return movie, nil
+}
+
+// Episode is one episode of a season with its IMDb rating as OMDb writes it ("N/A" where none).
+type Episode struct {
+	Title      string `json:"Title"`
+	Released   string `json:"Released"`
+	Episode    string `json:"Episode"`
+	IMDbRating string `json:"imdbRating"`
+	IMDbID     string `json:"imdbID"`
+}
+
+// Season is one season of a series as OMDb lists it.
+type Season struct {
+	Number   string    `json:"Season"`
+	Episodes []Episode `json:"Episodes"`
+	Response string    `json:"Response"`
+	Error    string    `json:"Error"`
+}
+
+// Season reads one season's episodes by the series' IMDb id: one request, only on a refresh.
+func (c Client) Season(ctx context.Context, imdb string, number int) (Season, error) {
+	if !c.Configured() || imdb == "" || number < 0 {
+		return Season{}, ErrNotFound
+	}
+	var season Season
+	query := url.Values{"apikey": {c.key()}, "i": {imdb}, "Season": {strconv.Itoa(number)}}
+	if err := c.http.GetJSON(ctx, c.base+"?"+query.Encode(), maxResponseBytes, &season); err != nil {
+		return Season{}, fmt.Errorf("omdb: %w", err)
+	}
+	if season.Response != "True" {
+		if strings.Contains(strings.ToLower(season.Error), "not found") {
+			return Season{}, ErrNotFound
+		}
+		return Season{}, fmt.Errorf("omdb: %s", season.Error)
+	}
+	return season, nil
 }
