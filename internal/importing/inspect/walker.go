@@ -303,16 +303,30 @@ func isSubtitleFolder(name string) bool {
 	return false
 }
 
-// subtitleFiles lists the subtitles directly inside a subtitle folder, so they follow the unit's videos.
+// subtitleFolderDepth is how many folders below a subtitle folder are read: scene packs keep "Subs/<episode name>/*.srt".
+const subtitleFolderDepth = 2
+
+// subtitleFiles lists the subtitles inside a subtitle folder and the folders under it, so they follow the unit's videos.
 func (w *walkerRun) subtitleFiles(relative string) []File {
+	return w.subtitlesBelow(relative, subtitleFolderDepth)
+}
+
+func (w *walkerRun) subtitlesBelow(relative string, depth int) []File {
 	entries, err := w.fsys.ReadDir(path.Join(w.root, relative))
 	if err != nil {
 		return nil
 	}
+	slices.SortFunc(entries, func(a, b fsx.DirEntry) int { return strings.Compare(a.Name, b.Name) })
 	var files []File
 	for _, entry := range entries {
 		childRelative := path.Join(relative, entry.Name)
-		if entry.IsDir || (w.opts.Only != nil && !w.opts.Only[childRelative]) {
+		if entry.IsDir {
+			if depth > 0 && entry.Name != RecycleFolder && entry.Name != recycleBinFolder {
+				files = append(files, w.subtitlesBelow(childRelative, depth-1)...)
+			}
+			continue
+		}
+		if w.opts.Only != nil && !w.opts.Only[childRelative] {
 			continue
 		}
 		info, err := w.fsys.Lstat(path.Join(w.root, childRelative))

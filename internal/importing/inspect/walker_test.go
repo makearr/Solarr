@@ -2,6 +2,7 @@ package inspect_test
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/importing/inspect"
@@ -265,6 +266,20 @@ func TestWalker_EverySubtitleFolderNameBelongsToTheUnit(t *testing.T) {
 		if len(units) != 1 || len(units[0].Other) != 1 || units[0].Other[0].RelPath != "Rel/"+folder+"/S01E01.English.srt" {
 			t.Errorf("%s: units = %+v, want the subtitle with the unit", folder, units)
 		}
+	}
+}
+
+// Scene packs keep one folder of subtitles per episode under Subs; they follow the unit, but only two folders deep.
+func TestWalker_AnEpisodeFolderUnderSubsBelongsToTheUnit(t *testing.T) {
+	tr := newTree(t, "Rel/S01E01.mkv", "Rel/Subs/S01E01/2_English.srt", "Rel/Subs/S01E01/3_French.srt", "Rel/Subs/a/b/c/Deep.srt")
+	units, _ := walkAll(t, tr, inspect.WalkOptions{})
+	var got []string
+	for _, other := range units[0].Other {
+		got = append(got, other.RelPath)
+	}
+	want := []string{"Rel/Subs/S01E01/2_English.srt", "Rel/Subs/S01E01/3_French.srt"}
+	if len(units) != 1 || !reflect.DeepEqual(got, want) {
+		t.Errorf("units = %d, other = %v, want %v", len(units), got, want)
 	}
 }
 
