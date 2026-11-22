@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -82,7 +83,7 @@ export function Downloaders() {
       </header>
 
       {downloaders.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-      {downloaders.error !== null && <p className="text-sm text-danger">Download clients could not be read.</p>}
+      {downloaders.error !== null && <p className="text-sm text-danger">{t("downloaders.downloadClientsCouldNot")}</p>}
 
       {downloaders.data && downloaders.data.length > 0 ? (
         <ul className="flex flex-col gap-2">
@@ -138,7 +139,7 @@ export function Downloaders() {
               <span className="flex items-center gap-2 text-xs text-ink-muted">
                 {describeOptions(downloader.options, kindOf(downloader.impl))}
                 {speedOf(downloader.id) && (
-                  <span title="Average over the last 30 days, from first seen running to finished">
+                  <span title={t("downloaders.averageOverTheLast")}>
                     {formatSpeed(speedOf(downloader.id)?.bytes_per_second ?? 0)} over {speedOf(downloader.id)?.downloads} downloads
                   </span>
                 )}
@@ -177,7 +178,7 @@ export function Downloaders() {
                     <button type="button" onClick={() => setDismissed([...dismissed, key])} className="hover:text-ink">
                       Not now
                     </button>
-                    {addCompanion.isError && <span className="text-danger">It could not be added.</span>}
+                    {addCompanion.isError && <span className="text-danger">{t("indexers.itCouldNotBe")}</span>}
                   </span>
                 );
               })()}
@@ -196,7 +197,7 @@ export function Downloaders() {
       ) : (
         !downloaders.isLoading && (
           <p className="rounded-lg border border-border-subtle bg-surface p-3 text-sm text-ink-muted">
-            No download client is configured.
+            {t("downloaders.noDownloadClientIs")}
           </p>
         )
       )}
@@ -209,7 +210,7 @@ export function Downloaders() {
 
       {downloaders.data && downloaders.data.length > 0 && <ReadyQueueLimitEditor />}
 
-      {kinds.isError && <p className="text-xs text-danger">The kinds of download client could not be read.</p>}
+      {kinds.isError && <p className="text-xs text-danger">{t("downloaders.theKindsOfDownload")}</p>}
       {kinds.data && kinds.data.length > 0 && <AddDownloader kinds={kinds.data} onAdded={invalidate} />}
     </div>
   );
@@ -233,7 +234,7 @@ function AddReportedFolder({ path, label }: { path: string; label: string }) {
       type="button"
       disabled={add.isPending}
       onClick={() => add.mutate()}
-      title="Without it, finished downloads sit in the queue as outside every download folder"
+      title={t("downloaders.withoutItFinishedDownloads")}
       className="ml-2 rounded border border-border-subtle px-1.5 py-0.5 text-ink hover:bg-canvas"
     >
       {add.isError ? "Could not add; set it under Download folders" : "Add as download folder"}
@@ -262,7 +263,7 @@ function ReadyQueueLimitEditor() {
           type="number"
           min={1}
           max={10000}
-          aria-label="Held releases"
+          aria-label={t("downloaders.heldReleases")}
           value={current}
           disabled={save.isPending}
           onChange={(event) => setDraft(Math.max(1, Math.min(10000, Number(event.target.value) || 1)))}
@@ -275,7 +276,7 @@ function ReadyQueueLimitEditor() {
           Save
         </Button>
       )}
-      {save.isError && <span className="text-danger">That change was refused.</span>}
+      {save.isError && <span className="text-danger">{t("importLists.refused")}</span>}
     </div>
   );
 }
@@ -392,7 +393,7 @@ function AddDownloader({ kinds, onAdded }: { kinds: DownloaderKind[]; onAdded: (
       <div className="flex items-center gap-2">
         <h2 className="text-sm font-medium">Add</h2>
         <select
-          aria-label="Download client"
+          aria-label={t("downloaders.downloadClient")}
           value={impl}
           onChange={(event) => {
             setImpl(event.target.value);
@@ -469,12 +470,12 @@ function AddDownloader({ kinds, onAdded }: { kinds: DownloaderKind[]; onAdded: (
       {test.data && (
         <p className={`text-xs ${test.data.ok ? "text-ok" : "text-danger"}`}>{test.data.message}</p>
       )}
-      {test.isError && <p className="text-xs text-danger">The test could not run.</p>}
+      {test.isError && <p className="text-xs text-danger">{t("indexerCatalog.theTestCouldNot")}</p>}
       {reported !== "" && (
         <div className="flex flex-wrap items-end gap-2 text-xs">
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={addFolder} onChange={(event) => setAddFolder(event.target.checked)} />
-            Also add its download folder
+            {t("downloaders.alsoAddItsDownload")}
           </label>
           {addFolder && (
             <label className="flex min-w-64 flex-1 flex-col gap-1 text-ink-muted">
@@ -603,11 +604,11 @@ function OptionFields({
       )}
       <label className="flex items-center gap-2 pb-2 text-ink-muted">
         <input type="checkbox" checked={removeCompleted} onChange={(event) => onRemoveCompleted(event.target.checked)} />
-        Remove completed downloads once imported
+        {t("downloaders.removeCompletedDownloadsOnce")}
       </label>
       <label
         className="flex w-36 flex-col gap-1 text-ink-muted"
-        title="Automatic searches beyond this wait in Solarr, best first, and go as downloads finish"
+        title={t("downloaders.automaticSearchesBeyondThis")}
       >
         Downloads at once
         <input
@@ -638,14 +639,14 @@ function OptionFields({
         title="A Search you start, a release you pick, or a request goes to the client even when it is full"
       >
         <input type="checkbox" checked={sendUser} onChange={(event) => onSendUser(event.target.checked)} />
-        Always send my grabs
+        {t("downloaders.alwaysSendMyGrabs")}
       </label>
       <label
         className="flex items-center gap-2 pb-2 text-ink-muted"
         title="A release RSS finds for something wanted goes to the client even when it is full"
       >
         <input type="checkbox" checked={sendRSS} onChange={(event) => onSendRSS(event.target.checked)} />
-        Always send RSS grabs
+        {t("downloaders.alwaysSendRssGrabs")}
       </label>
       {seed && removeCompleted && (
         <>
@@ -653,13 +654,13 @@ function OptionFields({
             Seed to ratio
             <input className={inputStyle} type="number" min={0} step={0.1} value={seed.ratio} placeholder="e.g. 1.0" onChange={(event) => seed.onRatio(event.target.value)} />
           </label>
-          <label className="flex w-36 flex-col gap-1 text-ink-muted" title="Whichever limit is reached first removes the torrent and its files">
+          <label className="flex w-36 flex-col gap-1 text-ink-muted" title={t("downloaders.whicheverLimitIsReached")}>
             Seed for (minutes)
             <input className={inputStyle} type="number" min={0} step={10} value={seed.minutes} placeholder="e.g. 4320" onChange={(event) => seed.onMinutes(event.target.value)} />
           </label>
           <label className="flex items-center gap-2 text-ink-muted" title="Off removes the torrent at the first limit reached; on waits for both">
             <input type="checkbox" checked={seed.both} onChange={(event) => seed.onBoth(event.target.checked)} />
-            Wait for both limits
+            {t("downloaders.waitForBothLimits")}
           </label>
           {!(Number(seed.ratio) > 0 || Number(seed.minutes) > 0) && (
             <p className="basis-full text-warn">Set a seed ratio or a seed time: a torrent with neither is removed as soon as it is imported.</p>
@@ -809,14 +810,14 @@ export function ClientOptionsForm({ downloader, kind, onDone }: { downloader: Do
                 onClick={() => addFolder.mutate()}
                 className="rounded-md border border-border-subtle px-2 py-1 text-ink hover:border-accent disabled:opacity-50"
               >
-                Add it to Download folders
+                {t("downloaders.addItToDownload")}
               </button>
             </>
           )}
           {addFolder.isError && <span className="text-danger">{(addFolder.error as Error).message}</span>}
         </div>
       )}
-      {save.isError && <p className="text-xs text-danger">The options could not be saved.</p>}
+      {save.isError && <p className="text-xs text-danger">{t("downloaders.theOptionsCouldNot")}</p>}
     </div>
   );
 }
@@ -853,7 +854,7 @@ function StallFields({ stall, onChange }: { stall: StallCleanup; onChange: (stal
       <label className="flex items-start gap-2">
         <input type="checkbox" checked={stall.enabled} onChange={(event) => onChange({ ...stall, enabled: event.target.checked })} />
         <span>
-          <span className="text-ink">Remove stalled downloads</span>
+          <span className="text-ink">{t("downloaders.removeStalledDownloads")}</span>
           <span className="block text-ink-muted">
             A download of Solarr's that stops moving gets a strike at each check; after the strikes, or the hours without
             progress, the tracks or episodes it did finish are imported first (qBittorrent), then it is removed with its

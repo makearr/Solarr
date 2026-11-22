@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
-import { vocabularyOf } from "@/lib/i18n";
+import { vocabularyOf, t } from "@/lib/i18n";
 import { sizeText, sizeTone } from "@/lib/targetCloseness";
 import { useLibrary } from "@/lib/useLibrary";
 import { Chip } from "@/ui/Chip";
@@ -216,7 +216,7 @@ export function Statistics() {
         </p>
       </header>
       {stats.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-      {stats.error !== null && <p className="text-sm text-danger">The statistics could not be read.</p>}
+      {stats.error !== null && <p className="text-sm text-danger">{t("statistics.theStatisticsCouldNot")}</p>}
 
       {data && (
         <>
@@ -258,7 +258,7 @@ export function Statistics() {
                   </Link>
                 </li>
               ))}
-              {data.downloads_by_state.length === 0 && <li className="text-sm text-ink-muted">No downloads in this window.</li>}
+              {data.downloads_by_state.length === 0 && <li className="text-sm text-ink-muted">{t("statistics.noDownloadsInThis")}</li>}
             </ul>
           </section>
           <FilesSection
@@ -272,7 +272,7 @@ export function Statistics() {
           <StorageSection usedBytes={totalBytes} categoryId={categoryId ?? ""} />
           {(data.quality_vs_target ?? []).length > 0 && (
             <section className="flex flex-col gap-2">
-              <h2 className="text-sm font-medium">Quality against the target</h2>
+              <h2 className="text-sm font-medium">{t("statistics.qualityAgainstTheTarget")}</h2>
               <p className="text-xs text-ink-muted">Monitored files the quality profile judged, against the library&apos;s target and its cutoff. Updated by the cutoff check.</p>
               <ul className="flex flex-col gap-1.5">
                 {(data.quality_vs_target ?? []).map((row) => (
@@ -286,7 +286,7 @@ export function Statistics() {
               </ul>
               {(data.worst_files ?? []).length > 0 && (
                 <>
-                  <h3 className="mt-1 text-xs font-medium text-ink-muted">Furthest from the target</h3>
+                  <h3 className="mt-1 text-xs font-medium text-ink-muted">{t("statistics.furthestFromTheTarget")}</h3>
                   <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
                     {(data.worst_files ?? []).map((file) => (
                       <li key={`${file.work_id}|${file.media_ref ?? ""}`} className="flex items-center gap-3 px-3 py-1.5 text-sm">
@@ -306,7 +306,7 @@ export function Statistics() {
           {video && (
             <>
               <Breakdown title="Resolution" note="As the probe measured each file." rows={data.files_by_resolution} />
-              <Breakdown title="Video codec" note="As the probe measured each file." rows={data.files_by_video_codec} />
+              <Breakdown title={t("release.claim.video_codec")} note="As the probe measured each file." rows={data.files_by_video_codec} />
               <Breakdown title="HDR" note="Files without an HDR format count as sdr." rows={data.files_by_hdr} />
               <Breakdown title="Audio" note="Codec and channel layout of the first audio track." rows={data.files_by_audio} />
             </>
@@ -340,14 +340,14 @@ export function Statistics() {
                   </span>
                 </li>
               ))}
-              {data.files_by_codec.length === 0 && <li className="text-sm text-ink-muted">No files yet.</li>}
+              {data.files_by_codec.length === 0 && <li className="text-sm text-ink-muted">{t("statistics.noFilesYet")}</li>}
             </ul>
           </section>
 
           <section className="flex flex-col gap-2">
             <h2 className="text-sm font-medium">Growth</h2>
             <p className="text-xs text-ink-muted">
-              Files by the month Solarr first saw them. The first scan of an existing library lands in one month.
+              {t("statistics.filesByTheMonth")}
             </p>
             <ul className="flex flex-col gap-1.5">
               {growth.map((row) => (
@@ -364,7 +364,7 @@ export function Statistics() {
                   </span>
                 </li>
               ))}
-              {growth.length === 0 && <li className="text-sm text-ink-muted">No files yet.</li>}
+              {growth.length === 0 && <li className="text-sm text-ink-muted">{t("statistics.noFilesYet")}</li>}
             </ul>
           </section>
 
@@ -380,7 +380,7 @@ export function Statistics() {
                   <span className="text-xs text-ink-muted">{OUTCOME_LABELS[row.key] ?? row.key}</span>
                 </li>
               ))}
-              {data.decisions_by_outcome.length === 0 && <li className="text-sm text-ink-muted">No releases judged in this window.</li>}
+              {data.decisions_by_outcome.length === 0 && <li className="text-sm text-ink-muted">{t("statistics.noReleasesJudgedIn")}</li>}
             </ul>
           </section>
 
@@ -426,9 +426,9 @@ function Searching({
           </li>
         ))}
       </ul>
-      <h3 className="mt-2 text-sm font-medium">Searched most, still missing</h3>
+      <h3 className="mt-2 text-sm font-medium">{t("statistics.searchedMostStillMissing")}</h3>
       {mostSearched === undefined || mostSearched.length === 0 ? (
-        <p className="text-sm text-ink-muted">Nothing has been searched for twice without being found.</p>
+        <p className="text-sm text-ink-muted">{t("statistics.nothingHasBeenSearched")}</p>
       ) : (
         <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
           {mostSearched.map((item) => (
@@ -476,7 +476,7 @@ function TargetSize({ categoryId }: { categoryId: string }) {
   ];
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-medium">Size against the target</h2>
+      <h2 className="text-sm font-medium">{t("statistics.sizeAgainstTheTarget")}</h2>
       <p className="text-xs text-ink-muted">
         Each video file's bitrate against the {data.expected_kbps} kbit/s a file on the target would have (video and audio plus container and subtitle overhead), over {data.judged} files.
       </p>
@@ -493,8 +493,8 @@ function TargetSize({ categoryId }: { categoryId: string }) {
           </li>
         ))}
       </ul>
-      <FileList title="Furthest below the target" files={data.furthest_below} />
-      <FileList title="Furthest above the target" files={data.furthest_above} />
+      <FileList title={t("statistics.furthestBelowTheTarget")} files={data.furthest_below} />
+      <FileList title={t("statistics.furthestAboveTheTarget")} files={data.furthest_above} />
     </section>
   );
 }

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -149,7 +150,7 @@ function Heatmap() {
       : `${label}, ${here.names.length} ${here.names.length === 1 ? "kind of job" : "kinds of job"}, ${formatRuntime(here.runtimeMs)} total: ${here.names.join(", ")}`;
   };
   return (
-    <section className="flex flex-col gap-2" aria-label="Schedule heatmap">
+    <section className="flex flex-col gap-2" aria-label={t("scheduler.scheduleHeatmap")}>
       <p className="text-xs text-ink-muted">
         Run time per hour over the last seven days, all jobs together, as the workers did it; the frame marks this hour. Hover or focus an hour to list what ran.
       </p>
@@ -247,8 +248,8 @@ function RunningJobs() {
   });
   const jobs = sortRunning(activity.data ?? [], sort, direction);
   return (
-    <section className="flex flex-col gap-2" aria-label="Running now">
-      <h2 className="text-sm font-medium">Running now</h2>
+    <section className="flex flex-col gap-2" aria-label={t("scheduler.runningNow")}>
+      <h2 className="text-sm font-medium">{t("scheduler.runningNow")}</h2>
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <ToolbarSort
           sort={sort}
@@ -259,7 +260,7 @@ function RunningJobs() {
         />
       </div>
       {jobs.length === 0 ? (
-        <p className="rounded-lg border border-border-subtle bg-surface p-3 text-xs text-ink-muted">Nothing is running.</p>
+        <p className="rounded-lg border border-border-subtle bg-surface p-3 text-xs text-ink-muted">{t("scheduler.nothingIsRunning")}</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {jobs.map((job) => (
@@ -564,7 +565,7 @@ function ScheduleRow({
             <span className="rounded-md border border-border-subtle bg-canvas px-2 py-0.5 text-ink">At startup</span>
             <button
               type="button"
-              aria-label="Remove schedule at startup"
+              aria-label={t("scheduler.removeScheduleAtStartup")}
               disabled={busy}
               onClick={onToggleStartup}
               className="rounded p-0.5 text-ink-muted hover:text-danger disabled:opacity-50"
@@ -602,19 +603,19 @@ function ScheduleRow({
                        hover:text-ink disabled:opacity-50"
           >
             <Plus aria-hidden className="size-3.5" />
-            Add a time
+            {t("scheduler.addATime")}
           </button>
           {!schedule.run_at_startup && (
             <button
               type="button"
               disabled={busy}
               onClick={onToggleStartup}
-              title="Also run once whenever Solarr starts. Database maintenance and backups wait a few minutes and are skipped when they ran recently."
+              title={t("scheduler.alsoRunOnceWhenever")}
               className="flex w-fit items-center gap-1 rounded-md border border-border-subtle px-2 py-0.5
                          hover:text-ink disabled:opacity-50"
             >
               <Plus aria-hidden className="size-3.5" />
-              Add at startup
+              {t("scheduler.addAtStartup")}
             </button>
           )}
           {dirty && (
@@ -646,7 +647,7 @@ function ScheduleRow({
               title={describeTrigger(parseCadence(schedule.default_cadence))}
               className="rounded-md border border-border-subtle px-2 py-0.5 hover:text-ink"
             >
-              Reset to default
+              {t("scheduler.resetToDefault")}
             </button>
           )}
         </span>
@@ -707,7 +708,7 @@ function TriggerEditor({
         <option value="hours">Every (hours)</option>
         <option value="daily">Daily at</option>
         <option value="weekly">Weekly on</option>
-        <option value="monthly">Monthly on day</option>
+        <option value="monthly">{t("scheduler.monthlyOnDay")}</option>
         <option value="advanced">Advanced (cron)</option>
       </select>
 
@@ -728,7 +729,7 @@ function TriggerEditor({
             type="number"
             min={1}
             max={23}
-            aria-label="Hours between runs"
+            aria-label={t("scheduler.hoursBetweenRuns")}
             value={trigger.hours}
             disabled={busy}
             onChange={(event) => onChange({ ...trigger, hours: Number(event.target.value) || 1 })}
@@ -739,7 +740,7 @@ function TriggerEditor({
             type="number"
             min={0}
             max={59}
-            aria-label="Minute past the hour"
+            aria-label={t("scheduler.minutePastTheHour")}
             value={trigger.minute}
             disabled={busy}
             onChange={(event) => onChange({ ...trigger, minute: Math.min(59, Number(event.target.value) || 0) })}
@@ -749,7 +750,7 @@ function TriggerEditor({
       )}
       {trigger.mode === "weekly" && (
         <select
-          aria-label="Day of the week"
+          aria-label={t("scheduler.dayOfTheWeek")}
           value={trigger.weekday}
           disabled={busy}
           onChange={(event) => onChange({ ...trigger, weekday: Number(event.target.value) })}
@@ -767,8 +768,8 @@ function TriggerEditor({
           type="number"
           min={1}
           max={28}
-          aria-label="Day of the month"
-          title="Up to the 28th, so it runs every month"
+          aria-label={t("scheduler.dayOfTheMonth")}
+          title={t("scheduler.upToThe28th")}
           value={trigger.day}
           disabled={busy}
           onChange={(event) =>
@@ -780,7 +781,7 @@ function TriggerEditor({
       {(trigger.mode === "daily" || trigger.mode === "weekly" || trigger.mode === "monthly") && (
         <input
           type="time"
-          aria-label="Time of day"
+          aria-label={t("scheduler.timeOfDay")}
           value={clock(trigger.hour, trigger.minute)}
           disabled={busy}
           onChange={(event) => {
@@ -832,7 +833,7 @@ export function BackupRetentionEditor() {
     <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-muted">
       Keep
       <select
-        aria-label="Keep backups by"
+        aria-label={t("scheduler.keepBackupsBy")}
         value={current.mode}
         disabled={save.isPending}
         onChange={(event) => setDraft({ ...current, mode: event.target.value as BackupRetention["mode"] })}
@@ -847,7 +848,7 @@ export function BackupRetentionEditor() {
             type="number"
             min={3}
             max={1000}
-            aria-label="Backups to keep"
+            aria-label={t("scheduler.backupsToKeep")}
             value={current.keep_count}
             disabled={save.isPending}
             onChange={(event) => setDraft({ ...current, keep_count: Number(event.target.value) || 3 })}
@@ -861,7 +862,7 @@ export function BackupRetentionEditor() {
             type="number"
             min={1}
             max={3650}
-            aria-label="Days to keep backups"
+            aria-label={t("scheduler.daysToKeepBackups")}
             value={current.keep_days}
             disabled={save.isPending}
             onChange={(event) => setDraft({ ...current, keep_days: Number(event.target.value) || 1 })}

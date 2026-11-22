@@ -124,9 +124,9 @@ export function PersonPage() {
     },
   });
 
-  if (!Number.isFinite(id)) return <Message>No person id in the address.</Message>;
+  if (!Number.isFinite(id)) return <Message>{t("personPage.noPersonIdIn")}</Message>;
   if (detail.isLoading) return <Message>Loading…</Message>;
-  if (detail.error !== null || !detail.data) return <Message>This person could not be found.</Message>;
+  if (detail.error !== null || !detail.data) return <Message>{t("personPage.thisPersonCouldNot")}</Message>;
 
   const person = detail.data;
   const typeOf = (library: Library | undefined) => types.find((type) => type.key === library?.media_type);
@@ -253,14 +253,14 @@ export function PersonPage() {
           <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
             {canRequestLead && (
               <button type="button" disabled={searchMissing.isPending} onClick={() => searchMissing.mutate()} className="rounded-md border border-border-subtle px-2 py-1 hover:text-ink disabled:opacity-50">
-                Search all missing
+                {t("personPage.searchAllMissing")}
               </button>
             )}
             <button
               type="button"
               disabled={refresh.isPending}
               onClick={() => refresh.mutate()}
-              title="Fetch this artist's details, picture and albums again, then rescan their folders"
+              title={t("personPage.fetchThisArtistS")}
               className="rounded-md border border-border-subtle px-2 py-1 hover:text-ink disabled:opacity-50"
             >
               Refresh
@@ -277,10 +277,10 @@ export function PersonPage() {
                 Monitor all
               </button>
             )}
-            {searchMissing.isSuccess && <span>Searching in the background.</span>}
-            {refresh.isSuccess && <span>Refreshing in the background.</span>}
+            {searchMissing.isSuccess && <span>{t("personPage.searchingInTheBackground")}</span>}
+            {refresh.isSuccess && <span>{t("personPage.refreshingInTheBackground")}</span>}
             {monitorAll.isSuccess && <span>Monitored.</span>}
-            {(searchMissing.isError || refresh.isError || monitorAll.isError) && <span className="text-danger">That could not be started.</span>}
+            {(searchMissing.isError || refresh.isError || monitorAll.isError) && <span className="text-danger">{t("incompleteDiscographies.thatCouldNotBe")}</span>}
           </div>
         )}
 
@@ -297,7 +297,7 @@ export function PersonPage() {
             />
           );
         })}
-        {sectionIds.length === 0 && <p className="text-sm text-ink-muted">No work in your libraries credits them yet.</p>}
+        {sectionIds.length === 0 && <p className="text-sm text-ink-muted">{t("personPage.noWorkInYour")}</p>}
         {editing && <EditPerson person={person} onClose={() => setEditing(false)} />}
         {merging && <MergePerson person={person} onClose={() => setMerging(false)} />}
 
@@ -467,7 +467,7 @@ function EditPerson({ person, onClose }: { person: PersonDetail; onClose: () => 
         {field("Hair colour", "hair")}
         {field("Tattoos", "tattoos")}
         {field("Piercings", "piercings")}
-        {save.isError && <p className="col-span-2 text-xs text-danger">That could not be saved.</p>}
+        {save.isError && <p className="col-span-2 text-xs text-danger">{t("libraryMetadata.saveFailed")}</p>}
       </div>
     </Dialog>
   );
@@ -510,7 +510,7 @@ function MergePerson({ person, onClose }: { person: PersonDetail; onClose: () =>
           </p>
         )}
         <PersonPicker autoFocus exclude={person.id} label="Find the person to merge into" onPick={setTarget} />
-        {merge.isError && <p className="text-xs text-danger">That could not be merged.</p>}
+        {merge.isError && <p className="text-xs text-danger">{t("personPage.thatCouldNotBe3")}</p>}
       </div>
     </Dialog>
   );
@@ -707,7 +707,7 @@ function KnownForSection({ personId, categoryIds }: { personId: number; category
   const keyOf = (title: KnownFor) => `${title.provider}-${title.kind}-${title.external_id}`;
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="text-sm font-semibold">Also known for</h2>
+      <h2 className="text-sm font-semibold">{t("personPage.alsoKnownFor")}</h2>
       {kinds.map((kind) => (
         <div key={kind} className="flex flex-col gap-2">
           <h3 className="text-xs font-medium text-ink-muted">{KIND_LABEL[kind] ?? kind}</h3>
@@ -816,9 +816,9 @@ function AlbumRow({ work }: { work: PersonWork }) {
       {expanded && (
         <div className="border-t border-border-subtle bg-canvas px-3 py-2 pl-11">
           {tracks.loading && <p className="text-xs text-ink-muted">Loading tracks…</p>}
-          {tracks.error && <p className="text-xs text-ink-muted">Tracks could not be read.</p>}
+          {tracks.error && <p className="text-xs text-ink-muted">{t("personPage.tracksCouldNotBe")}</p>}
           {!tracks.loading && !tracks.error && tracks.parts.length === 0 && (
-            <p className="text-xs text-ink-muted">No tracklist yet.</p>
+            <p className="text-xs text-ink-muted">{t("personPage.noTracklistYet")}</p>
           )}
           {tracks.parts.length > 0 && (
             <ul className="flex flex-col gap-1">

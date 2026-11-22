@@ -100,8 +100,8 @@ export function Import() {
 
       <section className="flex flex-col gap-4 rounded-lg border border-border-subtle bg-surface p-4">
         <div className="flex flex-col gap-0.5">
-          <h2 className="text-sm font-medium">How imports are judged and placed</h2>
-          <p className="text-xs text-ink-muted">These apply to every import, whichever folder it is.</p>
+          <h2 className="text-sm font-medium">{t("import.howImportsAreJudged")}</h2>
+          <p className="text-xs text-ink-muted">{t("import.theseApplyToEvery")}</p>
         </div>
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           <ThresholdControl />
@@ -125,7 +125,7 @@ export function Import() {
           <UnitList sessionId={selectedSessionId} />
         ) : (
           <p className="min-w-0 flex-1 rounded-lg border border-dashed border-border-subtle p-6 text-sm text-ink-muted">
-            Pick an import on the left to see what was found in it, and what waits for your decision.
+            {t("import.pickAnImportOn")}
           </p>
         )}
       </div>
@@ -168,13 +168,13 @@ function RenameOnImportControl() {
           onChange={(event) => update.mutate(event.target.checked)}
         />
         <span className="flex flex-col">
-          <span className="text-ink">Rename on import</span>
+          <span className="text-ink">{t("import.renameOnImport")}</span>
           <span className="text-[0.6875rem] text-ink-muted">
             Off keeps each file's own name; the folders still follow the template.
           </span>
         </span>
       </label>
-      {update.isError && <p className="text-danger">That could not be changed.</p>}
+      {update.isError && <p className="text-danger">{t("downloadFolders.thatCouldNotBe")}</p>}
     </fieldset>
   );
 }
@@ -338,7 +338,7 @@ function ThresholdControl() {
           </span>
         </label>
       ))}
-      {update.isError && <p className="text-danger">That could not be changed.</p>}
+      {update.isError && <p className="text-danger">{t("downloadFolders.thatCouldNotBe")}</p>}
     </fieldset>
   );
 }
@@ -533,7 +533,7 @@ export function TransferLadderEditor({
         </div>
       )}
 
-      {failed && <p className="text-danger">That could not be changed.</p>}
+      {failed && <p className="text-danger">{t("downloadFolders.thatCouldNotBe")}</p>}
       {explaining && <TransferMethodHelp onClose={() => setExplaining(false)} />}
     </fieldset>
   );
@@ -576,7 +576,7 @@ function TransferMethodHelp({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <p className="pt-2 text-ink-muted">
-          Each method is tried in turn until one succeeds.
+          {t("import.eachMethodIsTried")}
         </p>
         <dl className="flex flex-col gap-3 pt-3">
           {TRANSFER_METHODS.map((method) => (
@@ -671,9 +671,9 @@ function InspectForm() {
       }}
     >
       <div className="flex flex-col gap-0.5">
-        <h2 className="text-sm font-medium">Import a folder</h2>
+        <h2 className="text-sm font-medium">{t("import.importAFolder")}</h2>
         <p className="text-xs text-ink-muted">
-          Point at a downloaded release, a watched folder or a whole library. Solarr works out what is in it.
+          {t("import.pointAtADownloaded")}
         </p>
       </div>
       <div className="flex flex-wrap items-end gap-3">
@@ -695,7 +695,7 @@ function InspectForm() {
         </label>
         <label
           className={labelStyle}
-          title="Only files that fit the library's content are placed in it. Best match sends each folder to the library of the kind of media it holds. Decide later keeps every unit waiting for a library."
+          title={t("import.onlyFilesThatFit")}
         >
           Library
           <select
@@ -764,7 +764,7 @@ function InspectForm() {
       )}
       {inspect.isSuccess && inspect.data?.already_queued && (
         <p className="w-full text-xs text-ink-muted">
-          An identical import of that folder is already waiting or running, so none was added.
+          {t("import.anIdenticalImportOf")}
         </p>
       )}
       {inspect.isSuccess && !inspect.data?.already_queued && (
@@ -885,7 +885,7 @@ function SessionList({
         </div>
       )}
       {sessions.isLoading && <Message>Loading sessions…</Message>}
-      {sessions.error !== null && <Message>Sessions could not be read.</Message>}
+      {sessions.error !== null && <Message>{t("import.sessionsCouldNotBe")}</Message>}
       {sessions.data && rows.length === 0 && (
         <Message>{attention ? "Nothing needs you." : "No import has run yet."}</Message>
       )}
@@ -933,7 +933,7 @@ const SESSION_ROW_ESTIMATE = 76;
 /** The two views of the session list: what needs the user, and everything ever run. */
 export function SessionTabs({ attention, onChange }: { attention: boolean; onChange: (attention: boolean) => void }) {
   return (
-    <div className="flex gap-1" role="tablist" aria-label="Imports shown">
+    <div className="flex gap-1" role="tablist" aria-label={t("import.importsShown")}>
       {[
         { id: true, label: "Needs attention" },
         { id: false, label: "All" },
@@ -1049,7 +1049,7 @@ function SessionRow({
             type="button"
             onClick={() => cancel.mutate()}
             disabled={cancel.isPending}
-            title="Cancel this import"
+            title={t("import.cancelThisImport")}
             className="shrink-0 rounded-md p-1 text-ink-muted hover:text-danger disabled:opacity-50
                        focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
@@ -1061,7 +1061,7 @@ function SessionRow({
             type="button"
             onClick={() => dismiss.mutate()}
             disabled={dismiss.isPending}
-            title="Dismiss this session -- it stays on record, it just leaves this list"
+            title={t("import.dismissThisSessionIt")}
             className="shrink-0 rounded-md p-1 text-ink-muted hover:text-ink disabled:opacity-50
                        focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
@@ -1077,7 +1077,7 @@ function SessionRow({
               }
             }}
             disabled={revert.isPending}
-            title="Revert this session"
+            title={t("import.revertThisSession")}
             className="shrink-0 rounded-md p-1 text-ink-muted hover:text-danger disabled:opacity-50
                        focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
@@ -1107,7 +1107,7 @@ function SessionRow({
           {commitHeld.data?.already_queued && (
             <span className="text-ink-muted">A placement of this import was already running.</span>
           )}
-          {commitHeld.isError && <span className="text-danger">That could not be committed.</span>}
+          {commitHeld.isError && <span className="text-danger">{t("import.thatCouldNotBe2")}</span>}
         </div>
       )}
     </div>
@@ -1143,7 +1143,7 @@ function AssignCategory({ sessionId }: { sessionId: number }) {
         disabled={assign.isPending}
         onChange={(event) => setCategoryId(event.target.value === "" ? "" : Number(event.target.value))}
       >
-        <option value="">No category yet</option>
+        <option value="">{t("import.noCategoryYet")}</option>
         {categories.data?.map((category) => (
           <option key={category.id} value={category.id}>
             {libraryLabel(category)}
@@ -1159,7 +1159,7 @@ function AssignCategory({ sessionId }: { sessionId: number }) {
       >
         Assign
       </button>
-      {assign.isError && <span className="text-danger">Could not assign.</span>}
+      {assign.isError && <span className="text-danger">{t("import.couldNotAssign")}</span>}
       {assign.isSuccess && <span className="text-ink-muted">Placing what was already decided…</span>}
     </div>
   );
@@ -1208,7 +1208,7 @@ function UnitList({ sessionId }: { sessionId: number }) {
       {units.data && units.data.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 border-b border-border-subtle px-3 py-2 text-xs text-ink-muted">
           <span className="flex-1">{describeSessionTransfers(units.data)}</span>
-          {placeAll.isError && <span className="text-danger">Placing stopped at a unit that could not be committed.</span>}
+          {placeAll.isError && <span className="text-danger">{t("import.placingStoppedAtA")}</span>}
           <button
             type="button"
             disabled={identified.length === 0 || placeAll.isPending}
@@ -1221,8 +1221,8 @@ function UnitList({ sessionId }: { sessionId: number }) {
         </div>
       )}
       {units.isLoading && <Message>Loading units…</Message>}
-      {units.error !== null && <Message>Units could not be read.</Message>}
-      {units.data && units.data.length === 0 && <Message>Nothing found under this path.</Message>}
+      {units.error !== null && <Message>{t("import.unitsCouldNotBe")}</Message>}
+      {units.data && units.data.length === 0 && <Message>{t("import.nothingFoundUnderThis")}</Message>}
       {units.data && units.data.length > 0 && (
         <ul className="divide-y divide-border-subtle">
           {units.data.map((unit) => (
@@ -1327,7 +1327,7 @@ function UnitRow({ sessionId, unit, categoryId: sessionCategoryId }: { sessionId
             type="button"
             onClick={() => commit.mutate()}
             disabled={commit.isPending}
-            title="Place it as its best match, although it was held"
+            title={t("import.placeItAsIts")}
             className="shrink-0 rounded-md border border-border-subtle px-2 py-1 text-ink-muted hover:text-ink
                        disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
@@ -1338,7 +1338,7 @@ function UnitRow({ sessionId, unit, categoryId: sessionCategoryId }: { sessionId
           <button
             type="button"
             onClick={() => setIdentifying(true)}
-            title="Search for what these files are and place them as it"
+            title={t("import.searchForWhatThese")}
             className="shrink-0 rounded-md border border-border-subtle px-2 py-1 text-ink-muted hover:text-ink
                        focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
@@ -1370,7 +1370,7 @@ function UnitRow({ sessionId, unit, categoryId: sessionCategoryId }: { sessionId
               ))}
             </ul>
           ) : (
-            <span>No evidence recorded.</span>
+            <span>{t("import.noEvidenceRecorded")}</span>
           )}
           {unit.candidates && unit.candidates.length > 0 && (
             <div className="border-t border-border-subtle pt-1">

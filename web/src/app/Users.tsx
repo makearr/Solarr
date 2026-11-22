@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { RepeatPassword, passwordReady } from "./NewPassword";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -74,7 +75,7 @@ function MyTierSection({ tier, tierMax }: { tier: Tier; tierMax: Tier }) {
 
   return (
     <Card
-      title="Interface level"
+      title={t("users.interfaceLevel")}
       help="How much of the interface you see; each level includes the ones below it. A display preference only: it never changes what Solarr does."
     >
       <div className="flex flex-wrap gap-2">
@@ -102,7 +103,7 @@ function MyTierSection({ tier, tierMax }: { tier: Tier; tierMax: Tier }) {
           {TIERS.find((option) => option.id === tierMax)?.label}.
         </p>
       )}
-      {setTier.isError && <p className="text-xs text-danger">That could not be saved.</p>}
+      {setTier.isError && <p className="text-xs text-danger">{t("libraryMetadata.saveFailed")}</p>}
     </Card>
   );
 }
@@ -183,7 +184,7 @@ function APIKeysSection() {
       )}
 
       {(create.isError || revoke.isError) && (
-        <p className="text-xs text-danger">That could not be saved.</p>
+        <p className="text-xs text-danger">{t("libraryMetadata.saveFailed")}</p>
       )}
 
       <form
@@ -282,7 +283,7 @@ function CopyKeyButton({ value }: { value: string }) {
   return (
     <button
       type="button"
-      aria-label="Copy key"
+      aria-label={t("users.copyKey")}
       onClick={() => {
         navigator.clipboard?.writeText(value).catch(() => {});
       }}
@@ -358,7 +359,7 @@ function AccessSection() {
       )}
 
       {change.isError && (
-        <p className="text-xs text-danger">That could not be saved.</p>
+        <p className="text-xs text-danger">{t("libraryMetadata.saveFailed")}</p>
       )}
 
       <button
@@ -508,7 +509,7 @@ function NewLibraryDefault() {
   return (
     <label className="flex flex-wrap items-center gap-2 rounded-lg border border-border-subtle bg-surface p-3 text-xs text-ink-muted">
       <span className="flex-1">
-        New accounts get this on libraries created later. Each account can be changed on its own.
+        {t("users.newAccountsGetThis")}
       </span>
       <PermissionSelect
         label="Default for new libraries"
@@ -566,7 +567,7 @@ function BlockedTagsField({
   const chosen = new Set(tags.map((tag) => tag.tag_id));
   return (
     <div className="flex flex-col gap-1.5 text-xs text-ink-muted">
-      <span title="Items with one of these tags, or a tag below it, are hidden from this account">Hide items tagged</span>
+      <span title={t("users.itemsWithOneOf")}>{t("users.hideItemsTagged")}</span>
       <div className="flex flex-wrap items-center gap-1.5">
         {tags.map((tag) => (
           <span key={tag.tag_id} className="flex items-center gap-1 rounded-full border border-border-subtle px-2 py-0.5 text-ink">
@@ -686,14 +687,14 @@ function LimitsFields({
         )}
       </span>
       {!isAdmin && (
-        <label className="flex items-center gap-1.5" title="Requests this account makes are added at once instead of waiting for an administrator">
+        <label className="flex items-center gap-1.5" title={t("users.requestsThisAccountMakes")}>
           <input
             type="checkbox"
             checked={limits.auto_approve ?? false}
             disabled={disabled}
             onChange={(event) => onChange({ ...limits, auto_approve: event.target.checked })}
           />
-          Requests need no approval
+          {t("users.requestsNeedNoApproval")}
         </label>
       )}
     </div>
@@ -717,7 +718,7 @@ function AccessGrid({
   onChange: (categoryId: number, permission: Permission) => void;
 }) {
   if (libraries.length === 0) {
-    return <p className="text-xs text-ink-muted">No libraries yet.</p>;
+    return <p className="text-xs text-ink-muted">{t("users.noLibrariesYet")}</p>;
   }
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 text-xs">
@@ -908,7 +909,7 @@ function Row({
             type="password"
             value={password}
             autoComplete="new-password"
-            placeholder="New password"
+            placeholder={t("users.newPassword")}
             onChange={(event) => setPassword(event.target.value)}
             className="flex-1 rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs"
           />
@@ -977,7 +978,7 @@ function AddUser({ libraries, onAdded }: { libraries: readonly Library[]; onAdde
       }}
     >
       <div className="flex flex-col gap-0.5">
-        <h3 className="text-sm font-medium">Add a user</h3>
+        <h3 className="text-sm font-medium">{t("users.addAUser")}</h3>
         <p className="max-w-xl text-xs text-ink-muted">Their role sets what they may change; the libraries below set what they may see.</p>
       </div>
       <div className="flex flex-wrap items-end gap-2">
@@ -1053,7 +1054,7 @@ function AddUser({ libraries, onAdded }: { libraries: readonly Library[]; onAdde
         </Button>
         {create.isError && (
           <p className="text-xs text-danger">
-            That account could not be created. The username may already be taken.
+            {t("users.thatAccountCouldNot")}
           </p>
         )}
       </div>
