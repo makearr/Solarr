@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useParams } from "@tanstack/react-router";
 import { Bookmark, BookmarkCheck, RefreshCw, Search } from "lucide-react";
 
 import { api, ok } from "@/api/client";
+import { useIsAdministrator } from "@/lib/useAdministrator";
+import { useLibrary } from "@/lib/useLibrary";
 import { invalidateWorkLists } from "@/lib/resources";
 
 import { grabNote } from "./work/grabNote";
@@ -13,6 +16,12 @@ import { EditWorkButton } from "./work/EditWork";
  *  Every click stops at the button, since the tile or row around it is a link. */
 export function useItemActions(level: string | undefined, id: number, monitored: boolean | undefined) {
   const queryClient = useQueryClient();
+  const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
+  const administrator = useIsAdministrator();
+  const permission = useLibrary(categoryId)?.permission;
+  // Outside a library nothing is gated here: the server refuses what the caller may not do.
+  const rank = administrator || permission === undefined ? 3 : ["read", "request", "add", "manage"].indexOf(permission);
+  const allowed = { change: rank >= 2, edit: rank >= 3 };
   const [note, setNote] = useState<string>();
   const album = level === "works";
   const refresh = useMutation({
@@ -46,7 +55,7 @@ export function useItemActions(level: string | undefined, id: number, monitored:
     onSuccess: () => invalidateWorkLists(queryClient, id),
     onError: () => setNote("Monitoring could not be changed"),
   });
-  return { album, id, refresh, search, monitor, monitored, note };
+  return { album, id, refresh, search, monitor, monitored, note, allowed };
 }
 
 type Actions = ReturnType<typeof useItemActions>;
@@ -59,7 +68,7 @@ const stop = (event: React.MouseEvent, run: () => void) => {
 
 /** The monitored bookmark, Radarr's top-left corner; albums only. */
 export function MonitorToggle({ actions, className = "" }: { actions: Actions; className?: string }) {
-  if (!actions.album || actions.monitored === undefined) return null;
+  if (!actions.album || actions.monitored === undefined || !actions.allowed.change) return null;
   const Icon = actions.monitored ? BookmarkCheck : Bookmark;
   const label = actions.monitored ? "Monitored: click to stop" : "Not monitored: click to monitor";
   return (
@@ -82,6 +91,7 @@ export function ActionButtons({ actions, showNote = true }: { actions: Actions; 
   const button =
     "flex size-7 items-center justify-center rounded-full border border-border-subtle bg-canvas/85 text-ink-muted shadow-sm hover:text-ink disabled:opacity-50";
   const searchLabel = actions.album ? "Search: send the best release" : "Search all missing albums";
+  if (!actions.allowed.change) return null;
   return (
     <span className="flex items-center gap-1">
       <button
@@ -104,7 +114,7 @@ export function ActionButtons({ actions, showNote = true }: { actions: Actions; 
       >
         <RefreshCw aria-hidden className={`size-3.5 ${actions.refresh.isPending ? "animate-spin" : ""}`} />
       </button>
-      {actions.album && <EditWorkButton id={actions.id} />}
+      {actions.album && actions.allowed.edit && <EditWorkButton id={actions.id} />}
       {showNote && actions.note && <span className="truncate text-xs text-ink-muted">{actions.note}</span>}
     </span>
   );
