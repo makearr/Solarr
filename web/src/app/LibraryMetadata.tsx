@@ -11,6 +11,7 @@ import { PageHeader } from "@/ui/PageHeader";
 import { t } from "@/lib/i18n";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaType } from "@/lib/useMediaTypes";
+import { t, type MessageKey } from "@/lib/i18n";
 import { useMetadataSettings } from "@/lib/resources";
 import { OrderedSources, usePatchMetadataSettings } from "./MetadataSettings";
 
@@ -123,6 +124,7 @@ export function LibraryMetadata() {
             <p className="text-xs text-ink-muted">{t("libraryMetadata.bootlegOnlyHelp")}</p>
           </section>
         )}
+        {mediaType?.cover_sources && <ReleaseTypes id={id} />}
         {mediaType?.cover_sources && <CoverOrder />}
         <p className="text-xs text-ink-muted">
           A library follows the default of its library type, set under Settings, Metadata, until it keeps an order of its own here; the shipped one asks Wikidata first, since the ids its item records steer the others to the right
@@ -156,6 +158,42 @@ function CoverOrder() {
         onChange={(order) => patch.mutate({ cover_sources: order })}
       />
       {patch.isError && <p className="text-xs text-danger">That could not be saved.</p>}
+    </section>
+  );
+}
+
+const RELEASE_TYPES = ["Album", "EP", "Single", "Broadcast", "Other"] as const;
+
+/** The release types an artist followed in this music library brings in; a follow's own choice overrides it. */
+function ReleaseTypes({ id }: { id: number }) {
+  const queryClient = useQueryClient();
+  const key = ["libraryReleaseTypes", id];
+  const saved = useQuery({ queryKey: key, queryFn: () => ok(api.GET("/categories/{id}/release-types", { params: { path: { id } } })) });
+  const save = useMutation({
+    meta: { handlesErrors: true },
+    mutationFn: (types: string[]) => ok(api.PUT("/categories/{id}/release-types", { params: { path: { id } }, body: { types } })),
+    onSuccess: (data) => queryClient.setQueryData(key, data),
+  });
+  if (!saved.data) return null;
+  const chosen = saved.data.types;
+  const toggle = (type: string) => {
+    const next = chosen.includes(type) ? chosen.filter((entry) => entry !== type) : RELEASE_TYPES.filter((entry) => entry === type || chosen.includes(entry));
+    if (next.length > 0) save.mutate(next);
+  };
+  return (
+    <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
+      <h2 className="text-sm font-semibold">{t("releaseTypes.title")}</h2>
+      <p className="text-xs text-ink-muted">{t("releaseTypes.note")}</p>
+      <div className="flex flex-wrap gap-3 text-sm">
+        {RELEASE_TYPES.map((type) => (
+          <label key={type} className="flex items-center gap-1.5">
+            <input type="checkbox" checked={chosen.includes(type)} disabled={save.isPending || (chosen.length === 1 && chosen.includes(type))} onChange={() => toggle(type)} />
+            {t(`releaseTypes.${type}` satisfies MessageKey)}
+          </label>
+        ))}
+      </div>
+      {chosen.length === 1 && <p className="text-xs text-ink-muted">{t("releaseTypes.keepOne")}</p>}
+      {save.isError && <p className="text-xs text-danger">{t("releaseTypes.failed")}</p>}
     </section>
   );
 }

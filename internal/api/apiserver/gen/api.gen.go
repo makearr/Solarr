@@ -4165,6 +4165,12 @@ type LibraryQualityWrite struct {
 // LibraryQualityWritePreferredProtocol The delay profile's preferred protocol; the other's releases wait. Omitted leaves it as it is.
 type LibraryQualityWritePreferredProtocol string
 
+// LibraryReleaseTypes defines model for LibraryReleaseTypes.
+type LibraryReleaseTypes struct {
+	// Types MusicBrainz primary types (Album, EP, Single, Broadcast, Other); at least one.
+	Types []string `json:"types"`
+}
+
 // LibraryRenamePlan defines model for LibraryRenamePlan.
 type LibraryRenamePlan struct {
 	Roots []RootRenamePlan `json:"roots"`
@@ -8175,6 +8181,9 @@ type SetLibraryQualityJSONRequestBody = LibraryQualityWrite
 // PreviewLibraryQualityJSONRequestBody defines body for PreviewLibraryQuality for application/json ContentType.
 type PreviewLibraryQualityJSONRequestBody = LibraryQualityWrite
 
+// SetLibraryReleaseTypesJSONRequestBody defines body for SetLibraryReleaseTypes for application/json ContentType.
+type SetLibraryReleaseTypesJSONRequestBody = LibraryReleaseTypes
+
 // RenameLibraryJSONRequestBody defines body for RenameLibrary for application/json ContentType.
 type RenameLibraryJSONRequestBody RenameLibraryJSONBody
 
@@ -8726,6 +8735,12 @@ type ServerInterface interface {
 	// What saving this quality would change in the library, item by item; nothing is saved. Administrator only.
 	// (POST /categories/{id}/quality/preview)
 	PreviewLibraryQuality(w http.ResponseWriter, r *http.Request, id int64)
+	// The release types an artist followed in a library brings in. Administrator only.
+	// (GET /categories/{id}/release-types)
+	GetLibraryReleaseTypes(w http.ResponseWriter, r *http.Request, id int64)
+	// Choose the release types followed artists bring in; a follow that names its own types overrides it. Administrator only.
+	// (PUT /categories/{id}/release-types)
+	SetLibraryReleaseTypes(w http.ResponseWriter, r *http.Request, id int64)
 	// Preview or apply the library's naming to its files, on every root it uses. Administrator only.
 	// (POST /categories/{id}/rename)
 	RenameLibrary(w http.ResponseWriter, r *http.Request, id int64)
@@ -10058,6 +10073,18 @@ func (_ Unimplemented) SetLibraryQuality(w http.ResponseWriter, r *http.Request,
 // What saving this quality would change in the library, item by item; nothing is saved. Administrator only.
 // (POST /categories/{id}/quality/preview)
 func (_ Unimplemented) PreviewLibraryQuality(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The release types an artist followed in a library brings in. Administrator only.
+// (GET /categories/{id}/release-types)
+func (_ Unimplemented) GetLibraryReleaseTypes(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Choose the release types followed artists bring in; a follow that names its own types overrides it. Administrator only.
+// (PUT /categories/{id}/release-types)
+func (_ Unimplemented) SetLibraryReleaseTypes(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -13908,6 +13935,72 @@ func (siw *ServerInterfaceWrapper) PreviewLibraryQuality(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PreviewLibraryQuality(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetLibraryReleaseTypes operation middleware
+func (siw *ServerInterfaceWrapper) GetLibraryReleaseTypes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetLibraryReleaseTypes(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetLibraryReleaseTypes operation middleware
+func (siw *ServerInterfaceWrapper) SetLibraryReleaseTypes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetLibraryReleaseTypes(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -24617,6 +24710,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/categories/{id}/quality/preview", wrapper.PreviewLibraryQuality)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/categories/{id}/release-types", wrapper.GetLibraryReleaseTypes)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/categories/{id}/release-types", wrapper.SetLibraryReleaseTypes)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/categories/{id}/rename", wrapper.RenameLibrary)

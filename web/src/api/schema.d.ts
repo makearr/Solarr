@@ -4289,6 +4289,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories/{id}/release-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** The release types an artist followed in a library brings in. Administrator only. */
+        get: operations["getLibraryReleaseTypes"];
+        /** Choose the release types followed artists bring in; a follow that names its own types overrides it. Administrator only. */
+        put: operations["setLibraryReleaseTypes"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/quality": {
         parameters: {
             query?: never;
@@ -6828,6 +6848,10 @@ export interface components {
              * @description 0 clears the language.
              */
             language_profile_id?: number;
+        };
+        LibraryReleaseTypes: {
+            /** @description MusicBrainz primary types (Album, EP, Single, Broadcast, Other); at least one. */
+            types: string[];
         };
         LibraryMetadataSources: {
             /** @description The providers asked */
@@ -18802,6 +18826,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LibraryMetadataSources"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getLibraryReleaseTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The library's release types. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryReleaseTypes"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setLibraryReleaseTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryReleaseTypes"];
+            };
+        };
+        responses: {
+            /** @description The library's release types. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryReleaseTypes"];
                 };
             };
             400: components["responses"]["Problem"];

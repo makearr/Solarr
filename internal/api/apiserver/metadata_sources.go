@@ -207,3 +207,41 @@ func (s *Server) SetLibraryMetadataSources(w http.ResponseWriter, r *http.Reques
 	}
 	writeJSON(w, s.logger, http.StatusOK, s.metadataSourcesView(category))
 }
+
+// GetLibraryReleaseTypes answers the release types an artist followed in a library brings in.
+func (s *Server) GetLibraryReleaseTypes(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	category, err := s.libraryFor(r, id)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, gen.LibraryReleaseTypes{Types: category.MonitorReleaseTypes})
+}
+
+// SetLibraryReleaseTypes saves the release types followed artists bring in; at least one.
+func (s *Server) SetLibraryReleaseTypes(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if _, err := s.libraryFor(r, id); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	var body gen.LibraryReleaseTypes
+	if !s.decodeBody(w, r, maxSetupBody, &body, "expected types") {
+		return
+	}
+	if err := s.auth.Settings.SetCategoryMonitorReleaseTypes(r.Context(), id, body.Types); err != nil {
+		var problems config.Problems
+		if errors.As(err, &problems) {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "The release types have problems", problems.Report("the release types", "Nothing was changed."))
+			return
+		}
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, gen.LibraryReleaseTypes{Types: body.Types})
+}

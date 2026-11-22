@@ -6756,6 +6756,45 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /categories/{id}/release-types:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getLibraryReleaseTypes
+      tags: [settings]
+      summary: The release types an artist followed in a library brings in. Administrator only.
+      responses:
+        "200":
+          description: The library's release types.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryReleaseTypes" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setLibraryReleaseTypes
+      tags: [settings]
+      summary: Choose the release types followed artists bring in; a follow that names its own types overrides it. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryReleaseTypes" }
+      responses:
+        "200":
+          description: The library's release types.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryReleaseTypes" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/quality:
     parameters:
       - name: id
@@ -10021,6 +10060,12 @@ components:
         target_id: { type: integer, format: int64, description: 0 clears the target. }
         target_auto: { type: boolean }
         language_profile_id: { type: integer, format: int64, description: 0 clears the language. }
+
+    LibraryReleaseTypes:
+      type: object
+      required: [types]
+      properties:
+        types: { type: array, minItems: 1, items: { type: string }, description: "MusicBrainz primary types (Album, EP, Single, Broadcast, Other); at least one." }
 
     LibraryMetadataSources:
       type: object

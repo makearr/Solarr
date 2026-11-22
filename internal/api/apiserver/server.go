@@ -737,6 +737,8 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/parts/{partId}/remove", wrapped.RemovePart)
 			secured.Get("/categories/{id}/metadata-sources", wrapped.GetLibraryMetadataSources)
 			secured.Put("/categories/{id}/metadata-sources", wrapped.SetLibraryMetadataSources)
+			secured.Get("/categories/{id}/release-types", wrapped.GetLibraryReleaseTypes)
+			secured.Put("/categories/{id}/release-types", wrapped.SetLibraryReleaseTypes)
 			secured.Get("/categories/{id}/quality", wrapped.GetLibraryQuality)
 			secured.Put("/categories/{id}/quality", wrapped.SetLibraryQuality)
 			secured.Post("/categories/{id}/quality/preview", wrapped.PreviewLibraryQuality)
