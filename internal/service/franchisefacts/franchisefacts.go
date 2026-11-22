@@ -50,6 +50,8 @@ type Service struct {
 	Media      *media.Registry
 	Clock      clock.Clock
 	Logger     *slog.Logger
+	// Filled is told which library gained pictures or counts, so a page showing it can refresh; nil tells no one.
+	Filled func(categoryID int64)
 }
 
 // Run asks each library's media type for the facts of the collections still missing a picture or a count and not asked
@@ -84,6 +86,7 @@ func (s Service) Run(ctx context.Context, _ jobs.Job) error {
 			continue
 		}
 		facts := provider.FranchiseFacts(ctx, asked)
+		filledBefore := filled
 		for _, ref := range asked {
 			if ctx.Err() != nil {
 				return ctx.Err()
@@ -102,6 +105,9 @@ func (s Service) Run(ctx context.Context, _ jobs.Job) error {
 			if err := s.Franchises.SetFactsChecked(ctx, ref.ID, now.Unix()); err != nil {
 				logger.WarnContext(ctx, "collection facts check not stamped", slog.Int64("franchise_id", ref.ID), slog.Any("error", err))
 			}
+		}
+		if filled > filledBefore && s.Filled != nil {
+			s.Filled(category.ID)
 		}
 	}
 	logger.Info("collection facts pass finished", slog.Int("filled", filled))

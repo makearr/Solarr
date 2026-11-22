@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LayoutGrid, List, Trash2 } from "lucide-react";
@@ -19,6 +19,7 @@ import { Dialog } from "@/ui/Dialog";
 import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
 import { useLibrary } from "@/lib/useLibrary";
 import { useLibraries } from "@/lib/resources";
+import { subscribe } from "@/lib/eventStream";
 import { useMediaType } from "@/lib/useMediaTypes";
 import { AddToLibrary } from "./work/AddToSolarr";
 import { CoverArt } from "./CoverArt";
@@ -101,6 +102,17 @@ export function FranchiseIndex() {
     queryKey: ["franchises", categoryId],
     queryFn: () => ok(api.GET("/franchises", { params: { query: { category_id: Number(categoryId) } } })),
   });
+  // The facts pass fills in pictures and counts in the background; the page refreshes when it has.
+  useEffect(
+    () =>
+      subscribe({
+        topics: ["library"],
+        onEvents: (events) => {
+          if (events.some((event) => event.entity === `franchises:${categoryId}`)) void queryClient.invalidateQueries({ queryKey: ["franchises", categoryId] });
+        },
+      }),
+    [categoryId, queryClient],
+  );
   const monitor = useMutation({
     mutationFn: (franchise: Franchise) => ok(api.POST("/franchises/{id}/monitor", {
       params: { path: { id: franchise.id } },

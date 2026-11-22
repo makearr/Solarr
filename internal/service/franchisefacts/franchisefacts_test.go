@@ -79,10 +79,17 @@ func TestRun_FillsWhatTheProviderKnowsAndStampsEveryCollectionAsked(t *testing.T
 		},
 		totals: map[int64]int64{}, posters: map[int64]string{}, checked: map[int64]int64{},
 	}
-	service := franchisefacts.Service{Libraries: libraries{{ID: 1, MediaType: "fake"}}, Franchises: rows, Media: registry, Clock: fake, Logger: slog.New(slog.DiscardHandler)}
+	var told []int64
+	service := franchisefacts.Service{
+		Libraries: libraries{{ID: 1, MediaType: "fake"}}, Franchises: rows, Media: registry, Clock: fake, Logger: slog.New(slog.DiscardHandler),
+		Filled: func(categoryID int64) { told = append(told, categoryID) },
+	}
 
 	if err := service.Run(t.Context(), jobs.Job{}); err != nil {
 		t.Fatal(err)
+	}
+	if want := []int64{1}; !reflect.DeepEqual(told, want) {
+		t.Errorf("libraries told of new facts = %v, want %v", told, want)
 	}
 	if want := [][]int64{{10, 11}}; !reflect.DeepEqual(asked, want) {
 		t.Errorf("asked = %v, want %v: only collections lacking something and not checked this week", asked, want)
@@ -95,8 +102,8 @@ func TestRun_FillsWhatTheProviderKnowsAndStampsEveryCollectionAsked(t *testing.T
 	}
 
 	rows.rows[0].FactsCheckedAt, rows.rows[1].FactsCheckedAt = rows.checked[10], rows.checked[11]
-	asked = nil
-	if err := service.Run(t.Context(), jobs.Job{}); err != nil || len(asked) != 0 {
+	asked, told = nil, nil
+	if err := service.Run(t.Context(), jobs.Job{}); err != nil || len(asked) != 0 || len(told) != 0 {
 		t.Errorf("second run asked %v (err %v), want nothing within the week", asked, err)
 	}
 }
