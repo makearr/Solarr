@@ -112,6 +112,14 @@ func (a ArrSync) Preview(ctx context.Context, instanceID int64, options apiserve
 			continue
 		}
 		_, changes := arrFileManagement(category.FileManagement, source.Settings, instance.App, a.extraFileDefaults(category.MediaType))
+		if module, ok := a.namingModule(category.MediaType); ok && source.Naming != nil {
+			profile := module.DefaultNamingProfile()
+			if category.Naming != nil {
+				profile = *category.Naming
+			}
+			_, namingChanges, _ := arrNaming(module, profile, *source.Naming)
+			changes = append(changes, namingChanges...)
+		}
 		preview.Settings = append(preview.Settings, apiserver.ArrPreviewSettings{LibraryID: id, Changes: changes})
 	}
 	return preview, nil

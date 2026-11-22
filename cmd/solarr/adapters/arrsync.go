@@ -277,8 +277,40 @@ func (a ArrSync) takeSettings(ctx context.Context, app settings.ArrApp, client a
 		if err := a.Cache.SetCategoryFileManagement(ctx, id, next); err != nil {
 			failures = append(failures, fmt.Errorf("%s: %w", category.Name, err))
 		}
+		if app == settings.ArrAppLidarr && category.MediaType == "music" {
+			failures = append(failures, a.takeNaming(ctx, client, category))
+		}
 	}
 	return errors.Join(failures...)
+}
+
+// takeNaming gives a music library Lidarr's naming formats; a format it cannot express stays as the library has it.
+func (a ArrSync) takeNaming(ctx context.Context, client arrimport.LidarrClient, category settings.Category) error {
+	config, err := client.NamingConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("%s: read naming: %w", category.Name, err)
+	}
+	module, ok := a.namingModule(category.MediaType)
+	if !ok {
+		return nil
+	}
+	profile := module.DefaultNamingProfile()
+	if category.Naming != nil {
+		profile = *category.Naming
+	}
+	next, _, _ := arrNaming(module, profile, config)
+	if err := a.Cache.SetCategoryNaming(ctx, category.ID, next); err != nil {
+		return fmt.Errorf("%s: naming: %w", category.Name, err)
+	}
+	return nil
+}
+
+// namingModule is a media type's naming, when it declares one.
+func (a ArrSync) namingModule(mediaType string) (media.Naming, bool) {
+	if a.Registry == nil {
+		return nil, false
+	}
+	return media.Capability[media.Naming](a.Registry, media.Key(mediaType))
 }
 
 // supported is every app an import is mapped for.

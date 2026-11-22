@@ -441,6 +441,25 @@ func (c LidarrClient) MediaManagement(ctx context.Context) (MediaManagement, err
 	return settings, nil
 }
 
+// NamingConfig is GET config/naming trimmed to what a library's naming can take.
+type NamingConfig struct {
+	RenameTracks             bool   `json:"renameTracks"`
+	ReplaceIllegalCharacters bool   `json:"replaceIllegalCharacters"`
+	ColonReplacementFormat   int    `json:"colonReplacementFormat"`
+	StandardTrackFormat      string `json:"standardTrackFormat"`
+	MultiDiscTrackFormat     string `json:"multiDiscTrackFormat"`
+	ArtistFolderFormat       string `json:"artistFolderFormat"`
+}
+
+// NamingConfig answers the instance's naming formats; Lidarr 3 numbers its colon replacement (0 delete ... 4 smart).
+func (c LidarrClient) NamingConfig(ctx context.Context) (NamingConfig, error) {
+	var config NamingConfig
+	if err := c.get(ctx, "/api/v1/config/naming", &config); err != nil {
+		return NamingConfig{}, err
+	}
+	return config, nil
+}
+
 // Indexer is one of an *Arr's indexers as an import reads it: where it answers and with what key.
 type Indexer struct {
 	Name           string

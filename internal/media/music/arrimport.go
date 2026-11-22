@@ -269,7 +269,14 @@ func (l LidarrImport) Preview(ctx context.Context, client arrimport.LidarrClient
 			source.Follows[profile.ID] = arrmap.PreviewFollow{Name: profile.Name, PrimaryTypes: *filters.IncludePrimaryTypes, ExcludedSecondaryTypes: *filters.ExcludeSecondaryTypes}
 		}
 	}
-	return arrmap.ReadPreview(ctx, source, client, names)
+	read, err := arrmap.ReadPreview(ctx, source, client, names)
+	if err != nil {
+		return arrmap.PreviewSource{}, err
+	}
+	if naming, namingErr := client.NamingConfig(ctx); namingErr == nil {
+		read.Naming = &naming
+	}
+	return read, nil
 }
 
 // albumWanted is the albums option: every album, those the *Arr lacks a track of, or those it holds whole.

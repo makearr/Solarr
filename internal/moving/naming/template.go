@@ -58,6 +58,14 @@ func Compile(spec string) ([]Segment, error) {
 // separate from Compile because the vocabulary is the caller's, not this
 // package's.
 func ValidateTokens(segments []Segment, known map[string]bool) error {
+	if unknown := UnknownTokens(segments, known); len(unknown) > 0 {
+		return fmt.Errorf("naming: unknown token(s): %s", strings.Join(unknown, ", "))
+	}
+	return nil
+}
+
+// UnknownTokens is every token name in segments that known does not recognise, in order of appearance.
+func UnknownTokens(segments []Segment, known map[string]bool) []string {
 	var unknown []string
 	var walk func([]Segment)
 	walk = func(segments []Segment) {
@@ -75,10 +83,7 @@ func ValidateTokens(segments []Segment, known map[string]bool) error {
 		}
 	}
 	walk(segments)
-	if len(unknown) > 0 {
-		return fmt.Errorf("naming: unknown token(s): %s", strings.Join(unknown, ", "))
-	}
-	return nil
+	return unknown
 }
 
 // knownFold is a case-insensitive lookup: {ARTIST NAME} names the same token as {Artist Name}.

@@ -91,6 +91,8 @@ type PreviewSource struct {
 	// Follows says, per *Arr follow profile, which release types its items are followed for.
 	Follows  map[int64]PreviewFollow
 	Settings arrimport.MediaManagement
+	// Naming is the app's naming formats, nil from an app whose naming is not taken over.
+	Naming *arrimport.NamingConfig
 }
 
 // PreviewClient is what a preview reads of every app beside its items.

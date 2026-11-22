@@ -1,6 +1,8 @@
 package adapters
 
 import (
+	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -9,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/moving/naming"
 )
 
 // arrPropers, arrRescan and arrTitleRequired read the *Arr's words as File Management's; an unknown word is left out.
@@ -146,4 +149,70 @@ func titleRequired(value settings.EpisodeTitleRequired) string {
 		return string(settings.TitleRequiredAlways)
 	}
 	return string(value)
+}
+
+// lidarrColonReplacements are Lidarr 3's colonReplacementFormat values by number.
+var lidarrColonReplacements = []naming.ColonReplacement{
+	naming.ColonDelete, naming.ColonDash, naming.ColonSpaceDash, naming.ColonSpaceDashSpace, naming.ColonSmart,
+}
+
+// arrNaming is a music library's naming with Lidarr's taken over, each change in words. A format holding a token
+// Solarr has no counterpart for stays as the library has it, and the token is named in the third answer.
+func arrNaming(
+	module media.Naming, current settings.NamingProfile, from arrimport.NamingConfig,
+) (settings.NamingProfile, []apiserver.ArrSettingChange, []string) {
+	next := current
+	next.Formats = maps.Clone(current.Formats)
+	if next.Formats == nil {
+		next.Formats = map[string]string{}
+	}
+	next.RenameFiles = from.RenameTracks
+	next.ReplaceIllegalCharacters = from.ReplaceIllegalCharacters
+
+	var unsupported []string
+	if from.ColonReplacementFormat >= 0 && from.ColonReplacementFormat < len(lidarrColonReplacements) {
+		next.ColonReplacement = string(lidarrColonReplacements[from.ColonReplacementFormat])
+	} else {
+		unsupported = append(unsupported, fmt.Sprintf("colon replacement format %d", from.ColonReplacementFormat))
+	}
+	known := module.NamingScheme().Known()
+	changes := []apiserver.ArrSettingChange{}
+	for _, slot := range []struct{ key, format string }{
+		{"artist_folder", from.ArtistFolderFormat},
+		{"standard_track", from.StandardTrackFormat},
+		{"multi_disc_track", from.MultiDiscTrackFormat},
+	} {
+		segments, err := naming.Compile(slot.format)
+		if err != nil {
+			unsupported = append(unsupported, fmt.Sprintf("%s: %v", slot.key, err))
+			continue
+		}
+		if unknown := naming.UnknownTokens(segments, known); len(unknown) > 0 {
+			unsupported = append(unsupported, fmt.Sprintf("%s: {%s}", slot.key, strings.Join(unknown, "}, {")))
+			continue
+		}
+		next.Formats[slot.key] = slot.format
+	}
+
+	add := func(key, label, was, now string) {
+		if was != now {
+			changes = append(changes, apiserver.ArrSettingChange{Key: key, Label: label, Current: words(was), Proposed: words(now)})
+		}
+	}
+	for _, slot := range module.NamingScheme().Slots {
+		add("naming_"+slot.Key, slot.Label, current.Formats[slot.Key], next.Formats[slot.Key])
+	}
+	add("rename_files", "Rename tracks", onOff(current.RenameFiles), onOff(next.RenameFiles))
+	add("replace_illegal_characters", "Replace illegal characters", onOff(current.ReplaceIllegalCharacters), onOff(next.ReplaceIllegalCharacters))
+	add("colon_replacement", "Colon replacement", current.ColonReplacement, next.ColonReplacement)
+	was, now := module.NamingExamples(current), module.NamingExamples(next)
+	for index := range min(len(was), len(now)) {
+		add("naming_example_"+strconv.Itoa(index), now[index].Label, was[index].Path, now[index].Path)
+	}
+	if len(unsupported) > 0 {
+		changes = append(changes, apiserver.ArrSettingChange{
+			Key: "naming_unsupported", Label: "Not taken over", Current: "kept as is", Proposed: strings.Join(unsupported, "; "),
+		})
+	}
+	return next, changes, unsupported
 }
