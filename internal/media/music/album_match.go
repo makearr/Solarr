@@ -175,6 +175,10 @@ type pairScore struct {
 	hasTitles    bool
 	conflict     bool
 	sameRecord   bool
+	// lengthAgrees: both have a duration and they differ by no more than durationGrace.
+	lengthAgrees bool
+	// costUntitled is cost with the title left out, for a release whose titles are written in another way.
+	costUntitled float64
 }
 
 // scorePair judges one file against one track; localCore and trackCore are their titles' neutralCore, worked out once per title.
@@ -193,6 +197,7 @@ func scorePair(local LocalTrack, track musicbrainz.Track, disc, absolute int, lo
 	if local.Duration > 0 && track.DurationMs > 0 {
 		gap := (local.Duration - time.Duration(track.DurationMs)*time.Millisecond).Abs()
 		score.conflict = gap > durationConflict
+		score.lengthAgrees = gap <= durationGrace
 		d.add(dimensionTrackLength, min(1, max(0, float64(gap-durationGrace)/float64(durationWindow))))
 	}
 	if local.Track > 0 {
@@ -205,7 +210,15 @@ func scorePair(local LocalTrack, track musicbrainz.Track, disc, absolute int, lo
 		d.addBool(dimensionRecordingID, !score.sameRecord)
 	}
 	score.cost = d.normalized()
+	score.costUntitled = d.normalized(dimensionTrackTitle)
 	return score
+}
+
+func (s pairScore) costOf(ignoreTitles bool) float64 {
+	if ignoreTitles {
+		return s.costUntitled
+	}
+	return s.cost
 }
 
 // supported reports a pair strong enough to count toward a quorum.
@@ -225,6 +238,8 @@ type ReleaseScore struct {
 	GateDistance float64
 	Mapped       int
 	Supported    int
+	// LengthAgreed counts the mapped files whose length is within durationGrace of their track's.
+	LengthAgreed int
 	Accepted     bool
 	// Contradicted is a same-named track with a different recording or a length far off.
 	Contradicted bool
@@ -247,6 +262,7 @@ type tracklistFit struct {
 	costs        []float64
 	mapped       int
 	supported    int
+	lengthAgreed int
 	trackCount   int
 	contradicted bool
 }
@@ -266,7 +282,10 @@ func tracklistKey(release musicbrainz.Release) string {
 }
 
 // fitTracklist pairs the files with a release's tracks by optimal assignment.
-func fitTracklist(locals []LocalTrack, release musicbrainz.Release) tracklistFit {
+//
+// ignoreTitles pairs by length, position and recording alone: for a release the folder was grabbed as, whose titles
+// are written in another script or not at all.
+func fitTracklist(locals []LocalTrack, release musicbrainz.Release, ignoreTitles bool) tracklistFit {
 	var tracks []ReleaseTrack
 	var releaseTracks []musicbrainz.Track
 	for _, medium := range release.Media {
@@ -305,7 +324,7 @@ func fitTracklist(locals []LocalTrack, release musicbrainz.Release) tracklistFit
 				continue
 			}
 			fits = fits || sameName
-			cost[i][j] = pair.cost
+			cost[i][j] = pair.costOf(ignoreTitles)
 		}
 		if refuted && !fits {
 			contradictedFiles++
@@ -322,7 +341,10 @@ func fitTracklist(locals []LocalTrack, release musicbrainz.Release) tracklistFit
 		}
 		fit.tracks[i] = &tracks[j]
 		fit.mapped++
-		fit.costs = append(fit.costs, pairs[i][j].cost)
+		fit.costs = append(fit.costs, pairs[i][j].costOf(ignoreTitles))
+		if pairs[i][j].lengthAgrees {
+			fit.lengthAgreed++
+		}
 		if pairs[i][j].supported() {
 			fit.supported++
 		}
@@ -352,14 +374,28 @@ func scoreRelease(locals []LocalTrack, facts folderFacts, candidate AlbumCandida
 	key := tracklistKey(candidate.Release)
 	fit, found := fits[key]
 	if !found {
-		fit = fitTracklist(locals, candidate.Release)
+		fit = fitTracklist(locals, candidate.Release, false)
 		fits[key] = fit
+	}
+	// The album a download was grabbed as needs no readable titles: every file placed on a track of its own length,
+	// with at least three files, is the acquisition's answer. No other recall may reason so (lengths agree with too many albums).
+	structural := false
+	if candidate.Recall == RecallGrabbed && fit.supported < min(2, len(locals)) {
+		untitledKey := key + "\x00untitled"
+		untitled, found := fits[untitledKey]
+		if !found {
+			untitled = fitTracklist(locals, candidate.Release, true)
+			fits[untitledKey] = untitled
+		}
+		if structurallyFits(untitled, len(locals)) {
+			fit, structural = untitled, true
+		}
 	}
 
 	var d distance
 	score := ReleaseScore{
 		Candidate: candidate, Tracks: slices.Clone(fit.tracks), Contradicted: fit.contradicted,
-		Mapped: fit.mapped, Supported: fit.supported,
+		Mapped: fit.mapped, Supported: fit.supported, LengthAgreed: fit.lengthAgreed,
 	}
 	for _, cost := range fit.costs {
 		d.add(dimensionTracks, cost)
@@ -376,12 +412,21 @@ func scoreRelease(locals []LocalTrack, facts folderFacts, candidate AlbumCandida
 
 	score.Distance = d.normalized(dimensionMissingTracks)
 	score.GateDistance = d.normalized(dimensionMissingTracks, dimensionReleaseType, dimensionEdition)
+	if structural {
+		// The titles and the album's name cannot be read against this release; the files' lengths and places speak.
+		score.GateDistance = d.normalized(dimensionMissingTracks, dimensionReleaseType, dimensionEdition, dimensionTrackTitle, dimensionAlbum, dimensionArtist)
+	}
 	// Positions and lengths agree with too many albums; enough titles or recordings must too.
-	quorum := score.Supported >= min(2, len(locals))
+	quorum := structural || score.Supported >= min(2, len(locals))
 	score.Accepted = len(locals) > 0 && !score.Contradicted && artistOK && quorum && !playlistOnCompilation(locals, facts, score) &&
 		score.GateDistance <= albumAcceptDistance &&
 		float64(score.Mapped)/float64(len(locals)) >= minMappedFraction
 	return score
+}
+
+// structurallyFits is a fit that places every file on a track of its own length: three files at least, no more than the release has.
+func structurallyFits(fit tracklistFit, files int) bool {
+	return fit.mapped == files && fit.lengthAgreed == files && files >= 3 && files <= fit.trackCount
 }
 
 // playlistOnCompilation is a compilation the folder does not name, holding its files in another

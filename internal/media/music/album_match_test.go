@@ -667,3 +667,73 @@ func TestDecideAlbum_TheOriginalDateTellsTwoGroupsOfOnePressingDateApart(t *test
 		t.Fatalf("best = %v, want the group first released in 1973", decision.Best.Candidate.Release.MBID)
 	}
 }
+
+// The release writes its titles in a script the tags do not: nothing reads alike, only lengths and places agree.
+var unreadableTracks = []trackSpec{
+	{"ЖЖЖ ыыы", 250}, {"ЩЩЩ эээ", 225}, {"ЮЮЮ яяя", 244}, {"ФФФ ццц", 270}, {"ШШШ ййй", 160},
+	{"ЪЪЪ ччч", 216}, {"ЬЬЬ ббб", 301}, {"ГГГ ддд", 199}, {"ЗЗЗ ппп", 260}, {"ЛЛЛ ююю", 212},
+}
+
+func latinTagged(count int) []music.LocalTrack {
+	locals := make([]music.LocalTrack, count)
+	for i := range locals {
+		locals[i] = music.LocalTrack{
+			Title: tagged(fmt.Sprintf("Pesnya %c%c%c", 'a'+i, 'k'+i, 'q'+i)), Artist: tagged("P!po"), Album: tagged("Kebilegev Bibihi"),
+			Track: i + 1, Duration: time.Duration(unreadableTracks[i].seconds)*time.Second + time.Second,
+		}
+	}
+	return locals
+}
+
+func grabbedAs(recall string, tracks []trackSpec) music.AlbumCandidate {
+	candidate := candidateOf("rg-grabbed", "Album", nil, releaseOf("rel-grabbed", "Kebilegev Bibihi", "official", "2017-10-13", tracks))
+	candidate.Recall = recall
+	return candidate
+}
+
+// What was ordered is accepted on structure alone; no other recall may reason so (TRACK-11).
+func TestDecideAlbum_TheGrabbedAlbumIsAcceptedWhenOnlyItsLengthsAndPlacesAgree(t *testing.T) {
+	cases := []struct {
+		name   string
+		locals []music.LocalTrack
+		recall string
+		tracks []trackSpec
+		want   music.AlbumOutcome
+	}{
+		{"grabbed", latinTagged(10), music.RecallGrabbed, unreadableTracks, music.AlbumIdentified},
+		{"sibling seed", latinTagged(10), music.RecallSibling, unreadableTracks, music.AlbumInsufficientEvidence},
+		{"no seed", latinTagged(10), music.RecallAlbumTags, unreadableTracks, music.AlbumInsufficientEvidence},
+		{"partial album of twelve", latinTagged(10), music.RecallGrabbed, append(slices.Clone(unreadableTracks), trackSpec{"ЭЭЭ", 180}, trackSpec{"ЯЯЯ", 190}), music.AlbumIdentified},
+		{"release of eight", latinTagged(10), music.RecallGrabbed, unreadableTracks[:8], music.AlbumInsufficientEvidence},
+		{"two files only", latinTagged(2), music.RecallGrabbed, unreadableTracks, music.AlbumInsufficientEvidence},
+	}
+	for _, c := range cases {
+		decision := music.DecideAlbum(c.locals, []music.AlbumCandidate{grabbedAs(c.recall, c.tracks)})
+		if decision.Outcome != c.want {
+			t.Errorf("%s: outcome %s, want %s", c.name, decision.Outcome, c.want)
+		}
+	}
+	far := latinTagged(10)
+	far[4].Duration += 40 * time.Second
+	if decision := music.DecideAlbum(far, []music.AlbumCandidate{grabbedAs(music.RecallGrabbed, unreadableTracks)}); decision.Outcome == music.AlbumIdentified {
+		t.Errorf("one length 40 s off: %s", decision.Outcome)
+	}
+}
+
+// Unnumbered, untitled files whose lengths are a permutation of the tracks' go on the track of their length.
+func TestDecideAlbum_AGrabbedAlbumPlacesUntitledFilesByTheirLengths(t *testing.T) {
+	order := []int{3, 0, 4, 1, 2, 6, 5}
+	locals := make([]music.LocalTrack, len(order))
+	for i, track := range order {
+		locals[i] = music.LocalTrack{Duration: time.Duration(unreadableTracks[track].seconds) * time.Second}
+	}
+	decision := music.DecideAlbum(locals, []music.AlbumCandidate{grabbedAs(music.RecallGrabbed, unreadableTracks[:7])})
+	if decision.Outcome != music.AlbumIdentified || decision.Best.Candidate.Release.MBID != "rel-grabbed" {
+		t.Fatalf("outcome %s", decision.Outcome)
+	}
+	for i, track := range order {
+		if got := decision.Best.Tracks[i]; got == nil || got.Position != track+1 {
+			t.Errorf("file %d on %+v, want position %d", i, got, track+1)
+		}
+	}
+}

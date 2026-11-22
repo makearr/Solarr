@@ -48,7 +48,7 @@ func TestFitTracklist_QualifiersOfAPressingDoNotBreakThePairing(t *testing.T) {
 		titles = append(titles, title)
 		locals = append(locals, LocalTrack{Track: i, Title: Claim{Value: title + " (Remastered 2011)", Provenance: ProvenanceTag}})
 	}
-	if fit := fitTracklist(locals, tracklist(titles...)); fit.supported != 10 {
+	if fit := fitTracklist(locals, tracklist(titles...), false); fit.supported != 10 {
 		t.Errorf("supported = %d, want all 10", fit.supported)
 	}
 }
@@ -58,7 +58,7 @@ func TestFitTracklist_ALiveQualifierStillTellsRecordingsApart(t *testing.T) {
 	locals := []LocalTrack{
 		{Track: 2, Title: Claim{Value: "Invented Song (Live)", Provenance: ProvenanceTag}},
 	}
-	fit := fitTracklist(locals, tracklist("Invented Song", "Invented Song (Live)"))
+	fit := fitTracklist(locals, tracklist("Invented Song", "Invented Song (Live)"), false)
 	if fit.tracks[0] == nil || fit.tracks[0].Position != 2 {
 		t.Errorf("tracks[0] = %+v, want the live track at position 2", fit.tracks[0])
 	}
