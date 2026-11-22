@@ -158,6 +158,8 @@ type process struct {
 	pauses         *jobs.Pauses
 	// restoredUntracked are the downloads a restore found in a client that no record references, imported once the queue runs.
 	restoredUntracked []recovery.UntrackedDownload
+	// restoredUnreached are the clients the restore could not ask, asked again by a registered retry.
+	restoredUnreached []int64
 	// settingsRegistry is ADR-26's own registry of every scalar setting
 	// (todo 4.14), built once alongside cache -- write paths refuse a key
 	// this does not know about (settings.ErrSettingNotRegistered).
@@ -628,6 +630,9 @@ func (p *process) startJobs(ctx context.Context) error {
 		return err
 	}
 	if err := p.registerCategoryCountsJob(registry, executor); err != nil {
+		return err
+	}
+	if err := p.registerRestoreRetryJob(registry, executor); err != nil {
 		return err
 	}
 	if err := p.registerStatisticsJob(registry, executor); err != nil {

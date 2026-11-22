@@ -65,6 +65,7 @@ func reconcileDownloads(
 		slices.Sort(categories)
 		held, err := client.Held(ctx, categories)
 		if err != nil {
+			report.Unreached = append(report.Unreached, client.ID)
 			report.Gaps = append(report.Gaps, Gap{
 				What:    "re-derive in-flight downloads from the " + client.Name + " download client",
 				Because: "the client could not be asked (" + err.Error() + "); the poll follows its downloads and waits before treating a missing one as removed",
@@ -92,4 +93,12 @@ func reconcileDownloads(
 		}
 	}
 	return nil
+}
+
+// ReconcileDownloads asks the clients again, as the restore did: it closes what they lost and finds what nothing
+// references. The report names the clients that still could not be asked.
+func ReconcileDownloads(ctx context.Context, cl clock.Clock, libraryStore *store.Store, clients []DownloadClient) (Report, error) {
+	var report Report
+	err := reconcileDownloads(ctx, cl, libraryStore, clients, &report)
+	return report, err
 }

@@ -72,7 +72,9 @@ type Report struct {
 	DownloadsClosed int64 `json:"downloads_closed"`
 	// Untracked are downloads clients hold under Solarr's categories that no acquisition references.
 	Untracked []UntrackedDownload `json:"untracked,omitempty"`
-	Gaps      []Gap               `json:"gaps"`
+	// Unreached are the clients that could not be asked, to be asked again later.
+	Unreached []int64 `json:"unreached,omitempty"`
+	Gaps      []Gap   `json:"gaps"`
 }
 
 // notChecked is what ADR-15 names that is still not done: the indexer and downloader ids the restored rows carry are not compared with the settings.

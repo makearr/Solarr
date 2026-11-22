@@ -88,3 +88,31 @@ func TestReconcile_ANamedGapForAClientThatCannotBeAsked(t *testing.T) {
 		t.Errorf("state %s, gaps %+v; want the download untouched and the client named", got.State, report.Gaps)
 	}
 }
+
+// A client that could not be asked is named by id, and asking it again later closes what it lost (TRACK-18).
+func TestReconcileDownloads_AClientAskedAgainIsReconciledAfterItWasUnreachable(t *testing.T) {
+	f := newFixture(t)
+	acquisition := f.acquisition(t, "nzo-1")
+	reachable := false
+	client := recovery.DownloadClient{ID: 4, Name: "Usenet", Categories: []string{"solarr-tv"},
+		Held: func(context.Context, []string) ([]recovery.HeldDownload, error) {
+			if !reachable {
+				return nil, errors.New("connection refused")
+			}
+			return nil, nil
+		}}
+	report := f.restore(t, client)
+	if want := []int64{4}; !reflect.DeepEqual(report.Unreached, want) {
+		t.Fatalf("unreached = %v, want %v", report.Unreached, want)
+	}
+
+	reachable = true
+	again, err := recovery.ReconcileDownloads(t.Context(), f.clock, f.library, []recovery.DownloadClient{client})
+	if err != nil {
+		t.Fatalf("ReconcileDownloads: %v", err)
+	}
+	got, _ := library.NewAcquisitions(f.library).Get(t.Context(), acquisition.ID)
+	if got.State != "CANCELLED" || got.LastError != recovery.LostInRestore || again.DownloadsClosed != 1 || len(again.Unreached) != 0 {
+		t.Errorf("state %s (%q), closed %d, unreached %v; want CANCELLED with the restore reason, 1, none", got.State, got.LastError, again.DownloadsClosed, again.Unreached)
+	}
+}

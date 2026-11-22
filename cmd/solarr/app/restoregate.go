@@ -91,6 +91,7 @@ func (p *process) restoreDownloadClients(ctx context.Context) []recovery.Downloa
 // holdForRestore marks the gate and keeps what the restore found for the start that follows.
 func (p *process) holdForRestore(report recovery.Report) {
 	p.restoredUntracked = report.Untracked
+	p.restoredUnreached = report.Unreached
 	_ = fsx.WriteAtomic(p.fsys, p.restoreGatePath(), func(w io.Writer) error {
 		_, err := io.WriteString(w, "the library was restored from a backup; planning waits for the first scan\n")
 		return err
@@ -112,6 +113,7 @@ func (p *process) startRestoreGate(ctx context.Context) {
 		p.logger.Warn("restore: the libraries were not queued for a scan", slog.Any("error", err))
 	}
 	p.importUntrackedAfterRestore(ctx)
+	p.retryUnreachedClients(ctx)
 	p.logger.Warn("restore: searching is held until every library has been scanned again", slog.String("tasks", strings.Join(restoreGatedTasks, ", ")))
 	go p.releaseRestoreGate(ctx, clock.NewSystem())
 }
@@ -164,7 +166,12 @@ func untrackedImportPayload(fsys fsx.FS, downloadPath string) importjob.Payload 
 // importUntrackedAfterRestore queues an import of every finished download the restore found that nothing references;
 // the import identifies the files by inspection, as every import does, so no item is guessed.
 func (p *process) importUntrackedAfterRestore(ctx context.Context) {
-	for _, found := range p.restoredUntracked {
+	p.importUntracked(ctx, p.restoredUntracked)
+	p.restoredUntracked = nil
+}
+
+func (p *process) importUntracked(ctx context.Context, untracked []recovery.UntrackedDownload) {
+	for _, found := range untracked {
 		if !found.Finished || found.Path == "" {
 			continue
 		}
@@ -174,5 +181,4 @@ func (p *process) importUntrackedAfterRestore(ctx context.Context) {
 		}
 		p.logger.Info("restore: importing a download no record references", slog.String("name", found.Name), slog.String("client", found.Client))
 	}
-	p.restoredUntracked = nil
 }

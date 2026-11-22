@@ -31,6 +31,20 @@ func TestScansIdle(t *testing.T) {
 	}
 }
 
+// An unreachable download client is asked again with only the clients still unreachable, until the bound (TRACK-18).
+func TestNextRestoreRetry(t *testing.T) {
+	next, again := nextRestoreRetry(restoreRetryPayload{ClientIDs: []int64{1, 2}, Attempt: 1}, []int64{2})
+	if want := (restoreRetryPayload{ClientIDs: []int64{2}, Attempt: 2}); !again || !reflect.DeepEqual(next, want) {
+		t.Errorf("next = %+v, %v; want %+v", next, again, want)
+	}
+	if _, again := nextRestoreRetry(restoreRetryPayload{ClientIDs: []int64{1}, Attempt: 1}, nil); again {
+		t.Error("retried with every client reached")
+	}
+	if _, again := nextRestoreRetry(restoreRetryPayload{ClientIDs: []int64{1}, Attempt: restoreRetryAttempts}, []int64{1}); again {
+		t.Error("retried past the bound")
+	}
+}
+
 // A finished single-file download is imported as the one file of its folder; a folder download whole (V1).
 func TestUntrackedImportPayload(t *testing.T) {
 	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
