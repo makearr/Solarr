@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/makearr/Solarr/internal/mediaserver"
@@ -21,6 +22,9 @@ type Client struct {
 	key  string
 	// session is set when the connection signs in with a user name and password; the key is then empty.
 	session *mediaserver.Session
+	// indexes hold the id index per media type, built on first use for the life of the client.
+	indexMu sync.Mutex
+	indexes map[string]*idIndex
 }
 
 // New builds a client for the server at base with the API key.

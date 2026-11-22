@@ -71,6 +71,9 @@ func (s scanning) Resolve(ctx context.Context, root settings.RootFolder, categor
 			continue
 		}
 		named := NFOIDs(s.fs, path.Join(root.Path, file.File.RelPath))
+		if named == (IDs{}) {
+			named = s.resolver.Service.IDsByPath(ctx, categoryID, path.Join(root.Path, file.File.RelPath))
+		}
 		workID, candidates := s.resolver.Resolve(ctx, categoryID, info, named)
 		if folderInfo, found := parsemovie.ParseFolderAt(file.File.RelPath, s.clock.Now().Year()); workID == 0 && found && folderInfo.Title != "" && (folderInfo.Year != info.Year || folderInfo.Title != info.Title) {
 			// A file named after another year or spelling than its folder ("The Xbsebbxog Zxkuketjaz (2025)" in "... (2018)").

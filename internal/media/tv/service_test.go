@@ -3,6 +3,7 @@ package tv_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -11,10 +12,12 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/tv"
+	"github.com/makearr/Solarr/internal/mediaserver"
 	"github.com/makearr/Solarr/internal/metadata/fanart"
 	"github.com/makearr/Solarr/internal/metadata/kitsu"
 	"github.com/makearr/Solarr/internal/metadata/omdb"
@@ -468,5 +471,84 @@ func TestFetchFillsAnAnimesIDsAndRatingFromKitsu(t *testing.T) {
 	}
 	if series.Rating != 8.05 || series.RatingVotes != 900 || series.Overview != "A story." || !reflect.DeepEqual(series.IDs.MAL, []int64{55}) || !reflect.DeepEqual(series.IDs.AniDB, []int64{146}) {
 		t.Errorf("series = rating %v/%d, overview %q, ids %+v", series.Rating, series.RatingVotes, series.Overview, series.IDs)
+	}
+}
+
+type fakeLocal struct {
+	item  mediaserver.Item
+	found bool
+	asked []string
+}
+
+func (f *fakeLocal) Ask(_ context.Context, categoryID int64, kind, mediaType string, ids map[string]string) (mediaserver.Item, bool, error) {
+	f.asked = append(f.asked, fmt.Sprintf("%d %s %s tvdb=%s", categoryID, kind, mediaType, ids["tvdb"]))
+	return f.item, f.found, nil
+}
+
+func (f *fakeLocal) AskByPath(_ context.Context, categoryID int64, path string) (mediaserver.Item, bool, error) {
+	f.asked = append(f.asked, fmt.Sprintf("%d path %s", categoryID, path))
+	return f.item, f.found, nil
+}
+
+func TestGuessByPathNamesAFolderByTheServersIDsAndOnlyForATVItem(t *testing.T) {
+	service, _ := newService(t, fakeSkyhook{}, fakeTVmaze{})
+	service.Local = &fakeLocal{found: true, item: mediaserver.Item{MediaType: "tv", IDs: map[string]string{"tvdb": "1234", "tmdb": "5", "imdb": "tt7"}}}
+	if got, want := service.GuessByPath(t.Context(), 4, "/tv/Example Show"), (tv.FolderGuess{TVDBID: 1234, TMDBID: 5, IMDbID: "tt7"}); got != want {
+		t.Errorf("guess = %+v, want %+v", got, want)
+	}
+	service.Local = &fakeLocal{found: true, item: mediaserver.Item{MediaType: "movie", IDs: map[string]string{"tvdb": "1234"}}}
+	if got := service.GuessByPath(t.Context(), 4, "/tv/Example Show"); got != (tv.FolderGuess{}) {
+		t.Errorf("a film answered a folder: %+v", got)
+	}
+	if got := service.GuessByPath(t.Context(), 0, "/tv/Example Show"); got != (tv.FolderGuess{}) {
+		t.Errorf("a lookup with no library asked a server: %+v", got)
+	}
+}
+
+func localOrder() []string {
+	return []string{settings.TVSourceTVmaze, "local:jellyfin"}
+}
+
+func TestFetchForRanksAMediaServerAfterEveryProviderAndKeepsItsOwnValueWhereNoneHasOne(t *testing.T) {
+	service, _ := newService(t, fakeSkyhook{err: errors.New("proxy down")}, fakeTVmaze{show: tvmaze.Show{ID: 42, Name: "Example Show", Summary: "Outside words."}})
+	local := &fakeLocal{found: true, item: mediaserver.Item{Title: "Home Name", Overview: "Home words.", AgeRating: "TV-14",
+		IDs: map[string]string{"tvdb": "1234", "tmdb": "55"}, Genres: []string{"Drama"}}}
+	service.Local = local
+	service.PriorityFor = func(int64) []string { return localOrder() }
+	series, err := service.FetchFor(t.Context(), 7, tv.IDs{TVDB: 1234})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if series.Title != "Example Show" || series.Overview != "Outside words." || series.ContentRating != "TV-14" || !reflect.DeepEqual(series.Genres, []string{"Drama"}) || series.IDs.TMDB != 55 {
+		t.Errorf("series = %q / %q / %q / %v / tmdb %d", series.Title, series.Overview, series.ContentRating, series.Genres, series.IDs.TMDB)
+	}
+	if want := []string{"7 jellyfin tv tvdb=1234"}; !reflect.DeepEqual(local.asked, want) {
+		t.Errorf("asked = %q, want %q", local.asked, want)
+	}
+}
+
+func TestFetchForKeepsTheFileIDWhereTheMediaServerDisagrees(t *testing.T) {
+	service, _ := newService(t, fakeSkyhook{err: errors.New("proxy down")}, fakeTVmaze{show: tvmaze.Show{ID: 42, Name: "Example Show"}})
+	service.Local = &fakeLocal{found: true, item: mediaserver.Item{IDs: map[string]string{"tvdb": "9999", "imdb": "tt1"}}}
+	service.PriorityFor = func(int64) []string { return localOrder() }
+	series, err := service.FetchFor(t.Context(), 7, tv.IDs{TVDB: 1234})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if series.IDs.TVDB == 9999 || series.IDs.IMDb != "tt1" {
+		t.Errorf("tvdb = %d, imdb = %q: the server's tvdb must not replace the file's, its imdb fills the gap", series.IDs.TVDB, series.IDs.IMDb)
+	}
+}
+
+func TestFetchForAsksNoMediaServerWithoutALibrary(t *testing.T) {
+	service, _ := newService(t, fakeSkyhook{err: errors.New("proxy down")}, fakeTVmaze{show: tvmaze.Show{ID: 42, Name: "Example Show"}})
+	local := &fakeLocal{found: true, item: mediaserver.Item{Title: "Home Name"}}
+	service.Local = local
+	service.Priority = localOrder
+	if _, err := service.Fetch(t.Context(), tv.IDs{TVDB: 1234}); err != nil {
+		t.Fatal(err)
+	}
+	if len(local.asked) != 0 {
+		t.Errorf("asked = %q, want none", local.asked)
 	}
 }

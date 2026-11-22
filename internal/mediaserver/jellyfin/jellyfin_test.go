@@ -174,3 +174,30 @@ func TestClient_ItemByPathMatchesOnlyAnItemAboveTheFile(t *testing.T) {
 		t.Error("an unrelated path matched an item")
 	}
 }
+
+func TestClient_ItemByProviderIDReadsTheIndexOnceAndTheItemByItsId(t *testing.T) {
+	var requests []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.URL.Query().Get("Fields")+"|"+r.URL.Query().Get("Ids"))
+		if r.URL.Query().Get("Ids") == "j2" {
+			_, _ = io.WriteString(w, `{"Items":[{"Id":"j2","Type":"Series","Name":"Night Harbor","ProviderIds":{"Tmdb":"77"}}]}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"Items":[{"Id":"j1","Type":"Series","ProviderIds":{"Tmdb":"5"}},{"Id":"j2","Type":"Series","ProviderIds":{"Tmdb":"77","Imdb":"tt9"}}]}`)
+	}))
+	defer server.Close()
+	client := jellyfin.New(mediaservertest.Direct(), server.URL, "k1")
+	item, found, err := client.ItemByProviderID(t.Context(), "tv", "tmdb", "77")
+	if err != nil || !found || item.Title != "Night Harbor" || item.ID != "j2" {
+		t.Fatalf("ItemByProviderID = %+v, %v, %v", item, found, err)
+	}
+	if _, found, _ = client.ItemByProviderID(t.Context(), "tv", "imdb", "tt404"); found {
+		t.Error("an unknown id was found")
+	}
+	if _, found, _ = client.ItemByProviderID(t.Context(), "tv", "imdb", "tt9"); !found {
+		t.Error("the second id of an item was not found")
+	}
+	if len(requests) != 3 {
+		t.Errorf("requests = %q, want one index read and two item reads", requests)
+	}
+}

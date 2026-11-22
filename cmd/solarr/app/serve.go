@@ -186,8 +186,11 @@ type process struct {
 	acoustIDOnce   sync.Once
 	acoustIDShared acoustid.Client
 	// tvOnce builds the TV providers once so every caller shares their rate buckets (ADR-13).
-	tvOnce   sync.Once
-	tvShared tv.Service
+	// localOnce builds the asker of the media servers used as metadata once.
+	localOnce   sync.Once
+	localShared *localAsker
+	tvOnce      sync.Once
+	tvShared    tv.Service
 	// movieOnce builds the movie providers once, on the same TMDB bucket as TV.
 	movieOnce   sync.Once
 	movieShared movie.Service

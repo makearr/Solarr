@@ -16,6 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/mediaserver"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/fanart"
 	"github.com/makearr/Solarr/internal/metadata/kitsu"
@@ -100,7 +101,9 @@ type Service struct {
 	// OMDb adds the IMDb rating and the English plot, Fanart the clear logos and banners; nil skips either.
 	OMDb RatingSource
 	// Kitsu adds an anime's synopsis, rating and the ids of the other anime sites; nil skips it.
-	Kitsu  AnimeEntrySource
+	Kitsu AnimeEntrySource
+	// Local asks the media servers the library takes metadata from; nil asks none.
+	Local  mediaserver.LocalAsker
 	Fanart PictureSource
 	// Priority is the configured TV source order, read per fetch; nil is the default order.
 	Priority func() []string
@@ -133,7 +136,12 @@ type Service struct {
 // Fetch merges every source that knows the series (ADR-8): Skyhook sets identity and numbering, TMDB adds credits and
 // artwork, TVmaze air times. A failing source is skipped; only all failing is an error.
 func (s Service) Fetch(ctx context.Context, ids IDs) (Series, error) {
-	return s.fetch(ctx, ids, false, s.order(0))
+	return s.FetchFor(ctx, 0, ids)
+}
+
+// FetchFor is Fetch in the order of a library, which also decides the media servers asked.
+func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs) (Series, error) {
+	return s.fetch(ctx, categoryID, ids, false, s.order(categoryID))
 }
 
 // order is the providers a library asks, best first: its own, else the instance's.
@@ -152,7 +160,7 @@ func (s Service) order(categoryID int64) []string {
 }
 
 // fetch is Fetch; recentOnly asks TMDB for the guest stars of the newest seasons only, which is all a refresh needs.
-func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool, order []string) (Series, error) {
+func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, recentOnly bool, order []string) (Series, error) {
 	ids = s.completeIDs(ctx, s.bridgeIDs(ctx, ids, order))
 	var sources []Series
 	var failed []string
@@ -191,6 +199,11 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool, order []st
 	haveRich := false
 	var wrongTVmaze atomic.Int64
 	asked := slices.DeleteFunc([]string{settings.TVSourceTMDB, settings.TVSourceAniList, settings.TVSourceTVmaze, settings.TVSourceKitsu, settings.TVSourceOMDb, settings.TVSourceFanart}, func(source string) bool { return !slices.Contains(order, source) })
+	for _, source := range order {
+		if strings.HasPrefix(source, settings.LocalSourcePrefix) {
+			asked = append(asked, source)
+		}
+	}
 	answers := metaresolve.AskAll(ctx, asked,
 		func(ctx context.Context, source string) (fetched, error) {
 			switch source {
@@ -208,6 +221,10 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool, order []st
 				return fetched{series, found}, nil
 			case settings.TVSourceFanart:
 				series, found := s.fetchFanart(ctx, ids)
+				return fetched{series, found}, nil
+			}
+			if strings.HasPrefix(source, settings.LocalSourcePrefix) {
+				series, found := s.fetchLocal(ctx, categoryID, source, ids)
 				return fetched{series, found}, nil
 			}
 			if s.TVmaze == nil {
@@ -691,7 +708,7 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 	if !request.Monitor.Valid() {
 		return AddResult{}, fmt.Errorf("tv: unknown monitor option %q", request.Monitor)
 	}
-	series, err := s.fetch(ctx, request.IDs, false, s.order(request.CategoryID))
+	series, err := s.fetch(ctx, request.CategoryID, request.IDs, false, s.order(request.CategoryID))
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -807,7 +824,7 @@ func (s Service) Refresh(ctx context.Context, request RefreshRequest) (AddResult
 	ids.TVDB, _ = ParseID(provider[ProviderTVDB])
 	ids.TVmaze, _ = ParseID(provider[ProviderTVmaze])
 	ids.TMDB, _ = ParseID(provider[ProviderTMDB])
-	series, err := s.fetch(ctx, ids, true, s.order(request.CategoryID))
+	series, err := s.fetch(ctx, request.CategoryID, ids, true, s.order(request.CategoryID))
 	if err != nil {
 		return AddResult{}, err
 	}

@@ -147,6 +147,10 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 		if folder != "" {
 			named = ShowNFOIDs(c.config.FS, path.Join(root.Path, folder))
 			named.Path = path.Join(root.Path, folder)
+			if named.TVDBID == 0 && named.TMDBID == 0 && named.IMDbID == "" {
+				guess := c.config.Service.GuessByPath(ctx, categoryID, named.Path)
+				named.TVDBID, named.TMDBID, named.IMDbID = guess.TVDBID, guess.TMDBID, guess.IMDbID
+			}
 		}
 		var series int64
 		var candidates []model.Identification

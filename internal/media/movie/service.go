@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/mediaserver"
 	"github.com/makearr/Solarr/internal/metadata/fanart"
 	"github.com/makearr/Solarr/internal/metadata/mdblist"
 	"github.com/makearr/Solarr/internal/metadata/metaresolve"
@@ -53,7 +54,9 @@ type Service struct {
 	MDBList RatingsSource
 	OMDb    PlotSource
 	Fanart  ArtSource
-	TVDB    TVDBSource
+	// Local asks the media servers the library takes metadata from; nil asks none.
+	Local mediaserver.LocalAsker
+	TVDB  TVDBSource
 	// Priority is the instance's provider order, PriorityFor a library's own; nil follows the next, then TMDB before Radarr.
 	Priority    func() []string
 	PriorityFor func(categoryID int64) []string
@@ -110,6 +113,12 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs) (Movie
 	ids = s.completeIDs(ctx, s.bridgeIDs(ctx, ids, order))
 	// Each source has its own rate bucket and none uses an id another supplied here, so they are asked at once.
 	replies := metaresolve.AskAll(ctx, order, func(ctx context.Context, name string) (Movie, error) {
+		if strings.HasPrefix(name, settings.LocalSourcePrefix) {
+			if answer, ok := s.askLocal(ctx, categoryID, name, ids); ok {
+				return answer, nil
+			}
+			return Movie{}, errNoAnswer
+		}
 		answer, ok := s.askSource(ctx, name, ids)
 		if !ok {
 			return Movie{}, errNoAnswer

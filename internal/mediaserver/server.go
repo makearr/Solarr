@@ -161,3 +161,16 @@ type Catalog interface {
 	Search(ctx context.Context, mediaType, query string, limit int) ([]Item, error)
 	Item(ctx context.Context, id string) (Item, error)
 }
+
+// IDCatalog is implemented by the kinds that can find an item by a provider's id.
+type IDCatalog interface {
+	ItemByProviderID(ctx context.Context, mediaType, provider, id string) (Item, bool, error)
+}
+
+// LocalAsker asks the media servers of one kind a library takes its metadata from; it answers the first item any of them holds.
+// ids are by lower-case provider name; a library with no such server, or no match, answers false.
+type LocalAsker interface {
+	Ask(ctx context.Context, categoryID int64, kind, mediaType string, ids map[string]string) (Item, bool, error)
+	// AskByPath answers what the servers hold of the item whose file is solarrPath, before anything else has named it.
+	AskByPath(ctx context.Context, categoryID int64, solarrPath string) (Item, bool, error)
+}
