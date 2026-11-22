@@ -99,6 +99,9 @@ func (q *fakeQueue) Bump(_ context.Context, ids []int64) error {
 	}
 	return nil
 }
+func (q *fakeQueue) WorkTitles(context.Context, []int64) (map[int64]string, error) {
+	return map[int64]string{5: "Show A"}, nil
+}
 func (q *fakeQueue) WorkFiles(context.Context, int64) ([]library.WorkFilePlace, error) {
 	return q.files, nil
 }
@@ -113,7 +116,17 @@ func (p *fakePusher) Changed(_ context.Context, changes []mediaserver.Change) er
 	return p.err
 }
 
-type fakeClients struct{ pusher *fakePusher }
+type announcingPusher struct {
+	fakePusher
+	said []string
+}
+
+func (p *announcingPusher) Announce(_ context.Context, text string) error {
+	p.said = append(p.said, text)
+	return nil
+}
+
+type fakeClients struct{ pusher mediaserver.Pusher }
 
 func (c fakeClients) Pusher(context.Context, settings.MediaServer) (mediaserver.Pusher, error) {
 	return c.pusher, nil
@@ -237,5 +250,40 @@ func TestScheduleDue_AsksForEveryServerWithDueRows(t *testing.T) {
 	}
 	if !reflect.DeepEqual(scheduler.scheduled, []int64{1}) {
 		t.Fatalf("scheduled = %v", scheduler.scheduled)
+	}
+}
+
+func TestFlush_AnnouncesEachNewWorkOnceWhenTheConnectionAsks(t *testing.T) {
+	service, config, queue, _, _, fake := fixture()
+	pusher := &announcingPusher{}
+	service.Clients = fakeClients{pusher}
+	config.servers[0].Announce = true
+	if err := service.Record(t.Context(), 7, 5, library.PendingCreated, []string{"/media/shows/Show A/S1", "/media/shows/Show A/S2"}); err != nil {
+		t.Fatal(err)
+	}
+	fake.Advance(time.Hour)
+	if err := service.Flush(t.Context(), 1); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"Now available: Show A"}; !reflect.DeepEqual(pusher.said, want) {
+		t.Errorf("said = %q, want %q", pusher.said, want)
+	}
+	if len(queue.rows) != 0 {
+		t.Errorf("rows left = %+v", queue.rows)
+	}
+}
+
+func TestFlush_BusyServerKeepsRowsWithoutACountedAttempt(t *testing.T) {
+	service, _, queue, pusher, _, fake := fixture()
+	pusher.err = mediaserver.ErrBusy
+	if err := service.Record(t.Context(), 7, 5, library.PendingCreated, []string{"/media/shows/Show A"}); err != nil {
+		t.Fatal(err)
+	}
+	fake.Advance(time.Hour)
+	if err := service.Flush(t.Context(), 1); err != nil {
+		t.Fatal(err)
+	}
+	if len(queue.rows) != 1 || queue.rows[0].Attempts != 0 {
+		t.Errorf("rows = %+v, want one untouched row", queue.rows)
 	}
 }

@@ -134,3 +134,20 @@ func (m MediaServerPending) each(ctx context.Context, ids []int64, apply func(*l
 	}
 	return nil
 }
+
+// WorkTitles answers the titles of up to one batch of works, by id.
+func (m MediaServerPending) WorkTitles(ctx context.Context, ids []int64) (map[int64]string, error) {
+	encoded, err := json.Marshal(ids)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := librarydb.New(m.store.Read()).ListWorkTitlesForPush(ctx, string(encoded))
+	if err != nil {
+		return nil, fmt.Errorf("library: titles of works: %w", err)
+	}
+	titles := make(map[int64]string, len(rows))
+	for _, row := range rows {
+		titles[row.ID] = row.CanonicalTitle
+	}
+	return titles, nil
+}

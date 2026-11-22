@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/makearr/Solarr/internal/mediaserver"
 )
@@ -82,4 +83,67 @@ func (c *Client) Users(ctx context.Context) ([]mediaserver.User, error) {
 		users[index] = mediaserver.User{ID: account.ID, Name: account.Name}
 	}
 	return users, nil
+}
+
+// maxTargetedPaths is how many paths of one batch are told one by one before the whole library is scanned instead.
+const maxTargetedPaths = 50
+
+// Changed tells the server of the paths in one call, or scans when there are many.
+func (c *Client) Changed(ctx context.Context, changes []mediaserver.Change) error {
+	if len(changes) == 0 {
+		return nil
+	}
+	if len(changes) > maxTargetedPaths {
+		return mediaserver.Call(ctx, c.doer, http.MethodPost, mediaserver.Join(c.base, "/Library/Refresh"), c.header(), nil, nil)
+	}
+	type update struct {
+		Path       string `json:"Path"`
+		UpdateType string `json:"UpdateType"`
+	}
+	updates := make([]update, len(changes))
+	for index, change := range changes {
+		updates[index] = update{Path: change.Path, UpdateType: updateType(change.Kind)}
+	}
+	body := struct {
+		Updates []update `json:"Updates"`
+	}{updates}
+	return mediaserver.Call(ctx, c.doer, http.MethodPost, mediaserver.Join(c.base, "/Library/Media/Updated"), c.header(), body, nil)
+}
+
+func updateType(kind string) string {
+	switch kind {
+	case "created":
+		return "Created"
+	case "deleted":
+		return "Deleted"
+	default:
+		return "Modified"
+	}
+}
+
+// Announce shows a message in every active session that can be remote controlled.
+func (c *Client) Announce(ctx context.Context, text string) error {
+	var sessions []struct {
+		ID                    string `json:"Id"`
+		IsActive              bool   `json:"IsActive"`
+		SupportsRemoteControl bool   `json:"SupportsRemoteControl"`
+	}
+	if err := mediaserver.Call(ctx, c.doer, http.MethodGet, mediaserver.Join(c.base, "/Sessions"), c.header(), nil, &sessions); err != nil {
+		return err
+	}
+	message := struct {
+		Header    string `json:"Header"`
+		Text      string `json:"Text"`
+		TimeoutMs int    `json:"TimeoutMs"`
+	}{Header: "Solarr", Text: text, TimeoutMs: 8000}
+	for _, session := range sessions {
+		if !session.IsActive || !session.SupportsRemoteControl {
+			continue
+		}
+		address := mediaserver.Join(c.base, "/Sessions/"+url.PathEscape(session.ID)+"/Message")
+		if err := mediaserver.Call(ctx, c.doer, http.MethodPost, address, c.header(), message, nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }

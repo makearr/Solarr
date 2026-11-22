@@ -4,6 +4,7 @@ package audiobookshelf
 import (
 	"context"
 	"net/http"
+	"net/url"
 
 	"github.com/makearr/Solarr/internal/mediaserver"
 )
@@ -81,4 +82,15 @@ func (c *Client) Users(ctx context.Context) ([]mediaserver.User, error) {
 		users[index] = mediaserver.User{ID: user.ID, Name: user.Username}
 	}
 	return users, nil
+}
+
+// Changed scans each library the changes belong to once; the server has no per-folder call to rely on.
+func (c *Client) Changed(ctx context.Context, changes []mediaserver.Change) error {
+	for _, id := range mediaserver.LibraryIDsOf(changes) {
+		address := mediaserver.Join(c.base, "/api/libraries/"+url.PathEscape(id)+"/scan")
+		if err := mediaserver.Call(ctx, c.doer, http.MethodPost, address, c.header(), nil, nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }

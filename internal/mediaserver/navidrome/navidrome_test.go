@@ -51,3 +51,28 @@ func TestClient_ABadPasswordIsRejected(t *testing.T) {
 		t.Errorf("err = %v, want ErrRejected", err)
 	}
 }
+
+func TestClient_ChangedStartsAnIncrementalScanUnlessOneRuns(t *testing.T) {
+	scanning := false
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path+" fullScan="+r.URL.Query().Get("fullScan"))
+		if r.URL.Path == "/rest/getScanStatus" && scanning {
+			_, _ = w.Write([]byte(`{"subsonic-response":{"status":"ok","scanStatus":{"scanning":true}}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"subsonic-response":{"status":"ok","scanStatus":{"scanning":false}}}`))
+	}))
+	defer server.Close()
+	client := navidrome.New(mediaservertest.Direct(), server.URL, "guest", "x", func() string { return "s" })
+	if err := client.Changed(t.Context(), nil); err != nil {
+		t.Fatalf("Changed: %v", err)
+	}
+	if want := []string{"/rest/getScanStatus fullScan=", "/rest/startScan fullScan=false"}; !reflect.DeepEqual(paths, want) {
+		t.Errorf("requests = %q, want %q", paths, want)
+	}
+	scanning = true
+	if err := client.Changed(t.Context(), nil); !errors.Is(err, mediaserver.ErrBusy) {
+		t.Errorf("Changed while scanning = %v, want ErrBusy", err)
+	}
+}

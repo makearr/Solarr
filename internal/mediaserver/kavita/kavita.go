@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/makearr/Solarr/internal/mediaserver"
@@ -93,4 +94,15 @@ func (c *Client) Users(ctx context.Context) ([]mediaserver.User, error) {
 		users[index] = mediaserver.User{ID: strconv.Itoa(user.ID), Name: user.Username}
 	}
 	return users, nil
+}
+
+// Changed scans each library the changes belong to once.
+func (c *Client) Changed(ctx context.Context, changes []mediaserver.Change) error {
+	for _, id := range mediaserver.LibraryIDsOf(changes) {
+		address := mediaserver.Join(c.base, "/api/Library/scan") + mediaserver.Query(url.Values{"libraryId": {id}})
+		if err := mediaserver.Call(ctx, c.doer, http.MethodPost, address, c.header(), nil, nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }

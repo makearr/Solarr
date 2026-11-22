@@ -37,3 +37,16 @@ func TestClient_TestAndLibraries(t *testing.T) {
 		t.Errorf("libraries = %+v", libraries)
 	}
 }
+
+func TestClient_ChangedScansEachLibraryOnce(t *testing.T) {
+	var seen []string
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { seen = append(seen, r.Method+" "+r.URL.RequestURI()) }))
+	defer server.Close()
+	changes := []mediaserver.Change{{Path: "/a", LibraryIDs: []string{"3"}}, {Path: "/b", LibraryIDs: []string{"3"}}}
+	if err := kavita.New(mediaservertest.Direct(), server.URL, "k").Changed(t.Context(), changes); err != nil {
+		t.Fatalf("Changed: %v", err)
+	}
+	if want := []string{"POST /api/Library/scan?libraryId=3"}; !reflect.DeepEqual(seen, want) {
+		t.Errorf("requests = %q, want %q", seen, want)
+	}
+}

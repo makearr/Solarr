@@ -52,6 +52,7 @@ type Queue interface {
 	Delete(ctx context.Context, ids []int64) error
 	Bump(ctx context.Context, ids []int64) error
 	WorkFiles(ctx context.Context, workID int64) ([]library.WorkFilePlace, error)
+	WorkTitles(ctx context.Context, ids []int64) (map[int64]string, error)
 }
 
 // Clients opens the pusher of a connection; nil with no error says the kind cannot push.
@@ -240,7 +241,11 @@ func (s Service) Flush(ctx context.Context, serverID int64) error {
 		if err := s.Queue.Delete(ctx, ids); err != nil {
 			return err
 		}
+		s.announce(ctx, server, pusher, rows)
 		return s.Settings.SetMediaServerResult(ctx, serverID, at, "")
+	}
+	if errors.Is(err, mediaserver.ErrBusy) {
+		return nil
 	}
 	var spent, retry []int64
 	for _, row := range rows {
@@ -283,4 +288,34 @@ func (s Service) logger() *slog.Logger {
 		return s.Logger
 	}
 	return slog.Default()
+}
+
+// announce shows one "Now available" message per new work; a failure is logged, the push already succeeded.
+func (s Service) announce(ctx context.Context, server settings.MediaServer, pusher mediaserver.Pusher, rows []library.PendingPush) {
+	announcer, ok := pusher.(mediaserver.Announcer)
+	if !ok || !server.Announce {
+		return
+	}
+	var works []int64
+	for _, row := range rows {
+		if row.Change == library.PendingCreated && row.WorkID != 0 && !slices.Contains(works, row.WorkID) {
+			works = append(works, row.WorkID)
+		}
+	}
+	if len(works) == 0 {
+		return
+	}
+	titles, err := s.Queue.WorkTitles(ctx, works)
+	if err != nil {
+		s.logger().Warn("could not read titles to announce", slog.Any("error", err))
+		return
+	}
+	for _, id := range works {
+		if title := titles[id]; title != "" {
+			if err := announcer.Announce(ctx, "Now available: "+title); err != nil {
+				s.logger().Warn("media server announcement failed", slog.Int64("server_id", server.ID), slog.Any("error", err))
+				return
+			}
+		}
+	}
 }

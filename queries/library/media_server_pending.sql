@@ -25,3 +25,6 @@ SELECT DISTINCT lp.root_folder_id, lp.rel_path, lp.created_at
 FROM work_file wf JOIN library_path lp ON lp.media_object_id = wf.media_object_id
 WHERE wf.work_id = ? AND lp.missing_since IS NULL
 ORDER BY lp.root_folder_id, lp.rel_path;
+
+-- name: ListWorkTitlesForPush :many
+SELECT id, canonical_title FROM work WHERE id IN (SELECT value FROM json_each(sqlc.arg(ids))) ORDER BY id;

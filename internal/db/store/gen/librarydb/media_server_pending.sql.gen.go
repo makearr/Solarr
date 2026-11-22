@@ -169,3 +169,35 @@ func (q *Queries) ListWorkFilesForPush(ctx context.Context, workID int64) ([]Lis
 	}
 	return items, nil
 }
+
+const listWorkTitlesForPush = `-- name: ListWorkTitlesForPush :many
+SELECT id, canonical_title FROM work WHERE id IN (SELECT value FROM json_each(?1)) ORDER BY id
+`
+
+type ListWorkTitlesForPushRow struct {
+	ID             int64
+	CanonicalTitle string
+}
+
+func (q *Queries) ListWorkTitlesForPush(ctx context.Context, ids interface{}) ([]ListWorkTitlesForPushRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkTitlesForPush, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkTitlesForPushRow{}
+	for rows.Next() {
+		var i ListWorkTitlesForPushRow
+		if err := rows.Scan(&i.ID, &i.CanonicalTitle); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

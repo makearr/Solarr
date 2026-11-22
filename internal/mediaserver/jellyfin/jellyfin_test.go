@@ -1,6 +1,7 @@
 package jellyfin_test
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -58,5 +59,55 @@ func TestClient_TestReportsAKeyThatIsNotAnAdministrators(t *testing.T) {
 	info, err := jellyfin.New(mediaservertest.Direct(), server.URL, "k1").Test(t.Context())
 	if err != nil || info.Admin {
 		t.Errorf("info = %+v, err = %v; want a working non-admin key", info, err)
+	}
+}
+
+func TestClient_ChangedSendsOnePathUpdateBatch(t *testing.T) {
+	var seen []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		seen = append(seen, r.Method+" "+r.URL.Path+" "+string(body))
+	}))
+	defer server.Close()
+	client := jellyfin.New(mediaservertest.Direct(), server.URL, "k1")
+	err := client.Changed(t.Context(), []mediaserver.Change{{Path: "/m/a", Kind: "created"}, {Path: "/m/b", Kind: "deleted"}, {Path: "/m/c", Kind: "modified"}})
+	if err != nil {
+		t.Fatalf("Changed: %v", err)
+	}
+	want := []string{`POST /Library/Media/Updated {"Updates":[{"Path":"/m/a","UpdateType":"Created"},{"Path":"/m/b","UpdateType":"Deleted"},{"Path":"/m/c","UpdateType":"Modified"}]}`}
+	if !reflect.DeepEqual(seen, want) {
+		t.Errorf("requests = %q, want %q", seen, want)
+	}
+}
+
+func TestClient_ChangedScansWhenThereAreManyPaths(t *testing.T) {
+	var seen []string
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { seen = append(seen, r.Method+" "+r.URL.Path) }))
+	defer server.Close()
+	changes := make([]mediaserver.Change, 51)
+	if err := jellyfin.New(mediaservertest.Direct(), server.URL, "k1").Changed(t.Context(), changes); err != nil {
+		t.Fatalf("Changed: %v", err)
+	}
+	if want := []string{"POST /Library/Refresh"}; !reflect.DeepEqual(seen, want) {
+		t.Errorf("requests = %q, want %q", seen, want)
+	}
+}
+
+func TestClient_AnnounceMessagesActiveSessionsOnly(t *testing.T) {
+	var seen []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		seen = append(seen, r.Method+" "+r.URL.Path+" "+string(body))
+		if r.Method == http.MethodGet {
+			_, _ = w.Write([]byte(`[{"Id":"s1","IsActive":true,"SupportsRemoteControl":true},{"Id":"s2","IsActive":false,"SupportsRemoteControl":true},{"Id":"s3","IsActive":true,"SupportsRemoteControl":false}]`))
+		}
+	}))
+	defer server.Close()
+	if err := jellyfin.New(mediaservertest.Direct(), server.URL, "k1").Announce(t.Context(), "Now available: Dune"); err != nil {
+		t.Fatalf("Announce: %v", err)
+	}
+	want := []string{"GET /Sessions ", `POST /Sessions/s1/Message {"Header":"Solarr","Text":"Now available: Dune","TimeoutMs":8000}`}
+	if !reflect.DeepEqual(seen, want) {
+		t.Errorf("requests = %q, want %q", seen, want)
 	}
 }

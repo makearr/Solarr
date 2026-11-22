@@ -1053,6 +1053,7 @@ type Querier interface {
 	ListWorkReleaseFilters(ctx context.Context, workID int64) ([]WorkReleaseFilter, error)
 	ListWorkReleaseMBIDs(ctx context.Context, workID int64) ([]string, error)
 	ListWorkTitles(ctx context.Context, workID int64) ([]WorkTitle, error)
+	ListWorkTitlesForPush(ctx context.Context, ids interface{}) ([]ListWorkTitlesForPushRow, error)
 	// The facts a library's rules read of each of its works (plan 10-libraries L5).
 	ListWorkTraitsInCategory(ctx context.Context, categoryID int64) ([]ListWorkTraitsInCategoryRow, error)
 	// The hashed videos of one work: an import compares a download's pictures with what the work already holds.

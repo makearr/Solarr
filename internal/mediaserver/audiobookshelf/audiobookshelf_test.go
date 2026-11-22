@@ -47,3 +47,16 @@ func TestClient_TestLibrariesUsers(t *testing.T) {
 		t.Errorf("err = %v, want ErrRejected", err)
 	}
 }
+
+func TestClient_ChangedScansEachLibraryOnce(t *testing.T) {
+	var seen []string
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { seen = append(seen, r.Method+" "+r.URL.Path) }))
+	defer server.Close()
+	changes := []mediaserver.Change{{Path: "/a", LibraryIDs: []string{"l1"}}, {Path: "/b", LibraryIDs: []string{"l1", "l2"}}}
+	if err := audiobookshelf.New(mediaservertest.Direct(), server.URL, "tok").Changed(t.Context(), changes); err != nil {
+		t.Fatalf("Changed: %v", err)
+	}
+	if want := []string{"POST /api/libraries/l1/scan", "POST /api/libraries/l2/scan"}; !reflect.DeepEqual(seen, want) {
+		t.Errorf("requests = %q, want %q", seen, want)
+	}
+}

@@ -46,6 +46,9 @@ type answer struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
+	ScanStatus struct {
+		Scanning bool `json:"scanning"`
+	} `json:"scanStatus"`
 	MusicFolders struct {
 		MusicFolder []struct {
 			ID   int    `json:"id"`
@@ -98,4 +101,17 @@ func (c *Client) Libraries(ctx context.Context) ([]mediaserver.Library, error) {
 		libraries[index] = mediaserver.Library{ID: strconv.Itoa(folder.ID), Name: folder.Name, Type: "music"}
 	}
 	return libraries, nil
+}
+
+// Changed starts one incremental scan; the server cannot scan one folder, and a running scan is left to finish.
+func (c *Client) Changed(ctx context.Context, _ []mediaserver.Change) error {
+	status, err := c.call(ctx, "getScanStatus", nil)
+	if err != nil {
+		return err
+	}
+	if status.ScanStatus.Scanning {
+		return mediaserver.ErrBusy
+	}
+	_, err = c.call(ctx, "startScan", url.Values{"fullScan": {"false"}})
+	return err
 }
