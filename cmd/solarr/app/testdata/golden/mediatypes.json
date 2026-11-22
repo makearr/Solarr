@@ -504,6 +504,15 @@
         "sortable": false
       },
       {
+        "column": false,
+        "entity": "work",
+        "filterable": false,
+        "key": "numbering_disagrees",
+        "kind": "text",
+        "label": "Seasons the sources number differently",
+        "sortable": false
+      },
+      {
         "column": true,
         "entity": "work",
         "filterable": true,

@@ -300,6 +300,8 @@ func fieldWrites(series Series, source string) []library.SeriesFieldWrite {
 	add("original_network", series.OriginalNetwork)
 	add("original_country", series.OriginalCountry)
 	add("numbering_basis", orDefault(series.Basis, ProviderTVDB+":aired"))
+	// Written even when empty: a null value clears the note once the sources agree again.
+	fields = append(fields, library.SeriesFieldWrite{Field: FieldNumberingDisagrees, Provider: "merge", Value: seasonList(series.NumberingDisagrees)})
 	if series.Type != "" {
 		fields = append(fields, library.SeriesFieldWrite{Field: "series_type", Provider: "detected", Value: string(series.Type)})
 	}
@@ -351,4 +353,13 @@ func orDefault(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+// seasonList renders season numbers as "1, 3"; empty for none.
+func seasonList(seasons []int) string {
+	parts := make([]string, len(seasons))
+	for index, season := range seasons {
+		parts[index] = strconv.Itoa(season)
+	}
+	return strings.Join(parts, ", ")
 }

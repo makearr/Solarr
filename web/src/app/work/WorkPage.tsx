@@ -329,6 +329,9 @@ function WorkHeader({
             </div>
             {work.description && <p className="max-w-3xl text-sm text-ink-muted">{work.description}</p>}
             <PeopleLine work={work} info={info} categoryId={categoryId} />
+            {work.facets?.numbering_disagrees?.[0] && (
+              <p className="text-sm text-ink-muted">{t("work.numberingDisagrees", { seasons: work.facets.numbering_disagrees[0] })}</p>
+            )}
             {(work.tags?.length ?? 0) > 0 && categoryId !== undefined && workLevel ? (
               <div className="flex flex-wrap gap-1.5">
                 {/* A tag opens this library's list of everything carrying it (2026-10-24). */}
@@ -494,7 +497,7 @@ function MonitorIcon({ monitored }: { monitored: boolean }) {
 function headerFacts(work: Work, info: MediaTypeInfo | undefined): string[] {
   const facts: string[] = [];
   for (const facet of info?.facets ?? []) {
-    if (facet.key === "genre" || facet.entity !== "work") continue;
+    if (facet.key === "genre" || facet.key === "numbering_disagrees" || facet.entity !== "work") continue;
     const values = work.facets?.[facet.key] ?? [];
     for (const value of values) {
       if (!value || value === "0") continue;

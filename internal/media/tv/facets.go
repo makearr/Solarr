@@ -36,6 +36,10 @@ var facets = []media.Facet{
 		Choices: zoneChoices(), Editable: true, RefreshesWork: true,
 	},
 	{
+		Key: "numbering_disagrees", Label: "Seasons the sources number differently", Entity: model.LevelEntityWork, Kind: media.FacetText,
+		Source: media.FacetSource{Kind: media.SourceField, Name: FieldNumberingDisagrees},
+	},
+	{
 		Key: "network", Label: "Network", Entity: model.LevelEntityWork, Kind: media.FacetText,
 		Source: media.FacetSource{Kind: media.SourceOrganisation, Name: "network"}, Column: true, Sortable: true, Filterable: true, Badge: true,
 	},

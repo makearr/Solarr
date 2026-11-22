@@ -169,3 +169,20 @@ func TestMergeNotesTheSeasonsTheSourcesNumberDifferently(t *testing.T) {
 		t.Fatalf("NumberingDisagrees = %v, want [2]", got)
 	}
 }
+
+func TestToWriteStoresTheSeasonsTheSourcesNumberDifferently(t *testing.T) {
+	valueOf := func(series tv.Series) (string, bool) {
+		for _, field := range tv.ToWrite(series, tv.WriteOptions{}).Fields {
+			if field.Field == tv.FieldNumberingDisagrees {
+				return field.Value, true
+			}
+		}
+		return "", false
+	}
+	if got, found := valueOf(tv.Series{NumberingDisagrees: []int{2, 4}}); !found || got != "2, 4" {
+		t.Errorf("field = %q, %v; want \"2, 4\"", got, found)
+	}
+	if got, found := valueOf(tv.Series{}); !found || got != "" {
+		t.Errorf("agreeing sources: field = %q, %v; want an empty value that clears the note", got, found)
+	}
+}

@@ -20,6 +20,9 @@ type OrderingSource interface {
 // FieldNumberingBasis is the work field that says which list a series' episodes are numbered by.
 const FieldNumberingBasis = "numbering_basis"
 
+// FieldNumberingDisagrees is the work field listing the seasons in which the two metadata sources number episodes differently.
+const FieldNumberingDisagrees = "numbering_disagrees"
+
 // The numbering bases: TheTVDB's aired order is the default every provider shares; another of its orderings is
 // "tvdb:<type>" (dvd, absolute, alternate, regional, altdvd).
 const (
