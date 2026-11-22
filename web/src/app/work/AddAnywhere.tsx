@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useQueries, type UseQueryResult } from "@tanstack/react-query";
@@ -56,7 +57,7 @@ export function AddAnywhere() {
   const searchable = debounced.length >= MINIMUM_QUERY_LENGTH;
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col gap-4 overflow-y-auto p-4">
-      <h1 className="text-base font-semibold">Add to library</h1>
+      <h1 className="text-base font-semibold">{t("addAnywhere.addToLibrary")}</h1>
       <div className="flex flex-wrap gap-2">
         <label className="relative flex min-w-64 flex-1 items-center">
           <Search aria-hidden className="pointer-events-none absolute left-3 size-4 text-ink-muted" />
@@ -70,12 +71,12 @@ export function AddAnywhere() {
               remember({ q: event.target.value.trim(), library: opened.library });
             }}
             placeholder="Search for something to add…"
-            aria-label="Search for something to add"
+            aria-label={t("addAnywhere.searchForSomethingTo")}
             className="w-full rounded-md border border-border-subtle bg-surface py-2 pl-9 pr-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           />
         </label>
         <select
-          aria-label="Search in"
+          aria-label={t("addAnywhere.searchIn")}
           value={opened.library ?? ""}
           onChange={(event) => {
             setLimit(event.target.value ? LOOKUP_PAGE : FIRST_ACROSS_LIBRARIES);
@@ -92,7 +93,7 @@ export function AddAnywhere() {
         </select>
       </div>
       {query.trim().length > 0 && debounced.length < MINIMUM_QUERY_LENGTH && <p className="text-sm text-ink-muted">Keep typing: at least two characters.</p>}
-      {searchable && targets.length === 0 && <EmptyState title="No library to add to yet." />}
+      {searchable && targets.length === 0 && <EmptyState title={t("addAnywhere.noLibraryToAdd")} />}
       {searchable && (
         <TargetResults key={`${opened.library ?? ""}:${debounced}`} targets={targets} query={debounced} limit={limit} onMore={() => setLimit(Math.min(limit + step, MAXIMUM_LOOKUP))} />
       )}

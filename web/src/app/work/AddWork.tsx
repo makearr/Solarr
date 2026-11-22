@@ -80,7 +80,7 @@ export function AddWork() {
           </div>
         )}
         {kinds.length > 1 && (
-          <div className="ml-auto flex gap-1" role="group" aria-label="What to look for">
+          <div className="ml-auto flex gap-1" role="group" aria-label={t("addWork.whatToLookFor")}>
             {kinds.map((entry) => (
               <Button key={entry.key} variant={entry.key === kind ? "primary" : "secondary"} aria-pressed={entry.key === kind} onClick={() => { setKind(entry.key); setLimit(LOOKUP_PAGE); }}>
                 {entry.label}

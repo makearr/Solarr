@@ -71,14 +71,14 @@ export function WorkSearchTab({ work, info, words, lead }: { work: Work; info: M
   });
 
   if (groups.length === 0 || group === undefined) return <p className="text-sm text-ink-muted">{t("work.notWanted", words)}</p>;
-  if (!work.can_request) return <p className="text-sm text-ink-muted">Searching needs add access to this library.</p>;
+  if (!work.can_request) return <p className="text-sm text-ink-muted">{t("workSearchTab.searchingNeedsAddAccess")}</p>;
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         {groups.length > 1 && (
           <select
-            aria-label="What to search"
+            aria-label={t("workSearchTab.whatToSearch")}
             value={group}
             onChange={(event) => setGroup(event.target.value)}
             className="rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm"
@@ -90,10 +90,10 @@ export function WorkSearchTab({ work, info, words, lead }: { work: Work; info: M
             ))}
           </select>
         )}
-        <Button busy={grab.isPending} busyLabel="Searching…" title="Send the best release to the download client" onClick={() => grab.mutate()}>
+        <Button busy={grab.isPending} busyLabel="Searching…" title={t("workSearchTab.sendTheBestRelease")} onClick={() => grab.mutate()}>
           {t("action.search")}
         </Button>
-        <Button busy={search.isPending} busyLabel="Searching…" title="List what the indexers have, and choose" onClick={() => search.mutate(undefined)}>
+        <Button busy={search.isPending} busyLabel="Searching…" title={t("workSearchTab.listWhatTheIndexers")} onClick={() => search.mutate(undefined)}>
           {t("action.interactive")}
         </Button>
         {grab.data && <span className="text-xs text-ink-muted">{grabNote(grab.data)}</span>}
@@ -141,7 +141,7 @@ function DifferentTerms({
   const ready = terms.every((term) => (values[term.key] ?? "").trim() !== "");
   return (
     <details className="text-xs">
-      <summary className="cursor-pointer text-ink-muted hover:text-ink">Search with different terms</summary>
+      <summary className="cursor-pointer text-ink-muted hover:text-ink">{t("workSearchTab.searchWithDifferentTerms")}</summary>
       <form
         className="mt-2 flex flex-wrap items-center gap-2"
         onSubmit={(event) => {

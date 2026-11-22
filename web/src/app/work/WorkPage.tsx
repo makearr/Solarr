@@ -322,7 +322,7 @@ function WorkHeader({
               ))}
               {work.rating?.above_limit && (
                 <Chip tone="warn" title="Its library's maximum rating does not admit it: it stays, but is never searched there. Move it to another library or raise the limit.">
-                  Above this library's rating
+                  {t("workPage.aboveThisLibraryS")}
                 </Chip>
               )}
               <DownloadingBadge workId={work.id} />
@@ -420,7 +420,7 @@ function WorkHeader({
             )}
             {administrator && categoryId !== undefined && (
               <Button icon={<FolderInput aria-hidden className="size-4" />} onClick={() => setMovingLibrary(true)}>
-                Move to library
+                {t("workIndex.moveToLibrary")}
               </Button>
             )}
             {administrator && numberings.data && (
@@ -481,7 +481,7 @@ function WorkHeader({
               <input type="checkbox" checked={removal.exclude} onChange={(event) => setRemoval({ ...removal, exclude: event.target.checked })} />
               Do not add it back: follows and import lists leave it out
             </label>
-            {remove.isError && <p className="text-xs text-danger">That could not be removed.</p>}
+            {remove.isError && <p className="text-xs text-danger">{t("blocklist.thatCouldNotBe")}</p>}
           </div>
         </ConfirmDialog>
       )}
@@ -699,7 +699,7 @@ function CastStrip({ work, info, categoryId }: { work: Work; info: MediaTypeInfo
   };
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-semibold">Cast and crew</h2>
+      <h2 className="text-sm font-semibold">{t("workPage.castAndCrew")}</h2>
       <div className="flex gap-3 overflow-x-auto pb-1">{people.slice(0, 40).map((person) => tile(person.credit, person.subtitle.join(" · ")))}</div>
     </section>
   );
@@ -804,7 +804,7 @@ function HistoryTab({ workId }: { workId: number }) {
     },
   });
   if (history.isLoading) return <p className="text-xs text-ink-muted">{t("work.loading")}</p>;
-  if (!history.data || history.data.length === 0) return <EmptyState title="Nothing has been downloaded for it yet." />;
+  if (!history.data || history.data.length === 0) return <EmptyState title={t("workPage.nothingHasBeenDownloaded")} />;
   return (
     <ul className="flex flex-col gap-1 text-sm">
       {history.data.map((entry) => (
@@ -833,7 +833,7 @@ function DownloadingBadge({ workId }: { workId: number }) {
   if (!item) {
     return queue.data?.held.length ? (
       <Link to="/activity/queue" className="text-xs text-ink-muted hover:underline">
-        Waiting for room in the download client
+        {t("workPage.waitingForRoomIn")}
       </Link>
     ) : null;
   }

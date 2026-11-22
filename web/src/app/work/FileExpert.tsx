@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useQuery } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
@@ -35,7 +36,7 @@ export function ExpertFileInfo({ mediaObjectId, expert }: { mediaObjectId: numbe
       {detail.paths.map((place) => (
         <span key={place.path} className="flex flex-wrap items-center gap-1.5">
           <span className="break-all font-mono text-ink-muted">{place.path}</span>
-          <Chip tone={place.link_kind === "copy" ? "neutral" : "accent"} title="How this path was placed in the library">
+          <Chip tone={place.link_kind === "copy" ? "neutral" : "accent"} title={t("fileExpert.howThisPathWas")}>
             {place.link_kind}
           </Chip>
           {place.primary && detail.paths.length > 1 && <Chip>primary</Chip>}
@@ -53,7 +54,7 @@ export function ExpertFileInfo({ mediaObjectId, expert }: { mediaObjectId: numbe
       <span className="flex flex-wrap items-center gap-1.5">
         {detail.same_bytes > 0 && <Chip tone="warn">{detail.same_bytes} other {detail.same_bytes === 1 ? "file" : "files"} with the same bytes</Chip>}
         {detail.same_picture > 0 && <Chip tone="warn">{detail.same_picture} other {detail.same_picture === 1 ? "video" : "videos"} with the same picture</Chip>}
-        {detail.same_bytes === 0 && detail.same_picture === 0 && <span className="text-ink-muted">No duplicate candidates.</span>}
+        {detail.same_bytes === 0 && detail.same_picture === 0 && <span className="text-ink-muted">{t("fileExpert.noDuplicateCandidates")}</span>}
       </span>
     </span>
   );

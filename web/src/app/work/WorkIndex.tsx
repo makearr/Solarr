@@ -215,7 +215,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
         <Button
           variant={routeView.query.filters.fresh === "1" ? "primary" : "secondary"}
           aria-pressed={routeView.query.filters.fresh === "1"}
-          title="Out within the last week"
+          title={t("workIndex.outWithinTheLast")}
           onClick={() => setFilter("fresh", routeView.query.filters.fresh === "1" ? "" : "1")}
         >
           Fresh
@@ -270,7 +270,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
           onSort={(next) => setQuery({ sort: next })}
           onTurn={() => setQuery({ sort, direction: routeView.query.direction === "desc" ? "asc" : "desc" })}
         />
-        <Button onClick={list.selectAllMatching}>Select all matching</Button>
+        <Button onClick={list.selectAllMatching}>{t("activity.selectAll")}</Button>
         {view === "list" && (
           <details className="relative">
             <summary className="cursor-pointer list-none rounded-md border border-border-subtle px-3 py-1.5 text-sm">Columns</summary>
@@ -306,7 +306,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
       <div className="relative min-h-0 flex-1 pr-6">
         {jumpable && <LetterRail value={routeView.query.filters.from ?? ""} onChange={(letter) => setFilter("from", letter)} />}
         {list.isLoading && <p className="p-6 text-sm text-ink-muted">{t("work.loading")}</p>}
-        {list.error !== null && <p className="p-6 text-sm text-danger">The library could not be read.</p>}
+        {list.error !== null && <p className="p-6 text-sm text-danger">{t("workIndex.theLibraryCouldNot")}</p>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (
           <div className="p-6">
             <EmptyState
@@ -485,7 +485,7 @@ function BulkBar({
         </span>
       )}
       {administrator && info && (
-        <Button onClick={() => setMovingLibrary(true)}>Move to library</Button>
+        <Button onClick={() => setMovingLibrary(true)}>{t("workIndex.moveToLibrary")}</Button>
       )}
       {explicitIds.length > 0 && administrator && (
         <Button variant="danger" onClick={() => setConfirm({ kind: "remove" })}>
@@ -546,7 +546,7 @@ function BulkBar({
               </label>
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={removal.exclude} onChange={(event) => setRemoval({ ...removal, exclude: event.target.checked })} />
-                Do not add them back
+                {t("workIndex.doNotAddThem")}
               </label>
             </div>
           )}

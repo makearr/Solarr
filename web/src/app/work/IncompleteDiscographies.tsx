@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -27,7 +28,7 @@ export function IncompleteDiscographies({ categoryId }: { categoryId: number }) 
 
   return (
     <section className="flex min-h-0 flex-col gap-2 overflow-y-auto">
-      <h3 className="text-sm font-medium">Artists you have albums of, but not all</h3>
+      <h3 className="text-sm font-medium">{t("incompleteDiscographies.artistsYouHaveAlbums")}</h3>
       <p className="text-xs text-ink-muted">
         From your library, compared with each artist's discography (no live albums or compilations). Updated weekly.
       </p>
@@ -60,13 +61,13 @@ export function IncompleteDiscographies({ categoryId }: { categoryId: number }) 
                 onClick={() => follow.mutate(artist.person_id)}
                 className="shrink-0 rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50"
               >
-                Monitor and add the rest
+                {t("incompleteDiscographies.monitorAndAddThe")}
               </button>
             )}
           </li>
         ))}
       </ul>
-      {follow.isError && <p className="text-xs text-danger">That could not be started.</p>}
+      {follow.isError && <p className="text-xs text-danger">{t("incompleteDiscographies.thatCouldNotBe")}</p>}
     </section>
   );
 }

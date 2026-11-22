@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -74,7 +75,7 @@ export function LibraryMoveDialog({
       }
     >
       {targets.length === 0 ? (
-        <p className="text-sm text-ink-muted">There is no other library of this kind to go to.</p>
+        <p className="text-sm text-ink-muted">{t("libraryMoveDialog.thereIsNoOther")}</p>
       ) : (
         <div className="flex flex-col gap-3 text-sm">
           <div className="flex flex-wrap items-center gap-3">
@@ -101,7 +102,7 @@ export function LibraryMoveDialog({
               Copy
             </label>
           </div>
-          {plan.isError && <p className="text-danger">That could not be planned.</p>}
+          {plan.isError && <p className="text-danger">{t("libraryMoveDialog.thatCouldNotBe")}</p>}
           {single?.refusal && <p className="text-danger">It cannot go there: {single.refusal}.</p>}
           {single && !single.refusal && (
             <>

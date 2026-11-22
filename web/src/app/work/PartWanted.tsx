@@ -6,7 +6,7 @@ import { Search } from "lucide-react";
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 
-import { vocabularyOf } from "@/lib/i18n";
+import { vocabularyOf, t } from "@/lib/i18n";
 import type { MediaTypeInfo } from "@/lib/useMediaTypes";
 import { Chip } from "@/ui/Chip";
 
@@ -124,7 +124,7 @@ export function PartWanted({ info }: { info: MediaTypeInfo | undefined }) {
         </p>
       )}
       {pages.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-      {pages.error !== null && !pages.isLoading && <p className="text-sm text-danger">The list could not be read.</p>}
+      {pages.error !== null && !pages.isLoading && <p className="text-sm text-danger">{t("importLists.preview.failed")}</p>}
       {!pages.isLoading && rows.length === 0 && pages.error === null && (view === "missing" || judged) && (
         <p className="text-sm text-ink-muted">{view === "missing" ? "Nothing is missing." : "Every measured file meets the cutoff."}</p>
       )}

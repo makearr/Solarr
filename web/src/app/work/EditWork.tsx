@@ -127,7 +127,7 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
                 Back
               </Button>
               <Button variant="primary" busy={save.isPending} busyLabel="Moving…" onClick={() => save.mutate(true)}>
-                Move and save
+                {t("editWork.moveAndSave")}
               </Button>
             </>
           ) : (
@@ -151,7 +151,7 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
               <span className="text-xs text-ink-muted">Monitor which {info?.part.many.toLowerCase() || "parts"}</span>
               <span className="flex flex-wrap items-center gap-2">
                 <select value={form.option} onChange={(event) => change({ option: event.target.value })} className={field}>
-                  <option value="">Keep as they are</option>
+                  <option value="">{t("editWork.keepAsTheyAre")}</option>
                   {info?.monitor_options.map((option) => (
                     <option key={option.key} value={option.key}>
                       {option.label}
@@ -226,7 +226,7 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
                   </option>
                 ))}
               </select>
-              {rootChanged && <span className="text-xs text-ink-muted">Its files move there when you save.</span>}
+              {rootChanged && <span className="text-xs text-ink-muted">{t("editWork.itsFilesMoveThere")}</span>}
             </label>
           )}
           <TagPicker label="Tags" genreTree={info?.genre_tree.key ?? ""} names={form.tags} onChange={(tags) => change({ tags })} />
@@ -433,7 +433,7 @@ export function BulkEditWork({
         ))}
         <TagPicker label="Add tags" genreTree={info?.genre_tree.key ?? ""} names={addTags} onChange={(tags) => { setAddTags(tags); changed(); }} />
         <TagPicker label="Remove tags" genreTree={info?.genre_tree.key ?? ""} names={removeTags} onChange={(tags) => { setRemoveTags(tags); changed(); }} />
-        {send.isError && <p className="text-sm text-danger">That could not be applied.</p>}
+        {send.isError && <p className="text-sm text-danger">{t("editWork.thatCouldNotBe")}</p>}
       </div>
     </Dialog>
   );

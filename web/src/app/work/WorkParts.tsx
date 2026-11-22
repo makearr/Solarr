@@ -123,7 +123,7 @@ export function GroupSection({
           </Button>
         )}
         {onGroupInteractive && (
-          <Button variant="icon" title="Choose the release yourself" aria-label={`${t("action.interactive")} ${group.label}`} onClick={onGroupInteractive}>
+          <Button variant="icon" title={t("workParts.chooseTheReleaseYourself")} aria-label={`${t("action.interactive")} ${group.label}`} onClick={onGroupInteractive}>
             <User aria-hidden className="size-4" />
           </Button>
         )}
@@ -252,12 +252,12 @@ function PartRow({
         <span className={state.tone}>{state.label}</span>
         <HeartButton subject="work_part" id={part.id} name={title} className="ml-2 inline-flex align-middle" />
         {group && actions.onGrab && (
-          <Button variant="icon" className="ml-2" title="Search for it and send the best release" aria-label={`${t("action.search")} ${title}`} onClick={() => actions.onGrab?.(part, group)}>
+          <Button variant="icon" className="ml-2" title={t("workParts.searchForItAnd")} aria-label={`${t("action.search")} ${title}`} onClick={() => actions.onGrab?.(part, group)}>
             <Search aria-hidden className="size-3.5" />
           </Button>
         )}
         {group && actions.onInteractive && (
-          <Button variant="icon" title="Choose the release yourself" aria-label={`${t("action.interactive")} ${title}`} onClick={() => actions.onInteractive?.(part, group)}>
+          <Button variant="icon" title={t("workParts.chooseTheReleaseYourself")} aria-label={`${t("action.interactive")} ${title}`} onClick={() => actions.onInteractive?.(part, group)}>
             <User aria-hidden className="size-3.5" />
           </Button>
         )}
@@ -270,7 +270,7 @@ function PartRow({
           </Button>
         )}
         {actions.onRemove && (
-          <Button variant="icon" title="Stop wanting it" aria-label={`${t("action.remove")} ${title}`} onClick={() => setRemoving(true)}>
+          <Button variant="icon" title={t("workParts.stopWantingIt")} aria-label={`${t("action.remove")} ${title}`} onClick={() => setRemoving(true)}>
             <Trash2 aria-hidden className="size-3.5" />
           </Button>
         )}

@@ -8,7 +8,7 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCanAdd } from "@/lib/useLibraryPermission";
 import type { MediaTypeInfo } from "@/lib/useMediaTypes";
-import { vocabularyOf } from "@/lib/i18n";
+import { vocabularyOf, t } from "@/lib/i18n";
 import { useLibraries } from "@/lib/resources";
 
 import { InteractiveSearch } from "../InteractiveSearch";
@@ -163,8 +163,8 @@ export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
           <IndexViewToggle view={layout} onChange={(next) => setView({ layout: next })} />
           {searchLibrary.isSuccess &&
             (searchLibrary.data?.duplicate ? "That search is already running." : "Searching in the background.")}
-          {searchLibrary.isError && <span className="text-danger">The search could not start.</span>}
-          {!canAdd && <span>Searching needs add access to this library.</span>}
+          {searchLibrary.isError && <span className="text-danger">{t("workWanted.theSearchCouldNot")}</span>}
+          {!canAdd && <span>{t("workSearchTab.searchingNeedsAddAccess")}</span>}
           {searchable && (
           <>
           <button
@@ -174,7 +174,7 @@ export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
             className={toolbarButton}
           >
             <Search aria-hidden className="size-3.5" />
-            Search this page
+            {t("workWanted.searchThisPage")}
           </button>
           <button
             type="button"
@@ -224,7 +224,7 @@ export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
         </div>
 
         {works.isLoading && <Message>Loading…</Message>}
-        {works.isError && <Message>Wanted items could not be read.</Message>}
+        {works.isError && <Message>{t("workWanted.wantedItemsCouldNot")}</Message>}
         {works.isSuccess && items.length === 0 && page === 0 && (
           <Message>Nothing wanted -- every monitored {words.work} in this library is complete.</Message>
         )}
