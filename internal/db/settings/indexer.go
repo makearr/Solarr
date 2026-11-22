@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -159,6 +160,7 @@ func (i Indexer) Definition() string {
 // buildIndexerSettingsJSON encodes the request's egress and categories into SettingsJSON, or "" when
 // both are unset, so an indexer nobody configured still reads back with SettingsJSON == "".
 func buildIndexerSettingsJSON(request IndexerRequest) string {
+	request.EgressProxyURL = normaliseEgressProxyURL(request.EgressProxyURL)
 	if request.EgressProxyURL == "" && len(request.MusicCategories) == 0 && request.Definition == "" && request.Source == nil && request.ProxyID == nil && request.DownloadClientID == nil && request.QueriesPerHour == 0 {
 		return ""
 	}
@@ -226,6 +228,13 @@ func validateIndexer(request IndexerRequest) config.Problems {
 	if request.Priority < 1 || request.Priority > 50 {
 		problems = append(problems, config.Problem{Path: "priority", Value: fmt.Sprint(request.Priority),
 			Expectation: "1 to 50, lower preferred"})
+	}
+	if request.EgressProxyURL != "" {
+		parsed, err := url.Parse(strings.TrimSpace(request.EgressProxyURL))
+		if err != nil || parsed.Host == "" || parsed.Port() == "" || !isSupportedProxyScheme(strings.ToLower(parsed.Scheme)) {
+			problems = append(problems, config.Problem{Path: "egress_proxy_url", Value: redactedProxyValue(request.EgressProxyURL),
+				Expectation: "a URL with scheme http, https or socks5 and an explicit port, e.g. socks5://host:1080"})
+		}
 	}
 	if len(request.MusicCategories) > maxMusicCategories {
 		problems = append(problems, config.Problem{Path: "music_categories", Value: fmt.Sprint(len(request.MusicCategories)),
@@ -454,4 +463,29 @@ func convertIndexer(row settingsdb.Indexer) Indexer {
 		CategoriesJSON: row.CategoriesJson.String, CapsFetchedAt: int64Ptr(row.CapsFetchedAt),
 		SettingsJSON: row.SettingsJson.String, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}
+}
+
+// normaliseEgressProxyURL stores an indexer's own proxy the way the network proxy is: trimmed, scheme and host in lower
+// case, no trailing slash, so one proxy is one string. Text that is not a URL is stored as typed for validation to name.
+func normaliseEgressProxyURL(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	parsed, err := url.Parse(trimmed)
+	if err != nil || parsed.Host == "" {
+		return trimmed
+	}
+	parsed.Scheme = strings.ToLower(parsed.Scheme)
+	parsed.Host = strings.ToLower(parsed.Host)
+	if parsed.Path == "/" {
+		parsed.Path = ""
+	}
+	return parsed.String()
+}
+
+// redactedProxyValue hides the password of a proxy URL named in a problem the response carries.
+func redactedProxyValue(raw string) string {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return ""
+	}
+	return parsed.Redacted()
 }

@@ -3,6 +3,7 @@ package settings_test
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -199,6 +200,25 @@ func TestCreateIndexer_StoresEgressProxyURL(t *testing.T) {
 	if found.Egress().ProxyURL != "socks5://proxy.example:1080" {
 		t.Errorf("GetIndexer(...).Egress().ProxyURL = %q, want it to persist across a fresh read",
 			found.Egress().ProxyURL)
+	}
+}
+
+// SEC-14: an indexer's own proxy is stored normalised, and one that is not a proxy address is refused without echoing its password.
+func TestCreateIndexer_NormalisesAndChecksTheEgressProxyURL(t *testing.T) {
+	cache, fake := newCache(t)
+	request := settings.IndexerRequest{Name: "NZBgeek", Impl: "newznab", BaseURL: "https://api.nzbgeek.info", Enabled: true, EgressProxyURL: "  SOCKS5://Proxy.Example:1080/ "}
+	created, err := cache.CreateIndexer(t.Context(), request, secrets.Secret(""), fake.Now().Unix())
+	if err != nil {
+		t.Fatalf("CreateIndexer: %v", err)
+	}
+	if got := created.Egress().ProxyURL; got != "socks5://proxy.example:1080" {
+		t.Errorf("stored proxy = %q, want it trimmed, lower-cased and without the slash", got)
+	}
+	request.EgressProxyURL = "ftp://user:hunter2@proxy.example"
+	_, err = cache.CreateIndexer(t.Context(), request, secrets.Secret(""), fake.Now().Unix())
+	var problems config.Problems
+	if !errors.As(err, &problems) || len(problems) != 1 || problems[0].Path != "egress_proxy_url" || strings.Contains(problems[0].Value, "hunter2") {
+		t.Fatalf("err = %v, want one egress_proxy_url problem that does not echo the password", err)
 	}
 }
 
