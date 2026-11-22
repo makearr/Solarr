@@ -155,6 +155,12 @@ func (s *Server) AddWork(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "provider and external_id are required")
 		return
 	}
+	if body.QualityProfileId != nil {
+		if _, found := s.auth.Settings.Snapshot().QualityProfile(*body.QualityProfileId); !found {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "quality_profile_id does not exist")
+			return
+		}
+	}
 	if permission := access.Permission(body.CategoryId); !permission.AtLeast(settings.PermissionManage) {
 		if _, err := access.Category(body.CategoryId, settings.PermissionRequest); err != nil {
 			writeError(w, s.logger, err)

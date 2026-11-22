@@ -91,9 +91,13 @@ func TestAddWork_PassesTheChoicesAndReportsOnlyItsOwnIDs(t *testing.T) {
 	user := fixture.createUser(t, "admin", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "admin")
 	fixture.workAdder.result = apiserver.AddWorkResult{Kind: "artist", PersonID: 42, Searching: true}
-	profile := int64(3)
+	created, err := fixture.cache.CreateQualityProfile(t.Context(), "Added with", "{}", "{}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := created.ID
 
-	body := fmt.Sprintf(`{"category_id":%d,"kind":"series","provider":"tvdb","external_id":"81189","monitor_option":"future","specials":true,"quality_profile_id":3,"search":true}`, category.ID)
+	body := fmt.Sprintf(`{"category_id":%d,"kind":"series","provider":"tvdb","external_id":"81189","monitor_option":"future","specials":true,"quality_profile_id":%d,"search":true}`, category.ID, profile)
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works", body))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
@@ -114,6 +118,10 @@ func TestAddWork_PassesTheChoicesAndReportsOnlyItsOwnIDs(t *testing.T) {
 	}
 	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works", `{"category_id":1,"provider":"p"}`)); recorder.Code != http.StatusBadRequest {
 		t.Errorf("without external_id: %d, want 400", recorder.Code)
+	}
+	unknown := fmt.Sprintf(`{"category_id":%d,"provider":"tvdb","external_id":"1","quality_profile_id":%d}`, category.ID, profile+99)
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works", unknown)); recorder.Code != http.StatusBadRequest {
+		t.Errorf("unknown quality profile: %d, want 400", recorder.Code)
 	}
 }
 
