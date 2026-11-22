@@ -68,10 +68,7 @@ func (r RecoveryReport) HistoryLost(now time.Time) time.Duration {
 	return now.Sub(r.BackupAt)
 }
 
-// OpenChecked opens a database, verifying it first and restoring a backup over it if
-// the check fails (ADR-15, section 15.1 step 2). The check runs on its own throwaway
-// connection before Open, because Open settles the page size by querying the schema
-// and so fails on a corrupt file before any of the three real handles exist.
+// OpenChecked verifies a database and restores a backup over it on failure (ADR-15, section 15.1 step 2), on a throwaway connection because Open fails on a corrupt file before any handle exists.
 func OpenChecked(ctx context.Context, c clock.Clock, config Config, options RecoveryOptions) (*Store, RecoveryReport, error) {
 	config = config.withDefaults()
 

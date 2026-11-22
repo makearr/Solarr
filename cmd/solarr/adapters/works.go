@@ -215,12 +215,7 @@ func (f FreshWindow) Cutoffs(cl clock.Clock) (since string, rssSince int64) {
 	return FreshSinceCutoff(cl, days), FreshRSSCutoff(cl, hours)
 }
 
-// FreshSinceCutoff resolves ADR-55's freshness window to a cutoff date
-// string -- the one place library.WorkFilter.FreshSince's day-precision
-// format boundary is crossed from a raw clock, shared by the Library list's
-// own fresh=true filter (ListWorks above) and the dashboard's fresh-works
-// counter sweep (cmd/solarr/app's freshCountsJob), so the two can never
-// disagree about what "fresh" means.
+// FreshSinceCutoff resolves ADR-55's freshness window to a cutoff date string, shared by the Library list and the dashboard fresh counter so they cannot disagree.
 func FreshSinceCutoff(cl clock.Clock, days int64) string {
 	return cl.Now().AddDate(0, 0, -int(days)).Format(time.DateOnly)
 }

@@ -19,23 +19,10 @@ import (
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
-// LidarrClientFactory builds a REST client for one instance's own base URL
-// and decrypted API key -- injected so this package never builds an
-// httpx.Client itself (cmd/solarr/app/providers.go's own job, the same
-// rate limiter/breaker/proxy wiring every other provider already gets).
+// LidarrClientFactory builds a REST client from an instance's URL and decrypted key; injected so this package never builds an httpx.Client (providers.go does).
 type LidarrClientFactory func(baseURL, apiKey string) arrimport.LidarrClient
 
-// ArrSync runs one *Arr import (todo 4.13, ADR-52); what an item becomes is its media type's Importer.
-//
-// Sync returns as soon as the run is recorded RUNNING; the actual walk runs
-// detached in its own goroutine, and a caller polls GET /arr/imports/{id}
-// for DONE/FAILED. Originally built synchronous ("a Lidarr library's own
-// realistic scale is nowhere near WALK/GROUP's 500k-file design point");
-// live-verified wrong the same day against a real 766-artist library (one
-// artist alone with 251 albums, each needing its own Albums call) that
-// would have run well past this process's own HTTP write timeout -- exactly
-// the "revisit if a real large library proves this wrong" this type's
-// earlier doc comment already named as the thing to watch for.
+// ArrSync runs one *Arr import (todo 4.13, ADR-52); Sync returns once the run is RUNNING and the walk continues detached, because a large library outlives the HTTP write timeout (callers poll GET /arr/imports/{id}).
 type ArrSync struct {
 	Cache    *settings.Cache
 	Identity library.Identity
@@ -121,12 +108,7 @@ func (p *ArrProgress) annotate(view apiserver.ArrImportRun) apiserver.ArrImportR
 	return view
 }
 
-// Sync starts one instance's own import and returns immediately with the
-// RUNNING run -- recorded regardless of outcome, so a connection failure
-// still leaves a row the UI can show, not a silently missing one. The
-// actual walk (runAndFinish) runs detached from ctx: an HTTP request's own
-// context is cancelled the instant this method returns, but the sync it
-// started must keep running.
+// Sync records a RUNNING run regardless of outcome so a connection failure leaves a visible row, and runs the walk detached from ctx because the request context ends on return.
 func (a ArrSync) Sync(ctx context.Context, instanceID int64, options apiserver.ArrSyncOptions) (apiserver.ArrImportRun, error) {
 	instance, err := a.Cache.GetArrInstance(ctx, instanceID)
 	if err != nil {
@@ -159,10 +141,7 @@ func (a ArrSync) Sync(ctx context.Context, instanceID int64, options apiserver.A
 	return a.Progress.annotate(arrImportRunView(run)), nil
 }
 
-// runAndFinish is Sync's own detached second half: the real walk, then
-// recording its outcome. ctx has already had Sync's own cancellation
-// stripped (context.WithoutCancel) -- it must outlive the HTTP request that
-// started it.
+// runAndFinish is the detached second half: the walk, then its outcome; ctx is already uncancelled (context.WithoutCancel) so it outlives the request.
 func (a ArrSync) runAndFinish(
 	ctx context.Context, importID, instanceID int64, instance settings.ArrInstance, client arrimport.LidarrClient,
 	options apiserver.ArrSyncOptions,
@@ -191,11 +170,7 @@ func (a ArrSync) runAndFinish(
 	if listsErr != nil {
 		errMsg = strings.TrimPrefix(errMsg+"; "+listsErr.Error(), "; ")
 	}
-	// A connection or artist-listing failure leaves every count at zero --
-	// the run never got started, FAILED rather than a DONE with nothing to
-	// show for it. A per-artist/per-album failure still leaves real counts
-	// (syncLidarr's own best-effort tolerance), so that stays DONE with its
-	// own error summarising what did not import.
+	// A connection or artist-listing failure leaves counts at zero, so the run is FAILED; a per-artist or per-album failure keeps real counts and stays DONE with an error summary.
 	state := library.ArrImportDone
 	if syncErr != nil && counts == (library.ArrImportCounts{}) {
 		state = library.ArrImportFailed
@@ -435,12 +410,7 @@ func arrImportItemView(item library.ArrImportItem) apiserver.ArrImportItem {
 	}
 }
 
-// categoryFor answers which category a Lidarr artist's own root folder path
-// belongs to. instance.CategoryID, when set, always wins -- the simple
-// "everything from this instance goes to one category" case ADR-52 allows
-// without requiring path matching at all. Otherwise the longest-matching
-// configured root folder (fsx.Within) names the category, the same
-// longest-prefix reasoning a real filesystem's own mount resolution uses.
+// categoryFor picks a Lidarr artist's category: instance.CategoryID wins when set (ADR-52), else the longest-matching configured root folder (fsx.Within).
 func (a ArrSync) categoryFor(instance settings.ArrInstance, rootFolderPath string, roots []settings.RootFolder) (int64, bool) {
 	if instance.CategoryID != nil {
 		return *instance.CategoryID, true

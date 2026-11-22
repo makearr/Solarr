@@ -44,11 +44,7 @@ const CoreOwner = "core"
 type Migration struct {
 	Version int
 	Up      string
-	// DisablesForeignKeys asks applyMigration to run Up with foreign key enforcement
-	// suspended (runWithForeignKeysDisabled), for a rebuild SQLite's own ALTER TABLE
-	// cannot express any other way -- widening or narrowing a table's own constraint.
-	// Set by migrations.load from a marker comment in the .sql file itself, so it is
-	// locked into the migration's own checksum like everything else in the text.
+	// DisablesForeignKeys runs Up with enforcement suspended for table rebuilds ALTER TABLE cannot express; migrations.load sets it from a marker comment so the checksum covers it.
 	DisablesForeignKeys bool
 	// Replaces marks a baseline: the checksum of the last migration it squashed, so a database that
 	// applied that one is already at this schema. Empty for every ordinary migration.

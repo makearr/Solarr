@@ -19,10 +19,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
-// People satisfies apiserver.PeopleReader, apiserver.PeopleSubscriber and
-// apiserver.SubscriptionPreviewer over library.People. Provider is only
-// needed for Preview (todo 4.4) -- ListPeople/GetPersonDetail/Subscribe
-// never touch MusicBrainz directly.
+// People satisfies apiserver.PeopleReader, PeopleSubscriber and SubscriptionPreviewer over library.People; Provider is needed only for Preview (todo 4.4).
 type People struct {
 	People library.People
 	Works  library.Works
@@ -38,11 +35,7 @@ type People struct {
 	Warm func(ctx context.Context, personID int64)
 }
 
-// Remove stops following an artist and deletes them (revision 7.3). The
-// subscription goes first so a half-finished removal leaves a person who is
-// merely no longer followed, rather than a subscription pointing at a person
-// who no longer exists. Files are never touched: a work belongs to the
-// library, not to the person credited on it.
+// Remove stops following an artist then deletes them (revision 7.3); the subscription goes first so a half-finished removal never leaves a subscription to a missing person, and files are never touched.
 func (a People) Remove(ctx context.Context, personID, _ int64) error {
 	if _, err := a.People.Person(ctx, personID); err != nil {
 		return err

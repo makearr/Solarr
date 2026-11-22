@@ -244,10 +244,7 @@ func (c CandidateSearch) SendCandidate(ctx context.Context, workID int64, scope 
 	return acquisitionView(acquisition), nil
 }
 
-// translateDispatchError maps music/library's own dispatch error vocabulary
-// to apiserver's -- apiserver never imports internal/media/music or
-// internal/db/library directly (it defines narrow interfaces), so its own
-// sentinels are what a handler actually switches on.
+// translateDispatchError maps music/library dispatch errors to apiserver's sentinels, since apiserver never imports those packages and handlers switch on its own.
 func translateDispatchError(err error) error {
 	switch {
 	case errors.Is(err, music.ErrDecisionNotFound):
@@ -414,10 +411,7 @@ func candidateDecisionView(detail library.DecisionDetail) apiserver.CandidateDec
 	return view
 }
 
-// decodeJSON parses one candidate_decision JSON column back into its own
-// typed slice -- an empty or unparseable value answers nil rather than
-// erroring, the same tolerance every other "this is a stored blob, not a
-// request body" read in this codebase gives.
+// decodeJSON parses a candidate_decision JSON column into its typed slice; an empty or unparseable stored blob answers nil instead of an error.
 func decodeJSON[T any](raw string) []T {
 	if raw == "" {
 		return nil

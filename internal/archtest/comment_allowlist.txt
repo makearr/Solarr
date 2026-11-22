@@ -1,15 +1,4 @@
 # Long (4+ line) comment blocks each file still holds; the test fails when a count grows. Lower an entry when a block moves to documentation/.
-cmd/solarr/adapters/arrsync.go 6
-cmd/solarr/adapters/artists.go 1
-cmd/solarr/adapters/candidatesearch.go 2
-cmd/solarr/adapters/importsessions.go 2
-cmd/solarr/adapters/libraryhealth.go 1
-cmd/solarr/adapters/moves.go 2
-cmd/solarr/adapters/people.go 2
-cmd/solarr/adapters/settingscache.go 1
-cmd/solarr/adapters/unwanted.go 2
-cmd/solarr/adapters/works.go 1
-cmd/solarr/adapters/worksmonitor.go 5
 cmd/solarr/app/backups_source.go 1
 cmd/solarr/app/diskio.go 1
 cmd/solarr/app/fingerprint_retry.go 1
@@ -35,14 +24,6 @@ internal/acquiring/indexer/soulseek/soulseek.go 1
 internal/acquiring/indexer/types.go 3
 internal/acquiring/judge/profiles.go 1
 internal/acquiring/sabnzbd/client.go 2
-internal/db/store/backup.go 1
-internal/db/store/checkpoint.go 2
-internal/db/store/migrate.go 1
-internal/db/store/predicates.go 1
-internal/db/store/recover.go 1
-internal/db/store/retention.go 1
-internal/db/store/store.go 1
-internal/db/store/write.go 1
 internal/importing/arrimport/lidarr.go 6
 internal/importing/importjob/job.go 7
 internal/importing/importjob/manualcommit.go 3

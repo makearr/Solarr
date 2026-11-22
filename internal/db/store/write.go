@@ -156,21 +156,8 @@ func runInTransaction(ctx context.Context, db *sql.DB, database string, run func
 	return nil
 }
 
-// runWithForeignKeysDisabled runs fn the same way runInTransaction does, but with foreign key
-// enforcement suspended around it -- SQLite's own documented procedure for a schema change
-// ALTER TABLE cannot express (widening or narrowing a table's own constraints means rebuilding
-// it), since dropping a table that other tables still hold live ON DELETE CASCADE/SET NULL
-// references into cascades those rows away the moment it is dropped, unless enforcement is off
-// for the duration.
-//
-// PRAGMA foreign_keys is a documented no-op inside a transaction, so it must be toggled on db
-// itself before BEGIN and after COMMIT/ROLLBACK, never inside fn. This only works because db here
-// is always s.write, pinned to exactly one physical connection (SetMaxOpenConns(1)) -- the pragma
-// and the transaction that follows are guaranteed to land on the same connection rather than two
-// different ones from a pool, which a general-purpose *sql.DB could not guarantee.
-//
-// foreign_keys is always re-enabled, success or failure: Invariant 4 requires it, and this is the
-// one connection ever allowed to say otherwise, only for the moment this function owns it.
+// runWithForeignKeysDisabled is runInTransaction with enforcement off, SQLite's documented procedure for table rebuilds, since dropping a referenced table would cascade its rows away.
+// The pragma is a no-op inside a transaction, so it is toggled before BEGIN and after COMMIT/ROLLBACK on s.write, which is pinned to one connection; it is re-enabled on success or failure (Invariant 4).
 func runWithForeignKeysDisabled(
 	ctx context.Context, db *sql.DB, database string, fn func(context.Context, *sql.Tx) error,
 ) error {

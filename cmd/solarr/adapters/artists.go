@@ -9,10 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/listfilter"
 )
 
-// artistCreditRole is the one credit role the Artists navigation level
-// filters on -- music.CreditRoleArtist's own value, but internal/db/library
-// cannot import internal/media/music (the dependency arrow points the other way),
-// the same reason library.creditRoleArtist exists.
+// artistCreditRole mirrors music.CreditRoleArtist because internal/db/library cannot import internal/media/music.
 const artistCreditRole = "artist"
 
 // Artists satisfies apiserver.LibraryArtistsReader over library.People.

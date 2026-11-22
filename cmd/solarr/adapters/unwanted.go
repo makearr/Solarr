@@ -47,12 +47,7 @@ func blockedContentRow(row library.BlockedContent) apiserver.BlockedContentRow {
 	return view
 }
 
-// RemoveAndBlock satisfies apiserver.RemoveAndBlocker over
-// library.RemoveAndBlock, and answers apiserver.ErrNoSuchFile for a
-// media_object id nothing in the library recognises -- library.RemoveAndBlock
-// itself does not fail on an unknown id (a Reopen-only or Block-only request
-// simply has nothing to do), but the HTTP action needs a real 404 rather than
-// a silent, empty 200.
+// RemoveAndBlock satisfies apiserver.RemoveAndBlocker and answers ErrNoSuchFile for an unknown media_object id, because the library call does not fail but the HTTP action needs a 404.
 type RemoveAndBlock struct {
 	Action   library.RemoveAndBlock
 	Physical library.Physical
@@ -101,10 +96,7 @@ func (a RemoveAndBlock) RemoveAndBlockFile(
 	return output, nil
 }
 
-// RecycleFile is RemoveAndBlockFile's own first step alone: the bytes
-// leave the library and stay recoverable, nothing is blocked, and every
-// desired_item that file satisfied is recounted so the album reports what it
-// really has.
+// RecycleFile is RemoveAndBlockFile's first step alone: the bytes leave the library but stay recoverable, nothing is blocked, and satisfied desired_items are recounted.
 func (a RemoveAndBlock) RecycleFile(ctx context.Context, mediaObjectID int64, recycling library.Recycling) error {
 	return a.RecycleFor(ctx, mediaObjectID, recycling, library.ReasonUserDelete, 0)
 }

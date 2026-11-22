@@ -2,10 +2,7 @@ package store
 
 import "strings"
 
-// Predicates collects the filters a request actually carries, so a query says only what
-// it means. A filter written into static SQL as an is-it-empty test is not sargable, so
-// SQLite can use no index for that column and sorts the whole table instead: measured at
-// 31 times slower (documentation/sql-and-sqlc.md).
+// Predicates collects the filters a request carries, because an is-it-empty test in static SQL is not sargable and measured 31 times slower (documentation/sql-and-sqlc.md).
 type Predicates struct {
 	fragments []string
 	arguments []any

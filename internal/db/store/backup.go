@@ -77,10 +77,7 @@ func (s *Store) copyOut(ctx context.Context, choose func() (string, error)) erro
 	return s.fs.Chmod(path, 0o600)
 }
 
-// unusedBackupPath finds a free name (ADR-2). The kind is embedded right after the
-// name -- <name>.db.<kind>.<timestamp>[-N] -- so it survives a restart without a
-// separate manifest: retention has to tell a pre-migration backup from a rotation
-// one after the process that wrote it is long gone.
+// unusedBackupPath finds a free name (ADR-2) with the kind embedded (<name>.db.<kind>.<timestamp>[-N]) so retention can tell pre-migration from rotation backups after a restart.
 func (s *Store) unusedBackupPath(directory string, kind BackupKind) (string, error) {
 	stamp := strings.ReplaceAll(s.clock.Now().UTC().Format("2006-01-02T15:04:05Z"), ":", "-")
 	base := filepath.Join(directory, fmt.Sprintf("%s.db.%s.%s", s.config.Name, kind, stamp))

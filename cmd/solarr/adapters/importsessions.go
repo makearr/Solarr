@@ -367,11 +367,7 @@ func importSessionRow(s library.Session) apiserver.ImportSessionRow {
 	return row
 }
 
-// importUnitRow decodes evidence_json/candidates_json back into the exact
-// types they were marshaled from (inspect.Evidence, []model.Identification)
-// before mapping into apiserver's own view -- reusing those types rather
-// than re-deriving the JSON shape by hand, the same reconciliation lesson
-// this session's own duplicated-enum finding already recorded.
+// importUnitRow decodes evidence_json/candidates_json into the types they were marshaled from rather than re-deriving the JSON shape by hand.
 func importUnitRow(u library.Unit) apiserver.ImportUnitRow {
 	row := apiserver.ImportUnitRow{
 		ID: u.ID, SessionID: u.SessionID, RelPath: u.RelPath, Shape: u.Shape,
@@ -411,10 +407,7 @@ func importCandidatesFrom(candidates []model.Identification) []apiserver.ImportC
 	return views
 }
 
-// ImportInspector implements apiserver.ImportInspector by enqueuing
-// import.inspect (ActionKeyFor deduplicates concurrent submissions of the
-// same source path; a retry of one execution resumes rather than
-// duplicating, importjob.Job's own concern, not this adapter's).
+// ImportInspector enqueues import.inspect; ActionKeyFor deduplicates concurrent submissions of one source path, and retries resume inside importjob.Job.
 type ImportInspector struct {
 	Queue *jobs.Queue
 	// Settings gives the library roots; FS checks the folder; Workspace is Solarr's own working folder, never a source.

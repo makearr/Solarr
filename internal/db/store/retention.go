@@ -102,10 +102,7 @@ func parseBackupName(name, prefix string) (BackupInfo, bool) {
 	return BackupInfo{}, false
 }
 
-// PruneBackups deletes rotation backups beyond keep, oldest first, and returns
-// what it removed. Pre-migration backups are never touched -- ADR-15 keeps them
-// outside the rotation entirely -- and keep is raised to minBackupsKept if it is
-// configured lower.
+// PruneBackups deletes rotation backups beyond keep, oldest first; pre-migration backups are never touched (ADR-15) and keep is raised to minBackupsKept.
 func (s *Store) PruneBackups(directory string, keep int) ([]string, error) {
 	return s.pruneKind(directory, BackupRotation, func(index int, _ BackupInfo) bool {
 		return index >= max(keep, minBackupsKept)

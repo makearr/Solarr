@@ -89,10 +89,7 @@ func drainPlanResult(result drainjob.Result) apiserver.DrainPlanResult {
 	return movePlanResult(result.Plan, result.Accepted, result.MoveJobID)
 }
 
-// movePlanResult converts a mover.MovePlan into apiserver's own plain-data
-// shape -- shared by Drain and Rename, since both answer the
-// exact same DrainPlanResult DTO (structurally generic despite the name;
-// see apiserver.RenameStarter's own doc comment).
+// movePlanResult converts a mover.MovePlan to apiserver's plain data; Drain and Rename share it because both answer the same DrainPlanResult DTO.
 func movePlanResult(plan mover.MovePlan, accepted bool, moveJobID int64) apiserver.DrainPlanResult {
 	view := apiserver.DrainPlanResult{Accepted: accepted, MoveJobID: moveJobID}
 	for _, m := range plan.Moves {
@@ -193,11 +190,7 @@ func (a Rename) start(
 	return result, nil
 }
 
-// MoveJobs satisfies apiserver.MoveJobLister over library.MoveJobs.
-// Reason filtering happens here, in Go, since library.MoveJobs.List only
-// filters by state -- move job counts never approach library scale
-// (ListImportSessions' own comment gives the identical reasoning), so a
-// second pass over an already-small slice costs nothing.
+// MoveJobs satisfies apiserver.MoveJobLister; reason filtering happens in Go because library.MoveJobs.List filters only by state and move job counts are small.
 type MoveJobs struct {
 	MoveJobs library.MoveJobs
 	// Queue runs the job again after a resume.

@@ -13,10 +13,7 @@ type CheckpointReport struct {
 	CheckpointedPages int
 }
 
-// wantCheckpoint keeps the log in hand, and is called by the writer between
-// transactions. Two paths, because they answer different problems: copying frames out
-// costs a database fsync and belongs beside the writer, but only a checkpoint on the
-// writer's own connection lets SQLite rewind the file (documentation/benchmarks.md).
+// wantCheckpoint is called by the writer between transactions: copying frames costs a fsync and belongs beside the writer, but only a checkpoint on its own connection rewinds the file (documentation/benchmarks.md).
 func (s *Store) wantCheckpoint() {
 	s.commitsSinceCheckpoint++
 	if s.commitsSinceCheckpoint < s.config.CheckpointEveryCommits {
@@ -35,10 +32,7 @@ func (s *Store) wantCheckpoint() {
 	}
 }
 
-// rewindTheLog checkpoints on the writer's connection so the next transaction starts
-// the log again from the beginning. This is the path somebody can wait behind, so it
-// runs only once the log has actually outgrown its limit. RESTART and TRUNCATE both
-// wait out every reader, and never catch a writer that does not pause.
+// rewindTheLog checkpoints on the writer's connection so the log restarts; it is the path someone waits behind, so it runs only once the log outgrew its limit (RESTART and TRUNCATE wait out every reader).
 func (s *Store) rewindTheLog() {
 	s.checkpointMu.Lock()
 	defer s.checkpointMu.Unlock()

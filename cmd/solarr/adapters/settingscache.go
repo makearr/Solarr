@@ -78,10 +78,7 @@ func (m MoverRoots) RootFolder(id int64) (moverjob.RootFolder, bool) {
 	return moverjob.RootFolder{Path: root.Path, FSID: root.FSID}, true
 }
 
-// DrainRoots adapts *settings.Cache to drainjob.Roots -- internal/moving/drainjob
-// takes settings.RootFolder/CategoryRoot for their types only (the same
-// lightweight use internal/scanning/scan's own Roots interface already makes), so
-// this is a thin method-shape bridge, not a translation of any real logic.
+// DrainRoots adapts *settings.Cache to drainjob.Roots; a thin method-shape bridge, since drainjob uses settings types for their shape only.
 type DrainRoots struct{ Cache *settings.Cache }
 
 func (a DrainRoots) RootFolder(id int64) (settings.RootFolder, bool) {

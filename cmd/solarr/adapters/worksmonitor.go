@@ -17,11 +17,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/listfilter"
 )
 
-// WorksMonitor satisfies apiserver.WorksMonitor over library.Desired,
-// resolving category/profile the same way music.SubscriptionExpandJob
-// already does (CategoryFinder.CategoryForMediaType) rather than needing a
-// category the caller has no natural way to supply -- a work-detail page has
-// a work, not a root folder, to derive one from.
+// WorksMonitor satisfies apiserver.WorksMonitor over library.Desired, resolving category and profile as music.SubscriptionExpandJob does, since a work page has no root folder to derive one from.
 type WorksMonitor struct {
 	// RatingLimit answers a library's maximum rating, for a selection made under Above rating; nil filters nothing.
 	RatingLimit func(categoryID int64) (library.RatingLimit, bool)
@@ -181,12 +177,7 @@ func (a WorksMonitor) ensureWorkItem(ctx context.Context, detail library.WorkDet
 	return row, nil
 }
 
-// SetTrackWanted ensures the track's own SINGLE item exists, wanted or not,
-// mirroring SetWorkMonitored's own shape one level down (Invariant 71 --
-// an explicit "not interested" is worth recording the same as wanted).
-// Distinct from SetPartMonitored: that only resizes the album's own
-// required_count, this creates a standalone acquisition target for the
-// track by itself.
+// SetTrackWanted ensures the track's own SINGLE item exists, wanted or not (Invariant 71), unlike SetPartMonitored which only resizes the album's required_count.
 func (a WorksMonitor) SetTrackWanted(
 	ctx context.Context, workID, partID int64, wanted bool,
 ) (apiserver.WantedRow, error) {
@@ -227,13 +218,7 @@ func (a WorksMonitor) SetTrackWanted(
 // applied to a read pass here rather than a write transaction.
 const bulkPageSize = 200
 
-// BulkSetMonitored resolves the selection to concrete work ids (explicit
-// ids filtered to what's visible, or every visible work not excluded) and,
-// unless preview, calls SetWorkMonitored for each -- reusing the exact same
-// per-work logic and its Invariant 71 guarantee rather than a bulk SQL
-// statement that would have to reimplement it. One work failing (a media
-// type with no category configured, a since-deleted work) is logged and
-// skipped rather than aborting the rest of the selection.
+// BulkSetMonitored resolves the selection to work ids and, unless preview, calls SetWorkMonitored per work to keep its Invariant 71 logic; one failure is logged and skipped, not fatal.
 func (a WorksMonitor) BulkSetMonitored(
 	ctx context.Context, selection apiserver.BulkSelection, monitored, preview bool,
 ) (int64, error) {
@@ -257,11 +242,7 @@ func (a WorksMonitor) BulkSetMonitored(
 	return affected, nil
 }
 
-// matchingWorkIDs turns a selection into concrete ids. Explicit ids (an
-// "include" selection) are filtered to ones visible under rootFolderIDs or
-// categoryIDs (ADR-27's two halves) and not excluded; otherwise every visible
-// work not excluded is enumerated (an "all matching" selection), paged so no
-// single read pulls the whole library into memory at once.
+// matchingWorkIDs turns a selection into ids: explicit ids are filtered to visible (ADR-27) and not excluded, else every visible work not excluded, paged to bound memory.
 func (a WorksMonitor) matchingWorkIDs(ctx context.Context, selection apiserver.BulkSelection) ([]int64, error) {
 	rootFolderIDs, categoryIDs := selection.RootFolderIDs, selection.CategoryIDs
 	excluded := make(map[int64]bool, len(selection.ExcludedIDs))
@@ -322,11 +303,7 @@ func (a WorksMonitor) matchingWorkIDs(ctx context.Context, selection apiserver.B
 	}
 }
 
-// idVisible reports whether any of a work's own ids (root folder or category)
-// is among the caller's visible ones -- ADR-27, the same check
-// apiserver.sharesAnID makes, duplicated here rather than exported since
-// apiserver's helpers are unexported by design (this package translates,
-// it does not reach into apiserver's internals).
+// idVisible reports whether any of a work's ids is among the caller's visible ones (ADR-27), duplicated because apiserver's helpers are unexported by design.
 func idVisible(visible, workIDs []int64) bool {
 	seen := make(map[int64]struct{}, len(visible))
 	for _, id := range visible {

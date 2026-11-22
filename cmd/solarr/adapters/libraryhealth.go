@@ -15,10 +15,7 @@ import (
 // figure (todo 4.8: "every figure a link", not a full list of its own).
 const healthSampleSize = 20
 
-// LibraryHealth satisfies apiserver.LibraryHealth over library.db's own
-// readers. Root folder capacity is not composed here: the handler already
-// holds settings.Cache directly and reads it itself, the same shape
-// GetNetworkSettings already uses.
+// LibraryHealth satisfies apiserver.LibraryHealth over library.db readers; root folder capacity is read by the handler from settings.Cache, not composed here.
 type LibraryHealth struct {
 	Physical       library.Physical
 	Unidentified   library.Unidentified
