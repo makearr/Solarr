@@ -15,13 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
-// Extract expands source into destDir, subject to limits. destDir is always
-// a workspace the caller owns (ADR-49: "Extraction happens in a workspace,
-// never in place") -- this package has no opinion on where that workspace
-// is, only that every write stays inside it, checked by fsx.SafeJoin
-// (Invariant 76, the ADR-14 choke point applied to untrusted archive entry
-// names). Reading the source archive goes through fsx too, except rar --
-// see List's own doc comment for why that one format is the exception.
+// Extract expands source into destDir, a caller-owned workspace (ADR-49), with every write kept inside by fsx.SafeJoin (Invariant 76); reads go through fsx except rar (see List).
 func Extract(ctx context.Context, fsys fsx.FS, source, destDir string, limits Limits) error {
 	format, ok := DetectFormat(source)
 	if !ok {
@@ -58,10 +52,7 @@ func Extract(ctx context.Context, fsys fsx.FS, source, destDir string, limits Li
 	}
 }
 
-// checkFreeSpace is the free-space margin check "before the first byte is
-// written" (ADR-49) -- destDir's parent must already exist for DiskUsage to
-// resolve a real filesystem, so this runs before any directory is created
-// under it either.
+// checkFreeSpace is ADR-49's margin check before the first byte; destDir's parent must exist for DiskUsage, so it runs before any directory is created under it.
 func checkFreeSpace(fsys fsx.FS, destDir string, limits Limits) error {
 	probeDir := destDir
 	for {
@@ -81,13 +72,7 @@ func checkFreeSpace(fsys fsx.FS, destDir string, limits Limits) error {
 	}
 }
 
-// budget enforces the three numeric limits ADR-49 names as one shared
-// bookkeeper across every format's own extraction loop: entry count, total
-// uncompressed bytes, and expansion ratio (measured against the source
-// archive's own on-disk size, since not every format exposes a reliable
-// per-entry compressed size). Checked as bytes are actually written, not
-// only at entry boundaries, so a single oversized entry cannot blow through
-// the limit before the next check would have caught it.
+// budget enforces ADR-49's entry count, total uncompressed bytes and expansion ratio (against the archive's on-disk size, since not every format gives per-entry sizes) as bytes are written, so one oversized entry cannot pass between checks.
 type budget struct {
 	limits            Limits
 	sourceBytes       int64
@@ -172,12 +157,7 @@ func extractEntry(fsys fsx.FS, destDir, name string, isDir bool, src io.Reader, 
 	return nil
 }
 
-// splitEntryPath turns an archive entry's own name (always "/"-separated,
-// whatever format it came from) into path components fsx.SafeJoin can
-// sanitise and check one at a time. A leading "/" or drive letter is
-// stripped rather than trusted -- an absolute path inside an archive entry
-// is exactly the other half of the traversal attack SafeJoin's own ".."
-// rejection guards against.
+// splitEntryPath turns an entry name (always "/"-separated) into components for fsx.SafeJoin; a leading "/" or drive letter is stripped, the other half of the traversal attack its ".." rejection guards.
 func splitEntryPath(name string) []string {
 	var components []string
 	for _, part := range pathSplit(name) {
@@ -269,11 +249,7 @@ func extractTar(ctx context.Context, fsys fsx.FS, r io.Reader, format Format, de
 				return err
 			}
 		default:
-			// Symlinks, hardlinks, device files: never followed or created
-			// (the same "never a symlink" rule ADR-11 already applies to
-			// import), silently skipped rather than refusing the whole
-			// archive over one entry a music or book release never has a
-			// legitimate reason to contain.
+			// Symlinks, hardlinks and device files are never created (ADR-11) and are skipped rather than refusing the archive, as a release has no legitimate reason to hold one.
 		}
 	}
 }
@@ -332,12 +308,7 @@ func extract7z(ctx context.Context, fsys fsx.FS, r io.ReaderAt, size int64, dest
 		}
 		src, err := f.Open()
 		if err != nil {
-			// bodgit/sevenzip answers a password-shaped error for an
-			// encrypted entry rather than a typed sentinel this package
-			// could match on directly -- recorded here rather than
-			// misreported as ErrEncrypted, since todo 4.10 explicitly wants
-			// an unsupported case named with its own format and error
-			// rather than guessed at.
+			// bodgit/sevenzip reports an encrypted entry as a password-shaped error with no typed sentinel, so it is recorded as an unsupported case with its format rather than misreported as ErrEncrypted (todo 4.10).
 			return fmt.Errorf("archive: open 7z entry %q: %w", f.Name, err)
 		}
 		err = extractEntry(fsys, destDir, f.Name, false, src, b)

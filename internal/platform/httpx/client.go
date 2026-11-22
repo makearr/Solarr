@@ -237,12 +237,7 @@ func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response,
 	}
 
 	if class == ClassSuccess {
-		// cancel is deferred to the body's own Close, not run here: a caller
-		// reads the body after Do returns, and cancelling on return raced
-		// that read against net/http noticing the context was done --
-		// an intermittent "context canceled" on any slow or larger response
-		// (found live, todo 4.17's Discover search hit it against a real
-		// MusicBrainz search response).
+		// cancel is deferred to the body's Close, not run here: cancelling on return raced the caller's read against net/http noticing the context, giving intermittent "context canceled" on slow or large responses (todo 4.17).
 		response.Body = &cancelOnCloseBody{ReadCloser: response.Body, cancel: cancel}
 		return response, nil
 	}

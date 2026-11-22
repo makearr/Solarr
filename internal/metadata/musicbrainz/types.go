@@ -1,8 +1,4 @@
-// Package musicbrainz is ADR-29's provider: a Servarr metadata proxy tried first,
-// direct musicbrainz.org as the fallback ADR-13's circuit breaker falls over to,
-// both normalised to the same shape and cached behind internal/metadata/metacache. Direct-
-// wired into internal/media/music until stage 9 extracts the MetadataProvider interface
-// (architecture section 8.2), the way internal/media/music itself is.
+// Package musicbrainz is ADR-29's provider: a Servarr proxy first, direct musicbrainz.org as the fallback ADR-13's breaker falls over to, both normalised and cached in metacache; wired directly into internal/media/music until stage 9 extracts MetadataProvider (architecture section 8.2).
 package musicbrainz
 
 import "context"
@@ -35,10 +31,7 @@ type ReleaseGroup struct {
 	Aliases []string
 	// Rating is absent (zero) from a source that does not carry it.
 	Rating Rating
-	// WikidataQID is extracted from the release group's own "wikidata" URL
-	// relation, when one exists -- ADR-8's bridge, same reasoning as
-	// Artist.WikidataQID, for a work-level description rather than a
-	// person's biography.
+	// WikidataQID comes from the release group's "wikidata" URL relation (ADR-8's bridge, as Artist.WikidataQID) for a work-level description.
 	WikidataQID string
 }
 
@@ -101,10 +94,7 @@ type Release struct {
 	// pseudo-release), lowercased. It is the closest thing a Release has to a
 	// "kind of edition" and becomes edition.kind.
 	Status string
-	// Date, Country, LabelName, CatalogueNumber and Barcode are release
-	// attributes as MusicBrainz or the proxy reported them -- not every source
-	// carries every field (the proxy in particular has no catalogue number or
-	// barcode in its shape), so a field a source did not answer is simply empty.
+	// Date, Country, LabelName, CatalogueNumber and Barcode are release attributes as the source reported them; a source that did not answer leaves the field empty (the proxy has no catalogue number or barcode).
 	Date      string
 	Country   string
 	LabelName string
@@ -149,12 +139,7 @@ type Track struct {
 	ISRCs        []string
 }
 
-// Source is one place to ask (ADR-29): the Servarr proxy or direct MusicBrainz.
-// Album returns both pieces in one call because that is how the cheaper source
-// (the proxy) actually answers -- one request for a release group returns every
-// release under it, tracks included. releaseMBID selects which of those releases
-// the caller wants back; a source with no matching release under the group is an
-// error, not a fabricated empty Release.
+// Source is one place to ask (ADR-29): the Servarr proxy or direct MusicBrainz; Album returns release group and releases together as the proxy does, releaseMBID selects the release, and a missing match is an error, not an empty Release.
 type Source interface {
 	// Name is the ADR-13 rate-limit and circuit-breaker bucket key.
 	Name() string
@@ -171,10 +156,7 @@ type ReleaseGroupMatch struct {
 	ArtistNames string
 }
 
-// Searcher is an optional Source capability -- text search, not MBID lookup.
-// Not every Source implements it: ADR-29's Servarr proxy shape is unverified
-// for search (only direct musicbrainz.org has been confirmed live), so
-// Provider.Search only ever tries sources that assert this interface.
+// Searcher is an optional Source capability (text search, not MBID lookup); the proxy's search shape is unverified (only direct MusicBrainz is confirmed), so Provider.Search tries only sources asserting it.
 type Searcher interface {
 	SearchReleaseGroups(ctx context.Context, artist, title string, limit int) ([]ReleaseGroupMatch, error)
 }
@@ -215,13 +197,7 @@ type RecordingMatch struct {
 	ReleaseGroups []ReleaseGroup
 }
 
-// QuerySearcher is Searcher's own free-text counterpart (todo 4.17, ADR-56):
-// a user typing into a Discover search box has not split their query into
-// artist and title fields the way a file's own claimed tags let
-// SearchIdentifier do, and running the same raw string through both of
-// Searcher's fields would AND two broad phrases against different fields and
-// mostly miss. Same optional-capability shape as Searcher, ArtistLookup and
-// Discography -- not every Source implements it.
+// QuerySearcher is Searcher's free-text counterpart (todo 4.17, ADR-56): a Discover query is not split into artist and title, and AND-ing a raw string over both fields mostly misses; optional like Searcher.
 type QuerySearcher interface {
 	SearchReleaseGroupsByQuery(ctx context.Context, query string, limit int) ([]ReleaseGroupMatch, error)
 }
@@ -236,18 +212,12 @@ type ArtistMatch struct {
 	Score int
 }
 
-// ArtistSearcher is an optional Source capability: finding an artist by name
-// for someone adding one that is not in the library yet (ADR-56, revision
-// 7.1). Same optional shape as QuerySearcher -- ADR-29's proxy artist search
-// is unverified live, so not every Source implements it.
+// ArtistSearcher is an optional capability for finding an artist by name to add one not in the library (ADR-56, revision 7.1); the proxy's artist search is unverified.
 type ArtistSearcher interface {
 	SearchArtists(ctx context.Context, query string, limit int) ([]ArtistMatch, error)
 }
 
-// ArtistLookup is an optional Source capability: full artist detail beyond the
-// name and id ReleaseGroup.ArtistCredit already carries. Not every Source
-// implements it -- same reasoning as Searcher, the proxy's artist shape is
-// unverified live.
+// ArtistLookup is an optional capability for full artist detail beyond ReleaseGroup.ArtistCredit's name and id; the proxy's artist shape is unverified.
 type ArtistLookup interface {
 	Artist(ctx context.Context, mbid string) (Artist, error)
 }
@@ -290,12 +260,7 @@ type LabelCatalogue interface {
 	LabelReleaseGroups(ctx context.Context, labelMBID string) ([]ReleaseGroup, error)
 }
 
-// Discography is an optional Source capability: every release group credited
-// to an artist, browsed rather than looked up one release group at a time --
-// what subscription.expand (section 19.6, todo 4.4) needs to decide, per
-// release group, whether it is admitted. Not every Source implements it --
-// same reasoning as Searcher and ArtistLookup, ADR-29's proxy shape is
-// unverified live for this.
+// Discography is an optional capability returning every release group credited to an artist by browse, for subscription.expand (section 19.6, todo 4.4) to admit per group; the proxy is unverified for it.
 type Discography interface {
 	ArtistReleaseGroups(ctx context.Context, artistMBID string) ([]ReleaseGroup, error)
 }

@@ -13,10 +13,7 @@ type Answer[S, T any] struct {
 	Err    error
 }
 
-// FallThrough asks the sources in order and stops at the first that answers (ADR-29: the proxies first, the
-// direct source last). ask says can false for a source that cannot answer this question at all; it is passed
-// over without counting as a failure. answered is false when none answered, and errs then holds every failure in
-// order: none means no source could even be asked.
+// FallThrough asks sources in order and stops at the first answer (ADR-29: proxies first, direct last); ask false skips a source without counting a failure; answered is false when none did, and errs holds every failure in order (none means no source could be asked).
 func FallThrough[S, T any](
 	ctx context.Context, sources []S, ask func(ctx context.Context, source S) (value T, can bool, err error),
 ) (answer Answer[S, T], answered bool, errs []error) {

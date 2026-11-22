@@ -1,19 +1,9 @@
-// Package indexer is stage 5's own Newznab/Torznab protocol client (ADR-37,
-// 43, 47), and the Driver, Base and catalog every API indexer below it builds
-// on: Solarr speaks documented APIs rather than implementing Cardigann
-// (ADR-43), never a per-site scraping definition. It has no opinion on
-// rate limiting, circuit breaking or proxying -- the caller supplies an
-// already-configured httpx.Client, the same split internal/importing/
-// arrimport's own LidarrClient already uses for a per-connection external
-// service.
+// Package indexer is stage 5's Newznab/Torznab client (ADR-37, 43, 47) with the Driver, Base and catalog API indexers build on; it speaks documented APIs, not Cardigann (ADR-43), and takes an already-configured httpx.Client.
 package indexer
 
 import "time"
 
-// RawItem is one search or caps result before internal/identify/parse
-// extracts attributes from its own title (ADR-18) -- this package does no
-// interpretation of what a release actually is, only what the indexer's own
-// protocol said about it.
+// RawItem is one search or caps result before internal/identify/parse reads its title (ADR-18); it holds only what the indexer's protocol said.
 type RawItem struct {
 	Title string
 	GUID  string
@@ -54,10 +44,7 @@ type RawItem struct {
 	DownloadVolumeFactor *float64
 }
 
-// Category is one entry from the indexer's own t=caps categories block --
-// ADR-43: "the exact set must be taken from the specification at
-// implementation time rather than assumed", and the same applies to what
-// one specific indexer actually supports.
+// Category is one entry of the t=caps categories block; ADR-43 takes the set from the specification and from what each indexer supports.
 type Category struct {
 	ID            int
 	Name          string

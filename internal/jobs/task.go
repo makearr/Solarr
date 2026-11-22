@@ -8,10 +8,7 @@ import (
 	"time"
 )
 
-// Task is one periodic action, registered once in Go (ADR-59). Every
-// existing "enqueued once at startup, waits for a restart" function
-// (scan, enrichment, subscription expand, artwork, category counts, probe,
-// capacity) becomes one of these.
+// Task is one periodic action registered once in Go (ADR-59), replacing every enqueue-once-at-startup function (scan, enrichment, subscription expand, artwork, category counts, probe, capacity).
 type Task struct {
 	// Key is the stable identifier -- what ScheduleSource and ScheduleStates
 	// key their own rows on, and what the API and screen address a task by.
@@ -31,14 +28,7 @@ type Task struct {
 	// TaskRunner can record real outcomes (enqueued / already active /
 	// failed) rather than assuming success.
 	Enqueue func(context.Context) (EnqueueResult, error)
-	// RunFull is an optional second trigger for a task whose ordinary cadence
-	// does not do what a manual invocation sometimes needs -- library scan's
-	// own full rescan (private/questions.md), which rereads every directory
-	// regardless of mtime rather than the incremental sweep Enqueue always
-	// runs. Nil for every task with no such distinction; RunNowFull refuses
-	// with ErrNoFullMode when it is nil. Deliberately not a generic options
-	// payload every task would have to grow a case for -- scan is still the
-	// only task that needs one.
+	// RunFull is an optional second trigger for a task whose manual need differs from its cadence (library scan's full rescan, which ignores mtime); nil elsewhere, and RunNowFull then refuses with ErrNoFullMode.
 	RunFull func(context.Context) (EnqueueResult, error)
 	// EnqueueManual, when set, is what "Run now" fires instead of Enqueue, for a task that
 	// behaves differently when a person asks (a library's "Only After Manual Refresh").

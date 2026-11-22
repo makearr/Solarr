@@ -23,12 +23,7 @@ type Signal struct {
 // Evidence is why a unit's files ended up grouped the way they did.
 type Evidence struct {
 	Signals []Signal
-	// Ambiguous is true when grouping had to infer a boundary from a weaker
-	// signal (track continuity alone) rather than a decisive one (an embedded
-	// id, or a directory with nothing to contradict it) -- ADR-48:
-	// "disagreement between signals lowers confidence; it does not pick a
-	// winner silently." A later IDENTIFY/DECIDE stage is expected to treat
-	// this as a reason to queue rather than auto-commit.
+	// Ambiguous is true when grouping inferred a boundary from a weak signal (track continuity alone); ADR-48 says disagreement lowers confidence, so IDENTIFY/DECIDE should queue rather than auto-commit.
 	Ambiguous bool
 }
 
@@ -39,10 +34,7 @@ type Unit struct {
 	// merge (Album/CD1+CD2 reports Album, not either child).
 	Directory string
 	Media     []File
-	// Other is every non-media file Run found in Directory or one of its
-	// merged children -- artwork, sidecars and the rest, kept as evidence for
-	// a later stage rather than discarded (ADR-48: "unknown does not mean
-	// discard").
+	// Other is every non-media file in Directory or its merged children, kept as evidence rather than discarded (ADR-48).
 	Other    []File
 	Evidence Evidence
 }

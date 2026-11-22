@@ -154,10 +154,7 @@ const (
 	AuthProxy AuthMode = "proxy"
 	// AuthAPIKeyOnly disables interactive login entirely.
 	AuthAPIKeyOnly AuthMode = "apikey_only"
-	// AuthNone serves every request as the administrator, with no credential of
-	// any kind. Deliberate and file-only: nothing in the interface can set it,
-	// because the one setting whose purpose is removing the protection around
-	// the settings screen must not be reachable from inside it.
+	// AuthNone serves every request as the administrator with no credential; it is file-only because the setting that removes the protection around settings must not be reachable from inside them.
 	AuthNone AuthMode = "none"
 )
 

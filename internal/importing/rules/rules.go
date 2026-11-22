@@ -1,7 +1,4 @@
-// Package rules holds the checks Radarr and Sonarr make before a downloaded file is imported, as pure functions of
-// facts the importer already has: a file's extension, runtime and audio, its siblings, the folder it sits in, the
-// episodes it covers. Each says no with a model.Rejection and yes with nothing. Ported from their import specifications
-// (ATTRIBUTION.md); where they read a database or a disk, the importer passes the answer in.
+// Package rules holds the checks Radarr and Sonarr make before importing a file, as pure functions of facts the importer has (extension, runtime, audio, siblings, folder, episodes); each says no with a model.Rejection, ported from their specifications (ATTRIBUTION.md), with database and disk answers passed in.
 package rules
 
 import (

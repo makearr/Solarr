@@ -9,10 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
-// losslessCodecs are ffprobe's own codec_name values for a lossless audio
-// stream -- a raw "pcm_*" prefix covers every sample format/endianness WAV
-// and AIFF report separately (pcm_s16le, pcm_s24be, ...), so it is a prefix
-// check rather than an exhaustive list of them.
+// losslessCodecs are ffprobe's codec_name values for lossless audio; a "pcm_*" prefix covers every WAV/AIFF sample format, so it is a prefix check.
 var losslessCodecs = map[string]bool{
 	"flac": true, "alac": true, "ape": true, "wavpack": true, "tta": true,
 }
@@ -22,10 +19,7 @@ func isLosslessCodec(codec string) bool {
 	return losslessCodecs[codec] || strings.HasPrefix(codec, "pcm_")
 }
 
-// attributeClaimFromMeasured maps ADR-39's measured facts onto the same
-// AttributeClaim shape the claimed side will use once it is wired
-// (private/next.md's own remaining item) -- both halves intern through
-// media_attributes, so one converter per side is all this needs.
+// attributeClaimFromMeasured maps ADR-39's measured facts onto AttributeClaim, the shape the claimed side will use; both intern through media_attributes, so one converter per side suffices.
 func attributeClaimFromMeasured(m mediatool.Measured, sidecarSubtitles []string) library.AttributeClaim {
 	claim := library.AttributeClaim{
 		AudioCodec:  m.AudioCodec,
@@ -48,11 +42,7 @@ func attributeClaimFromMeasured(m mediatool.Measured, sidecarSubtitles []string)
 		claim.Lossless = false
 	}
 	claim.Subtitles = mergedLanguages(m.SubtitleLanguages, sidecarSubtitles)
-	// BitrateMode is deliberately left unset: ffprobe's stream bit_rate is an
-	// average regardless of whether the encoding was CBR or VBR, so this
-	// would be a guess dressed as a fact -- exactly what ADR-39 exists to
-	// avoid. The claimed side's own release-name signal (a preset like "V0")
-	// is real evidence; this is not.
+	// BitrateMode is left unset: ffprobe's bit_rate is an average for CBR and VBR alike, so setting it would be a guess dressed as fact (ADR-39); the claimed side's release-name preset is the real evidence.
 	return claim
 }
 

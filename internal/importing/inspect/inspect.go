@@ -1,10 +1,4 @@
-// Package inspect turns one arbitrary filesystem path into the units of import it
-// actually contains (ADR-48, section 11.9): walk to any depth, classify every file,
-// and group the media files into candidate units by evidence rather than by depth.
-// It carries no media-type knowledge and no database of its own (ADR-23) -- identity
-// resolution (the ADR-24 chain), shaping a unit into SINGLE/SET/PACK and the commit
-// decision are a caller's job, layered on top the way music.Consumer layers onto
-// internal/scanning/scan today.
+// Package inspect turns one filesystem path into import units (ADR-48, section 11.9): walk to any depth, classify files, group media by evidence; it has no media-type knowledge or database (ADR-23), and identity, shaping and the commit decision are the caller's.
 package inspect
 
 import (
@@ -32,10 +26,7 @@ type TagGrouper func(relPaths []string) (groups TagGroups, ok bool)
 // Options tunes one Run. Every field is optional.
 type Options struct {
 	Tags TagGrouper
-	// MediaSizeFloorBytes is the minimum size a file with a media extension
-	// must clear to classify as Media rather than Junk -- ADR-48's own example,
-	// "sample.mp3", is exactly what this guards against. Zero uses
-	// DefaultMediaSizeFloorBytes.
+	// MediaSizeFloorBytes is the minimum size for a media-extension file to classify as Media rather than Junk (ADR-48's "sample.mp3"); zero uses DefaultMediaSizeFloorBytes.
 	MediaSizeFloorBytes int64
 	// Books counts ebook files as media, for a book library's import.
 	Books bool

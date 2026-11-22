@@ -113,10 +113,7 @@ func (OS) ReadDir(path string) ([]DirEntry, error) {
 // verbatim, so a destination can be checked for containment before it is created.
 func (OS) Resolve(path string) (string, error) { return resolveExisting(path) }
 
-// DiskUsage reports what statfs(2) says about the filesystem holding path.
-// free is Bavail (blocks available to an unprivileged process), not Bfree
-// (raw free blocks): root's own reserve is never this process's to place
-// into.
+// DiskUsage reports statfs(2) for the filesystem holding path; free is Bavail, not Bfree, since root's reserve is not this process's to use.
 func (OS) DiskUsage(path string) (totalBytes, freeBytes int64, err error) {
 	var stat syscall.Statfs_t
 	if err := syscall.Statfs(path, &stat); err != nil {

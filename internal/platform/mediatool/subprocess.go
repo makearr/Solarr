@@ -225,10 +225,7 @@ func (s *Subprocess) fingerprintOne(ctx context.Context, path string) Fingerprin
 	bounded, cancel := context.WithTimeout(ctx, perFileTimeout)
 	defer cancel()
 
-	// -length bounds how much audio is decoded. AcoustID matches on the first
-	// two minutes, so decoding a whole 70-minute file buys nothing and costs
-	// real time on a library-wide pass. Not -raw: AcoustID wants the compressed
-	// form, and -raw is for callers doing their own comparison.
+	// -length bounds the decode: AcoustID matches on the first two minutes, so decoding a whole file costs time for nothing; not -raw, since AcoustID wants the compressed form.
 	output, runErr := s.runner.Run(bounded, fpcalcBinary, "-length", fpcalcSeconds, "-json", path)
 
 	var decoded struct {
@@ -237,10 +234,7 @@ func (s *Subprocess) fingerprintOne(ctx context.Context, path string) Fingerprin
 	}
 	decodeErr := json.Unmarshal(output, &decoded)
 
-	// fpcalc exits non-zero on a file it could only partly decode while still
-	// printing a usable fingerprint. Throwing that away loses exactly the
-	// damaged files fingerprinting exists to identify, so a fingerprint that
-	// parsed is kept and the failure is reported as Partial instead.
+	// fpcalc exits non-zero on a partly decoded file yet prints a usable fingerprint; keeping a parsed one and reporting Partial retains the damaged files fingerprinting exists to identify.
 	if decodeErr == nil && decoded.Fingerprint != "" {
 		return Fingerprint{
 			Path:        path,

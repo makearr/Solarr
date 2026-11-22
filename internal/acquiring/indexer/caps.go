@@ -8,10 +8,7 @@ import (
 	"strings"
 )
 
-// capsXML is one t=caps response -- the Newznab specification's own shape,
-// shared by Torznab (ADR-43). Only the fields this package actually reads
-// are declared; an indexer's own additional <server>/<limits>/<registration>
-// blocks are ignored rather than modelled.
+// capsXML is one t=caps response (Newznab shape, shared by Torznab, ADR-43); only the fields read are declared.
 type capsXML struct {
 	XMLName    xml.Name          `xml:"caps"`
 	Searching  capsSearchingXML  `xml:"searching"`
@@ -59,10 +56,7 @@ func (c capsCategoryXML) toCategory() Category {
 	return category
 }
 
-// Capabilities fetches and parses t=caps -- ADR-43's own "categories are
-// taken from the response, never assumed", so a caller (indexer connection
-// setup, or a periodic refresh) always has the indexer's own real answer
-// rather than a guess.
+// Capabilities fetches and parses t=caps; ADR-43 takes categories from the response, never assumed.
 func (c Client) Capabilities(ctx context.Context) (Capabilities, error) {
 	requestURL := c.apiURL("caps", nil)
 	body, err := c.getBody(ctx, requestURL)

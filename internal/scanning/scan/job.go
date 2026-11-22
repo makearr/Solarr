@@ -47,11 +47,7 @@ type Payload struct {
 	// Full ignores the watermark and reads every directory, for a first scan or a
 	// library whose timestamps are not to be trusted.
 	Full bool `json:"full"`
-	// CategoryID is which category this scan run is scoped to -- a root can in
-	// principle belong to several, so the enqueuer (which already knows) states
-	// it rather than the job guessing. The consumer looks the category's own
-	// policy up fresh at run time rather than trusting a value baked in at
-	// enqueue time, the same "ask, don't cache" discipline Roots already uses.
+	// CategoryID is the category this scan is scoped to, stated by the enqueuer because a root can belong to several; the consumer looks the category's policy up fresh at run time (ask, don't cache).
 	CategoryID int64 `json:"category_id"`
 	// Directories, when set, rescans only these directories (relative to the
 	// root) and leaves the root's watermark and cursor alone. Used once an
@@ -289,12 +285,8 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		slog.Int("directories_read", result.DirectoriesRead),
 		slog.Int("directories_visited", result.DirectoriesVisited))
 
-	// Only a full sweep visited every directory, so only a full sweep is evidence
-	// that a path it did not re-observe is actually gone (section 10.4). An
-	// incremental sweep skips directories whose mtime did not move and would
-	// wrongly mark their contents missing.
-	// A resumed sweep counts when all of it was full and began at run.StartedAt: its earlier runs saw what lies before the
-	// cursor. One whose start was not kept, or a cursor an incremental sweep left, proves nothing gone.
+	// Only a full sweep visited every directory, so only it is evidence that an unobserved path is gone (section 10.4); an incremental sweep skips unchanged directories and would wrongly mark their contents missing.
+	// A resumed sweep counts when all of it was full and began at run.StartedAt (earlier runs saw what lies before the cursor); one whose start was not kept, or a cursor an incremental sweep left, proves nothing gone.
 	wholeRun := run.Full && (!resumed || !progress.RunStartedAt.IsZero())
 	outcome := SweepOutcome{EmptyDirectories: result.EmptyDirectories}
 	if wholeRun && j.markMissing(ctx, root, sweptThrough) {
@@ -449,10 +441,7 @@ func (j *Job) observe(ctx context.Context, root settings.RootFolder, sweep Sweep
 // type decides what its own files look like (ADR-23); the kinds themselves are filekind's one table.
 func IsAudio(relPath string) bool { return filekind.Of(relPath) == filekind.Audio }
 
-// EnqueueDirectories submits a rescan of only these directories of one root.
-// Its action key names the directories rather than the root: it never touches
-// the root's cursor, which is what one-scan-per-root protects (Invariant 16), and
-// sharing the root's key would drop it whenever an ordinary scan was active.
+// EnqueueDirectories submits a rescan of only these directories; its action key names them, not the root, so it never touches the root's cursor (Invariant 16) and is not dropped when an ordinary scan is active.
 func EnqueueDirectories(
 	ctx context.Context, queue *jobs.Queue, rootFolderID, categoryID int64, directories []string,
 ) (jobs.EnqueueResult, error) {

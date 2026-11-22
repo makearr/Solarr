@@ -1,8 +1,4 @@
-// Package capacity is section 11.7's polling job: "capacity is polled, not
-// assumed". It refreshes writable/total_bytes/free_bytes for every
-// configured root folder on an interval, so Placement.Resolve (a pure
-// function with no filesystem access of its own) always has a recent
-// reading to filter candidates against.
+// Package capacity is section 11.7's polling job: it refreshes writable/total_bytes/free_bytes per root on an interval so Placement.Resolve has a recent reading.
 package capacity
 
 import (
@@ -33,11 +29,7 @@ var Definition = jobs.Definition{
 	Type: JobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3,
 }
 
-// probeFileName mirrors internal/api/apiserver's own write-probe convention
-// (FilesystemRoots.probeWritable) -- duplicated rather than imported, since
-// apiserver sits above internal packages in the dependency graph and this
-// job must not depend on it. Kept identical so the two never disagree about
-// whether a root is writable.
+// probeFileName duplicates apiserver's write-probe convention (FilesystemRoots.probeWritable) because this job must not depend on apiserver, and the two must agree on writability.
 const probeFileName = ".mnx-write-probe"
 
 // Job refreshes writable/total_bytes/free_bytes for every configured root

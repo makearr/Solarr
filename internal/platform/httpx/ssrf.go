@@ -145,12 +145,7 @@ type Guard struct {
 	allowedHosts map[string]struct{}
 }
 
-// NewGuard returns a guard. allowedHosts are exact, case-insensitive hostnames
-// exempted from address classification; passing none is the default posture.
-//
-// A nil resolver or dialer means the system's. They were once taken literally,
-// and the nil then surfaced as a segfault inside a background dial -- which
-// takes the process with it, far from the call that caused it.
+// NewGuard returns a guard; allowedHosts are exact, case-insensitive hostnames exempt from address classification (none is the default), and a nil resolver or dialer means the system's, since a literal nil once segfaulted a background dial.
 func NewGuard(resolver Resolver, dial DialFunc, allowedHosts []string) *Guard {
 	if resolver == nil {
 		resolver = net.DefaultResolver

@@ -12,17 +12,10 @@ import (
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
-// maxResponseBytes bounds what one caps or search call can make this
-// process read -- the same defensive ceiling internal/importing/arrimport
-// and internal/metadata/musicbrainz both already apply to a provider they
-// do not control. A real indexer's own search page is nowhere near this;
-// one answering with more is refused rather than read without limit.
+// maxResponseBytes bounds one caps or search read, the same ceiling arrimport and musicbrainz apply to providers they do not control; larger answers are refused.
 const maxResponseBytes = 8 << 20
 
-// Client is a thin Newznab/Torznab protocol client over one indexer
-// connection. It has no opinion on rate limiting, circuit breaking or
-// egress proxying (ADR-13/47) -- client must already be configured for
-// that, the same split LidarrClient already uses.
+// Client is a thin Newznab/Torznab client over one connection; rate limiting, breaking and egress proxying (ADR-13/47) are the injected client's job.
 type Client struct {
 	http    *httpx.Client
 	baseURL string

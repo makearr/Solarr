@@ -23,10 +23,7 @@ type SearchRequest struct {
 	Extra  map[string]string
 }
 
-// Search fetches and parses one t=<function> response into raw items --
-// this package does no title parsing, deduping or scoring of its own
-// (ADR-18/ADR-40's own jobs); it only turns the indexer's own protocol
-// response into a plain Go value.
+// Search fetches and parses one t=<function> response into raw items; title parsing, dedupe and scoring are ADR-18/ADR-40's jobs.
 func (c Client) Search(ctx context.Context, request SearchRequest) ([]RawItem, error) {
 	body, err := c.getBody(ctx, c.apiURL(request.function(), request.params()))
 	if err != nil {
@@ -224,10 +221,7 @@ var pubDateLayouts = []string{
 	time.RFC822Z, time.RFC822, time.RFC3339, time.DateTime,
 }
 
-// parsePubDate returns the zero time for a date it cannot parse -- a
-// malformed pubDate is not a reason to fail the whole search, and the
-// candidate pipeline's own dedupe/expiry logic already tolerates a zero
-// PublishedAt the same way it tolerates any other missing fact.
+// parsePubDate returns the zero time for an unparseable date, since a malformed pubDate must not fail the search and the pipeline tolerates a zero PublishedAt.
 func parsePubDate(raw string) time.Time {
 	raw = strings.TrimSpace(raw)
 	for _, layout := range pubDateLayouts {

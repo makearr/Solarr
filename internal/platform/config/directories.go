@@ -117,10 +117,7 @@ func identityHint() string {
 	return "\n      " + privilege.IdentityHint()
 }
 
-// ownerHint adds the directory's own owner and mode to identityHint when the filesystem can
-// report it, closing the other half of Invariant 62 (documentation/startup-checks.md,
-// architecture §14.3) -- matching the hint FilesystemRoots.Writable already gives a library
-// root that fails the same probe.
+// ownerHint adds the directory's owner and mode to identityHint where the filesystem reports it (Invariant 62, documentation/startup-checks.md), matching FilesystemRoots.Writable's hint.
 func ownerHint(fsys fsx.FS, path string) string {
 	info, err := fsys.Stat(path)
 	if err != nil || (info.UID < 0 && info.GID < 0) {

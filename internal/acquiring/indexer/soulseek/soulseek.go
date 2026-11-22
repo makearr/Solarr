@@ -1,7 +1,4 @@
-// Package soulseek searches the Soulseek network through slskd's search API (Tubifarry's way for Lidarr), as a source
-// of every media type: a search is started, awaited and read; a peer's folder of audio is one release, and its films,
-// episodes and books are releases of their own, a whole folder when the folder is what was searched for. Its link carries the folder's files as a
-// download.DirectRelease, which slskd as a download client fetches; nothing is downloaded from an indexer.
+// Package soulseek searches the Soulseek network through slskd's search API as a source for every media type: a peer's folder of audio is one release, and its link carries the files as a download.DirectRelease that slskd fetches as a download client.
 package soulseek
 
 import (

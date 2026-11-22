@@ -103,10 +103,7 @@ type FS interface {
 	// exist yet are kept as given, so a path can be resolved before it is created.
 	Resolve(path string) (string, error)
 
-	// DiskUsage reports the filesystem holding path's total and free bytes
-	// (section 11.7: capacity is polled, not assumed). free is what is
-	// actually available to this process, not raw free blocks -- root's
-	// reserved blocks are not this process's to place into.
+	// DiskUsage reports total and free bytes of the filesystem holding path (section 11.7); free is what this process can use, excluding root's reserved blocks.
 	DiskUsage(path string) (totalBytes, freeBytes int64, err error)
 
 	// FilesystemID names the filesystem holding path: two paths with the same id share its

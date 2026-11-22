@@ -56,10 +56,7 @@ type memContent struct {
 	data  []byte
 }
 
-// NewMem returns an empty filesystem containing only the root directory.
-// defaultDiskTotalBytes and defaultDiskFreeBytes are arbitrary but large
-// enough that an unconfigured test never mistakes the fake for a full disk;
-// SetDiskUsage overrides them for a test that cares about a specific value.
+// NewMem returns an empty filesystem holding only the root; default disk sizes are large enough that an unconfigured test never sees a full disk, and SetDiskUsage overrides them.
 const (
 	defaultDiskTotalBytes = 1 << 40 // 1 TiB
 	defaultDiskFreeBytes  = 1 << 39 // 512 GiB
@@ -548,10 +545,7 @@ func (m *Mem) resolveLocked(path string, depth int) (string, error) {
 	return walked, nil
 }
 
-// touchParent advances the mtime of the directory an entry was added to or removed
-// from, which is what a real filesystem does and what the section 10.4 sweep reads to
-// decide whether a directory is worth opening. Rewriting a file's contents does not
-// reach here: that changes the file, not the listing.
+// touchParent advances the mtime of the directory an entry was added to or removed from, as a real filesystem does and the section 10.4 sweep reads; rewriting contents does not reach here.
 func (m *Mem) touchParent(path string) {
 	parent := filepath.Dir(path)
 	if node, ok := m.nodes[parent]; ok && node.isDir {

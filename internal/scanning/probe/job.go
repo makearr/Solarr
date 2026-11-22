@@ -1,10 +1,4 @@
-// Package probe fills in ADR-39's measured half: a background sweep that
-// ffprobes every file with no measured_attributes_id yet and records what it
-// actually is, as opposed to what a release name claims. Deliberately a
-// separate job from internal/scanning/scan rather than folded into it -- confirmed
-// with the user (private/next.md, todo 4.2) -- so a scan's own write
-// transaction stays bounded and probing can run at the lowest priority
-// without ever blocking identification.
+// Package probe fills ADR-39's measured half: a background sweep that ffprobes files with no measured_attributes_id, kept apart from scan (todo 4.2) so a scan's write transaction stays bounded and probing runs at the lowest priority without blocking identification.
 package probe
 
 import (
@@ -42,11 +36,7 @@ var Definition = jobs.Definition{
 	Type: JobType, Pool: jobs.PoolFiles, Mutating: true, MaxAttempts: 3,
 }
 
-// batchSize bounds how many unmeasured files one pass asks the store for
-// before probing them and checking in with ListUnmeasured again -- the same
-// crash-safety reasoning as EnrichJob's own batch: each batch's writes are
-// already their own transaction per file, so a shutdown mid-run loses at most
-// one batch's worth of otherwise-committed progress.
+// batchSize bounds how many unmeasured files one pass asks the store for, as EnrichJob does: each file's writes are their own transaction, so a shutdown loses at most one batch of progress.
 const batchSize = 100
 
 // yieldAfter is how long a sweep runs before it gives up its slot to jobs waiting in the pool: a first sweep of a
@@ -120,11 +110,7 @@ func NewJob(config Config) *Job {
 	}
 }
 
-// Run implements jobs.Handler. There is no persisted cursor across runs --
-// only within one, so a file that fails its probe (a missing root, a
-// corrupted file) does not spin the batch forever; the next scheduled run
-// (there is no scheduler yet, so today that means the next process restart)
-// simply asks the same question again.
+// Run implements jobs.Handler with no cursor across runs, only within one, so a file failing its probe cannot spin the batch; the next scheduled run asks the same question again.
 func (j *Job) Run(ctx context.Context, request jobs.Job) error {
 	started := j.clock.Now()
 	total, failed := 0, 0
@@ -456,10 +442,7 @@ func (j *Job) record(ctx context.Context, file library.UnmeasuredFile, absolute 
 	measured.CRF = j.encoderCRF(absolute, measured)
 	claim := attributeClaimFromMeasured(measured, sidecarSubtitleLanguages(j.fs, absolute))
 
-	// ADR-39: a claim that fails its probe is a signal. claimedFound is false
-	// for every file today -- the claimed side has nowhere in this codebase
-	// that writes it yet -- but the comparison runs for real the moment it
-	// does, rather than needing this job changed too.
+	// ADR-39: a claim that fails its probe is a signal; claimedFound is false for every file today (nothing writes the claimed side yet), but the comparison runs for real once something does.
 	mismatchJSON := ""
 	if claimed, claimedFound, err := j.physical.ClaimedAttributesFor(ctx, file.MediaObjectID); err != nil {
 		j.logger.WarnContext(ctx, "read claimed attributes failed",

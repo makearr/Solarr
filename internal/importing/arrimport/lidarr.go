@@ -1,9 +1,4 @@
-// Package arrimport is ADR-52's own home: one REST client per *Arr
-// application, over its documented API and an API key only -- no database
-// reading, no file access. It writes to the source in one place only, a resource's monitored flag, and only for a
-// connection whose owner turned that on (2026-10-31). Only Lidarr is
-// fully wired at stage 4 (music exists); the client shapes for the other
-// four apps land with their own "connect, preview, park" support.
+// Package arrimport is ADR-52's home: one REST client per *Arr over its documented API and API key only, writing only a resource's monitored flag for a connection whose owner enabled it (2026-10-31); only Lidarr is wired at stage 4.
 package arrimport
 
 import (
@@ -21,12 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
-// maxLidarrResponseBytes bounds what one call can make this process read.
-// 128 MiB, not the 16 MiB musicbrainz's own per-release lookups use:
-// Lidarr's own Album objects carry far more than this package's minimal
-// fields read, and one real prolific artist's own Albums response measured
-// 28 MiB for 2,050 albums live -- a misbehaving or malicious instance
-// answering more than this is still refused rather than read without limit.
+// maxLidarrResponseBytes bounds one call's read at 128 MiB, above musicbrainz's 16 MiB because Lidarr's Album objects are large; a larger answer is refused.
 const maxLidarrResponseBytes = 128 << 20
 
 // ErrResponseTooLarge reports a response this package refused to finish
@@ -47,10 +37,7 @@ type LidarrRootFolder struct {
 	Path string `json:"path"`
 }
 
-// LidarrArtist is GET /api/v1/artist's own shape, trimmed to what todo
-// 4.13 imports. ForeignArtistID is Lidarr's own field name for the artist's
-// MusicBrainz id -- ADR-8's own external identity, reused rather than
-// inventing a parallel one.
+// LidarrArtist is GET /api/v1/artist's shape trimmed to what todo 4.13 imports; ForeignArtistID is the artist's MusicBrainz id (ADR-8).
 type LidarrArtist struct {
 	ID                int64  `json:"id"`
 	ArtistName        string `json:"artistName"`
@@ -91,11 +78,7 @@ func (a LidarrAlbum) Complete() bool {
 	return a.Statistics.TotalTrackCount > 0 && a.Statistics.TrackFileCount >= a.Statistics.TotalTrackCount
 }
 
-// LidarrQualityProfile is GET /api/v1/qualityprofile's own shape -- report
-// only (ADR-52: "custom formats do not translate either... imported as a
-// report of what existed"), the same treatment applied here since no
-// Solarr profile-creation UI exists yet to propose a mapping into
-// (todo 4.3).
+// LidarrQualityProfile is GET /api/v1/qualityprofile's shape, report only (ADR-52) since no Solarr profile-creation UI can propose a mapping yet (todo 4.3).
 type LidarrQualityProfile struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
@@ -320,10 +303,7 @@ func (d DownloadClient) BaseURL() string {
 	return address
 }
 
-// get is the common request shape every call above uses: GET with the API
-// key header, bounded read, decode. httpx.Client.Do already classifies a
-// non-2xx response into a *httpx.StatusError (wrong API key answers 401,
-// caught here the same as any other non-success status).
+// get is the common request: GET with the API key header, bounded read, decode; httpx.Client.Do turns a non-2xx (a wrong key is 401) into *httpx.StatusError.
 func (c LidarrClient) get(ctx context.Context, path string, into any) error {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {
@@ -337,13 +317,7 @@ func (c LidarrClient) get(ctx context.Context, path string, into any) error {
 	}
 	defer func() { _ = response.Body.Close() }()
 
-	// Read one byte past the limit so a response that exactly fills it is
-	// reported honestly (ErrResponseTooLarge) instead of silently truncated
-	// into a confusing "unexpected end of JSON input" from Unmarshal --
-	// found live against a real prolific artist's own Albums response
-	// (2,050 albums, 28 MiB: Lidarr's own album objects carry much more than
-	// this package's minimal fields read, nothing like musicbrainz's own
-	// per-object size).
+	// Read one byte past the limit so a response exactly filling it reports ErrResponseTooLarge instead of a truncated "unexpected end of JSON input".
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxLidarrResponseBytes+1))
 	if err != nil {
 		return fmt.Errorf("arrimport: read response for %s: %w", path, err)

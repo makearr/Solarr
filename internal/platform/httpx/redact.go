@@ -20,10 +20,7 @@ var secretQueryParams = map[string]struct{}{
 	"auth": {}, "sid": {}, "r": {},
 }
 
-// RedactURL renders a URL for an error message or a log line: userinfo masked
-// as url.URL.Redacted does it, plus every credential-bearing query parameter,
-// which Redacted leaves untouched (Invariant 61, ADR-14). The parameter's name
-// survives, so the error still says which request failed.
+// RedactURL renders a URL for errors and logs with userinfo masked and every credential-bearing query parameter redacted (Invariant 61, ADR-14), keeping the parameter name.
 func RedactURL(target *url.URL) string {
 	if target == nil {
 		return ""
@@ -51,10 +48,7 @@ func RedactURL(target *url.URL) string {
 	return masked.Redacted()
 }
 
-// redactRequestError rebuilds the *url.Error net/http answers a failed request
-// with: its own Error() prints the URL it was given, query and all, so wrapping
-// it verbatim would undo the redaction. The cause is kept, so errors.Is and
-// errors.As still see what actually failed.
+// redactRequestError rebuilds net/http's *url.Error because its Error() prints the URL with its query, and keeps the cause so errors.Is and errors.As still work.
 func redactRequestError(err error, redacted string) error {
 	var wrapped *url.Error
 	if errors.As(err, &wrapped) {

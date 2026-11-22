@@ -50,11 +50,7 @@ type coverArtImage struct {
 	Types      []string          `json:"types"`
 }
 
-// coverArtThumbnails are the archive's ready-made renditions, largest first.
-// 1200 is the smallest that still covers platform/artwork's largest size
-// (1000); the original upload is often many megabytes behind a slow redirect,
-// only to be shrunk anyway, which is why covers used to arrive at roughly one
-// every nine seconds (2026-09-17).
+// coverArtThumbnails are the archive's ready-made renditions, largest first; 1200 is the smallest covering platform/artwork's largest size (1000), since the original is often megabytes behind a slow redirect (covers once arrived one per nine seconds, 2026-09-17).
 var coverArtThumbnails = []string{"1200", "large", "500"}
 
 // url is the rendition worth downloading: a large thumbnail, else the original.
@@ -67,10 +63,7 @@ func (i coverArtImage) url() string {
 	return i.Image
 }
 
-// Fetch answers the best available source image URL for a release: the
-// standard http.Client the guard's transport wraps follows the archive.org
-// redirect chain itself, so this is a plain GET. ErrNoCoverArt distinguishes
-// "this release has no art" from a real failure.
+// Fetch answers the best source image URL for a release with a plain GET (the guard's http.Client follows the archive.org redirects); ErrNoCoverArt separates "no art" from failure.
 func (c CoverArt) Fetch(ctx context.Context, releaseMBID string) (string, error) {
 	return c.fetch(ctx, "release", releaseMBID)
 }

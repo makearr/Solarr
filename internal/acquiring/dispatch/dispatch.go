@@ -97,11 +97,7 @@ type ReleaseFetcher func(ctx context.Context, indexerID int64, link string) ([]b
 // IndexerSource already follows.
 type DownloaderSource func(ctx context.Context) ([]DownloaderConn, error)
 
-// Dispatch is ADR-57's own acquire.send: given an ACCEPTed decision, submit
-// its own release to a matching downloader and record the resulting
-// acquisition. No resource gate yet -- every dispatch this pass is a user's
-// own explicit action, ADR-12's own "user request: never paused" job class,
-// since nothing automatic (stage 6's planner) calls this yet.
+// Dispatch is ADR-57's acquire.send: it submits an ACCEPTed decision's release to a matching downloader and records the acquisition; no resource gate yet, since every dispatch is a user action (ADR-12 "never paused").
 type Dispatch struct {
 	// Candidates are read only to send what a person picked by its decision.
 	Candidates   statistics.Candidates
@@ -242,10 +238,7 @@ func (d Dispatch) SendRelease(ctx context.Context, itemID int64, release library
 		// a reference reused for a different download no longer matches this.
 		ClientFingerprint: fmt.Sprintf("%d:%s:%d", at.Unix(), detail.ReleaseCandidate.Title, size),
 		Protocol:          detail.ReleaseCandidate.Protocol,
-		// QUEUED, not DOWNLOADING: acquire.send only confirms the client
-		// accepted the job, not that it has started pulling data yet --
-		// that distinction needs client polling (section 10.9), not built
-		// this pass.
+		// QUEUED, not DOWNLOADING: acquire.send only confirms the client accepted the job, and telling them apart needs client polling (section 10.9), not built yet.
 		State:     "QUEUED",
 		CreatedAt: at.Unix(), UpdatedAt: at.Unix(), ContentHash: contentHash, SizeBytes: size, Parts: parts,
 	})

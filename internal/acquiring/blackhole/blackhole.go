@@ -1,7 +1,4 @@
-// Package blackhole is Sonarr's Torrent and Usenet Blackhole behind download.TorrentClient and
-// download.UsenetClient (ADR-46): Solarr writes what it is sent into a folder some other program watches, and finds
-// the finished downloads in a second folder. There is no API: a download's reference is the name its files arrive
-// under, and one whose files have not changed for a minute is finished.
+// Package blackhole is Sonarr's Torrent and Usenet Blackhole behind download.TorrentClient and UsenetClient (ADR-46): it writes to a watched folder, finds finished downloads in a second one, and has no API (a download's reference is its file name; one unchanged for a minute is finished).
 package blackhole
 
 import (

@@ -81,20 +81,10 @@ type Payload struct {
 	BestMatch bool `json:"best_match,omitempty"`
 }
 
-// Policy is what this job needs from settings.db -- asked fresh per run
-// rather than cached, the same "ask, don't cache" discipline every other
-// job's settings dependency already uses. No internal/db/settings import
-// here (architecture §2) -- cmd/solarr/adapters bridges both methods
-// over a real settings.Cache the same way it already bridges
-// ImportAutoCommitConfidence.
+// Policy is what this job needs from settings.db, asked fresh per run; no internal/db/settings import (architecture section 2), cmd/solarr/adapters bridges it.
 type Policy interface {
 	ImportAutoCommitConfidence() float64
-	// RefusedByExclusion reports the ADR-53 refuse-action pattern that
-	// matched name, if any -- the import gate's own exclusion-pattern check
-	// (todo 4.15). An ignore-action match is never surfaced here: CLASSIFY
-	// already treats an ignore-shaped file as junk by its own hardcoded
-	// extension list (internal/importing/inspect), and nothing today asks
-	// this for anything but the poison case.
+	// RefusedByExclusion reports the ADR-53 refuse-action pattern matching name (todo 4.15); ignore-action matches are not surfaced because CLASSIFY already treats them as junk.
 	RefusedByExclusion(name, mediaType string, categoryID *int64) (pattern string, found bool)
 }
 
@@ -178,11 +168,7 @@ func NewJob(config Config) *Job {
 // into an ImportCancelled finish, never the executor's retryable failure.
 var errCancelled = errors.New("importjob: session cancelled")
 
-// Run walks payload.SourcePath, identifying and recording each unit it finds.
-// Retried by the executor on a plain (unlabelled, so retryable) error; a
-// retry resumes rather than duplicating a session's own rows, since
-// resumeOrCreate looks for one already in progress for this exact source
-// path before starting a new one.
+// Run walks payload.SourcePath, identifying and recording each unit; a retry resumes since resumeOrCreate finds the session already in progress for this source path.
 func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	var payload Payload
 	if err := json.Unmarshal(job.Payload, &payload); err != nil {
@@ -534,11 +520,7 @@ func sameAcquisition(a, b *int64) bool {
 	return *a == *b
 }
 
-// estimateOnce runs inspect.EstimateUnits and persists it, the first time
-// only -- a resumed session already carrying an estimate skips straight past.
-// Failure is logged and otherwise ignored, the same "a courtesy, never a
-// reason to fail the run" rule publishProgress already applies: a wrong or
-// missing ETA is a worse UI than a stalled import.
+// estimateOnce persists inspect.EstimateUnits the first time only; a failure is logged and ignored (a courtesy, as in publishProgress) because a wrong ETA is worse than none.
 func (j *Job) estimateOnce(ctx context.Context, sessionID int64, sourcePath string) {
 	session, err := j.sessions.Get(ctx, sessionID)
 	if err != nil {
@@ -558,16 +540,7 @@ func (j *Job) estimateOnce(ctx context.Context, sessionID int64, sourcePath stri
 	}
 }
 
-// detectPacks runs todo 4.11's own detection once a walk finishes cleanly
-// (Run's own caller: never on a cancelled or still-interrupted run) --
-// pack.Detect is pure and in-memory (ADR-23); this is where the result is
-// persisted. Adoption sessions are skipped: an existing, already-organised
-// library naturally has many same-artist sibling directories that are an
-// established catalogue, not "one source, many works" in ADR-50's own sense
-// (private/questions.md). Failure is logged and otherwise ignored, the same
-// "a courtesy, never a reason to fail the run" rule estimateOnce already
-// follows -- a missed pack is a worse UI than a stalled import, and every
-// member unit is still fully imported on its own regardless.
+// detectPacks persists todo 4.11's pack.Detect result after a clean walk (never a cancelled one); adoption sessions are skipped since an organised library's same-artist siblings are a catalogue, not ADR-50 packs, and a failure is logged and ignored.
 func (j *Job) detectPacks(ctx context.Context, sessionID int64, sourcePath, origin string) {
 	if origin == library.ImportOriginAdoption {
 		return
@@ -602,12 +575,7 @@ func (j *Job) detectPacks(ctx context.Context, sessionID int64, sourcePath, orig
 	}
 }
 
-// packItemStateFor maps one unit's own decision (and whether it actually
-// placed, for COMMIT) onto pack_item's narrower vocabulary -- COMMIT with no
-// work_id yet (no category on the session at WALK time) reads as QUEUED,
-// same as a real QUEUE decision: neither has resolved into the library yet,
-// and ManualCommitter's own ResolveItem is what moves either one to RESOLVED
-// once it does.
+// packItemStateFor maps a unit's decision onto pack_item's states; COMMIT with no work_id yet reads as QUEUED like a real QUEUE, and ManualCommitter's ResolveItem moves either to RESOLVED.
 func packItemStateFor(unit library.Unit) string {
 	switch {
 	case unit.Decision == library.UnitCommit && unit.WorkID != nil:
@@ -863,11 +831,7 @@ type ImportProgress struct {
 	BytesImported  int64  `json:"bytes_imported"`
 }
 
-// publishProgress re-reads and publishes the session; silent on any failure
-// or without an events.Bus -- a courtesy, never a reason to fail the run.
-// The session's own category_id is read fresh here too, not passed in --
-// commitCluster's own doc comment gives the reason (todo 4.9's "assign a
-// category later" can change it mid-run).
+// publishProgress re-reads and publishes the session, silent on failure or without an events.Bus; category_id is re-read because it can change mid-run (todo 4.9).
 func (j *Job) publishProgress(ctx context.Context, sessionID int64, phase, currentUnit string) {
 	publishSessionProgress(ctx, j.events, j.sessions, j.logger, sessionID, phase, currentUnit)
 }

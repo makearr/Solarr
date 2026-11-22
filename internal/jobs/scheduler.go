@@ -30,10 +30,7 @@ var ErrUnknownTask = errors.New("jobs: unknown task")
 // RunFull function.
 var ErrNoFullMode = errors.New("jobs: this task has no full-run mode")
 
-// ScheduleSource resolves a task's live, current cadence and enabled flag,
-// re-read every tick so a setting change takes effect without a restart.
-// Implemented by a cmd/solarr adapter over internal/db/settings.Cache --
-// this package never imports internal/db/settings (architecture §2).
+// ScheduleSource resolves a task's live cadence and enabled flag, re-read every tick so changes need no restart; a cmd/solarr adapter over settings.Cache implements it (architecture section 2).
 type ScheduleSource interface {
 	// Cadences returns the task's effective cron expressions: an override if one is stored,
 	// defaultCadence otherwise. The task fires at the earliest of them.
@@ -46,12 +43,7 @@ type ScheduleSource interface {
 	Enabled(taskKey string) bool
 }
 
-// TaskRunner drives one registered Task's own periodic loop (ADR-59):
-// resolves its live cadence and enabled flag every tick, fires, and records
-// what happened in jobs.db so a restart does not erase the only evidence a
-// task has not run in a week. The scheduled loop and a manual RunNow share
-// one mutex, so "already running" is refused rather than double-queued in
-// either direction.
+// TaskRunner drives one Task's periodic loop (ADR-59): it resolves cadence and enabled each tick, fires, and records the outcome in jobs.db; the loop and RunNow share one mutex, so overlap is refused, not queued.
 type TaskRunner struct {
 	task    Task
 	source  ScheduleSource
@@ -158,10 +150,7 @@ func (r *TaskRunner) sleepUntil(ctx context.Context, next time.Time) bool {
 	}
 }
 
-// RunNow fires immediately, ignoring whether the task is enabled -- a
-// manual trigger is the user overriding that, the same way a disabled
-// scheduled scan can still be run from the interface once. Refuses rather
-// than double-queues when a fire is already in flight.
+// RunNow fires immediately even if the task is disabled (a manual override) and refuses when a fire is already in flight.
 func (r *TaskRunner) RunNow(ctx context.Context) error {
 	if r.task.EnqueueManual != nil {
 		return r.runOnce(ctx, r.task.EnqueueManual)
@@ -181,10 +170,7 @@ func (r *TaskRunner) runOnce(ctx context.Context, enqueue func(context.Context) 
 	return nil
 }
 
-// RunNowFull is RunNow's counterpart for a task's own RunFull trigger
-// (library scan's full rescan). Shares the same running lock as RunNow and
-// the scheduled loop, so a full rescan and an ordinary one can never
-// overlap for the same task.
+// RunNowFull is RunNow for a task's RunFull trigger (library scan's full rescan), sharing the running lock so full and ordinary runs never overlap.
 func (r *TaskRunner) RunNowFull(ctx context.Context) error {
 	if r.task.RunFull == nil {
 		return ErrNoFullMode
@@ -321,10 +307,7 @@ func (r *TaskRunner) fireAndRecord(ctx context.Context, enqueue func(context.Con
 		outcome = "duplicate"
 	}
 
-	// A fire that already happened records its own outcome even if ctx is
-	// cancelled the instant Enqueue returns (process shutdown racing the
-	// last tick) -- the alternative is a fire that genuinely ran leaving no
-	// trace, which is exactly what this table exists to prevent.
+	// A fire that happened records its outcome even if ctx is cancelled as Enqueue returns (shutdown racing the last tick), so a real run never leaves no trace.
 	recordCtx := context.WithoutCancel(ctx)
 	next := r.resolveSchedule().Next(r.clock.Now())
 	if recordErr := r.states.RecordRun(recordCtx, r.task.Key, start, duration, outcome, errMsg, next); recordErr != nil {

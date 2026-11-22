@@ -44,10 +44,7 @@ func ForUpgrade(profiles []RankedProfile) []RankedProfile {
 // counts as better than the file it would replace.
 const upgradeSlack = 0.5
 
-// UpgradeBeats says a candidate beats the file an upgrade replaces. It is hesitant: a file that already has the
-// target's container, codecs, resolution, frame rate or sample rate and channels is taken as on target whatever its
-// bitrate (an earlier transcode, in Solarr or by Tdarr or FileFlows, lands near it, not on it), so a number alone never
-// replaces it; for any other file a number must be clearly nearer, not just nearer. Equal tiers keep the incumbent.
+// UpgradeBeats says whether a candidate beats the file it replaces, hesitantly: a file already on the target's container, codecs, resolution, frame rate or sample rate and channels is on target whatever its bitrate (a transcode lands near, not on it), other files need a number clearly nearer, and equal tiers keep the incumbent.
 func UpgradeBeats(profiles []RankedProfile, candidate, incumbent model.Decision, incumbentFile score.FileFacts, minScoreGain float64) bool {
 	ignoreRates := len(profiles) > 0 && profiles[0].Target != nil && quality.MeetsTarget(*profiles[0].Target, incumbentFile)
 	for i := 0; i < min(len(candidate.Quality.Tiers), len(incumbent.Quality.Tiers)); i++ {

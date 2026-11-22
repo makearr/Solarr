@@ -23,10 +23,7 @@ type Record struct {
 	Attrs []string
 }
 
-// buffer is the records themselves, shared by every handler derived from one
-// Ring. Separate from Ring because WithAttrs/WithGroup must return a handler
-// that writes into the *same* buffer -- copying the slice header instead sends
-// a derived logger's records somewhere nobody reads.
+// buffer holds the records shared by every handler derived from one Ring, because WithAttrs/WithGroup must write into the same buffer and a copied slice header would lose them.
 type buffer struct {
 	capacity int
 
@@ -37,10 +34,7 @@ type buffer struct {
 	full  bool
 }
 
-// Ring is an slog.Handler that keeps the last capacity records and passes
-// every one on to the handler it wraps, so adding it never costs a log line.
-// Bounded by count rather than bytes: a record is small and a count is the
-// thing an operator can reason about ("the last 2,000 lines").
+// Ring is an slog.Handler keeping the last capacity records and passing every one to the handler it wraps; bounded by count, which an operator can reason about.
 type Ring struct {
 	next slog.Handler
 	buf  *buffer

@@ -1,9 +1,4 @@
-// Package metacache is the permanent metadata cache behind cache/metadata.db
-// (ADR-2, ADR-29). It is deliberately generic -- kind and external id are opaque
-// strings the caller defines, and the body is whatever JSON the caller wants back --
-// so every metadata provider shares one cache rather than each growing its own.
-// Disposable: nothing here is authoritative, so there is no backup rotation and a
-// miss just costs a re-fetch, never data.
+// Package metacache is the permanent, generic metadata cache behind cache/metadata.db (ADR-2, ADR-29): kind and external id are opaque and the body is caller JSON, so every provider shares it; it is disposable (no backup rotation, a miss costs a re-fetch).
 package metacache
 
 import (
@@ -73,10 +68,7 @@ func (c Cache) Set(ctx context.Context, kind, externalID string, entry Entry) er
 	})
 }
 
-// SizeBytes answers the logical bytes currently stored (ADR-60): a real
-// measurement of what is there, not the metadata.db file's own physical
-// size, which SQLite does not shrink on DELETE without a VACUUM this
-// codebase deliberately does not run.
+// SizeBytes answers the logical bytes stored (ADR-60), not the physical file size, which SQLite does not shrink on DELETE without a VACUUM this codebase does not run.
 func (c Cache) SizeBytes(ctx context.Context) (int64, error) {
 	bytes, err := metadatadb.New(c.store.Read()).SumMetadataCacheBytes(ctx)
 	if err != nil {

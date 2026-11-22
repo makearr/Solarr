@@ -25,12 +25,7 @@ var ErrNoEmbeddedPicture = errors.New("mediatool: no embedded picture")
 // which container it came from.
 type Tags map[string]string
 
-// First returns the value of the first name that is present, ignoring how the name
-// is punctuated. One logical tag really is spelled three ways: setting MusicBrainz's
-// release group id through kid3 produces MUSICBRAINZ_RELEASEGROUPID, "MUSICBRAINZ
-// RELEASE GROUP ID" and "MusicBrainz Release Group Id" depending on the container
-// (documentation/media-tools.md), and an alias list would only ever be as complete as
-// the last tagger someone used.
+// First returns the first present name's value, ignoring punctuation: one logical tag (MusicBrainz's release group id via kid3) is spelled three ways by container (documentation/media-tools.md), and an alias list is only as complete as the last tagger used.
 func (t Tags) First(names ...string) string {
 	for _, name := range names {
 		wanted := squeeze(name)
@@ -114,10 +109,7 @@ type Fingerprint struct {
 	Path        string
 	Duration    time.Duration
 	Chromaprint string
-	// Partial marks a fingerprint fpcalc produced while still failing: it
-	// decoded enough to fingerprint but hit a problem. Usable, and worth
-	// knowing about, since a damaged file is exactly what fingerprinting is
-	// for.
+	// Partial marks a fingerprint fpcalc produced while still failing: usable and worth knowing about, since a damaged file is what fingerprinting is for.
 	Partial bool
 	Err     error
 }

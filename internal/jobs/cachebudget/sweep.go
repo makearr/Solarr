@@ -1,16 +1,5 @@
-// Package cachebudget is ADR-60's own bounded cache: current size measured
-// (not estimated) per namespace, age-ordered eviction within whichever
-// namespace is over budget, and a manual clear that is always safe
-// (Invariant 5 -- nothing in the cache is the only copy of anything).
-//
-// The two namespaces are architecturally different and are handled
-// differently: images is a flat directory of files (internal/media/music's own
-// artwork cache, evicted by removing files through fsx); metadata is
-// internal/metadata/metacache's own SQLite-backed cache (evicted by deleting rows).
-// Deleting metadata rows frees logical bytes immediately but does not
-// shrink metadata.db's own physical file without a VACUUM this package
-// deliberately does not run -- a named simplification, not an oversight
-// (see internal/metadata/metacache's own SizeBytes doc comment).
+// Package cachebudget is ADR-60's bounded cache: measured size per namespace, age-ordered eviction in whichever is over budget, and an always-safe manual clear (Invariant 5).
+// Images are a flat directory evicted through fsx; metadata is metacache's SQLite cache, evicted by deleting rows, which frees logical bytes but does not shrink metadata.db without a VACUUM this package deliberately skips.
 package cachebudget
 
 import (
@@ -155,10 +144,7 @@ func (s *Sweep) heldToFreeSpace(ctx context.Context, budget *settings.CacheBudge
 	return ceiling, nil
 }
 
-// Enforce applies ADR-60's two eviction triggers in order -- max_age
-// unconditionally, then budget-triggered age-ordered eviction within
-// whichever namespace is still over its own share -- then records the
-// final measurement.
+// Enforce applies ADR-60's triggers in order, max_age unconditionally then age-ordered eviction in whichever namespace is still over its share, and records the final measurement.
 func (s *Sweep) Enforce(ctx context.Context, budget settings.CacheBudget) (Result, error) {
 	cutoff := s.clock.Now().AddDate(0, 0, -int(budget.MaxAgeDays))
 

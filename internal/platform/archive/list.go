@@ -17,15 +17,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
-// List reads path's entries without writing anything (ADR-49: "no writes,
-// ever") -- names, sizes and (where the format carries one) CRCs, enough to
-// identify what an archive holds and record it as PACKED presence against a
-// desired item without touching a byte. Every read goes through fsx (the
-// ADR-14 choke point) except rar, whose multi-volume support needs to open
-// sibling files next to path by name -- real filesystem awareness a Reader
-// over one already-open file cannot provide -- so listRar is given the
-// path directly, the one exception, same reasoning as internal/platform/mediatool's
-// own real-path subprocess reads.
+// List reads path's entries without writing (ADR-49): names, sizes and CRCs, enough to record PACKED presence; reads go through fsx except rar, whose multi-volume support must open sibling files by name, so listRar gets the path directly (like mediatool's subprocess reads).
 func List(ctx context.Context, fsys fsx.FS, path string) ([]Entry, Format, error) {
 	format, ok := DetectFormat(path)
 	if !ok {

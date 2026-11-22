@@ -17,10 +17,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
-// ManualCommitter is what a person does with a session's units the walk did not place: commit one it held (as its
-// best guess, or as a work named), commit every held one, and place what was decided before the session had a
-// library. Units sharing a folder keep their media files; the others re-walk their own folder (reconstructUnit). Either
-// way the unit goes to its library's media type, which places it as that type does.
+// ManualCommitter is what a person does with units the walk did not place: commit one held (best guess or a named work), commit every held one, or place what was decided before the session had a library; units sharing a folder keep their files, others re-walk theirs (reconstructUnit).
 type ManualCommitter struct {
 	fsys     fsx.FS
 	sessions library.ImportSessions
@@ -67,10 +64,7 @@ var ErrUnitNotQueued = errors.New("importjob: unit is not queued for review")
 // all.
 var ErrNoCandidate = errors.New("importjob: unit has no candidate to commit")
 
-// ErrUnitChanged means a re-walk of the unit's own directory no longer
-// matches what WALK originally recorded (a different file count) -- the
-// source changed since inspection, and re-deriving a stale unit's placement
-// would silently commit the wrong thing.
+// ErrUnitChanged means a re-walk no longer matches what WALK recorded (a different file count): the source changed, and placing a stale unit would commit the wrong thing.
 var ErrUnitChanged = errors.New("importjob: unit's own files no longer match what was inspected")
 
 // CommitHeld force-commits one QUEUE-decision unit as its own best guess: a person overriding DECIDE's threshold,
@@ -310,24 +304,8 @@ func topCandidate(unit library.Unit) (model.Identification, error) {
 	return candidates[0], nil
 }
 
-// reconstructUnit re-derives one unit's own file list by re-walking exactly
-// its already-decided boundary (unit.RelPath under the session's own
-// source_path). The overwhelming common case -- one import_unit per
-// directory -- uses a plain inspect.Run. Several import_unit rows sharing
-// one rel_path (GROUP's track-continuity fallback splitting a flat
-// multi-album drop into siblings that all report the same Directory,
-// inspect.Unit's own doc comment) instead re-derives through
-// inspect.SplitDirectory -- Walker's own per-cluster split, in Walker's own
-// unsorted emission order -- and matches each sibling back to its own
-// import_unit row by position in ascending id order: the same order
-// AddUnits inserted every sibling from one WALK cluster in, which is the
-// same order Walker's own batch (one emit call per directory) arrived in.
-// inspect.Run's own group() is not equivalent for this: it re-sorts every
-// unit by (directory, firstPath) before returning, a different order than
-// Walker ever emitted a multi-unit cluster in. Either path ends the same
-// way: a file-count mismatch means the source changed since inspection,
-// refused rather than placing a different set of files than IDENTIFY
-// actually ranked.
+// reconstructUnit re-derives a unit's file list by re-walking its decided boundary (unit.RelPath under the session's source_path); one unit per directory uses a plain inspect.Run.
+// Several rows sharing a rel_path (GROUP's track-continuity split of a flat drop) go through inspect.SplitDirectory and match back by ascending id, the order Walker emitted them; inspect.Run's group() re-sorts, so it is not equivalent. A file-count mismatch is refused.
 func (m ManualCommitter) reconstructUnit(ctx context.Context, root string, unit library.Unit, floorBytes int64, books bool) (inspect.Unit, error) {
 	siblings, err := m.sessions.ListUnits(ctx, unit.SessionID)
 	if err != nil {

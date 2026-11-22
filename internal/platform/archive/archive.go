@@ -1,11 +1,4 @@
-// Package archive lists and extracts zip, tar (+gz/bz2/xz), rar and 7z
-// archives, in pure Go (ADR-49): no CGO, no bundled unrar or p7zip, which
-// keeps the capability inside the static binary (ADR-1) and outside the
-// UnRAR licence's own restrictions on reimplementing the format. List never
-// writes; Extract only ever into a caller-supplied workspace directory,
-// never a library root (ADR-49 part 2 -- an archive found inside a library
-// root is listed and counted as PACKED presence, never expanded, which is a
-// caller's job, not this package's).
+// Package archive lists and extracts zip, tar (+gz/bz2/xz), rar and 7z in pure Go (ADR-49), keeping it in the static binary (ADR-1) and clear of UnRAR's licence; List never writes, Extract writes only into a caller-supplied workspace, and an archive inside a library root is listed as PACKED, never expanded (the caller's job).
 package archive
 
 import (
@@ -29,10 +22,7 @@ const (
 	Format7z     Format = "7z"
 )
 
-// DetectFormat maps an archive's own name to the format that reads it, by
-// extension. A scene release, a comic (.cbz/.cbr) and a backup all carry a
-// real, meaningful extension far more reliably than a magic-byte sniff would
-// be worth the extra code to bother with.
+// DetectFormat maps an archive's name to its format by extension, which a scene release, comic or backup carries more reliably than a magic-byte sniff is worth.
 func DetectFormat(name string) (Format, bool) {
 	lower := strings.ToLower(name)
 	switch {
@@ -73,10 +63,7 @@ type Entry struct {
 // no password was supplied.
 var ErrEncrypted = fmt.Errorf("archive: entry is encrypted")
 
-// Limits bounds Extract. ADR-49: "not optional and has no permissive
-// default" -- every field must be set to something real by the caller,
-// which is why there is no zero-value Limits a caller could pass by mistake
-// and get an unbounded extraction.
+// Limits bounds Extract and has no permissive default (ADR-49): every field must be set, so a zero value cannot be passed by mistake and extract without bounds.
 type Limits struct {
 	// MaxExpansionRatio caps uncompressed-size / compressed-size, the
 	// classic decompression-bomb guard.
@@ -86,21 +73,14 @@ type Limits struct {
 	MaxTotalBytes int64
 	// MaxEntryCount caps how many entries one archive may contain.
 	MaxEntryCount int
-	// MaxDepth caps nested-archive expansion (an archive inside an
-	// archive). Extract itself never recurses -- this field exists so a
-	// caller that does (import inspection, unbuilt) has one place to read
-	// the limit from; Extract enforces it only in the sense that Extract
-	// call depth over this value is refused.
+	// MaxDepth caps nested-archive expansion; Extract never recurses, so this gives a recursing caller (import inspection, unbuilt) one place to read the limit, and a call depth over it is refused.
 	MaxDepth int
 	// MinFreeBytes is the free-space margin required on the destination
 	// filesystem, checked before the first byte is written.
 	MinFreeBytes int64
 }
 
-// DefaultLimits is a real, usable starting point -- not a permissive
-// do-nothing default: a 200x expansion ratio catches an actual zip bomb
-// (which routinely exceeds 1000x) while never refusing a real FLAC-in-a-CD
-// image or similar already-compressed content re-archived losslessly.
+// DefaultLimits is a usable starting point: a 200x expansion ratio catches a real zip bomb (often over 1000x) without refusing a lossless CD image re-archived.
 func DefaultLimits() Limits {
 	return Limits{
 		MaxExpansionRatio: 200,
@@ -164,10 +144,7 @@ func (m MultipartSet) MissingVolumes() []int {
 	return missing
 }
 
-// DetectMultipart groups names (siblings in one directory, as returned by a
-// directory listing) into multipart sets, keyed by base name. A name that
-// matches none of the three schemes is not part of any set -- the caller
-// treats it as its own single-volume archive.
+// DetectMultipart groups sibling names into multipart sets keyed by base name; a name matching none of the three schemes is its own single-volume archive.
 func DetectMultipart(names []string) map[string]*MultipartSet {
 	sets := make(map[string]*MultipartSet)
 

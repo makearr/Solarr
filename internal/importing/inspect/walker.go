@@ -13,11 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/iogate"
 )
 
-// WalkState is one resumable Walk's persisted progress -- the same role
-// scan.State's Cursor plays for a library sweep, reused directly rather than
-// reinvented: the last cluster (one grouped directory's worth of units) this
-// walk fully committed, relative to the root. Empty means start from the
-// beginning.
+// WalkState is one resumable Walk's progress: the last cluster fully committed, relative to the root (like scan.State's Cursor); empty means start over.
 type WalkState struct {
 	Cursor string
 }
@@ -44,37 +40,15 @@ type WalkResult struct {
 	UnitsEmitted int
 }
 
-// Walker walks one root incrementally, emitting each fully-grouped cluster's
-// units as soon as they are known rather than building the whole session in
-// memory -- ADR-48's own text: "it streams units as it finds them". Run (a
-// single in-memory pass) stays exactly as it is for what most callers actually
-// point it at, a single downloaded release; Walker is what a whole-library
-// bulk-adoption entry point needs, the same 500k-file problem section 10.4
-// already solves for a library scan, generalised to inspection's own grouping.
-//
-// Resuming a walk re-reads the whole tree (inspection has no cheap mtime
-// watermark of its own the way a scan does, section 10.4) but skips re-emitting
-// -- and so re-probing and re-persisting, the genuinely expensive half a real
-// caller's IDENTIFY step pays for -- any cluster already committed before an
-// interruption. Watermark-based skip-reading is a natural follow-up once a real
-// caller exists to measure whether it is worth the added complexity; not
-// attempted here.
+// Walker walks one root incrementally and emits each grouped cluster as soon as it is known (ADR-48 "streams units"), for whole-library adoption; Run stays the in-memory pass for a single release.
+// Resuming re-reads the tree (inspection has no mtime watermark, section 10.4) but skips re-emitting, re-probing and re-persisting clusters already committed; watermark skipping awaits a real caller to measure.
 type Walker struct{}
 
 // NewWalker builds one. Stateless -- every Walk call is independent, the same
 // as Sweeper.
 func NewWalker() Walker { return Walker{} }
 
-// EstimateUnits counts how many units a real Walk over root would emit,
-// without probing or persisting anything -- one readdir and one stat per
-// file, the same filesystem cost Walk's own traversal pays, and nothing more.
-// It runs the identical WALK/GROUP logic (including disc-subfolder merging
-// and the track-continuity structural fallback splitFiles falls back to with
-// no TagGrouper), so it undercounts only where tag evidence alone would have
-// split a directory that structure does not -- a real, accepted inaccuracy,
-// not a bug, for an estimate that exists purely for a progress ETA (todo
-// 4.21). Deliberately a second walk of the tree: the "never a second walk to
-// count" rule is about WALK/GROUP itself, not this opt-in estimate.
+// EstimateUnits counts the units a Walk would emit without probing or persisting (one readdir and one stat per file), using the same WALK/GROUP logic; it undercounts where only tag evidence would split a directory, an accepted inaccuracy for a progress ETA (todo 4.21), and is deliberately a second walk, opt-in.
 func EstimateUnits(ctx context.Context, fsys fsx.FS, root string) (int, error) {
 	var total int
 	_, err := NewWalker().Walk(ctx, fsys, root, WalkState{}, WalkOptions{},
@@ -104,11 +78,7 @@ type walkerRun struct {
 	opts WalkOptions
 	emit func(context.Context, []Unit) error
 
-	// resumeFrom is the cursor an interrupted walk left behind. reached flips
-	// true the instant this run's own (deterministic, sorted) traversal passes
-	// it, gating every emission before that point -- post-order has no cheap
-	// path-comparison shortcut the way a pre-order sweep's cursor does, so this
-	// walk tracks its position in the sequence directly instead.
+	// resumeFrom is the cursor an interrupted walk left; reached flips true once this run's deterministic sorted traversal passes it, gating earlier emissions, since post-order has no cheap path comparison.
 	resumeFrom string
 	reached    bool
 
@@ -116,10 +86,7 @@ type walkerRun struct {
 	emitted int
 }
 
-// Walk runs one resumable inspection pass over root, calling emit for every
-// cluster of units it groups. emit is where a caller persists and identifies,
-// so returning an error from it stops the walk with the progress made so far
-// intact -- state.Cursor names the last cluster committed.
+// Walk runs one resumable pass over root, calling emit per cluster; an emit error stops the walk with progress kept (state.Cursor names the last cluster committed).
 func (Walker) Walk(
 	ctx context.Context, fsys fsx.FS, root string, state WalkState, opts WalkOptions,
 	emit func(context.Context, []Unit) error,
@@ -138,10 +105,7 @@ func (Walker) Walk(
 		return result, err
 	}
 	if !w.reached {
-		// The cursor names a directory this run's traversal never reached --
-		// deleted, renamed, or the tree changed shape between runs. Silently
-		// treating "never found it" as "already past it" would skip the entire
-		// remaining walk, the one failure mode worse than redoing work.
+		// A cursor naming a directory this traversal never reached (deleted, renamed, tree changed) must not read as "already past it", which would skip the entire remaining walk, worse than redoing work.
 		return result, fmt.Errorf("inspect: resume cursor %q was not found in this walk", state.Cursor)
 	}
 
@@ -205,12 +169,7 @@ func (w *walkerRun) visit(ctx context.Context, relative string) (clusterFiles, e
 		return clusterFiles{}, nil
 	}
 
-	// Captured before updating reached: resumeFrom names the *last* cluster an
-	// interrupted run already committed, so that one cluster itself must be
-	// skipped here too, not re-emitted -- only clusters strictly after it in
-	// this run's own deterministic sequence are new work. Checked only here,
-	// among real cluster-root candidates, since resumeFrom can only ever equal
-	// a directory that previously was one (w.cursor is set nowhere else).
+	// Captured before updating reached: resumeFrom names the last committed cluster, so that cluster is skipped too and only strictly later ones are new; checked only among cluster-root candidates since w.cursor is set nowhere else.
 	shouldEmit := w.reached
 	if relative == w.resumeFrom {
 		w.reached = true

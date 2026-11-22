@@ -1,9 +1,4 @@
-// Package sabnzbd is stage 5's own SABnzbd downloader client (ADR-46/57):
-// query-string API, JSON responses. It has no opinion on rate limiting,
-// circuit breaking or egress proxying -- the caller supplies an already-
-// configured httpx.Client, the same split internal/acquiring/indexer and
-// internal/importing/arrimport's own LidarrClient already use for a
-// per-connection external service. Downloader puts it behind download.Client (ADR-46).
+// Package sabnzbd is stage 5's SABnzbd client (ADR-46/57): query-string API, JSON; rate limiting and egress belong to the injected httpx.Client, and Downloader puts it behind download.Client.
 package sabnzbd
 
 import (
@@ -89,11 +84,7 @@ func (c Client) Version(ctx context.Context) (string, error) {
 	return parsed.Version, nil
 }
 
-// megabytesToBytes converts one of SABnzbd's own "12583.5"-shaped megabyte
-// strings to bytes -- every size field in the queue/history API is a decimal
-// string in MB, not a raw byte count. An unparseable value answers 0 rather
-// than failing the whole response over one field SABnzbd itself might one
-// day format differently.
+// megabytesToBytes converts SABnzbd's decimal MB strings to bytes; an unparseable value answers 0 rather than failing the response.
 func megabytesToBytes(mb string) int64 {
 	value, err := strconv.ParseFloat(mb, 64)
 	bytes := value * 1024 * 1024

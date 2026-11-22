@@ -25,11 +25,7 @@ const (
 	ClassUnknown  Class = "unknown"
 )
 
-// DefaultMediaSizeFloorBytes is the minimum size a media-extension file must clear
-// to classify as real media rather than junk -- small enough to keep a genuinely
-// short real track, large enough to catch a "sample.mp3" or a truncated download.
-// 64 KiB is below any real compressed audio second but above the debris this
-// guards against.
+// DefaultMediaSizeFloorBytes is the minimum size for a media-extension file to count as media, not junk: 64 KiB keeps a short real track and catches a "sample.mp3" or truncated download.
 const DefaultMediaSizeFloorBytes = 64 * 1024
 
 var archiveExtensions = map[string]bool{

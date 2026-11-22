@@ -123,10 +123,7 @@ func (p proxy) ReleaseGroupOf(ctx context.Context, releaseMBID string) (string, 
 	return rg.MBID, nil
 }
 
-// proxyArtistCredit is the album's artists, its own primary artist (artistid)
-// first, since credit order decides a work's primary artist. These were never
-// read, so an album enriched through the proxy -- the default first provider --
-// got no artist, and a fresh library had no artists at all (found 2026-09-17).
+// proxyArtistCredit is the album's artists with the primary (artistid) first, since credit order decides the primary artist; it was never read, so proxy-enriched albums had no artist (found 2026-09-17).
 func proxyArtistCredit(album proxyAlbum) []ArtistCredit {
 	credits := make([]ArtistCredit, 0, len(album.Artists))
 	for _, artist := range album.Artists {

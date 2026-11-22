@@ -76,10 +76,7 @@ func wikidataQIDFromRelations(relations []directRelation) string {
 	return ""
 }
 
-// directReleaseGroup is musicbrainz.org's release-group JSON with
-// inc=artist-credits+genres+tags+ratings+aliases+url-rels -- ArtistCredit, Genres, Tags, Rating,
-// Aliases and the WikidataQID need those incs, every other field is already in the default
-// response.
+// directReleaseGroup is musicbrainz.org's release-group JSON with inc=artist-credits+genres+tags+ratings+aliases+url-rels, which ArtistCredit, Genres, Tags, Rating, Aliases and WikidataQID need.
 type directReleaseGroup struct {
 	ID               string   `json:"id"`
 	Title            string   `json:"title"`
@@ -256,10 +253,7 @@ func releaseGroupQuery(artist, title string) string {
 	return fmt.Sprintf(`(artist:%s OR artistname:%s) AND releasegroup:%s`, luceneQuoted(artist), luceneQuoted(artist), luceneQuoted(title))
 }
 
-// directArtistSearchResponse is ws/2's artist search JSON. The artist
-// documents it returns carry the same fields as a lookup plus a score, but
-// never relations, so a chosen result still needs Artist() for its Wikidata
-// QID.
+// directArtistSearchResponse is ws/2's artist search JSON: artists carry a score but no relations, so a chosen result still needs Artist() for its Wikidata QID.
 type directArtistSearchResponse struct {
 	Artists []struct {
 		directArtist
@@ -294,11 +288,7 @@ func (d direct) SearchArtists(ctx context.Context, query string, limit int) ([]A
 	return matches, nil
 }
 
-// SearchReleaseGroupsByQuery is QuerySearcher's own free-text search (todo
-// 4.17): MusicBrainz's Lucene default-field search over the release group's
-// own document (title, artist credit, tags, ...) rather than SearchReleaseGroups'
-// two named fields, since a Discover query box has nothing to split a raw
-// string into.
+// SearchReleaseGroupsByQuery is QuerySearcher's free-text Lucene search over the release group document (todo 4.17), since a Discover box has nothing to split a raw string into.
 func (d direct) SearchReleaseGroupsByQuery(ctx context.Context, query string, limit int) ([]ReleaseGroupMatch, error) {
 	matches, err := d.searchReleaseGroups(ctx, query, limit)
 	if err != nil {
@@ -506,10 +496,7 @@ func (d direct) Recording(ctx context.Context, mbid string) (RecordingMatch, err
 	return recording.toMatch(), nil
 }
 
-// directBrowseResponse is musicbrainz.org's release-group browse JSON
-// (`/release-group?artist=...`), which differs from the search endpoint's
-// shape by name only -- both list "release-groups", but browsing also
-// reports the total count so paging can stop without an extra request.
+// directBrowseResponse is musicbrainz.org's release-group browse JSON, which differs from search by name only and also reports the total so paging can stop early.
 type directBrowseResponse struct {
 	ReleaseGroupCount int                        `json:"release-group-count"`
 	ReleaseGroups     []directBrowseReleaseGroup `json:"release-groups"`

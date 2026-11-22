@@ -35,10 +35,7 @@ func firstPath(files []File) string {
 	return files[0].RelPath
 }
 
-// splitByEvidence decides whether directory's media files are one unit or
-// several, and returns the resulting units. extra, when non-nil, is a signal
-// already established before this call (a disc-subfolder merge) that every
-// resulting unit carries regardless of how the split itself resolves.
+// splitByEvidence decides whether a directory's media files are one unit or several; extra is a signal established earlier (a disc-subfolder merge) that every resulting unit carries.
 func splitByEvidence(directory string, files []File, tags TagGrouper, extra *Signal) []Unit {
 	// A disc-subfolder merge already explains why track numbering restarts
 	// (CD2 starts at 01 same as CD1) -- letting the structural fallback run
@@ -58,10 +55,7 @@ func splitByEvidence(directory string, files []File, tags TagGrouper, extra *Sig
 	return units
 }
 
-// splitFiles is the actual per-directory decision: tag agreement first (the
-// decisive and high-weight signals), track-number continuity as the only
-// purely structural fallback, and the whole directory as one group -- the
-// default -- when neither signal has anything to say.
+// splitFiles is the per-directory decision: tag agreement first, track-number continuity as the only structural fallback, else the whole directory as one group.
 func splitFiles(files []File, tags TagGrouper, structuralFallbackAllowed bool) (groups [][]File, signals [][]Signal, ambiguous bool) {
 	if tags != nil {
 		if g, s, unsure, ok := splitByTags(files, tags); ok {
@@ -117,18 +111,7 @@ func placesEachOnce(grouped TagGroups, count int) bool {
 	return placed == count
 }
 
-// splitByTrackContinuity is the one purely-structural splitter: track numbers
-// that restart (drop back down rather than keep climbing) mark a new group.
-// ok is false when fewer than two files carry a parseable track number, since
-// one data point proves nothing, and also when no number repeats anywhere in
-// the set -- see the duplicate gate below.
-//
-// Files are read in modification-time order, not filename order: two albums
-// dropped into one flat folder each keep their own 01, 02, 03... run in the
-// order they were written, but a plain filename sort interleaves both albums'
-// "01"s before either "02" (section 11.9's own "mtime clustering" signal is
-// what makes the "track continuity" signal usable at all here, a copy
-// operation that flattens mtimes is the known limit of this heuristic).
+// splitByTrackContinuity treats a restarting track number as a new group; ok is false with fewer than two parseable numbers or no repeated number (see the duplicate gate), and files are read in mtime order because a filename sort interleaves albums dropped in one flat folder (section 11.9, defeated by a copy that flattens mtimes).
 func splitByTrackContinuity(files []File) (groups [][]File, signals [][]Signal, ok bool) {
 	type numbered struct {
 		file   File
@@ -166,12 +149,7 @@ func splitByTrackContinuity(files []File) (groups [][]File, signals [][]Signal, 
 	if numberedCount < 2 {
 		return nil, nil, false
 	}
-	// A real release's own track numbers are unique; mtime order is only a
-	// weak proxy for track order -- a segmented usenet/torrent download can
-	// finish files in any order regardless of track number -- so a "decrease"
-	// with no number actually repeated is mtime noise, not a second release.
-	// Confirmed live: a real, cleanly-tagged Vutu Doci album (unique 01-13,
-	// scrambled mtimes) split 6 ways on this alone before the gate.
+	// A real release's track numbers are unique and mtime is only a weak proxy for track order (segmented downloads finish in any order), so a decrease with no repeated number is mtime noise, not a second release.
 	if !duplicate {
 		return nil, nil, false
 	}

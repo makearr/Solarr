@@ -11,10 +11,7 @@ import (
 // nzbSegment is one article of an NZB: <segment bytes=".." number="..">message-id</segment>.
 var nzbSegment = regexp.MustCompile(`<segment\b[^>]*>([^<]+)</segment>`)
 
-// NZBContentHash identifies what an NZB downloads: its article message-ids, sorted and hashed.
-// Indexers rewrite an NZB's head and file names, never the articles, so one upload listed on two
-// indexers hashes the same (section 10.11's failure memory by content). Empty when the file has
-// no articles, which is no identity at all.
+// NZBContentHash hashes an NZB's sorted article message-ids, which indexers never rewrite (section 10.11 failure memory by content); empty when there are no articles.
 func NZBContentHash(nzb []byte) string {
 	matches := nzbSegment.FindAllSubmatch(nzb, -1)
 	if len(matches) == 0 {

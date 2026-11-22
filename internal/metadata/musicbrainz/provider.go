@@ -50,10 +50,7 @@ const (
 	cacheKindSearch = "musicbrainz:search"
 	// cacheKindArtist is one artist's own detail, keyed on their MBID.
 	cacheKindArtist = "musicbrainz:artist:v3"
-	// cacheKindDiscography is one artist's full release-group list, keyed on
-	// their MBID -- refreshed by the same RefreshAfter policy as everything
-	// else, since a discography grows over time unlike a release group's own
-	// fixed facts.
+	// cacheKindDiscography is one artist's release-group list keyed on MBID, refreshed by RefreshAfter since a discography grows unlike a release group's fixed facts.
 	cacheKindDiscography = "musicbrainz:discography"
 	// cacheKindReleases is every release of one release group, tracklists included.
 	cacheKindReleases = "musicbrainz:releases"
@@ -69,10 +66,7 @@ const (
 	cacheKindReleaseGroupOf = "musicbrainz:release-group-of"
 )
 
-// Provider is ADR-29 end to end: try each source in priority order, falling
-// through on failure (ADR-13's breaker already skips a source that is down
-// without this package needing to ask it first), permanent cache in front so a
-// repeat lookup costs nothing.
+// Provider is ADR-29 end to end: sources in priority order with fall-through (ADR-13's breaker skips a down source) and a permanent cache in front.
 type Provider struct {
 	sources      []Source
 	liveOrder    func(library int64) []string
@@ -257,10 +251,7 @@ func notFound(err error) bool {
 	return errors.As(err, &statusErr) && statusErr.Status == http.StatusNotFound || errors.Is(err, errReleaseNotInGroup)
 }
 
-// Search answers a text search for release groups matching artist and title,
-// cache first. Only sources that implement Searcher are tried -- ADR-29's proxy
-// does not (Searcher's own doc comment), so this silently has fewer sources than
-// Album does, never an error for that reason alone.
+// Search answers a release-group text search, cache first, trying only Searcher sources (ADR-29's proxy is not one), so it silently has fewer sources than Album.
 func (p Provider) Search(
 	ctx context.Context, priority Priority, artist, title string, limit int,
 ) ([]ReleaseGroupMatch, error) {
@@ -293,10 +284,7 @@ func (p Provider) Releases(ctx context.Context, priority Priority, releaseGroupM
 	})
 }
 
-// SearchArtists answers artists matching a name, cache first, from the first
-// source able to search them -- what adding an artist the library has never
-// seen starts from (revision 7.1). No source able to search at all reads as
-// "found nothing": a wiring gap, not a failed lookup.
+// SearchArtists answers artists matching a name, cache first, from the first source able to search (revision 7.1); no capable source reads as found nothing, a wiring gap.
 func (p Provider) SearchArtists(ctx context.Context, priority Priority, query string, limit int) ([]ArtistMatch, error) {
 	call := lookup{kind: cacheKindArtistSearch, key: queryCacheKey(query, limit), what: fmt.Sprintf("artist search %q", query)}
 	return through(ctx, p, priority, call, func(ctx context.Context, searcher ArtistSearcher) ([]ArtistMatch, error) {

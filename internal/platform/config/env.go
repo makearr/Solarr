@@ -77,14 +77,7 @@ func applyEnv(config *Config, lookup Lookup) Problems {
 	return problems
 }
 
-// setField assigns an environment variable's raw text to field. A string-kind field
-// (including named types like LogLevel) takes the text directly: an env var is
-// already a literal value, not YAML source, and routing it through yaml.Unmarshal
-// misreads any value starting with a YAML-special character (*, &, !, [, { and more)
-// as document syntax -- "* * * * *" for a cron schedule is exactly such a value,
-// since a leading * is YAML's alias-reference syntax. Every other kind (Duration,
-// Bytes, bool, int, ...) keeps the YAML path, which is where their type coercion and
-// custom UnmarshalYAML methods live.
+// setField assigns an env var's raw text: string kinds take it directly, since YAML-parsing a value like "* * * * *" misreads a leading * as an alias; other kinds keep the YAML path for coercion and UnmarshalYAML.
 func setField(field reflect.Value, value string) error {
 	if field.Kind() == reflect.String {
 		field.SetString(value)

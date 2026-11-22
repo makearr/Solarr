@@ -1,7 +1,4 @@
-// Package acoustid looks a Chromaprint fingerprint up against acoustid.org
-// (ADR-29's fingerprint rung, D12). It identifies and nothing more: what comes
-// back is a set of MusicBrainz ids, which the caller then resolves through the
-// ordered metadata sources like any other candidate.
+// Package acoustid looks a Chromaprint fingerprint up at acoustid.org (ADR-29, D12); it only identifies, returning MusicBrainz ids the caller resolves through the ordered sources.
 package acoustid
 
 import (
@@ -25,10 +22,7 @@ const Name = "acoustid"
 // DefaultBaseURL is acoustid.org's own v2 endpoint.
 const DefaultBaseURL = "https://api.acoustid.org/v2"
 
-// ErrNoKey reports that no API key is configured, so the rung is disabled
-// rather than failing. D12: the rung is built now and the key is entered
-// later; until then it reports itself disabled and files it skipped are
-// re-run once one appears.
+// ErrNoKey means no API key is configured, so the rung reports itself disabled rather than failing (D12); skipped files re-run once a key appears.
 var ErrNoKey = errors.New("acoustid: no API key configured")
 
 // MinScore is the floor a match must clear. AcoustID scores 0..1 and returns
@@ -41,10 +35,7 @@ const MinScore = 0.70
 type Match struct {
 	// Score is AcoustID's own 0..1 confidence for the fingerprint itself.
 	Score float64
-	// Recordings are the recordings this audio matched. A recording is the
-	// track, not the album, so the caller resolves upward from it -- which is
-	// what the names are for: a file whose tags say nothing still has an artist
-	// and a title once its audio has been recognised.
+	// Recordings are the recordings this audio matched; a recording is a track, so the caller resolves upward, and the names give an untagged file an artist and title.
 	Recordings []Recording
 	// ReleaseGroupMBIDs are the albums those recordings appear on, when
 	// AcoustID reported them.
@@ -102,10 +93,7 @@ func (c Client) Lookup(ctx context.Context, fingerprint string, duration time.Du
 	query.Set("client", c.key())
 	query.Set("fingerprint", fingerprint)
 	query.Set("duration", strconv.Itoa(int(duration.Seconds())))
-	// recordings gives the ids; releasegroups the albums they sit on. Both are
-	// wanted, because a recording alone does not say which album it belongs to.
-	// Space-separated, never "+": a literal plus is not the separator, and
-	// AcoustID then answers bare ids with no metadata at all rather than failing.
+	// recordings gives ids and releasegroups the albums they sit on (a recording alone does not say); space-separated, never "+", else AcoustID answers bare ids with no metadata.
 	query.Set("meta", "recordings releasegroups")
 	query.Set("format", "json")
 

@@ -1,9 +1,4 @@
-// Package wikidata resolves a person's biography from their Wikidata QID
-// (ADR-8's cross-provider identity bridge -- musicbrainz.Artist already
-// extracts one from MusicBrainz's own "wikidata" URL relation, so this
-// package never has to search for one itself). MusicBrainz carries no prose
-// biography field at all; Wikidata's own short description plus the linked
-// Wikipedia article's summary extract are the closest real substitute.
+// Package wikidata resolves a person's biography from their Wikidata QID (ADR-8; musicbrainz.Artist already extracts it): MusicBrainz has no prose biography, so Wikidata's short description plus the linked Wikipedia summary substitute.
 package wikidata
 
 import (
@@ -20,13 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
-// maxResponseBytes bounds one lookup. A Wikipedia summary extract is a few
-// paragraphs at most, but wbgetentities' own claims are unbounded per entity
-// (props=claims was added for P18 alone; a prolific entity can carry
-// hundreds of unrelated statements) -- raised from the original 1 MiB
-// (description/sitelinks only) with the same "generous but still bounded"
-// reasoning arrimport's own response cap learned the hard way (16 MiB
-// silently truncated a real 28 MiB response, todo 4.13).
+// maxResponseBytes bounds one lookup: a Wikipedia summary is short but wbgetentities claims are unbounded per entity (props=claims was added for P18), so the cap was raised from 1 MiB, generous but bounded as arrimport's cap learned (todo 4.13).
 const maxResponseBytes = 8 << 20
 
 // Biography is what this package can answer for one Wikidata QID.
@@ -38,12 +27,7 @@ type Biography struct {
 	// Extract is the linked Wikipedia article's summary, real prose, empty
 	// when the entity has no English Wikipedia sitelink at all.
 	Extract string
-	// ImageURL is a direct, fetchable URL for the entity's own P18 ("image")
-	// claim, empty when it has none -- the common case for anyone without a
-	// Wikipedia-notable photo. Built from the Commons file name via
-	// Special:FilePath rather than a second API call: that endpoint 302s
-	// straight to the file's own bytes, which is all a caller here ever
-	// wants (never the Commons page itself).
+	// ImageURL is a fetchable URL for the entity's P18 image claim, empty when none; built via Special:FilePath, which 302s to the file bytes, instead of a second API call.
 	ImageURL string
 }
 
@@ -52,10 +36,7 @@ type Biography struct {
 // language-keyed maps).
 type entitiesResponse struct {
 	Entities map[string]struct {
-		// Missing is present (even as an empty string) when a well-formed QID
-		// simply does not exist -- confirmed against a real live response,
-		// distinct from the malformed-QID case, which answers a top-level
-		// "error" object instead of an "entities" map at all.
+		// Missing is present (even empty) when a well-formed QID does not exist, unlike a malformed QID, which answers a top-level "error" object instead of an "entities" map.
 		Missing      *string `json:"missing"`
 		Descriptions map[string]struct {
 			Value string `json:"value"`
@@ -63,11 +44,7 @@ type entitiesResponse struct {
 		Sitelinks map[string]struct {
 			Title string `json:"title"`
 		} `json:"sitelinks"`
-		// Claims carries P18 ("image") among many others this package never
-		// reads, kept raw per property: their values are strings, objects or
-		// numbers depending on the property, and decoding them all as strings
-		// failed every real artist, whose occupation (P106) is an object
-		// (found 2026-09-17).
+		// Claims carries P18 among many properties never read, kept raw because values are strings, objects or numbers by property, and decoding them all as strings failed every real artist (occupation P106 is an object, found 2026-09-17).
 		Claims map[string]json.RawMessage `json:"claims"`
 	} `json:"entities"`
 }
@@ -85,11 +62,7 @@ const commonsFilePathBase = "https://commons.wikimedia.org/wiki/Special:FilePath
 // megabytes, or a TIFF or SVG the artwork decoder cannot read at all.
 const commonsImageWidth = "1000"
 
-// imageURLFor builds the direct file URL from a P18 claim's own Commons file
-// name, reusing pathEscape's own space-to-underscore convention (MediaWiki's
-// own title normalisation, not just a Wikipedia-summary-path quirk --
-// Special:FilePath/Vutu_Doci_1981.jpg redirects correctly live, verified
-// while adding this).
+// imageURLFor builds the file URL from a P18 Commons file name, reusing pathEscape's space-to-underscore convention, which is MediaWiki title normalisation and works for Special:FilePath.
 func imageURLFor(claims map[string]json.RawMessage) string {
 	raw, found := claims[wikidataImageProperty]
 	if !found {
@@ -122,10 +95,7 @@ type Fetcher struct {
 	clock           clock.Clock
 }
 
-// Config is what a Fetcher needs. Two clients, not one: musicbrainz.org's own
-// precedent of one httpx.Client (and ADR-13 rate-limit/breaker bucket) per
-// distinct host, since www.wikidata.org and en.wikipedia.org are answered by
-// entirely separate services with no shared budget.
+// Config is what a Fetcher needs: two clients, one per host (and ADR-13 bucket) as musicbrainz does, since www.wikidata.org and en.wikipedia.org are separate services with no shared budget.
 type Config struct {
 	WikidataClient  *httpx.Client
 	WikipediaClient *httpx.Client
@@ -231,11 +201,7 @@ func pathEscape(title string) string {
 	return url.PathEscape(strings.ReplaceAll(title, " ", "_"))
 }
 
-// ErrResponseTooLarge reports a response this package refused to finish
-// reading past maxResponseBytes -- arrimport.ErrResponseTooLarge's own
-// reasoning: read one byte past the limit so an over-limit response is
-// refused honestly instead of silently truncated into a confusing decode
-// error with no hint why.
+// ErrResponseTooLarge reports a response past maxResponseBytes, refused honestly (read one byte over the limit) instead of truncated into a confusing decode error, as arrimport does.
 var ErrResponseTooLarge = errors.New("wikidata: response exceeded the size limit")
 
 func getJSON(ctx context.Context, client *httpx.Client, url string, into any) error {

@@ -35,10 +35,7 @@ func NewScheduleStates(jobStore *store.Store) *ScheduleStates {
 	return &ScheduleStates{store: jobStore, queries: jobsdb.New(jobStore.Read())}
 }
 
-// SetNextRun records when a task will next fire, without disturbing
-// last_run_at/last_duration_ms/last_outcome/last_error -- called every tick,
-// whether or not the task actually fires, so a disabled task still shows an
-// accurate next-run time.
+// SetNextRun records the next fire time every tick without touching the last_* columns, so a disabled task still shows an accurate next run.
 func (s *ScheduleStates) SetNextRun(ctx context.Context, taskKey string, next time.Time) error {
 	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		return jobsdb.New(tx).UpsertScheduleNextRun(ctx, jobsdb.UpsertScheduleNextRunParams{

@@ -1,8 +1,4 @@
-// Package pack detects ADR-50's own "one source, many works" relationship
-// from a session's already-decided units. Pure and in-memory (ADR-23), the
-// same layering inspect's own package doc comment describes -- persistence
-// is internal/db/library.Packs' job, and the caller (importjob.Job) owns
-// when this runs.
+// Package pack detects ADR-50's one-source-many-works relationship from a session's decided units; pure and in-memory (ADR-23), persistence is library.Packs' and importjob.Job decides when it runs.
 package pack
 
 import (
@@ -11,10 +7,7 @@ import (
 	"github.com/makearr/Solarr/internal/identify/parse"
 )
 
-// Kinds (pack.kind, migration 0026). Re-exported by internal/db/library the
-// same way inspect.Shape's own values are (library.UnitSingle etc.).
-// MULTI_DISC and MULTI_SEASON are deliberately absent -- neither is
-// reachable from this package's own detector (private/questions.md).
+// Kinds (pack.kind, migration 0026), re-exported by internal/db/library; MULTI_DISC and MULTI_SEASON are absent because this detector cannot reach them.
 const (
 	Discography = "DISCOGRAPHY"
 	BoxSet      = "BOX_SET"
@@ -24,28 +17,18 @@ const (
 
 // Detection sources (pack.detected_from).
 const (
-	// DetectedFromStructure names a pack found from sibling structure alone,
-	// with no name-based confirmation -- declared for the schema's own full
-	// vocabulary; this package's own detector never emits it (every group it
-	// finds also passes a name check, see Detect's own doc comment).
+	// DetectedFromStructure names a pack from sibling structure alone; declared for the schema's vocabulary but never emitted, since every group Detect finds also passes a name check.
 	DetectedFromStructure         = "structure"
 	DetectedFromStructureAndTitle = "structure_and_name"
 )
 
-// discographyConfidence values this pass's own two detection paths --
-// SourceDeclaresDiscography names the release itself ("Artist-Discography-
-// 1990-2020-FLAC"), a stronger signal than SiblingArtistAgreement noticing
-// after the fact that several unrelated-looking folders happen to share a
-// parsed artist.
+// discographyConfidence values the two detection paths: SourceDeclaresDiscography (the release name says so) is stronger than SiblingArtistAgreement (folders sharing a parsed artist).
 const (
 	confidenceSourceDeclared   = 0.85
 	confidenceSiblingAgreement = 0.65
 )
 
-// Candidate is one already-decided import_unit, the caller's own view --
-// this package touches no database (ADR-23), only what a caller already has
-// in hand after DECIDE. RelPath is relative to the session's own
-// source_path, exactly as import_unit.rel_path stores it.
+// Candidate is one decided import_unit as the caller sees it; this package touches no database (ADR-23), and RelPath is relative to the session's source_path as stored.
 type Candidate struct {
 	UnitID  int64
 	RelPath string
@@ -60,37 +43,8 @@ type Group struct {
 	Members      []Candidate // input order preserved
 }
 
-// Detect groups sibling units into packs. Only a unit that is a direct
-// child of the walked source participates (RelPath has no "/") -- a unit
-// nested deeper (already merged into its own parent by GROUP, or one member
-// of a genuine subfolder structure this pass's own detector does not reach)
-// never does. Nor does a unit whose own RelPath is not unique among direct
-// children: GROUP's track-continuity structural fallback can misread one
-// real release's own messy filenames (found live, against a real scene
-// fixture: a single album, no clean sequential numbering, split into five
-// import_unit rows that all report the identical directory) as several
-// separate units sharing one directory -- excludeAmbiguousDirectories drops
-// every one of them rather than let several fragments of the same release
-// masquerade as several different releases by the same artist. Two paths
-// feed one result over what remains, structure always the gate:
-//
-//   - The source itself declares what it is: sourceName (the session's own
-//     source_path basename) parses with a real Discography flag and artist
-//     (identify/parse.Identity.Discography -- "Artist-Discography-1990-2020-
-//     FLAC" is exactly this). Every direct-child unit becomes one member,
-//     regardless of how each is itself named -- the container's own claim is
-//     the confirming signal here, matching ADR-50's own worked example.
-//   - No such declaration, so siblings are grouped by their own parsed
-//     artist agreeing with each other (two or more sharing one artist).
-//     Every remaining direct-child unit with an empty or a lone parsed
-//     artist stays ungrouped -- a single unit, named "Anthology" or
-//     anything else, never becomes a pack: the anthology trap (§19.6) falls
-//     out of requiring at least two siblings, never from reading a name.
-//
-// Every group Detect returns cleared a real, if imperfect, name check, so
-// DetectedFromStructure (structure with no name confirmation at all) is
-// never actually produced -- ADR-50 wants both signals feeding one
-// confidence, not structure alone deciding.
+// Detect groups sibling units into packs; only direct children of the walked source (RelPath has no "/") with a unique RelPath take part, because GROUP's track-continuity fallback can split one messy release into several rows sharing a directory (excludeAmbiguousDirectories).
+// Two paths feed one result: a source name parsing as a Discography makes every direct child a member, else siblings sharing one parsed artist group (two or more, so the anthology trap, section 19.6, never reads a name); every group passes a name check, so structure alone never decides (ADR-50).
 func Detect(sourceName string, candidates []Candidate) []Group {
 	var direct []Candidate
 	for _, c := range candidates {
@@ -113,11 +67,7 @@ func Detect(sourceName string, candidates []Candidate) []Group {
 	return siblingArtistGroups(direct)
 }
 
-// excludeAmbiguousDirectories drops every candidate whose own RelPath is
-// shared with another candidate -- two or more import_unit rows reporting
-// the identical directory are fragments GROUP could not cleanly bound into
-// one unit, not real sibling releases (Detect's own doc comment has the
-// live-found case). Order preserved among what remains.
+// excludeAmbiguousDirectories drops every candidate whose RelPath another shares: those are fragments GROUP could not bound, not sibling releases; order is preserved.
 func excludeAmbiguousDirectories(candidates []Candidate) []Candidate {
 	counts := make(map[string]int, len(candidates))
 	for _, c := range candidates {

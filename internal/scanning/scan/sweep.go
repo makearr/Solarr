@@ -25,21 +25,10 @@ const DefaultBatchSize = 200
 // progress, not a function call: a restart continues from the last committed batch
 // (section 10.4, ADR-3).
 type State struct {
-	// SweptThrough is the watermark: the wall-clock time the last completed sweep
-	// **started**. A directory whose mtime is older than this had no entries added,
-	// removed or renamed since, so its files are not re-read.
-	//
-	// The start, not the end, and not the newest mtime seen. A directory written
-	// while the sweep was running -- after the walk had already passed it -- would
-	// otherwise sit behind the watermark and never be read again.
+	// SweptThrough is the watermark: when the last completed sweep started (not ended, not the newest mtime), because a directory written during the sweep, after the walk passed it, would otherwise sit behind it and never be read; older directories are not re-read.
 	SweptThrough time.Time
 
-	// Cursor is the last directory whose files were committed, relative to the
-	// root. Empty means start from the beginning.
-	//
-	// Comparing it takes comparePaths, not string order: the walk visits a
-	// directory's whole subtree before its next sibling, so "a" then "a/c" then
-	// "a-b" is the order, and "a-b" < "a/c" as plain strings.
+	// Cursor is the last directory whose files were committed, relative to the root; empty starts over. Compare with comparePaths, not string order: the walk visits a subtree before the next sibling, and "a-b" < "a/c" as strings.
 	Cursor string
 }
 
@@ -115,13 +104,7 @@ type Sweeper struct {
 // NewSweeper builds one over a filesystem and the injected clock (ADR-17).
 func NewSweeper(fsys fsx.FS, cl clock.Clock) Sweeper { return Sweeper{fsys: fsys, clock: cl} }
 
-// Sweep walks root and calls emit for each batch of files in a directory that has
-// changed since state.SweptThrough. emit is where the caller commits, so returning
-// an error from it stops the sweep with the progress made so far intact.
-//
-// A directory's mtime moves when its own entries change, not when a grandchild
-// does, so the whole tree is still traversed -- only reading is skipped, which is
-// the expensive half.
+// Sweep walks root and calls emit per batch of files in a directory changed since state.SweptThrough; an emit error stops it with progress kept, and the whole tree is traversed because a directory's mtime ignores grandchildren, only reading is skipped.
 func (s Sweeper) Sweep(
 	ctx context.Context,
 	root string,
@@ -267,11 +250,7 @@ func (w *sweep) reads(relative string, info fsx.FileInfo) bool {
 	if w.resumeFrom != "" && comparePaths(relative, w.resumeFrom) <= 0 {
 		return false
 	}
-	// The workhorse: a directory whose mtime predates the last sweep's start
-	// gained, lost and renamed nothing since, so there is nothing here to read.
-	// Not-after rather than before: a directory touched in the same instant the
-	// last sweep started is re-read, because over-reading is recoverable and
-	// missing a change is not.
+	// A directory whose mtime predates the last sweep's start gained, lost and renamed nothing, so nothing is read; not-after rather than before, since over-reading is recoverable and missing a change is not.
 	return w.options.Full || !info.ModTime.Before(w.watermark)
 }
 
@@ -401,10 +380,7 @@ func (s Sweeper) ReadDirectory(root, relative string, include func(relPath strin
 	return batch, nil
 }
 
-// comparePaths orders two relative paths the way the walk visits them: segment by
-// segment, so a directory sorts before everything beneath it and before any sibling
-// that follows it. Plain string comparison does not do this -- "a-b" < "a/c" because
-// '-' is below '/' -- which would skip a sibling directory on resume.
+// comparePaths orders relative paths as the walk visits them, segment by segment (a directory before its contents and later siblings); plain string order puts "a-b" before "a/c" ('-' is below '/') and would skip a sibling on resume.
 func comparePaths(left, right string) int {
 	leftSegments := splitPath(left)
 	rightSegments := splitPath(right)
