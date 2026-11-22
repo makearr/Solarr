@@ -584,6 +584,13 @@ const (
 	MeTierNormal   MeTier = "normal"
 )
 
+// Defines values for MediaServerKindCredential.
+const (
+	MediaServerKindCredentialKey              MediaServerKindCredential = "key"
+	MediaServerKindCredentialOptionalPassword MediaServerKindCredential = "optional_password"
+	MediaServerKindCredentialPassword         MediaServerKindCredential = "password"
+)
+
 // Defines values for MediaType.
 const (
 	MediaTypeAdult     MediaType = "adult"
@@ -4349,6 +4356,152 @@ type MediaRole struct {
 	PartScoped bool `json:"part_scoped"`
 }
 
+// MediaServer defines model for MediaServer.
+type MediaServer struct {
+	Announce   bool      `json:"announce"`
+	AsMetadata bool      `json:"as_metadata"`
+	BaseUrl    string    `json:"base_url"`
+	CreatedAt  time.Time `json:"created_at"`
+
+	// Credential A credential, shown without ever exposing it (section 13.1). The raw value exists only between the database and the one outbound request that needs it.
+	Credential   SecretMask              `json:"credential"`
+	Enabled      bool                    `json:"enabled"`
+	Id           int64                   `json:"id"`
+	Kind         string                  `json:"kind"`
+	LastError    *string                 `json:"last_error,omitempty"`
+	LastOkAt     *time.Time              `json:"last_ok_at,omitempty"`
+	Libraries    []MediaServerLibraryMap `json:"libraries"`
+	Name         string                  `json:"name"`
+	Paths        []MediaServerPathPair   `json:"paths"`
+	PushFiles    bool                    `json:"push_files"`
+	SyncPlayback bool                    `json:"sync_playback"`
+	UpdatedAt    time.Time               `json:"updated_at"`
+	Username     string                  `json:"username"`
+	Users        []MediaServerUserMap    `json:"users"`
+}
+
+// MediaServerKind defines model for MediaServerKind.
+type MediaServerKind struct {
+	// CanAnnounce The server can show a message to people watching.
+	CanAnnounce bool `json:"can_announce"`
+
+	// CanMetadata The server can be a local metadata source.
+	CanMetadata bool `json:"can_metadata"`
+
+	// CanPlayback The server keeps watch state.
+	CanPlayback bool `json:"can_playback"`
+
+	// CanPush The server can be told of new files.
+	CanPush bool `json:"can_push"`
+
+	// Credential What the dialog asks for, a key or token alone, or a user name and password.
+	Credential      MediaServerKindCredential `json:"credential"`
+	DefaultPortHint *string                   `json:"default_port_hint,omitempty"`
+	HasUsers        bool                      `json:"has_users"`
+
+	// Key jellyfin, navidrome, audiobookshelf, kavita, calibre or stash.
+	Key        string   `json:"key"`
+	Label      string   `json:"label"`
+	MediaTypes []string `json:"media_types"`
+
+	// NeedsAdmin Scanning and listing users need an administrator's credential.
+	NeedsAdmin bool `json:"needs_admin"`
+
+	// PushByPath The server takes the exact path rather than only a library scan.
+	PushByPath bool `json:"push_by_path"`
+}
+
+// MediaServerKindCredential What the dialog asks for, a key or token alone, or a user name and password.
+type MediaServerKindCredential string
+
+// MediaServerLibraryMap defines model for MediaServerLibraryMap.
+type MediaServerLibraryMap struct {
+	CategoryId      int64   `json:"category_id"`
+	ServerLibrary   *string `json:"server_library,omitempty"`
+	ServerLibraryId string  `json:"server_library_id"`
+}
+
+// MediaServerPathCheck defines model for MediaServerPathCheck.
+type MediaServerPathCheck struct {
+	// Found The server holds a library under the server prefix.
+	Found        bool   `json:"found"`
+	ServerPrefix string `json:"server_prefix"`
+	SolarrPrefix string `json:"solarr_prefix"`
+}
+
+// MediaServerPathPair defines model for MediaServerPathPair.
+type MediaServerPathPair struct {
+	ServerPrefix string `json:"server_prefix"`
+	SolarrPrefix string `json:"solarr_prefix"`
+}
+
+// MediaServerRemoteLibrary defines model for MediaServerRemoteLibrary.
+type MediaServerRemoteLibrary struct {
+	Id    string   `json:"id"`
+	Name  string   `json:"name"`
+	Paths []string `json:"paths"`
+
+	// Type The server's own word for what the library holds.
+	Type string `json:"type"`
+}
+
+// MediaServerRemoteUser defines model for MediaServerRemoteUser.
+type MediaServerRemoteUser struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// MediaServerTestRequest defines model for MediaServerTestRequest.
+type MediaServerTestRequest struct {
+	Connection *MediaServerWrite `json:"connection,omitempty"`
+
+	// Id Test the stored connection.
+	Id    *int64                 `json:"id,omitempty"`
+	Paths *[]MediaServerPathPair `json:"paths,omitempty"`
+}
+
+// MediaServerTestResult defines model for MediaServerTestResult.
+type MediaServerTestResult struct {
+	// Admin The credential is an administrator's.
+	Admin *bool `json:"admin,omitempty"`
+
+	// Error Why the test failed
+	Error     *string                    `json:"error,omitempty"`
+	Libraries []MediaServerRemoteLibrary `json:"libraries"`
+	Name      *string                    `json:"name,omitempty"`
+	Ok        bool                       `json:"ok"`
+	Paths     []MediaServerPathCheck     `json:"paths"`
+	Users     []MediaServerRemoteUser    `json:"users"`
+	Version   *string                    `json:"version,omitempty"`
+}
+
+// MediaServerUserMap defines model for MediaServerUserMap.
+type MediaServerUserMap struct {
+	// Counted Counts toward "everyone watched it".
+	Counted      bool   `json:"counted"`
+	Name         string `json:"name"`
+	ServerUserId string `json:"server_user_id"`
+
+	// UserId The Solarr user this account is
+	UserId *int64 `json:"user_id,omitempty"`
+}
+
+// MediaServerWrite defines model for MediaServerWrite.
+type MediaServerWrite struct {
+	Announce   *bool  `json:"announce,omitempty"`
+	AsMetadata *bool  `json:"as_metadata,omitempty"`
+	BaseUrl    string `json:"base_url"`
+
+	// Credential Required when adding; on a replace, sent only to change it.
+	Credential   *string `json:"credential,omitempty"`
+	Enabled      *bool   `json:"enabled,omitempty"`
+	Kind         string  `json:"kind"`
+	Name         string  `json:"name"`
+	PushFiles    *bool   `json:"push_files,omitempty"`
+	SyncPlayback *bool   `json:"sync_playback,omitempty"`
+	Username     *string `json:"username,omitempty"`
+}
+
 // MediaTerm defines model for MediaTerm.
 type MediaTerm struct {
 	Many string `json:"many"`
@@ -7419,6 +7572,15 @@ type SetMyTierJSONBody struct {
 // SetMyTierJSONBodyTier defines parameters for SetMyTier.
 type SetMyTierJSONBodyTier string
 
+// SetMediaServerLibrariesJSONBody defines parameters for SetMediaServerLibraries.
+type SetMediaServerLibrariesJSONBody = []MediaServerLibraryMap
+
+// SetMediaServerPathsJSONBody defines parameters for SetMediaServerPaths.
+type SetMediaServerPathsJSONBody = []MediaServerPathPair
+
+// SetMediaServerUsersJSONBody defines parameters for SetMediaServerUsers.
+type SetMediaServerUsersJSONBody = []MediaServerUserMap
+
 // SetAcoustIDAPIKeyJSONBody defines parameters for SetAcoustIDAPIKey.
 type SetAcoustIDAPIKeyJSONBody struct {
 	ApiKey *string `json:"api_key,omitempty"`
@@ -8343,6 +8505,24 @@ type SetMyPreferenceJSONRequestBody SetMyPreferenceJSONBody
 // SetMyTierJSONRequestBody defines body for SetMyTier for application/json ContentType.
 type SetMyTierJSONRequestBody SetMyTierJSONBody
 
+// AddMediaServerJSONRequestBody defines body for AddMediaServer for application/json ContentType.
+type AddMediaServerJSONRequestBody = MediaServerWrite
+
+// TestMediaServerJSONRequestBody defines body for TestMediaServer for application/json ContentType.
+type TestMediaServerJSONRequestBody = MediaServerTestRequest
+
+// UpdateMediaServerJSONRequestBody defines body for UpdateMediaServer for application/json ContentType.
+type UpdateMediaServerJSONRequestBody = MediaServerWrite
+
+// SetMediaServerLibrariesJSONRequestBody defines body for SetMediaServerLibraries for application/json ContentType.
+type SetMediaServerLibrariesJSONRequestBody = SetMediaServerLibrariesJSONBody
+
+// SetMediaServerPathsJSONRequestBody defines body for SetMediaServerPaths for application/json ContentType.
+type SetMediaServerPathsJSONRequestBody = SetMediaServerPathsJSONBody
+
+// SetMediaServerUsersJSONRequestBody defines body for SetMediaServerUsers for application/json ContentType.
+type SetMediaServerUsersJSONRequestBody = SetMediaServerUsersJSONBody
+
 // SetAcoustIDAPIKeyJSONRequestBody defines body for SetAcoustIDAPIKey for application/json ContentType.
 type SetAcoustIDAPIKeyJSONRequestBody SetAcoustIDAPIKeyJSONBody
 
@@ -9158,6 +9338,39 @@ type ServerInterface interface {
 	// Change how much of the settings surface the caller is shown (ADR-26). Self-service: any authenticated user may set their own tier, not just an administrator -- raising or lowering it never changes behaviour, only what is displayed.
 	// (PATCH /me/tier)
 	SetMyTier(w http.ResponseWriter, r *http.Request)
+	// Every media server connection. Administrator only; the credential is never returned.
+	// (GET /media-servers)
+	ListMediaServers(w http.ResponseWriter, r *http.Request)
+	// Connect a media server. Administrator only; the credential is sealed at rest and write-only.
+	// (POST /media-servers)
+	AddMediaServer(w http.ResponseWriter, r *http.Request)
+	// Every kind of media server a connection can name, with what it can do. Administrator only.
+	// (GET /media-servers/kinds)
+	ListMediaServerKinds(w http.ResponseWriter, r *http.Request)
+	// Try a connection, saved or not, and report what the server holds. Administrator only.
+	// (POST /media-servers/test)
+	TestMediaServer(w http.ResponseWriter, r *http.Request)
+	// Remove a connection and its mappings. Administrator only.
+	// (DELETE /media-servers/{id})
+	DeleteMediaServer(w http.ResponseWriter, r *http.Request, id int64)
+	// One media server connection. Administrator only.
+	// (GET /media-servers/{id})
+	GetMediaServer(w http.ResponseWriter, r *http.Request, id int64)
+	// Replace a connection's facts. The kind never changes; the credential changes only when one is sent.
+	// (PUT /media-servers/{id})
+	UpdateMediaServer(w http.ResponseWriter, r *http.Request, id int64)
+	// The libraries the server itself holds, asked of the server now.
+	// (GET /media-servers/{id}/libraries)
+	ListMediaServerLibraries(w http.ResponseWriter, r *http.Request, id int64)
+	// Replace which Solarr libraries are which libraries of the server.
+	// (PUT /media-servers/{id}/libraries)
+	SetMediaServerLibraries(w http.ResponseWriter, r *http.Request, id int64)
+	// Replace the path pairs that turn a Solarr path into the server's.
+	// (PUT /media-servers/{id}/paths)
+	SetMediaServerPaths(w http.ResponseWriter, r *http.Request, id int64)
+	// Replace the server's users as known here, which Solarr user each is and whether they count.
+	// (PUT /media-servers/{id}/users)
+	SetMediaServerUsers(w http.ResponseWriter, r *http.Request, id int64)
 	// The media types this build can manage, with what each calls its entities.
 	// (GET /mediatypes)
 	ListMediaTypes(w http.ResponseWriter, r *http.Request)
@@ -10907,6 +11120,72 @@ func (_ Unimplemented) SetMyPreference(w http.ResponseWriter, r *http.Request, k
 // Change how much of the settings surface the caller is shown (ADR-26). Self-service: any authenticated user may set their own tier, not just an administrator -- raising or lowering it never changes behaviour, only what is displayed.
 // (PATCH /me/tier)
 func (_ Unimplemented) SetMyTier(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every media server connection. Administrator only; the credential is never returned.
+// (GET /media-servers)
+func (_ Unimplemented) ListMediaServers(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Connect a media server. Administrator only; the credential is sealed at rest and write-only.
+// (POST /media-servers)
+func (_ Unimplemented) AddMediaServer(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every kind of media server a connection can name, with what it can do. Administrator only.
+// (GET /media-servers/kinds)
+func (_ Unimplemented) ListMediaServerKinds(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Try a connection, saved or not, and report what the server holds. Administrator only.
+// (POST /media-servers/test)
+func (_ Unimplemented) TestMediaServer(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a connection and its mappings. Administrator only.
+// (DELETE /media-servers/{id})
+func (_ Unimplemented) DeleteMediaServer(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One media server connection. Administrator only.
+// (GET /media-servers/{id})
+func (_ Unimplemented) GetMediaServer(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace a connection's facts. The kind never changes; the credential changes only when one is sent.
+// (PUT /media-servers/{id})
+func (_ Unimplemented) UpdateMediaServer(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The libraries the server itself holds, asked of the server now.
+// (GET /media-servers/{id}/libraries)
+func (_ Unimplemented) ListMediaServerLibraries(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace which Solarr libraries are which libraries of the server.
+// (PUT /media-servers/{id}/libraries)
+func (_ Unimplemented) SetMediaServerLibraries(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace the path pairs that turn a Solarr path into the server's.
+// (PUT /media-servers/{id}/paths)
+func (_ Unimplemented) SetMediaServerPaths(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace the server's users as known here, which Solarr user each is and whether they count.
+// (PUT /media-servers/{id}/users)
+func (_ Unimplemented) SetMediaServerUsers(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -18484,6 +18763,325 @@ func (siw *ServerInterfaceWrapper) SetMyTier(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// ListMediaServers operation middleware
+func (siw *ServerInterfaceWrapper) ListMediaServers(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMediaServers(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddMediaServer operation middleware
+func (siw *ServerInterfaceWrapper) AddMediaServer(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddMediaServer(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMediaServerKinds operation middleware
+func (siw *ServerInterfaceWrapper) ListMediaServerKinds(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMediaServerKinds(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestMediaServer operation middleware
+func (siw *ServerInterfaceWrapper) TestMediaServer(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestMediaServer(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteMediaServer operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMediaServer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteMediaServer(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMediaServer operation middleware
+func (siw *ServerInterfaceWrapper) GetMediaServer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMediaServer(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMediaServer operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMediaServer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMediaServer(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMediaServerLibraries operation middleware
+func (siw *ServerInterfaceWrapper) ListMediaServerLibraries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMediaServerLibraries(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetMediaServerLibraries operation middleware
+func (siw *ServerInterfaceWrapper) SetMediaServerLibraries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetMediaServerLibraries(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetMediaServerPaths operation middleware
+func (siw *ServerInterfaceWrapper) SetMediaServerPaths(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetMediaServerPaths(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetMediaServerUsers operation middleware
+func (siw *ServerInterfaceWrapper) SetMediaServerUsers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetMediaServerUsers(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListMediaTypes operation middleware
 func (siw *ServerInterfaceWrapper) ListMediaTypes(w http.ResponseWriter, r *http.Request) {
 
@@ -25133,6 +25731,39 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/me/tier", wrapper.SetMyTier)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/media-servers", wrapper.ListMediaServers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/media-servers", wrapper.AddMediaServer)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/media-servers/kinds", wrapper.ListMediaServerKinds)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/media-servers/test", wrapper.TestMediaServer)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/media-servers/{id}", wrapper.DeleteMediaServer)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/media-servers/{id}", wrapper.GetMediaServer)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/media-servers/{id}", wrapper.UpdateMediaServer)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/media-servers/{id}/libraries", wrapper.ListMediaServerLibraries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/media-servers/{id}/libraries", wrapper.SetMediaServerLibraries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/media-servers/{id}/paths", wrapper.SetMediaServerPaths)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/media-servers/{id}/users", wrapper.SetMediaServerUsers)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/mediatypes", wrapper.ListMediaTypes)

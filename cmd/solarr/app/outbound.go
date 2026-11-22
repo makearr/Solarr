@@ -48,6 +48,8 @@ const (
 	providerDownloaderPrefix = "downloader:"
 	// Each *Arr instance has its own bucket, named by its host, so one instance being down pauses no other.
 	providerArrPrefix = "arr:"
+	// Each media server connection has its own bucket, named by its host.
+	providerMediaServerPrefix = "mediaserver:"
 )
 
 // providerLimits is every provider's pace, declared once (ADR-13): the metadata providers' in settings.MetadataProviders,
@@ -116,6 +118,8 @@ var providerFamilyLimits = map[string]httpx.Limits{
 	providerDownloaderPrefix: {MinInterval: 200 * time.Millisecond, MaxConcurrent: connectionConcurrency},
 	// Someone's own *Arr server, often busy with its own imports.
 	providerArrPrefix: {MinInterval: 500 * time.Millisecond, MaxConcurrent: connectionConcurrency},
+	// Someone's own media server, which is also being watched on.
+	providerMediaServerPrefix: {MinInterval: 200 * time.Millisecond, MaxConcurrent: connectionConcurrency},
 }
 
 // connectionConcurrency is how many requests one indexer, download client or *Arr connection has in flight; the pace only
@@ -158,7 +162,7 @@ func (p *process) providerClient(provider string, guard *httpx.Guard, config htt
 	}
 	config.Provider = provider
 	config.RejectedKeyOpens = !strings.HasPrefix(provider, providerIndexerPrefix) && !strings.HasPrefix(provider, providerDownloaderPrefix) &&
-		!strings.HasPrefix(provider, providerArrPrefix) && provider != providerProwlarr && provider != providerWhisparr
+		!strings.HasPrefix(provider, providerArrPrefix) && !strings.HasPrefix(provider, providerMediaServerPrefix) && provider != providerProwlarr && provider != providerWhisparr
 	_, metadata := settings.MetadataProviderByKey(provider)
 	config.RetryTransient = metadata && provider != providerWhisparr
 	if config.UserAgent == "" && config.LiveUserAgent == nil {

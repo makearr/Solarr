@@ -930,9 +930,10 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		ImportLists: adapters.ImportLists{
 			Service: p.importListService(), Forgetter: library.NewImportLists(p.library), Queue: p.queue,
 		},
-		LibrarySuggester: p.suggester(),
-		ArrSync:          p.arrSync(),
-		ArrCompanion:     p.arrSync(), AfterWrite: p.memory.requestSync,
+		LibrarySuggester:   p.suggester(),
+		ArrSync:            p.arrSync(),
+		MediaServerClients: p.mediaServerClients,
+		ArrCompanion:       p.arrSync(), AfterWrite: p.memory.requestSync,
 		CategoryMerger: libraryMerger{merges: library.NewCategoryMerges(p.library), queue: p.queue},
 		Prowlarr:       adapters.Prowlarr{Cache: p.cache, List: p.listProwlarr},
 		ArrConnections: adapters.Prowlarr{

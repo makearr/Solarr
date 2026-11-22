@@ -2848,6 +2848,231 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /media-servers/kinds:
+    get:
+      operationId: listMediaServerKinds
+      tags: [settings]
+      summary: Every kind of media server a connection can name, with what it can do. Administrator only.
+      responses:
+        "200":
+          description: The kinds, ordered by key.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MediaServerKind" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /media-servers:
+    get:
+      operationId: listMediaServers
+      tags: [settings]
+      summary: Every media server connection. Administrator only; the credential is never returned.
+      responses:
+        "200":
+          description: Every connection with its library, path and user mapping.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MediaServer" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: addMediaServer
+      tags: [settings]
+      summary: Connect a media server. Administrator only; the credential is sealed at rest and write-only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MediaServerWrite" }
+      responses:
+        "201":
+          description: Connected.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MediaServer" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /media-servers/test:
+    post:
+      operationId: testMediaServer
+      tags: [settings]
+      summary: Try a connection, saved or not, and report what the server holds. Administrator only.
+      description: >-
+        Give either id (the stored connection, with the stored credential unless one is sent) or a whole connection.
+        Answers the version, whether the credential is an administrator's, the server's libraries and users, and for each
+        path pair whether the server holds a library under it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MediaServerTestRequest" }
+      responses:
+        "200":
+          description: The server answered, or the problem is in the result's error.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MediaServerTestResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /media-servers/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getMediaServer
+      tags: [settings]
+      summary: One media server connection. Administrator only.
+      responses:
+        "200":
+          description: The connection.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MediaServer" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updateMediaServer
+      tags: [settings]
+      summary: Replace a connection's facts. The kind never changes; the credential changes only when one is sent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MediaServerWrite" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MediaServer" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteMediaServer
+      tags: [settings]
+      summary: Remove a connection and its mappings. Administrator only.
+      responses:
+        "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /media-servers/{id}/libraries:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: listMediaServerLibraries
+      tags: [settings]
+      summary: The libraries the server itself holds, asked of the server now.
+      responses:
+        "200":
+          description: The server's libraries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MediaServerRemoteLibrary" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setMediaServerLibraries
+      tags: [settings]
+      summary: Replace which Solarr libraries are which libraries of the server.
+      description: A Solarr library whose media type the kind does not take is refused with 422.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: "#/components/schemas/MediaServerLibraryMap" }
+      responses:
+        "200":
+          description: The connection as saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MediaServer" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+
+  /media-servers/{id}/paths:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      operationId: setMediaServerPaths
+      tags: [settings]
+      summary: Replace the path pairs that turn a Solarr path into the server's.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: "#/components/schemas/MediaServerPathPair" }
+      responses:
+        "200":
+          description: The connection as saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MediaServer" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /media-servers/{id}/users:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      operationId: setMediaServerUsers
+      tags: [settings]
+      summary: Replace the server's users as known here, which Solarr user each is and whether they count.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: "#/components/schemas/MediaServerUserMap" }
+      responses:
+        "200":
+          description: The connection as saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MediaServer" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /arr/instances:
     get:
       operationId: listArrInstances
@@ -11837,6 +12062,152 @@ components:
             Send the monitored flag of what an import brought in back to the *Arr when it changes here. The one write
             Solarr ever makes to an *Arr; off unless turned on.
         last_pushed_at: { type: string, format: date-time }
+
+    MediaServerKind:
+      type: object
+      required: [key, label, credential, can_push, push_by_path, can_announce, can_playback, can_metadata, has_users, needs_admin, media_types]
+      properties:
+        key: { type: string, description: "jellyfin, navidrome, audiobookshelf, kavita, calibre or stash." }
+        label: { type: string }
+        credential:
+          type: string
+          enum: [key, password, optional_password]
+          description: What the dialog asks for, a key or token alone, or a user name and password.
+        can_push: { type: boolean, description: The server can be told of new files. }
+        push_by_path: { type: boolean, description: The server takes the exact path rather than only a library scan. }
+        can_announce: { type: boolean, description: The server can show a message to people watching. }
+        can_playback: { type: boolean, description: The server keeps watch state. }
+        can_metadata: { type: boolean, description: The server can be a local metadata source. }
+        has_users: { type: boolean }
+        needs_admin: { type: boolean, description: Scanning and listing users need an administrator's credential. }
+        media_types:
+          type: array
+          items: { type: string }
+        default_port_hint: { type: string }
+
+    MediaServerWrite:
+      type: object
+      required: [kind, name, base_url]
+      properties:
+        kind: { type: string }
+        name: { type: string }
+        base_url: { type: string }
+        username: { type: string }
+        credential:
+          type: string
+          description: Required when adding; on a replace, sent only to change it.
+        enabled: { type: boolean, default: true }
+        as_metadata: { type: boolean, default: false }
+        push_files: { type: boolean, default: false }
+        announce: { type: boolean, default: false }
+        sync_playback: { type: boolean, default: false }
+
+    MediaServerLibraryMap:
+      type: object
+      required: [category_id, server_library_id]
+      properties:
+        category_id: { type: integer, format: int64 }
+        server_library_id: { type: string }
+        server_library: { type: string }
+
+    MediaServerPathPair:
+      type: object
+      required: [solarr_prefix, server_prefix]
+      properties:
+        solarr_prefix: { type: string }
+        server_prefix: { type: string }
+
+    MediaServerUserMap:
+      type: object
+      required: [server_user_id, name, counted]
+      properties:
+        server_user_id: { type: string }
+        name: { type: string }
+        user_id: { type: integer, format: int64, description: The Solarr user this account is, when it is one. }
+        counted: { type: boolean, description: Counts toward "everyone watched it". }
+
+    MediaServer:
+      type: object
+      required: [id, kind, name, base_url, username, credential, enabled, as_metadata, push_files, announce, sync_playback, libraries, paths, users, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string }
+        name: { type: string }
+        base_url: { type: string }
+        username: { type: string }
+        credential: { $ref: "#/components/schemas/SecretMask" }
+        enabled: { type: boolean }
+        as_metadata: { type: boolean }
+        push_files: { type: boolean }
+        announce: { type: boolean }
+        sync_playback: { type: boolean }
+        libraries:
+          type: array
+          items: { $ref: "#/components/schemas/MediaServerLibraryMap" }
+        paths:
+          type: array
+          items: { $ref: "#/components/schemas/MediaServerPathPair" }
+        users:
+          type: array
+          items: { $ref: "#/components/schemas/MediaServerUserMap" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        last_ok_at: { type: string, format: date-time }
+        last_error: { type: string }
+
+    MediaServerRemoteLibrary:
+      type: object
+      required: [id, name, type, paths]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        type: { type: string, description: The server's own word for what the library holds. }
+        paths:
+          type: array
+          items: { type: string }
+
+    MediaServerRemoteUser:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+
+    MediaServerTestRequest:
+      type: object
+      properties:
+        id: { type: integer, format: int64, description: Test the stored connection. }
+        connection: { $ref: "#/components/schemas/MediaServerWrite" }
+        paths:
+          type: array
+          items: { $ref: "#/components/schemas/MediaServerPathPair" }
+
+    MediaServerPathCheck:
+      type: object
+      required: [solarr_prefix, server_prefix, found]
+      properties:
+        solarr_prefix: { type: string }
+        server_prefix: { type: string }
+        found: { type: boolean, description: The server holds a library under the server prefix. }
+
+    MediaServerTestResult:
+      type: object
+      required: [ok, libraries, users, paths]
+      properties:
+        ok: { type: boolean }
+        error: { type: string, description: Why the test failed, in words. }
+        name: { type: string }
+        version: { type: string }
+        admin: { type: boolean, description: The credential is an administrator's. }
+        libraries:
+          type: array
+          items: { $ref: "#/components/schemas/MediaServerRemoteLibrary" }
+        users:
+          type: array
+          items: { $ref: "#/components/schemas/MediaServerRemoteUser" }
+        paths:
+          type: array
+          items: { $ref: "#/components/schemas/MediaServerPathCheck" }
 
     Indexer:
       type: object

@@ -292,6 +292,8 @@ type Config struct {
 	// Calendar answers releases in a date window.
 	Calendar CalendarReader
 	ArrSync  ArrSync
+	// MediaServerClients builds the client of a media server connection; nil leaves testing one unavailable.
+	MediaServerClients MediaServerClients
 	// CategoryMerger moves what the library holds for one category to another; nil leaves merging unavailable.
 	CategoryMerger CategoryMerger
 	// LibraryHealth answers todo 4.8's own aggregate report (unprobed files,
@@ -427,6 +429,7 @@ type Server struct {
 	workAdder               WorkAdder
 	importLists             ImportListSync
 	arrSync                 ArrSync
+	mediaServerClients      MediaServerClients
 	categoryMerger          CategoryMerger
 	libraryHealth           LibraryHealth
 	systemHealth            SystemHealthSource
@@ -576,6 +579,7 @@ func New(config Config) (*Server, error) {
 		workAdder:               config.WorkAdder,
 		importLists:             config.ImportLists,
 		arrSync:                 config.ArrSync,
+		mediaServerClients:      config.MediaServerClients,
 		categoryMerger:          config.CategoryMerger,
 		libraryHealth:           config.LibraryHealth,
 		systemHealth:            config.SystemHealth,
@@ -767,6 +771,17 @@ func New(config Config) (*Server, error) {
 			secured.Delete("/works/exclusions", server.routeRemoveWorkExclusion)
 			secured.Get("/works/lookup", server.routeLookupWorks)
 			secured.Post("/works", server.AddWork)
+			secured.Get("/media-servers/kinds", server.ListMediaServerKinds)
+			secured.Get("/media-servers", server.ListMediaServers)
+			secured.Post("/media-servers", server.AddMediaServer)
+			secured.Post("/media-servers/test", server.TestMediaServer)
+			secured.Get("/media-servers/{id}", wrapped.GetMediaServer)
+			secured.Put("/media-servers/{id}", wrapped.UpdateMediaServer)
+			secured.Delete("/media-servers/{id}", wrapped.DeleteMediaServer)
+			secured.Get("/media-servers/{id}/libraries", wrapped.ListMediaServerLibraries)
+			secured.Put("/media-servers/{id}/libraries", wrapped.SetMediaServerLibraries)
+			secured.Put("/media-servers/{id}/paths", wrapped.SetMediaServerPaths)
+			secured.Put("/media-servers/{id}/users", wrapped.SetMediaServerUsers)
 			secured.Get("/arr/instances", server.ListArrInstances)
 			secured.Post("/arr/instances", server.AddArrInstance)
 			secured.Patch("/arr/instances/{id}", wrapped.UpdateArrInstance)

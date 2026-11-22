@@ -1951,6 +1951,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/media-servers/kinds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every kind of media server a connection can name, with what it can do. Administrator only. */
+        get: operations["listMediaServerKinds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media-servers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every media server connection. Administrator only; the credential is never returned. */
+        get: operations["listMediaServers"];
+        put?: never;
+        /** Connect a media server. Administrator only; the credential is sealed at rest and write-only. */
+        post: operations["addMediaServer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media-servers/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Try a connection, saved or not, and report what the server holds. Administrator only.
+         * @description Give either id (the stored connection, with the stored credential unless one is sent) or a whole connection. Answers the version, whether the credential is an administrator's, the server's libraries and users, and for each path pair whether the server holds a library under it.
+         */
+        post: operations["testMediaServer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media-servers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** One media server connection. Administrator only. */
+        get: operations["getMediaServer"];
+        /** Replace a connection's facts. The kind never changes; the credential changes only when one is sent. */
+        put: operations["updateMediaServer"];
+        post?: never;
+        /** Remove a connection and its mappings. Administrator only. */
+        delete: operations["deleteMediaServer"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media-servers/{id}/libraries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** The libraries the server itself holds, asked of the server now. */
+        get: operations["listMediaServerLibraries"];
+        /**
+         * Replace which Solarr libraries are which libraries of the server.
+         * @description A Solarr library whose media type the kind does not take is refused with 422.
+         */
+        put: operations["setMediaServerLibraries"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media-servers/{id}/paths": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace the path pairs that turn a Solarr path into the server's. */
+        put: operations["setMediaServerPaths"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media-servers/{id}/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace the server's users as known here, which Solarr user each is and whether they count. */
+        put: operations["setMediaServerUsers"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/arr/instances": {
         parameters: {
             query?: never;
@@ -8452,6 +8589,132 @@ export interface components {
             /** Format: date-time */
             last_pushed_at?: string;
         };
+        MediaServerKind: {
+            /** @description jellyfin, navidrome, audiobookshelf, kavita, calibre or stash. */
+            key: string;
+            label: string;
+            /**
+             * @description What the dialog asks for, a key or token alone, or a user name and password.
+             * @enum {string}
+             */
+            credential: "key" | "password" | "optional_password";
+            /** @description The server can be told of new files. */
+            can_push: boolean;
+            /** @description The server takes the exact path rather than only a library scan. */
+            push_by_path: boolean;
+            /** @description The server can show a message to people watching. */
+            can_announce: boolean;
+            /** @description The server keeps watch state. */
+            can_playback: boolean;
+            /** @description The server can be a local metadata source. */
+            can_metadata: boolean;
+            has_users: boolean;
+            /** @description Scanning and listing users need an administrator's credential. */
+            needs_admin: boolean;
+            media_types: string[];
+            default_port_hint?: string;
+        };
+        MediaServerWrite: {
+            kind: string;
+            name: string;
+            base_url: string;
+            username?: string;
+            /** @description Required when adding; on a replace, sent only to change it. */
+            credential?: string;
+            /** @default true */
+            enabled: boolean;
+            /** @default false */
+            as_metadata: boolean;
+            /** @default false */
+            push_files: boolean;
+            /** @default false */
+            announce: boolean;
+            /** @default false */
+            sync_playback: boolean;
+        };
+        MediaServerLibraryMap: {
+            /** Format: int64 */
+            category_id: number;
+            server_library_id: string;
+            server_library?: string;
+        };
+        MediaServerPathPair: {
+            solarr_prefix: string;
+            server_prefix: string;
+        };
+        MediaServerUserMap: {
+            server_user_id: string;
+            name: string;
+            /**
+             * Format: int64
+             * @description The Solarr user this account is
+             */
+            user_id?: number;
+            /** @description Counts toward "everyone watched it". */
+            counted: boolean;
+        };
+        MediaServer: {
+            /** Format: int64 */
+            id: number;
+            kind: string;
+            name: string;
+            base_url: string;
+            username: string;
+            credential: components["schemas"]["SecretMask"];
+            enabled: boolean;
+            as_metadata: boolean;
+            push_files: boolean;
+            announce: boolean;
+            sync_playback: boolean;
+            libraries: components["schemas"]["MediaServerLibraryMap"][];
+            paths: components["schemas"]["MediaServerPathPair"][];
+            users: components["schemas"]["MediaServerUserMap"][];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: date-time */
+            last_ok_at?: string;
+            last_error?: string;
+        };
+        MediaServerRemoteLibrary: {
+            id: string;
+            name: string;
+            /** @description The server's own word for what the library holds. */
+            type: string;
+            paths: string[];
+        };
+        MediaServerRemoteUser: {
+            id: string;
+            name: string;
+        };
+        MediaServerTestRequest: {
+            /**
+             * Format: int64
+             * @description Test the stored connection.
+             */
+            id?: number;
+            connection?: components["schemas"]["MediaServerWrite"];
+            paths?: components["schemas"]["MediaServerPathPair"][];
+        };
+        MediaServerPathCheck: {
+            solarr_prefix: string;
+            server_prefix: string;
+            /** @description The server holds a library under the server prefix. */
+            found: boolean;
+        };
+        MediaServerTestResult: {
+            ok: boolean;
+            /** @description Why the test failed */
+            error?: string;
+            name?: string;
+            version?: string;
+            /** @description The credential is an administrator's. */
+            admin?: boolean;
+            libraries: components["schemas"]["MediaServerRemoteLibrary"][];
+            users: components["schemas"]["MediaServerRemoteUser"][];
+            paths: components["schemas"]["MediaServerPathCheck"][];
+        };
         Indexer: {
             /** Format: int64 */
             id: number;
@@ -14518,6 +14781,300 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listMediaServerKinds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The kinds, ordered by key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaServerKind"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listMediaServers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every connection with its library, path and user mapping. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaServer"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    addMediaServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MediaServerWrite"];
+            };
+        };
+        responses: {
+            /** @description Connected. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaServer"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    testMediaServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MediaServerTestRequest"];
+            };
+        };
+        responses: {
+            /** @description The server answered, or the problem is in the result's error. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaServerTestResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getMediaServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The connection. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaServer"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateMediaServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MediaServerWrite"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaServer"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteMediaServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listMediaServerLibraries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The server's libraries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaServerRemoteLibrary"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+        };
+    };
+    setMediaServerLibraries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MediaServerLibraryMap"][];
+            };
+        };
+        responses: {
+            /** @description The connection as saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaServer"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    setMediaServerPaths: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MediaServerPathPair"][];
+            };
+        };
+        responses: {
+            /** @description The connection as saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaServer"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setMediaServerUsers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MediaServerUserMap"][];
+            };
+        };
+        responses: {
+            /** @description The connection as saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaServer"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };
