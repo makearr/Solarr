@@ -9,6 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/identify/comicinfo"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parsecomic"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/platform/keyedlock"
 )
 
@@ -197,6 +198,9 @@ func identifications(found []Candidate) []model.Identification {
 // add stores the series the ids name in the library the file is in, unmonitored: its files, not the provider's whole
 // back catalogue, are what the person has asked to keep.
 func (r Resolver) add(ctx context.Context, categoryID int64, ids map[string]string, hint Hint) int64 {
+	if r.Service.IsExcluded(ctx, ids) {
+		return works.Excluded
+	}
 	category, found := r.Categories.Category(categoryID)
 	if !found {
 		return 0

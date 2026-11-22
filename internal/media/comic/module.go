@@ -46,6 +46,18 @@ type Module struct {
 	Service Service
 	// Sweep is the scan of the type's files.
 	Sweep scan.Sweep
+	// Files places a queued file by a person's word.
+	Files media.PlacingFiles
+}
+
+var _ media.PlacingFiles = Module{}
+
+// PlaceFile implements media.PlacingFiles.
+func (m Module) PlaceFile(ctx context.Context, categoryID, mediaObjectID int64, placement media.Placement, wholeFolder bool) (int64, int64, error) {
+	if m.Files == nil {
+		return 0, 0, media.ErrNotWired
+	}
+	return m.Files.PlaceFile(ctx, categoryID, mediaObjectID, placement, wholeFolder)
 }
 
 var (
@@ -155,7 +167,11 @@ func (Module) Descriptor() media.Descriptor {
 		AddKinds:       []media.Choice{{Key: AddKindSeries, Label: "Series"}},
 		Kinds:          Kinds(),
 		ExtraFiles:     media.ExtraFilesDefault{Import: true, Extensions: []string{"jpg", "xml", "json"}},
-		GuessFloor:     0.9,
+		GuessFloor:     GuessFloor,
+		// A held import folder is committed by hand, and a removed series' files are left out by the scan.
+		CommitsHeldImports:    true,
+		ScanHonoursExclusions: true,
+		UnidentifiedRetry:     media.IdentifyRetryKey,
 	}
 }
 

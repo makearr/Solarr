@@ -20,9 +20,11 @@ import (
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/adult"
 	"github.com/makearr/Solarr/internal/media/book"
+	"github.com/makearr/Solarr/internal/media/comic"
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -226,6 +228,7 @@ func (p *process) batchImporters() map[string]batch.Importer {
 	for _, format := range book.Formats {
 		importers[format.MediaType] = p.bookImporter(format)
 	}
+	importers[comic.MediaType] = p.comicImporter()
 	return importers
 }
 
@@ -246,6 +249,27 @@ func (p *process) bookImporter(format book.Format) book.Importer {
 		Categories: categories, Clock: clock.NewSystem(), Logger: p.logger,
 		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
 		RenameOnImport: p.renameOnImport, ExtraFiles: p.extraFileExtensions, AfterPlacing: p.afterPlacing,
+	})
+}
+
+// comicImporter is the comic module's batch importer: issues, volumes and chapters placed below their series' folder.
+func (p *process) comicImporter() comic.Importer {
+	identity := library.NewIdentity(p.library)
+	return comic.NewImporter(comic.ImporterConfig{
+		ImportDeps: works.ImportDeps{
+			FS: p.fsys, Physical: library.NewPhysical(p.library), Series: library.NewSeries(p.library),
+			Reader: library.NewSeriesReader(p.library), Identity: identity, Desired: library.NewDesired(p.library),
+			Acquisitions: library.NewAcquisitions(p.library),
+			Placer: placer.New(placer.Config{
+				FS: p.fsys, Roots: adapters.DrainRoots{Cache: p.cache}, Affinity: p.cache, Identity: identity,
+				Blocked: library.NewBlockedContentStore(p.library), Clock: clock.NewSystem(), Logger: p.logger,
+				TransferLadder: p.transferLadder, GroupID: lookupGroupID,
+			}),
+			Categories: adapters.Categories{Cache: p.cache}, Clock: clock.NewSystem(), Logger: p.logger,
+			Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
+			RenameOnImport: p.renameOnImport, ExtraFiles: p.extraFileExtensions, AfterPlacing: p.afterPlacing,
+		},
+		Resolver: p.comicResolver(),
 	})
 }
 

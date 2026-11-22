@@ -868,7 +868,7 @@ func (p *process) comicService() comic.Service {
 			}
 			return snapshot.MetadataSourcesFor(category)
 		},
-		Series: library.NewSeries(p.library), Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library),
+		Series: library.NewSeries(p.library), Exclusions: library.NewExclusions(p.library), Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library),
 		Clock: clock.NewSystem(),
 		ProfileFor: func(categoryID int64) int64 {
 			category, found := p.cache.Snapshot().Category(categoryID)
@@ -880,15 +880,27 @@ func (p *process) comicService() comic.Service {
 	}
 }
 
+// comicResolver finds or adds the series a file or a download names.
+func (p *process) comicResolver() comic.Resolver {
+	return comic.Resolver{
+		Service: p.comicService(), Logger: p.logger, Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID,
+		Locks: p.locksFor("comic"), Threshold: p.acceptThreshold,
+	}
+}
+
 // comicModule wires the comic type: the add and refresh over the providers and the jobs that keep its metadata current.
 func (p *process) comicModule() comic.Module {
 	service := p.comicService()
 	catalog := comic.Catalog{Service: service, Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID}
-	resolver := comic.Resolver{
-		Service: service, Logger: p.logger, Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID,
-		Locks: p.locksFor("comic"), Threshold: p.acceptThreshold,
-	}
+	resolver := p.comicResolver()
 	return comic.Module{
+		Files: comic.Files{
+			Resolver: resolver, FS: p.fsys, Unidentified: library.NewUnidentified(p.library), Physical: library.NewPhysical(p.library), Clock: clock.NewSystem(),
+			AllowAgain: catalog.AllowAgain, RootPath: func(id int64) (string, bool) {
+				root, found := p.cache.Snapshot().RootFolder(id)
+				return root.Path, found
+			},
+		},
 		Sweep: scan.Sweep{
 			Consumer: comic.NewConsumer(comic.ConsumerConfig{
 				FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library), Service: service,

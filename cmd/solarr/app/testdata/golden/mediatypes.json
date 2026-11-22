@@ -1357,7 +1357,7 @@
       }
     ],
     "commit_guess_floor": 0.9,
-    "commits_held_imports": false,
+    "commits_held_imports": true,
     "cover_sources": false,
     "duplicates_by_name": false,
     "facets": [
@@ -1530,6 +1530,7 @@
     },
     "search_terms": [],
     "searches_library": false,
+    "unidentified_retry": "identify_retry",
     "wanted_grain": "part",
     "work": {
       "many": "Series",

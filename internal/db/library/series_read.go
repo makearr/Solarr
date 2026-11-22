@@ -604,3 +604,16 @@ func (r SeriesReader) WorkOfFolder(ctx context.Context, mediaType string, rootFo
 	}
 	return ids[0], true, nil
 }
+
+// CoveredRefs are the media refs of a work's parts that have a file.
+func (r SeriesReader) CoveredRefs(ctx context.Context, workID int64) (map[string]bool, error) {
+	refs, err := librarydb.New(r.store.Read()).CoveredPartRefs(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: covered parts: %w", err)
+	}
+	covered := make(map[string]bool, len(refs))
+	for _, ref := range refs {
+		covered[ref] = true
+	}
+	return covered, nil
+}

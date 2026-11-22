@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/comicinfo"
 	"github.com/makearr/Solarr/internal/identify/parsecomic"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/scanning/scan"
@@ -110,6 +111,9 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 	for _, group := range byGroup {
 		first := group[0]
 		series, candidates := c.config.Resolver.Resolve(ctx, categoryID, evidenceOf(first))
+		if series == works.Excluded {
+			continue
+		}
 		var links []library.SeriesFileLink
 		var leftover []observedFile
 		for _, file := range group {
@@ -119,7 +123,7 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 				continue
 			}
 			if manga {
-				c.ensureParts(ctx, categoryID, series, keys)
+				c.config.Service.EnsureParts(ctx, categoryID, series, keys)
 			}
 			links = append(links, library.SeriesFileLink{MediaObjectID: file.registered.MediaObjectID, Parts: keys})
 		}
@@ -169,50 +173,7 @@ func (c Consumer) recordFacts(ctx context.Context, group []observedFile, placed 
 		if !file.readable || !slices.Contains(placed, file.registered.MediaObjectID) {
 			continue
 		}
-		pages := file.facts.Pages
-		claim := library.AttributeClaim{Container: strings.TrimPrefix(strings.ToLower(path.Ext(file.File.RelPath)), "."), ImageFormat: pages.Format, PageCount: pages.Count}
-		scalars := library.MeasuredScalars{Width: pages.MedianShort, Height: pages.MedianLong, ProbeVersion: 1}
-		if err := c.config.Physical.RecordMeasured(ctx, file.registered.MediaObjectID, claim, scalars, "", at); err != nil {
-			c.logger.Warn("comic page facts not stored", slog.String("path", file.File.RelPath), slog.Any("error", err))
-		}
-	}
-}
-
-// ensureParts makes the parts a manga's files name that no provider listed: a volume of a series whose count is unknown, a
-// chapter no volume holds. Parts appear as files or providers reveal them.
-func (c Consumer) ensureParts(ctx context.Context, categoryID, workID int64, keys []library.PartKey) {
-	var missing []Part
-	for _, key := range keys {
-		kind, number, _ := strings.Cut(key.MediaRef, ":")
-		if kind != PartChapter && kind != PartVolume {
-			continue
-		}
-		if _, absent, _ := c.config.Service.Series.ResolveParts(ctx, workID, []library.PartKey{key}); absent > 0 {
-			missing = append(missing, Part{Kind: kind, Number: number})
-		}
-	}
-	if len(missing) == 0 {
-		return
-	}
-	basics, err := c.config.Service.Reader.Basics(ctx, workID)
-	if err != nil {
-		return
-	}
-	ids, err := c.config.Service.Reader.ProviderIDs(ctx, workID)
-	if err != nil {
-		return
-	}
-	write := library.SeriesWrite{Work: library.WorkIdentity{MediaType: MediaType, CanonicalTitle: basics.Title, SortTitle: library.SortTitle(basics.Title)}, IDs: idWrites(ids), CertificationAge: -1}
-	for _, part := range missing {
-		write.Parts = append(write.Parts, partWrite(part, false))
-	}
-	if _, err := c.config.Service.Series.Upsert(ctx, c.config.Clock.Now(), write); err != nil {
-		c.logger.Warn("comic parts not stored", slog.Int64("work_id", workID), slog.Any("error", err))
-		return
-	}
-	profile := c.config.Service.profileOf(ctx, workID, categoryID)
-	if err := c.config.Service.ensureItems(ctx, workID, categoryID, profile, nil, "", missing, map[string]bool{}); err != nil {
-		c.logger.Warn("comic part items not stored", slog.Int64("work_id", workID), slog.Any("error", err))
+		recordPageFacts(ctx, c.config.Physical, file.registered.MediaObjectID, path.Ext(file.File.RelPath), file.facts, at)
 	}
 }
 
@@ -228,9 +189,12 @@ func groupOf(file observedFile) string {
 
 // claimsOf are the file's claims, strongest first: its embedded metadata, its name, its folder, its parent folder.
 func claimsOf(file observedFile) []parsecomic.Claim {
-	rel := file.File.RelPath
+	return claimsOfPath(file.File.RelPath, file.facts)
+}
+
+func claimsOfPath(rel string, facts Facts) []parsecomic.Claim {
 	var claims []parsecomic.Claim
-	if info := embedded(file.facts); info != nil {
+	if info := embedded(facts); info != nil {
 		claims = append(claims, claimOfInfo(*info))
 	}
 	claims = append(claims, parsecomic.Parse(path.Base(rel)))
@@ -243,12 +207,13 @@ func claimsOf(file observedFile) []parsecomic.Claim {
 	return claims
 }
 
-func evidenceOf(file observedFile) Evidence {
-	claims := claimsOf(file)
+func evidenceOf(file observedFile) Evidence { return evidenceOfPath(file.File.RelPath, file.facts) }
+
+func evidenceOfPath(rel string, facts Facts) Evidence {
 	// The file's own name first: a folder named after the series only fills what the file's name lacks.
-	ev := EvidenceOf(embedded(file.facts), claims...)
+	ev := EvidenceOf(embedded(facts), claimsOfPath(rel, facts)...)
 	if ev.Series == "" {
-		ev.Series = path.Base(path.Dir(file.File.RelPath))
+		ev.Series = path.Base(path.Dir(rel))
 	}
 	return ev
 }

@@ -261,3 +261,28 @@ func TestAMangaWhoseVolumeCountNoProviderStatesGainsTheVolumesItsFilesName(t *te
 		t.Fatalf("%d files waiting", waiting)
 	}
 }
+
+func TestAScanDoesNotAddBackASeriesAPersonRemoved(t *testing.T) {
+	opened := comicStore(t)
+	service := serviceOn(opened, Sources{ComicVine: namedSeries{fakeComicVine{issues: lanternIssues}}})
+	fake := clock.NewFakeAtEpoch()
+	fsys := fsx.NewMem(fake)
+	if err := fsys.MkdirAll(scanRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Exclusions.Exclude(t.Context(), fake.Now(), MediaType, "Lantern Wardens", []library.ExternalIDWrite{{Provider: ProviderComicVine, ExternalID: "4050"}}); err != nil {
+		t.Fatal(err)
+	}
+	consumer := NewConsumer(ConsumerConfig{
+		FS: fsys, Physical: library.NewPhysical(opened), Unidentified: library.NewUnidentified(opened), Service: service, Clock: fake,
+		Resolver: Resolver{Service: service, Categories: inLibrary{}, DefaultProfileID: 1},
+	})
+	root := settings.RootFolder{ID: 1, Path: scanRoot, Online: true}
+	batch := []scan.Observed{scanned(t, fsys, "Lantern Wardens (2019)/Lantern Wardens 002 (2019).cbz", "")}
+	if err := consumer.Observe(t.Context(), root, 3, batch); err != nil {
+		t.Fatal(err)
+	}
+	if _, found := service.WorkByIDs(t.Context(), map[string]string{ProviderComicVine: "4050"}); found {
+		t.Fatal("a removed series was added back by the scan")
+	}
+}

@@ -20,6 +20,7 @@ type Service struct {
 	KindOf      func(categoryID int64) string
 	ProvidersOf func(categoryID int64) []string
 	Series      library.Series
+	Exclusions  library.Exclusions
 	Reader      library.SeriesReader
 	Desired     library.Desired
 	Clock       clock.Clock
@@ -431,4 +432,52 @@ func (s Service) WorkByIDs(ctx context.Context, ids map[string]string) (int64, b
 		}
 	}
 	return 0, false
+}
+
+// IsExcluded says a person removed a series by one of these ids and asked not to see it again.
+func (s Service) IsExcluded(ctx context.Context, ids map[string]string) bool {
+	excluded, err := s.Exclusions.Excluded(ctx, idWrites(ids))
+	if err != nil {
+		s.warn("exclusions", "", err)
+		return false
+	}
+	return excluded
+}
+
+// EnsureParts makes the parts a manga's files name that no provider listed: a volume of a series whose count is unknown, a
+// chapter no volume holds. Parts appear as files or providers reveal them.
+func (s Service) EnsureParts(ctx context.Context, categoryID, workID int64, keys []library.PartKey) {
+	var missing []Part
+	for _, key := range keys {
+		kind, number, _ := strings.Cut(key.MediaRef, ":")
+		if kind != PartChapter && kind != PartVolume {
+			continue
+		}
+		if _, absent, _ := s.Series.ResolveParts(ctx, workID, []library.PartKey{key}); absent > 0 {
+			missing = append(missing, Part{Kind: kind, Number: number})
+		}
+	}
+	if len(missing) == 0 {
+		return
+	}
+	basics, err := s.Reader.Basics(ctx, workID)
+	if err != nil {
+		return
+	}
+	ids, err := s.Reader.ProviderIDs(ctx, workID)
+	if err != nil {
+		return
+	}
+	write := library.SeriesWrite{Work: library.WorkIdentity{MediaType: MediaType, CanonicalTitle: basics.Title, SortTitle: library.SortTitle(basics.Title)}, IDs: idWrites(ids), CertificationAge: -1}
+	for _, part := range missing {
+		write.Parts = append(write.Parts, partWrite(part, false))
+	}
+	if _, err := s.Series.Upsert(ctx, s.Clock.Now(), write); err != nil {
+		s.warn("parts", strconv.FormatInt(workID, 10), err)
+		return
+	}
+	profile := s.profileOf(ctx, workID, categoryID)
+	if err := s.ensureItems(ctx, workID, categoryID, profile, nil, "", missing, map[string]bool{}); err != nil {
+		s.warn("part items", strconv.FormatInt(workID, 10), err)
+	}
 }

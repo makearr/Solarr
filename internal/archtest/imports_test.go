@@ -471,7 +471,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/identify/parsebook":   {"internal/identify/titlekey"},
 	"internal/identify/parsecomic":  {},
 	"internal/identify/comicinfo":   {},
-	"internal/media/comic":          {"internal/identify/comicinfo", "internal/platform/archive", "internal/platform/fsx", "internal/media", "internal/db/settings", "internal/identify/model", "internal/moving/naming", "internal/media/works", "internal/db/library", "internal/jobs", "internal/media/picturesweep", "internal/platform/clock", "internal/metadata/anilist", "internal/metadata/comicvine", "internal/metadata/gcd", "internal/metadata/mangadex", "internal/metadata/mangaupdates", "internal/metadata/metron", "internal/identify/parsecomic", "internal/scanning/scan", "internal/platform/keyedlock"},
+	"internal/media/comic":          {"internal/identify/comicinfo", "internal/platform/archive", "internal/platform/fsx", "internal/media", "internal/db/settings", "internal/identify/model", "internal/moving/naming", "internal/media/works", "internal/db/library", "internal/jobs", "internal/media/picturesweep", "internal/platform/clock", "internal/metadata/anilist", "internal/metadata/comicvine", "internal/metadata/gcd", "internal/metadata/mangadex", "internal/metadata/mangaupdates", "internal/metadata/metron", "internal/identify/parsecomic", "internal/scanning/scan", "internal/platform/keyedlock", "internal/importing/batch", "internal/importing/inspect", "internal/importing/placer", "internal/importing/rules", "internal/moving/mover"},
 	"internal/identify/bookmeta":    {"internal/platform/fsx"},
 	"internal/identify/titlekey":    {},
 	"internal/identify/parseadult":  {},

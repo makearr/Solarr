@@ -78,7 +78,7 @@ func comicService(t *testing.T, sources Sources) Service { return serviceOn(comi
 
 func serviceOn(opened *store.Store, sources Sources) Service {
 	return Service{
-		Sources: sources, Series: library.NewSeries(opened), Reader: library.NewSeriesReader(opened), Desired: library.NewDesired(opened),
+		Sources: sources, Series: library.NewSeries(opened), Exclusions: library.NewExclusions(opened), Reader: library.NewSeriesReader(opened), Desired: library.NewDesired(opened),
 		Clock: clock.NewFakeAtEpoch(), KindOf: func(int64) string { return KindComics }, ProfileFor: func(int64) int64 { return 1 },
 		ProvidersOf: func(int64) []string { return []string{settings.ComicSourceComicVine, settings.ComicSourceMetron} },
 	}
