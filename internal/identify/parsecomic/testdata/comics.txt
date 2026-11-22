@@ -1,0 +1,109 @@
+Night Harbor 001 (2023) (Digital) (Group).cbz => series=Night Harbor; year=2023; issue=1; source=digital; group=Group; ext=cbz
+Night Harbor #12.cbz => series=Night Harbor; issue=12; ext=cbz
+Night Harbor v2 003.cbz => series=Night Harbor; issue=3; vol=2; ext=cbz
+Night Harbor (2019) 001-006.cbz => series=Night Harbor; year=2019; issue=1; issueEnd=6; ext=cbz
+Night Harbor Vol. 03 TPB.cbz => series=Night Harbor; vol=3; format=tpb; ext=cbz
+Night Harbor 2021 Annual 01.cbz => series=Night Harbor; year=2021; issue=1; format=annual; ext=cbz
+Night Harbor 001 (of 6).cbz => series=Night Harbor; issue=1; ext=cbz; of=6
+Night Harbor 012 (2048px).cbz => series=Night Harbor; issue=12; px=2048; ext=cbz
+Night Harbor 012 (HD) (Group).cbz => series=Night Harbor; issue=12; group=Group; ext=cbz
+Night Harbor 012 (c2c).cbz => series=Night Harbor; issue=12; source=c2c; ext=cbz
+Night Harbor 1.5 (2022).cbz => series=Night Harbor; year=2022; issue=1.5; ext=cbz
+Night Harbor -1 (2022).cbz => series=Night Harbor; year=2022; issue=-1; ext=cbz
+Night Harbor 000 (2022).cbz => series=Night Harbor; year=2022; issue=0; ext=cbz
+Night Harbor ½ (2022).cbz => series=Night Harbor; year=2022; issue=0.5; ext=cbz
+Night Harbor 001AU (2022).cbz => series=Night Harbor; year=2022; issue=1AU; ext=cbz
+Night Harbor 001.MU (2022).cbz => series=Night Harbor; year=2022; issue=1.MU; ext=cbz
+Rocket Garden 2301.cbz => series=Rocket Garden; issue=2301; ext=cbz
+2000 Orbit 2301.cbz => series=2000 Orbit; issue=2301; ext=cbz
+2000 Orbit 2301 (2024).cbz => series=2000 Orbit; year=2024; issue=2301; ext=cbz
+Rocket Garden (1963).cbz => series=Rocket Garden; year=1963; ext=cbz
+Rocket Garden (1963) => series=Rocket Garden; year=1963
+Rocket Garden 2019 => series=Rocket Garden; year=2019
+Rocket Garden => series=Rocket Garden
+Rocket Garden TPB (2020).cbz => series=Rocket Garden; year=2020; format=tpb; ext=cbz
+Rocket Garden Vol 1 - The Beginning (2020).cbz => series=Rocket Garden; year=2020; vol=1; ext=cbz
+Rocket Garden Omnibus (2018).cbz => series=Rocket Garden; year=2018; format=omnibus; ext=cbz
+Rocket Garden HC (2018).cbz => series=Rocket Garden; year=2018; format=hc; ext=cbz
+Rocket Garden Hardcover (2018).cbz => series=Rocket Garden; year=2018; format=hc; ext=cbz
+Rocket Garden GN (2017).cbz => series=Rocket Garden; year=2017; format=gn; ext=cbz
+Rocket Garden Graphic Novel (2017).cbz => series=Rocket Garden; year=2017; format=gn; ext=cbz
+Rocket Garden One-Shot (2016).cbz => series=Rocket Garden; year=2016; format=one-shot; ext=cbz
+Rocket Garden Oneshot (2016).cbz => series=Rocket Garden; year=2016; format=one-shot; ext=cbz
+Rocket Garden Special 01 (2016).cbz => series=Rocket Garden; year=2016; issue=1; format=special; ext=cbz
+Rocket Garden Special (2016).cbz => series=Rocket Garden; year=2016; format=special; ext=cbz
+Rocket Garden Annual (2016).cbz => series=Rocket Garden; year=2016; format=annual; ext=cbz
+Rocket Garden Annual 2 (2016).cbz => series=Rocket Garden; year=2016; issue=2; format=annual; ext=cbz
+Rocket Garden 003 (2016) (Digital) (Marvel).cbz => series=Rocket Garden; year=2016; issue=3; publisher=Marvel; source=digital; ext=cbz
+Rocket Garden 003 (2016) (Digital-Empire).cbz => series=Rocket Garden; year=2016; issue=3; source=digital; ext=cbz
+Rocket Garden 003 (2016) (webrip) (Group).cbz => series=Rocket Garden; year=2016; issue=3; source=webrip; group=Group; ext=cbz
+Rocket Garden 003 (2016) (Scans) (Group).cbz => series=Rocket Garden; year=2016; issue=3; source=scan; group=Group; ext=cbz
+Rocket Garden 003 (2016) (hybrid).cbz => series=Rocket Garden; year=2016; issue=3; source=hybrid; ext=cbz
+Rocket Garden 003 (2016) (Deluxe).cbz => series=Rocket Garden; year=2016; issue=3; edition=deluxe; ext=cbz
+Rocket Garden 003 (2016) (fixed).cbz => series=Rocket Garden; year=2016; issue=3; edition=fixed; ext=cbz
+Rocket Garden 003 (2016) (repack).cbz => series=Rocket Garden; year=2016; issue=3; edition=repack; ext=cbz
+Rocket Garden 003 (English).cbz => series=Rocket Garden; issue=3; lang=en; ext=cbz
+Rocket Garden 003 (jp).cbz => series=Rocket Garden; issue=3; lang=ja; ext=cbz
+Rocket Garden 003 (DC).cbz => series=Rocket Garden; issue=3; publisher=DC; ext=cbz
+Rocket Garden 003 (Dark Horse).cbz => series=Rocket Garden; issue=3; publisher=Dark Horse; ext=cbz
+Rocket Garden 003 (IDW).cbz => series=Rocket Garden; issue=3; publisher=IDW; ext=cbz
+Rocket Garden 003.cbr => series=Rocket Garden; issue=3; ext=cbr
+Rocket Garden 003.cb7 => series=Rocket Garden; issue=3; ext=cb7
+Rocket Garden 003.cbt => series=Rocket Garden; issue=3; ext=cbt
+Rocket Garden 003.pdf => series=Rocket Garden; issue=3; ext=pdf
+Rocket Garden 003.epub => series=Rocket Garden; issue=3; ext=epub
+Rocket Garden 003 => series=Rocket Garden; issue=3
+Rocket_Garden_003_(2016).cbz => series=Rocket Garden; year=2016; issue=3; ext=cbz
+Rocket.Garden.003.2016.cbz => series=Rocket Garden; year=2016; issue=3; ext=cbz
+Rocket.Garden.v02.003.cbz => series=Rocket Garden; issue=3; vol=2; ext=cbz
+Rocket Garden #3-5 (2016).cbz => series=Rocket Garden; year=2016; issue=3; issueEnd=5; ext=cbz
+Rocket Garden #003 (2016).cbz => series=Rocket Garden; year=2016; issue=3; ext=cbz
+Rocket Garden # 3.cbz => series=Rocket Garden; issue=3; ext=cbz
+Rocket Garden 10 (of 12) (2016).cbz => series=Rocket Garden; year=2016; issue=10; ext=cbz; of=12
+Rocket Garden 10 (of 12) (2016) (Digital) (Group).cbz => series=Rocket Garden; year=2016; issue=10; source=digital; group=Group; ext=cbz; of=12
+Rocket Garden - 010 (2016).cbz => series=Rocket Garden; year=2016; issue=10; ext=cbz
+Rocket Garden: Reborn 004 (2021).cbz => series=Rocket Garden: Reborn; year=2021; issue=4; ext=cbz
+Rocket Garden - Reborn #004 (2021).cbz => series=Rocket Garden - Reborn; year=2021; issue=4; ext=cbz
+Rocket Garden Vol. 2 003 (2016).cbz => series=Rocket Garden; year=2016; issue=3; vol=2; ext=cbz
+Rocket Garden v2 (2016).cbz => series=Rocket Garden; year=2016; vol=2; ext=cbz
+Rocket Garden Volume 2 (2016) TPB.cbz => series=Rocket Garden; year=2016; vol=2; format=tpb; ext=cbz
+Rocket Garden TPB Vol 01 (2016).cbz => series=Rocket Garden; year=2016; vol=1; format=tpb; ext=cbz
+Rocket Garden TPB 01 (2016).cbz => series=Rocket Garden; year=2016; issue=1; format=tpb; ext=cbz
+C:\Comics\Rocket Garden (2016)\Rocket Garden 003 (2016).cbz => series=Rocket Garden; year=2016; issue=3; ext=cbz
+/library/Rocket Garden (2016)/Rocket Garden 003 (2016).cbz => series=Rocket Garden; year=2016; issue=3; ext=cbz
+Rocket Garden 003 (2016) (digital) (BlueGroup).cbz => series=Rocket Garden; year=2016; issue=3; source=digital; group=BlueGroup; ext=cbz
+Rocket Garden 003 (2016) (2048px) (digital) (BlueGroup).cbz => series=Rocket Garden; year=2016; issue=3; source=digital; group=BlueGroup; px=2048; ext=cbz
+Rocket Garden 003 (2016) (3056px).cbz => series=Rocket Garden; year=2016; issue=3; px=3056; ext=cbz
+Rocket Garden 100.cbz => series=Rocket Garden; issue=100; ext=cbz
+Rocket Garden 100 (2016).cbz => series=Rocket Garden; year=2016; issue=100; ext=cbz
+Rocket Garden 1000 (2016).cbz => series=Rocket Garden; year=2016; issue=1000; ext=cbz
+Rocket Garden 001.1 (2016).cbz => series=Rocket Garden; year=2016; issue=1.1; ext=cbz
+Rocket Garden 001.5 (2016) (Digital).cbz => series=Rocket Garden; year=2016; issue=1.5; source=digital; ext=cbz
+Rocket Garden 5.1 (2016).cbz => series=Rocket Garden; year=2016; issue=5.1; ext=cbz
+Rocket Garden 12a.cbz => series=Rocket Garden; issue=12a; ext=cbz
+Rocket Garden 003-004 (2016).cbz => series=Rocket Garden; year=2016; issue=3; issueEnd=4; ext=cbz
+Rocket Garden 001-006 (2016) (Digital).cbz => series=Rocket Garden; year=2016; issue=1; issueEnd=6; source=digital; ext=cbz
+Rocket Garden 001 - 006 (2016).cbz => series=Rocket Garden; year=2016; issue=1; issueEnd=6; ext=cbz
+Rocket Garden 2016 001.cbz => series=Rocket Garden; year=2016; issue=1; ext=cbz
+Rocket Garden 2016 Annual 01.cbz => series=Rocket Garden; year=2016; issue=1; format=annual; ext=cbz
+Rocket Garden (2016) Annual 01.cbz => series=Rocket Garden; year=2016; issue=1; format=annual; ext=cbz
+Rocket Garden Annual 01 (2016).cbz => series=Rocket Garden; year=2016; issue=1; format=annual; ext=cbz
+Rocket Garden Annual #01 (2016).cbz => series=Rocket Garden; year=2016; issue=1; format=annual; ext=cbz
+Rocket Garden - Annual 01.cbz => series=Rocket Garden; issue=1; format=annual; ext=cbz
+Rocket Garden Special #1 (2016).cbz => series=Rocket Garden; year=2016; issue=1; format=special; ext=cbz
+Rocket Garden 001-012 (2016) (Complete) (Group).cbz => series=Rocket Garden; year=2016; issue=1; issueEnd=12; group=Group; ext=cbz
+Rocket Garden TPB (2016) (Digital) (Group) => series=Rocket Garden; year=2016; format=tpb; source=digital; group=Group
+Rocket Garden (2016) (Digital) (Group) => series=Rocket Garden; year=2016; source=digital; group=Group
+Rocket Garden 003 (2016) (Digital) (Marvel) (Group).cbz => series=Rocket Garden; year=2016; issue=3; publisher=Marvel; source=digital; group=Group; ext=cbz
+Pale Comet 01 (of 04) (2020).cbz => series=Pale Comet; year=2020; issue=1; ext=cbz; of=4
+Pale Comet 07 (2020) (c2c) (Group).cbz => series=Pale Comet; year=2020; issue=7; source=c2c; group=Group; ext=cbz
+Pale Comet 07 (2020) (Digital) (c2c).cbz => series=Pale Comet; year=2020; issue=7; source=c2c; ext=cbz
+Pale Comet 07 (2020) [Group].cbz => series=Pale Comet; year=2020; issue=7; group=Group; ext=cbz
+[Group] Pale Comet 07 (2020).cbz => series=Pale Comet; year=2020; issue=7; group=Group; ext=cbz
+[Group] Pale Comet 07.cbz => series=Pale Comet; issue=7; group=Group; ext=cbz
+The Pale Comet 07 (2020).cbz => series=The Pale Comet; year=2020; issue=7; ext=cbz
+A.B.C. Heroes 004 (2020).cbz => series=A.B.C. Heroes; year=2020; issue=4; ext=cbz
+Mr. Moon 010 (2018).cbz => series=Mr. Moon; year=2018; issue=10; ext=cbz
+Pale Comet 0 (2020).cbz => series=Pale Comet; year=2020; issue=0; ext=cbz
+Pale Comet -2 (2020).cbz => series=Pale Comet; year=2020; issue=-2; ext=cbz
+Pale Comet 99.9 (2020).cbz => series=Pale Comet; year=2020; issue=99.9; ext=cbz

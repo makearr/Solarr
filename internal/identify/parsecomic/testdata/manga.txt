@@ -1,0 +1,80 @@
+Silent Tide v01 (2020) (Digital) (1r0n).cbz => series=Silent Tide; year=2020; vol=1; source=digital; group=1r0n; ext=cbz
+Silent Tide v01.cbz => series=Silent Tide; vol=1; ext=cbz
+Silent Tide v1.cbz => series=Silent Tide; vol=1; ext=cbz
+Silent Tide Vol. 03.cbz => series=Silent Tide; vol=3; ext=cbz
+Silent Tide Vol 03.cbz => series=Silent Tide; vol=3; ext=cbz
+Silent Tide Volume 03.cbz => series=Silent Tide; vol=3; ext=cbz
+Silent Tide - Volume 01.cbz => series=Silent Tide; vol=1; ext=cbz
+Silent Tide v01-v03.cbz => series=Silent Tide; vol=1; volEnd=3; ext=cbz
+Silent Tide v01-03.cbz => series=Silent Tide; vol=1; volEnd=3; ext=cbz
+Silent Tide v01-03 (2020).cbz => series=Silent Tide; year=2020; vol=1; volEnd=3; ext=cbz
+Silent Tide c123.5.cbz => series=Silent Tide; ch=123.5; ext=cbz
+Silent Tide c123.cbz => series=Silent Tide; ch=123; ext=cbz
+Silent Tide c040-047.cbz => series=Silent Tide; ch=40; chEnd=47; ext=cbz
+Silent Tide c040-c047.cbz => series=Silent Tide; ch=40; chEnd=47; ext=cbz
+Silent Tide ch. 12.cbz => series=Silent Tide; ch=12; ext=cbz
+Silent Tide Ch12.cbz => series=Silent Tide; ch=12; ext=cbz
+Silent Tide Chapter 12.cbz => series=Silent Tide; ch=12; ext=cbz
+Silent Tide Chapter 12-14.cbz => series=Silent Tide; ch=12; chEnd=14; ext=cbz
+Silent Tide v05 c040-047.cbz => series=Silent Tide; vol=5; ch=40; chEnd=47; ext=cbz
+Silent Tide v05 c040.cbz => series=Silent Tide; vol=5; ch=40; ext=cbz
+Silent Tide v05 c040-047 (2021) (Digital) (Group).cbz => series=Silent Tide; year=2021; vol=5; ch=40; chEnd=47; source=digital; group=Group; ext=cbz
+Silent Tide - v05 - c040.cbz => series=Silent Tide; vol=5; ch=40; ext=cbz
+[Group] Silent Tide - Volume 01 [Digital-HD].cbz => series=Silent Tide; vol=1; source=digital; group=Group; ext=cbz
+[Group] Silent Tide - Volume 01 [Digital-HD] => series=Silent Tide; vol=1; source=digital; group=Group
+[Group] Silent Tide - Chapter 012 [Digital].cbz => series=Silent Tide; ch=12; source=digital; group=Group; ext=cbz
+[Group] Silent Tide v02 [Digital].cbz => series=Silent Tide; vol=2; source=digital; group=Group; ext=cbz
+[Group] Silent Tide v02 [English].cbz => series=Silent Tide; vol=2; group=Group; lang=en; ext=cbz
+[Group] Silent Tide v02 [JP].cbz => series=Silent Tide; vol=2; group=Group; lang=ja; ext=cbz
+[Group] Silent Tide c012 (2020).cbz => series=Silent Tide; year=2020; ch=12; group=Group; ext=cbz
+Silent Tide v01 (2020) (Digital) (1r0n) => series=Silent Tide; year=2020; vol=1; source=digital; group=1r0n
+Silent Tide v02 (2020) (Digital) (Group) (2400px).cbz => series=Silent Tide; year=2020; vol=2; source=digital; group=Group; px=2400; ext=cbz
+Silent Tide v02 (2400px).cbz => series=Silent Tide; vol=2; px=2400; ext=cbz
+Silent Tide 12.cbz => series=Silent Tide; issue=12; ext=cbz
+Silent Tide 012.cbz => series=Silent Tide; issue=12; ext=cbz
+Silent Tide 12-14.cbz => series=Silent Tide; issue=12; issueEnd=14; ext=cbz
+Silent Tide 012 (2020).cbz => series=Silent Tide; year=2020; issue=12; ext=cbz
+Silent Tide_v03_(2021)_(Digital).cbz => series=Silent Tide; year=2021; vol=3; source=digital; ext=cbz
+Silent Tide.v03.cbz => series=Silent Tide; vol=3; ext=cbz
+Silent Tide.c012.cbz => series=Silent Tide; ch=12; ext=cbz
+Silent Tide.v03.c012.cbz => series=Silent Tide; vol=3; ch=12; ext=cbz
+Silent Tide Vol.03.cbz => series=Silent Tide; vol=3; ext=cbz
+Silent Tide Vol.03 Ch.012.cbz => series=Silent Tide; vol=3; ch=12; ext=cbz
+Silent Tide v03 Ch.012.cbz => series=Silent Tide; vol=3; ch=12; ext=cbz
+Silent Tide - Extra c012.5.cbz => series=Silent Tide - Extra; ch=12.5; ext=cbz
+Silent Tide - Extra v03 (Digital).cbz => series=Silent Tide - Extra; vol=3; source=digital; ext=cbz
+Silent Tide Omake v01.cbz => series=Silent Tide Omake; vol=1; ext=cbz
+Silent Tide One-Shot (2019).cbz => series=Silent Tide; year=2019; format=one-shot; ext=cbz
+Silent Tide v01 (Digital-HD).cbz => series=Silent Tide; vol=1; source=digital; ext=cbz
+Silent Tide v01 (Digital) (Yen Press).cbz => series=Silent Tide; vol=1; publisher=Yen Press; source=digital; ext=cbz
+Silent Tide v01 (Digital) (Kodansha).cbz => series=Silent Tide; vol=1; publisher=Kodansha; source=digital; ext=cbz
+Silent Tide v01 (Digital) (Viz).cbz => series=Silent Tide; vol=1; publisher=Viz; source=digital; ext=cbz
+Silent Tide v01 (Digital) (Seven Seas).cbz => series=Silent Tide; vol=1; publisher=Seven Seas; source=digital; ext=cbz
+Silent Tide v01 (scan) (Group).cbz => series=Silent Tide; vol=1; source=scan; group=Group; ext=cbz
+Silent Tide v01 (webrip) (Group).cbz => series=Silent Tide; vol=1; source=webrip; group=Group; ext=cbz
+Silent Tide v01 (hybrid) (Group).cbz => series=Silent Tide; vol=1; source=hybrid; group=Group; ext=cbz
+Silent Tide v01 (fixed).cbz => series=Silent Tide; vol=1; edition=fixed; ext=cbz
+Silent Tide v01 (repack).cbz => series=Silent Tide; vol=1; edition=repack; ext=cbz
+Silent Tide v01 (Deluxe).cbz => series=Silent Tide; vol=1; edition=deluxe; ext=cbz
+Silent Tide v10 (2018).cbz => series=Silent Tide; year=2018; vol=10; ext=cbz
+Silent Tide v100.cbz => series=Silent Tide; vol=100; ext=cbz
+Silent Tide v01.cbr => series=Silent Tide; vol=1; ext=cbr
+Silent Tide v01.cb7 => series=Silent Tide; vol=1; ext=cb7
+Silent Tide v01.pdf => series=Silent Tide; vol=1; ext=pdf
+Silent Tide v01.epub => series=Silent Tide; vol=1; ext=epub
+Silent Tide => series=Silent Tide
+Silent Tide (2020) => series=Silent Tide; year=2020
+Silent Tide (2020) (Digital) (Group) => series=Silent Tide; year=2020; source=digital; group=Group
+Silent Tide Vol 2 - The Hollow Shore (2021).cbz => series=Silent Tide; year=2021; vol=2; ext=cbz
+Silent Tide c1.cbz => series=Silent Tide; ch=1; ext=cbz
+Silent Tide c01.cbz => series=Silent Tide; ch=1; ext=cbz
+Silent Tide c001.cbz => series=Silent Tide; ch=1; ext=cbz
+Silent Tide c0.cbz => series=Silent Tide; ch=0; ext=cbz
+Silent Tide c000.5.cbz => series=Silent Tide; ch=0.5; ext=cbz
+Sky Lantern 2 v01.cbz => series=Sky Lantern 2; vol=1; ext=cbz
+Sky Lantern 2 - Volume 03.cbz => series=Sky Lantern 2; vol=3; ext=cbz
+Sky Lantern: New Wave v04 c030.cbz => series=Sky Lantern: New Wave; vol=4; ch=30; ext=cbz
+Sky Lantern - New Wave - c030.cbz => series=Sky Lantern - New Wave; ch=30; ext=cbz
+Sky Lantern v04 c030-031 (Digital).cbz => series=Sky Lantern; vol=4; ch=30; chEnd=31; source=digital; ext=cbz
+Sky Lantern (2015) v04.cbz => series=Sky Lantern; year=2015; vol=4; ext=cbz
+Sky Lantern (2015) c030.cbz => series=Sky Lantern; year=2015; ch=30; ext=cbz
