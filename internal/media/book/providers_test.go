@@ -2,10 +2,12 @@ package book
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/metadata/fantlab"
 	"github.com/makearr/Solarr/internal/metadata/hardcover"
+	"github.com/makearr/Solarr/internal/metadata/internetarchive"
 	"github.com/makearr/Solarr/internal/metadata/itunes"
 )
 
@@ -84,5 +86,23 @@ func TestAskITunes_TakesTheExactTitleNotTheNeighbourListedFirst(t *testing.T) {
 	got, ok := service.askITunes(context.Background(), IDs{}, Hint{Title: "Dune"}, func(string, error, error) bool { return true })
 	if !ok || got.IDs.ITunes != "3" {
 		t.Errorf("got %+v ok=%v", got.IDs, ok)
+	}
+}
+
+type fakeArchive struct{}
+
+func (fakeArchive) ByISBN(context.Context, string) (internetarchive.Item, error) {
+	return internetarchive.Item{Title: "Example Fox", Description: "A fox digs under three farms to feed his family, and the farmers dig after him.",
+		Subjects: []string{"Foxes -- Fiction"}, Language: "eng", Cover: "https://archive.org/services/img/example-fox"}, nil
+}
+
+func TestFetchFor_TheArchiveAnswersByISBNWithDescriptionGenresAndCover(t *testing.T) {
+	service := Service{Format: Ebook, Archive: fakeArchive{}, PriorityFor: func(int64) []string { return []string{"internetarchive"} }}
+	book, err := service.FetchFor(t.Context(), 7, IDs{ISBN: "9780000000001"}, Hint{Title: "Example Fox"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if book.Title != "Example Fox" || !strings.HasPrefix(book.Overview, "A fox digs") || len(book.Images) == 0 || book.Images[0].Source != "internetarchive" {
+		t.Errorf("book = %+v", book)
 	}
 }

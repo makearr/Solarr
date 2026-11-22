@@ -18,6 +18,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/fantlab"
 	"github.com/makearr/Solarr/internal/metadata/googlebooks"
 	"github.com/makearr/Solarr/internal/metadata/hardcover"
+	"github.com/makearr/Solarr/internal/metadata/internetarchive"
 	"github.com/makearr/Solarr/internal/metadata/itunes"
 	"github.com/makearr/Solarr/internal/metadata/openlibrary"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
@@ -63,6 +64,11 @@ type FantLabSource interface {
 	Work(ctx context.Context, id int64) (fantlab.Work, error)
 }
 
+// ArchiveSource is the Internet Archive client as the service needs it.
+type ArchiveSource interface {
+	ByISBN(ctx context.Context, isbn string) (internetarchive.Item, error)
+}
+
 // HardcoverSource is the Hardcover client as the service needs it.
 type HardcoverSource interface {
 	Configured() bool
@@ -84,7 +90,9 @@ type Service struct {
 	ITunes      ITunesSource
 	FantLab     FantLabSource
 	Hardcover   HardcoverSource
-	Wikidata    IDBridge
+	// Archive fills description, subjects and a cover from the Internet Archive; nil skips it.
+	Archive  ArchiveSource
+	Wikidata IDBridge
 	// PriorityFor is a library's provider order; nil, or an empty answer, takes the format's.
 	PriorityFor func(categoryID int64) []string
 	Series      library.Series
@@ -220,6 +228,11 @@ func (s Service) ask(ctx context.Context, name string, ids IDs, hint Hint, faile
 		case ids.ISBN != "":
 			volume, err := s.GoogleBooks.ByISBN(ctx, ids.ISBN)
 			return FromGoogleBooks(volume), report(ids.ISBN, err, googlebooks.ErrNotFound)
+		}
+	case settings.BookSourceArchive:
+		if s.Archive != nil && ids.ISBN != "" {
+			item, err := s.Archive.ByISBN(ctx, ids.ISBN)
+			return FromArchive(item), report(ids.ISBN, err, internetarchive.ErrNotFound)
 		}
 	case settings.BookSourceAudible:
 		if s.Audible != nil && ids.ASIN != "" {

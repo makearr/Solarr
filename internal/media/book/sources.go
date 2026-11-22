@@ -12,6 +12,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/fantlab"
 	"github.com/makearr/Solarr/internal/metadata/googlebooks"
 	"github.com/makearr/Solarr/internal/metadata/hardcover"
+	"github.com/makearr/Solarr/internal/metadata/internetarchive"
 	"github.com/makearr/Solarr/internal/metadata/itunes"
 	"github.com/makearr/Solarr/internal/metadata/openlibrary"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
@@ -21,6 +22,7 @@ import (
 const (
 	sourceOpenLibrary = "openlibrary"
 	sourceGoogleBooks = "googlebooks"
+	sourceArchive     = "internetarchive"
 	sourceAudible     = "audible"
 	sourceWikidata    = "wikidata"
 	sourceITunes      = "itunes"
@@ -424,4 +426,14 @@ func yearOf(day string) int {
 		}
 	}
 	return year
+}
+
+// FromArchive is what the Internet Archive holds of a book it has by ISBN: a description, subjects, language, publisher and a cover.
+func FromArchive(in internetarchive.Item) Book {
+	book := Book{Title: in.Title, Overview: cleanText(in.Description), Language: language(in.Language), Publisher: in.Publisher, Published: in.Date,
+		Genres: genresOf(in.Subjects), Sources: []string{sourceArchive}}
+	if in.Cover != "" {
+		book.Images = []Image{{Kind: "poster", URL: in.Cover, Source: sourceArchive}}
+	}
+	return book
 }

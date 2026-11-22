@@ -34,6 +34,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/fantlab"
 	"github.com/makearr/Solarr/internal/metadata/googlebooks"
 	"github.com/makearr/Solarr/internal/metadata/hardcover"
+	"github.com/makearr/Solarr/internal/metadata/internetarchive"
 	"github.com/makearr/Solarr/internal/metadata/itunes"
 	"github.com/makearr/Solarr/internal/metadata/kitsu"
 	"github.com/makearr/Solarr/internal/metadata/mdblist"
@@ -432,7 +433,7 @@ func (p *process) bookService(format book.Format) book.Service {
 		p.bookShared = map[string]book.Service{}
 		for _, each := range book.Formats {
 			p.bookShared[each.MediaType] = book.Service{
-				Format: each, OpenLibrary: openLibrary, GoogleBooks: googleBooks, Audible: catalog, ITunes: appleBooks, FantLab: fantLab, Hardcover: hardcoverClient, Wikidata: p.wikidataFacts(),
+				Format: each, OpenLibrary: openLibrary, GoogleBooks: googleBooks, Audible: catalog, ITunes: appleBooks, FantLab: fantLab, Hardcover: hardcoverClient, Archive: internetarchive.New(p.providerClient(providerInternetArchive, nil, httpx.ClientConfig{})), Wikidata: p.wikidataFacts(),
 				PriorityFor: func(categoryID int64) []string {
 					snapshot := p.cache.Snapshot()
 					category, found := snapshot.Category(categoryID)

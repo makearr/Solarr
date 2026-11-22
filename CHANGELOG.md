@@ -7,6 +7,7 @@ Earlier entries use older schemes; those at and below `0.0.x` predate both and a
 
 - Development moves to branch `dev`; `main` on GitHub stays at the last release.
 - Metadata: OMDb (IMDb rating, English plot) and fanart.tv (clear logos, banners, posters) now also serve TV libraries, last in the default order; media servers used as metadata will rank after every other provider.
+- Metadata: the Internet Archive fills a book's missing description, subjects and cover by ISBN, last in the book order (no key).
 - Metadata: Kitsu (no key) adds anime synopsis, age rating, average rating, poster and the MyAnimeList and AniDB ids, after the other providers in TV libraries.
 - Connections > Media servers: connect Jellyfin, Navidrome, Audiobookshelf, Kavita, a Calibre content server or Stash with a tested address and credential, and map Solarr libraries and paths to the server's. Settings schema 0078 adds the connection tables. Telling servers about new files, local metadata and watch state follow.
 - Media servers: Jellyfin, Kavita and Stash sign in with a user name and password as well as an API key (Jellyfin may have an empty password); the session is kept and renewed when the server refuses it.

@@ -30,10 +30,11 @@ const (
 	BookSourceITunes      = "itunes"
 	BookSourceFantLab     = "fantlab"
 	BookSourceHardcover   = "hardcover"
+	BookSourceArchive     = "internetarchive"
 )
 
 // DefaultBookSources is Wikidata to steer, Open Library, which names a book, then Google Books to fill what it lacks.
-var DefaultBookSources = []string{SourceWikidata, BookSourceOpenLibrary, BookSourceGoogleBooks, BookSourceHardcover}
+var DefaultBookSources = []string{SourceWikidata, BookSourceOpenLibrary, BookSourceGoogleBooks, BookSourceHardcover, BookSourceArchive}
 
 // DefaultAudiobookSources is Wikidata to steer, Audible for the reading (narrators, length, series), then the book providers.
 var DefaultAudiobookSources = []string{SourceWikidata, BookSourceAudible, BookSourceITunes, BookSourceOpenLibrary, BookSourceGoogleBooks, BookSourceHardcover}
@@ -177,6 +178,8 @@ var MetadataProviders = []MetadataProvider{
 		PerMinute: 100, MaxPerMinute: 100, Published: "Audnexus: 100 a minute"},
 	{Key: BookSourceHardcover, Label: "Hardcover", MediaTypes: []string{"book", "audiobook"}, Carries: []string{"descriptions", "ratings", "genres", "page counts", "covers"}, NeedsKey: true,
 		PerMinute: 30, MaxPerMinute: 60, Published: "60 a minute"},
+	{Key: BookSourceArchive, Label: "Internet Archive", MediaTypes: []string{"book"}, Carries: []string{"descriptions", "subjects", "language", "covers"},
+		PerMinute: 30, Published: "none published; asked at 30 a minute"},
 	{Key: BookSourceITunes, Label: "iTunes", MediaTypes: []string{"audiobook"}, Carries: []string{"audiobook titles and authors", "descriptions", "genres", "large covers"},
 		PerMinute: 20, MaxPerMinute: 20, Published: "about 20 a minute"},
 	{Key: BookSourceFantLab, Label: "FantLab", MediaTypes: []string{"book", "audiobook"}, Carries: []string{"fantasy and science fiction works", "original titles", "descriptions", "ratings", "covers"},
