@@ -228,3 +228,22 @@ func TestFetchFor_NamesTheSourcesThatAnsweredAnError(t *testing.T) {
 		t.Errorf("Failed = %v, %v", scene.Failed, err)
 	}
 }
+
+// A refresh asks a source that finds the scene by its name with the studio and day the library holds (META-14).
+func TestRefresh_AsksASourceByNameWithTheStoredStudioAndDay(t *testing.T) {
+	service := newFilmService(t, &fakeServer{scenes: []stashbox.Scene{stashScene()}})
+	added, err := service.Add(t.Context(), AddRequest{IDs: IDs{StashDB: "sb-1"}, CategoryID: 3, ProfileID: 1})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	byName := &fakeServer{}
+	service.Servers = map[string]Server{ProviderStashDB: &fakeServer{scenes: []stashbox.Scene{stashScene()}}, ProviderThePornDB: byName}
+	service.Sources = []string{ProviderStashDB, ProviderThePornDB}
+	if _, err := service.Refresh(t.Context(), 3, added.WorkID); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	want := []string{"on:2020-05-14:Class Two", "search:Night Studio Class Two", "search:Class Two"}
+	if !slices.Equal(byName.asked, want) {
+		t.Errorf("asked = %v, want %v", byName.asked, want)
+	}
+}

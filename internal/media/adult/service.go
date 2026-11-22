@@ -751,7 +751,12 @@ func (s Service) Refresh(ctx context.Context, categoryID, workID int64) (Scene, 
 		return Scene{}, err
 	}
 	stored := idsOf(provider)
-	scene, err := s.FetchFor(ctx, categoryID, stored, Hint{Title: basics.Title})
+	// The stored studio and day keep a search by title from adopting another scene of the same name.
+	hint := Hint{Title: basics.Title}
+	if facts, err := NamingFacts(ctx, s.Reader, categoryID, workID, s.Clock.Now()); err == nil {
+		hint.Studio, hint.Date = facts.Studio, facts.Date
+	}
+	scene, err := s.FetchFor(ctx, categoryID, stored, hint)
 	if err != nil {
 		return Scene{}, err
 	}
