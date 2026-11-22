@@ -72,7 +72,7 @@ func (s scanning) Resolve(ctx context.Context, root settings.RootFolder, categor
 		found, seen := byUnit[unit]
 		if !seen {
 			if info, ok := s.format.Parse(file.File.RelPath); ok {
-				info = withEmbedded(s.fs, path.Join(root.Path, file.File.RelPath), info)
+				info = withEmbedded(ctx, s.fs, path.Join(root.Path, file.File.RelPath), info)
 				if s.format.ByFolder && file.Probe.Err == nil {
 					info = withTags(info, file.Probe.Tags)
 				}

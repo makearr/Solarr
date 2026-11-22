@@ -444,3 +444,48 @@ func TestRefresh_WhileTheSourceThatSuppliedTheBookIsDownNothingIsStored(t *testi
 		t.Fatalf("Refresh error = %v, want ErrSourceUnavailable", err)
 	}
 }
+
+// exchangedOpenLibrary knows the book only under the author as the title, as a name read the wrong way round asks.
+type exchangedOpenLibrary struct {
+	*fakeOpenLibrary
+}
+
+func (exchangedOpenLibrary) Search(_ context.Context, title, author string, _ int) ([]openlibrary.Doc, error) {
+	if title == "Mara Quell" && author == "Invented Tale" {
+		return nil, nil
+	}
+	if title == "Invented Tale" && author == "Mara Quell" {
+		return []openlibrary.Doc{{Key: "/works/OL5W", Title: "Invented Tale", AuthorNames: []string{"Mara Quell"}}}, nil
+	}
+	return nil, nil
+}
+
+func TestFind_ANameReadTheWrongWayRoundIsSearchedOnceExchangedAndSaysSo(t *testing.T) {
+	format := Ebook
+	format.Sources = []string{settings.BookSourceOpenLibrary}
+	resolver := Resolver{Service: Service{Format: format, OpenLibrary: exchangedOpenLibrary{&fakeOpenLibrary{}}}}
+	got := resolver.find(context.Background(), 0, parsebook.Info{Author: "Invented Tale", Title: "Mara Quell"})
+	if !got.ok || got.picked.Title != "Invented Tale" || got.reading != readingExchanged {
+		t.Errorf("found %+v", got)
+	}
+	right := resolver.find(context.Background(), 0, parsebook.Info{Author: "Mara Quell", Title: "Invented Tale"})
+	if !right.ok || right.reading != "" {
+		t.Errorf("the name the right way round %+v", right)
+	}
+}
+
+func TestConfidenceOf_ATitleOnlyTheFilesMetadataGaveIsNotPlacedByItselfButAnIdMatchIsEnough(t *testing.T) {
+	resolver := Resolver{}
+	pick := Candidate{IDs: IDs{ISBN: "9780306406157"}}
+	unbacked := found{ok: true, picked: pick, confidence: model.FolderExactMatch, unbacked: true}
+	if got := resolver.confidenceOf(unbacked, IDs{}); model.AcceptsFolderMatch(got, resolver.Threshold) {
+		t.Errorf("an unbacked title scored %v", got)
+	}
+	if got := resolver.confidenceOf(unbacked, IDs{ISBN: "9780306406157"}); !model.AcceptsFolderMatch(got, resolver.Threshold) {
+		t.Errorf("an unbacked title the file's own ISBN names scored %v", got)
+	}
+	unbacked.unbacked = false
+	if got := resolver.confidenceOf(unbacked, IDs{}); got != model.FolderExactMatch {
+		t.Errorf("a backed title scored %v", got)
+	}
+}

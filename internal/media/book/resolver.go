@@ -70,33 +70,97 @@ func (r Resolver) Resolve(ctx context.Context, categoryID int64, info parsebook.
 	if id, found := r.inLibrary(ctx, categoryID, info); found {
 		return id, nil
 	}
-	placed := func(found []Candidate) bool { _, _, ok := pickCandidate(found, info); return ok }
+	found := r.find(ctx, categoryID, info)
+	if found.failed {
+		return 0, nil
+	}
+	if found.ok && model.AcceptsFolderMatch(r.confidenceOf(found, ids), r.Threshold) {
+		if id := r.add(ctx, categoryID, found.picked.IDs, Hint{Title: found.picked.Title, Author: found.picked.Author}); id != 0 {
+			return id, nil
+		}
+	}
+	return 0, r.identifications(found.candidates, found.reading)
+}
+
+// capBelowThreshold keeps a title that only the file's own metadata gave out of an automatic placement: such files exist mis-tagged.
+const capBelowThreshold = 0.01
+
+// confidenceOf is the pick's confidence, held below the threshold when its title came from the file's metadata alone
+// and no id of the file's own named it.
+func (r Resolver) confidenceOf(f found, ids IDs) float64 {
+	if f.unbacked && !f.picked.namesID(ids) {
+		return min(f.confidence, r.floor()-capBelowThreshold)
+	}
+	return f.confidence
+}
+
+func (r Resolver) floor() float64 {
+	if r.Threshold != nil {
+		return r.Threshold()
+	}
+	return model.FolderLooseMatch
+}
+
+// namesID is true when the candidate carries one of the ids the file itself gave.
+func (c Candidate) namesID(ids IDs) bool {
+	return (ids.ISBN != "" && c.IDs.ISBN == ids.ISBN) || (ids.ASIN != "" && c.IDs.ASIN == ids.ASIN)
+}
+
+// found is what the search for a parsed name came to.
+type found struct {
+	candidates []Candidate
+	picked     Candidate
+	confidence float64
+	ok, failed bool
+	// unbacked: the title is the file's own metadata and no reading of its name says the same.
+	unbacked bool
+	// reading names a reading other than the name's own that found the book; empty for the usual one.
+	reading string
+}
+
+// readingExchanged says the name was read with its author and title the other way round.
+const readingExchanged = "author and title exchanged"
+
+// find searches the providers for the book a name is: its title and author first, then the two exchanged (a name
+// the other way round finds nothing), then each other reading of the title.
+func (r Resolver) find(ctx context.Context, categoryID int64, info parsebook.Info) found {
+	out := found{unbacked: info.TitleUnbacked}
+	placed := func(hits []Candidate) bool { _, _, ok := pickCandidate(hits, info); return ok }
 	candidates, err := r.Service.SearchUntil(ctx, categoryID, info.Title, info.Author, searchLimit, placed)
 	if err != nil {
 		r.warn("book lookup failed", info.Title, err)
-		return 0, nil
+		out.failed = true
+		return out
 	}
 	if len(candidates) == 0 && info.Author != "" {
 		// A folder above a book is often its series, not its author.
 		candidates, _ = r.Service.Search(ctx, categoryID, info.Title, "", searchLimit)
 	}
-	pick, confidence, ok := pickCandidate(candidates, info)
+	out.candidates = candidates
+	out.picked, out.confidence, out.ok = pickCandidate(candidates, info)
+	if !out.ok && info.Author != "" && info.Title != "" {
+		swapped := parsebook.Info{Author: info.Title, Title: info.Author}
+		if hits, err := r.Service.Search(ctx, categoryID, swapped.Title, swapped.Author, searchLimit); err == nil {
+			if pick, confidence, ok := pickCandidate(hits, swapped); ok {
+				out.picked, out.confidence, out.ok, out.reading = pick, confidence, true, readingExchanged
+			}
+			if len(out.candidates) == 0 {
+				out.candidates = hits
+				out.reading = readingExchanged
+			}
+		}
+	}
 	for _, reading := range otherReadings(info) {
-		if ok {
+		if out.ok {
 			break
 		}
 		// The name's best reading may be only its subtitle ("A Novel"): each other reading is searched on its own.
-		found, err := r.Service.Search(ctx, categoryID, reading, info.Author, searchLimit)
+		hits, err := r.Service.Search(ctx, categoryID, reading, info.Author, searchLimit)
 		if err == nil {
-			pick, confidence, ok = pickCandidate(found, info)
+			out.picked, out.confidence, out.ok = pickCandidate(hits, info)
 		}
 	}
-	if ok && model.AcceptsFolderMatch(confidence, r.Threshold) {
-		if id := r.add(ctx, categoryID, pick.IDs, Hint{Title: pick.Title, Author: pick.Author}); id != 0 {
-			return id, nil
-		}
-	}
-	return 0, r.identifications(candidates)
+	return out
 }
 
 // maxOtherReadings bounds the extra searches one unplaced name costs.
@@ -278,7 +342,7 @@ func hasLatinLetter(name string) bool {
 }
 
 // identifications are the hits a person picks from in Review, the provider's own ranking kept.
-func (r Resolver) identifications(candidates []Candidate) []model.Identification {
+func (r Resolver) identifications(candidates []Candidate, reading string) []model.Identification {
 	out := make([]model.Identification, 0, len(candidates))
 	for rank, candidate := range candidates {
 		provider, externalID := r.Service.Format.CandidateID(candidate.IDs)
@@ -288,6 +352,9 @@ func (r Resolver) identifications(candidates []Candidate) []model.Identification
 		detail := candidate.Title
 		if candidate.Author != "" {
 			detail += " by " + candidate.Author
+		}
+		if reading != "" {
+			detail += " (" + reading + ")"
 		}
 		out = append(out, model.Identification{
 			Strategy:   "parse",

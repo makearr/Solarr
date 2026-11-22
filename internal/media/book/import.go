@@ -88,7 +88,7 @@ func (p placing) Resolve(ctx context.Context, request batch.Request, unit inspec
 	var candidates []model.Identification
 	if info, ok := p.format().Parse(files[0].RelPath); ok {
 		absolute := path.Join(request.SourcePath, files[0].RelPath)
-		info = withEmbedded(p.config.FS, absolute, info)
+		info = withEmbedded(ctx, p.config.FS, absolute, info)
 		if p.format().ByFolder && p.config.Tags != nil {
 			if probes, err := p.config.Tags.ReadTags(ctx, []string{absolute}); err == nil && len(probes) == 1 && probes[0].Err == nil {
 				info = withTags(info, probes[0].Tags)

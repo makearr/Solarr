@@ -31,6 +31,8 @@ type Info struct {
 	Version      int
 	ReleaseGroup string
 	ISBN, ASIN   string
+	// TitleUnbacked: Title is what the file's own metadata says and no reading of the name agrees, so a match by it alone is not trusted.
+	TitleUnbacked bool
 }
 
 // EbookFormats are the ebook file formats, Readarr's and Calibre's common ones.
