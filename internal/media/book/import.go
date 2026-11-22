@@ -240,6 +240,9 @@ func affinityKey(format Format, title string) string {
 	return format.MediaType + ":" + clean
 }
 
+// unknownAuthor names the author folder of a book with no author credit.
+const unknownAuthor = "Unknown Author"
+
 // NamingFacts gathers what a book's file names draw on: its title, year, first author and narrator, series and ids.
 func NamingFacts(ctx context.Context, reader library.SeriesReader, format Format, categoryID, workID int64, now time.Time) (FileNaming, error) {
 	detail, err := reader.GetOf(ctx, format.MediaType, categoryID, workID, now)
@@ -262,7 +265,7 @@ func NamingFacts(ctx context.Context, reader library.SeriesReader, format Format
 		}
 	}
 	if facts.Author == "" {
-		facts.Author = "Unknown Author"
+		facts.Author = unknownAuthor
 	}
 	return facts, nil
 }

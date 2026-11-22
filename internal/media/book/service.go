@@ -676,15 +676,44 @@ func (s Service) Refresh(ctx context.Context, categoryID, workID int64) (Book, e
 	if err != nil {
 		return Book{}, err
 	}
-	book, err := s.FetchFor(ctx, categoryID, s.Format.idsOf(provider), Hint{Title: basics.Title})
+	now := s.Clock.Now()
+	// The stored author keeps a search by title from adopting a neighbouring book of another writer.
+	hint := Hint{Title: basics.Title}
+	if facts, err := NamingFacts(ctx, s.Reader, s.Format, categoryID, workID, now); err == nil && facts.Author != unknownAuthor {
+		hint.Author = facts.Author
+	}
+	stored := s.Format.idsOf(provider)
+	book, err := s.FetchFor(ctx, categoryID, stored, hint)
 	if err != nil {
 		return Book{}, err
 	}
-	now := s.Clock.Now()
+	if refreshedAnotherBook(basics.Title, book.Title, stored, book.IDs) {
+		return Book{}, fmt.Errorf("book %d: the refresh found %q for %q with other ids; nothing was stored: %w", workID, book.Title, basics.Title, ErrOtherBook)
+	}
 	if _, err := s.Series.Upsert(ctx, now, ToWrite(s.Format, book, now)); err != nil {
 		return Book{}, err
 	}
 	return book, nil
+}
+
+// ErrOtherBook says a refresh found a different book than the one stored; the person can still identify it by hand.
+var ErrOtherBook = errors.New("book: refresh found another book")
+
+// refreshedAnotherBook is true when the fetched book is titled differently and shares no provider id with the stored one.
+func refreshedAnotherBook(storedTitle, fetchedTitle string, stored, fetched IDs) bool {
+	if foldTitle(storedTitle) == foldTitle(fetchedTitle) || fetched.Empty() {
+		return false
+	}
+	return !sharesAnID(stored, fetched)
+}
+
+// sharesAnID reports whether both sides hold the same non-empty id for some provider.
+func sharesAnID(a, b IDs) bool {
+	pairs := [][2]string{
+		{a.OpenLibrary, b.OpenLibrary}, {a.GoogleBooks, b.GoogleBooks}, {a.ASIN, b.ASIN}, {a.ISBN, b.ISBN},
+		{a.Goodreads, b.Goodreads}, {a.Hardcover, b.Hardcover}, {a.ITunes, b.ITunes}, {a.FantLab, b.FantLab},
+	}
+	return slices.ContainsFunc(pairs, func(pair [2]string) bool { return pair[0] != "" && pair[0] == pair[1] })
 }
 
 // ApplyMonitor sets a book's monitoring as Readarr's Monitor choice says; "Book and series" also follows its series.

@@ -76,7 +76,7 @@ func (b bookSpec) Wanted(ctx context.Context, item librarydb.DesiredItem, _ int,
 		return wanted{}, false, err
 	}
 	w := wanted{title: basics.Title, aliases: basics.Aliases}
-	if facts.Author != "" && facts.Author != "Unknown Author" {
+	if facts.Author != "" && facts.Author != unknownAuthor {
 		w.authors = []string{facts.Author}
 	}
 	if item.PresentCount == 0 {

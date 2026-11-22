@@ -364,3 +364,24 @@ func TestSearchUntil_AsksTheNextSourceWhenTheHitsAreNotTheBook(t *testing.T) {
 		t.Errorf("second source asked %d times after the first placed the book, err %v", asked, err)
 	}
 }
+
+func TestRefreshedAnotherBook_ANeighbourWithOtherIdsIsRefusedARetitledBookIsNot(t *testing.T) {
+	stored := IDs{OpenLibrary: "OL1W", ISBN: "9780000000001"}
+	cases := []struct {
+		name                 string
+		storedTitle, fetched string
+		fetchedIDs           IDs
+		want                 bool
+	}{
+		{"same title", "Dune", "Dune", IDs{OpenLibrary: "OL9W"}, false},
+		{"same title folded", "Dune!", "dune", IDs{OpenLibrary: "OL9W"}, false},
+		{"neighbour, other ids", "Dune", "Dune Messiah", IDs{OpenLibrary: "OL2W", ISBN: "9780000000002"}, true},
+		{"retitled, same id", "Dune", "Dune (Deluxe)", IDs{OpenLibrary: "OL1W"}, false},
+		{"neighbour without ids", "Dune", "Dune Messiah", IDs{}, false},
+	}
+	for _, c := range cases {
+		if got := refreshedAnotherBook(c.storedTitle, c.fetched, stored, c.fetchedIDs); got != c.want {
+			t.Errorf("%s: refreshedAnotherBook = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
