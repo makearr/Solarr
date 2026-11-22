@@ -7620,6 +7620,8 @@ export interface components {
                 key: string;
                 label: string;
                 help?: string;
+                /** @description The kind's works are adult content; the interface asks for a confirmation before adding such a library. */
+                adult?: boolean;
             }[];
             /**
              * Format: double

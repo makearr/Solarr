@@ -1352,6 +1352,194 @@
   {
     "add_kinds": [
       {
+        "key": "series",
+        "label": "Series"
+      }
+    ],
+    "commit_guess_floor": 0.9,
+    "commits_held_imports": false,
+    "cover_sources": false,
+    "duplicates_by_name": false,
+    "facets": [
+      {
+        "column": true,
+        "entity": "work",
+        "filterable": true,
+        "key": "year",
+        "kind": "number",
+        "label": "Year",
+        "sortable": true
+      },
+      {
+        "column": true,
+        "entity": "work",
+        "filterable": true,
+        "key": "publisher",
+        "kind": "text",
+        "label": "Publisher",
+        "sortable": true
+      },
+      {
+        "column": false,
+        "entity": "work",
+        "filterable": true,
+        "key": "original_language",
+        "kind": "text",
+        "label": "Language",
+        "sortable": false
+      }
+    ],
+    "file_settings": [],
+    "follow_options": [],
+    "genre_tree": {
+      "key": "",
+      "label": ""
+    },
+    "group": {
+      "many": "Volumes",
+      "one": "Volume"
+    },
+    "key": "comic",
+    "kinds": [
+      {
+        "help": "Western comics: series of issues, read left to right.",
+        "key": "comics",
+        "label": "Comics"
+      },
+      {
+        "help": "Series of tankobon volumes, read right to left; a chapter file counts toward its volume.",
+        "key": "manga",
+        "label": "Manga"
+      },
+      {
+        "adult": true,
+        "help": "Comics for adults, hidden and confirmed as the adult type is.",
+        "key": "adult_comics",
+        "label": "Adult comics"
+      },
+      {
+        "adult": true,
+        "help": "Adult manga and one-shot galleries, hidden and confirmed as the adult type is.",
+        "key": "hentai",
+        "label": "Hentai"
+      }
+    ],
+    "label": "Comics",
+    "lead_people": {
+      "many": "Writers",
+      "one": "Writer"
+    },
+    "monitor_options": [
+      {
+        "key": "all",
+        "label": "All issues"
+      },
+      {
+        "key": "future",
+        "label": "Future issues"
+      },
+      {
+        "key": "missing",
+        "label": "Missing issues"
+      },
+      {
+        "key": "first",
+        "label": "First issue"
+      },
+      {
+        "key": "latest",
+        "label": "Latest issue"
+      },
+      {
+        "key": "none",
+        "label": "None"
+      }
+    ],
+    "organisation": {
+      "many": "Publishers",
+      "one": "Publisher"
+    },
+    "part": {
+      "many": "Issues",
+      "one": "Issue"
+    },
+    "ratings": false,
+    "release_filters": false,
+    "roles": [
+      {
+        "character": false,
+        "followable": true,
+        "key": "writer",
+        "label": "Writer",
+        "lead": true,
+        "part_scoped": false
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "penciller",
+        "label": "Penciller",
+        "lead": false,
+        "part_scoped": false
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "inker",
+        "label": "Inker",
+        "lead": false,
+        "part_scoped": false
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "colorist",
+        "label": "Colorist",
+        "lead": false,
+        "part_scoped": false
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "letterer",
+        "label": "Letterer",
+        "lead": false,
+        "part_scoped": false
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "cover_artist",
+        "label": "Cover artist",
+        "lead": false,
+        "part_scoped": false
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "editor",
+        "label": "Editor",
+        "lead": false,
+        "part_scoped": false
+      }
+    ],
+    "scan_monitor": {
+      "label": "",
+      "options": [],
+      "setting": ""
+    },
+    "search_terms": [],
+    "searches_library": false,
+    "wanted_grain": "part",
+    "work": {
+      "many": "Series",
+      "one": "Series"
+    },
+    "work_image": "poster"
+  },
+  {
+    "add_kinds": [
+      {
         "key": "book",
         "label": "Books"
       }

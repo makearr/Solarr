@@ -11009,6 +11009,7 @@ components:
               key: { type: string }
               label: { type: string }
               help: { type: string }
+              adult: { type: boolean, description: "The kind's works are adult content; the interface asks for a confirmation before adding such a library." }
         commit_guess_floor:
           type: number
           format: double

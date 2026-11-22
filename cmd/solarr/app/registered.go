@@ -18,6 +18,7 @@ import (
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/book"
+	"github.com/makearr/Solarr/internal/media/comic"
 	"github.com/makearr/Solarr/internal/media/housekeeping"
 	"github.com/makearr/Solarr/internal/media/knownfor"
 	"github.com/makearr/Solarr/internal/media/movie"
@@ -34,7 +35,7 @@ import (
 // registerMedia builds the one list of media types in the binary, each wired to what it needs from the process.
 // A new type is one more module here; nothing else in this package names a type's scan.
 func (p *process) registerMedia() error {
-	modules := []media.Module{p.musicModule(), p.tvModule(), p.movieModule(), p.adultModule()}
+	modules := []media.Module{p.musicModule(), p.tvModule(), p.movieModule(), p.adultModule(), comic.Module{}}
 	for _, format := range book.Formats {
 		modules = append(modules, p.bookModule(format))
 	}

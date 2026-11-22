@@ -75,6 +75,8 @@ type MediaTypeInfo struct {
 // LibraryKind is one kind of library of a media type and the defaults a library of it starts with.
 type LibraryKind struct {
 	Key, Label, Help string
+	// Adult marks a kind of adult content.
+	Adult bool
 	// QualityProfiles name the profiles the library accepts, best first; one not found is left out.
 	QualityProfiles []string
 	// Language is the language profile it starts with, found by name or created; nil for none.
@@ -99,6 +101,7 @@ func (info MediaTypeInfo) kindOf(key string) (LibraryKind, bool) {
 }
 
 func kindViews(kinds []LibraryKind) *[]struct {
+	Adult *bool   `json:"adult,omitempty"`
 	Help  *string `json:"help,omitempty"`
 	Key   string  `json:"key"`
 	Label string  `json:"label"`
@@ -107,12 +110,16 @@ func kindViews(kinds []LibraryKind) *[]struct {
 		return nil
 	}
 	views := make([]struct {
+		Adult *bool   `json:"adult,omitempty"`
 		Help  *string `json:"help,omitempty"`
 		Key   string  `json:"key"`
 		Label string  `json:"label"`
 	}, len(kinds))
 	for i, kind := range kinds {
 		views[i].Key, views[i].Label, views[i].Help = kind.Key, kind.Label, strPtr(kind.Help)
+		if kind.Adult {
+			views[i].Adult = &kinds[i].Adult
+		}
 	}
 	return &views
 }

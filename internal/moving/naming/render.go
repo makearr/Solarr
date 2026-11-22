@@ -143,6 +143,9 @@ func formatValue(name, value string, seg Segment, warnings *[]Warning) string {
 		if n, err := strconv.Atoi(value); err == nil {
 			return fmt.Sprintf("%0*d", seg.padWidth, n)
 		}
+		if padded, ok := padLeadingNumber(value, seg.padWidth); ok {
+			return padded
+		}
 		*warnings = append(*warnings, Warning{
 			Token: name, Message: fmt.Sprintf("zero-padding requested but %q is not a number", value),
 		})
@@ -153,6 +156,22 @@ func formatValue(name, value string, seg Segment, warnings *[]Warning) string {
 		return string(runes[:seg.maxChars])
 	}
 	return value
+}
+
+// padLeadingNumber pads the digits a value starts with and keeps the rest: "1.5" and "1AU" pad to "001.5" and "001AU".
+func padLeadingNumber(value string, width int) (string, bool) {
+	end := 0
+	for end < len(value) && value[end] >= '0' && value[end] <= '9' {
+		end++
+	}
+	if end == 0 || end == len(value) {
+		return "", false
+	}
+	n, err := strconv.Atoi(value[:end])
+	if err != nil {
+		return "", false
+	}
+	return fmt.Sprintf("%0*d", width, n) + value[end:], true
 }
 
 // allTokensResolve reports whether every token directly inside segments

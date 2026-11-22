@@ -232,7 +232,7 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 		info.GuessFloor = descriptor.GuessFloor
 		for _, kind := range descriptor.Kinds {
 			info.Kinds = append(info.Kinds, apiserver.LibraryKind{
-				Key: kind.Key, Label: kind.Label, Help: kind.Help, QualityProfiles: kind.QualityProfiles, Language: kind.Language,
+				Key: kind.Key, Label: kind.Label, Help: kind.Help, Adult: kind.Adult, QualityProfiles: kind.QualityProfiles, Language: kind.Language,
 			})
 		}
 		for _, setting := range descriptor.FileSettings {

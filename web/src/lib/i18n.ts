@@ -457,6 +457,7 @@ const catalogue = {
   "network.listenPort": "Listen port",
   "network.proxy": "Outbound proxy",
   "newLibrary.failed": "That library could not be created. Check the name is not empty.",
+  "newLibrary.holdsAdultContent": "This library holds adult content",
   "password.repeat": "Repeat password",
   "notifications.noProblems": "Nothing is wrong right now.",
   "notifications.lastWeek": "Last 7 days",

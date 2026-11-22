@@ -4599,6 +4599,8 @@ type MediaTypeInfo struct {
 
 	// Kinds What a library of the type can be, picked when one is added; the first is the default. Empty for a type of one kind.
 	Kinds *[]struct {
+		// Adult The kind's works are adult content; the interface asks for a confirmation before adding such a library.
+		Adult *bool   `json:"adult,omitempty"`
 		Help  *string `json:"help,omitempty"`
 		Key   string  `json:"key"`
 		Label string  `json:"label"`

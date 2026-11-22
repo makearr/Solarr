@@ -26,6 +26,9 @@ export function useNewLibrary() {
   const typeName = mediaType ? mediaTypeName(mediaType) : "";
   const kinds = mediaTypes.find((type) => type.key === mediaType)?.kinds ?? [];
   const effectiveKind = kind || kinds[0]?.key || "";
+  // A kind of adult content is added only after the person confirms it.
+  const adultKind = kinds.find((candidate) => candidate.key === effectiveKind)?.adult === true;
+  const [adultConfirmed, setAdultConfirmed] = useState(false);
   // Anime is one library for its series and its films, so movies start ticked for it unless unticked.
   const [asked, setAsked] = useState<Record<string, boolean>>({});
   const offeredTypes = mediaTypes.filter((type) => type.key !== mediaType);
@@ -42,6 +45,9 @@ export function useNewLibrary() {
     typeName,
     name: typedName ?? typeName,
     kind,
+    adultKind,
+    adultConfirmed,
+    setAdultConfirmed,
     setName,
     setKind,
     setMediaType: (value: MediaType) => {
@@ -93,6 +99,12 @@ export function NewLibraryFields({ library }: { library: NewLibrary }) {
         </select>
       </label>
       {library.mediaType && <KindSelect mediaType={library.mediaType} value={library.kind} onChange={library.setKind} />}
+      {library.adultKind && (
+        <label className="flex items-center gap-1 text-sm">
+          <input type="checkbox" checked={library.adultConfirmed} onChange={(event) => library.setAdultConfirmed(event.target.checked)} />
+          {t("newLibrary.holdsAdultContent")}
+        </label>
+      )}
       <TargetChoiceField choice={library.target} />
       {library.offeredTypes.length > 0 && (
         <fieldset className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
@@ -137,7 +149,7 @@ export function AddLibraryForm() {
       }}
     >
       <NewLibraryFields library={library} />
-      <Button variant="primary" type="submit" disabled={create.isPending || !library.mediaType}>
+      <Button variant="primary" type="submit" disabled={create.isPending || !library.mediaType || (library.adultKind && !library.adultConfirmed)}>
         <Plus aria-hidden className="size-4" />
         {create.isPending ? "Adding…" : "Add library"}
       </Button>
