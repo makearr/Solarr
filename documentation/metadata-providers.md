@@ -67,6 +67,23 @@ then asks nothing; an add or a manual refresh reads its one work and keeps it to
 Jellyfin's per-library ordered downloaders are the model Solarr follows. What each upstream project uses beyond what its
 documentation states is from memory and should be checked before relying on it.
 
+## Your own media servers
+
+A media server connected under Connections, Media servers with *Use as a metadata source* on, and mapped to a library, is a
+provider of that library, `local:<kind>`. It is **provisional**: asked first in time (so a work has something at once), then
+every other provider in the library's order; where both hold a field the other provider wins, and the server's value stays only
+where no one else has one. Its ids only fill gaps, never replace an id from a file, a person or another provider. A library's
+Metadata page marks it "your media server" and says so; a type's default order never holds one, only a library's own does.
+A connection a library's order still names is not deleted (409) unless another of its kind answers for that library.
+
+| Server | Libraries | Asked by | Notes |
+|---|---|---|---|
+| Jellyfin | TV, movies | provider id from a folder or file name (a bulk index of the server's titles, since its id filters are ignored), else title; by path where the path pairs match | titles, overview, genres, ids, studios, certification; People are not yet credits; music not wired |
+| Audiobookshelf | audiobooks, books | ASIN or ISBN, else exact title | description, series, publisher, ISBN id |
+| Navidrome | music | client built, not wired | music is keyed by MusicBrainz id; needs a by-path id step |
+| Calibre | books | identifier or title (`/ajax/search`) | shapes from the documentation only |
+| Stash | adult | stash-box id | GraphQL |
+
 ## Music
 
 | Provider | Carries | Built | Notes |
@@ -93,10 +110,11 @@ documentation states is from memory and should be checked before relying on it.
 | AniList | titles in every language, synonyms, cours, format, status, genres, covers, banners, **relations** (sequel, prequel, spin-off) | yes | anime |
 | Wikidata | the ids every other provider knows a series by, franchises (part of the series, media franchise, spin-off, follows) | yes | first by default; collections of series |
 | TheXEM | scene numbering (TheTVDB's episode to the scene's), scene names | yes | no key; switched on or off, no place in the order ([tv-internals.md](tv-internals.md)) |
-| AniDB, Kitsu, MyAnimeList | anime titles, episodes, relations, ratings | no | AniDB bans heavy clients |
-| IMDb datasets | ratings, episode lists, crew | no | files, not an API |
-| fanart.tv | clear logos, banners, HD art, season posters | no | a free key |
-| OMDb | ratings (IMDb, Rotten Tomatoes), English plots | no | a key |
+| Kitsu | anime synopsis, age rating, average rating, poster, and the MyAnimeList and AniDB ids | yes | no key; found through AniList's id (its `/mappings`), anime libraries, after AniList |
+| AniDB, MyAnimeList | anime titles, episodes, relations, ratings | no | AniDB bans heavy clients; MyAnimeList needs a client id |
+| IMDb datasets | rating and votes | yes, **off** | IMDb's daily `title.ratings.tsv.gz`, streamed into `cache/metadata.db` by the task `imdb_ratings`; no key, no quota; personal, non-commercial use only. A series has one rating, so it fills where no earlier source holds one |
+| fanart.tv | clear logos, banners, HD art, posters | yes | a free key; its posters are offered in the picker |
+| OMDb | the series' IMDb rating and English plot | yes | a key; asked by IMDb id, last in the order; the per-season call is built, not used |
 
 ## Movies
 
@@ -124,8 +142,9 @@ Hardcover. Solarr asks the keyless ones in each library's order, Wikidata first.
 | Open Library | works, their editions' ISBNs, publishers and page counts, authors with photos, subjects, covers | yes | no key; names a book: its work id is the book's id |
 | Google Books | descriptions, publishers, page counts, categories, ratings, covers | yes | no key on a shared quota; the owner's free key raises it |
 | Audible (Audnexus) | an audiobook's narrators, length, abridgement, series and position, publisher, genres, cover; Audible's catalogue to search | yes | no key; audiobooks only; Audnexus allows 100 a minute |
-| Hardcover | works, editions, series, ratings | no | a key; what Bookshelf's service reads |
-| iTunes, FantLab | covers, descriptions | no | Audiobookshelf's further sources |
+| Hardcover | works, editions, series, ratings | yes | a key; what Bookshelf's service reads |
+| Internet Archive | description, subjects, language, page count, cover | yes | no key; found by ISBN; last in the order |
+| iTunes, FantLab | covers, descriptions | yes | Audiobookshelf's further sources |
 
 **Wikidata leads what it holds** for books as for films: the overview and the year of first publication, and the
 series, which Open Library does not keep. It never names the title: its title is the original language's, kept as an
