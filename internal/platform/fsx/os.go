@@ -70,6 +70,19 @@ func (OS) MkdirAll(path string, perm fs.FileMode) error { return os.MkdirAll(pat
 // Chown is os.Chown, here so the forbidigo choke point stays absolute.
 func (OS) Chown(path string, uid, gid int) error { return os.Chown(path, uid, gid) }
 
+// Sync flushes the file at path to disk.
+func (OS) Sync(path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
+}
+
 // Lchown is os.Lchown.
 func (OS) Lchown(path string, uid, gid int) error { return os.Lchown(path, uid, gid) }
 

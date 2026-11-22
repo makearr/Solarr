@@ -281,6 +281,12 @@ func (m *Mem) Chown(path string, uid, gid int) error {
 	return nil
 }
 
+// Sync has nothing to flush in memory; it fails for a file that is not there, as the disk does.
+func (m *Mem) Sync(path string) error {
+	_, err := m.Stat(path)
+	return err
+}
+
 // Lchown records ownership of the entry itself; the in-memory tree does not follow a link to change it.
 func (m *Mem) Lchown(path string, uid, gid int) error { return m.Chown(path, uid, gid) }
 

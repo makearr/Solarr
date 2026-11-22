@@ -75,6 +75,9 @@ type FS interface {
 
 	// Chown changes ownership; -1 leaves that half alone, as chown(2) does.
 	Chown(path string, uid, gid int) error
+	// Sync makes a written file durable: a file swapped in over another by Rename must not be the one a crash left empty.
+	Sync(path string) error
+
 	// Lchown is Chown on a link itself, never on what it points at.
 	Lchown(path string, uid, gid int) error
 

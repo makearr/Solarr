@@ -3,10 +3,12 @@ package music_test
 import (
 	"context"
 	"errors"
+	"github.com/makearr/Solarr/internal/platform/clock"
 	"image"
 	"io"
 	"path"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -85,12 +87,13 @@ type tagWritebackFixture struct {
 	tool   *fakeTagFiles
 	fs     *fsx.Mem
 	roots  []music.TagRoot
+	clock  clock.Clock
 }
 
 func newTagWritebackJob(t *testing.T, roots ...music.TagRoot) *tagWritebackFixture {
 	t.Helper()
 	opened, fs, fake := newTestLibrary(t)
-	fixture := &tagWritebackFixture{opened: opened, tool: &fakeTagFiles{fs: fs}, fs: fs, roots: roots}
+	fixture := &tagWritebackFixture{opened: opened, tool: &fakeTagFiles{fs: fs}, fs: fs, roots: roots, clock: fake}
 	fixture.job = music.NewTagWritebackJob(music.TagWritebackConfig{
 		Files: library.NewTagWriteback(opened),
 		Roots: func(context.Context) ([]music.TagRoot, error) { return fixture.roots, nil },
@@ -377,5 +380,54 @@ func TestTagWriteback_ALinkedFileIsTaggedOnACopyWhenAsked(t *testing.T) {
 	}
 	if _, err := fixture.fs.Lstat("/music/Heka/Zanuvode/01.m4a.solarr-tag"); err == nil {
 		t.Error("the private copy was left behind")
+	}
+}
+
+// orderSpy records the order of the calls that decide whether a swapped-in file survives a crash.
+type orderSpy struct {
+	fsx.FS
+	calls []string
+}
+
+func (o *orderSpy) Sync(path string) error {
+	o.calls = append(o.calls, "sync "+path)
+	return o.FS.Sync(path)
+}
+
+func (o *orderSpy) Rename(oldPath, newPath string) error {
+	o.calls = append(o.calls, "rename "+newPath)
+	return o.FS.Rename(oldPath, newPath)
+}
+
+// TAG-1: the tagged copy is flushed before it replaces the file.
+func TestTagWriteback_ATaggedCopyIsFlushedBeforeItReplacesTheFile(t *testing.T) {
+	options := music.TagOptions{WriteIDs: true, CopyLinkedFiles: true}
+	fixture := newTagWritebackJob(t, music.TagRoot{ID: 1, Path: "/music", Options: options})
+	identifyFile(t, fixture.opened, "Heka/Zanuvode/01.m4a", "rg-1", "rel-1")
+	putFile(t, fixture.fs, "/music/Heka/Zanuvode/01.m4a", "audio")
+	if err := fixture.fs.MkdirAll("/downloads", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.fs.Link("/music/Heka/Zanuvode/01.m4a", "/downloads/01.m4a"); err != nil {
+		t.Fatal(err)
+	}
+	spy := &orderSpy{FS: fixture.fs}
+	job := music.NewTagWritebackJob(music.TagWritebackConfig{
+		Files: library.NewTagWriteback(fixture.opened),
+		Roots: func(context.Context) ([]music.TagRoot, error) { return fixture.roots, nil },
+		Tool:  fixture.tool, FS: spy, ImagesDir: "/cache/images", CoversDir: "/cache/tag-covers", Clock: fixture.clock,
+	})
+	if err := job.Run(t.Context(), jobs.Job{Type: music.TagWritebackJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	want := []string{"sync /music/Heka/Zanuvode/01.m4a.solarr-tag", "rename /music/Heka/Zanuvode/01.m4a"}
+	var swap []string
+	for _, call := range spy.calls {
+		if strings.HasPrefix(call, "sync /music") || call == "rename /music/Heka/Zanuvode/01.m4a" {
+			swap = append(swap, call)
+		}
+	}
+	if !reflect.DeepEqual(swap, want) {
+		t.Fatalf("calls = %v, want %v", swap, want)
 	}
 }

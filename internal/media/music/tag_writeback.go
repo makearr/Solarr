@@ -246,7 +246,10 @@ func (j *TagWritebackJob) writePage(ctx context.Context, run *tagRun, candidates
 	for k, result := range results {
 		failure, digest := "", digests[k]
 		if result.Err == nil && originals[k] != "" && len(result.Changed) > 0 {
-			if err := j.config.FS.Rename(edits[k].Path, originals[k]); err != nil {
+			// Flushed first: after a crash the library path must hold a whole tagged file or the untouched original.
+			if err := j.config.FS.Sync(edits[k].Path); err != nil {
+				result.Err = fmt.Errorf("flush the tagged copy: %w", err)
+			} else if err := j.config.FS.Rename(edits[k].Path, originals[k]); err != nil {
 				result.Err = fmt.Errorf("swap the tagged copy in: %w", err)
 			}
 		}
