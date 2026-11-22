@@ -256,6 +256,14 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 	if err != nil {
 		return nil, err
 	}
+	localRows, err := c.queries.ListLocalMetadataKinds(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list local metadata providers: %w", err)
+	}
+	localSources := make(map[int64][]string)
+	for _, row := range localRows {
+		localSources[row.CategoryID] = append(localSources[row.CategoryID], LocalSource(row.Kind))
+	}
 
 	snapshot := newSnapshot(
 		convertUsers(users),
@@ -276,6 +284,7 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 	snapshot.targetProfiles = convertTargetProfiles(targetProfiles)
 	snapshot.defaultLanguages = defaultLanguages
 	snapshot.blockedTagsByUser = blockedByUser
+	snapshot.localSources = localSources
 	return snapshot, nil
 }
 

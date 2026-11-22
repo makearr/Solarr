@@ -55,7 +55,7 @@ func (c *Cache) SetTypeDefaults(ctx context.Context, cl clock.Clock, mediaType s
 	}
 	seen := map[string]bool{}
 	for index, source := range defaults.MetadataSources {
-		if !validSourceFor(mediaType, source) || seen[source] {
+		if !validSourceFor(mediaType, source) || seen[source] || IsProvisionalSource(source) {
 			problems = append(problems, config.Problem{Path: fmt.Sprintf("metadata_sources[%d]", index), Value: source, Expectation: "a provider of " + mediaType + " libraries, once"})
 		}
 		seen[source] = true

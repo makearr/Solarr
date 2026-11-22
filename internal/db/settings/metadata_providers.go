@@ -91,6 +91,46 @@ type MetadataProvider struct {
 	MaxPerMinute int64
 	// Published is what the provider says it can take, in the words a person reads.
 	Published string
+	// Role says whether the provider takes a place in a library's order; the zero value is RoleOrder.
+	Role ProviderRole
+	// Provisional marks a local provider (a media server): asked first, ranked after every other provider in the merge.
+	Provisional bool
+}
+
+// ProviderRole says how a provider is used: in a library's order, or switched on and off with a fixed place.
+type ProviderRole string
+
+// The roles of a provider.
+const (
+	RoleOrder  ProviderRole = "order"
+	RoleEnrich ProviderRole = "enrich"
+)
+
+// InOrder says the provider takes a place in a library's order.
+func (p MetadataProvider) InOrder() bool { return p.Role != RoleEnrich }
+
+// LocalSourcePrefix starts the key of every local provider: "local:" and the media server kind.
+const LocalSourcePrefix = "local:"
+
+// LocalSource is the provider key of a media server kind.
+func LocalSource(kind string) string { return LocalSourcePrefix + kind }
+
+// IsProvisionalSource says key is a local provider, whose answers every other provider replaces.
+func IsProvisionalSource(key string) bool { return strings.HasPrefix(key, LocalSourcePrefix) }
+
+// RankProvisionalLast moves the provisional providers behind all the others, keeping each group's order: in a merge the
+// first provider to hold a field supplies it, and a local value must lose to every external one.
+func RankProvisionalLast(order []string) []string {
+	ranked := make([]string, 0, len(order))
+	var local []string
+	for _, key := range order {
+		if IsProvisionalSource(key) {
+			local = append(local, key)
+		} else {
+			ranked = append(ranked, key)
+		}
+	}
+	return append(ranked, local...)
 }
 
 // MaxProviderPerMinute bounds a pace no provider limits: 100 a second.
@@ -147,13 +187,23 @@ var MetadataProviders = []MetadataProvider{
 		PerMinute: 120, Published: "none published"},
 	{Key: AdultSourceFansDB, Label: "FansDB", MediaTypes: []string{"adult"}, Carries: []string{"fan-platform scenes", "creators", "tags", "fingerprints", "images"}, NeedsKey: true,
 		PerMinute: 120, Published: "none published; a community server, asked gently"},
-	{Key: SourceTheAudioDB, Label: "TheAudioDB", AlsoFor: []string{"music"}, Carries: []string{"artist photos and biographies", "album covers"},
+	{Key: LocalSource("jellyfin"), Label: "Jellyfin (your server)", MediaTypes: []string{"tv", "movie", "music"}, Provisional: true, Carries: []string{"titles", "overviews", "genres", "cast", "provider ids", "images"},
+		PerMinute: 600, Published: "your own server"},
+	{Key: LocalSource("navidrome"), Label: "Navidrome (your server)", MediaTypes: []string{"music"}, Provisional: true, Carries: []string{"artists", "albums", "tracks", "MusicBrainz ids"},
+		PerMinute: 600, Published: "your own server"},
+	{Key: LocalSource("audiobookshelf"), Label: "Audiobookshelf (your server)", MediaTypes: []string{"audiobook", "book"}, Provisional: true, Carries: []string{"titles", "narrators", "series", "ASIN and ISBN", "covers"},
+		PerMinute: 600, Published: "your own server"},
+	{Key: LocalSource("calibre"), Label: "Calibre (your server)", MediaTypes: []string{"book"}, Provisional: true, Carries: []string{"titles", "authors", "series", "tags", "identifiers", "covers"},
+		PerMinute: 600, Published: "your own server"},
+	{Key: LocalSource("stash"), Label: "Stash (your server)", MediaTypes: []string{"adult"}, Provisional: true, Carries: []string{"scenes", "performers", "studios", "tags", "stash-box ids"},
+		PerMinute: 600, Published: "your own server"},
+	{Key: SourceTheAudioDB, Role: RoleEnrich, Label: "TheAudioDB", AlsoFor: []string{"music"}, Carries: []string{"artist photos and biographies", "album covers"},
 		PerMinute: 120, Published: "none published for the free key"},
-	{Key: SourceCoverArtArchive, Label: "Cover Art Archive", AlsoFor: []string{"music"}, Carries: []string{"album covers"},
+	{Key: SourceCoverArtArchive, Role: RoleEnrich, Label: "Cover Art Archive", AlsoFor: []string{"music"}, Carries: []string{"album covers"},
 		Published: "none published; served by the Internet Archive"},
-	{Key: SourceAcoustID, Label: "AcoustID", AlsoFor: []string{"music"}, Carries: []string{"files identified by their sound"}, NeedsKey: true,
+	{Key: SourceAcoustID, Role: RoleEnrich, Label: "AcoustID", AlsoFor: []string{"music"}, Carries: []string{"files identified by their sound"}, NeedsKey: true,
 		PerMinute: 180, MaxPerMinute: 180, Published: "3 a second"},
-	{Key: SourceTheXEM, Label: "TheXEM", AlsoFor: []string{"tv"}, Carries: []string{"scene numbering", "scene names"},
+	{Key: SourceTheXEM, Role: RoleEnrich, Label: "TheXEM", AlsoFor: []string{"tv"}, Carries: []string{"scene numbering", "scene names"},
 		PerMinute: 30, Published: "none published; a community server, asked gently"},
 }
 
@@ -293,11 +343,33 @@ func DefaultMetadataSources(mediaType, kind string) []string {
 // MetadataSourcesFor is the order a library's providers are consulted in: its own when it has set one, else its type's
 // default (shipped: what suits its type and kind); a provider switched off is left out.
 func (s *Snapshot) MetadataSourcesFor(category Category) []string {
-	order := category.MetadataSources
+	order := slices.Clone(category.MetadataSources)
+	local := s.localSources[category.ID]
 	if len(order) == 0 {
-		order = s.TypeMetadataSources(category.MediaType, category.Kind)
+		order = append(slices.Clone(local), s.TypeMetadataSources(category.MediaType, category.Kind)...)
 	}
-	return slices.DeleteFunc(slices.Clone(order), func(key string) bool { return !s.ProviderEnabled(key) })
+	order = slices.DeleteFunc(order, func(key string) bool { return IsProvisionalSource(key) && !slices.Contains(local, key) })
+	return RankProvisionalLast(slices.DeleteFunc(slices.Clone(order), func(key string) bool { return !s.ProviderEnabled(key) }))
+}
+
+// LocalSourceOffered says a library is mapped to a media server of the local provider's kind that serves as metadata.
+func (s *Snapshot) LocalSourceOffered(categoryID int64, key string) bool {
+	return slices.Contains(s.localSources[categoryID], key)
+}
+
+// LocalSourceInUse says some library is mapped to such a media server; a local provider no one uses is not listed.
+func (s *Snapshot) LocalSourceInUse(key string) bool {
+	for _, keys := range s.localSources {
+		if slices.Contains(keys, key) {
+			return true
+		}
+	}
+	return false
+}
+
+// LocalSourcesOf lists the local providers a library is mapped to.
+func (s *Snapshot) LocalSourcesOf(categoryID int64) []string {
+	return slices.Clone(s.localSources[categoryID])
 }
 
 // MusicSourceOrder is the order a music library's lookups are asked in; a lookup made for no music library (categoryID 0,
@@ -337,7 +409,7 @@ func (c *Cache) SetCategoryMetadataSources(ctx context.Context, id int64, source
 	var problems config.Problems
 	seen := map[string]bool{}
 	for index, source := range sources {
-		if !validSourceFor(category.MediaType, source) || seen[source] {
+		if !validSourceFor(category.MediaType, source) || seen[source] || (IsProvisionalSource(source) && !c.Snapshot().LocalSourceOffered(id, source)) {
 			problems = append(problems, config.Problem{Path: fmt.Sprintf("sources[%d]", index), Value: source, Expectation: "a provider of " + category.MediaType + " libraries, once"})
 		}
 		seen[source] = true

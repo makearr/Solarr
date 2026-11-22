@@ -64,3 +64,9 @@ DELETE FROM media_server_user WHERE server_id = ?;
 
 -- name: AddMediaServerUser :exec
 INSERT INTO media_server_user (server_id, server_user_id, name, user_id, counted) VALUES (?, ?, ?, ?, ?);
+
+-- name: ListLocalMetadataKinds :many
+SELECT DISTINCT l.category_id AS category_id, s.kind AS kind
+FROM media_server s JOIN media_server_library l ON l.server_id = s.id
+WHERE s.enabled = 1 AND s.as_metadata = 1
+ORDER BY l.category_id, s.kind;

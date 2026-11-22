@@ -25,6 +25,9 @@ func (s *Server) metadataSourcesView(category settings.Category) gen.LibraryMeta
 		Available: []gen.MetadataProviderInfo{},
 	}
 	for _, provider := range settings.MetadataProvidersFor(category.MediaType) {
+		if provider.Provisional && !snapshot.LocalSourceOffered(category.ID, provider.Key) {
+			continue
+		}
 		view.Available = append(view.Available, s.providerInfo(snapshot, provider))
 	}
 	return view
@@ -128,6 +131,9 @@ func (s *Server) ListMetadataProviders(w http.ResponseWriter, r *http.Request) {
 	snapshot := s.auth.Settings.Snapshot()
 	providers := make([]gen.MetadataProviderInfo, 0, len(settings.MetadataProviders))
 	for _, provider := range settings.MetadataProviders {
+		if provider.Provisional && !snapshot.LocalSourceInUse(provider.Key) {
+			continue
+		}
 		providers = append(providers, s.providerInfo(snapshot, provider))
 	}
 	writeJSON(w, s.logger, http.StatusOK, struct {

@@ -228,6 +228,41 @@ func (q *Queries) ListAllMediaServerLibraries(ctx context.Context) ([]MediaServe
 	return items, nil
 }
 
+const listLocalMetadataKinds = `-- name: ListLocalMetadataKinds :many
+SELECT DISTINCT l.category_id AS category_id, s.kind AS kind
+FROM media_server s JOIN media_server_library l ON l.server_id = s.id
+WHERE s.enabled = 1 AND s.as_metadata = 1
+ORDER BY l.category_id, s.kind
+`
+
+type ListLocalMetadataKindsRow struct {
+	CategoryID int64
+	Kind       string
+}
+
+func (q *Queries) ListLocalMetadataKinds(ctx context.Context) ([]ListLocalMetadataKindsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLocalMetadataKinds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLocalMetadataKindsRow{}
+	for rows.Next() {
+		var i ListLocalMetadataKindsRow
+		if err := rows.Scan(&i.CategoryID, &i.Kind); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMediaServerLibraries = `-- name: ListMediaServerLibraries :many
 SELECT server_id, category_id, server_library_id, server_library
 FROM media_server_library WHERE server_id = ? ORDER BY category_id, server_library_id

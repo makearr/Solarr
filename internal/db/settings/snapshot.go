@@ -36,6 +36,8 @@ type Snapshot struct {
 	languageProfileByID  map[int64]LanguageProfile
 	exclusionPatternByID map[int64]ExclusionPattern
 	blockedTagsByUser    map[int64][]UserBlockedTag
+	// localSources are the local providers (media servers used as metadata) each library is mapped to.
+	localSources map[int64][]string
 }
 
 // Users returns every account, ordered by username.

@@ -146,6 +146,7 @@ type Querier interface {
 	// Instance-wide policy, seeded from config.yml and changeable afterwards (ADR-21).
 	ListInstanceSettings(ctx context.Context) ([]InstanceSetting, error)
 	ListLanguageProfiles(ctx context.Context) ([]LanguageProfile, error)
+	ListLocalMetadataKinds(ctx context.Context) ([]ListLocalMetadataKindsRow, error)
 	ListMediaServerLibraries(ctx context.Context, serverID int64) ([]MediaServerLibrary, error)
 	ListMediaServerPaths(ctx context.Context, serverID int64) ([]MediaServerPath, error)
 	ListMediaServerUsers(ctx context.Context, serverID int64) ([]MediaServerUser, error)
