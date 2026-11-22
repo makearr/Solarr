@@ -1,6 +1,7 @@
 import { tr } from "@/lib/i18nRich";
 import { t } from "@/lib/i18n";
 import { SubTabs } from "@/ui/SubTabs";
+import { Link } from "@tanstack/react-router";
 import { Fragment, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Info } from "lucide-react";
@@ -124,6 +125,7 @@ export function MetadataSettings() {
           </Fragment>
         ))}
       </ul>
+      <LocalServers />
       {(switchProvider.isError || patch.isError) && <p className="text-sm text-danger">{t("importLists.refused")}</p>}
     </section>
   );
@@ -878,4 +880,34 @@ function ProviderStatus({ provider }: { provider: Provider }) {
     ? new Date(provider.status_until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : null;
   return <span className="rounded-md border border-danger px-1.5 text-xs text-danger">{until ? `${label} until ${until}` : label}</span>;
+}
+
+/** The media servers used as a source of metadata: what they are, which libraries they answer for, and where to switch them. */
+function LocalServers() {
+  const servers = useQuery({ queryKey: ["media-servers"], queryFn: () => ok(api.GET("/media-servers")) });
+  const used = (servers.data ?? []).filter((server) => server.as_metadata);
+  return (
+    <Card title={t("metadataSettings.servers")} help={t("metadataSettings.serversHelp")}>
+      {used.length === 0 ? (
+        <p className="text-sm text-ink-muted">{t("metadataSettings.serversNone")}</p>
+      ) : (
+        <ul className="flex flex-col divide-y divide-border-subtle text-sm">
+          {used.map((server) => (
+            <li key={server.id} className="flex flex-wrap items-center gap-2 py-2">
+              <span className="font-medium">{server.name}</span>
+              <Chip>{server.kind}</Chip>
+              {!server.enabled && <Chip tone="warn">{t("metadataSettings.serverOff")}</Chip>}
+              {server.last_error && <Chip tone="warn">{server.last_error}</Chip>}
+              <span className="min-w-0 flex-1 truncate text-xs text-ink-muted">
+                {t("metadataSettings.serverLibraries", { names: server.libraries.map((library) => library.server_library).join(", ") || "-" })}
+              </span>
+              <Link className="text-xs text-accent hover:underline" to="/connections/media-servers">
+                {t("metadataSettings.serverLink")}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
 }

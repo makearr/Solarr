@@ -75,6 +75,7 @@ export function LibraryMetadata() {
                   <span className="w-5 text-right tabular-nums text-ink-muted">{index + 1}.</span>
                   <span className="font-medium">{info?.label ?? provider}</span>
                   {info?.needs_key && <Chip tone="warn">needs your key</Chip>}
+                  {info?.provisional && <Chip title={t("libraryMetadata.provisional")}>{t("libraryMetadata.provisionalChip")}</Chip>}
                   <span className="min-w-0 flex-1 text-xs text-ink-muted">{info?.carries.join(", ")}</span>
                   <Button variant="icon" aria-label={`Move ${info?.label ?? provider} up`} disabled={index === 0 || save.isPending} onClick={() => move(index, -1)}>
                     <ArrowUp aria-hidden className="size-4" />
@@ -89,6 +90,9 @@ export function LibraryMetadata() {
               );
             })}
           </ol>
+          {sources.some((provider) => labelOf(provider)?.provisional) && (
+            <p className="text-xs text-ink-muted">{t("libraryMetadata.provisional")}</p>
+          )}
           {unused.length > 0 && (
             <div className="flex flex-col gap-1 border-t border-border-subtle pt-2 text-sm">
               <span className="text-xs text-ink-muted">{t("libraryMetadata.notUsed")}</span>

@@ -4751,6 +4751,9 @@ type MetadataProviderInfo struct {
 	// PerMinute The pace requests go out at
 	PerMinute int64 `json:"per_minute"`
 
+	// Provisional A media server of the person's own
+	Provisional *bool `json:"provisional,omitempty"`
+
 	// Published What the provider says it can take.
 	Published string `json:"published"`
 

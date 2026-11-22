@@ -7147,6 +7147,8 @@ export interface components {
             media_types: string[];
             /** @description The libraries it serves outside their order. */
             also_for: string[];
+            /** @description A media server of the person's own */
+            provisional?: boolean;
         };
         LibraryQualityWrite: {
             /** @description The profiles the library accepts, earlier preferred. */

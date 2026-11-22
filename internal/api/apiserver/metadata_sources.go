@@ -67,7 +67,8 @@ func (s *Server) providerInfo(snapshot *settings.Snapshot, provider settings.Met
 		Enabled: snapshot.ProviderEnabled(provider.Key), CanDisable: snapshot.ProviderCanBeSwitchedOff(provider.Key),
 		KeyStored:  snapshot.ProviderKeyStored(provider.Key),
 		MediaTypes: orEmpty(provider.MediaTypes), AlsoFor: orEmpty(provider.AlsoFor),
-		PerMinute: pace, DefaultPerMinute: provider.PerMinute, MaxPerMinute: ceiling, Published: provider.Published,
+		Provisional: boolPtr(provider.Provisional),
+		PerMinute:   pace, DefaultPerMinute: provider.PerMinute, MaxPerMinute: ceiling, Published: provider.Published,
 	}
 }
 
