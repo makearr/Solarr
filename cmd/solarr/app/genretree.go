@@ -41,3 +41,24 @@ func genreTreeTags(tags []media.GenreTreeTag) []library.GenreTreeTag {
 	}
 	return out
 }
+
+// healBlockedTags points an account's block on a tag that was merged away (by a tidy of the genre tree, or by a merge
+// before blocks followed them) at the tag it became, so no merge has lifted a block.
+func (p *process) healBlockedTags(ctx context.Context) {
+	people := library.NewPeople(p.library)
+	for _, blocked := range p.cache.Snapshot().BlockedTagsOfAnyUser() {
+		into, name, found, err := people.MergedInto(ctx, blocked.TagID, blocked.Name)
+		if err != nil {
+			p.logger.Warn("blocked tag not checked", slog.Int64("tag_id", blocked.TagID), slog.Any("error", err))
+			continue
+		}
+		if !found {
+			continue
+		}
+		if err := p.cache.MoveUserBlockedTag(ctx, blocked.TagID, into, name); err != nil {
+			p.logger.Warn("blocked tag not moved", slog.Int64("tag_id", blocked.TagID), slog.Any("error", err))
+			continue
+		}
+		p.logger.Info("an account's blocked tag was merged; the block follows it", slog.Int64("from", blocked.TagID), slog.Int64("into", into))
+	}
+}

@@ -137,6 +137,21 @@ func (s *Snapshot) TagBlockedForAnyUser(tagID int64) bool {
 	return false
 }
 
+// BlockedTagsOfAnyUser lists each tag some account is kept from once.
+func (s *Snapshot) BlockedTagsOfAnyUser() []UserBlockedTag {
+	var all []UserBlockedTag
+	seen := map[int64]bool{}
+	for _, blocked := range s.blockedTagsByUser {
+		for _, tag := range blocked {
+			if !seen[tag.TagID] {
+				seen[tag.TagID] = true
+				all = append(all, tag)
+			}
+		}
+	}
+	return all
+}
+
 // UserBlockedTags is the tags an account is kept from.
 func (s *Snapshot) UserBlockedTags(userID int64) []UserBlockedTag { return s.blockedTagsByUser[userID] }
 

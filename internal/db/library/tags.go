@@ -576,6 +576,25 @@ func (p People) TagName(ctx context.Context, id int64) (string, bool, error) {
 	return tag.Name, true, nil
 }
 
+// MergedInto answers the one tag a tag that no longer exists was merged into, found by its name living on as an alias;
+// found is false while the tag still exists, and when the name names no tag or several.
+func (p People) MergedInto(ctx context.Context, id int64, name string) (intoID int64, intoName string, found bool, err error) {
+	queries := librarydb.New(p.store.Read())
+	if _, err := queries.GetTag(ctx, id); err == nil {
+		return 0, "", false, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return 0, "", false, fmt.Errorf("library: tag %d: %w", id, err)
+	}
+	candidates, err := queries.ListTagsByAliasAnyTree(ctx, slugify(name))
+	if err != nil {
+		return 0, "", false, fmt.Errorf("library: tags aliased %q: %w", name, err)
+	}
+	if len(candidates) != 1 {
+		return 0, "", false, nil
+	}
+	return candidates[0].ID, candidates[0].Name, true, nil
+}
+
 // WorkCarriesAnyTag says whether the work carries one of the tags or one below it.
 func (p People) WorkCarriesAnyTag(ctx context.Context, workID int64, tagIDs []int64) (bool, error) {
 	if len(tagIDs) == 0 {

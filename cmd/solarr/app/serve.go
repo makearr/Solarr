@@ -301,6 +301,7 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 		return err
 	}
 	running.seedGenreTrees(ctx)
+	running.healBlockedTags(ctx)
 	running.readCertificationAges(ctx)
 	running.warnDangling(ctx)
 	running.pinProfilesOfLibrariesWithoutAList(ctx)

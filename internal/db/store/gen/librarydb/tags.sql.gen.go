@@ -454,6 +454,41 @@ func (q *Queries) ListTagsByAlias(ctx context.Context, arg ListTagsByAliasParams
 	return items, nil
 }
 
+const listTagsByAliasAnyTree = `-- name: ListTagsByAliasAnyTree :many
+SELECT t.id, t.name FROM tag_alias a JOIN tag t ON t.id = a.tag_id
+WHERE a.alias = ?
+ORDER BY t.id
+`
+
+type ListTagsByAliasAnyTreeRow struct {
+	ID   int64
+	Name string
+}
+
+// The tags an alias names, in any tree: a merged-away tag's name lives on as an alias of the tag it became.
+func (q *Queries) ListTagsByAliasAnyTree(ctx context.Context, alias string) ([]ListTagsByAliasAnyTreeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTagsByAliasAnyTree, alias)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTagsByAliasAnyTreeRow{}
+	for rows.Next() {
+		var i ListTagsByAliasAnyTreeRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTagsOfGenreTree = `-- name: ListTagsOfGenreTree :many
 SELECT id, name, slug, parent_id, description, source, genre_tree FROM tag WHERE genre_tree = ? ORDER BY id
 `

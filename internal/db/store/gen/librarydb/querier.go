@@ -941,6 +941,8 @@ type Querier interface {
 	ListTagWritebackCandidates(ctx context.Context, arg ListTagWritebackCandidatesParams) ([]ListTagWritebackCandidatesRow, error)
 	// The tags of one genre tree an alias names; one alias may name several ("Action & Adventure").
 	ListTagsByAlias(ctx context.Context, arg ListTagsByAliasParams) ([]int64, error)
+	// The tags an alias names, in any tree: a merged-away tag's name lives on as an alias of the tag it became.
+	ListTagsByAliasAnyTree(ctx context.Context, alias string) ([]ListTagsByAliasAnyTreeRow, error)
 	ListTagsForSubject(ctx context.Context, arg ListTagsForSubjectParams) ([]TagAssignment, error)
 	// The work detail page's own need, same reasoning as ListCreditsForWorkWithPerson.
 	ListTagsForSubjectWithName(ctx context.Context, arg ListTagsForSubjectWithNameParams) ([]ListTagsForSubjectWithNameRow, error)

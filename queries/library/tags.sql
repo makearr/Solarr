@@ -20,6 +20,12 @@ SELECT t.id FROM tag_alias a JOIN tag t ON t.id = a.tag_id
 WHERE a.alias = sqlc.arg(alias) AND t.genre_tree = sqlc.arg(genre_tree)
 ORDER BY t.id;
 
+-- The tags an alias names, in any tree: a merged-away tag's name lives on as an alias of the tag it became.
+-- name: ListTagsByAliasAnyTree :many
+SELECT t.id, t.name FROM tag_alias a JOIN tag t ON t.id = a.tag_id
+WHERE a.alias = ?
+ORDER BY t.id;
+
 -- name: AddTagAlias :exec
 INSERT INTO tag_alias (tag_id, alias) VALUES (?, ?) ON CONFLICT (tag_id, alias) DO NOTHING;
 

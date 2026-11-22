@@ -121,6 +121,13 @@ func TestTagTree_EditMergeDelete(t *testing.T) {
 	if err := people.MergeTag(t.Context(), ids["Metal"], ids["Hip Hop"]); err != nil {
 		t.Fatalf("MergeTag: %v", err)
 	}
+	// SEC-17: what a merge left behind finds the tag it became by name; a tag that still exists is not one.
+	if into, name, found, err := people.MergedInto(t.Context(), ids["Metal"], "Metal"); err != nil || !found || into != ids["Hip Hop"] || name != "Hip Hop" {
+		t.Errorf("MergedInto(merged away) = %d %q %v, %v; want Hip Hop", into, name, found, err)
+	}
+	if _, _, found, err := people.MergedInto(t.Context(), ids["Hip Hop"], "Hip Hop"); err != nil || found {
+		t.Errorf("MergedInto(existing tag) found = %v, %v; want false", found, err)
+	}
 	want = []string{"Hip Hop 0", "Hip Hop/Thrash Metal 1", "Rock 0"}
 	if got := tagPaths(t, people, "music"); !reflect.DeepEqual(got, want) {
 		t.Fatalf("after merging Metal into Hip Hop: tree = %v\nwant %v", got, want)
