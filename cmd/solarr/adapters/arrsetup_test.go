@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -55,9 +56,12 @@ func TestArrSetupAddsAMaskedIndexerSwitchedOffAndAProwlarrOneWithItsKey(t *testi
 	served := `[
 	 {"name":"Direct","implementation":"Newznab","enableRss":true,"fields":[{"name":"baseUrl","value":"http://indexer.example"},{"name":"apiKey","value":"********"},{"name":"categories","value":[3010,3040]}]},
 	 {"name":"ViaProwlarr","implementation":"Torznab","enableRss":true,"fields":[{"name":"baseUrl","value":"http://prowlarr.local:9696/4"},{"name":"apiKey","value":"********"}]}]`
-	err = ArrSetup{Cache: cache, Clock: clock.NewFakeAtEpoch()}.indexers(t.Context(), settings.ArrAppLidarr, lidarrServing(served))
-	if err == nil || !strings.Contains(err.Error(), "Direct") {
-		t.Errorf("err = %v, want a note naming the indexer that needs a key", err)
+	notes, err := ArrSetup{Cache: cache, Clock: clock.NewFakeAtEpoch()}.indexers(t.Context(), settings.ArrAppLidarr, lidarrServing(served))
+	if err != nil {
+		t.Errorf("err = %v, want none: a keyless indexer is a note, not a failure", err)
+	}
+	if want := []string{"Indexers added switched off, enter their API keys: Direct"}; !reflect.DeepEqual(notes, want) {
+		t.Errorf("notes = %q, want %q", notes, want)
 	}
 	indexers, _ := cache.Indexers(t.Context())
 	byName := map[string]settings.Indexer{}
@@ -211,7 +215,7 @@ func TestArrSetupCarriesTheRemotePathMappingOfAClientsHost(t *testing.T) {
 	client := arrimport.NewLidarrClient(httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), limiter, breaker, httpx.ClientConfig{
 		Provider: "arr-setup-test", UserAgent: "test", Transport: servedBody(func(request *http.Request) string { return answers[request.URL.Path] }),
 	}), "http://lidarr.local", "key")
-	if err := (ArrSetup{Cache: cache, Clock: fake}).downloadClients(t.Context(), settings.ArrAppLidarr, client); err != nil {
+	if _, err := (ArrSetup{Cache: cache, Clock: fake}).downloadClients(t.Context(), settings.ArrAppLidarr, client); err != nil {
 		t.Fatalf("downloadClients: %v", err)
 	}
 	have, err := cache.Downloaders(t.Context())
@@ -233,5 +237,27 @@ func TestArrSetupCarriesTheRemotePathMappingOfAClientsHost(t *testing.T) {
 	}
 	if got := options["Other"]; got.RemotePath != "" || got.LocalPath != "" {
 		t.Errorf("Other options = %+v, want no mapping: it is another host", got)
+	}
+}
+
+// SYNC-7: a download client sharing the *Arr's category is added switched off with a note, not a failure.
+func TestArrSetupNotesTheCategoryAClientSharesWithTheArr(t *testing.T) {
+	cache := newSetupCache(t)
+	fake := clock.NewFakeAtEpoch()
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter)
+	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute})
+	answers := map[string]string{
+		"/api/v1/downloadclient": `[{"name":"Box","implementation":"Sabnzbd","protocol":"usenet","enable":true,
+			"fields":[{"name":"host","value":"sab.example"},{"name":"port","value":8080},{"name":"musicCategory","value":"music"}]}]`,
+	}
+	client := arrimport.NewLidarrClient(httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), limiter, breaker, httpx.ClientConfig{
+		Provider: "arr-setup-test", UserAgent: "test", Transport: servedBody(func(request *http.Request) string { return answers[request.URL.Path] }),
+	}), "http://lidarr.local", "key")
+	notes, err := (ArrSetup{Cache: cache, Clock: fake}).downloadClients(t.Context(), settings.ArrAppLidarr, client)
+	if err != nil {
+		t.Fatalf("downloadClients: %v", err)
+	}
+	if len(notes) != 1 || !strings.Contains(notes[0], `Box`) || !strings.Contains(notes[0], `"music"`) {
+		t.Errorf("notes = %q, want one naming the client and its category", notes)
 	}
 }

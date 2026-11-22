@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
+import { t } from "@/lib/i18n";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 import type { components } from "@/api/schema";
 
@@ -314,7 +315,7 @@ export function statusLabel(item: QueueItem): string {
     case "COMPLETED":
       return item.error ? "Downloaded, waiting" : "Downloaded";
   }
-  if (item.client_disabled) return "Client disabled";
+  if (item.client_disabled) return t("queue.clientDisabled");
   switch (item.client_state) {
     case "paused":
       return "Paused";

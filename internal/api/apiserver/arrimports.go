@@ -109,6 +109,7 @@ type ArrImportRun struct {
 	StartedAt                      int64
 	FinishedAt                     *int64
 	Error                          string
+	Notes                          []string
 	ArtistsCreated, ArtistsMatched int64
 	AlbumsCreated, AlbumsMatched   int64
 	ItemsParked                    int64
@@ -445,6 +446,9 @@ func arrImportRunView(run ArrImportRun) gen.ArrImportRun {
 	if run.Error != "" {
 		errMsg := run.Error
 		view.Error = &errMsg
+	}
+	if len(run.Notes) > 0 {
+		view.Notes = &run.Notes
 	}
 	return view
 }

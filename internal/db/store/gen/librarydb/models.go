@@ -77,6 +77,7 @@ type ArrImport struct {
 	AlbumsCreated  int64
 	AlbumsMatched  int64
 	ItemsParked    int64
+	Notes          sql.NullString
 }
 
 type ArrImportItem struct {

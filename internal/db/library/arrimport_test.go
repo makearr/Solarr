@@ -3,6 +3,7 @@ package library_test
 import (
 	"database/sql"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -45,7 +46,7 @@ func TestArrImports_StartAddItemFinishRoundTrips(t *testing.T) {
 		t.Error("PersonCreated = false, want true")
 	}
 
-	if err := imports.Finish(t.Context(), importID, library.ArrImportDone, 1002, "",
+	if err := imports.Finish(t.Context(), importID, library.ArrImportDone, 1002, "", []string{"Enter the key of one", "Enter the key of two"},
 		library.ArrImportCounts{ArtistsCreated: 1}); err != nil {
 		t.Fatalf("Finish: %v", err)
 	}
@@ -55,6 +56,9 @@ func TestArrImports_StartAddItemFinishRoundTrips(t *testing.T) {
 	}
 	if finished.State != library.ArrImportDone || finished.ArtistsCreated != 1 {
 		t.Errorf("finished run = %+v, want DONE with ArtistsCreated=1", finished)
+	}
+	if want := []string{"Enter the key of one", "Enter the key of two"}; !reflect.DeepEqual(finished.Notes, want) {
+		t.Errorf("Notes = %q, want %q", finished.Notes, want)
 	}
 	if finished.FinishedAt == nil || *finished.FinishedAt != 1002 {
 		t.Errorf("FinishedAt = %v, want 1002", finished.FinishedAt)
@@ -104,7 +108,7 @@ func TestArrImportRevert_DeletesWhatTheRunCreated(t *testing.T) {
 	}, firstSeen.Unix()); err != nil {
 		t.Fatalf("AddItem (album): %v", err)
 	}
-	if err := imports.Finish(t.Context(), importID, library.ArrImportDone, firstSeen.Unix(), "",
+	if err := imports.Finish(t.Context(), importID, library.ArrImportDone, firstSeen.Unix(), "", nil,
 		library.ArrImportCounts{ArtistsCreated: 1, AlbumsCreated: 1}); err != nil {
 		t.Fatalf("Finish: %v", err)
 	}
@@ -176,7 +180,7 @@ func TestArrImportRevert_NeverDeletesWhatTheRunOnlyMatched(t *testing.T) {
 	}, firstSeen.Unix()); err != nil {
 		t.Fatalf("AddItem (album): %v", err)
 	}
-	if err := imports.Finish(t.Context(), importID, library.ArrImportDone, firstSeen.Unix(), "",
+	if err := imports.Finish(t.Context(), importID, library.ArrImportDone, firstSeen.Unix(), "", nil,
 		library.ArrImportCounts{ArtistsMatched: 1, AlbumsMatched: 1}); err != nil {
 		t.Fatalf("Finish: %v", err)
 	}
@@ -236,7 +240,7 @@ func TestArrImportRevert_DeletesTheWorkBeforeItsOwnPrimaryArtist(t *testing.T) {
 	}, firstSeen.Unix()); err != nil {
 		t.Fatalf("AddItem (album): %v", err)
 	}
-	if err := imports.Finish(t.Context(), importID, library.ArrImportDone, firstSeen.Unix(), "",
+	if err := imports.Finish(t.Context(), importID, library.ArrImportDone, firstSeen.Unix(), "", nil,
 		library.ArrImportCounts{ArtistsCreated: 1, AlbumsCreated: 1}); err != nil {
 		t.Fatalf("Finish: %v", err)
 	}
@@ -265,7 +269,7 @@ func TestAbandonRunningMarksOnlyTheRunsARestartCutShort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := imports.Finish(t.Context(), done, library.ArrImportDone, 200, "", library.ArrImportCounts{}); err != nil {
+	if err := imports.Finish(t.Context(), done, library.ArrImportDone, 200, "", nil, library.ArrImportCounts{}); err != nil {
 		t.Fatal(err)
 	}
 	abandoned, err := imports.AbandonRunning(t.Context(), 300)
@@ -294,7 +298,7 @@ func TestArrImports_OneRunningPerInstance(t *testing.T) {
 	if _, err := imports.Start(t.Context(), 8, "sonarr", 1001); err != nil {
 		t.Errorf("another instance = %v, want it side by side", err)
 	}
-	if err := imports.Finish(t.Context(), first, library.ArrImportDone, 1002, "", library.ArrImportCounts{}); err != nil {
+	if err := imports.Finish(t.Context(), first, library.ArrImportDone, 1002, "", nil, library.ArrImportCounts{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := imports.Start(t.Context(), 7, "lidarr", 1003); err != nil {

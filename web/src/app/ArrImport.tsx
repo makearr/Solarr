@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, Pencil, RefreshCw, RotateCcw } from "lucide-
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
+import { t } from "@/lib/i18n";
 import { useCategories } from "@/lib/resources";
 import { useLibraryLabel } from "@/lib/libraryLabel";
 import { Button } from "@/ui/Button";
@@ -361,6 +362,7 @@ function RunSummary({ run }: { run: ArrImportRun }) {
         <span className="text-danger">{run.state}</span>
       )}
       {run.error && <span className="block text-danger">{run.error}</span>}
+      {run.notes && run.notes.length > 0 && <RunNotes notes={run.notes} />}
     </p>
   );
 }
@@ -536,5 +538,16 @@ function AddInstance({
         <p className="w-full text-xs text-danger">That connection could not be created.</p>
       )}
     </form>
+  );
+}
+
+/** What an import leaves for the person to do, apart from what failed. */
+export function RunNotes({ notes }: { notes: string[] }) {
+  return (
+    <ul aria-label={t("arrImport.notes")} className="mt-1 list-disc pl-5 text-ink-muted">
+      {notes.map((note) => (
+        <li key={note}>{note}</li>
+      ))}
+    </ul>
   );
 }

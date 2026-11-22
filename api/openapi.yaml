@@ -12196,6 +12196,10 @@ components:
         started_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time }
         error: { type: string }
+        notes:
+          type: array
+          description: What the person should still do after a run that did not fail, such as entering the API key of an imported indexer.
+          items: { type: string }
         artists_created: { type: integer, format: int64 }
         artists_matched: { type: integer, format: int64 }
         albums_created: { type: integer, format: int64 }

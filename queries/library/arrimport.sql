@@ -4,14 +4,14 @@
 INSERT INTO arr_import (instance_id, app, state, started_at)
 VALUES (?, ?, ?, ?)
 RETURNING id, instance_id, app, state, started_at, finished_at, error,
-          artists_created, artists_matched, albums_created, albums_matched, items_parked;
+          artists_created, artists_matched, albums_created, albums_matched, items_parked, notes;
 
 -- name: CountRunningArrImports :one
 SELECT CAST(COUNT(*) AS INTEGER) FROM arr_import WHERE instance_id = ? AND state = 'RUNNING';
 
 -- name: FinishArrImport :exec
 UPDATE arr_import
-SET state = ?, finished_at = ?, error = ?,
+SET state = ?, finished_at = ?, error = ?, notes = ?,
     artists_created = ?, artists_matched = ?, albums_created = ?, albums_matched = ?, items_parked = ?
 WHERE id = ?;
 
@@ -25,12 +25,12 @@ UPDATE arr_import SET state = ? WHERE id = ?;
 
 -- name: GetArrImport :one
 SELECT id, instance_id, app, state, started_at, finished_at, error,
-       artists_created, artists_matched, albums_created, albums_matched, items_parked
+       artists_created, artists_matched, albums_created, albums_matched, items_parked, notes
 FROM arr_import WHERE id = ?;
 
 -- name: ListArrImportsForInstance :many
 SELECT id, instance_id, app, state, started_at, finished_at, error,
-       artists_created, artists_matched, albums_created, albums_matched, items_parked
+       artists_created, artists_matched, albums_created, albums_matched, items_parked, notes
 FROM arr_import WHERE instance_id = ? ORDER BY started_at DESC;
 
 -- name: AddArrImportItem :one

@@ -1460,14 +1460,17 @@ type ArrImportRun struct {
 	ArtistsMatched int64  `json:"artists_matched"`
 
 	// ArtistsTotal Artists the running import will walk; absent once it has finished.
-	ArtistsTotal *int64            `json:"artists_total,omitempty"`
-	Error        *string           `json:"error,omitempty"`
-	FinishedAt   *time.Time        `json:"finished_at,omitempty"`
-	Id           int64             `json:"id"`
-	InstanceId   int64             `json:"instance_id"`
-	ItemsParked  int64             `json:"items_parked"`
-	StartedAt    time.Time         `json:"started_at"`
-	State        ArrImportRunState `json:"state"`
+	ArtistsTotal *int64     `json:"artists_total,omitempty"`
+	Error        *string    `json:"error,omitempty"`
+	FinishedAt   *time.Time `json:"finished_at,omitempty"`
+	Id           int64      `json:"id"`
+	InstanceId   int64      `json:"instance_id"`
+	ItemsParked  int64      `json:"items_parked"`
+
+	// Notes What the person should still do after a run that did not fail, such as entering the API key of an imported indexer.
+	Notes     *[]string         `json:"notes,omitempty"`
+	StartedAt time.Time         `json:"started_at"`
+	State     ArrImportRunState `json:"state"`
 }
 
 // ArrImportRunState defines model for ArrImportRun.State.

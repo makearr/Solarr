@@ -171,7 +171,8 @@ func (a ArrSync) runAndFinish(
 	foldersErr := a.rootFolders(ctx, instance, client, options)
 	counts, syncErr := a.Importers[instance.App].Import(ctx, a.run(importID, instance, client, options))
 	defer a.Progress.clear(importID)
-	if setupErr := a.importSetup(ctx, instance, client, options); setupErr != nil {
+	notes, setupErr := a.importSetup(ctx, instance, client, options)
+	if setupErr != nil {
 		syncErr = errors.Join(syncErr, setupErr)
 	}
 	listsErr := a.importLists(ctx, instance, client, options)
@@ -199,7 +200,7 @@ func (a ArrSync) runAndFinish(
 	if syncErr != nil && counts == (library.ArrImportCounts{}) {
 		state = library.ArrImportFailed
 	}
-	if err := a.Imports.Finish(ctx, importID, state, finishedAt, errMsg, counts); err != nil {
+	if err := a.Imports.Finish(ctx, importID, state, finishedAt, errMsg, notes, counts); err != nil {
 		if a.Logger != nil {
 			a.Logger.Error("arr import: recording run outcome failed",
 				slog.Int64("import_id", importID), slog.Any("error", err))
@@ -386,7 +387,7 @@ func (a ArrSync) Revert(ctx context.Context, id int64) (apiserver.ArrImportRever
 func arrImportRunView(run library.ArrImportRun) apiserver.ArrImportRun {
 	return apiserver.ArrImportRun{
 		ID: run.ID, InstanceID: run.InstanceID, App: run.App, State: run.State,
-		StartedAt: run.StartedAt, FinishedAt: run.FinishedAt, Error: run.Error,
+		StartedAt: run.StartedAt, FinishedAt: run.FinishedAt, Error: run.Error, Notes: run.Notes,
 		ArtistsCreated: run.ArtistsCreated, ArtistsMatched: run.ArtistsMatched,
 		AlbumsCreated: run.AlbumsCreated, AlbumsMatched: run.AlbumsMatched, ItemsParked: run.ItemsParked,
 	}

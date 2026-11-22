@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -43,6 +44,8 @@ type ArrImportRun struct {
 	StartedAt  int64
 	FinishedAt *int64
 	Error      string
+	// Notes are what the person should still do after a run that did not fail, one line each.
+	Notes []string
 	ArrImportCounts
 }
 
@@ -140,11 +143,11 @@ func (a ArrImports) AddItem(ctx context.Context, importID int64, item NewArrImpo
 
 // Finish records a run's terminal outcome.
 func (a ArrImports) Finish(
-	ctx context.Context, importID int64, state string, finishedAt int64, errMsg string, counts ArrImportCounts,
+	ctx context.Context, importID int64, state string, finishedAt int64, errMsg string, notes []string, counts ArrImportCounts,
 ) error {
 	err := a.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		return librarydb.New(tx).FinishArrImport(ctx, librarydb.FinishArrImportParams{
-			State: state, FinishedAt: sql.NullInt64{Int64: finishedAt, Valid: true}, Error: nullString(errMsg),
+			State: state, FinishedAt: sql.NullInt64{Int64: finishedAt, Valid: true}, Error: nullString(errMsg), Notes: nullString(strings.Join(notes, "\n")),
 			ArtistsCreated: counts.ArtistsCreated, ArtistsMatched: counts.ArtistsMatched,
 			AlbumsCreated: counts.AlbumsCreated, AlbumsMatched: counts.AlbumsMatched,
 			ItemsParked: counts.ItemsParked, ID: importID,
@@ -223,7 +226,7 @@ func (a ArrImports) ListItems(ctx context.Context, importID int64) ([]ArrImportI
 func arrImportRunFrom(row librarydb.ArrImport) ArrImportRun {
 	return ArrImportRun{
 		ID: row.ID, InstanceID: row.InstanceID, App: row.App, State: row.State,
-		StartedAt: row.StartedAt, FinishedAt: int64Ptr(row.FinishedAt), Error: row.Error.String,
+		StartedAt: row.StartedAt, FinishedAt: int64Ptr(row.FinishedAt), Error: row.Error.String, Notes: notesOf(row.Notes),
 		ArrImportCounts: ArrImportCounts{
 			ArtistsCreated: row.ArtistsCreated, ArtistsMatched: row.ArtistsMatched,
 			AlbumsCreated: row.AlbumsCreated, AlbumsMatched: row.AlbumsMatched,
@@ -245,4 +248,12 @@ func arrImportItemFrom(row librarydb.ArrImportItem) ArrImportItem {
 		},
 		CreatedAt: row.CreatedAt,
 	}
+}
+
+// notesOf splits the stored notes back into their lines.
+func notesOf(stored sql.NullString) []string {
+	if stored.String == "" {
+		return nil
+	}
+	return strings.Split(stored.String, "\n")
 }

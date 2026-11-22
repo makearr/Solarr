@@ -102,7 +102,7 @@ const createArrImport = `-- name: CreateArrImport :one
 INSERT INTO arr_import (instance_id, app, state, started_at)
 VALUES (?, ?, ?, ?)
 RETURNING id, instance_id, app, state, started_at, finished_at, error,
-          artists_created, artists_matched, albums_created, albums_matched, items_parked
+          artists_created, artists_matched, albums_created, albums_matched, items_parked, notes
 `
 
 type CreateArrImportParams struct {
@@ -134,13 +134,14 @@ func (q *Queries) CreateArrImport(ctx context.Context, arg CreateArrImportParams
 		&i.AlbumsCreated,
 		&i.AlbumsMatched,
 		&i.ItemsParked,
+		&i.Notes,
 	)
 	return i, err
 }
 
 const finishArrImport = `-- name: FinishArrImport :exec
 UPDATE arr_import
-SET state = ?, finished_at = ?, error = ?,
+SET state = ?, finished_at = ?, error = ?, notes = ?,
     artists_created = ?, artists_matched = ?, albums_created = ?, albums_matched = ?, items_parked = ?
 WHERE id = ?
 `
@@ -149,6 +150,7 @@ type FinishArrImportParams struct {
 	State          string
 	FinishedAt     sql.NullInt64
 	Error          sql.NullString
+	Notes          sql.NullString
 	ArtistsCreated int64
 	ArtistsMatched int64
 	AlbumsCreated  int64
@@ -162,6 +164,7 @@ func (q *Queries) FinishArrImport(ctx context.Context, arg FinishArrImportParams
 		arg.State,
 		arg.FinishedAt,
 		arg.Error,
+		arg.Notes,
 		arg.ArtistsCreated,
 		arg.ArtistsMatched,
 		arg.AlbumsCreated,
@@ -174,7 +177,7 @@ func (q *Queries) FinishArrImport(ctx context.Context, arg FinishArrImportParams
 
 const getArrImport = `-- name: GetArrImport :one
 SELECT id, instance_id, app, state, started_at, finished_at, error,
-       artists_created, artists_matched, albums_created, albums_matched, items_parked
+       artists_created, artists_matched, albums_created, albums_matched, items_parked, notes
 FROM arr_import WHERE id = ?
 `
 
@@ -194,6 +197,7 @@ func (q *Queries) GetArrImport(ctx context.Context, id int64) (ArrImport, error)
 		&i.AlbumsCreated,
 		&i.AlbumsMatched,
 		&i.ItemsParked,
+		&i.Notes,
 	)
 	return i, err
 }
@@ -245,7 +249,7 @@ func (q *Queries) ListArrImportItems(ctx context.Context, importID int64) ([]Arr
 
 const listArrImportsForInstance = `-- name: ListArrImportsForInstance :many
 SELECT id, instance_id, app, state, started_at, finished_at, error,
-       artists_created, artists_matched, albums_created, albums_matched, items_parked
+       artists_created, artists_matched, albums_created, albums_matched, items_parked, notes
 FROM arr_import WHERE instance_id = ? ORDER BY started_at DESC
 `
 
@@ -271,6 +275,7 @@ func (q *Queries) ListArrImportsForInstance(ctx context.Context, instanceID int6
 			&i.AlbumsCreated,
 			&i.AlbumsMatched,
 			&i.ItemsParked,
+			&i.Notes,
 		); err != nil {
 			return nil, err
 		}

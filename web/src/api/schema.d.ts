@@ -8788,6 +8788,8 @@ export interface components {
             /** Format: date-time */
             finished_at?: string;
             error?: string;
+            /** @description What the person should still do after a run that did not fail, such as entering the API key of an imported indexer. */
+            notes?: string[];
             /** Format: int64 */
             artists_created: number;
             /** Format: int64 */

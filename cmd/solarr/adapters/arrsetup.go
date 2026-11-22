@@ -25,23 +25,29 @@ type ArrSetup struct {
 }
 
 // importSetup brings the *Arr's indexers and download clients the options name; each is added once, found by its address.
-func (a ArrSync) importSetup(ctx context.Context, instance settings.ArrInstance, client arrimport.LidarrClient, options apiserver.ArrSyncOptions) error {
+// What needs the person's attention afterwards comes back as notes, apart from what failed.
+func (a ArrSync) importSetup(
+	ctx context.Context, instance settings.ArrInstance, client arrimport.LidarrClient, options apiserver.ArrSyncOptions,
+) ([]string, error) {
 	if (!options.Indexers && !options.DownloadClients) || a.Setup.Cache == nil {
-		return nil
+		return nil, nil
 	}
+	var notes []string
 	var failures []error
 	if options.Indexers {
-		failures = append(failures, a.Setup.indexers(ctx, instance.App, client))
+		found, err := a.Setup.indexers(ctx, instance.App, client)
+		notes, failures = append(notes, found...), append(failures, err)
 	}
 	if options.DownloadClients {
-		failures = append(failures, a.Setup.downloadClients(ctx, instance.App, client))
+		found, err := a.Setup.downloadClients(ctx, instance.App, client)
+		notes, failures = append(notes, found...), append(failures, err)
 	}
-	return errors.Join(failures...)
+	return notes, errors.Join(failures...)
 }
 
 // indexers adds the Newznab and Torznab indexers of the *Arr, enabled as it has them; Prowlarr's own are used through
 // its connection, and an indexer of another kind has no address Solarr can search.
-func (s ArrSetup) indexers(ctx context.Context, app settings.ArrApp, client arrimport.LidarrClient) error {
+func (s ArrSetup) indexers(ctx context.Context, app settings.ArrApp, client arrimport.LidarrClient) ([]string, error) {
 	var found []arrimport.Indexer
 	var err error
 	switch app {
@@ -55,18 +61,19 @@ func (s ArrSetup) indexers(ctx context.Context, app settings.ArrApp, client arri
 		found, err = client.Indexers(ctx)
 	}
 	if err != nil {
-		return fmt.Errorf("indexers: %w", err)
+		return nil, fmt.Errorf("indexers: %w", err)
 	}
 	have, err := s.Cache.Indexers(ctx)
 	if err != nil {
-		return fmt.Errorf("indexers: %w", err)
+		return nil, fmt.Errorf("indexers: %w", err)
 	}
 	known := map[string]bool{}
 	for _, existing := range have {
 		known[strings.TrimRight(existing.BaseURL, "/")] = true
 	}
 	prowlarr := s.prowlarrKeys(ctx)
-	var failures, keyless []error
+	var failures []error
+	var keyless []string
 	for _, entry := range found {
 		impl := strings.ToLower(entry.Implementation)
 		if (impl != "newznab" && impl != "torznab") || entry.BaseURL == "" || known[strings.TrimRight(entry.BaseURL, "/")] {
@@ -81,7 +88,7 @@ func (s ArrSetup) indexers(ctx context.Context, app settings.ArrApp, client arri
 				key = prowlarrKey
 			} else {
 				key, request.Enabled = "", false
-				keyless = append(keyless, errors.New(entry.Name))
+				keyless = append(keyless, entry.Name)
 			}
 		}
 		if app == settings.ArrAppLidarr && len(entry.Categories) > 0 {
@@ -91,14 +98,11 @@ func (s ArrSetup) indexers(ctx context.Context, app settings.ArrApp, client arri
 			failures = append(failures, fmt.Errorf("add indexer %s: %w", entry.Name, err))
 		}
 	}
+	var notes []string
 	if len(keyless) > 0 {
-		names := make([]string, len(keyless))
-		for i, err := range keyless {
-			names[i] = err.Error()
-		}
-		failures = append(failures, fmt.Errorf("indexers added switched off, enter their API keys: %s", strings.Join(names, ", ")))
+		notes = append(notes, "Indexers added switched off, enter their API keys: "+strings.Join(keyless, ", "))
 	}
-	return errors.Join(failures...)
+	return notes, errors.Join(failures...)
 }
 
 // maxIndexerCategories bounds the categories carried over from one indexer.
@@ -134,7 +138,7 @@ func (s ArrSetup) prowlarrKeys(ctx context.Context) map[string]string {
 
 // downloadClients adds the *Arr's download clients Solarr has a client for, found by address. An *Arr hides a client's
 // password, so each arrives switched off, to be switched on once its credentials are entered.
-func (s ArrSetup) downloadClients(ctx context.Context, app settings.ArrApp, client arrimport.LidarrClient) error {
+func (s ArrSetup) downloadClients(ctx context.Context, app settings.ArrApp, client arrimport.LidarrClient) ([]string, error) {
 	var found []arrimport.DownloadClient
 	var err error
 	switch app {
@@ -148,11 +152,11 @@ func (s ArrSetup) downloadClients(ctx context.Context, app settings.ArrApp, clie
 		found, err = client.DownloadClients(ctx)
 	}
 	if err != nil {
-		return fmt.Errorf("download clients: %w", err)
+		return nil, fmt.Errorf("download clients: %w", err)
 	}
 	have, err := s.Cache.Downloaders(ctx)
 	if err != nil {
-		return fmt.Errorf("download clients: %w", err)
+		return nil, fmt.Errorf("download clients: %w", err)
 	}
 	mappings := remotePathMappingsOf(ctx, app, client)
 	known := map[string]bool{}
@@ -160,6 +164,7 @@ func (s ArrSetup) downloadClients(ctx context.Context, app settings.ArrApp, clie
 		known[strings.TrimRight(existing.BaseURL, "/")] = true
 	}
 	var failures []error
+	var notes []string
 	for _, entry := range found {
 		impl := strings.ToLower(entry.Implementation)
 		definition, supported := DownloadClientDefinition(impl)
@@ -185,13 +190,13 @@ func (s ArrSetup) downloadClients(ctx context.Context, app settings.ArrApp, clie
 			}
 		}
 		if entry.Category != "" {
-			failures = append(failures, fmt.Errorf("%s: %s uses category %q; give Solarr its own category before enabling it", entry.Name, app, entry.Category))
+			notes = append(notes, fmt.Sprintf("%s: %s uses category %q; give Solarr its own category before enabling it", entry.Name, app, entry.Category))
 		}
 		if _, err := s.Cache.CreateDownloader(ctx, request, "", s.Clock.Now().Unix()); err != nil {
 			failures = append(failures, fmt.Errorf("add download client %s: %w", entry.Name, err))
 		}
 	}
-	return errors.Join(failures...)
+	return notes, errors.Join(failures...)
 }
 
 // remotePathMappingsOf reads the *Arr's Remote Path Mappings; unreadable ones leave the clients without a mapping, which the person sets by hand.
