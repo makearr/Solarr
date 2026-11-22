@@ -52,16 +52,21 @@ type Session struct {
 // units. It performs no writes and resolves no identity -- see the package doc
 // comment for what happens next.
 func Run(ctx context.Context, fsys fsx.FS, root string, opts Options) (Session, error) {
-	if opts.MediaSizeFloorBytes <= 0 {
-		opts.MediaSizeFloorBytes = DefaultMediaSizeFloorBytes
-	}
-
-	files, err := walk(ctx, fsys, root, opts.MediaSizeFloorBytes, opts.Books)
+	var units []Unit
+	_, err := NewWalker().Walk(ctx, fsys, root, WalkState{}, WalkOptions{
+		Tags: opts.Tags, MediaSizeFloorBytes: opts.MediaSizeFloorBytes, Books: opts.Books,
+	}, func(_ context.Context, cluster []Unit) error {
+		units = append(units, cluster...)
+		return nil
+	})
 	if err != nil {
 		return Session{}, fmt.Errorf("inspect: walk %q: %w", root, err)
 	}
-	sort.Slice(files, func(i, j int) bool { return files[i].RelPath < files[j].RelPath })
-
-	units := group(files, opts.Tags)
+	sort.Slice(units, func(i, j int) bool {
+		if units[i].Directory != units[j].Directory {
+			return units[i].Directory < units[j].Directory
+		}
+		return firstPath(units[i].Media) < firstPath(units[j].Media)
+	})
 	return Session{Root: root, Units: units}, nil
 }

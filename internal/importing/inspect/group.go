@@ -28,100 +28,11 @@ func DiscNumber(dirName string) (int, bool) {
 // "01 - Title.flac", "01_title.mp3", "1.flac" all match.
 var leadingTrackNumberRe = regexp.MustCompile(`^0*(\d{1,3})\b`)
 
-// group partitions files' media into units. Non-media files are attached to
-// whichever unit shares their directory, or dropped if no unit claims that
-// directory -- Run's caller sees them via Session, not lost, since a stray
-// cover.jpg beside no album is still evidence, not an import failure.
-func group(files []File, tags TagGrouper) []Unit {
-	mediaByDir := map[string][]File{}
-	otherByDir := map[string][]File{}
-	for _, f := range files {
-		dir := path.Dir(f.RelPath)
-		if f.Class == ClassMedia {
-			mediaByDir[dir] = append(mediaByDir[dir], f)
-		} else {
-			otherByDir[dir] = append(otherByDir[dir], f)
-		}
-	}
-
-	merged, standalone := mergeDiscSubfolders(mediaByDir)
-
-	var units []Unit
-	for _, m := range merged {
-		units = append(units, splitByEvidence(m.directory, m.files, tags, &Signal{
-			Kind: SignalDiscSubfolder, Detail: strings.Join(m.children, ", "),
-		})...)
-	}
-	for _, dir := range standalone {
-		units = append(units, splitByEvidence(dir, mediaByDir[dir], tags, nil)...)
-	}
-
-	sort.Slice(units, func(i, j int) bool {
-		if units[i].Directory != units[j].Directory {
-			return units[i].Directory < units[j].Directory
-		}
-		return firstPath(units[i].Media) < firstPath(units[j].Media)
-	})
-
-	attachOther(units, otherByDir)
-	return units
-}
-
 func firstPath(files []File) string {
 	if len(files) == 0 {
 		return ""
 	}
 	return files[0].RelPath
-}
-
-type mergedGroup struct {
-	directory string
-	children  []string
-	files     []File
-}
-
-// mergeDiscSubfolders folds CD1/CD2-shaped sibling directories into one group
-// keyed on their parent, and returns every other media directory untouched.
-// A parent qualifies once any of its immediate children matches the pattern --
-// requiring all of them would break on a disc set with one oddly-named volume.
-func mergeDiscSubfolders(mediaByDir map[string][]File) ([]mergedGroup, []string) {
-	byParent := map[string][]string{}
-	for dir := range mediaByDir {
-		if dir == "." || dir == "" {
-			continue
-		}
-		if discSubfolderRe.MatchString(path.Base(dir)) {
-			parent := path.Dir(dir)
-			byParent[parent] = append(byParent[parent], dir)
-		}
-	}
-
-	merged := map[string]bool{}
-	var groups []mergedGroup
-	for parent, children := range byParent {
-		sort.Strings(children)
-		var files []File
-		for _, child := range children {
-			files = append(files, mediaByDir[child]...)
-			merged[child] = true
-		}
-		// The parent's own direct files, if any, join the merge too -- a disc
-		// set sometimes carries a bonus-disc track loose beside the CD folders.
-		if direct, ok := mediaByDir[parent]; ok {
-			files = append(files, direct...)
-			merged[parent] = true
-		}
-		groups = append(groups, mergedGroup{directory: parent, children: children, files: files})
-	}
-
-	var standalone []string
-	for dir := range mediaByDir {
-		if !merged[dir] {
-			standalone = append(standalone, dir)
-		}
-	}
-	sort.Strings(standalone)
-	return groups, standalone
 }
 
 // splitByEvidence decides whether directory's media files are one unit or
@@ -287,26 +198,4 @@ func splitByTrackContinuity(files []File) (groups [][]File, signals [][]Signal, 
 		signals = append(signals, []Signal{{Kind: SignalTrackContinuity}})
 	}
 	return groups, signals, true
-}
-
-// attachOther gives each unit the non-media files sitting in its own directory.
-// A merged unit collects its children's non-media files too.
-func attachOther(units []Unit, otherByDir map[string][]File) {
-	byDir := map[string][]int{}
-	for i, u := range units {
-		byDir[u.Directory] = append(byDir[u.Directory], i)
-	}
-	for dir, files := range otherByDir {
-		indexes, ok := byDir[dir]
-		if !ok {
-			continue
-		}
-		// Several units can share one directory (a flat two-album folder) --
-		// the shared non-media evidence (a folder.jpg, an .nfo) belongs to
-		// all of them equally, since nothing distinguishes which one it
-		// describes.
-		for _, i := range indexes {
-			units[i].Other = append(units[i].Other, files...)
-		}
-	}
 }

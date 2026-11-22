@@ -87,10 +87,7 @@ func EstimateUnits(ctx context.Context, fsys fsx.FS, root string) (int, error) {
 
 // clusterFiles is what one directory contributes to its own decision, or bubbles
 // up to its parent instead when its own name matches the disc-subfolder pattern.
-// Only media bubbles: mergeDiscSubfolders (Run's own implementation) never
-// touches a disc-subfolder child's own non-media files either, so a CD1/folder.jpg
-// is dropped, not attached to the merged unit, in both Run and Walker alike --
-// an existing, minor, unchanged gap, not something this pass introduces or fixes.
+// Only media and the discs' own sidecars bubble; a disc subfolder is never a unit of its own.
 type clusterFiles struct {
 	media    []File
 	children []string

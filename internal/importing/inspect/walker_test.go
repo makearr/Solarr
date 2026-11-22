@@ -2,8 +2,10 @@ package inspect_test
 
 import (
 	"context"
+	"path"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/importing/inspect"
@@ -359,5 +361,68 @@ func TestWalker_ABlurayFolderIsOneUnitHeldAsADiscStructure(t *testing.T) {
 	want := []inspect.Signal{{Kind: inspect.SignalDiscStructure, Detail: "BDMV"}}
 	if !slices.Equal(units[0].Evidence.Signals, want) {
 		t.Errorf("Signals = %+v, want %+v", units[0].Evidence.Signals, want)
+	}
+}
+
+// MERGE-6: Run, Walk and SplitDirectory read a download the same way: the same fixture gives the same units.
+func TestInspection_RunWalkAndSplitDirectoryAgreeOnTheSameTree(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		files []string
+		links []string
+		// flat is the one directory SplitDirectory is asked about, empty when the tree has none.
+		flat string
+	}{
+		{"a symlink is never a file", []string{"Album/01 Sesoge.flac", "Album/02 Vagelo.flac", "Album/cover.jpg"}, []string{"Album/03 Rumi.flac"}, "Album"},
+		{"the recycle folder is not entered", []string{"Album/01 Sesoge.flac", "Album/.solarr-recycle/old.flac"}, nil, "Album"},
+		{"subtitles follow the video", []string{"Rel/S01E01.mkv", "Rel/Subs/S01E01.English.srt"}, nil, ""},
+		{"a disc sidecar follows the album", []string{"Artist/Album/CD1/01-a.flac", "Artist/Album/CD1/cover.jpg", "Artist/Album/CD2/01-b.flac"}, nil, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tr := newTree(t, tc.files...)
+			if len(tc.links) > 0 {
+				if err := tr.fsys.MkdirAll("/config", 0o755); err != nil {
+					t.Fatal(err)
+				}
+				tr.write(t, "../config/target.flac", 300*1024)
+				for _, link := range tc.links {
+					if err := tr.fsys.Symlink(root+"/../config/target.flac", root+"/"+link); err != nil {
+						t.Fatalf("Symlink: %v", err)
+					}
+				}
+			}
+			ran, err := inspect.Run(t.Context(), tr.fsys, root, inspect.Options{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			walked, _ := walkAll(t, tr, inspect.WalkOptions{})
+			if len(ran.Units) == 0 || !reflect.DeepEqual(ran.Units, walked) {
+				t.Errorf("Run = %+v\nWalk = %+v\nwant the same units", ran.Units, walked)
+			}
+			for _, unit := range walked {
+				for _, file := range append(slices.Clone(unit.Media), unit.Other...) {
+					if slices.Contains(tc.links, file.RelPath) || strings.Contains(file.RelPath, ".solarr-recycle") {
+						t.Errorf("%s was read: a link and the recycle folder are never part of a unit", file.RelPath)
+					}
+				}
+			}
+			if tc.flat == "" {
+				return
+			}
+			split, err := inspect.SplitDirectory(t.Context(), tr.fsys, root+"/"+tc.flat, nil, 0, false)
+			if err != nil || len(split) != len(walked) {
+				t.Fatalf("SplitDirectory = %+v, %v; want the %d unit(s) Walk found", split, err, len(walked))
+			}
+			names := func(files []inspect.File) []string {
+				var out []string
+				for _, f := range files {
+					out = append(out, path.Base(f.RelPath))
+				}
+				return out
+			}
+			if !slices.Equal(names(split[0].Media), names(walked[0].Media)) || !slices.Equal(names(split[0].Other), names(walked[0].Other)) {
+				t.Errorf("SplitDirectory files = %v / %v, Walk = %v / %v", names(split[0].Media), names(split[0].Other), names(walked[0].Media), names(walked[0].Other))
+			}
+		})
 	}
 }

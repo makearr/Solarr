@@ -2,8 +2,6 @@ package inspect
 
 import (
 	"context"
-	"fmt"
-	"io/fs"
 	"path"
 	"slices"
 	"strings"
@@ -14,7 +12,29 @@ import (
 // ListFiles is every file under root, classified: what the import decides what to do with, and what unpack looks
 // for archives in.
 func ListFiles(ctx context.Context, fsys fsx.FS, root string, sizeFloor int64) ([]File, error) {
-	return walk(ctx, fsys, root, sizeFloor, false)
+	var files []File
+	if err := listTree(ctx, fsys, root, "", WalkOptions{MediaSizeFloorBytes: sizeFloor}, &files); err != nil {
+		return nil, err
+	}
+	slices.SortFunc(files, func(a, b File) int { return strings.Compare(a.RelPath, b.RelPath) })
+	return files, nil
+}
+
+func listTree(ctx context.Context, fsys fsx.FS, root, relative string, opts WalkOptions, files *[]File) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	media, other, dirs, err := readDirectory(ctx, fsys, path.Join(root, relative), relative, opts)
+	if err != nil {
+		return err
+	}
+	*files = append(append(*files, media...), other...)
+	for _, dir := range dirs {
+		if err := listTree(ctx, fsys, root, path.Join(relative, dir.Name), opts, files); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RecycleFolder is where source archives were kept before they went to the recycle bin; the walk never enters it.
@@ -23,56 +43,3 @@ const RecycleFolder = ".solarr-recycle"
 // recycleBinFolder is a recycle bin's folder in a download folder (library.RecycleBinDirectory); archives imported from
 // there are in it, and the walk never enters it.
 const recycleBinFolder = "recycle-bin"
-
-// walk recurses to arbitrary depth under root and classifies every file it finds.
-// An archive is classified, not opened here: importing/unpack expands them into a workspace first (ADR-49).
-func walk(ctx context.Context, fsys fsx.FS, root string, sizeFloor int64, books bool) ([]File, error) {
-	var files []File
-	if err := walkDir(ctx, fsys, root, "", sizeFloor, books, &files); err != nil {
-		return nil, err
-	}
-	return files, nil
-}
-
-func walkDir(ctx context.Context, fsys fsx.FS, root, relative string, sizeFloor int64, books bool, files *[]File) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	absolute := root
-	if relative != "" {
-		absolute = path.Join(root, relative)
-	}
-
-	entries, err := fsys.ReadDir(absolute)
-	if err != nil {
-		return fmt.Errorf("read %q: %w", absolute, err)
-	}
-	slices.SortFunc(entries, func(a, b fsx.DirEntry) int { return strings.Compare(a.Name, b.Name) })
-
-	for _, entry := range entries {
-		childRelative := path.Join(relative, entry.Name)
-		if entry.IsDir {
-			if entry.Name == RecycleFolder || entry.Name == recycleBinFolder {
-				continue
-			}
-			if err := walkDir(ctx, fsys, root, childRelative, sizeFloor, books, files); err != nil {
-				return err
-			}
-			continue
-		}
-		// Lstat, and a link skipped: a download is untrusted, and one carrying a symlink must not bring the file it
-		// points at (a database, a key) into the library (ADR-11: import never follows a symlink).
-		info, err := fsys.Lstat(path.Join(absolute, entry.Name))
-		if err != nil {
-			return fmt.Errorf("stat %q: %w", path.Join(absolute, entry.Name), err)
-		}
-		if info.Mode&fs.ModeSymlink != 0 {
-			continue
-		}
-		*files = append(*files, File{
-			RelPath: childRelative, SizeBytes: info.Size, ModTime: info.ModTime,
-			Class: classify(childRelative, info.Size, sizeFloor, books),
-		})
-	}
-	return nil
-}
