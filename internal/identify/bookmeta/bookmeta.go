@@ -141,8 +141,8 @@ func parsePackage(reader io.Reader) (Meta, bool) {
 	}
 	for _, identifier := range pkg.Metadata.Identifiers {
 		value := strings.TrimSpace(identifier.Value)
-		switch scheme := strings.ToUpper(identifier.Scheme); {
-		case scheme == "ASIN" || scheme == "MOBI-ASIN" || scheme == "AMAZON":
+		switch strings.ToUpper(identifier.Scheme) {
+		case "ASIN", "MOBI-ASIN", "AMAZON":
 			if meta.ASIN == "" {
 				meta.ASIN = value
 			}
