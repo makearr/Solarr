@@ -91,6 +91,21 @@ type Part struct {
 // Ref is the part's media_ref.
 func (p Part) Ref() string { return p.Kind + ":" + p.Number }
 
+// defaultTitle names a part its provider gave no title: "Issue #1", "Volume 3", "Chapter 12".
+func (p Part) defaultTitle() string {
+	switch p.Kind {
+	case PartVolume:
+		return "Volume " + p.Number
+	case PartChapter:
+		return "Chapter " + p.Number
+	case PartAnnual:
+		return "Annual #" + p.Number
+	case PartSpecial:
+		return "Special #" + p.Number
+	}
+	return "Issue #" + p.Number
+}
+
 // Date is the day the part is out: the store date, else the cover date.
 func (p Part) Date() (day, basis string) {
 	if day = normaliseDay(p.Store); day != "" {
@@ -262,7 +277,7 @@ func personKey(name string) string { return strings.ToLower(strings.Join(strings
 
 func partWrite(part Part, monitored bool) library.SeriesPartWrite {
 	write := library.SeriesPartWrite{
-		MediaRef: part.Ref(), SortKey: SortKey(part.Kind, part.Number), Title: part.Title, MonitoredIfNew: monitored,
+		MediaRef: part.Ref(), SortKey: SortKey(part.Kind, part.Number), Title: firstNonEmpty(part.Title, part.defaultTitle()), MonitoredIfNew: monitored,
 	}
 	if day, basis := part.Date(); day != "" {
 		write.Date = day

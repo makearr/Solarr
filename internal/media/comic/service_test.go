@@ -79,7 +79,7 @@ func comicService(t *testing.T, sources Sources) Service { return serviceOn(comi
 func serviceOn(opened *store.Store, sources Sources) Service {
 	return Service{
 		Sources: sources, Series: library.NewSeries(opened), Reader: library.NewSeriesReader(opened), Desired: library.NewDesired(opened),
-		Clock: clock.NewFakeAtEpoch(), KindOf: func(int64) string { return KindComics },
+		Clock: clock.NewFakeAtEpoch(), KindOf: func(int64) string { return KindComics }, ProfileFor: func(int64) int64 { return 1 },
 		ProvidersOf: func(int64) []string { return []string{settings.ComicSourceComicVine, settings.ComicSourceMetron} },
 	}
 }
@@ -151,10 +151,10 @@ func TestAnAdultSeriesIsRefusedByAKindThatIsNotAdult(t *testing.T) {
 	}
 }
 
-type fakeAniList struct{ adult bool }
+type fakeAniList struct{ adult, bare bool }
 
 func (f fakeAniList) Manga(context.Context, int64) (anilist.Manga, error) {
-	m := anilist.Manga{ID: 5, Volumes: 3, IsAdult: f.adult, Format: "MANGA", Status: "FINISHED", CountryOfOrigin: "JP"}
+	m := anilist.Manga{ID: 5, Volumes: map[bool]int{false: 3}[f.bare], IsAdult: f.adult, Format: "MANGA", Status: "FINISHED", CountryOfOrigin: "JP"}
 	m.Title.English = "Moon Orchard"
 	m.StartDate.Year = 2010
 	return m, nil

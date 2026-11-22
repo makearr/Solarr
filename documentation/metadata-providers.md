@@ -169,7 +169,7 @@ endpoint; each takes the owner's own key, sealed in `settings.db` and never ship
 
 ## Other media types (planned)
 
-Comics: ComicVine, Metron; games: IGDB, ScreenScraper. None is built; a media type is only as viable as its source
+Comics: ComicVine, Metron, the Grand Comics Database (see [comics.md](comics.md)); games: IGDB, ScreenScraper. None is built; a media type is only as viable as its source
 (ADR-42).
 
 ## How collections are found

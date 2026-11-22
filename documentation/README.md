@@ -49,6 +49,7 @@ interface levels *normal / advanced / expert* in Settings → User.
 | [metadata-providers.md](metadata-providers.md) | What each provider carries and which library it serves |
 | [outbound-requests.md](outbound-requests.md) | The user, fresh and background request lanes and their shares |
 | [books.md](books.md) | Books and audiobooks |
+| [comics.md](comics.md) | Comics and manga: libraries, providers, identification |
 | [adult.md](adult.md) | The adult type |
 | [media-player.md](media-player.md) | The preview player: direct and converted playback, GPU encoding |
 

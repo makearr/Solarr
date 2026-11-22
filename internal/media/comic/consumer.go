@@ -119,7 +119,7 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 				continue
 			}
 			if manga {
-				c.ensureLoose(ctx, categoryID, series, keys)
+				c.ensureParts(ctx, categoryID, series, keys)
 			}
 			links = append(links, library.SeriesFileLink{MediaObjectID: file.registered.MediaObjectID, Parts: keys})
 		}
@@ -178,17 +178,20 @@ func (c Consumer) recordFacts(ctx context.Context, group []observedFile, placed 
 	}
 }
 
-// ensureLoose makes a loose chapter part for a chapter no volume holds, so its file has a place to be recorded.
-func (c Consumer) ensureLoose(ctx context.Context, categoryID, workID int64, keys []library.PartKey) {
-	var chapters []Part
+// ensureParts makes the parts a manga's files name that no provider listed: a volume of a series whose count is unknown, a
+// chapter no volume holds. Parts appear as files or providers reveal them.
+func (c Consumer) ensureParts(ctx context.Context, categoryID, workID int64, keys []library.PartKey) {
+	var missing []Part
 	for _, key := range keys {
-		if number, ok := strings.CutPrefix(key.MediaRef, PartChapter+":"); ok {
-			if _, missing, _ := c.config.Service.Series.ResolveParts(ctx, workID, []library.PartKey{key}); missing > 0 {
-				chapters = append(chapters, Part{Kind: PartChapter, Number: number})
-			}
+		kind, number, _ := strings.Cut(key.MediaRef, ":")
+		if kind != PartChapter && kind != PartVolume {
+			continue
+		}
+		if _, absent, _ := c.config.Service.Series.ResolveParts(ctx, workID, []library.PartKey{key}); absent > 0 {
+			missing = append(missing, Part{Kind: kind, Number: number})
 		}
 	}
-	if len(chapters) == 0 {
+	if len(missing) == 0 {
 		return
 	}
 	basics, err := c.config.Service.Reader.Basics(ctx, workID)
@@ -200,19 +203,16 @@ func (c Consumer) ensureLoose(ctx context.Context, categoryID, workID int64, key
 		return
 	}
 	write := library.SeriesWrite{Work: library.WorkIdentity{MediaType: MediaType, CanonicalTitle: basics.Title, SortTitle: library.SortTitle(basics.Title)}, IDs: idWrites(ids), CertificationAge: -1}
-	for _, part := range chapters {
+	for _, part := range missing {
 		write.Parts = append(write.Parts, partWrite(part, false))
 	}
 	if _, err := c.config.Service.Series.Upsert(ctx, c.config.Clock.Now(), write); err != nil {
-		c.logger.Warn("comic loose chapter not stored", slog.Int64("work_id", workID), slog.Any("error", err))
+		c.logger.Warn("comic parts not stored", slog.Int64("work_id", workID), slog.Any("error", err))
 		return
 	}
-	items, err := c.config.Service.Desired.AlbumItemsForWork(ctx, workID)
-	if err != nil || len(items) == 0 {
-		return
-	}
-	if err := c.config.Service.ensureItems(ctx, workID, categoryID, items[0].ProfileID, nil, chapters, map[string]bool{}); err != nil {
-		c.logger.Warn("comic loose chapter item not stored", slog.Int64("work_id", workID), slog.Any("error", err))
+	profile := c.config.Service.profileOf(ctx, workID, categoryID)
+	if err := c.config.Service.ensureItems(ctx, workID, categoryID, profile, nil, missing, map[string]bool{}); err != nil {
+		c.logger.Warn("comic part items not stored", slog.Int64("work_id", workID), slog.Any("error", err))
 	}
 }
 

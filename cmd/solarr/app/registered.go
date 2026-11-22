@@ -870,6 +870,13 @@ func (p *process) comicService() comic.Service {
 		},
 		Series: library.NewSeries(p.library), Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library),
 		Clock: clock.NewSystem(),
+		ProfileFor: func(categoryID int64) int64 {
+			category, found := p.cache.Snapshot().Category(categoryID)
+			if !found {
+				return p.defaultQualityProfileID
+			}
+			return adapters.Categories{Cache: p.cache}.ProfileFor(category, p.defaultQualityProfileID)
+		},
 	}
 }
 

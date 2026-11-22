@@ -229,3 +229,35 @@ func TestAChapterFileLinksToTheVolumeThatHoldsItAndAnUnlistedChapterStandsAlone(
 		t.Fatalf("%d files waiting, want all placed", waiting)
 	}
 }
+
+func TestAMangaWhoseVolumeCountNoProviderStatesGainsTheVolumesItsFilesName(t *testing.T) {
+	opened := comicStore(t)
+	service := serviceOn(opened, Sources{AniList: fakeAniList{bare: true}})
+	service.KindOf = func(int64) string { return KindManga }
+	service.ProvidersOf = func(int64) []string { return []string{settings.TVSourceAniList} }
+	fake := clock.NewFakeAtEpoch()
+	fsys := fsx.NewMem(fake)
+	if err := fsys.MkdirAll(scanRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	consumer := NewConsumer(ConsumerConfig{
+		FS: fsys, Physical: library.NewPhysical(opened), Unidentified: library.NewUnidentified(opened), Service: service, Clock: fake,
+		Resolver: Resolver{Service: service, Categories: inLibrary{}, DefaultProfileID: 1},
+	})
+	batch := []scan.Observed{scanned(t, fsys, "Moon Orchard/Moon Orchard v01.cbz", ""), scanned(t, fsys, "Moon Orchard/Moon Orchard c050.cbz", "")}
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: scanRoot, Online: true}, 3, batch); err != nil {
+		t.Fatal(err)
+	}
+	held, _ := service.WorkByIDs(t.Context(), map[string]string{ProviderAniListManga: "5"})
+	parts, _ := service.Desired.AllParts(t.Context(), held)
+	var refs []string
+	for _, part := range parts {
+		refs = append(refs, part.MediaRef)
+	}
+	if len(refs) != 2 || refs[0] != "volume:1" || refs[1] != "chapter:50" {
+		t.Fatalf("parts = %v", refs)
+	}
+	if waiting, _ := library.NewUnidentified(opened).Count(t.Context()); waiting != 0 {
+		t.Fatalf("%d files waiting", waiting)
+	}
+}

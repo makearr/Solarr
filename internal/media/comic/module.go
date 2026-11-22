@@ -3,6 +3,7 @@ package comic
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -52,11 +53,36 @@ var (
 	_ media.Naming     = Module{}
 	_ media.Jobs       = Module{}
 	_ media.Scanning   = Module{}
+	_ media.Grouping   = Module{}
+	_ media.Numbering  = Module{}
 	_ media.Monitoring = Module{}
 	_ media.Adding     = Module{}
 	_ media.Refreshing = Module{}
 	_ media.Enriching  = Module{}
 )
+
+// GroupLabel implements media.Grouping: the heading a page gives a kind of part.
+func (Module) GroupLabel(ref string) string {
+	switch ref {
+	case PartIssue:
+		return "Issues"
+	case PartAnnual:
+		return "Annuals"
+	case PartSpecial:
+		return "Specials"
+	case PartVolume:
+		return "Volumes"
+	case PartChapter:
+		return "Chapters not yet in a volume"
+	}
+	return ref
+}
+
+// PartPosition implements media.Numbering: a part is shown by the number as printed, with no heading of its own.
+func (Module) PartPosition(ref string) (section, number string) {
+	_, number, _ = strings.Cut(ref, ":")
+	return "", number
+}
 
 // ScanSweep implements media.Scanning.
 func (m Module) ScanSweep() scan.Sweep { return m.Sweep }

@@ -23,6 +23,8 @@ type Service struct {
 	Reader      library.SeriesReader
 	Desired     library.Desired
 	Clock       clock.Clock
+	// ProfileFor is the quality profile a library's new wanted items take; nil leaves a series without items until one exists.
+	ProfileFor func(categoryID int64) int64
 }
 
 func (s Service) kind(categoryID int64) string {
@@ -295,6 +297,9 @@ func (s Service) ensureItems(ctx context.Context, workID, categoryID, profileID 
 	for _, part := range parts {
 		monitored[part.Kind] = monitored[part.Kind] || wanted[part.Ref()]
 	}
+	if profileID == 0 && len(monitored) > 0 {
+		return nil
+	}
 	for kind, any := range monitored {
 		if _, err := s.Desired.EnsureSeasonItem(ctx, library.SeasonRequest{
 			WorkID: workID, MediaRef: kind, SortKey: SortKey(kind, "0"), CategoryID: categoryID, ProfileID: profileID, Monitored: any, AddedBy: addedBy,
@@ -303,6 +308,17 @@ func (s Service) ensureItems(ctx context.Context, workID, categoryID, profileID 
 		}
 	}
 	return nil
+}
+
+// profileOf is the profile the series' items already follow, else the library's.
+func (s Service) profileOf(ctx context.Context, workID, categoryID int64) int64 {
+	if items, err := s.Desired.AlbumItemsForWork(ctx, workID); err == nil && len(items) > 0 {
+		return items[0].ProfileID
+	}
+	if s.ProfileFor != nil {
+		return s.ProfileFor(categoryID)
+	}
+	return 0
 }
 
 // Refresh reads a held series again. A part it creates is monitored when the series is; monitoring of the parts it
@@ -334,18 +350,12 @@ func (s Service) Refresh(ctx context.Context, categoryID, workID int64) (Series,
 		return Series{}, err
 	}
 	// A kind of part the series gains (its first annual) gets an item beside the others, under the same profile.
-	items, err := s.Desired.AlbumItemsForWork(ctx, workID)
-	if err != nil {
-		return Series{}, err
+	kept := map[string]bool{}
+	for _, part := range series.Parts {
+		kept[part.Ref()] = monitored && part.Kind != PartChapter
 	}
-	if len(items) > 0 {
-		kept := map[string]bool{}
-		for _, part := range series.Parts {
-			kept[part.Ref()] = monitored && part.Kind != PartChapter
-		}
-		if err := s.ensureItems(ctx, workID, categoryID, items[0].ProfileID, nil, series.Parts, kept); err != nil {
-			return Series{}, err
-		}
+	if err := s.ensureItems(ctx, workID, categoryID, s.profileOf(ctx, workID, categoryID), nil, series.Parts, kept); err != nil {
+		return Series{}, err
 	}
 	return series, nil
 }
