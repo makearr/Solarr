@@ -53,10 +53,7 @@ func (s *Server) CreateExclusionPattern(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, s.logger, http.StatusCreated, exclusionPatternView(created))
 }
 
-// UpdateExclusionPattern replaces a pattern's content. Administrator only.
-// Builtin never changes -- settings.Cache's own UpdateExclusionPattern does
-// not accept it as a field to change, so there is nothing here that could
-// turn a shipped default into a user-added pattern or back.
+// UpdateExclusionPattern replaces content only; Builtin is not a changeable field, so a default never becomes user-added or back.
 func (s *Server) UpdateExclusionPattern(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
 		return

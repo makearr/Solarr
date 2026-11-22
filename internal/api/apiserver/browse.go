@@ -89,10 +89,7 @@ func (s *Server) BrowsePath(w http.ResponseWriter, r *http.Request, params gen.B
 	writeJSON(w, s.logger, http.StatusOK, listing)
 }
 
-// browseTarget resolves what to actually list: the path itself when it is a
-// directory, otherwise the directory above it with the typed remainder as a
-// name prefix -- which is what makes one endpoint serve both browsing and
-// typeahead.
+// browseTarget lists the path if it is a directory, else its parent with the remainder as prefix, so one endpoint serves browsing and typeahead.
 func (s *Server) browseTarget(asked string) (directory, prefix string) {
 	if info, err := s.fsys.Stat(asked); err == nil && info.IsDir {
 		return asked, ""

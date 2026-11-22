@@ -144,10 +144,7 @@ type ArrImportRevertResult struct {
 	Errors                                            []string
 }
 
-// ArrSync runs and reverts *Arr imports (todo 4.13, ADR-52). Defined here
-// and implemented by cmd/solarr/adapters.ArrSync, the same split
-// Discover's own interface keeps -- this package never imports
-// internal/db/library directly.
+// ArrSync runs and reverts *Arr imports; implemented in cmd/solarr/adapters so this package never imports internal/db/library.
 type ArrSync interface {
 	Sync(ctx context.Context, instanceID int64, options ArrSyncOptions) (ArrImportRun, error)
 	// Preview reads what Sync would do with options and changes nothing.

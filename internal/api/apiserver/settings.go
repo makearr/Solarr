@@ -80,10 +80,7 @@ func (s *Server) ImportSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Same reason AddRootFolder records it inline: a root the document just
-	// created has no free space recorded, and placement refuses such a root
-	// entirely, so a restored configuration could import nothing at all until
-	// the six-hourly sweep happened to run.
+	// Capacity is recorded inline like AddRootFolder: placement refuses a root with unknown free space, so a restore would import nothing until the sweep.
 	if s.roots != nil {
 		for _, root := range s.auth.Settings.Snapshot().RootFolders() {
 			if root.FreeBytes != nil {

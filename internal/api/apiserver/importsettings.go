@@ -12,10 +12,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/config"
 )
 
-// GetImportSettings answers ADR-48's own commit-line threshold, the same
-// direct-settings.Cache shape GetNetworkSettings already uses -- import.
-// auto_commit_confidence is a scalar policy value (notes.md §3), not
-// behind its own adapter interface.
+// GetImportSettings answers ADR-48's commit threshold, a scalar policy read directly from settings.Cache like GetNetworkSettings.
 func (s *Server) GetImportSettings(w http.ResponseWriter, r *http.Request) {
 	if _, err := authz.FromContext(r.Context()); err != nil {
 		writeError(w, s.logger, err)

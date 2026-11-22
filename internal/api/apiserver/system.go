@@ -164,13 +164,7 @@ func (s *Server) SetMyTier(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Not s.GetMe: access is frozen for the request's lifetime (ADR-27), so
-	// reading the tier back off the same Access this handler already holds
-	// would show what it was when the request began, not what was just
-	// written -- the exact staleness class the category-editing endpoint
-	// hit live (2026-09-12). User (unlike Categories/Category/
-	// VisibleCategoryIDs/Permission) carries no per-caller filtering, so a
-	// direct fresh Snapshot read is not the archtest-forbidden pattern.
+	// Not s.GetMe: Access is frozen per request (ADR-27) and would show the tier from before the write; User has no per-caller filtering, so a fresh Snapshot read is allowed.
 	visible := access.Categories(settings.PermissionRead)
 	categories := make([]categoryView, 0, len(visible))
 	for _, category := range visible {

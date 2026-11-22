@@ -64,10 +64,7 @@ type PersonWorkRow struct {
 	Unverified bool
 }
 
-// AlbumStatus is the colour an album carries wherever it is listed: red
-// incomplete, purple downloading, yellow not released yet, green complete
-// (2026-09-19). One vocabulary, so the artist page, the poster wall and the
-// album page cannot drift apart.
+// AlbumStatus is one colour vocabulary (red incomplete, purple downloading, yellow unreleased, green complete) shared by artist page, wall and album page.
 type AlbumStatus string
 
 // The four states, in the order albumStatus decides them.

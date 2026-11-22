@@ -20,10 +20,7 @@ const maxDrainBody = 4 << 10
 // server error, so writeError maps it to 409 rather than 500.
 var ErrNothingToDrain = errors.New("root folder has no files to drain")
 
-// DrainStarter starts or stops ADR-51's own drain over a root folder.
-// Defined here and implemented by the caller (cmd/solarr), the same
-// reasoning every library-backed interface in this package already gives --
-// apiserver never imports internal/db/library or internal/moving/mover directly.
+// DrainStarter starts or stops ADR-51's drain over a root; implemented in cmd/solarr so apiserver never imports the library store or mover.
 type DrainStarter interface {
 	StartDrain(ctx context.Context, rootFolderID int64, preview bool) (DrainPlanResult, error)
 	StopDrain(ctx context.Context, rootFolderID int64) error
@@ -52,11 +49,7 @@ type MoveJobLister interface {
 	CancelMoveJob(ctx context.Context, id int64) error
 }
 
-// RenameStarter applies section 11.8's own naming template to a root's
-// already-identified files. Same DrainPlanResult shape DrainStarter
-// answers -- structurally identical (accepted/moves/refused/deltas), not
-// drain-specific despite the name, and not worth a second type until the
-// two shapes actually need to diverge.
+// RenameStarter applies the naming template (section 11.8) to a root's files; it shares DrainPlanResult, whose shape is not drain-specific.
 type RenameStarter interface {
 	StartRename(ctx context.Context, rootFolderID int64, preview bool) (DrainPlanResult, error)
 	// StartLibraryRename renames one library's works, or with workID one of them, on every root it uses, one plan per root.
@@ -90,10 +83,7 @@ type DrainMoveRow struct {
 	DestRelPath      string
 	SizeBytes        int64
 	AffinityKey      string
-	// Warnings are non-fatal notices about DestRelPath -- today, only
-	// naming's own total-path-length recommendation. Only ever populated
-	// for a rename plan; a drain never renames a file, so this stays empty
-	// there.
+	// Warnings are non-fatal notices about DestRelPath (naming's path-length advice); only rename plans fill it.
 	Warnings []string
 	// Companions are the files that move with it, current then new path.
 	Companions []MoveCompanionRow
@@ -132,10 +122,7 @@ type MoveJobRow struct {
 	Error                 string
 }
 
-// DrainRootFolder computes ADR-51's drain plan for one root, administrator
-// only -- it can force accepts_new = 0 and move real files, the same trust
-// boundary InspectImport's own doc comment states for a filesystem-wide
-// action.
+// DrainRootFolder computes ADR-51's plan for one root; administrator only because it can force accepts_new = 0 and move files.
 func (s *Server) DrainRootFolder(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
 		return
@@ -250,10 +237,7 @@ func (s *Server) routeListMoveJobs(w http.ResponseWriter, r *http.Request) {
 	s.ListMoveJobs(w, r, params)
 }
 
-// ListMoveJobs returns every move job, newest first, optionally filtered by
-// reason and/or state. Any authenticated caller -- a move job carries no
-// per-category visibility of its own, the same reasoning import sessions
-// already follow.
+// ListMoveJobs lists move jobs newest first, filtered by reason and state; any authenticated caller, since jobs carry no per-category visibility.
 func (s *Server) ListMoveJobs(w http.ResponseWriter, r *http.Request, params gen.ListMoveJobsParams) {
 	if _, err := authz.FromContext(r.Context()); err != nil {
 		writeError(w, s.logger, err)
@@ -301,10 +285,7 @@ func drainPlanView(result DrainPlanResult) gen.DrainPlan {
 		if m.SourceRelPath != "" {
 			view.Moves[i].SourceRelPath = &m.SourceRelPath
 		}
-		// warnings is optional (omitempty): omitted entirely when there are
-		// none, rather than an empty array -- unlike GET /network's own
-		// proxy_bypass/allow_cidrs, which are required and so must never
-		// serialise as null.
+		// warnings is omitempty: omitted when empty, unlike required fields such as proxy_bypass that must never serialise as null.
 		if len(m.Warnings) > 0 {
 			view.Moves[i].Warnings = &m.Warnings
 		}

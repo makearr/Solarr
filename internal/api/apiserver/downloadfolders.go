@@ -38,12 +38,7 @@ func (s *Server) ListDownloadFolders(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, views)
 }
 
-// AddDownloadFolder watches a new folder. Administrator only. The path is
-// probed for existence and readability the same way AddRootFolder probes
-// writability -- but unlike a root folder, an unreadable download folder is
-// still accepted and flagged, matching AddRootFolder's own "reported, never
-// refused" ownership stance: there is nothing to chown, it is someone
-// else's client writing there.
+// AddDownloadFolder probes the path but accepts and flags an unreadable one: reported, never refused, since someone else's client writes there.
 func (s *Server) AddDownloadFolder(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdministrator(w, r) {
 		return

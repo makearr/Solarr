@@ -87,12 +87,7 @@ func (s *Server) UpdateNetworkSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ADR-58's revised precedence (2026-09-12): config.yml now outranks
-	// settings.db, so a deliberate port choice (0 means "no override," left
-	// untouched) has to reach the file too, or the change would be silently
-	// undone by config.yml's own stale value on the next restart. Written
-	// first and required to succeed -- a settings.db write with no matching
-	// config.yml write is the exact inconsistency this exists to prevent.
+	// ADR-58: config.yml outranks settings.db, so a deliberate port (0 = no override) is written there first and must succeed, or the next restart undoes it.
 	caller := s.resolvedClientAddress(r)
 	// Checked before config.yml is touched, so a refused change leaves the file as it was too.
 	if err := settings.ValidateNetworkSettings(wanted, caller); err != nil {
@@ -192,10 +187,7 @@ func (s *Server) networkSettingsView() gen.NetworkSettings {
 		// A proxy's password is never shown again, to anyone; sending the masked URL back keeps it.
 		view.ProxyUrl = redactedProxyURL(stored.ProxyURL)
 	}
-	// A fresh instance has never written these; nil serialises to JSON null,
-	// which crashed the Network screen's own network.proxy_bypass.join(...)
-	// (found live against a genuinely fresh install, never hit before since
-	// every prior test instance already had these set from earlier use).
+	// A fresh instance never wrote these; nil would serialise to null and crash the Network screen's join.
 	if view.ProxyBypass == nil {
 		view.ProxyBypass = []string{}
 	}

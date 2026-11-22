@@ -107,13 +107,7 @@ func (s *Server) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// nextCategoryPriorityRank places an omitted rank after every existing
-// category, so creating one from the interface never requires the caller to
-// already understand ADR-36's ordering. Reads through access (an
-// administrator, since CreateCategory is admin-only) rather than the raw
-// snapshot -- archtest's own TestHandlersCannotBypassCategoryFiltering
-// forbids the latter in every apiserver handler, without exception, so
-// staying consistent here is cheaper than arguing this call site is safe.
+// nextCategoryPriorityRank puts an omitted rank after all categories; reads through access because archtest forbids the raw snapshot in handlers.
 func nextCategoryPriorityRank(access authz.Access) int64 {
 	var highest int64
 	for _, category := range access.Categories(settings.PermissionRead) {
@@ -124,12 +118,7 @@ func nextCategoryPriorityRank(access authz.Access) int64 {
 	return highest + 1
 }
 
-// GetCategory answers one category's full settings-side detail --
-// LibraryCategory (ListCategories) stays lean for the many navigation
-// callers that never need any of this. Administrator only. Reads through
-// Access rather than the raw snapshot (archtest's own
-// TestHandlersCannotBypassCategoryFiltering forbids the latter in every
-// apiserver handler, without exception).
+// GetCategory answers one category's full settings-side detail, admin only, through Access (the raw snapshot is forbidden in handlers).
 func (s *Server) GetCategory(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
 		return
@@ -147,16 +136,7 @@ func (s *Server) GetCategory(w http.ResponseWriter, r *http.Request, id int64) {
 	writeJSON(w, s.logger, http.StatusOK, categorySettingsView(category))
 }
 
-// UpdateCategory renames/reprioritises a category (todo 4.6's own remaining
-// gap: creation and deletion existed, editing did not) and sets its default
-// quality/language profile and monitor-discovered policy, all through one
-// settings.Cache.UpdateCategory call. Administrator only. Deliberately not
-// three separate settings.Cache writes plus a final Access-based read for
-// the response: Access is frozen for a request's lifetime (ADR-27), so a
-// handler that wrote through it and then read the same Access back would
-// see the category as it looked when the request began, not what it had
-// just written -- found live verifying this exact endpoint (2026-09-12).
-// media_type never changes -- it is identity, not policy.
+// UpdateCategory writes in one settings.Cache call, not three writes plus an Access read, because Access is frozen per request (ADR-27) and would show the old row; media_type is identity and never changes.
 func (s *Server) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) {
 		return
@@ -470,10 +450,7 @@ func (s *Server) DetachRootFolderFromCategory(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// categoryCounts reads the "works"/"files" metrics library.CategoryCounters
-// reconciles (never a live COUNT, section 21.12). Unavailable or never-reconciled
-// answers 0, the same "render without the tile" fallback libraryCounts uses,
-// rather than failing the whole category list over one figure.
+// categoryCounts reads reconciled counters, never a live COUNT; unavailable answers 0 so the list renders without the tile.
 func (s *Server) categoryCounts(ctx context.Context, categoryID int64) (works, files int) {
 	if s.librarySize == nil {
 		return 0, 0

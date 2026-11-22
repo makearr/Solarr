@@ -234,20 +234,12 @@ type WorksMonitor interface {
 	// MonitorWork monitors or unmonitors what scope names and answers the work's groups after. A missing work
 	// answers an error wrapping sql.ErrNoRows, an option the type does not have ErrInvalidChoice.
 	MonitorWork(ctx context.Context, workID int64, scope MonitorScope) ([]GroupRow, error)
-	// SetTrackWanted always ensures the track's own SINGLE desired_item
-	// exists (creating it on first use, wanted or not) and sets its
-	// monitored flag either way -- distinct from SetPartMonitored, which
-	// only resizes the album's own required_count. Answers a missing work
-	// or part id with an error wrapping sql.ErrNoRows.
+	// SetTrackWanted ensures the track's SINGLE desired_item exists and sets monitored; unlike SetPartMonitored it does not resize required_count; missing ids wrap sql.ErrNoRows.
 	SetTrackWanted(ctx context.Context, workID, partID int64, wanted bool) (WantedRow, error)
 	// BulkSetMonitored is SetWorkMonitored over a selection (section 21.7). Always returns how many works
 	// matched; when preview is true nothing is changed.
 	BulkSetMonitored(ctx context.Context, selection BulkSelection, monitored, preview bool) (int64, error)
-	// RemoveWork drops every desired item for the work, and the work itself
-	// only when no files remain for it. Never touches files. Answers a
-	// missing work id with an error wrapping sql.ErrNoRows.
-	// RemoveWork stops wanting an album. deleteFiles also puts its files
-	// into the recycle bin (section 10.8 -- never a direct delete).
+	// RemoveWork drops the work's desired items and the work only when no files remain; deleteFiles recycles files (section 10.8); a missing id wraps sql.ErrNoRows.
 	RemoveWork(ctx context.Context, workID int64, deleteFiles, exclude bool) (RemoveWorkResult, error)
 	// RemovePart stops wanting one track; deleteFiles also recycles its file.
 	// Answers a part outside the work with an error wrapping sql.ErrNoRows.
@@ -566,11 +558,7 @@ func (s *Server) SetTrackWanted(w http.ResponseWriter, r *http.Request, id, part
 	writeJSON(w, s.logger, http.StatusOK, buildWantedView(wanted))
 }
 
-// BulkSetWorkMonitored is SetWorkMonitored over a selection (section 21.7):
-// "bulk selection is a query, never a list of ids". Visibility is enforced
-// by resolving rootFolderIDs and categoryIDs from the caller's own access
-// before the selection is ever interpreted, the same visibility call ListWorks
-// makes -- a work outside both is never matched, explicit id or not.
+// BulkSetWorkMonitored is SetWorkMonitored over a selection query (section 21.7); visibility is resolved from the caller's access first, like ListWorks.
 func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
@@ -631,10 +619,7 @@ func bulkSelectionNamed(body gen.BulkSetWorkMonitoredJSONRequestBody) bool {
 		derefOr(body.Tags, "") != "" || derefOr(body.MediaType, "") != "" || derefOr(body.PersonId, 0) != 0
 }
 
-// workVisible runs GetWork's own ADR-27 visibility check against id, writing
-// a 404 (indistinguishable from missing, Invariant 37) and returning false
-// when the work is not visible to the caller -- shared so a mutation can
-// never be reached for a work the caller could not even read.
+// workVisible runs GetWork's ADR-27 check and writes 404 (Invariant 37) so no mutation reaches a work the caller cannot read.
 func (s *Server) workVisible(w http.ResponseWriter, r *http.Request, access authz.Access, id int64) bool {
 	return s.workPermitted(w, r, access, id, settings.PermissionRead)
 }
@@ -715,10 +700,7 @@ func buildWantedView(row WantedRow) gen.Wanted {
 	return view
 }
 
-// workDetailVisible is GetWork's own ADR-27 visibility check: row is visible
-// if either half -- on-disk root folder or desired_item category -- shares an
-// id with what the caller may see. A subscription-discovered work has no root
-// folder yet, so the category half is what makes it reachable at all.
+// workDetailVisible: visible if the root-folder half or the category half matches; subscription-discovered works have no root yet.
 func workDetailVisible(rootFolderIDs, categoryIDs []int64, row WorkDetailRow) bool {
 	return sharesAnID(rootFolderIDs, row.RootFolderIDs) || sharesAnID(categoryIDs, row.CategoryIDs)
 }

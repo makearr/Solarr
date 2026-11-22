@@ -55,11 +55,7 @@ const (
 	maxCacheSizeKB = 16 * 1024 * 1024
 )
 
-// CacheManager exposes ADR-60's cache budget, its last measurement, and the
-// manual clear to the API. Defined here and implemented by a
-// cmd/solarr adapter over internal/jobs/cachebudget.Sweep and
-// internal/db/settings.Cache, the same reasoning WorksReader's own doc comment
-// gives for every other reader interface in this package.
+// CacheManager exposes ADR-60's cache budget, last measurement and manual clear; implemented in cmd/solarr over cachebudget and settings.Cache.
 type CacheManager interface {
 	Report(ctx context.Context) (CacheReport, error)
 	// SetBudget writes a new budget (ADR-44: validated on write).

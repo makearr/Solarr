@@ -11,10 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 )
 
-// PackLister answers ADR-50's own detected packs. Defined here and
-// implemented by the caller (cmd/solarr), the same reasoning every
-// other library-backed interface in this package already gives --
-// apiserver never imports internal/db/library directly.
+// PackLister answers ADR-50's detected packs; implemented by the caller so apiserver never imports internal/db/library.
 type PackLister interface {
 	ListPacks(ctx context.Context, afterID int64, limit int) ([]PackRow, error)
 	GetPack(ctx context.Context, id int64) (PackRow, []PackItemRow, error)

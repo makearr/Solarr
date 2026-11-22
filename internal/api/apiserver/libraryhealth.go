@@ -10,11 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 )
 
-// LibraryHealth answers todo 4.8's own aggregate report over library.db.
-// Root folder capacity is not part of this interface: apiserver already
-// holds settings.Cache directly (the same shape GetNetworkSettings uses),
-// so "roots near reserve" is computed in the handler instead of routed
-// through here.
+// LibraryHealth is the library.db aggregate report; root capacity is computed in the handler from settings.Cache instead.
 type LibraryHealth interface {
 	Report(ctx context.Context) (LibraryHealthReport, error)
 }
@@ -57,11 +53,7 @@ type BlockedPresent struct {
 	RelPath          string
 }
 
-// CategoryOfflineFiles is one category currently carrying files on a root
-// declared offline (todo 4.18's own remaining item: "a category with an
-// offline root reports its full count with an offline note"). TotalFiles is
-// the category's real total regardless of reachability; OfflineFiles is how
-// many of those sit on a root that is not reachable right now.
+// CategoryOfflineFiles is a category with files on an offline root, with its real total and the count currently unreachable.
 type CategoryOfflineFiles struct {
 	CategoryID   int64
 	Name         string
@@ -105,16 +97,7 @@ func (s *Server) GetLibraryHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// categoriesWithOfflineFiles composes the caller's own visible categories
-// (authz.Access.Categories, ADR-27 -- never the raw settings.Snapshot,
-// Invariant 85/86: a category the caller cannot see must not appear here)
-// with library.db's own per-category counter (internal/db/library.
-// CategoryCounters, "files"/"files_offline") the same way rootsNearReserve
-// already composes settings.db facts at the handler level rather than
-// through the LibraryHealth interface (ADR-25: no cross-database join,
-// composed in Go). Only categories actually carrying an offline file are
-// returned -- the counter is reconciled periodically (ADR-28), never
-// computed live here.
+// categoriesWithOfflineFiles joins visible categories (ADR-27) with the reconciled files counters in Go (ADR-25), returning only those with offline files.
 func (s *Server) categoriesWithOfflineFiles(ctx context.Context, access authz.Access) []CategoryOfflineFiles {
 	if s.librarySize == nil {
 		return nil
@@ -200,11 +183,7 @@ func (s *Server) rootsNearReserve() []gen.RootNearReserve {
 	return near
 }
 
-// isNearReserve reports whether a root's own free space has fallen within
-// 10% of its own configured reserve -- a root with no reserve configured
-// (minFreeBytes <= 0) carries no such warning, an offline root is not a
-// capacity concern, and one never yet measured (freeBytes nil) is skipped
-// rather than guessed at.
+// isNearReserve: free space within 10% of the root's reserve; no reserve, an offline root or an unmeasured one never warns.
 func isNearReserve(online bool, freeBytes *int64, minFreeBytes int64) bool {
 	if !online || minFreeBytes <= 0 || freeBytes == nil {
 		return false

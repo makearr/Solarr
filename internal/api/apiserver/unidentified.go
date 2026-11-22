@@ -64,10 +64,7 @@ func (s *Server) ListUnidentified(w http.ResponseWriter, r *http.Request, params
 		return
 	}
 
-	// Root-folder-only: an unidentified file is by definition physical (it
-	// exists on disk with no work resolved yet), so it can never have a
-	// desired_item.category_id -- the category half of ADR-27 visibility has
-	// nothing to gate here.
+	// Root-folder-only: an unidentified file is physical with no desired_item.category_id, so the category half of ADR-27 has nothing to gate.
 	rootFolderIDs, _, err := s.visibility(access, params.CategoryId)
 	if err != nil {
 		writeError(w, s.logger, err)

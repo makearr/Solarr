@@ -116,12 +116,7 @@ func (s *Server) SetArrInstanceKey(w http.ResponseWriter, r *http.Request, id in
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// writeArrInstanceError translates settings.ArrInstance's own error
-// vocabulary the same way AddDownloadFolder already does for its own
-// config.Problems/settings.ErrNotFound pair, plus settings.ErrSecretsUnavailable
-// (the process started with no encryption key decoded -- a startup
-// condition, not a caller mistake, so it answers 503 like every other
-// "not available" capability rather than 400).
+// writeArrInstanceError maps settings errors to statuses; a missing encryption key is 503, a startup condition, not a caller mistake.
 func writeArrInstanceError(w http.ResponseWriter, s *Server, err error, title, closing string) {
 	var problems config.Problems
 	switch {
@@ -138,11 +133,7 @@ func writeArrInstanceError(w http.ResponseWriter, s *Server, err error, title, c
 }
 
 func arrInstanceView(instance settings.ArrInstance) gen.ArrInstance {
-	// HasValue alone, no Masked hint: showing even a masked hint (secrets.
-	// Secret.Mask()) would mean decrypting the key for a plain list view --
-	// this package never does that outside the one call site that actually
-	// needs the raw value (the sync job's own REST client, via
-	// Cache.DecryptedAPIKey), so a list response has nothing to hint from.
+	// HasValue only, no mask hint: a hint would mean decrypting the key for a plain list view.
 	view := gen.ArrInstance{
 		Id: instance.ID, App: gen.ArrApp(instance.App), Name: instance.Name, BaseUrl: instance.BaseURL,
 		CategoryId: instance.CategoryID, Enabled: instance.Enabled, PushMonitoring: &instance.PushMonitoring,

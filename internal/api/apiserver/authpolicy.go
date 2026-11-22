@@ -17,16 +17,9 @@ func (s *Server) GetAuthPolicy(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, s.authPolicyView())
 }
 
-// SetAuthPolicy turns the login requirement on or off. Administrators only,
-// except before the first account exists: during setup there is nobody to be an
-// administrator, and refusing there would make the choice unreachable exactly
-// where it is offered.
+// SetAuthPolicy toggles the login requirement; administrators only, except before the first account exists, when nobody could be one.
 func (s *Server) SetAuthPolicy(w http.ResponseWriter, r *http.Request) {
-	// Identified here rather than by middleware: the route is open so that the
-	// first-run wizard, where there is nobody to be an administrator, can reach
-	// it. Once an account exists the check is the same one everywhere else.
-	// Held to the end: an unclaimed instance's answer must not change under this request, or a request that found
-	// no account could switch authentication off, or set the password, of one created meanwhile.
+	// Identified here, not by middleware, because the route is open for the first-run wizard; held to the end so an unclaimed instance cannot change under this request.
 	s.claim.Lock()
 	defer s.claim.Unlock()
 	claimed := len(s.auth.Settings.Snapshot().Users()) > 0
@@ -63,11 +56,7 @@ func (s *Server) SetAuthPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Requiring a login that nobody can satisfy locks the instance out of its own
-	// interface, which ADR-44 exists to prevent. An account existing is not
-	// enough: the one created when authentication was switched off carries no
-	// password, so it cannot be signed in as. A proxy or API key install has its
-	// credential elsewhere and is exempt.
+	// Requiring a login nobody can satisfy locks the instance out (ADR-44); an account without a password does not count, proxy and API key installs are exempt.
 	if *request.AuthRequired && s.auth.Mode == AuthLocal && !s.someoneCanSignIn() {
 		if request.Password == "" {
 			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
@@ -91,10 +80,7 @@ func (s *Server) SetAuthPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Turning authentication off before any account exists still needs one: it is
-	// who every request is served as, and it gives user_id on a job something to
-	// name. Passwordless, which settings.db already models for an account that
-	// does not authenticate by password.
+	// Turning authentication off before any account exists still creates one: it is who requests are served as and what job user_id names; it is passwordless.
 	if !*request.AuthRequired && !claimed {
 		created, err := s.auth.Settings.CreateFirstUser(r.Context(), s.auth.Clock,
 			OpenAccessUsername, "", settings.RoleAdmin)

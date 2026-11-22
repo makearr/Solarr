@@ -209,12 +209,7 @@ func (s *Server) AddRootFolder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusCreated, view)
 }
 
-// recordRootCapacity probes and stores one root's free space now rather than
-// leaving it to the six-hourly sweep: placement refuses a root whose free space
-// is unknown, so an import right after configuring one found no root at all
-// (found 2026-09-17 when a root was added, and again 2026-09-19 when a whole
-// document was imported). Reported, never fatal -- a root that cannot be
-// measured is still a root.
+// recordRootCapacity measures free space now, since placement refuses a root with unknown space; reported, never fatal.
 func (s *Server) recordRootCapacity(ctx context.Context, id int64, path string, writable bool) bool {
 	total, free, err := s.roots.Usage(path)
 	if err != nil {
@@ -230,12 +225,7 @@ func (s *Server) recordRootCapacity(ctx context.Context, id int64, path string, 
 	return true
 }
 
-// rootFolderView renders one root folder for the API, including its own
-// read_only/allow_rename policy, capacity (nil until the capacity job has
-// run once), and the categories it is attached to -- everything the root
-// folder overview screen (todo 4.18) needs in one call, since
-// internal/jobs/capacity already computes every number and nothing rendered them
-// before this.
+// rootFolderView renders a root with its policy, capacity (nil until the capacity job ran) and categories for the overview screen in one call.
 func (s *Server) rootFolderView(folder settings.RootFolder) gen.RootFolder {
 	view := gen.RootFolder{
 		Id: folder.ID, Path: folder.Path, Online: folder.Online,

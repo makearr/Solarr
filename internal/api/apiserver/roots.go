@@ -81,10 +81,7 @@ func (r FilesystemRoots) probeWritable(directory string) error {
 	return r.FS.Remove(probe)
 }
 
-// Readable reports whether this process can list a download folder's
-// contents. Read-only, unlike Writable's create-then-remove probe: a
-// download folder is never written to by Solarr (section 5.1) -- it is
-// someone else's client writing there, only ever watched from here.
+// Readable lists a download folder read-only; Solarr never writes there, someone else's client does (section 5.1).
 func (r FilesystemRoots) Readable(path string) error {
 	_, err := r.FS.ReadDir(path)
 	return err

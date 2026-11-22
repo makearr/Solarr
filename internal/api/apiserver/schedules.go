@@ -14,11 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/config"
 )
 
-// Scheduler exposes ADR-59's task registry, live settings and run-state to
-// the API, and a manual trigger. Defined here and implemented by a
-// cmd/solarr adapter over internal/jobs.TaskRegistry/ScheduleStates and
-// internal/db/settings.Cache, the same reasoning WorksReader's own doc comment
-// gives for every other reader interface in this package.
+// Scheduler exposes ADR-59's task registry, settings, run state and manual trigger; implemented in cmd/solarr over jobs and settings.Cache.
 type Scheduler interface {
 	// Tasks lists every registered task, sorted by key.
 	Tasks() []jobs.Task
@@ -39,12 +35,7 @@ type Scheduler interface {
 	SetRunAtStartup(ctx context.Context, key string, run bool) error
 	// SetEnabled enables or disables one task.
 	SetEnabled(ctx context.Context, key string, enabled bool) error
-	// RunNow fires a task immediately. full requests the task's own RunFull
-	// trigger instead of its ordinary Enqueue -- library scan's full rescan,
-	// today's only user (private/questions.md). Returns jobs.ErrUnknownTask
-	// for an unregistered key, jobs.ErrAlreadyRunning if a fire -- scheduled
-	// or manual -- is already in flight, jobs.ErrNoFullMode if full is true
-	// for a task that never registered one.
+	// RunNow fires a task now; full requests its RunFull mode. Errors: ErrUnknownTask, ErrAlreadyRunning, ErrNoFullMode.
 	RunNow(ctx context.Context, key string, full bool) error
 	// Pause holds one task, or every task when key is jobs.AllTasks; Resume lifts it.
 	Pause(ctx context.Context, key string) error
@@ -180,12 +171,7 @@ func (s *Server) routeRunSchedule(w http.ResponseWriter, r *http.Request) {
 	s.RunSchedule(w, r, chi.URLParam(r, "key"), params)
 }
 
-// RunSchedule fires a task immediately (todo 4.8's "trigger a scan, a probe
-// sweep or a metadata refresh from the interface"). Administrator only.
-// full=true asks for the task's own full-run mode instead of its ordinary
-// one -- library scan's full rescan (private/questions.md), refused with 400
-// for any task that has none. 202: the trigger was accepted, not that the
-// underlying job has finished.
+// RunSchedule fires a task now (admin only); full=true asks for the full-run mode, 400 if none; 202 means accepted, not finished.
 func (s *Server) RunSchedule(w http.ResponseWriter, r *http.Request, key string, params gen.RunScheduleParams) {
 	if !s.requireAdministrator(w, r) {
 		return

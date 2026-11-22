@@ -26,11 +26,7 @@ type NavigationProvider interface {
 	LevelsFor(mediaType string) ([]model.Level, bool)
 }
 
-// ListLibraries is GET /libraries, the navigation tree's root: every
-// category the caller may read (ADR-27), with the entity levels its media
-// type declares and each level's count. A media type with no registered
-// NavigationProvider entry answers no levels rather than failing the whole
-// list -- the same "render without the tile" fallback categoryCounts uses.
+// ListLibraries is the navigation root: every readable category with its levels and counts; a media type without a provider answers no levels.
 func (s *Server) ListLibraries(w http.ResponseWriter, r *http.Request) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
@@ -211,10 +207,7 @@ func countFor(values map[string]int64, entity model.LevelEntity) *int {
 	if !ok {
 		return nil
 	}
-	// A zero artist count is never informative: the count is persons credited
-	// on works in this library, and credits only exist once enrichment has
-	// fetched each album. Adding an artist and immediately reading "Artists 0"
-	// says the add failed, which it did not. No number until there is one.
+	// A zero artist count is never shown: credits exist only after enrichment, so "Artists 0" would suggest the add failed.
 	if entity == model.LevelEntityPerson && value == 0 {
 		return nil
 	}
@@ -298,19 +291,12 @@ type ArtistRow struct {
 	Downloading    bool
 }
 
-// LibraryArtistsReader lists the Artists navigation level (a person-entity
-// level). Defined here and implemented by the caller, so this package never
-// imports internal/db/library directly (WorksReader's own doc comment explains
-// why) -- separate from PeopleReader, which is deliberately not
-// category-scoped (a person spans several media types at once, ADR-32).
+// LibraryArtistsReader lists the Artists level; separate from PeopleReader because a person spans media types and is not category-scoped (ADR-32).
 type LibraryArtistsReader interface {
 	ListLibraryArtists(ctx context.Context, filter ArtistsFilter, cursor ArtistsCursor, pageSize int) ([]ArtistRow, error)
 }
 
-// levelCursor is GET /libraries/{id}/{level}'s own opaque cursor: a handful
-// of text fields plus an id tie-break, general enough for any level's own
-// sort key (Albums needs one field, Tracks needs two) without a new codec
-// per level -- the same reasoning LibraryLevelItem's own genericity has.
+// levelCursor is one opaque cursor (text fields plus id tie-break) general enough for every level's sort key.
 type levelCursor struct {
 	fields []string
 	id     int64
@@ -351,10 +337,7 @@ func (c levelCursor) field(index int) string {
 	return c.fields[index]
 }
 
-// routeListLibraryLevel parses the id/level path parameters and the cursor/
-// limit query parameters by hand, mirroring routeListWorks -- this project
-// registers routes directly rather than through the generated
-// ServerInterfaceWrapper, for full control over the middleware chain.
+// routeListLibraryLevel parses path and query by hand, mirroring routeListWorks, because routes are registered directly for middleware control.
 func (s *Server) routeListLibraryLevel(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -403,11 +386,7 @@ func (s *Server) routeListLibraryLevel(w http.ResponseWriter, r *http.Request) {
 	s.ListLibraryLevel(w, r, id, level, params)
 }
 
-// ListLibraryLevel answers one page of one navigation level (ADR-54). The
-// response is one generic row shape across every entity a level can back --
-// only one media type exists today, so there is no second real case yet to
-// generalize a typed-per-level response from (the spec's own description has
-// the detail).
+// ListLibraryLevel answers one page of one navigation level (ADR-54) as a generic row; one media type exists, so no typed-per-level shape yet.
 func (s *Server) ListLibraryLevel(w http.ResponseWriter, r *http.Request, id int64, level string, params gen.ListLibraryLevelParams) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {

@@ -238,10 +238,7 @@ type Config struct {
 	// LibraryArtists lists the Artists navigation level (ADR-54). Optional:
 	// without it, a person-entity level answers 503.
 	LibraryArtists LibraryArtistsReader
-	// DownloadRoots probes a candidate download folder for existence and
-	// readability (todo 4.18, section 5.1). Optional: without it,
-	// AddDownloadFolder accepts a path unprobed rather than refusing to add
-	// folders at all.
+	// DownloadRoots probes a candidate download folder; optional, without it AddDownloadFolder accepts the path unprobed.
 	DownloadRoots DownloadFolderChecker
 	// Scheduler exposes ADR-59's task registry, live settings and run-state
 	// (todo 4.19). Optional: without it, the schedule endpoints answer 503.
@@ -447,15 +444,9 @@ type Server struct {
 	tvProviders             TVProviders
 	remoteImages            RemoteImages
 	candidateSearcher       CandidateSearcher
-	// effectivePort is the port this process actually bound to, resolved at
-	// startup (ADR-58). The Network screen reports it beside whatever
-	// settings.db now holds, since a port change written from the screen
-	// needs a restart before the two agree.
+	// effectivePort is the port actually bound at startup (ADR-58); a port changed on the Network screen needs a restart to match.
 	effectivePort int
-	// healthPath is the one route ADR-58's IP allowlist never applies to
-	// (section 20.2: a container healthcheck from a bridge network must
-	// never be locked out by a LAN-only rule), computed once against
-	// BaseURL rather than hard-coded against APIPrefix alone.
+	// healthPath is exempt from ADR-58's IP allowlist so container healthchecks are never locked out; computed against BaseURL.
 	healthPath string
 
 	// ready gates /ready independently of the checks themselves, so the answer
@@ -635,11 +626,7 @@ func New(config Config) (*Server, error) {
 		api.Post("/auth/logout", server.Logout)
 		api.Get("/auth/transport-key", server.GetTransportKey)
 
-		// Unauthenticated because before the first account exists there is nobody to authenticate as
-		// (section 21.11).
-		// Unauthenticated for the same reason as /setup: an instance that requires
-		// no login has nobody to authenticate, and both the wizard and the running
-		// interface have to be able to discover that.
+		// Unauthenticated: before the first account there is nobody to authenticate (section 21.11), and with login off the same holds, so the wizard and UI can discover it.
 		api.Get("/settings/auth", server.GetAuthPolicy)
 		api.Put("/settings/auth", server.SetAuthPolicy)
 		api.Get("/setup", server.GetSetupStatus)

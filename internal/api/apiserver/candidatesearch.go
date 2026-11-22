@@ -16,10 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/identify/model"
 )
 
-// ErrWorkNotWanted reports a search attempted against a work with no
-// album-level desired item -- nothing is monitoring it, so there is nothing
-// to search for yet (section 19.6's own "wanted" is a precondition here,
-// not something a search creates).
+// ErrWorkNotWanted is no album-level desired item exists, so there is nothing to search for.
 var ErrWorkNotWanted = errors.New("apiserver: work is not currently wanted")
 
 // ErrNoIndexersConfigured reports a search with no enabled indexer to run
@@ -54,11 +51,7 @@ var ErrAcquisitionAlreadyInFlight = errors.New("apiserver: this item already has
 // to the work it was asked to dispatch from.
 var ErrCandidateDecisionNotFound = errors.New("apiserver: no such decision for this work")
 
-// CandidateDecision is one release decided against a specific desired item
-// (section 10.1/12). Components/Rejections/Deferrals reuse ADR-10's own
-// vocabulary (internal/identify/model, already an allowed apiserver
-// dependency via score.go's own Decision) rather than declaring a
-// duplicate shape.
+// CandidateDecision is one release decided against a desired item, reusing ADR-10's Components/Rejections/Deferrals vocabulary.
 type CandidateDecision struct {
 	ID              int64
 	CandidateID     int64

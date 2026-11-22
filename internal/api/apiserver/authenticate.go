@@ -41,10 +41,7 @@ type AuthConfig struct {
 	// Transport opens secrets the browser sealed; nil accepts only plain values.
 	Transport *auth.Transport
 	Settings  *settings.Cache
-	// Registry is ADR-26's settings registry (todo 4.14), reused here for
-	// every scalar setting Settings.Cache writes directly -- auth, network
-	// and import policy -- the same direct-Cache shape those handlers
-	// already share.
+	// Registry (ADR-26) is reused for every scalar setting Settings.Cache writes directly: auth, network and import policy.
 	Registry *settings.Registry
 	Clock    clock.Clock
 	// ProxyHeader carries the username when Mode is proxy.

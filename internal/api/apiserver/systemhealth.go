@@ -27,22 +27,13 @@ const (
 	HealthWarning = "warning"
 )
 
-// SystemHealthSource supplies the checks apiserver cannot compute from
-// settings alone -- anything needing the library store, the job registry or
-// the filesystem. Defined here and implemented by the caller, the same
-// separation WorksReader keeps.
+// SystemHealthSource supplies checks needing the library store, job registry or filesystem; implemented by the caller.
 type SystemHealthSource interface {
-	// Checks answers whatever this source currently has to report. An
-	// implementation that cannot answer returns no checks rather than an
-	// error: a health screen that fails to render because one probe failed is
-	// worse than one missing probe.
+	// Checks returns what the source can report; an unanswerable probe yields no check rather than failing the screen.
 	Checks(ctx context.Context) []HealthCheck
 }
 
-// GetSystemHealth reports configuration and operational problems, worst
-// first. Distinct from GetLibraryHealth, which reports on the library's data
-// rather than on the instance. Every check is computed fresh: this is read by
-// a human looking at a dashboard, not on a hot path.
+// GetSystemHealth reports instance problems worst first, computed fresh; GetLibraryHealth covers the library's data instead.
 func (s *Server) GetSystemHealth(w http.ResponseWriter, r *http.Request) {
 	if _, err := authz.FromContext(r.Context()); err != nil {
 		writeError(w, s.logger, err)

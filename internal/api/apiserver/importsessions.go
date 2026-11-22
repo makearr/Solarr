@@ -19,10 +19,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
-// ImportSessionLister reads ADR-48 import sessions and their units. Defined
-// here and implemented by the caller (cmd/solarr), the same reasoning
-// WorksReader's own doc comment gives for every library-backed interface --
-// apiserver never imports internal/db/library directly.
+// ImportSessionLister reads ADR-48 sessions and units; implemented in cmd/solarr so apiserver never imports internal/db/library.
 type ImportSessionLister interface {
 	ListImportSessions(ctx context.Context, query ImportSessionQuery) ([]ImportSessionRow, error)
 	GetImportSession(ctx context.Context, id int64) (ImportSessionRow, error)
@@ -89,20 +86,10 @@ var ErrImportUnitHasNoCandidate = errors.New("apiserver: import unit has no cand
 // unit's own directory no longer matches what WALK originally found.
 var ErrImportUnitChanged = errors.New("apiserver: import unit's own files no longer match what was inspected")
 
-// ErrNoPlacement is CommitImportUnit's refusal when the unit's own category
-// has no writable root folder to place it under -- music.ErrNoPlacement at
-// this package's own boundary, the same shape every other engine error here
-// keeps. Previously fell through writeError's default case to a bare
-// "the request could not be completed" (found live testing the image
-// fallback chain against a deliberately read-only test root, 2026-09-11) --
-// the same unclassified-domain-error shape CreateCategory's own duplicate-
-// name bug was, fixed the same session.
+// ErrNoPlacement is the unit's category has no writable root; mapped at this boundary so it is not a generic failure.
 var ErrNoPlacement = errors.New("apiserver: no writable root folder to place this unit under")
 
-// ErrBlockedContent is CommitImportUnit's refusal when a unit's own hash
-// matches blocked_content (ADR-53 part 2, todo 4.15) -- music.ErrBlockedContent
-// at this package's own boundary, the same translation ErrNoPlacement's own
-// doc comment describes.
+// ErrBlockedContent is the unit's hash matches blocked_content (ADR-53); translated like ErrNoPlacement.
 var ErrBlockedContent = errors.New("apiserver: this content is blocked and cannot be committed")
 
 // ImportRevertResult is what one session's revert actually did.
@@ -337,10 +324,7 @@ const (
 	importSessionsMaxLimit     = 200
 )
 
-// ListImportSessions returns a page of sessions, newest first, optionally
-// filtered to one state. Any authenticated caller, the same as root folders
-// and exclusion patterns -- a session carries no per-category visibility of
-// its own (category_id is nullable, "decide per unit").
+// ListImportSessions pages sessions newest first, optionally by state; any authenticated caller, since a session has no per-category visibility.
 func (s *Server) ListImportSessions(w http.ResponseWriter, r *http.Request, params gen.ListImportSessionsParams) {
 	if !s.requireAdministrator(w, r) {
 		return

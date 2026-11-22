@@ -9,10 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/api/authz"
 )
 
-// ErrQueryTooShort reports a search query too short to run (section 21.5's 2-character
-// floor). A sentinel here rather than library.ErrQueryTooShort: this package never
-// imports the library store (WorksReader's doc comment explains why), so the adapter
-// that implements SearchReader translates the domain error into this one.
+// ErrQueryTooShort is query under the 2-character floor (section 21.5); the adapter translates the library's error into this sentinel.
 var ErrQueryTooShort = errors.New("apiserver: search query is too short")
 
 // searchDefaultLimit and searchMaxLimit bound an interactive search box, deliberately
@@ -30,10 +27,7 @@ type SearchReader interface {
 	SearchWorks(ctx context.Context, filter SearchFilter, limit int) ([]SearchResultRow, error)
 }
 
-// SearchFilter narrows a SearchWorks call. RootFolderIDs and CategoryIDs carry
-// ADR-27 visibility's two halves the same way WorksFilter's own fields do: nil
-// means that half is not applied, a non-nil empty slice means the caller can
-// see nothing via that half.
+// SearchFilter carries ADR-27's two visibility halves like WorksFilter: nil means not applied, non-nil empty means nothing visible.
 type SearchFilter struct {
 	Query         string
 	MediaType     string

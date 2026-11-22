@@ -62,11 +62,7 @@ const (
 	SortDescending SortDirection = "desc"
 )
 
-// WorksFilter narrows a ListWorks call. RootFolderIDs and CategoryIDs are
-// ADR-27 visibility's two halves -- on-disk presence and desired-item
-// membership, library.WorkFilter's own nil-vs-empty distinction carried
-// through here since getting this wrong here would mean a category filter
-// that quietly does nothing or quietly leaks.
+// WorksFilter carries ADR-27's two halves; nil versus empty must stay distinct or a category filter silently does nothing or leaks.
 type WorksFilter struct {
 	RootFolderIDs []int64
 	CategoryIDs   []int64
@@ -315,11 +311,7 @@ func worksCursorFor(sort WorkSort, cursor paginate.TextCursor) (WorksCursor, err
 	return WorksCursor{SortTitle: cursor.Sort, ID: cursor.ID}, nil
 }
 
-// visibility resolves what a caller may see into ADR-27's two halves -- root
-// folder ids (on-disk presence) and category ids (desired_item.category_id,
-// for a work with no root folder yet, e.g. a subscription-discovered album) --
-// scoped to categoryID when given. A category the caller cannot read answers
-// authz.ErrNotVisible, which writeError already maps to 404 (Invariant 37).
+// visibility resolves ADR-27's root-folder and category halves, scoped to categoryID; an unreadable category answers ErrNotVisible (404, Invariant 37).
 func (s *Server) visibility(access authz.Access, categoryID *int64) (rootFolderIDs, categoryIDs []int64, err error) {
 	return s.visibilityAt(access, categoryID, settings.PermissionRead)
 }

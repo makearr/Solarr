@@ -20,10 +20,7 @@ type ArtworkReader interface {
 	GetPersonArtwork(ctx context.Context, personID int64) (PersonArtworkRow, error)
 }
 
-// WorkArtworkRow is what ArtworkReader answers: the cache key ArtworkJob wrote
-// the image under (empty when nothing has been fetched yet), the root
-// folders to run the ADR-27 visibility check against, and its primary
-// artist -- the album-falls-back-to-artist-image chain (2026-09-11).
+// WorkArtworkRow is the cache key, the roots for the ADR-27 visibility check, and the primary artist for the cover fallback chain.
 type WorkArtworkRow struct {
 	CacheKey      string
 	Found         bool
@@ -34,21 +31,13 @@ type WorkArtworkRow struct {
 	LeadPersonID *int64
 }
 
-// PersonArtworkRow is what ArtworkReader answers for a person: the cache key
-// EnrichJob wrote their Wikidata image under, if any. No visibility fields
-// -- a person has no root-folder or category scoping of its own (this
-// file's own GetPersonArtwork doc comment).
+// PersonArtworkRow is the cache key of a person's Wikidata image; people have no root or category scoping.
 type PersonArtworkRow struct {
 	CacheKey string
 	Found    bool
 }
 
-// artworkSizeSuffix maps the OpenAPI enum to ArtworkJob's own on-disk naming
-// (internal/media/music.artworkSizeName) -- duplicated rather than shared, since
-// this package does not import internal/media/music (ADR-23: core carries no
-// media-type logic). A plain *string rather than one generated enum type, so
-// both GetWorkArtwork's and GetPersonArtwork's own (distinct, generated)
-// params types can share it.
+// artworkSizeSuffix duplicates the job's on-disk size naming because core must not import internal/media/music (ADR-23).
 func artworkSizeSuffix(size *string) string {
 	if size == nil {
 		return "small"
@@ -83,12 +72,7 @@ func (s *Server) routeGetWorkArtwork(w http.ResponseWriter, r *http.Request) {
 	s.GetWorkArtwork(w, r, id, params)
 }
 
-// GetWorkArtwork streams a work's cached cover art straight off disk -- never
-// fetched live, never re-encoded per request. A work the caller cannot see
-// answers 404. A work the caller can see but with no cover of its own falls
-// back to its provider poster, then its lead's image (2026-09-11's own album-falls-back-to-
-// artist chain) before answering 404 too -- indistinguishable by design from
-// "no cover recorded yet" either way (ADR-27, Invariant 37).
+// GetWorkArtwork streams cached art from disk, falling back to poster then lead image; invisible work and no cover both answer 404 (ADR-27).
 func (s *Server) GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64, params gen.GetWorkArtworkParams) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
@@ -186,11 +170,7 @@ func (s *Server) routeGetPersonArtwork(w http.ResponseWriter, r *http.Request) {
 	s.GetPersonArtwork(w, r, id, params)
 }
 
-// GetPersonArtwork streams a person's cached Wikidata image straight off
-// disk. No ADR-27 visibility check -- a person is a shared entity with no
-// category scoping of its own (GetPerson itself has none either); "no such
-// person" and "no image recorded" both answer 404, the same
-// indistinguishable-by-design GetWorkArtwork already keeps.
+// GetPersonArtwork streams a person's cached image; no visibility check since a person has no category scoping, and 404 hides which case applied.
 func (s *Server) GetPersonArtwork(w http.ResponseWriter, r *http.Request, id int64, params gen.GetPersonArtworkParams) {
 	if _, err := authz.FromContext(r.Context()); err != nil {
 		writeError(w, s.logger, err)
