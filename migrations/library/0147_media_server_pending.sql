@@ -35,3 +35,12 @@ CREATE TABLE playback_sync (
   since          INTEGER NOT NULL,
   PRIMARY KEY (server_id, server_user_id)
 ) WITHOUT ROWID;
+
+-- A held covering part stands for the covered one (a collected edition for the issues it collects); source is a provider key or 'hand'.
+CREATE TABLE part_coverage (
+  covering_part_id INTEGER NOT NULL REFERENCES work_part(id) ON DELETE CASCADE,
+  covered_part_id  INTEGER NOT NULL REFERENCES work_part(id) ON DELETE CASCADE,
+  source           TEXT    NOT NULL,
+  PRIMARY KEY (covering_part_id, covered_part_id)
+) WITHOUT ROWID;
+CREATE INDEX part_coverage_by_covered ON part_coverage(covered_part_id);

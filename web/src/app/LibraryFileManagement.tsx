@@ -27,6 +27,8 @@ export function LibraryFileManagement() {
   // The settings whose meaning depends on the type are offered only when it declares them, in its words.
   const declared = useMediaType(useLibrary(categoryId ?? "")?.media_type)?.file_settings ?? [];
   const setting = (key: FileSettingKey) => declared.find((entry) => entry.key === key);
+  // The choices a type declares of its own are kept in the library's module options.
+  const moduleSettings = declared.filter((entry) => ["date_type", "edition_satisfies_issues", "reader_files"].includes(entry.key) && (entry.options?.length ?? 0) > 0);
   const options = (entry: { options?: { key: string; label: string }[] }) =>
     (entry.options ?? []).map((option) => [option.key, option.label] as const);
 
@@ -172,6 +174,22 @@ export function LibraryFileManagement() {
               onChange={(value) => set({ shared_file_fallback: value as FileManagement["shared_file_fallback"] })}
             />
           )}
+        </section>
+      )}
+
+      {moduleSettings.length > 0 && (
+        <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
+          <h2 className="text-sm font-medium">{t("libraryFiles.typeOptions")}</h2>
+          {moduleSettings.map((entry) => (
+            <Choice
+              key={entry.key}
+              label={entry.label}
+              help={entry.help}
+              value={draft.module_options?.[entry.key] ?? entry.options?.[0]?.key ?? ""}
+              options={options(entry)}
+              onChange={(value) => set({ module_options: { ...draft.module_options, [entry.key]: value } })}
+            />
+          ))}
         </section>
       )}
 

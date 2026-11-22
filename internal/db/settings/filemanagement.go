@@ -2,6 +2,7 @@ package settings
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"regexp"
@@ -89,6 +90,8 @@ type FileManagement struct {
 	IgnoreNewSeasons bool
 	// EpisodeTitleRequired holds a TBA-titled episode from import for up to TitleWaitAfterAiring; empty is always.
 	EpisodeTitleRequired EpisodeTitleRequired
+	// ModuleOptions are the settings the library's media type declares of its own, by key; absent is the type's default.
+	ModuleOptions map[string]string
 }
 
 // Tagging is one library's tag writing (revision D3, widened 2026-09-29). Nothing is written on a
@@ -130,7 +133,7 @@ func (f FileManagement) IsDefault() bool {
 		f.SetPermissions == d.SetPermissions && f.ChmodFolder == d.ChmodFolder && f.ChownGroup == d.ChownGroup &&
 		f.Tagging == d.Tagging && f.ExtraFiles.Import == nil && f.ExtraFiles.Extensions == nil &&
 		f.MediaServerFiles == d.MediaServerFiles && f.SharedFileFallback == d.SharedFileFallback &&
-		f.IgnoreNewSeasons == d.IgnoreNewSeasons && f.EpisodeTitleRequired == d.EpisodeTitleRequired
+		f.IgnoreNewSeasons == d.IgnoreNewSeasons && f.EpisodeTitleRequired == d.EpisodeTitleRequired && len(f.ModuleOptions) == 0
 }
 
 // FolderMode is ChmodFolder as a mode; FileMode drops the execute bits, as Sonarr does.
@@ -233,6 +236,7 @@ func writeCategoryFileManagement(ctx context.Context, queries *settingsdb.Querie
 		ImportExtraFiles:   extrasOn, ExtraFileExtensions: extensions,
 		MediaServerFiles: boolToInt(f.MediaServerFiles), SharedFileFallback: string(f.SharedFileFallback),
 		IgnoreNewSeasons: boolToInt(f.IgnoreNewSeasons), EpisodeTitleRequired: string(f.EpisodeTitleRequired),
+		ModuleOptions: encodeModuleOptions(f.ModuleOptions),
 	})
 }
 
@@ -265,7 +269,35 @@ func withFileManagement(categories []Category, rows []settingsdb.CategoryFileMan
 			SharedFileFallback:   SharedFileFallback(row.SharedFileFallback),
 			IgnoreNewSeasons:     row.IgnoreNewSeasons != 0,
 			EpisodeTitleRequired: EpisodeTitleRequired(row.EpisodeTitleRequired),
+			ModuleOptions:        decodeModuleOptions(row.ModuleOptions),
 		}
 	}
 	return categories
+}
+
+func encodeModuleOptions(options map[string]string) string {
+	if len(options) == 0 {
+		return "{}"
+	}
+	encoded, err := json.Marshal(options)
+	if err != nil {
+		return "{}"
+	}
+	return string(encoded)
+}
+
+func decodeModuleOptions(stored string) map[string]string {
+	var options map[string]string
+	if json.Unmarshal([]byte(stored), &options) != nil || len(options) == 0 {
+		return nil
+	}
+	return options
+}
+
+// ModuleOption is the value of one of the media type's own settings, or fallback while none is stored.
+func (f FileManagement) ModuleOption(key, fallback string) string {
+	if value, found := f.ModuleOptions[key]; found {
+		return value
+	}
+	return fallback
 }

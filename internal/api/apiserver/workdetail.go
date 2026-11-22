@@ -81,6 +81,12 @@ type EditionRow struct {
 	ExternalIDs                                 []ExternalIDRow
 }
 
+// EditionLink is a work that holds a part on behalf of another.
+type EditionLink struct {
+	WorkID int64
+	Title  string
+}
+
 // PartRow is one part (track, episode, chapter, ...) of a work.
 type PartRow struct {
 	ID       int64
@@ -89,10 +95,12 @@ type PartRow struct {
 	Title    *string
 	// MediumTitle and ArtistCredit are empty when the disc has no name and the track has the album's artist.
 	MediumTitle, ArtistCredit string
-	RuntimeMs                 *int64
-	Date                      *string
-	Monitored                 bool
-	ExternalIDs               []ExternalIDRow
+	// InEdition names the held collected edition that stands for the part, nil when none does.
+	InEdition   *EditionLink
+	RuntimeMs   *int64
+	Date        *string
+	Monitored   bool
+	ExternalIDs []ExternalIDRow
 	// Wanted is the track's own SINGLE desired_item, nil until someone
 	// explicitly wants this one track on its own (todo 4.4).
 	Wanted *WantedRow
@@ -937,6 +945,9 @@ func buildPartViews(rows []PartRow) []gen.WorkPart {
 			views[index].AvailableConfidence = &confidence
 			hours := int64(row.AvailableGrace / time.Hour)
 			views[index].OutGraceHours = &hours
+		}
+		if row.InEdition != nil {
+			views[index].InEdition = &gen.PartEdition{WorkId: row.InEdition.WorkID, Title: row.InEdition.Title}
 		}
 		views[index].Section, views[index].Number = strPtr(row.Section), strPtr(row.Number)
 		if len(row.AltNumbers) > 0 {

@@ -115,7 +115,15 @@ func (p Part) defaultTitle() string {
 }
 
 // Date is the day the part is out: the store date, else the cover date.
-func (p Part) Date() (day, basis string) {
+func (p Part) Date() (day, basis string) { return p.dateBy(false) }
+
+// dateBy is Date, cover date first when the library's date type is the cover date.
+func (p Part) dateBy(coverFirst bool) (day, basis string) {
+	if coverFirst {
+		if day = normaliseDay(p.CoverDate); day != "" {
+			return day, "cover date"
+		}
+	}
 	if day = normaliseDay(p.Store); day != "" {
 		return day, "store date"
 	}
@@ -232,6 +240,8 @@ type WriteOptions struct {
 	Now     time.Time
 	// NewPart, when set, decides the monitoring of each part a write creates instead of Monitor.
 	NewPart func(Part) bool
+	// CoverDate dates a part by its cover date where it has one, the library's date type.
+	CoverDate bool
 }
 
 // ToWrite turns a merged series into what the library stores.
@@ -273,7 +283,7 @@ func ToWrite(series Series, options WriteOptions) library.SeriesWrite {
 		if options.NewPart != nil {
 			monitored = options.NewPart(part)
 		}
-		write.Parts = append(write.Parts, partWrite(part, monitored))
+		write.Parts = append(write.Parts, partWrite(part, monitored, options.CoverDate))
 	}
 	return write
 }
@@ -283,11 +293,11 @@ const ProviderPerson = "comic:person"
 
 func personKey(name string) string { return strings.ToLower(strings.Join(strings.Fields(name), " ")) }
 
-func partWrite(part Part, monitored bool) library.SeriesPartWrite {
+func partWrite(part Part, monitored, coverDate bool) library.SeriesPartWrite {
 	write := library.SeriesPartWrite{
 		MediaRef: part.Ref(), SortKey: SortKey(part.Kind, part.Number), Title: firstNonEmpty(part.Title, part.defaultTitle()), MonitoredIfNew: monitored,
 	}
-	if day, basis := part.Date(); day != "" {
+	if day, basis := part.dateBy(coverDate); day != "" {
 		write.Date = day
 		write.AvailableBasis = basis
 		write.AvailableConfidence = "low"

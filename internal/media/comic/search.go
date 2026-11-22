@@ -15,6 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/identify/parsecomic"
 	"github.com/makearr/Solarr/internal/identify/score"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/works"
 )
 
@@ -28,6 +29,8 @@ type Search struct {
 	Reader library.SeriesReader
 	// KindOf answers a library's kind; nil takes Comics.
 	KindOf func(categoryID int64) string
+	// OptionOf answers one of the library's own settings; nil takes every fallback.
+	OptionOf func(categoryID int64, key, fallback string) string
 }
 
 func (s Search) shared() works.Search[wanted] {
@@ -92,7 +95,11 @@ func (c comicSpec) Wanted(ctx context.Context, item librarydb.DesiredItem, only 
 			w.names[key] = true
 		}
 	}
+	editionsSatisfy := s.OptionOf != nil && s.OptionOf(item.CategoryID, string(media.FileEditionSatisfies), EditionOff) == EditionOn
 	for _, part := range detail.Episodes {
+		if standsInEdition(editionsSatisfy, part) {
+			continue
+		}
 		partKind, number, _ := strings.Cut(part.MediaRef, ":")
 		whole, err := strconv.Atoi(number)
 		if partKind != item.MediaRef || err != nil || whole < 0 || strconv.Itoa(whole) != number {
@@ -109,6 +116,11 @@ func (c comicSpec) Wanted(ctx context.Context, item librarydb.DesiredItem, only 
 		}
 	}
 	return w, len(w.missing) > 0, nil
+}
+
+// standsInEdition is a part a held collected edition stands for, with the library's setting on: it is not searched for.
+func standsInEdition(setting bool, part library.SeriesEpisode) bool {
+	return setting && part.InEdition != nil
 }
 
 // Owned implements works.Spec: a search fills gaps; upgrades are the cutoff check's.

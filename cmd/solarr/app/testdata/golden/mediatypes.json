@@ -1389,7 +1389,57 @@
         "sortable": false
       }
     ],
-    "file_settings": [],
+    "file_settings": [
+      {
+        "help": "Which date an issue comes out on: the date it is in the shops (the pull list and when it is searched for), or the cover date printed on it.",
+        "key": "date_type",
+        "label": "Date type",
+        "options": [
+          {
+            "key": "store",
+            "label": "Store date"
+          },
+          {
+            "key": "cover",
+            "label": "Cover date"
+          }
+        ]
+      },
+      {
+        "help": "A trade paperback or omnibus you hold stands for the issues it collects: they are not searched for, and the series page shows them as held in the edition.",
+        "key": "edition_satisfies_issues",
+        "label": "A collected edition satisfies its issues",
+        "options": [
+          {
+            "key": "off",
+            "label": "No"
+          },
+          {
+            "key": "on",
+            "label": "Yes"
+          }
+        ]
+      },
+      {
+        "help": "Write what comic readers use: series.json beside the series, and ComicInfo.xml inside each cbz. Fill adds a missing file or element and never changes an existing value; Replace overwrites. Files are rewritten through the move engine with the old one in the recycle bin.",
+        "key": "reader_files",
+        "label": "Kavita and Komga files",
+        "options": [
+          {
+            "key": "off",
+            "label": "Off"
+          },
+          {
+            "key": "fill",
+            "label": "Fill what is missing"
+          },
+          {
+            "key": "replace",
+            "label": "Replace"
+          }
+        ]
+      }
+    ],
     "follow_options": [],
     "genre_tree": {
       "key": "comics",

@@ -868,6 +868,13 @@ func (p *process) comicService() comic.Service {
 			}
 			return snapshot.MetadataSourcesFor(category)
 		},
+		OptionOf: func(categoryID int64, key, fallback string) string {
+			category, found := p.cache.Snapshot().Category(categoryID)
+			if !found {
+				return fallback
+			}
+			return category.FileManagement.ModuleOption(key, fallback)
+		},
 		Series: library.NewSeries(p.library), Exclusions: library.NewExclusions(p.library), Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library),
 		Clock: clock.NewSystem(),
 		ProfileFor: func(categoryID int64) int64 {
@@ -885,7 +892,7 @@ func (p *process) comicGrab() comic.Grab {
 	blocklist, sightings, filters := library.NewBlocklistStore(p.library), library.NewSightings(p.library), library.NewReleaseFilters(p.library)
 	return comic.Grab{
 		Search: comic.Search{
-			Reader: library.NewSeriesReader(p.library), KindOf: p.comicService().KindOf,
+			Reader: library.NewSeriesReader(p.library), KindOf: p.comicService().KindOf, OptionOf: p.comicService().OptionOf,
 			Deps: works.Deps{Desired: library.NewDesired(p.library), Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist, Sightings: &sightings, ReleaseFilters: &filters},
 		},
 		Automatic: dispatch.Automatic{

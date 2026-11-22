@@ -15,6 +15,9 @@ import { EmptyState } from "@/ui/EmptyState";
 import { PageHeader } from "@/ui/PageHeader";
 import { inputStyle } from "@/ui/form";
 
+import { useLibrary } from "@/lib/useLibrary";
+
+import { ReadingListImport } from "./ReadingListImport";
 import { AddToLibrary } from "./work/AddToSolarr";
 
 type Crossover = components["schemas"]["Crossover"];
@@ -57,6 +60,8 @@ export function CrossoverIndex() {
   const { categoryId } = useParams({ strict: false }) as { categoryId: string };
   const administrator = useIsAdministrator();
   const queryClient = useQueryClient();
+  const [importing, setImporting] = useState(false);
+  const importable = useLibrary(categoryId)?.media_type === "comic";
   const list = useQuery({
     queryKey: ["crossovers", categoryId],
     queryFn: () => ok(api.GET("/crossovers", { params: { query: { category_id: Number(categoryId) } } })),
@@ -85,6 +90,12 @@ export function CrossoverIndex() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-4xl flex-col gap-5 p-4">
         <PageHeader title={t("crossover.title")} subtitle={t("crossover.help")} />
+        {importable && administrator && (
+          <div>
+            <Button onClick={() => setImporting(true)}>{t("readingList.import")}</Button>
+          </div>
+        )}
+        {importing && <ReadingListImport categoryId={categoryId} onClose={() => setImporting(false)} />}
         {list.data.events.length === 0 && <EmptyState title={t("crossover.none")} />}
         {list.data.events.map((event) => (
           <section key={event.id} className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">

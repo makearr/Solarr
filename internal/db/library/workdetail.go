@@ -43,6 +43,8 @@ type PartDetail struct {
 	// MediumTitle is the disc's own name and ArtistCredit the track's credited artists when they are not the album's.
 	MediumTitle  string
 	ArtistCredit string
+	// InEdition is the held collected edition that stands for the part, nil when none does.
+	InEdition *EditionRef
 }
 
 // PartCredit is one person credited on a part.
@@ -473,6 +475,16 @@ func detailParts(ctx context.Context, queries *librarydb.Queries, id int64, part
 		detailOf[row.PartID] = row
 	}
 
+	editions, err := queries.ListHeldCoverageOfWork(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("library: work detail: coverage: %w", err)
+	}
+	editionOf := make(map[string]*EditionRef, len(editions))
+	for _, edition := range editions {
+		if _, taken := editionOf[edition.CoveredRef]; !taken {
+			editionOf[edition.CoveredRef] = &EditionRef{WorkID: edition.EditionWorkID, Title: edition.EditionTitle}
+		}
+	}
 	partDetails := make([]PartDetail, len(parts))
 	for index, part := range parts {
 		partExternalIDs, err := queries.ListWorkPartExternalIDs(ctx, part.ID)
@@ -480,7 +492,7 @@ func detailParts(ctx context.Context, queries *librarydb.Queries, id int64, part
 			return nil, fmt.Errorf("library: work detail: part external ids: %w", err)
 		}
 		partDetails[index] = PartDetail{Part: part, ExternalIDs: partExternalIDs, Credits: creditsOf[part.ID], AltNumbers: altNumbersOf[part.ID],
-			MediumTitle: detailOf[part.ID].MediumTitle, ArtistCredit: detailOf[part.ID].ArtistCredit}
+			MediumTitle: detailOf[part.ID].MediumTitle, ArtistCredit: detailOf[part.ID].ArtistCredit, InEdition: editionOf[part.MediaRef]}
 		if file, found := fileByRef[part.MediaRef]; found {
 			partDetails[index].File = &file
 		}

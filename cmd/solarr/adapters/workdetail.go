@@ -215,6 +215,9 @@ func (a WorkDetail) partRows(mediaType string, from []library.PartDetail) []apis
 				State: detail.Wanted.State, LastSearchedAt: detail.Wanted.LastSearchedAt,
 			}
 		}
+		if detail.InEdition != nil {
+			row.InEdition = &apiserver.EditionLink{WorkID: detail.InEdition.WorkID, Title: detail.InEdition.Title}
+		}
 		if detail.Part.Title.Valid {
 			row.Title = &detail.Part.Title.String
 		}

@@ -107,6 +107,7 @@ type CategoryFileManagement struct {
 	IgnoreNewSeasons         int64
 	EpisodeTitleRequired     string
 	TagCopyLinkedFiles       int64
+	ModuleOptions            string
 }
 
 type CategoryMetadataSource struct {

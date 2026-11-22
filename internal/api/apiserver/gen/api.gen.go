@@ -611,13 +611,16 @@ const (
 const (
 	MediaTypeInfoFileSettingsKeyChangeFileDate           MediaTypeInfoFileSettingsKey = "change_file_date"
 	MediaTypeInfoFileSettingsKeyCreateEmptyArtistFolders MediaTypeInfoFileSettingsKey = "create_empty_artist_folders"
+	MediaTypeInfoFileSettingsKeyDateType                 MediaTypeInfoFileSettingsKey = "date_type"
 	MediaTypeInfoFileSettingsKeyDeleteEmptyFolders       MediaTypeInfoFileSettingsKey = "delete_empty_folders"
+	MediaTypeInfoFileSettingsKeyEditionSatisfiesIssues   MediaTypeInfoFileSettingsKey = "edition_satisfies_issues"
 	MediaTypeInfoFileSettingsKeyEpisodeTitleRequired     MediaTypeInfoFileSettingsKey = "episode_title_required"
 	MediaTypeInfoFileSettingsKeyExtraFileExtensions      MediaTypeInfoFileSettingsKey = "extra_file_extensions"
 	MediaTypeInfoFileSettingsKeyImportExtraFiles         MediaTypeInfoFileSettingsKey = "import_extra_files"
 	MediaTypeInfoFileSettingsKeyMediaServerFiles         MediaTypeInfoFileSettingsKey = "media_server_files"
 	MediaTypeInfoFileSettingsKeyMergeArtistAliases       MediaTypeInfoFileSettingsKey = "merge_artist_aliases"
 	MediaTypeInfoFileSettingsKeyMonitorNewSeasons        MediaTypeInfoFileSettingsKey = "monitor_new_seasons"
+	MediaTypeInfoFileSettingsKeyReaderFiles              MediaTypeInfoFileSettingsKey = "reader_files"
 	MediaTypeInfoFileSettingsKeyRescanAfterRefresh       MediaTypeInfoFileSettingsKey = "rescan_after_refresh"
 	MediaTypeInfoFileSettingsKeySharedFileFallback       MediaTypeInfoFileSettingsKey = "shared_file_fallback"
 	MediaTypeInfoFileSettingsKeyUnmonitorDeleted         MediaTypeInfoFileSettingsKey = "unmonitor_deleted"
@@ -818,6 +821,19 @@ const (
 	QueueItemStateDOWNLOADING QueueItemState = "DOWNLOADING"
 	QueueItemStateIMPORTING   QueueItemState = "IMPORTING"
 	QueueItemStateQUEUED      QueueItemState = "QUEUED"
+)
+
+// Defines values for ReadingListPreviewBooksMissing.
+const (
+	ReadingListPreviewBooksMissingIssue  ReadingListPreviewBooksMissing = "issue"
+	ReadingListPreviewBooksMissingSeries ReadingListPreviewBooksMissing = "series"
+)
+
+// Defines values for ReadingListPreviewBooksStatus.
+const (
+	ReadingListPreviewBooksStatusAmbiguous ReadingListPreviewBooksStatus = "ambiguous"
+	ReadingListPreviewBooksStatusMatched   ReadingListPreviewBooksStatus = "matched"
+	ReadingListPreviewBooksStatusNotFound  ReadingListPreviewBooksStatus = "not_found"
 )
 
 // Defines values for ReadyStatusStatus.
@@ -2858,6 +2874,9 @@ type FileManagement struct {
 
 	// MergeArtistAliases An artist stored under several names (folders, aliases) is merged into one after each disk scan: the identified artist wins, else the name with the most albums.
 	MergeArtistAliases bool `json:"merge_artist_aliases"`
+
+	// ModuleOptions The settings the library's media type declares of its own (file_settings with options), by key; a key left out is the type's default. Omitted on a save keeps what is stored.
+	ModuleOptions *map[string]string `json:"module_options,omitempty"`
 
 	// MonitorNewSeasons Whether a season a refresh finds is monitored when the series already has a monitored one (Sonarr's "Monitor New Seasons": all or none). On by default. Omitted on a save keeps what is stored.
 	MonitorNewSeasons    *bool                            `json:"monitor_new_seasons,omitempty"`
@@ -5097,6 +5116,12 @@ type ParsedTitle struct {
 	Year     *int      `json:"year,omitempty"`
 }
 
+// PartEdition The held collected edition that stands for a part (a trade paperback for the issues it collects).
+type PartEdition struct {
+	Title  string `json:"title"`
+	WorkId int64  `json:"work_id"`
+}
+
 // PartFile The file covering one part, and what probing measured of it.
 type PartFile struct {
 	AudioChannels *string `json:"audio_channels,omitempty"`
@@ -5713,6 +5738,34 @@ type RatingLimit struct {
 	AllowUnrated bool   `json:"allow_unrated"`
 	MaxAge       *int64 `json:"max_age"`
 }
+
+// ReadingListPreview defines model for ReadingListPreview.
+type ReadingListPreview struct {
+	Books []struct {
+		// Missing What the library lacks of a book that is not matched.
+		Missing *ReadingListPreviewBooksMissing `json:"missing,omitempty"`
+		Number  string                          `json:"number"`
+
+		// PartId The held issue's part
+		PartId *int64 `json:"part_id,omitempty"`
+
+		// Series The series as the file names it.
+		Series      string                        `json:"series"`
+		SeriesTitle *string                       `json:"series_title,omitempty"`
+		Status      ReadingListPreviewBooksStatus `json:"status"`
+		Volume      *string                       `json:"volume,omitempty"`
+
+		// WorkId The held series
+		WorkId *int64 `json:"work_id,omitempty"`
+	} `json:"books"`
+	Name string `json:"name"`
+}
+
+// ReadingListPreviewBooksMissing What the library lacks of a book that is not matched.
+type ReadingListPreviewBooksMissing string
+
+// ReadingListPreviewBooksStatus defines model for ReadingListPreview.Books.Status.
+type ReadingListPreviewBooksStatus string
 
 // ReadyQueueLimit The ready queue's bound (acquire.ready_queue_limit).
 type ReadyQueueLimit struct {
@@ -7140,9 +7193,12 @@ type WorkPart struct {
 	ExternalIds []ExternalID `json:"external_ids"`
 
 	// File What is on disk for this part, absent when nothing is. Aligned through the same media_ref the album's own present_count is counted from, so the two can never disagree.
-	File     *PartFile `json:"file"`
-	Id       int64     `json:"id"`
-	MediaRef string    `json:"media_ref"`
+	File *PartFile `json:"file"`
+	Id   int64     `json:"id"`
+
+	// InEdition The held collected edition that stands for a part (a trade paperback for the issues it collects).
+	InEdition *PartEdition `json:"in_edition,omitempty"`
+	MediaRef  string       `json:"media_ref"`
 
 	// MediumTitle The disc's own name ("Live in Berlin"); absent for most discs.
 	MediumTitle *string `json:"medium_title,omitempty"`
@@ -7336,6 +7392,12 @@ type SetLibraryMetadataSourcesJSONBody struct {
 
 	// Sources The providers to ask
 	Sources *[]string `json:"sources,omitempty"`
+}
+
+// PreviewReadingListJSONBody defines parameters for PreviewReadingList.
+type PreviewReadingListJSONBody struct {
+	// Content The file's text, at most 1 MiB.
+	Content string `json:"content"`
 }
 
 // RenameLibraryJSONBody defines parameters for RenameLibrary.
@@ -8527,6 +8589,9 @@ type SetLibraryQualityJSONRequestBody = LibraryQualityWrite
 // PreviewLibraryQualityJSONRequestBody defines body for PreviewLibraryQuality for application/json ContentType.
 type PreviewLibraryQualityJSONRequestBody = LibraryQualityWrite
 
+// PreviewReadingListJSONRequestBody defines body for PreviewReadingList for application/json ContentType.
+type PreviewReadingListJSONRequestBody PreviewReadingListJSONBody
+
 // SetLibraryReleaseTypesJSONRequestBody defines body for SetLibraryReleaseTypes for application/json ContentType.
 type SetLibraryReleaseTypesJSONRequestBody = LibraryReleaseTypes
 
@@ -9102,6 +9167,9 @@ type ServerInterface interface {
 	// What saving this quality would change in the library, item by item; nothing is saved. Administrator only.
 	// (POST /categories/{id}/quality/preview)
 	PreviewLibraryQuality(w http.ResponseWriter, r *http.Request, id int64)
+	// Match a ComicRack reading list (.cbl) to the library's series and issues, saving nothing. Administrator only.
+	// (POST /categories/{id}/reading-list)
+	PreviewReadingList(w http.ResponseWriter, r *http.Request, id int64)
 	// The release types an artist followed in a library brings in. Administrator only.
 	// (GET /categories/{id}/release-types)
 	GetLibraryReleaseTypes(w http.ResponseWriter, r *http.Request, id int64)
@@ -10485,6 +10553,12 @@ func (_ Unimplemented) SetLibraryQuality(w http.ResponseWriter, r *http.Request,
 // What saving this quality would change in the library, item by item; nothing is saved. Administrator only.
 // (POST /categories/{id}/quality/preview)
 func (_ Unimplemented) PreviewLibraryQuality(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Match a ComicRack reading list (.cbl) to the library's series and issues, saving nothing. Administrator only.
+// (POST /categories/{id}/reading-list)
+func (_ Unimplemented) PreviewReadingList(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -14437,6 +14511,39 @@ func (siw *ServerInterfaceWrapper) PreviewLibraryQuality(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PreviewLibraryQuality(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewReadingList operation middleware
+func (siw *ServerInterfaceWrapper) PreviewReadingList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewReadingList(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -25698,6 +25805,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/categories/{id}/quality/preview", wrapper.PreviewLibraryQuality)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/categories/{id}/reading-list", wrapper.PreviewReadingList)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories/{id}/release-types", wrapper.GetLibraryReleaseTypes)

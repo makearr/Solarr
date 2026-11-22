@@ -66,6 +66,16 @@ func (s *Server) SetLibraryFileManagement(w http.ResponseWriter, r *http.Request
 	if body.EpisodeTitleRequired != nil {
 		wanted.EpisodeTitleRequired = settings.EpisodeTitleRequired(*body.EpisodeTitleRequired)
 	}
+	wanted.ModuleOptions = category.FileManagement.ModuleOptions
+	if body.ModuleOptions != nil {
+		options, problems := s.moduleOptions(category.MediaType, *body.ModuleOptions)
+		if len(problems) > 0 {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"The file management has problems", problems.Report("file management", "Nothing was changed."))
+			return
+		}
+		wanted.ModuleOptions = options
+	}
 	if err := s.auth.Settings.SetCategoryFileManagement(r.Context(), id, wanted); err != nil {
 		var problems config.Problems
 		if errors.As(err, &problems) {
@@ -104,7 +114,12 @@ func (s *Server) fileManagementView(category settings.Category) gen.FileManageme
 		titleRequired = gen.FileManagementEpisodeTitleRequired(settings.TitleRequiredAlways)
 	}
 	monitorNew := !f.IgnoreNewSeasons
+	moduleOptions := map[string]string{}
+	for key, value := range f.ModuleOptions {
+		moduleOptions[key] = value
+	}
 	return gen.FileManagement{
+		ModuleOptions:    &moduleOptions,
 		ImportExtraFiles: &extrasOn, ExtraFileExtensions: &extensions, MediaServerFiles: &f.MediaServerFiles,
 		SharedFileFallback: &fallback, MonitorNewSeasons: &monitorNew, EpisodeTitleRequired: &titleRequired,
 		PropersRepacks:     gen.FileManagementPropersRepacks(f.PropersRepacks),
@@ -167,4 +182,33 @@ func (s *Server) SetLibraryTagging(w http.ResponseWriter, r *http.Request, id in
 
 func taggingView(t settings.Tagging) gen.Tagging {
 	return gen.Tagging{WriteIds: t.WriteIDs, ReplaceIds: t.ReplaceIDs, WriteMetadata: t.WriteMetadata, EmbedCover: t.EmbedCover, Navidrome: t.Navidrome, CopyLinkedFiles: t.CopyLinkedFiles}
+}
+
+// moduleOptions keeps the values the media type declares a choice for, one of its own options each; any other is a problem.
+func (s *Server) moduleOptions(mediaType string, given map[string]string) (map[string]string, config.Problems) {
+	info, _ := s.mediaTypeInfo(mediaType)
+	var problems config.Problems
+	kept := map[string]string{}
+	for key, value := range given {
+		allowed := false
+		declared := false
+		for _, setting := range info.FileSettings {
+			if setting.Key != key || len(setting.Options) == 0 {
+				continue
+			}
+			declared = true
+			for _, option := range setting.Options {
+				allowed = allowed || option.Key == value
+			}
+		}
+		switch {
+		case !declared:
+			problems = append(problems, config.Problem{Path: "module_options." + key, Value: value, Expectation: "a setting this media type declares"})
+		case !allowed:
+			problems = append(problems, config.Problem{Path: "module_options." + key, Value: value, Expectation: "one of the setting's options"})
+		default:
+			kept[key] = value
+		}
+	}
+	return kept, problems
 }

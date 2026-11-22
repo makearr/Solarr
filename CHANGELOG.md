@@ -5,6 +5,7 @@ Earlier entries use older schemes; those at and below `0.0.x` predate both and a
 
 ## Unreleased
 
+- Comics: a library chooses its date type (store date or cover date) and whether a collected edition it holds satisfies the issues it collects (those are then not searched for and show as held in the edition); a ComicRack reading list (.cbl) can be imported on the Story arcs page: matched issues are kept in order as one list. Libraries gained a generic "Library options" section for settings a media type declares.
 - Comics: a download of cbz/cbr files is no longer unpacked into its pages before import; a Manga library names its series folders without a year and starts on the Manga default target.
 - Calendar: a Pull list view (comic libraries only, weeks starting on Wednesday).
 - Comics: four shipped CBZ quality targets (any page size, SD, HD, manga HD) with a page size the median page of a file must reach (a file whose pages were not measured is never held against it), comic quality profiles (CBZ preferred, Any comic, High resolution), a Pages section in the quality target editor, and Rename now names comic files by the library's naming scheme. The "also the specials" box shows only for TV.

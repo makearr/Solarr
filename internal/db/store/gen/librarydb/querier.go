@@ -21,6 +21,7 @@ type Querier interface {
 	AddCollectionMemberByHand(ctx context.Context, arg AddCollectionMemberByHandParams) error
 	AddCollectionMemberOrigin(ctx context.Context, arg AddCollectionMemberOriginParams) error
 	AddCollectionRefusal(ctx context.Context, arg AddCollectionRefusalParams) error
+	AddCoverage(ctx context.Context, arg AddCoverageParams) error
 	// edition_id and part_id are 0 for a credit on the work itself (Appendix E, D2).
 	AddCredit(ctx context.Context, arg AddCreditParams) error
 	AddCrossoverEventDismissed(ctx context.Context, arg AddCrossoverEventDismissedParams) error
@@ -689,6 +690,8 @@ type Querier interface {
 	ListCollectionsOfKind(ctx context.Context, arg ListCollectionsOfKindParams) ([]Collection, error)
 	ListCollectionsOfWorkParts(ctx context.Context, arg ListCollectionsOfWorkPartsParams) ([]Collection, error)
 	ListCountersForScope(ctx context.Context, scope string) ([]Counter, error)
+	// What an edition's parts cover, in the covered series' words.
+	ListCoverageByEdition(ctx context.Context, workID int64) ([]ListCoverageByEditionRow, error)
 	ListCreatorLinksOfType(ctx context.Context, mediaType string) ([]ListCreatorLinksOfTypeRow, error)
 	ListCreditsForEdition(ctx context.Context, editionID int64) ([]Credit, error)
 	// Per-track performers and composers, which is what classical and various-artists
@@ -762,6 +765,8 @@ type Querier interface {
 	ListGroupObservations(ctx context.Context, arg ListGroupObservationsParams) ([]GroupObservation, error)
 	// Every video with frame hashes and its primary path; the similar-video report brute-forces Hamming distance in Go (ADR-35).
 	ListHashedVideos(ctx context.Context, version int64) ([]ListHashedVideosRow, error)
+	// The parts of a work that a held collected edition stands for, with the edition's work and title.
+	ListHeldCoverageOfWork(ctx context.Context, workID int64) ([]ListHeldCoverageOfWorkRow, error)
 	// The artists with something held in a library, and the release groups they hold there: what a discography is
 	// compared against. A held work without a release-group id yields an empty id.
 	ListHeldReleaseGroupsByArtist(ctx context.Context, categoryID int64) ([]ListHeldReleaseGroupsByArtistRow, error)
@@ -1264,6 +1269,7 @@ type Querier interface {
 	RenameCollection(ctx context.Context, arg RenameCollectionParams) error
 	RenameCollectionByHand(ctx context.Context, arg RenameCollectionByHandParams) (int64, error)
 	RenamePersonByHand(ctx context.Context, arg RenamePersonByHandParams) error
+	ReplaceCoverageSource(ctx context.Context, arg ReplaceCoverageSourceParams) error
 	RepointEditionExternalID(ctx context.Context, arg RepointEditionExternalIDParams) (int64, error)
 	RepointItemProfileChunk(ctx context.Context, arg RepointItemProfileChunkParams) (int64, error)
 	RepointProfileOverrideChunk(ctx context.Context, arg RepointProfileOverrideChunkParams) (int64, error)

@@ -19,11 +19,13 @@ type Service struct {
 	// KindOf answers a library's kind; ProvidersOf the enabled providers of its order, best first.
 	KindOf      func(categoryID int64) string
 	ProvidersOf func(categoryID int64) []string
-	Series      library.Series
-	Exclusions  library.Exclusions
-	Reader      library.SeriesReader
-	Desired     library.Desired
-	Clock       clock.Clock
+	// OptionOf answers one of the library's own settings (module options), or the fallback while it has none.
+	OptionOf   func(categoryID int64, key, fallback string) string
+	Series     library.Series
+	Exclusions library.Exclusions
+	Reader     library.SeriesReader
+	Desired    library.Desired
+	Clock      clock.Clock
 	// ProfileFor is the quality profile a library's new wanted items take; nil leaves a series without items until one exists.
 	ProfileFor func(categoryID int64) int64
 }
@@ -33,6 +35,17 @@ func (s Service) kind(categoryID int64) string {
 		return KindComics
 	}
 	return s.KindOf(categoryID)
+}
+
+func (s Service) option(categoryID int64, key, fallback string) string {
+	if s.OptionOf == nil {
+		return fallback
+	}
+	return s.OptionOf(categoryID, key, fallback)
+}
+
+func (s Service) coverDates(categoryID int64) bool {
+	return s.option(categoryID, string(media.FileDateType), DateTypeStore) == DateTypeCover
 }
 
 func (s Service) order(categoryID int64) []string {
@@ -280,7 +293,7 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 		return AddResult{}, fmt.Errorf("%w: %q is adult content, which only an adult kind of library takes", media.ErrInvalidAdd, series.Title)
 	}
 	now := s.Clock.Now()
-	stored, err := s.Series.Upsert(ctx, now, ToWrite(series, WriteOptions{Monitor: monitor, Now: now}))
+	stored, err := s.Series.Upsert(ctx, now, ToWrite(series, WriteOptions{Monitor: monitor, Now: now, CoverDate: s.coverDates(request.CategoryID)}))
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -351,7 +364,7 @@ func (s Service) Refresh(ctx context.Context, categoryID, workID int64) (Series,
 		return Series{}, err
 	}
 	now := s.Clock.Now()
-	if _, err := s.Series.Upsert(ctx, now, ToWrite(series, WriteOptions{Now: now, NewPart: func(part Part) bool { return monitored && part.Kind != PartChapter }})); err != nil {
+	if _, err := s.Series.Upsert(ctx, now, ToWrite(series, WriteOptions{Now: now, CoverDate: s.coverDates(categoryID), NewPart: func(part Part) bool { return monitored && part.Kind != PartChapter }})); err != nil {
 		return Series{}, err
 	}
 	// A kind of part the series gains (its first annual) gets an item beside the others, under the same profile.
@@ -470,7 +483,7 @@ func (s Service) EnsureParts(ctx context.Context, categoryID, workID int64, keys
 	}
 	write := library.SeriesWrite{Work: library.WorkIdentity{MediaType: MediaType, CanonicalTitle: basics.Title, SortTitle: library.SortTitle(basics.Title)}, IDs: idWrites(ids), CertificationAge: -1}
 	for _, part := range missing {
-		write.Parts = append(write.Parts, partWrite(part, false))
+		write.Parts = append(write.Parts, partWrite(part, false, s.coverDates(categoryID)))
 	}
 	if _, err := s.Series.Upsert(ctx, s.Clock.Now(), write); err != nil {
 		s.warn("parts", strconv.FormatInt(workID, 10), err)

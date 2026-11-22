@@ -18,6 +18,12 @@ import (
 // ErrSeriesNotFound reports a series id that is not a TV series visible in the category asked about.
 var ErrSeriesNotFound = errors.New("library: series not found")
 
+// EditionRef names a work that holds a part on behalf of others.
+type EditionRef struct {
+	WorkID int64
+	Title  string
+}
+
 // SeriesCounts are the episode counts of a series or a season. Present counts monitored episodes with a file.
 type SeriesCounts struct {
 	Total, Monitored, Present, AiredMissing int64
@@ -57,13 +63,15 @@ type SeriesEpisode struct {
 	File   *EpisodeFile
 	PartID int64
 	// MediaRef is the part's own reference ("s2:e5", "issue:5"); Season and Number are what a TV ref says.
-	MediaRef            string
-	Season, Number      int
-	Title               string
-	Date                string
-	RuntimeMs           int64
-	Monitored           bool
-	Present             bool
+	MediaRef       string
+	Season, Number int
+	Title          string
+	Date           string
+	RuntimeMs      int64
+	Monitored      bool
+	Present        bool
+	// InEdition is the held collected edition that stands for this part, when one does.
+	InEdition           *EditionRef
 	AvailableAt         int64
 	AvailableConfidence string
 	// AvailableGrace is how long after its time or date it is waited for.
@@ -166,6 +174,16 @@ func (r SeriesReader) GetOf(ctx context.Context, mediaType string, categoryID, w
 	for _, ref := range covered {
 		hasFile[ref] = true
 	}
+	editions, err := queries.ListHeldCoverageOfWork(ctx, workID)
+	if err != nil {
+		return SeriesDetailRow{}, fmt.Errorf("library: coverage: %w", err)
+	}
+	editionOf := make(map[string]*EditionRef, len(editions))
+	for _, edition := range editions {
+		if _, taken := editionOf[edition.CoveredRef]; !taken {
+			editionOf[edition.CoveredRef] = &EditionRef{WorkID: edition.EditionWorkID, Title: edition.EditionTitle}
+		}
+	}
 	numbersOf := map[string]map[int64]string{}
 	for _, scheme := range []string{"absolute", AltSchemeScene, AltSchemeSceneAbsolute} {
 		numbers, err := queries.ListAltNumbersForWork(ctx, librarydb.ListAltNumbersForWorkParams{WorkID: workID, Scheme: scheme})
@@ -195,7 +213,7 @@ func (r SeriesReader) GetOf(ctx context.Context, mediaType string, categoryID, w
 		detail.Episodes = append(detail.Episodes, SeriesEpisode{File: file,
 			PartID: part.ID, MediaRef: part.MediaRef, Season: season, Number: number, Absolute: numbersOf["absolute"][part.ID],
 			Scene: numbersOf[AltSchemeScene][part.ID], SceneAbsolute: numbersOf[AltSchemeSceneAbsolute][part.ID], Title: part.Title.String, Date: part.Date.String,
-			RuntimeMs: part.RuntimeMs.Int64, Monitored: part.Monitored == 1, Present: hasFile[part.MediaRef],
+			RuntimeMs: part.RuntimeMs.Int64, Monitored: part.Monitored == 1, Present: hasFile[part.MediaRef], InEdition: editionOf[part.MediaRef],
 			AvailableAt: part.AvailableAt.Int64, AvailableConfidence: part.AvailableConfidence,
 			AvailableGrace: PartGrace(part.AvailableGrace, part.AvailableConfidence), AltTitles: altOf[part.ID],
 		})

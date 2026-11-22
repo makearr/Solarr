@@ -188,6 +188,7 @@ func (Module) Descriptor() media.Descriptor {
 		Kinds:          Kinds(),
 		ExtraFiles:     media.ExtraFilesDefault{Import: true, Extensions: []string{"jpg", "xml", "json"}},
 		GuessFloor:     GuessFloor,
+		FileSettings:   fileSettings,
 		// A held import folder is committed by hand, and a removed series' files are left out by the scan.
 		CommitsHeldImports:    true,
 		ScanHonoursExclusions: true,
@@ -219,4 +220,25 @@ func facets() []media.Facet {
 			Source: media.FacetSource{Kind: media.SourceColumn, Name: "original_language"}, Filterable: true,
 		},
 	}
+}
+
+// The library settings of the comic type, kept in the library's module options by these keys.
+const (
+	DateTypeStore = "store"
+	DateTypeCover = "cover"
+	// ReaderFilesOff writes nothing for Kavita and Komga; Fill adds what is missing; Replace overwrites what differs.
+	ReaderFilesOff     = "off"
+	ReaderFilesFill    = "fill"
+	ReaderFilesReplace = "replace"
+	EditionOn          = "on"
+	EditionOff         = "off"
+)
+
+var fileSettings = []media.FileSetting{
+	{Key: media.FileDateType, Label: "Date type", Help: "Which date an issue comes out on: the date it is in the shops (the pull list and when it is searched for), or the cover date printed on it.", Options: []media.Choice{
+		{Key: DateTypeStore, Label: "Store date"}, {Key: DateTypeCover, Label: "Cover date"}}},
+	{Key: media.FileEditionSatisfies, Label: "A collected edition satisfies its issues", Help: "A trade paperback or omnibus you hold stands for the issues it collects: they are not searched for, and the series page shows them as held in the edition.", Options: []media.Choice{
+		{Key: EditionOff, Label: "No"}, {Key: EditionOn, Label: "Yes"}}},
+	{Key: media.FileReaderFiles, Label: "Kavita and Komga files", Help: "Write what comic readers use: series.json beside the series, and ComicInfo.xml inside each cbz. Fill adds a missing file or element and never changes an existing value; Replace overwrites. Files are rewritten through the move engine with the old one in the recycle bin.", Options: []media.Choice{
+		{Key: ReaderFilesOff, Label: "Off"}, {Key: ReaderFilesFill, Label: "Fill what is missing"}, {Key: ReaderFilesReplace, Label: "Replace"}}},
 }

@@ -4596,6 +4596,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories/{id}/reading-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Match a ComicRack reading list (.cbl) to the library's series and issues, saving nothing. Administrator only. */
+        post: operations["previewReadingList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/file-management": {
         parameters: {
             query?: never;
@@ -7650,7 +7669,7 @@ export interface components {
             /** @description The File Management settings that mean something for the type, in its words; one left out is not offered. The rest of File Management is the same for every type. */
             file_settings: {
                 /** @enum {string} */
-                key: "create_empty_artist_folders" | "delete_empty_folders" | "unmonitor_deleted" | "merge_artist_aliases" | "rescan_after_refresh" | "change_file_date" | "import_extra_files" | "extra_file_extensions" | "media_server_files" | "monitor_new_seasons" | "shared_file_fallback" | "episode_title_required";
+                key: "create_empty_artist_folders" | "delete_empty_folders" | "unmonitor_deleted" | "merge_artist_aliases" | "rescan_after_refresh" | "change_file_date" | "import_extra_files" | "extra_file_extensions" | "media_server_files" | "monitor_new_seasons" | "shared_file_fallback" | "date_type" | "edition_satisfies_issues" | "reader_files" | "episode_title_required";
                 label: string;
                 help: string;
                 /** @description A choice's values in the type's words. */
@@ -9853,6 +9872,39 @@ export interface components {
             script?: string;
             external_ids: components["schemas"]["ExternalID"][];
         };
+        ReadingListPreview: {
+            name: string;
+            books: {
+                /** @description The series as the file names it. */
+                series: string;
+                number: string;
+                volume?: string;
+                /** @enum {string} */
+                status: "matched" | "ambiguous" | "not_found";
+                /**
+                 * @description What the library lacks of a book that is not matched.
+                 * @enum {string}
+                 */
+                missing?: "series" | "issue";
+                /**
+                 * Format: int64
+                 * @description The held series
+                 */
+                work_id?: number;
+                series_title?: string;
+                /**
+                 * Format: int64
+                 * @description The held issue's part
+                 */
+                part_id?: number;
+            }[];
+        };
+        /** @description The held collected edition that stands for a part (a trade paperback for the issues it collects). */
+        PartEdition: {
+            /** Format: int64 */
+            work_id: number;
+            title: string;
+        };
         WorkPart: {
             /** Format: int64 */
             id: number;
@@ -9863,6 +9915,7 @@ export interface components {
             medium_title?: string;
             /** @description The track's credited artists when they are not the album's; absent otherwise. */
             artist_credit?: string;
+            in_edition?: components["schemas"]["PartEdition"];
             /** Format: int64 */
             runtime_ms?: number;
             date?: string;
@@ -10604,6 +10657,10 @@ export interface components {
         };
         /** @description Sonarr's File Management and Permissions for one library. The recycling bin is Solarr's recycle bin: nothing is deleted directly, so only how long it keeps what this library removes is set here. */
         FileManagement: {
+            /** @description The settings the library's media type declares of its own (file_settings with options), by key; a key left out is the type's default. Omitted on a save keeps what is stored. */
+            module_options?: {
+                [key: string]: string;
+            };
             /**
              * @description Sonarr's Episode Title Required: an episode whose title is still TBA is held from import for up to 48 hours after it aired, from any release (always, the default), only from a whole-season release, or never. Omitted on a save keeps what is stored.
              * @enum {string}
@@ -19892,6 +19949,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LibraryNaming"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    previewReadingList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The file's text, at most 1 MiB. */
+                    content: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The list's name and each book's match, in reading order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingListPreview"];
                 };
             };
             400: components["responses"]["Problem"];

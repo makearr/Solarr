@@ -150,6 +150,9 @@ const (
 	FileMonitorNewGroups       FileSettingKey = "monitor_new_seasons"
 	FileSharedFileFallback     FileSettingKey = "shared_file_fallback"
 	FileEpisodeTitleRequired   FileSettingKey = "episode_title_required"
+	FileDateType               FileSettingKey = "date_type"
+	FileEditionSatisfies       FileSettingKey = "edition_satisfies_issues"
+	FileReaderFiles            FileSettingKey = "reader_files"
 )
 
 // FileSetting is one File Management setting as a type words it; Options relabel a choice's values in its words.

@@ -1070,6 +1070,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Files: library.NewPhysical(p.library), Works: library.NewWorks(p.library), Cache: p.cache,
 		},
 		VanishedFiles: p.vanishedFiles(),
+		ReadingLists:  adapters.ReadingLists{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library)},
 		Crossovers: adapters.Crossovers{
 			Crossovers: library.NewCrossovers(p.library), Desired: library.NewDesired(p.library), SharedFiles: p.enqueueSharedFiles,
 		},

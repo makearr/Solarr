@@ -743,6 +743,12 @@ type PackItem struct {
 	State        string
 }
 
+type PartCoverage struct {
+	CoveringPartID int64
+	CoveredPartID  int64
+	Source         string
+}
+
 type Person struct {
 	ID             int64
 	Name           string

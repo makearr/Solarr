@@ -206,6 +206,8 @@ type Config struct {
 	Franchises Franchises
 	// Crossovers are events across works and one broadcast listed twice. Optional: without it, 503.
 	Crossovers Crossovers
+	// ReadingLists matches an uploaded reading list to a comic library. Optional: without it, 503.
+	ReadingLists ReadingLists
 	// WorkNumbering numbers a work by another of its sources' lists. Optional: without it, none is offered.
 	WorkNumbering WorkNumbering
 	// WorkReleaseFilters holds a series' own rules for the releases offered for it. Optional: without it, 503.
@@ -410,6 +412,7 @@ type Server struct {
 	workNumbering           WorkNumbering
 	workReleaseFilters      WorkReleaseFilters
 	crossovers              Crossovers
+	readingLists            ReadingLists
 	franchises              Franchises
 	moveJobs                MoveJobLister
 	renameStarter           RenameStarter
@@ -563,6 +566,7 @@ func New(config Config) (*Server, error) {
 		workNumbering:           config.WorkNumbering,
 		workReleaseFilters:      config.WorkReleaseFilters,
 		crossovers:              config.Crossovers,
+		readingLists:            config.ReadingLists,
 		franchises:              config.Franchises,
 		moveJobs:                config.MoveJobs,
 		renameStarter:           config.RenameStarter,
@@ -747,6 +751,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/categories/{id}/quality/preview", wrapped.PreviewLibraryQuality)
 			secured.Get("/categories/{id}/naming", wrapped.GetLibraryNaming)
 			secured.Put("/categories/{id}/naming", wrapped.SetLibraryNaming)
+			secured.Post("/categories/{id}/reading-list", wrapped.PreviewReadingList)
 			secured.Get("/categories/{id}/file-management", wrapped.GetLibraryFileManagement)
 			secured.Put("/categories/{id}/file-management", wrapped.SetLibraryFileManagement)
 			secured.Get("/categories/{id}/tagging", wrapped.GetLibraryTagging)
