@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"slices"
 	"strconv"
 	"strings"
@@ -93,12 +94,8 @@ func (f Following) FollowCandidates(ctx context.Context, follow media.Follow) ([
 	if err != nil {
 		return nil, err
 	}
-	filters := ParseSubscriptionFilters(follow.FiltersJSON)
-	if category, ok := f.Categories.Category(follow.CategoryID); ok && filters.IncludePrimaryTypes == nil && category.MonitorReleaseTypes != nil {
-		// A follow naming no release types takes its library's own (2026-09-19).
-		types := category.MonitorReleaseTypes
-		filters.IncludePrimaryTypes = &types
-	}
+	category, haveCategory := f.Categories.Category(follow.CategoryID)
+	filters := EffectiveFilters(follow.FiltersJSON, category, haveCategory)
 	var candidates []media.FollowCandidate
 	for _, group := range groups {
 		if !filters.Admits(group) || (since != "" && releasedBefore(group.FirstReleaseDate, since)) {
@@ -208,4 +205,14 @@ func (f Following) SearchFollowed(ctx context.Context, follow media.Follow) erro
 // releasedBefore compares at the precision the release date has: "2024-06" is not before "2024-06-05"; no date is.
 func releasedBefore(date, since string) bool {
 	return date == "" || date < since[:min(len(since), len(date))]
+}
+
+// EffectiveFilters is what a follow admits: its own filters, and for release types it names none of, its library's own (2026-09-19).
+func EffectiveFilters(followFiltersJSON string, category settings.Category, haveCategory bool) SubscriptionFilters {
+	filters := ParseSubscriptionFilters(followFiltersJSON)
+	if haveCategory && filters.IncludePrimaryTypes == nil && category.MonitorReleaseTypes != nil {
+		types := category.MonitorReleaseTypes
+		filters.IncludePrimaryTypes = &types
+	}
+	return filters
 }

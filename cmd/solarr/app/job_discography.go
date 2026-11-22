@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 
+	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -14,8 +15,9 @@ import (
 func (p *process) discographyCoverageJob() media.JobRegistration {
 	return media.JobRegistration{Definition: music.DiscographyCoverageDefinition, Handler: music.NewDiscographyCoverageJob(music.DiscographyCoverageConfig{
 		Statistics: library.NewStatistics(p.library), Coverage: statistics.NewRollup(p.statistics), Provider: p.musicBrainzProvider(),
-		Categories: p.libraryIDsOf(string(music.MediaType)),
-		Clock:      clock.NewSystem(), Logger: p.logger,
+		Categories: p.libraryIDsOf(string(music.MediaType)), Category: adapters.Categories{Cache: p.cache}.Category,
+		Follows: library.NewSubscriptions(p.library).ListEnabled,
+		Clock:   clock.NewSystem(), Logger: p.logger,
 	})}
 }
 

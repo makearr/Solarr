@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
@@ -37,8 +38,12 @@ type DiscographyCoverageConfig struct {
 	Provider DiscographyProvider
 	// Categories lists the music libraries to compare.
 	Categories func() []int64
-	Clock      clock.Clock
-	Logger     *slog.Logger
+	// Category answers a library's settings, for the release types it monitors; nil means the defaults.
+	Category func(id int64) (settings.Category, bool)
+	// Follows lists the enabled follows, whose own filters decide what counts for their artist; nil means none.
+	Follows func(ctx context.Context) ([]library.Subscription, error)
+	Clock   clock.Clock
+	Logger  *slog.Logger
 }
 
 // DiscographyCoverageJob compares, per library, each artist's held albums with the albums their discography has
@@ -55,13 +60,24 @@ func NewDiscographyCoverageJob(config DiscographyCoverageConfig) *DiscographyCov
 
 // Run rebuilds each library's coverage rows; an artist whose discography cannot be read is left out this time.
 func (j *DiscographyCoverageJob) Run(ctx context.Context, job jobs.Job) error {
-	filters := ParseSubscriptionFilters("")
-	for _, categoryID := range j.config.Categories() {
+	follows, err := j.followFilters(ctx)
+	if err != nil {
+		return err
+	}
+	categoryIDs := j.config.Categories()
+	held := make(map[int64][]library.ArtistHeld, len(categoryIDs))
+	var all int64
+	for _, categoryID := range categoryIDs {
 		artists, err := j.config.Statistics.ArtistsHeld(ctx, categoryID)
 		if err != nil {
 			return err
 		}
-		job.Progress.SetTotal(int64(len(artists)))
+		held[categoryID] = artists
+		all += int64(len(artists))
+	}
+	job.Progress.SetTotal(all)
+	for _, categoryID := range categoryIDs {
+		artists := held[categoryID]
 		rows := make([]statistics.DiscographyCoverage, 0, len(artists))
 		// The rows are replaced wholesale: an artist whose lookup fails keeps what was last measured rather than vanishing.
 		previous := map[int64]statistics.DiscographyCoverage{}
@@ -91,6 +107,7 @@ func (j *DiscographyCoverageJob) Run(ctx context.Context, job jobs.Job) error {
 				}
 				continue
 			}
+			filters := j.filtersFor(follows, artist.PersonID, categoryID)
 			var total, held int64
 			for _, group := range groups {
 				if !filters.Admits(group) {
@@ -109,4 +126,37 @@ func (j *DiscographyCoverageJob) Run(ctx context.Context, job jobs.Job) error {
 		j.config.Logger.Info("music: discography coverage done", "category_id", categoryID, "artists", len(rows), "skipped", failed)
 	}
 	return nil
+}
+
+// followFilters is each person's follow filters, by library (0: a follow made before libraries were recorded).
+func (j *DiscographyCoverageJob) followFilters(ctx context.Context) (map[followKey]string, error) {
+	if j.config.Follows == nil {
+		return nil, nil
+	}
+	subscriptions, err := j.config.Follows(ctx)
+	if err != nil {
+		return nil, err
+	}
+	filters := map[followKey]string{}
+	for _, subscription := range subscriptions {
+		if subscription.SubjectType == "person" {
+			filters[followKey{subscription.SubjectID, subscription.CategoryID}] = subscription.FiltersJSON
+		}
+	}
+	return filters, nil
+}
+
+type followKey struct{ personID, categoryID int64 }
+
+// filtersFor is what counts toward an artist's discography in a library: the artist's follow there, else the library's own release types, else the defaults.
+func (j *DiscographyCoverageJob) filtersFor(follows map[followKey]string, personID, categoryID int64) SubscriptionFilters {
+	own, found := follows[followKey{personID, categoryID}]
+	if !found {
+		own = follows[followKey{personID, 0}]
+	}
+	if j.config.Category == nil {
+		return ParseSubscriptionFilters(own)
+	}
+	category, haveCategory := j.config.Category(categoryID)
+	return EffectiveFilters(own, category, haveCategory)
 }
