@@ -227,11 +227,12 @@ image:      ## Release (user's word only): secrets scan, multi-arch, ghcr + Dock
 scan-image: ## Scan a local image for private keys: make scan-image [REF=ghcr.io/makearr/solarr:dev]
 	@./scripts/scan-image-secrets.sh $(or $(REF),$(IMAGE):dev)
 
-push:       ## Advance the build number, commit VERSION, push main to GitHub
+push:       ## Advance the build number, commit VERSION, push dev to GitHub (main moves only on a release)
+	@test "$$(git rev-parse --abbrev-ref HEAD)" = dev || { echo "not on branch dev: development happens there"; exit 1; }
 	@git diff --cached --quiet || { echo "staged changes: commit them first"; exit 1; }
 	@echo "$(BUILD_VERSION)" > VERSION
 	@git add VERSION && git commit -q -m "Build $(BUILD_VERSION)" -m "Pushed to GitHub; every push advances the build number."
-	@git push -q "https://x-access-token:$(TOKEN)@github.com/makearr/Solarr.git" HEAD:main || \
+	@git push -q "https://x-access-token:$(TOKEN)@github.com/makearr/Solarr.git" HEAD:dev || \
 	  { git reset -q HEAD~1 && git checkout -- VERSION; echo "push failed; build number left at $(VERSION)"; exit 1; }
 	@echo "pushed - version $(BUILD_VERSION)"
 

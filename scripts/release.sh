@@ -27,11 +27,15 @@ tag="v${new_version}"
 title="${new_version}"
 [ -n "$milestone" ] && title="${new_version} — ${milestone}"
 
-# ── changelog: commits since the previous tag ─────────────────────────────────
+[ "$(git rev-parse --abbrev-ref HEAD)" = dev ] || die "releases are cut from branch dev"
+
+# ── changelog: the hand-kept Unreleased section, else commits since the previous tag ──
+unreleased=$(awk '/^## Unreleased/{f=1;next} /^## /{f=0} f' "$CHANGELOG" 2>/dev/null | sed -e '/./,$!d')
 range=""; [ -n "$prev_tag" ] && range="${prev_tag}..HEAD"
 subjects=$(git log $range --no-merges --pretty=format:'- %s' 2>/dev/null || true)
 [ -z "$subjects" ] && subjects="- No source changes since ${prev_tag:-the initial commit}"
-# Hand-written notes replace the commit list, for a release whose range is too long to read.
+[ -n "$unreleased" ] && subjects="$unreleased"
+# Hand-written notes replace both, for a release whose range is too long to read.
 [ -n "${RELEASE_NOTES:-}" ] && { subjects=$(cat "$RELEASE_NOTES") || die "cannot read $RELEASE_NOTES"; }
 
 entry="## ${new_version} — $(date -u +%Y-%m-%d)
@@ -43,8 +47,10 @@ printf '%s\n' "$subjects" > "$notes"
 scripts/scan-text-private.sh "$notes" || die "the changelog text holds a private value; nothing was committed"
 
 if [ -f "$CHANGELOG" ]; then
-  # insert beneath the header, newest first
-  { head -n 4 "$CHANGELOG"; echo; echo "$entry"; tail -n +5 "$CHANGELOG"; } > "$CHANGELOG.tmp"
+  # the Unreleased section becomes this entry; a fresh empty one opens above it, newest first
+  rest=$(awk '/^## Unreleased/{f=1;next} /^## /{f=0} !f' "$CHANGELOG")
+  { printf '%s\n' "$rest" | head -n 4; echo; echo "## Unreleased"; echo; echo "$entry"
+    printf '%s\n' "$rest" | tail -n +5 | sed -e '/./,$!d'; } > "$CHANGELOG.tmp"
   mv "$CHANGELOG.tmp" "$CHANGELOG"
 else
   printf '# Changelog\n\nVersion is `YYYY.MM.R.BBBB` (year.month.release.build); see\n`documentation/versioning.md`.\n\n%s\n' "$entry" > "$CHANGELOG"
@@ -62,8 +68,10 @@ git tag -a "$tag" -m "Release ${title}
 ${subjects}"
 
 TOKEN=$(token)
-git push -q "https://x-access-token:${TOKEN}@${REMOTE}" HEAD:main "$tag" ||
+# main holds only releases: it fast-forwards to the release commit on dev.
+git push -q "https://x-access-token:${TOKEN}@${REMOTE}" HEAD:dev HEAD:main "$tag" ||
   die "git push failed — VERSION is already ${new_version} locally; re-run push manually"
+git branch -f main HEAD
 
 # ── GitHub release ────────────────────────────────────────────────────────────
 body=$(printf '%s\n\n---\n\nImages: `makearr/solarr:%s` (Docker Hub), `ghcr.io/makearr/solarr:%s`\nPlatforms: linux/amd64, linux/arm64' "$subjects" "$new_version" "$new_version")

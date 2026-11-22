@@ -3,6 +3,10 @@
 Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM.RRR.BBB` before); see `documentation/versioning.md`.
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
+## Unreleased
+
+- Development moves to branch `dev`; `main` on GitHub stays at the last release.
+
 ## 2026.11.2.1311 — 2026-11-22
 
 **Upgrading:** each database is one squashed baseline again. Only databases from build 1298 or later (schema
@@ -292,8 +296,3 @@ refused at start-up: use the *Arr import or start with a fresh config folder. Th
 - Rewrite README around functionality
 - Ignore local-only CLAUDE.md working context
 
-
-## Unreleased
-
-Design phase. No image has been built yet, so no build has been recorded.
-The first entry will appear when `make image` first succeeds.

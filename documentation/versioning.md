@@ -29,10 +29,14 @@ The four parts are stored and compared separately, never as one parsed decimal â
 | Action | Advances | Writes |
 |---|---|---|
 | `make image-local` | `build` | `VERSION` only; no push, tag or release. Image stamped `-dirty` when the tree is |
-| `make push` | `build` | commits `VERSION` as `Build <version>` and pushes `main`; a failed push undoes the commit |
+| `make push` | `build` | commits `VERSION` as `Build <version>` and pushes `dev` (refused on any other branch); a failed push undoes the commit |
 | `make image` | `release` and `build`, year and month set to today | everything below |
 
 A failed build or push leaves the version untouched.
+
+Development happens on `dev`; `main` on GitHub stays at the last release. `dev` keeps no compatibility
+between its own builds: schema changes since the last release accumulate in one migration per database,
+edited in place, so a database created by an earlier dev build may have to be recreated.
 
 ### What `make image` does
 
@@ -43,10 +47,10 @@ A failed build or push leaves the version untouched.
 4  docker login ghcr.io and Docker Hub (credentials from private/secrets.md, never in the image)
 5  buildx --push, linux/amd64 + linux/arm64, to ghcr.io/makearr/solarr and makearr/solarr,
    tagged with the version and latest
-6  prepend a CHANGELOG.md entry â€” commits since the previous tag
+6  CHANGELOG.md's `## Unreleased` section becomes the entry (commits since the previous tag if empty)
 7  commit VERSION + CHANGELOG.md
 8  annotated tag v<version>
-9  git push main + tag
+9  git push dev + tag, fast-forward main to the release commit
 10 create the GitHub release, body = the changelog entry, title includes the milestone name if set
 ```
 
