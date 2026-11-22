@@ -13864,6 +13864,15 @@ components:
             The most an archive may unpack to (default 20 GiB); a bigger
             release is held and says why. Omitted on a PATCH leaves the stored
             value alone.
+        history_keep_days:
+          type: integer
+          format: int64
+          minimum: 7
+          maximum: 3650
+          description: >-
+            How many days finished imports, downloads and move jobs are kept
+            before the daily clean-up (default 90). Omitted on a PATCH leaves
+            the stored value alone.
 
     TransferMethod:
       type: string

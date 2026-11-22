@@ -29,9 +29,6 @@ const (
 	historyRetentionJobType    = jobs.Type("library.history_retention")
 )
 
-// importHistoryKept is how long a finished import that placed nothing stays listed.
-const importHistoryKept = 90 * 24 * time.Hour
-
 // decisionRetentionPages bounds one run, so a first pass over an old backlog is spread over several nights.
 const decisionRetentionPages = 250
 
@@ -84,18 +81,20 @@ func (j decisionRetentionJob) Run(ctx context.Context, _ jobs.Job) error {
 	return nil
 }
 
-// historyRetentionJob deletes finished imports, downloads and move jobs older than importHistoryKept that nothing
+// historyRetentionJob deletes finished imports, downloads and move jobs older than the import.history_keep_days setting that nothing
 // needs any more, a batch at a time.
 type historyRetentionJob struct {
 	sessions     library.ImportSessions
 	acquisitions library.Acquisitions
 	moves        library.MoveJobs
-	clock        clock.Clock
-	logger       *slog.Logger
+	// keepDays is the days finished history is kept, read at each run so a changed setting applies at once.
+	keepDays func() int64
+	clock    clock.Clock
+	logger   *slog.Logger
 }
 
 func (j historyRetentionJob) Run(ctx context.Context, _ jobs.Job) error {
-	before := j.clock.Now().Add(-importHistoryKept).Unix()
+	before := j.clock.Now().Add(-time.Duration(j.keepDays()) * 24 * time.Hour).Unix()
 	sessions, err := deleteInBatches(ctx, before, j.sessions.DeleteOldSessions)
 	if err != nil {
 		return err
@@ -323,7 +322,8 @@ func (p *process) registerMaintenanceJobs(registry *jobs.Registry, executor *job
 		fs: p.fsys, dir: filepath.Join(p.config.Paths.ConfigDir, "previews"), physical: library.NewPhysical(p.library), logger: p.logger,
 	})
 	executor.Handle(historyRetentionJobType, historyRetentionJob{
-		sessions: library.NewImportSessions(p.library), acquisitions: library.NewAcquisitions(p.library), moves: library.NewMoveJobs(p.library), clock: clock.NewSystem(), logger: p.logger})
+		sessions: library.NewImportSessions(p.library), acquisitions: library.NewAcquisitions(p.library), moves: library.NewMoveJobs(p.library),
+		keepDays: func() int64 { return p.cache.Snapshot().ImportHistoryKeepDays() }, clock: clock.NewSystem(), logger: p.logger})
 	executor.Handle(jobRetentionJobType, jobRetentionJob{queue: p.queue, clock: clock.NewSystem(), logger: p.logger})
 	executor.Handle(backupJobType, backupJob{
 		backup: bundleBackup{

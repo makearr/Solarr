@@ -3566,6 +3566,9 @@ type ImportSettings struct {
 	// AutoCommitConfidence 0.75-0.95, the section 11.4 table's five named levels. Default 0.90.
 	AutoCommitConfidence float32 `json:"auto_commit_confidence"`
 
+	// HistoryKeepDays How many days finished imports, downloads and move jobs are kept before the daily clean-up (default 90). Omitted on a PATCH leaves the stored value alone.
+	HistoryKeepDays *int64 `json:"history_keep_days,omitempty"`
+
 	// MaxArchiveBytes The most an archive may unpack to (default 20 GiB); a bigger release is held and says why. Omitted on a PATCH leaves the stored value alone.
 	MaxArchiveBytes *int64 `json:"max_archive_bytes,omitempty"`
 

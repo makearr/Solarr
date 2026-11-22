@@ -136,7 +136,7 @@ func (c *Cache) SetImportRenameOnImport(ctx context.Context, cl clock.Clock, ren
 
 // UpdateImportSettings validates and writes the supplied import policy values
 // in one transaction. A nil value leaves that setting untouched.
-func (c *Cache) UpdateImportSettings(ctx context.Context, cl clock.Clock, confidence *float64, ladder *[]string, rename *bool, maxArchiveBytes *int64) error {
+func (c *Cache) UpdateImportSettings(ctx context.Context, cl clock.Clock, confidence *float64, ladder *[]string, rename *bool, maxArchiveBytes, historyKeepDays *int64) error {
 	if confidence != nil {
 		if problems := validateImportAutoCommitConfidence(*confidence); len(problems) > 0 {
 			return problems
@@ -158,7 +158,12 @@ func (c *Cache) UpdateImportSettings(ctx context.Context, cl clock.Clock, confid
 			return problems
 		}
 	}
-	if confidence == nil && ladder == nil && rename == nil && maxArchiveBytes == nil {
+	if historyKeepDays != nil {
+		if problems := validateImportHistoryKeepDays(*historyKeepDays); len(problems) > 0 {
+			return problems
+		}
+	}
+	if confidence == nil && ladder == nil && rename == nil && maxArchiveBytes == nil && historyKeepDays == nil {
 		return nil
 	}
 	updatedAt := cl.Now().Unix()
@@ -191,8 +196,43 @@ func (c *Cache) UpdateImportSettings(ctx context.Context, cl clock.Clock, confid
 				return err
 			}
 		}
+		if historyKeepDays != nil {
+			if err := queries.SetInstanceSetting(ctx, settingsdb.SetInstanceSettingParams{
+				Key: KeyImportHistoryKeepDays, ValueJson: strconv.FormatInt(*historyKeepDays, 10), UpdatedAt: updatedAt,
+			}); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
+}
+
+// KeyImportHistoryKeepDays is how long finished imports, downloads and move jobs are kept before the daily clean-up.
+const KeyImportHistoryKeepDays = "import.history_keep_days"
+
+// The bounds of the history setting and its default, in days.
+const (
+	DefaultImportHistoryKeepDays int64 = 90
+	MinImportHistoryKeepDays     int64 = 7
+	MaxImportHistoryKeepDays     int64 = 3650
+)
+
+// ImportHistoryKeepDays reads how many days finished import history is kept, 90 when nothing is stored.
+func (s *Snapshot) ImportHistoryKeepDays() int64 {
+	days := s.policyInt(KeyImportHistoryKeepDays, DefaultImportHistoryKeepDays)
+	if days < MinImportHistoryKeepDays || days > MaxImportHistoryKeepDays {
+		return DefaultImportHistoryKeepDays
+	}
+	return days
+}
+
+func validateImportHistoryKeepDays(days int64) config.Problems {
+	if days < MinImportHistoryKeepDays || days > MaxImportHistoryKeepDays {
+		return config.Problems{{
+			Path: "history_keep_days", Value: strconv.FormatInt(days, 10), Expectation: "between 7 and 3650 days",
+		}}
+	}
+	return nil
 }
 
 // KeyImportMaxArchiveBytes is the largest archive an import unpacks: what a release unpacks to may not pass it.

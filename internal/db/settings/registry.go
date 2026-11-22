@@ -278,6 +278,13 @@ func NewDefaultRegistry() *Registry {
 		Default: strconv.FormatInt(DefaultImportMaxArchiveBytes, 10),
 	})
 
+	registry.MustRegister(SettingDef{
+		Key: KeyImportHistoryKeepDays, Kind: KindInt, Tier: TierNormal,
+		Name:     "Keep import history for",
+		HelpText: "Finished imports, downloads and move jobs older than this many days (7 to 3650) are cleaned up daily; what a library file still needs stays.",
+		Default:  strconv.FormatInt(DefaultImportHistoryKeepDays, 10),
+	})
+
 	// Streaming: the preview player's transcode, edited as one form (documentation/media-player.md).
 	registry.MustRegister(SettingDef{
 		Key: KeyStreamingTranscodeEnabled, Kind: KindBool, Tier: TierNormal,

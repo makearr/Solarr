@@ -10173,6 +10173,11 @@ export interface components {
              * @description The most an archive may unpack to (default 20 GiB); a bigger release is held and says why. Omitted on a PATCH leaves the stored value alone.
              */
             max_archive_bytes?: number;
+            /**
+             * Format: int64
+             * @description How many days finished imports, downloads and move jobs are kept before the daily clean-up (default 90). Omitted on a PATCH leaves the stored value alone.
+             */
+            history_keep_days?: number;
         };
         /**
          * @description How import gets a file into the library. reflink clones it copy-on-write, sharing disk blocks but presenting as an independent file; hardlink makes a second directory entry for the same bytes; move renames it, or copies and deletes the source when it cannot; copy writes independent bytes; symlink leaves the library pointing at the source. Only reflink and hardlink avoid using more disk space, only move removes the source, and only symlink leaves the library dependent on it.

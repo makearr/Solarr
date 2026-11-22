@@ -109,6 +109,7 @@ export function Import() {
           <div className="flex flex-col gap-6">
             <RenameOnImportControl />
             <LargestArchiveControl />
+            <HistoryKeepControl />
           </div>
         </div>
       </section>
@@ -232,6 +233,57 @@ function LargestArchiveControl() {
         {t("import.largestArchiveHelp")}
       </span>
       {update.isError && <p className="text-danger">{t("import.largestArchiveFailed")}</p>}
+    </fieldset>
+  );
+}
+
+/** How long finished imports, downloads and move jobs are kept before the daily clean-up. */
+function HistoryKeepControl() {
+  const queryClient = useQueryClient();
+  const settings = useImportSettings();
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const update = useMutation({
+    meta: { handlesErrors: true },
+    mutationFn: async (days: number) => {
+      await ok(api.PATCH("/import/settings", {
+        body: { auto_commit_confidence: settings.data?.auto_commit_confidence ?? 0.9, history_keep_days: days },
+      }));
+    },
+    onSuccess: () => {
+      setDraft(null);
+      void queryClient.invalidateQueries({ queryKey: ["import-settings"] });
+    },
+  });
+
+  if (!settings.data) return null;
+  const current = settings.data.history_keep_days ?? 90;
+  const shown = draft ?? String(current);
+
+  return (
+    <fieldset className="flex flex-col gap-1 border-0 p-0 text-xs">
+      <legend className="mb-1 p-0 text-sm font-medium text-ink">{t("import.historyLegend")}</legend>
+      <label className="flex items-center gap-2">
+        <span className="text-ink">{t("import.historyKeep")}</span>
+        <input
+          type="number"
+          min={7}
+          max={3650}
+          step={1}
+          className="w-20 rounded border border-border-subtle bg-surface px-1 py-0.5"
+          value={shown}
+          disabled={update.isPending}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={() => {
+            const days = Number(shown);
+            if (draft !== null && Number.isInteger(days) && days !== current) update.mutate(days);
+            else setDraft(null);
+          }}
+        />
+        <span className="text-ink-muted">{t("import.historyDays")}</span>
+      </label>
+      <span className="text-[0.6875rem] text-ink-muted">{t("import.historyHelp")}</span>
+      {update.isError && <p className="text-danger">{t("import.historyFailed")}</p>}
     </fieldset>
   );
 }

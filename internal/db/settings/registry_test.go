@@ -102,7 +102,7 @@ func TestNewDefaultRegistry_CoversEveryKnownScalarSetting(t *testing.T) {
 		settings.KeyUsersNewLibraryPermission,
 		settings.KeyBackupRetention, settings.KeyBackupKeepCount, settings.KeyBackupKeepDays,
 		settings.KeyImportAutoCommitConfidence, settings.KeyImportTransferLadder,
-		settings.KeyImportRenameOnImport, settings.KeyImportMaxArchiveBytes, settings.KeyStreamingTranscodeEnabled, settings.KeyStreamingHardware, settings.KeyStreamingDevice,
+		settings.KeyImportRenameOnImport, settings.KeyImportMaxArchiveBytes, settings.KeyImportHistoryKeepDays, settings.KeyStreamingTranscodeEnabled, settings.KeyStreamingHardware, settings.KeyStreamingDevice,
 		settings.KeyStreamingMaxHeight, settings.KeyStreamingVideoKbps, settings.KeyStreamingMaxSessions,
 		settings.KeyAvailabilityGraceHigh, settings.KeyAvailabilityGraceMedium, settings.KeyAvailabilityGraceLow,
 		settings.KeyNetworkPort, settings.KeyNetworkProxyEnabled, settings.KeyNetworkProxyURL,
