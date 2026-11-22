@@ -126,10 +126,7 @@ func NewArtworkJob(config ArtworkJobConfig) *ArtworkJob {
 	}
 }
 
-// Run processes every work it can find needing cover art, in bounded batches,
-// until none remain or the context is cancelled. No persisted cursor: a
-// recorded work stops being returned by NeedingArtwork, so a restart simply
-// asks the same question again (EnrichJob's Run doc comment, same reasoning).
+// Run processes works needing art in bounded batches; no persisted cursor, since a recorded work stops being returned (same as EnrichJob).
 func (j *ArtworkJob) Run(ctx context.Context, job jobs.Job) error {
 	if err := j.fs.MkdirAll(j.imagesDir, 0o755); err != nil {
 		return fmt.Errorf("music: artwork: create %s: %w", j.imagesDir, err)

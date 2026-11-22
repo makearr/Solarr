@@ -1,11 +1,6 @@
 package music
 
-// Stage 5's own candidate pipeline (section 10.1): given one wanted album,
-// search every configured indexer, match what comes back against the
-// album's own identity, score it against the category's own quality/
-// language profile, and persist ACCEPT/REJECT/DEFER. Dispatch
-// (acquire.send, SENT/PREPARED/HELD) is a separate, later pass -- this is
-// decide-and-persist only.
+// Stage 5 candidate pipeline (section 10.1): search every indexer for one wanted album, match, score against the category profile and persist ACCEPT/REJECT/DEFER; dispatch is a later pass.
 
 import (
 	"context"
@@ -31,23 +26,13 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-// ErrTrackSearchNotSupported reports a SINGLE (track-level) desired item --
-// this pass only searches SET (album-level) items. A track search needs its
-// own claimed identity (the track title, not the album's) and its own
-// search terms; nothing has asked for that yet.
+// ErrTrackSearchNotSupported is this pass searches only SET (album-level) items; a track search needs its own identity and terms.
 var ErrTrackSearchNotSupported = errors.New("music: search: only album-level (SET) desired items are supported")
 
 // ErrNoQualityProfile reports a desired item whose profile no longer exists; the shared error, under music's name.
 var ErrNoQualityProfile = judge.ErrNoQualityProfile
 
-// maxCandidateMatchDistance is section 10.2's own acceptance gate for this
-// pass -- reused verbatim from SearchIdentifier's own DefaultSearchThresholds
-// (0.3), tuned there against real scene-release titles for the identical
-// shape of comparison (combined "Artist - Album" text). A second threshold,
-// AmbiguityMargin, does not apply here: SearchIdentifier disambiguates among
-// several candidate *identities* for one file, this disambiguates among
-// several *releases* against one already-known identity, so there is only
-// ever one candidate identity to clear the gate against.
+// maxCandidateMatchDistance is section 10.2's gate, reused from SearchIdentifier's DefaultSearchThresholds (0.3); AmbiguityMargin does not apply because there is one candidate identity.
 var maxCandidateMatchDistance = DefaultSearchThresholds.MaxDistance
 
 // maxAliasSearchTerms bounds tier 2's own widening -- a work with many
@@ -139,12 +124,7 @@ func queriesFor(terms []searchTerms) []judge.Query {
 	return queries
 }
 
-// SearchItem runs the pipeline for one album-level desired item: build its
-// own identity and search tiers, fan out to every indexer at each tier in
-// turn, and stop widening at the first tier that finds at least one release
-// clearing the match-distance gate (section 10.2's own progressive
-// widening). Every accepted match is scored and persisted regardless of its
-// quality outcome -- REJECT and DEFER are recorded findings, not silence.
+// SearchItem runs the pipeline for one album item: fan out per tier, stop widening at the first tier with a release under the match gate (section 10.2), and persist every match, REJECT and DEFER included.
 func (s Search) SearchItem(ctx context.Context, itemID int64, indexers []IndexerConn, at time.Time) (ItemSearchResult, error) {
 	return s.SearchItemWithTerms(ctx, itemID, indexers, at, nil)
 }
@@ -382,11 +362,7 @@ func (s Search) BlocklistRelease(ctx context.Context, itemID, decisionID int64, 
 	return ErrDecisionNotFound
 }
 
-// evaluateRawItems parses, matches and scores every raw result from one
-// indexer call, keeping only what clears maxCandidateMatchDistance -- a
-// release that plainly is not this album is noise, not evidence, and is
-// never persisted (section 10.1: module.Evaluate produces Matches, not raw
-// items).
+// evaluateRawItems parses, matches and scores one indexer's results, keeping only those under maxCandidateMatchDistance; a release that is plainly not this album is noise and never persisted.
 func evaluateRawItems(
 	raws []indexer.RawItem, conn IndexerConn, target, albumTarget match.Candidate, wantedArtist string,
 	rules []judge.RankedProfile, languagePolicy *score.LanguagePolicy, preferPropers bool,
@@ -491,10 +467,7 @@ func videoRelease(title string) bool { return videoMarkerRe.MatchString(title) }
 // (a dropped "The", a punctuation mark an indexer files as a letter).
 const maxArtistTypo = 0.3
 
-// sameArtist: a release naming no artist, or an album without one, passes; so does a compilation. Otherwise the
-// release must credit the wanted artist by name: a part of either credit equals a part of the other (in any spelling
-// the search itself asks for), the whole names are a typo apart, or the wanted name is followed by "and the ..." (a band's backing group). A shared
-// substring is not a name: "Air" is not "Air Supply".
+// sameArtist: a release or album naming no artist passes, as does a compilation; otherwise a name part must match in any searched spelling, the names be a typo apart, or the wanted name be followed by "and the ..."; a shared substring is not a name ("Air" is not "Air Supply").
 func sameArtist(released, wanted string) bool {
 	if released == "" || wanted == "" || strings.EqualFold(strings.TrimSpace(wanted), "Various Artists") {
 		return true
@@ -530,12 +503,7 @@ func withoutLeadingThe(name string) string {
 	return name
 }
 
-// targetIdentity builds the album's own claimed-against identity once per
-// search. ItemCount is the album's own required track count (SET only,
-// already guaranteed above); ExternalIDs are carried through even though no
-// raw search result will ever have one to compare against yet -- tier 4's
-// own metadata-assisted search (section 10.2, not built this pass) is where
-// that stops being true.
+// targetIdentity builds the claimed-against identity once per search; ExternalIDs are carried although raw results have none until tier 4 (section 10.2).
 func targetIdentity(detail library.WorkDetail, item librarydb.DesiredItem, artistName string, aliases []string) match.Candidate {
 	identity := match.Identity{
 		Title:           combinedTitle(artistName, detail.Work.CanonicalTitle),
@@ -555,10 +523,7 @@ func targetIdentity(detail library.WorkDetail, item librarydb.DesiredItem, artis
 	return match.Candidate{ID: strconv.FormatInt(item.WorkID, 10), Identity: identity}
 }
 
-// primaryArtistName reads the work's own artist=ord0 credit (AddCredit's
-// shape, ArrSync's syncAlbum among its callers) -- falling back to the
-// denormalised sort name when no credit exists, for a work that predates
-// crediting or was never given one.
+// primaryArtistName reads the artist=ord0 credit, falling back to the denormalised sort name for works without one.
 func primaryArtistName(detail library.WorkDetail) string {
 	for _, credit := range detail.Credits {
 		if credit.Role == "artist" {
@@ -568,11 +533,7 @@ func primaryArtistName(detail library.WorkDetail) string {
 	return detail.Work.LeadPersonSortName.String
 }
 
-// buildSearchTiers is section 10.2's own progressive widening, scoped to
-// tiers 0-2 this pass (exact, +year, +alias -- tiers 3/4, fuzzy composite
-// and metadata-assisted id search, are open). Tier 1 is omitted entirely
-// when the work has no recorded year, rather than repeating tier 0's own
-// query for no reason.
+// buildSearchTiers is section 10.2's widening for tiers 0-2 (exact, +year, +alias); tier 1 is omitted when the work has no year.
 func buildSearchTiers(artistName string, work librarydb.Work, aliases []string) [][]searchTerms {
 	tiers := [][]searchTerms{musicTerms(artistName, work.CanonicalTitle, "")}
 
@@ -595,10 +556,7 @@ func buildSearchTiers(artistName string, work librarydb.Work, aliases []string) 
 	return tiers
 }
 
-// factsFromRelease stands a claimed release's own parse in for measured
-// facts (ADR-39) -- the same reasoning apiserver.SimulateScore's own
-// factsFromParsed already uses, extended with the release's own reported
-// size/seeders/protocol (score.ReleaseFacts, known before any download).
+// factsFromRelease stands the release's parse in for measured facts (ADR-39), plus its reported size, seeders and protocol.
 func factsFromRelease(parsed parse.Result, raw indexer.RawItem, impl string) score.Facts {
 	facts := score.Facts{
 		Release: score.ReleaseFacts{

@@ -9,13 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 )
 
-// refinementFor turns one MusicBrainz answer into what library.RefineEdition
-// needs: interpreting MusicBrainz's own vocabulary into Solarr's is this
-// package's job, never core's (ADR-23). workReleaseDate is the release
-// group's FirstReleaseDate at whatever precision MusicBrainz gave it
-// (YYYY, YYYY-MM or YYYY-MM-DD) -- kept alongside workYear rather than only
-// the parsed year, since todo 4.20's freshness window needs day precision a
-// year alone cannot give.
+// refinementFor turns a MusicBrainz answer into library.RefineEdition input (ADR-23); workReleaseDate keeps the provider's precision because the freshness window needs the day.
 func refinementFor(rg musicbrainz.ReleaseGroup, release musicbrainz.Release) (
 	workYear *int64, workReleaseDate, workPrimaryType string, refinement library.EditionRefinement, parts []library.PartIdentity,
 ) {
@@ -24,10 +18,7 @@ func refinementFor(rg musicbrainz.ReleaseGroup, release musicbrainz.Release) (
 	workPrimaryType = rg.PrimaryType
 
 	refinement = library.EditionRefinement{
-		// Status is the closest thing a Release has to a "kind of edition"
-		// (official/promotion/bootleg/pseudo-release) -- label stays the release
-		// MBID permanently (identity.go's resolveEdition comment), so changing
-		// kind alone can never collide with UNIQUE(work_id, kind, label).
+		// Status is the closest thing to an edition kind; label stays the release MBID, so changing kind cannot collide with UNIQUE(work_id, kind, label).
 		Kind:            orUnknownStatus(release.Status),
 		Year:            parseYear(release.Date),
 		Format:          formatOf(release.Media),
@@ -56,10 +47,7 @@ func orUnknownStatus(status string) string {
 	return status
 }
 
-// formatOf reports the first medium's format. Music editions in this library are
-// overwhelmingly single-format (a release is not "half CD, half vinyl"); a genuine
-// mixed-format box set is rare enough that recording only the first is an accepted
-// simplification, not a design position.
+// formatOf reports the first medium's format: releases are almost always single-format, and a mixed box set recording only the first is an accepted simplification.
 func formatOf(media []musicbrainz.Medium) string {
 	if len(media) == 0 {
 		return ""

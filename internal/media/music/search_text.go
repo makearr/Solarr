@@ -9,10 +9,7 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// searchTextVariants is a text query and the spellings indexers file the same release under, as
-// Lidarr cleans its queries: punctuation as spaces ("K!ra" is found as "K ra", 2026-09-29), then
-// German umlauts spelt out ("Voernue"), then accents dropped. The original comes first; a
-// variant equal to one before it is left out.
+// searchTextVariants lists a query's spellings as indexers file them, Lidarr-style: punctuation as spaces, umlauts spelt out, accents dropped; original first, duplicates left out.
 func searchTextVariants(query string) []string {
 	cleaned := cleanSearchText(query)
 	variants := []string{query}

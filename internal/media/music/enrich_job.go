@@ -27,16 +27,10 @@ import (
 	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
-// maxPersonImageBytes mirrors ArtworkJob's own maxImageBytes -- a person's
-// Wikidata photo is not expected to be any larger than a release cover, and
-// a source serving far more is a reason to stop reading, not to buffer it
-// all first.
+// maxPersonImageBytes mirrors ArtworkJob's limit; a source serving far more is a reason to stop reading, not to buffer.
 const maxPersonImageBytes = 20 << 20
 
-// Biographer is what EnrichJob needs to turn a Wikidata QID into a real
-// biography (ADR-8's cross-provider bridge) -- internal/metadata/wikidata.Fetcher's
-// own method, named here so this package never imports wikidata for more
-// than the one type its return value needs.
+// Biographer turns a Wikidata QID into a biography (ADR-8's bridge); named here so this package imports wikidata for one type only.
 type Biographer interface {
 	Biography(ctx context.Context, qid string) (wikidata.Biography, error)
 	// Biographies answers many QIDs at once; a QID it has nothing for is absent.
@@ -56,10 +50,7 @@ const EnrichJobType = jobs.Type("music.enrich")
 // one may be active at a time (Invariant 16) the same way a per-root scan is.
 const EnrichActionKey = "music.enrich"
 
-// CreditRoleArtist is the one credit role this pass writes -- a release
-// group's own artist-credit. Role-rich credits beyond "artist" (producer,
-// composer, songwriter) need MusicBrainz's relationship data, real scope of
-// its own (architecture.md's §19.5, deliberately not attempted this pass).
+// CreditRoleArtist is the one role written; producer, composer and the like need MusicBrainz relationships (section 19.5), not attempted.
 const CreditRoleArtist = "artist"
 
 // EnrichDefinition declares how enrichment behaves: background, low priority,
@@ -69,11 +60,7 @@ var EnrichDefinition = jobs.Definition{
 	Type: EnrichJobType, Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 3,
 }
 
-// enrichBatchSize bounds how many placeholder editions one pass asks a provider
-// about before checking in with ListPlaceholderEditions again. Small enough that
-// a shutdown mid-run (ctx cancelled between batches) loses at most one batch's
-// worth of otherwise-committed progress -- each batch's writes are already their
-// own transaction (library.RefineEdition), so nothing partial survives either way.
+// enrichBatchSize bounds editions per pass so a shutdown loses at most one batch; each batch is already its own transaction.
 const enrichBatchSize = 20
 
 // enrichLookupWorkers overlaps a batch's album lookups: BrainzMash answers in ~1 s but allows
@@ -141,18 +128,12 @@ type TagReader interface {
 // its edition; a larger set is judged on this many.
 const maxEditionChoiceFiles = 200
 
-// Realigner matches a work's files to its tracks again, once enrichment has
-// given it a tracklist. A scan matches files only against tracks that exist,
-// and on a fresh library the tracklist arrives afterwards, so without this
-// every album on disk stayed wanted with no files present (found 2026-09-17).
+// Realigner re-matches a work's files to tracks once enrichment supplies a tracklist; without it albums on a fresh library stayed wanted with files present.
 type Realigner interface {
 	RealignWorks(ctx context.Context, workIDs []int64, manual bool) error
 }
 
-// EnrichJobConfig is what an EnrichJob needs. Every field is required except
-// Biography and Logger -- a nil Biography resolves people with MusicBrainz's
-// own facts only, no prose biography (and, following from that, no image
-// either: Wikidata's own P18 claim is read from the same lookup).
+// EnrichJobConfig is required except Biography and Logger; a nil Biography means MusicBrainz facts only, no prose and no image.
 type EnrichJobConfig struct {
 	Identity library.Identity
 	People   library.People
@@ -207,11 +188,7 @@ func NewEnrichJob(config EnrichJobConfig) *EnrichJob {
 	}
 }
 
-// Run processes every placeholder edition it can find, in bounded batches, until
-// none remain or the context is cancelled. There is no persisted cursor: a
-// refined edition's kind moves off 'unknown', so PlaceholderEditions' own result
-// set shrinks as work succeeds -- a restart simply asks the same question again
-// and gets whatever is left (library.PlaceholderEditions's doc comment).
+// Run processes placeholder editions in bounded batches until none remain or the context ends; no cursor, since refined editions leave the result set.
 func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 	var payload EnrichPayload
 	if len(job.Payload) > 0 {
@@ -328,12 +305,7 @@ func (j *EnrichJob) handOn(ctx context.Context, refinedWorkIDs []int64, manual b
 	}
 }
 
-// enrichEditionless gives works identified at release-group level -- the text
-// search's output, which has no edition -- their artist, genres, description,
-// year and type. The placeholder-edition pass above never reached them, so
-// they sat under "Unknown artist" (found 2026-09-17). No tracklist: that needs
-// an edition, which choosing is not this pass's call. Walked by work id within
-// a run and bounded by editionlessBudget.
+// enrichEditionless gives release-group-level works (no edition) their artist, genres, description, year and type; no tracklist, since choosing an edition is not this pass's call; bounded by editionlessBudget.
 func (j *EnrichJob) enrichEditionless(ctx context.Context, artists artistMemo) (withEdition []int64) {
 	enriched, failed, retired := 0, 0, 0
 	afterWorkID := j.editionlessAfter.Load()
@@ -422,10 +394,7 @@ func (j *EnrichJob) alignClaimed(ctx context.Context, workID int64) {
 	}
 }
 
-// chooseEdition gives a work identified only at release-group level the
-// edition its files fit best (chooseRelease, approved 2026-09-17), then refines
-// it like any placeholder edition, which builds the tracklist. True when an
-// edition was chosen and refined, so the work's files can be matched to it.
+// chooseEdition picks the edition a release-group-level work's files fit best, refines it (building the tracklist), and reports whether files can now be matched.
 func (j *EnrichJob) chooseEdition(
 	ctx context.Context, work library.EditionlessWork, group musicbrainz.ReleaseGroup, artists artistMemo,
 ) bool {
@@ -576,10 +545,7 @@ const (
 	backfillAbsent
 )
 
-// backfillOne resolves one person's provider detail. A definitive "this
-// artist has no Wikidata image" is recorded so the sweep stops asking --
-// without it the same lowest-id people come back every run and the rest are
-// never reached. A transient failure records nothing and is retried.
+// backfillOne resolves one person's provider detail; a definitive no-image answer is recorded so the sweep reaches the rest, a transient failure is retried.
 func (j *EnrichJob) backfillOne(ctx context.Context, candidate library.PersonArtworkCandidate) backfillOutcome {
 	ctx = j.forPerson(ctx, candidate.PersonID)
 	artist, err := j.provider.Artist(ctx, musicbrainz.PriorityEnrich, candidate.ArtistMBID)
@@ -840,12 +806,7 @@ func (j *EnrichJob) enrichOne(
 	return nil
 }
 
-// enrichCreditsAndGenres populates ADR-32's role="artist" credits and ADR-33's
-// genre tags from the same release group Album already fetched -- no extra
-// request for the genres (inc=genres rides along with artist-credits), one
-// more request per distinct artist for their own bio facts (Provider.Artist
-// caches permanently, so a prolific artist only ever costs one real lookup
-// across every edition of theirs this sweep touches).
+// enrichCreditsAndGenres writes ADR-32 credits and ADR-33 genres from the release group already fetched; Provider.Artist caches permanently, so one lookup per artist.
 func (j *EnrichJob) enrichCreditsAndGenres(
 	ctx context.Context, workID int64, rg musicbrainz.ReleaseGroup, artists artistMemo,
 ) {
@@ -935,14 +896,7 @@ func weightedGenres(genres []musicbrainz.Genre) []string {
 	return names
 }
 
-// enrichDescription writes the work's own description from the release
-// group's Wikidata QID -- a real Wikipedia extract when the album has an
-// English Wikipedia article (proven live for well-known albums: Katupoken's
-// "KI Pecezinu", Dipa Cogaf's "The Fura Husu of the Teke"), Wikidata's short
-// description otherwise, nothing at all when there is no linked Wikidata
-// entity -- MusicBrainz's release-group annotation, checked as an
-// alternative source, turned out empty for every real album tested while
-// building this, so it is not used.
+// enrichDescription uses a Wikipedia extract when the QID has an English article, else Wikidata's short description, else nothing; MusicBrainz annotations proved empty and are not used.
 func (j *EnrichJob) enrichDescription(ctx context.Context, workID int64, album albumAnswer) {
 	// Wikidata's genres are curated where MusicBrainz's are voted tags; written after MusicBrainz's, they replace them.
 	if len(album.genres) > 0 {
@@ -967,12 +921,7 @@ func (j *EnrichJob) enrichDescription(ctx context.Context, workID int64, album a
 	}
 }
 
-// resolveArtist finds or creates the person behind one release-group credit.
-// A failed Artist lookup still resolves a person from the name and id the
-// artist-credit itself already carries -- thinner than a full bio, but a
-// credit worth having is worth having even without one.
-// artistMemo is the artists one run has already resolved, by MusicBrainz id: their biography and
-// photo cost a Wikidata request each, once per album before, ~1.2 s an album (measured 2026-09-28).
+// resolveArtist finds or creates the person behind a credit, from the credit's own name and id if the Artist lookup fails. artistMemo caches artists per run, as each costs a Wikidata request (~1.2 s an album).
 type artistMemo struct {
 	ids map[string]int64
 	// genres are each looked-up artist's weighted genres, for an album nobody voted genres onto.
@@ -1020,23 +969,14 @@ func (j *EnrichJob) resolveArtist(ctx context.Context, credit musicbrainz.Artist
 				slog.Int64("person_id", personID), slog.Any("error", err))
 		}
 	}
-	// Best-effort, same as the biography text above: a person is still worth
-	// having with no image at all. Album covers falling back to this image
-	// (todo 4.13's own follow-up, asked for 2026-09-11) is what makes fetching
-	// it here, rather than only when someone opens the Artists screen, worth
-	// doing proactively.
+	// Best-effort like the biography: a person without an image is still worth having; fetching it here lets album covers fall back to it.
 	_ = j.fetchPersonImage(ctx, personID, bio.ImageURL)
 	artists.ids[credit.MBID] = personID
 	artists.genres[credit.MBID] = weightedGenres(artist.Genres)
 	return personID, nil
 }
 
-// wikidataBiographyFor is biographyFor's own lookup, factored out so its one
-// Wikidata response feeds both the biography text (biographyText) and the
-// image fetch (fetchPersonImage) rather than being fetched twice. Returns
-// the zero Biography (empty ImageURL and text) when j.biography is nil, the
-// artist has no Wikidata QID, or the lookup itself failed -- never fails
-// resolveArtist over this.
+// wikidataBiographyFor is one lookup feeding both the biography text and the image; it returns the zero Biography when nothing is available and never fails resolveArtist.
 func (j *EnrichJob) wikidataBiographyFor(ctx context.Context, artist musicbrainz.Artist) wikidata.Biography {
 	bio, err := j.wikidataLookup(ctx, artist)
 	if err != nil {
@@ -1094,12 +1034,7 @@ func biographyText(bio wikidata.Biography) string {
 	return bio.Description
 }
 
-// fetchPersonImage downloads, processes and records personID's own Wikidata
-// photo -- ArtworkJob.processOne's own shape, duplicated rather than shared
-// (two callers, ADR-23's own "three similar things: extract" threshold not
-// met yet, and the two differ in subject type and cache key). Never fails
-// the credit it was resolved for: a person is still worth having with no
-// image, the same tolerance every other best-effort step in this job keeps.
+// fetchPersonImage downloads and records a person's Wikidata photo, duplicating ArtworkJob.processOne (two callers, below the extract threshold); never fails the credit.
 func (j *EnrichJob) fetchPersonImage(ctx context.Context, personID int64, imageURL string) imageOutcome {
 	if imageURL == "" || j.artworks == (library.Artworks{}) || j.http == nil || j.fs == nil {
 		return imageFailed

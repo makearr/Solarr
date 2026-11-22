@@ -8,41 +8,18 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 )
 
-// DefaultExcludedSecondaryTypes is section 19.6's own default: an artist
-// subscription that returns every bootleg is the version of this feature
-// people switch off. Matched case-insensitively and by substring against
-// MusicBrainz's own secondary-type vocabulary, since "Mixtape/Street" is the
-// real value for what a user thinks of as "mixtape".
+// DefaultExcludedSecondaryTypes is section 19.6's default, since an artist subscription returning every bootleg gets switched off; matched case-insensitively by substring against MusicBrainz's vocabulary.
 var DefaultExcludedSecondaryTypes = []string{"compilation", "live", "remix", "dj-mix", "mixtape", "demo", "interview", "audiobook", "audio drama", "field recording"}
 
-// DefaultIncludedPrimaryTypes is what a subscription naming no types brings
-// in: the three anyone means by "their albums" (2026-09-19). Matched
-// case-insensitively against MusicBrainz's own primary-type vocabulary. A
-// release group with no primary type at all is admitted -- refusing what a
-// provider simply did not say would silently drop real albums.
+// DefaultIncludedPrimaryTypes is what a subscription naming no types brings in; a release group with no primary type is admitted rather than silently dropped.
 var DefaultIncludedPrimaryTypes = []string{"Album", "EP", "Single"}
 
-// SubscriptionFilters is what admits or excludes one release group from an
-// artist subscription's expansion (ADR-38's preview-before-enable shape,
-// applied to subscriptions per section 19.6). Kept in internal/media/music, not
-// internal/db/library: which vocabulary a filter names is media-type-specific
-// (ADR-23), library.Subscription's FiltersJSON stays opaque.
+// SubscriptionFilters admits or excludes release groups in an artist subscription's expansion (ADR-38, section 19.6); kept here because the vocabulary is media-type-specific (ADR-23).
 type SubscriptionFilters struct {
-	// IncludePrimaryTypes is which release-group types the subscription
-	// brings in at all -- "Albums EP Singles by default", the user's own
-	// words (2026-09-19), overridable per artist. A pointer for the same
-	// reason ExcludeSecondaryTypes is: an explicit empty list is a choice.
-	// Absent means the library's own setting, which the caller resolves
-	// before this is stored, or DefaultIncludedPrimaryTypes if it did not.
+	// IncludePrimaryTypes is which types the subscription brings in; a pointer so an explicit empty list differs from absent, which means the library's setting or the default.
 	IncludePrimaryTypes *[]string `json:"include_primary_types,omitempty"`
 
-	// ExcludeSecondaryTypes overrides DefaultExcludedSecondaryTypes when
-	// present, a pointer so an explicit empty list ("exclude nothing" --
-	// todo 4.4's preview lets a user choose exactly that) is distinguished
-	// from absent. A subscription stored with no filters at all (nil, or
-	// the key simply missing from stored JSON) gets the default -- never a
-	// silent "exclude nothing", which is exactly the behaviour that makes
-	// people turn discography monitoring off.
+	// ExcludeSecondaryTypes overrides the default; a pointer so an explicit empty list (exclude nothing) differs from absent, which gets the default, never a silent exclude-nothing.
 	ExcludeSecondaryTypes *[]string `json:"exclude_secondary_types,omitempty"`
 }
 

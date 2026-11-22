@@ -28,11 +28,7 @@ type AcoustIDLookup interface {
 	Lookup(ctx context.Context, fingerprint string, duration time.Duration) ([]acoustid.Match, error)
 }
 
-// AcoustIDIdentifier is ADR-29's fingerprint rung (D12): fingerprint the audio,
-// ask AcoustID what it is, and report the release groups it names as
-// candidates. It identifies only -- the ids it returns are resolved through the
-// ordered metadata sources like any other candidate, which is why nothing here
-// touches a provider.
+// AcoustIDIdentifier is ADR-29's fingerprint rung (D12): it names candidate release groups and leaves resolution to the ordered metadata sources.
 type AcoustIDIdentifier struct {
 	fingerprints Fingerprinter
 	lookup       AcoustIDLookup
@@ -60,10 +56,7 @@ func (AcoustIDIdentifier) Name() string { return "acoustid" }
 // Order is OrderFingerprint.
 func (AcoustIDIdentifier) Order() int { return OrderFingerprint }
 
-// Identify fingerprints the file and asks AcoustID what it is. With no key
-// configured it answers nothing rather than an error: the rung is disabled,
-// not broken, and a file skipped for that reason is identified normally once a
-// key appears (D12).
+// Identify fingerprints the file; with no key the rung is disabled, not broken, so the file is identified normally once a key appears (D12).
 func (a AcoustIDIdentifier) Identify(ctx context.Context, f model.FileRef) ([]model.Identification, error) {
 	if a.lookup == nil || !a.lookup.Enabled() {
 		return nil, nil
@@ -99,10 +92,7 @@ func (a AcoustIDIdentifier) Identify(ctx context.Context, f model.FileRef) ([]mo
 		for _, group := range match.ReleaseGroupMBIDs {
 			found = append(found, model.Identification{
 				Strategy: a.Name(),
-				// AcoustID's own score is the confidence: it says how well the
-				// audio matched, which is exactly what this rung is claiming.
-				// It is never 1.0 the way an embedded MBID is, because this is
-				// a guess with a confidence (ADR-24).
+				// AcoustID's score is the confidence, never 1.0 like an embedded MBID, because this is a guess (ADR-24).
 				Precedence: model.PrecedenceSearched,
 				Confidence: match.Score,
 				ExternalID: &model.ExternalID{

@@ -41,10 +41,7 @@ const tieBreakConfidence = 0.90
 // worth keeping (F29's manual queue shows them), just never worth guessing from.
 const candidateConfidence = 0.3
 
-// DefaultSearchThresholds is section 10.2's two-gate acceptance, tuned so a clean
-// artist+album title match against a single strong search result resolves
-// automatically while anything genuinely ambiguous falls through to the manual
-// identification queue instead of guessing.
+// DefaultSearchThresholds is section 10.2's two-gate acceptance: a clean match against one strong result resolves, anything ambiguous goes to the manual queue.
 var DefaultSearchThresholds = match.Thresholds{MaxDistance: 0.3, AmbiguityMargin: 0.08}
 
 // Searcher is what SearchIdentifier needs from a metadata provider -- exactly
@@ -54,11 +51,7 @@ type Searcher interface {
 	Search(ctx context.Context, priority musicbrainz.Priority, artist, title string, limit int) ([]musicbrainz.ReleaseGroupMatch, error)
 }
 
-// SearchIdentifier is ADR-24's "parse" strategy: read what artist/album a file
-// itself claims (tags first, the release-folder name as fallback -- ADR-41's path
-// evidence), search MusicBrainz for release groups, and weigh what comes back with
-// internal/identify/match. It exists for the files MBIDIdentifier cannot answer at all: a
-// file with no embedded MusicBrainz ids, which is most scene-released music.
+// SearchIdentifier is ADR-24's parse strategy for files without MusicBrainz ids (most scene music): claimed artist/album from tags, else the folder name (ADR-41), searched and weighed with identify/match.
 type SearchIdentifier struct {
 	tags       TagSource
 	search     Searcher
@@ -88,11 +81,7 @@ func (SearchIdentifier) Name() string { return "musicbrainz-search" }
 // Order is OrderParseSearch.
 func (SearchIdentifier) Order() int { return OrderParseSearch }
 
-// Identify searches MusicBrainz for the file's claimed artist/album and ranks
-// what comes back. A search failure, or a search with no source configured to
-// answer it at all, is treated as "found nothing" rather than an error -- the
-// same reasoning as MBIDIdentifier's empty-tags case: it says nothing about
-// whether a later strategy or a later sweep can do better.
+// Identify ranks MusicBrainz search results; a failed or unconfigured search counts as found nothing, since a later strategy or sweep may do better.
 func (s SearchIdentifier) Identify(ctx context.Context, file model.FileRef) ([]model.Identification, error) {
 	tags, err := s.tags.TagsFor(ctx, file)
 	if err != nil {
@@ -113,14 +102,7 @@ func (s SearchIdentifier) Identify(ctx context.Context, file model.FileRef) ([]m
 		return nil, nil
 	}
 
-	// Year is deliberately left out of this comparison, proven against real scene
-	// rips rather than assumed: a release group's FirstReleaseDate is the
-	// *original* release year, while a file's own DATE tag (or a year parsed from
-	// the release folder name) is usually the year of *this particular* pressing
-	// -- a remaster or WEB reissue tagged 2018 for a 1978 album, say. Comparing
-	// them as if they were the same field turned a perfect title match into a
-	// rejected one. Year belongs to an edition (ADR-7), not a release group, and
-	// this identifier only ever searches at release-group (work) level.
+	// Year is left out of the comparison: a release group's date is the original year while a file's DATE is usually its pressing's, and year belongs to an edition (ADR-7).
 	claimed := match.Claimed{Identity: match.Identity{Title: combinedTitle(artist, album)}}
 	candidates := make([]match.Candidate, len(matches))
 	for index, one := range matches {
@@ -219,19 +201,13 @@ func fileYear(tags mediatool.Tags) string {
 	return ""
 }
 
-// identificationsFor turns a match.Result into RunChain's input: the confident
-// winner (if any) at a real, chain-auto-resolvable confidence, every other ranked
-// candidate at a low confidence that can only ever populate F29's manual queue,
-// never win the chain outright.
+// identificationsFor turns a match.Result into chain input: the confident winner at an auto-resolvable confidence, other candidates low enough to only feed the manual queue (F29).
 func identificationsFor(result match.Result) []model.Identification {
 	identifications := make([]model.Identification, 0, len(result.Candidates))
 	for _, candidate := range result.Candidates {
 		confidence := candidateConfidence * (1 - candidate.Distance.Total)
 		if result.Best != nil && candidate.ID == result.Best.ID {
-			// Both of match.Rank's own gates already passed for this one --
-			// scaling only slightly by distance keeps a clean match comfortably
-			// above Consumer's DefaultAmbiguityThreshold rather than scaling it
-			// down toward the same range as every other candidate.
+			// Both of match.Rank's gates passed, so scale only slightly by distance to stay above DefaultAmbiguityThreshold.
 			confidence = searchConfidence - candidate.Distance.Total*0.5
 		}
 		identifications = append(identifications, model.Identification{
@@ -257,10 +233,7 @@ func evidenceForDistance(distance match.Distance) []model.MatchEvidence {
 	return evidence
 }
 
-// claimedIdentity is what the file itself says it is: real ARTIST/ALBUM/DATE tags
-// when present (more reliable than a filename guess), the release-folder name
-// through internal/identify/parse otherwise -- ADR-41's "path is evidence" for a file with
-// no usable tags at all.
+// claimedIdentity is what the file says it is: ARTIST/ALBUM/DATE tags when present, else the release-folder name (ADR-41).
 func claimedIdentity(tags mediatool.Tags, relPath string) (artist, album string) {
 	artist = tags.First("albumartist", "album_artist", "artist")
 	album = tags.First("album")
@@ -278,13 +251,7 @@ func claimedIdentity(tags mediatool.Tags, relPath string) (artist, album string)
 	return artist, album
 }
 
-// cleanAlbumTag strips edition/technical noise a tagger baked directly into the
-// ALBUM tag itself, not just the release folder name -- found against a real
-// "Nogih Zeni (Mono Remastered)" tag during this project's own verification pass,
-// which MusicBrainz's own exact-phrase search treats as a literally different,
-// nonexistent title. Reuses internal/identify/parse's own bracket/noise classification
-// (it handles a bare title exactly like a one-segment release name) rather than
-// duplicating it; falls back to the raw tag if cleaning empties it out.
+// cleanAlbumTag strips edition and technical noise baked into the ALBUM tag, which MusicBrainz exact-phrase search treats as a different title; it reuses identify/parse and falls back to the raw tag if cleaning empties it.
 func cleanAlbumTag(album string) string {
 	if cleaned := parse.Parse(album).Identity.Album; cleaned != "" {
 		return cleaned
@@ -292,10 +259,7 @@ func cleanAlbumTag(album string) string {
 	return album
 }
 
-// combinedTitle folds artist and album into one string. internal/identify/match's Identity
-// has no dedicated artist dimension; comparing "Artist - Album" as a single title
-// gives both album title and artist credit weight in the one dimension that
-// exists, rather than needing a new one for what is otherwise a one-caller need.
+// combinedTitle folds artist and album into one string because match's Identity has no artist dimension.
 func combinedTitle(artist, title string) string {
 	if artist == "" {
 		return title

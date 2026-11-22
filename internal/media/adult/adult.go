@@ -1,7 +1,4 @@
-// Package adult is the adult media type: scenes and films, as Whisparr holds them. A scene is a work without parts whose
-// one wanted item needs its file; performers are its people and the studio its organisation. Metadata is read from
-// Whisparr's server and the stash-box servers (StashDB, ThePornDB, FansDB) in a library's order and merged field by field
-// (ADR-8). Core sees works and items only (ADR-23).
+// Package adult is the adult media type (scenes and films); core sees works and items only (ADR-23).
 package adult
 
 import (

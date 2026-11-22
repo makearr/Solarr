@@ -9,24 +9,10 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-// ErrUnsupportedProvider reports a resolve request naming a provider this
-// package has no lookup for. Only ProviderReleaseGroup is wired today, since
-// that is the only provider the ADR-24 chain's own candidates ever carry into
-// the queue (identifier.go, search_identifier.go).
+// ErrUnsupportedProvider is only ProviderReleaseGroup is wired, the only provider chain candidates carry into the queue.
 var ErrUnsupportedProvider = fmt.Errorf("music: unsupported provider for manual resolve")
 
-// ResolveUnidentified is section 21.3's manual-resolve action: given a
-// candidate a human picked (either one of RunChain's own ranked suggestions,
-// or, in future, a live search result), fetch its real title from the
-// provider, resolve-or-create the work, link the file's own root folder, and
-// clear the queue entry. Confidence is 1.0 -- a human explicitly chose this,
-// which is stronger evidence than anything the chain could have inferred on
-// its own.
-//
-// This reaches only as far as SearchIdentifier's own automatic resolution
-// does: the file's work becomes real and browsable, but no edition or
-// tracklist alignment is attempted (the same "browsable, not yet enrichable"
-// limit search_identifier.go's own doc comment already names).
+// ResolveUnidentified is section 21.3's manual resolve: fetch the picked candidate's title, resolve or create the work, link the root and clear the queue entry, at confidence 1.0 (a human chose); like SearchIdentifier it attempts no edition or tracklist alignment.
 func ResolveUnidentified(
 	ctx context.Context, cl clock.Clock, provider musicbrainz.Provider,
 	identity library.Identity, unidentified library.Unidentified,

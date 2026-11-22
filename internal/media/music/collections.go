@@ -256,10 +256,7 @@ type albumFranchise struct {
 	Declared  []string
 }
 
-// planAlbumFranchises joins the franchises Wikidata names for the albums with those they are part of, so each family is
-// one collection under its widest item (the saga, not the trilogy a score belongs to) that declares all the others. A
-// family reached through a film's soundtrack is kept for one album, as it links the album with the films; one named on
-// albums alone needs two.
+// planAlbumFranchises merges Wikidata franchises into one collection per family under its widest item; a family via a soundtrack needs one album, albums alone need two.
 func planAlbumFranchises(found map[string][]wikidata.AlbumFranchise, works map[string][]int64) []albumFranchise {
 	direct := map[string][]int64{}
 	labels := map[string]string{}

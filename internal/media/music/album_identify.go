@@ -414,10 +414,7 @@ func artistNames(credits []musicbrainz.ArtistCredit) string {
 	return strings.Join(names, " & ")
 }
 
-// albumConfidence is a tracklist fit's likelihood: 120 of 120 right on the test library
-// (2026-09-17). At the accept distance (0.20) it reaches 0.89, just short of review-free.
-// It reads the gate distance: release type ranks editions, it is no evidence against one, and
-// counting it sent a correct compilation to review (the main library, 2026-09-25).
+// albumConfidence: a tracklist fit's likelihood, 0.89 at the accept distance; it reads the gate distance because release type ranks editions and is no evidence against one.
 func albumConfidence(score ReleaseScore) float64 {
 	return 0.99 - score.GateDistance*0.5
 }

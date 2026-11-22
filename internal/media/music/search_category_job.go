@@ -22,19 +22,13 @@ import (
 // scope).
 const SearchCategoryJobType = jobs.Type("music.search_category")
 
-// SearchCategoryDefinition declares how the job behaves: background,
-// mutating (it writes candidate/candidate_decision rows), retried once on a
-// transient failure -- a whole category re-search is not cheap enough to
-// retry as aggressively as a single item would be.
+// SearchCategoryDefinition is background, mutating, retried once, since a whole category re-search is too costly to retry aggressively.
 var SearchCategoryDefinition = jobs.Definition{
 	Name: "Searching wanted albums",
 	Type: SearchCategoryJobType, Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 2,
 }
 
-// SearchCategoryActionKey deduplicates concurrent runs for the same
-// category -- a second "search now" click while one is already running
-// enqueues nothing new, the same reasoning importjob.ActionKeyFor already
-// gives per source path.
+// SearchCategoryActionKey deduplicates concurrent runs per category, so a second "search now" click enqueues nothing.
 func SearchCategoryActionKey(categoryID int64) string {
 	return fmt.Sprintf("%s:%d", SearchCategoryJobType, categoryID)
 }
@@ -96,24 +90,13 @@ func enqueueSearch(ctx context.Context, queue *jobs.Queue, priority jobs.Priorit
 	})
 }
 
-// searchCategoryPageSize bounds one page of IncompleteItems -- the same
-// pagination shape library health's own listing already uses, so a category
-// with many wanted albums is walked in bounded batches rather than one
-// unbounded query.
+// searchCategoryPageSize bounds one page of IncompleteItems so a large category is walked in bounded batches.
 const searchCategoryPageSize = 50
 
-// IndexerSource resolves the currently configured, enabled indexers fresh
-// on every run -- settings can change between runs, the same "ask fresh,
-// never cache" discipline every settings-backed job dependency in this
-// codebase already follows (moverjob.RootFolders, ArrSync's own Cache
-// reads).
+// IndexerSource resolves enabled indexers fresh each run, since settings can change between runs.
 type IndexerSource func(ctx context.Context) ([]IndexerConn, error)
 
-// SearchCategoryJob runs SearchItem across every monitored, incomplete
-// album-level item in one category. Track-level items in the same category
-// (ErrTrackSearchNotSupported) are skipped, not failed -- this pass's own
-// scope, not a defect in the item. One item failing does not stop the rest,
-// the same per-item isolation the follow sweep uses.
+// SearchCategoryJob runs SearchItem over every monitored incomplete album item; track-level items are skipped, not failed, and one item failing does not stop the rest.
 type SearchCategoryJob struct {
 	grab     Grab
 	indexers IndexerSource
@@ -140,10 +123,7 @@ func NewSearchCategoryJob(config SearchCategoryConfig) *SearchCategoryJob {
 	return &SearchCategoryJob{grab: config.Grab, indexers: config.Indexers, clock: config.Clock, logger: logger}
 }
 
-// Run walks every monitored MISSING/PARTIAL item in the category once,
-// searching each in turn. Results are visible per work through
-// Candidates.ListDecisionsForItem -- this run itself reports only a summary
-// to the log, the same level of detail the follow sweep logs.
+// Run walks each monitored MISSING/PARTIAL item once; results are read through Candidates.ListDecisionsForItem and the log carries only a summary.
 func (j *SearchCategoryJob) Run(ctx context.Context, job jobs.Job) error {
 	var payload SearchCategoryPayload
 	if err := json.Unmarshal(job.Payload, &payload); err != nil {

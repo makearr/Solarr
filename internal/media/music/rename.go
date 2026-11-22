@@ -8,22 +8,14 @@ import (
 	"github.com/makearr/Solarr/internal/moving/naming"
 )
 
-// RenameTarget is one file's current and proposed location under its library's naming --
-// section 11.8's "preview as a diff" (Invariant 73).
-// WorkID and SizeBytes carry through what RenamePreview already resolved
-// per file, so a caller building a mover.Request from a []RenameTarget
-// never needs to re-derive either.
+// RenameTarget is one file's current and proposed location (section 11.8 preview as a diff, Invariant 73); WorkID and SizeBytes spare callers re-deriving them.
 type RenameTarget struct {
 	MediaObjectID   int64
 	WorkID          int64
 	SizeBytes       int64
 	CurrentRelPath  string
 	ProposedRelPath string
-	// Warnings are naming.RenderPath's own non-fatal notices about the
-	// proposed path (today: only the total-length recommendation) -- the
-	// rename preview is a genuine diff-before-apply step (Invariant 73), so
-	// this is the one caller where a warning can actually reach the user
-	// before anything moves.
+	// Warnings are naming's non-fatal notices; the rename preview is the one place they can reach the user before anything moves.
 	Warnings []naming.Warning
 }
 

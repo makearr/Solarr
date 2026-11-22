@@ -11,12 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
-// recordClaimedAttributes writes ADR-39's claimed half (todo 4.2) for every
-// file this batch registered: the release folder name, parsed once per
-// distinct folder rather than once per file (a release's tracks all share
-// one folder and so all share one claim), interned and pointed at from each
-// file's own media_object. mediaObjectIDs is positionally aligned with
-// observed, the same contract RegisterBatch's own caller already relies on.
+// recordClaimedAttributes writes ADR-39's claimed half once per distinct release folder, pointing each file's media_object at it; mediaObjectIDs aligns with observed.
 func (c Consumer) recordClaimedAttributes(ctx context.Context, observed []scan.Observed, mediaObjectIDs []int64) error {
 	claimsByFolder := make(map[string]library.AttributeClaim)
 	for index, one := range observed {
@@ -33,11 +28,7 @@ func (c Consumer) recordClaimedAttributes(ctx context.Context, observed []scan.O
 	return nil
 }
 
-// attributeClaimFromReleaseName parses one release folder's own name (ADR-18)
-// and translates its music-specific claim (model.Attributes) into library's
-// cross-media-type shape. Fields with no music equivalent (Resolution,
-// VideoCodec, HDR, ...) are left zero, which Intern stores as NULL rather
-// than a false claim of "known and empty".
+// attributeClaimFromReleaseName parses a folder name (ADR-18) into library's shape; fields with no music equivalent stay zero so Intern stores NULL.
 func attributeClaimFromReleaseName(releaseName string) library.AttributeClaim {
 	attributes := parse.Parse(releaseName).Attributes
 	return library.AttributeClaim{
@@ -56,10 +47,7 @@ func attributeClaimFromReleaseName(releaseName string) library.AttributeClaim {
 	}
 }
 
-// editionTokens splits Parse's own space-joined Edition string ("flac (m4a)
-// lossless") into AttributeClaim.EditionTokens' []string shape -- an empty
-// Edition yields nil, which Intern's own jsonArray already treats as "none
-// stated" rather than the literal string "[]".
+// editionTokens splits Parse's space-joined Edition into tokens; empty yields nil so Intern reads it as not stated, not "[]".
 func editionTokens(edition string) []string {
 	if edition == "" {
 		return nil

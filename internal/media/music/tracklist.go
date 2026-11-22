@@ -14,11 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
-// titleMatchThreshold is the minimum internal/identify/match title similarity Align
-// accepts as a match when neither a recording MBID nor a disc/track position
-// aligns a candidate to a part -- below it, a candidate is left unmatched
-// rather than guessed (section 19.6: alignment carries confidence, never a
-// silent wrong answer).
+// titleMatchThreshold is the minimum title similarity Align accepts without a recording MBID or position; below it a candidate stays unmatched (section 19.6).
 const titleMatchThreshold = 0.75
 
 // TrackFile is one candidate audio file's own claimed position and identity,
@@ -169,15 +165,7 @@ type Alignment struct {
 	Extra []TrackFile
 }
 
-// Align matches candidate files to a work's expected tracklist, three passes
-// in descending confidence: a shared MusicBrainz recording id (1.0,
-// unambiguous), disc-and-track position (0.9), then title similarity
-// (internal/identify/match's token-set/Jaro-Winkler best-of, so a weak title match
-// reports a weak confidence rather than snapping to a fixed value) above
-// titleMatchThreshold. A bonus track that shifts every later track's
-// numbering is exactly what the title pass tolerates: its own position
-// matches nothing, but a real track's title still does even once its position
-// has shifted past it.
+// Align matches files to the tracklist in three passes: recording id (1.0), disc and track position (0.9), then title similarity above titleMatchThreshold, which tolerates a bonus track shifting positions.
 func Align(parts []Part, candidates []TrackFile) Alignment {
 	remaining := append([]TrackFile(nil), candidates...)
 	result := Alignment{Parts: make([]AlignedPart, len(parts))}

@@ -21,42 +21,24 @@ import (
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
-// DefaultAcceptThreshold stops the chain once a candidate is that likely right; a release-group
-// or release tag clears it, so a tagged file never pays for a search. DefaultAmbiguityThreshold
-// is the one identification threshold (import.auto_commit_confidence's default), for scan and
-// import alike since confidence became a calibrated likelihood (2026-09-24).
+// DefaultAcceptThreshold stops the chain once a candidate is that likely right; DefaultAmbiguityThreshold is the one identification threshold (import.auto_commit_confidence's default) for scan and import.
 const (
 	DefaultAcceptThreshold    = 0.9
 	DefaultAmbiguityThreshold = 0.9
 )
 
-// Categories answers the one policy question discovery needs: what a scan
-// should do with an album nobody asked for (section 19.6). Asked fresh per
-// batch rather than cached, the same "ask, don't cache" discipline scan.Roots
-// already uses for root folders.
+// Categories answers what a scan does with an album nobody asked for (section 19.6); asked fresh per batch, never cached.
 type Categories interface {
 	Category(id int64) (settings.Category, bool)
 }
 
-// CategoryFinder resolves which category a media type's own discovery should
-// use when nothing more specific is configured -- subscription.expand's own
-// need (a subscription has no root folder to inherit a category from the way
-// a scan does). It includes the by-id lookup, since a subscription that
-// recorded its own library uses that in preference (2026-09-19).
+// CategoryFinder resolves the category for discovery when nothing is configured (a subscription has no root to inherit from), including a by-id lookup preferred when recorded.
 type CategoryFinder interface {
 	Categories
 	CategoryForMediaType(mediaType string) (settings.Category, bool)
 }
 
-// Consumer records what a scan found: media_object and library_path rows always,
-// the work it identifies when the MBID chain resolves one, and -- when it does
-// not -- an F29 manual-identification-queue entry with whatever candidates the
-// chain did find. When Desired and Categories are configured it also does what
-// section 19.6 calls "a scan creates desired items too": an album-level SET item
-// per work it identifies, with per-track alignment (Align) attaching whichever
-// of this batch's files match a still-uncovered part. It implements
-// scan.Consumer, direct-wired the way the rest of internal/media/music is until
-// stage 9.
+// Consumer records what a scan found: media_object and library_path rows, the identified work or a manual-identification queue entry (F29), and, when configured, desired items with per-track alignment (section 19.6); it implements scan.Consumer.
 type Consumer struct {
 	fsys         fsx.FS
 	physical     library.Physical
@@ -72,10 +54,7 @@ type Consumer struct {
 	chain        model.ChainConfig
 	logger       *slog.Logger
 
-	// desired, categories and defaultProfileID are all optional together: a
-	// caller (or test) that leaves them unset gets identification with no
-	// discovery, never a panic -- discoverWanted checks desired/categories
-	// before touching either.
+	// desired, categories and defaultProfileID are optional together: unset means identification without discovery, never a panic.
 	desired          *library.Desired
 	people           *library.People
 	categories       Categories
@@ -83,10 +62,7 @@ type Consumer struct {
 	threshold        func() float64
 }
 
-// ConsumerConfig is what a Consumer needs. Every field is required except
-// Chain, Search, Logger, and the Desired/Categories/DefaultProfileID trio
-// (section 19.6's discovery -- omit all three together to get identification
-// with no discovery).
+// ConsumerConfig is required except Chain, Search, Logger and the Desired/Categories/DefaultProfileID trio, which are omitted together to disable discovery.
 type ConsumerConfig struct {
 	FS           fsx.FS
 	Physical     library.Physical
@@ -94,10 +70,7 @@ type ConsumerConfig struct {
 	Unidentified library.Unidentified
 	// Attempts records each file's identification run beyond its embedded MBIDs; nil records none.
 	Attempts *library.Attempts
-	// Search adds the ADR-24 "parse" strategy (SearchIdentifier) to the chain,
-	// for a file MBIDIdentifier cannot answer at all. Nil leaves the chain at the
-	// one strategy stage 3 shipped with -- a media type or test with no metadata
-	// provider configured is unaffected.
+	// Search adds ADR-24's parse strategy for files MBIDIdentifier cannot answer; nil leaves the chain unchanged.
 	Search Searcher
 	// Albums identifies a folder's untagged files together against whole tracklists.
 	// Nil leaves identification per file.
@@ -148,11 +121,7 @@ func NewConsumer(config ConsumerConfig) Consumer {
 	}
 }
 
-// Observe implements scan.Consumer. Every file's bytes are read once, before any
-// transaction opens (Invariant 2): quick hashes first, one registration transaction,
-// then the chain (pure Go, no I/O) decides identity, then one more transaction records
-// whatever it resolved. A failure at any point leaves nothing lost -- the next sweep
-// resumes from the un-advanced cursor and finds the same, still-idempotent work to do.
+// Observe reads each file's bytes once before any transaction (Invariant 2): hashes, one registration transaction, the pure chain, then one recording transaction; a failure resumes idempotently from the un-advanced cursor.
 func (c Consumer) Observe(
 	ctx context.Context, root settings.RootFolder, categoryID int64, batch []scan.Observed,
 ) error {
@@ -506,16 +475,7 @@ type pendingFile struct {
 	refuted []string
 }
 
-// fingerprintPass recovers names from the audio itself and matches the folder as an album
-// with them -- AcoustID identifies, the ordered metadata sources supply the data (D12).
-// A single recording names many release groups (its album, its single, every compilation
-// it was ever on), so asking which of them this file belongs to is unanswerable per file
-// and ordinary for a folder scored against whole tracklists. With no album lookup
-// configured it falls back to the per-file chain, which can answer only when AcoustID
-// named exactly one.
-//
-// With no key configured it records that it did not run: a file skipped for a missing key
-// is not a file AcoustID had no answer for, and only the record tells them apart (D12).
+// fingerprintPass names files from audio (AcoustID) and matches the folder as an album, since one recording names many release groups and only whole tracklists settle it (D12); with no key it records that it did not run.
 func (c Consumer) fingerprintPass(
 	ctx context.Context, out *batchResult, identifiers []model.Identifier, files []pendingFile,
 ) []pendingFile {
@@ -569,10 +529,7 @@ func (c Consumer) withoutSiblingsSongs(
 	return keptNamed, keptLocals, pending
 }
 
-// namesFromAudio fingerprints every still-unidentified file in one call and asks AcoustID
-// what each one is. It answers the files it could name with their recovered tracks, the
-// release groups to seed recall with -- most agreed-on first, since the album every track
-// names is the album the folder is -- and the files it could not name, still pending.
+// namesFromAudio fingerprints unidentified files in one call, returning recovered tracks, release groups to seed recall (most agreed first) and files still pending.
 func (c Consumer) namesFromAudio(
 	ctx context.Context, out *batchResult, files []pendingFile,
 ) (named []pendingFile, locals []LocalTrack, seeds []string, pending []pendingFile) {
@@ -648,12 +605,7 @@ func namedRecordings(matches []acoustid.Match) []acoustid.Recording {
 	return recordings
 }
 
-// consensusArtist is the artist the folder agrees on: the name most of its files
-// have among their own candidates, counted once per file. AcoustID's database is
-// crowd-contributed and a fingerprint can carry an outright wrong link -- a real
-// Heka track answered with a recording by a band called Badtown Boys, first in the
-// list (measured 2026-09-18). One file cannot tell which of its candidates is the
-// wrong one; a folder can.
+// consensusArtist is the artist most files agree on, counted once per file: AcoustID is crowd-contributed and one file cannot tell a wrong link from a right one.
 func consensusArtist(recognised [][]acoustid.Recording) string {
 	counts := make(map[string]int)
 	names := make(map[string]string)
@@ -739,13 +691,7 @@ func recordedLocal(local LocalTrack, recording acoustid.Recording, decoded time.
 	// stronger, in truth, since a tag can say anything and the audio cannot.
 	local.Title = Claim{Value: recording.Title, Provenance: ProvenanceTag}
 	local.Artist = Claim{Value: recording.Artist, Provenance: ProvenanceTag}
-	// The recording id is deliberately not asserted: AcoustID names every
-	// recording MusicBrainz holds of one performance, so picking one of them
-	// refutes every release that happens to use another -- measured against the
-	// real service, which refuted the correct album for all 12 of its tracks.
-	// A scan does not measure durations -- the probe job fills those in later
-	// (ADR-39) -- but fpcalc just decoded the file and reports its real length,
-	// which is what tells a 12-track album from the box set it also appears on.
+	// The recording id is not asserted because AcoustID names every recording of one performance and picking one refutes releases using another; fpcalc's real length tells an album from a box set.
 	if local.Duration == 0 {
 		local.Duration = decoded
 	}
@@ -980,10 +926,7 @@ func splitByTrackTotal(observed []scan.Observed, group []pendingFile) [][]pendin
 	return split
 }
 
-// applyAlbumDecision records one album match and acts on it: identified links every
-// file to its own matched track, ambiguous is queued rather than guessed per file,
-// anything else stays pending for a later pass. Shared by both passes that match an
-// album -- from tags, and from names recovered by fingerprinting.
+// applyAlbumDecision records one album match: identified links files to tracks, ambiguous is queued, anything else stays pending; shared by the tag pass and the fingerprint pass.
 func applyAlbumDecision(
 	out *batchResult, pass string, group []pendingFile, decision AlbumDecision,
 ) []pendingFile {
@@ -1096,16 +1039,7 @@ func soleSiblingIdentity(links []library.WorkLink) (library.WorkLink, bool) {
 	return links[0], true
 }
 
-// discoverWanted is section 19.6's "a scan creates desired items too": for each
-// work this batch resolved a file to, ensure its album-level SET item exists
-// (per category.monitor_discovered policy) and align this batch's own files
-// against whatever parts are not yet covered (Align). A work whose tracklist
-// has not been enriched yet still gets its item -- required_count stays
-// unknown until EnrichJob adds parts, and AlignClaimedFiles attaches this
-// batch's files once it does.
-//
-// Skipped entirely when Desired/Categories were not configured, or when
-// categoryID is 0 (a caller with no category context, such as a test).
+// discoverWanted (section 19.6) ensures each resolved work's album-level SET item and aligns this batch's files; an unenriched work keeps required_count unknown. Skipped without Desired/Categories or with categoryID 0.
 func (c Consumer) discoverWanted(ctx context.Context, categoryID int64, workIDs []int64, trackFiles []TrackFile) error {
 	if c.desired == nil || c.categories == nil || categoryID == 0 {
 		return nil
@@ -1124,19 +1058,7 @@ func (c Consumer) discoverWanted(ctx context.Context, categoryID int64, workIDs 
 	return nil
 }
 
-// DiscoverWanted is section 19.6's own "a scan creates desired items too",
-// factored out of Consumer.discoverWanted so import commit (Committer) runs
-// the identical policy for a freshly placed file rather than a second,
-// driftable copy of it: ensure workID's album-level SET item exists (per
-// category.monitor_discovered policy) and align candidates -- this caller's
-// own batch of files, already known to belong to workID -- against whatever
-// parts are not yet covered (Align). A work whose tracklist has not been
-// enriched yet still gets its item -- required_count stays unknown until
-// EnrichJob adds parts, and AlignClaimedFiles attaches this batch's files
-// then, from the track claims recorded here.
-//
-// A no-op when desired/categories is nil, categoryID is 0, or the category
-// is not found or configured monitor_discovered=none.
+// DiscoverWanted is section 19.6's discovery shared with import commit so there is one policy, not two; an unenriched tracklist is aligned later from recorded claims. A no-op without desired/categories, category 0, or monitor_discovered=none.
 func DiscoverWanted(
 	ctx context.Context, desired *library.Desired, categories Categories, cl clock.Clock,
 	defaultProfileID, categoryID, workID int64, candidates []TrackFile,
@@ -1262,13 +1184,7 @@ func tagSourceFor(root settings.RootFolder, observed []scan.Observed) Resolved {
 	}
 }
 
-// newWorkIdentity is what to name a work if the chain's identity needs one created.
-// The album tag names it; a file tagged sparsely falls back to its containing
-// directory, which is how a Lidarr-managed library already names an album folder.
-// matchedWorkIdentity names a work MusicBrainz has just identified after its own
-// release group, not after the folder it happened to be in: an untagged rip lives in
-// "Ripped/CD01", and calling the album that would be describing our own directory
-// layout rather than the record (found live, 2026-09-18).
+// newWorkIdentity names a work from the album tag, falling back to the directory; matchedWorkIdentity names it after the MusicBrainz release group, not a folder such as "Ripped/CD01".
 func matchedWorkIdentity(observed scan.Observed, group musicbrainz.ReleaseGroup) library.WorkIdentity {
 	identity := newWorkIdentity(observed)
 	if group.Title != "" {
@@ -1286,12 +1202,7 @@ func newWorkIdentity(observed scan.Observed) library.WorkIdentity {
 	return library.WorkIdentity{MediaType: "music", CanonicalTitle: title, SortTitle: library.SortTitle(title)}
 }
 
-// newEditionLink resolves the release (edition-level) MBID, when the file carries
-// one, into a placeholder edition -- kind "unknown", label the release MBID itself.
-// A guessed human label risks colliding with a real edition's UNIQUE(work_id, kind,
-// label) once the MusicBrainz provider exists; an MBID as its own label cannot,
-// since no real label is ever a UUID, and the provider updates this row in place
-// rather than needing to create a second one.
+// newEditionLink makes a placeholder edition (kind unknown, label = release MBID) because an MBID never collides with a real label under UNIQUE(work_id, kind, label).
 func newEditionLink(observed scan.Observed) *library.EditionLink {
 	release := ReadMBIDs(observed.Probe.Tags).Release
 	if release == "" {

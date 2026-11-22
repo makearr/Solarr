@@ -50,10 +50,7 @@ func (MBIDIdentifier) Name() string { return "musicbrainz-embedded-tag" }
 // Order is OrderEmbeddedTag.
 func (MBIDIdentifier) Order() int { return OrderEmbeddedTag }
 
-// Identify answers what work this file belongs to, preferring the release group,
-// which is the work-level id (ADR-7). The edition, recording and artist ids are
-// carried as evidence: the chain decides one identity, and the caller that writes
-// edition and credit rows reads them from ReadMBIDs directly.
+// Identify prefers the release group, the work-level id (ADR-7); edition, recording and artist ids are evidence the caller reads from ReadMBIDs.
 func (m MBIDIdentifier) Identify(ctx context.Context, file model.FileRef) ([]model.Identification, error) {
 	tags, err := m.tags.TagsFor(ctx, file)
 	if err != nil {

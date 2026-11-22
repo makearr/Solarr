@@ -20,38 +20,19 @@ import (
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
-// PlacementRoots is the settings-side facts CommitUnit's placement step
-// needs -- the same narrow shape internal/moving/drainjob.Roots already
-// keeps from a full settings.Cache (ADR-25: this package never imports the
-// cache itself), scoped down further since import never touches
-// accepts_new or drain_state.
+// PlacementRoots is the narrow settings-side view placement needs (ADR-25), without accepts_new or drain_state.
 type PlacementRoots interface {
 	RootFolder(id int64) (settings.RootFolder, bool)
 	CategoryRoots() []settings.CategoryRoot
 }
 
-// PlacementAffinity is the settings-side placement_affinity read/write
-// CommitUnit's artist-affinity step needs (section 11.7: "affinity keeps an
-// artist or series on one disk once placed" -- a general placement rule, not
-// pack-specific). *settings.Cache already satisfies this directly --
-// PlacementAffinity/SetPlacementAffinity are its own methods, not routed
-// through a Snapshot the way PlacementRoots's fields are -- so callers can
-// wire the cache straight through with no adapter needed.
+// PlacementAffinity reads and writes placement_affinity (section 11.7); *settings.Cache satisfies it directly.
 type PlacementAffinity interface {
 	PlacementAffinity(ctx context.Context, categoryID int64, affinityKey string) (int64, bool, error)
 	SetPlacementAffinity(ctx context.Context, categoryID int64, affinityKey string, rootFolderID, updatedAt int64) error
 }
 
-// Committer is ADR-48's own "COMMIT actually imports" (todo 4.9): place
-// every file a unit's IDENTIFY/DECIDE steps already decided to commit
-// (mover.PlaceOne, ADR-11 A -- reflink/hardlink/copy, never the source
-// touched), register it (library.Physical, the same call Consumer.Observe
-// already makes for a scanned file), resolve its work/edition
-// (library.Identity.ResolveWorksDetailed) and attach whatever of its files
-// fill the album's still-uncovered parts (DiscoverWanted, shared with
-// Consumer's own scan-time discovery). Everything here happens after
-// IDENTIFY already ran during WALK/GROUP -- CommitUnit trusts the
-// Identification it is given rather than re-running the chain.
+// Committer is ADR-48's COMMIT: place each decided file, register it, resolve its work/edition and attach it to uncovered parts; it trusts the Identification given.
 type Committer struct {
 	fsys             fsx.FS
 	roots            PlacementRoots
@@ -71,10 +52,7 @@ type Committer struct {
 	logger           *slog.Logger
 }
 
-// TransferLadder answers the ordered transfer methods import should try, read
-// per commit rather than captured once so a settings change takes effect
-// without a restart -- the same live-read shape the egress proxy already uses.
-// A nil func or an empty result means mover.DefaultLadder.
+// TransferLadder answers the ordered transfer methods, read per commit so a settings change needs no restart; nil or empty means mover.DefaultLadder.
 type TransferLadder func() []mover.PlaceMethod
 
 // RenameOnImport answers whether a committed file is named by the template
@@ -89,10 +67,7 @@ type ExtraFiles func(categoryID int64) []string
 // GroupID resolves a group name for a library's "chown group"; nil accepts only numbers.
 type GroupID func(name string) (int, error)
 
-// BlockedContent is the ADR-53 part 2 check CommitUnit's import gate needs
-// (todo 4.15) -- library.BlockedContentStore's own shape, narrowed to an
-// interface so a test can fake it without a real library.db the way
-// Committer already does for Physical/Identity's own real dependencies.
+// BlockedContent is the ADR-53 part 2 check, narrowed to an interface so tests can fake it.
 type BlockedContent interface {
 	FindByHash(ctx context.Context, oshash, quickHash string, now int64) ([]library.BlockedContent, error)
 }
@@ -137,33 +112,18 @@ func NewCommitter(config CommitterConfig) Committer {
 	}
 }
 
-// Placed is what CommitUnit resolved and placed -- everything import_unit
-// and import_unit_file need to record, for display and for a later
-// session revert to know precisely which rows it is responsible for
-// (ADR-48: revert "removes the rows the session created", never one it
-// only matched).
+// Placed is what CommitUnit resolved and placed, so a revert knows exactly which rows it owns (ADR-48).
 type Placed struct {
 	WorkID         int64
 	WorkCreated    bool
 	EditionID      *int64
 	EditionCreated bool
 	MediaObjectIDs []int64
-	// LibraryPathIDs is parallel to MediaObjectIDs: which library_path row this
-	// unit's own placement created for each file, since RegisterBatch's ADR-11
-	// quick-hash dedupe can point a MediaObjectID at bytes another, unrelated
-	// commit already owns -- a revert must undo only its own path, never a path
-	// it merely shares an object with (4.22's own linking audit).
+	// LibraryPathIDs parallels MediaObjectIDs: the path this unit created, since quick-hash dedupe may share an object, and a revert must undo only its own path.
 	LibraryPathIDs []int64
-	// PathWarnings is naming.RenderPath's own non-fatal notices (today: only
-	// the total-length recommendation), keyed by MediaObjectID -- COMMIT runs
-	// inline with no separate preview step to block on, so the caller's own
-	// choice is what to do with these (todo 4.9: logged, not surfaced in the
-	// UI, since nothing about import_unit persists a per-file warning today).
+	// PathWarnings are naming's non-fatal notices keyed by MediaObjectID; COMMIT has no preview step, so they are only logged.
 	PathWarnings map[int64][]string
-	// TransferMethods is parallel to MediaObjectIDs: which rung of the ladder
-	// actually placed each file. Recorded because no two rungs are
-	// distinguishable on disk -- a reflink and a copy look identical, which is
-	// how an XFS import read as "it copied everything" (2026-09-18).
+	// TransferMethods parallels MediaObjectIDs: which rung placed each file, recorded because a reflink and a copy look identical on disk.
 	TransferMethods []mover.PlaceMethod
 	// RootFolderID is where the unit was placed; Extras are paths under it.
 	RootFolderID int64
@@ -186,24 +146,13 @@ func (p Placed) TransferMethodNames() []string {
 	return names
 }
 
-// ErrNoPlacement means placement.Resolve deferred: no root folder in
-// categoryID currently qualifies. The unit stays COMMIT-decided-but-unplaced
-// (import_unit.work_id still NULL) for a later retry, the same as any other
-// DEFER (section 11.7).
+// ErrNoPlacement is no root folder in the category qualifies, so the unit stays decided but unplaced for a retry (section 11.7).
 var ErrNoPlacement = errors.New("music: no root folder available to place this unit")
 
-// ErrBlockedContent means one of unit.Media's own quick hashes matched
-// blocked_content (ADR-53 part 2, todo 4.15's import gate): the message
-// itself carries model.ReasonBlockedContent as a matchable prefix, so a
-// caller distinguishing this from ErrNoPlacement can also record the
-// block's own reason directly, without re-deriving it.
+// ErrBlockedContent is a quick hash matched blocked_content (ADR-53); the message starts with model.ReasonBlockedContent so callers can record the reason.
 var ErrBlockedContent = errors.New(model.ReasonBlockedContent)
 
-// errNoExternalID means best carries no ExternalID at all -- today's own
-// identifiers (MBIDIdentifier, SearchIdentifier) never produce that (see
-// consumer.go's identical comment on identifyBatch), so this is a genuine
-// caller error, not a real-world case, and CommitUnit refuses loudly rather
-// than creating a work keyed on an empty provider/external id pair.
+// errNoExternalID is a genuine caller error (no current identifier produces it); refuse loudly rather than key a work on an empty id pair.
 var errNoExternalID = errors.New("music: identification has no external id to resolve a work by")
 
 // AlbumPlacement is what album matching decided for a unit: the release it matched, how many
@@ -286,17 +235,7 @@ func (c Committer) CommitMatchedUnit(
 		totalBytes += f.SizeBytes
 	}
 
-	// ADR-53 part 2's own gate (todo 4.15): hashed from the source, before
-	// any file reaches the library -- "nothing about a blocked file reaches
-	// the library" only holds if the check runs before mover.PlaceOne, not
-	// after. Every file's hash is computed and checked before any of them
-	// are placed, so a block on file 2 of 3 never leaves file 1 already
-	// copied in (ADR-53: "unit contains a refuse pattern -> whole unit
-	// refused", the same all-or-nothing shape the exclusion-pattern gate
-	// gives at DECIDE time). quickHashes is reused below instead of hashing
-	// the destination a second time -- source and destination bytes are
-	// identical after placement (ADR-11: reflink/hardlink/copy, never a
-	// transform).
+	// ADR-53 part 2 gate: hash and check every file from the source before placing any, so a block on file 2 never leaves file 1 copied; the hashes are reused after placement.
 	quickHashes := make([]string, len(unit.Media))
 	for index, media := range unit.Media {
 		hash, err := library.QuickHash(c.fsys, path.Join(sourceRoot, media.RelPath), media.SizeBytes)
@@ -653,12 +592,7 @@ func pathStem(relPath string) string {
 	return strings.ToLower(strings.TrimSuffix(relPath, path.Ext(relPath)))
 }
 
-// rootCandidates answers every root folder attached to categoryID, in
-// placement.RootCandidate form -- the same conversion
-// internal/moving/drainjob.rootCandidate already does for drain, duplicated
-// rather than shared since drainjob's own is unexported and the two
-// packages must not import each other (both sit beside, not above, the
-// other in architecture §2's graph).
+// rootCandidates converts the category's roots to placement form; duplicated from drainjob because the two packages must not import each other.
 func (c Committer) rootCandidates(categoryID int64) []placement.RootCandidate {
 	return rootCandidates(c.roots, categoryID)
 }
@@ -691,13 +625,7 @@ func rootCandidates(roots PlacementRoots, categoryID int64) []placement.RootCand
 	return candidates
 }
 
-// artistAffinityKey builds section 11.7's artist-scoped placement affinity
-// key from a unit's own tag-read artist name -- the same lowercased/trimmed
-// comparison key internal/importing/pack's own sibling-artist grouping
-// already uses, so a separator or casing difference never fragments one
-// artist's affinity across two keys. An empty/unknown artist returns "",
-// which the caller reads as "affinity does not apply to this unit" rather
-// than colliding every unknown-artist unit onto one key.
+// artistAffinityKey builds section 11.7's lowercased, trimmed artist key (same as pack grouping); empty means affinity does not apply.
 func artistAffinityKey(artist string) string {
 	key := strings.ToLower(strings.TrimSpace(artist))
 	if key == "" {
@@ -706,10 +634,7 @@ func artistAffinityKey(artist string) string {
 	return "artist:" + key
 }
 
-// unitWorkIdentity names the work a unit resolves to if one has to be
-// created -- the same tag-first, directory-fallback rule newWorkIdentity
-// already applies to one scanned file, read here from the unit's own
-// representative (first file's) tags instead.
+// unitWorkIdentity names the work to create, with newWorkIdentity's tag-first, directory-fallback rule read from the unit's first file.
 func unitWorkIdentity(sourceRoot string, unit inspect.Unit, tags mediatool.Tags) library.WorkIdentity {
 	title := tags.First("album")
 	if title == "" {
@@ -764,10 +689,7 @@ func importRelPath(
 	return rendered, messages, nil
 }
 
-// keptFileName is "rename on import" turned off: the template still decides
-// which folders a file lands in, and the file itself keeps the name it
-// arrived with, sanitised for the destination filesystem the way every
-// rendered component already is.
+// keptFileName is rename-on-import off: the template picks folders, the file keeps its arrived name, sanitised for the destination.
 func keptFileName(renderedRelPath, sourceRelPath string) string {
 	kept := fsx.SanitiseComponent(strings.TrimSpace(path.Base(sourceRelPath)))
 	if kept == "" {

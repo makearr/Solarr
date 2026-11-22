@@ -1,7 +1,4 @@
-// Package book is the books and audiobooks modules: two media types over one implementation, as Readarr ran one code
-// base for both. A book is a work without parts whose one wanted item needs its files (an ebook's file, an audiobook's
-// chapters), read from Open Library, Google Books and, for audiobooks, Audible through Audnexus, steered by Wikidata and
-// merged field by field (ADR-8). What differs between the two is the Format; core sees works and items only (ADR-23).
+// Package book is the books and audiobooks media types over one implementation, differing only in Format; core sees works and items only (ADR-23).
 package book
 
 import "strings"

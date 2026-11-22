@@ -38,10 +38,7 @@ func hasPrefix(long, short []string) bool {
 	return len(short) < len(long) && slices.Equal(long[:len(short)], short)
 }
 
-// titleEdges pairs the works whose names say they belong together: one named like the start of another ("Kitsu" and
-// "Kitsu Storm", "Blue Globe" and "Blue Globe II"), the same name before a colon ("Void Rangers: Alpha" and
-// "Void Rangers: Beta"), the same name in two years (Fixit 1985 and 2016) or the same two first words ("Ember Orb Z"
-// and "Ember Orb Super"). A single shared word proves nothing: Void Wars and Void Rangers.
+// titleEdges pairs works whose names belong together: prefix, same name before a colon, same name in two years, or the same first two words; one shared word proves nothing.
 func titleEdges(works []library.WorkName) [][2]int64 {
 	type entry struct {
 		id    int64

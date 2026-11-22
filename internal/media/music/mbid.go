@@ -8,10 +8,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
-// Provider strings for MusicBrainz identity. They are level-specific because a
-// release group MBID and a release MBID are both MusicBrainz UUIDs for different
-// things, and ADR-7's work/edition split turns on telling them apart -- ADR-29 is
-// blunt that reading only one loses either which album this is or which pressing.
+// Provider strings for MusicBrainz identity are level-specific because release group and release MBIDs differ and ADR-7 turns on telling them apart.
 const (
 	// ProviderReleaseGroup identifies the work: the album, across every pressing.
 	ProviderReleaseGroup = "musicbrainz:release-group"

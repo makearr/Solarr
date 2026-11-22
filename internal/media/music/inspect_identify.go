@@ -14,17 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
-// IdentifyUnit runs the ADR-24 chain over one inspect.Unit as a whole (ADR-48's
-// IDENTIFY step: "the ADR-24 chain, per unit, independently") via
-// model.RunChainForFiles rather than per file and merged afterward -- a cheap
-// strategy that resolves confidently from any one file in the unit skips a more
-// expensive strategy for the rest of it, the same early-stop RunChain already gives
-// a single scanned file. identifiers must already be built over a TagSource that
-// resolves this unit's own import root (UnitTagSourceFor); this function only turns
-// the unit's media files into the model.FileRef the chain expects.
-//
-// An import unit has no MediaObjectID or RootFolderID yet (ADR-48) -- exactly what
-// the widened model.FileRef exists for.
+// IdentifyUnit runs the ADR-24 chain over a whole unit (ADR-48 IDENTIFY) so a confident file skips costlier strategies for the rest; it needs identifiers built over UnitTagSourceFor, and the unit has no MediaObjectID or RootFolderID yet.
 func IdentifyUnit(
 	ctx context.Context, unit inspect.Unit, identifiers []model.Identifier, cfg model.ChainConfig,
 ) (model.ChainResult, error) {
@@ -44,12 +34,7 @@ func IdentifyUnit(
 	return result, nil
 }
 
-// UnitTagSourceFor answers the chain's tag lookups for an import-inspection unit
-// from a batch already probed by mediatool -- ADR-28/ADR-30's "one probe per file,
-// not per identifier" applied to an import root the same way tagSourceFor applies it
-// to a scanned one. root is the path inspect.Run was given; a FileRef's RelPath is
-// relative to it either way, so this only differs from tagSourceFor in not closing
-// over a settings.RootFolder that an import unit does not have.
+// UnitTagSourceFor answers tag lookups for an import unit from one batch probe (ADR-28/30), like tagSourceFor but without a settings.RootFolder.
 func UnitTagSourceFor(root string, probes []mediatool.Probe) Resolved {
 	return Resolved{
 		Tags: NewBatchTags(probes),
@@ -151,10 +136,7 @@ type AudioNaming struct {
 	Albums       AlbumLookup
 }
 
-// RefineUnitByAudio is RefineUnitByAlbum's last rung, for a unit its tags and names could not identify: the files'
-// own audio is fingerprinted, AcoustID names the recordings, and those names (not AcoustID's recording ids) are
-// matched against whole tracklists, seeded with the release groups AcoustID named, most agreed-on first -- the
-// scan's fingerprint pass, for an import (D12). Nothing happens without an AcoustID key.
+// RefineUnitByAudio is the last rung for a unit tags and names could not identify: fingerprint, match recovered names against whole tracklists seeded by AcoustID's release groups (D12); needs an AcoustID key.
 func RefineUnitByAudio(
 	ctx context.Context, naming AudioNaming, unit inspect.Unit, probes map[string]mediatool.Probe,
 	absolute func(relPath string) string, result model.ChainResult, threshold float64, seeds []string,
