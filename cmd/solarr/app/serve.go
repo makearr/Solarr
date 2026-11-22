@@ -97,6 +97,8 @@ type process struct {
 	env    config.Lookup
 	fsys   fsx.FS
 	logger *slog.Logger
+	// wall is the clock the retry task and the database sync read; nil means the system clock.
+	wall clock.Clock
 	// logRing is the in-memory buffer the Logs screen reads (revision 7.16).
 	logRing  *logbuffer.Ring
 	settings *store.Store
@@ -260,7 +262,7 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 	}
 
 	running := &process{
-		build: build, config: loaded, env: env, fsys: fsys, logger: logger, logRing: logRing,
+		wall: clock.NewSystem(), build: build, config: loaded, env: env, fsys: fsys, logger: logger, logRing: logRing,
 		timezone: timezone, configPath: configPath, tool: mediatool.New(nil, 0),
 		transcoder: transcode.NewService(mediatool.ExecRunner{}, transcode.ExecPiper{Dir: filepath.Join(loaded.Paths.CacheDir, "transcode"), IONice: mediatool.IONice{Class: 2, Level: 0}}, fsys).WithStallWatch(clock.NewSystem(), playbackStallAfter),
 	}
@@ -1315,4 +1317,12 @@ func (p *process) locksFor(mediaType string) *keyedlock.Locks {
 		p.resolverLocks[mediaType] = locks
 	}
 	return locks
+}
+
+// now reads the process clock, the system one when a test built the process bare.
+func (p *process) now() time.Time {
+	if p.wall == nil {
+		return clock.NewSystem().Now()
+	}
+	return p.wall.Now()
 }

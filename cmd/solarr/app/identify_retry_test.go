@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // retryModule is a media type declaring only which schedule retries its waiting files.
@@ -57,5 +58,14 @@ func TestTakeRecoveredMediaTypes(t *testing.T) {
 	}
 	if got := p.takeRecoveredMediaTypes(at.Add(outageRetrySpacing + time.Minute)); !slices.Equal(got, []string{"adult"}) {
 		t.Errorf("got %v, want the held note honoured after the spacing", got)
+	}
+}
+
+// The retry task and the database sync read the process clock, so a test sets the time they see.
+func TestProcessNowReadsTheInjectedClock(t *testing.T) {
+	at := time.Unix(1_000_000, 0)
+	p := &process{wall: clock.NewFake(at)}
+	if got := p.now(); !got.Equal(at) {
+		t.Errorf("now() = %v, want %v", got, at)
 	}
 }

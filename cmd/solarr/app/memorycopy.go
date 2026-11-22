@@ -331,7 +331,7 @@ func (m *memoryCopy) syncDatabases(ctx context.Context) error {
 		}
 	}
 	if len(failures) == 0 {
-		m.lastDatabaseSync = clock.NewSystem().Now()
+		m.lastDatabaseSync = m.p.now()
 	}
 	return errors.Join(failures...)
 }

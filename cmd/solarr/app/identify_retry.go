@@ -11,7 +11,6 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
-	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
@@ -66,7 +65,7 @@ func (p *process) identifyCategory(ctx context.Context, category settings.Catego
 	var last jobs.EnqueueResult
 	folders := 0
 	for _, root := range p.cache.Snapshot().RootFoldersForCategory(category.ID) {
-		directories, err := adapters.WaitingDirectories(ctx, unidentified, root.ID, clock.NewSystem().Now().Unix(), force)
+		directories, err := adapters.WaitingDirectories(ctx, unidentified, root.ID, p.now().Unix(), force)
 		if err != nil {
 			return last, folders, err
 		}
@@ -108,7 +107,7 @@ func (p *process) outageRetryTask() jobs.Task {
 }
 
 func (p *process) enqueueOutageRetry(ctx context.Context) (jobs.EnqueueResult, error) {
-	mediaTypes := p.takeRecoveredMediaTypes(clock.NewSystem().Now())
+	mediaTypes := p.takeRecoveredMediaTypes(p.now())
 	if len(mediaTypes) == 0 {
 		return jobs.EnqueueResult{}, nil
 	}
