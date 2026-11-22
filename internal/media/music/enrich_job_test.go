@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -2036,5 +2037,56 @@ func TestEnrichJob_AnArtistIsRefreshedWhenHalfItsAlbumsAnswer(t *testing.T) {
 				t.Errorf("RefreshArtist error = %v, want error: %v", err, test.wantErr)
 			}
 		})
+	}
+}
+
+// META-13: an album nobody voted genres onto takes its lead artist's, under its own source, and loses them once it has its own.
+func TestEnrichJob_AnAlbumWithoutGenresTakesItsArtistsUntilItHasItsOwn(t *testing.T) {
+	source := &fakeArtistSource{
+		fakeSource: fakeSource{
+			rg: musicbrainz.ReleaseGroup{
+				MBID: "rg-1", Title: "Quiet Harbour", PrimaryType: "Album", FirstReleaseDate: "1997-05-21",
+				ArtistCredit: []musicbrainz.ArtistCredit{{MBID: "artist-1", Name: "Katupoken"}},
+			},
+			release: musicbrainz.Release{MBID: "rel-1", Title: "Quiet Harbour", Status: "official"},
+		},
+		artists: map[string]musicbrainz.Artist{
+			"artist-1": {MBID: "artist-1", Name: "Katupoken", SortName: "Katupoken", Genres: []musicbrainz.Genre{{Name: "dream pop", Count: 9}, {Name: "stray", Count: 1}}},
+		},
+	}
+	job, opened, queries := newEnrichJob(t, source)
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{Provider: music.ProviderReleaseGroup, ExternalID: "rg-1"})
+	if err != nil {
+		t.Fatalf("GetWorkByExternalID: %v", err)
+	}
+	sources := func() []string {
+		tags, err := queries.ListTagsForSubject(t.Context(), librarydb.ListTagsForSubjectParams{SubjectType: "work", SubjectID: work.ID})
+		if err != nil {
+			t.Fatalf("ListTagsForSubject: %v", err)
+		}
+		var got []string
+		for _, tag := range tags {
+			got = append(got, tag.Source)
+		}
+		return got
+	}
+	if got := sources(); !reflect.DeepEqual(got, []string{library.GenreSourceArtist}) {
+		t.Fatalf("tag sources = %v, want only the artist's one genre", got)
+	}
+
+	person, err := queries.GetPersonByExternalID(t.Context(), librarydb.GetPersonByExternalIDParams{Provider: music.ProviderArtist, ExternalID: "artist-1"})
+	if err != nil {
+		t.Fatalf("GetPersonByExternalID: %v", err)
+	}
+	source.rg.Genres = []musicbrainz.Genre{{Name: "shoegaze", Count: 5}}
+	if err := job.RefreshArtist(t.Context(), person.ID, true); err != nil {
+		t.Fatalf("RefreshArtist: %v", err)
+	}
+	if got := sources(); !reflect.DeepEqual(got, []string{"musicbrainz"}) {
+		t.Fatalf("tag sources after the album got genres = %v, want only musicbrainz", got)
 	}
 }

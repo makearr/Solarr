@@ -347,7 +347,7 @@ const directArtistBody = `{
 
 func TestDirect_ArtistParsesTheRealFieldShapeAndFindsTheWikidataQID(t *testing.T) {
 	transport := &fakeTransport{responses: map[string]fakeResponse{
-		"https://musicbrainz.invalid/artist/" + kateBushMBID + "?fmt=json&inc=url-rels+aliases": {
+		"https://musicbrainz.invalid/artist/" + kateBushMBID + "?fmt=json&inc=url-rels+aliases+genres": {
 			status: http.StatusOK, body: directArtistBody,
 		},
 	}}

@@ -868,16 +868,35 @@ func (j *EnrichJob) enrichCreditsAndGenres(
 	}
 
 	names := weightedGenres(rg.Genres)
+	source := library.GenreSourceMusicBrainz
 	if len(names) == 0 {
-		return
+		// An album nobody voted genres onto takes its lead artist's, under a source of their own that a later real genre replaces.
+		names, source = j.leadArtistGenres(ctx, rg), library.GenreSourceArtist
+		if len(names) == 0 {
+			return
+		}
+	} else if err := j.people.ClearGenresFrom(ctx, workID, library.GenreSourceArtist); err != nil {
+		j.logger.WarnContext(ctx, "clear artist genres failed", slog.Int64("work_id", workID), slog.Any("error", err))
 	}
 	genres := make([]library.GenreLink, len(names))
 	for index, name := range names {
 		genres[index] = library.GenreLink{Name: name}
 	}
-	if err := j.people.AssignGenres(ctx, workID, GenreTree.Key, genres); err != nil {
+	if err := j.people.AssignGenresFrom(ctx, workID, GenreTree.Key, source, genres); err != nil {
 		j.logger.WarnContext(ctx, "assign genres failed", slog.Int64("work_id", workID), slog.Any("error", err))
 	}
+}
+
+// leadArtistGenres are the weighted genres of the release group's first credited artist; the lookup is cached, so a run that already resolved them asks nothing.
+func (j *EnrichJob) leadArtistGenres(ctx context.Context, rg musicbrainz.ReleaseGroup) []string {
+	if len(rg.ArtistCredit) == 0 || rg.ArtistCredit[0].MBID == "" {
+		return nil
+	}
+	artist, err := j.provider.Artist(ctx, musicbrainz.PriorityEnrich, rg.ArtistCredit[0].MBID)
+	if err != nil {
+		return nil
+	}
+	return weightedGenres(artist.Genres)
 }
 
 // maxAlbumGenres is the most genres one album takes from the votes.

@@ -315,6 +315,20 @@ func (p People) AssignGenres(ctx context.Context, workID int64, genreTree string
 // GenreSourceWikidata is the source of the genres Wikidata names, which replace MusicBrainz's where it has any.
 const GenreSourceWikidata = "wikidata"
 
+// GenreSourceArtist is the source of the genres an album takes from its artist while MusicBrainz has none of its own for it.
+const GenreSourceArtist = "musicbrainz-artist"
+
+// ClearGenresFrom removes the genres one source gave a work, and no one else's.
+func (p People) ClearGenresFrom(ctx context.Context, workID int64, source string) error {
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).ClearProviderTagAssignments(ctx, librarydb.ClearProviderTagAssignmentsParams{SubjectType: "work", SubjectID: workID, Source: source})
+	})
+	if err != nil {
+		return fmt.Errorf("library: clear %s genres of work %d: %w", source, workID, err)
+	}
+	return nil
+}
+
 // AssignGenresFrom replaces a work's provider genres of the genre tree with one provider's, mapped onto its tree.
 func (p People) AssignGenresFrom(ctx context.Context, workID int64, genreTree, source string, genres []GenreLink) error {
 	names := make([]string, len(genres))
@@ -331,7 +345,10 @@ func (p People) AssignGenresFrom(ctx context.Context, workID int64, genreTree, s
 }
 
 // providerSourceMusicBrainz is the tag_assignment.source of MusicBrainz's genres.
-const providerSourceMusicBrainz = "musicbrainz"
+const providerSourceMusicBrainz = GenreSourceMusicBrainz
+
+// GenreSourceMusicBrainz is the source of the genres MusicBrainz voted onto a release group.
+const GenreSourceMusicBrainz = "musicbrainz"
 
 // slugify turns a genre name into tag.slug's globally-unique key: lowercase,
 // non-alphanumeric runs collapsed to a single hyphen.

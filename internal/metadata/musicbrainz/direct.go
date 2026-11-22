@@ -128,6 +128,10 @@ func (d direct) releaseGroup(ctx context.Context, mbid string) (ReleaseGroup, er
 // directArtist is musicbrainz.org's artist JSON with inc=url-rels -- verified
 // against a real live response (Vutu Doci).
 type directArtist struct {
+	Genres []struct {
+		Name  string `json:"name"`
+		Count int    `json:"count"`
+	} `json:"genres"`
 	ID             string `json:"id"`
 	Name           string `json:"name"`
 	SortName       string `json:"sort-name"`
@@ -157,7 +161,7 @@ type directArtist struct {
 func (d direct) Artist(ctx context.Context, mbid string) (Artist, error) {
 	var parsed directArtist
 	escaped := url.PathEscape(mbid) // an id from a file tag is not trusted to be a bare MBID
-	url := fmt.Sprintf("%s/artist/%s?fmt=json&inc=url-rels+aliases", d.baseURL, escaped)
+	url := fmt.Sprintf("%s/artist/%s?fmt=json&inc=url-rels+aliases+genres", d.baseURL, escaped)
 	if err := getJSON(ctx, d.client, url, &parsed); err != nil {
 		return Artist{}, fmt.Errorf("musicbrainz: artist %s: %w", mbid, err)
 	}
@@ -166,8 +170,12 @@ func (d direct) Artist(ctx context.Context, mbid string) (Artist, error) {
 	for _, alias := range parsed.Aliases {
 		aliases = append(aliases, alias.Name)
 	}
+	genres := make([]Genre, len(parsed.Genres))
+	for i, genre := range parsed.Genres {
+		genres[i] = Genre{Name: genre.Name, Count: genre.Count}
+	}
 	return Artist{
-		MBID: parsed.ID, Name: parsed.Name, SortName: parsed.SortName, Aliases: aliases,
+		MBID: parsed.ID, Name: parsed.Name, SortName: parsed.SortName, Aliases: aliases, Genres: genres,
 		Disambiguation: parsed.Disambiguation, Type: parsed.Type, Gender: parsed.Gender,
 		Country: parsed.Country, Area: parsed.Area.Name, BeginArea: parsed.BeginArea.Name,
 		Born: parsed.LifeSpan.Begin, Died: parsed.LifeSpan.End,
