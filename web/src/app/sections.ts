@@ -109,10 +109,7 @@ function ownSections(categoryId: string): readonly Section[] {
     {
       key: `library:${categoryId}:wanted`,
       label: "Wanted",
-      tabs: [
-        { label: "Wanted", path: `${base}/wanted`, tier: "normal" },
-        { label: "Watched", path: `${base}/watched`, tier: "advanced", administrator: true },
-      ],
+      tabs: [{ label: "Wanted", path: `${base}/wanted`, tier: "normal" }],
     },
     {
       key: `library:${categoryId}:insights`,
@@ -144,6 +141,11 @@ function ownSections(categoryId: string): readonly Section[] {
         { label: "Import lists", path: `${base}/config/import-lists`, tier: "advanced", administrator: true },
         { label: "Suggested for", path: `${base}/config/rules`, tier: "advanced", administrator: true },
       ],
+    },
+    {
+      key: `library:${categoryId}:watched`,
+      label: "Watched",
+      tabs: [{ label: "Watched", path: `${base}/watched`, tier: "advanced", administrator: true }],
     },
   ];
 }
