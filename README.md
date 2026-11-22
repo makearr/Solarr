@@ -775,63 +775,48 @@ standards](documentation/coding-standards.md) and judge the result yourself.
 
 ## Changelog
 
-Changes since the first release, **2026.10.001.515** (25 October 2026), newest areas first. The history of earlier
-releases is in [CHANGELOG.md](CHANGELOG.md), and the commit log has every detail.
+Changes since the last release, **2026.11.1.0882** (8 November 2026). Every release is in
+[CHANGELOG.md](CHANGELOG.md), and the commit log has every detail.
 
-**Upgrading:** databases created by 2026.10.001.515 or earlier are refused at start-up (one baseline migration per
-database now). Use the *Arr import or start a fresh config folder; the first start on the new layout moves
-`data/{db,cache,backups}` to `{db,cache,backups}` by itself.
+**Upgrading:** each database is one squashed baseline again. Only databases from build 1298 or later (schema
+library 0146, settings 0077, jobs 0010, statistics 0008) are upgraded. Anything older, **2026.11.1.0882 included**, is
+refused at start-up: use the *Arr import or start with a fresh config folder. The automatic move of the old
+`data/{db,cache,backups}` layout and the old browser theme setting are gone too.
 
-- **Books and audiobooks are real libraries.** Metadata from Open Library, Google Books, Hardcover, FantLab, iTunes and
-  Audible (with Audnexus), covers, one collection per series and the books a series still lacks, **Monitor** on a
-  whole series, **follow an author**, and a **Narrators** level, filter and column for audiobooks.
-- **An adult library type** (optional) over the stash-box providers, ThePornDB and Whisparr's metadata: scenes and
-  films, performers, and a StashDB favourites import list. See [adult](documentation/adult.md).
-- **Import lists for TV.** An AniList season or user list, a TMDB list or TMDB's trending and popular shows add series
-  for you, **previewed before you enable them**. See [import lists](documentation/import-lists.md).
-- **Import from the \*Arrs by choice.** A preview and mapping step, then pick what to bring across; Whisparr is a
-  source too, and monitoring can be **sent back** to the \*Arr.
-- **Merge one library into another** of the same media type, previewed like a move.
-- **Favourites.** A per-user heart on works, parts, people, organisations and collections, with a Favourites filter.
-- **A preview player in the browser**: bar, corner window or full screen, source bitrate, quality menu and **GPU
-  transcoding**. See [media player](documentation/media-player.md).
-- **Similar videos report** across one library or all: perceptual hashes of the frames plus duration, keep one and
-  link or recycle the others. Hashing is **off by default**. See [duplicate videos](documentation/duplicate-videos.md).
-- **More download clients and indexers**: every client Lidarr and Sonarr offer, **Soulseek through slskd**, and
-  **Prowlarr's catalog** to choose indexers from.
-- **Download queue insight**: the dashboard says when the queue will be empty, a deferred release says what it
-  waits for, each client's average speed is shown, a search-budget view shows what the last hour's searches were spent
-  on, and the Add form shows where a request ranks against the automatic searches.
-- **Libraries choose whether existing files are renamed**: never, on request, or automatic. Replacements are
-  recorded and shown side by side. Move jobs can be paused, resumed and cancelled.
-- **TV**: searches and imports by TheXEM's scene numbers, episode titles in the library's profile languages, air moments on the
-  calendar, subtitles that follow the file that replaces an episode, a richer add form (root folder, series type,
-  season folders, tags) and a franchise watch task.
-- **Per-library music provider order**, label, network and organisation logos, and **people and collections editable
-  by hand**; one human is one person across every source.
-- **Cache and memory page** (*Settings → Cache*) with one database cache ceiling, a Shrink button, and an optional
-  **cache and databases in RAM** (tmpfs); **statistics** per indexer and files below each library's cutoff,
-  and health that names a paused indexer or download client.
-- **Settings by environment variable**: config folder, port, root folders and API keys; `_FILE` variants for Docker
-  secrets. See [environment variables](documentation/environment-variables.md).
-- **Deduplication.** Similar videos are found at five levels across all libraries (hash version 2: time-based sample
-  windows, black-bar crop, scene cuts), with delete on every file, a frame and 3x3 preview sheet per file, and
-  hashing switched off by default.
-- **Requests.** Users with request permission file requests an administrator approves (or an *Add* grant that is
-  approved at once); tags can be hidden per account and **blocked** library-wide.
-- **Target quality.** Libraries aim at a named target with shipped presets, a per-work target, closeness judged
-  against it, and a preview of what a change makes upgradable.
-- **One verified backup bundle** (`tar.zst` of the four databases and `config.yml`) and a Settings → Database page
-  with disk use, a keep rule and maintenance by hand.
-- **Held releases** have a size setting (default 200), and torrents can wait for both ratio and time with a hard stop.
-- **Documentation** split into beginner, advanced and expert levels, with a getting-started page.
-- **Hardening.** The first-run claim race is closed, cross-site writes are refused, a session cookie is `Secure`
-  behind a trusted TLS proxy, 6to4 and IPv4-compatible addresses are judged by the IPv4 they carry, symlinks in a
-  download are never followed, a torrent whose name is a path never becomes an import path, and a whole download
-  folder is never imported as one download.
-- **Faster.** Scans read directories ahead of the walk, bulk edit writes only what changed, album decisions are about
-  3x faster, release-name parses are remembered, RSS sync skips a feed that answers 304, and the queue asks all
-  download clients together.
+- **Indexers without Prowlarr.** Our own indexer spec engine with a **581-site catalog**, a proxy list with
+  FlareSolverr, indexer priority and per-indexer download client binding, categories read from the indexer itself,
+  and stated API allowances respected (back-off on a limit answer, one sign-in shared by parallel searches).
+  Prowlarr can still be followed: its indexers, proxies and clients sync hourly.
+- **Disk-aware I/O.** Settings → Disk shows the disk topology and latency; probing, tag write-back, moves, linking and
+  imports wait their turn per disk, idle disks are left alone, and inotify folder watching lets scans trust it.
+- **Scheduler.** Pause and resume any task (or all), a *Running now* list with time left and estimated load, a
+  heatmap of real run time, a hung-job watchdog, and a task that missed its time while Solarr was down runs once.
+- **Imports.** Blu-ray/DVD folders are one unit held for review; Calibre `metadata.opf` and EPUB metadata name a book;
+  audiobook tags lead the folder name; disc subfolders, subtitle folders and hidden pregap tracks are handled;
+  every failing step takes back what it placed; the Import screen pages, has a *Needs attention* tab and dismisses
+  all finished sessions in one click. How long import history is kept is a setting.
+- **Music.** Bootleg-only release groups per library, optional tracks, release detail (edition names, disc titles,
+  track artists, ISRCs), duplicates by **audio fingerprint**, community ratings, vote-weighted genres, Lidarr import
+  takes over naming formats and metadata profiles.
+- **TV.** Daily series searched by air date, a season missing a few episodes searched episode by episode, several
+  downloads of one season in parallel when they do not overlap, specials leave the missing count, and seasons that two
+  sources number differently are shown on the work page.
+- **Downloads.** A title can be wanted by two libraries; a dead `.torrent` falls back to its magnet; BitTorrent v2
+  hashes; a full client disk keeps downloads waiting instead of blocklisting them; a release an indexer stopped
+  serving is blocklisted as *gone at indexer*; renamed and blackhole downloads are still recognised; a removed
+  download is only declared gone after ten minutes.
+- **Similar videos** are compared by a nightly job and stored, so the report opens at once; a pair is compared only
+  when their lengths agree.
+- **Safety.** Deleting anything in use is refused or offers to move its users first; a fresh install claimed from a
+  public address needs the setup code from the log; access levels per action (add, manage) in one table; files of a
+  blocked work are a 404 everywhere; passwords of 8+ characters asked twice; credentials never follow a redirect to
+  another host; API writes trigger a database copy to disk when running from RAM.
+- **Faster and lighter.** A metadata refresh that finds nothing changed writes nothing; library covers sit in 256
+  shard folders; one event stream per tab; JSON answers gzipped; provider outages serve the stored answer;
+  backups and vacuum no longer hold the database writer; the job dispatcher no longer polls.
+- **Health** names unreadable files (with ffprobe's message), missing media tools, failing tasks, stale backups,
+  disabled clients still holding downloads and a missing AcoustID key.
+- **The whole interface is translatable**: every sentence comes from one i18n catalogue (English only for now).
 
 ---
 
