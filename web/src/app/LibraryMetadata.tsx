@@ -107,7 +107,7 @@ export function LibraryMetadata() {
               ))}
             </div>
           )}
-          {save.isError && <p className="text-xs text-danger">{t("libraryMetadata.saveFailed")}</p>}
+          {save.isError && <p className="text-xs text-danger">{t("common.saveFailed")}</p>}
         </section>
         {library?.media_type === "music" && (
           <section className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface p-3">
@@ -156,7 +156,7 @@ function CoverOrder() {
         busy={patch.isPending}
         onChange={(order) => patch.mutate({ cover_sources: order })}
       />
-      {patch.isError && <p className="text-xs text-danger">{t("libraryMetadata.saveFailed")}</p>}
+      {patch.isError && <p className="text-xs text-danger">{t("common.saveFailed")}</p>}
     </section>
   );
 }

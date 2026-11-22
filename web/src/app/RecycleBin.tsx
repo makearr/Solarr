@@ -102,7 +102,7 @@ export function RecycleBin() {
       <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4 text-sm">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="font-medium">
-            In the bin{contents.data ? `: ${contents.data.total_entries} files, ${formatBytes(contents.data.total_bytes)}` : ""}
+            {contents.data ? t("recycleBin.inBinCounted", { count: contents.data.total_entries, size: formatBytes(contents.data.total_bytes) }) : t("recycleBin.inBin")}
           </h2>
           <button
             type="button"
@@ -138,7 +138,7 @@ export function RecycleBin() {
           </ul>
         )}
         {contents.data && contents.data.total_entries > contents.data.entries.length && (
-          <p className="text-xs text-ink-muted">Showing the newest {contents.data.entries.length}.</p>
+          <p className="text-xs text-ink-muted">{t("recycleBin.showingNewest", { count: contents.data.entries.length })}</p>
         )}
       </section>
     </div>

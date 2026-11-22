@@ -1,3 +1,4 @@
+import { tr } from "@/lib/i18nRich";
 import { t } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -585,8 +586,7 @@ function AddRootFolder({
       </Button>
       {create.isError && (
         <p className="w-full text-xs text-danger">
-          That could not be added -- check the path exists and is mounted inside the container,
-          and the library name is not empty.
+          {t("rootFolders.addFailed")}
         </p>
       )}
     </form>
@@ -613,10 +613,7 @@ function VanishedHeld({ root }: { root: RootFolder }) {
   return (
     <div role="alert" className="flex flex-col gap-2 rounded-md border border-warn/40 bg-warn/10 p-2.5 text-sm">
       <p>
-        The last full scan found <strong>{count.toLocaleString()}</strong> {count === 1 ? "file" : "files"} of this root
-        gone and marked none of them missing. If the disk was not mounted, run a full scan once it is. If you deleted them,
-        accept it: their albums and seasons are then missing and searched for again, unless the library unmonitors
-        deleted files.
+        {tr(count === 1 ? "rootFolders.goneOne" : "rootFolders.goneMany", { count: <strong>{count.toLocaleString()}</strong> })}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         {confirming ? (

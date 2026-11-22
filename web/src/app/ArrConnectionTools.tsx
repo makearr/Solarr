@@ -409,7 +409,7 @@ function ArrPull({ instanceId, app }: { instanceId: number; app: ArrApp }) {
       </div>
       {needsLibrary && (
         <label className="flex items-center gap-1.5">
-          Root folders and import lists go to
+          {t("arrConnectionTools.rootFoldersGoTo")}
           <select
             className={input}
             value={current?.library_id ?? ""}

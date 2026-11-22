@@ -103,7 +103,7 @@ export function UnidentifiedReview() {
         <div className="flex flex-wrap items-center gap-3 text-xs">
           <label className="flex items-center gap-1.5 text-ink">
             <input type="checkbox" checked={wholeFolder} onChange={(event) => setWholeFolder(event.target.checked)} />
-            Also place the other files waiting in this folder in the {words.work} I pick
+            {t("unidentifiedReview.alsoPlace", { work: words.work ?? "" })}
           </label>
           <span className="ml-auto flex items-center gap-1.5">
             {confirmingNotMedia ? (

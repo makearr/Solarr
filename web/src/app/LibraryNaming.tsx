@@ -142,7 +142,7 @@ export function LibraryNaming() {
       <header className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold">Naming</h1>
         <p className="text-sm leading-relaxed text-ink-muted">
-          How files in this library are named and where they go below the root folder.
+          {t("libraryNaming.intro")}
           {naming.data.is_default && " This library uses the default until you save."}
         </p>
       </header>
@@ -286,8 +286,7 @@ export function LibraryNaming() {
         <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
           <h2 className="text-sm font-medium">Tags</h2>
           <p className="text-xs text-ink-muted">
-            Written into this library's files once enrichment has identified them, never into a download folder
-            and never on a read-only root folder.
+            {t("libraryNaming.tagsHelp")}
           </p>
           <Toggle
             label="Write MusicBrainz IDs"

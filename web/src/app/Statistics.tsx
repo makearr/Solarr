@@ -138,7 +138,7 @@ function FilesSection({ totalFiles, unidentified, states, items, categoryId, wor
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-sm font-medium">Files</h2>
-      <p className="text-xs text-ink-muted">Files in the library, how many are identified, and the monitored {items} still missing.</p>
+      <p className="text-xs text-ink-muted">{t("statistics.filesIntro", { items })}</p>
       <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile value={String(totalFiles)} label="Files in the library" to={`/library/${categoryId}/${worksLevel}`} />
         <StatTile value={String(identified)} label="Identified" note={share(identified, totalFiles)} />
@@ -369,7 +369,7 @@ export function Statistics() {
           </section>
 
           <section className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium">Release decisions, last {data.window_days} days</h2>
+            <h2 className="text-sm font-medium">{t("statistics.decisionsWindow", { days: data.window_days })}</h2>
             <p className="text-xs text-ink-muted">
               {decisions} releases judged against your profiles, whichever of them was then downloaded.
             </p>
@@ -478,7 +478,7 @@ function TargetSize({ categoryId }: { categoryId: string }) {
     <section className="flex flex-col gap-2">
       <h2 className="text-sm font-medium">{t("statistics.sizeAgainstTheTarget")}</h2>
       <p className="text-xs text-ink-muted">
-        Each video file's bitrate against the {data.expected_kbps} kbit/s a file on the target would have (video and audio plus container and subtitle overhead), over {data.judged} files.
+        {t("statistics.bitrateIntro", { kbps: data.expected_kbps, count: data.judged })}
       </p>
       <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {buckets.map((bucket) => (

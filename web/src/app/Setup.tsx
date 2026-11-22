@@ -349,7 +349,7 @@ function ConnectArr({
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={pushMonitoring} onChange={(event) => setPushMonitoring(event.target.checked)} />
-          Send monitoring back to {app} (only what an import brings in, only its monitored flag)
+          {t("setup.sendMonitoringBack", { app })}
         </label>
 
         {connect.isError && <Problem error={connect.error} />}

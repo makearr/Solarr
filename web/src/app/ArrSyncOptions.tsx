@@ -191,10 +191,10 @@ export function ArrSyncOptions({
         <p className="pl-6 font-mono text-ink-muted">{(folders.data ?? []).map((folder) => rewrite(folder.path)).join(" · ")}</p>
       )}
       <label className="flex items-center gap-2">
-        Try it on the first
+        {t("arrSyncOptions.tryFirst")}
         <input type="number" min={0} aria-label={t("arrSyncOptions.howManyItemsTo")} placeholder="all" value={limit}
           onChange={(event) => setLimit(event.target.value)} className={`${input} w-16`} />
-        items only
+        {t("arrSyncOptions.itemsOnly")}
       </label>
       <div className="flex flex-col gap-1">
         <span className="text-ink-muted">

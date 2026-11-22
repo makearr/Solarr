@@ -204,7 +204,7 @@ function DownloadFolderCard({
               })
             }
           />
-          Custom import method
+          {t("downloadFolders.customMethod")}
           {!ownLadder && <span className="text-ink-muted">(unticked: the default import order)</span>}
         </label>
       </div>

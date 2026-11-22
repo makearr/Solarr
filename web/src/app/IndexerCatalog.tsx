@@ -1,3 +1,4 @@
+import { tr } from "@/lib/i18nRich";
 import { t } from "@/lib/i18n";
 import { useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -245,7 +246,7 @@ export function IndexerSetup() {
       {kinds.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
       {!kinds.isLoading && chosen.length === 0 && (
         <p className="text-sm text-ink-muted">
-          Nothing is chosen. <Link to="/connections/indexers/add" className="text-accent underline">Choose indexers</Link>.
+          {tr("indexerCatalog.nothingChosen", { link: <Link to="/connections/indexers/add" className="text-accent underline">Choose indexers</Link> })}
         </p>
       )}
       {chosen.map((kind) => (

@@ -36,8 +36,7 @@ export function CacheSettingsPage() {
           <CacheSettings />
         ) : (
           <p className="text-sm text-ink-muted">
-            Cache sizing is an expert-tier setting. Raise your own tier on the User settings page
-            to see it.
+            {t("cacheSettings.expertOnly")}
           </p>
         )}
       </div>
@@ -121,8 +120,7 @@ export function CacheSettings() {
         )}
         {report.data.shrunk_to_bytes != null && (
           <p className="text-xs text-warn">
-            The last sweep held the cache to {formatBytes(report.data.shrunk_to_bytes)} to keep {report.data.min_free_percent}% of the
-            disk free.
+            {t("cacheSettings.sweepHeld", { size: formatBytes(report.data.shrunk_to_bytes), percent: report.data.min_free_percent })}
           </p>
         )}
       </Card>

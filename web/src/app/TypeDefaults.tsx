@@ -47,9 +47,7 @@ export function MetadataTypeTab({ entry }: { entry: TypeDefaults }) {
   return (
     <section className="flex flex-col gap-3">
       <p className="max-w-2xl text-sm text-ink-muted">
-        The providers a {name.toLowerCase()} library asks and the order it asks them in. The first that has a field supplies it; each later one only
-        fills what the earlier ones left empty, and one left out is not asked. A library can keep its own list under its Settings, Metadata; until it
-        does it follows this one.
+        {t("typeDefaults.intro", { name: name.toLowerCase() })}
       </p>
       <div className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
         <div className="flex items-center gap-2">
@@ -94,7 +92,7 @@ export function MetadataTypeTab({ entry }: { entry: TypeDefaults }) {
             ))}
           </div>
         )}
-        {save.isError && <p className="text-xs text-danger">{t("libraryMetadata.saveFailed")}</p>}
+        {save.isError && <p className="text-xs text-danger">{t("common.saveFailed")}</p>}
       </div>
     </section>
   );
@@ -209,7 +207,7 @@ function TypeQualityCard({ entry }: { entry: TypeDefaults }) {
           )}
         </div>
       )}
-      {save.isError && <p className="text-xs text-danger">{t("libraryMetadata.saveFailed")}</p>}
+      {save.isError && <p className="text-xs text-danger">{t("common.saveFailed")}</p>}
     </Card>
   );
 }

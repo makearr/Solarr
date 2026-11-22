@@ -40,8 +40,7 @@ function SettingsPage({
         <h1 className="text-base font-semibold">{title}</h1>
         {hidden ? (
           <p className="text-sm text-ink-muted">
-            These settings are shown from the {requiredTier === "expert" ? "Expert" : "Advanced"} level on.
-            Choose it in the menu under your name, top right.
+            {t("settings.tierGate", { tier: requiredTier === "expert" ? "Expert" : "Advanced" })}
           </p>
         ) : (
           children
@@ -114,7 +113,7 @@ export function GeneralSettings() {
             onChange={(event) => change.mutate({ hunt_old_missing: event.target.checked })}
           />
           <span>
-            Search for old missing items
+            {t("settings.searchOldMissing")}
             <span className="block text-xs text-ink-muted">{t("settings.theAutomaticSearchAlso")}</span>
           </span>
         </label>
@@ -144,7 +143,7 @@ export function GeneralSettings() {
             onChange={(event) => change.mutate({ video_previews: event.target.checked })}
           />
           <span>
-            Make preview pictures of videos
+            {t("settings.videoPreviews")}
             <span className="block text-xs text-ink-muted">Keeps a single frame (up to 720p) and a 3x3 thumbnail sheet of each video, made from the same frames the hashing reads, in the previews folder of the config directory. Turns hashing on.</span>
           </span>
         </label>

@@ -258,7 +258,7 @@ function ReadyQueueLimitEditor() {
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
       <label className="flex items-center gap-1.5">
-        Hold at most
+        {t("downloaders.holdAtMost")}
         <input
           type="number"
           min={1}
@@ -610,7 +610,7 @@ function OptionFields({
         className="flex w-36 flex-col gap-1 text-ink-muted"
         title={t("downloaders.automaticSearchesBeyondThis")}
       >
-        Downloads at once
+        {t("downloaders.downloadsAtOnce")}
         <input
           className={inputStyle}
           type="number"
@@ -651,7 +651,7 @@ function OptionFields({
       {seed && removeCompleted && (
         <>
           <label className="flex w-32 flex-col gap-1 text-ink-muted" title="Set a ratio, a time or both: the torrent keeps seeding until a limit is reached">
-            Seed to ratio
+            {t("downloaders.seedToRatio")}
             <input className={inputStyle} type="number" min={0} step={0.1} value={seed.ratio} placeholder="e.g. 1.0" onChange={(event) => seed.onRatio(event.target.value)} />
           </label>
           <label className="flex w-36 flex-col gap-1 text-ink-muted" title={t("downloaders.whicheverLimitIsReached")}>
@@ -760,7 +760,7 @@ export function ClientOptionsForm({ downloader, kind, onDone }: { downloader: Do
         <div className="flex flex-wrap items-end gap-3 text-xs">
           {kind.user_name && (
             <label className="flex min-w-40 flex-col gap-1 text-ink-muted">
-              New user name
+              {t("downloaders.newUserName")}
               <input className={inputStyle} value={signInUser} autoComplete="off" onChange={(event) => setSignInUser(event.target.value)} />
             </label>
           )}
@@ -780,11 +780,11 @@ export function ClientOptionsForm({ downloader, kind, onDone }: { downloader: Do
       {hasAddress && (
         <div className="flex flex-wrap items-end gap-3 text-xs">
           <label className="flex min-w-48 flex-1 flex-col gap-1 text-ink-muted">
-            The client says its downloads are in
+            {t("downloaders.clientPath")}
             <input className={inputStyle} value={remotePath} placeholder="/downloads" onChange={(event) => setRemotePath(event.target.value)} />
           </label>
           <label className="flex min-w-48 flex-1 flex-col gap-1 text-ink-muted">
-            Solarr sees that folder at
+            {t("downloaders.localPath")}
             <input className={inputStyle} value={localPath} placeholder="/data/downloads" onChange={(event) => setLocalPath(event.target.value)} />
           </label>
         </div>

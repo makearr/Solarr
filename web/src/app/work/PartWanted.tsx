@@ -1,3 +1,4 @@
+import { tr } from "@/lib/i18nRich";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -116,11 +117,9 @@ export function PartWanted({ info }: { info: MediaTypeInfo | undefined }) {
       </p>
       {view === "cutoff" && !judged && (
         <p className="text-sm text-ink-muted">
-          This library has no target or cutoff yet, so nothing can be below it. Set one on its{" "}
-          <Link to="/library/$categoryId/config/quality" params={{ categoryId }} className="text-accent underline">
+          {tr("partWanted.noTarget", { link: <Link to="/library/$categoryId/config/quality" params={{ categoryId }} className="text-accent underline">
             Quality page
-          </Link>
-          .
+          </Link> })}
         </p>
       )}
       {pages.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}

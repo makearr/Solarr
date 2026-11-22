@@ -152,7 +152,7 @@ function GroupCard({ group, scope, libraryName }: { group: Group; scope: Similar
               <TargetChip file={video.file} />
             </div>
             <span className="break-all font-mono text-ink-muted">{video.path}</span>
-            {video.path_count > 1 && <span className="text-warn">The same file is linked at {video.path_count} paths; dropping it affects all of them.</span>}
+            {video.path_count > 1 && <span className="text-warn">{t("similarVideos.linkedAt", { count: video.path_count })}</span>}
             {!done && (
               <div className="flex flex-wrap gap-2">
                 {!isKept && (
@@ -292,9 +292,7 @@ export function SimilarVideos({ scope }: { scope: SimilarScope }) {
         </label>
       </div>
       <p className="max-w-xl text-xs text-ink-muted">
-        Files that look like the same video in another encode, size or container{scope === "everywhere" ? ", in any library" : ""}.
-        Only files the hash pass has reached are compared, so more can appear over time.
-        {data?.limited ? " Only the largest groups are shown." : ""}
+        {t("similarVideos.intro", { scope: scope === "everywhere" ? ", in any library" : "" })}{data?.limited ? ` ${t("similarVideos.limited")}` : ""}
       </p>
       {data && (
         <p className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
@@ -308,8 +306,7 @@ export function SimilarVideos({ scope }: { scope: SimilarScope }) {
       )}
       {data && !data.hashing_enabled && (
         <p className="text-xs text-warn">
-          Video hashing is switched off, so files added since are not compared.
-          {scope === "everywhere" ? "" : " An administrator can turn it on under Storage › Duplicates."}
+          {t("similarVideos.hashingOff")}{scope === "everywhere" ? "" : ` ${t("similarVideos.hashingOffAdmin")}`}
         </p>
       )}
       {report.isLoading && <p className="text-xs text-ink-muted">Looking…</p>}

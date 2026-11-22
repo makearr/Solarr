@@ -194,7 +194,7 @@ export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
         <div className="min-h-0 flex-1 overflow-y-auto">
           {works.isLoading && <Message>Loading…</Message>}
           {works.isSuccess && items.length === 0 && page === 0 && (
-            <Message>Nothing wanted -- every monitored {words.work} in this library is complete.</Message>
+            <Message>{t("workWanted.nothingWanted", { work: words.work ?? "" })}</Message>
           )}
           {layout === "poster" ? (
             <PosterWall entries={items.map((work) => workEntry(work, categoryId, info))} options={posterOptions} />
@@ -226,7 +226,7 @@ export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
         {works.isLoading && <Message>Loading…</Message>}
         {works.isError && <Message>{t("workWanted.wantedItemsCouldNot")}</Message>}
         {works.isSuccess && items.length === 0 && page === 0 && (
-          <Message>Nothing wanted -- every monitored {words.work} in this library is complete.</Message>
+          <Message>{t("workWanted.nothingWanted", { work: words.work ?? "" })}</Message>
         )}
         {items.map((work) => (
           <div key={work.id} role="row" className={`${GRID} border-b border-border-subtle py-1.5 text-sm`}>

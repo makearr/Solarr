@@ -1,3 +1,4 @@
+import { tr } from "@/lib/i18nRich";
 import { t } from "@/lib/i18n";
 import { SubTabs } from "@/ui/SubTabs";
 import { Fragment, useState } from "react";
@@ -340,7 +341,7 @@ function PaceForm({ provider }: { provider: Provider }) {
           </Button>
         )}
       </div>
-      {!valid && draft !== "" && <p className="text-warn">Between 1 a minute and {formatPace(provider.max_per_minute)}.</p>}
+      {!valid && draft !== "" && <p className="text-warn">{t("metadataSettings.paceRange", { max: formatPace(provider.max_per_minute) })}</p>}
       {save.isError && <p className="text-danger">{(save.error as { detail?: string }).detail ?? "That pace was refused."}</p>}
     </div>
   );
@@ -411,11 +412,9 @@ function ProviderDetails({
       return (
         <>
           <ApiKeyForm key={`acoustid-${String(settings.acoustid_api_key?.has_value ?? false)}`} label="AcoustID API key" unset="not set" stored={settings.acoustid_api_key?.has_value ?? false} onSave={(key) => acoustid.mutate(key)} busy={acoustid.isPending}>
-            Without a key that step is skipped and everything else still works. Register an application at{" "}
-            <a href="https://acoustid.org/new-application" target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
+            {tr("metadataSettings.acoustidHelp", { link: <a href="https://acoustid.org/new-application" target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
               acoustid.org/new-application
-            </a>
-            ; the key it gives you is the one to paste here, not the one on your account page.
+            </a> })}
           </ApiKeyForm>
           {acoustid.isError && failed}
         </>
@@ -835,7 +834,7 @@ function BackfillForm({
       }}
     >
       <label className="flex flex-col gap-1">
-        Artists filled per run
+        {t("metadataSettings.artistsPerRun")}
         <input
           type="number"
           min={1}

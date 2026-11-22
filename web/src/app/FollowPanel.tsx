@@ -229,7 +229,7 @@ function FollowRow({
           )}
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={back} onChange={(event) => setBack(event.target.checked)} />
-            Also add older {works}, not only new ones
+            {t("followPanel.alsoAddOlder", { works })}
           </label>
           <div className="flex flex-col gap-1.5" aria-live="polite">
             <span className="text-ink-muted">{t("followPanel.whatThisWouldAdd")}</span>

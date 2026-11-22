@@ -590,8 +590,7 @@ function TransferMethodHelp({ onClose }: { onClose: () => void }) {
           ))}
         </dl>
         <p className="pt-3 leading-relaxed text-ink-muted">
-          Move and copy almost always succeed, so any method placed below them is
-          normally never reached.
+          {t("import.methodsBelowCopy")}
         </p>
       </div>
     </div>

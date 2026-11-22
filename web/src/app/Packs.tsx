@@ -35,8 +35,7 @@ export function Packs() {
       {packs.error !== null && <Message>{t("packs.packsCouldNotBe")}</Message>}
       {packs.data && packs.data.length === 0 && (
         <Message>
-          No pack has been detected yet -- point Import at a source with several sibling releases
-          by the same artist to see one here.
+          {t("packs.none")}
         </Message>
       )}
       {packs.data && packs.data.length > 0 && (

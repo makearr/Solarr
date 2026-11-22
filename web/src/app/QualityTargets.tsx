@@ -165,7 +165,7 @@ function TargetFields({ target, onChange }: { target: QualityTarget; onChange: (
         <label className="flex items-start gap-2 text-sm" title={t("qualityTargets.everythingBelowTheTarget")}>
           <input type="checkbox" className="mt-1" checked={target.ignore_below ?? false} onChange={(event) => set({ ignore_below: event.target.checked })} />
           <span>
-            Ignore everything below the target while anything at or above it exists
+            {t("qualityTargets.ignoreBelow")}
             <span className="block text-xs text-ink-muted">A 720p release is chosen only when no 1080p or better one is found.</span>
           </span>
         </label>

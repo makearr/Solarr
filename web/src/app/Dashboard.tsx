@@ -1,3 +1,4 @@
+import { tr } from "@/lib/i18nRich";
 import { t } from "@/lib/i18n";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -192,11 +193,9 @@ export function Dashboard() {
             </div>
           ) : (
             <Note>
-              No library yet.{" "}
-              <Link to="/libraries" className="text-accent underline underline-offset-2">
+              {tr("dashboard.noLibrary", { link: <Link to="/libraries" className="text-accent underline underline-offset-2">
                 Add one
-              </Link>{" "}
-              to get started.
+              </Link> })}
             </Note>
           )}
         </Section>

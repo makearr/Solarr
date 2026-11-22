@@ -138,7 +138,7 @@ export function IdentifyAs({
             <input value={parts} onChange={(event) => setParts(event.target.value)} placeholder="from the name, or 3 or 3-4" className={`${input} w-48`} />
           </label>
           <span className="max-w-md">
-            Leave both empty when the file name says which {words.part} it is.
+            {t("identifyAs.leaveEmpty", { part: words.part ?? "" })}
           </span>
         </div>
       )}

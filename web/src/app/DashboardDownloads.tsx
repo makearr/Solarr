@@ -1,3 +1,4 @@
+import { tr } from "@/lib/i18nRich";
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { t } from "@/lib/i18n";
@@ -28,11 +29,9 @@ export function DashboardDownloads() {
   if (queue.data.clients.length === 0) {
     return (
       <p className="text-sm text-ink-muted">
-        No download client yet.{" "}
-        <Link to="/connections/downloaders" className="text-accent underline underline-offset-2">
+        {tr("dashboardDownloads.noClient", { link: <Link to="/connections/downloaders" className="text-accent underline underline-offset-2">
           Add one
-        </Link>{" "}
-        to download what is missing.
+        </Link> })}
       </p>
     );
   }

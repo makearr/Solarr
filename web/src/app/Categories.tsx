@@ -152,8 +152,7 @@ export function Categories() {
 
       {remove.isError && (
         <p className="text-xs text-danger">
-          That category could not be removed -- it is still referenced by a root folder, a
-          user's access grant, or a discovery job.
+          {t("categories.removeRefused")}
         </p>
       )}
 
@@ -520,8 +519,7 @@ function EditCategoryFields({
       </div>
       {info?.ratings && !isFurtherType && maxAge !== null && (
         <p className="text-xs text-ink-muted">
-          Anything rated higher{allowUnrated ? "" : ", or not rated at all,"} stays where it is but is never searched in this library; a
-          notice says how many, and Above rating in the library lists them.
+          {t("categories.aboveRating", { unrated: allowUnrated ? "" : ", or not rated at all," })}
         </p>
       )}
       {save.isError && (

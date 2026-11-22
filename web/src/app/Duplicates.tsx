@@ -1,3 +1,4 @@
+import { tr } from "@/lib/i18nRich";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -306,7 +307,7 @@ export function Duplicates() {
             {data.limited
               ? `More than ${data.groups.length} ${words.parts} are held more than once; these ${data.groups.length} have the most to free, and the rest show once some are dealt with.`
               : `${data.groups.length} ${data.groups.length === 1 ? words.part : words.parts} held more than once.`}{" "}
-            Dropping the extra copies shown would free <span className="font-medium">{formatBytes(data.reclaimable_bytes)}</span>.
+            {tr("duplicates.reclaimable", { size: <span className="font-medium">{formatBytes(data.reclaimable_bytes)}</span> })}
           </p>
           <GroupList
             groups={data.groups}

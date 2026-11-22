@@ -1,3 +1,4 @@
+import { tr } from "@/lib/i18nRich";
 import { useState } from "react";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { RouterProvider } from "@tanstack/react-router";
@@ -42,8 +43,7 @@ export function App() {
   if (setup.error !== null || !setup.data) {
     return (
       <Splash>
-        The server could not be reached. Check that Solarr is running and that any reverse
-        proxy forwards <code className="font-mono">/api/v1</code>.
+        {tr("app.serverUnreachable", { path: <code className="font-mono">/api/v1</code> })}
       </Splash>
     );
   }

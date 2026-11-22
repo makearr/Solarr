@@ -258,7 +258,7 @@ function EditInstance({ instance, onDone }: { instance: ArrInstance; onDone: () 
         <input className={inputStyle} value={baseUrl} autoComplete="off" onChange={(event) => setBaseUrl(event.target.value)} />
       </label>
       <label className="flex min-w-40 flex-col gap-1 text-xs text-ink-muted">
-        New API key
+        {t("arrImport.newApiKey")}
         <input className={inputStyle} type="password" value={apiKey} placeholder="unchanged" autoComplete="off" onChange={(event) => setApiKey(event.target.value)} />
       </label>
       <label className={labelStyle}>

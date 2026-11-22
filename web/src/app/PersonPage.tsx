@@ -205,7 +205,7 @@ export function PersonPage() {
               )}
             </div>
             {facts.length > 0 && <p className="text-sm text-ink-muted">{facts.join(" · ")}</p>}
-            {person.aliases.length > 0 && <p className="text-xs text-ink-muted">Also known as {person.aliases.join(", ")}</p>}
+            {person.aliases.length > 0 && <p className="text-xs text-ink-muted">{t("personPage.alsoKnownAs", { names: person.aliases.join(", ") })}</p>}
             {person.genres.length > 0 && (
               <GenreChips genres={person.genres} tags={person.genre_tags ?? []} categoryId={tagLibrary === undefined ? undefined : String(tagLibrary)} level={tagLevel} />
             )}
@@ -467,7 +467,7 @@ function EditPerson({ person, onClose }: { person: PersonDetail; onClose: () => 
         {field("Hair colour", "hair")}
         {field("Tattoos", "tattoos")}
         {field("Piercings", "piercings")}
-        {save.isError && <p className="col-span-2 text-xs text-danger">{t("libraryMetadata.saveFailed")}</p>}
+        {save.isError && <p className="col-span-2 text-xs text-danger">{t("common.saveFailed")}</p>}
       </div>
     </Dialog>
   );

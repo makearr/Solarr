@@ -99,11 +99,10 @@ function MyTierSection({ tier, tierMax }: { tier: Tier; tierMax: Tier }) {
       </div>
       {tierMax !== "expert" && (
         <p className="text-xs text-ink-muted">
-          An administrator allows this account up to{" "}
-          {TIERS.find((option) => option.id === tierMax)?.label}.
+          {t("users.tierMax", { tier: TIERS.find((option) => option.id === tierMax)?.label ?? "" })}
         </p>
       )}
-      {setTier.isError && <p className="text-xs text-danger">{t("libraryMetadata.saveFailed")}</p>}
+      {setTier.isError && <p className="text-xs text-danger">{t("common.saveFailed")}</p>}
     </Card>
   );
 }
@@ -184,7 +183,7 @@ function APIKeysSection() {
       )}
 
       {(create.isError || revoke.isError) && (
-        <p className="text-xs text-danger">{t("libraryMetadata.saveFailed")}</p>
+        <p className="text-xs text-danger">{t("common.saveFailed")}</p>
       )}
 
       <form
@@ -359,7 +358,7 @@ function AccessSection() {
       )}
 
       {change.isError && (
-        <p className="text-xs text-danger">{t("libraryMetadata.saveFailed")}</p>
+        <p className="text-xs text-danger">{t("common.saveFailed")}</p>
       )}
 
       <button
@@ -481,8 +480,7 @@ export function Users({ currentUserId }: { currentUserId: number }) {
 
       {(update.isError || remove.isError || grant.isError) && (
         <p className="text-xs text-danger">
-          That change was refused. The last administrator cannot be removed or demoted, and an
-          account cannot start above its maximum level.
+          {t("users.changeRefused")}
         </p>
       )}
 

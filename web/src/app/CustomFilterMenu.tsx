@@ -225,7 +225,7 @@ function FilterBuilder({
             })}
           </ul>
           {kept.length > 0 && (
-            <p className="text-xs text-ink-muted">Also keeps the list's {kept.map(([key, value]) => `${key} “${value}”`).join(", ")}.</p>
+            <p className="text-xs text-ink-muted">{t("customFilterMenu.alsoKeeps", { kept: kept.map(([key, value]) => `${key} “${value}”`).join(", ") })}</p>
           )}
           <button type="button" onClick={() => setConditions([...conditions, blankCondition(fields)])} className="flex w-fit items-center gap-1 text-xs text-accent hover:underline">
             <Plus aria-hidden className="size-3.5" /> {t("customFilterMenu.addACondition")}

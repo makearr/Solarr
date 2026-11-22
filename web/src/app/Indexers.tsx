@@ -115,10 +115,7 @@ export function Indexers() {
       </div>
       {explainPriority && (
         <p className="rounded-lg border border-border-subtle bg-surface p-3 text-xs leading-relaxed text-ink-muted">
-          Priority runs from 1 to 50, and lower is preferred, as in Lidarr. Every enabled indexer is
-          searched. When two releases are otherwise equal -- the same quality, score and match -- the one
-          from the indexer with the lower number is grabbed, and when two indexers list the same release
-          it is downloaded from that one. Indexers with equal priority are treated alike. New indexers start at 25.
+          {t("indexers.priorityHelp")}
         </p>
       )}
 
@@ -191,7 +188,7 @@ export function Indexers() {
                 const key = `indexer:${indexer.id}`;
                 return companion && downloaders.data && !dismissed.includes(key) && (
                   <span className="flex flex-wrap items-center gap-2 rounded-md border border-border-subtle p-2 text-xs text-ink-muted">
-                    Its releases download through {companion.label}, which is not a download client yet.
+                    {t("indexers.companionMissing", { name: companion.label })}
                     <button
                       type="button"
                       disabled={addCompanion.isPending}
@@ -559,7 +556,7 @@ function UpstreamKey({ indexer, onSaved }: { indexer: Indexer; onSaved: () => vo
   if (!indexer.source?.awaiting_key || !indexer.source.upstream_base_url) return null;
   return (
     <span className="flex flex-wrap items-center gap-2 rounded-md border border-border-subtle p-2 text-xs text-ink-muted">
-      Searches through Prowlarr, which hides the key of {indexer.source.upstream_base_url}. Enter the key to search it directly.
+      {t("indexers.prowlarrKeyHidden", { url: indexer.source.upstream_base_url })}
       <input
         type="password"
         autoComplete="off"
@@ -641,7 +638,7 @@ function ClientPicker({ indexer, onSaved }: { indexer: Indexer; onSaved: () => v
         disabled={save.isPending}
         onChange={(event) => save.mutate(Number(event.target.value))}
       >
-        <option value={0}>Any that takes {protocol}</option>
+        <option value={0}>{t("indexers.anyThatTakes", { protocol })}</option>
         {fitting.map((client) => (
           <option key={client.id} value={client.id}>{client.name}</option>
         ))}
@@ -682,7 +679,7 @@ function QueryLimit({ indexer, onSaved }: { indexer: Indexer; onSaved: () => voi
       }}
     >
       <label className="flex items-center gap-1.5" title="Requests an hour the indexer allows. Empty: none stated, so Solarr asks gently and slows down when the indexer says it is overloaded.">
-        Requests per hour
+        {t("indexers.requestsPerHour")}
         <input className={`${inputStyle} w-20`} inputMode="numeric" value={text} placeholder="no limit" onChange={(event) => setText(event.target.value)} />
       </label>
       {text !== current && (
