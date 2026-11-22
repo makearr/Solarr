@@ -19,6 +19,11 @@ import (
 type EditionDetail struct {
 	Edition     librarydb.Edition
 	ExternalIDs []librarydb.EditionExternalID
+	// Disambiguation, Packaging, Language and Script tell editions of one title apart; empty when no provider said.
+	Disambiguation string
+	Packaging      string
+	Language       string
+	Script         string
 }
 
 // PartDetail is one work_part with the external ids recorded against it.
@@ -38,6 +43,9 @@ type PartDetail struct {
 	Credits []PartCredit
 	// AltNumbers are the part's numbers under other schemes, by scheme ("absolute").
 	AltNumbers map[string]string
+	// MediumTitle is the disc's own name and ArtistCredit the track's credited artists when they are not the album's.
+	MediumTitle  string
+	ArtistCredit string
 }
 
 // PartCredit is one person credited on a part.
@@ -212,6 +220,13 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 			return WorkDetail{}, fmt.Errorf("library: work detail: edition external ids: %w", err)
 		}
 		editionDetails[index] = EditionDetail{Edition: edition, ExternalIDs: editionExternalIDs}
+		switch detail, err := queries.GetEditionDetail(ctx, edition.ID); {
+		case err == nil:
+			editionDetails[index].Disambiguation, editionDetails[index].Packaging = detail.Disambiguation, detail.Packaging
+			editionDetails[index].Language, editionDetails[index].Script = detail.Language, detail.Script
+		case !errors.Is(err, sql.ErrNoRows):
+			return WorkDetail{}, fmt.Errorf("library: work detail: edition detail: %w", err)
+		}
 	}
 
 	parts, err := queries.ListWorkParts(ctx, id)
@@ -456,13 +471,23 @@ func detailParts(ctx context.Context, queries *librarydb.Queries, id int64, part
 		}
 	}
 
+	detailRows, err := queries.ListWorkPartDetails(ctx, partIDs)
+	if err != nil {
+		return nil, fmt.Errorf("library: work detail: part details: %w", err)
+	}
+	detailOf := make(map[int64]librarydb.WorkPartDetail, len(detailRows))
+	for _, row := range detailRows {
+		detailOf[row.PartID] = row
+	}
+
 	partDetails := make([]PartDetail, len(parts))
 	for index, part := range parts {
 		partExternalIDs, err := queries.ListWorkPartExternalIDs(ctx, part.ID)
 		if err != nil {
 			return nil, fmt.Errorf("library: work detail: part external ids: %w", err)
 		}
-		partDetails[index] = PartDetail{Part: part, ExternalIDs: partExternalIDs, Credits: creditsOf[part.ID], AltNumbers: altNumbersOf[part.ID]}
+		partDetails[index] = PartDetail{Part: part, ExternalIDs: partExternalIDs, Credits: creditsOf[part.ID], AltNumbers: altNumbersOf[part.ID],
+			MediumTitle: detailOf[part.ID].MediumTitle, ArtistCredit: detailOf[part.ID].ArtistCredit}
 		if file, found := fileByRef[part.MediaRef]; found {
 			partDetails[index].File = &file
 		}

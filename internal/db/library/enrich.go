@@ -168,6 +168,11 @@ type EditionRefinement struct {
 	CatalogueNumber string
 	Barcode         string
 	RuntimeMs       *int64
+	// Disambiguation, Packaging, Language and Script tell editions of one title apart; empty when the provider did not say.
+	Disambiguation string
+	Packaging      string
+	Language       string
+	Script         string
 }
 
 // PartIdentity is one part (track, episode, chapter, ...) to resolve-or-create
@@ -179,6 +184,9 @@ type PartIdentity struct {
 	RuntimeMs *int64
 	// Optional is a part the work may carry without owing it (a hidden pregap): matched when present, never missing.
 	Optional bool
+	// MediumTitle is the disc's own name and ArtistCredit the track's credited artists, empty when not told.
+	MediumTitle  string
+	ArtistCredit string
 	// ExternalID links the resolved (or created) part to a provider id, e.g. a
 	// MusicBrainz recording MBID. Optional: not every source names one.
 	ExternalID *PartExternalID
@@ -220,6 +228,9 @@ func (i Identity) RefineEdition(
 			if err := foldEdition(ctx, queries, editionID, twin); err != nil {
 				return fmt.Errorf("fold edition into %d: %w", twin, err)
 			}
+			if err := setEditionDetail(ctx, queries, twin, refinement); err != nil {
+				return err
+			}
 		case errors.Is(err, sql.ErrNoRows):
 			if err := queries.UpdateEdition(ctx, librarydb.UpdateEditionParams{
 				ID: editionID, Kind: refinement.Kind, Year: nullInt64(refinement.Year),
@@ -229,6 +240,9 @@ func (i Identity) RefineEdition(
 				RuntimeMs:       nullInt64(refinement.RuntimeMs),
 			}); err != nil {
 				return fmt.Errorf("update edition: %w", err)
+			}
+			if err := setEditionDetail(ctx, queries, editionID, refinement); err != nil {
+				return err
 			}
 		default:
 			return fmt.Errorf("find edition twin: %w", err)
@@ -390,10 +404,30 @@ func (i Identity) RetitleWork(ctx context.Context, at, workID int64, title, sort
 	return nil
 }
 
+func setEditionDetail(ctx context.Context, queries *librarydb.Queries, editionID int64, refinement EditionRefinement) error {
+	if refinement.Disambiguation == "" && refinement.Packaging == "" && refinement.Language == "" && refinement.Script == "" {
+		return nil
+	}
+	if err := queries.SetEditionDetail(ctx, librarydb.SetEditionDetailParams{
+		EditionID: editionID, Disambiguation: refinement.Disambiguation, Packaging: refinement.Packaging,
+		Language: refinement.Language, Script: refinement.Script,
+	}); err != nil {
+		return fmt.Errorf("set edition detail: %w", err)
+	}
+	return nil
+}
+
 func resolvePart(ctx context.Context, queries *librarydb.Queries, workID int64, part PartIdentity) error {
 	partID, err := findOrCreatePart(ctx, queries, workID, part)
 	if err != nil {
 		return err
+	}
+	if part.MediumTitle != "" || part.ArtistCredit != "" {
+		if err := queries.SetWorkPartDetail(ctx, librarydb.SetWorkPartDetailParams{
+			PartID: partID, MediumTitle: part.MediumTitle, ArtistCredit: part.ArtistCredit,
+		}); err != nil {
+			return fmt.Errorf("set part detail: %w", err)
+		}
 	}
 	if part.ExternalID == nil {
 		return nil

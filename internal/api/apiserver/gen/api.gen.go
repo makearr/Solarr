@@ -2680,16 +2680,22 @@ type DuplicateResolveRequestDropAction string
 
 // Edition defines model for Edition.
 type Edition struct {
-	Barcode         *string      `json:"barcode,omitempty"`
-	CatalogueNumber *string      `json:"catalogue_number,omitempty"`
-	ExternalIds     []ExternalID `json:"external_ids"`
-	Format          *string      `json:"format,omitempty"`
-	Id              int64        `json:"id"`
-	IsDefault       bool         `json:"is_default"`
-	Kind            string       `json:"kind"`
-	Label           string       `json:"label"`
-	RuntimeMs       *int64       `json:"runtime_ms,omitempty"`
-	Year            *int         `json:"year,omitempty"`
+	Barcode         *string `json:"barcode,omitempty"`
+	CatalogueNumber *string `json:"catalogue_number,omitempty"`
+
+	// Disambiguation What sets this edition apart from others of the title; absent when no provider said.
+	Disambiguation *string      `json:"disambiguation,omitempty"`
+	ExternalIds    []ExternalID `json:"external_ids"`
+	Format         *string      `json:"format,omitempty"`
+	Id             int64        `json:"id"`
+	IsDefault      bool         `json:"is_default"`
+	Kind           string       `json:"kind"`
+	Label          string       `json:"label"`
+	Language       *string      `json:"language,omitempty"`
+	Packaging      *string      `json:"packaging,omitempty"`
+	RuntimeMs      *int64       `json:"runtime_ms,omitempty"`
+	Script         *string      `json:"script,omitempty"`
+	Year           *int         `json:"year,omitempty"`
 }
 
 // Egress Every field is optional: a check that is switched off, has not run yet or has failed reports nothing rather than a stale or invented address.
@@ -6868,6 +6874,9 @@ type WorkPart struct {
 	// AltNumbers The part's numbers under other schemes, by scheme ("absolute").
 	AltNumbers *map[string]string `json:"alt_numbers,omitempty"`
 
+	// ArtistCredit The track's credited artists when they are not the album's; absent otherwise.
+	ArtistCredit *string `json:"artist_credit,omitempty"`
+
 	// AvailableAt When the part is out (an episode's air time); absent when unknown.
 	AvailableAt *time.Time `json:"available_at,omitempty"`
 
@@ -6883,10 +6892,13 @@ type WorkPart struct {
 	ExternalIds []ExternalID `json:"external_ids"`
 
 	// File What is on disk for this part, absent when nothing is. Aligned through the same media_ref the album's own present_count is counted from, so the two can never disagree.
-	File      *PartFile `json:"file"`
-	Id        int64     `json:"id"`
-	MediaRef  string    `json:"media_ref"`
-	Monitored bool      `json:"monitored"`
+	File     *PartFile `json:"file"`
+	Id       int64     `json:"id"`
+	MediaRef string    `json:"media_ref"`
+
+	// MediumTitle The disc's own name ("Live in Berlin"); absent for most discs.
+	MediumTitle *string `json:"medium_title,omitempty"`
+	Monitored   bool    `json:"monitored"`
 
 	// Number The number the part is shown with: a track's, an episode's.
 	Number *string `json:"number,omitempty"`

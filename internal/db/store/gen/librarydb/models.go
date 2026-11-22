@@ -344,6 +344,14 @@ type Edition struct {
 	IsDefault       int64
 }
 
+type EditionDetail struct {
+	EditionID      int64
+	Disambiguation string
+	Packaging      string
+	Language       string
+	Script         string
+}
+
 type EditionExternalID struct {
 	Provider   string
 	ExternalID string
@@ -1031,6 +1039,12 @@ type WorkPart struct {
 	AvailableBasis      string
 	AvailableGrace      sql.NullInt64
 	Optional            int64
+}
+
+type WorkPartDetail struct {
+	PartID       int64
+	MediumTitle  string
+	ArtistCredit string
 }
 
 type WorkPartExternalID struct {

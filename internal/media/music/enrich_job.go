@@ -874,7 +874,17 @@ func (j *EnrichJob) enrichCreditsAndGenres(
 		}
 	}
 
+	if len(rg.Aliases) > 0 {
+		if err := j.people.SetAliases(ctx, workID, "musicbrainz", rg.Aliases, j.clock.Now().Unix()); err != nil {
+			j.logger.WarnContext(ctx, "set aliases failed", slog.Int64("work_id", workID), slog.Any("error", err))
+		}
+	}
+
 	names := weightedGenres(rg.Genres)
+	if len(names) == 0 {
+		// Folksonomy tags stand in where nobody curated a genre.
+		names = weightedGenres(rg.Tags)
+	}
 	source := library.GenreSourceMusicBrainz
 	if len(names) == 0 {
 		// An album nobody voted genres onto takes its lead artist's, under a source of their own that a later real genre replaces.

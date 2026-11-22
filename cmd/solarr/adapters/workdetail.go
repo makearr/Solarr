@@ -158,7 +158,8 @@ func editionRows(from []library.EditionDetail) []apiserver.EditionRow {
 		row := apiserver.EditionRow{
 			ID: detail.Edition.ID, Kind: detail.Edition.Kind, Label: detail.Edition.Label,
 			IsDefault:   detail.Edition.IsDefault != 0,
-			ExternalIDs: externalIDs,
+			ExternalIDs: externalIDs, Disambiguation: detail.Disambiguation, Packaging: detail.Packaging,
+			Language: detail.Language, Script: detail.Script,
 		}
 		if detail.Edition.Year.Valid {
 			row.Year = &detail.Edition.Year.Int64
@@ -192,6 +193,7 @@ func (a WorkDetail) partRows(mediaType string, from []library.PartDetail) []apis
 			ID: detail.Part.ID, MediaRef: detail.Part.MediaRef, SortKey: detail.Part.SortKey,
 			Monitored:   detail.Part.Monitored != 0,
 			ExternalIDs: externalIDs, AltNumbers: detail.AltNumbers, Number: detail.Part.MediaRef,
+			MediumTitle: detail.MediumTitle, ArtistCredit: detail.ArtistCredit,
 		}
 		if a.PartPosition != nil {
 			row.Section, row.Number = a.PartPosition(mediaType, detail.Part.MediaRef)

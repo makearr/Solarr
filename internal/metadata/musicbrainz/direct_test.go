@@ -26,6 +26,8 @@ const directReleaseGroupBody = `{
   "primary-type": "Album",
   "first-release-date": "1997-05-21",
   "rating": {"value": 4.2, "votes-count": 12},
+  "tags": [{"name": "lo-fi", "count": 3}],
+  "aliases": [{"name": "Pecezinu"}, {"name": ""}],
   "artist-credit": [
     {
       "name": "Katupoken",
@@ -84,7 +86,7 @@ const directReleaseBody = `{
 
 func TestDirect_AlbumParsesTheRealFieldShape(t *testing.T) {
 	transport := &fakeTransport{responses: map[string]fakeResponse{
-		"https://musicbrainz.invalid/release-group/" + okComputerRG + "?fmt=json&inc=artist-credits+genres+ratings+url-rels": {
+		"https://musicbrainz.invalid/release-group/" + okComputerRG + "?fmt=json&inc=artist-credits+genres+tags+ratings+aliases+url-rels": {
 			status: http.StatusOK, body: directReleaseGroupBody,
 		},
 		"https://musicbrainz.invalid/release/" + okComputerRelease + "?fmt=json&inc=recordings+artist-credits+isrcs+labels+media": {
@@ -108,6 +110,9 @@ func TestDirect_AlbumParsesTheRealFieldShape(t *testing.T) {
 	}
 	if len(rg.Genres) != 2 || rg.Genres[0].Name != "alternative rock" || rg.Genres[0].Count != 25 {
 		t.Errorf("Genres = %+v, want alternative rock first with its vote count", rg.Genres)
+	}
+	if !reflect.DeepEqual(rg.Tags, []musicbrainz.Genre{{Name: "lo-fi", Count: 3}}) || !reflect.DeepEqual(rg.Aliases, []string{"Pecezinu"}) {
+		t.Errorf("Tags = %+v Aliases = %+v, want the folksonomy tag and the one named alias", rg.Tags, rg.Aliases)
 	}
 	if rg.Rating != (musicbrainz.Rating{Value: 4.2, Votes: 12}) {
 		t.Errorf("Rating = %+v, want 4.2 from 12 votes", rg.Rating)
@@ -157,7 +162,7 @@ func TestDirect_AlbumParsesTheRealFieldShape(t *testing.T) {
 // matters (section 21.3's manual-resolve action).
 func TestDirect_AlbumWithNoReleaseMBIDSkipsTheReleaseCall(t *testing.T) {
 	transport := &fakeTransport{responses: map[string]fakeResponse{
-		"https://musicbrainz.invalid/release-group/" + okComputerRG + "?fmt=json&inc=artist-credits+genres+ratings+url-rels": {
+		"https://musicbrainz.invalid/release-group/" + okComputerRG + "?fmt=json&inc=artist-credits+genres+tags+ratings+aliases+url-rels": {
 			status: http.StatusOK, body: directReleaseGroupBody,
 		},
 	}}
@@ -181,7 +186,7 @@ func TestDirect_AlbumWithNoReleaseMBIDSkipsTheReleaseCall(t *testing.T) {
 func TestDirect_AlbumKeepsTheReleaseGroupsSecondaryTypes(t *testing.T) {
 	body := `{"id":"rg-collection","title":"The Collection","primary-type":"Album","secondary-types":["Compilation"],"first-release-date":"2012-11-19"}`
 	transport := &fakeTransport{responses: map[string]fakeResponse{
-		"https://musicbrainz.invalid/release-group/rg-collection?fmt=json&inc=artist-credits+genres+ratings+url-rels": {status: http.StatusOK, body: body},
+		"https://musicbrainz.invalid/release-group/rg-collection?fmt=json&inc=artist-credits+genres+tags+ratings+aliases+url-rels": {status: http.StatusOK, body: body},
 	}}
 	source := musicbrainz.NewDirect(newTestClient(t, transport, musicbrainz.DirectName), "https://musicbrainz.invalid")
 
@@ -204,7 +209,7 @@ func TestDirect_NameIsTheBreakerBucketKey(t *testing.T) {
 // BrainzMash is a ws/2 mirror pool: the same requests against its own base URL, under its own bucket.
 func TestBrainzMash_AlbumAsksItsOwnBaseURLUnderItsOwnBucket(t *testing.T) {
 	transport := &fakeTransport{responses: map[string]fakeResponse{
-		"https://brainzmash.invalid/ws/2/release-group/" + okComputerRG + "?fmt=json&inc=artist-credits+genres+ratings+url-rels": {
+		"https://brainzmash.invalid/ws/2/release-group/" + okComputerRG + "?fmt=json&inc=artist-credits+genres+tags+ratings+aliases+url-rels": {
 			status: http.StatusOK, body: directReleaseGroupBody,
 		},
 	}}
@@ -696,7 +701,7 @@ func TestDirect_ReleaseGroupOfWithoutAGroupIsAnError(t *testing.T) {
 func TestDirect_AnUnratedReleaseGroupHasNoRating(t *testing.T) {
 	body := strings.Replace(directReleaseGroupBody, `"rating": {"value": 4.2, "votes-count": 12}`, `"rating": {"value": null, "votes-count": 0}`, 1)
 	transport := &fakeTransport{responses: map[string]fakeResponse{
-		"https://musicbrainz.invalid/release-group/" + okComputerRG + "?fmt=json&inc=artist-credits+genres+ratings+url-rels": {status: http.StatusOK, body: body},
+		"https://musicbrainz.invalid/release-group/" + okComputerRG + "?fmt=json&inc=artist-credits+genres+tags+ratings+aliases+url-rels": {status: http.StatusOK, body: body},
 	}}
 	source := musicbrainz.NewDirect(newTestClient(t, transport, musicbrainz.DirectName), "https://musicbrainz.invalid")
 	rg, _, err := source.Album(t.Context(), okComputerRG, "")
@@ -730,7 +735,7 @@ func TestDirect_AlbumReadsAMediumsPregapAsAnOptionalTrackZero(t *testing.T) {
 	  "pregap": {"number": "0", "position": 0, "title": "Hidden Zeta", "length": 61000, "recording": {"id": "11111111-2222-4333-8444-555555555555", "title": "Hidden Zeta"}},
 	  "tracks": [{"number": "1", "position": 1, "title": "First", "length": 1000, "recording": {"id": "66666666-2222-4333-8444-555555555555", "title": "First"}}]}]}`
 	transport := &fakeTransport{responses: map[string]fakeResponse{
-		"https://musicbrainz.invalid/release-group/" + okComputerRG + "?fmt=json&inc=artist-credits+genres+ratings+url-rels": {
+		"https://musicbrainz.invalid/release-group/" + okComputerRG + "?fmt=json&inc=artist-credits+genres+tags+ratings+aliases+url-rels": {
 			status: http.StatusOK, body: directReleaseGroupBody,
 		},
 		"https://musicbrainz.invalid/release/" + okComputerRelease + "?fmt=json&inc=recordings+artist-credits+isrcs+labels+media": {

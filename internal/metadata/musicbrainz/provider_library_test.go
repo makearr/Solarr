@@ -77,10 +77,10 @@ func TestProvider_EachLibraryIsAnsweredInItsOwnOrderAndFromItsOwnCache(t *testin
 func TestProvider_AnUntaggedEntryIsServedOnlyFromTheOrdersLeadSource(t *testing.T) {
 	cache := newTestCache(t)
 	for kind, body := range map[string]string{
-		"musicbrainz:release-group:v2": `{"mbid":"rg","title":"Cached from first"}`,
+		"musicbrainz:release-group:v3": `{"mbid":"rg","title":"Cached from first"}`,
 		"musicbrainz:release":          `{"mbid":"rel"}`,
 	} {
-		key := map[string]string{"musicbrainz:release-group:v2": "rg", "musicbrainz:release": "rel"}[kind]
+		key := map[string]string{"musicbrainz:release-group:v3": "rg", "musicbrainz:release": "rel"}[kind]
 		if err := cache.Set(t.Context(), kind, key, metacache.Entry{Source: "first", Body: body, FetchedAt: time.Unix(0, 0)}); err != nil {
 			t.Fatal(err)
 		}

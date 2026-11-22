@@ -474,6 +474,7 @@ type Querier interface {
 	GetDesiredTargetOverride(ctx context.Context, desiredItemID int64) (int64, error)
 	GetEdition(ctx context.Context, id int64) (Edition, error)
 	GetEditionByExternalID(ctx context.Context, arg GetEditionByExternalIDParams) (Edition, error)
+	GetEditionDetail(ctx context.Context, editionID int64) (EditionDetail, error)
 	GetGenreTreeSeed(ctx context.Context, key string) (int64, error)
 	// Scoring reads the bounded value, never the raw rate (ADR-45).
 	GetGroupReputation(ctx context.Context, releaseGroup string) (GroupReputation, error)
@@ -535,6 +536,7 @@ type Querier interface {
 	// A provider id is looked up within one media type: TMDB numbers its movies and series apart.
 	GetWorkOfTypeByExternalID(ctx context.Context, arg GetWorkOfTypeByExternalIDParams) (Work, error)
 	GetWorkPart(ctx context.Context, id int64) (WorkPart, error)
+	GetWorkPartDetail(ctx context.Context, partID int64) (WorkPartDetail, error)
 	// The ids a user's image picker asks the providers with.
 	GetWorkReleaseGroupMBID(ctx context.Context, workID int64) (string, error)
 	GetWorkWriteDigest(ctx context.Context, workID int64) ([]byte, error)
@@ -1024,6 +1026,7 @@ type Querier interface {
 	// Every work of a media type with its name, for finding which belong together.
 	ListWorkNamesOfType(ctx context.Context, mediaType string) ([]ListWorkNamesOfTypeRow, error)
 	ListWorkOrganisationIDsInRole(ctx context.Context, arg ListWorkOrganisationIDsInRoleParams) ([]int64, error)
+	ListWorkPartDetails(ctx context.Context, partIds []int64) ([]WorkPartDetail, error)
 	ListWorkPartExternalIDs(ctx context.Context, partID int64) ([]WorkPartExternalID, error)
 	ListWorkPartRefs(ctx context.Context, workID int64) ([]ListWorkPartRefsRow, error)
 	ListWorkPartTitles(ctx context.Context, partID int64) ([]WorkPartTitle, error)
@@ -1323,6 +1326,7 @@ type Querier interface {
 	SetDesiredProfileOverride(ctx context.Context, arg SetDesiredProfileOverrideParams) error
 	SetDesiredProfileOverrideForWork(ctx context.Context, arg SetDesiredProfileOverrideForWorkParams) error
 	SetDesiredTargetOverride(ctx context.Context, arg SetDesiredTargetOverrideParams) error
+	SetEditionDetail(ctx context.Context, arg SetEditionDetailParams) error
 	SetFingerprints(ctx context.Context, arg SetFingerprintsParams) error
 	SetGenreTreeSeed(ctx context.Context, arg SetGenreTreeSeedParams) error
 	SetGroupReputation(ctx context.Context, arg SetGroupReputationParams) error
@@ -1397,6 +1401,7 @@ type Querier interface {
 	// doc comment) -- written only by internal/db/library.People.AddCredit, the one place a
 	// role='artist' ord=0 credit is ever recorded.
 	SetWorkLeadPerson(ctx context.Context, arg SetWorkLeadPersonParams) error
+	SetWorkPartDetail(ctx context.Context, arg SetWorkPartDetailParams) error
 	SetWorkPartMonitored(ctx context.Context, arg SetWorkPartMonitoredParams) error
 	SetWorkRating(ctx context.Context, arg SetWorkRatingParams) error
 	// Unlike year, unconditional: nothing else writes a work's description yet,

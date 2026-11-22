@@ -12880,6 +12880,10 @@ components:
         barcode: { type: string }
         runtime_ms: { type: integer, format: int64 }
         is_default: { type: boolean }
+        disambiguation: { type: string, example: "deluxe edition", description: What sets this edition apart from others of the title; absent when no provider said. }
+        packaging: { type: string, example: "Digipak" }
+        language: { type: string, example: "eng" }
+        script: { type: string, example: "Latn" }
         external_ids:
           type: array
           items: { $ref: "#/components/schemas/ExternalID" }
@@ -12892,6 +12896,8 @@ components:
         media_ref: { type: string }
         sort_key: { type: string }
         title: { type: string }
+        medium_title: { type: string, description: The disc's own name ("Live in Berlin"); absent for most discs. }
+        artist_credit: { type: string, description: The track's credited artists when they are not the album's; absent otherwise. }
         runtime_ms: { type: integer, format: int64 }
         date: { type: string }
         available_at: { type: string, format: date-time, description: When the part is out (an episode's air time); absent when unknown. }

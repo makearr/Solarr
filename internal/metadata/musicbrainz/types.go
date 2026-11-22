@@ -29,6 +29,10 @@ type ReleaseGroup struct {
 	// Genres are the release group's own genre tags with MusicBrainz's vote
 	// count, best first -- ADR-33's tag system, source "musicbrainz".
 	Genres []Genre
+	// Tags are the folksonomy votes, a genre fallback where curated Genres are empty; Aliases are
+	// other titles (localised, search hints). Both are empty from a source that does not carry them.
+	Tags    []Genre
+	Aliases []string
 	// Rating is absent (zero) from a source that does not carry it.
 	Rating Rating
 	// WikidataQID is extracted from the release group's own "wikidata" URL

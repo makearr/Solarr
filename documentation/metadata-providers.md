@@ -20,6 +20,8 @@ that wants it, else the first holding its files; an artist's first music library
 A lookup with no library (an actor's albums on a person page, the artist picture picker, an import deciding its library
 per unit) takes the first music library's order, as every lookup did before.
 
+**Which source fills which album field.** Direct MusicBrainz alone fills an edition's disambiguation, packaging, language and script, a disc's title, a track's credited artists and ISRCs, and a release group's folksonomy tags and aliases; the Servarr proxy's shape carries none of them, so those fields stay empty from it and the library keeps what an earlier direct answer stored.
+
 **The cache is keyed by order.** Every MusicBrainz cache entry's kind carries the order it was asked in, the source names
 in order (`musicbrainz:release-group@brainzmash>musicbrainz-proxy>musicbrainz`), so an answer one order got, a fallback
 included, is never served to an order that ranks the sources otherwise, and reordering a library asks again. An entry

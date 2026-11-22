@@ -708,11 +708,12 @@ function CastStrip({ work, info, categoryId }: { work: Work; info: MediaTypeInfo
 function EditionCard({ edition, workTitle }: { edition: Edition; workTitle: string }) {
   // A label that is only the provider's id is an identity key, not a name (found 2026-09-28).
   const labelIsID = edition.external_ids.some((id) => id.external_id === edition.label);
-  const fields = [edition.format, edition.catalogue_number, edition.barcode, edition.year ? String(edition.year) : undefined].filter((field): field is string => Boolean(field));
+  const fields = [edition.format, edition.packaging, edition.catalogue_number, edition.barcode, edition.year ? String(edition.year) : undefined].filter((field): field is string => Boolean(field));
   return (
     <li className="flex flex-col gap-1 rounded-md border border-border-subtle p-2">
       <span className="flex items-center gap-2">
         <span className="font-medium">{labelIsID ? workTitle : edition.label}</span>
+        {edition.disambiguation && <span className="text-xs text-ink-muted">({edition.disambiguation})</span>}
         <span className="text-xs text-ink-muted">{edition.kind}</span>
         {edition.is_default && <Chip tone="accent">default</Chip>}
       </span>

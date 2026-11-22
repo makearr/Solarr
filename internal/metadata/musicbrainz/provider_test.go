@@ -571,7 +571,7 @@ func TestProvider_OneStaleEntryForcesAFullRefetchOfBoth(t *testing.T) {
 		rel: musicbrainz.Release{MBID: "rel1", Title: "KI Pecezinu (Remastered)"}}
 	provider, fake, cache := newRefreshingProvider(t, 90*24*time.Hour, direct)
 
-	if err := cache.Set(t.Context(), "musicbrainz:release-group:v2", "rg1",
+	if err := cache.Set(t.Context(), "musicbrainz:release-group:v3", "rg1",
 		metacache.Entry{Source: "direct", Body: `{"MBID":"rg1","Title":"KI Pecezinu"}`, FetchedAt: fake.Now()}); err != nil {
 		t.Fatalf("seed release-group entry: %v", err)
 	}

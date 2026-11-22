@@ -34,11 +34,14 @@ func refinementFor(rg musicbrainz.ReleaseGroup, release musicbrainz.Release) (
 		CatalogueNumber: release.CatalogueNumber,
 		Barcode:         release.Barcode,
 		RuntimeMs:       totalRuntimeMs(release.Media),
+		Disambiguation:  release.Disambiguation, Packaging: release.Packaging,
+		Language: release.Language, Script: release.Script,
 	}
+	albumCredit := creditNames(rg.ArtistCredit)
 
 	for _, medium := range release.Media {
 		for _, track := range medium.Tracks {
-			parts = append(parts, partFor(medium, track))
+			parts = append(parts, partFor(medium, track, albumCredit))
 		}
 	}
 	return workYear, workReleaseDate, workPrimaryType, refinement, parts
@@ -81,12 +84,16 @@ func totalRuntimeMs(media []musicbrainz.Medium) *int64 {
 	return &total
 }
 
-func partFor(medium musicbrainz.Medium, track musicbrainz.Track) library.PartIdentity {
+func partFor(medium musicbrainz.Medium, track musicbrainz.Track, albumCredit string) library.PartIdentity {
 	part := library.PartIdentity{
-		MediaRef: mediaRef(medium.Position, track.Position),
-		SortKey:  sortKey(medium.Position, track.Position),
-		Title:    track.Title,
-		Optional: track.Optional,
+		MediaRef:    mediaRef(medium.Position, track.Position),
+		SortKey:     sortKey(medium.Position, track.Position),
+		Title:       track.Title,
+		Optional:    track.Optional,
+		MediumTitle: medium.Title,
+	}
+	if credit := creditNames(track.ArtistCredit); credit != albumCredit {
+		part.ArtistCredit = credit
 	}
 	if track.DurationMs > 0 {
 		duration := track.DurationMs

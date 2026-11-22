@@ -32,6 +32,10 @@ const (
 	TokenTrack                    = "track"
 	TokenTrackTitle               = "Track Title"
 	TokenTrackCleanTitle          = "Track CleanTitle"
+	TokenTrackArtistName          = "Track ArtistName"
+	TokenTrackArtistCleanName     = "Track ArtistCleanName"
+	TokenReleaseDisambiguation    = "Release Disambiguation"
+	TokenMediumTitle              = "Medium Title"
 	TokenAudioCodec               = "MediaInfo AudioCodec"
 	TokenAudioBitRate             = "MediaInfo AudioBitRate"
 	TokenOriginalFilename         = "Original Filename"
@@ -75,6 +79,10 @@ var NamingScheme = naming.Scheme{
 		{Spelling: "{track:00}", Group: "Track", Example: "01", Help: "The track number, two digits."},
 		{Spelling: "{Track Title}", Group: "Track", Example: "Track Title", Help: "The track's title."},
 		{Spelling: "{Track CleanTitle}", Group: "Track", Example: "Track Title", Help: "The title without punctuation, & written as and."},
+		{Spelling: "{Track ArtistName}", Group: "Track", Example: "Vessa Lund", Help: "The track's own credited artist; the album artist when the track names none."},
+		{Spelling: "{Track ArtistCleanName}", Group: "Track", Example: "Vessa Lund", Help: "The track artist without punctuation, & written as and."},
+		{Spelling: "{Release Disambiguation}", Group: "Release date", Example: "deluxe edition", Help: "What sets this edition apart: deluxe edition, 2011 remaster. Empty when none."},
+		{Spelling: "{Medium Title}", Group: "Medium", Example: "Live in Berlin", Help: "The disc's own name. Empty for most discs."},
 		{Spelling: "{MediaInfo AudioCodec}", Group: "Media info", Example: "FLAC", Help: "The audio codec measured from the file."},
 		{Spelling: "{MediaInfo AudioBitRate}", Group: "Media info", Example: "320 kbps", Help: "The bitrate measured from the file."},
 		{Spelling: "{Original Filename}", Group: "Original", Example: "01 - track title", Help: "The name the file arrived with, without its extension."},
@@ -155,19 +163,23 @@ func (n Naming) RenderArtistFolder(artistName string) (string, error) {
 
 // TrackNaming is every fact a track's name can draw on; a zero field renders as absent.
 type TrackNaming struct {
-	ArtistName       string
-	AlbumTitle       string
-	AlbumType        string
-	AlbumGenre       string
-	AlbumMbID        string
-	ReleaseYear      int
-	Medium           int
-	MediumFormat     string
-	Track            int
-	TrackTitle       string
-	AudioCodec       string
-	AudioBitRateKbps int64
-	OriginalFilename string
+	ArtistName   string
+	AlbumTitle   string
+	AlbumType    string
+	AlbumGenre   string
+	AlbumMbID    string
+	ReleaseYear  int
+	Medium       int
+	MediumFormat string
+	Track        int
+	TrackTitle   string
+	// TrackArtistName is the track's own credit; empty means the album artist.
+	TrackArtistName       string
+	ReleaseDisambiguation string
+	MediumTitle           string
+	AudioCodec            string
+	AudioBitRateKbps      int64
+	OriginalFilename      string
 }
 
 // Context spells every token out, the derived forms included.
@@ -207,6 +219,16 @@ func (t TrackNaming) Context() naming.Context {
 		set(TokenTrackTitle, t.TrackTitle)
 		set(TokenTrackCleanTitle, naming.CleanTitle(t.TrackTitle))
 	}
+	trackArtist := t.TrackArtistName
+	if trackArtist == "" {
+		trackArtist = t.ArtistName
+	}
+	set(TokenTrackArtistName, trackArtist)
+	if trackArtist != "" {
+		set(TokenTrackArtistCleanName, naming.CleanTitle(trackArtist))
+	}
+	set(TokenReleaseDisambiguation, t.ReleaseDisambiguation)
+	set(TokenMediumTitle, t.MediumTitle)
 	set(TokenAudioCodec, strings.ToUpper(t.AudioCodec))
 	if t.AudioBitRateKbps > 0 {
 		set(TokenAudioBitRate, fmt.Sprintf("%d kbps", t.AudioBitRateKbps))
@@ -226,6 +248,7 @@ var (
 		ArtistName: "Vessa Lund & The Low Tides", AlbumTitle: "Quiet Harbour", AlbumType: "Album",
 		AlbumGenre: "Rock", AlbumMbID: "3f6b1c2e-8d4a-4b7e-9a15-6c2d7e0f4a81", ReleaseYear: 1988,
 		Medium: 1, MediumFormat: "CD", Track: 1, TrackTitle: "The Furab Keke",
+		TrackArtistName: "Vessa Lund", ReleaseDisambiguation: "deluxe edition", MediumTitle: "Harbour Side",
 		AudioCodec: "flac", AudioBitRateKbps: 1011, OriginalFilename: "01 - wait then go",
 	}
 	multiDiscExample = TrackNaming{
@@ -293,6 +316,8 @@ func NamingContext(
 	if part.Part.Title.Valid {
 		facts.TrackTitle = part.Part.Title.String
 	}
+	facts.TrackArtistName, facts.MediumTitle = part.ArtistCredit, part.MediumTitle
+	facts.ReleaseDisambiguation = edition.Disambiguation
 	if part.File != nil {
 		facts.AudioCodec = part.File.AudioCodec
 		facts.AudioBitRateKbps = part.File.BitrateKbps

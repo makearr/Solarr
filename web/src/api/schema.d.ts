@@ -9402,6 +9402,17 @@ export interface components {
             /** Format: int64 */
             runtime_ms?: number;
             is_default: boolean;
+            /**
+             * @description What sets this edition apart from others of the title; absent when no provider said.
+             * @example deluxe edition
+             */
+            disambiguation?: string;
+            /** @example Digipak */
+            packaging?: string;
+            /** @example eng */
+            language?: string;
+            /** @example Latn */
+            script?: string;
             external_ids: components["schemas"]["ExternalID"][];
         };
         WorkPart: {
@@ -9410,6 +9421,10 @@ export interface components {
             media_ref: string;
             sort_key: string;
             title?: string;
+            /** @description The disc's own name ("Live in Berlin"); absent for most discs. */
+            medium_title?: string;
+            /** @description The track's credited artists when they are not the album's; absent otherwise. */
+            artist_credit?: string;
             /** Format: int64 */
             runtime_ms?: number;
             date?: string;

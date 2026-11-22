@@ -320,6 +320,23 @@ func (p People) SetRating(ctx context.Context, workID int64, provider string, sc
 	return nil
 }
 
+// SetAliases records the other titles a provider knows a work by, one per line, replacing that provider's earlier list.
+func (p People) SetAliases(ctx context.Context, workID int64, provider string, aliases []string, at int64) error {
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetWorkField(ctx, librarydb.SetWorkFieldParams{
+			WorkID: workID, Field: WorkFieldAliases, Provider: provider,
+			Value: sql.NullString{String: strings.Join(aliases, "\n"), Valid: true}, FetchedAt: at,
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("library: set %s aliases of work %d: %w", provider, workID, err)
+	}
+	return nil
+}
+
+// WorkFieldAliases is the work_field name SetAliases writes.
+const WorkFieldAliases = "aliases"
+
 // AssignGenres replaces a work's provider genres of the genre tree with MusicBrainz's; a person's own stay (ADR-33).
 func (p People) AssignGenres(ctx context.Context, workID int64, genreTree string, genres []GenreLink) error {
 	return p.AssignGenresFrom(ctx, workID, genreTree, providerSourceMusicBrainz, genres)

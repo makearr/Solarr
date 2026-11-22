@@ -97,6 +97,42 @@ func TestRefineEdition_UpdatesTheEditionRow(t *testing.T) {
 	}
 }
 
+func TestRefineEdition_KeepsWhatTellsEditionsAndTracksApart(t *testing.T) {
+	opened, queries := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	workID, editionID := createPlaceholderEdition(t, queries, identity, "rg-7", "release-7")
+
+	err := identity.RefineEdition(t.Context(), firstSeen.Unix(), editionID, workID, nil, "", "", library.EditionRefinement{
+		Kind: "official", Disambiguation: "deluxe edition", Packaging: "Digipak", Language: "eng", Script: "Latn",
+	}, []library.PartIdentity{{MediaRef: "disc1:track1", SortKey: "00010001", Title: "One", MediumTitle: "Live", ArtistCredit: "A & B"}})
+	if err != nil {
+		t.Fatalf("RefineEdition: %v", err)
+	}
+
+	detail, err := queries.GetEditionDetail(t.Context(), editionID)
+	if err != nil {
+		t.Fatalf("GetEditionDetail: %v", err)
+	}
+	if want := (librarydb.EditionDetail{EditionID: editionID, Disambiguation: "deluxe edition", Packaging: "Digipak", Language: "eng", Script: "Latn"}); detail != want {
+		t.Errorf("edition detail = %+v, want %+v", detail, want)
+	}
+	shown, err := library.NewWorks(opened).Detail(t.Context(), workID)
+	if err != nil || shown.Editions[0].Disambiguation != "deluxe edition" || shown.Parts[0].MediumTitle != "Live" || shown.Parts[0].ArtistCredit != "A & B" {
+		t.Errorf("work detail = %+v (%v), want the edition name, disc title and track credit", shown, err)
+	}
+	part, err := queries.FindWorkPart(t.Context(), librarydb.FindWorkPartParams{WorkID: workID, MediaRef: "disc1:track1"})
+	if err != nil {
+		t.Fatalf("FindWorkPart: %v", err)
+	}
+	got, err := queries.GetWorkPartDetail(t.Context(), part.ID)
+	if err != nil {
+		t.Fatalf("GetWorkPartDetail: %v", err)
+	}
+	if want := (librarydb.WorkPartDetail{PartID: part.ID, MediumTitle: "Live", ArtistCredit: "A & B"}); got != want {
+		t.Errorf("part detail = %+v, want %+v", got, want)
+	}
+}
+
 // A release MusicBrainz merged is known by two ids; files still tagged with the old one open a placeholder
 // under the label the first edition already has (seen 2026-10-09: refused by UNIQUE every hour).
 func TestRefineEdition_APlaceholderThatIsAnExistingEditionFoldsIntoIt(t *testing.T) {

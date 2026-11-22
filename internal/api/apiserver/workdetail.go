@@ -76,19 +76,23 @@ type EditionRow struct {
 	Barcode         *string
 	RuntimeMs       *int64
 	IsDefault       bool
-	ExternalIDs     []ExternalIDRow
+	// Disambiguation, Packaging, Language and Script are empty when no provider said.
+	Disambiguation, Packaging, Language, Script string
+	ExternalIDs                                 []ExternalIDRow
 }
 
 // PartRow is one part (track, episode, chapter, ...) of a work.
 type PartRow struct {
-	ID          int64
-	MediaRef    string
-	SortKey     string
-	Title       *string
-	RuntimeMs   *int64
-	Date        *string
-	Monitored   bool
-	ExternalIDs []ExternalIDRow
+	ID       int64
+	MediaRef string
+	SortKey  string
+	Title    *string
+	// MediumTitle and ArtistCredit are empty when the disc has no name and the track has the album's artist.
+	MediumTitle, ArtistCredit string
+	RuntimeMs                 *int64
+	Date                      *string
+	Monitored                 bool
+	ExternalIDs               []ExternalIDRow
 	// Wanted is the track's own SINGLE desired_item, nil until someone
 	// explicitly wants this one track on its own (todo 4.4).
 	Wanted *WantedRow
@@ -914,6 +918,8 @@ func buildEditionViews(rows []EditionRow) []gen.Edition {
 			Id: row.ID, Kind: row.Kind, Label: row.Label, Year: year,
 			Format: row.Format, CatalogueNumber: row.CatalogueNumber, Barcode: row.Barcode,
 			RuntimeMs: row.RuntimeMs, IsDefault: row.IsDefault,
+			Disambiguation: strPtr(row.Disambiguation), Packaging: strPtr(row.Packaging),
+			Language: strPtr(row.Language), Script: strPtr(row.Script),
 			ExternalIds: buildExternalIDViews(row.ExternalIDs),
 		}
 	}
@@ -926,6 +932,7 @@ func buildPartViews(rows []PartRow) []gen.WorkPart {
 		views[index] = gen.WorkPart{
 			Id: row.ID, MediaRef: row.MediaRef, SortKey: row.SortKey, Title: row.Title,
 			RuntimeMs: row.RuntimeMs, Date: row.Date, Monitored: row.Monitored,
+			MediumTitle: strPtr(row.MediumTitle), ArtistCredit: strPtr(row.ArtistCredit),
 			ExternalIds: buildExternalIDViews(row.ExternalIDs),
 		}
 		if row.Wanted != nil {

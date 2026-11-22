@@ -77,8 +77,8 @@ func wikidataQIDFromRelations(relations []directRelation) string {
 }
 
 // directReleaseGroup is musicbrainz.org's release-group JSON with
-// inc=artist-credits+genres+ratings+url-rels -- ArtistCredit, Genres, Rating and the
-// WikidataQID need those incs, every other field is already in the default
+// inc=artist-credits+genres+tags+ratings+aliases+url-rels -- ArtistCredit, Genres, Tags, Rating,
+// Aliases and the WikidataQID need those incs, every other field is already in the default
 // response.
 type directReleaseGroup struct {
 	ID               string   `json:"id"`
@@ -97,6 +97,13 @@ type directReleaseGroup struct {
 		Name  string `json:"name"`
 		Count int    `json:"count"`
 	} `json:"genres"`
+	Tags []struct {
+		Name  string `json:"name"`
+		Count int    `json:"count"`
+	} `json:"tags"`
+	Aliases []struct {
+		Name string `json:"name"`
+	} `json:"aliases"`
 	Rating struct {
 		Value      *float64 `json:"value"`
 		VotesCount int      `json:"votes-count"`
@@ -107,7 +114,7 @@ type directReleaseGroup struct {
 func (d direct) releaseGroup(ctx context.Context, mbid string) (ReleaseGroup, error) {
 	var parsed directReleaseGroup
 	escaped := url.PathEscape(mbid) // an id from a file tag is not trusted to be a bare MBID
-	url := fmt.Sprintf("%s/release-group/%s?fmt=json&inc=artist-credits+genres+ratings+url-rels", d.baseURL, escaped)
+	url := fmt.Sprintf("%s/release-group/%s?fmt=json&inc=artist-credits+genres+tags+ratings+aliases+url-rels", d.baseURL, escaped)
 	if err := getJSON(ctx, d.client, url, &parsed); err != nil {
 		return ReleaseGroup{}, fmt.Errorf("musicbrainz: release-group %s: %w", mbid, err)
 	}
@@ -121,10 +128,21 @@ func (d direct) releaseGroup(ctx context.Context, mbid string) (ReleaseGroup, er
 		genres[i] = Genre{Name: genre.Name, Count: genre.Count}
 	}
 
+	tags := make([]Genre, len(parsed.Tags))
+	for i, tag := range parsed.Tags {
+		tags[i] = Genre{Name: tag.Name, Count: tag.Count}
+	}
+	aliases := make([]string, 0, len(parsed.Aliases))
+	for _, alias := range parsed.Aliases {
+		if alias.Name != "" {
+			aliases = append(aliases, alias.Name)
+		}
+	}
+
 	return ReleaseGroup{
 		MBID: parsed.ID, Title: parsed.Title,
 		PrimaryType: parsed.PrimaryType, SecondaryTypes: parsed.SecondaryTypes, FirstReleaseDate: parsed.FirstReleaseDate,
-		ArtistCredit: credits, Genres: genres, Rating: ratingOf(parsed.Rating.Value, parsed.Rating.VotesCount),
+		ArtistCredit: credits, Genres: genres, Tags: tags, Aliases: aliases, Rating: ratingOf(parsed.Rating.Value, parsed.Rating.VotesCount),
 		WikidataQID: wikidataQIDFromRelations(parsed.Relations),
 	}, nil
 }
