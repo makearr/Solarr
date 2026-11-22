@@ -6,10 +6,9 @@ import (
 	"context"
 	"slices"
 	"strconv"
-	"strings"
-	"unicode"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/identify/titlekey"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 )
@@ -227,12 +226,4 @@ func (p Profiling) knownFor(ctx context.Context, personID, categoryID int64, rem
 }
 
 // titleKey folds a title to its letters and digits, so "JEHES" and "Fubar!" are one.
-func titleKey(title string) string {
-	var out strings.Builder
-	for _, r := range strings.ToLower(title) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			out.WriteRune(r)
-		}
-	}
-	return out.String()
-}
+func titleKey(title string) string { return titlekey.Fold(title, titlekey.Compact) }
