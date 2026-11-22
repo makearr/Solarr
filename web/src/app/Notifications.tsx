@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Bell, CheckCircle2, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import { healthMessage } from "@/lib/healthMessage";
@@ -107,7 +108,7 @@ export function Notifications() {
         {!loading && warnings.length === 0 && (
           <p className="flex items-center gap-2 text-sm text-ink-muted">
             <CheckCircle2 aria-hidden className="size-4 text-ok" />
-            Nothing is wrong right now.
+            {t("notifications.noProblems")}
           </p>
         )}
         <ul className="flex flex-col gap-1">
@@ -133,8 +134,8 @@ export function Notifications() {
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium">Last 7 days</h2>
-        {!loading && events.length === 0 && <p className="text-sm text-ink-muted">No failures or imports.</p>}
+        <h2 className="text-sm font-medium">{t("notifications.lastWeek")}</h2>
+        {!loading && events.length === 0 && <p className="text-sm text-ink-muted">{t("notifications.noEvents")}</p>}
         <ul className="flex flex-col gap-1">
           {events.map((item) => (
             <li

@@ -1,9 +1,10 @@
+import { t } from "@/lib/i18n";
 const LETTERS = ["#", ..."abcdefghijklmnopqrstuvwxyz"];
 
 /** An A-Z strip beside a long list: a letter starts the list there, "#" at the beginning. */
 export function LetterRail({ value, onChange }: { value: string; onChange: (letter: string) => void }) {
   return (
-    <nav aria-label="Jump to a letter" className="absolute inset-y-2 right-1 z-10 flex w-5 flex-col items-center justify-between rounded-full bg-surface/80 py-1 text-[10px] leading-none text-ink-muted backdrop-blur">
+    <nav aria-label={t("letterRail.jump")} className="absolute inset-y-2 right-1 z-10 flex w-5 flex-col items-center justify-between rounded-full bg-surface/80 py-1 text-[10px] leading-none text-ink-muted backdrop-blur">
       {LETTERS.map((letter) => {
         const current = (letter === "#" ? "" : letter) === value;
         return (

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { t } from "@/lib/i18n";
 
 import { appendSample, sparkPath, totalSpeed, type SpeedSample } from "@/lib/speedHistory";
 import { labelStyle } from "@/ui/form";
@@ -120,7 +121,7 @@ function SpeedGraph({ samples }: { samples: readonly SpeedSample[] }) {
         height={GRAPH_HEIGHT}
         viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
         role="img"
-        aria-label="Download speed over the last minutes"
+        aria-label={t("dashboard.speedChart")}
         className="rounded border border-border-subtle bg-canvas"
       >
         {path && <path d={path} className="fill-accent/30 stroke-accent" strokeWidth={1} />}

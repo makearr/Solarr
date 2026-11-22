@@ -2,6 +2,7 @@ import { LetterRail } from "@/ui/LetterRail";
 import { useMemo, useRef } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { User } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -217,7 +218,7 @@ export function PeopleIndex() {
       <div className="relative min-h-0 flex-1 pr-6">
         {sort === "name" && direction !== "desc" && <LetterRail value={view.query.filters.from ?? ""} onChange={(letter) => setFilter("from", letter)} />}
         {list.isLoading && <p className="p-4 text-sm text-ink-muted">Loading…</p>}
-        {list.error !== null && <p className="p-4 text-sm text-danger">The people could not be loaded.</p>}
+        {list.error !== null && <p className="p-4 text-sm text-danger">{t("people.loadFailed")}</p>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (
           <p className="max-w-xl p-4 text-sm text-ink-muted">
             {view.query.filters.favorite === "only"

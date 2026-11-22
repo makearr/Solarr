@@ -36,7 +36,7 @@ export function CandidateList({
 }) {
   if (loading) return <p className="text-xs text-ink-muted">Loading…</p>;
   if (decisions.length === 0) {
-    return <p className="text-xs text-ink-muted">Nothing found yet -- try Search now.</p>;
+    return <p className="text-xs text-ink-muted">{t("candidates.empty")}</p>;
   }
   return (
     <div className="flex flex-col gap-2">
@@ -62,7 +62,7 @@ export function CandidateList({
               <button
                 type="button"
                 onClick={() => onBlocklist(decision.id)}
-                title="Never offer this release again"
+                title={t("candidates.neverOffer")}
                 className="shrink-0 rounded-md border border-border-subtle px-2 py-0.5 text-xs
                            text-ink-muted hover:text-danger"
               >

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import { Button } from "@/ui/Button";
@@ -76,7 +77,7 @@ export function Login() {
               onChange={(event) => setRemember(event.target.checked)}
               className="size-3.5 accent-[var(--color-accent)]"
             />
-            Stay signed in
+            {t("login.stay")}
           </label>
 
           {signIn.isError && (

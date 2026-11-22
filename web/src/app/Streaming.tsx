@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -77,7 +78,7 @@ function StreamingForm({
       }}
     >
       <Card
-        title="Converting for the player"
+        title={t("streaming.converting")}
         help="Files the browser cannot play as they are (most MKV, HEVC, FLAC in Safari, WMA) are converted by ffmpeg while they stream. Off, only files the browser plays itself can be previewed."
       >
         <SettingRow label="Convert on the server" help={report.ffmpeg_available ? undefined : "ffmpeg is not installed, so nothing can be converted."}>
@@ -98,7 +99,7 @@ function StreamingForm({
       </Card>
 
       <Card
-        title="Graphics hardware"
+        title={t("streaming.hardware")}
         help="Encoding on a GPU leaves the processor free. Automatic uses the best encoder found working at start; choose one here to override it."
       >
         <SettingRow label="Encoder">

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useLibraryLabel } from "@/lib/libraryLabel";
 import { useCategories } from "@/lib/resources";
 import { Button } from "@/ui/Button";
+import { t } from "@/lib/i18n";
 
 import { RenamePlanner } from "./RenamePlanner";
 
@@ -30,7 +31,7 @@ export function RenameAll() {
             <RenamePlanner title={<h2 className="text-sm font-medium">{label(category)}</h2>} categoryId={category.id} previewAtOnce={previewing} />
           </section>
         ))}
-        {categories.data?.length === 0 && <p className="text-sm text-ink-muted">No library yet.</p>}
+        {categories.data?.length === 0 && <p className="text-sm text-ink-muted">{t("renameAll.noLibrary")}</p>}
       </div>
     </div>
   );

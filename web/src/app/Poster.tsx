@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import type { LinkProps } from "@tanstack/react-router";
 import { UserRound } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 import { AvailabilityBar, type AlbumStatus } from "@/lib/albumStatus";
 
@@ -126,7 +127,7 @@ export function ArtistCoverMark() {
   return (
     <span
       title="No album cover yet: this is the artist's image"
-      aria-label="Artist image, no album cover"
+      aria-label={t("poster.artistNoCover")}
       className="flex size-6 items-center justify-center rounded-full border border-border-subtle bg-canvas/85 text-ink-muted shadow-sm"
     >
       <UserRound aria-hidden className="size-3.5" />

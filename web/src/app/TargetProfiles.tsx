@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -125,7 +126,7 @@ export function TargetProfilesSection() {
   };
   return (
     <Card
-      title="Content profiles"
+      title={t("targetProfiles.title")}
       help="What kind of material a target quality is for: anime, sports, a CD rip. Each carries recommended settings and the shipped target that fits it best; picking one on a target fills them in, and you can change every number afterwards."
       toggle={
         <button type="button" onClick={() => setEditing("new")} className="flex shrink-0 items-center gap-1 rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted hover:text-ink">

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import { isTierVisible, useTier } from "@/lib/useTier";
@@ -97,7 +98,7 @@ export function Priority() {
           spent ({budget.data.new_release} new releases, {budget.data.gap} gaps, {budget.data.upgrade} upgrades).
         </p>
       )}
-      {update.isError && <p className="text-sm text-danger">That change was refused.</p>}
+      {update.isError && <p className="text-sm text-danger">{t("importLists.refused")}</p>}
     </section>
   );
 }
@@ -166,7 +167,7 @@ function PriorityForm({
       }}
     >
       <Card
-        title="Automatic searching"
+        title={t("priority.autoSearch")}
         help="Missing items are searched on their own, most urgent first, the hour's searches spread over its runs. Keep the number low if an indexer limits API calls per day."
       >
         <div className="flex flex-wrap items-start gap-4">
@@ -288,7 +289,7 @@ function PriorityForm({
       </Card>
 
       <Card
-        title="Outbound requests"
+        title={t("priority.outbound")}
         help="When a provider is busy, its waiting requests are served in these proportions; a kind nobody is waiting for gives its part to the others, so none is ever shut out."
       >
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

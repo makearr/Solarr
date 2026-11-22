@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import { isTierVisible, useTier } from "@/lib/useTier";
@@ -46,7 +47,7 @@ export function Network() {
       <NetworkForm network={network.data} onSave={(body) => update.mutate(body)} busy={update.isPending} />
       {update.isError && (
         <p className="text-sm text-danger">
-          That change was refused, often because it would exclude the address you are using right now.
+          {t("network.refused")}
         </p>
       )}
     </section>
@@ -100,7 +101,7 @@ function NetworkForm({
         submit();
       }}
     >
-      <Card title="Listen port" help="The port Solarr serves on. A change needs a restart of the container.">
+      <Card title={t("network.listenPort")} help="The port Solarr serves on. A change needs a restart of the container.">
         <label className="flex w-40 flex-col gap-1 text-xs text-ink-muted">
           Port
           <input
@@ -122,7 +123,7 @@ function NetworkForm({
       </Card>
 
       <Card
-        title="Outbound proxy"
+        title={t("network.proxy")}
         help="Send Solarr's own internet traffic (metadata providers, indexers) through a proxy. Addresses in the bypass list always go direct."
         toggle={<Toggle label="Use a proxy" checked={proxyEnabled} disabled={busy} onChange={setProxyEnabled} />}
       >

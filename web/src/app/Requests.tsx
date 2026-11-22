@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -55,7 +56,7 @@ export function Requests() {
       }
     >
       {requests.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-      {requests.error !== null && <p className="text-sm text-ink-muted">The requests could not be read.</p>}
+      {requests.error !== null && <p className="text-sm text-ink-muted">{t("requests.readFailed")}</p>}
       {requests.data && items.length === 0 && (
         <p className="text-sm text-ink-muted">Nothing has been requested. Use Request on a library&apos;s Add page.</p>
       )}
@@ -120,7 +121,7 @@ export function Requests() {
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
                   placeholder="Reason shown to the requester (optional)"
-                  aria-label="Reason for declining"
+                  aria-label={t("requests.declineReason")}
                   className="min-w-0 flex-1 rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs"
                 />
                 <button type="submit" className="rounded-md border border-border-subtle px-2 py-1 text-xs">

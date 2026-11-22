@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import {
   editionSummary,
   factsOf,
@@ -89,7 +90,7 @@ export function IdentificationCandidates({
                                    disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2
                                    focus-visible:outline-accent"
                       >
-                        Use this album
+                        {t("identify.useAlbum")}
                       </button>
                     )}
                   </td>

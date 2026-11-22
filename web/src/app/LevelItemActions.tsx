@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { Bookmark, BookmarkCheck, RefreshCw, Search } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import { useIsAdministrator } from "@/lib/useAdministrator";
@@ -106,8 +107,8 @@ export function ActionButtons({ actions, showNote = true }: { actions: Actions; 
       </button>
       <button
         type="button"
-        title="Refresh metadata"
-        aria-label="Refresh metadata"
+        title={t("levelItem.refreshMetadata")}
+        aria-label={t("levelItem.refreshMetadata")}
         disabled={actions.refresh.isPending}
         onClick={(event) => stop(event, () => actions.refresh.mutate())}
         className={button}

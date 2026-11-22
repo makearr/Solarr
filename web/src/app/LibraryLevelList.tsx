@@ -3,6 +3,7 @@ import { Link, useParams } from "@tanstack/react-router";
 import type { LinkProps } from "@tanstack/react-router";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ArrowDown, ArrowUp, Columns3 } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import { albumStatusFill, albumStatusLabel } from "@/lib/albumStatus";
@@ -226,7 +227,7 @@ export function LibraryLevelList() {
       {list.error !== null && (
         <Message>{(list.error as { detail?: string }).detail ?? "This view could not be read."}</Message>
       )}
-      {!list.isLoading && list.error === null && list.items.length === 0 && <Message>Nothing here yet.</Message>}
+      {!list.isLoading && list.error === null && list.items.length === 0 && <Message>{t("levelList.empty")}</Message>}
 
       {list.items.length > 0 && (
         <div className="min-h-0 flex-1">
@@ -314,8 +315,8 @@ function ColumnChooser({
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger
-        aria-label="Choose columns"
-        title="Choose columns"
+        aria-label={t("levelList.chooseColumns")}
+        title={t("levelList.chooseColumns")}
         className="rounded-md border border-border-subtle p-1.5 text-ink-muted hover:text-ink"
       >
         <Columns3 aria-hidden className="size-4" />

@@ -3,6 +3,7 @@ import { useRef } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Building2 } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -123,7 +124,7 @@ export function OrganisationIndex() {
       <div className="relative min-h-0 flex-1 pr-6">
         {sort === "name" && !descending && <LetterRail value={view.query.filters.from ?? ""} onChange={(letter) => setFilter("from", letter)} />}
         {list.isLoading && <p className="p-4 text-sm text-ink-muted">Loading…</p>}
-        {list.error !== null && <p className="p-4 text-sm text-danger">These could not be loaded.</p>}
+        {list.error !== null && <p className="p-4 text-sm text-danger">{t("organisations.loadFailed")}</p>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (
           <p className="p-4 text-sm text-ink-muted">
             {view.query.filters.favorite === "only" ? "No favorites here yet. Press the heart to find one again here." : view.query.filters.q || view.query.filters.monitored ? "None match." : `None known yet: they arrive with the ${works}' metadata.`}
@@ -167,7 +168,7 @@ export function OrganisationPage() {
   });
   const libraries = useLibraries();
   if (detail.isLoading) return <p className="p-4 text-sm text-ink-muted">Loading…</p>;
-  if (detail.isError || !detail.data) return <p className="p-4 text-sm text-danger">This could not be found.</p>;
+  if (detail.isError || !detail.data) return <p className="p-4 text-sm text-danger">{t("organisations.notFound")}</p>;
 
   const organisation = detail.data;
   const sectionIds = [...new Set(organisation.libraries.map((place) => place.category_id))];

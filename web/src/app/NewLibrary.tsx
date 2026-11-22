@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -141,7 +142,7 @@ export function AddLibraryForm() {
         {create.isPending ? "Adding…" : "Add library"}
       </Button>
       {create.isError && (
-        <p className="w-full text-xs text-danger">That library could not be created. Check the name is not empty.</p>
+        <p className="w-full text-xs text-danger">{t("newLibrary.failed")}</p>
       )}
     </form>
   );

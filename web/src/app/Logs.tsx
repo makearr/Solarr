@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import { useDebouncedValue } from "./useDebouncedValue";
@@ -64,7 +65,7 @@ export function Logs() {
       </p>
 
       {records.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-      {records.error !== null && <p className="text-sm text-ink-muted">The log could not be read.</p>}
+      {records.error !== null && <p className="text-sm text-ink-muted">{t("logs.readFailed")}</p>}
       {records.data && records.data.length === 0 && (
         <p className="text-sm text-ink-muted">Nothing matches.</p>
       )}

@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { mediaTypeIcon, mediaTypeName } from "@/lib/mediaTypeIcon";
 import { useLibraryTree } from "@/lib/resources";
 import type { components } from "@/api/schema";
+import { t } from "@/lib/i18n";
 
 import { AddLibraryForm } from "./NewLibrary";
 import { defaultLevelKey } from "./Sidebar";
@@ -20,14 +21,14 @@ export function Libraries() {
     <div className="flex h-full flex-col gap-4 overflow-auto p-6">
       <div>
         <h1 className="text-lg font-semibold tracking-tight">Libraries</h1>
-        <p className="text-sm text-ink-muted">Every collection Solarr manages.</p>
+        <p className="text-sm text-ink-muted">{t("libraries.subtitle")}</p>
       </div>
 
       {libraries.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-      {libraries.error != null && <p className="text-sm text-danger">The libraries could not be read.</p>}
+      {libraries.error != null && <p className="text-sm text-danger">{t("libraries.readFailed")}</p>}
 
       {libraries.data && libraries.data.length === 0 && (
-        <p className="text-sm text-ink-muted">No libraries yet. Add one below to get started.</p>
+        <p className="text-sm text-ink-muted">{t("libraries.empty")}</p>
       )}
 
       {libraries.data && libraries.data.length > 0 && (

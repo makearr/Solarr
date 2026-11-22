@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { type ReactNode, useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
@@ -73,7 +74,7 @@ export function RenamePlanner({
         </p>
       )}
       {plan && !started && moves.length === 0 && refused.length === 0 && (
-        <p className="text-sm text-ink-muted">Every file already has the name this library would give it.</p>
+        <p className="text-sm text-ink-muted">{t("renamePlanner.allNamed")}</p>
       )}
       {plan && !started && moves.length > 0 && (
         <>

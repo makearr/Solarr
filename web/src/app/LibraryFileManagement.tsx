@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import { useLibrary } from "@/lib/useLibrary";
@@ -52,7 +53,7 @@ export function LibraryFileManagement() {
     onSuccess: (data) => queryClient.setQueryData(["libraryFileManagement", id], data),
   });
 
-  if (id === undefined) return <Message>No library in the URL.</Message>;
+  if (id === undefined) return <Message>{t("libraryFiles.noLibrary")}</Message>;
   if (saved.isLoading || !draft) return <Message>Loading…</Message>;
   if (saved.error !== null || !saved.data) return <Message>This library&apos;s file management could not be read.</Message>;
 

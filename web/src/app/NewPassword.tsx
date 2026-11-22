@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 export const MIN_PASSWORD_LENGTH = 8;
 
 /** A new password is ready to send when it is long enough and typed twice the same. */
@@ -25,8 +26,8 @@ export function RepeatPassword({
         type="password"
         value={repeat}
         autoComplete="new-password"
-        placeholder="Repeat password"
-        aria-label="Repeat password"
+        placeholder={t("password.repeat")}
+        aria-label={t("password.repeat")}
         aria-invalid={differs}
         onChange={(event) => onRepeat(event.target.value)}
       />

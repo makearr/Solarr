@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
 import { useMemo, useState } from "react";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 
@@ -69,7 +70,7 @@ export function TagChips({ categoryId, wholeLibrary = false, value, onChange }: 
         <button
           type="button"
           aria-expanded={open}
-          aria-label="Filter by tags"
+          aria-label={t("tags.filter")}
           onClick={() => setOpen(!open)}
           className="rounded-md border border-border-subtle px-3 py-1.5 text-sm"
         >
@@ -83,7 +84,7 @@ export function TagChips({ categoryId, wholeLibrary = false, value, onChange }: 
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Find a tag…"
-            aria-label="Find a tag"
+            aria-label={t("tags.find")}
             className="rounded-md border border-border-subtle bg-canvas px-2 py-1 text-sm"
           />
           <ul className="max-h-80 overflow-y-auto text-sm">

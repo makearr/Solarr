@@ -165,7 +165,7 @@ export function PosterOptionsMenu({ options, onChange }: { options: PosterOption
   ];
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger aria-label="Poster options" title="Poster options" className="rounded-md border border-border-subtle p-1.5 text-ink-muted hover:text-ink">
+      <DropdownMenu.Trigger aria-label={t("indexViews.posterOptions")} title={t("indexViews.posterOptions")} className="rounded-md border border-border-subtle p-1.5 text-ink-muted hover:text-ink">
         <Settings2 aria-hidden className="size-4" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>

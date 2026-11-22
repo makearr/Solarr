@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { useState } from "react";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -25,7 +26,7 @@ export function LibraryCheck() {
   const [moving, setMoving] = useState<{ subject: MoveSubject; mediaType: string; from: number; to: number }>();
 
   if (check.isLoading) return <p className="p-6 text-sm text-ink-muted">Checking…</p>;
-  if (check.error !== null || !check.data) return <p className="p-6 text-sm text-danger">The library could not be checked.</p>;
+  if (check.error !== null || !check.data) return <p className="p-6 text-sm text-danger">{t("libraryCheck.failed")}</p>;
   const groups = new Map<string, Misplaced[]>();
   for (const work of check.data.misplaced) {
     const key = `${work.from_category_id}:${work.suggestion.category_id}`;
@@ -48,7 +49,7 @@ export function LibraryCheck() {
         </div>
       ))}
       {check.data.misplaced.length === 0 ? (
-        <EmptyState title="Everything here belongs here." hint="Each library's rules (its settings, Suggested for) say what belongs in it." />
+        <EmptyState title={t("libraryCheck.allBelong")} hint="Each library's rules (its settings, Suggested for) say what belongs in it." />
       ) : (
         [...groups.values()].map((works) => {
           const first = works[0]!;

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, X } from "lucide-react";
 import { useState } from "react";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 
@@ -26,7 +27,7 @@ export function PersonFilter({ categoryId, value, onChange }: { categoryId: numb
           if (event.key === "Escape") setOpen(false);
         }}
       >
-        <button type="button" aria-expanded={open} aria-label="Filter by person" onClick={() => setOpen(!open)} className="rounded-md border border-border-subtle px-3 py-1.5 text-sm">
+        <button type="button" aria-expanded={open} aria-label={t("personFilter.label")} onClick={() => setOpen(!open)} className="rounded-md border border-border-subtle px-3 py-1.5 text-sm">
           Person
           <ChevronDown aria-hidden className="ml-1 inline size-3.5" />
         </button>
@@ -46,7 +47,7 @@ export function PersonFilter({ categoryId, value, onChange }: { categoryId: numb
       {value !== "" && (
         <span className="inline-flex items-center gap-1 rounded-full border border-accent px-2 py-px text-xs">
           {chosen.data?.name ?? "…"}
-          <button type="button" aria-label="Remove the person filter" onClick={() => onChange("")} className="text-ink-muted hover:text-ink">
+          <button type="button" aria-label={t("personFilter.remove")} onClick={() => onChange("")} className="text-ink-muted hover:text-ink">
             <X aria-hidden className="size-3" />
           </button>
         </span>

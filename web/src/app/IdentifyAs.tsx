@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 import { api, ok } from "@/api/client";
 import { vocabularyOf } from "@/lib/i18n";
@@ -101,7 +102,7 @@ export function IdentifyAs({
         />
       </label>
       {results.isFetching && <p className="text-xs text-ink-muted">Searching…</p>}
-      {results.isError && <p className="text-xs text-danger">The search failed. Try again in a moment.</p>}
+      {results.isError && <p className="text-xs text-danger">{t("identifyAs.searchFailed")}</p>}
       {results.data?.length === 0 && <p className="text-xs text-ink-muted">Nothing found for “{query}”.</p>}
       <ul className="flex min-h-0 flex-col gap-1 overflow-y-auto">
         {(results.data ?? []).map((candidate) => {
