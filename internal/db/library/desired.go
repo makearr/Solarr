@@ -12,19 +12,10 @@ import (
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
-// ErrPartNotFound reports a track request naming a media_ref (or, from
-// EnsureTrackItemByPart, a part id) with no matching work_part -- section
-// 19.6 requires resolving against a real part, never a guessed index.
-// Wraps sql.ErrNoRows so apiserver, which cannot import this package, can
-// still map it to 404 the same way SetPartMonitored's own cross-work id
-// check already does.
+// ErrPartNotFound is a track request names no real work_part (section 19.6, never a guessed index); wraps sql.ErrNoRows so apiserver can map it to 404.
 var ErrPartNotFound = fmt.Errorf("library: work part not found: %w", sql.ErrNoRows)
 
-// Desired creates and maintains desired_item / desired_item_file rows --
-// section 19.6's "wanted, at three levels": SET for an album, SINGLE for a
-// track, plus what a scan discovers on disk. Deciding *which* file covers
-// *which* part is a media type's own algorithm (ADR-23 -- internal/media/music's
-// Align is the first); this type only persists what a caller already decided.
+// Desired maintains desired_item and desired_item_file rows (section 19.6: SET, SINGLE and discovered); which file covers which part is the media type's algorithm (ADR-23), this type persists the decision.
 type Desired struct{ store *store.Store }
 
 // NewDesired builds it over an open library store.
@@ -45,12 +36,7 @@ type AlbumRequest struct {
 	RequiredWithoutParts int64
 }
 
-// EnsureAlbumItem finds the work's album-level SET item, or creates it from
-// request -- required_count is always derived from the work's own parts
-// (recomputeAlbumTx), never taken on faith from a caller. An item that already
-// exists keeps its own recorded policy untouched -- discovery must never
-// overwrite what a user (or an earlier discovery pass) already decided, the
-// same idempotent shape Invariant 71 requires of a subscription one level up.
+// EnsureAlbumItem finds or creates the work's SET item; required_count is derived from the parts, and an existing item keeps its policy so discovery never overwrites a decision (Invariant 71).
 func (d Desired) EnsureAlbumItem(ctx context.Context, request AlbumRequest) (librarydb.DesiredItem, error) {
 	var item librarydb.DesiredItem
 	err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
@@ -149,11 +135,7 @@ func (d Desired) EnsureTrackItem(ctx context.Context, request TrackRequest) (lib
 	return item, nil
 }
 
-// EnsureTrackItemByPart resolves partID to its own media_ref -- checking it
-// belongs to workID, the same existence/ownership guard SetPartMonitored
-// uses -- and finds or creates that track's own SINGLE item. The API-facing
-// entry point: a caller has the part id from the tracklist, not the raw
-// media_ref EnsureTrackItem itself requires.
+// EnsureTrackItemByPart resolves a part id to its media_ref after checking it belongs to workID, then finds or creates the SINGLE item; the API-facing entry point.
 func (d Desired) EnsureTrackItemByPart(
 	ctx context.Context, workID, partID, categoryID, profileID int64, addedBy *int64,
 ) (librarydb.DesiredItem, error) {
@@ -281,10 +263,7 @@ func (d Desired) UnmonitorItemsLosingFiles(ctx context.Context, categoryID, root
 	}
 }
 
-// SetPartMonitored toggles one work_part's monitored flag, then recomputes
-// every album-level SET item for that work: unmonitoring a bonus track must
-// shrink the album's required_count rather than holding it PARTIAL forever
-// (section 19.6, Appendix E D3).
+// SetPartMonitored toggles a part and recomputes the work's album items, so unmonitoring a bonus track shrinks required_count instead of leaving it PARTIAL (section 19.6, D3).
 func (d Desired) SetPartMonitored(ctx context.Context, workID, partID int64, monitored bool) error {
 	return d.SetPartsMonitored(ctx, workID, []int64{partID}, monitored)
 }
@@ -436,11 +415,7 @@ func (d Desired) AllParts(ctx context.Context, workID int64) ([]librarydb.WorkPa
 	return parts, nil
 }
 
-// UnfilledParts returns every one of a work's parts not yet covered by
-// itemID's desired_item_file rows, in part order -- what a media type's own
-// alignment (internal/media/music's Align is the first) should try to match new
-// candidates against, so a part a previous batch already covered is never
-// reconsidered.
+// UnfilledParts returns a work's parts not yet covered by itemID's files, in part order, for alignment to try against new candidates.
 func (d Desired) UnfilledParts(ctx context.Context, itemID, workID int64) ([]librarydb.WorkPart, error) {
 	queries := librarydb.New(d.store.Read())
 	parts, err := queries.ListWorkParts(ctx, workID)
@@ -481,10 +456,7 @@ func (d Desired) AttachedFiles(ctx context.Context, itemID int64) (map[int64]boo
 	return attached, nil
 }
 
-// ExternalIDsFor returns the given parts' external ids for one provider, keyed
-// by part id -- a part with none is simply absent. Kept provider-agnostic
-// (ADR-23): a media type names which provider it means (internal/media/music's
-// ProviderRecording, for Align's recording-MBID pass).
+// ExternalIDsFor returns parts' external ids for one provider keyed by part id, provider-agnostic (ADR-23): the media type names the provider.
 func (d Desired) ExternalIDsFor(ctx context.Context, parts []librarydb.WorkPart, provider string) (map[int64]string, error) {
 	queries := librarydb.New(d.store.Read())
 	out := make(map[int64]string, len(parts))
@@ -624,10 +596,7 @@ type FileMembership struct {
 	AddedAt       int64
 }
 
-// ItemsForFile answers every desired_item a file currently satisfies -- what
-// a scan needs to recognise bytes it has seen (section 5.2's own doc
-// comment on the query), and what a removal needs to know before the file
-// is gone.
+// ItemsForFile answers every desired_item a file satisfies, for scans recognising known bytes and for removals (section 5.2).
 func (d Desired) ItemsForFile(ctx context.Context, mediaObjectID int64) ([]FileMembership, error) {
 	rows, err := librarydb.New(d.store.Read()).ListDesiredItemsForFile(ctx, mediaObjectID)
 	if err != nil {
@@ -643,22 +612,14 @@ func (d Desired) ItemsForFile(ctx context.Context, mediaObjectID int64) ([]FileM
 	return memberships, nil
 }
 
-// FileIdentity is a file's own editorial position -- which work, which
-// edition (nil for "any pressing"), and which part -- resolved from its
-// desired_item_file coverage. What a rename preview needs to know "which
-// track is this" without any media-type knowledge of its own.
+// FileIdentity is a file's editorial position (work, edition or nil for any pressing, part) from its coverage, so rename previews need no media-type knowledge.
 type FileIdentity struct {
 	WorkID    int64
 	EditionID *int64
 	MediaRef  string
 }
 
-// IdentityForFile answers the editorial identity backing one file, or
-// found=false when the file has no desired_item_file coverage at all --
-// not yet aligned to a desired_item (section 19.6's own Align), or an
-// import that never went through discovery. Only 'primary' coverage
-// counts, matching CountPrimaryFiles' own reasoning: a trailer or bonus
-// role does not name the file for renaming purposes.
+// IdentityForFile answers a file's editorial identity, or found=false when it has no coverage; only primary coverage counts, since a trailer or bonus does not name the file for renaming.
 func (d Desired) IdentityForFile(ctx context.Context, mediaObjectID int64) (FileIdentity, bool, error) {
 	memberships, err := d.ItemsForFile(ctx, mediaObjectID)
 	if err != nil {
@@ -708,11 +669,7 @@ func (d Desired) Get(ctx context.Context, itemID int64) (librarydb.DesiredItem, 
 	return row, nil
 }
 
-// DetachAndRecompute removes a file from an item under every role listed and
-// recomputes required/present count and state in the same transaction -- the
-// same attach+recompute shape RecordAlignment already uses for the opposite
-// direction. Detaching a role the item never actually had is a no-op, not an
-// error, the same idempotence every other repair path in this codebase has.
+// DetachAndRecompute removes a file under every listed role and recomputes counts and state in one transaction, as RecordAlignment does in reverse; detaching an absent role is a no-op.
 func (d Desired) DetachAndRecompute(ctx context.Context, itemID, workID, mediaObjectID int64, roles []string) error {
 	err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
@@ -731,12 +688,7 @@ func (d Desired) DetachAndRecompute(ctx context.Context, itemID, workID, mediaOb
 	return nil
 }
 
-// RecomputeAlbum re-derives an album item's required_count (from the work's
-// currently-monitored parts) and present_count/state (from what
-// desired_item_file already covers), and marks it dirty for the planner.
-// Idempotent -- safe to call any time either side of that comparison might
-// have changed, the same "periodic recompute is the design, not a corner cut"
-// shape CategoryCounters and Reconciler already use.
+// RecomputeAlbum re-derives required_count, present_count and state and marks the item dirty for the planner; idempotent, since periodic recompute is the design.
 func (d Desired) RecomputeAlbum(ctx context.Context, itemID, workID int64) error {
 	err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		return recomputeAlbumTx(ctx, librarydb.New(tx), itemID, workID, d.store.Now())

@@ -11,11 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
-// ErrSessionNotRevertible reports that sessionID is not in a state Revert
-// can act on -- only a session that finished inspecting (successfully or
-// not) has anything of its own to undo; one still INSPECTING/IMPORTING/
-// CANCELLING is not done deciding what it did, and one already REVERTED or
-// CANCELLED has nothing left.
+// ErrSessionNotRevertible is only a session that finished inspecting has anything to undo; INSPECTING, IMPORTING and CANCELLING are undecided, REVERTED and CANCELLED are done.
 var ErrSessionNotRevertible = errors.New("library: import session cannot be reverted from its current state")
 
 // ErrRevertFileBlocked is a file the revert could not move to the recycle bin (a folder not writable, say); a retry may succeed.
@@ -37,23 +33,11 @@ type RevertResult struct {
 	UnitsReverted         int
 	WorksDeleted          int
 	EditionsDeleted       int
-	// SkippedSharedObjects are media_object ids revert left untouched: bytes
-	// this unit shares with a path from outside this session (ADR-11's
-	// quick-hash dedupe), recorded before migration 0029 gave revert a way to
-	// tell its own path apart from the other one -- refusing to guess rather
-	// than risk recycling and deleting a library entry the session never
-	// created (Invariant 92).
+	// SkippedSharedObjects are media_object ids revert left alone: bytes shared with a path from outside the session (ADR-11 dedupe) from before migration 0029, so it refuses to guess (Invariant 92).
 	SkippedSharedObjects []int64
 }
 
-// ImportRevert is ADR-48's own "revert this session": move every file the
-// session placed back through the recycle bin (section 10.8) and remove exactly
-// the rows the session created, never a row it only matched (ADR-48's own
-// wording) -- import_unit.work_created/edition_created say which is which,
-// RecordPlacement's own doc comment explains why they exist. Composes
-// ImportSessions, Physical and RecycleBin the same way RemoveAndBlock
-// composes its own four stores; not a new kind of orchestration, the same
-// one, aimed at an import session instead of one file.
+// ImportRevert is ADR-48's revert: recycle every placed file (section 10.8) and remove exactly the rows the session created (work_created/edition_created), composing stores as RemoveAndBlock does.
 type ImportRevert struct {
 	sessions   ImportSessions
 	physical   Physical
@@ -71,16 +55,7 @@ func NewImportRevert(
 	}
 }
 
-// Revert undoes sessionID's own COMMIT placements. A unit DECIDE queued or
-// skipped, or one COMMIT-decided but never actually placed (no category_id
-// to place into, or a placement failure that was logged and tolerated), has
-// nothing to undo and is left exactly as it was -- only WorkID != nil marks
-// a unit this needs to act on.
-//
-// Two passes over the session's own units: the first recycles every file, the second recounts or deletes the
-// work/edition rows and only then clears the unit's placement, so a revert that stops part-way finds on a retry
-// what each unit made. A work two units resolved to (one created it, the second only matched it) is released from
-// the second unit before it is deleted.
+// Revert undoes sessionID's COMMIT placements; units never placed (WorkID nil) are left as they were. Two passes: recycle every file, then recount or delete work/edition rows and clear placement, so a partial revert is resumable; a work shared by two units is released from the second before deletion.
 func (r ImportRevert) Revert(ctx context.Context, sessionID int64, recycling Recycling, at int64) (RevertResult, error) {
 	session, err := r.sessions.Get(ctx, sessionID)
 	if err != nil {
@@ -202,18 +177,7 @@ func (r ImportRevert) closeUnit(ctx context.Context, unit Unit, placed []Unit, r
 	return nil
 }
 
-// recycleObject recycles exactly the one library_path row this unit's own
-// placement created for file.MediaObjectID, then deletes the media_object outright
-// only if that was its last remaining path.
-//
-// ADR-11's quick-hash dedupe means RegisterBatch can point this unit's placement at
-// bytes an unrelated, untouched commit already owns (a duplicate track shipped in two
-// releases, say). The naive shape this replaced -- recycle every PathsForObject row
-// and delete the object -- destroyed that untouched library entry too whenever it
-// happened. file.LibraryPathID (migration 0029) is what lets this pick out only the
-// session's own row; when it is nil (data from before that migration) or PathsForObject
-// no longer contains it, this refuses to guess among more than one candidate rather
-// than repeat the bug (Invariant 92), and records the skip instead.
+// recycleObject recycles only the library_path row this unit's placement created, deleting the media_object if it was the last path, because ADR-11 dedupe can point a placement at bytes an untouched commit owns; with no LibraryPathID (pre-0029) and several paths it refuses to guess (Invariant 92).
 func (r ImportRevert) recycleObject(ctx context.Context, file UnitFile, recycling Recycling, result *RevertResult) error {
 	paths, err := r.physical.PathsForObject(ctx, file.MediaObjectID)
 	if err != nil {

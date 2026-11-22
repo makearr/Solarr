@@ -13,10 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
-// PersonIdentity is what a person should look like if one has to be created --
-// naming and biographical facts only, the same "this package decides
-// persistence, the caller decides what to name" split as WorkIdentity.
-// The sort name is always the name, as Lidarr sorts: MusicBrainz's "Doci, Vutu" filed Vutu Doci under D.
+// PersonIdentity is the naming and biographical facts for a person that must be created; the sort name is always the name, as Lidarr sorts, so a comma form does not file under the surname.
 type PersonIdentity struct {
 	Name           string
 	Disambiguation string
@@ -56,12 +53,7 @@ type People struct{ store *store.Store }
 // NewPeople builds it over an open library store.
 func NewPeople(opened *store.Store) People { return People{store: opened} }
 
-// ResolvePerson finds the person behind link's external id, or creates one
-// with link.Person's facts when none exists yet. Unlike resolveWork, an
-// existing person's facts are never overwritten by a later call -- there is
-// no update path (person.fields_json aside, nothing about a person changes
-// often enough to need one yet), matching findOrCreateWork's own
-// once-created-stays-created shape.
+// ResolvePerson finds the person behind link's external id or creates one; an existing person's facts are never overwritten, as with findOrCreateWork.
 func (p People) ResolvePerson(ctx context.Context, at time.Time, link PersonLink) (int64, error) {
 	var personID int64
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
@@ -138,11 +130,7 @@ func (p People) ResolveFolderArtist(ctx context.Context, at time.Time, provider,
 // normalizedAlias is the lookup form of an alias: trimmed and lower-cased.
 func normalizedAlias(alias string) string { return strings.ToLower(strings.TrimSpace(alias)) }
 
-// FindByExternalID answers the person behind an external id, without
-// creating one -- the "did this call create it or only match it" question
-// ResolvePerson's own return value cannot answer, needed by a caller that
-// must record which is which (todo 4.13's ArrImportRevert: only a person a
-// run itself created may be undone).
+// FindByExternalID answers the person behind an external id without creating one, for callers recording created versus matched (todo 4.13 ArrImportRevert).
 func (p People) FindByExternalID(ctx context.Context, provider, externalID string) (int64, bool, error) {
 	person, err := librarydb.New(p.store.Read()).GetPersonByExternalID(ctx, librarydb.GetPersonByExternalIDParams{
 		Provider: provider, ExternalID: externalID,
@@ -398,11 +386,7 @@ func slugify(name string) string {
 	return strings.TrimSuffix(b.String(), "-")
 }
 
-// DiscographyRow is one work credited to a person, plus the availability
-// signal the artist page needs (Lidarr-like "available / missing /
-// requested", user request 2026-09-12) -- the same wanted-state and on-disk
-// facts WorkListRow already carries for the library list, composed the same
-// way (raw SQL, DiscographyRow's own doc comment on why).
+// DiscographyRow is one work credited to a person plus the available/missing/requested signal the artist page needs, composed in raw SQL like WorkListRow.
 type DiscographyRow struct {
 	librarydb.Work
 	WantedState sql.NullString
@@ -436,12 +420,7 @@ const discographyStatusColumns = `(SELECT di.present_count FROM desired_item di
       WHERE di.work_id = work.id
         AND a.state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED')) AS downloading`
 
-// Discography pages every work credited to a person, any role when role is
-// empty, oldest release first. Raw SQL, not sqlc, for the same reason
-// works.go's List is: wanted_state is a correlated scalar subquery sqlc
-// cannot see is nullable the way it can a real table column, and would type
-// it as a plain non-null string -- a panic waiting on the first row with no
-// monitored desired_item.
+// Discography pages works credited to a person (any role if empty), oldest first; raw SQL because sqlc would type the wanted_state subquery as non-null and panic on a work with no monitored item.
 func (p People) Discography(ctx context.Context, personID int64, role string) ([]DiscographyRow, error) {
 	query := `SELECT ` + workColumns + `, work.subtype,
        ` + workStateColumn + `,
@@ -524,30 +503,13 @@ type SubscriptionRequest struct {
 	MediaTypes           []string
 	Roles                []string
 	MonitorBackCatalogue bool
-	// FiltersJSON is opaque here (subscription.FiltersJSON's own doc comment):
-	// which genre tree it filters on is a media type's own concern (ADR-23).
-	// Empty means "use that media type's own default" -- never written as an
-	// empty JSON object, so a caller that never sets this changes nothing.
+	// FiltersJSON is opaque here; which genre tree it filters is the media type's concern (ADR-23), and empty means its default, never an empty object.
 	FiltersJSON string
-	// CategoryID is the library this artist was added to, so the expansion
-	// puts their albums there rather than in whichever library of that media
-	// type happens to come first (2026-09-19). 0 leaves it unset, which the
-	// expansion reads as "the media type's own first library", the behaviour
-	// every subscription made before this had.
+	// CategoryID is the library the artist was added to so the expansion puts albums there; 0 means the media type's first library.
 	CategoryID int64
 }
 
-// Subscribe records a subscription and marks the person monitored, in one
-// transaction -- ADR-32: "adding a performer monitors their scenes regardless
-// of studio". CategoryID records which library the artist was added to;
-// ProfileID stays unset, resolved from that category when the expansion runs.
-//
-// Idempotent on (person, user): a second call for the same pair returns the
-// existing subscription's id rather than erroring on the UNIQUE(subject_type,
-// subject_id, user_id) constraint or creating a duplicate -- Invariant 80,
-// the same "existing facts never overwritten" shape ResolvePerson's own doc
-// comment already states for a person. Found needed live: SubscribePerson's
-// own API handler had no other guard against a double-subscribe before this.
+// Subscribe records a subscription and marks the person monitored in one transaction (ADR-32); idempotent on (person, user) so a double subscribe returns the existing id instead of failing the UNIQUE constraint (Invariant 80).
 func (p People) Subscribe(
 	ctx context.Context, at time.Time, personID, userID int64, request SubscriptionRequest,
 ) (int64, error) {
@@ -575,15 +537,7 @@ func (p People) Subscribe(
 	return subscriptionID, nil
 }
 
-// Delete removes a person outright, cascading person_alias, credit and
-// person_external_id (every REFERENCES person(id) with ON DELETE CASCADE).
-// Revert-only use so far (todo 4.13's ArrImportRevert): only ever called for
-// a person this package itself created (arr_import_item.person_created), and
-// only after the person's own subscription (no cascade of its own,
-// subscription.subject_id is a polymorphic reference with no FK) and any
-// work crediting them as lead_person_id (also no cascade) are already
-// gone, or this fails on the same foreign key work.lead_person_id
-// enforces.
+// Delete removes a person, cascading aliases, credits and external ids; used only by ArrImportRevert for persons it created, after the subscription and any lead_person_id credits are gone (neither has a cascade).
 func (p People) Delete(ctx context.Context, personID int64) error {
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		return librarydb.New(tx).DeletePerson(ctx, personID)
@@ -594,10 +548,7 @@ func (p People) Delete(ctx context.Context, personID int64) error {
 	return nil
 }
 
-// biographyFromFields decodes fields_json back out, empty when there is none
-// or it does not decode -- a row this package itself wrote should always
-// decode, so a failure here is treated as "no biography" rather than a hard
-// error, the same reasoning musicbrainz.Provider's own cache uses.
+// biographyFromFields decodes fields_json, treating a failure as no biography rather than a hard error.
 func biographyFromFields(raw sql.NullString) string {
 	if !raw.Valid {
 		return ""

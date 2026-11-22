@@ -19,10 +19,7 @@ type CategoryMerges struct{ store *store.Store }
 // NewCategoryMerges builds it over an open library store.
 func NewCategoryMerges(opened *store.Store) CategoryMerges { return CategoryMerges{store: opened} }
 
-// Merge makes every wanted item, request, collection, import session, move and follow of category from category into's,
-// and recomputes who and what each library holds. A wanted item the target already has for the same thing is folded
-// into it with its files and downloads, not doubled. It answers how many wanted items moved. Every step is repeatable,
-// so a merge that failed is finished by calling it again.
+// Merge moves every wanted item, request, collection, session, move and follow from one category to another and recomputes counts; duplicates fold into the target's item, and a failed merge is finished by calling it again.
 func (m CategoryMerges) Merge(ctx context.Context, from, into int64) (int64, error) {
 	if from == into {
 		return 0, fmt.Errorf("library: a library cannot be merged into itself")

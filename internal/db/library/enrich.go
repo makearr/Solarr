@@ -199,22 +199,10 @@ type PartExternalID struct {
 	Confidence float64
 }
 
-// WorkDateStreet is the work_date.kind this package writes a release group's
-// first-release-date under -- "street" (the industry term for when something
-// first became available), the closest of ADR-23's shared vocabulary
-// (theatrical|digital|physical|air|street|publication) to what MusicBrainz's
-// FirstReleaseDate actually means for a piece of music, which was never tied
-// to one specific format.
+// WorkDateStreet is the work_date.kind for a release group's first release date, the closest of ADR-23's vocabulary to MusicBrainz's format-independent FirstReleaseDate.
 const WorkDateStreet = "street"
 
-// RefineEdition replaces a placeholder edition's guessed fields with real ones and
-// resolves its parts, all in one transaction: an edition a concurrent scan is still
-// resolving must not see half-written enrichment. workYear and workPrimaryType, if
-// set, are written to the work only when the column is still empty (Invariant-shaped:
-// enrichment fills a gap, it never overwrites a value already there, whoever set it).
-// workReleaseDate, when non-empty, is written to work_date unconditionally (SetWorkDate's
-// own upsert contract) -- there is no manual-override UI for it yet, so "the last
-// provider to enrich this work" is the only source there is to protect against.
+// RefineEdition replaces a placeholder edition's guesses and resolves its parts in one transaction, so a concurrent scan never sees half-written enrichment; workYear and workPrimaryType fill empty columns only, while workReleaseDate is upserted (no manual override exists yet).
 func (i Identity) RefineEdition(
 	ctx context.Context, at int64, editionID, workID int64, workYear *int64, workReleaseDate, workPrimaryType string,
 	refinement EditionRefinement, parts []PartIdentity,
@@ -335,10 +323,7 @@ type EditionlessWork struct {
 	ReleaseGroupMBID string
 }
 
-// EditionlessWorks returns up to pageSize works after afterWorkID with a
-// release-group id, no edition and no credit yet. Enrichment used to walk
-// placeholder editions only, so these never gained an artist, genres or a
-// description (found 2026-09-17).
+// EditionlessWorks returns works after afterWorkID with a release-group id, no edition and no credit, which placeholder-edition enrichment never reached.
 func (i Identity) EditionlessWorks(ctx context.Context, afterWorkID, pageSize int64) ([]EditionlessWork, error) {
 	rows, err := librarydb.New(i.store.Read()).ListEditionlessWorks(ctx,
 		librarydb.ListEditionlessWorksParams{AfterID: afterWorkID, PageSize: pageSize})
@@ -361,12 +346,7 @@ func (i Identity) EditionWork(ctx context.Context, editionID int64) (int64, erro
 	return edition.WorkID, nil
 }
 
-// SetWorkDescription writes a work's free-text description, unconditionally
-// (unlike the year in RefineEdition, nothing else writes this column yet, so
-// there is no earlier value to protect). A separate method, not folded into
-// RefineEdition: the description is work-level, sourced independently
-// (Wikidata, not the release group's own fields), and not every enrichment
-// pass has one to write.
+// SetWorkDescription writes the description unconditionally, as nothing else writes it; separate from RefineEdition because it is work-level and sourced from Wikidata.
 func (i Identity) SetWorkDescription(ctx context.Context, at, workID int64, description string) error {
 	err := i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		return librarydb.New(tx).SetWorkDescription(ctx, librarydb.SetWorkDescriptionParams{

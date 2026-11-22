@@ -10,17 +10,10 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-// probeCoverageScope is the counter scope probing reconciles into -- a single
-// library-wide figure rather than per-category, since a media_attributes row
-// carries no category of its own (unlike CategoryCounters' per-category
-// "works"/"files", which read from work_root_folder).
+// probeCoverageScope is one library-wide counter scope, since a media_attributes row carries no category.
 const probeCoverageScope = "library"
 
-// ProbeCoverage recomputes how many files have a measured attribute row
-// (ADR-39) against how many exist at all, the same drift-and-repair shape
-// CategoryCounters already uses for "works"/"files" -- periodic recompute is
-// the design here too, not a fallback for a write path that forgot to update
-// a counter inline.
+// ProbeCoverage recomputes files with a measured attribute row against all files, drift-and-repair like CategoryCounters; periodic recompute is the design.
 type ProbeCoverage struct {
 	store *store.Store
 	clock clock.Clock

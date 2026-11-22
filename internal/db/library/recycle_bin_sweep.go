@@ -44,11 +44,7 @@ type RecycleBinSweepResult struct {
 	Errors     []error
 }
 
-// Sweep purges every entry retention no longer allows: past its own
-// expires_at first, then -- if a global byte budget is still exceeded --
-// the oldest remaining entries regardless of root, then -- per root, if a
-// percentage-of-root budget is given -- the oldest entries in whichever
-// roots are over it. Each guard runs only when configured (non-zero).
+// Sweep purges entries past expires_at, then the oldest across roots if the global byte budget is exceeded, then the oldest per root over a percentage budget; each guard runs only when configured.
 func (q RecycleBin) Sweep(
 	ctx context.Context, cfg RecycleBinConfig, capacity RootCapacity, rootFolderIDs []int64,
 ) (RecycleBinSweepResult, error) {

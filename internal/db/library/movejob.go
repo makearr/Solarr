@@ -22,11 +22,7 @@ const (
 	MoveJobFailed    = "FAILED"
 )
 
-// Move item states (move_item.state) -- ADR-51's own Apply algorithm, one
-// state per step: PENDING before anything runs, COPIED once the bytes are
-// written (same-filesystem rename(2) skips straight to VERIFIED, since it
-// has no separate copy step), VERIFIED once size and hash match, DONE once
-// library_path is repointed and the source is unlinked.
+// Move item states (move_item.state) follow ADR-51's Apply: PENDING, COPIED once bytes are written (same-filesystem rename skips to VERIFIED), VERIFIED when size and hash match, DONE once library_path is repointed and the source unlinked.
 const (
 	MoveItemPending  = "PENDING"
 	MoveItemVerified = "VERIFIED"
@@ -34,10 +30,7 @@ const (
 	MoveItemFailed   = "FAILED"
 )
 
-// MoveJobs is ADR-51's own persistence: one row per move operation, one row
-// per file within it. internal/moving/mover.Plan is pure and in-memory (ADR-23,
-// the same separation internal/importing/inspect keeps); this is where a caller
-// persists a plan once accepted, so a restart has something to resume.
+// MoveJobs is ADR-51's persistence: a row per move and per file, where a caller stores an accepted plan (mover.Plan is in-memory, ADR-23) so a restart can resume.
 type MoveJobs struct{ store *store.Store }
 
 // NewMoveJobs builds it over an open library store.
@@ -199,10 +192,7 @@ func (m MoveJobs) SetRunning(ctx context.Context, jobID int64) error {
 	return nil
 }
 
-// NextPendingItem answers the next item Apply should work on -- ordered by
-// media_object_id, so a resumed job continues deterministically rather than
-// racing its own restart over which item comes next. sql.ErrNoRows means
-// every item has reached a terminal state (DONE or FAILED).
+// NextPendingItem answers the next item for Apply, ordered by media_object_id so a resume is deterministic; sql.ErrNoRows means every item is DONE or FAILED.
 func (m MoveJobs) NextPendingItem(ctx context.Context, jobID int64) (Item, error) {
 	row, err := librarydb.New(m.store.Read()).NextPendingMoveItem(ctx, jobID)
 	if err != nil {
@@ -211,10 +201,7 @@ func (m MoveJobs) NextPendingItem(ctx context.Context, jobID int64) (Item, error
 	return itemFromRow(row), nil
 }
 
-// SetItemState records one item's own progress and recomputes the job's
-// running totals -- the same drift-and-repair shape
-// RecomputeImportSessionCounts already uses, rather than an incremented
-// counter that can drift from the rows it is meant to summarise.
+// SetItemState records one item's progress and recomputes the job totals (drift-and-repair) rather than incrementing a counter that can drift.
 func (m MoveJobs) SetItemState(ctx context.Context, jobID, mediaObjectID int64, state, errMsg string) error {
 	err := m.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)

@@ -23,10 +23,7 @@ import (
 // unlike the full-file content hash.
 const quickHashSampleBytes = 65536
 
-// QuickHash is media_object.quick_hash: size plus a head and tail sample. It is not a
-// content hash -- two files differing only in the middle would collide -- which is the
-// point: it is cheap identity, not proof, and a hash collision only costs a wasted
-// dedupe lookup rather than a wrong one (size is checked too).
+// QuickHash is media_object.quick_hash: size plus head and tail samples; cheap identity, not proof, so a collision only wastes a dedupe lookup (size is checked too).
 func QuickHash(fsys fsx.FS, absolutePath string, size int64) (string, error) {
 	file, err := fsys.Open(absolutePath)
 	if err != nil {
@@ -100,11 +97,7 @@ type Physical struct{ store *store.Store }
 // NewPhysical builds it over an open library store.
 func NewPhysical(opened *store.Store) Physical { return Physical{store: opened} }
 
-// RegisteredFile is one file RegisterBatch recorded: the media_object it belongs to
-// (new or, per ADR-11's quick-hash dedupe, an existing one this call merged into) and
-// the library_path row this specific call touched. A caller that must know which path
-// was its own -- ImportRevert's own 4.22 fix -- needs both, since two callers can share
-// a MediaObjectID while never sharing a LibraryPathID.
+// RegisteredFile is one file RegisterBatch recorded: its media_object (possibly merged by ADR-11 dedupe) and the library_path this call touched; callers needing their own path need both, since paths are never shared.
 type RegisteredFile struct {
 	MediaObjectID int64
 	LibraryPathID int64
@@ -313,10 +306,7 @@ type UnmeasuredFile struct {
 	RelPath      string
 }
 
-// ListUnmeasured pages through every media_object with no measured_attributes_id
-// yet, oldest id first -- the same resumable-by-cursor shape ListUnfingerprinted
-// already uses (ADR-35), so a file that fails its probe this run does not block
-// the cursor from reaching what comes after it.
+// ListUnmeasured pages media_object rows with no measured_attributes_id, oldest first, resumable by cursor (ADR-35) so a failing probe does not block later files.
 func (p Physical) ListUnmeasured(ctx context.Context, afterID, pageSize, now int64) ([]UnmeasuredFile, error) {
 	var files []UnmeasuredFile
 	for int64(len(files)) < pageSize {
@@ -548,11 +538,7 @@ type FileOnRoot struct {
 // itself walks through in one call.
 const drainPageSize = 1000
 
-// PathsForRoot returns every real file on a root folder, size included --
-// ADR-51's own drain needs the whole list at once to group and place it,
-// unlike ListUnmeasured's own per-page caller; paging internally keeps any
-// one query bounded (ADR-22) while still handing the caller a complete
-// answer.
+// PathsForRoot returns every file on a root with sizes for ADR-51's drain, paging internally to keep each query bounded (ADR-22).
 func (p Physical) PathsForRoot(ctx context.Context, rootFolderID int64) ([]FileOnRoot, error) {
 	var files []FileOnRoot
 	seen := map[int64]bool{}
@@ -597,10 +583,7 @@ func (p Physical) PathsForWorkOnRoot(ctx context.Context, rootFolderID, workID i
 	return files, nil
 }
 
-// Exists reports whether a media_object id is real -- an API layer's own
-// existence check before an action like RemoveAndBlock, which does not
-// itself fail on an unknown id (a Reopen-only or Block-only request simply
-// finds nothing to do).
+// Exists reports whether a media_object id is real, for the API layer before actions like RemoveAndBlock that do not fail on unknown ids.
 func (p Physical) Exists(ctx context.Context, mediaObjectID int64) (bool, error) {
 	_, err := librarydb.New(p.store.Read()).GetMediaObject(ctx, mediaObjectID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -621,11 +604,7 @@ func (p Physical) ObjectSize(ctx context.Context, mediaObjectID int64) (int64, e
 	return object.SizeBytes, nil
 }
 
-// PathsForObject answers every library_path row for one media_object,
-// primary first -- ADR-11 cross-entry hardlinking means one set of bytes can
-// have more than one path, which a caller removing a file everywhere those
-// bytes exist (ADR-53's own "remove and block") needs to know about rather
-// than assuming a single location.
+// PathsForObject answers every library_path of an object, primary first, since ADR-11 hardlinking gives one set of bytes several paths and removal (ADR-53) must reach all.
 func (p Physical) PathsForObject(ctx context.Context, mediaObjectID int64) ([]librarydb.LibraryPath, error) {
 	rows, err := librarydb.New(p.store.Read()).ListPathsForObject(ctx, mediaObjectID)
 	if err != nil {
@@ -672,10 +651,7 @@ func sqliteUniqueViolation(err error) bool {
 	return errors.As(err, &coded) && (coded.Code() == sqliteConstraintUnique || coded.Code() == sqliteConstraintPrimaryKey)
 }
 
-// Relocate is ADR-51's own RECORD step: media_object never changes
-// (Invariant 70), only where it lives. Matched by the old
-// (root_folder_id, rel_path) pair, which is exactly what a PlannedMove
-// already carries -- no lookup needed before the update.
+// Relocate is ADR-51's RECORD step: media_object never changes (Invariant 70), only its location, matched by the old (root_folder_id, rel_path) a PlannedMove carries.
 func (p Physical) Relocate(ctx context.Context, oldRootFolderID int64, oldRelPath string, newRootFolderID int64, newRelPath string) error {
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		if err := librarydb.New(tx).DeleteStaleDestinationPath(ctx, librarydb.DeleteStaleDestinationPathParams{
@@ -717,12 +693,7 @@ func (p Physical) Relocate(ctx context.Context, oldRootFolderID int64, oldRelPat
 	return nil
 }
 
-// DeleteObject removes a media_object outright, cascading to every
-// library_path and desired_item_file row that referenced it. Unlike
-// MarkMissing (section 10.4's "a vanished path is MISSING, not deleted,
-// until the root is confirmed online"), this is for a caller that already
-// knows, with certainty, that the bytes are gone -- a deliberate recycle bin,
-// not a scan's own uncertainty about a path it has not looked at again yet.
+// DeleteObject removes a media_object, cascading to its paths and coverage, for callers certain the bytes are gone; MarkMissing covers a scan's uncertainty (section 10.4).
 func (p Physical) DeleteObject(ctx context.Context, mediaObjectID int64) error {
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		return librarydb.New(tx).DeleteMediaObject(ctx, mediaObjectID)
@@ -765,10 +736,7 @@ func (p Physical) existingChunk(ctx context.Context, chunk []int64, found map[in
 	return rows.Err()
 }
 
-// DeleteLibraryPathRow removes exactly one library_path row, leaving its media_object
-// and every other path referencing it untouched -- the half of ADR-11 case C DeleteObject
-// cannot give a caller that must remove only its own copy of shared bytes (4.22's own
-// linking audit; see ImportRevert.recycleObject).
+// DeleteLibraryPathRow removes one library_path row and leaves the object and other paths, for removing only one's own copy of shared bytes (4.22; ImportRevert.recycleObject).
 func (p Physical) DeleteLibraryPathRow(ctx context.Context, libraryPathID int64) error {
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		return librarydb.New(tx).DeleteLibraryPath(ctx, libraryPathID)
@@ -798,10 +766,7 @@ func (p Physical) ClaimedAttributesFor(ctx context.Context, mediaObjectID int64)
 	return attributeClaimFromRow(row), true, nil
 }
 
-// MeasuredScalars are the per-file facts media_object stores directly rather
-// than through the interned media_attributes row -- unique per file, so
-// interning them would give one attributes row per object (media_object's own
-// comment on why).
+// MeasuredScalars are per-file facts stored on media_object, not interned, since they are unique per file.
 type MeasuredScalars struct {
 	DurationMs                                 int64
 	Width, Height                              int
@@ -810,12 +775,7 @@ type MeasuredScalars struct {
 	ProbeVersion int64
 }
 
-// RecordMeasured writes ADR-39's measured half for one file: interning claim
-// into media_attributes and pointing media_object at it, in one transaction so
-// a crash between the two never leaves media_object referencing a row that was
-// never actually committed. mismatchJSON is empty when there is no claimed
-// side to compare against -- a file whose scan predates RecordClaimed
-// (todo 4.2), or whose release name claimed nothing at all.
+// RecordMeasured writes ADR-39's measured half: intern into media_attributes and point media_object at it in one transaction; mismatchJSON is empty without a claimed side.
 func (p Physical) RecordMeasured(
 	ctx context.Context, mediaObjectID int64, claim AttributeClaim, scalars MeasuredScalars,
 	mismatchJSON string, verifiedAt int64,
@@ -849,12 +809,7 @@ func (p Physical) RecordMeasured(
 	})
 }
 
-// RecordClaimed writes ADR-39's claimed half for one file (todo 4.2):
-// interning claim into media_attributes and pointing media_object at it, the
-// same intern-then-point shape RecordMeasured uses. Unlike RecordMeasured,
-// there are no scalar fields and no mismatch to record -- those only mean
-// something once a measured claim exists to compare against, and claim here
-// comes from the release name, not the file's own bytes.
+// RecordClaimed writes ADR-39's claimed half (todo 4.2) by the same intern-then-point shape, with no scalars or mismatch since those need a measured side.
 func (p Physical) RecordClaimed(ctx context.Context, mediaObjectID int64, claim AttributeClaim) error {
 	return p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
@@ -869,10 +824,7 @@ func (p Physical) RecordClaimed(ctx context.Context, mediaObjectID int64, claim 
 	})
 }
 
-// MarkMissing marks every library_path in rootFolderID not observed since before as
-// missing (section 10.4). Callers must only pass before from a completed *full*
-// sweep's start time -- an incremental sweep can skip whole directories, so a path it
-// never looked at is not evidence of absence.
+// MarkMissing marks library_path rows in a root not observed since before as missing (section 10.4); only a completed full sweep's start time is valid, as incremental sweeps skip directories.
 func (p Physical) MarkMissing(ctx context.Context, rootFolderID int64, before time.Time) (int, error) {
 	beforeUnix := before.Unix()
 	if err := p.noteMissingRecount(ctx, rootFolderID, beforeUnix); err != nil {

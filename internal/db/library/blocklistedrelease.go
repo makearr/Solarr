@@ -28,10 +28,7 @@ const (
 	BlocklistManual BlocklistReason = "MANUAL"
 )
 
-// BlocklistSource says who created the entry -- an automatic one is a fact
-// about the download, never a judgement (section 10.11); only a user source
-// is ever eligible to feed ADR-45 reputation, and even then only through
-// blocked_content's own reason=FAKE, not through this table at all.
+// BlocklistSource says who created the entry: an automatic one is a fact, never a judgement (section 10.11), and only a user source can feed ADR-45 reputation, via blocked_content reason=FAKE.
 type BlocklistSource string
 
 // The two sources blocklisted_release.source accepts.

@@ -44,10 +44,7 @@ func (s Spec) withDefaults() Spec {
 	return s
 }
 
-// FileName identifies one corpus, so two specs never share a cached database. The schema
-// is in the name as well as the generator: a migration changes the plans a benchmark
-// measures, and a cached file from before it would answer for the new one without saying
-// so.
+// FileName identifies one corpus so specs never share a cached database; the schema is in the name because a migration changes the plans a benchmark measures.
 func (s Spec) FileName() (string, error) {
 	s = s.withDefaults()
 	schema, err := schemaFingerprint()

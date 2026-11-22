@@ -6,11 +6,7 @@ import (
 	"strings"
 )
 
-// bitrateTolerance and sampleRateTolerance are fractional, not absolute: a
-// claimed "320" against a measured 315000 bps is real-world encoder rounding,
-// not a mislabelled release. ADR-39 asks for "a tolerance, not equality"
-// without naming one; these are a deliberate, adjustable starting point, not
-// a value derived from any external source.
+// bitrateTolerance and sampleRateTolerance are fractional because encoder rounding (320 claimed, 315000 bps measured) is not a mislabel; ADR-39 names no value, so these are adjustable starting points.
 const (
 	bitrateTolerance    = 0.10
 	sampleRateTolerance = 0.01
@@ -24,11 +20,7 @@ type AttributeMismatch struct {
 	Measured string `json:"measured"`
 }
 
-// CompareAttributes finds every claimed field that disagrees with what was
-// measured, beyond the tolerances above. Only fields with fixed intended
-// values are compared (a codec claim, a lossless claim, a stated bitrate or
-// sample rate) -- a field neither side claimed is not a disagreement, just
-// missing information.
+// CompareAttributes finds claimed fields that disagree with measurement beyond tolerance; only fixed-value fields compare, and a field neither side claimed is missing information, not a disagreement.
 func CompareAttributes(claimed, measured AttributeClaim) map[string]AttributeMismatch {
 	mismatches := map[string]AttributeMismatch{}
 
@@ -55,10 +47,7 @@ func CompareAttributes(claimed, measured AttributeClaim) map[string]AttributeMis
 	return mismatches
 }
 
-// MismatchJSON encodes CompareAttributes' result the way
-// media_object.attribute_mismatch_json expects it -- empty for no mismatch,
-// never the literal string "{}", so a caller can tell "compared, agreed" from
-// "never compared" by whether the column is NULL.
+// MismatchJSON encodes the result for media_object.attribute_mismatch_json: empty for no mismatch, never "{}", so NULL still means never compared.
 func MismatchJSON(mismatches map[string]AttributeMismatch) string {
 	if len(mismatches) == 0 {
 		return ""

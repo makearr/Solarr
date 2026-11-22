@@ -12,10 +12,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
-// Acquisition is section 12's own provenance record: a candidate handed to
-// a download client, denormalised (CandidateGUID/CandidateTitle/SearchTerms)
-// because the candidate it came from can expire (section 10.1) while this
-// row must outlive it.
+// Acquisition is section 12's provenance record of a candidate handed to a client, denormalised because the candidate can expire (section 10.1) while this row must outlive it.
 type Acquisition struct {
 	ID                int64
 	DesiredItemID     *int64
@@ -67,11 +64,7 @@ type NewAcquisition struct {
 	Parts []string
 }
 
-// ErrAcquisitionAlreadyInFlight reports a desired item that already has a
-// non-terminal acquisition -- Invariant 15's own "at most one in-flight
-// acquisition per desired item", checked here first so a caller gets a
-// clean, mapped refusal rather than the acquisition_one_inflight unique
-// index's own raw constraint error.
+// ErrAcquisitionAlreadyInFlight is Invariant 15's one in-flight acquisition per desired item, checked first for a clean refusal instead of the unique index's raw error.
 var ErrAcquisitionAlreadyInFlight = errors.New("library: desired item already has an acquisition in flight")
 
 // Acquisitions is section 5.4's own repository over the acquisition table,

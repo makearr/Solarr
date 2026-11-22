@@ -38,10 +38,7 @@ const (
 // re-running.
 var ErrAlreadyRestored = errors.New("recycle bin: entry already restored or does not exist")
 
-// ErrRestoreConflict reports that the original path is occupied by something
-// else now -- something has replaced whatever was recycled, and restoring
-// would silently overwrite it (section 10.8: "surfaces the conflict rather
-// than overwriting").
+// ErrRestoreConflict is the original path is occupied now, and restoring would overwrite it (section 10.8: surface the conflict).
 var ErrRestoreConflict = errors.New("recycle bin: original path already exists")
 
 // Entry is one recycle bin row.
@@ -83,16 +80,7 @@ type PutRequest struct {
 	ReplacedByObjectID *int64
 }
 
-// RecycleBin is section 10.8: nothing is deleted directly. Every destructive
-// operation moves a file into a recycle bin directory first -- same
-// filesystem as its source, time- and space-bounded, restorable with its
-// provenance intact -- and only a later Sweep (or a manual Purge) removes
-// the bytes for good.
-//
-// It does not read settings.db itself (ADR-25's own database split, and the
-// same separation internal/moving/placement keeps from internal/db/settings) -- a
-// caller resolves a root folder's path and the retention policy in force
-// and passes both in.
+// RecycleBin is section 10.8: nothing is deleted directly; files move into a same-filesystem, time- and space-bounded bin, restorable with provenance, until Sweep or Purge. It does not read settings.db (ADR-25): callers pass the root path and retention policy.
 type RecycleBin struct {
 	store *store.Store
 	fsys  fsx.FS

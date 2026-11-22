@@ -11,11 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
-// Subscription is one subject's discography-monitoring rule (ADR-32): "artist
-// = person.monitored + subscription, not a desired item -- a rule that
-// generates them" (section 19.6). FiltersJSON stays opaque here -- which
-// vocabulary it filters on is a media type's own concern (ADR-23), decoded by
-// whatever expands it (internal/media/music's SubscriptionFilters is the first).
+// Subscription is one subject's discography-monitoring rule (ADR-32, section 19.6); FiltersJSON stays opaque because its vocabulary is the media type's (ADR-23).
 type Subscription struct {
 	ID                   int64
 	SubjectType          string
@@ -79,11 +75,7 @@ func subscriptionFrom(row librarydb.Subscription) Subscription {
 	}
 }
 
-// Find answers the subscription for one subject and user, without creating
-// one -- the same "did this call create it or only match it" question
-// People.Subscribe's own idempotent return value cannot answer on its own,
-// needed by a caller that must record which is which (todo 4.13's
-// ArrImportRevert).
+// Find answers the subscription for a subject and user without creating one, for callers recording created versus matched (todo 4.13).
 func (s Subscriptions) Find(ctx context.Context, subjectType string, subjectID, userID, categoryID int64) (int64, bool, error) {
 	row, err := librarydb.New(s.store.Read()).GetSubscriptionForSubject(ctx, librarydb.GetSubscriptionForSubjectParams{
 		SubjectType: subjectType, SubjectID: subjectID, UserID: sql.NullInt64{Int64: userID, Valid: userID != 0},
@@ -98,10 +90,7 @@ func (s Subscriptions) Find(ctx context.Context, subjectType string, subjectID, 
 	return row.ID, true, nil
 }
 
-// Delete removes a subscription outright. Revert-only use so far (todo
-// 4.13's ArrImportRevert): must run before People.Delete for the same
-// person, since subscription.subject_id carries no FK/cascade of its own to
-// clean up after a deleted person.
+// Delete removes a subscription; ArrImportRevert runs it before People.Delete, as subscription.subject_id has no FK or cascade.
 func (s Subscriptions) Delete(ctx context.Context, subscriptionID int64) error {
 	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		return librarydb.New(tx).DeleteSubscription(ctx, subscriptionID)
@@ -112,10 +101,7 @@ func (s Subscriptions) Delete(ctx context.Context, subscriptionID int64) error {
 	return nil
 }
 
-// ExternalIDFor returns a person's external id for one provider (e.g.
-// "musicbrainz:artist"), when one is recorded -- what subscription.expand
-// needs to go from a subscribed person back to the id their discography is
-// browsed by.
+// ExternalIDFor returns a person's external id for one provider, which subscription.expand needs to browse their discography.
 func (p People) ExternalIDFor(ctx context.Context, personID int64, provider string) (string, bool, error) {
 	rows, err := librarydb.New(p.store.Read()).ListPersonExternalIDs(ctx, personID)
 	if err != nil {

@@ -14,11 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
-// AttributeClaim mirrors media_attributes' full column set (ADR-39: "release
-// name = claims, ffprobe = facts. Both stored"). Both halves intern through the
-// same shape, since they are the same table -- a caller sets only the fields it
-// actually knows about; everything else stays zero, which Intern stores as NULL
-// rather than a false claim of "known and empty".
+// AttributeClaim mirrors media_attributes' columns (ADR-39), claims and facts alike; unset fields stay zero and Intern stores NULL, not a false "known and empty".
 type AttributeClaim struct {
 	Resolution, Source, VideoCodec, HDR string
 	AudioCodec, AudioChannels           string
@@ -39,11 +35,7 @@ type AttributeClaim struct {
 	CRF float64
 }
 
-// Hash is media_attributes.attr_hash: a deterministic digest of every field in
-// a fixed order, so two files claiming or measuring an identical set intern to
-// the same row (section 5.2's interning, proven at the 500k fixture by keeping
-// distinct rows in the thousands). Field order must never change once any row
-// exists, or every existing hash stops matching what re-deriving it produces.
+// Hash is media_attributes.attr_hash, a digest of every field in fixed order so identical sets intern to one row (section 5.2); the field order must never change once rows exist.
 func (c AttributeClaim) Hash() string {
 	sum := sha256.New()
 	fields := []string{
@@ -117,10 +109,7 @@ func internParams(c AttributeClaim) librarydb.InternAttributesParams {
 	}
 }
 
-// attributeClaimFromRow reverses internParams: an interned media_attributes
-// row back into the same Go shape a caller built it from, so a claimed row
-// looked up by id can feed CompareAttributes exactly like the value that was
-// interned to begin with.
+// attributeClaimFromRow reverses internParams so a looked-up row feeds CompareAttributes like the interned value.
 func attributeClaimFromRow(row librarydb.MediaAttribute) AttributeClaim {
 	return AttributeClaim{
 		Resolution: row.Resolution.String, Source: row.Source.String,

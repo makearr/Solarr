@@ -6,10 +6,7 @@ import (
 	"fmt"
 )
 
-// ErrArrImportNotDone means Revert was asked to undo a run that is not in a
-// state a revert makes sense for (still RUNNING, or already REVERTED) --
-// the same "refuse rather than guess" rule library.ImportRevert already
-// applies to a session's own state.
+// ErrArrImportNotDone is the run is still RUNNING or already REVERTED, so a revert refuses rather than guesses.
 var ErrArrImportNotDone = errors.New("library: arr import is not in a revertible state")
 
 // ArrImportRevertResult is what one revert actually undid.
@@ -17,32 +14,11 @@ type ArrImportRevertResult struct {
 	WorksDeleted         int
 	SubscriptionsDeleted int
 	PeopleDeleted        int
-	// Errors is every per-item failure a best-effort revert tolerated rather
-	// than aborting on -- the same shape ManualCommitter.PlaceUnplaced
-	// already returns for a bulk, best-effort operation. A work still
-	// referenced elsewhere, or a person still credited or still named as
-	// some untouched work's primary artist, is the expected shape of such a
-	// failure -- reported, not silently absorbed.
+	// Errors lists per-item failures a best-effort revert tolerated, such as a work still referenced elsewhere or a person still credited; reported, not absorbed.
 	Errors []error
 }
 
-// ArrImportRevert undoes one *Arr import run: only rows the run's own
-// arr_import_item records as *_created, never one it only matched -- the
-// same distinction library.ImportRevert already draws between "this
-// session's own work_created" and a work it merely resolved to. Composes
-// ArrImports, Identity, People and Subscriptions the same way ImportRevert
-// composes its own four stores, aimed at a run instead of a session.
-//
-// Deletion order matters: every work this run created is deleted first (so
-// any primary-artist credit it set on a person about to be deleted no
-// longer references that person, clearing the one foreign key --
-// work.lead_person_id -- that would otherwise block it), then each
-// person's own subscription (subscription.subject_id carries no FK of its
-// own to clean up after), then the person itself. A person still credited
-// or still primary-artist on a work this run did not create (a rare mixed
-// case: a new artist credited onto an album this run only matched) is a
-// real, tolerated per-item failure, not attempted to be untangled further
-// here.
+// ArrImportRevert undoes one *Arr run, touching only rows its arr_import_item records as *_created. Order matters: created works first (clearing work.lead_person_id), then each person's subscription, then the person; a person still credited elsewhere is a tolerated per-item failure.
 type ArrImportRevert struct {
 	imports       ArrImports
 	identity      Identity
@@ -55,11 +31,7 @@ func NewArrImportRevert(imports ArrImports, identity Identity, people People, su
 	return ArrImportRevert{imports: imports, identity: identity, people: people, subscriptions: subscriptions}
 }
 
-// Revert undoes importID, best-effort per item, and marks the run REVERTED
-// once done regardless of whether every item's own undo succeeded -- a
-// partial revert is still a revert, and re-running it would only retry
-// exactly the items still left (each undo is naturally idempotent: deleting
-// something already gone is the only way it could be asked for twice).
+// Revert undoes importID best-effort per item and marks the run REVERTED regardless; a re-run only retries what is left, as each undo is idempotent.
 func (r ArrImportRevert) Revert(ctx context.Context, importID int64) (ArrImportRevertResult, error) {
 	run, err := r.imports.Get(ctx, importID)
 	if err != nil {

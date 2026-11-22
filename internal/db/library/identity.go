@@ -21,12 +21,7 @@ type WorkIdentity struct {
 	MediaType      string
 	CanonicalTitle string
 	SortTitle      string
-	// Subtype is MusicBrainz's own release-group vocabulary (Album, EP,
-	// Single, Broadcast, Other, ...), stored as-is when the caller already
-	// knows it. Empty when it doesn't -- findOrCreateWork leaves the column
-	// NULL rather than write "", so a later enrichment pass can still fill
-	// it in (UpdateWorkSubtypeIfNull's own "fills a gap, never
-	// overwrites" rule, work.year's own precedent).
+	// Subtype is MusicBrainz's release-group vocabulary stored as given; empty stays NULL so enrichment can fill it later (fills a gap, never overwrites).
 	Subtype string
 }
 
@@ -35,10 +30,7 @@ type WorkIdentity struct {
 type WorkLink struct {
 	Provider   string
 	ExternalID string
-	// MediaObjectID is the file that resolved this link, for a caller that
-	// wants to know which work each of its files ended up under (ResolveWorks'
-	// returned ids line up with links positionally). Zero means the caller has
-	// no single file to attribute this link to.
+	// MediaObjectID is the file that resolved this link, so callers can pair files with ResolveWorks' positional ids; zero means no single file.
 	MediaObjectID int64
 	// Confidence is the provider's own confidence in the (Provider, ExternalID)-to-work
 	// mapping (ADR-8), not the chain's confidence in having read it correctly.
@@ -47,11 +39,7 @@ type WorkLink struct {
 	// Edition is optional: when set, an edition is resolved (or created) under the
 	// work this link resolves to, in the same transaction.
 	Edition *EditionLink
-	// RootFolderID records which root folder this link's identifying file came
-	// from (work_root_folder) -- on-disk presence, one half of ADR-27
-	// visibility (WorkFilter.RootFolderIDs' own doc comment has the other
-	// half, desired_item.category_id). Zero means the caller has no root
-	// folder to report.
+	// RootFolderID is the root the identifying file came from (work_root_folder), the on-disk half of ADR-27 visibility; zero means none.
 	RootFolderID int64
 }
 
@@ -79,12 +67,7 @@ type Identity struct{ store *store.Store }
 // NewIdentity builds it over an open library store.
 func NewIdentity(opened *store.Store) Identity { return Identity{store: opened} }
 
-// ResolveWorks finds or creates the work behind each link's (Provider, ExternalID),
-// linking it when new, all in one transaction (Invariant 2). A link naming a pair
-// already resolved earlier in the same batch reuses that work rather than creating a
-// second one: writes are visible to reads within the same transaction. The
-// returned ids line up with links, positionally, so a caller that also carries
-// each link's MediaObjectID can pair a file back to the work it resolved to.
+// ResolveWorks finds or creates the work behind each link's (Provider, ExternalID) in one transaction (Invariant 2); a pair repeated in the batch reuses its work, and ids align with links positionally.
 func (i Identity) ResolveWorks(ctx context.Context, at time.Time, links []WorkLink) ([]int64, error) {
 	if len(links) == 0 {
 		return nil, nil
@@ -110,13 +93,7 @@ func (i Identity) ResolveWorks(ctx context.Context, at time.Time, links []WorkLi
 	return workIDs, nil
 }
 
-// WorkResolution is one link's ResolveWorksDetailed result: the ids
-// ResolveWorks itself already returns, plus whether each row was created new
-// by this call or matched something that already existed. A caller with
-// nothing to undo (scan's own consumer.go) has no use for the distinction;
-// one that must later revert only "the rows the session created" (ADR-48)
-// does, so it is a separate, additive method rather than a breaking change
-// to ResolveWorks' signature.
+// WorkResolution adds whether each row was created or matched, which a revert needs (ADR-48); a separate method so ResolveWorks' signature stays.
 type WorkResolution struct {
 	WorkID         int64
 	WorkCreated    bool
@@ -124,12 +101,7 @@ type WorkResolution struct {
 	EditionCreated bool
 }
 
-// ResolveWorksDetailed is ResolveWorks plus the created/matched distinction,
-// for a caller that must know precisely which rows it is responsible for
-// (import commit's own revert bookkeeping). Shares the same per-link
-// resolution as ResolveWorks -- a link naming a pair already resolved
-// earlier in the same batch still reuses that work rather than creating a
-// second one.
+// ResolveWorksDetailed is ResolveWorks plus the created/matched distinction for import commit's revert bookkeeping, with the same per-link resolution.
 func (i Identity) ResolveWorksDetailed(ctx context.Context, at time.Time, links []WorkLink) ([]WorkResolution, error) {
 	if len(links) == 0 {
 		return nil, nil
@@ -172,14 +144,7 @@ func (i Identity) ResolveWorksDetailed(ctx context.Context, at time.Time, links 
 	return resolutions, nil
 }
 
-// DeleteWork removes a work outright, cascading to every table that
-// references it (edition, desired_item, credits, genres, alt titles,
-// work_root_folder, external ids -- every REFERENCES work(id) in the schema
-// is ON DELETE CASCADE). Import revert's own use (todo 4.9): only ever
-// called for a work CommitUnit itself created (import_unit.work_created),
-// and only after every import_unit referencing it -- created or only
-// matched -- has been cleared (ImportSessions.ClearUnitPlacement), since
-// import_unit.work_id carries no cascade of its own.
+// DeleteWork removes a work, cascading to every REFERENCES work(id) table; import revert calls it only for works CommitUnit created and only after every import_unit referencing it is cleared, since import_unit.work_id has no cascade.
 func (i Identity) DeleteWork(ctx context.Context, workID int64) error {
 	err := i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
@@ -291,10 +256,7 @@ func linkWorkFile(ctx context.Context, queries *librarydb.Queries, at time.Time,
 	return nil
 }
 
-// findOrCreateWorks resolves every link's (Provider, ExternalID) to a work: one lookup per
-// distinct key, then every new work in one multi-row INSERT and their external ids in another
-// -- per-row inserts were 81% of a scan batch, and one statement is 3.9x faster (notes 8.19).
-// A key repeated in the batch reuses its work; only its first link counts as having created it.
+// findOrCreateWorks does one lookup per distinct key then one multi-row INSERT for works and one for external ids (per-row inserts were 81% of a scan batch, notes 8.19); only a key's first link counts as creating it.
 func findOrCreateWorks(
 	ctx context.Context, tx *sql.Tx, queries *librarydb.Queries, at time.Time, links []WorkLink,
 ) (ids []int64, created []bool, err error) {

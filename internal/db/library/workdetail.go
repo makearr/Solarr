@@ -34,10 +34,7 @@ type PartDetail struct {
 	// covers it. Aligned per media_ref, the same link present_count is
 	// counted from.
 	File *PartFile
-	// Wanted is the track's own SINGLE desired_item, when one exists -- nil
-	// until someone explicitly wants this one track on its own (todo 4.4),
-	// independent of Part.Monitored (which only shrinks or grows the
-	// album's own required_count).
+	// Wanted is the track's own SINGLE desired_item, nil until someone wants this track alone (todo 4.4), independent of Part.Monitored.
 	Wanted *DesiredItemStatus
 	// Credits are the part's own: an episode's guest stars, director and writers.
 	Credits []PartCredit
@@ -106,11 +103,7 @@ type DesiredItemStatus struct {
 	AvailableFrom int64
 }
 
-// WorkDetail is a work's own fields, its editions, its parts, its credits and
-// genre tags, and every level's external ids. RootFolderIDs doubles as
-// display data (OnDisk, section 21.3) and one half of the ADR-27 visibility
-// check; CategoryIDs is the other half -- a subscription-discovered work has
-// no root folder yet but does have a desired_item.category_id.
+// WorkDetail is a work's fields, editions, parts, credits, genres and external ids; RootFolderIDs is display data (OnDisk, section 21.3) and half of ADR-27 visibility, CategoryIDs the other half.
 type WorkDetail struct {
 	Work        librarydb.Work
 	ExternalIDs []librarydb.WorkExternalID

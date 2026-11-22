@@ -19,10 +19,7 @@ type ArtworkCandidate struct {
 	MBID   string
 }
 
-// Artworks is section 21.6's persistence half: which works still need cover art,
-// and recording what was fetched. Fetching and encoding are internal/platform/artwork's
-// and a provider client's job, not this package's (ADR-23: core carries no
-// media-type or provider logic).
+// Artworks is section 21.6's persistence half: which works need cover art and what was fetched; fetching and encoding belong to platform/artwork and providers (ADR-23).
 type Artworks struct{ store *store.Store }
 
 // NewArtworks builds the wrapper.
@@ -123,11 +120,7 @@ type PersonArtworkCandidate struct {
 	ArtistMBID string
 }
 
-// PeopleNeedingArtwork returns up to pageSize credited people carrying a
-// MusicBrainz artist id and no recorded image, lowest person id first --
-// NeedingArtwork's own shape one subject over. Works have had that sweep since
-// section 21.6; people never did, so an artist first resolved before the image
-// code existed never got one (found 2026-09-13).
+// PeopleNeedingArtwork returns credited people with a MusicBrainz id and no image, lowest id first: NeedingArtwork for people, which never had that sweep.
 func (a Artworks) PeopleNeedingArtwork(ctx context.Context, afterPersonID, pageSize, absentAfter int64) ([]PersonArtworkCandidate, error) {
 	rows, err := librarydb.New(a.store.Read()).ListPeopleNeedingArtwork(ctx, librarydb.ListPeopleNeedingArtworkParams{
 		AfterID: afterPersonID, PageSize: pageSize, AbsentAfter: absentAfter,
@@ -142,13 +135,7 @@ func (a Artworks) PeopleNeedingArtwork(ctx context.Context, afterPersonID, pageS
 	return candidates, nil
 }
 
-// WorkArtwork is what a caller needs to serve a work's cover art file itself:
-// the cache key ArtworkJob wrote it under, the root folders it must check
-// the caller can see (the same ADR-27 visibility GetWorkDetail already applies,
-// reused here rather than requiring a full work-detail fetch just to serve an
-// image), and its primary artist -- the album-falls-back-to-artist-image
-// chain asked for 2026-09-11, since a work with no cover of its own still
-// answers with its own artist's when that one exists.
+// WorkArtwork is what serving a cover needs: the cache key, the roots for ADR-27 visibility without a full detail fetch, and the primary artist for the artist-image fallback.
 type WorkArtwork struct {
 	CacheKey      string
 	Found         bool
@@ -218,20 +205,13 @@ func (a Artworks) Record(
 	})
 }
 
-// PersonArtwork is what a caller needs to serve a person's own image: the
-// cache key it was written under. Unlike WorkArtwork there is no
-// RootFolderIDs to visibility-check against -- a person is a shared entity
-// with no category-scoped access of its own (ADR-54's "the entity stays
-// shared"; GetPerson itself has no such check either).
+// PersonArtwork is the cache key of a person's image; no RootFolderIDs, since a person is a shared entity (ADR-54).
 type PersonArtwork struct {
 	CacheKey string
 	Found    bool
 }
 
-// GetForPerson answers a person's recorded image, if any. Found is false
-// (not an error) both when nobody has looked yet and when a look found
-// nothing -- an empty cache_key is RecordPersonArtworkAbsent's own marker,
-// and either way there is no file to serve.
+// GetForPerson answers a person's image; Found is false both when nobody looked and when the look found nothing (empty cache_key marker).
 func (a Artworks) GetForPerson(ctx context.Context, personID int64) (PersonArtwork, error) {
 	cacheKey, err := librarydb.New(a.store.Read()).GetArtwork(ctx, librarydb.GetArtworkParams{
 		SubjectType: "person", SubjectID: personID, Kind: artworkKindCover,
@@ -248,12 +228,7 @@ func (a Artworks) GetForPerson(ctx context.Context, personID int64) (PersonArtwo
 	return PersonArtwork{CacheKey: cacheKey, Found: true}, nil
 }
 
-// RecordPersonArtworkAbsent remembers that this person was looked up and has
-// no image to fetch, as a row with an empty cache_key. Without it the
-// backfill sweep re-asks about the same lowest-id people every run and never
-// reaches the rest, since PeopleNeedingArtwork excludes only people who
-// already have a row -- and unlike a cover art miss, each retry costs a
-// MusicBrainz lookup against a 1 req/s budget shared with everything else.
+// RecordPersonArtworkAbsent stores an empty cache_key row so the backfill stops re-asking about the same people, each retry costing a rate-limited MusicBrainz lookup.
 func (a Artworks) RecordPersonArtworkAbsent(ctx context.Context, personID, checkedAt int64) error {
 	return a.RecordForPerson(ctx, personID, "", "", 0, 0, checkedAt)
 }

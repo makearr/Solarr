@@ -11,11 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-// ReconcileScope names one counter scope to keep true. Scope is the counter table's
-// own key ("library" for everything, "category:7" for one category); CategoryID
-// drives the truth query, and zero means every category. library.db does not know
-// which categories exist -- that is settings.db policy (ADR-25) -- so the caller
-// supplies the scopes to check.
+// ReconcileScope names a counter scope to keep true ("library" or "category:7"); CategoryID drives the truth query, zero meaning all, and the caller supplies scopes since categories are settings.db policy (ADR-25).
 type ReconcileScope struct {
 	Scope      string
 	CategoryID int64
@@ -31,12 +27,7 @@ type Correction struct {
 	Now    int64
 }
 
-// Reconciler recomputes counter from the library's own truth and corrects whatever
-// has drifted. Drift is inevitable: SetCounter/AdjustCounter is never the same
-// transaction as the domain write it is counting (Invariant 3 forbids holding a
-// write transaction open across unrelated work), so a crash between the two loses
-// the counter update but not the domain change. Migration 0004's comment on
-// `counter` is explicit that the repair path is therefore not optional.
+// Reconciler recomputes counters from the library's truth and corrects drift, inevitable because counter writes are not in the domain write's transaction (Invariant 3); migration 0004 makes the repair path mandatory.
 type Reconciler struct {
 	store *store.Store
 	clock clock.Clock

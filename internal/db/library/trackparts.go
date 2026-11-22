@@ -89,11 +89,7 @@ type TrackAlbumCursor struct {
 	AlbumID        int64
 }
 
-// TrackRow is one work_part with its parent album's display fields -- what
-// the Tracks level actually shows a row of. AlbumWorkID is the album's own
-// work id, not the track's (WorkPart.ID is the track's own work_part id) --
-// what a caller needs to point a track's own cover art at its album's
-// (the song-falls-back-to-album-image chain, 2026-09-11).
+// TrackRow is a work_part with its album's display fields; AlbumWorkID is the album's work id (not the track's), used for the song-falls-back-to-album-image chain.
 type TrackRow struct {
 	librarydb.WorkPart
 	AlbumWorkID int64
@@ -226,10 +222,7 @@ func (t TrackParts) matchingParts(ctx context.Context, albumID int64, narrowed s
 	return parts, rows.Err()
 }
 
-// ExplainAlbumPage returns SQLite's plan for the album-page query List runs,
-// so a test can assert the ordering actually reaches work_lead_person_sort
-// rather than sorting the whole table (documentation/sql-and-sqlc.md, the
-// same shape Works.ExplainList already gives the Albums level).
+// ExplainAlbumPage returns SQLite's plan for the album-page query so a test can assert it reaches work_lead_person_sort (documentation/sql-and-sqlc.md).
 func (t TrackParts) ExplainAlbumPage(ctx context.Context, filter TrackFilter, after TrackAlbumCursor, albumPageSize int) (string, error) {
 	query, arguments := composeAlbumPage(filter, after, albumPageSize)
 	return t.store.ExplainQueryPlan(ctx, query, arguments...)

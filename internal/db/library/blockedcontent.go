@@ -57,10 +57,7 @@ type BlockedContent struct {
 	LastHitAt    *int64
 }
 
-// NewBlock is what Create needs. At least one of OSHash/QuickHash/
-// Chromaprint/Phash must be set (ErrNoHash otherwise). ExpiresAt nil means
-// permanent -- manual blocks always are (section 10.8); only an automatic
-// entry should ever set one.
+// NewBlock needs at least one of OSHash, QuickHash, Chromaprint or Phash (ErrNoHash); nil ExpiresAt is permanent, as manual blocks always are (section 10.8).
 type NewBlock struct {
 	OSHash       string
 	QuickHash    string
@@ -87,10 +84,7 @@ func NewBlockedContentStore(opened *store.Store) BlockedContentStore {
 	return BlockedContentStore{store: opened}
 }
 
-// Create records a new block. A caller checking for existing library matches
-// first (section 10.8's own "warns when the hash already matches files in
-// the library" guard) is the compound remove-and-block action's job, not
-// this method's -- Create only ever records what it is told to.
+// Create records what it is told; warning about existing library matches (section 10.8) is the remove-and-block action's job.
 func (b BlockedContentStore) Create(ctx context.Context, req NewBlock) (BlockedContent, error) {
 	if req.OSHash == "" && req.QuickHash == "" && req.Chromaprint == "" && req.Phash == "" {
 		return BlockedContent{}, ErrNoHash
@@ -124,11 +118,7 @@ func (b BlockedContentStore) Get(ctx context.Context, id int64) (BlockedContent,
 	return blockedContentFromRow(row), nil
 }
 
-// FindByHash is the import gate's own check (section 10.3 step 3): every
-// unexpired block matching either exact hash. Empty strings match nothing --
-// a caller with no oshash yet (not probed) passes quick_hash alone rather
-// than an empty string that would otherwise compare true against a NULL
-// column via IS NOT NULL's own guard.
+// FindByHash is the import gate's check (section 10.3 step 3): unexpired blocks matching either hash; empty strings match nothing.
 func (b BlockedContentStore) FindByHash(ctx context.Context, oshash, quickHash string, now int64) ([]BlockedContent, error) {
 	rows, err := librarydb.New(b.store.Read()).FindBlockedContentByExactHash(ctx, librarydb.FindBlockedContentByExactHashParams{
 		Now: sql.NullInt64{Int64: now, Valid: true}, Oshash: nullString(oshash), QuickHash: nullString(quickHash),

@@ -40,11 +40,7 @@ type Calendar struct {
 // NewCalendar builds one over an open library store.
 func NewCalendar(opened *store.Store) Calendar { return Calendar{store: opened} }
 
-// Entries answers releases between from and to inclusive, earliest first, for
-// works this library has a reason to care about: something wants the work, or
-// an artist credited on it is monitored. Dates are compared as ISO strings,
-// which sorts correctly and lets a partial date sit in the window it belongs
-// to without inventing a day for it.
+// Entries answers releases from..to inclusive, earliest first, for works something wants or whose artist is monitored; ISO string comparison keeps partial dates in their window.
 func (c Calendar) Entries(
 	ctx context.Context, from, to string, categoryIDs []int64, pageSize int,
 ) ([]CalendarEntry, error) {

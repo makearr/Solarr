@@ -49,10 +49,7 @@ type ArrImportRun struct {
 	ArrImportCounts
 }
 
-// NewArrImportItem is one entity a run touched, ready to record -- the
-// *_created flags are ArrImportRevert's own contract: only a row this run
-// itself created may be undone, the same "created vs only matched" shape
-// library.ImportRevert already uses for import_unit.work_created.
+// NewArrImportItem is one entity a run touched; the *_created flags let a revert undo only rows this run created, as import_unit.work_created does.
 type NewArrImportItem struct {
 	Kind               string
 	SourceID           string
@@ -113,11 +110,7 @@ func (a ArrImports) Start(ctx context.Context, instanceID int64, app string, sta
 	return id, nil
 }
 
-// AddItem records one entity a run touched. One write per item rather than
-// a batch: a Lidarr library is small enough (thousands of albums at most,
-// never the 500k-file scale WALK/GROUP is built for) that per-item recording
-// keeps partial progress visible and survivable, the same tolerance
-// commitCluster's own per-unit loop already has for a bad file mid-batch.
+// AddItem records one entity per write: *Arr libraries are small, and per-item recording keeps partial progress visible and survivable.
 func (a ArrImports) AddItem(ctx context.Context, importID int64, item NewArrImportItem, at int64) (int64, error) {
 	var id int64
 	err := a.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {

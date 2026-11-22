@@ -10,10 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/importing/pack"
 )
 
-// Pack kinds and detection sources (pack.kind/detected_from, migration
-// 0026) -- internal/importing/pack.Detect's own values (pure, ADR-23),
-// re-exported as plain strings for this file's own callers, the same shape
-// library.UnitSingle etc. already give inspect.Shape's values.
+// Pack kinds and detection sources (pack.kind/detected_from, migration 0026) re-export pack.Detect's values as strings, like the unit shape constants.
 const (
 	PackDiscography = pack.Discography
 
@@ -111,10 +108,7 @@ func (p Packs) Create(
 	return id, nil
 }
 
-// ResolveItem moves one pack member from QUEUED to RESOLVED once a later
-// action (ManualCommitter's own "assign a category later" or "commit what
-// was held") places the unit it belongs to -- a no-op, safely, for a unit
-// that was never part of any pack (no row matches importUnitID).
+// ResolveItem moves a pack member from QUEUED to RESOLVED when a later action places its unit; a no-op for a unit that was never in a pack.
 func (p Packs) ResolveItem(ctx context.Context, importUnitID, workID int64, editionID *int64) error {
 	return p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)

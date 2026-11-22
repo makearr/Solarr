@@ -32,10 +32,7 @@ const (
 	ImportOriginAdoption    = "adoption"
 )
 
-// Import unit shapes (import_unit.shape) -- inspect.Shape's own values
-// (inspect.ShapeOf), re-exported as plain strings for this file's own callers.
-// UnitPack has no inspect.Shape equivalent: PACK is a cross-unit fact (ADR-50),
-// never one unit's own structural shape (see inspect.Shape's doc comment).
+// Import unit shapes (import_unit.shape) re-export inspect.Shape values as strings; UnitPack has no equivalent because PACK is a cross-unit fact (ADR-50).
 const (
 	UnitSingle    = string(inspect.ShapeSingle)
 	UnitSet       = string(inspect.ShapeSet)
@@ -43,10 +40,7 @@ const (
 	UnitMultiDisc = string(inspect.ShapeMultiDisc)
 )
 
-// Import unit decisions (import_unit.decision) -- model.UnitDecision's own
-// values (model.Decide), re-exported as plain strings for this file's own
-// callers. A unit is recorded UnitQueue by default until a real IDENTIFY/DECIDE
-// caller wires music.IdentifyUnit and model.Decide to SetUnitDecision.
+// Import unit decisions (import_unit.decision) re-export model.UnitDecision values; a unit is UnitQueue until IDENTIFY/DECIDE records otherwise.
 const (
 	UnitCommit = string(model.DecisionCommit)
 	UnitQueue  = string(model.DecisionQueue)
@@ -57,10 +51,7 @@ const (
 // UnitReasonDuplicate is the reason of a skipped unit whose pictures the library already holds.
 const UnitReasonDuplicate = "its picture is one the library already holds, and it is no better"
 
-// ImportSessions is ADR-48's own persistence: one row per inspection-and-import
-// run, and one row per unit it found. internal/importing/inspect.Session/Unit are pure and
-// in-memory (deliberately, ADR-23); this is where a caller persists them, so a
-// session survives past one process and a revert has something to undo.
+// ImportSessions is ADR-48's persistence of inspection-and-import runs and their units, so a session survives the process and a revert has something to undo (inspect types stay in memory, ADR-23).
 type ImportSessions struct{ store *store.Store }
 
 // NewImportSessions builds it over an open library store.
@@ -124,10 +115,7 @@ type Unit struct {
 	EvidenceJSON   string
 	CandidatesJSON string
 	Reason         string
-	// WorkCreated/EditionCreated record whether this unit's own CommitUnit
-	// created the row or matched an existing one -- both false until
-	// RecordPlacement runs. A later session revert must only ever delete a
-	// row the session itself created (ADR-48).
+	// WorkCreated/EditionCreated record whether CommitUnit created the row or matched one, false until RecordPlacement; a revert deletes only created rows (ADR-48).
 	WorkCreated    bool
 	EditionCreated bool
 	// PackID is non-nil once todo 4.11's own detection (run once, after WALK
@@ -189,14 +177,7 @@ func (s ImportSessions) Create(ctx context.Context, params NewSession) (int64, e
 	return id, nil
 }
 
-// AddUnits records every unit one inspection pass found, in one transaction
-// (Invariant 2), then recomputes the session's own running counts -- the same
-// drift-and-repair shape CategoryCounters already uses, rather than trying to
-// keep a running total consistent through every future call site that can
-// change a unit's decision. Returns the new rows' ids, in the same order as
-// units, so a caller that already has a real IDENTIFY/DECIDE result in hand
-// (import.inspect's own job) can call SetUnitDecision immediately without a
-// second round trip to look them back up.
+// AddUnits records every unit of one inspection pass in one transaction (Invariant 2), recomputes the session counts (drift-and-repair), and returns ids in unit order for an immediate SetUnitDecision.
 func (s ImportSessions) AddUnits(ctx context.Context, sessionID int64, units []NewUnit) ([]int64, error) {
 	if len(units) == 0 {
 		return nil, nil
@@ -259,12 +240,7 @@ type UnitDecision struct {
 	CandidatesJSON, Reason string
 }
 
-// SetUnitDecisions records every unit one cluster's IDENTIFY step decided, in
-// a single transaction with a single RecomputeImportSessionCounts at the end
-// (Invariant 3, todo 4.21) -- the same batching AddUnits already gives the
-// insert half, instead of the N reads and N transactions calling this once
-// per unit cost. The caller already knows sessionID (it is the cluster's own),
-// so this needs no per-unit lookup the way the single-unit version once did.
+// SetUnitDecisions records a cluster's decisions in one transaction with one count recompute (Invariant 3, todo 4.21), instead of N reads and transactions.
 func (s ImportSessions) SetUnitDecisions(ctx context.Context, sessionID int64, decisions []UnitDecision) error {
 	if len(decisions) == 0 {
 		return nil
@@ -288,11 +264,7 @@ func (s ImportSessions) SetUnitDecisions(ctx context.Context, sessionID int64, d
 	return nil
 }
 
-// Placement is one unit's own CommitUnit result, ready to record --
-// import_unit's own work_id/edition_id/work_created/edition_created columns
-// plus every media_object row import_unit_file must remember, so a later
-// session revert (ADR-48) knows precisely which rows this unit's own commit
-// is responsible for.
+// Placement is one unit's CommitUnit result: the import_unit columns plus every media_object row import_unit_file must remember for a revert (ADR-48).
 type Placement struct {
 	WorkID         int64
 	WorkCreated    bool
@@ -327,10 +299,7 @@ type UnitExtra struct {
 	RelPath      string
 }
 
-// RecordPlacement writes one unit's placement, in one transaction: the
-// import_unit columns (work_id becoming non-null is what "actually placed"
-// means from here on, not merely decided -- job.go's own doc comment) and
-// one import_unit_file row per media_object CommitUnit placed.
+// RecordPlacement writes a unit's placement in one transaction; work_id non-null is what "actually placed" means, plus one import_unit_file row per object.
 func (s ImportSessions) RecordPlacement(ctx context.Context, unitID int64, placement Placement) error {
 	return s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
@@ -404,11 +373,7 @@ func (s ImportSessions) DeleteUnitExtras(ctx context.Context, unitID int64) erro
 	return nil
 }
 
-// ClearUnitPlacement is revert's own first step for one unit: work_id/
-// edition_id/work_created/edition_created all go back to their pre-placement
-// values, which is what makes it safe to then delete the work/edition row
-// itself (RecordPlacement's own doc comment: import_unit's FK to either
-// carries no ON DELETE CASCADE).
+// ClearUnitPlacement is revert's first step per unit: it restores the pre-placement values so the work/edition can be deleted (import_unit's FKs have no cascade).
 func (s ImportSessions) ClearUnitPlacement(ctx context.Context, unitID int64) error {
 	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		return librarydb.New(tx).ClearImportUnitPlacement(ctx, unitID)
@@ -452,11 +417,7 @@ func (s ImportSessions) ReleaseAndDelete(ctx context.Context, unitIDs []int64, e
 	return nil
 }
 
-// UnitFile is one media_object row a unit's own CommitUnit produced, with the
-// specific library_path row that placement created for it when known
-// (LibraryPathID is nil for a row written before migration 0029, or one whose
-// media_object already had more than one path at that time -- see the
-// migration's own comment).
+// UnitFile is a media_object row a unit's commit produced with the library_path it created; LibraryPathID is nil before migration 0029 or when the object already had several paths.
 type UnitFile struct {
 	MediaObjectID int64
 	LibraryPathID *int64
@@ -493,10 +454,7 @@ type TransferMethodCount struct {
 	Files  int64
 }
 
-// UnitTransferMethods reports, per unit in a session, how its files were
-// actually placed -- the answer to "did it link them or copy them?", which is
-// invisible on disk (a reflink and a copy look identical). Units whose rows
-// predate migration 0034 simply have no entry.
+// UnitTransferMethods reports per unit how files were placed (link or copy), invisible on disk; rows before migration 0034 have no entry.
 func (s ImportSessions) UnitTransferMethods(
 	ctx context.Context, sessionID int64,
 ) (map[int64][]TransferMethodCount, error) {
@@ -671,20 +629,10 @@ func (s ImportSessions) Get(ctx context.Context, id int64) (Session, error) {
 	return sessionFromRow(row), nil
 }
 
-// ErrSessionCategoryAlreadySet reports that a session already has a
-// *different* category -- todo 4.9's "assign a category later" path is for a
-// session that started with none (questions.md); re-pointing an
-// already-targeted session at a different category is out of scope, not
-// silently allowed. Calling SetCategory again with the *same* categoryID is
-// not an error (see its own doc comment).
+// ErrSessionCategoryAlreadySet is a session already has a different category; re-pointing is out of scope, while the same categoryID again is not an error.
 var ErrSessionCategoryAlreadySet = errors.New("library: import session already has a category")
 
-// SetCategory assigns categoryID to a session that started without one, or
-// is a no-op success when categoryID already matches -- deliberately
-// idempotent so a caller can retry ManualCommitter.PlaceUnplaced (the
-// adapter's own AssignImportCategory calls both together) after a transient
-// placement failure, such as a root folder's capacity not having been
-// probed yet, by sending the identical request again.
+// SetCategory assigns a category to a session that had none, idempotently, so ManualCommitter.PlaceUnplaced can be retried with the identical request after a transient placement failure.
 func (s ImportSessions) SetCategory(ctx context.Context, sessionID, categoryID int64) error {
 	var affected int64
 	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
@@ -809,11 +757,7 @@ func (s ImportSessions) ListUnits(ctx context.Context, sessionID int64) ([]Unit,
 	return units, nil
 }
 
-// ListUnitsPage returns one cursor-paginated page of a session's units,
-// unlike ListUnits above -- a session's own unit count is not bounded the way
-// a session count is (Invariant 22 is exactly the "500k+ files" case a
-// whole-library adoption run can hit), so an API caller needs a real page.
-// filterDecision empty means every decision.
+// ListUnitsPage is cursor-paginated because a session's unit count is unbounded (Invariant 22, whole-library adoption); empty filterDecision means all.
 func (s ImportSessions) ListUnitsPage(
 	ctx context.Context, sessionID, afterID int64, filterDecision string, pageSize int64,
 ) ([]Unit, error) {
@@ -841,11 +785,7 @@ func (s ImportSessions) GetUnit(ctx context.Context, id int64) (Unit, error) {
 	return unitFromRow(row), nil
 }
 
-// ListUnplacedCommitUnits answers every unit this session decided COMMIT but
-// has not yet actually placed -- todo 4.9's "assign a category later" UI
-// action needs these once a session gets a category it did not have while
-// walking. work_id staying NULL after DECIDE is what distinguishes the two
-// (job.go's own doc comment).
+// ListUnplacedCommitUnits answers units decided COMMIT but not placed (work_id still NULL), for the assign-a-category-later action (todo 4.9).
 func (s ImportSessions) ListUnplacedCommitUnits(ctx context.Context, sessionID int64) ([]Unit, error) {
 	rows, err := librarydb.New(s.store.Read()).ListUnplacedCommitUnits(ctx, sessionID)
 	if err != nil {

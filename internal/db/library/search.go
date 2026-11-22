@@ -32,13 +32,7 @@ type SearchResult struct {
 	Score float64
 }
 
-// Works ranks works whose title or an alias matches query, cross-media-type unless
-// mediaType narrows it (section 21.1's "search across everything"). A work appears at
-// most once even when several of its titles match. rootFolderIDs and categoryIDs mirror
-// WorkFilter's own two visibility halves: nil means that half is not applied, a non-nil
-// empty slice matches nothing via that half, and a work matching either is included
-// (ADR-27 -- a subscription-discovered work has no root folder yet but does have a
-// desired_item.category_id).
+// Works ranks works whose title or alias matches query, across media types unless mediaType narrows it (section 21.1), each work once; rootFolderIDs and categoryIDs follow WorkFilter's halves (nil not applied, empty matches nothing, either half includes, ADR-27).
 func (s Search) Works(
 	ctx context.Context, query, mediaType string, rootFolderIDs, categoryIDs []int64, pageSize int,
 ) ([]SearchResult, error) {

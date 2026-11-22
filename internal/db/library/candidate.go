@@ -1,9 +1,6 @@
 package library
 
-// ReleaseCandidate is one release an indexer answered, matched against a specific
-// desired item's own identity (section 10.1). Claimed only -- there is
-// nothing to probe before a download, so AttributesID stays unset; bitrate
-// is estimated from size over runtime instead (ADR-39).
+// ReleaseCandidate is a release an indexer answered, matched against a desired item (section 10.1); claimed only, so AttributesID is unset and bitrate is estimated from size over runtime (ADR-39).
 type ReleaseCandidate struct {
 	ID              int64
 	IndexerID       int64

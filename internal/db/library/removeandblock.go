@@ -9,26 +9,14 @@ import (
 	"time"
 )
 
-// RootFolderPath answers a root folder's own absolute filesystem path, for
-// resolving library_path.rel_path into a real path to the recycle bin. This
-// package never reaches into settings.db itself (ADR-25's own database
-// split), so a caller supplies the lookup -- the same shape Recycle bin's own
-// Sweep already asks a caller for root capacity.
+// RootFolderPath answers a root's absolute path for resolving rel_path to the recycle bin; the caller supplies it since this package never reads settings.db (ADR-25).
 type RootFolderPath func(rootFolderID int64) (path string, ok bool)
 
-// RemoveAndBlockRequest is ADR-53 section 3's "remove and block" action --
-// the user's actual workflow ("this is fake, get rid of it and make sure it
-// never comes back"), not "add a hash to a list". Each step is individually
-// overridable, matching architecture.md's own text.
+// RemoveAndBlockRequest is ADR-53 section 3's action ("fake: remove it and never let it back"), each step individually overridable.
 type RemoveAndBlockRequest struct {
 	MediaObjectID int64
 
-	// Recycle bin is step 1. Every copy of these bytes (every library_path
-	// row for MediaObjectID, across every root -- ADR-11 cross-entry
-	// hardlinking means there can be more than one) is recycled together,
-	// then the media_object itself is removed: "remove and block" removes
-	// the fake everywhere it exists, not just the one path a caller happened
-	// to be looking at.
+	// Recycle bin is step 1: every library_path copy of MediaObjectID across all roots (ADR-11 hardlinks) is recycled together, then the media_object is removed.
 	RecycleBin    bool
 	RecycleReason Reason
 	RecycleRetain time.Duration
@@ -75,10 +63,7 @@ type RemoveAndBlockResult struct {
 	ReopenedItems []int64
 }
 
-// RemoveAndBlock composes recycle bin, blocked_content, blocklisted_release
-// and desired_item into the one action architecture.md section 10.8/ADR-53
-// describes -- each of its own pieces already exists and is independently
-// tested; this is the orchestration, not new storage.
+// RemoveAndBlock composes recycle bin, blocked_content, blocklisted_release and desired_item into the ADR-53 action (section 10.8); orchestration only, no new storage.
 type RemoveAndBlock struct {
 	recycleBin RecycleBin
 	blocks     BlockedContentStore

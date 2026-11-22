@@ -122,10 +122,7 @@ type FrameHash struct {
 // minSharedFrames is how many slots two videos must both have a frame for before they can be called alike.
 const minSharedFrames = 4
 
-// framesAlike is whether two videos show the same pictures at the same moments: at least two thirds of the slots
-// both sampled match. A slot holds a few hashes of frames close in time, and it matches when any two are within the
-// distance, so a copy cut a few frames earlier or later still lines up. One show's episodes share a look, so the mean
-// frame alone joins them (found 2026-11-02).
+// framesAlike: two videos match when at least two thirds of the slots both sampled agree, a slot matching when any two of its close-in-time frame hashes are within the distance, so a copy cut a few frames off lines up; the mean frame alone joins one show's episodes.
 func framesAlike(first, second []FrameHash, frameMaxBits int) bool {
 	shared, matched := 0, 0
 	for i, j := 0, 0; i < len(first) && j < len(second); {

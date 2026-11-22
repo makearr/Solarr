@@ -35,11 +35,7 @@ func (q RecycleBin) ReplacedBy(ctx context.Context, mediaObjectID int64) ([]Entr
 	return entries, nil
 }
 
-// Restore puts a recycled file back where it came from. Refused if it was
-// already restored, and refused -- rather than silently overwriting -- if
-// something now occupies the original path (section 10.8: "restoring an item
-// whose desired state has since been satisfied differently surfaces the
-// conflict rather than overwriting").
+// Restore puts a recycled file back; refused if already restored or if the original path is occupied, surfacing the conflict (section 10.8).
 func (q RecycleBin) Restore(ctx context.Context, id int64) (Entry, error) {
 	entry, err := q.Get(ctx, id)
 	if err != nil {
@@ -88,10 +84,7 @@ func (q RecycleBin) Restore(ctx context.Context, id int64) (Entry, error) {
 	return entry, nil
 }
 
-// Purge removes a recycled file's bytes for good and its row with them --
-// there is no purged_at column, since once the bytes are gone there is
-// nothing left for one to distinguish from. Refused on an already-restored
-// entry: its recycled_path no longer holds anything to remove.
+// Purge removes a recycled file's bytes and row; there is no purged_at, and an already-restored entry is refused as it holds nothing.
 func (q RecycleBin) Purge(ctx context.Context, id int64) error {
 	entry, err := q.Get(ctx, id)
 	if err != nil {

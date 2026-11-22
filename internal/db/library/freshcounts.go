@@ -10,19 +10,13 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-// freshCountsScope is the counter scope the fresh-works sweep reconciles
-// into -- library-wide, the same simplification the dashboard's other
-// whole-library tiles (probeCoverageScope) already make rather than a
-// per-category breakdown ADR-55's own dashboard panel does not ask for.
+// freshCountsScope is the library-wide counter scope, like probeCoverageScope, as ADR-55's dashboard panel needs no per-category figure.
 const freshCountsScope = "library"
 
 // freshCountsMetric is the counter row's own metric name within that scope.
 const freshCountsMetric = "fresh"
 
-// FreshCounts recomputes ADR-55's dashboard "new arrivals" figure: how many
-// works carry a release date inside the freshness window. A counter-backed
-// lookup, never a live aggregate (section 21.12) -- the same drift-and-repair
-// shape ProbeCoverage already uses for its own single library-wide figure.
+// FreshCounts recomputes ADR-55's "new arrivals" figure (works with a release date in the freshness window) as a counter, never a live aggregate (section 21.12).
 type FreshCounts struct {
 	store *store.Store
 	clock clock.Clock
@@ -33,13 +27,7 @@ func NewFreshCounts(opened *store.Store, cl clock.Clock) FreshCounts {
 	return FreshCounts{store: opened, clock: cl}
 }
 
-// Reconcile recomputes "fresh" and writes it back if it does not already
-// match, returning the correction made (nil when nothing drifted). since is
-// the same already-resolved cutoff date WorkFilter.FreshSince takes -- this
-// package never calls time.Now() (forbidigo), so the caller resolves it the
-// same way cmd/solarr/adapters.Works already does for the Library
-// list's own fresh=true filter, and the two can never disagree about what
-// "fresh" means.
+// Reconcile recomputes "fresh" and writes back a correction, nil when none; since is the caller-resolved cutoff shared with WorkFilter.FreshSince, as time.Now is forbidden here and both must agree.
 func (c FreshCounts) Reconcile(ctx context.Context, since string, rssSince int64) ([]Correction, error) {
 	reader := librarydb.New(c.store.Read())
 	fresh, err := reader.CountFreshWorks(ctx, librarydb.CountFreshWorksParams{Kind: WorkDateStreet, Date: since, RssSince: rssSince})

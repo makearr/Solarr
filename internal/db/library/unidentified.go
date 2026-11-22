@@ -35,10 +35,7 @@ type QueueEntry struct {
 	ProviderUnavailable bool
 }
 
-// Candidate is the queue's own, deliberately narrower shape for one ranked
-// suggestion: WorkID is always nil for a queued entry (RunChain never sets Best
-// from a candidate that did not clear AmbiguityThreshold) and Evidence is not
-// shown here -- the full page (§21.3) is where that depth belongs.
+// Candidate is the queue's narrower suggestion shape: WorkID is always nil (RunChain sets Best only past AmbiguityThreshold) and Evidence belongs to the full page (section 21.3).
 type Candidate struct {
 	Strategy   string  `json:"strategy"`
 	Provider   string  `json:"provider,omitempty"`
@@ -117,11 +114,7 @@ func (u Unidentified) Record(ctx context.Context, entries []QueueEntry) error {
 	})
 }
 
-// Get answers one queued entry, for the manual resolve action -- confirming a
-// candidate needs the file's own RootFolderID (to link work_root_folder),
-// which List's page rows already carry but a caller resolving a single id
-// from a request path should not have to page through the whole queue for.
-// A missing id surfaces sql.ErrNoRows, wrapped: callers use errors.Is.
+// Get answers one queued entry for manual resolve, which needs its RootFolderID; a missing id wraps sql.ErrNoRows.
 func (u Unidentified) Get(ctx context.Context, mediaObjectID int64) (Row, error) {
 	row, err := librarydb.New(u.store.Read()).GetUnidentified(ctx, mediaObjectID)
 	if err != nil {
@@ -228,10 +221,7 @@ func (u Unidentified) Count(ctx context.Context) (int64, error) {
 	})
 }
 
-// List returns one page, oldest-queued first. rootFolderIDs follows WorkFilter's
-// own convention (search.go, works.go): nil is unfiltered, a non-nil empty slice
-// matches nothing (ADR-27 -- the caller translates "no root folder visible" into
-// that before calling, rather than the two being indistinguishable here).
+// List returns one page, oldest-queued first; rootFolderIDs follows WorkFilter's convention (nil unfiltered, empty matches nothing, ADR-27), with the caller translating no visible root.
 func (u Unidentified) List(ctx context.Context, rootFolderIDs []int64, after paginate.Cursor, pageSize int) ([]Row, error) {
 	filterRootFolders := rootFolderIDs != nil
 	encodedRootFolderIDs, err := json.Marshal(rootFolderIDs)

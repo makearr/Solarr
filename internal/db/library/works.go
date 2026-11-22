@@ -11,10 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/listfilter"
 )
 
-// workColumns is the sqlc model's field order, which the scan below depends on
-// (documentation/sql-and-sqlc.md). Qualified with "work." -- person (joined in
-// for workArtistColumn) also has id and added_at columns, which would
-// otherwise be ambiguous.
+// workColumns is the sqlc model's field order, which the scan depends on (documentation/sql-and-sqlc.md); qualified with "work." because the joined person has id and added_at too.
 const workColumns = `work.id, work.media_type, work.canonical_title, work.sort_title, work.original_language,
        work.year, work.runtime_ms, work.added_at, work.updated_at, work.added_by`
 
@@ -91,24 +88,12 @@ type WorkFilter struct {
 	// TitlePrefix matches the start of the sort title, which is already normalised
 	// for ordering.
 	TitlePrefix string
-	// RootFolderIDs restricts the list to works work_root_folder recorded against
-	// any of these root folders -- on-disk presence, half of ADR-27 visibility.
-	// Nil means this half is not applied; a non-nil empty slice matches nothing
-	// via this half. CategoryIDs is the other half (desired_item.category_id, for
-	// a work with no root folder yet); a work matching either is included. Both
-	// nil together means fully unfiltered -- callers translate "nothing visible"
-	// into an empty non-nil slice on at least one of the two themselves.
+	// RootFolderIDs restricts to works recorded on these roots (on-disk half of ADR-27); nil is not applied, empty matches nothing, either half includes, and both nil is unfiltered.
 	RootFolderIDs []int64
 	// CategoryIDs restricts the list to works with a desired_item recorded
 	// against any of these categories -- see RootFolderIDs' own doc comment.
 	CategoryIDs []int64
-	// FreshSince is ADR-55's release-date freshness window (todo 4.20),
-	// already resolved to a cutoff date ("2006-01-02") by the caller --
-	// this package never calls time.Now() (forbidigo). Empty means the
-	// filter is not applied. A work_date shorter than a full date (a
-	// year- or month-only release) can never match: it always sorts before
-	// any real cutoff in the plain string comparison this uses, which is
-	// the point -- freshness needs day precision, not a guess from less.
+	// FreshSince is ADR-55's freshness cutoff ("2006-01-02") resolved by the caller, as time.Now is forbidden here; empty is not applied, and year- or month-only dates never match since freshness needs day precision.
 	FreshSince string
 	// FreshRSSSince is ADR-55's other window as a Unix time: a work an RSS feed showed a release for since then is
 	// fresh too. Read only when FreshSince is set.
@@ -117,10 +102,7 @@ type WorkFilter struct {
 	// sortable columns).
 	Sort      WorkSort
 	Direction SortDirection
-	// WantedOnly restricts to works with a monitored desired_item that is
-	// not yet COMPLETE -- todo 4.13's follow-up "Wanted" per-library screen,
-	// asked for 2026-09-11. Reuses this list's own pagination/sort/visibility
-	// rather than a second query.
+	// WantedOnly restricts to works with a monitored desired_item not yet COMPLETE (todo 4.13 Wanted screen), reusing this list's pagination, sort and visibility.
 	WantedOnly bool
 	// CutoffUnmetOnly restricts to works whose monitored album falls short of its cutoff (M1d, Lidarr's
 	// Wanted -> Cutoff Unmet).
@@ -207,11 +189,7 @@ type Works struct {
 // NewWorks builds a reader over an open library store.
 func NewWorks(opened *store.Store) Works { return Works{store: opened} }
 
-// composeList builds the query and its arguments from the filters actually set. The SQL
-// is assembled rather than written in queries/ because an optional predicate in static
-// SQL costs the index entirely -- 31 times slower, measured
-// (documentation/benchmarks.md). One function, so Explain always describes what List
-// runs.
+// composeList assembles SQL from the filters set because an optional predicate in static SQL loses the index (31x slower, documentation/benchmarks.md); one function so Explain describes what List runs.
 func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []any) {
 	var predicates store.Predicates
 	predicates.AddIf(filter.MediaType != "", "media_type = ?", filter.MediaType)
@@ -258,16 +236,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		orderDirection = " DESC"
 	}
 
-	// The id tie-break follows the sort's own direction (changed 2026-09-18).
-	// It used to advance ascending whatever the sort did, which was consistent
-	// with the OR-form cursor it was paired with. Once the cursor became a row
-	// value it stopped being optional: a row value compares the whole tuple in
-	// one direction, so an ascending tie-break under a descending sort makes
-	// the WHERE and the ORDER BY disagree and pagination silently drops rows
-	// inside a tie group -- 230 of 250 in the test that pins it. The speed is
-	// the row value's doing (notes.md 8.17); this is the correctness half.
-	// Every cursor compares as a row value, which SQLite answers with an index
-	// seek. The OR form this replaced could not be seeked at all.
+	// The id tie-break follows the sort direction: a row-value cursor compares the tuple one way, so a mismatched tie-break silently drops rows inside a tie group. Row values also let SQLite seek an index (notes.md 8.17), which the old OR form could not.
 	var orderBy string
 	join := workArtistJoin
 	numberColumn, textColumn := "0", "''"
@@ -438,15 +407,7 @@ func prefixUpperBound(prefix string) (string, bool) {
 	return "", false
 }
 
-// addVisibility restricts to works visible via either root folder (on-disk
-// presence) or category (desired_item.category_id, for a work with no root
-// folder yet) -- ADR-27's two halves, OR'd together. Either side nil means
-// that half was not asked for and contributes nothing; both nil together
-// leaves the list unfiltered. A non-nil empty slice on a side that applies
-// matches no rows via that side, same as before this had two halves.
-//
-// EXISTS, correlated on work.id, not "id IN (SELECT ...)": the IN form drove
-// SQLite to abandon the sort index entirely (ADR-28; see notes.md).
+// addVisibility ORs ADR-27's root-folder and category halves (nil half contributes nothing, empty non-nil matches nothing); EXISTS correlated on work.id, since IN made SQLite drop the sort index (ADR-28).
 func addVisibility(predicates *store.Predicates, rootFolderIDs, categoryIDs []int64) {
 	fragment, arguments, applies := visibilityFragment("work.id", rootFolderIDs, categoryIDs)
 	if applies {
@@ -454,10 +415,7 @@ func addVisibility(predicates *store.Predicates, rootFolderIDs, categoryIDs []in
 	}
 }
 
-// visibilityFragment is addVisibility's own OR-of-two-halves logic, factored
-// out so a second real caller (peoplelist.go's Artists-level query, credit-
-// correlated rather than directly against work.id) shares it instead of
-// re-deriving the same easy-to-get-subtly-wrong combination.
+// visibilityFragment is addVisibility's OR-of-two-halves logic, shared with the Artists-level query so the subtle combination lives once.
 func visibilityFragment(workIDExpr string, rootFolderIDs, categoryIDs []int64) (fragment string, arguments []any, applies bool) {
 	rootFragment, rootArgs, rootApplies := membershipFragment(
 		"EXISTS (SELECT 1 FROM work_root_folder wrf WHERE wrf.work_id = "+workIDExpr+" AND wrf.root_folder_id IN (%s))",
@@ -479,10 +437,7 @@ func visibilityFragment(workIDExpr string, rootFolderIDs, categoryIDs []int64) (
 	}
 }
 
-// membershipFragment builds one "IN (...)" clause (template holding one %s for
-// the placeholder list) for ids. applies is false when ids is nil (the caller
-// did not ask for this filter at all); an empty non-nil ids deliberately
-// renders as a clause matching nothing, not as "unfiltered".
+// membershipFragment builds one IN clause for ids; applies is false for nil ids (not asked), and an empty non-nil slice renders a clause matching nothing.
 func membershipFragment(template string, ids []int64) (fragment string, arguments []any, applies bool) {
 	if ids == nil {
 		return "", nil, false
@@ -536,13 +491,7 @@ func (w Works) ExplainList(ctx context.Context, filter WorkFilter, after WorkCur
 	return w.store.ExplainQueryPlan(ctx, query, arguments...)
 }
 
-// AlternateTitles answers a work's own alias/original/translit titles
-// (ADR-41, work_title) -- every kind except "primary", which is already
-// Work.CanonicalTitle. Empty until something populates work_title, which
-// nothing does yet (enrichment writes editions and credits but no alternate
-// titles) -- a search tier built against this simply finds nothing extra
-// until that lands, the same "ready ahead of its data" shape placement.Resolve
-// and priority.Compute already had ahead of their own first caller.
+// AlternateTitles answers a work's alias/original/translit titles (ADR-41, work_title) except "primary"; empty until something populates work_title, so a search tier on it finds nothing extra yet.
 func (w Works) AlternateTitles(ctx context.Context, workID int64) ([]string, error) {
 	rows, err := librarydb.New(w.store.Read()).ListWorkTitles(ctx, workID)
 	if err != nil {

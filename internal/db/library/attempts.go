@@ -122,11 +122,7 @@ type SkippedFile struct {
 	Directory string
 }
 
-// ListSkipped answers the queued files whose newest run recorded pass/outcome,
-// D12's "find what a missing AcoustID key cost once a key is entered". Paged on
-// media_object_id (ADR-22: a cursor, never an OFFSET); the caller pages until it
-// answers fewer than pageSize. The pass filter is applied here rather than in SQL
-// because sqlc's SQLite parser cannot model json_each's columns in a WHERE.
+// ListSkipped answers queued files whose newest run recorded pass/outcome (D12), paged on media_object_id (ADR-22); the pass filter is in Go because sqlc cannot model json_each in a WHERE.
 func (a Attempts) ListSkipped(
 	ctx context.Context, pass, outcome string, afterID int64, pageSize int,
 ) (files []SkippedFile, lastID int64, err error) {
