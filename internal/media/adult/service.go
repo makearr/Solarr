@@ -14,6 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/mediaserver"
 	"github.com/makearr/Solarr/internal/metadata/stashbox"
 	"github.com/makearr/Solarr/internal/metadata/theporndb"
 	"github.com/makearr/Solarr/internal/metadata/whisparr"
@@ -57,6 +58,8 @@ type MovieSource interface {
 
 // Service reads scenes from the providers and keeps them in the library. Any source may be nil.
 type Service struct {
+	// Local asks the media servers the library takes metadata from; nil asks none.
+	Local    mediaserver.LocalAsker
 	Whisparr WhisparrSource
 	// Movies adds ThePornDB's films to what its entry in a library's order answers; nil leaves films to the scenes' servers.
 	Movies MovieSource
@@ -150,6 +153,10 @@ func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, hint Hint
 		ask := func(i int) {
 			asking, cancel := context.WithTimeout(ctx, providerPatience)
 			defer cancel()
+			if strings.HasPrefix(questions[i].name, settings.LocalSourcePrefix) {
+				scenes[i], answered[i], failures[i] = s.askLocal(asking, categoryID, questions[i].name, questions[i].ids, questions[i].known)
+				return
+			}
 			scenes[i], answered[i], failures[i] = s.ask(asking, questions[i].name, questions[i].ids, questions[i].known)
 		}
 		// A source that answered is not counted failed: an error beside an answer (a film search after a scene lookup) lost nothing.

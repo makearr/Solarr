@@ -14,6 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/parsebook"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/mediaserver"
 	"github.com/makearr/Solarr/internal/metadata/audible"
 	"github.com/makearr/Solarr/internal/metadata/fantlab"
 	"github.com/makearr/Solarr/internal/metadata/googlebooks"
@@ -91,7 +92,9 @@ type Service struct {
 	FantLab     FantLabSource
 	Hardcover   HardcoverSource
 	// Archive fills description, subjects and a cover from the Internet Archive; nil skips it.
-	Archive  ArchiveSource
+	Archive ArchiveSource
+	// Local asks the media servers the library takes metadata from; nil asks none.
+	Local    mediaserver.LocalAsker
 	Wikidata IDBridge
 	// PriorityFor is a library's provider order; nil, or an empty answer, takes the format's.
 	PriorityFor func(categoryID int64) []string
@@ -157,7 +160,14 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs, hint H
 			if _, asked := answers[name]; asked {
 				continue
 			}
-			if answer, ok := s.ask(ctx, name, ids, hintFrom(hint, answers, order), &failed); ok {
+			var answer Book
+			var ok bool
+			if strings.HasPrefix(name, settings.LocalSourcePrefix) {
+				answer, ok = s.askLocal(ctx, categoryID, name, ids, hintFrom(hint, answers, order))
+			} else {
+				answer, ok = s.ask(ctx, name, ids, hintFrom(hint, answers, order), &failed)
+			}
+			if ok {
 				answers[name] = answer
 				ids = Merge(Book{IDs: ids}, Book{IDs: answer.IDs}).IDs
 			}

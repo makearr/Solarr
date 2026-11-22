@@ -2,6 +2,7 @@ package audiobookshelf_test
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -58,5 +59,41 @@ func TestClient_ChangedScansEachLibraryOnce(t *testing.T) {
 	}
 	if want := []string{"POST /api/libraries/l1/scan", "POST /api/libraries/l2/scan"}; !reflect.DeepEqual(seen, want) {
 		t.Errorf("requests = %q, want %q", seen, want)
+	}
+}
+
+func TestClient_CatalogReadsEveryBookOnceAndFindsItByIDPathAndTitle(t *testing.T) {
+	var listings int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/libraries":
+			_, _ = io.WriteString(w, `{"libraries":[{"id":"l1","name":"Books","mediaType":"book","folders":[]},{"id":"l2","name":"Casts","mediaType":"podcast","folders":[]}]}`)
+		case "/api/libraries/l1/items":
+			listings++
+			_, _ = io.WriteString(w, `{"results":[{"id":"i1","path":"/books/Mara Quell/The Lantern Keeper","media":{"duration":7200,"metadata":{"title":"The Lantern Keeper","authorName":"Mara Quell, Jo Reed","narratorName":"Narrator: Sam Vale","seriesName":"Lanterns #2","genres":["Fantasy"],"publishedYear":"2015","publisher":"Invented House","description":"Home words.","isbn":"9780000000002","asin":"B000TEST01","language":"English"}}}]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client := audiobookshelf.New(mediaservertest.Direct(), server.URL, "tok")
+	want := mediaserver.Item{
+		ID: "i1", MediaType: "book", Title: "The Lantern Keeper", Overview: "Home words.", Year: 2015, Genres: []string{"Fantasy"}, Language: "English",
+		RuntimeMS: 7200000, Path: "/books/Mara Quell/The Lantern Keeper", IDs: map[string]string{"isbn": "9780000000002", "asin": "B000TEST01"},
+		Organisations: []string{"Invented House"}, Parent: &mediaserver.ItemRef{Title: "Lanterns #2"},
+		People: []mediaserver.Credit{{Name: "Mara Quell", Kind: "author"}, {Name: "Jo Reed", Kind: "author"}, {Name: "Sam Vale", Kind: "narrator"}},
+	}
+	byID, found, err := client.ItemByProviderID(t.Context(), "book", "asin", "B000TEST01")
+	if err != nil || !found || !reflect.DeepEqual(byID, want) {
+		t.Fatalf("by id = %+v, %v, %v", byID, found, err)
+	}
+	if byPath, found, _ := client.ItemByPath(t.Context(), "/books/Mara Quell/The Lantern Keeper/part1.m4b"); !found || byPath.ID != "i1" {
+		t.Errorf("by path = %+v, %v", byPath, found)
+	}
+	if hits, _ := client.Search(t.Context(), "book", "lantern", 5); len(hits) != 1 {
+		t.Errorf("search = %+v", hits)
+	}
+	if _, found, _ := client.ItemByProviderID(t.Context(), "book", "isbn", "none"); found || listings != 1 {
+		t.Errorf("unknown id found = %v, listings = %d", found, listings)
 	}
 }

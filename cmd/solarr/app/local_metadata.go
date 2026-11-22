@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/titlekey"
 	"github.com/makearr/Solarr/internal/mediaserver"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
@@ -33,7 +34,7 @@ func newLocalAsker(p *process) *localAsker {
 }
 
 // Ask implements mediaserver.LocalAsker.
-func (a *localAsker) Ask(ctx context.Context, categoryID int64, kind, mediaType string, ids map[string]string) (mediaserver.Item, bool, error) {
+func (a *localAsker) Ask(ctx context.Context, categoryID int64, kind, mediaType string, question mediaserver.Question) (mediaserver.Item, bool, error) {
 	servers, err := a.p.cache.MediaServers(ctx)
 	if err != nil {
 		return mediaserver.Item{}, false, err
@@ -42,6 +43,7 @@ func (a *localAsker) Ask(ctx context.Context, categoryID int64, kind, mediaType 
 	if err != nil {
 		return mediaserver.Item{}, false, err
 	}
+	ids := question.IDs
 	names := make([]string, 0, len(ids))
 	for name, id := range ids {
 		if id != "" {
@@ -67,8 +69,45 @@ func (a *localAsker) Ask(ctx context.Context, categoryID int64, kind, mediaType 
 				return item, true, nil
 			}
 		}
+		if item, found := a.byTitle(ctx, catalog, mediaType, question); found {
+			return item, true, nil
+		}
 	}
 	return mediaserver.Item{}, false, nil
+}
+
+// byTitle finds an item whose title is the question's exactly (case, accents and punctuation aside), and whose author agrees when both name one.
+func (a *localAsker) byTitle(ctx context.Context, catalog mediaserver.IDCatalog, mediaType string, question mediaserver.Question) (mediaserver.Item, bool) {
+	searcher, ok := catalog.(mediaserver.Catalog)
+	if !ok || question.Title == "" {
+		return mediaserver.Item{}, false
+	}
+	found, err := searcher.Search(ctx, mediaType, question.Title, 10)
+	if err != nil {
+		return mediaserver.Item{}, false
+	}
+	for _, item := range found {
+		if titlekey.Fold(item.Title, titlekey.Compact) != titlekey.Fold(question.Title, titlekey.Compact) {
+			continue
+		}
+		authors := authorsOf(item)
+		if question.Author == "" || len(authors) == 0 || slices.ContainsFunc(authors, func(name string) bool {
+			return titlekey.Fold(name, titlekey.Compact) == titlekey.Fold(question.Author, titlekey.Compact)
+		}) {
+			return item, true
+		}
+	}
+	return mediaserver.Item{}, false
+}
+
+func authorsOf(item mediaserver.Item) []string {
+	var names []string
+	for _, person := range item.People {
+		if person.Kind == "author" {
+			names = append(names, person.Name)
+		}
+	}
+	return names
 }
 
 // AskByPath implements mediaserver.LocalAsker.

@@ -57,3 +57,35 @@ func TestClient_WithoutAUserNameSendsNothing(t *testing.T) {
 		t.Errorf("info = %+v, err %v", info, err)
 	}
 }
+
+func TestClient_ItemByProviderIDSearchesTheIdentifierAndReadsTheBook(t *testing.T) {
+	var queries []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		queries = append(queries, r.URL.Path+"?"+r.URL.RawQuery)
+		switch r.URL.Path {
+		case "/ajax/search":
+			if r.URL.Query().Get("query") != "identifiers:amazon:B000TEST01" {
+				_, _ = w.Write([]byte(`{"book_ids":[]}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"book_ids":[3]}`))
+		case "/ajax/books":
+			_, _ = w.Write([]byte(`{"3":{"title":"The Lantern Keeper","authors":["Mara Quell"],"comments":"<div><p>Home words.</p></div>","tags":["Fantasy"],"publisher":"Invented House","languages":["eng"],"pubdate":"2015-04-02T00:00:00+00:00","series":"Lanterns","series_index":2.0,"identifiers":{"isbn":"9780000000002","amazon":"B000TEST01"}}}`))
+		}
+	}))
+	defer server.Close()
+	client := calibre.New(mediaservertest.Direct(), server.URL, "", "", func() string { return "c" })
+	got, found, err := client.ItemByProviderID(t.Context(), "book", "asin", "B000TEST01")
+	want := mediaserver.Item{
+		ID: "3", MediaType: "book", Title: "The Lantern Keeper", Overview: "Home words.", Year: 2015, Date: "2015-04-02", Genres: []string{"Fantasy"}, Language: "eng",
+		Organisations: []string{"Invented House"}, Parent: &mediaserver.ItemRef{Title: "Lanterns #2"},
+		People: []mediaserver.Credit{{Name: "Mara Quell", Kind: "author"}},
+		IDs:    map[string]string{"isbn": "9780000000002", "amazon": "B000TEST01", "asin": "B000TEST01"},
+	}
+	if err != nil || !found || !reflect.DeepEqual(got, want) {
+		t.Fatalf("item = %+v, %v, %v; queries %q", got, found, err, queries)
+	}
+	if _, found, _ := client.ItemByProviderID(t.Context(), "book", "isbn", "0"); found {
+		t.Error("an unknown identifier was found")
+	}
+}

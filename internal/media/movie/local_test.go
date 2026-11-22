@@ -14,7 +14,7 @@ type fakeLocal struct {
 	seen []string
 }
 
-func (f *fakeLocal) Ask(_ context.Context, _ int64, kind, mediaType string, _ map[string]string) (mediaserver.Item, bool, error) {
+func (f *fakeLocal) Ask(_ context.Context, _ int64, kind, mediaType string, _ mediaserver.Question) (mediaserver.Item, bool, error) {
 	f.seen = append(f.seen, kind+" "+mediaType)
 	return f.item, true, nil
 }

@@ -480,8 +480,8 @@ type fakeLocal struct {
 	asked []string
 }
 
-func (f *fakeLocal) Ask(_ context.Context, categoryID int64, kind, mediaType string, ids map[string]string) (mediaserver.Item, bool, error) {
-	f.asked = append(f.asked, fmt.Sprintf("%d %s %s tvdb=%s", categoryID, kind, mediaType, ids["tvdb"]))
+func (f *fakeLocal) Ask(_ context.Context, categoryID int64, kind, mediaType string, question mediaserver.Question) (mediaserver.Item, bool, error) {
+	f.asked = append(f.asked, fmt.Sprintf("%d %s %s tvdb=%s", categoryID, kind, mediaType, question.IDs["tvdb"]))
 	return f.item, f.found, nil
 }
 

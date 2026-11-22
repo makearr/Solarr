@@ -15,6 +15,7 @@ type Client struct {
 	doer  mediaserver.Doer
 	base  string
 	token string
+	shelf shelf
 }
 
 // New builds a client for the server at base with the token.

@@ -2,6 +2,7 @@ package navidrome_test
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -74,5 +75,29 @@ func TestClient_ChangedStartsAnIncrementalScanUnlessOneRuns(t *testing.T) {
 	scanning = true
 	if err := client.Changed(t.Context(), nil); !errors.Is(err, mediaserver.ErrBusy) {
 		t.Errorf("Changed while scanning = %v, want ErrBusy", err)
+	}
+}
+
+func TestClient_ItemReadsAnAlbumWithItsReleaseMBIDAndSearchFindsIt(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/rest/getAlbum":
+			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","album":{"id":"a1","name":"Invented Album","artist":"Invented Band","year":1999,"duration":120,"musicBrainzId":"11111111-2222-3333-4444-555555555555","genres":[{"name":"Rock"}],"recordLabels":[{"name":"Invented Label"}],"releaseDate":{"year":1999,"month":3,"day":9},"song":[]}}}`)
+		case "/rest/search3":
+			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","searchResult3":{"album":[{"id":"a1","name":"Invented Album"}]}}}`)
+		}
+	}))
+	defer server.Close()
+	client := navidrome.New(mediaservertest.Direct(), server.URL, "u", "p", func() string { return "s" })
+	got, err := client.Item(t.Context(), "a1")
+	want := mediaserver.Item{
+		ID: "a1", MediaType: "music", Title: "Invented Album", Year: 1999, Date: "1999-03-09", RuntimeMS: 120000, Genres: []string{"Rock"}, Organisations: []string{"Invented Label"},
+		People: []mediaserver.Credit{{Name: "Invented Band", Kind: "artist"}}, IDs: map[string]string{"musicbrainzalbum": "11111111-2222-3333-4444-555555555555"},
+	}
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("item = %+v, %v", got, err)
+	}
+	if found, _ := client.Search(t.Context(), "music", "invented", 5); len(found) != 1 || found[0].ID != "a1" {
+		t.Errorf("search = %+v", found)
 	}
 }

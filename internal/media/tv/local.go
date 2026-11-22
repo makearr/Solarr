@@ -44,7 +44,7 @@ func (s Service) fetchLocal(ctx context.Context, categoryID int64, source string
 	if ids.TMDB > 0 {
 		known["tmdb"] = strconv.FormatInt(ids.TMDB, 10)
 	}
-	item, found, err := s.Local.Ask(ctx, categoryID, strings.TrimPrefix(source, settings.LocalSourcePrefix), "tv", known)
+	item, found, err := s.Local.Ask(ctx, categoryID, strings.TrimPrefix(source, settings.LocalSourcePrefix), "tv", mediaserver.Question{IDs: known})
 	if err != nil {
 		s.warn(source, ids.TVDB, err)
 		return Series{}, false

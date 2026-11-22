@@ -167,10 +167,17 @@ type IDCatalog interface {
 	ItemByProviderID(ctx context.Context, mediaType, provider, id string) (Item, bool, error)
 }
 
+// Question is what is known of a work when a server is asked: provider ids by lower-case name, and a title (and author)
+// for a server that holds no id the work carries.
+type Question struct {
+	IDs           map[string]string
+	Title, Author string
+}
+
 // LocalAsker asks the media servers of one kind a library takes its metadata from; it answers the first item any of them holds.
 // ids are by lower-case provider name; a library with no such server, or no match, answers false.
 type LocalAsker interface {
-	Ask(ctx context.Context, categoryID int64, kind, mediaType string, ids map[string]string) (Item, bool, error)
+	Ask(ctx context.Context, categoryID int64, kind, mediaType string, question Question) (Item, bool, error)
 	// AskByPath answers what the servers hold of the item whose file is solarrPath, before anything else has named it.
 	AskByPath(ctx context.Context, categoryID int64, solarrPath string) (Item, bool, error)
 }

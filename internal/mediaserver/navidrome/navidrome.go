@@ -60,10 +60,14 @@ type answer struct {
 		} `json:"album"`
 	} `json:"albumList2"`
 	Album struct {
+		wireAlbum
 		Song []struct {
 			Path string `json:"path"`
 		} `json:"song"`
 	} `json:"album"`
+	SearchResult3 struct {
+		Album []wireAlbum `json:"album"`
+	} `json:"searchResult3"`
 	MusicFolders struct {
 		MusicFolder []struct {
 			ID   int    `json:"id"`

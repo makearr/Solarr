@@ -435,7 +435,7 @@ func (p *process) bookService(format book.Format) book.Service {
 		p.bookShared = map[string]book.Service{}
 		for _, each := range book.Formats {
 			p.bookShared[each.MediaType] = book.Service{
-				Format: each, OpenLibrary: openLibrary, GoogleBooks: googleBooks, Audible: catalog, ITunes: appleBooks, FantLab: fantLab, Hardcover: hardcoverClient, Archive: internetarchive.New(p.providerClient(providerInternetArchive, nil, httpx.ClientConfig{})), Wikidata: p.wikidataFacts(),
+				Format: each, OpenLibrary: openLibrary, GoogleBooks: googleBooks, Audible: catalog, ITunes: appleBooks, FantLab: fantLab, Hardcover: hardcoverClient, Archive: internetarchive.New(p.providerClient(providerInternetArchive, nil, httpx.ClientConfig{})), Wikidata: p.wikidataFacts(), Local: p.localMetadata(),
 				PriorityFor: func(categoryID int64) []string {
 					snapshot := p.cache.Snapshot()
 					category, found := snapshot.Category(categoryID)
@@ -634,6 +634,7 @@ func (p *process) adultService() adult.Service {
 		}
 		p.adultShared = adult.Service{
 			Memo:     adult.NewSearchMemo(clock.NewSystem()),
+			Local:    p.localMetadata(),
 			Whisparr: whisparr.New(p.providerClient(providerWhisparr, nil, httpx.ClientConfig{Timeout: whisparrTimeout})),
 			Movies:   theporndb.New(p.providerClient(providerThePornDB, nil, httpx.ClientConfig{}), p.providerKey(settings.AdultSourceThePornDB)),
 			Servers: map[string]adult.Server{

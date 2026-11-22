@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/mediaserver"
@@ -56,5 +57,32 @@ func TestClient_LoginSendsTheSessionCookie(t *testing.T) {
 	}
 	if cookie != "session=abc" || form != "password=pw&returnURL=%2F&username=home" {
 		t.Errorf("cookie %q, form %q", cookie, form)
+	}
+}
+
+func TestClient_ItemByProviderIDAsksTheBoxEndpointAndMapsTheScene(t *testing.T) {
+	var asked string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		asked = string(body)
+		_, _ = io.WriteString(w, `{"data":{"findScenes":{"scenes":[{"id":"9","title":"Invented Scene","details":"Words.","date":"2021-05-04","code":"X-1","director":"Pat Dir","studio":{"Name":"Invented Studio"},"performers":[{"Name":"Alex Example"}],"tags":[{"Name":"Tag One"}],"stash_ids":[{"endpoint":"https://stashdb.org/graphql","stash_id":"abc"}],"files":[{"path":"/data/a.mp4","duration":61.5}]}]}}}`)
+	}))
+	defer server.Close()
+	client := stash.New(mediaservertest.Direct(), server.URL, "k")
+	got, found, err := client.ItemByProviderID(t.Context(), "adult", "stashdb", "abc")
+	want := mediaserver.Item{
+		ID: "9", MediaType: "adult", Title: "Invented Scene", Overview: "Words.", Year: 2021, Date: "2021-05-04", Tags: []string{"Tag One"},
+		Organisations: []string{"Invented Studio"}, RuntimeMS: 61500, Path: "/data/a.mp4",
+		People: []mediaserver.Credit{{Name: "Alex Example", Kind: "actor"}, {Name: "Pat Dir", Kind: "director"}},
+		IDs:    map[string]string{"code": "X-1", "stashdb": "abc"},
+	}
+	if err != nil || !found || !reflect.DeepEqual(got, want) {
+		t.Fatalf("item = %+v, %v, %v", got, found, err)
+	}
+	if !strings.Contains(asked, `https://stashdb.org/graphql`) || !strings.Contains(asked, `modifier: EQUALS`) {
+		t.Errorf("query = %s", asked)
+	}
+	if _, found, _ := client.ItemByProviderID(t.Context(), "adult", "imdb", "tt1"); found {
+		t.Error("a provider that is no stash-box found a scene")
 	}
 }
