@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -12,6 +13,7 @@ import (
 type importSettingsBody struct {
 	AutoCommitConfidence float64  `json:"auto_commit_confidence"`
 	TransferLadder       []string `json:"transfer_ladder"`
+	MaxArchiveBytes      int64    `json:"max_archive_bytes"`
 }
 
 func TestGetImportSettings_RequiresAuthentication(t *testing.T) {
@@ -203,5 +205,31 @@ func TestUpdateImportSettings_RejectsAnEmptyTransferLadder(t *testing.T) {
 		`{"auto_commit_confidence":0.9,"transfer_ladder":[]}`))
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400 (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+func TestUpdateImportSettings_KeepsTheLargestArchiveWithinItsBounds(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	if recorder := fixture.do(authedGet(t, cookies, "/api/v1/import/settings")); !strings.Contains(recorder.Body.String(), `"max_archive_bytes":21474836480`) {
+		t.Fatalf("default = %s, want 20 GiB", recorder.Body)
+	}
+	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/import/settings", `{"max_archive_bytes":5368709120}`))
+	var body importSettingsBody
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil || recorder.Code != http.StatusOK || body.MaxArchiveBytes != 5<<30 {
+		t.Fatalf("status = %d, %v, body = %s, want 5 GiB", recorder.Code, err, recorder.Body)
+	}
+	if got := fixture.cache.Snapshot().ImportMaxArchiveBytes(); got != 5<<30 {
+		t.Errorf("stored = %d, want 5 GiB", got)
+	}
+	for _, sent := range []string{`{"max_archive_bytes":1000}`, `{"max_archive_bytes":4398046511104}`} {
+		if recorder := fixture.do(authedPatch(t, cookies, "/api/v1/import/settings", sent)); recorder.Code != http.StatusBadRequest {
+			t.Errorf("%s: status = %d, want 400", sent, recorder.Code)
+		}
+	}
+	if got := fixture.cache.Snapshot().ImportMaxArchiveBytes(); got != 5<<30 {
+		t.Errorf("stored = %d after refused values, want 5 GiB still", got)
 	}
 }

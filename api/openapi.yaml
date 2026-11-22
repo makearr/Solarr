@@ -13833,6 +13833,15 @@ components:
             (on, the default) or keeps the name it arrived with. The folder
             structure comes from the template either way. Omitted on a PATCH
             leaves the stored value alone.
+        max_archive_bytes:
+          type: integer
+          format: int64
+          minimum: 1073741824
+          maximum: 2199023255552
+          description: >-
+            The most an archive may unpack to (default 20 GiB); a bigger
+            release is held and says why. Omitted on a PATCH leaves the stored
+            value alone.
 
     TransferMethod:
       type: string

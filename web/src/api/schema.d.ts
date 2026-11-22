@@ -10153,6 +10153,11 @@ export interface components {
             transfer_ladder?: components["schemas"]["TransferMethod"][];
             /** @description Whether a committed file is named by the library's own template (on, the default) or keeps the name it arrived with. The folder structure comes from the template either way. Omitted on a PATCH leaves the stored value alone. */
             rename_on_import?: boolean;
+            /**
+             * Format: int64
+             * @description The most an archive may unpack to (default 20 GiB); a bigger release is held and says why. Omitted on a PATCH leaves the stored value alone.
+             */
+            max_archive_bytes?: number;
         };
         /**
          * @description How import gets a file into the library. reflink clones it copy-on-write, sharing disk blocks but presenting as an independent file; hardlink makes a second directory entry for the same bytes; move renames it, or copies and deletes the source when it cannot; copy writes independent bytes; symlink leaves the library pointing at the source. Only reflink and hardlink avoid using more disk space, only move removes the source, and only symlink leaves the library dependent on it.

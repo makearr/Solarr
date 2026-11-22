@@ -104,6 +104,7 @@ type Job struct {
 	workspace      string
 	recycleArchive func(ctx context.Context, categoryID *int64, sourcePath, file string) error
 	archiveLimits  archive.Limits
+	maxArchive     func() int64
 	fsys           fsx.FS
 	sessions       library.ImportSessions
 	policy         Policy
@@ -150,10 +151,12 @@ type Config struct {
 	Workspace string
 	// ArchiveLimits bounds an expansion; zero is archive.DefaultLimits.
 	ArchiveLimits archive.Limits
-	Events        *events.Bus
-	OnCommitted   func(context.Context)
-	Clock         clock.Clock
-	Logger        *slog.Logger
+	// MaxArchiveBytes reads the administrator's largest archive each time one is opened; nil keeps the limits' own.
+	MaxArchiveBytes func() int64
+	Events          *events.Bus
+	OnCommitted     func(context.Context)
+	Clock           clock.Clock
+	Logger          *slog.Logger
 }
 
 // NewJob builds the handler.
@@ -164,7 +167,7 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		fsys: config.FS, sessions: config.Sessions, policy: config.Policy, packs: config.Packs,
-		workspace: config.Workspace, recycleArchive: config.RecycleArchive, archiveLimits: config.ArchiveLimits,
+		workspace: config.Workspace, recycleArchive: config.RecycleArchive, archiveLimits: config.ArchiveLimits, maxArchive: config.MaxArchiveBytes,
 		importers: config.Importers, mediaTypeOf: config.MediaTypeOf, unassigned: config.Unassigned, libraries: config.Libraries,
 		tracked: config.Tracked, events: config.Events, onCommitted: config.OnCommitted, clock: config.Clock, logger: logger,
 		releases: releaseNotes{acquisitions: config.Acquisitions, clock: config.Clock},
@@ -321,10 +324,14 @@ func (j *Job) unpack(ctx context.Context, sourcePath string) (workspace string, 
 }
 
 func (j *Job) limits() archive.Limits {
-	if j.archiveLimits == (archive.Limits{}) {
-		return archive.DefaultLimits()
+	limits := j.archiveLimits
+	if limits == (archive.Limits{}) {
+		limits = archive.DefaultLimits()
 	}
-	return j.archiveLimits
+	if j.maxArchive != nil {
+		limits.MaxTotalBytes = j.maxArchive()
+	}
+	return limits
 }
 
 // hasMedia reports whether the source holds media files of its own, beside its archives.

@@ -43,7 +43,7 @@ func (s *Server) UpdateImportSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.auth.Registry.LookupAll(settings.KeyImportAutoCommitConfidence, settings.KeyImportTransferLadder,
-		settings.KeyImportRenameOnImport); err != nil {
+		settings.KeyImportRenameOnImport, settings.KeyImportMaxArchiveBytes); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
@@ -59,7 +59,7 @@ func (s *Server) UpdateImportSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	// Absent means "say nothing about renaming", the same shape the ladder
 	// above keeps.
-	if err := s.auth.Settings.UpdateImportSettings(r.Context(), s.auth.Clock, sent.AutoCommitConfidence, ladderValue, body.RenameOnImport); err != nil {
+	if err := s.auth.Settings.UpdateImportSettings(r.Context(), s.auth.Clock, sent.AutoCommitConfidence, ladderValue, body.RenameOnImport, body.MaxArchiveBytes); err != nil {
 		s.writeImportSettingsError(w, err)
 		return
 	}
@@ -86,9 +86,11 @@ func (s *Server) importSettingsView() gen.ImportSettings {
 		ladder = append(ladder, gen.TransferMethod(method))
 	}
 	rename := snapshot.ImportRenameOnImport()
+	maxArchive := snapshot.ImportMaxArchiveBytes()
 	return gen.ImportSettings{
 		AutoCommitConfidence: float32(snapshot.ImportAutoCommitConfidence()),
 		TransferLadder:       &ladder,
 		RenameOnImport:       &rename,
+		MaxArchiveBytes:      &maxArchive,
 	}
 }

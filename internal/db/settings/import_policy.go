@@ -6,6 +6,8 @@ import (
 	"math"
 	"strconv"
 
+	"github.com/makearr/Solarr/internal/platform/config"
+
 	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
@@ -134,7 +136,7 @@ func (c *Cache) SetImportRenameOnImport(ctx context.Context, cl clock.Clock, ren
 
 // UpdateImportSettings validates and writes the supplied import policy values
 // in one transaction. A nil value leaves that setting untouched.
-func (c *Cache) UpdateImportSettings(ctx context.Context, cl clock.Clock, confidence *float64, ladder *[]string, rename *bool) error {
+func (c *Cache) UpdateImportSettings(ctx context.Context, cl clock.Clock, confidence *float64, ladder *[]string, rename *bool, maxArchiveBytes *int64) error {
 	if confidence != nil {
 		if problems := validateImportAutoCommitConfidence(*confidence); len(problems) > 0 {
 			return problems
@@ -151,7 +153,12 @@ func (c *Cache) UpdateImportSettings(ctx context.Context, cl clock.Clock, confid
 			return err
 		}
 	}
-	if confidence == nil && ladder == nil && rename == nil {
+	if maxArchiveBytes != nil {
+		if problems := validateImportMaxArchiveBytes(*maxArchiveBytes); len(problems) > 0 {
+			return problems
+		}
+	}
+	if confidence == nil && ladder == nil && rename == nil && maxArchiveBytes == nil {
 		return nil
 	}
 	updatedAt := cl.Now().Unix()
@@ -177,6 +184,37 @@ func (c *Cache) UpdateImportSettings(ctx context.Context, cl clock.Clock, confid
 				return err
 			}
 		}
+		if maxArchiveBytes != nil {
+			if err := queries.SetInstanceSetting(ctx, settingsdb.SetInstanceSettingParams{
+				Key: KeyImportMaxArchiveBytes, ValueJson: strconv.FormatInt(*maxArchiveBytes, 10), UpdatedAt: updatedAt,
+			}); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
+}
+
+// KeyImportMaxArchiveBytes is the largest archive an import unpacks: what a release unpacks to may not pass it.
+const KeyImportMaxArchiveBytes = "import.max_archive_bytes"
+
+// The bounds of the largest-archive setting and its default.
+const (
+	DefaultImportMaxArchiveBytes int64 = 20 << 30
+	MinImportMaxArchiveBytes     int64 = 1 << 30
+	MaxImportMaxArchiveBytes     int64 = 2 << 40
+)
+
+// ImportMaxArchiveBytes reads the largest archive an import unpacks, 20 GiB when nothing is stored.
+func (s *Snapshot) ImportMaxArchiveBytes() int64 {
+	return s.policyInt(KeyImportMaxArchiveBytes, DefaultImportMaxArchiveBytes)
+}
+
+func validateImportMaxArchiveBytes(bytes int64) config.Problems {
+	if bytes < MinImportMaxArchiveBytes || bytes > MaxImportMaxArchiveBytes {
+		return config.Problems{{
+			Path: "max_archive_bytes", Value: strconv.FormatInt(bytes, 10), Expectation: "between 1 GiB and 2 TiB",
+		}}
+	}
+	return nil
 }

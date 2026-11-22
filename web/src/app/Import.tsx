@@ -108,6 +108,7 @@ export function Import() {
           <TransferLadderControl />
           <div className="flex flex-col gap-6">
             <RenameOnImportControl />
+            <LargestArchiveControl />
           </div>
         </div>
       </section>
@@ -173,6 +174,64 @@ function RenameOnImportControl() {
         </span>
       </label>
       {update.isError && <p className="text-danger">That could not be changed.</p>}
+    </fieldset>
+  );
+}
+
+const GIB = 1024 ** 3;
+
+/** The most an archive may unpack to; a bigger release is held and says why. */
+function LargestArchiveControl() {
+  const queryClient = useQueryClient();
+  const settings = useImportSettings();
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const update = useMutation({
+    meta: { handlesErrors: true },
+    mutationFn: async (gib: number) => {
+      await ok(api.PATCH("/import/settings", {
+        body: {
+          auto_commit_confidence: settings.data?.auto_commit_confidence ?? 0.9,
+          max_archive_bytes: Math.round(gib * GIB),
+        },
+      }));
+    },
+    onSuccess: () => {
+      setDraft(null);
+      void queryClient.invalidateQueries({ queryKey: ["import-settings"] });
+    },
+  });
+
+  if (!settings.data) return null;
+  const current = (settings.data.max_archive_bytes ?? 20 * GIB) / GIB;
+  const shown = draft ?? String(Math.round(current * 100) / 100);
+
+  return (
+    <fieldset className="flex flex-col gap-1 border-0 p-0 text-xs">
+      <legend className="mb-1 p-0 text-sm font-medium text-ink">{t("import.archivesLegend")}</legend>
+      <label className="flex items-center gap-2">
+        <span className="text-ink">{t("import.largestArchive")}</span>
+        <input
+          type="number"
+          min={1}
+          max={2048}
+          step="any"
+          className="w-20 rounded border border-border-subtle bg-surface px-1 py-0.5"
+          value={shown}
+          disabled={update.isPending}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={() => {
+            const gib = Number(shown);
+            if (draft !== null && Number.isFinite(gib) && gib !== current) update.mutate(gib);
+            else setDraft(null);
+          }}
+        />
+        <span className="text-ink-muted">GiB</span>
+      </label>
+      <span className="text-[0.6875rem] text-ink-muted">
+        {t("import.largestArchiveHelp")}
+      </span>
+      {update.isError && <p className="text-danger">{t("import.largestArchiveFailed")}</p>}
     </fieldset>
   );
 }

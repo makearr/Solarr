@@ -270,6 +270,14 @@ func NewDefaultRegistry() *Registry {
 		Default: "true",
 	})
 
+	registry.MustRegister(SettingDef{
+		Key: KeyImportMaxArchiveBytes, Kind: KindInt, Tier: TierNormal,
+		Name: "Largest archive to unpack",
+		HelpText: "A download kept in archives is unpacked only up to this many bytes (1 GiB to 2 TiB); " +
+			"a bigger release is held and says why.",
+		Default: strconv.FormatInt(DefaultImportMaxArchiveBytes, 10),
+	})
+
 	// Streaming: the preview player's transcode, edited as one form (documentation/media-player.md).
 	registry.MustRegister(SettingDef{
 		Key: KeyStreamingTranscodeEnabled, Kind: KindBool, Tier: TierNormal,
