@@ -133,7 +133,9 @@ type Track struct {
 	// Position is the track's 1-based place on its medium -- what work_part's
 	// sort_key is padded from, never the printed Number, which is a vinyl side
 	// letter as often as a plain digit ("A1").
-	Position      int
+	Position int
+	// Optional is a hidden pregap (position 0): matched when a file is tagged for it, never owed.
+	Optional      bool
 	Number        string
 	Title         string
 	DurationMs    int64

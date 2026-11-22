@@ -668,23 +668,40 @@ type directRelease struct {
 		CatalogNumber string `json:"catalog-number"`
 	} `json:"label-info"`
 	Media []struct {
-		Position int    `json:"position"`
-		Format   string `json:"format"`
-		Title    string `json:"title"`
-		Tracks   []struct {
-			ArtistCredit []directCredit `json:"artist-credit"`
-			Number       string         `json:"number"`
-			Position     int            `json:"position"`
-			Title        string         `json:"title"`
-			Length       *int64         `json:"length"`
-			Recording    struct {
-				ID     string   `json:"id"`
-				Title  string   `json:"title"`
-				Length *int64   `json:"length"`
-				ISRCs  []string `json:"isrcs"`
-			} `json:"recording"`
-		} `json:"tracks"`
+		Position int           `json:"position"`
+		Format   string        `json:"format"`
+		Title    string        `json:"title"`
+		Pregap   *directTrack  `json:"pregap"`
+		Tracks   []directTrack `json:"tracks"`
 	} `json:"media"`
+}
+
+type directTrack struct {
+	ArtistCredit []directCredit `json:"artist-credit"`
+	Number       string         `json:"number"`
+	Position     int            `json:"position"`
+	Title        string         `json:"title"`
+	Length       *int64         `json:"length"`
+	Recording    struct {
+		ID     string   `json:"id"`
+		Title  string   `json:"title"`
+		Length *int64   `json:"length"`
+		ISRCs  []string `json:"isrcs"`
+	} `json:"recording"`
+}
+
+func (track directTrack) toTrack(optional bool) Track {
+	title := track.Title
+	if title == "" {
+		title = track.Recording.Title
+	}
+	return Track{
+		Position: track.Position, Optional: optional, Number: track.Number, Title: title,
+		DurationMs:    firstNonNil(track.Length, track.Recording.Length),
+		RecordingMBID: track.Recording.ID,
+		ArtistCredit:  creditsOf(track.ArtistCredit),
+		ISRCs:         track.Recording.ISRCs,
+	}
 }
 
 func (d direct) release(ctx context.Context, mbid string) (Release, error) {
@@ -777,18 +794,13 @@ func (parsed directRelease) toRelease() Release {
 	}
 	for _, medium := range parsed.Media {
 		out := Medium{Position: medium.Position, Format: medium.Format, Title: medium.Title}
+		if medium.Pregap != nil {
+			pregap := medium.Pregap.toTrack(true)
+			pregap.Position = 0
+			out.Tracks = append(out.Tracks, pregap)
+		}
 		for _, track := range medium.Tracks {
-			title := track.Title
-			if title == "" {
-				title = track.Recording.Title
-			}
-			out.Tracks = append(out.Tracks, Track{
-				Position: track.Position, Number: track.Number, Title: title,
-				DurationMs:    firstNonNil(track.Length, track.Recording.Length),
-				RecordingMBID: track.Recording.ID,
-				ArtistCredit:  creditsOf(track.ArtistCredit),
-				ISRCs:         track.Recording.ISRCs,
-			})
+			out.Tracks = append(out.Tracks, track.toTrack(false))
 		}
 		release.Media = append(release.Media, out)
 	}

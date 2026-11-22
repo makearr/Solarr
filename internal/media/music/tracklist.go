@@ -247,7 +247,7 @@ func Align(parts []Part, candidates []TrackFile) Alignment {
 					continue
 				}
 			}
-			if candidateTrack == 0 || candidateDisc != disc || candidateTrack != track || !agrees(part, candidate) {
+			if (candidateTrack == 0 && (candidate.TrackFrom == "" || candidate.Side > 0)) || candidateDisc != disc || candidateTrack != track || !agrees(part, candidate) {
 				continue
 			}
 			file := take(candidateIndex)

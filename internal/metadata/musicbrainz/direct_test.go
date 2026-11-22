@@ -724,3 +724,31 @@ func TestDirect_ArtistReleaseGroupsAsksForBootlegOnlyGroupsWhenTheLibraryDoes(t 
 		t.Errorf("groups = %+v, want the one the unfiltered browse answered", groups)
 	}
 }
+
+func TestDirect_AlbumReadsAMediumsPregapAsAnOptionalTrackZero(t *testing.T) {
+	const body = `{"id": "` + okComputerRelease + `", "title": "Invented", "media": [{"position": 1, "format": "CD",
+	  "pregap": {"number": "0", "position": 0, "title": "Hidden Zeta", "length": 61000, "recording": {"id": "11111111-2222-4333-8444-555555555555", "title": "Hidden Zeta"}},
+	  "tracks": [{"number": "1", "position": 1, "title": "First", "length": 1000, "recording": {"id": "66666666-2222-4333-8444-555555555555", "title": "First"}}]}]}`
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://musicbrainz.invalid/release-group/" + okComputerRG + "?fmt=json&inc=artist-credits+genres+ratings+url-rels": {
+			status: http.StatusOK, body: directReleaseGroupBody,
+		},
+		"https://musicbrainz.invalid/release/" + okComputerRelease + "?fmt=json&inc=recordings+artist-credits+isrcs+labels+media": {
+			status: http.StatusOK, body: body,
+		},
+	}}
+	source := musicbrainz.NewDirect(newTestClient(t, transport, musicbrainz.DirectName), "https://musicbrainz.invalid")
+
+	_, release, err := source.Album(t.Context(), okComputerRG, okComputerRelease)
+	if err != nil {
+		t.Fatalf("Album: %v", err)
+	}
+
+	want := []musicbrainz.Track{
+		{Position: 0, Optional: true, Number: "0", Title: "Hidden Zeta", DurationMs: 61000, RecordingMBID: "11111111-2222-4333-8444-555555555555"},
+		{Position: 1, Number: "1", Title: "First", DurationMs: 1000, RecordingMBID: "66666666-2222-4333-8444-555555555555"},
+	}
+	if got := release.Media[0].Tracks; !reflect.DeepEqual(got, want) {
+		t.Errorf("Tracks = %+v, want %+v", got, want)
+	}
+}

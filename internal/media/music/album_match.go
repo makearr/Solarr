@@ -285,8 +285,17 @@ func tracklistKey(release musicbrainz.Release) string {
 func fitTracklist(locals []LocalTrack, release musicbrainz.Release, ignoreTitles bool) tracklistFit {
 	var tracks []ReleaseTrack
 	var releaseTracks []musicbrainz.Track
+	// The continuous number a file tagged "track 9 of the album" counts by: a pregap holds none.
+	var absolutes []int
+	mandatory := 0
 	for _, medium := range release.Media {
 		for _, track := range medium.Tracks {
+			absolute := 0
+			if !track.Optional {
+				mandatory++
+				absolute = mandatory
+			}
+			absolutes = append(absolutes, absolute)
 			tracks = append(tracks, ReleaseTrack{
 				Disc: medium.Position, Position: track.Position, Title: track.Title, RecordingMBID: track.RecordingMBID,
 			})
@@ -313,7 +322,7 @@ func fitTracklist(locals []LocalTrack, release musicbrainz.Release, ignoreTitles
 		pairs[i] = make([]pairScore, len(tracks))
 		refuted, fits := false, false
 		for j, track := range releaseTracks {
-			pair := scorePair(local, track, tracks[j].Disc, j+1, localCores[i], trackCores[j])
+			pair := scorePair(local, track, tracks[j].Disc, absolutes[j], localCores[i], trackCores[j])
 			pairs[i][j] = pair
 			sameName := pair.hasTitles && pair.titlePenalty <= supportTitlePenalty
 			if pair.conflict {
@@ -360,6 +369,16 @@ func fitTracklist(locals []LocalTrack, release musicbrainz.Release, ignoreTitles
 		}
 		if best >= 0 {
 			fit.tracks[i] = &tracks[best]
+		}
+	}
+	// A pregap no file took is not a track the folder lacks.
+	taken := map[*ReleaseTrack]bool{}
+	for _, placed := range fit.tracks {
+		taken[placed] = true
+	}
+	for j, track := range releaseTracks {
+		if track.Optional && !taken[&tracks[j]] {
+			fit.trackCount--
 		}
 	}
 	return fit

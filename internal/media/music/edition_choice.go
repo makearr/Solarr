@@ -34,7 +34,11 @@ func chooseRelease(group musicbrainz.ReleaseGroup, releases []musicbrainz.Releas
 func trackCount(release musicbrainz.Release) int {
 	count := 0
 	for _, medium := range release.Media {
-		count += len(medium.Tracks)
+		for _, track := range medium.Tracks {
+			if !track.Optional {
+				count++
+			}
+		}
 	}
 	return count
 }

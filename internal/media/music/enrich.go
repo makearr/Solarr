@@ -69,7 +69,7 @@ func totalRuntimeMs(media []musicbrainz.Medium) *int64 {
 	var found bool
 	for _, medium := range media {
 		for _, track := range medium.Tracks {
-			if track.DurationMs > 0 {
+			if track.DurationMs > 0 && !track.Optional {
 				total += track.DurationMs
 				found = true
 			}
@@ -86,6 +86,7 @@ func partFor(medium musicbrainz.Medium, track musicbrainz.Track) library.PartIde
 		MediaRef: mediaRef(medium.Position, track.Position),
 		SortKey:  sortKey(medium.Position, track.Position),
 		Title:    track.Title,
+		Optional: track.Optional,
 	}
 	if track.DurationMs > 0 {
 		duration := track.DurationMs

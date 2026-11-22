@@ -327,3 +327,17 @@ func TestReadTrackFile_TagsOutrankThePath(t *testing.T) {
 		t.Errorf("a vinyl position in the tag = %+v, want side 2 track 2", got)
 	}
 }
+
+func TestAlign_AFileNamedTrackZeroMatchesThePregapPart(t *testing.T) {
+	parts := []music.Part{part("disc1:track0", "Hidden Zeta", ""), part("disc1:track1", "First Song", "")}
+	candidates := []music.TrackFile{
+		music.ReadTrackFile(5, "Album/00 - Hidden Zeta.flac", mediatool.Tags{}),
+		{MediaObjectID: 6, Disc: 1, Track: 1, Title: "First Song"},
+	}
+
+	result := music.Align(parts, candidates)
+
+	if result.Parts[0].File == nil || result.Parts[0].File.MediaObjectID != 5 || result.Parts[0].Basis != "position" || len(result.Extra) != 0 {
+		t.Fatalf("want file 5 on the pregap by position and nothing extra, got %+v extra %+v", result.Parts[0], result.Extra)
+	}
+}
