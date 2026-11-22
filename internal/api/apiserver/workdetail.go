@@ -135,6 +135,8 @@ type PartFileRow struct {
 	AudioLanguages, Subtitles      []string
 	FrameRate, CRF                 float64
 	HeightPx, DurationMs           int64
+	PageCount, PageShort, PageLong int64
+	ImageFormat                    string
 }
 
 // CreditRow is one work-level credit, the person's own name included so a
@@ -984,6 +986,11 @@ func partFileView(file PartFileRow) *gen.PartFile {
 	if file.CRF > 0 {
 		crf := float32(file.CRF)
 		view.Crf = &crf
+	}
+	if file.PageCount > 0 {
+		view.Pages = &file.PageCount
+		view.PageShort, view.PageLong = &file.PageShort, &file.PageLong
+		view.ImageFormat = strPtr(file.ImageFormat)
 	}
 	if file.HeightPx > 0 {
 		view.Height = &file.HeightPx

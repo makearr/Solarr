@@ -28,9 +28,9 @@ var mangaRules = []settings.LibraryRule{
 func Kinds() []media.LibraryKind {
 	return []media.LibraryKind{
 		{Key: KindComics, Label: "Comics", Help: "Western comics: series of issues, read left to right.", QualityProfiles: comicProfiles},
-		{Key: KindManga, Label: "Manga", Help: "Series of tankobon volumes, read right to left; a chapter file counts toward its volume.", QualityProfiles: mangaProfiles, Rules: mangaRules},
+		{Key: KindManga, Label: "Manga", Help: "Series of tankobon volumes, read right to left; a chapter file counts toward its volume.", Part: media.Term{One: "Volume", Many: "Volumes"}, QualityProfiles: mangaProfiles, Rules: mangaRules},
 		{Key: KindAdultComics, Label: "Adult comics", Help: "Comics for adults, hidden and confirmed as the adult type is.", Adult: true, QualityProfiles: comicProfiles},
-		{Key: KindHentai, Label: "Hentai", Help: "Adult manga and one-shot galleries, hidden and confirmed as the adult type is.", Adult: true, QualityProfiles: mangaProfiles},
+		{Key: KindHentai, Label: "Hentai", Help: "Adult manga and one-shot galleries, hidden and confirmed as the adult type is.", Adult: true, Part: media.Term{One: "Volume", Many: "Volumes"}, QualityProfiles: mangaProfiles},
 	}
 }
 

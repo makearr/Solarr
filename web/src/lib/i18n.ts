@@ -990,7 +990,8 @@ export type MessageKey = keyof typeof catalogue;
 /** The words of a media type a label may name: {work}, {Work}, {works}, {Works}, and the same for part and group. */
 export type Vocabulary = Record<string, string>;
 
-export function vocabularyOf(info: MediaTypeInfo | undefined): Vocabulary {
+export function vocabularyOf(info: MediaTypeInfo | undefined, kind?: string): Vocabulary {
+  const part = info?.kinds?.find((entry) => entry.key === kind && kind !== undefined)?.part ?? info?.part;
   const words: Vocabulary = {};
   const add = (name: string, one: string | undefined, many: string | undefined, fallbackOne: string, fallbackMany: string) => {
     const singular = one || fallbackOne;
@@ -1001,7 +1002,7 @@ export function vocabularyOf(info: MediaTypeInfo | undefined): Vocabulary {
     words[`${name.charAt(0).toUpperCase() + name.slice(1)}s`] = plural;
   };
   add("work", info?.work.one, info?.work.many, "Item", "Items");
-  add("part", info?.part.one, info?.part.many, "Part", "Parts");
+  add("part", part?.one, part?.many, "Part", "Parts");
   add("group", info?.group.one, info?.group.many, "Group", "Groups");
   return words;
 }

@@ -7658,6 +7658,8 @@ export interface components {
                 help?: string;
                 /** @description The kind's works are adult content; the interface asks for a confirmation before adding such a library. */
                 adult?: boolean;
+                /** @description What a library of this kind calls a part when it differs from the type's (a manga's volumes, not issues). */
+                part?: components["schemas"]["MediaTerm"];
             }[];
             /**
              * Format: double
@@ -10003,6 +10005,23 @@ export interface components {
             duration_ms?: number;
             /**
              * Format: int64
+             * @description A comic file's page count; absent for any other file.
+             */
+            pages?: number;
+            /**
+             * Format: int64
+             * @description The median short edge of a comic file's pages in pixels; absent when unknown.
+             */
+            page_short?: number;
+            /**
+             * Format: int64
+             * @description The median long edge of a comic file's pages in pixels; absent when unknown.
+             */
+            page_long?: number;
+            /** @description The commonest page image format of a comic file (jpg */
+            image_format?: string;
+            /**
+             * Format: int64
              * @description The file's bitrate as a percentage of the bitrate a file on the library's target would have (its video and audio bitrates plus container and subtitle overhead): 100 on it, 618 for six times as large, 50 for half. Absent when the target names no bitrate or the file's is unknown.
              */
             target_size_pct?: number;
@@ -11061,6 +11080,8 @@ export interface components {
             id: number;
             /** @example music */
             media_type: string;
+            /** @description The library's kind within its media type (comics: manga); absent for a type of one kind. */
+            kind?: string;
             name: string;
             /** @description The library's further media types, each a library of its own under the same name (its levels, its id in the URL); absent for a library of one type. */
             members?: components["schemas"]["Library"][];

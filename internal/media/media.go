@@ -185,6 +185,8 @@ type LibraryKind struct {
 	Key, Label, Help string
 	// Adult marks a kind whose works are adult content, which the interface treats as it treats the adult type.
 	Adult bool
+	// Part is what a library of the kind calls a part when it differs from the type's; the zero Term follows the type.
+	Part Term
 	// QualityProfiles name the shipped profiles the library accepts, best first; one not found is left out.
 	QualityProfiles []string
 	// Language is the language profile it starts with, found by name or created; nil starts with none.

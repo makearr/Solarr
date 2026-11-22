@@ -11041,6 +11041,7 @@ components:
               label: { type: string }
               help: { type: string }
               adult: { type: boolean, description: "The kind's works are adult content; the interface asks for a confirmation before adding such a library." }
+              part: { $ref: "#/components/schemas/MediaTerm", description: "What a library of this kind calls a part when it differs from the type's (a manga's volumes, not issues)." }
         commit_guess_floor:
           type: number
           format: double
@@ -13576,6 +13577,10 @@ components:
         crf: { type: number, description: The constant rate factor the encoder states. }
         height: { type: integer, format: int64, description: The picture's lines the probe read; absent when it read none. }
         duration_ms: { type: integer, format: int64, description: The running time the probe read; absent when it read none. }
+        pages: { type: integer, format: int64, description: A comic file's page count; absent for any other file. }
+        page_short: { type: integer, format: int64, description: The median short edge of a comic file's pages in pixels; absent when unknown. }
+        page_long: { type: integer, format: int64, description: The median long edge of a comic file's pages in pixels; absent when unknown. }
+        image_format: { type: string, description: The commonest page image format of a comic file (jpg, png, webp). }
         target_size_pct:
           type: integer
           format: int64
@@ -14963,6 +14968,7 @@ components:
       properties:
         id: { type: integer, format: int64 }
         media_type: { type: string, example: "music" }
+        kind: { type: string, description: "The library's kind within its media type (comics: manga); absent for a type of one kind." }
         name: { type: string }
         members:
           type: array

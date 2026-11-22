@@ -135,6 +135,9 @@ func (s *Server) libraryView(ctx context.Context, access authz.Access, category 
 		Levels:     s.libraryLevels(category, values),
 		LastLevel:  s.lastLibraryLevel(ctx, access.UserID(), category.ID),
 	}
+	if category.Kind != "" {
+		view.Kind = &category.Kind
+	}
 	if category.MaxAge != nil {
 		view.RatingLimit = &gen.RatingLimit{MaxAge: category.MaxAge, AllowUnrated: category.AllowUnrated}
 	}

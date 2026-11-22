@@ -6,6 +6,7 @@ import { ArrowDown, ArrowUp, ListFilter, Search } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
+import { useLibrary } from "@/lib/useLibrary";
 import { useCanAdd } from "@/lib/useLibraryPermission";
 import type { MediaTypeInfo } from "@/lib/useMediaTypes";
 import { vocabularyOf, t } from "@/lib/i18n";
@@ -47,9 +48,9 @@ const GRID = "grid grid-cols-[1fr_1.4fr_6rem_10rem_6rem_14rem] items-center gap-
 /** Lidarr's Wanted for a type wanted work by work: sortable by header, paged, searched one work, one page or the
  *  whole library at a time. Search sends the best release; the list icon lets a person choose it. */
 export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
-  const words = vocabularyOf(info);
-  const COLUMNS = columnsOf(info);
   const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
+  const words = vocabularyOf(info, useLibrary(categoryId)?.kind);
+  const COLUMNS = columnsOf(info);
   const search = useSearch({ strict: false }) as {
     sort?: Sort;
     dir?: "asc" | "desc";

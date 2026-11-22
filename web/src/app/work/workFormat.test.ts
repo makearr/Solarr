@@ -35,6 +35,9 @@ test("a video's chips name its picture and sound; an audio file's its format", (
       audio_codec: "eac3", audio_channels: "5.1", audio_languages: ["en", "und"], subtitles: ["und"], size_bytes: 1_200_000_000,
     }),
   ).toEqual(["1080p", "HEVC", "HDR10", "EAC3 5.1", "audio: en", "subs", "1.2 GB"]);
+  expect(fileChips({ media_object_id: 3, bitrate_kbps: 0, lossless: false, extension: "cbz", size_bytes: 40_000_000, pages: 22, page_short: 1988, page_long: 3056, image_format: "jpg" })).toEqual([
+    "CBZ", "22 pages", "1988 x 3056 px", "jpg", "40 MB",
+  ]);
   expect(fileChips({ media_object_id: 2, bitrate_kbps: 320, lossless: false, extension: "mp3", size_bytes: 9_000_000 })).toEqual(["MP3", "320 kbps", "9.0 MB"]);
   expect(formatSize(950)).toBe("950 B");
 });

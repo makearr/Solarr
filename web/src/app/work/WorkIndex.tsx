@@ -136,7 +136,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
   const info = mediaTypes.find((entry) => entry.key === (wholeLibrary ? chosenType : library?.media_type));
   const infoOf = (mediaType: string) => mediaTypes.find((entry) => entry.key === mediaType);
   const memberOf = (mediaType: string) => String(types.find((entry) => entry.media_type === mediaType)?.id ?? categoryId);
-  const words = vocabularyOf(info);
+  const words = vocabularyOf(info, library?.kind);
   const levelLabel = wholeLibrary ? "All" : (library?.levels.find((entry) => entry.key === level)?.label ?? words.Works);
   const lead = info?.roles.find((role) => role.lead);
   const portrait = info?.work_image === "poster";

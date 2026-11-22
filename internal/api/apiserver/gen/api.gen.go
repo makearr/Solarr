@@ -3943,6 +3943,9 @@ type LegalText struct {
 type Library struct {
 	Id int64 `json:"id"`
 
+	// Kind The library's kind within its media type (comics: manga); absent for a type of one kind.
+	Kind *string `json:"kind,omitempty"`
+
 	// LastLevel The level key the caller last visited in this library (user_preference), absent if never visited.
 	LastLevel *string        `json:"last_level,omitempty"`
 	Levels    []LibraryLevel `json:"levels"`
@@ -4619,10 +4622,11 @@ type MediaTypeInfo struct {
 	// Kinds What a library of the type can be, picked when one is added; the first is the default. Empty for a type of one kind.
 	Kinds *[]struct {
 		// Adult The kind's works are adult content; the interface asks for a confirmation before adding such a library.
-		Adult *bool   `json:"adult,omitempty"`
-		Help  *string `json:"help,omitempty"`
-		Key   string  `json:"key"`
-		Label string  `json:"label"`
+		Adult *bool      `json:"adult,omitempty"`
+		Help  *string    `json:"help,omitempty"`
+		Key   string     `json:"key"`
+		Label string     `json:"label"`
+		Part  *MediaTerm `json:"part,omitempty"`
 	} `json:"kinds,omitempty"`
 
 	// Label Also the default name of a library of this type.
@@ -5146,15 +5150,27 @@ type PartFile struct {
 	Hdr       *string  `json:"hdr,omitempty"`
 
 	// Height The picture's lines the probe read; absent when it read none.
-	Height        *int64 `json:"height,omitempty"`
-	Lossless      bool   `json:"lossless"`
-	MediaObjectId int64  `json:"media_object_id"`
+	Height *int64 `json:"height,omitempty"`
+
+	// ImageFormat The commonest page image format of a comic file (jpg
+	ImageFormat   *string `json:"image_format,omitempty"`
+	Lossless      bool    `json:"lossless"`
+	MediaObjectId int64   `json:"media_object_id"`
 
 	// MeetsCutoff Good enough that upgrades stop. Absent when the library sets neither target nor cutoff.
 	MeetsCutoff *bool `json:"meets_cutoff,omitempty"`
 
 	// MeetsTarget Codec, file type and bitrate match the library's target. Absent when it sets none.
 	MeetsTarget *bool `json:"meets_target,omitempty"`
+
+	// PageLong The median long edge of a comic file's pages in pixels; absent when unknown.
+	PageLong *int64 `json:"page_long,omitempty"`
+
+	// PageShort The median short edge of a comic file's pages in pixels; absent when unknown.
+	PageShort *int64 `json:"page_short,omitempty"`
+
+	// Pages A comic file's page count; absent for any other file.
+	Pages *int64 `json:"pages,omitempty"`
 
 	// Path Where the file is, relative to its root folder (its primary path when it has several).
 	Path       *string `json:"path,omitempty"`

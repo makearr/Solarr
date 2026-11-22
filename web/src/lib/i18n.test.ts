@@ -17,6 +17,13 @@ describe("t", () => {
     expect(t("action.searchAll", vocabularyOf(series))).toBe("Search all series");
   });
 
+  it("words a part by the library's kind when the kind has its own", () => {
+    const comics = { ...series, part: { one: "Issue", many: "Issues" }, kinds: [{ key: "manga", label: "Manga", part: { one: "Volume", many: "Volumes" } }, { key: "comics", label: "Comics" }] };
+    expect(vocabularyOf(comics, "manga").parts).toBe("volumes");
+    expect(vocabularyOf(comics, "comics").parts).toBe("issues");
+    expect(vocabularyOf(comics).parts).toBe("issues");
+  });
+
   it("keeps a placeholder it has no value for, and falls back to neutral words for a type without its own", () => {
     expect(t("work.remove.title", {})).toBe("Remove {title}");
     expect(t("work.noParts", vocabularyOf(series))).toBe("No parts are known yet.");

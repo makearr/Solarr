@@ -71,7 +71,7 @@ export function WorkPage() {
 }
 
 function WorkView({ work, info, categoryId, tab }: { work: Work; info: MediaTypeInfo | undefined; categoryId: string | undefined; tab: TabKey }) {
-  const words = vocabularyOf(info);
+  const words = vocabularyOf(info, useLibrary(categoryId)?.kind);
   const tabLink = (key: TabKey): Tab["link"] =>
     categoryId
       ? { to: "/library/$categoryId/works/$workId/$tab", params: { categoryId, workId: String(work.id), tab: key } }

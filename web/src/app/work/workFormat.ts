@@ -71,7 +71,9 @@ export function fileTagChips(file: PartFile): FileChip[] {
         toned(file, "audio_language", known(file.audio_languages).length > 0 ? `audio: ${known(file.audio_languages).join(", ")}` : undefined),
         toned(file, "subtitle_language", subtitles),
       ]
-    : [toned(file, "audio_codec", file.extension?.toUpperCase() ?? audio), plain(file.lossless ? "lossless" : file.bitrate_kbps > 0 ? `${file.bitrate_kbps} kbps` : undefined)];
+    : file.pages
+      ? [plain(file.extension?.toUpperCase()), plain(`${file.pages} pages`), plain(file.page_long && file.page_short ? `${file.page_short} x ${file.page_long} px` : undefined), plain(file.image_format)]
+      : [toned(file, "audio_codec", file.extension?.toUpperCase() ?? audio), plain(file.lossless ? "lossless" : file.bitrate_kbps > 0 ? `${file.bitrate_kbps} kbps` : undefined)];
   return [...chips, plain(file.size_bytes ? formatSize(file.size_bytes) : undefined)].filter((chip): chip is FileChip => chip !== undefined && chip.text !== "");
 }
 

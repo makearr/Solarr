@@ -97,7 +97,8 @@ FROM desired_item_file WHERE media_object_id = ? ORDER BY desired_item_id;
 -- name: ListPartFilesForWork :many
 SELECT f.media_ref, f.media_object_id, o.overall_bitrate, o.audio_bitrate,
        a.audio_codec, a.video_codec, a.container, a.lossless, a.languages, a.lyrics_languages,
-       o.size_bytes, o.video_bitrate, o.height, o.duration_ms, a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
+       o.size_bytes, o.video_bitrate, o.height, o.width, o.duration_ms, a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
+       a.page_count, a.image_format,
        CAST(COALESCE((SELECT lp.rel_path FROM library_path lp WHERE lp.media_object_id = o.id
                       ORDER BY EXISTS (SELECT 1 FROM work_file wf JOIN library_path sib ON sib.media_object_id = wf.media_object_id
                                        WHERE wf.work_id = d.work_id AND wf.media_object_id <> o.id

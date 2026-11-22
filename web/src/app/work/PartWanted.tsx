@@ -8,6 +8,7 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 
 import { vocabularyOf, t } from "@/lib/i18n";
+import { useLibrary } from "@/lib/useLibrary";
 import type { MediaTypeInfo } from "@/lib/useMediaTypes";
 import { Chip } from "@/ui/Chip";
 
@@ -22,8 +23,8 @@ type View = "missing" | "cutoff";
 /** Sonarr's Wanted for a type wanted part by part: Missing (monitored, out, no file) and Cutoff unmet (files below the
  *  library's target or cutoff). A search covers the part's whole group, so a pack can fill several rows at once. */
 export function PartWanted({ info }: { info: MediaTypeInfo | undefined }) {
-  const words = vocabularyOf(info);
   const { categoryId } = useParams({ strict: false }) as { categoryId: string };
+  const words = vocabularyOf(info, useLibrary(categoryId)?.kind);
   const [view, setView] = useState<View>("missing");
   const queryClient = useQueryClient();
   const [dialog, setDialog] = useState<Part | null>(null);

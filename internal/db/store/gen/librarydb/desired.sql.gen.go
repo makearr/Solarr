@@ -1318,7 +1318,8 @@ func (q *Queries) ListMonitoredPartsLosingFiles(ctx context.Context, arg ListMon
 const listPartFilesForWork = `-- name: ListPartFilesForWork :many
 SELECT f.media_ref, f.media_object_id, o.overall_bitrate, o.audio_bitrate,
        a.audio_codec, a.video_codec, a.container, a.lossless, a.languages, a.lyrics_languages,
-       o.size_bytes, o.video_bitrate, o.height, o.duration_ms, a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
+       o.size_bytes, o.video_bitrate, o.height, o.width, o.duration_ms, a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
+       a.page_count, a.image_format,
        CAST(COALESCE((SELECT lp.rel_path FROM library_path lp WHERE lp.media_object_id = o.id
                       ORDER BY EXISTS (SELECT 1 FROM work_file wf JOIN library_path sib ON sib.media_object_id = wf.media_object_id
                                        WHERE wf.work_id = d.work_id AND wf.media_object_id <> o.id
@@ -1349,6 +1350,7 @@ type ListPartFilesForWorkRow struct {
 	SizeBytes       int64
 	VideoBitrate    sql.NullInt64
 	Height          sql.NullInt64
+	Width           sql.NullInt64
 	DurationMs      sql.NullInt64
 	Resolution      sql.NullString
 	Hdr             sql.NullString
@@ -1356,6 +1358,8 @@ type ListPartFilesForWorkRow struct {
 	Subtitles       sql.NullString
 	FrameRate       sql.NullFloat64
 	Crf             sql.NullFloat64
+	PageCount       sql.NullInt64
+	ImageFormat     sql.NullString
 	RelPath         string
 }
 
@@ -1386,6 +1390,7 @@ func (q *Queries) ListPartFilesForWork(ctx context.Context, workID int64) ([]Lis
 			&i.SizeBytes,
 			&i.VideoBitrate,
 			&i.Height,
+			&i.Width,
 			&i.DurationMs,
 			&i.Resolution,
 			&i.Hdr,
@@ -1393,6 +1398,8 @@ func (q *Queries) ListPartFilesForWork(ctx context.Context, workID int64) ([]Lis
 			&i.Subtitles,
 			&i.FrameRate,
 			&i.Crf,
+			&i.PageCount,
+			&i.ImageFormat,
 			&i.RelPath,
 		); err != nil {
 			return nil, err

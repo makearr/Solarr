@@ -76,6 +76,9 @@ type PartFile struct {
 	FrameRate, CRF float64
 	// HeightPx and DurationMs are the picture's lines and the running time the probe read; 0 when it read none.
 	HeightPx, DurationMs int64
+	// PageCount, PageShort and PageLong are a comic file's pages and the median edges of its pages; ImageFormat their commonest format.
+	PageCount, PageShort, PageLong int64
+	ImageFormat                    string
 }
 
 // Credit is one work-level credit, with the person's own name -- the work
@@ -434,6 +437,7 @@ func detailParts(ctx context.Context, queries *librarydb.Queries, id int64, part
 			AudioChannels: row.AudioChannels.String, VideoBitrateKbps: row.VideoBitrate.Int64 / 1000,
 			AudioLanguages: jsonStrings(row.Languages), Subtitles: jsonStrings(row.Subtitles),
 			FrameRate: row.FrameRate.Float64, CRF: row.Crf.Float64, HeightPx: row.Height.Int64, DurationMs: row.DurationMs.Int64,
+			PageCount: row.PageCount.Int64, PageShort: row.Width.Int64, PageLong: row.Height.Int64, ImageFormat: row.ImageFormat.String,
 		}
 	}
 	partIDs := make([]int64, len(parts))
