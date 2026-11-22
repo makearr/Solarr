@@ -242,6 +242,45 @@ type LanguageProfile struct {
 	RejectDubbed          int64
 }
 
+type MediaServer struct {
+	ID           int64
+	Kind         string
+	Name         string
+	BaseUrl      string
+	Username     string
+	Credential   []byte
+	Enabled      int64
+	AsMetadata   int64
+	PushFiles    int64
+	Announce     int64
+	SyncPlayback int64
+	CreatedAt    int64
+	UpdatedAt    int64
+	LastOkAt     sql.NullInt64
+	LastError    string
+}
+
+type MediaServerLibrary struct {
+	ServerID        int64
+	CategoryID      int64
+	ServerLibraryID string
+	ServerLibrary   string
+}
+
+type MediaServerPath struct {
+	ServerID     int64
+	SolarrPrefix string
+	ServerPrefix string
+}
+
+type MediaServerUser struct {
+	ServerID     int64
+	ServerUserID string
+	Name         string
+	UserID       sql.NullInt64
+	Counted      int64
+}
+
 type NamingFormat struct {
 	NamingProfileID int64
 	Slot            string

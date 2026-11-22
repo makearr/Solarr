@@ -471,7 +471,16 @@ var allowedInternalImports = map[string][]string{
 	"internal/metadata/radarrmeta": {"internal/platform/httpx"},
 	"internal/metadata/mdblist":    {"internal/platform/httpx"},
 	"internal/metadata/omdb":       {},
-	"internal/metadata/fanart":     {"internal/platform/httpx"},
+	// Media server connections: kinds, path mapping and the client interfaces; each kind has its own package.
+	"internal/mediaserver":                 {"internal/platform/httpx"},
+	"internal/mediaserver/mediaservertest": {"internal/mediaserver", "internal/platform/httpx"},
+	"internal/mediaserver/jellyfin":        {"internal/mediaserver"},
+	"internal/mediaserver/navidrome":       {"internal/mediaserver"},
+	"internal/mediaserver/audiobookshelf":  {"internal/mediaserver"},
+	"internal/mediaserver/kavita":          {"internal/mediaserver"},
+	"internal/mediaserver/calibre":         {"internal/mediaserver", "internal/platform/httpx"},
+	"internal/mediaserver/stash":           {"internal/mediaserver"},
+	"internal/metadata/fanart":             {"internal/platform/httpx"},
 	// A movie release or file name: title, year, edition and ids, reading claims through parsetv's.
 	"internal/identify/parsemovie": {"internal/identify/parsetv"},
 	// What a video release name claims, as the facts a profile judges; TV and movies read it the same way.

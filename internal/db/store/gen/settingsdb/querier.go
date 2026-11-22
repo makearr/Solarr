@@ -11,6 +11,9 @@ import (
 
 type Querier interface {
 	AddDefaultLanguage(ctx context.Context, arg AddDefaultLanguageParams) error
+	AddMediaServerLibrary(ctx context.Context, arg AddMediaServerLibraryParams) error
+	AddMediaServerPath(ctx context.Context, arg AddMediaServerPathParams) error
+	AddMediaServerUser(ctx context.Context, arg AddMediaServerUserParams) error
 	AttachRootFolderToCategory(ctx context.Context, arg AttachRootFolderToCategoryParams) error
 	ClearCategoryBootlegOnly(ctx context.Context, categoryID int64) error
 	ClearCategoryTarget(ctx context.Context, categoryID int64) error
@@ -54,6 +57,8 @@ type Querier interface {
 	// Indexer connections (stage 5, ADR-37/43/47). Column lists follow table order.
 	CreateIndexer(ctx context.Context, arg CreateIndexerParams) (Indexer, error)
 	CreateLanguageProfile(ctx context.Context, arg CreateLanguageProfileParams) (LanguageProfile, error)
+	// Media server connections. Column lists follow table order.
+	CreateMediaServer(ctx context.Context, arg CreateMediaServerParams) (MediaServer, error)
 	CreateNamingProfile(ctx context.Context, arg CreateNamingProfileParams) (int64, error)
 	// Proxies an indexer can use. Column lists follow table order.
 	CreateProxy(ctx context.Context, arg CreateProxyParams) (Proxy, error)
@@ -75,6 +80,10 @@ type Querier interface {
 	DeleteImportList(ctx context.Context, id int64) error
 	DeleteIndexer(ctx context.Context, id int64) error
 	DeleteLanguageProfile(ctx context.Context, id int64) error
+	DeleteMediaServer(ctx context.Context, id int64) error
+	DeleteMediaServerLibraries(ctx context.Context, serverID int64) error
+	DeleteMediaServerPaths(ctx context.Context, serverID int64) error
+	DeleteMediaServerUsers(ctx context.Context, serverID int64) error
 	DeleteNamingFormats(ctx context.Context, namingProfileID int64) error
 	DeleteNamingProfile(ctx context.Context, id int64) error
 	DeletePlacementAffinityOfRootFolder(ctx context.Context, rootFolderID int64) error
@@ -100,6 +109,7 @@ type Querier interface {
 	GetImportList(ctx context.Context, id int64) (ImportList, error)
 	GetIndexer(ctx context.Context, id int64) (Indexer, error)
 	GetInstanceSetting(ctx context.Context, key string) (InstanceSetting, error)
+	GetMediaServer(ctx context.Context, id int64) (MediaServer, error)
 	GetPlacementAffinity(ctx context.Context, arg GetPlacementAffinityParams) (int64, error)
 	GetPreference(ctx context.Context, arg GetPreferenceParams) (UserPreference, error)
 	GetProxy(ctx context.Context, id int64) (Proxy, error)
@@ -113,6 +123,7 @@ type Querier interface {
 	InsertUserBlockedTag(ctx context.Context, arg InsertUserBlockedTagParams) error
 	ListAPIKeysForUser(ctx context.Context, userID int64) ([]ApiKey, error)
 	ListAllCategoryAccess(ctx context.Context) ([]UserCategoryAccess, error)
+	ListAllMediaServerLibraries(ctx context.Context) ([]MediaServerLibrary, error)
 	ListAllUserBlockedTags(ctx context.Context) ([]UserBlockedTag, error)
 	ListArrInstances(ctx context.Context) ([]ArrInstance, error)
 	ListCategories(ctx context.Context) ([]Category, error)
@@ -135,6 +146,10 @@ type Querier interface {
 	// Instance-wide policy, seeded from config.yml and changeable afterwards (ADR-21).
 	ListInstanceSettings(ctx context.Context) ([]InstanceSetting, error)
 	ListLanguageProfiles(ctx context.Context) ([]LanguageProfile, error)
+	ListMediaServerLibraries(ctx context.Context, serverID int64) ([]MediaServerLibrary, error)
+	ListMediaServerPaths(ctx context.Context, serverID int64) ([]MediaServerPath, error)
+	ListMediaServerUsers(ctx context.Context, serverID int64) ([]MediaServerUser, error)
+	ListMediaServers(ctx context.Context) ([]MediaServer, error)
 	ListNamingFormats(ctx context.Context) ([]NamingFormat, error)
 	// One naming profile per library (category.naming_profile_id), its templates per slot.
 	ListNamingProfiles(ctx context.Context) ([]NamingProfile, error)
@@ -196,6 +211,9 @@ type Querier interface {
 	SetIndexerAPIKey(ctx context.Context, arg SetIndexerAPIKeyParams) error
 	SetIndexerCaps(ctx context.Context, arg SetIndexerCapsParams) error
 	SetInstanceSetting(ctx context.Context, arg SetInstanceSettingParams) error
+	// A separate statement so an edit that keeps the credential never reseals it (a fresh nonce every call).
+	SetMediaServerCredential(ctx context.Context, arg SetMediaServerCredentialParams) error
+	SetMediaServerResult(ctx context.Context, arg SetMediaServerResultParams) error
 	SetPlacementAffinity(ctx context.Context, arg SetPlacementAffinityParams) error
 	SetPreference(ctx context.Context, arg SetPreferenceParams) error
 	// The capacity-polling job's own write: everything it probes, in one
@@ -226,6 +244,7 @@ type Querier interface {
 	UpdateImportList(ctx context.Context, arg UpdateImportListParams) error
 	UpdateIndexer(ctx context.Context, arg UpdateIndexerParams) error
 	UpdateLanguageProfile(ctx context.Context, arg UpdateLanguageProfileParams) error
+	UpdateMediaServer(ctx context.Context, arg UpdateMediaServerParams) error
 	UpdateNamingProfile(ctx context.Context, arg UpdateNamingProfileParams) error
 	UpdateProxy(ctx context.Context, arg UpdateProxyParams) error
 	UpdateQualityProfile(ctx context.Context, arg UpdateQualityProfileParams) error
