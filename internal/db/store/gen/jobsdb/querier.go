@@ -13,6 +13,8 @@ type Querier interface {
 	// History (section 5.7). Appended after a library commit succeeds, never inside one.
 	AppendEvent(ctx context.Context, arg AppendEventParams) (int64, error)
 	CancelJob(ctx context.Context, arg CancelJobParams) (int64, error)
+	// Waiting jobs whose payload names a library: the library is gone, so the work is too.
+	CancelWaitingJobsOfCategory(ctx context.Context, arg CancelWaitingJobsOfCategoryParams) (int64, error)
 	// One conditional UPDATE ... RETURNING, so two dispatchers cannot hand the same
 	// job to two workers.
 	ClaimJobs(ctx context.Context, arg ClaimJobsParams) ([]Job, error)

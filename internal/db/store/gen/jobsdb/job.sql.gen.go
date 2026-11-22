@@ -65,6 +65,27 @@ func (q *Queries) CancelJob(ctx context.Context, arg CancelJobParams) (int64, er
 	return result.RowsAffected()
 }
 
+const cancelWaitingJobsOfCategory = `-- name: CancelWaitingJobsOfCategory :execrows
+UPDATE job
+SET state = 'CANCELLED', last_error = ?1, updated_at = ?2
+WHERE state IN ('PENDING', 'PENDING_RETRY') AND CAST(json_extract(payload_json, '$.category_id') AS INTEGER) = CAST(?3 AS INTEGER)
+`
+
+type CancelWaitingJobsOfCategoryParams struct {
+	Reason     sql.NullString
+	Now        int64
+	CategoryID int64
+}
+
+// Waiting jobs whose payload names a library: the library is gone, so the work is too.
+func (q *Queries) CancelWaitingJobsOfCategory(ctx context.Context, arg CancelWaitingJobsOfCategoryParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, cancelWaitingJobsOfCategory, arg.Reason, arg.Now, arg.CategoryID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const claimJobs = `-- name: ClaimJobs :many
 
 UPDATE job

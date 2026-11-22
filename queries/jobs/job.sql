@@ -97,6 +97,12 @@ SET state = 'CANCELLED', lease_owner = NULL, lease_expires_at = NULL,
 WHERE id = sqlc.arg(id)
   AND state IN ('PENDING', 'PENDING_RETRY', 'LEASED', 'RUNNING');
 
+-- Waiting jobs whose payload names a library: the library is gone, so the work is too.
+-- name: CancelWaitingJobsOfCategory :execrows
+UPDATE job
+SET state = 'CANCELLED', last_error = sqlc.arg(reason), updated_at = sqlc.arg(now)
+WHERE state IN ('PENDING', 'PENDING_RETRY') AND CAST(json_extract(payload_json, '$.category_id') AS INTEGER) = CAST(sqlc.arg(category_id) AS INTEGER);
+
 -- The reaper returns abandoned work to the queue. A crashed process therefore
 -- self-heals with no manual cleanup, which is what makes restart recovery real.
 -- The abandoned run gives its attempt back; a job reaped max_reclaims times fails.

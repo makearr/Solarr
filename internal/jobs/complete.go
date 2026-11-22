@@ -354,3 +354,20 @@ func fullJitter(d time.Duration) time.Duration {
 
 // NoJitter returns a backoff unchanged, for tests and deterministic mode.
 func NoJitter(d time.Duration) time.Duration { return d }
+
+// CancelWaitingForCategory cancels the jobs not yet started whose payload names the library, and answers how many; a
+// merged-away library has nothing left for them to do.
+func (q *Queue) CancelWaitingForCategory(ctx context.Context, categoryID int64, reason string) (int64, error) {
+	var cancelled int64
+	err := q.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		rows, err := q.queries.WithTx(tx).CancelWaitingJobsOfCategory(ctx, jobsdb.CancelWaitingJobsOfCategoryParams{
+			Reason: nullString(reason), Now: q.clock.Now().Unix(), CategoryID: categoryID,
+		})
+		cancelled = rows
+		return err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("jobs: cancel the waiting jobs of library %d: %w", categoryID, err)
+	}
+	return cancelled, nil
+}

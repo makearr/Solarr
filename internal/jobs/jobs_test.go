@@ -920,3 +920,21 @@ func TestEnqueue_ADuplicateRaisesAWaitingJobsPriority(t *testing.T) {
 		t.Errorf("a less urgent duplicate lowered the job to %d", stored.Priority)
 	}
 }
+
+func TestCancelWaitingForCategory_CancelsOnlyThatLibrarysWaitingJobs(t *testing.T) {
+	queue, _ := newQueue(t)
+	mine := mustEnqueue(t, queue, jobs.Request{Type: typeBackup, ActionKey: "mine", Payload: []byte(`{"category_id":7}`)})
+	other := mustEnqueue(t, queue, jobs.Request{Type: typeBackup, ActionKey: "other", Payload: []byte(`{"category_id":8}`)})
+	none := mustEnqueue(t, queue, jobs.Request{Type: typeBackup, ActionKey: "none", Payload: []byte(`{}`)})
+
+	cancelled, err := queue.CancelWaitingForCategory(t.Context(), 7, "library merged")
+	if err != nil || cancelled != 1 {
+		t.Fatalf("cancelled = %d, %v; want 1", cancelled, err)
+	}
+	for id, want := range map[int64]jobs.State{mine.ID: jobs.StateCancelled, other.ID: jobs.StatePending, none.ID: jobs.StatePending} {
+		got, err := queue.Get(t.Context(), id)
+		if err != nil || got.State != want {
+			t.Errorf("job %d is %q, %v; want %q", id, got.State, err, want)
+		}
+	}
+}
