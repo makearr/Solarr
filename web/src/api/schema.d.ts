@@ -13857,6 +13857,11 @@ export interface operations {
                     /** @default false */
                     above_rating?: boolean;
                     /**
+                     * @description The list's own quality profile filter.
+                     * @default false
+                     */
+                    own_profile?: boolean;
+                    /**
                      * Format: int64
                      * @description The list's person filter.
                      */
@@ -14333,6 +14338,8 @@ export interface operations {
                 cutoff_unmet?: boolean;
                 /** @description Only the works the library's maximum rating does not admit (held, never searched); needs category_id. */
                 above_rating?: boolean;
+                /** @description Only the works with an item that carries a quality profile of its own (an override), not the library's. */
+                own_profile?: boolean;
                 /** @description With category_id, every media type of that library (its All list), not that one category. */
                 whole_library?: boolean;
                 /** @description Only works the person is credited on. */
@@ -16237,6 +16244,11 @@ export interface operations {
                      */
                     above_rating?: boolean;
                     /**
+                     * @description The list's own quality profile filter.
+                     * @default false
+                     */
+                    own_profile?: boolean;
+                    /**
                      * Format: int64
                      * @description The list's person filter.
                      */
@@ -16304,6 +16316,11 @@ export interface operations {
                     tags?: string;
                     /** @default false */
                     above_rating?: boolean;
+                    /**
+                     * @description The list's own quality profile filter.
+                     * @default false
+                     */
+                    own_profile?: boolean;
                     /**
                      * Format: int64
                      * @description The list's person filter.

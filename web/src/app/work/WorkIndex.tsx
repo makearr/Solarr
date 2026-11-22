@@ -43,7 +43,7 @@ import { formatMinutes } from "./workFormat";
 type Work = components["schemas"]["Work"];
 
 // Filters that ride in the URL; the library is the route's own.
-const FILTER_KEYS: readonly string[] = ["fresh", "q", "where", "from", "tags", "person", "above_rating", "favorite", "type"];
+const FILTER_KEYS: readonly string[] = ["fresh", "q", "where", "from", "tags", "person", "above_rating", "own_profile", "favorite", "type"];
 const CARD_HEIGHT = 68;
 const TABLE_ROW_HEIGHT = 44;
 const GROUP_HEADER_HEIGHT = 44;
@@ -109,6 +109,7 @@ function selectionBody(request: SelectionRequest) {
     person_id: request.filters.person ? Number(request.filters.person) : undefined,
     favorite: request.filters.favorite === "only" ? true : undefined,
     above_rating: String(request.filters.above_rating) === "1" ? true : undefined,
+    own_profile: String(request.filters.own_profile) === "1" ? true : undefined,
     whole_library: request.filters.whole_library === "1" ? true : undefined,
     media_type: request.filters.type || undefined,
   };
@@ -190,6 +191,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
             person_id: query.filters.person ? Number(query.filters.person) : undefined,
             favorite: query.filters.favorite === "only" ? true : undefined,
             above_rating: String(query.filters.above_rating) === "1" ? true : undefined,
+            own_profile: String(query.filters.own_profile) === "1" ? true : undefined,
             whole_library: wholeLibrary || undefined,
             media_type: chosenType || undefined,
           },
@@ -230,6 +232,14 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
             Above rating
           </Button>
         )}
+        <Button
+          variant={String(routeView.query.filters.own_profile) === "1" ? "primary" : "secondary"}
+          aria-pressed={String(routeView.query.filters.own_profile) === "1"}
+          title={t("work.filter.ownProfile.hint")}
+          onClick={() => setFilter("own_profile", String(routeView.query.filters.own_profile) === "1" ? "" : "1")}
+        >
+          {t("work.filter.ownProfile")}
+        </Button>
         {types.length > 1 && (
           <span className="flex items-center gap-1" role="group" aria-label="Type">
             {[{ key: "", label: "All" }, ...types.map((entry) => ({ key: entry.media_type, label: infoOf(entry.media_type)?.work.many ?? entry.media_type }))].map((choice) => (
@@ -300,7 +310,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
         {!list.isLoading && list.error === null && list.items.length === 0 && (
           <div className="p-6">
             <EmptyState
-              title={routeView.query.filters.where || routeView.query.filters.fresh || routeView.query.filters.q || routeView.query.filters.tags || routeView.query.filters.person || routeView.query.filters.above_rating || routeView.query.filters.favorite ? `No ${words.works} match these filters.` : `No ${words.works} in this library yet.`}
+              title={routeView.query.filters.where || routeView.query.filters.fresh || routeView.query.filters.q || routeView.query.filters.tags || routeView.query.filters.person || routeView.query.filters.above_rating || routeView.query.filters.own_profile || routeView.query.filters.favorite ? `No ${words.works} match these filters.` : `No ${words.works} in this library yet.`}
               hint={`Identified files appear here once a scan finds them; Add new looks ${words.works} up.`}
             />
           </div>

@@ -90,7 +90,7 @@ func (s *Server) BulkMoveWorksToLibrary(w http.ResponseWriter, r *http.Request) 
 	selection := BulkSelection{
 		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, IDs: derefOr(body.Ids, nil), ExcludedIDs: derefOr(body.ExcludedIds, nil),
 		Fresh: derefOr(body.Fresh, false), Wanted: derefOr(body.Wanted, false), CutoffUnmet: derefOr(body.CutoffUnmet, false),
-		Where: derefOr(body.Where, ""), AboveRating: derefOr(body.AboveRating, false), MediaType: derefOr(body.MediaType, ""),
+		Where: derefOr(body.Where, ""), AboveRating: derefOr(body.AboveRating, false), OwnProfile: derefOr(body.OwnProfile, false), MediaType: derefOr(body.MediaType, ""),
 		PersonID: derefOr(body.PersonId, 0), FavoriteUserID: favoriteViewer(body.Favorite, access),
 	}
 	if selection.TagIDs, selection.ExcludedTagIDs, err = parseTagChips(derefOr(body.Tags, "")); err != nil {

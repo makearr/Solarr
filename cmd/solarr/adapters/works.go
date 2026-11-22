@@ -93,6 +93,7 @@ func (a Works) ListWorks(
 			TagIDs:          filter.TagIDs,
 			ExcludedTagIDs:  filter.ExcludedTagIDs,
 			AboveRating:     aboveRating(filter.AboveRating, filter.CategoryIDs, a.RatingLimit),
+			OwnProfileOnly:  filter.OwnProfile,
 			MediaType:       filter.MediaType,
 			MediaTypes:      filter.MediaTypes,
 			PersonID:        filter.PersonID,

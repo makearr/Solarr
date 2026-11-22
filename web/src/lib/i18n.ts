@@ -46,6 +46,8 @@ const catalogue = {
   "work.notFound": "This {work} could not be found.",
   "level.notFound": "This library has no such list.",
   "work.loading": "Loading…",
+  "work.filter.ownProfile": "Own profile",
+  "work.filter.ownProfile.hint": "Only with a quality profile of its own, not the library's",
   "work.readBy": "read by {narrators}",
   "work.partsOnDisk": "{present} of {required} {parts} on disk",
   "work.partsPresent": "{present} {parts} on disk",

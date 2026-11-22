@@ -1328,6 +1328,10 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 		}
 		params.PersonId = &person
 	}
+	if raw := query.Get("own_profile"); raw != "" {
+		own := raw == "true"
+		params.OwnProfile = &own
+	}
 	if raw := query.Get("above_rating"); raw != "" {
 		above := raw == "true"
 		params.AboveRating = &above

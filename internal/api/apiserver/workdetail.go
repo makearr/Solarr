@@ -213,6 +213,8 @@ type BulkSelection struct {
 	TagIDs, ExcludedTagIDs []int64
 	// AboveRating is the list's Above rating filter.
 	AboveRating bool
+	// OwnProfile is the list's own quality profile filter.
+	OwnProfile bool
 	// MediaType is the All list's type chip, "" for every type.
 	MediaType string
 	// PersonID is the list's person filter, 0 for none.
@@ -602,7 +604,7 @@ func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 	selection := BulkSelection{
 		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, IDs: derefOr(body.Ids, nil), ExcludedIDs: derefOr(body.ExcludedIds, nil),
 		Fresh: derefOr(body.Fresh, false), Wanted: derefOr(body.Wanted, false), CutoffUnmet: derefOr(body.CutoffUnmet, false),
-		Where: derefOr(body.Where, ""), AboveRating: derefOr(body.AboveRating, false), MediaType: derefOr(body.MediaType, ""),
+		Where: derefOr(body.Where, ""), AboveRating: derefOr(body.AboveRating, false), OwnProfile: derefOr(body.OwnProfile, false), MediaType: derefOr(body.MediaType, ""),
 		PersonID: derefOr(body.PersonId, 0), FavoriteUserID: favoriteViewer(body.Favorite, access),
 	}
 	if selection.TagIDs, selection.ExcludedTagIDs, err = parseTagChips(derefOr(body.Tags, "")); err != nil {
@@ -621,7 +623,7 @@ func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 func bulkSelectionNamed(body gen.BulkSetWorkMonitoredJSONRequestBody) bool {
 	return len(derefOr(body.Ids, nil)) > 0 || body.CategoryId != nil || derefOr(body.WholeLibrary, false) ||
 		derefOr(body.Fresh, false) || derefOr(body.Wanted, false) || derefOr(body.CutoffUnmet, false) ||
-		derefOr(body.AboveRating, false) || derefOr(body.Favorite, false) || derefOr(body.Where, "") != "" ||
+		derefOr(body.AboveRating, false) || derefOr(body.OwnProfile, false) || derefOr(body.Favorite, false) || derefOr(body.Where, "") != "" ||
 		derefOr(body.Tags, "") != "" || derefOr(body.MediaType, "") != "" || derefOr(body.PersonId, 0) != 0
 }
 

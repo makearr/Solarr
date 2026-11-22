@@ -129,6 +129,8 @@ type WorkFilter struct {
 	TagIDs, ExcludedTagIDs []int64
 	// AboveRating keeps only the works a library's maximum rating does not admit; nil does not filter.
 	AboveRating *RatingLimit
+	// OwnProfileOnly keeps the works with an item that carries a quality profile of its own.
+	OwnProfileOnly bool
 	// Where are the conditions of a custom filter, all of which must hold.
 	Where []listfilter.Condition
 	// Facets are the media type's facets a condition of Where may name.
@@ -234,6 +236,8 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	if limit := filter.AboveRating; limit != nil {
 		predicates.Add(aboveRatingSQL, boolToInt(limit.AllowUnrated), limit.MaxAge)
 	}
+	predicates.AddIf(filter.OwnProfileOnly,
+		"EXISTS (SELECT 1 FROM desired_item odi JOIN desired_profile_override opo ON opo.desired_item_id = odi.id WHERE odi.work_id = work.id)")
 	predicates.AddIf(filter.FreshSince != "",
 		"(EXISTS (SELECT 1 FROM work_date wd WHERE wd.work_id = work.id AND wd.kind = ? AND wd.date >= ?)"+
 			" OR EXISTS (SELECT 1 FROM rss_sighting rs JOIN desired_item fdi ON fdi.id = rs.desired_item_id"+

@@ -2291,6 +2291,7 @@ paths:
                 where: { type: string }
                 tags: { type: string }
                 above_rating: { type: boolean, default: false }
+                own_profile: { type: boolean, default: false, description: The list's own quality profile filter. }
                 person_id: { type: integer, format: int64, description: The list's person filter. }
                 favorite: { type: boolean, default: false, description: The list's favorites-only filter. }
                 whole_library: { type: boolean, default: false }
@@ -2750,6 +2751,10 @@ paths:
         - name: above_rating
           in: query
           description: Only the works the library's maximum rating does not admit (held, never searched); needs category_id.
+          schema: { type: boolean, default: false }
+        - name: own_profile
+          in: query
+          description: Only the works with an item that carries a quality profile of its own (an override), not the library's.
           schema: { type: boolean, default: false }
         - name: whole_library
           in: query
@@ -4429,6 +4434,7 @@ paths:
                 where: { type: string, description: The list's custom filter (the JSON the list carried), when "select all matching" was made under it. }
                 tags: { type: string, description: The list's tag chips, as listWorks takes them. }
                 above_rating: { type: boolean, default: false, description: The list's Above rating filter. }
+                own_profile: { type: boolean, default: false, description: The list's own quality profile filter. }
                 person_id: { type: integer, format: int64, description: The list's person filter. }
                 favorite: { type: boolean, default: false, description: The list's favorites-only filter. }
                 whole_library: { type: boolean, default: false, description: The selection is of the library's All list. }
@@ -4477,6 +4483,7 @@ paths:
                 where: { type: string }
                 tags: { type: string }
                 above_rating: { type: boolean, default: false }
+                own_profile: { type: boolean, default: false, description: The list's own quality profile filter. }
                 person_id: { type: integer, format: int64, description: The list's person filter. }
                 favorite: { type: boolean, default: false, description: The list's favorites-only filter. }
                 whole_library: { type: boolean, default: false }

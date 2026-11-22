@@ -85,6 +85,8 @@ type WorksFilter struct {
 	TagIDs, ExcludedTagIDs []int64
 	// AboveRating keeps the works the library's maximum rating does not admit.
 	AboveRating bool
+	// OwnProfile keeps the works with an item on a quality profile of its own.
+	OwnProfile bool
 	// MediaType keeps only works of one media type, "" all (a mixed library's type chip).
 	MediaType string
 	// MediaTypes keeps only works of these types, nil any: the types the library holds, so a work whose file lies under the
@@ -219,7 +221,7 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		WorksFilter{
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Sort: sort, Direction: direction,
 			Fresh: derefOr(params.Fresh, false), Wanted: derefOr(params.Wanted, false), CutoffUnmet: derefOr(params.CutoffUnmet, false),
-			Where: derefOr(params.Where, ""), TagIDs: carry, ExcludedTagIDs: append(without, blockedTagIDs(access)...), AboveRating: derefOr(params.AboveRating, false),
+			Where: derefOr(params.Where, ""), TagIDs: carry, ExcludedTagIDs: append(without, blockedTagIDs(access)...), AboveRating: derefOr(params.AboveRating, false), OwnProfile: derefOr(params.OwnProfile, false),
 			MediaType:      derefOr(params.MediaType, ""),
 			PersonID:       derefOr(params.PersonId, 0),
 			FavoriteUserID: favoriteViewer(params.Favorite, access),

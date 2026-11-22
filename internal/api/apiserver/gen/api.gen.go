@@ -7775,6 +7775,9 @@ type ListWorksParams struct {
 	// AboveRating Only the works the library's maximum rating does not admit (held, never searched); needs category_id.
 	AboveRating *bool `form:"above_rating,omitempty" json:"above_rating,omitempty"`
 
+	// OwnProfile Only the works with an item that carries a quality profile of its own (an override), not the library's.
+	OwnProfile *bool `form:"own_profile,omitempty" json:"own_profile,omitempty"`
+
 	// WholeLibrary With category_id, every media type of that library (its All list), not that one category.
 	WholeLibrary *bool `form:"whole_library,omitempty" json:"whole_library,omitempty"`
 
@@ -7818,6 +7821,9 @@ type BulkEditWorksJSONBody struct {
 	MonitorOption *string `json:"monitor_option,omitempty"`
 	Monitored     *bool   `json:"monitored,omitempty"`
 
+	// OwnProfile The list's own quality profile filter.
+	OwnProfile *bool `json:"own_profile,omitempty"`
+
 	// PersonId The list's person filter.
 	PersonId *int64 `json:"person_id,omitempty"`
 	Preview  *bool  `json:"preview,omitempty"`
@@ -7853,6 +7859,9 @@ type BulkMoveWorksToLibraryJSONBody struct {
 	LibraryId *int64  `json:"library_id,omitempty"`
 	MediaType *string `json:"media_type,omitempty"`
 
+	// OwnProfile The list's own quality profile filter.
+	OwnProfile *bool `json:"own_profile,omitempty"`
+
 	// PersonId The list's person filter.
 	PersonId     *int64  `json:"person_id,omitempty"`
 	Preview      *bool   `json:"preview,omitempty"`
@@ -7884,6 +7893,9 @@ type BulkSetWorkMonitoredJSONBody struct {
 	// MediaType The All list's type chip.
 	MediaType *string `json:"media_type,omitempty"`
 	Monitored bool    `json:"monitored"`
+
+	// OwnProfile The list's own quality profile filter.
+	OwnProfile *bool `json:"own_profile,omitempty"`
 
 	// PersonId The list's person filter.
 	PersonId *int64 `json:"person_id,omitempty"`
@@ -22711,6 +22723,14 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 	err = runtime.BindQueryParameter("form", true, false, "above_rating", r.URL.Query(), &params.AboveRating)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "above_rating", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "own_profile" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "own_profile", r.URL.Query(), &params.OwnProfile)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "own_profile", Err: err})
 		return
 	}
 

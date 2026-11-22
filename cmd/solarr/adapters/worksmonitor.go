@@ -296,7 +296,7 @@ func (a WorksMonitor) matchingWorkIDs(ctx context.Context, selection apiserver.B
 	filter := library.WorkFilter{
 		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, WantedOnly: selection.Wanted, CutoffUnmetOnly: selection.CutoffUnmet,
 		Where: where, TagIDs: selection.TagIDs, ExcludedTagIDs: selection.ExcludedTagIDs,
-		AboveRating: aboveRating(selection.AboveRating, categoryIDs, a.RatingLimit), MediaType: selection.MediaType,
+		AboveRating: aboveRating(selection.AboveRating, categoryIDs, a.RatingLimit), MediaType: selection.MediaType, OwnProfileOnly: selection.OwnProfile,
 		PersonID: selection.PersonID, FavoriteUserID: selection.FavoriteUserID,
 	}
 	if selection.Fresh {

@@ -115,3 +115,32 @@ func TestBackfillCertificationAges_ReadsEachOnce(t *testing.T) {
 		t.Fatalf("detail rating = %q age %d, %v; want PG-13 at 13", detail.Rating, detail.RatingAge, err)
 	}
 }
+
+// The own-profile filter lists only the works with an item that carries a profile override.
+func TestWorkFilter_OwnProfileKeepsTheWorksWithAnOverride(t *testing.T) {
+	opened, _ := newLibrary(t)
+	series := library.NewSeries(opened)
+	desired := library.NewDesired(opened)
+	add := func(title, tvdb string) int64 {
+		write := sampleSeries()
+		write.Work.CanonicalTitle, write.Work.SortTitle = title, title
+		write.IDs = []library.ExternalIDWrite{{Provider: "tvdb", ExternalID: tvdb}}
+		result, err := series.Upsert(t.Context(), seriesAt, write)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := desired.EnsureSeasonItem(t.Context(), library.SeasonRequest{WorkID: result.WorkID, MediaRef: "s01", CategoryID: 3, ProfileID: 1, Monitored: true}); err != nil {
+			t.Fatal(err)
+		}
+		return result.WorkID
+	}
+	add("Plain", "1")
+	own := add("Pinned", "2")
+	if err := desired.SetProfileOverrideForWork(t.Context(), own, 2); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := library.NewWorks(opened).List(t.Context(), library.WorkFilter{OwnProfileOnly: true}, library.WorkCursor{}, 10)
+	if err != nil || len(rows) != 1 || rows[0].CanonicalTitle != "Pinned" {
+		t.Fatalf("own profile list = %v, %v; want Pinned only", rows, err)
+	}
+}
