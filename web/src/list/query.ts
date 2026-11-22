@@ -11,7 +11,7 @@ export interface ListQuery {
 export const EMPTY: ListQuery = { filters: {}, sort: null, direction: "asc" };
 
 /** The URL wins over stored preferences (section 21.2). Unknown parameters are
- *  ignored, and so is anything that is not a string: a URL is user input. */
+ *  ignored. The router has already parsed "own_profile=1" into the number 1, so a number or boolean reads as its text. */
 export function fromRecord(
   record: Record<string, unknown>,
   filterKeys: readonly string[],
@@ -20,6 +20,7 @@ export function fromRecord(
   for (const key of filterKeys) {
     const value = record[key];
     if (typeof value === "string" && value !== "") filters[key] = value;
+    else if (typeof value === "number" || typeof value === "boolean") filters[key] = String(value);
   }
 
   return {
@@ -40,6 +41,11 @@ export function toRecord(query: ListQuery): Record<string, string> {
     if (query.direction === "desc") record.dir = "desc";
   }
   return record;
+}
+
+/** The record for the router: a string it would read back as a number is written as one, or the URL carries it quoted (%221%22). */
+export function toRouteSearch(query: ListQuery): Record<string, string | number> {
+  return Object.fromEntries(Object.entries(toRecord(query)).map(([key, value]) => [key, key !== "sort" && String(Number(value)) === value ? Number(value) : value]));
 }
 
 /** The router hands over a parsed object; these two are for the raw string a

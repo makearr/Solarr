@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { EMPTY, cycleSort, fromSearch, key, toSearch, withFilter } from "./query";
+import { EMPTY, cycleSort, fromRecord, fromSearch, key, toRouteSearch, toSearch, withFilter } from "./query";
 
 const FILTER_KEYS = ["state", "pool"];
 
@@ -25,6 +25,12 @@ describe("URL round-trip", () => {
     // typos; none of that should be an error.
     const parsed = fromSearch("?state=FAILED&utm_source=mail&nonsense=1", FILTER_KEYS);
     expect(parsed.filters).toEqual({ state: "FAILED" });
+  });
+
+  test("a deep link the router parsed into a number still filters, and is written back unquoted", () => {
+    const parsed = fromRecord({ own_profile: 1, state: "FAILED" }, ["own_profile", "state"]);
+    expect(parsed.filters).toEqual({ own_profile: "1", state: "FAILED" });
+    expect(toRouteSearch(parsed)).toEqual({ own_profile: 1, state: "FAILED" });
   });
 
   test("an empty filter value is absent, not an empty string", () => {

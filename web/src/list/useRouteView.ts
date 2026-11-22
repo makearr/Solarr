@@ -43,7 +43,7 @@ export function useRouteView(filterKeys: readonly string[]): ViewState {
       const stored = query.toRecord(query.fromRecord(remembered, filterKeys));
       if (Object.keys(search).length === 0 && Object.keys(stored).length > 0) {
         restoring.current = true;
-        void navigate({ to: ".", search: stored, replace: true }).finally(() => (restoring.current = false));
+        void navigate({ to: ".", search: query.toRouteSearch(query.fromRecord(remembered, filterKeys)), replace: true }).finally(() => (restoring.current = false));
         return;
       }
     }
@@ -53,7 +53,7 @@ export function useRouteView(filterKeys: readonly string[]): ViewState {
   const setQuery = useCallback(
     (next: query.ListQuery) => {
       // replace, not push: changing a filter is not a navigation to go back from.
-      void navigate({ to: ".", search: query.toRecord(next), replace: true });
+      void navigate({ to: ".", search: query.toRouteSearch(next), replace: true });
     },
     [navigate],
   );
