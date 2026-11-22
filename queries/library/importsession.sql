@@ -291,13 +291,17 @@ ORDER BY started_at DESC, id DESC
 LIMIT sqlc.arg(row_limit);
 
 -- Old finished sessions that placed nothing still in the library and hold nothing for a person; a pack keeps its session.
+-- A placed unit with no recorded file, or with a file that still has a live path, is what a revert acts on.
 -- name: DeleteOldImportSessions :execrows
 DELETE FROM import_session WHERE id IN (
   SELECT s.id FROM import_session s
   WHERE s.state IN ('DONE', 'FAILED', 'CANCELLED', 'REVERTED')
     AND s.finished_at IS NOT NULL AND s.finished_at < sqlc.arg(finished_before)
     AND (s.state = 'REVERTED' OR NOT EXISTS (
-      SELECT 1 FROM import_unit u WHERE u.session_id = s.id AND (u.decision = 'QUEUE' OR u.work_id IS NOT NULL)))
+      SELECT 1 FROM import_unit u WHERE u.session_id = s.id AND (u.decision = 'QUEUE' OR (u.work_id IS NOT NULL AND (
+        NOT EXISTS (SELECT 1 FROM import_unit_file f WHERE f.unit_id = u.id)
+        OR EXISTS (SELECT 1 FROM import_unit_file f JOIN library_path lp ON lp.media_object_id = f.media_object_id AND lp.missing_since IS NULL
+                   WHERE f.unit_id = u.id))))))
     AND NOT EXISTS (SELECT 1 FROM pack p WHERE p.session_id = s.id)
     AND NOT EXISTS (SELECT 1 FROM pack_item pi JOIN import_unit u2 ON u2.id = pi.import_unit_id WHERE u2.session_id = s.id)
   ORDER BY s.id

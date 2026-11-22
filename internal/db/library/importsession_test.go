@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store"
@@ -675,6 +677,47 @@ func TestImportSessions_DeleteOldSessionsLeavesPlacedPackedAndRunningOnes(t *tes
 		_, err := sessions.Get(ctx, id)
 		if gone := err != nil; gone != wantGone {
 			t.Errorf("session %d gone = %v, want %v", id, gone, wantGone)
+		}
+	}
+}
+
+// A session that placed files is kept while one of them is in the library, and goes once every one has left.
+func TestImportSessions_DeleteOldSessionsKeepsASessionWhoseFileIsStillInTheLibrary(t *testing.T) {
+	opened, _ := newLibrary(t)
+	sessions := library.NewImportSessions(opened)
+	physical := library.NewPhysical(opened)
+	ctx := t.Context()
+	registered, err := physical.RegisterBatch(ctx, 1, []library.PhysicalFile{
+		{RelPath: "Album/01.flac", SizeBytes: 10, QuickHash: "h1", FirstSeenAt: time.Unix(0, 0)},
+		{RelPath: "Album/02.flac", SizeBytes: 20, QuickHash: "h2", FirstSeenAt: time.Unix(0, 0)},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	placedFile := func(file library.RegisteredFile) int64 {
+		session, units := seedSessionWithUnits(t, sessions, 1)
+		work := createWork(t, opened, "music", fmt.Sprintf("Fake Album %d", file.MediaObjectID)).ID
+		if err := sessions.SetUnitDecisions(ctx, session, []library.UnitDecision{{UnitID: units[0], Decision: library.UnitCommit, Confidence: 1, WorkID: &work}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := sessions.RecordPlacement(ctx, units[0], library.Placement{WorkID: work, MediaObjectIDs: []int64{file.MediaObjectID}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := sessions.Finish(ctx, session, library.ImportDone, 100, ""); err != nil {
+			t.Fatal(err)
+		}
+		return session
+	}
+	stays, leaves := placedFile(registered[0]), placedFile(registered[1])
+	if _, err := opened.WriteDB().ExecContext(ctx, `UPDATE library_path SET missing_since = 5 WHERE media_object_id = ?`, registered[1].MediaObjectID); err != nil {
+		t.Fatal(err)
+	}
+	if deleted, err := sessions.DeleteOldSessions(ctx, 1000, 200); err != nil || deleted != 1 {
+		t.Fatalf("deleted %d, %v; want only the session whose file left the library", deleted, err)
+	}
+	for id, wantGone := range map[int64]bool{stays: false, leaves: true} {
+		if _, err := sessions.Get(ctx, id); (err != nil) != wantGone {
+			t.Errorf("session %d gone = %v, want %v", id, err != nil, wantGone)
 		}
 	}
 }
