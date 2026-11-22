@@ -348,7 +348,23 @@ func (p *process) enqueueServerFiles(ctx context.Context) (jobs.EnqueueResult, e
 	if _, err := movie.EnqueueServerFiles(ctx, p.queue); err != nil {
 		return jobs.EnqueueResult{}, err
 	}
+	if _, err := comic.EnqueueReaderFiles(ctx, p.queue); err != nil {
+		return jobs.EnqueueResult{}, err
+	}
 	return tv.EnqueueServerFiles(ctx, p.queue)
+}
+
+// rehashFile records the size and quick hash a file rewritten in place has now.
+func (p *process) rehashFile(ctx context.Context, mediaObjectID int64, filePath string) error {
+	info, err := p.fsys.Stat(filePath)
+	if err != nil {
+		return err
+	}
+	quick, err := library.QuickHash(p.fsys, filePath, info.Size)
+	if err != nil {
+		return err
+	}
+	return library.NewTagWriteback(p.library).Rehash(ctx, mediaObjectID, info.Size, quick)
 }
 
 // musicJobs are the job types the music module brings.
@@ -948,6 +964,17 @@ func (p *process) comicModule() comic.Module {
 		Registrations: []media.JobRegistration{
 			{Definition: comic.RefreshDefinition(), Handler: comic.NewRefreshJob(library.NewSeriesReader(p.library), service, clock.NewSystem(), p.logger)},
 			{Definition: comic.ArtworkDefinition(), Handler: comic.NewArtworkJob(library.NewSeriesReader(p.library), p.remoteImages(), p.logger)},
+			{Definition: comic.ReaderFilesDefinition, Handler: comic.ReaderFilesJob{
+				Writer: comic.ReaderFiles{
+					FS: p.fsys, Reader: library.NewSeriesReader(p.library), Roots: adapters.Roots{Cache: p.cache}, Clock: clock.NewSystem(), Logger: p.logger,
+					KindOf: service.KindOf, OptionOf: service.OptionOf, Rehash: p.rehashFile,
+				},
+				Libraries: func() []settings.Category { return p.cache.Snapshot().Categories() },
+				RootsOf: func(categoryID int64) []settings.RootFolder {
+					return p.cache.Snapshot().RootFoldersForCategory(categoryID)
+				},
+				Logger: p.logger,
+			}},
 		},
 		Service: service,
 		Passes: media.Passes{

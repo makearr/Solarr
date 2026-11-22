@@ -86,7 +86,8 @@ func (s *Server) SetLibraryFileManagement(w http.ResponseWriter, r *http.Request
 		writeError(w, s.logger, err)
 		return
 	}
-	if wanted.MediaServerFiles && !category.FileManagement.MediaServerFiles && s.scheduler != nil {
+	readerFiles := func(f settings.FileManagement) string { return f.ModuleOption("reader_files", "off") }
+	if (wanted.MediaServerFiles && !category.FileManagement.MediaServerFiles || readerFiles(wanted) != "off" && readerFiles(wanted) != readerFiles(category.FileManagement)) && s.scheduler != nil {
 		if err := s.scheduler.RunNow(r.Context(), mediaServerFilesTaskKey, false); err != nil {
 			s.logger.InfoContext(r.Context(), "jellyfin/kodi files after switching them on not started", "error", err)
 		}

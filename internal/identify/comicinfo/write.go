@@ -202,3 +202,23 @@ func SeriesJSON(series Series) ([]byte, error) {
 	}
 	return json.MarshalIndent(map[string]any{"version": "1.0.1", "metadata": metadata}, "", "  ")
 }
+
+// ReadFromCBZ answers the ComicInfo.xml a cbz carries at its root, nil when it has none.
+func ReadFromCBZ(source io.ReaderAt, size int64) ([]byte, error) {
+	reader, err := zip.NewReader(source, size)
+	if err != nil {
+		return nil, fmt.Errorf("comicinfo: open cbz: %w", err)
+	}
+	for _, file := range reader.File {
+		if file.Name != ComicInfoName {
+			continue
+		}
+		body, err := file.Open()
+		if err != nil {
+			return nil, fmt.Errorf("comicinfo: read %s: %w", ComicInfoName, err)
+		}
+		defer func() { _ = body.Close() }()
+		return io.ReadAll(io.LimitReader(body, maxXMLBytes))
+	}
+	return nil, nil
+}

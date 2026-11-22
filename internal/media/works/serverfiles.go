@@ -24,6 +24,8 @@ type ServerFilesPass struct {
 		WorksOnRoot(ctx context.Context, mediaType string, rootFolderID, afterID, pageSize int64) ([]int64, error)
 	}
 	Write func(ctx context.Context, categoryID, workID int64) (int, error)
+	// Enabled says a library asks for the files; nil is the Jellyfin and Kodi setting.
+	Enabled func(category settings.Category) bool
 	// Libraries answers every library, with the roots each is on.
 	Libraries func() []settings.Category
 	RootsOf   func(categoryID int64) []settings.RootFolder
@@ -44,7 +46,7 @@ func (p ServerFilesPass) Run(ctx context.Context, job jobs.Job) error {
 	}
 	written, count := 0, 0
 	for _, category := range p.Libraries() {
-		if category.MediaType != p.MediaType || !category.FileManagement.MediaServerFiles {
+		if category.MediaType != p.MediaType || !p.enabled(category) {
 			continue
 		}
 		for _, root := range p.RootsOf(category.ID) {
@@ -76,9 +78,16 @@ func (p ServerFilesPass) Run(ctx context.Context, job jobs.Job) error {
 	return nil
 }
 
+func (p ServerFilesPass) enabled(category settings.Category) bool {
+	if p.Enabled != nil {
+		return p.Enabled(category)
+	}
+	return category.FileManagement.MediaServerFiles
+}
+
 func (p ServerFilesPass) runOne(ctx context.Context, one serverFilesPayload) error {
 	for _, category := range p.Libraries() {
-		if category.ID != one.CategoryID || category.MediaType != p.MediaType || !category.FileManagement.MediaServerFiles {
+		if category.ID != one.CategoryID || category.MediaType != p.MediaType || !p.enabled(category) {
 			continue
 		}
 		made, err := p.Write(ctx, one.CategoryID, one.WorkID)
