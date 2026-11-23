@@ -29,7 +29,7 @@ internal/
 │               + capacity  cachebudget  providerdef (definition files, catalog, stored state)
 ├── metadata/   musicbrainz  wikidata  acoustid  metacache  metaresolve
 │               skyhook  tvmaze  tmdb  tvdb  thexem  anilist  omdb  mdblist  fanart  radarrmeta  theaudiodb
-│               openlibrary  googlebooks  audible  itunes  fantlab  hardcover  specprovider (providers as YAML files)  stashbox  theporndb  whisparr
+│               openlibrary  googlebooks  audible  itunes  fantlab  bookbrainz  lrclib  hardcover  specprovider (providers as YAML files)  stashbox  theporndb  whisparr
 ├── identify/   model  parse  parsetv  parsemovie  parsebook  parsecomic  comicinfo  readinglist  bookmeta  parseadult  match  score  priority
 ├── scanning/   scan  probe
 ├── importing/  inspect  importjob  batch  placer  rules  unpack (archives into a workspace)  downloadwatch  arrimport  arrmap

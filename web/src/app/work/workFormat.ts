@@ -116,6 +116,7 @@ const LINKS: Record<string, { label: string; url: (id: string) => string }> = {
   "hardcover:audiobook": { label: "Hardcover", url: (id) => `https://hardcover.app/search?q=${id}` },
   itunes: { label: "iTunes", url: (id) => `https://books.apple.com/audiobook/id${id}` },
   "itunes:audiobook": { label: "iTunes", url: (id) => `https://books.apple.com/audiobook/id${id}` },
+  bookbrainz: { label: "BookBrainz", url: (id) => `https://bookbrainz.org/work/${id}` },
   fantlab: { label: "FantLab", url: (id) => `https://fantlab.ru/work${id}` },
   "fantlab:audiobook": { label: "FantLab", url: (id) => `https://fantlab.ru/work${id}` },
   audible: { label: "Audible", url: (id) => `https://www.audible.com/pd/${id}` },

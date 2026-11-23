@@ -48,6 +48,7 @@ const (
 	providerAnimeIDs        = "animeids"
 	providerLRCLIB          = "lrclib"
 	providerFantLab         = "fantlab"
+	providerBookBrainz      = "bookbrainz"
 	providerWhisparr        = "whisparr"
 	providerStashDB         = "stashdb"
 	providerThePornDB       = "theporndb"

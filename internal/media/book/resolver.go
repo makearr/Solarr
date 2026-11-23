@@ -385,6 +385,8 @@ func (f Format) CandidateID(ids IDs) (provider, externalID string) {
 		return f.Provider(ProviderITunes), ids.ITunes
 	case ids.FantLab != "":
 		return f.Provider(ProviderFantLab), ids.FantLab
+	case ids.BookBrainz != "":
+		return f.Provider(ProviderBookBrainz), ids.BookBrainz
 	}
 	return "", ""
 }
@@ -406,6 +408,8 @@ func (f Format) NamedIDs(provider, externalID string) (IDs, bool) {
 		return IDs{ITunes: externalID}, externalID != "" && f.ByFolder
 	case ProviderFantLab:
 		return IDs{FantLab: externalID}, externalID != ""
+	case ProviderBookBrainz:
+		return IDs{BookBrainz: externalID}, externalID != ""
 	case ProviderISBN:
 		isbn := strings.ReplaceAll(externalID, "-", "")
 		return IDs{ISBN: isbn}, len(isbn) == 13

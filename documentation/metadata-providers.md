@@ -157,6 +157,7 @@ Hardcover. Solarr asks the keyless ones in each library's order, Wikidata first.
 | Audible (Audnexus) | an audiobook's narrators, length, abridgement, series and position, publisher, genres, cover; Audible's catalogue to search | yes | no key; audiobooks only; Audnexus allows 100 a minute |
 | Hardcover | works, editions, series, ratings | yes | a key; what Bookshelf's service reads |
 | Internet Archive | description, subjects, language, page count, cover | yes | no key; found by ISBN; last in the order |
+| BookBrainz | works, authors, a contributor-written description, language | yes | thin coverage; no key |
 | iTunes, FantLab | covers, descriptions | yes | Audiobookshelf's further sources |
 
 **Wikidata leads what it holds** for books as for films: the overview and the year of first publication, and the

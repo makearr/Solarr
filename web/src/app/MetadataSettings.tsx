@@ -51,6 +51,7 @@ const NOTES: Record<string, string> = {
     "Descriptions, publishers, page counts and covers. Answers without a key on a small quota everyone shares; your own free key raises it.",
   hardcover: "The readers' catalogue: descriptions, ratings, genres and covers of books. Needs your own free token.",
   itunes: "Apple's audiobook catalogue: titles, authors, descriptions and large covers. No key.",
+  bookbrainz: "The open book database in MusicBrainz style: works with their authors, language and a description a contributor wrote. Coverage is thin; it fills what other sources lack. No key.",
   fantlab: "The Russian fantasy and science fiction catalogue, as Audiobookshelf offers it: original titles, descriptions, ratings and covers. No key.",
   audible: "Audible's catalogue, read through Audnexus as Audiobookshelf does: narrators, length, series and covers of audiobooks. No key.",
   whisparr: "Whisparr's own metadata server, backed by ThePornDB: scenes with their performers, sites and genres. No key.",
@@ -186,7 +187,7 @@ const PROVIDER_GROUPS: readonly { group: string; keys: readonly string[] }[] = [
   { group: "Music", keys: ["brainzmash", "musicbrainz", "theaudiodb", "coverartarchive", "acoustid"] },
   { group: "Movies", keys: ["tmdb", "mdblist", "omdb", "fanart"] },
   { group: "Series", keys: ["tvdb", "tvmaze", "anilist", "thexem"] },
-  { group: "Books and audiobooks", keys: ["openlibrary", "googlebooks", "hardcover", "fantlab", "audible", "itunes"] },
+  { group: "Books and audiobooks", keys: ["openlibrary", "googlebooks", "hardcover", "fantlab", "bookbrainz", "audible", "itunes"] },
   { group: "Adult", keys: ["stashdb", "theporndb", "fansdb"] },
 ];
 

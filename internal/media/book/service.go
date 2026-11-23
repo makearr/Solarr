@@ -16,6 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/mediaserver"
 	"github.com/makearr/Solarr/internal/metadata/audible"
+	"github.com/makearr/Solarr/internal/metadata/bookbrainz"
 	"github.com/makearr/Solarr/internal/metadata/fantlab"
 	"github.com/makearr/Solarr/internal/metadata/googlebooks"
 	"github.com/makearr/Solarr/internal/metadata/hardcover"
@@ -65,6 +66,11 @@ type FantLabSource interface {
 	Work(ctx context.Context, id int64) (fantlab.Work, error)
 }
 
+// BrainzSource is the BookBrainz client as the service needs it.
+type BrainzSource interface {
+	Search(ctx context.Context, title string, limit int) ([]bookbrainz.Work, error)
+}
+
 // ArchiveSource is the Internet Archive client as the service needs it.
 type ArchiveSource interface {
 	ByISBN(ctx context.Context, isbn string) (internetarchive.Item, error)
@@ -91,6 +97,7 @@ type Service struct {
 	Audible     AudibleSource
 	ITunes      ITunesSource
 	FantLab     FantLabSource
+	BookBrainz  BrainzSource
 	Hardcover   HardcoverSource
 	// Archive fills description, subjects and a cover from the Internet Archive; nil skips it.
 	Archive ArchiveSource
@@ -264,6 +271,8 @@ func (s Service) ask(ctx context.Context, name string, ids IDs, hint Hint, faile
 		return s.askITunes(ctx, ids, hint, report)
 	case settings.BookSourceFantLab:
 		return s.askFantLab(ctx, ids, hint, report)
+	case settings.BookSourceBookBrainz:
+		return s.askBookBrainz(ctx, ids, hint, report)
 	case settings.BookSourceHardcover:
 		return s.askHardcover(ctx, ids, hint, report)
 	}
@@ -386,6 +395,29 @@ func (s Service) askFantLab(ctx context.Context, ids IDs, hint Hint, report func
 	}
 	work, err := s.FantLab.Work(ctx, id)
 	return FromFantLab(work), report(strconv.FormatInt(id, 10), err, fantlab.ErrNotFound)
+}
+
+// askBookBrainz finds the work by its title (the service has no lookup by id): the stored one when it is among the hits,
+// otherwise the best title and author match.
+func (s Service) askBookBrainz(ctx context.Context, ids IDs, hint Hint, report func(string, error, error) bool) (Book, bool) {
+	if s.BookBrainz == nil || hint.Title == "" {
+		return Book{}, false
+	}
+	hits, err := s.BookBrainz.Search(ctx, hint.Title, bookbrainz.SearchPageSize)
+	if !report(hint.Title, err, nil) {
+		return Book{}, false
+	}
+	if ids.BookBrainz != "" {
+		if index := slices.IndexFunc(hits, func(hit bookbrainz.Work) bool { return hit.BBID == ids.BookBrainz }); index >= 0 {
+			return FromBookBrainz(hits[index]), true
+		}
+	}
+	hit, found := bestTitleHit(hits, hint.Title, func(hit bookbrainz.Work) []string { return []string{hit.Name} },
+		func(hit bookbrainz.Work) bool { return hint.Author != "" && sameAuthor(hit.Authors, hint.Author) })
+	if !found {
+		return Book{}, false
+	}
+	return FromBookBrainz(hit), true
 }
 
 func (s Service) askHardcover(ctx context.Context, ids IDs, hint Hint, report func(string, error, error) bool) (Book, bool) {
@@ -628,6 +660,19 @@ func (s Service) searchOne(ctx context.Context, name, title, author string, limi
 			candidates = append(candidates, Candidate{IDs: IDs{FantLab: strconv.FormatInt(match.WorkID, 10)}, Title: cmp.Or(match.Name, match.RussianName),
 				Author: cmp.Or(match.AuthorName, match.AuthorRus), Year: match.Year, Cover: match.Cover()})
 		}
+	case settings.BookSourceBookBrainz:
+		if s.BookBrainz == nil {
+			return nil, nil
+		}
+		works, err := s.BookBrainz.Search(ctx, title, limit)
+		if err != nil {
+			return nil, err
+		}
+		for _, work := range works {
+			found := FromBookBrainz(work)
+			candidates = append(candidates, Candidate{IDs: found.IDs, Title: found.Title, Author: first(found.Authors()), CoAuthors: othersThanFirst(found.Authors()),
+				Overview: found.Overview, Traits: media.Traits{OriginalLanguage: found.Language}})
+		}
 	case settings.BookSourceHardcover:
 		if s.Hardcover == nil || !s.Hardcover.Configured() {
 			return nil, nil
@@ -743,7 +788,7 @@ func (s Service) Refresh(ctx context.Context, categoryID, workID int64) (Book, e
 func failedSupplier(stored IDs, failed []string) (string, bool) {
 	holds := map[string]string{
 		settings.BookSourceOpenLibrary: stored.OpenLibrary, settings.BookSourceGoogleBooks: stored.GoogleBooks, settings.BookSourceAudible: stored.ASIN,
-		settings.BookSourceITunes: stored.ITunes, settings.BookSourceFantLab: stored.FantLab, settings.BookSourceHardcover: stored.Hardcover,
+		settings.BookSourceITunes: stored.ITunes, settings.BookSourceFantLab: stored.FantLab, settings.BookSourceBookBrainz: stored.BookBrainz, settings.BookSourceHardcover: stored.Hardcover,
 	}
 	for _, name := range failed {
 		if holds[name] != "" {
@@ -768,7 +813,7 @@ func refreshedAnotherBook(storedTitle, fetchedTitle string, stored, fetched IDs)
 func sharesAnID(a, b IDs) bool {
 	pairs := [][2]string{
 		{a.OpenLibrary, b.OpenLibrary}, {a.GoogleBooks, b.GoogleBooks}, {a.ASIN, b.ASIN}, {a.ISBN, b.ISBN},
-		{a.Goodreads, b.Goodreads}, {a.Hardcover, b.Hardcover}, {a.ITunes, b.ITunes}, {a.FantLab, b.FantLab},
+		{a.Goodreads, b.Goodreads}, {a.Hardcover, b.Hardcover}, {a.ITunes, b.ITunes}, {a.FantLab, b.FantLab}, {a.BookBrainz, b.BookBrainz},
 	}
 	return slices.ContainsFunc(pairs, func(pair [2]string) bool { return pair[0] != "" && pair[0] == pair[1] })
 }

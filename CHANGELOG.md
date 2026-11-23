@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Books: BookBrainz is offered as a metadata provider (works, authors, description, language; keyless, not in the default order).
 - Music: an optional per-library Lyrics setting writes synced (.lrc) or plain (.txt) lyrics from LRCLIB beside tracks that have none, once a day, never over a file you put there.
 - Webhooks: a webhook with an invalid address or event now answers a clear 400 naming the problem instead of an internal error.
 - TV: an optional anime id map (Fribb, one file read once a day; off until switched on under Metadata providers) finds an anime's AniDB, MyAnimeList and AniList ids from its TheTVDB id.

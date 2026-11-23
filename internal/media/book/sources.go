@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/makearr/Solarr/internal/metadata/audible"
+	"github.com/makearr/Solarr/internal/metadata/bookbrainz"
 	"github.com/makearr/Solarr/internal/metadata/fantlab"
 	"github.com/makearr/Solarr/internal/metadata/googlebooks"
 	"github.com/makearr/Solarr/internal/metadata/hardcover"
@@ -27,6 +28,7 @@ const (
 	sourceWikidata    = "wikidata"
 	sourceITunes      = "itunes"
 	sourceFantLab     = "fantlab"
+	sourceBookBrainz  = "bookbrainz"
 	sourceHardcover   = "hardcover"
 )
 
@@ -222,6 +224,15 @@ func FromFantLab(in fantlab.Work) Book {
 	return book
 }
 
+// FromBookBrainz turns a BookBrainz work into a book; the annotation is its overview.
+func FromBookBrainz(in bookbrainz.Work) Book {
+	book := Book{IDs: IDs{BookBrainz: in.BBID}, Title: in.Name, Overview: cleanText(in.Annotation), Language: in.Language, Sources: []string{sourceBookBrainz}}
+	for index, author := range in.Authors {
+		book.Credits = append(book.Credits, Credit{Name: author, Role: RoleAuthor, Order: index})
+	}
+	return book
+}
+
 // FromHardcover turns a Hardcover book into a book.
 func FromHardcover(in hardcover.Book) Book {
 	book := Book{
@@ -272,7 +283,7 @@ func Merge(first, second Book) Book {
 	merged.IDs = IDs{
 		OpenLibrary: cmp.Or(first.IDs.OpenLibrary, second.IDs.OpenLibrary), GoogleBooks: cmp.Or(first.IDs.GoogleBooks, second.IDs.GoogleBooks),
 		ASIN: cmp.Or(first.IDs.ASIN, second.IDs.ASIN), ISBN: cmp.Or(first.IDs.ISBN, second.IDs.ISBN), Goodreads: cmp.Or(first.IDs.Goodreads, second.IDs.Goodreads),
-		Hardcover: cmp.Or(first.IDs.Hardcover, second.IDs.Hardcover), ITunes: cmp.Or(first.IDs.ITunes, second.IDs.ITunes), FantLab: cmp.Or(first.IDs.FantLab, second.IDs.FantLab), Archive: cmp.Or(first.IDs.Archive, second.IDs.Archive),
+		Hardcover: cmp.Or(first.IDs.Hardcover, second.IDs.Hardcover), ITunes: cmp.Or(first.IDs.ITunes, second.IDs.ITunes), FantLab: cmp.Or(first.IDs.FantLab, second.IDs.FantLab), BookBrainz: cmp.Or(first.IDs.BookBrainz, second.IDs.BookBrainz), Archive: cmp.Or(first.IDs.Archive, second.IDs.Archive),
 	}
 	merged.Title = cmp.Or(first.Title, second.Title)
 	merged.Subtitle = cmp.Or(first.Subtitle, second.Subtitle)

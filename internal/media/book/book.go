@@ -15,6 +15,7 @@ const (
 	ProviderHardcover         = "hardcover"
 	ProviderITunes            = "itunes"
 	ProviderFantLab           = "fantlab"
+	ProviderBookBrainz        = "bookbrainz"
 	ProviderWikidata          = "wikidata"
 	// ProviderSeries keeps a book series on its collection row, by Wikidata's item or the provider's own name for it.
 	ProviderSeries = "book:series"
@@ -48,6 +49,7 @@ type IDs struct {
 	Hardcover   string
 	ITunes      string
 	FantLab     string
+	BookBrainz  string
 	// Archive is the Internet Archive item an Open Library doc names; it is learnt per fetch, never stored.
 	Archive string
 }

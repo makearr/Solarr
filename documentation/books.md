@@ -55,7 +55,9 @@ Three more providers, found by reading what ReadMeABook, Listenarr, Calibre-Web 
 only, keyless), FantLab (keyless; the original title becomes the title, the Russian one an alias) and Hardcover (needs the
 owner's token, GraphQL). Each is asked by its own id, else by the title and author another source learned, taking the one
 hit whose title and author agree. A library that saved its own provider order keeps it; the new ones are added in its
-Metadata settings. Not built: Amazon, Douban, Lubimyczytac and Google Scholar (HTML scraping), ComicVine (comics).
+Metadata settings. BookBrainz (keyless, books only) is a fourth: works found by title with their authors, language and the
+annotation a contributor wrote; it has no lookup by id, so the stored work is found again among a title search's hits, and a title
+without an author chooses nothing. Coverage is thin. Not built: Amazon, Douban, Lubimyczytac and Google Scholar (HTML scraping), ComicVine (comics).
 
 ## Files
 

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/metadata/bookbrainz"
 	"github.com/makearr/Solarr/internal/metadata/fantlab"
 	"github.com/makearr/Solarr/internal/metadata/hardcover"
 	"github.com/makearr/Solarr/internal/metadata/internetarchive"
@@ -119,5 +120,31 @@ func TestFetchFor_TheArchiveItemOpenLibraryNamesIsAskedBeforeTheISBN(t *testing.
 	book, err := service.FetchFor(t.Context(), 7, IDs{ISBN: "9780000000001", Archive: "examplefox00"}, Hint{Title: "Example Fox"})
 	if err != nil || book.Title != "Example Fox (item)" {
 		t.Errorf("book = %+v err=%v", book, err)
+	}
+}
+
+type fakeBookBrainz struct{}
+
+func (fakeBookBrainz) Search(context.Context, string, int) ([]bookbrainz.Work, error) {
+	return []bookbrainz.Work{
+		{BBID: "w-fr", Name: "Moon Garden", Language: "fr", Authors: []string{"Otto Other"}},
+		{BBID: "w-en", Name: "Moon Garden", Language: "en", Annotation: "A gardener finds the moon.", Authors: []string{"Ann Writer"}},
+	}, nil
+}
+
+func TestAskBookBrainz_TakesTheWorkOfTheAuthorAskedForAndNeedsOne(t *testing.T) {
+	service := Service{Format: Ebook, BookBrainz: fakeBookBrainz{}}
+	ask := func(ids IDs, hint Hint) (Book, bool) {
+		return service.askBookBrainz(t.Context(), ids, hint, func(string, error, error) bool { return true })
+	}
+	got, ok := ask(IDs{}, Hint{Title: "Moon Garden", Author: "Ann Writer"})
+	if !ok || got.IDs.BookBrainz != "w-en" || got.Overview != "A gardener finds the moon." || got.Authors()[0] != "Ann Writer" {
+		t.Errorf("by author: %+v ok=%v", got, ok)
+	}
+	if _, ok := ask(IDs{}, Hint{Title: "Moon Garden"}); ok {
+		t.Error("a title alone chose a work")
+	}
+	if got, ok := ask(IDs{BookBrainz: "w-fr"}, Hint{Title: "Moon Garden"}); !ok || got.IDs.BookBrainz != "w-fr" {
+		t.Errorf("stored id: %+v ok=%v", got.IDs, ok)
 	}
 }

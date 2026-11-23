@@ -31,6 +31,7 @@ const (
 	BookSourceAudible     = "audible"
 	BookSourceITunes      = "itunes"
 	BookSourceFantLab     = "fantlab"
+	BookSourceBookBrainz  = "bookbrainz"
 	BookSourceHardcover   = "hardcover"
 	BookSourceArchive     = "internetarchive"
 )
@@ -224,6 +225,8 @@ var MetadataProviders = []MetadataProvider{
 		PerMinute: 20, MaxPerMinute: 20, Published: "about 20 a minute"},
 	{Key: BookSourceFantLab, Label: "FantLab", MediaTypes: []string{"book", "audiobook"}, Carries: []string{"fantasy and science fiction works", "original titles", "descriptions", "ratings", "covers"},
 		PerMinute: 60, Published: "none published"},
+	{Key: BookSourceBookBrainz, Label: "BookBrainz", MediaTypes: []string{"book"}, Carries: []string{"works and their authors", "descriptions written by contributors", "language"},
+		PerMinute: 30, Published: "none published; asked at 30 a minute"},
 	{Key: ComicSourceComicVine, Label: "ComicVine", MediaTypes: []string{"comic"}, Carries: []string{"series", "issues and their numbers", "cover and store dates", "credits", "story arcs", "covers"}, NeedsKey: true,
 		PerMinute: 3, MaxPerMinute: 3, Published: "200 requests an hour for each kind of request; faster gets the key blocked"},
 	{Key: ComicSourceMetron, Label: "Metron (account as user:password)", MediaTypes: []string{"comic"}, Carries: []string{"series and their type", "issues", "page counts", "age ratings", "credits", "reprints", "ComicVine and GCD ids"}, NeedsKey: true,
