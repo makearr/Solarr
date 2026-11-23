@@ -70,6 +70,9 @@ type MediaTypeInfo struct {
 	SearchesLibrary   bool
 	CoverSources      bool
 	ReleaseFilters    bool
+	PartCoverage      bool
+	// PreviewableSettings are the File Management settings that can count the files they would write.
+	PreviewableSettings []string
 }
 
 // LibraryKind is one kind of library of a media type and the defaults a library of it starts with.
@@ -176,7 +179,7 @@ func (s *Server) ListMediaTypes(w http.ResponseWriter, _ *http.Request) {
 				DuplicatesByName: info.DuplicatesByName, Kinds: kindViews(info.Kinds),
 				FileSettings: fileSettingViews(info.FileSettings), ScanMonitor: scanMonitorView(info.ScanMonitor),
 				UnidentifiedRetry: strPtr(info.UnidentifiedRetry), SearchesLibrary: info.SearchesLibrary,
-				CoverSources: info.CoverSources, ReleaseFilters: info.ReleaseFilters,
+				CoverSources: info.CoverSources, ReleaseFilters: info.ReleaseFilters, PartCoverage: info.PartCoverage, PreviewableSettings: nonNilStrings(info.PreviewableSettings),
 			})
 		}
 	}

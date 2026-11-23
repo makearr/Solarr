@@ -56,6 +56,8 @@ type Module struct {
 	works.Searching
 	// Files places a queued file by a person's word.
 	Files media.PlacingFiles
+	// ReaderFiles writes and previews the reader files of a library.
+	ReaderFiles *ReaderFiles
 	// Rename names a series' files for a rename; nil leaves comics without one.
 	Rename *RenameConfig
 }
@@ -206,6 +208,31 @@ func levels() []model.Level {
 	}
 }
 
+// formatChoices lists the formats a series can have, for the library's Format filter (Trades are the collected ones).
+func formatChoices() []media.Choice {
+	return []media.Choice{
+		{Key: FormatSeries, Label: "Series"}, {Key: FormatLimited, Label: "Limited series"}, {Key: FormatOneShot, Label: "One-shot"},
+		{Key: FormatAnnual, Label: "Annual"}, {Key: FormatTradePaperbck, Label: "Trade paperback"}, {Key: FormatHardcover, Label: "Hardcover"},
+		{Key: FormatGraphicNovel, Label: "Graphic novel"}, {Key: FormatOmnibus, Label: "Omnibus"}, {Key: FormatGallery, Label: "Gallery"},
+	}
+}
+
+// PreviewableSettings implements media.FilePreviewing.
+func (Module) PreviewableSettings() []media.FileSettingKey {
+	return []media.FileSettingKey{media.FileReaderFiles}
+}
+
+// PreviewFileSetting implements media.FilePreviewing: how many files the reader-files pass would write in a mode.
+func (m Module) PreviewFileSetting(ctx context.Context, categoryID int64, key media.FileSettingKey, option string) (int, error) {
+	if key != media.FileReaderFiles || m.ReaderFiles == nil {
+		return 0, media.ErrNotWired
+	}
+	return m.ReaderFiles.Preview(ctx, categoryID, option)
+}
+
+// CoversParts implements media.PartCoverage: a collected edition stands for the issues it collects.
+func (Module) CoversParts() {}
+
 func facets() []media.Facet {
 	return []media.Facet{
 		{
@@ -215,6 +242,10 @@ func facets() []media.Facet {
 		{
 			Key: "publisher", Label: "Publisher", Entity: model.LevelEntityWork, Kind: media.FacetText,
 			Source: media.FacetSource{Kind: media.SourceOrganisation, Name: "publisher"}, Column: true, Sortable: true, Filterable: true,
+		},
+		{
+			Key: "format", Label: "Format", Entity: model.LevelEntityWork, Kind: media.FacetEnum,
+			Source: media.FacetSource{Kind: media.SourceField, Name: FieldFormat}, Choices: formatChoices(), Column: true, Sortable: true, Filterable: true,
 		},
 		{
 			Key: "original_language", Label: "Language", Entity: model.LevelEntityWork, Kind: media.FacetText,

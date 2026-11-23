@@ -250,6 +250,8 @@
       "many": "Tracks",
       "one": "Track"
     },
+    "part_coverage": false,
+    "previewable_settings": [],
     "ratings": false,
     "release_filters": false,
     "roles": [
@@ -753,6 +755,8 @@
       "many": "Episodes",
       "one": "Episode"
     },
+    "part_coverage": false,
+    "previewable_settings": [],
     "ratings": true,
     "release_filters": true,
     "roles": [
@@ -1063,6 +1067,8 @@
       "many": "",
       "one": ""
     },
+    "part_coverage": false,
+    "previewable_settings": [],
     "ratings": true,
     "release_filters": true,
     "roles": [
@@ -1305,6 +1311,8 @@
       "many": "",
       "one": ""
     },
+    "part_coverage": false,
+    "previewable_settings": [],
     "ratings": false,
     "release_filters": true,
     "roles": [
@@ -1377,6 +1385,53 @@
         "key": "publisher",
         "kind": "text",
         "label": "Publisher",
+        "sortable": true
+      },
+      {
+        "choices": [
+          {
+            "key": "series",
+            "label": "Series"
+          },
+          {
+            "key": "limited",
+            "label": "Limited series"
+          },
+          {
+            "key": "one_shot",
+            "label": "One-shot"
+          },
+          {
+            "key": "annual",
+            "label": "Annual"
+          },
+          {
+            "key": "trade_paperback",
+            "label": "Trade paperback"
+          },
+          {
+            "key": "hardcover",
+            "label": "Hardcover"
+          },
+          {
+            "key": "graphic_novel",
+            "label": "Graphic novel"
+          },
+          {
+            "key": "omnibus",
+            "label": "Omnibus"
+          },
+          {
+            "key": "gallery",
+            "label": "Gallery"
+          }
+        ],
+        "column": true,
+        "entity": "work",
+        "filterable": true,
+        "key": "format",
+        "kind": "enum",
+        "label": "Format",
         "sortable": true
       },
       {
@@ -1521,6 +1576,10 @@
       "many": "Issues",
       "one": "Issue"
     },
+    "part_coverage": true,
+    "previewable_settings": [
+      "reader_files"
+    ],
     "ratings": false,
     "release_filters": false,
     "roles": [
@@ -1762,6 +1821,8 @@
       "many": "",
       "one": ""
     },
+    "part_coverage": false,
+    "previewable_settings": [],
     "ratings": false,
     "release_filters": true,
     "roles": [
@@ -1981,6 +2042,8 @@
       "many": "",
       "one": ""
     },
+    "part_coverage": false,
+    "previewable_settings": [],
     "ratings": false,
     "release_filters": true,
     "roles": [

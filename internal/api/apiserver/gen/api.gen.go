@@ -2269,6 +2269,23 @@ type ConnectionTestResult struct {
 	TestedAt time.Time `json:"tested_at"`
 }
 
+// CoverageItem defines model for CoverageItem.
+type CoverageItem struct {
+	EditionRef string `json:"edition_ref"`
+	MediaRef   string `json:"media_ref"`
+
+	// Source hand, or a provider's key.
+	Source string `json:"source"`
+	Title  string `json:"title"`
+	WorkId int64  `json:"work_id"`
+}
+
+// CoveredPartRef defines model for CoveredPartRef.
+type CoveredPartRef struct {
+	MediaRef string `json:"media_ref"`
+	WorkId   int64  `json:"work_id"`
+}
+
 // CreatedAPIKey defines model for CreatedAPIKey.
 type CreatedAPIKey struct {
 	CreatedAt time.Time `json:"created_at"`
@@ -4764,6 +4781,12 @@ type MediaTypeInfo struct {
 	Organisation MediaTerm `json:"organisation"`
 	Part         MediaTerm `json:"part"`
 
+	// PartCoverage A held part can stand for parts of other works (GET /works/{id}/coverage).
+	PartCoverage bool `json:"part_coverage"`
+
+	// PreviewableSettings File Management settings whose options can say how many files they would write (GET /categories/{id}/file-settings/{key}/preview).
+	PreviewableSettings []string `json:"previewable_settings"`
+
 	// Ratings Its works carry certifications a library's maximum rating limits.
 	Ratings bool `json:"ratings"`
 
@@ -6496,6 +6519,14 @@ type SecretMask struct {
 	Masked *string `json:"masked,omitempty"`
 }
 
+// SetWorkCoverage defines model for SetWorkCoverage.
+type SetWorkCoverage struct {
+	Covered []CoveredPartRef `json:"covered"`
+
+	// EditionRef The ref of the work's own part that covers.
+	EditionRef string `json:"edition_ref"`
+}
+
 // SettingDefinition One setting registered once in Go (ADR-26, todo 4.14) -- the single source for its tier, default and help text. Either a scalar instance_setting key, or (kind entity, since the non-scalar audit's own deep pass) a whole settings surface such as quality profiles or categories, which has no single value and so an always-empty default.
 type SettingDefinition struct {
 	// Default Encoded the same way the value itself is stored (a JSON array for string_list). Always empty for kind entity.
@@ -7316,6 +7347,16 @@ type WorkStatus string
 // WorkWantedState Set when this work has a monitored desired_item, regardless of whether the wanted filter was used.
 type WorkWantedState string
 
+// WorkCoverage defines model for WorkCoverage.
+type WorkCoverage struct {
+	// EditionParts The refs of the work's own parts.
+	EditionParts []string       `json:"edition_parts"`
+	Items        []CoverageItem `json:"items"`
+
+	// Skipped Named parts that do not exist (only after a PUT).
+	Skipped int `json:"skipped"`
+}
+
 // WorkCredit One thing a person or organisation did on one work of one library; parts lists the parts of a part-scoped role.
 type WorkCredit struct {
 	CategoryId int64     `json:"category_id"`
@@ -7715,6 +7756,11 @@ type CreateCategoryJSONBody struct {
 type OrderCategoriesJSONBody struct {
 	// Ids Every library (not its further media types) in the new order.
 	Ids []int64 `json:"ids"`
+}
+
+// PreviewLibraryFileSettingParams defines parameters for PreviewLibraryFileSetting.
+type PreviewLibraryFileSettingParams struct {
+	Option string `form:"option" json:"option"`
 }
 
 // MergeCategoryJSONBody defines parameters for MergeCategory.
@@ -9311,6 +9357,9 @@ type BulkSetWorkMonitoredJSONRequestBody BulkSetWorkMonitoredJSONBody
 // ChooseWorkArtworkJSONRequestBody defines body for ChooseWorkArtwork for application/json ContentType.
 type ChooseWorkArtworkJSONRequestBody = ImagePick
 
+// SetWorkCoverageJSONRequestBody defines body for SetWorkCoverage for application/json ContentType.
+type SetWorkCoverageJSONRequestBody = SetWorkCoverage
+
 // SaveWorkEditJSONRequestBody defines body for SaveWorkEdit for application/json ContentType.
 type SaveWorkEditJSONRequestBody = WorkEdit
 
@@ -9505,6 +9554,9 @@ type ServerInterface interface {
 	// Save a library's File Management and Permissions. Administrator only.
 	// (PUT /categories/{id}/file-management)
 	SetLibraryFileManagement(w http.ResponseWriter, r *http.Request, id int64)
+	// How many files a File Management setting would write at one option, writing none. Administrator only.
+	// (GET /categories/{id}/file-settings/{key}/preview)
+	PreviewLibraryFileSetting(w http.ResponseWriter, r *http.Request, id int64, key string, params PreviewLibraryFileSettingParams)
 	// Preview linking the identical copies one library holds (read only).
 	// (GET /categories/{id}/links)
 	GetCategoryLinks(w http.ResponseWriter, r *http.Request, id int64)
@@ -10531,6 +10583,12 @@ type ServerInterface interface {
 	// Dispatch one ACCEPTed decision's own release to a matching downloader (ADR-57's acquire.send). No resource gate yet -- every dispatch here is a user's own explicit action (ADR-12's own "user request: never paused"), since nothing automatic calls this until stage 6's planner exists.
 	// (POST /works/{id}/candidates/{decisionId}/send)
 	SendCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64, params SendCandidateParams)
+	// Which parts of other works the work's own parts stand for (a collected edition for its issues). Administrator only.
+	// (GET /works/{id}/coverage)
+	GetWorkCoverage(w http.ResponseWriter, r *http.Request, id int64)
+	// Replace what one of the work's parts covers by hand. Administrator only.
+	// (PUT /works/{id}/coverage)
+	SetWorkCoverage(w http.ResponseWriter, r *http.Request, id int64)
 	// The events a work's episodes are in, and its episodes listed as the same broadcast as another series'.
 	// (GET /works/{id}/crossovers)
 	GetWorkCrossovers(w http.ResponseWriter, r *http.Request, id int64)
@@ -10924,6 +10982,12 @@ func (_ Unimplemented) GetLibraryFileManagement(w http.ResponseWriter, r *http.R
 // Save a library's File Management and Permissions. Administrator only.
 // (PUT /categories/{id}/file-management)
 func (_ Unimplemented) SetLibraryFileManagement(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// How many files a File Management setting would write at one option, writing none. Administrator only.
+// (GET /categories/{id}/file-settings/{key}/preview)
+func (_ Unimplemented) PreviewLibraryFileSetting(w http.ResponseWriter, r *http.Request, id int64, key string, params PreviewLibraryFileSettingParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12979,6 +13043,18 @@ func (_ Unimplemented) SendCandidate(w http.ResponseWriter, r *http.Request, id 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Which parts of other works the work's own parts stand for (a collected edition for its issues). Administrator only.
+// (GET /works/{id}/coverage)
+func (_ Unimplemented) GetWorkCoverage(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace what one of the work's parts covers by hand. Administrator only.
+// (PUT /works/{id}/coverage)
+func (_ Unimplemented) SetWorkCoverage(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // The events a work's episodes are in, and its episodes listed as the same broadcast as another series'.
 // (GET /works/{id}/crossovers)
 func (_ Unimplemented) GetWorkCrossovers(w http.ResponseWriter, r *http.Request, id int64) {
@@ -14717,6 +14793,66 @@ func (siw *ServerInterfaceWrapper) SetLibraryFileManagement(w http.ResponseWrite
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetLibraryFileManagement(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewLibraryFileSetting operation middleware
+func (siw *ServerInterfaceWrapper) PreviewLibraryFileSetting(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PreviewLibraryFileSettingParams
+
+	// ------------- Required query parameter "option" -------------
+
+	if paramValue := r.URL.Query().Get("option"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "option"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "option", r.URL.Query(), &params.Option)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "option", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewLibraryFileSetting(w, r, id, key, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -25912,6 +26048,72 @@ func (siw *ServerInterfaceWrapper) SendCandidate(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// GetWorkCoverage operation middleware
+func (siw *ServerInterfaceWrapper) GetWorkCoverage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWorkCoverage(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetWorkCoverage operation middleware
+func (siw *ServerInterfaceWrapper) SetWorkCoverage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetWorkCoverage(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetWorkCrossovers operation middleware
 func (siw *ServerInterfaceWrapper) GetWorkCrossovers(w http.ResponseWriter, r *http.Request) {
 
@@ -27078,6 +27280,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Put(options.BaseURL+"/categories/{id}/file-management", wrapper.SetLibraryFileManagement)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/categories/{id}/file-settings/{key}/preview", wrapper.PreviewLibraryFileSetting)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories/{id}/links", wrapper.GetCategoryLinks)
 	})
 	r.Group(func(r chi.Router) {
@@ -28102,6 +28307,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/candidates/{decisionId}/send", wrapper.SendCandidate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works/{id}/coverage", wrapper.GetWorkCoverage)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/works/{id}/coverage", wrapper.SetWorkCoverage)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works/{id}/crossovers", wrapper.GetWorkCrossovers)

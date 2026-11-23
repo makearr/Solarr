@@ -33,10 +33,16 @@ func TestARepeatedFillRewritesTheCbzOnlyOnce(t *testing.T) {
 	info := comicinfo.Info{Series: "Lantern", Number: "1", Year: 2031}
 	target := "/lib/Lantern/Lantern 001.cbz"
 	file := library.PartPath{MediaRef: "issue:1"}
-	if changed, err := writer.rewrite(t.Context(), target, file, info, comicinfo.ModeFill); err != nil || !changed {
+	if counted, err := writer.rewrite(t.Context(), target, file, info, comicinfo.ModeFill, true); err != nil || !counted {
+		t.Fatalf("a dry run counts the file that would change: %v, %v", counted, err)
+	}
+	if before, _ := fsys.Stat(target); before.Size != int64(cbz.Len()) {
+		t.Fatalf("a dry run wrote the file: size %d, was %d", before.Size, cbz.Len())
+	}
+	if changed, err := writer.rewrite(t.Context(), target, file, info, comicinfo.ModeFill, false); err != nil || !changed {
 		t.Fatalf("first fill = %v, %v", changed, err)
 	}
-	if changed, err := writer.rewrite(t.Context(), target, file, info, comicinfo.ModeFill); err != nil || changed {
+	if changed, err := writer.rewrite(t.Context(), target, file, info, comicinfo.ModeFill, false); err != nil || changed {
 		t.Fatalf("second fill = %v, %v: an unchanged file is not rewritten", changed, err)
 	}
 	opened, _ := fsys.Open(target)

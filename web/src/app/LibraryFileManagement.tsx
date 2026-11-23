@@ -9,6 +9,7 @@ import { useMediaType } from "@/lib/useMediaTypes";
 import type { components } from "@/api/schema";
 
 import { isTierVisible, useTier } from "@/lib/useTier";
+import { Button } from "@/ui/Button";
 import { inputStyle } from "@/ui/form";
 
 import { Message, Toggle } from "./LibraryNaming";
@@ -29,6 +30,7 @@ export function LibraryFileManagement() {
   const setting = (key: FileSettingKey) => declared.find((entry) => entry.key === key);
   // The choices a type declares of its own are kept in the library's module options.
   const moduleSettings = declared.filter((entry) => ["date_type", "edition_satisfies_issues", "reader_files"].includes(entry.key) && (entry.options?.length ?? 0) > 0);
+  const previewable = useMediaType(useLibrary(categoryId ?? "")?.media_type)?.previewable_settings ?? [];
   const options = (entry: { options?: { key: string; label: string }[] }) =>
     (entry.options ?? []).map((option) => [option.key, option.label] as const);
 
@@ -180,16 +182,21 @@ export function LibraryFileManagement() {
       {moduleSettings.length > 0 && (
         <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
           <h2 className="text-sm font-medium">{t("libraryFiles.typeOptions")}</h2>
-          {moduleSettings.map((entry) => (
-            <Choice
-              key={entry.key}
-              label={entry.label}
-              help={entry.help}
-              value={draft.module_options?.[entry.key] ?? entry.options?.[0]?.key ?? ""}
-              options={options(entry)}
-              onChange={(value) => set({ module_options: { ...draft.module_options, [entry.key]: value } })}
-            />
-          ))}
+          {moduleSettings.map((entry) => {
+            const value = draft.module_options?.[entry.key] ?? entry.options?.[0]?.key ?? "";
+            return (
+              <div key={entry.key} className="flex flex-col gap-1">
+                <Choice
+                  label={entry.label}
+                  help={entry.help}
+                  value={value}
+                  options={options(entry)}
+                  onChange={(next) => set({ module_options: { ...draft.module_options, [entry.key]: next } })}
+                />
+                {previewable.includes(entry.key) && value !== (entry.options?.[0]?.key ?? "") && <FilePreview categoryId={id} settingKey={entry.key} option={value} />}
+              </div>
+            );
+          })}
         </section>
       )}
 
@@ -265,5 +272,26 @@ function Choice({
         ))}
       </select>
     </SettingRow>
+  );
+}
+
+/** Counts, on request, the files a setting would write at the chosen option, before it is saved and switched on. */
+function FilePreview({ categoryId, settingKey, option }: { categoryId: number; settingKey: string; option: string }) {
+  const [asked, setAsked] = useState<string>();
+  const preview = useQuery({
+    queryKey: ["file-setting-preview", categoryId, settingKey, option],
+    enabled: asked === option,
+    staleTime: 0,
+    queryFn: () => ok(api.GET("/categories/{id}/file-settings/{key}/preview", { params: { path: { id: categoryId, key: settingKey }, query: { option } } })),
+  });
+  return (
+    <div className="flex items-center gap-3 text-xs text-ink-muted">
+      <Button disabled={preview.isFetching} onClick={() => { setAsked(option); if (asked === option) void preview.refetch(); }}>
+        {t("libraryFiles.preview")}
+      </Button>
+      {preview.isFetching && <span>{t("libraryFiles.previewing")}</span>}
+      {asked === option && preview.data && !preview.isFetching && <span role="status">{t("libraryFiles.previewCount", { files: preview.data.files })}</span>}
+      {asked === option && preview.isError && <span className="text-danger">{t("libraryFiles.previewFailed")}</span>}
+    </div>
   );
 }

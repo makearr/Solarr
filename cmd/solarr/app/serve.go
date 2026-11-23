@@ -1098,8 +1098,10 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 				return err
 			},
 		},
-		WorkNumbering:      adapters.WorkNumbering{Works: library.NewWorks(p.library), Registry: p.media},
-		WorkReleaseFilters: adapters.WorkReleaseFilters{Works: library.NewWorks(p.library), Filters: library.NewReleaseFilters(p.library), Registry: p.media},
+		WorkNumbering:       adapters.WorkNumbering{Works: library.NewWorks(p.library), Registry: p.media},
+		FileSettingPreviews: adapters.FileSettingPreviews{Cache: p.cache, Registry: p.media},
+		WorkCoverage:        adapters.WorkCoverage{Works: library.NewWorks(p.library), Coverage: library.NewCoverage(p.library), Registry: p.media},
+		WorkReleaseFilters:  adapters.WorkReleaseFilters{Works: library.NewWorks(p.library), Filters: library.NewReleaseFilters(p.library), Registry: p.media},
 		WorkMerger: adapters.WorkMerger{
 			Identity: library.NewIdentity(p.library), History: statistics.NewHistory(p.statistics), Registry: p.media, Logger: p.logger,
 		},

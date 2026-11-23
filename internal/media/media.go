@@ -467,6 +467,21 @@ type ReleaseFiltering interface {
 	FiltersReleases()
 }
 
+// PartCoverage is the capability of a media type whose held parts can stand for other parts (a collected edition for the
+// issues it collects): a person edits what a part covers.
+type PartCoverage interface {
+	CoversParts()
+}
+
+// FilePreviewing is the capability of a media type whose file setting can say, before it is switched on, how many files
+// it would write.
+type FilePreviewing interface {
+	// PreviewableSettings are the settings whose options PreviewFileSetting counts.
+	PreviewableSettings() []FileSettingKey
+	// PreviewFileSetting counts the files the library would write with the setting at option, writing none.
+	PreviewFileSetting(ctx context.Context, categoryID int64, key FileSettingKey, option string) (int, error)
+}
+
 // Numbering is the capability of a media type that places a part for a reader: a heading within its group, and
 // the number it is shown with ("Disc 2", "3"; "", "7").
 type Numbering interface {

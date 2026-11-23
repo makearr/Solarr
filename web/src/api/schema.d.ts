@@ -4923,6 +4923,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories/{id}/file-settings/{key}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                key: string;
+            };
+            cookie?: never;
+        };
+        /** How many files a File Management setting would write at one option, writing none. Administrator only. */
+        get: operations["previewLibraryFileSetting"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/file-management": {
         parameters: {
             query?: never;
@@ -6151,6 +6171,29 @@ export interface paths {
          * @description Its parts move to their places in that list, keeping their files, history and ids, and the choice holds for every later refresh. A part the list has no place for whose place it gives to another is set aside, its files kept. Files keep their names until renamed (the work's Rename preview).
          */
         post: operations["setWorkNumbering"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/works/{id}/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** Which parts of other works the work's own parts stand for (a collected edition for its issues). Administrator only. */
+        get: operations["getWorkCoverage"];
+        /**
+         * Replace what one of the work's parts covers by hand. Administrator only.
+         * @description Only the rows a person made are replaced; what a provider filled stays. A covered part that does not exist is skipped and counted. With the library setting on, a covered part is no longer searched for while the part that covers it is held.
+         */
+        put: operations["setWorkCoverage"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -8002,6 +8045,10 @@ export interface components {
             cover_sources: boolean;
             /** @description A work can carry release filters (GET /works/{id}/release-filters). */
             release_filters: boolean;
+            /** @description A held part can stand for parts of other works (GET /works/{id}/coverage). */
+            part_coverage: boolean;
+            /** @description File Management settings whose options can say how many files they would write (GET /categories/{id}/file-settings/{key}/preview). */
+            previewable_settings: string[];
         };
         MediaChoice: {
             key: string;
@@ -10421,6 +10468,32 @@ export interface components {
             /** Format: int64 */
             work_id: number;
             title: string;
+        };
+        CoveredPartRef: {
+            /** Format: int64 */
+            work_id: number;
+            media_ref: string;
+        };
+        SetWorkCoverage: {
+            /** @description The ref of the work's own part that covers. */
+            edition_ref: string;
+            covered: components["schemas"]["CoveredPartRef"][];
+        };
+        CoverageItem: {
+            edition_ref: string;
+            /** Format: int64 */
+            work_id: number;
+            title: string;
+            media_ref: string;
+            /** @description hand, or a provider's key. */
+            source: string;
+        };
+        WorkCoverage: {
+            /** @description The refs of the work's own parts. */
+            edition_parts: string[];
+            items: components["schemas"]["CoverageItem"][];
+            /** @description Named parts that do not exist (only after a PUT). */
+            skipped: number;
         };
         WorkPart: {
             /** Format: int64 */
@@ -21095,6 +21168,37 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
+    previewLibraryFileSetting: {
+        parameters: {
+            query: {
+                option: string;
+            };
+            header?: never;
+            path: {
+                id: number;
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The count. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        files: number;
+                    };
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
     getLibraryFileManagement: {
         parameters: {
             query?: never;
@@ -23426,6 +23530,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NumberingPlan"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getWorkCoverage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The edition's parts and every part they cover. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkCoverage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setWorkCoverage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetWorkCoverage"];
+            };
+        };
+        responses: {
+            /** @description The coverage now held, and how many named parts were skipped. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkCoverage"];
                 };
             };
             400: components["responses"]["Problem"];

@@ -42,6 +42,8 @@ type ReaderFiles struct {
 	// OptionOf answers one of the library's own settings; KindOf the library's kind.
 	OptionOf func(categoryID int64, key, fallback string) string
 	KindOf   func(categoryID int64) string
+	// RootsOf answers the roots of a library, which a preview walks.
+	RootsOf func(categoryID int64) []settings.RootFolder
 	// Rehash records the size and quick hash a rewritten file has now.
 	Rehash func(ctx context.Context, mediaObjectID int64, filePath string) error
 	Clock  clock.Clock
@@ -56,7 +58,37 @@ func ReaderFilesEnabled(category settings.Category) bool {
 
 // WriteSeries writes the series' reader files into each writable root its files are on, answering how many files it wrote.
 func (w ReaderFiles) WriteSeries(ctx context.Context, categoryID, workID int64) (int, error) {
-	mode := w.OptionOf(categoryID, string(media.FileReaderFiles), ReaderFilesOff)
+	return w.series(ctx, categoryID, workID, w.OptionOf(categoryID, string(media.FileReaderFiles), ReaderFilesOff), false)
+}
+
+// Preview counts the files a pass in this mode would write across the library, writing none.
+func (w ReaderFiles) Preview(ctx context.Context, categoryID int64, mode string) (int, error) {
+	total := 0
+	for _, root := range w.RootsOf(categoryID) {
+		var afterID int64
+		for {
+			ids, err := w.Reader.WorksOnRoot(ctx, MediaType, root.ID, afterID, 200)
+			if err != nil {
+				return total, err
+			}
+			for _, workID := range ids {
+				afterID = workID
+				count, err := w.series(ctx, categoryID, workID, mode, true)
+				if err != nil {
+					return total, err
+				}
+				total += count
+			}
+			if len(ids) < 200 {
+				break
+			}
+		}
+	}
+	return total, nil
+}
+
+// series is WriteSeries in a given mode; dry counts what would be written and touches nothing.
+func (w ReaderFiles) series(ctx context.Context, categoryID, workID int64, mode string, dry bool) (int, error) {
 	if mode != ReaderFilesFill && mode != ReaderFilesReplace {
 		return 0, nil
 	}
@@ -80,13 +112,16 @@ func (w ReaderFiles) WriteSeries(ctx context.Context, categoryID, workID int64) 
 		if !strings.EqualFold(path.Ext(file.RelPath), ".cbz") {
 			continue
 		}
-		changed, err := w.rewrite(ctx, path.Join(root.Path, file.RelPath), file, issueInfo(detail, file, manga), mode)
+		changed, err := w.rewrite(ctx, path.Join(root.Path, file.RelPath), file, issueInfo(detail, file, manga), mode, dry)
 		if err != nil {
 			w.Logger.Warn("comicinfo not written", slog.Int64("work_id", workID), slog.Any("error", err))
 			continue
 		}
 		if changed {
 			written++
+			if dry {
+				continue
+			}
 			if err := w.Rehash(ctx, file.MediaObjectID, path.Join(root.Path, file.RelPath)); err != nil {
 				w.Logger.Warn("rewritten cbz not measured, the next scan will", slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", err))
 			}
@@ -99,6 +134,13 @@ func (w ReaderFiles) WriteSeries(ctx context.Context, categoryID, workID int64) 
 	}
 	for _, folder := range sortedFolders(folders) {
 		target := path.Join(folder, "series.json")
+		if dry {
+			current, err := w.read(target)
+			if errors.Is(err, fs.ErrNotExist) || (err == nil && mode == ReaderFilesReplace && !bytes.Equal(current, body)) {
+				written++
+			}
+			continue
+		}
 		if mode == ReaderFilesReplace {
 			if replaced, err := w.replaceFile(target, body); err != nil {
 				return written, err
@@ -192,7 +234,7 @@ func idNotes(ids map[string]string) string {
 }
 
 // rewrite puts ComicInfo.xml into the cbz when it would differ, swapping in a whole new file; answers whether it did.
-func (w ReaderFiles) rewrite(ctx context.Context, target string, _ library.PartPath, info comicinfo.Info, mode string) (bool, error) {
+func (w ReaderFiles) rewrite(ctx context.Context, target string, _ library.PartPath, info comicinfo.Info, mode string, dry bool) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
@@ -210,8 +252,8 @@ func (w ReaderFiles) rewrite(ctx context.Context, target string, _ library.PartP
 		return false, err
 	}
 	data, changed, err := comicinfo.Merge(existing, info, mode)
-	if err != nil || !changed {
-		return false, err
+	if err != nil || !changed || dry {
+		return changed && dry, err
 	}
 	err = fsx.WriteAtomic(w.FS, target, func(out io.Writer) error { return comicinfo.RewriteCBZ(source, stat.Size, out, data) })
 	if err != nil {

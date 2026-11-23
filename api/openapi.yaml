@@ -7701,6 +7701,40 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /categories/{id}/file-settings/{key}/preview:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: previewLibraryFileSetting
+      tags: [library]
+      summary: How many files a File Management setting would write at one option, writing none. Administrator only.
+      parameters:
+        - name: option
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: The count.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [files]
+                properties:
+                  files: { type: integer }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/file-management:
     parameters:
       - name: id
@@ -9530,6 +9564,49 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/NumberingPlan" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /works/{id}/coverage:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getWorkCoverage
+      tags: [library]
+      summary: Which parts of other works the work's own parts stand for (a collected edition for its issues). Administrator only.
+      responses:
+        "200":
+          description: The edition's parts and every part they cover.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkCoverage" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setWorkCoverage
+      tags: [library]
+      summary: Replace what one of the work's parts covers by hand. Administrator only.
+      description: >-
+        Only the rows a person made are replaced; what a provider filled stays. A covered part that does not exist is
+        skipped and counted. With the library setting on, a covered part is no longer searched for while the part
+        that covers it is held.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetWorkCoverage" }
+      responses:
+        "200":
+          description: The coverage now held, and how many named parts were skipped.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkCoverage" }
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
@@ -11409,7 +11486,7 @@ components:
 
     MediaTypeInfo:
       type: object
-      required: [key, label, genre_tree, ratings, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain, add_kinds, commits_held_imports, duplicates_by_name, file_settings, scan_monitor, searches_library, cover_sources, release_filters]
+      required: [key, label, genre_tree, ratings, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain, add_kinds, commits_held_imports, duplicates_by_name, file_settings, scan_monitor, searches_library, cover_sources, release_filters, part_coverage, previewable_settings]
       properties:
         key: { $ref: "#/components/schemas/MediaType" }
         label: { type: string, description: Also the default name of a library of this type. }
@@ -11508,6 +11585,8 @@ components:
         searches_library: { type: boolean, description: "Every wanted work of a library can be searched at once (POST /categories/{id}/search)." }
         cover_sources: { type: boolean, description: "The type's covers follow cover_sources of the metadata settings." }
         release_filters: { type: boolean, description: "A work can carry release filters (GET /works/{id}/release-filters)." }
+        part_coverage: { type: boolean, description: "A held part can stand for parts of other works (GET /works/{id}/coverage)." }
+        previewable_settings: { type: array, items: { type: string }, description: "File Management settings whose options can say how many files they would write (GET /categories/{id}/file-settings/{key}/preview)." }
 
     MediaChoice:
       type: object
@@ -14127,6 +14206,34 @@ components:
       properties:
         work_id: { type: integer, format: int64 }
         title: { type: string }
+    CoveredPartRef:
+      type: object
+      required: [work_id, media_ref]
+      properties:
+        work_id: { type: integer, format: int64 }
+        media_ref: { type: string }
+    SetWorkCoverage:
+      type: object
+      required: [edition_ref, covered]
+      properties:
+        edition_ref: { type: string, description: The ref of the work's own part that covers. }
+        covered: { type: array, items: { $ref: "#/components/schemas/CoveredPartRef" } }
+    CoverageItem:
+      type: object
+      required: [edition_ref, work_id, title, media_ref, source]
+      properties:
+        edition_ref: { type: string }
+        work_id: { type: integer, format: int64 }
+        title: { type: string }
+        media_ref: { type: string }
+        source: { type: string, description: "hand, or a provider's key." }
+    WorkCoverage:
+      type: object
+      required: [edition_parts, items, skipped]
+      properties:
+        edition_parts: { type: array, items: { type: string }, description: The refs of the work's own parts. }
+        items: { type: array, items: { $ref: "#/components/schemas/CoverageItem" } }
+        skipped: { type: integer, description: Named parts that do not exist (only after a PUT). }
     WorkPart:
       type: object
       required: [id, media_ref, sort_key, monitored, external_ids]

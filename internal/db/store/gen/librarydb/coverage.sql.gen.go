@@ -25,10 +25,12 @@ func (q *Queries) AddCoverage(ctx context.Context, arg AddCoverageParams) error 
 }
 
 const listCoverageByEdition = `-- name: ListCoverageByEdition :many
-SELECT cov.covering_part_id, cov.covered_part_id, cov.source, p.work_id AS covered_work_id, p.media_ref AS covered_ref
+SELECT cov.covering_part_id, cov.covered_part_id, cov.source, q.media_ref AS covering_ref,
+       p.work_id AS covered_work_id, p.media_ref AS covered_ref, w.canonical_title AS covered_title
 FROM part_coverage cov
 JOIN work_part q ON q.id = cov.covering_part_id
 JOIN work_part p ON p.id = cov.covered_part_id
+JOIN work w ON w.id = p.work_id
 WHERE q.work_id = ?
 ORDER BY p.work_id, p.sort_key, p.id
 `
@@ -37,8 +39,10 @@ type ListCoverageByEditionRow struct {
 	CoveringPartID int64
 	CoveredPartID  int64
 	Source         string
+	CoveringRef    string
 	CoveredWorkID  int64
 	CoveredRef     string
+	CoveredTitle   string
 }
 
 // What an edition's parts cover, in the covered series' words.
@@ -55,8 +59,10 @@ func (q *Queries) ListCoverageByEdition(ctx context.Context, workID int64) ([]Li
 			&i.CoveringPartID,
 			&i.CoveredPartID,
 			&i.Source,
+			&i.CoveringRef,
 			&i.CoveredWorkID,
 			&i.CoveredRef,
+			&i.CoveredTitle,
 		); err != nil {
 			return nil, err
 		}

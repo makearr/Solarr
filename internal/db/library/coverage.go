@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -26,9 +27,27 @@ type CoveredPart struct {
 
 // CoverageRow is one part an edition covers.
 type CoverageRow struct {
+	EditionRef    string
 	CoveredWorkID int64
+	CoveredTitle  string
 	CoveredRef    string
 	Source        string
+}
+
+// ErrNoEditionPart is an edition part ref the work does not have.
+var ErrNoEditionPart = errors.New("library: the edition has no such part")
+
+// PartRefs lists the refs of a work's own parts, in order.
+func (c Coverage) PartRefs(ctx context.Context, workID int64) ([]string, error) {
+	parts, err := librarydb.New(c.store.Read()).ListWorkParts(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: parts of work %d: %w", workID, err)
+	}
+	refs := make([]string, len(parts))
+	for i, part := range parts {
+		refs[i] = part.MediaRef
+	}
+	return refs, nil
 }
 
 // Replace makes the edition's part cover exactly the given parts of this source; a part that does not exist is skipped
@@ -42,7 +61,7 @@ func (c Coverage) Replace(ctx context.Context, editionWorkID int64, editionRef, 
 		}
 		covering, found := edition[editionRef]
 		if !found {
-			return fmt.Errorf("library: edition %d has no part %q", editionWorkID, editionRef)
+			return fmt.Errorf("%w: work %d, part %q", ErrNoEditionPart, editionWorkID, editionRef)
 		}
 		if err := queries.ReplaceCoverageSource(ctx, librarydb.ReplaceCoverageSourceParams{CoveringPartID: covering, Source: source}); err != nil {
 			return err
@@ -94,7 +113,7 @@ func (c Coverage) OfEdition(ctx context.Context, editionWorkID int64) ([]Coverag
 	}
 	out := make([]CoverageRow, len(rows))
 	for i, row := range rows {
-		out[i] = CoverageRow{CoveredWorkID: row.CoveredWorkID, CoveredRef: row.CoveredRef, Source: row.Source}
+		out[i] = CoverageRow{EditionRef: row.CoveringRef, CoveredWorkID: row.CoveredWorkID, CoveredTitle: row.CoveredTitle, CoveredRef: row.CoveredRef, Source: row.Source}
 	}
 	return out, nil
 }

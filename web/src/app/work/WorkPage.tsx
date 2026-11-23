@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FilePen, Filter, Layers, ListChecks, ListOrdered, Pencil, RefreshCw, Search, Trash2, UserRound, FolderInput } from "lucide-react";
+import { FilePen, Filter, Layers, Library, ListChecks, ListOrdered, Pencil, RefreshCw, Search, Trash2, UserRound, FolderInput } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -32,6 +32,7 @@ import { CrossoverBadges, CrossoverDialog, CrossoverGuestRows, useWorkCrossovers
 import { useLibrary } from "@/lib/useLibrary";
 import { EditWork } from "./EditWork";
 import { NumberingDialog, useNumberingChoices } from "./NumberingDialog";
+import { CoverageDialog } from "./CoverageDialog";
 import { ReleaseFiltersDialog } from "./ReleaseFiltersDialog";
 import { grabNote } from "./grabNote";
 import { ExpertFileInfo, type ExpertFiles, useExpertFiles } from "./FileExpert";
@@ -195,6 +196,7 @@ function WorkHeader({
   const library = useLibrary(categoryId ?? "");
   const [numbering, setNumbering] = useState(false);
   const [filtering, setFiltering] = useState(false);
+  const [covering, setCovering] = useState(false);
   const numberings = useNumberingChoices(work.id, administrator);
   const [removal, setRemoval] = useState({ deleteFiles: false, exclude: true });
   const [note, setNote] = useState<string>();
@@ -433,6 +435,11 @@ function WorkHeader({
                 {t("releaseFilters.title")}
               </Button>
             )}
+            {administrator && info?.part_coverage && (
+              <Button icon={<Library aria-hidden className="size-4" />} onClick={() => setCovering(true)}>
+                {t("coverage.action")}
+              </Button>
+            )}
             {administrator && (
               <Button variant="danger" icon={<Trash2 aria-hidden className="size-4" />} onClick={() => setRemoving(true)}>
                 {t("action.remove")}
@@ -445,6 +452,7 @@ function WorkHeader({
         <p className="text-xs text-ink-muted">{refresh.isError ? "Refresh failed." : monitor.isError ? "That could not be changed." : note}</p>
       )}
       {editing && <EditWork work={work} info={info} onClose={() => setEditing(false)} />}
+      {covering && <CoverageDialog workId={work.id} title={work.title} onClose={() => setCovering(false)} />}
       {filtering && <ReleaseFiltersDialog workId={work.id} title={work.title} onClose={() => setFiltering(false)} />}
       {numbering && <NumberingDialog workId={work.id} title={work.title} onClose={() => setNumbering(false)} />}
       {renaming && categoryId !== undefined && (

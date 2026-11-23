@@ -15,10 +15,12 @@ ORDER BY p.sort_key, p.id;
 
 -- What an edition's parts cover, in the covered series' words.
 -- name: ListCoverageByEdition :many
-SELECT cov.covering_part_id, cov.covered_part_id, cov.source, p.work_id AS covered_work_id, p.media_ref AS covered_ref
+SELECT cov.covering_part_id, cov.covered_part_id, cov.source, q.media_ref AS covering_ref,
+       p.work_id AS covered_work_id, p.media_ref AS covered_ref, w.canonical_title AS covered_title
 FROM part_coverage cov
 JOIN work_part q ON q.id = cov.covering_part_id
 JOIN work_part p ON p.id = cov.covered_part_id
+JOIN work w ON w.id = p.work_id
 WHERE q.work_id = ?
 ORDER BY p.work_id, p.sort_key, p.id;
 

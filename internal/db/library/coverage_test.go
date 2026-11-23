@@ -1,6 +1,8 @@
 package library_test
 
 import (
+	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -68,7 +70,18 @@ func TestAHeldEditionStandsForTheIssuesItCovers(t *testing.T) {
 		t.Fatalf("held edition covers %v, want %v", got, want)
 	}
 	rows, err := coverage.OfEdition(t.Context(), book.WorkID)
-	if err != nil || len(rows) != 2 || rows[0].CoveredRef != "issue:1" || rows[0].Source != library.CoverageSourceHand {
+	wantRows := []library.CoverageRow{
+		{EditionRef: "whole", CoveredWorkID: run.WorkID, CoveredTitle: "Lantern Run", CoveredRef: "issue:1", Source: library.CoverageSourceHand},
+		{EditionRef: "whole", CoveredWorkID: run.WorkID, CoveredTitle: "Lantern Run", CoveredRef: "issue:2", Source: library.CoverageSourceHand},
+	}
+	if err != nil || !reflect.DeepEqual(rows, wantRows) {
 		t.Fatalf("of edition = %+v, %v", rows, err)
+	}
+	refs, err := coverage.PartRefs(t.Context(), book.WorkID)
+	if err != nil || !reflect.DeepEqual(refs, []string{"whole"}) {
+		t.Fatalf("part refs = %v, %v", refs, err)
+	}
+	if _, err := coverage.Replace(t.Context(), book.WorkID, "volume:1", library.CoverageSourceHand, nil); !errors.Is(err, library.ErrNoEditionPart) {
+		t.Fatalf("a part the edition lacks: %v", err)
 	}
 }

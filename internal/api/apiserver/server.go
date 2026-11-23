@@ -210,6 +210,10 @@ type Config struct {
 	ReadingLists ReadingLists
 	// WorkNumbering numbers a work by another of its sources' lists. Optional: without it, none is offered.
 	WorkNumbering WorkNumbering
+	// FileSettingPreviews counts the files a File Management option would write. Optional: without it, 503.
+	FileSettingPreviews FileSettingPreviews
+	// WorkCoverage edits what a held part stands for. Optional: without it, 503.
+	WorkCoverage WorkCoverage
 	// WorkReleaseFilters holds a series' own rules for the releases offered for it. Optional: without it, 503.
 	WorkReleaseFilters WorkReleaseFilters
 	// WorkMerger folds an album held twice into one. Optional: without it, MergeWork answers 503.
@@ -422,6 +426,8 @@ type Server struct {
 	workMerger              WorkMerger
 	workNumbering           WorkNumbering
 	workReleaseFilters      WorkReleaseFilters
+	workCoverage            WorkCoverage
+	fileSettingPreviews     FileSettingPreviews
 	crossovers              Crossovers
 	readingLists            ReadingLists
 	franchises              Franchises
@@ -582,6 +588,8 @@ func New(config Config) (*Server, error) {
 		workMerger:              config.WorkMerger,
 		workNumbering:           config.WorkNumbering,
 		workReleaseFilters:      config.WorkReleaseFilters,
+		workCoverage:            config.WorkCoverage,
+		fileSettingPreviews:     config.FileSettingPreviews,
 		crossovers:              config.Crossovers,
 		readingLists:            config.ReadingLists,
 		franchises:              config.Franchises,
@@ -763,6 +771,8 @@ func New(config Config) (*Server, error) {
 			secured.Delete("/parts/{id}/same-content", server.routeUnlinkSameContent)
 			secured.Post("/parts/{id}/not-same", func(w http.ResponseWriter, r *http.Request) { server.routeCrossoverID(w, r, server.MarkNotSameContent) })
 			secured.Get("/works/{id}/numbering", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.GetWorkNumbering) })
+			secured.Get("/works/{id}/coverage", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.GetWorkCoverage) })
+			secured.Put("/works/{id}/coverage", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.SetWorkCoverage) })
 			secured.Get("/works/{id}/release-filters", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.GetWorkReleaseFilters) })
 			secured.Put("/works/{id}/release-filters", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.SetWorkReleaseFilters) })
 			secured.Post("/works/{id}/numbering", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.SetWorkNumbering) })
@@ -777,6 +787,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/categories/{id}/naming", wrapped.GetLibraryNaming)
 			secured.Put("/categories/{id}/naming", wrapped.SetLibraryNaming)
 			secured.Post("/categories/{id}/reading-list", wrapped.PreviewReadingList)
+			secured.Get("/categories/{id}/file-settings/{key}/preview", wrapped.PreviewLibraryFileSetting)
 			secured.Get("/categories/{id}/file-management", wrapped.GetLibraryFileManagement)
 			secured.Put("/categories/{id}/file-management", wrapped.SetLibraryFileManagement)
 			secured.Get("/categories/{id}/tagging", wrapped.GetLibraryTagging)

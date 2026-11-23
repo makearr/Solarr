@@ -962,8 +962,16 @@ func (p *process) comicModule() comic.Module {
 	resolver := p.comicResolver()
 	grab := p.comicGrab()
 	conns := p.comicIndexerConns
+	readerFiles := &comic.ReaderFiles{
+		FS: p.fsys, Reader: library.NewSeriesReader(p.library), Roots: adapters.Roots{Cache: p.cache}, Clock: clock.NewSystem(), Logger: p.logger,
+		KindOf: service.KindOf, OptionOf: service.OptionOf, Rehash: p.rehashFile,
+		RootsOf: func(categoryID int64) []settings.RootFolder {
+			return p.cache.Snapshot().RootFoldersForCategory(categoryID)
+		},
+	}
 	return comic.Module{
-		Rename: &comic.RenameConfig{Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},
+		ReaderFiles: readerFiles,
+		Rename:      &comic.RenameConfig{Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},
 		Feed: comic.Feed{
 			Grab: grab, Reader: library.NewSeriesReader(p.library), Indexers: conns, Logger: p.logger, Libraries: p.libraryIDsOf(comic.MediaType),
 		},
@@ -994,10 +1002,7 @@ func (p *process) comicModule() comic.Module {
 			{Definition: comic.RefreshDefinition(), Handler: comic.NewRefreshJob(library.NewSeriesReader(p.library), service, clock.NewSystem(), p.logger)},
 			{Definition: comic.ArtworkDefinition(), Handler: comic.NewArtworkJob(library.NewSeriesReader(p.library), p.remoteImages(), p.logger)},
 			{Definition: comic.ReaderFilesDefinition, Handler: comic.ReaderFilesJob{
-				Writer: comic.ReaderFiles{
-					FS: p.fsys, Reader: library.NewSeriesReader(p.library), Roots: adapters.Roots{Cache: p.cache}, Clock: clock.NewSystem(), Logger: p.logger,
-					KindOf: service.KindOf, OptionOf: service.OptionOf, Rehash: p.rehashFile,
-				},
+				Writer:    *readerFiles,
 				Libraries: func() []settings.Category { return p.cache.Snapshot().Categories() },
 				RootsOf: func(categoryID int64) []settings.RootFolder {
 					return p.cache.Snapshot().RootFoldersForCategory(categoryID)
