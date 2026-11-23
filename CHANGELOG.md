@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Metadata providers as files: e-Hentai, ExHentai (your own session cookies) and nhentai (experimental, through your own FlareSolverr) ship switched off as definition files and are offered to Hentai libraries only; two ports of compiled clients prove the engine against the Go code.
 - Settings > Providers: list every provider definition (metadata, indexers, download clients, webhook presets) with its origin and state, edit a custom file with its problems listed by line, copy a built-in one to custom, approve the hosts of a custom provider before it runs, test a metadata provider, and revert or remove a file (it moves to custom/.removed).
 - Provider definitions: an active metadata definition file now joins a comic library's provider order (picker marked Custom); a definition that is gone or broken shows as no longer available and is skipped.
 - Provider definitions: the engine behind a metadata provider that is only a YAML file (JSON, HTML or XML answers read into one generic record, at most eight requests an operation, only the declared hosts). It is not offered to libraries yet.

@@ -1,0 +1,34 @@
+schema: 1
+kind: metadata
+key: nhentai
+name: nhentai
+engine: http
+enabled: false
+description: "Experimental: nhentai's JSON API, which sits behind a Cloudflare challenge; it answers only through your own FlareSolverr."
+media_types: [comic]
+library_kinds: [hentai]
+adult: true
+role: order
+via: flaresolverr
+hosts: [nhentai.net]
+pace: {per_minute: 20, max_per_minute: 20}
+settings:
+  - {name: flaresolverr_url, type: text, label: FlareSolverr address, required: true}
+ids: {own: nhentai}
+search:
+  request: {method: GET, path: "https://nhentai.net/api/galleries/search", query: {query: "{{ .Query.Title }}"}}
+  response: json
+  rows: {selector: result}
+  fields:
+    id: {selector: id}
+    title: {selector: "title.english"}
+item:
+  request: {method: GET, path: "https://nhentai.net/api/gallery/{{ .ID }}"}
+  response: json
+  fields:
+    id: {selector: id}
+    title: {selector: "title.english"}
+    original_title: {selector: "title.japanese", optional: true}
+    tags: {selector: tags, filters: [{name: jsonjoinarray, args: ["tags", ","]}], split: ","}
+    page_count: {selector: num_pages}
+    adult: {text: "true"}

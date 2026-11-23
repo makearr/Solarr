@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer/spec"
+	"github.com/makearr/Solarr/internal/metadata/specprovider"
 	"github.com/makearr/Solarr/internal/providerdef"
 )
 
@@ -54,7 +55,7 @@ func (p *process) builtinDefinitions() map[providerdef.Kind]map[string][]byte {
 		}
 		indexers[one.ID] = data
 	}
-	files := map[providerdef.Kind]map[string][]byte{providerdef.KindIndexer: indexers}
+	files := map[providerdef.Kind]map[string][]byte{providerdef.KindIndexer: indexers, providerdef.KindMetadata: specprovider.Builtin()}
 	for kind, descriptors := range compiledDescriptors() {
 		if files[kind] == nil {
 			files[kind] = map[string][]byte{}
@@ -101,6 +102,11 @@ var builtinCatalogDefinitions = sync.OnceValue(func() []providerdef.Definition {
 			if def, problems := providerdef.Parse(providerdef.KindIndexer, one.ID+".yaml", data, providerdef.SourceBuiltin); len(problems) == 0 {
 				defs = append(defs, def)
 			}
+		}
+	}
+	for key, data := range specprovider.Builtin() {
+		if def, problems := providerdef.Parse(providerdef.KindMetadata, key+".yaml", data, providerdef.SourceBuiltin); len(problems) == 0 {
+			defs = append(defs, def)
 		}
 	}
 	return defs

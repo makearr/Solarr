@@ -1,0 +1,25 @@
+schema: 1
+kind: metadata
+key: fantlab-port
+name: FantLab (port of the compiled client)
+engine: http
+description: A YAML port of the compiled FantLab client, kept to prove the engine reads a real provider the way the Go code does.
+media_types: [book]
+hosts: [api.fantlab.ru]
+pace: {per_minute: 30, max_per_minute: 30}
+ids: {own: fantlab}
+item:
+  request: {method: GET, path: "https://api.fantlab.ru/work/{{ .ID }}/extended"}
+  response: json
+  fields:
+    id: {selector: work_id}
+    title: {selector: work_name}
+    original_title: {selector: work_name_orig}
+    overview: {selector: work_description}
+    year: {selector: work_year}
+  people:
+    rows: {selector: authors}
+    fields: {name: {selector: name}, role: {text: author}}
+  images:
+    rows: {selector: "."}
+    fields: {url: {selector: image, filters: [{name: re_replace, args: ["\\?.*$", ""]}, {name: prepend, args: "https://fantlab.ru"}]}, kind: {text: cover}}

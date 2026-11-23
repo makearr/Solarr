@@ -82,7 +82,17 @@ func (p *process) reloadRecordProviders() {
 			continue
 		}
 		key := def.Key
-		client := p.providerClient(key, httpx.NewGuard(nil, nil, nil).OnlyHosts(parsed.Hosts), httpx.ClientConfig{})
+		guard := httpx.NewGuard(nil, nil, nil).OnlyHosts(parsed.Hosts)
+		config := httpx.ClientConfig{}
+		if parsed.Via == "flaresolverr" {
+			// The solver's address is the owner's own setting; without one the site is asked direct and will say blocked.
+			held, _ := p.cache.ProviderDefinitionSettings(context.Background(), string(providerdef.KindMetadata), key)
+			if address := held["flaresolverr_url"]; address != "" {
+				config.Proxy = p.liveProxyPolicy()
+				config.Transport = p.flareSolverrTransport(guard, address, config.Proxy)
+			}
+		}
+		client := p.providerClient(key, guard, config)
 		values := func() map[string]string {
 			held, _ := p.cache.ProviderDefinitionSettings(context.Background(), string(providerdef.KindMetadata), key)
 			return held

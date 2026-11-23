@@ -1,0 +1,44 @@
+schema: 1
+kind: metadata
+key: exhentai
+name: ExHentai
+engine: http
+enabled: false
+description: The same galleries as e-Hentai from the members-only site; needs your own session cookies, which are sealed and sent only to its hosts.
+media_types: [comic]
+library_kinds: [hentai]
+adult: true
+role: order
+hosts: [exhentai.org]
+pace: {per_minute: 12, max_per_minute: 12}
+cookies: {ipb_member_id: "{{ .Settings.ipb_member_id }}", ipb_pass_hash: "{{ .Settings.ipb_pass_hash }}", igneous: "{{ .Settings.igneous }}", nw: "1"}
+settings:
+  - {name: ipb_member_id, type: password, label: ipb_member_id cookie, required: true}
+  - {name: ipb_pass_hash, type: password, label: ipb_pass_hash cookie, required: true}
+  - {name: igneous, type: password, label: igneous cookie, required: true}
+ids: {own: exhentai}
+search:
+  request: {method: GET, path: "https://exhentai.org/", query: {f_search: "{{ .Query.Title }}"}}
+  response: html
+  rows: {selector: "td.gl3c.glname"}
+  fields:
+    id: {selector: "a", attribute: href, filters: [{name: regexp, args: "/g/(\\d+/[0-9a-f]+)/"}]}
+    title: {selector: "div.glink"}
+item:
+  request:
+    method: POST
+    path: "https://exhentai.org/api.php"
+    body: '{"method":"gdata","gidlist":[["{{ re_replace .ID "/.*" "" }}","{{ re_replace .ID "^[0-9]+/" "" }}"]],"namespace":1}'
+  response: json
+  rows: {selector: gmetadata}
+  fields:
+    title: {selector: title}
+    original_title: {selector: title_jpn, optional: true}
+    genres: {selector: category}
+    tags: {selector: tags, filters: [{name: jsonjoinarray, args: ["tags", ","]}], split: ","}
+    page_count: {selector: filecount}
+    rating: {selector: rating}
+    adult: {text: "true"}
+  images:
+    rows: {selector: "."}
+    fields: {url: {selector: thumb}, kind: {text: cover}}

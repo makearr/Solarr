@@ -1,0 +1,40 @@
+schema: 1
+kind: metadata
+key: ehentai
+name: e-Hentai
+engine: http
+enabled: false
+description: Gallery titles, tags, page counts and covers from e-Hentai, read-only and paced. Offered to Hentai libraries only.
+media_types: [comic]
+library_kinds: [hentai]
+adult: true
+role: order
+hosts: [e-hentai.org, api.e-hentai.org]
+pace: {per_minute: 12, max_per_minute: 12}
+cookies: {nw: "1"}
+ids: {own: ehentai}
+search:
+  request: {method: GET, path: "https://e-hentai.org/", query: {f_search: "{{ .Query.Title }}"}}
+  response: html
+  rows: {selector: "td.gl3c.glname"}
+  fields:
+    id: {selector: "a", attribute: href, filters: [{name: regexp, args: "/g/(\\d+/[0-9a-f]+)/"}]}
+    title: {selector: "div.glink"}
+item:
+  request:
+    method: POST
+    path: "https://api.e-hentai.org/api.php"
+    body: '{"method":"gdata","gidlist":[["{{ re_replace .ID "/.*" "" }}","{{ re_replace .ID "^[0-9]+/" "" }}"]],"namespace":1}'
+  response: json
+  rows: {selector: gmetadata}
+  fields:
+    title: {selector: title}
+    original_title: {selector: title_jpn, optional: true}
+    genres: {selector: category}
+    tags: {selector: tags, filters: [{name: jsonjoinarray, args: ["tags", ","]}], split: ","}
+    page_count: {selector: filecount}
+    rating: {selector: rating}
+    adult: {text: "true"}
+  images:
+    rows: {selector: "."}
+    fields: {url: {selector: thumb}, kind: {text: cover}}

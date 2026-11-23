@@ -1,0 +1,34 @@
+schema: 1
+kind: metadata
+key: itunes-port
+name: iTunes audiobooks (port of the compiled client)
+engine: http
+description: A YAML port of the compiled iTunes audiobook client, kept to prove the engine reads a real provider the way the Go code does.
+media_types: [audiobook]
+hosts: [itunes.apple.com]
+pace: {per_minute: 20, max_per_minute: 20}
+ids: {own: itunes}
+search:
+  request: {method: GET, path: "https://itunes.apple.com/search", query: {term: "{{ .Query.Title }}", media: audiobook, entity: audiobook, limit: "20"}}
+  response: json
+  rows: {selector: results}
+  fields:
+    id: {selector: collectionId}
+    title: {selector: collectionName, filters: [{name: re_replace, args: [" \\((Un)?[Aa]bridged\\)$", ""]}]}
+    year: {selector: releaseDate, filters: [{name: regexp, args: "^(\\d{4})"}]}
+item:
+  request: {method: GET, path: "https://itunes.apple.com/lookup", query: {id: "{{ .ID }}", entity: audiobook}}
+  response: json
+  rows: {selector: results}
+  fields:
+    id: {selector: collectionId}
+    title: {selector: collectionName, filters: [{name: re_replace, args: [" \\((Un)?[Aa]bridged\\)$", ""]}]}
+    overview: {selector: description}
+    year: {selector: releaseDate, filters: [{name: regexp, args: "^(\\d{4})"}]}
+    genres: {selector: primaryGenreName}
+  people:
+    rows: {selector: "."}
+    fields: {name: {selector: artistName}, role: {text: author}}
+  images:
+    rows: {selector: "."}
+    fields: {url: {selector: artworkUrl100, filters: [{name: replace, args: ["100x100bb", "1500x1500bb"]}]}, kind: {text: cover}}
