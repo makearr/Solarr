@@ -253,7 +253,11 @@ func hasImage(images []Image, url string) bool {
 // source fills what the earlier left empty, adds aliases, and supplies a more trustworthy air time.
 func Merge(sources ...Series) Series {
 	var merged Series
+	var ratings []ProviderRating
 	for index, source := range sources {
+		if source.Rating > 0 && len(source.Sources) > 0 && !slices.ContainsFunc(ratings, func(one ProviderRating) bool { return one.Provider == source.Sources[0] }) {
+			ratings = append(ratings, ProviderRating{Provider: source.Sources[0], Score: source.Rating, Votes: source.RatingVotes})
+		}
 		if index == 0 {
 			merged = source
 			merged.Sources = append([]string(nil), source.Sources...)
@@ -261,6 +265,7 @@ func Merge(sources ...Series) Series {
 		}
 		mergeInto(&merged, source)
 	}
+	merged.Ratings = ratings
 	return merged
 }
 

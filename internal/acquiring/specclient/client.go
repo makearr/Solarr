@@ -12,7 +12,10 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/PuerkitoBio/goquery"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -42,6 +45,8 @@ type Client struct {
 	user    string
 	secret  string
 	baseErr error
+	mu      sync.Mutex
+	cookies []*http.Cookie
 }
 
 var _ download.UsenetClient = (*Client)(nil)
@@ -156,35 +161,119 @@ func (c *Client) build(ctx context.Context, spec Request, variables *extract.Var
 		request.Header.Set(c.def.Auth.Name, c.def.Auth.Prefix+c.secret)
 	case "basic":
 		request.SetBasicAuth(c.user, c.secret)
+	case "login":
+		c.mu.Lock()
+		for _, cookie := range c.cookies {
+			request.AddCookie(cookie)
+		}
+		c.mu.Unlock()
 	}
 	return request, nil
 }
 
-// call makes one request and decodes the answer; the address is never part of an error, since a query may carry the secret.
-func (c *Client) call(ctx context.Context, spec Request, variables *extract.Variables, file []byte) (any, error) {
+// answer is a decoded reply: a JSON-shaped value (xml is read into one) or an html document.
+type answer struct {
+	value any
+	doc   *goquery.Document
+}
+
+func (a answer) node() extract.Node {
+	if a.doc != nil {
+		return extract.HTMLNode{Selection: a.doc.Selection}
+	}
+	return extract.JSONNode{Value: a.value}
+}
+
+var errUnauthorised = errors.New("specclient: the client refused the session")
+
+// exchange makes one request and answers the body and the cookies set; the address is never part of an error, since a query may carry the secret.
+func (c *Client) exchange(ctx context.Context, spec Request, variables *extract.Variables, file []byte) ([]byte, []*http.Cookie, error) {
 	request, err := c.build(ctx, spec, variables, file)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	reply, err := c.http.Do(ctx, request.WithContext(ctx))
 	if err != nil {
-		return nil, fmt.Errorf("specclient: %s", httpx.Explain(err))
+		var refused *httpx.StatusError
+		if errors.As(err, &refused) && (refused.Status == http.StatusUnauthorized || refused.Status == http.StatusForbidden) {
+			return nil, nil, fmt.Errorf("%w: %s", errUnauthorised, httpx.Explain(err))
+		}
+		return nil, nil, fmt.Errorf("specclient: %s", httpx.Explain(err))
 	}
 	defer func() { _ = reply.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(reply.Body, maxAnswerBytes+1))
 	if err != nil || len(body) > maxAnswerBytes {
-		return nil, errors.New("specclient: the answer could not be read within its size limit")
+		return nil, nil, errors.New("specclient: the answer could not be read within its size limit")
 	}
 	if reply.StatusCode < 200 || reply.StatusCode > 299 {
-		return nil, fmt.Errorf("specclient: status %d", reply.StatusCode)
+		return nil, nil, fmt.Errorf("specclient: status %d", reply.StatusCode)
+	}
+	return body, reply.Cookies(), nil
+}
+
+// login opens the session of a login auth; force drops the one held first. Other auths have nothing to open.
+func (c *Client) login(ctx context.Context, force bool) error {
+	if c.def.Auth.Type != "login" {
+		return nil
+	}
+	c.mu.Lock()
+	held := len(c.cookies) > 0
+	if force {
+		c.cookies = nil
+	}
+	c.mu.Unlock()
+	if held && !force {
+		return nil
+	}
+	_, cookies, err := c.exchange(ctx, *c.def.Auth.Login, c.variables(nil, ""), nil)
+	if err != nil {
+		return fmt.Errorf("login: %w", err)
+	}
+	if len(cookies) == 0 {
+		return errors.New("specclient: login: the client opened no session, so the user or the secret was refused")
+	}
+	c.mu.Lock()
+	c.cookies = cookies
+	c.mu.Unlock()
+	return nil
+}
+
+// call makes one request and decodes the answer as the request says; a login that expired is made again once.
+func (c *Client) call(ctx context.Context, spec Request, variables *extract.Variables, file []byte) (answer, error) {
+	if err := c.login(ctx, false); err != nil {
+		return answer{}, err
+	}
+	body, _, err := c.exchange(ctx, spec, variables, file)
+	if errors.Is(err, errUnauthorised) && c.def.Auth.Type == "login" {
+		if err = c.login(ctx, true); err != nil {
+			return answer{}, err
+		}
+		body, _, err = c.exchange(ctx, spec, variables, file)
+	}
+	if err != nil {
+		return answer{}, err
+	}
+	switch spec.Answer {
+	case "html":
+		doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
+		if err != nil {
+			return answer{}, fmt.Errorf("specclient: the answer is not html (it begins %q)", snippet(body))
+		}
+		return answer{doc: doc}, nil
+	case "xml":
+		value, err := extract.XMLValue(body)
+		if err != nil {
+			return answer{}, fmt.Errorf("specclient: the answer is not xml (it begins %q)", snippet(body))
+		}
+		return answer{value: value}, nil
 	}
 	var decoded any
 	if err := json.Unmarshal(body, &decoded); err != nil {
-		return nil, fmt.Errorf("%w (it begins %q)", ErrNotJSON, snippet(body))
+		return answer{}, fmt.Errorf("%w (it begins %q)", ErrNotJSON, snippet(body))
 	}
-	return decoded, nil
+	return answer{value: decoded}, nil
 }
 
 func snippet(body []byte) string {
@@ -221,7 +310,7 @@ func (c *Client) runSteps(ctx context.Context, steps []Step, variables *extract.
 		if err != nil {
 			return fmt.Errorf("%s: %w", step.Name, err)
 		}
-		values, err := c.readFields(extract.JSONNode{Value: answer}, step.Fields, variables)
+		values, err := c.readFields(answer.node(), step.Fields, variables)
 		if err != nil {
 			return fmt.Errorf("%s: %w", step.Name, err)
 		}
@@ -270,7 +359,7 @@ func (c *Client) AddNZB(ctx context.Context, request download.AddRequest) (strin
 	if err != nil {
 		return "", fmt.Errorf("add: %w", err)
 	}
-	values, err := c.readFields(extract.JSONNode{Value: answer}, c.def.Add.Fields, variables)
+	values, err := c.readFields(answer.node(), c.def.Add.Fields, variables)
 	if err != nil {
 		return "", fmt.Errorf("add: %w", err)
 	}
@@ -307,8 +396,7 @@ func (c *Client) listAll(ctx context.Context, listings []Listing, query map[stri
 		if err != nil {
 			return nil, fmt.Errorf("downloads: %w", err)
 		}
-		root := extract.JSONNode{Value: answer}
-		rows, err := rowsOf(root, listing.Rows)
+		rows, err := rowsOf(answer, listing.Rows)
 		if err != nil {
 			return nil, err
 		}
@@ -326,7 +414,13 @@ func (c *Client) listAll(ctx context.Context, listings []Listing, query map[stri
 	return downloads, nil
 }
 
-func rowsOf(root extract.JSONNode, selector string) ([]extract.Node, error) {
+func rowsOf(from answer, selector string) ([]extract.Node, error) {
+	if from.doc != nil {
+		var rows []extract.Node
+		from.doc.Find(selector).Each(func(_ int, one *goquery.Selection) { rows = append(rows, extract.HTMLNode{Selection: one}) })
+		return rows, nil
+	}
+	root := extract.JSONNode{Value: from.value}
 	picked, ok := root.Path(selector)
 	if !ok {
 		return nil, nil
@@ -375,7 +469,7 @@ func (c *Client) QueueStatus(ctx context.Context) (download.QueueStatus, error) 
 	if err != nil {
 		return download.QueueStatus{}, fmt.Errorf("queue: %w", err)
 	}
-	values, err := c.readFields(extract.JSONNode{Value: answer}, c.def.QueueStatus.Fields, variables)
+	values, err := c.readFields(answer.node(), c.def.QueueStatus.Fields, variables)
 	if err != nil {
 		return download.QueueStatus{}, fmt.Errorf("queue: %w", err)
 	}

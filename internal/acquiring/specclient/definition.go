@@ -38,11 +38,13 @@ type Definition struct {
 	Resume             *Action    `json:"resume"`
 }
 
-// Auth is how the owner's secret travels: as a query value, a header, or HTTP basic ("user:password" in the secret).
+// Auth is how the owner's secret travels: as a query value, a header, HTTP basic ("user:password" in the secret), or a login whose cookies are kept.
 type Auth struct {
 	Type   string `json:"type"`
 	Name   string `json:"name"`
 	Prefix string `json:"prefix"`
+	// Login is the request a "login" auth makes first, with the user and secret in its body; the cookies it sets are kept.
+	Login *Request `json:"login"`
 }
 
 // Request is one call; an empty rendered query value is left out of the address.
@@ -55,6 +57,8 @@ type Request struct {
 	BodyType  string            `json:"body_type"`
 	FileField string            `json:"file_field"`
 	FileName  string            `json:"file_name"`
+	// Answer is how the reply is read: json (the default), xml or html.
+	Answer string `json:"answer"`
 }
 
 // Field reads one value of a row; BlankWhen empties it when the row matches the selector.
@@ -178,9 +182,16 @@ func (d Definition) validate() error {
 		if d.Auth.Name == "" {
 			return fmt.Errorf("auth.name is required for %s", d.Auth.Type)
 		}
+	case "login":
+		if d.Auth.Login == nil {
+			return fmt.Errorf("auth.login is required for a login")
+		}
+		if err := d.Auth.Login.check("auth.login"); err != nil {
+			return err
+		}
 	case "basic", "none", "":
 	default:
-		return fmt.Errorf("auth.type %q is not query, header, basic or none", d.Auth.Type)
+		return fmt.Errorf("auth.type %q is not query, header, basic, login or none", d.Auth.Type)
 	}
 	if d.Probe == nil || d.Add == nil || d.Downloads == nil || d.QueueStatus == nil || d.Remove == nil || d.Pause == nil || d.Resume == nil {
 		return fmt.Errorf("probe, add, downloads, queue_status, remove, pause and resume are all required")
@@ -266,6 +277,9 @@ func checkSteps(label string, steps []Step, least int) error {
 func (r Request) check(label string) error {
 	if !strings.HasPrefix(r.Path, "/") || strings.HasPrefix(r.Path, "//") || strings.Contains(r.Path, "://") || strings.Contains(r.Path, "@") {
 		return fmt.Errorf("%s: path %q must start with a single / (it is relative to the owner's address)", label, r.Path)
+	}
+	if !slices.Contains([]string{"", "json", "xml", "html"}, r.Answer) {
+		return fmt.Errorf("%s: answer %q is not json, xml or html", label, r.Answer)
 	}
 	if !slices.Contains([]string{"", "GET", "POST", "PUT", "DELETE"}, r.Method) {
 		return fmt.Errorf("%s: method %q is not GET, POST, PUT or DELETE", label, r.Method)

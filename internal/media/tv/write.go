@@ -176,6 +176,14 @@ func ToWrite(series Series, options WriteOptions) library.SeriesWrite {
 	if series.Rating > 0 {
 		write.Rating = &library.SeriesRatingWrite{Provider: source, Score: series.Rating, Votes: int64(series.RatingVotes)}
 	}
+	for i, rating := range series.Ratings {
+		entry := library.SeriesRatingWrite{Provider: rating.Provider, Score: rating.Score, Votes: int64(rating.Votes)}
+		if i == 0 {
+			write.Rating = &entry
+		} else {
+			write.MoreRatings = append(write.MoreRatings, entry)
+		}
+	}
 	if series.FirstAired != "" {
 		write.Dates = append(write.Dates, library.SeriesDateWrite{Kind: "first_aired", Date: series.FirstAired, Source: source})
 	}

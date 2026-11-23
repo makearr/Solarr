@@ -153,24 +153,33 @@ type Image struct {
 	Source string `json:"source,omitempty"`
 }
 
+// ProviderRating is one source's score of a series, 0 to 10.
+type ProviderRating struct {
+	Provider string
+	Score    float64
+	Votes    int
+}
+
 // Series is one show, merged from every source that knew it.
 type Series struct {
-	IDs              IDs
-	Title            string
-	Aliases          []string
-	Overview         string
-	Year             int
-	FirstAired       string
-	LastAired        string
-	Status           Status
-	RuntimeMin       int
-	Network          string
-	OriginalNetwork  string
-	AirTime          *AirTime
-	Genres           []string
-	ContentRating    string
-	Rating           float64
-	RatingVotes      int
+	IDs             IDs
+	Title           string
+	Aliases         []string
+	Overview        string
+	Year            int
+	FirstAired      string
+	LastAired       string
+	Status          Status
+	RuntimeMin      int
+	Network         string
+	OriginalNetwork string
+	AirTime         *AirTime
+	Genres          []string
+	ContentRating   string
+	Rating          float64
+	RatingVotes     int
+	// Ratings are the score each source gave, first source first; Merge fills them.
+	Ratings          []ProviderRating
 	OriginalLanguage string
 	OriginalCountry  string
 	Seasons          []Season

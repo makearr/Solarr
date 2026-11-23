@@ -186,3 +186,21 @@ func TestToWriteStoresTheSeasonsTheSourcesNumberDifferently(t *testing.T) {
 		t.Errorf("agreeing sources: field = %q, %v; want an empty value that clears the note", got, found)
 	}
 }
+
+func TestEverySourcesScoreIsKeptAndStoredBesideTheFirst(t *testing.T) {
+	merged := tv.Merge(
+		tv.Series{Title: "Lantern Run", Rating: 7.4, RatingVotes: 900, Sources: []string{"tvdb"}},
+		tv.Series{Rating: 8.1, RatingVotes: 12000, Sources: []string{"omdb"}},
+		tv.Series{Rating: 6.0, Sources: []string{"tvmaze"}},
+		tv.Series{Rating: 7.0, Sources: []string{"omdb"}},
+		tv.Series{Title: "No score", Sources: []string{"tmdb"}},
+	)
+	want := []tv.ProviderRating{{Provider: "tvdb", Score: 7.4, Votes: 900}, {Provider: "omdb", Score: 8.1, Votes: 12000}, {Provider: "tvmaze", Score: 6.0}}
+	if !reflect.DeepEqual(merged.Ratings, want) {
+		t.Fatalf("ratings = %+v, want %+v", merged.Ratings, want)
+	}
+	write := tv.ToWrite(merged, tv.WriteOptions{})
+	if write.Rating == nil || write.Rating.Provider != "tvdb" || len(write.MoreRatings) != 2 || write.MoreRatings[0].Provider != "omdb" || write.MoreRatings[0].Votes != 12000 {
+		t.Fatalf("stored = %+v, more = %+v", write.Rating, write.MoreRatings)
+	}
+}

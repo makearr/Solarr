@@ -4,6 +4,8 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- TV: a series page shows every provider's score as its own chip (OMDb's IMDb rating included) instead of only the first source's.
+- Download client definitions can sign in with a login request (the session cookie is kept) and read XML and HTML answers, not only JSON.
 - Comics: an edition page has a Covers dialog to say which issues a collected edition holds (a series and a range), the library list filters by Format (the Trades view), and the Kavita and Komga files setting counts how many files it would write before it is switched on.
 - Watched: the library tree shows how many works are ready to clean up beside the Watched entry (refreshed by the watch-state sync); a non-administrator who opens the page is told it is administrator-only instead of an error.
 - Webhooks: `file_recycled` now fires when a file goes to the recycle bin (it never did for the bin itself).

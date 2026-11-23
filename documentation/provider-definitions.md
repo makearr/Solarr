@@ -53,7 +53,10 @@ them, the first the default) and a `request_delay` that floors the gap between a
 A definition says how to talk to an external usenet client; Solarr implements no client. Paths are relative to the address
 the owner enters (a path that is absolute, scheme-relative or carries `@` is refused), so a definition never names a host.
 `protocol: usenet` only (torrent definitions are not offered). The secret travels by `auth` (`query` with a name, `header` with a
-name and prefix, or `basic` with `user:password`).
+name and prefix, `basic` with `user:password`, or `login` with `user_name: true` and an `auth.login` request whose body names
+`{{.Settings.user}}` and `{{.Settings.secret}}`: the cookies it sets are kept, and a 401 or 403 makes it again once). A request reads its
+answer as `json` (default), `xml` (attributes as `@name`, text as `#text`, repeated elements as a list) or `html` (CSS selectors)
+with `answer:`.
 
 Parts, all required: `probe` (steps, then `version`, optional `download_folder` and `categories`), `add` (a request with
 `file_field`, answering `ref`, `ok`, `error`), `downloads.list` (one listing per place the client keeps downloads: `rows`, fields

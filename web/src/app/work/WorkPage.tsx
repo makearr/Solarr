@@ -859,5 +859,6 @@ function DownloadingBadge({ workId }: { workId: number }) {
 // A local media server's score reads as the server's name; every other source keeps its short uppercase key.
 function scoreSourceLabel(provider: string): string {
   const local = provider.startsWith("local:") ? provider.slice("local:".length) : "";
+  if (provider === "omdb") return "IMDb via OMDb";
   return local === "" ? provider.toUpperCase() : local.charAt(0).toUpperCase() + local.slice(1);
 }
