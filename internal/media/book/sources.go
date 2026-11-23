@@ -80,6 +80,9 @@ func FromOpenLibrary(work openlibrary.Work, doc openlibrary.Doc) Book {
 	if len(doc.Google) > 0 {
 		book.IDs.GoogleBooks = doc.Google[0]
 	}
+	if len(doc.Archive) > 0 {
+		book.IDs.Archive = doc.Archive[0]
+	}
 	book.IDs.ISBN = firstISBN13(doc.ISBN)
 	subjects := work.Subjects
 	if len(subjects) == 0 {
@@ -269,7 +272,7 @@ func Merge(first, second Book) Book {
 	merged.IDs = IDs{
 		OpenLibrary: cmp.Or(first.IDs.OpenLibrary, second.IDs.OpenLibrary), GoogleBooks: cmp.Or(first.IDs.GoogleBooks, second.IDs.GoogleBooks),
 		ASIN: cmp.Or(first.IDs.ASIN, second.IDs.ASIN), ISBN: cmp.Or(first.IDs.ISBN, second.IDs.ISBN), Goodreads: cmp.Or(first.IDs.Goodreads, second.IDs.Goodreads),
-		Hardcover: cmp.Or(first.IDs.Hardcover, second.IDs.Hardcover), ITunes: cmp.Or(first.IDs.ITunes, second.IDs.ITunes), FantLab: cmp.Or(first.IDs.FantLab, second.IDs.FantLab),
+		Hardcover: cmp.Or(first.IDs.Hardcover, second.IDs.Hardcover), ITunes: cmp.Or(first.IDs.ITunes, second.IDs.ITunes), FantLab: cmp.Or(first.IDs.FantLab, second.IDs.FantLab), Archive: cmp.Or(first.IDs.Archive, second.IDs.Archive),
 	}
 	merged.Title = cmp.Or(first.Title, second.Title)
 	merged.Subtitle = cmp.Or(first.Subtitle, second.Subtitle)

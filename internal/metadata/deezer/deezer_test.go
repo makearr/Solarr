@@ -39,3 +39,19 @@ func TestFind_NoExactMatchIsNotFound(t *testing.T) {
 		t.Errorf("error = %v, want ErrNotFound", err)
 	}
 }
+
+func TestByUPC_ReadsTheAlbumTheBarcodeNames(t *testing.T) {
+	client := deezer.New(pages{"/album/upc:5000000000001": `{"id":7,"title":"Example Album","fans":20,"cover_xl":"https://img.example/7.jpg","artist":{"name":"Example Band"}}`})
+	got, err := client.ByUPC(t.Context(), "5000000000001")
+	want := deezer.Album{ID: 7, Title: "Example Album", Artist: "Example Band", Fans: 20, Cover: "https://img.example/7.jpg"}
+	if err != nil || got != want {
+		t.Errorf("ByUPC = %+v, %v; want %+v", got, err, want)
+	}
+}
+
+func TestByUPC_AnErrorBodyIsNotFound(t *testing.T) {
+	client := deezer.New(pages{"/album/upc:": `{"error":{"type":"DataException","code":800}}`})
+	if _, err := client.ByUPC(t.Context(), "5000000000002"); !errors.Is(err, deezer.ErrNotFound) {
+		t.Errorf("error = %v, want ErrNotFound", err)
+	}
+}

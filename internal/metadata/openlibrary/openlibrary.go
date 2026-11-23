@@ -24,7 +24,7 @@ const (
 	maxResponseBytes = 8 << 20
 	// searchFields are what a search answers of each work: enough to add one without asking again.
 	searchFields = "key,title,subtitle,author_name,author_key,first_publish_year,isbn,publisher,number_of_pages_median," +
-		"language,cover_i,subject,edition_count,ratings_average,ratings_count,id_goodreads,id_google,id_amazon"
+		"language,cover_i,subject,edition_count,ratings_average,ratings_count,id_goodreads,id_google,id_amazon,ia"
 )
 
 // workPattern, authorPattern and editionPattern are the only id shapes that reach a request.
@@ -69,6 +69,7 @@ type Doc struct {
 	Goodreads        []string `json:"id_goodreads"`
 	Google           []string `json:"id_google"`
 	Amazon           []string `json:"id_amazon"`
+	Archive          []string `json:"ia"`
 }
 
 // WorkID is the doc's work id, "OL27482W".

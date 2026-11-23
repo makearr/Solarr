@@ -23,7 +23,10 @@ type storedImage struct {
 	Source string `json:"source,omitempty"`
 }
 
-// WorkPictures lists the posters the providers hold, the thumbnail being the poster itself.
+// pickableKinds are the stored picture kinds the picker offers, with the label each shows.
+var pickableKinds = map[string]string{"poster": "Poster", "logo": "Logo", "banner": "Banner"}
+
+// WorkPictures lists the pictures the providers hold, the thumbnail being the poster itself.
 func (p ProviderPictures) WorkPictures(ctx context.Context, workID int64) ([]media.ImageOption, error) {
 	images, err := p.Reader.Images(ctx, workID)
 	if err != nil {
@@ -31,14 +34,14 @@ func (p ProviderPictures) WorkPictures(ctx context.Context, workID int64) ([]med
 	}
 	var options []media.ImageOption
 	for _, image := range images {
-		if image.Kind == "poster" {
-			options = append(options, media.ImageOption{URL: image.URL, ThumbURL: image.URL, Source: image.Source, Label: "Poster"})
+		if label, ok := pickableKinds[image.Kind]; ok {
+			options = append(options, media.ImageOption{URL: image.URL, ThumbURL: image.URL, Source: image.Source, Label: label})
 		}
 	}
 	return options, nil
 }
 
-// PickWorkPicture puts the chosen poster first among the work's pictures as the user's own, keeping the others.
+// PickWorkPicture puts the chosen picture first among the work's pictures as the user's own, keeping the others.
 func (p ProviderPictures) PickWorkPicture(ctx context.Context, workID int64, url string) error {
 	images, err := p.Reader.Images(ctx, workID)
 	if err != nil {
@@ -48,7 +51,7 @@ func (p ProviderPictures) PickWorkPicture(ctx context.Context, workID int64, url
 	rest := []storedImage{}
 	for _, image := range images {
 		entry := storedImage{Kind: image.Kind, URL: image.URL, Source: image.Source}
-		if image.Kind == "poster" && image.URL == url {
+		if _, ok := pickableKinds[image.Kind]; ok && image.URL == url {
 			chosen = append(chosen, entry)
 		} else {
 			rest = append(rest, entry)

@@ -8,6 +8,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/metadata/deezer"
 	"github.com/makearr/Solarr/internal/metadata/fanart"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/metadata/theaudiodb"
@@ -25,21 +26,28 @@ func (p *process) musicPictures() *music.ArtworkChoice {
 	fanartOn := func() bool {
 		return p.cache.Snapshot().ProviderEnabled(settings.MovieSourceFanart) && fanartClient.Configured()
 	}
+	deezerClient := deezer.New(p.providerClient(providerDeezer, nil, httpx.ClientConfig{}))
+	deezerOn := func() bool { return p.cache.Snapshot().ProviderEnabled(settings.SourceDeezer) }
 	audioDBOn := func() bool { return *p.cache.Snapshot().MetadataSettings().TheAudioDB }
 	return music.NewArtworkChoice(music.ArtworkChoiceConfig{
 		Artworks: library.NewArtworks(p.library),
 		CoverArt: musicbrainz.NewCoverArt(client, coverArtBaseURL),
-		AlbumImages: func(ctx context.Context, releaseGroupMBID string) ([]media.ImageOption, error) {
+		AlbumImages: func(ctx context.Context, ask music.AlbumAsk) ([]media.ImageOption, error) {
 			var options []media.ImageOption
 			if audioDBOn() {
-				more, err := audioDBOptions(audioDB.AlbumPictures(ctx, releaseGroupMBID))
+				more, err := audioDBOptions(audioDB.AlbumPictures(ctx, ask.ReleaseGroupMBID))
 				if err != nil {
 					return nil, err
 				}
 				options = append(options, more...)
 			}
 			if fanartOn() {
-				options = append(options, fanartAlbumOptions(fanartClient.Album(ctx, releaseGroupMBID))...)
+				options = append(options, fanartAlbumOptions(fanartClient.Album(ctx, ask.ReleaseGroupMBID))...)
+			}
+			if deezerOn() {
+				if found, err := findDeezer(ctx, deezerClient, ask); err == nil && found.Cover != "" {
+					options = append(options, media.ImageOption{URL: found.Cover, Source: "Deezer", Label: "Cover"})
+				}
 			}
 			return options, nil
 		},
@@ -111,4 +119,17 @@ func fanartArtistOptions(artist fanart.Artist, err error) []media.ImageOption {
 		}
 	}
 	return options
+}
+
+// findDeezer looks an album up by its barcode when it has one, else by exact artist and title.
+func findDeezer(ctx context.Context, client deezer.Client, ask music.AlbumAsk) (deezer.Album, error) {
+	if ask.Barcode != "" {
+		if found, err := client.ByUPC(ctx, ask.Barcode); err == nil {
+			return found, nil
+		}
+	}
+	if ask.Artist == "" || ask.Title == "" {
+		return deezer.Album{}, deezer.ErrNotFound
+	}
+	return client.Find(ctx, ask.Artist, ask.Title)
 }

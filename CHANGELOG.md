@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Picture pickers: a series or movie also offers its fanart.tv logos and banners; an album also offers its Deezer cover (found by barcode when a release has one). Books: an Open Library match that names an Internet Archive item reads that item directly.
 - Music: the album and artist image pickers also offer fanart.tv covers, disc art, artist photos, backgrounds, logos and banners (when fanart.tv is on and has a key).
 - Fixed: Deezer ratings missed albums whose plain edition is not among the first search hits; a local media server's score now reads as the server's name on a work.
 

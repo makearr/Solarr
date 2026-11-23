@@ -22,12 +22,17 @@ type CoverArtLister interface {
 	List(ctx context.Context, entity, mbid string) ([]musicbrainz.CoverImage, error)
 }
 
+// AlbumAsk is what a further picture provider is asked with: its id, or the names and barcode it can search by.
+type AlbumAsk struct {
+	ReleaseGroupMBID, Artist, Title, Barcode string
+}
+
 // ArtworkChoiceConfig is what an ArtworkChoice needs; the two image funcs are optional.
 type ArtworkChoiceConfig struct {
 	Artworks library.Artworks
 	CoverArt CoverArtLister
 	// AlbumImages lists a release group's pictures from a further provider.
-	AlbumImages func(ctx context.Context, releaseGroupMBID string) ([]media.ImageOption, error)
+	AlbumImages func(ctx context.Context, ask AlbumAsk) ([]media.ImageOption, error)
 	// ArtistImages lists an artist's pictures from every provider that has some.
 	ArtistImages func(ctx context.Context, artistMBID string) ([]media.ImageOption, error)
 	HTTP         *httpx.Client
@@ -78,7 +83,7 @@ func (c *ArtworkChoice) WorkPictures(ctx context.Context, workID int64) ([]media
 		collect("release", release)
 	}
 	if ids.ReleaseGroup != "" && c.config.AlbumImages != nil {
-		more, err := c.config.AlbumImages(ctx, ids.ReleaseGroup)
+		more, err := c.config.AlbumImages(ctx, AlbumAsk{ReleaseGroupMBID: ids.ReleaseGroup, Artist: ids.Artist, Title: ids.Title, Barcode: ids.Barcode})
 		if err != nil {
 			failures = append(failures, err)
 		}

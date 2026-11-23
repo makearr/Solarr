@@ -68,6 +68,7 @@ type FantLabSource interface {
 // ArchiveSource is the Internet Archive client as the service needs it.
 type ArchiveSource interface {
 	ByISBN(ctx context.Context, isbn string) (internetarchive.Item, error)
+	Item(ctx context.Context, identifier string) (internetarchive.Item, error)
 }
 
 // HardcoverSource is the Hardcover client as the service needs it.
@@ -240,6 +241,11 @@ func (s Service) ask(ctx context.Context, name string, ids IDs, hint Hint, faile
 			return FromGoogleBooks(volume), report(ids.ISBN, err, googlebooks.ErrNotFound)
 		}
 	case settings.BookSourceArchive:
+		if s.Archive != nil && ids.Archive != "" {
+			if item, err := s.Archive.Item(ctx, ids.Archive); err == nil {
+				return FromArchive(item), true
+			}
+		}
 		if s.Archive != nil && ids.ISBN != "" {
 			item, err := s.Archive.ByISBN(ctx, ids.ISBN)
 			return FromArchive(item), report(ids.ISBN, err, internetarchive.ErrNotFound)

@@ -48,6 +48,8 @@ type IDs struct {
 	Hardcover   string
 	ITunes      string
 	FantLab     string
+	// Archive is the Internet Archive item an Open Library doc names; it is learnt per fetch, never stored.
+	Archive string
 }
 
 // Empty says no provider id is known.

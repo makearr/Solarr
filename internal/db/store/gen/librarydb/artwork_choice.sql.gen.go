@@ -21,6 +21,18 @@ func (q *Queries) GetPersonArtistMBID(ctx context.Context, personID int64) (stri
 	return artist_mbid, err
 }
 
+const getWorkBarcode = `-- name: GetWorkBarcode :one
+SELECT CAST(COALESCE(MIN(barcode), '') AS TEXT) AS barcode
+FROM edition WHERE work_id = ? AND kind != 'unknown' AND barcode IS NOT NULL AND barcode != ''
+`
+
+func (q *Queries) GetWorkBarcode(ctx context.Context, workID int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getWorkBarcode, workID)
+	var barcode string
+	err := row.Scan(&barcode)
+	return barcode, err
+}
+
 const getWorkReleaseGroupMBID = `-- name: GetWorkReleaseGroupMBID :one
 SELECT CAST(COALESCE(MIN(external_id), '') AS TEXT) AS release_group_mbid
 FROM work_external_id WHERE work_id = ? AND provider = 'musicbrainz:release-group'

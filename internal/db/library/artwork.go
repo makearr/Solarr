@@ -256,6 +256,10 @@ func (a Artworks) RecordForPerson(
 type WorkMBIDs struct {
 	ReleaseGroup string
 	Releases     []string
+	// Title and Artist are the work's own names, for providers that search by them.
+	Title, Artist string
+	// Barcode is the first release barcode any edition carries.
+	Barcode string
 }
 
 // MBIDsForWork answers the release group and up to six releases of a work, either may be absent.
@@ -269,7 +273,19 @@ func (a Artworks) MBIDsForWork(ctx context.Context, workID int64) (WorkMBIDs, er
 	if err != nil {
 		return WorkMBIDs{}, fmt.Errorf("library: releases of work %d: %w", workID, err)
 	}
-	return WorkMBIDs{ReleaseGroup: releaseGroup, Releases: releases}, nil
+	found := WorkMBIDs{ReleaseGroup: releaseGroup, Releases: releases}
+	if barcode, err := queries.GetWorkBarcode(ctx, workID); err == nil {
+		found.Barcode = barcode
+	}
+	if work, err := queries.GetWork(ctx, workID); err == nil {
+		found.Title = work.CanonicalTitle
+		if work.LeadPersonID.Valid {
+			if person, err := queries.GetPerson(ctx, work.LeadPersonID.Int64); err == nil {
+				found.Artist = person.Name
+			}
+		}
+	}
+	return found, nil
 }
 
 // ArtistMBID answers a person's MusicBrainz artist id, empty when it has none.

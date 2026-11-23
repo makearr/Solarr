@@ -71,3 +71,18 @@ func (c Client) Find(ctx context.Context, artist, title string) (Album, error) {
 	}
 	return Album{}, ErrNotFound
 }
+
+// ByUPC reads the album the barcode names, the exact route when a release carries one.
+func (c Client) ByUPC(ctx context.Context, upc string) (Album, error) {
+	var page struct {
+		wireAlbum
+		Error *struct{} `json:"error"`
+	}
+	if err := c.http.GetJSON(ctx, baseURL+"/album/upc:"+url.PathEscape(upc), maxResponseBytes, &page); err != nil {
+		return Album{}, fmt.Errorf("deezer: upc %s: %w", upc, err)
+	}
+	if page.Error != nil || page.ID == 0 {
+		return Album{}, ErrNotFound
+	}
+	return Album{ID: page.ID, Title: page.Title, Artist: page.Artist.Name, Fans: page.Fans, Explicit: page.ExplicitLyrics, Cover: page.CoverXL}, nil
+}

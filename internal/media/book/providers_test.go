@@ -91,6 +91,13 @@ func TestAskITunes_TakesTheExactTitleNotTheNeighbourListedFirst(t *testing.T) {
 
 type fakeArchive struct{}
 
+func (fakeArchive) Item(_ context.Context, identifier string) (internetarchive.Item, error) {
+	if identifier != "examplefox00" {
+		return internetarchive.Item{}, internetarchive.ErrNotFound
+	}
+	return internetarchive.Item{Title: "Example Fox (item)", Description: "Item by Open Library's ocaid."}, nil
+}
+
 func (fakeArchive) ByISBN(context.Context, string) (internetarchive.Item, error) {
 	return internetarchive.Item{Title: "Example Fox", Description: "A fox digs under three farms to feed his family, and the farmers dig after him.",
 		Subjects: []string{"Foxes -- Fiction"}, Language: "eng", Cover: "https://archive.org/services/img/example-fox"}, nil
@@ -104,5 +111,13 @@ func TestFetchFor_TheArchiveAnswersByISBNWithDescriptionGenresAndCover(t *testin
 	}
 	if book.Title != "Example Fox" || !strings.HasPrefix(book.Overview, "A fox digs") || len(book.Images) == 0 || book.Images[0].Source != "internetarchive" {
 		t.Errorf("book = %+v", book)
+	}
+}
+
+func TestFetchFor_TheArchiveItemOpenLibraryNamesIsAskedBeforeTheISBN(t *testing.T) {
+	service := Service{Format: Ebook, Archive: fakeArchive{}, PriorityFor: func(int64) []string { return []string{"internetarchive"} }}
+	book, err := service.FetchFor(t.Context(), 7, IDs{ISBN: "9780000000001", Archive: "examplefox00"}, Hint{Title: "Example Fox"})
+	if err != nil || book.Title != "Example Fox (item)" {
+		t.Errorf("book = %+v err=%v", book, err)
 	}
 }

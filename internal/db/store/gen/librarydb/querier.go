@@ -535,6 +535,7 @@ type Querier interface {
 	// candidates list alone does not carry.
 	GetUnidentified(ctx context.Context, mediaObjectID int64) (IdentificationQueue, error)
 	GetWork(ctx context.Context, id int64) (Work, error)
+	GetWorkBarcode(ctx context.Context, workID int64) (string, error)
 	// Resolving a provider id to a work is the first step of the Identifier chain (ADR-24).
 	GetWorkByExternalID(ctx context.Context, arg GetWorkByExternalIDParams) (Work, error)
 	// A work's certification, the one understood first; one work may carry a TV and a film rating.

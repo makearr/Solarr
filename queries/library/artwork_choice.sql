@@ -12,3 +12,7 @@ ORDER BY e.id LIMIT 6;
 -- name: GetPersonArtistMBID :one
 SELECT CAST(COALESCE(MIN(external_id), '') AS TEXT) AS artist_mbid
 FROM person_external_id WHERE person_id = ? AND provider = 'musicbrainz:artist';
+
+-- name: GetWorkBarcode :one
+SELECT CAST(COALESCE(MIN(barcode), '') AS TEXT) AS barcode
+FROM edition WHERE work_id = ? AND kind != 'unknown' AND barcode IS NOT NULL AND barcode != '';
