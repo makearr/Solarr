@@ -35,6 +35,7 @@ func TestAReleaseIsWantedWhenItNamesTheSeriesAndAWantedPart(t *testing.T) {
 		{"an alias", wantedIssues(3), "Harbor Lights 003 (2019)", 30 * mib, []int{3}, 1, true},
 		{"the wrong decade", wantedIssues(3), "Night Harbor 003 (1999)", 30 * mib, nil, 0, false},
 		{"a volume", wanted{kind: PartVolume, manga: true, title: "Night Harbor", missing: map[int]string{2: ""}, names: map[string]bool{"nightharbor": true}}, "Night Harbor v02 (Digital)", 80 * mib, []int{2}, 1, true},
+		{"a manga volume reprinted in another year", wanted{kind: PartVolume, manga: true, title: "Night Harbor", year: 2002, missing: map[int]string{1: ""}, names: map[string]bool{"nightharbor": true}}, "Night Harbor v01 [2026] [Omnibus Edition] [Digital]", 80 * mib, []int{1}, 1, true},
 		{"a chapter is not a volume", wanted{kind: PartVolume, manga: true, title: "Night Harbor", missing: map[int]string{2: ""}, names: map[string]bool{"nightharbor": true}}, "Night Harbor c002", 10 * mib, nil, 0, false},
 		{"a complete pack holds every wanted part", wantedIssues(3, 5), "Night Harbor Complete (2019) (Digital)", 300 * mib, []int{3, 5}, 2, true},
 		{"a complete pack of another series", wantedIssues(3, 5), "Dusk Harbor Complete (2019)", 300 * mib, nil, 0, false},

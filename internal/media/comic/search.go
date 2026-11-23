@@ -181,7 +181,8 @@ func (comicSpec) Read(w wanted, raw indexer.RawItem, conn judge.Conn, _ time.Tim
 	if !w.names[titleKey(claim.Series)] {
 		return works.Release{}, false
 	}
-	if claim.Year > 0 && w.year > 0 && (int64(claim.Year)-w.year > 1 || w.year-int64(claim.Year) > 1) {
+	// A manga volume's year is its own edition's, not the series' first year.
+	if claim.Year > 0 && w.year > 0 && !w.manga && (int64(claim.Year)-w.year > 1 || w.year-int64(claim.Year) > 1) {
 		return works.Release{}, false
 	}
 	held := heldNumbers(w, claim)
