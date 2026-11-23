@@ -5,8 +5,10 @@ import (
 	"errors"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/metadata/fanart"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/metadata/theaudiodb"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -19,15 +21,27 @@ func (p *process) musicPictures() *music.ArtworkChoice {
 	audioDB := p.theAudioDB()
 	biographies := p.wikidataFetcher()
 	provider := p.musicBrainzProvider()
+	fanartClient := fanart.New(p.providerClient(providerFanart, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceFanart))
+	fanartOn := func() bool {
+		return p.cache.Snapshot().ProviderEnabled(settings.MovieSourceFanart) && fanartClient.Configured()
+	}
 	audioDBOn := func() bool { return *p.cache.Snapshot().MetadataSettings().TheAudioDB }
 	return music.NewArtworkChoice(music.ArtworkChoiceConfig{
 		Artworks: library.NewArtworks(p.library),
 		CoverArt: musicbrainz.NewCoverArt(client, coverArtBaseURL),
 		AlbumImages: func(ctx context.Context, releaseGroupMBID string) ([]media.ImageOption, error) {
-			if !audioDBOn() {
-				return nil, nil
+			var options []media.ImageOption
+			if audioDBOn() {
+				more, err := audioDBOptions(audioDB.AlbumPictures(ctx, releaseGroupMBID))
+				if err != nil {
+					return nil, err
+				}
+				options = append(options, more...)
 			}
-			return audioDBOptions(audioDB.AlbumPictures(ctx, releaseGroupMBID))
+			if fanartOn() {
+				options = append(options, fanartAlbumOptions(fanartClient.Album(ctx, releaseGroupMBID))...)
+			}
+			return options, nil
 		},
 		ArtistImages: func(ctx context.Context, artistMBID string) ([]media.ImageOption, error) {
 			var options []media.ImageOption
@@ -36,6 +50,9 @@ func (p *process) musicPictures() *music.ArtworkChoice {
 				if bio, err := biographies.Biography(ctx, artist.WikidataQID); err == nil && bio.ImageURL != "" {
 					options = append(options, media.ImageOption{URL: bio.ImageURL, Source: "Wikidata", Label: "Photo"})
 				}
+			}
+			if fanartOn() {
+				options = append(options, fanartArtistOptions(fanartClient.Artist(ctx, artistMBID))...)
 			}
 			if audioDBOn() {
 				more, err := audioDBOptions(audioDB.ArtistPictures(ctx, artistMBID))
@@ -60,4 +77,38 @@ func audioDBOptions(pictures []theaudiodb.Picture, err error) ([]media.ImageOpti
 		options[index] = media.ImageOption{URL: picture.URL, Source: "TheAudioDB", Label: picture.Label}
 	}
 	return options, nil
+}
+
+// fanartAlbumOptions is fanart.tv's covers and disc art of a release group; nothing known there is no options.
+func fanartAlbumOptions(album fanart.Album, err error) []media.ImageOption {
+	var options []media.ImageOption
+	if err != nil {
+		return nil
+	}
+	for _, group := range album.Albums {
+		for _, image := range group.Covers {
+			options = append(options, media.ImageOption{URL: image.URL, Source: "fanart.tv", Label: "Cover"})
+		}
+		for _, image := range group.Discs {
+			options = append(options, media.ImageOption{URL: image.URL, Source: "fanart.tv", Label: "Disc"})
+		}
+	}
+	return options
+}
+
+// fanartArtistOptions is fanart.tv's pictures of an artist, by kind; nothing known there is no options.
+func fanartArtistOptions(artist fanart.Artist, err error) []media.ImageOption {
+	if err != nil {
+		return nil
+	}
+	var options []media.ImageOption
+	for _, kind := range []struct {
+		label  string
+		images []fanart.Image
+	}{{"Photo", artist.Thumbs}, {"Background", artist.Backgrounds}, {"Logo", artist.Logos}, {"Banner", artist.Banners}} {
+		for _, image := range kind.images {
+			options = append(options, media.ImageOption{URL: image.URL, Source: "fanart.tv", Label: kind.label})
+		}
+	}
+	return options
 }
