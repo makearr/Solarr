@@ -4083,6 +4083,9 @@ type Library struct {
 
 	// Wanted Albums (works) in this library with a monitored item not yet complete: the Wanted page's total. From the counter table, never a live COUNT; absent until first counted.
 	Wanted *int `json:"wanted,omitempty"`
+
+	// Watched Works on the Watched cleanup list at its default age, written by the watch-state sync; absent until a connection has synced this library.
+	Watched *int `json:"watched,omitempty"`
 }
 
 // LibraryCategory A category as a navigation target: no `permission` field, since the list is already narrowed to what the caller may read (unlike `Me`'s `categories`, which reports the caller's level on each).

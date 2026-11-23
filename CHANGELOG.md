@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Watched: the library tree shows how many works are ready to clean up beside the Watched entry (refreshed by the watch-state sync); a non-administrator who opens the page is told it is administrator-only instead of an error.
 - Webhooks: `file_recycled` now fires when a file goes to the recycle bin (it never did for the bin itself).
 - Comics: an issue held in a collected edition shows "In the collected edition" with a link to it on the series page.
 - Webhooks: the form shows the body of the chosen format for an example event, and `GET /webhooks/{id}/pending` lists what still waits for a webhook (event, attempts, next try).

@@ -15632,6 +15632,11 @@ components:
             Albums (works) in this library with a monitored item not yet
             complete: the Wanted page's total. From the counter table, never
             a live COUNT; absent until first counted.
+        watched:
+          type: integer
+          description: >-
+            Works on the Watched cleanup list at its default age, written by the
+            watch-state sync; absent until a connection has synced this library.
 
     LibraryLevel:
       type: object

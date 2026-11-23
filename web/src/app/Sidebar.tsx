@@ -376,6 +376,11 @@ function LibraryNode({
               <li key={section.key}>
                 <Link to={tab.path} search={tab.search} className={sectionLinkClass(active, false)}>
                   <span className="truncate">{section.label}</span>
+                  {section.key.endsWith(":watched") && (library.watched ?? 0) > 0 && (
+                    <span className={`ml-auto shrink-0 text-xs tabular-nums ${active ? "text-accent-ink/80" : "text-ink-muted"}`}>
+                      {(library.watched ?? 0).toLocaleString()}
+                    </span>
+                  )}
                 </Link>
               </li>
             );

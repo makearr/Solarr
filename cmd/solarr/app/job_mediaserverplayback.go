@@ -31,15 +31,20 @@ type mediaServerPlaybackPayload struct {
 	Full     bool  `json:"full"`
 }
 
-type mediaServerPlaybackJob struct{ service playback.Service }
+type mediaServerPlaybackJob struct {
+	service playback.Service
+	counts  func(context.Context) error
+}
 
 func (j mediaServerPlaybackJob) Run(ctx context.Context, job jobs.Job) error {
 	var payload mediaServerPlaybackPayload
 	if err := json.Unmarshal(job.Payload, &payload); err != nil {
 		return jobs.Fatalf("media_server_playback", "payload", err)
 	}
-	_, err := j.service.Sync(ctx, payload.ServerID, payload.Full)
-	return err
+	if _, err := j.service.Sync(ctx, payload.ServerID, payload.Full); err != nil {
+		return err
+	}
+	return j.counts(ctx)
 }
 
 // playbackSettings adds the root folders to the settings cache.
@@ -112,6 +117,6 @@ func (p *process) registerMediaServerPlaybackJob(registry *jobs.Registry, execut
 	if err := registry.Register(mediaServerPlaybackDefinition); err != nil {
 		return err
 	}
-	executor.Handle(mediaServerPlaybackJobType, mediaServerPlaybackJob{service: p.playbackService()})
+	executor.Handle(mediaServerPlaybackJobType, mediaServerPlaybackJob{service: p.playbackService(), counts: p.recordWatchedCounts})
 	return nil
 }

@@ -145,6 +145,10 @@ func (s *Server) libraryView(ctx context.Context, access authz.Access, category 
 		count := int(wanted)
 		view.Wanted = &count
 	}
+	if watched, ok := values[watchedCountMetric]; ok {
+		count := int(watched)
+		view.Watched = &count
+	}
 	return view
 }
 
@@ -698,3 +702,6 @@ func overviewOf(description string) string {
 	}
 	return cut + "…"
 }
+
+// watchedCountMetric is the counter the playback sync writes (library.WatchedCountMetric; apiserver never imports the store).
+const watchedCountMetric = "works_watched"

@@ -1042,6 +1042,7 @@ const catalogue = {
   "watched.intro": "Works every counted user has played, last played at least this many days ago, that still have files. Recycling moves the files to the recycle bin; nothing is deleted.",
   "watched.days": "Days since the last play",
   "watched.empty": "Nothing here: no work has been played by everyone counted for that long, or no connection reads watch state for this library.",
+  "watched.administratorOnly": "Only an administrator can clean up watched files. Your own watched state shows on each work.",
   "watched.failed": "The list could not be read.",
   "watched.selectAll": "Select all listed",
   "watched.recycle": "Recycle files",

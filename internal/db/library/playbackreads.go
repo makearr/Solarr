@@ -2,10 +2,12 @@ package library
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 
 	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 // Watch statuses of a work for a viewer.
@@ -208,11 +210,8 @@ type WatchedQuery struct {
 	IDs []int64
 }
 
-// WatchedWorks lists the cleanup list in work id order.
-func (p Playback) WatchedWorks(ctx context.Context, query WatchedQuery) ([]WatchedWork, error) {
-	if len(query.Pairs) == 0 {
-		return nil, nil
-	}
+// watchedPredicates is the cleanup list's condition, shared by the list and its count.
+func watchedPredicates(query WatchedQuery) store.Predicates {
 	encoded := PairsJSON(query.Pairs)
 	var predicates store.Predicates
 	predicates.Add("work.id > ?", query.After)
@@ -230,6 +229,35 @@ func (p Playback) WatchedWorks(ctx context.Context, query WatchedQuery) ([]Watch
 	predicates.Add("COALESCE((SELECT MAX(p.last_played_at) FROM playback_state p WHERE p.work_id = work.id AND EXISTS"+
 		" (SELECT 1 FROM json_each(?) j WHERE json_extract(j.value, '$.s') = p.server_id AND json_extract(j.value, '$.u') = p.server_user_id)), 0) <= ?",
 		encoded, query.LastPlayedBefore)
+	return predicates
+}
+
+// WatchedCountMetric is the counter the Watched entry of a library shows; the playback sync writes it.
+const WatchedCountMetric = "works_watched"
+
+// RecordWatchedCount runs the cleanup list's condition once and stores how many works it holds, so the sidebar reads a counter.
+func (p Playback) RecordWatchedCount(ctx context.Context, categoryID int64, query WatchedQuery, now int64) error {
+	var count int64
+	if len(query.Pairs) > 0 {
+		predicates := watchedPredicates(query)
+		row := p.store.Read().QueryRowContext(ctx, "SELECT CAST(COUNT(*) AS INTEGER) FROM work "+predicates.Where(), predicates.Args()...)
+		if err := row.Scan(&count); err != nil {
+			return fmt.Errorf("library: count watched works: %w", err)
+		}
+	}
+	return p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetCounter(ctx, librarydb.SetCounterParams{
+			Scope: fmt.Sprintf("category:%d", categoryID), Metric: WatchedCountMetric, Value: count, UpdatedAt: now,
+		})
+	})
+}
+
+// WatchedWorks lists the cleanup list in work id order.
+func (p Playback) WatchedWorks(ctx context.Context, query WatchedQuery) ([]WatchedWork, error) {
+	if len(query.Pairs) == 0 {
+		return nil, nil
+	}
+	predicates := watchedPredicates(query)
 	limit := query.Limit
 	if limit <= 0 {
 		limit = 50

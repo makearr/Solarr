@@ -7,6 +7,7 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { invalidateWorkLists } from "@/lib/resources";
 import { t } from "@/lib/i18n";
+import { useIsAdministrator } from "@/lib/useAdministrator";
 import { Button } from "@/ui/Button";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
@@ -23,6 +24,7 @@ export function WatchedPage() {
   const { categoryId } = useParams({ strict: false }) as { categoryId: string };
   const { days: searched } = useSearch({ strict: false }) as { days?: number | string };
   const days = Number.isFinite(Number(searched)) && searched !== undefined && searched !== "" ? Math.max(0, Math.floor(Number(searched))) : DEFAULT_DAYS;
+  const administrator = useIsAdministrator();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [chosen, setChosen] = useState<ReadonlySet<number>>(new Set());
@@ -33,6 +35,7 @@ export function WatchedPage() {
   const pages = useInfiniteQuery({
     queryKey: ["watched", categoryId, days],
     initialPageParam: undefined as string | undefined,
+    enabled: administrator,
     queryFn: ({ pageParam, signal }) =>
       ok(api.GET("/libraries/{id}/watched", { params: { path: { id: Number(categoryId) }, query: { days, cursor: pageParam, limit: 100 } }, signal })),
     getNextPageParam: (last) => last.next_cursor,
@@ -75,6 +78,15 @@ export function WatchedPage() {
     setChosen(next);
   };
   const allChosen = rows.length > 0 && chosen.size === rows.length;
+
+  if (!administrator) {
+    return (
+      <div className="flex h-full flex-col gap-3 p-4">
+        <h1 className="text-sm font-medium">{t("watched.title")}</h1>
+        <p className="text-sm text-ink-muted">{t("watched.administratorOnly")}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col gap-3 p-4">

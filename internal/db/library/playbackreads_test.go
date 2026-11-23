@@ -77,6 +77,26 @@ func TestPlayback_AWorkIsWatchedWhenEveryPartWasPlayedAndOneUserFinishingIsNotEv
 	if len(adaOnly) != 2 {
 		t.Fatalf("ada alone finished both: %+v", adaOnly)
 	}
+
+	query := library.WatchedQuery{Pairs: both, LastPlayedBefore: 1000}
+	if err := playback.RecordWatchedCount(t.Context(), 5, query, 9); err != nil {
+		t.Fatal(err)
+	}
+	counted, err := library.NewCounters(playback.Store()).Counters(t.Context(), "category:5")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]int64{library.WatchedCountMetric: 1}; !reflect.DeepEqual(counted, want) {
+		t.Fatalf("counter = %v, want %v", counted, want)
+	}
+	query.Pairs = nil
+	if err := playback.RecordWatchedCount(t.Context(), 5, query, 10); err != nil {
+		t.Fatal(err)
+	}
+	counted, _ = library.NewCounters(playback.Store()).Counters(t.Context(), "category:5")
+	if counted[library.WatchedCountMetric] != 0 {
+		t.Fatalf("no counted user leaves the count at zero: %v", counted)
+	}
 }
 
 func TestPlayback_ResolveFileFindsTheWorkOfAPath(t *testing.T) {
