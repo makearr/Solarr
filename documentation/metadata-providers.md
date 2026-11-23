@@ -97,6 +97,9 @@ A connection a library's order still names is not deleted (409) unless another o
 | AcoustID | an audio fingerprint to a recording id | yes | an identifier, not a source |
 | ListenBrainz | how many people listened to an album (by release group id) | yes | no key; shown as a rating on 0..10, two points a power of ten of listeners; enrichment only, no place in the order |
 | Deezer | an album's fans, found by exact artist and title; explicit flag and cover are read but not yet shown | yes | no key; rating on the same scale; enrichment only |
+| Last.fm | how many people listen to an album (and, for the Discover pages, similar artists) | yes | your own free key; off until it is stored; score by listeners on the same scale as Deezer; enrichment only |
+| Discogs | the community's rating of a release, found by exact artist and title | yes | your own personal token; the 0-5 average is shown on 0-10; off until stored; enrichment only |
+| Spotify | an album's popularity (0-100, shown on 0-10); cover and UPC are read, not yet shown | yes | your app as `client id:client secret` (client credentials); off until stored; enrichment only |
 | fanart.tv | artist backgrounds, logos, banners, album covers, disc art | no | a free key; best for images |
 | Discogs | credits, labels, catalogue numbers, pressings | no | needs a token |
 | Last.fm | tags, biographies, similar artists, listening counts | no | |

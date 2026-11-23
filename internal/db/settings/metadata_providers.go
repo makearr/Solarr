@@ -53,7 +53,7 @@ const (
 var DefaultComicSources = []string{ComicSourceComicVine, ComicSourceMetron, ComicSourceGCD}
 
 // DefaultMangaSources is AniList, which names a manga, then MangaUpdates and MangaDex, whose chapter map gives the volumes.
-var DefaultMangaSources = []string{TVSourceAniList, ComicSourceMangaUpdates, ComicSourceMangaDex}
+var DefaultMangaSources = []string{TVSourceAniList, ComicSourceMangaUpdates, ComicSourceMangaDex, SourceLastFM, SourceDiscogs, SourceSpotify}
 
 // The adult providers: Whisparr's server, backed by ThePornDB, and three stash-box servers.
 const (
@@ -76,6 +76,9 @@ const (
 	SourceAcoustID        = "acoustid"
 	SourceListenBrainz    = "listenbrainz"
 	SourceDeezer          = "deezer"
+	SourceLastFM          = "lastfm"
+	SourceDiscogs         = "discogs"
+	SourceSpotify         = "spotify"
 	// SourceTheXEM maps TheTVDB's episode numbers to the ones scene releases carry.
 	SourceTheXEM = "thexem"
 )
@@ -240,6 +243,12 @@ var MetadataProviders = []MetadataProvider{
 		PerMinute: 60, MaxPerMinute: 60, Published: "none published; asked at 60 a minute"},
 	{Key: SourceDeezer, Role: RoleEnrich, Label: "Deezer", AlsoFor: []string{"music"}, Carries: []string{"an album's fans", "explicit flag"},
 		PerMinute: 120, Published: "50 requests every 5 seconds"},
+	{Key: SourceLastFM, Role: RoleEnrich, Label: "Last.fm", AlsoFor: []string{"music"}, Carries: []string{"how many people listen to an album", "similar artists"}, NeedsKey: true,
+		PerMinute: 120, Published: "about 5 requests a second; asked at 2 a second"},
+	{Key: SourceDiscogs, Role: RoleEnrich, Label: "Discogs", AlsoFor: []string{"music"}, Carries: []string{"the community's rating of a release"}, NeedsKey: true,
+		PerMinute: 60, MaxPerMinute: 60, Published: "60 a minute with a token"},
+	{Key: SourceSpotify, Role: RoleEnrich, Label: "Spotify", AlsoFor: []string{"music"}, Carries: []string{"an album's popularity", "covers"}, NeedsKey: true,
+		PerMinute: 120, Published: "none published; a rolling 30 second window"},
 	{Key: SourceAcoustID, Role: RoleEnrich, Label: "AcoustID", AlsoFor: []string{"music"}, Carries: []string{"files identified by their sound"}, NeedsKey: true,
 		PerMinute: 180, MaxPerMinute: 180, Published: "3 a second"},
 	{Key: SourceTheXEM, Role: RoleEnrich, Label: "TheXEM", AlsoFor: []string{"tv"}, Carries: []string{"scene numbering", "scene names"},

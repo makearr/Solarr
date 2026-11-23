@@ -8,6 +8,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/media/screen"
+	"github.com/makearr/Solarr/internal/mediaserver"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 )
 
@@ -110,7 +111,14 @@ func ToWrite(movie Movie, options WriteOptions) library.SeriesWrite {
 		write.Dates = append(write.Dates, library.SeriesDateWrite{Kind: releaseKind, Date: first, Source: source})
 	}
 	for _, credit := range movie.Credits {
-		if credit.TMDBID == 0 || credit.Name == "" {
+		if credit.Name == "" {
+			continue
+		}
+		if credit.TMDBID == 0 {
+			write.Credits = append(write.Credits, library.SeriesCreditWrite{
+				Provider: mediaserver.PersonProvider, ExternalID: mediaserver.PersonKey(credit.Name), Name: strings.TrimSpace(credit.Name),
+				Role: credit.Role, Character: credit.Character, Ord: credit.Order,
+			})
 			continue
 		}
 		write.Credits = append(write.Credits, library.SeriesCreditWrite{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 )
 
 // Info is what Test learns of a server.
@@ -112,6 +113,14 @@ type Credit struct {
 	Role string
 	// Kind is "actor", "director", "writer" or the server's own word.
 	Kind string
+}
+
+// PersonProvider keys a credit from a media server by the person's normalised name, as a server's own person ids mean nothing elsewhere.
+const PersonProvider = "jellyfin:person"
+
+// PersonKey is the normalised name a server's credit is keyed by, so one name is one person in every library.
+func PersonKey(name string) string {
+	return strings.ToLower(strings.Join(strings.Fields(strings.NewReplacer(".", " ", ",", " ").Replace(name)), " "))
 }
 
 // Image is a picture of an item; URL is the server's, fetched with the connection's guard.

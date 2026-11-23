@@ -11,7 +11,10 @@ import (
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/metadata/deezer"
+	"github.com/makearr/Solarr/internal/metadata/discogs"
+	"github.com/makearr/Solarr/internal/metadata/lastfm"
 	"github.com/makearr/Solarr/internal/metadata/listenbrainz"
+	"github.com/makearr/Solarr/internal/metadata/spotify"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
@@ -80,6 +83,9 @@ func (p *process) enrichmentPass(ctx context.Context, manual bool) (duplicate bo
 func (p *process) albumRatings() music.AlbumRatings {
 	lb := listenbrainz.New(p.providerClient(providerListenBrainz, nil, httpx.ClientConfig{}))
 	dz := deezer.New(p.providerClient(providerDeezer, nil, httpx.ClientConfig{}))
+	lf := lastfm.New(p.providerClient(providerLastFM, nil, httpx.ClientConfig{}), p.providerKey(settings.SourceLastFM))
+	dc := discogs.New(p.providerClient(providerDiscogs, nil, httpx.ClientConfig{}), p.providerKey(settings.SourceDiscogs))
+	sp := spotify.New(p.providerClient(providerSpotify, nil, httpx.ClientConfig{}), p.providerKey(settings.SourceSpotify), clock.NewSystem().Now)
 	return func(ctx context.Context, releaseGroupMBID, artist, title string) []music.AlbumRating {
 		snapshot := p.cache.Snapshot()
 		var ratings []music.AlbumRating
@@ -99,6 +105,35 @@ func (p *process) albumRatings() music.AlbumRatings {
 				ratings = append(ratings, music.AlbumRating{Provider: settings.SourceDeezer, Score: music.PopularityScore(found.Fans), Votes: found.Fans})
 			case err != nil && !errors.Is(err, deezer.ErrNotFound):
 				p.logger.Warn("deezer album", slog.String("mbid", releaseGroupMBID), slog.Any("error", err))
+			}
+		}
+		if snapshot.ProviderEnabled(settings.SourceLastFM) && lf.Configured() && artist != "" && title != "" {
+			found, err := lf.AlbumInfo(ctx, artist, title)
+			switch {
+			case err == nil && found.Listeners > 0:
+				ratings = append(ratings, music.AlbumRating{Provider: settings.SourceLastFM, Score: music.PopularityScore(found.Listeners), Votes: found.Listeners})
+			case err != nil && !errors.Is(err, lastfm.ErrNotFound):
+				p.logger.Warn("lastfm album", slog.String("mbid", releaseGroupMBID), slog.Any("error", err))
+			}
+		}
+		if snapshot.ProviderEnabled(settings.SourceDiscogs) && dc.Configured() && artist != "" && title != "" {
+			found, err := dc.Find(ctx, artist, title)
+			switch {
+			case err == nil && found.Votes > 0:
+				// Discogs rates from 0 to 5; the library scale is 0 to 10.
+				ratings = append(ratings, music.AlbumRating{Provider: settings.SourceDiscogs, Score: found.Rating * 2, Votes: found.Votes})
+			case err != nil && !errors.Is(err, discogs.ErrNotFound):
+				p.logger.Warn("discogs release", slog.String("mbid", releaseGroupMBID), slog.Any("error", err))
+			}
+		}
+		if snapshot.ProviderEnabled(settings.SourceSpotify) && sp.Configured() && artist != "" && title != "" {
+			found, err := sp.FindAlbum(ctx, artist, title)
+			switch {
+			case err == nil && found.Popularity > 0:
+				// Spotify's popularity runs 0 to 100; it counts no votes.
+				ratings = append(ratings, music.AlbumRating{Provider: settings.SourceSpotify, Score: float64(found.Popularity) / 10})
+			case err != nil && !errors.Is(err, spotify.ErrNotFound):
+				p.logger.Warn("spotify album", slog.String("mbid", releaseGroupMBID), slog.Any("error", err))
 			}
 		}
 		return ratings

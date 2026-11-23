@@ -270,6 +270,8 @@ func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, recentOnl
 	if wrong := wrongTVmaze.Load(); wrong > 0 && merged.IDs.TVmaze == wrong {
 		merged.IDs.TVmaze = 0
 	}
+	// Ids the series was asked by (a folder name, a file) are kept even when no source of the order repeats them.
+	mergeIDs(&merged.IDs, IDs{TVDB: ids.TVDB, TMDB: ids.TMDB, IMDb: ids.IMDb})
 	merged.Failed = failed
 	if len(merged.NumberingDisagrees) > 0 && s.Logger != nil {
 		s.Logger.Info("sources number seasons differently; air times are matched by date", slog.Any("seasons", merged.NumberingDisagrees))

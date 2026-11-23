@@ -25,6 +25,10 @@ const (
 	// KeyComicVineAPIKey is the owner's ComicVine key; KeyMetronAccount is the Metron "user:password" pair, sealed as one value.
 	KeyComicVineAPIKey = "metadata.comicvine.api_key"
 	KeyMetronAccount   = "metadata.metron.account"
+	// KeyLastFMAPIKey and KeyDiscogsToken are the owner's own; KeySpotifyClient is "client id:client secret", sealed as one value.
+	KeyLastFMAPIKey  = "metadata.lastfm.api_key"
+	KeyDiscogsToken  = "metadata.discogs.token"
+	KeySpotifyClient = "metadata.spotify.client"
 )
 
 // providerKeySettings maps a provider to the setting its key is sealed under.
@@ -33,6 +37,7 @@ var providerKeySettings = map[string]string{
 	BookSourceGoogleBooks: KeyGoogleBooksAPIKey, BookSourceHardcover: KeyHardcoverAPIKey,
 	AdultSourceStashDB: KeyStashDBAPIKey, AdultSourceThePornDB: KeyThePornDBAPIKey, AdultSourceFansDB: KeyFansDBAPIKey,
 	ComicSourceComicVine: KeyComicVineAPIKey, ComicSourceMetron: KeyMetronAccount,
+	SourceLastFM: KeyLastFMAPIKey, SourceDiscogs: KeyDiscogsToken, SourceSpotify: KeySpotifyClient,
 	TVSourceTMDB: KeyTMDBAPIKey, TVSourceTVDB: KeyTVDBAPIKey, SourceTheAudioDB: KeyTheAudioDBAPIKey, SourceAcoustID: KeyAcoustIDAPIKey,
 }
 

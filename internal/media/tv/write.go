@@ -9,6 +9,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/media/screen"
+	"github.com/makearr/Solarr/internal/mediaserver"
 )
 
 // MediaType is the work media type of a series.
@@ -189,7 +190,11 @@ func ToWrite(series Series, options WriteOptions) library.SeriesWrite {
 		})
 	}
 	for _, credit := range series.Credits {
-		if credit.TMDBID == 0 || credit.Name == "" {
+		if credit.Name == "" {
+			continue
+		}
+		if credit.TMDBID == 0 {
+			write.Credits = append(write.Credits, namedCreditWrite(credit))
 			continue
 		}
 		write.Credits = append(write.Credits, creditWrite(credit))
@@ -208,6 +213,14 @@ func ToWrite(series Series, options WriteOptions) library.SeriesWrite {
 		write.Parts = append(write.Parts, part)
 	}
 	return write
+}
+
+// namedCreditWrite is a credit a media server gave, keyed by the person's name.
+func namedCreditWrite(credit Credit) library.SeriesCreditWrite {
+	return library.SeriesCreditWrite{
+		Provider: mediaserver.PersonProvider, ExternalID: mediaserver.PersonKey(credit.Name), Name: strings.TrimSpace(credit.Name),
+		Role: credit.Role, Character: credit.Character, Ord: credit.Order,
+	}
 }
 
 func creditWrite(credit Credit) library.SeriesCreditWrite {

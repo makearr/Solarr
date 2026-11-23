@@ -29,6 +29,7 @@ func FromServer(item mediaserver.Item, source string) Series {
 			series.Cast = append(series.Cast, Person{Name: person.Name, Character: person.Role})
 		}
 	}
+	series.Credits = serverCredits(item.People)
 	return series
 }
 
@@ -79,4 +80,26 @@ func (s Service) GuessByPath(ctx context.Context, categoryID int64, folderPath s
 	guess.TVDBID, _ = strconv.ParseInt(item.IDs["tvdb"], 10, 64)
 	guess.TMDBID, _ = strconv.ParseInt(item.IDs["tmdb"], 10, 64)
 	return guess
+}
+
+// serverCredits turns a server's people into credits keyed by name (TMDBID stays zero); a person of another kind is left out.
+func serverCredits(people []mediaserver.Credit) []Credit {
+	var credits []Credit
+	order := 0
+	for _, person := range people {
+		switch person.Kind {
+		case "actor", "gueststar":
+			credits = append(credits, Credit{Name: person.Name, Role: RoleActor, Character: person.Role, Order: order})
+			order++
+		case "director":
+			credits = append(credits, Credit{Name: person.Name, Role: RoleDirector})
+		case "writer":
+			credits = append(credits, Credit{Name: person.Name, Role: RoleWriter})
+		case "producer":
+			credits = append(credits, Credit{Name: person.Name, Role: RoleProducer})
+		case "composer":
+			credits = append(credits, Credit{Name: person.Name, Role: RoleComposer})
+		}
+	}
+	return credits
 }

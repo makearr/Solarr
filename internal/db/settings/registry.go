@@ -593,6 +593,24 @@ func NewDefaultRegistry() *Registry {
 		Default:  "",
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyLastFMAPIKey, Kind: KindString, Tier: TierNormal,
+		Name:     "Last.fm key",
+		HelpText: "Your own API key from last.fm/api (free): how many people listen to an album, and similar artists.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyDiscogsToken, Kind: KindString, Tier: TierNormal,
+		Name:     "Discogs token",
+		HelpText: "Your own personal access token from discogs.com/settings/developers: the community's rating of a release.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeySpotifyClient, Kind: KindString, Tier: TierNormal,
+		Name:     "Spotify app",
+		HelpText: "Your Spotify app as client id:client secret (developer.spotify.com, free): an album's popularity and covers.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyTMDBAPIKey, Kind: KindString, Tier: TierNormal,
 		Name:     "TMDB key",
 		HelpText: "Your own TMDB read access token or API key (themoviedb.org, free). Adds cast, crew, guest stars, artwork and alternative orderings to TV.",
