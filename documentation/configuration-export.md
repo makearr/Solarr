@@ -24,6 +24,10 @@ stored order. A non-empty `network_allow_cidrs` is checked against the importing
 remote address the same way `PATCH /network` is (Invariant 89) -- an import with no real caller
 address to check refuses conservatively rather than risk a lockout it cannot verify.
 
+A `transcode` block carries the master switch, the lane limits, the originals policy, each library's row (keyed
+`media_type/name`) and every saved setup (keyed by its target's `media_type/name`, the document as in the API). A library
+or target the importing instance lacks is skipped; a setup that does not validate refuses the whole block before anything is written.
+
 The Backups page downloads the document and restores one (2026-09-24).
 
 A further media type of a library carries `library_of: <media_type>/<name>` of the library it belongs to; import

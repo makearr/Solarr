@@ -312,3 +312,48 @@ func (s TranscodeSetup) Validate(target QualityTarget) config.Problems {
 	oneOf("audio_filters.denoise_method", string(s.Audio.DenoiseMethod), "afftdn", "anlmdn")
 	return problems
 }
+
+// TranscodeWarningCode names a way a setup is likely to miss its target.
+type TranscodeWarningCode string
+
+// The warnings that follow from the setup and its target alone.
+const (
+	WarnQualityDiffersFromTarget TranscodeWarningCode = "quality_differs_from_target"
+	WarnChecksOff                TranscodeWarningCode = "checks_off"
+	WarnRangeUnknown             TranscodeWarningCode = "range_unknown"
+)
+
+// TranscodeWarning is one warning with the number that raised it, when there is one.
+type TranscodeWarning struct {
+	Code  TranscodeWarningCode
+	Value string
+}
+
+// TranscodeWarnings lists how the setup is likely to miss its target.
+func TranscodeWarnings(setup TranscodeSetup, target QualityTarget) []TranscodeWarning {
+	warnings := []TranscodeWarning{}
+	video := target.isTranscodeVideo()
+	if video && setup.Encode.RateMode == RateQuality && target.CRF > 0 {
+		if gap := setup.Encode.Quality - target.CRF; gap > 2 || gap < -2 {
+			warnings = append(warnings, TranscodeWarning{Code: WarnQualityDiffersFromTarget, Value: strconv.FormatFloat(setup.Encode.Quality, 'f', -1, 64)})
+		}
+	}
+	if !setup.Check.WithinRange && !setup.Check.Smaller {
+		warnings = append(warnings, TranscodeWarning{Code: WarnChecksOff})
+	}
+	if (video && target.VideoBitrateKbps == nil) || (!video && target.BitrateKbps == nil) {
+		warnings = append(warnings, TranscodeWarning{Code: WarnRangeUnknown})
+	}
+	return warnings
+}
+
+// TranscodeKind says what a target converts to: video, audio, or other for what transcoding does not cover (books, comics).
+func (t QualityTarget) TranscodeKind() string {
+	switch {
+	case t.isTranscodeVideo():
+		return "video"
+	case TargetFamily(t.MediaType) == "book":
+		return "other"
+	}
+	return "audio"
+}

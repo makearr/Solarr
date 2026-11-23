@@ -8359,6 +8359,117 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /settings/transcode:
+    get:
+      operationId: getTranscodeSettings
+      tags: [settings]
+      summary: The transcode switch, lane limits, originals policy and every library with its target and transcode row. Administrator only.
+      responses:
+        "200":
+          description: The settings in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TranscodeSettings" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setTranscodeSettings
+      tags: [settings]
+      summary: Save the transcode switch, lane limits and originals policy; the libraries are saved one by one. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TranscodeGlobalSettings" }
+      responses:
+        "200":
+          description: The settings now in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TranscodeSettings" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /settings/transcode/libraries/{category_id}:
+    parameters:
+      - name: category_id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      operationId: setTranscodeLibrary
+      tags: [settings]
+      summary: Save one library's transcode row. Refused for a library without an audio or video target. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TranscodeLibraryRow" }
+      responses:
+        "200":
+          description: The library as it now stands.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TranscodeLibrary" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /settings/transcode/targets/{target_id}:
+    parameters:
+      - name: target_id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getTranscodeSetup
+      tags: [settings]
+      summary: A quality target's transcode setup, the generated default until one is saved. Administrator only.
+      responses:
+        "200":
+          description: The setup with its revision, warnings and engine availability.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TranscodeSetupState" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setTranscodeSetup
+      tags: [settings]
+      summary: Save a quality target's transcode setup; the revision goes up by one. A missing field takes its default, an unknown one is refused. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TranscodeSetup" }
+      responses:
+        "200":
+          description: The setup now in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TranscodeSetupState" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: resetTranscodeSetup
+      tags: [settings]
+      summary: Write the target's generated default over its setup; the revision still goes up. Administrator only.
+      responses:
+        "200":
+          description: The default now in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TranscodeSetupState" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /settings/general/video-previews/generate:
     post:
       operationId: generateVideoPreviews
@@ -16583,6 +16694,190 @@ components:
           type: string
           enum: [normal, read_only, pause_downloads, observe, arr_companion]
           description: "How much of the outside world Solarr touches (general.solarr_mode): read_only writes nothing into a library, pause_downloads sends nothing to a download client, observe is read_only without indexer searches or downloads, arr_companion is observe plus sending monitoring back to the *Arrs. SOLARR_MODE sets it at every start."
+
+    TranscodeLaneLimits:
+      type: object
+      required: [cpu, gpu, audio]
+      properties:
+        cpu: { type: integer, minimum: 0, maximum: 16 }
+        gpu: { type: integer, minimum: 0, maximum: 16 }
+        audio: { type: integer, minimum: 0, maximum: 16 }
+
+    TranscodeGlobalSettings:
+      type: object
+      required: [enabled, parallel, playback_parallel, originals_retain_days, originals_cap_gb]
+      properties:
+        enabled: { type: boolean, description: "Master switch (transcode.enabled). Default off." }
+        parallel: { $ref: "#/components/schemas/TranscodeLaneLimits" }
+        playback_parallel: { $ref: "#/components/schemas/TranscodeLaneLimits" }
+        originals_retain_days: { type: integer, minimum: 0, maximum: 3650, description: "Days a replaced original stays in the recycle bin; 0 follows the bin's own retention." }
+        originals_cap_gb: { type: integer, minimum: 0, description: "Most space replaced originals may take together; 0 is no cap." }
+
+    TranscodeLibraryRow:
+      type: object
+      required: [enabled, priority, order]
+      properties:
+        enabled: { type: boolean }
+        priority: { type: integer, minimum: -100, maximum: 100, description: Higher runs first; equal priorities take turns. }
+        order: { type: string, enum: [found, alphabetical, largest, smallest, oldest, newest] }
+
+    TranscodeLibrary:
+      type: object
+      required: [category_id, name, media_type, supported, enabled, priority, order]
+      properties:
+        category_id: { type: integer, format: int64 }
+        name: { type: string }
+        media_type: { type: string }
+        target_id: { type: integer, format: int64, nullable: true, description: The library's quality target; absent when it has none. }
+        target_name: { type: string }
+        target_kind: { type: string, enum: [video, audio, other], description: "What the target converts to; 'other' (books, comics) is not supported." }
+        supported: { type: boolean, description: True when the library has a video or audio target. }
+        enabled: { type: boolean }
+        priority: { type: integer }
+        order: { type: string, enum: [found, alphabetical, largest, smallest, oldest, newest] }
+
+    TranscodeSettings:
+      type: object
+      required: [global, libraries]
+      properties:
+        global: { $ref: "#/components/schemas/TranscodeGlobalSettings" }
+        libraries: { type: array, items: { $ref: "#/components/schemas/TranscodeLibrary" } }
+
+    TranscodeEncode:
+      type: object
+      required: [engine, allow_cpu_fallback, rate_mode, quality, hardware_quality_offset, video_bitrate_kbps, preset]
+      properties:
+        engine: { type: string, enum: [auto, software, qsv, vaapi, nvenc] }
+        allow_cpu_fallback: { type: boolean }
+        rate_mode: { type: string, enum: ["", quality, bitrate], description: Empty for an audio target. }
+        quality: { type: number, minimum: 0, maximum: 63, description: In software CRF terms. }
+        hardware_quality_offset: { type: number }
+        video_bitrate_kbps: { type: integer, minimum: 0, description: 0 takes the target's. }
+        preset: { type: string, enum: ["", fast, normal, slow, slower, veryslow], description: Empty for an audio target. }
+
+    TranscodeSkip:
+      type: object
+      required: [transcoded_before, container_matches, codec_matches, also_video_codecs, also_audio_codecs, resolution_at_or_below, rate_at_or_below, only_wanted_languages, within_range, range_pct, below_max, max_pct]
+      properties:
+        transcoded_before: { type: boolean }
+        container_matches: { type: boolean }
+        codec_matches: { type: boolean }
+        also_video_codecs: { type: array, items: { type: string } }
+        also_audio_codecs: { type: array, items: { type: string } }
+        resolution_at_or_below: { type: boolean }
+        rate_at_or_below: { type: boolean }
+        only_wanted_languages: { type: boolean }
+        within_range: { type: boolean }
+        range_pct: { type: integer, minimum: 1, maximum: 100 }
+        below_max: { type: boolean }
+        max_pct: { type: integer, minimum: 1, maximum: 1000 }
+
+    TranscodeStreams:
+      type: object
+      required: [copy_video_on_target, video_copy_max_pct, copy_audio_on_target, audio_copy_max_pct, downscale, no_upscale, reduce_fps, no_fps_increase, downmix, no_upmix, no_sample_rate_increase, remove_unwanted_audio, remove_unwanted_subtitles]
+      properties:
+        copy_video_on_target: { type: boolean }
+        video_copy_max_pct: { type: integer, minimum: 1, maximum: 1000 }
+        copy_audio_on_target: { type: boolean }
+        audio_copy_max_pct: { type: integer, minimum: 1, maximum: 1000 }
+        downscale: { type: boolean }
+        no_upscale: { type: boolean }
+        reduce_fps: { type: boolean }
+        no_fps_increase: { type: boolean }
+        downmix: { type: boolean }
+        no_upmix: { type: boolean }
+        no_sample_rate_increase: { type: boolean }
+        remove_unwanted_audio: { type: boolean }
+        remove_unwanted_subtitles: { type: boolean }
+
+    TranscodeVideoFilters:
+      type: object
+      required: [deinterlace, denoise, denoise_method, deblock, deband, deflicker, sharpen, sharpen_method, tonemap]
+      properties:
+        deinterlace: { type: boolean }
+        denoise: { $ref: "#/components/schemas/TranscodeFilterStrength" }
+        denoise_method: { type: string, enum: ["", auto, hqdn3d, nlmeans, bm3d] }
+        deblock: { $ref: "#/components/schemas/TranscodeFilterStrength" }
+        deband: { $ref: "#/components/schemas/TranscodeFilterStrength" }
+        deflicker: { $ref: "#/components/schemas/TranscodeFilterStrength" }
+        sharpen: { $ref: "#/components/schemas/TranscodeFilterStrength" }
+        sharpen_method: { type: string, enum: ["", cas, smartblur] }
+        tonemap: { type: boolean }
+
+    TranscodeFilterStrength:
+      type: string
+      enum: ["", off, low, medium, strong]
+
+    TranscodeAudioFilters:
+      type: object
+      required: [normalize, dialog_enhance, compress, denoise, denoise_method, declip]
+      properties:
+        normalize: { type: boolean }
+        dialog_enhance: { type: boolean }
+        compress: { type: boolean }
+        denoise: { $ref: "#/components/schemas/TranscodeFilterStrength" }
+        denoise_method: { type: string, enum: [afftdn, anlmdn] }
+        declip: { type: boolean }
+
+    TranscodeCheck:
+      type: object
+      required: [duration, duration_seconds, smaller, within_range, range_pct, below_max, max_pct]
+      properties:
+        duration: { type: boolean }
+        duration_seconds: { type: integer, minimum: 0, maximum: 60 }
+        smaller: { type: boolean }
+        within_range: { type: boolean }
+        range_pct: { type: integer, minimum: 1, maximum: 100 }
+        below_max: { type: boolean }
+        max_pct: { type: integer, minimum: 1, maximum: 1000 }
+
+    TranscodeLadder:
+      type: object
+      required: [extra_passes, quality_step, bitrate_step_pct]
+      properties:
+        extra_passes: { type: integer, minimum: 0, maximum: 4 }
+        quality_step: { type: number, minimum: 0, exclusiveMinimum: true }
+        bitrate_step_pct: { type: integer, minimum: 1, maximum: 90 }
+
+    TranscodeSetup:
+      type: object
+      description: How files are converted to one target quality; the target itself says to what.
+      required: [version, encode, skip, streams, video_filters, audio_filters, check, ladder]
+      properties:
+        version: { type: integer, enum: [1] }
+        encode: { $ref: "#/components/schemas/TranscodeEncode" }
+        skip: { $ref: "#/components/schemas/TranscodeSkip" }
+        streams: { $ref: "#/components/schemas/TranscodeStreams" }
+        video_filters: { $ref: "#/components/schemas/TranscodeVideoFilters" }
+        audio_filters: { $ref: "#/components/schemas/TranscodeAudioFilters" }
+        check: { $ref: "#/components/schemas/TranscodeCheck" }
+        ladder: { $ref: "#/components/schemas/TranscodeLadder" }
+
+    TranscodeWarning:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, enum: [quality_differs_from_target, checks_off, range_unknown] }
+        value: { type: string, description: The number that triggered it, when there is one. }
+
+    TranscodeEngineAvailability:
+      type: object
+      required: [engine, available]
+      properties:
+        engine: { type: string, enum: [auto, software, qsv, vaapi, nvenc] }
+        available: { type: boolean }
+        reason: { type: string, description: Why not, as a code, when unavailable. }
+
+    TranscodeSetupState:
+      type: object
+      required: [target_id, is_default, revision, setup, warnings, availability]
+      properties:
+        target_id: { type: integer, format: int64 }
+        is_default: { type: boolean, description: True until a setup is saved for the target. }
+        revision: { type: integer, format: int64, description: 0 for a generated default. }
+        setup: { $ref: "#/components/schemas/TranscodeSetup" }
+        warnings: { type: array, items: { $ref: "#/components/schemas/TranscodeWarning" } }
+        availability: { type: array, items: { $ref: "#/components/schemas/TranscodeEngineAvailability" } }
 
     DiscoverGlobalSettings:
       type: object

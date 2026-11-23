@@ -31,6 +31,10 @@ func (s *Server) ExportSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.logger, err)
 		return
 	}
+	if err := s.auth.Settings.ExportTranscode(r.Context(), &document); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
 	if s.configExtras != nil {
 		if err := s.configExtras.Export(r.Context(), &document); err != nil {
 			writeError(w, s.logger, err)
@@ -99,6 +103,15 @@ func (s *Server) ImportSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.auth.Settings.ImportDiscover(r.Context(), s.wall, document); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if err := s.auth.Settings.ImportTranscode(r.Context(), s.wall, document); err != nil {
+		var problems config.Problems
+		if errors.As(err, &problems) {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "The document has problems", problems.Report("the document", "Nothing was changed."))
+			return
+		}
 		writeError(w, s.logger, err)
 		return
 	}

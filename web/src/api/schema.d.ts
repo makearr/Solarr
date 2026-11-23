@@ -5393,6 +5393,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/transcode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The transcode switch, lane limits, originals policy and every library with its target and transcode row. Administrator only. */
+        get: operations["getTranscodeSettings"];
+        /** Save the transcode switch, lane limits and originals policy; the libraries are saved one by one. Administrator only. */
+        put: operations["setTranscodeSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/transcode/libraries/{category_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Save one library's transcode row. Refused for a library without an audio or video target. Administrator only. */
+        put: operations["setTranscodeLibrary"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/transcode/targets/{target_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: number;
+            };
+            cookie?: never;
+        };
+        /** A quality target's transcode setup, the generated default until one is saved. Administrator only. */
+        get: operations["getTranscodeSetup"];
+        /** Save a quality target's transcode setup; the revision goes up by one. A missing field takes its default, an unknown one is refused. Administrator only. */
+        put: operations["setTranscodeSetup"];
+        post?: never;
+        /** Write the target's generated default over its setup; the revision still goes up. Administrator only. */
+        delete: operations["resetTranscodeSetup"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/general/video-previews/generate": {
         parameters: {
             query?: never;
@@ -12373,6 +12431,181 @@ export interface components {
              * @enum {string}
              */
             solarr_mode?: "normal" | "read_only" | "pause_downloads" | "observe" | "arr_companion";
+        };
+        TranscodeLaneLimits: {
+            cpu: number;
+            gpu: number;
+            audio: number;
+        };
+        TranscodeGlobalSettings: {
+            /** @description Master switch (transcode.enabled). Default off. */
+            enabled: boolean;
+            parallel: components["schemas"]["TranscodeLaneLimits"];
+            playback_parallel: components["schemas"]["TranscodeLaneLimits"];
+            /** @description Days a replaced original stays in the recycle bin; 0 follows the bin's own retention. */
+            originals_retain_days: number;
+            /** @description Most space replaced originals may take together; 0 is no cap. */
+            originals_cap_gb: number;
+        };
+        TranscodeLibraryRow: {
+            enabled: boolean;
+            /** @description Higher runs first; equal priorities take turns. */
+            priority: number;
+            /** @enum {string} */
+            order: "found" | "alphabetical" | "largest" | "smallest" | "oldest" | "newest";
+        };
+        TranscodeLibrary: {
+            /** Format: int64 */
+            category_id: number;
+            name: string;
+            media_type: string;
+            /**
+             * Format: int64
+             * @description The library's quality target; absent when it has none.
+             */
+            target_id?: number | null;
+            target_name?: string;
+            /**
+             * @description What the target converts to; 'other' (books, comics) is not supported.
+             * @enum {string}
+             */
+            target_kind?: "video" | "audio" | "other";
+            /** @description True when the library has a video or audio target. */
+            supported: boolean;
+            enabled: boolean;
+            priority: number;
+            /** @enum {string} */
+            order: "found" | "alphabetical" | "largest" | "smallest" | "oldest" | "newest";
+        };
+        TranscodeSettings: {
+            global: components["schemas"]["TranscodeGlobalSettings"];
+            libraries: components["schemas"]["TranscodeLibrary"][];
+        };
+        TranscodeEncode: {
+            /** @enum {string} */
+            engine: "auto" | "software" | "qsv" | "vaapi" | "nvenc";
+            allow_cpu_fallback: boolean;
+            /**
+             * @description Empty for an audio target.
+             * @enum {string}
+             */
+            rate_mode: "" | "quality" | "bitrate";
+            /** @description In software CRF terms. */
+            quality: number;
+            hardware_quality_offset: number;
+            /** @description 0 takes the target's. */
+            video_bitrate_kbps: number;
+            /**
+             * @description Empty for an audio target.
+             * @enum {string}
+             */
+            preset: "" | "fast" | "normal" | "slow" | "slower" | "veryslow";
+        };
+        TranscodeSkip: {
+            transcoded_before: boolean;
+            container_matches: boolean;
+            codec_matches: boolean;
+            also_video_codecs: string[];
+            also_audio_codecs: string[];
+            resolution_at_or_below: boolean;
+            rate_at_or_below: boolean;
+            only_wanted_languages: boolean;
+            within_range: boolean;
+            range_pct: number;
+            below_max: boolean;
+            max_pct: number;
+        };
+        TranscodeStreams: {
+            copy_video_on_target: boolean;
+            video_copy_max_pct: number;
+            copy_audio_on_target: boolean;
+            audio_copy_max_pct: number;
+            downscale: boolean;
+            no_upscale: boolean;
+            reduce_fps: boolean;
+            no_fps_increase: boolean;
+            downmix: boolean;
+            no_upmix: boolean;
+            no_sample_rate_increase: boolean;
+            remove_unwanted_audio: boolean;
+            remove_unwanted_subtitles: boolean;
+        };
+        TranscodeVideoFilters: {
+            deinterlace: boolean;
+            denoise: components["schemas"]["TranscodeFilterStrength"];
+            /** @enum {string} */
+            denoise_method: "" | "auto" | "hqdn3d" | "nlmeans" | "bm3d";
+            deblock: components["schemas"]["TranscodeFilterStrength"];
+            deband: components["schemas"]["TranscodeFilterStrength"];
+            deflicker: components["schemas"]["TranscodeFilterStrength"];
+            sharpen: components["schemas"]["TranscodeFilterStrength"];
+            /** @enum {string} */
+            sharpen_method: "" | "cas" | "smartblur";
+            tonemap: boolean;
+        };
+        /** @enum {string} */
+        TranscodeFilterStrength: "" | "off" | "low" | "medium" | "strong";
+        TranscodeAudioFilters: {
+            normalize: boolean;
+            dialog_enhance: boolean;
+            compress: boolean;
+            denoise: components["schemas"]["TranscodeFilterStrength"];
+            /** @enum {string} */
+            denoise_method: "afftdn" | "anlmdn";
+            declip: boolean;
+        };
+        TranscodeCheck: {
+            duration: boolean;
+            duration_seconds: number;
+            smaller: boolean;
+            within_range: boolean;
+            range_pct: number;
+            below_max: boolean;
+            max_pct: number;
+        };
+        TranscodeLadder: {
+            extra_passes: number;
+            quality_step: number;
+            bitrate_step_pct: number;
+        };
+        /** @description How files are converted to one target quality; the target itself says to what. */
+        TranscodeSetup: {
+            /** @enum {integer} */
+            version: 1;
+            encode: components["schemas"]["TranscodeEncode"];
+            skip: components["schemas"]["TranscodeSkip"];
+            streams: components["schemas"]["TranscodeStreams"];
+            video_filters: components["schemas"]["TranscodeVideoFilters"];
+            audio_filters: components["schemas"]["TranscodeAudioFilters"];
+            check: components["schemas"]["TranscodeCheck"];
+            ladder: components["schemas"]["TranscodeLadder"];
+        };
+        TranscodeWarning: {
+            /** @enum {string} */
+            code: "quality_differs_from_target" | "checks_off" | "range_unknown";
+            /** @description The number that triggered it */
+            value?: string;
+        };
+        TranscodeEngineAvailability: {
+            /** @enum {string} */
+            engine: "auto" | "software" | "qsv" | "vaapi" | "nvenc";
+            available: boolean;
+            /** @description Why not */
+            reason?: string;
+        };
+        TranscodeSetupState: {
+            /** Format: int64 */
+            target_id: number;
+            /** @description True until a setup is saved for the target. */
+            is_default: boolean;
+            /**
+             * Format: int64
+             * @description 0 for a generated default.
+             */
+            revision: number;
+            setup: components["schemas"]["TranscodeSetup"];
+            warnings: components["schemas"]["TranscodeWarning"][];
+            availability: components["schemas"]["TranscodeEngineAvailability"][];
         };
         DiscoverGlobalSettings: {
             /** @description Recommendations of works that are not in Solarr or not monitored (discover.enabled), the same switch as on Settings -> General. Default off. */
@@ -22345,6 +22578,166 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getTranscodeSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscodeSettings"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    setTranscodeSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranscodeGlobalSettings"];
+            };
+        };
+        responses: {
+            /** @description The settings now in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscodeSettings"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    setTranscodeLibrary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranscodeLibraryRow"];
+            };
+        };
+        responses: {
+            /** @description The library as it now stands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscodeLibrary"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getTranscodeSetup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The setup with its revision, warnings and engine availability. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscodeSetupState"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setTranscodeSetup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranscodeSetup"];
+            };
+        };
+        responses: {
+            /** @description The setup now in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscodeSetupState"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    resetTranscodeSetup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The default now in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscodeSetupState"];
+                };
+            };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

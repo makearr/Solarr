@@ -32,6 +32,7 @@ type Document struct {
 	LanguageProfiles  []LanguageProfileEntry  `yaml:"language_profiles,omitempty"`
 	ExclusionPatterns []ExclusionPatternEntry `yaml:"exclusion_patterns,omitempty"`
 	Discover          *DiscoverEntry          `yaml:"discover,omitempty"`
+	Transcode         *TranscodeEntry         `yaml:"transcode,omitempty"`
 	// Schedules holds each task's stored overrides by task key; a task absent here runs on its defaults.
 	Schedules map[string]ScheduleEntry `yaml:"schedules,omitempty"`
 	// The three below are filled and applied by the API layer (webhooks and definition files are not in the settings snapshot).

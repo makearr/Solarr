@@ -1078,6 +1078,111 @@ const (
 	TierNormal   Tier = "normal"
 )
 
+// Defines values for TranscodeAudioFiltersDenoiseMethod.
+const (
+	TranscodeAudioFiltersDenoiseMethodAfftdn TranscodeAudioFiltersDenoiseMethod = "afftdn"
+	TranscodeAudioFiltersDenoiseMethodAnlmdn TranscodeAudioFiltersDenoiseMethod = "anlmdn"
+)
+
+// Defines values for TranscodeEncodeEngine.
+const (
+	TranscodeEncodeEngineAuto     TranscodeEncodeEngine = "auto"
+	TranscodeEncodeEngineNvenc    TranscodeEncodeEngine = "nvenc"
+	TranscodeEncodeEngineQsv      TranscodeEncodeEngine = "qsv"
+	TranscodeEncodeEngineSoftware TranscodeEncodeEngine = "software"
+	TranscodeEncodeEngineVaapi    TranscodeEncodeEngine = "vaapi"
+)
+
+// Defines values for TranscodeEncodePreset.
+const (
+	TranscodeEncodePresetEmpty    TranscodeEncodePreset = ""
+	TranscodeEncodePresetFast     TranscodeEncodePreset = "fast"
+	TranscodeEncodePresetNormal   TranscodeEncodePreset = "normal"
+	TranscodeEncodePresetSlow     TranscodeEncodePreset = "slow"
+	TranscodeEncodePresetSlower   TranscodeEncodePreset = "slower"
+	TranscodeEncodePresetVeryslow TranscodeEncodePreset = "veryslow"
+)
+
+// Defines values for TranscodeEncodeRateMode.
+const (
+	TranscodeEncodeRateModeBitrate TranscodeEncodeRateMode = "bitrate"
+	TranscodeEncodeRateModeEmpty   TranscodeEncodeRateMode = ""
+	TranscodeEncodeRateModeQuality TranscodeEncodeRateMode = "quality"
+)
+
+// Defines values for TranscodeEngineAvailabilityEngine.
+const (
+	TranscodeEngineAvailabilityEngineAuto     TranscodeEngineAvailabilityEngine = "auto"
+	TranscodeEngineAvailabilityEngineNvenc    TranscodeEngineAvailabilityEngine = "nvenc"
+	TranscodeEngineAvailabilityEngineQsv      TranscodeEngineAvailabilityEngine = "qsv"
+	TranscodeEngineAvailabilityEngineSoftware TranscodeEngineAvailabilityEngine = "software"
+	TranscodeEngineAvailabilityEngineVaapi    TranscodeEngineAvailabilityEngine = "vaapi"
+)
+
+// Defines values for TranscodeFilterStrength.
+const (
+	TranscodeFilterStrengthEmpty  TranscodeFilterStrength = ""
+	TranscodeFilterStrengthLow    TranscodeFilterStrength = "low"
+	TranscodeFilterStrengthMedium TranscodeFilterStrength = "medium"
+	TranscodeFilterStrengthOff    TranscodeFilterStrength = "off"
+	TranscodeFilterStrengthStrong TranscodeFilterStrength = "strong"
+)
+
+// Defines values for TranscodeLibraryOrder.
+const (
+	TranscodeLibraryOrderAlphabetical TranscodeLibraryOrder = "alphabetical"
+	TranscodeLibraryOrderFound        TranscodeLibraryOrder = "found"
+	TranscodeLibraryOrderLargest      TranscodeLibraryOrder = "largest"
+	TranscodeLibraryOrderNewest       TranscodeLibraryOrder = "newest"
+	TranscodeLibraryOrderOldest       TranscodeLibraryOrder = "oldest"
+	TranscodeLibraryOrderSmallest     TranscodeLibraryOrder = "smallest"
+)
+
+// Defines values for TranscodeLibraryTargetKind.
+const (
+	TranscodeLibraryTargetKindAudio TranscodeLibraryTargetKind = "audio"
+	TranscodeLibraryTargetKindOther TranscodeLibraryTargetKind = "other"
+	TranscodeLibraryTargetKindVideo TranscodeLibraryTargetKind = "video"
+)
+
+// Defines values for TranscodeLibraryRowOrder.
+const (
+	TranscodeLibraryRowOrderAlphabetical TranscodeLibraryRowOrder = "alphabetical"
+	TranscodeLibraryRowOrderFound        TranscodeLibraryRowOrder = "found"
+	TranscodeLibraryRowOrderLargest      TranscodeLibraryRowOrder = "largest"
+	TranscodeLibraryRowOrderNewest       TranscodeLibraryRowOrder = "newest"
+	TranscodeLibraryRowOrderOldest       TranscodeLibraryRowOrder = "oldest"
+	TranscodeLibraryRowOrderSmallest     TranscodeLibraryRowOrder = "smallest"
+)
+
+// Defines values for TranscodeSetupVersion.
+const (
+	TranscodeSetupVersionN1 TranscodeSetupVersion = 1
+)
+
+// Defines values for TranscodeVideoFiltersDenoiseMethod.
+const (
+	TranscodeVideoFiltersDenoiseMethodAuto    TranscodeVideoFiltersDenoiseMethod = "auto"
+	TranscodeVideoFiltersDenoiseMethodBm3d    TranscodeVideoFiltersDenoiseMethod = "bm3d"
+	TranscodeVideoFiltersDenoiseMethodEmpty   TranscodeVideoFiltersDenoiseMethod = ""
+	TranscodeVideoFiltersDenoiseMethodHqdn3d  TranscodeVideoFiltersDenoiseMethod = "hqdn3d"
+	TranscodeVideoFiltersDenoiseMethodNlmeans TranscodeVideoFiltersDenoiseMethod = "nlmeans"
+)
+
+// Defines values for TranscodeVideoFiltersSharpenMethod.
+const (
+	TranscodeVideoFiltersSharpenMethodCas       TranscodeVideoFiltersSharpenMethod = "cas"
+	TranscodeVideoFiltersSharpenMethodEmpty     TranscodeVideoFiltersSharpenMethod = ""
+	TranscodeVideoFiltersSharpenMethodSmartblur TranscodeVideoFiltersSharpenMethod = "smartblur"
+)
+
+// Defines values for TranscodeWarningCode.
+const (
+	TranscodeWarningCodeChecksOff                TranscodeWarningCode = "checks_off"
+	TranscodeWarningCodeQualityDiffersFromTarget TranscodeWarningCode = "quality_differs_from_target"
+	TranscodeWarningCodeRangeUnknown             TranscodeWarningCode = "range_unknown"
+)
+
 // Defines values for TransferMethod.
 const (
 	TransferMethodCopy     TransferMethod = "copy"
@@ -7193,6 +7298,239 @@ type TierValue struct {
 	Rank int `json:"rank"`
 }
 
+// TranscodeAudioFilters defines model for TranscodeAudioFilters.
+type TranscodeAudioFilters struct {
+	Compress      bool                               `json:"compress"`
+	Declip        bool                               `json:"declip"`
+	Denoise       TranscodeFilterStrength            `json:"denoise"`
+	DenoiseMethod TranscodeAudioFiltersDenoiseMethod `json:"denoise_method"`
+	DialogEnhance bool                               `json:"dialog_enhance"`
+	Normalize     bool                               `json:"normalize"`
+}
+
+// TranscodeAudioFiltersDenoiseMethod defines model for TranscodeAudioFilters.DenoiseMethod.
+type TranscodeAudioFiltersDenoiseMethod string
+
+// TranscodeCheck defines model for TranscodeCheck.
+type TranscodeCheck struct {
+	BelowMax        bool `json:"below_max"`
+	Duration        bool `json:"duration"`
+	DurationSeconds int  `json:"duration_seconds"`
+	MaxPct          int  `json:"max_pct"`
+	RangePct        int  `json:"range_pct"`
+	Smaller         bool `json:"smaller"`
+	WithinRange     bool `json:"within_range"`
+}
+
+// TranscodeEncode defines model for TranscodeEncode.
+type TranscodeEncode struct {
+	AllowCpuFallback      bool                  `json:"allow_cpu_fallback"`
+	Engine                TranscodeEncodeEngine `json:"engine"`
+	HardwareQualityOffset float32               `json:"hardware_quality_offset"`
+
+	// Preset Empty for an audio target.
+	Preset TranscodeEncodePreset `json:"preset"`
+
+	// Quality In software CRF terms.
+	Quality float32 `json:"quality"`
+
+	// RateMode Empty for an audio target.
+	RateMode TranscodeEncodeRateMode `json:"rate_mode"`
+
+	// VideoBitrateKbps 0 takes the target's.
+	VideoBitrateKbps int `json:"video_bitrate_kbps"`
+}
+
+// TranscodeEncodeEngine defines model for TranscodeEncode.Engine.
+type TranscodeEncodeEngine string
+
+// TranscodeEncodePreset Empty for an audio target.
+type TranscodeEncodePreset string
+
+// TranscodeEncodeRateMode Empty for an audio target.
+type TranscodeEncodeRateMode string
+
+// TranscodeEngineAvailability defines model for TranscodeEngineAvailability.
+type TranscodeEngineAvailability struct {
+	Available bool                              `json:"available"`
+	Engine    TranscodeEngineAvailabilityEngine `json:"engine"`
+
+	// Reason Why not
+	Reason *string `json:"reason,omitempty"`
+}
+
+// TranscodeEngineAvailabilityEngine defines model for TranscodeEngineAvailability.Engine.
+type TranscodeEngineAvailabilityEngine string
+
+// TranscodeFilterStrength defines model for TranscodeFilterStrength.
+type TranscodeFilterStrength string
+
+// TranscodeGlobalSettings defines model for TranscodeGlobalSettings.
+type TranscodeGlobalSettings struct {
+	// Enabled Master switch (transcode.enabled). Default off.
+	Enabled bool `json:"enabled"`
+
+	// OriginalsCapGb Most space replaced originals may take together; 0 is no cap.
+	OriginalsCapGb int `json:"originals_cap_gb"`
+
+	// OriginalsRetainDays Days a replaced original stays in the recycle bin; 0 follows the bin's own retention.
+	OriginalsRetainDays int                 `json:"originals_retain_days"`
+	Parallel            TranscodeLaneLimits `json:"parallel"`
+	PlaybackParallel    TranscodeLaneLimits `json:"playback_parallel"`
+}
+
+// TranscodeLadder defines model for TranscodeLadder.
+type TranscodeLadder struct {
+	BitrateStepPct int     `json:"bitrate_step_pct"`
+	ExtraPasses    int     `json:"extra_passes"`
+	QualityStep    float32 `json:"quality_step"`
+}
+
+// TranscodeLaneLimits defines model for TranscodeLaneLimits.
+type TranscodeLaneLimits struct {
+	Audio int `json:"audio"`
+	Cpu   int `json:"cpu"`
+	Gpu   int `json:"gpu"`
+}
+
+// TranscodeLibrary defines model for TranscodeLibrary.
+type TranscodeLibrary struct {
+	CategoryId int64                 `json:"category_id"`
+	Enabled    bool                  `json:"enabled"`
+	MediaType  string                `json:"media_type"`
+	Name       string                `json:"name"`
+	Order      TranscodeLibraryOrder `json:"order"`
+	Priority   int                   `json:"priority"`
+
+	// Supported True when the library has a video or audio target.
+	Supported bool `json:"supported"`
+
+	// TargetId The library's quality target; absent when it has none.
+	TargetId *int64 `json:"target_id"`
+
+	// TargetKind What the target converts to; 'other' (books, comics) is not supported.
+	TargetKind *TranscodeLibraryTargetKind `json:"target_kind,omitempty"`
+	TargetName *string                     `json:"target_name,omitempty"`
+}
+
+// TranscodeLibraryOrder defines model for TranscodeLibrary.Order.
+type TranscodeLibraryOrder string
+
+// TranscodeLibraryTargetKind What the target converts to; 'other' (books, comics) is not supported.
+type TranscodeLibraryTargetKind string
+
+// TranscodeLibraryRow defines model for TranscodeLibraryRow.
+type TranscodeLibraryRow struct {
+	Enabled bool                     `json:"enabled"`
+	Order   TranscodeLibraryRowOrder `json:"order"`
+
+	// Priority Higher runs first; equal priorities take turns.
+	Priority int `json:"priority"`
+}
+
+// TranscodeLibraryRowOrder defines model for TranscodeLibraryRow.Order.
+type TranscodeLibraryRowOrder string
+
+// TranscodeSettings defines model for TranscodeSettings.
+type TranscodeSettings struct {
+	Global    TranscodeGlobalSettings `json:"global"`
+	Libraries []TranscodeLibrary      `json:"libraries"`
+}
+
+// TranscodeSetup How files are converted to one target quality; the target itself says to what.
+type TranscodeSetup struct {
+	AudioFilters TranscodeAudioFilters `json:"audio_filters"`
+	Check        TranscodeCheck        `json:"check"`
+	Encode       TranscodeEncode       `json:"encode"`
+	Ladder       TranscodeLadder       `json:"ladder"`
+	Skip         TranscodeSkip         `json:"skip"`
+	Streams      TranscodeStreams      `json:"streams"`
+	Version      TranscodeSetupVersion `json:"version"`
+	VideoFilters TranscodeVideoFilters `json:"video_filters"`
+}
+
+// TranscodeSetupVersion defines model for TranscodeSetup.Version.
+type TranscodeSetupVersion int
+
+// TranscodeSetupState defines model for TranscodeSetupState.
+type TranscodeSetupState struct {
+	Availability []TranscodeEngineAvailability `json:"availability"`
+
+	// IsDefault True until a setup is saved for the target.
+	IsDefault bool `json:"is_default"`
+
+	// Revision 0 for a generated default.
+	Revision int64 `json:"revision"`
+
+	// Setup How files are converted to one target quality; the target itself says to what.
+	Setup    TranscodeSetup     `json:"setup"`
+	TargetId int64              `json:"target_id"`
+	Warnings []TranscodeWarning `json:"warnings"`
+}
+
+// TranscodeSkip defines model for TranscodeSkip.
+type TranscodeSkip struct {
+	AlsoAudioCodecs     []string `json:"also_audio_codecs"`
+	AlsoVideoCodecs     []string `json:"also_video_codecs"`
+	BelowMax            bool     `json:"below_max"`
+	CodecMatches        bool     `json:"codec_matches"`
+	ContainerMatches    bool     `json:"container_matches"`
+	MaxPct              int      `json:"max_pct"`
+	OnlyWantedLanguages bool     `json:"only_wanted_languages"`
+	RangePct            int      `json:"range_pct"`
+	RateAtOrBelow       bool     `json:"rate_at_or_below"`
+	ResolutionAtOrBelow bool     `json:"resolution_at_or_below"`
+	TranscodedBefore    bool     `json:"transcoded_before"`
+	WithinRange         bool     `json:"within_range"`
+}
+
+// TranscodeStreams defines model for TranscodeStreams.
+type TranscodeStreams struct {
+	AudioCopyMaxPct         int  `json:"audio_copy_max_pct"`
+	CopyAudioOnTarget       bool `json:"copy_audio_on_target"`
+	CopyVideoOnTarget       bool `json:"copy_video_on_target"`
+	Downmix                 bool `json:"downmix"`
+	Downscale               bool `json:"downscale"`
+	NoFpsIncrease           bool `json:"no_fps_increase"`
+	NoSampleRateIncrease    bool `json:"no_sample_rate_increase"`
+	NoUpmix                 bool `json:"no_upmix"`
+	NoUpscale               bool `json:"no_upscale"`
+	ReduceFps               bool `json:"reduce_fps"`
+	RemoveUnwantedAudio     bool `json:"remove_unwanted_audio"`
+	RemoveUnwantedSubtitles bool `json:"remove_unwanted_subtitles"`
+	VideoCopyMaxPct         int  `json:"video_copy_max_pct"`
+}
+
+// TranscodeVideoFilters defines model for TranscodeVideoFilters.
+type TranscodeVideoFilters struct {
+	Deband        TranscodeFilterStrength            `json:"deband"`
+	Deblock       TranscodeFilterStrength            `json:"deblock"`
+	Deflicker     TranscodeFilterStrength            `json:"deflicker"`
+	Deinterlace   bool                               `json:"deinterlace"`
+	Denoise       TranscodeFilterStrength            `json:"denoise"`
+	DenoiseMethod TranscodeVideoFiltersDenoiseMethod `json:"denoise_method"`
+	Sharpen       TranscodeFilterStrength            `json:"sharpen"`
+	SharpenMethod TranscodeVideoFiltersSharpenMethod `json:"sharpen_method"`
+	Tonemap       bool                               `json:"tonemap"`
+}
+
+// TranscodeVideoFiltersDenoiseMethod defines model for TranscodeVideoFilters.DenoiseMethod.
+type TranscodeVideoFiltersDenoiseMethod string
+
+// TranscodeVideoFiltersSharpenMethod defines model for TranscodeVideoFilters.SharpenMethod.
+type TranscodeVideoFiltersSharpenMethod string
+
+// TranscodeWarning defines model for TranscodeWarning.
+type TranscodeWarning struct {
+	Code TranscodeWarningCode `json:"code"`
+
+	// Value The number that triggered it
+	Value *string `json:"value,omitempty"`
+}
+
+// TranscodeWarningCode defines model for TranscodeWarning.Code.
+type TranscodeWarningCode string
+
 // TransferMethod How import gets a file into the library. reflink clones it copy-on-write, sharing disk blocks but presenting as an independent file; hardlink makes a second directory entry for the same bytes; move renames it, or copies and deletes the source when it cannot; copy writes independent bytes; symlink leaves the library pointing at the source. Only reflink and hardlink avoid using more disk space, only move removes the source, and only symlink leaves the library dependent on it.
 type TransferMethod string
 
@@ -9603,6 +9941,15 @@ type PatchGeneralSettingsJSONRequestBody = GeneralSettings
 // SetImportDuplicatesJSONRequestBody defines body for SetImportDuplicates for application/json ContentType.
 type SetImportDuplicatesJSONRequestBody = ImportDuplicates
 
+// SetTranscodeSettingsJSONRequestBody defines body for SetTranscodeSettings for application/json ContentType.
+type SetTranscodeSettingsJSONRequestBody = TranscodeGlobalSettings
+
+// SetTranscodeLibraryJSONRequestBody defines body for SetTranscodeLibrary for application/json ContentType.
+type SetTranscodeLibraryJSONRequestBody = TranscodeLibraryRow
+
+// SetTranscodeSetupJSONRequestBody defines body for SetTranscodeSetup for application/json ContentType.
+type SetTranscodeSetupJSONRequestBody = TranscodeSetup
+
 // SetUserDefaultsJSONRequestBody defines body for SetUserDefaults for application/json ContentType.
 type SetUserDefaultsJSONRequestBody = UserDefaults
 
@@ -10754,6 +11101,24 @@ type ServerInterface interface {
 	// Every registered scalar setting (ADR-26) -- its tier, kind, default and help text.
 	// (GET /settings/registry)
 	ListSettingDefinitions(w http.ResponseWriter, r *http.Request)
+	// The transcode switch, lane limits, originals policy and every library with its target and transcode row. Administrator only.
+	// (GET /settings/transcode)
+	GetTranscodeSettings(w http.ResponseWriter, r *http.Request)
+	// Save the transcode switch, lane limits and originals policy; the libraries are saved one by one. Administrator only.
+	// (PUT /settings/transcode)
+	SetTranscodeSettings(w http.ResponseWriter, r *http.Request)
+	// Save one library's transcode row. Refused for a library without an audio or video target. Administrator only.
+	// (PUT /settings/transcode/libraries/{category_id})
+	SetTranscodeLibrary(w http.ResponseWriter, r *http.Request, categoryId int64)
+	// Write the target's generated default over its setup; the revision still goes up. Administrator only.
+	// (DELETE /settings/transcode/targets/{target_id})
+	ResetTranscodeSetup(w http.ResponseWriter, r *http.Request, targetId int64)
+	// A quality target's transcode setup, the generated default until one is saved. Administrator only.
+	// (GET /settings/transcode/targets/{target_id})
+	GetTranscodeSetup(w http.ResponseWriter, r *http.Request, targetId int64)
+	// Save a quality target's transcode setup; the revision goes up by one. A missing field takes its default, an unknown one is refused. Administrator only.
+	// (PUT /settings/transcode/targets/{target_id})
+	SetTranscodeSetup(w http.ResponseWriter, r *http.Request, targetId int64)
 	// What a new account starts with. Administrator only.
 	// (GET /settings/users)
 	GetUserDefaults(w http.ResponseWriter, r *http.Request)
@@ -13115,6 +13480,42 @@ func (_ Unimplemented) SetImportDuplicates(w http.ResponseWriter, r *http.Reques
 // Every registered scalar setting (ADR-26) -- its tier, kind, default and help text.
 // (GET /settings/registry)
 func (_ Unimplemented) ListSettingDefinitions(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The transcode switch, lane limits, originals policy and every library with its target and transcode row. Administrator only.
+// (GET /settings/transcode)
+func (_ Unimplemented) GetTranscodeSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Save the transcode switch, lane limits and originals policy; the libraries are saved one by one. Administrator only.
+// (PUT /settings/transcode)
+func (_ Unimplemented) SetTranscodeSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Save one library's transcode row. Refused for a library without an audio or video target. Administrator only.
+// (PUT /settings/transcode/libraries/{category_id})
+func (_ Unimplemented) SetTranscodeLibrary(w http.ResponseWriter, r *http.Request, categoryId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Write the target's generated default over its setup; the revision still goes up. Administrator only.
+// (DELETE /settings/transcode/targets/{target_id})
+func (_ Unimplemented) ResetTranscodeSetup(w http.ResponseWriter, r *http.Request, targetId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A quality target's transcode setup, the generated default until one is saved. Administrator only.
+// (GET /settings/transcode/targets/{target_id})
+func (_ Unimplemented) GetTranscodeSetup(w http.ResponseWriter, r *http.Request, targetId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Save a quality target's transcode setup; the revision goes up by one. A missing field takes its default, an unknown one is refused. Administrator only.
+// (PUT /settings/transcode/targets/{target_id})
+func (_ Unimplemented) SetTranscodeSetup(w http.ResponseWriter, r *http.Request, targetId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -24969,6 +25370,182 @@ func (siw *ServerInterfaceWrapper) ListSettingDefinitions(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// GetTranscodeSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetTranscodeSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTranscodeSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetTranscodeSettings operation middleware
+func (siw *ServerInterfaceWrapper) SetTranscodeSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetTranscodeSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetTranscodeLibrary operation middleware
+func (siw *ServerInterfaceWrapper) SetTranscodeLibrary(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "category_id" -------------
+	var categoryId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "category_id", chi.URLParam(r, "category_id"), &categoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetTranscodeLibrary(w, r, categoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResetTranscodeSetup operation middleware
+func (siw *ServerInterfaceWrapper) ResetTranscodeSetup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "target_id" -------------
+	var targetId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "target_id", chi.URLParam(r, "target_id"), &targetId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "target_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResetTranscodeSetup(w, r, targetId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTranscodeSetup operation middleware
+func (siw *ServerInterfaceWrapper) GetTranscodeSetup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "target_id" -------------
+	var targetId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "target_id", chi.URLParam(r, "target_id"), &targetId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "target_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTranscodeSetup(w, r, targetId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetTranscodeSetup operation middleware
+func (siw *ServerInterfaceWrapper) SetTranscodeSetup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "target_id" -------------
+	var targetId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "target_id", chi.URLParam(r, "target_id"), &targetId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "target_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetTranscodeSetup(w, r, targetId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetUserDefaults operation middleware
 func (siw *ServerInterfaceWrapper) GetUserDefaults(w http.ResponseWriter, r *http.Request) {
 
@@ -29023,6 +29600,24 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/settings/registry", wrapper.ListSettingDefinitions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/settings/transcode", wrapper.GetTranscodeSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/settings/transcode", wrapper.SetTranscodeSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/settings/transcode/libraries/{category_id}", wrapper.SetTranscodeLibrary)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/settings/transcode/targets/{target_id}", wrapper.ResetTranscodeSetup)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/settings/transcode/targets/{target_id}", wrapper.GetTranscodeSetup)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/settings/transcode/targets/{target_id}", wrapper.SetTranscodeSetup)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/settings/users", wrapper.GetUserDefaults)

@@ -229,3 +229,32 @@ func (c *Cache) ListTranscodeSetupRevisions(ctx context.Context) (map[int64]int6
 	}
 	return out, nil
 }
+
+// TranscodeLibrary is a library's transcode row with what the interface shows beside it; Target is nil for a library with none.
+type TranscodeLibrary struct {
+	CategoryTranscode
+	Name      string
+	MediaType string
+	Target    *QualityTarget
+}
+
+// Supported says the library has an audio or video target, the only kinds that are converted.
+func (l TranscodeLibrary) Supported() bool {
+	return l.Target != nil && l.Target.TranscodeKind() != "other"
+}
+
+// TranscodeLibraries answers every library with its row and target.
+func (c *Cache) TranscodeLibraries(ctx context.Context) ([]TranscodeLibrary, error) {
+	rows, err := c.CategoryTranscodes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	snapshot := c.Snapshot()
+	var out []TranscodeLibrary
+	for _, row := range rows {
+		if category, found := snapshot.Category(row.CategoryID); found {
+			out = append(out, TranscodeLibrary{CategoryTranscode: row, Name: category.Name, MediaType: category.MediaType, Target: category.QualityTarget})
+		}
+	}
+	return out, nil
+}

@@ -53,7 +53,7 @@ Everything else is `library.db`. Applying that test:
 **`settings.db`** — `provider_definition_state` (what a person set about a definition file, sealed values included), `webhook` (outgoing webhooks, address and secret sealed), `app_user`, `user_category_access`, `user_preference`, `api_key`,
 `user_blocked_tag`, `root_folder`, `category` with its `category_root_folder`, `category_file_management`,
 `category_metadata_source`, `category_quality_profile`, `category_target` and `category_target_auto`, `placement_affinity`,
-`quality_profile`, `quality_target`, `target_profile`, `default_language`, `language_profile`, `naming_profile`,
+`quality_profile`, `quality_target`, `transcode_setup` (one versioned JSON document per target, `revision` raised on every save), `category_transcode`, `target_profile`, `default_language`, `language_profile`, `naming_profile`,
 `naming_format`, `exclusion_pattern`, `indexer`, `downloader`, `download_folder`, `arr_instance`, `import_list`,
 `calendar_feed`, `instance_setting`.
 

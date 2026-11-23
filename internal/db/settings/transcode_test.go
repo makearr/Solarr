@@ -190,3 +190,73 @@ func TestACategoryRowDefaultsToOffRoundTripsValidatesAndFollowsTheCategory(t *te
 		t.Errorf("rows after delete = %+v", rows)
 	}
 }
+
+func TestTranscodeExportCarriesPolicyRowsAndSavedSetupsToAnotherInstanceAndRefusesABadSetup(t *testing.T) {
+	source, cl := newCache(t)
+	films, _ := source.CreateCategory(t.Context(), "movie", "Films", 10)
+	global := settings.TranscodeGlobal{Enabled: true, Parallel: settings.LaneLimits{CPU: 2, GPU: 3, Audio: 5}, Originals: settings.OriginalsPolicy{RetainDays: 3, CapGB: 50}}
+	if err := source.SetTranscodeGlobal(t.Context(), cl, global); err != nil {
+		t.Fatal(err)
+	}
+	row := settings.CategoryTranscode{CategoryID: films.ID, Enabled: true, Priority: 4, Order: settings.OrderNewest}
+	if err := source.SetCategoryTranscode(t.Context(), row); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := source.TranscodeSetup(t.Context(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored.Setup.Encode.Quality = 19
+	if err := source.SetTranscodeSetup(t.Context(), cl, 1, stored.Setup); err != nil {
+		t.Fatal(err)
+	}
+	var document settings.Document
+	if err := source.ExportTranscode(t.Context(), &document); err != nil {
+		t.Fatal(err)
+	}
+	if len(document.Transcode.Setups) != 1 || len(document.Transcode.Libraries) != 1 {
+		t.Fatalf("exported = %+v", document.Transcode)
+	}
+
+	target, _ := newCache(t)
+	other, _ := target.CreateCategory(t.Context(), "movie", "Films", 10)
+	if err := target.ImportTranscode(t.Context(), cl, document); err != nil {
+		t.Fatal(err)
+	}
+	if got := target.Snapshot().TranscodeGlobal(); !reflect.DeepEqual(got, global) {
+		t.Errorf("global = %+v", got)
+	}
+	row.CategoryID = other.ID
+	if rows, _ := target.CategoryTranscodes(t.Context()); !reflect.DeepEqual(rows, []settings.CategoryTranscode{row}) {
+		t.Errorf("rows = %+v", rows)
+	}
+	if got, _ := target.TranscodeSetup(t.Context(), 1); got.Setup.Encode.Quality != 19 || got.Revision != 1 {
+		t.Errorf("setup = %+v", got)
+	}
+
+	document.Transcode.Setups[0].Setup["ladder"] = map[string]any{"extra_passes": 9}
+	third, _ := newCache(t)
+	var problems config.Problems
+	if err := third.ImportTranscode(t.Context(), cl, document); !errors.As(err, &problems) {
+		t.Errorf("bad setup: %v", err)
+	}
+	if third.Snapshot().TranscodeEnabled() {
+		t.Error("a refused section changed the policy")
+	}
+}
+
+func TestTranscodeWarningsNameWhereASetupMissesItsTarget(t *testing.T) {
+	bitrate := int64(2500)
+	target := settings.QualityTarget{MediaType: "video", VideoCodec: "hevc", CRF: 24, VideoBitrateKbps: &bitrate}
+	setup := settings.DefaultTranscodeSetup(target)
+	if got := settings.TranscodeWarnings(setup, target); len(got) != 0 {
+		t.Errorf("default = %+v", got)
+	}
+	setup.Encode.Quality = 28
+	setup.Check.WithinRange, setup.Check.Smaller = false, false
+	target.VideoBitrateKbps = nil
+	want := []settings.TranscodeWarning{{Code: settings.WarnQualityDiffersFromTarget, Value: "28"}, {Code: settings.WarnChecksOff}, {Code: settings.WarnRangeUnknown}}
+	if got := settings.TranscodeWarnings(setup, target); !reflect.DeepEqual(got, want) {
+		t.Errorf("warnings = %+v, want %+v", got, want)
+	}
+}
