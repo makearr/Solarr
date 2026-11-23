@@ -83,6 +83,12 @@ func New(def Definition, doer Doer, c clock.Clock, settings func() map[string]st
 	return &Provider{def: def, http: doer, clock: c, settings: settings}
 }
 
+// Namespace is the id namespace the provider's own ids are written under.
+func (p *Provider) Namespace() string { return p.def.IDs.Own }
+
+// Definition is what the provider was built from.
+func (p *Provider) Definition() Definition { return p.def }
+
 // Search lists the records matching the query.
 func (p *Provider) Search(ctx context.Context, query Query) ([]Record, error) {
 	if p.def.Search == nil {

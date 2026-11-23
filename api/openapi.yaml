@@ -10477,6 +10477,7 @@ components:
         media_types: { type: array, items: { type: string }, description: The libraries whose order it takes a place in. }
         also_for: { type: array, items: { type: string }, description: The libraries it serves outside their order. }
         provisional: { type: boolean, description: A media server of the person's own, asked first and ranked after every other provider. }
+        custom: { type: boolean, description: A provider that is a definition file of the person's own. }
 
     LibraryQualityWrite:
       type: object

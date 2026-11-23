@@ -7185,6 +7185,8 @@ export interface components {
             also_for: string[];
             /** @description A media server of the person's own */
             provisional?: boolean;
+            /** @description A provider that is a definition file of the person's own. */
+            custom?: boolean;
         };
         LibraryQualityWrite: {
             /** @description The profiles the library accepts, earlier preferred. */

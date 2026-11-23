@@ -855,6 +855,15 @@ func (p *process) adultResolver() adult.Resolver {
 	}
 }
 
+// comicRecords is the comic service's view of the active definitions; a nil provider must not become a non-nil interface.
+func (p *process) comicRecords(key string) comic.RecordProvider {
+	provider := p.records.get(key)
+	if provider == nil {
+		return nil
+	}
+	return provider
+}
+
 // comicService is the comic service over the six providers, each on its own bucket and pace.
 func (p *process) comicService() comic.Service {
 	client := func(name string) *httpx.Client { return p.providerClient(name, nil, httpx.ClientConfig{}) }
@@ -867,6 +876,7 @@ func (p *process) comicService() comic.Service {
 			AniList:      anilist.New(client(providerAniList)),
 			MangaUpdates: mangaupdates.New(client(settings.ComicSourceMangaUpdates)),
 			MangaDex:     mangadex.New(client(settings.ComicSourceMangaDex)),
+			Records:      p.comicRecords,
 			Logger:       p.logger,
 		},
 		KindOf: func(categoryID int64) string {

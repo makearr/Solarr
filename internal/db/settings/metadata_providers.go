@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -117,6 +118,15 @@ type MetadataProvider struct {
 	Role ProviderRole
 	// Provisional marks a local provider (a media server): asked first, ranked after every other provider in the merge.
 	Provisional bool
+	// Custom marks a provider that is a person's definition file, not compiled in.
+	Custom bool
+	// LibraryKinds narrows a definition-file provider to those kinds of library; empty is every kind of its media types.
+	LibraryKinds []string
+}
+
+// ServesKind says the provider may be offered to a library of the kind.
+func (p MetadataProvider) ServesKind(kind string) bool {
+	return len(p.LibraryKinds) == 0 || slices.Contains(p.LibraryKinds, kind)
 }
 
 // ProviderRole says how a provider is used: in a library's order, or switched on and off with a fixed place.
@@ -304,8 +314,24 @@ func (c *Cache) SetProviderPace(ctx context.Context, cl clock.Clock, key string,
 	return c.setPolicy(ctx, cl, KeyMetadataProviderPaces, string(encoded))
 }
 
+var customProviders atomic.Pointer[[]MetadataProvider]
+
+// SetCustomMetadataProviders replaces the providers that are definition files; the catalog reload calls it.
+func SetCustomMetadataProviders(providers []MetadataProvider) { customProviders.Store(&providers) }
+
+// CustomMetadataProviders are the active definition-file providers.
+func CustomMetadataProviders() []MetadataProvider {
+	if held := customProviders.Load(); held != nil {
+		return *held
+	}
+	return nil
+}
+
 // MetadataProviderByKey finds a provider by its key.
 func MetadataProviderByKey(key string) (MetadataProvider, bool) {
+	if custom := slices.IndexFunc(CustomMetadataProviders(), func(provider MetadataProvider) bool { return provider.Key == key }); custom >= 0 {
+		return CustomMetadataProviders()[custom], true
+	}
 	index := slices.IndexFunc(MetadataProviders, func(provider MetadataProvider) bool { return provider.Key == key })
 	if index < 0 {
 		return MetadataProvider{}, false
@@ -361,7 +387,7 @@ func (s *Snapshot) anotherMusicSourceOn(key string) bool {
 // MetadataProvidersFor lists the providers that apply to a media type.
 func MetadataProvidersFor(mediaType string) []MetadataProvider {
 	var out []MetadataProvider
-	for _, provider := range MetadataProviders {
+	for _, provider := range append(slices.Clone(MetadataProviders), CustomMetadataProviders()...) {
 		if slices.Contains(provider.MediaTypes, mediaType) {
 			out = append(out, provider)
 		}

@@ -783,3 +783,9 @@ func Capability[T any](r *Registry, key Key) (T, bool) {
 
 // IdentifyRetryKey is the one schedule that asks again about the files of every type but TV that waited for review.
 const IdentifyRetryKey = "identify_retry"
+
+// RecordConsuming is the capability of a media type that can merge a declarative provider's generic record: core asks the
+// module, a definition naming a type without it is refused.
+type RecordConsuming interface {
+	ConsumesRecords() bool
+}

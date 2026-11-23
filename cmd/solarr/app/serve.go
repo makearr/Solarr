@@ -128,6 +128,8 @@ type process struct {
 	jobRegistry *jobs.Registry
 	// definitions is the catalog of provider definition files in force; Reload swaps it whole.
 	definitions *providerdef.Holder
+	// records are the active definition-file metadata providers.
+	records recordProviders
 	// specs is the set of indexer site specs in force: the embedded ones and the approved custom ones.
 	specs *spec.Library
 	// indexerCaps is what each indexer's music search accepts, fetched once a day.

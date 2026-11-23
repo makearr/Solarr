@@ -125,7 +125,8 @@ func (s Service) anyAnswered(_ context.Context, categoryID int64) bool {
 			key == settings.ComicSourceGCD && s.GCD != nil,
 			key == settings.TVSourceAniList && s.AniList != nil,
 			key == settings.ComicSourceMangaUpdates && s.MangaUpdates != nil,
-			key == settings.ComicSourceMangaDex && s.MangaDex != nil:
+			key == settings.ComicSourceMangaDex && s.MangaDex != nil,
+			s.recordProvider(key) != nil:
 			return true
 		}
 	}
@@ -147,8 +148,12 @@ func firstID(ids map[string]string, order []string) (provider, id string) {
 		settings.TVSourceAniList: ProviderAniListManga, settings.ComicSourceMangaUpdates: ProviderMangaUpdates, settings.ComicSourceMangaDex: ProviderMangaDex,
 	}
 	for _, key := range order {
-		if ids[keys[key]] != "" {
-			return keys[key], ids[keys[key]]
+		name, compiled := keys[key]
+		if !compiled {
+			name = key
+		}
+		if ids[name] != "" {
+			return name, ids[name]
 		}
 	}
 	return "", ""
@@ -249,6 +254,8 @@ func (s Service) searchOne(ctx context.Context, key, kind, query string) []Candi
 			out = append(out, Candidate{Title: one.Title, Overview: stripMarkup(one.Description), Year: one.Year, Count: one.LastVolume,
 				Adult: one.ContentRating == "pornographic", IDs: ids})
 		}
+	default:
+		out = s.searchRecords(ctx, key, query)
 	}
 	return out
 }

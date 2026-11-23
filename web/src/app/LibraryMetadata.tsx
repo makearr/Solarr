@@ -75,6 +75,8 @@ export function LibraryMetadata() {
                   <span className="w-5 text-right tabular-nums text-ink-muted">{index + 1}.</span>
                   <span className="font-medium">{info?.label ?? provider}</span>
                   {info?.needs_key && <Chip tone="warn">needs your key</Chip>}
+                  {info?.custom && <Chip title={t("libraryMetadata.customHelp")}>{t("libraryMetadata.customChip")}</Chip>}
+                  {!info && <Chip tone="warn" title={t("libraryMetadata.goneHelp")}>{t("libraryMetadata.goneChip")}</Chip>}
                   {info?.provisional && <Chip title={t("libraryMetadata.provisional")}>{t("libraryMetadata.provisionalChip")}</Chip>}
                   <span className="min-w-0 flex-1 text-xs text-ink-muted">{info?.carries.join(", ")}</span>
                   <Button variant="icon" aria-label={`Move ${info?.label ?? provider} up`} disabled={index === 0 || save.isPending} onClick={() => move(index, -1)}>

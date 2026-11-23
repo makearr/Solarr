@@ -4753,6 +4753,9 @@ type MetadataProviderInfo struct {
 	// Carries What the provider supplies.
 	Carries []string `json:"carries"`
 
+	// Custom A provider that is a definition file of the person's own.
+	Custom *bool `json:"custom,omitempty"`
+
 	// DefaultPerMinute The shipped pace; per_minute differs when a person set their own.
 	DefaultPerMinute int64 `json:"default_per_minute"`
 

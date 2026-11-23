@@ -81,16 +81,17 @@ func (m Module) PlaceFile(ctx context.Context, categoryID, mediaObjectID int64, 
 }
 
 var (
-	_ media.Module     = Module{}
-	_ media.Naming     = Module{}
-	_ media.Jobs       = Module{}
-	_ media.Scanning   = Module{}
-	_ media.Grouping   = Module{}
-	_ media.Numbering  = Module{}
-	_ media.Monitoring = Module{}
-	_ media.Adding     = Module{}
-	_ media.Refreshing = Module{}
-	_ media.Enriching  = Module{}
+	_ media.Module          = Module{}
+	_ media.Naming          = Module{}
+	_ media.Jobs            = Module{}
+	_ media.Scanning        = Module{}
+	_ media.Grouping        = Module{}
+	_ media.Numbering       = Module{}
+	_ media.Monitoring      = Module{}
+	_ media.Adding          = Module{}
+	_ media.Refreshing      = Module{}
+	_ media.Enriching       = Module{}
+	_ media.RecordConsuming = Module{}
 )
 
 // GroupLabel implements media.Grouping: the heading a page gives a kind of part.

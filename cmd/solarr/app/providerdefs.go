@@ -112,6 +112,7 @@ func (p *process) reloadProviderDefinitions() {
 	}
 	p.definitions.Swap(catalog)
 	p.reloadSpecs(custom)
+	p.reloadRecordProviders()
 }
 
 // reloadSpecs puts the approved custom indexer specs over the embedded set; one that needs approval or fails to decode is

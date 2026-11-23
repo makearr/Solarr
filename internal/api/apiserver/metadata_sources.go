@@ -25,7 +25,7 @@ func (s *Server) metadataSourcesView(category settings.Category) gen.LibraryMeta
 		Available: []gen.MetadataProviderInfo{},
 	}
 	for _, provider := range settings.MetadataProvidersFor(category.MediaType) {
-		if (provider.Provisional && !snapshot.LocalSourceOffered(category.ID, provider.Key)) || s.hidden("metadata", provider.Key) {
+		if (provider.Provisional && !snapshot.LocalSourceOffered(category.ID, provider.Key)) || !provider.ServesKind(category.Kind) || s.hidden("metadata", provider.Key) {
 			continue
 		}
 		view.Available = append(view.Available, s.providerInfo(snapshot, provider))
@@ -67,8 +67,8 @@ func (s *Server) providerInfo(snapshot *settings.Snapshot, provider settings.Met
 		Enabled: snapshot.ProviderEnabled(provider.Key), CanDisable: snapshot.ProviderCanBeSwitchedOff(provider.Key),
 		KeyStored:  snapshot.ProviderKeyStored(provider.Key),
 		MediaTypes: orEmpty(provider.MediaTypes), AlsoFor: orEmpty(provider.AlsoFor),
-		Provisional: boolPtr(provider.Provisional),
-		PerMinute:   pace, DefaultPerMinute: provider.PerMinute, MaxPerMinute: ceiling, Published: provider.Published,
+		Provisional: boolPtr(provider.Provisional), Custom: boolPtr(provider.Custom),
+		PerMinute: pace, DefaultPerMinute: provider.PerMinute, MaxPerMinute: ceiling, Published: provider.Published,
 	}
 }
 

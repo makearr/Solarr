@@ -149,6 +149,9 @@ func Parse(key, name string, data []byte) (Definition, error) {
 		return Definition{}, fmt.Errorf("specprovider: %s: %w", key, err)
 	}
 	def.Key, def.Name = key, name
+	if def.IDs.Own == "" {
+		def.IDs.Own = key
+	}
 	if err := def.validate(); err != nil {
 		return Definition{}, fmt.Errorf("specprovider: %s: %w", key, err)
 	}

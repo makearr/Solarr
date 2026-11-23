@@ -80,7 +80,9 @@ type Sources struct {
 	AniList      AniListSource
 	MangaUpdates MangaUpdatesSource
 	MangaDex     MangaDexSource
-	Logger       *slog.Logger
+	// Records answers the definition-file provider of a key, nil for one that is not (or no longer) active.
+	Records func(key string) RecordProvider
+	Logger  *slog.Logger
 }
 
 func (s Sources) warn(source, id string, err error) {
@@ -118,6 +120,8 @@ func (s Sources) fetchComic(ctx context.Context, series *Series, order []string,
 			s.askMetron(ctx, series, hint)
 		case settings.ComicSourceGCD:
 			s.askGCD(ctx, series, hint)
+		default:
+			s.askRecords(ctx, series, key, hint)
 		}
 	}
 }
@@ -317,9 +321,13 @@ func (s Sources) fetchManga(ctx context.Context, series *Series, order []string,
 			if ok {
 				aggregate, lastVolume = volumes, dex.LastVolume
 			}
+		default:
+			s.askRecords(ctx, series, key, hint)
 		}
 	}
-	series.Parts = mangaParts(aggregate, append(volumeCounts, lastVolume))
+	if parts := mangaParts(aggregate, append(volumeCounts, lastVolume)); len(parts) > 0 || len(series.Parts) == 0 {
+		series.Parts = parts
+	}
 	if series.Format == "" {
 		series.Format = FormatSeries
 	}
