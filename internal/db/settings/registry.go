@@ -490,6 +490,60 @@ func NewDefaultRegistry() *Registry {
 		Default:  `[]`,
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyTranscodeEnabled, Kind: KindBool, Tier: TierNormal,
+		Name:     "Transcode",
+		HelpText: "Convert library files to their target quality in the background (off by default).",
+		Default:  "false",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyTranscodeParallelCPU, Kind: KindInt, Tier: TierNormal,
+		Name:     "Transcode: parallel software conversions",
+		HelpText: "How many conversions on the CPU run at once.",
+		Default:  "1",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyTranscodeParallelGPU, Kind: KindInt, Tier: TierNormal,
+		Name:     "Transcode: parallel hardware conversions",
+		HelpText: "How many conversions on a GPU run at once.",
+		Default:  "2",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyTranscodeParallelAudio, Kind: KindInt, Tier: TierNormal,
+		Name:     "Transcode: parallel audio conversions",
+		HelpText: "How many audio-only conversions run at once.",
+		Default:  "4",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyTranscodePlaybackParallelCPU, Kind: KindInt, Tier: TierNormal,
+		Name:     "Transcode while playing: software",
+		HelpText: "How many CPU conversions may run while the web player converts.",
+		Default:  "0",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyTranscodePlaybackParallelGPU, Kind: KindInt, Tier: TierNormal,
+		Name:     "Transcode while playing: hardware",
+		HelpText: "How many GPU conversions may run while the web player converts.",
+		Default:  "1",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyTranscodePlaybackParallelAudio, Kind: KindInt, Tier: TierNormal,
+		Name:     "Transcode while playing: audio",
+		HelpText: "How many audio conversions may run while the web player converts.",
+		Default:  "1",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyTranscodeOriginalsRetainDays, Kind: KindInt, Tier: TierNormal,
+		Name:     "Transcode: days an original is kept",
+		HelpText: "Days a replaced original stays in the recycle bin; 0 follows the bin's normal rule.",
+		Default:  "7",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyTranscodeOriginalsCapGB, Kind: KindInt, Tier: TierNormal,
+		Name:     "Transcode: originals size cap",
+		HelpText: "Gigabytes replaced originals may take together before the oldest are purged; 0 for no cap.",
+		Default:  "100",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyDiscoverEnabled, Kind: KindBool, Tier: TierNormal,
 		Name:     "Discover",
 		HelpText: "Recommendations of works that are not in Solarr or not monitored: a Discover page, a dashboard row and, per library, optional auto-add.",

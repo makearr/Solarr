@@ -166,3 +166,22 @@ SELECT 'discover.enabled', 'true', CAST(strftime('%s', 'now') AS INTEGER) WHERE 
 DELETE FROM import_list WHERE type IN ('tmdb_trending_tv', 'tmdb_popular_tv');
 DROP INDEX discovery_job_enabled;
 DROP TABLE discovery_job;
+
+-- Transcoding: one setup document per target quality, and per library the switch, priority and order.
+CREATE TABLE transcode_setup (
+  target_id  INTEGER PRIMARY KEY REFERENCES quality_target(id) ON DELETE CASCADE,
+  -- Bumped on every save; an item remembers the revision it was judged and failed under.
+  revision   INTEGER NOT NULL DEFAULT 1,
+  -- The versioned document settings.TranscodeSetup; validated in Go, unknown fields refused.
+  setup_json TEXT    NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE category_transcode (
+  category_id INTEGER PRIMARY KEY REFERENCES category(id) ON DELETE CASCADE,
+  enabled     INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
+  -- Higher runs first; equal priorities take turns.
+  priority    INTEGER NOT NULL DEFAULT 0 CHECK (priority BETWEEN -100 AND 100),
+  list_order  TEXT    NOT NULL DEFAULT 'found'
+              CHECK (list_order IN ('alphabetical', 'largest', 'smallest', 'oldest', 'newest', 'found'))
+);

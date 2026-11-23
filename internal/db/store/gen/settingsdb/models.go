@@ -163,6 +163,13 @@ type CategoryTargetAuto struct {
 	CategoryID int64
 }
 
+type CategoryTranscode struct {
+	CategoryID int64
+	Enabled    int64
+	Priority   int64
+	ListOrder  string
+}
+
 type DefaultLanguage struct {
 	Code string
 	Ord  int64
@@ -423,6 +430,13 @@ type TargetProfile struct {
 	BitrateKbps       sql.NullInt64
 	RecommendedTarget string
 	Builtin           int64
+}
+
+type TranscodeSetup struct {
+	TargetID  int64
+	Revision  int64
+	SetupJson string
+	UpdatedAt int64
 }
 
 type UserBlockedTag struct {

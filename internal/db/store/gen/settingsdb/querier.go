@@ -114,6 +114,8 @@ type Querier interface {
 	GetPreference(ctx context.Context, arg GetPreferenceParams) (UserPreference, error)
 	GetProviderDefinitionState(ctx context.Context, arg GetProviderDefinitionStateParams) (ProviderDefinitionState, error)
 	GetProxy(ctx context.Context, id int64) (Proxy, error)
+	// Transcode setups per target quality and the per-library switch, priority and order.
+	GetTranscodeSetup(ctx context.Context, targetID int64) (TranscodeSetup, error)
 	GetUserByAPIKeyHash(ctx context.Context, keyHash string) (GetUserByAPIKeyHashRow, error)
 	// Columns are listed explicitly rather than with *, so adding one cannot
 	// silently reshape an existing result (documentation/sql-and-sqlc.md).
@@ -142,6 +144,7 @@ type Querier interface {
 	ListCategoryRootFolders(ctx context.Context) ([]CategoryRootFolder, error)
 	ListCategoryTargetAuto(ctx context.Context) ([]int64, error)
 	ListCategoryTargets(ctx context.Context) ([]CategoryTarget, error)
+	ListCategoryTranscode(ctx context.Context) ([]CategoryTranscode, error)
 	ListDefaultLanguages(ctx context.Context) ([]string, error)
 	ListDownloadFolders(ctx context.Context) ([]DownloadFolder, error)
 	ListDownloaders(ctx context.Context) ([]Downloader, error)
@@ -169,6 +172,7 @@ type Querier interface {
 	ListQualityTargets(ctx context.Context) ([]QualityTarget, error)
 	ListRootFolders(ctx context.Context) ([]RootFolder, error)
 	ListTargetProfiles(ctx context.Context) ([]TargetProfile, error)
+	ListTranscodeSetups(ctx context.Context) ([]TranscodeSetup, error)
 	ListUsers(ctx context.Context) ([]AppUser, error)
 	// Incoming webhooks. Column lists follow table order.
 	ListWebhookInbound(ctx context.Context) ([]WebhookInbound, error)
@@ -270,6 +274,8 @@ type Querier interface {
 	UpsertCalendarFeed(ctx context.Context, arg UpsertCalendarFeedParams) error
 	UpsertCategoryDiscover(ctx context.Context, arg UpsertCategoryDiscoverParams) error
 	UpsertCategoryFileManagement(ctx context.Context, arg UpsertCategoryFileManagementParams) error
+	UpsertCategoryTranscode(ctx context.Context, arg UpsertCategoryTranscodeParams) error
+	UpsertTranscodeSetup(ctx context.Context, arg UpsertTranscodeSetupParams) error
 }
 
 var _ Querier = (*Queries)(nil)
