@@ -16,6 +16,25 @@ type DiscoverRefresher interface {
 	ForgetDiscover(ctx context.Context, categoryID int64) error
 }
 
+// DiscoverAutoAddPreviewer answers what auto-add would do with a library's unsaved settings, without doing it.
+type DiscoverAutoAddPreviewer interface {
+	PreviewDiscoverAutoAdd(ctx context.Context, one settings.LibraryDiscover) ([]DiscoverPreviewItem, error)
+}
+
+// DiscoverPreviewItem is one pool item with auto-add's verdict.
+type DiscoverPreviewItem struct {
+	Title      string
+	Year       int64
+	Type       string
+	Rating     float64
+	Votes      int64
+	WouldAdd   bool
+	Rejections []DiscoverPreviewRejection
+}
+
+// DiscoverPreviewRejection is one reason auto-add holds an item back, with the value that caused it.
+type DiscoverPreviewRejection struct{ Reason, Value string }
+
 func (s *Server) discoverGlobal() gen.DiscoverGlobalSettings {
 	global := s.auth.Settings.Snapshot().DiscoverGlobal()
 	return gen.DiscoverGlobalSettings{Enabled: global.Enabled, ExcludeGenres: nonNil(global.ExcludeGenres), ExcludeNetworks: nonNil(global.ExcludeNetworks)}
@@ -100,14 +119,7 @@ func (s *Server) SetLibraryDiscoverSettings(w http.ResponseWriter, r *http.Reque
 	if !s.decodeBody(w, r, maxUserBody, &body, "expected a JSON object") {
 		return
 	}
-	one := settings.LibraryDiscover{
-		CategoryID: categoryID, Enabled: body.Enabled, TotalAmount: int64(body.TotalAmount), ClassicAgeYears: int64(body.ClassicAgeYears), MinRating: body.MinRating,
-		MinVotes: body.MinVotes, AutoAddPerDay: int64(body.AutoAddPerDay), AutoAddSearch: body.AutoAddSearch, OriginalLanguages: body.OriginalLanguages,
-		LanguagesSet: body.LanguagesSet, ExcludeGenres: body.ExcludeGenres, ExcludeNetworks: body.ExcludeNetworks, DisabledKinds: body.DisabledKinds,
-	}
-	for _, setting := range body.Types {
-		one.Types = append(one.Types, settings.DiscoverTypeSetting{Type: string(setting.Type), Enabled: setting.Enabled, Amount: int64(setting.Amount), AutoAdd: setting.AutoAdd})
-	}
+	one := libraryDiscoverOf(categoryID, body)
 	err := s.auth.Settings.SetLibraryDiscover(r.Context(), one)
 	var problems config.Problems
 	if errors.As(err, &problems) {
@@ -133,4 +145,68 @@ func (s *Server) SetLibraryDiscoverSettings(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, s.discoverLibrary(saved))
+}
+
+func libraryDiscoverOf(categoryID int64, body gen.LibraryDiscoverSettings) settings.LibraryDiscover {
+	one := settings.LibraryDiscover{
+		CategoryID: categoryID, Enabled: body.Enabled, TotalAmount: int64(body.TotalAmount), ClassicAgeYears: int64(body.ClassicAgeYears), MinRating: body.MinRating,
+		MinVotes: body.MinVotes, AutoAddPerDay: int64(body.AutoAddPerDay), AutoAddSearch: body.AutoAddSearch, OriginalLanguages: body.OriginalLanguages,
+		LanguagesSet: body.LanguagesSet, ExcludeGenres: body.ExcludeGenres, ExcludeNetworks: body.ExcludeNetworks, DisabledKinds: body.DisabledKinds,
+	}
+	for _, setting := range body.Types {
+		one.Types = append(one.Types, settings.DiscoverTypeSetting{Type: string(setting.Type), Enabled: setting.Enabled, Amount: int64(setting.Amount), AutoAdd: setting.AutoAdd})
+	}
+	return one
+}
+
+// PreviewLibraryDiscoverAutoAdd answers what auto-add would add now with the unsaved settings; nothing is saved or added. Administrator only.
+func (s *Server) PreviewLibraryDiscoverAutoAdd(w http.ResponseWriter, r *http.Request, categoryID int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	var body gen.LibraryDiscoverSettings
+	if !s.decodeBody(w, r, maxUserBody, &body, "expected a JSON object") {
+		return
+	}
+	if _, found := s.auth.Settings.Snapshot().Category(categoryID); !found {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such library")
+		return
+	}
+	one := libraryDiscoverOf(categoryID, body)
+	if problems := settings.ValidateLibraryDiscover(one); len(problems) > 0 {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", problems.Report("the Discover settings", "Nothing was changed."))
+		return
+	}
+	if s.discoverPreviewer == nil {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "auto-add preview is not available")
+		return
+	}
+	items, err := s.discoverPreviewer.PreviewDiscoverAutoAdd(r.Context(), one)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	out := gen.DiscoverAutoAddPreview{Items: []gen.DiscoverAutoAddPreviewItem{}}
+	for _, item := range items {
+		entry := gen.DiscoverAutoAddPreviewItem{Title: item.Title, Type: item.Type, Rating: item.Rating, Votes: item.Votes, WouldAdd: item.WouldAdd, Rejections: []gen.DiscoverRejection{}}
+		if item.Year > 0 {
+			year := int(item.Year)
+			entry.Year = &year
+		}
+		for _, rejection := range item.Rejections {
+			one := gen.DiscoverRejection{Reason: rejection.Reason}
+			if rejection.Value != "" {
+				value := rejection.Value
+				one.Value = &value
+			}
+			entry.Rejections = append(entry.Rejections, one)
+		}
+		if item.WouldAdd {
+			out.WouldAdd++
+		} else {
+			out.HeldBack++
+		}
+		out.Items = append(out.Items, entry)
+	}
+	writeJSON(w, s.logger, http.StatusOK, out)
 }

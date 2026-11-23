@@ -3,8 +3,9 @@ import { useEffect, useState } from "react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
-import { t, type MessageKey } from "@/lib/i18n";
+import { t, tOr, type MessageKey } from "@/lib/i18n";
 import { Button } from "@/ui/Button";
+import { Dialog } from "@/ui/Dialog";
 import { inputStyle, labelStyle } from "@/ui/form";
 
 import { LanguagePicker } from "./LanguagePicker";
@@ -101,6 +102,7 @@ function LibraryCard({ library, globalOn }: { library: Library; globalOn: boolea
       void queryClient.invalidateQueries({ queryKey: ["discover-libraries"] });
     },
   });
+  const [previewing, setPreviewing] = useState<number | null>(null);
   const number = (key: "total_amount" | "classic_age_years" | "min_votes" | "auto_add_per_day" | "min_rating", label: MessageKey) => (
     <label className={labelStyle}>
       <span>{t(label)}</span>
@@ -165,7 +167,17 @@ function LibraryCard({ library, globalOn }: { library: Library; globalOn: boolea
                 <td>{t(LIST_LABELS[row.type] ?? "discover.list.highest_rated")}</td>
                 <td><input type="checkbox" aria-label={t(LIST_LABELS[row.type] ?? "discover.list.highest_rated")} checked={row.enabled} onChange={(event) => change({ enabled: event.target.checked })} /></td>
                 <td><input type="number" className={inputStyle} value={row.amount} onChange={(event) => change({ amount: Number(event.target.value) })} /></td>
-                <td><input type="checkbox" checked={row.auto_add} onChange={(event) => change({ auto_add: event.target.checked })} /></td>
+                <td>
+                  <input
+                    type="checkbox"
+                    aria-label={`${t("discover.addAutomatically")}: ${t(LIST_LABELS[row.type] ?? "discover.list.highest_rated")}`}
+                    checked={row.auto_add}
+                    onChange={(event) => {
+                      change({ auto_add: event.target.checked });
+                      if (event.target.checked) setPreviewing(index);
+                    }}
+                  />
+                </td>
               </tr>
             );
           })}
@@ -175,6 +187,69 @@ function LibraryCard({ library, globalOn }: { library: Library; globalOn: boolea
         <Button variant="primary" busy={save.isPending} onClick={() => save.mutate()}>{t("discover.saveRefresh")}</Button>
         {save.isError && <span className="text-xs text-danger">{(save.error as { detail?: string }).detail ?? t("discover.refused")}</span>}
       </div>
+      {previewing !== null && (
+        <AutoAddPreview
+          library={{ ...draft, exclude_genres: toList(genres), exclude_networks: toList(networks) }}
+          onConfirm={() => setPreviewing(null)}
+          onCancel={() => {
+            setDraft({ ...draft, types: draft.types.map((other, at) => (at === previewing ? { ...other, auto_add: false } : other)) });
+            setPreviewing(null);
+          }}
+        />
+      )}
     </Card>
+  );
+}
+
+/** What auto-add would add now with the unsaved settings, shown before it is switched on (nothing is added by looking). */
+function AutoAddPreview({ library, onConfirm, onCancel }: { library: Library; onConfirm: () => void; onCancel: () => void }) {
+  const preview = useQuery({
+    queryKey: ["discover-auto-add-preview", library],
+    queryFn: () => ok(api.POST("/settings/discover/libraries/{category_id}/preview", { params: { path: { category_id: library.category_id } }, body: library })),
+  });
+  const data = preview.data;
+  return (
+    <Dialog
+      title={t("discover.preview.title", { name: library.name ?? String(library.category_id) })}
+      description={t("discover.preview.description")}
+      width="wide"
+      onClose={onCancel}
+      closeLabel={t("discover.preview.cancel")}
+      actions={
+        <>
+          <Button variant="ghost" onClick={onCancel}>{t("discover.preview.cancel")}</Button>
+          <Button variant="primary" disabled={!data} onClick={onConfirm}>{t("discover.preview.confirm")}</Button>
+        </>
+      }
+    >
+      {preview.isLoading && <p className="text-sm text-ink-muted">{t("discover.preview.loading")}</p>}
+      {preview.isError && <p className="text-sm text-danger">{(preview.error as { detail?: string }).detail ?? t("discover.preview.failed")}</p>}
+      {data && data.items.length === 0 && <p className="text-sm text-ink-muted">{t("discover.preview.empty")}</p>}
+      {data && data.items.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium">{t("discover.preview.summary", { add: data.would_add, held: data.held_back })}</p>
+          <ul className="flex max-h-[50vh] flex-col gap-1 overflow-y-auto text-sm">
+            {data.items.map((item, index) => (
+              <li key={index} className="flex flex-col gap-0.5 border-b border-border-subtle py-1">
+                <span>
+                  {item.title}
+                  {item.year ? ` (${item.year})` : ""}
+                  <span className="ml-2 text-xs text-ink-muted">{item.rating.toFixed(1)} · {item.votes}</span>
+                </span>
+                {item.would_add ? (
+                  <span className="text-xs text-ok">{t("discover.preview.wouldAdd")}</span>
+                ) : (
+                  item.rejections.map((rejection) => (
+                    <span key={rejection.reason + (rejection.value ?? "")} className="text-xs text-ink-muted">
+                      {tOr(`discover.reason.${rejection.reason}`, rejection.reason).replace("{value}", rejection.value ?? "")}
+                    </span>
+                  ))
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Dialog>
   );
 }

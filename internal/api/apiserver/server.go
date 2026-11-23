@@ -111,6 +111,8 @@ type Config struct {
 	DiscoverPool DiscoverPool
 	// DiscoverRefresher queues the refresh of recommendations after a settings change; optional.
 	DiscoverRefresher DiscoverRefresher
+	// DiscoverAutoAddPreviewer answers the auto-add preview; optional.
+	DiscoverAutoAddPreviewer DiscoverAutoAddPreviewer
 	// UnreadableFiles has the probe read again the files it gave up on; optional.
 	UnreadableFiles UnreadableFiles
 	// ConfigPath locates config.yml on disk. Optional: without it,
@@ -392,6 +394,7 @@ type Server struct {
 	previewsDir             string
 	videoPictures           VideoPictures
 	discoverRefresher       DiscoverRefresher
+	discoverPreviewer       DiscoverAutoAddPreviewer
 	discoverPool            DiscoverPool
 	unreadableFiles         UnreadableFiles
 	configPath              string
@@ -557,6 +560,7 @@ func New(config Config) (*Server, error) {
 		previewsDir:             config.PreviewsDir,
 		videoPictures:           config.VideoPictures,
 		discoverRefresher:       config.DiscoverRefresher,
+		discoverPreviewer:       config.DiscoverAutoAddPreviewer,
 		discoverPool:            config.DiscoverPool,
 		unreadableFiles:         config.UnreadableFiles,
 		configPath:              config.ConfigPath,

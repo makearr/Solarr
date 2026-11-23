@@ -8304,6 +8304,32 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /settings/discover/libraries/{category_id}/preview:
+    parameters:
+      - name: category_id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: previewLibraryDiscoverAutoAdd
+      tags: [settings]
+      summary: What auto-add would add now with these unsaved settings, and why it holds the rest back. Adds nothing. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryDiscoverSettings" }
+      responses:
+        "200":
+          description: Every pool item of the lists with auto-add on, with the verdict.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiscoverAutoAddPreview" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /settings/general/video-previews/generate:
     post:
       operationId: generateVideoPreviews
@@ -16565,6 +16591,33 @@ components:
         exclude_networks: { type: array, items: { type: string } }
         disabled_kinds: { type: array, items: { type: string }, description: "Add kinds the library does not recommend (an album, a performer)." }
         types: { type: array, items: { $ref: "#/components/schemas/DiscoverTypeSettings" }, description: Every recommendation list with the library's choice. }
+
+    DiscoverAutoAddPreview:
+      type: object
+      required: [would_add, held_back, items]
+      properties:
+        would_add: { type: integer, description: How many items auto-add would add now. }
+        held_back: { type: integer, description: How many it would not. }
+        items: { type: array, items: { $ref: "#/components/schemas/DiscoverAutoAddPreviewItem" } }
+
+    DiscoverAutoAddPreviewItem:
+      type: object
+      required: [title, type, rating, votes, would_add, rejections]
+      properties:
+        title: { type: string }
+        year: { type: integer }
+        type: { type: string, description: The recommendation list the item sits in. }
+        rating: { type: number, format: double }
+        votes: { type: integer, format: int64 }
+        would_add: { type: boolean }
+        rejections: { type: array, items: { $ref: "#/components/schemas/DiscoverRejection" } }
+
+    DiscoverRejection:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, description: "A code: below_rating, below_votes, daily_cap, already_auto_added, excluded, genre_excluded, network_excluded, language_unwanted, above_rating, held_monitored, other_library." }
+        value: { type: string }
 
     DiscoverSettings:
       type: object

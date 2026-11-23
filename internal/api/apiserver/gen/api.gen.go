@@ -2489,6 +2489,29 @@ type Deferral struct {
 	RetryAfter *time.Time `json:"retry_after,omitempty"`
 }
 
+// DiscoverAutoAddPreview defines model for DiscoverAutoAddPreview.
+type DiscoverAutoAddPreview struct {
+	// HeldBack How many it would not.
+	HeldBack int                          `json:"held_back"`
+	Items    []DiscoverAutoAddPreviewItem `json:"items"`
+
+	// WouldAdd How many items auto-add would add now.
+	WouldAdd int `json:"would_add"`
+}
+
+// DiscoverAutoAddPreviewItem defines model for DiscoverAutoAddPreviewItem.
+type DiscoverAutoAddPreviewItem struct {
+	Rating     float64             `json:"rating"`
+	Rejections []DiscoverRejection `json:"rejections"`
+	Title      string              `json:"title"`
+
+	// Type The recommendation list the item sits in.
+	Type     string `json:"type"`
+	Votes    int64  `json:"votes"`
+	WouldAdd bool   `json:"would_add"`
+	Year     *int   `json:"year,omitempty"`
+}
+
 // DiscoverFeed defines model for DiscoverFeed.
 type DiscoverFeed struct {
 	// Exhausted The source has no further page to read.
@@ -2527,6 +2550,13 @@ type DiscoverLibrary struct {
 
 	// Types The enabled recommendation lists.
 	Types []string `json:"types"`
+}
+
+// DiscoverRejection defines model for DiscoverRejection.
+type DiscoverRejection struct {
+	// Reason A code: below_rating, below_votes, daily_cap, already_auto_added, excluded, genre_excluded, network_excluded, language_unwanted, above_rating, held_monitored, other_library.
+	Reason string  `json:"reason"`
+	Value  *string `json:"value,omitempty"`
 }
 
 // DiscoverSettings defines model for DiscoverSettings.
@@ -9532,6 +9562,9 @@ type SetDiscoverSettingsJSONRequestBody = DiscoverGlobalSettings
 // SetLibraryDiscoverSettingsJSONRequestBody defines body for SetLibraryDiscoverSettings for application/json ContentType.
 type SetLibraryDiscoverSettingsJSONRequestBody = LibraryDiscoverSettings
 
+// PreviewLibraryDiscoverAutoAddJSONRequestBody defines body for PreviewLibraryDiscoverAutoAdd for application/json ContentType.
+type PreviewLibraryDiscoverAutoAddJSONRequestBody = LibraryDiscoverSettings
+
 // SetDiskOverridesJSONRequestBody defines body for SetDiskOverrides for application/json ContentType.
 type SetDiskOverridesJSONRequestBody = DiskOverrides
 
@@ -10647,6 +10680,9 @@ type ServerInterface interface {
 	// Save one library's Discover settings and refresh its recommendations. Administrator only.
 	// (PUT /settings/discover/libraries/{category_id})
 	SetLibraryDiscoverSettings(w http.ResponseWriter, r *http.Request, categoryId int64)
+	// What auto-add would add now with these unsaved settings, and why it holds the rest back. Adds nothing. Administrator only.
+	// (POST /settings/discover/libraries/{category_id}/preview)
+	PreviewLibraryDiscoverAutoAdd(w http.ResponseWriter, r *http.Request, categoryId int64)
 	// The detected disk layout of every root, the latest latency per disk group and the inotify budget.
 	// (GET /settings/disk)
 	GetDiskSettings(w http.ResponseWriter, r *http.Request)
@@ -12954,6 +12990,12 @@ func (_ Unimplemented) SetDiscoverSettings(w http.ResponseWriter, r *http.Reques
 // Save one library's Discover settings and refresh its recommendations. Administrator only.
 // (PUT /settings/discover/libraries/{category_id})
 func (_ Unimplemented) SetLibraryDiscoverSettings(w http.ResponseWriter, r *http.Request, categoryId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What auto-add would add now with these unsaved settings, and why it holds the rest back. Adds nothing. Administrator only.
+// (POST /settings/discover/libraries/{category_id}/preview)
+func (_ Unimplemented) PreviewLibraryDiscoverAutoAdd(w http.ResponseWriter, r *http.Request, categoryId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -24529,6 +24571,39 @@ func (siw *ServerInterfaceWrapper) SetLibraryDiscoverSettings(w http.ResponseWri
 	handler.ServeHTTP(w, r)
 }
 
+// PreviewLibraryDiscoverAutoAdd operation middleware
+func (siw *ServerInterfaceWrapper) PreviewLibraryDiscoverAutoAdd(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "category_id" -------------
+	var categoryId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "category_id", chi.URLParam(r, "category_id"), &categoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewLibraryDiscoverAutoAdd(w, r, categoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetDiskSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetDiskSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -28843,6 +28918,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/settings/discover/libraries/{category_id}", wrapper.SetLibraryDiscoverSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/settings/discover/libraries/{category_id}/preview", wrapper.PreviewLibraryDiscoverAutoAdd)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/settings/disk", wrapper.GetDiskSettings)

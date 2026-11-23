@@ -5357,6 +5357,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/discover/libraries/{category_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** What auto-add would add now with these unsaved settings, and why it holds the rest back. Adds nothing. Administrator only. */
+        post: operations["previewLibraryDiscoverAutoAdd"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/general/video-previews/generate": {
         parameters: {
             query?: never;
@@ -12389,6 +12408,30 @@ export interface components {
             disabled_kinds: string[];
             /** @description Every recommendation list with the library's choice. */
             types: components["schemas"]["DiscoverTypeSettings"][];
+        };
+        DiscoverAutoAddPreview: {
+            /** @description How many items auto-add would add now. */
+            would_add: number;
+            /** @description How many it would not. */
+            held_back: number;
+            items: components["schemas"]["DiscoverAutoAddPreviewItem"][];
+        };
+        DiscoverAutoAddPreviewItem: {
+            title: string;
+            year?: number;
+            /** @description The recommendation list the item sits in. */
+            type: string;
+            /** Format: double */
+            rating: number;
+            /** Format: int64 */
+            votes: number;
+            would_add: boolean;
+            rejections: components["schemas"]["DiscoverRejection"][];
+        };
+        DiscoverRejection: {
+            /** @description A code: below_rating, below_votes, daily_cap, already_auto_added, excluded, genre_excluded, network_excluded, language_unwanted, above_rating, held_monitored, other_library. */
+            reason: string;
+            value?: string;
         };
         DiscoverSettings: {
             global: components["schemas"]["DiscoverGlobalSettings"];
@@ -22210,6 +22253,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LibraryDiscoverSettings"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    previewLibraryDiscoverAutoAdd: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryDiscoverSettings"];
+            };
+        };
+        responses: {
+            /** @description Every pool item of the lists with auto-add on, with the verdict. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverAutoAddPreview"];
                 };
             };
             400: components["responses"]["Problem"];

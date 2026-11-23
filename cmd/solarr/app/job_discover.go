@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -14,10 +15,18 @@ import (
 
 // discoverService is the refresh of Discover's pool: settings from the cache, feeds from the media types.
 func (p *process) discoverService() discover.Service {
+	pool := library.NewRecommendations(p.library)
 	return discover.Service{
+		AutoAdd: &discover.AutoAdd{
+			Pool: pool, SearchAllowed: func() bool { return !p.solarrMode().SearchesStopped() },
+			Adders: func(mediaType string) (media.Adding, bool) {
+				return media.Capability[media.Adding](p.media, media.Key(mediaType))
+			},
+			AfterAdd: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+		},
 		Config: discoverConfiguration{cache: p.cache}, Pool: library.NewRecommendations(p.library), Sources: discoverSources{registry: p.media},
 		Judge:       discoverJudge{process: p, pool: library.NewRecommendations(p.library), exclusions: library.NewExclusions(p.library)},
-		Collections: discoverCollections{pool: library.NewRecommendations(p.library)},
+		Collections: discoverCollections{pool: pool},
 		Clock:       clock.NewSystem(), Logger: p.logger,
 	}
 }
@@ -150,4 +159,25 @@ func (p *process) resolveSeriesEntry(ctx context.Context, entry media.ListEntry)
 		return media.ListMatch{}, media.ErrNotWired
 	}
 	return resolver.ResolveListEntry(ctx, entry)
+}
+
+// discoverPreviewer answers the auto-add preview from the same judgement a refresh makes.
+type discoverPreviewer struct{ process *process }
+
+func (r discoverPreviewer) PreviewDiscoverAutoAdd(ctx context.Context, one settings.LibraryDiscover) ([]apiserver.DiscoverPreviewItem, error) {
+	verdicts, err := r.process.discoverService().AutoAddPreview(ctx, one)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]apiserver.DiscoverPreviewItem, 0, len(verdicts))
+	for _, verdict := range verdicts {
+		item := apiserver.DiscoverPreviewItem{
+			Title: verdict.Item.Title, Year: verdict.Item.Year, Type: verdict.Type, Rating: verdict.Item.Rating, Votes: verdict.Item.Votes, WouldAdd: verdict.Decision.Admitted,
+		}
+		for _, rejection := range verdict.Decision.Rejections {
+			item.Rejections = append(item.Rejections, apiserver.DiscoverPreviewRejection{Reason: string(rejection.Reason), Value: rejection.Value})
+		}
+		out = append(out, item)
+	}
+	return out, nil
 }

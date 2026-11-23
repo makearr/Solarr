@@ -199,6 +199,11 @@ func cleanedList(values []string) []string {
 	return out
 }
 
+// ValidateLibraryDiscover is what a save checks, for a caller that judges settings it does not save.
+func ValidateLibraryDiscover(setting LibraryDiscover) config.Problems {
+	return validateLibraryDiscover(setting)
+}
+
 func validateLibraryDiscover(setting LibraryDiscover) config.Problems {
 	var problems config.Problems
 	problem := func(path string, value any, expectation string) {

@@ -88,8 +88,10 @@ type Service struct {
 	Judge   Judge
 	// Collections names the members of held collections; nil leaves the collections list empty.
 	Collections CollectionSource
-	Clock       clock.Clock
-	Logger      *slog.Logger
+	// AutoAdd adds what the gates admit once a library is refreshed; nil leaves auto-add off.
+	AutoAdd *AutoAdd
+	Clock   clock.Clock
+	Logger  *slog.Logger
 }
 
 func (s Service) logger() *slog.Logger {
@@ -138,13 +140,7 @@ func (s Service) refreshLibrary(ctx context.Context, global settings.DiscoverGlo
 		return
 	}
 	usable, _ := module.RecommendationFeeds(ctx)
-	rules := Rules{
-		ExcludeGenres: Union(global.ExcludeGenres, lib.ExcludeGenres), ExcludeNetworks: Union(global.ExcludeNetworks, lib.ExcludeNetworks),
-		OriginalLanguages: lib.OriginalLanguages, Rating: s.Judge.RatingLimit(category),
-	}
-	if !lib.LanguagesSet {
-		rules.OriginalLanguages = s.Judge.DefaultLanguages(category)
-	}
+	rules := s.rulesOf(global, lib, category)
 	for _, setting := range lib.Types {
 		if !setting.Enabled {
 			continue
@@ -160,6 +156,19 @@ func (s Service) refreshLibrary(ctx context.Context, global settings.DiscoverGlo
 			s.refreshFeed(ctx, category, lib, setting, feed, module, rules)
 		}
 	}
+	s.runAutoAdd(ctx, global, lib, category)
+}
+
+// rulesOf is what a library keeps out: its exclusions joined with the instance's, its languages and its rating limit.
+func (s Service) rulesOf(global settings.DiscoverGlobal, lib settings.LibraryDiscover, category settings.Category) Rules {
+	rules := Rules{
+		ExcludeGenres: Union(global.ExcludeGenres, lib.ExcludeGenres), ExcludeNetworks: Union(global.ExcludeNetworks, lib.ExcludeNetworks),
+		OriginalLanguages: lib.OriginalLanguages, Rating: s.Judge.RatingLimit(category),
+	}
+	if !lib.LanguagesSet {
+		rules.OriginalLanguages = s.Judge.DefaultLanguages(category)
+	}
+	return rules
 }
 
 func (s Service) refreshFeed(ctx context.Context, category settings.Category, lib settings.LibraryDiscover, setting settings.DiscoverTypeSetting,
