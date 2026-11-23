@@ -71,6 +71,16 @@ INSERT INTO desired_item_file (desired_item_id, media_object_id, role, media_ref
 VALUES (?, ?, ?, ?, ?)
 ON CONFLICT (desired_item_id, media_object_id, role, media_ref) DO NOTHING;
 
+-- A part wanted on its own after its file was placed holds that file from the start: the other items of the work
+-- already hold it under the same part reference.
+-- name: AttachHeldFilesOfPart :exec
+INSERT INTO desired_item_file (desired_item_id, media_object_id, role, media_ref, added_at)
+SELECT DISTINCT sqlc.arg(desired_item_id), f.media_object_id, 'primary', f.media_ref, sqlc.arg(added_at)
+FROM desired_item_file f
+JOIN desired_item d ON d.id = f.desired_item_id
+WHERE d.work_id = sqlc.arg(work_id) AND f.media_ref = sqlc.arg(media_ref) AND f.role = 'primary'
+ON CONFLICT (desired_item_id, media_object_id, role, media_ref) DO NOTHING;
+
 -- Removes the file from the item entirely, every part it covered with it.
 -- name: DetachFile :exec
 DELETE FROM desired_item_file

@@ -75,6 +75,9 @@ type Querier interface {
 	AnyUnverifiedWork(ctx context.Context) (int64, error)
 	AssignTag(ctx context.Context, arg AssignTagParams) error
 	AttachFile(ctx context.Context, arg AttachFileParams) error
+	// A part wanted on its own after its file was placed holds that file from the start: the other items of the work
+	// already hold it under the same part reference.
+	AttachHeldFilesOfPart(ctx context.Context, arg AttachHeldFilesOfPartParams) error
 	// Fills in only the person columns still empty, never overwriting one that
 	// already holds something -- a backfill for people resolved before a field
 	// had a source, not a refresh (a manual override must always win, ADR-8).

@@ -61,6 +61,34 @@ func (q *Queries) AttachFile(ctx context.Context, arg AttachFileParams) error {
 	return err
 }
 
+const attachHeldFilesOfPart = `-- name: AttachHeldFilesOfPart :exec
+INSERT INTO desired_item_file (desired_item_id, media_object_id, role, media_ref, added_at)
+SELECT DISTINCT ?1, f.media_object_id, 'primary', f.media_ref, ?2
+FROM desired_item_file f
+JOIN desired_item d ON d.id = f.desired_item_id
+WHERE d.work_id = ?3 AND f.media_ref = ?4 AND f.role = 'primary'
+ON CONFLICT (desired_item_id, media_object_id, role, media_ref) DO NOTHING
+`
+
+type AttachHeldFilesOfPartParams struct {
+	DesiredItemID int64
+	AddedAt       int64
+	WorkID        int64
+	MediaRef      string
+}
+
+// A part wanted on its own after its file was placed holds that file from the start: the other items of the work
+// already hold it under the same part reference.
+func (q *Queries) AttachHeldFilesOfPart(ctx context.Context, arg AttachHeldFilesOfPartParams) error {
+	_, err := q.db.ExecContext(ctx, attachHeldFilesOfPart,
+		arg.DesiredItemID,
+		arg.AddedAt,
+		arg.WorkID,
+		arg.MediaRef,
+	)
+	return err
+}
+
 const copyWorkItemFilesToCategory = `-- name: CopyWorkItemFilesToCategory :exec
 INSERT OR IGNORE INTO desired_item_file (desired_item_id, media_object_id, role, media_ref, added_at)
 SELECT t.id, f.media_object_id, f.role, f.media_ref, f.added_at

@@ -30,6 +30,8 @@ type WorksMonitor struct {
 	// Libraries gives a removal its library's recycling bin.
 	Libraries        LibraryLookup
 	DefaultProfileID int64
+	// ProfileFor answers the profile of a library with none of its own, by its media type; nil takes DefaultProfileID.
+	ProfileFor func(category settings.Category, fallback int64) int64
 	// Monitoring answers a media type's monitor options; nil has none.
 	Monitoring func(mediaType string) (media.Monitoring, bool)
 	// GroupLabel names a group of a media type's work; nil names it by its ref.
@@ -154,10 +156,7 @@ func (a WorksMonitor) ensureWorkItem(ctx context.Context, detail library.WorkDet
 	if !ok {
 		return apiserver.WantedRow{}, fmt.Errorf("no category configured for %s", detail.Work.MediaType)
 	}
-	profileID := a.DefaultProfileID
-	if category.QualityProfileID != nil {
-		profileID = *category.QualityProfileID
-	}
+	profileID := a.profileOf(category)
 	item, err := a.Desired.EnsureAlbumItem(ctx, library.AlbumRequest{
 		WorkID: detail.Work.ID, CategoryID: category.ID, ProfileID: profileID, Monitored: monitored,
 	})
@@ -177,6 +176,17 @@ func (a WorksMonitor) ensureWorkItem(ctx context.Context, detail library.WorkDet
 	return row, nil
 }
 
+// profileOf is the profile a new item of the library starts with: the library's own, else its media type's shipped one.
+func (a WorksMonitor) profileOf(category settings.Category) int64 {
+	if category.QualityProfileID != nil {
+		return *category.QualityProfileID
+	}
+	if a.ProfileFor != nil {
+		return a.ProfileFor(category, a.DefaultProfileID)
+	}
+	return a.DefaultProfileID
+}
+
 // SetTrackWanted ensures the track's own SINGLE item exists, wanted or not (Invariant 71), unlike SetPartMonitored which only resizes the album's required_count.
 func (a WorksMonitor) SetTrackWanted(
 	ctx context.Context, workID, partID int64, wanted bool,
@@ -190,10 +200,7 @@ func (a WorksMonitor) SetTrackWanted(
 	if !ok {
 		return apiserver.WantedRow{}, fmt.Errorf("no category configured for %s", detail.Work.MediaType)
 	}
-	profileID := a.DefaultProfileID
-	if category.QualityProfileID != nil {
-		profileID = *category.QualityProfileID
-	}
+	profileID := a.profileOf(category)
 
 	item, err := a.Desired.EnsureTrackItemByPart(ctx, workID, partID, category.ID, profileID, nil)
 	if err != nil {

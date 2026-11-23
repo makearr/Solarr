@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
 	"image"
 	"image/png"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/identify/parsecomic"
 	"github.com/makearr/Solarr/internal/metadata/comicvine"
@@ -283,7 +285,17 @@ func TestAScannedVolumeAlsoSatisfiesTheItemWantingThatVolumeOnItsOwn(t *testing.
 		t.Fatal(err)
 	}
 	held, _ := service.WorkByIDs(t.Context(), map[string]string{ProviderAniListManga: "5"})
-	if _, err := service.Desired.EnsureTrackItem(t.Context(), library.TrackRequest{WorkID: held, MediaRef: "volume:1", CategoryID: 3, ProfileID: 1}); err != nil {
+	single, err := service.Desired.EnsureTrackItem(t.Context(), library.TrackRequest{WorkID: held, MediaRef: "volume:1", CategoryID: 3, ProfileID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if single.PresentCount != 1 {
+		t.Fatalf("an item created for a held volume starts at %d present, want 1", single.PresentCount)
+	}
+	if err := opened.Write(t.Context(), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "DELETE FROM desired_item_file WHERE desired_item_id = ?", single.ID)
+		return err
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := consumer.Observe(t.Context(), root, 3, []scan.Observed{scanned(t, fsys, "Moon Orchard/Moon Orchard Vol 01.cbz", "")}); err != nil {

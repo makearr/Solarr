@@ -1213,7 +1213,8 @@ func (p *process) worksMonitor() adapters.WorksMonitor {
 		Identity:    library.NewIdentity(p.library), Works: library.NewWorks(p.library),
 		Desired: library.NewDesired(p.library), Categories: adapters.Categories{Cache: p.cache},
 		Libraries: adapters.Categories{Cache: p.cache}, Remover: p.fileRemover(),
-		DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(), Fresh: p.freshWindow, Logger: p.logger,
+		DefaultProfileID: p.defaultQualityProfileID, ProfileFor: adapters.Categories{Cache: p.cache}.ProfileFor,
+		Clock: clock.NewSystem(), Fresh: p.freshWindow, Logger: p.logger,
 		Monitoring: adapters.MediaTypes{Registry: p.media}.MonitoringOf, GroupLabel: adapters.MediaTypes{Registry: p.media}.GroupLabel,
 		Exclusions: library.NewExclusions(p.library), ScanHonoursExclusions: adapters.MediaTypes{Registry: p.media}.ScanHonoursExclusions,
 	}

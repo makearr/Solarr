@@ -126,6 +126,17 @@ func (d Desired) EnsureTrackItem(ctx context.Context, request TrackRequest) (lib
 		if err != nil {
 			return fmt.Errorf("create: %w", err)
 		}
+		if err := queries.AttachHeldFilesOfPart(ctx, librarydb.AttachHeldFilesOfPartParams{
+			DesiredItemID: created.ID, AddedAt: d.store.Now().Unix(), WorkID: request.WorkID, MediaRef: request.MediaRef,
+		}); err != nil {
+			return fmt.Errorf("attach held files: %w", err)
+		}
+		if err := recomputeAlbumTx(ctx, queries, created.ID, request.WorkID, d.store.Now()); err != nil {
+			return err
+		}
+		if created, err = queries.GetDesiredItem(ctx, created.ID); err != nil {
+			return fmt.Errorf("get created: %w", err)
+		}
 		item = created
 		return nil
 	})
