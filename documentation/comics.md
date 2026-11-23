@@ -79,3 +79,9 @@ With *Kavita and Komga files* on, a daily pass (and one when the setting is swit
 A file holding several volumes or issues is named for both ends: `v04-05`; `{Volume:00}` pads both.
 
 The Kavita and Komga files setting has a **Preview** button beside it in File Management: `GET /categories/{id}/file-settings/{key}/preview?option=` runs the pass in that mode without writing (a media type declares which settings can, `media.FilePreviewing`) and answers how many files would be written. It opens every cbz of the library once, one after the other.
+
+## Grand Comics Database issues
+
+GCD lists a series' issues by address only, so a refresh reads them one request each on the provider's pace (at most 60 a refresh, two minutes at 30 a minute,
+variant covers left out). It reads them only for a series no other source gave issues for; ComicVine's and Metron's lists win.
+Partial dates GCD writes with zeros ("1963-03-00") are kept as the part of the date it knows.

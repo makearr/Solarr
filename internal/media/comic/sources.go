@@ -45,6 +45,7 @@ type MetronSource interface {
 type GCDSource interface {
 	SearchSeries(ctx context.Context, name string, page int) ([]gcd.Series, bool, error)
 	Series(ctx context.Context, id int) (gcd.Series, error)
+	Issue(ctx context.Context, id int) (gcd.Issue, error)
 }
 
 // AniListSource is the manga part of AniList's client.
@@ -294,6 +295,38 @@ func (s Sources) askGCD(ctx context.Context, series *Series, hint Hint) {
 	series.IDs[ProviderGCD] = strconv.Itoa(held.ID)
 	series.fill(held.Name, "", "", "", held.YearBegan, held.YearEnded)
 	series.Sources = append(series.Sources, settings.ComicSourceGCD)
+	if len(series.Parts) == 0 {
+		series.mergeParts(s.gcdIssues(ctx, held.IssueIDs))
+	}
+}
+
+// maxGCDIssues bounds the issues read of one series per refresh: GCD lists a series' issues by address only, so each is a request on the paced bucket.
+const maxGCDIssues = 60
+
+// gcdIssues reads a GCD series' issues one by one, variants left out; a list longer than the bound is read from its start.
+func (s Sources) gcdIssues(ctx context.Context, ids []int) []Part {
+	var parts []Part
+	for _, id := range ids[:min(len(ids), maxGCDIssues)] {
+		issue, err := s.GCD.Issue(ctx, id)
+		if err != nil {
+			s.warn(settings.ComicSourceGCD, strconv.Itoa(id), err)
+			continue
+		}
+		if issue.VariantOfID > 0 || issue.Number == "" {
+			continue
+		}
+		parts = append(parts, Part{
+			Kind: partKind(issue.Number), Number: issue.Number, Title: issue.Title, CoverDate: gcdDate(issue.KeyDate), Store: gcdDate(issue.OnSaleDate),
+			Pages: int(issue.Pages), Rating: issue.Rating, IDs: map[string]string{ProviderGCD: strconv.Itoa(issue.ID)},
+		})
+	}
+	return parts
+}
+
+// gcdDate drops the zero month and day GCD writes for a partial date ("1963-03-00" is "1963-03").
+func gcdDate(date string) string {
+	date = strings.TrimSuffix(date, "-00")
+	return strings.TrimSuffix(date, "-00")
 }
 
 // mangaDexRatings are the content ratings asked for: MangaDex rates mainstream manga with nudity "erotica", so only "pornographic" is adult.
