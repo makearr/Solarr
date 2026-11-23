@@ -2,12 +2,14 @@ package apiserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // WebhookInfo is one outgoing webhook as the interface shows it: never the address or the secret.
@@ -128,6 +130,11 @@ func (s *Server) saveWebhook(w http.ResponseWriter, r *http.Request, id int64, s
 		return
 	}
 	saved, err := webhooks.Save(r.Context(), id, webhookInput(body))
+	var problems config.Problems
+	if errors.As(err, &problems) {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "The webhook has problems", problems.Report("the webhook", "Nothing was saved."))
+		return
+	}
 	if err != nil {
 		writeError(w, s.logger, err)
 		return

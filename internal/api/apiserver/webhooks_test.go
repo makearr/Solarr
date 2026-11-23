@@ -9,6 +9,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 // fakeWebhooks keeps what the handlers asked for; the address it is given never comes back.
@@ -18,6 +19,9 @@ func (*fakeWebhooks) List(context.Context) ([]apiserver.WebhookInfo, error) {
 	return []apiserver.WebhookInfo{{ID: 1, Name: "Chat", Preset: "discord", AddressHint: "hooks.example.org", HasSecret: true, Enabled: true, Pending: 2}}, nil
 }
 func (f *fakeWebhooks) Save(_ context.Context, id int64, input apiserver.WebhookInput) (apiserver.WebhookInfo, error) {
+	if input.Name == "bad" {
+		return apiserver.WebhookInfo{}, config.Problems{{Path: "address", Value: "", Expectation: "an http or https address"}}
+	}
 	f.saved = append(f.saved, input)
 	return apiserver.WebhookInfo{ID: max(id, 1), Name: input.Name, Preset: input.Preset, AddressHint: "hooks.example.org", HasSecret: input.Secret != ""}, nil
 }
@@ -85,5 +89,14 @@ func TestWebhooks_PendingListsTheWaitingDeliveriesWithoutAPayload(t *testing.T) 
 	}
 	if recorder := fixture.do(authedGet(t, admin, "/api/v1/webhooks/9/pending")); recorder.Code != http.StatusNotFound {
 		t.Errorf("unknown webhook = %d, want 404", recorder.Code)
+	}
+}
+
+func TestWebhooks_InvalidInputAnswersAClientErrorNotAServerError(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	recorder := fixture.do(authedPost(t, fixture.signIn(t, "admin"), "/api/v1/webhooks", `{"name":"bad","preset":"generic","events":[]}`))
+	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "an http or https address") {
+		t.Errorf("add = %d %s, want 400 naming the problem", recorder.Code, recorder.Body)
 	}
 }
