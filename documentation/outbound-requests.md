@@ -21,3 +21,8 @@ lane and cannot pull a user's request out of the first one.
 has stored it.
 
 Media server calls (Test, push, watch state) go through `httpx` on a bucket per connection host, Background unless marked otherwise.
+
+Definition-file metadata providers (documentation/provider-definitions.md) get their own `httpx` client, rate bucket and breaker named
+after the definition's key; the guard additionally refuses every host the file does not declare, in requests and in redirects.
+Webhook deliveries (documentation/webhooks.md) go to the address the administrator typed through a guard that allows that one host
+(a LAN receiver is fine), on a bucket per webhook, and never follow a redirect to another host.

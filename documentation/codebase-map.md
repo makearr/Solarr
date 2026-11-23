@@ -26,10 +26,10 @@ internal/
 │               listfilter (a list's custom filter)  keyedlock  parallel  hitcount  logbuffer
 ├── db/         store (+gen)  settings  library (+fixture)  statistics  recovery
 ├── jobs/       the durable queue, executor, dispatcher, task registry
-│               + capacity  cachebudget
+│               + capacity  cachebudget  providerdef (definition files, catalog, stored state)
 ├── metadata/   musicbrainz  wikidata  acoustid  metacache  metaresolve
 │               skyhook  tvmaze  tmdb  tvdb  thexem  anilist  omdb  mdblist  fanart  radarrmeta  theaudiodb
-│               openlibrary  googlebooks  audible  itunes  fantlab  hardcover  stashbox  theporndb  whisparr
+│               openlibrary  googlebooks  audible  itunes  fantlab  hardcover  specprovider (providers as YAML files)  stashbox  theporndb  whisparr
 ├── identify/   model  parse  parsetv  parsemovie  parsebook  parsecomic  comicinfo  readinglist  bookmeta  parseadult  match  score  priority
 ├── scanning/   scan  probe
 ├── importing/  inspect  importjob  batch  placer  rules  unpack (archives into a workspace)  downloadwatch  arrimport  arrmap
@@ -40,7 +40,7 @@ internal/
 │               hdbits  passthepopcorn  beyondhd  broadcasthenet  soulseek
 │               clients: sabnzbd  nzbget  qbittorrent  transmission (+ Vuze)  deluge  rtorrent  utorrent  flood  aria2
 │               slskd  blackhole (Torrent and Usenet)
-├── service/    follow (ADR-32)  franchisewatch (monitored franchises gain their later works, 25 a run)  franchisefacts (collection picture and count, off the listing request)  importlist (ADR-38, documentation/import-lists.md): every type alike
+├── service/    webhook (outbox, presets, signed delivery; documentation/webhooks.md)  follow (ADR-32)  franchisewatch (monitored franchises gain their later works, 25 a run)  franchisefacts (collection picture and count, off the listing request)  importlist (ADR-38, documentation/import-lists.md): every type alike
 │               franchiselink (collections of different libraries in one provider franchise)
 ├── media/      the media-type registry  +  music  tv  movie  book (books and audiobooks)  comic (comics and manga)  adult
 │               +  screen (the genre tree film and TV share)
