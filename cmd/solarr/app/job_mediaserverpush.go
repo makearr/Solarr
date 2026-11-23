@@ -127,6 +127,7 @@ func (p *process) recycleBin() library.RecycleBin {
 	return library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()).WithOnRecycled(func(ctx context.Context, entry library.Entry) {
 		if entry.RootFolderID != nil {
 			p.recordServerFolder(ctx, *entry.RootFolderID, path.Dir(entry.OriginalPath), library.PendingDeleted)
+			p.recordWebhookFileRecycled(ctx, *entry.RootFolderID, entry)
 		}
 	})
 }

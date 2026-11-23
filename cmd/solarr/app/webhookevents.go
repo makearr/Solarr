@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"path"
 	"slices"
 	"sync"
 	"time"
@@ -175,5 +176,20 @@ func (p *process) watchHealth(ctx context.Context) {
 func (p *process) recordWebhookInstance(ctx context.Context, event webhook.Event, message string) {
 	if err := p.webhookService().Record(ctx, webhook.Occurrence{Event: event, Message: message}); err != nil {
 		p.logger.Warn("could not queue a webhook", "event", string(event), "error", err)
+	}
+}
+
+// recycledOccurrence is the file_recycled occurrence for one file the bin took.
+func recycledOccurrence(entry library.Entry) webhook.Occurrence {
+	file := webhook.File{Name: path.Base(entry.OriginalPath), Size: entry.SizeBytes, Path: entry.OriginalPath}
+	return webhook.Occurrence{Event: webhook.EventFileRecycled, Files: []webhook.File{file}}
+}
+
+// recordWebhookFileRecycled tells file_recycled for a file the bin took, once per library that keeps files under its root.
+func (p *process) recordWebhookFileRecycled(ctx context.Context, rootFolderID int64, entry library.Entry) {
+	for _, attached := range p.cache.Snapshot().CategoryRoots() {
+		if attached.RootFolderID == rootFolderID {
+			p.recordWebhookOccurrence(ctx, attached.CategoryID, recycledOccurrence(entry))
+		}
 	}
 }
