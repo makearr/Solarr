@@ -138,6 +138,8 @@ var allowedInternalImports = map[string][]string{
 	// touches no database and no filesystem of ours.
 	"internal/platform/mediatool": {"internal/platform/artwork"},
 	// The player's ffmpeg conversion: encoder detection reads device nodes through fsx.
+	// The transcode analysis is pure: what a conversion of one file to its target would do.
+	"internal/service/transcoder": {"internal/platform/transcode", "internal/platform/mediatool", "internal/db/settings", "internal/identify/quality", "internal/identify/score"},
 	"internal/platform/transcode": {"internal/platform/fsx", "internal/platform/mediatool", "internal/platform/clock"},
 	// Section 21.6's resize-and-encode step: pure image processing (stdlib image
 	// package plus a pure-Go WebP encoder dependency), no I/O of its own.
@@ -321,7 +323,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/scanning/probe": {
 		"internal/platform/iogate",
 		"internal/platform/clock", "internal/platform/filekind", "internal/jobs", "internal/db/library", "internal/platform/mediatool",
-		"internal/db/settings", "internal/platform/fsx", "internal/identify/parsetv", "internal/platform/previewstore",
+		"internal/db/settings", "internal/platform/fsx", "internal/identify/parsetv", "internal/platform/previewstore", "internal/identify/quality",
 	},
 	// ADR-48's import.inspect job: internal/importing/inspect for WALK/GROUP/SHAPE,
 	// internal/identify/model for the ADR-24 chain's own types (RunChainForFiles,

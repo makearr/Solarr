@@ -195,6 +195,25 @@ func Distance(target settings.QualityTarget, file score.FileFacts) (closeness Cl
 	return Closeness{Percent: int(math.Round(100 * earned / possible)), Parts: parts}, true
 }
 
+// ResolutionOf names a picture by its lines; a wide crop keeps the class its width says.
+func ResolutionOf(width, height int) string {
+	switch {
+	case height >= 2000 || width >= 3800:
+		return "2160p"
+	case height >= 1000 || width >= 1800:
+		return "1080p"
+	case height >= 700 || width >= 1200:
+		return "720p"
+	case height >= 560:
+		return "576p"
+	case height >= 500:
+		return "540p"
+	case height >= 420:
+		return "480p"
+	}
+	return "360p"
+}
+
 // rung is the resolution's place on the ladder; a label off it takes the place of the first rung at or below its height,
 // and only a label without lines is -1.
 func rung(resolution string) int {

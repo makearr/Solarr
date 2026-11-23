@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/identify/quality"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
@@ -36,7 +37,7 @@ func attributeClaimFromMeasured(m mediatool.Measured, sidecarSubtitles []string)
 		claim.AudioChannels = strconv.Itoa(m.Channels)
 	}
 	if m.VideoCodec != "" && m.Height > 0 {
-		claim.VideoCodec, claim.Resolution = videoCodecName(m.VideoCodec), resolutionOf(m.Width, m.Height)
+		claim.VideoCodec, claim.Resolution = videoCodecName(m.VideoCodec), quality.ResolutionOf(m.Width, m.Height)
 		claim.HDR, claim.FrameRate, claim.ScanType = m.HDR, m.FrameRate, m.ScanType
 		claim.CRF = m.CRF
 		claim.Lossless = false
@@ -44,25 +45,6 @@ func attributeClaimFromMeasured(m mediatool.Measured, sidecarSubtitles []string)
 	claim.Subtitles = mergedLanguages(m.SubtitleLanguages, sidecarSubtitles)
 	// BitrateMode is left unset: ffprobe's bit_rate is an average for CBR and VBR alike, so setting it would be a guess dressed as fact (ADR-39); the claimed side's release-name preset is the real evidence.
 	return claim
-}
-
-// resolutionOf names a picture by its lines; a wide crop keeps the class its width says.
-func resolutionOf(width, height int) string {
-	switch {
-	case height >= 2000 || width >= 3800:
-		return "2160p"
-	case height >= 1000 || width >= 1800:
-		return "1080p"
-	case height >= 700 || width >= 1200:
-		return "720p"
-	case height >= 560:
-		return "576p"
-	case height >= 500:
-		return "540p"
-	case height >= 420:
-		return "480p"
-	}
-	return "360p"
 }
 
 // videoCodecName is ffprobe's codec_name in the vocabulary a release name uses.
