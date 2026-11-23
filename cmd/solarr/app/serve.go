@@ -980,7 +980,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		IndexerKinds:    adapters.IndexerKinds{Specs: p.specs},
 		ProviderHidden:  p.providerHidden, ProviderTuned: p.providerTuned,
 		ProviderDefinitions: definitionsAdmin{p: p},
-		Webhooks:            webhookAdmin{p: p}, InboundWebhooks: inboundWebhookAdmin{p: p},
+		Webhooks:            webhookAdmin{p: p}, InboundWebhooks: inboundWebhookAdmin{p: p}, ConfigExtras: configExtras{p: p},
 		CandidateSearcher: p.candidateSearcher(),
 		TVProviders:       p.tvProviders(),
 		RemoteImages:      p.remoteImages(),

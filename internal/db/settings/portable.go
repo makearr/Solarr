@@ -33,6 +33,10 @@ type Document struct {
 	ExclusionPatterns []ExclusionPatternEntry `yaml:"exclusion_patterns,omitempty"`
 	// Schedules holds each task's stored overrides by task key; a task absent here runs on its defaults.
 	Schedules map[string]ScheduleEntry `yaml:"schedules,omitempty"`
+	// The three below are filled and applied by the API layer (webhooks and definition files are not in the settings snapshot).
+	Webhooks            []WebhookEntry            `yaml:"webhooks,omitempty"`
+	IncomingWebhooks    []IncomingWebhookEntry    `yaml:"incoming_webhooks,omitempty"`
+	ProviderDefinitions []ProviderDefinitionEntry `yaml:"provider_definitions,omitempty"`
 }
 
 // ScalarSettingsEntry flattens every registered scalar setting; nil on import leaves them all alone, while Export always fills it since they are never absent.

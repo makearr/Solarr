@@ -335,6 +335,8 @@ type Config struct {
 	Webhooks Webhooks
 	// InboundWebhooks administers and runs the incoming ones; optional.
 	InboundWebhooks InboundWebhooks
+	// ConfigExtras adds webhooks and definition files to the configuration export and import; optional.
+	ConfigExtras ConfigExtras
 	// CandidateSearcher is stage 5's own candidate pipeline (section 10.1/10.2).
 	CandidateSearcher CandidateSearcher
 	// RemoteImages serves provider pictures from the local cache. Optional: nil answers 503.
@@ -478,6 +480,7 @@ type Server struct {
 	providerDefinitions     ProviderDefinitions
 	webhooks                Webhooks
 	inbound                 InboundWebhooks
+	configExtras            ConfigExtras
 	inboundLimit            *windowLimiter
 	tvProviders             TVProviders
 	remoteImages            RemoteImages
@@ -640,6 +643,7 @@ func New(config Config) (*Server, error) {
 		providerDefinitions:     config.ProviderDefinitions,
 		webhooks:                config.Webhooks,
 		inbound:                 config.InboundWebhooks,
+		configExtras:            config.ConfigExtras,
 		inboundLimit:            newWindowLimiter(),
 		candidateSearcher:       config.CandidateSearcher,
 		tvProviders:             config.TVProviders,

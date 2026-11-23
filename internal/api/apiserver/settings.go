@@ -26,7 +26,14 @@ func (s *Server) ExportSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	encoded, err := yaml.Marshal(s.auth.Settings.Export())
+	document := s.auth.Settings.Export()
+	if s.configExtras != nil {
+		if err := s.configExtras.Export(r.Context(), &document); err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
+	}
+	encoded, err := yaml.Marshal(document)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -66,6 +73,13 @@ func (s *Server) ImportSettings(w http.ResponseWriter, r *http.Request) {
 	unknown := config.UnknownKeysIn(generic, reflect.TypeOf(settings.Document{}))
 	document.NameSettings(settingsKeysIn(generic))
 
+	if s.configExtras != nil {
+		if problems := s.configExtras.Check(r.Context(), document); len(problems) > 0 {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"The document has problems", problems.Report("the document", "Nothing was changed."))
+			return
+		}
+	}
 	caller := s.resolvedClientAddress(r)
 	if err := s.auth.Settings.Import(r.Context(), s.wall, caller, document); err != nil {
 		// The whole list is what makes the response useful.
@@ -78,6 +92,13 @@ func (s *Server) ImportSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, s.logger, err)
 		return
+	}
+
+	if s.configExtras != nil {
+		if err := s.configExtras.Apply(r.Context(), document); err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
 	}
 
 	// Capacity is recorded inline like AddRootFolder: placement refuses a root with unknown free space, so a restore would import nothing until the sweep.

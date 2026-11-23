@@ -71,7 +71,12 @@ Those are not the same event, so `Problems.Report` takes the caller's own headin
 line — telling someone importing through the web interface that "config.yml has 4 errors" and
 that "nothing has been started" names a file they did not touch and a process already running.
 
-## Not yet exported
+## Webhooks and definition files
 
-Webhooks and provider definition files are not in the document yet. When they are, they carry no address, secret or token
-hash; today they live in the settings database and in the config folder's `providers/`, both of which a backup covers.
+The document also carries `webhooks`, `incoming_webhooks` and `provider_definitions` (the text of each file in a `custom/` folder).
+Never an address, a secret, a token or a token hash: those stay on the instance. Libraries are written as `media_type/name`,
+a connection as its name.
+
+An import adds and updates by name and deletes nothing. A webhook the instance does not have yet arrives switched off (an
+outgoing one has no address, an incoming one a token nobody saw: rotate it); one naming a library or connection that does not
+exist is switched off too. An imported definition file is written to `custom/` and still needs its approval in Settings > Providers.
