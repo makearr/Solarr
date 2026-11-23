@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Comics: an issue that arrives as a folder of page images (jpg, png, webp, avif, jxl, gif; at least three, cover first, natural order) is packed into one cbz and imported as that file; a download's folder is left as it was, a folder you imported by hand goes to the recycle bin once the cbz is in the library.
 - Metadata language: one setting under Metadata providers (default English) makes TMDB, Skyhook and Wikipedia answer in your language; an overview comes from that language's Wikipedia article (found through Wikidata) where the library's order lets Wikidata supply it, and English is used where a provider has nothing in your language.
 - TV: the anime id map (Fribb) is now on by default; switch it off under Metadata providers.
 - Work page: a series, film, book, comic or scene whose metadata so far came only from your own media server shows a "From your media server" chip; it goes once another metadata provider of its library answers a refresh (music never carries it: albums always come from MusicBrainz).

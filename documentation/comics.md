@@ -45,6 +45,33 @@ A file naming a range (`001-006`, `v01-v03`, `c040-047`) covers every part of it
 volume the provider lists it in; a chapter no volume holds, and a volume or chapter of a series whose count no provider
 states, becomes a part when its file is found.
 
+## Folders of page images
+
+The library only holds files: an issue that arrives as a folder of loose page images is packed into one cbz before the
+import inspects it, and that cbz is what is identified, named and placed.
+
+- **When**: an import into a comic library (a download, or Import pointed at a folder with a comic library chosen).
+  A Best match import never packs (a music download's scans would become a comic), and a library scan neither packs
+  nor registers images: a loose page folder already inside a library is imported by pointing Import at it.
+- **What is a page**: `jpg`, `jpeg`, `png`, `webp`, `avif`, `jxl`, `gif` (the extensions the probe reads), not
+  hidden, not a symlink, and not media-server art (`folder`, `poster`, `fanart`, `banner`, `backdrop`, `background`,
+  `logo`, `clearlogo`, `clearart`, `thumb`, `series`). A folder is an issue when it holds at least three pages and
+  no comic archive (beside archives, images are extras); each such folder, to eight levels deep, is one cbz. Only
+  its own files are pages; a subfolder is judged on its own.
+- **Order**: a page named `cover` first, the rest in natural order (`2` before `10`). Entries keep their names and
+  are stored uncompressed (images do not shrink); no `ComicInfo.xml` is written by the packing, since nothing is
+  identified yet: *Kavita and Komga files* adds one after the import when switched on.
+- **Name and place**: the cbz is named after its folder and written to the import workspace (never to the source)
+  through a temporary swapped in whole; a folder over 2 GiB (one issue's ceiling) or whose cbz name is already taken
+  is skipped and logged. Folders inside an opened archive are packed too.
+- **The source**: a download's folder is never touched. A folder you pointed Import at keeps its pages until every
+  unit of the workspace is placed (each placement copies and verifies), then the packed pages go to the recycle bin
+  as archives do. Reverting the import recycles the placed cbz like any import; the pages are still in the source or
+  the bin.
+
+Core code knows none of this: `batch.FolderPacker` is the extension point the import job asks the library's type
+for; `comic.PackPageFolders` implements it.
+
 ## Where the facts are
 
 A file's median page edges are stored as its width and height, its page count and image format as claimed attributes, so

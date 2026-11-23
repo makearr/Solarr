@@ -187,7 +187,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	if len(payload.Only) > 0 {
 		return j.runSession(ctx, job, payload)
 	}
-	if workspace, opened := j.unpack(ctx, payload.SourcePath); opened > 0 {
+	if workspace, opened, pages := j.unpack(ctx, payload); opened > 0 {
 		inner := payload
 		inner.SourcePath = workspace
 		if err := j.runSession(ctx, job, inner); err != nil {
@@ -199,6 +199,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 				j.logger.Warn("import workspace not removed", slog.String("workspace", workspace), slog.Any("error", err))
 			} else if payload.Origin == library.ImportOriginManual && !payload.Preview && j.placedAll(ctx, workspace) {
 				j.retireArchives(ctx, payload.SourcePath, payload.CategoryID)
+				j.recycleSourceFiles(ctx, payload.SourcePath, payload.CategoryID, pages, "page images")
 			}
 		}
 		if !j.hasMedia(ctx, payload.SourcePath) {
@@ -257,15 +258,23 @@ func (j *Job) retireArchives(ctx context.Context, sourcePath string, categoryID 
 		j.logger.Info("source archives kept in place", slog.String("source_path", sourcePath), slog.Any("error", err))
 		return
 	}
+	j.recycleSourceFiles(ctx, sourcePath, categoryID, files, "archives")
+}
+
+// recycleSourceFiles sends files of an imported source to the recycle bin; one that cannot move stays.
+func (j *Job) recycleSourceFiles(ctx context.Context, sourcePath string, categoryID *int64, files []string, what string) {
+	if j.recycleArchive == nil || len(files) == 0 {
+		return
+	}
 	recycled := 0
 	for _, file := range files {
 		if err := j.recycleArchive(ctx, categoryID, sourcePath, file); err != nil {
-			j.logger.Info("source archive kept in place", slog.String("file", file), slog.Any("error", err))
+			j.logger.Info("source file kept in place", slog.String("file", file), slog.Any("error", err))
 			continue
 		}
 		recycled++
 	}
-	j.logger.Info("source archives recycled", slog.String("source_path", sourcePath), slog.Int("files", recycled))
+	j.logger.Info("source "+what+" recycled", slog.String("source_path", sourcePath), slog.Int("files", recycled))
 }
 
 // workspaceLifetime is how long a workspace kept for a review waits before it is swept.
@@ -278,11 +287,13 @@ func (j *Job) sweepWorkspaces() {
 	}
 }
 
-// unpack opens the source's archives into a workspace of its own; none opened, or a failure, leaves the source to
-// be imported as it is. A workspace is never itself unpacked again.
-func (j *Job) unpack(ctx context.Context, sourcePath string) (workspace string, opened int) {
+// unpack opens the source's archives into a workspace of its own and has the library's type pack its folders of loose
+// pages there; nothing written, or a failure, leaves the source to be imported as it is. A workspace is never itself
+// unpacked again. pages are the source files a packed file was made from.
+func (j *Job) unpack(ctx context.Context, payload Payload) (workspace string, opened int, pages []string) {
+	sourcePath := payload.SourcePath
 	if j.workspace == "" || fsx.Within(j.workspace, sourcePath) {
-		return "", 0
+		return "", 0, nil
 	}
 	j.sweepWorkspaces()
 	sum := sha256.Sum256([]byte(sourcePath))
@@ -291,22 +302,56 @@ func (j *Job) unpack(ctx context.Context, sourcePath string) (workspace string, 
 	if j.holdsQueuedUnits(ctx, workspace) {
 		// Held units still read their files from here: opening the archives again would wipe them.
 		j.logger.Info("source waits for its held units; archives not opened again", slog.String("source_path", sourcePath))
-		return workspace, 0
+		return workspace, 0, nil
 	}
 	if err := unpack.RemoveTree(j.fsys, workspace); err != nil {
 		j.logger.Warn("import workspace not cleared", slog.String("workspace", workspace), slog.Any("error", err))
-		return "", 0
+		return "", 0, nil
 	}
 	opened, err := unpack.Expand(ctx, j.fsys, sourcePath, workspace, j.limits())
 	if err != nil {
 		j.logger.Warn("archives could not be opened", slog.String("source_path", sourcePath), slog.Any("error", err))
 		_ = unpack.RemoveTree(j.fsys, workspace)
-		return "", 0
+		return "", 0, nil
 	}
 	if opened > 0 {
 		j.logger.Info("archives opened for import", slog.String("source_path", sourcePath), slog.Int("archives", opened))
 	}
-	return workspace, opened
+	packed, pages := j.packFolders(ctx, payload, workspace, opened > 0)
+	return workspace, opened + packed, pages
+}
+
+// packFolders has the library's type pack folders of loose pages, from the source and from the archives just opened,
+// into the workspace. Only an import into a library whose type packs does: a Best match would turn a music
+// download's scans into a comic.
+func (j *Job) packFolders(ctx context.Context, payload Payload, workspace string, archivesOpened bool) (packed int, pages []string) {
+	if payload.CategoryID == nil {
+		return 0, nil
+	}
+	importer, _ := j.importerFor(payload.CategoryID)
+	packer, ok := importer.(importbatch.FolderPacker)
+	if !ok {
+		return 0, nil
+	}
+	fromSource, err := packer.PackFolders(ctx, payload.SourcePath, workspace)
+	if err != nil {
+		j.logger.Warn("folders of pages not packed", slog.String("source_path", payload.SourcePath), slog.Any("error", err))
+	}
+	for _, folder := range fromSource {
+		pages = append(pages, folder.Pages...)
+	}
+	packed = len(fromSource)
+	if archivesOpened {
+		fromArchives, err := packer.PackFolders(ctx, workspace, workspace)
+		if err != nil {
+			j.logger.Warn("folders of pages not packed", slog.String("source_path", workspace), slog.Any("error", err))
+		}
+		packed += len(fromArchives)
+	}
+	if packed > 0 {
+		j.logger.Info("folders of pages packed for import", slog.String("source_path", payload.SourcePath), slog.Int("files", packed))
+	}
+	return packed, pages
 }
 
 func (j *Job) limits() archive.Limits {

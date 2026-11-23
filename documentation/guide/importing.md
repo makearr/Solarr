@@ -45,6 +45,9 @@ A folder you pointed at keeps its archives until everything in them is in the li
 `.solarr-recycle` folder inside it (deleted after a week by the next import of that folder). A read-only source
 is never touched.
 
+A comic issue that arrives as a folder of page images is packed into one cbz in the same workspace and imported
+as that file; see [Comics](../comics.md#folders-of-page-images).
+
 ## A folder held for review (🟡)
 
 - **Commit anyway** places it as its best match.

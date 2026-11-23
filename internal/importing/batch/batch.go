@@ -159,6 +159,20 @@ type BookFiles interface {
 	TakesBookFiles() bool
 }
 
+// FolderPacker is an Importer whose media may arrive as a folder of loose files (a comic's page images) that it packs
+// into one file of its own before the walk, so the library only ever holds files (ADR-23 extension point).
+type FolderPacker interface {
+	// PackFolders writes one file below workspace for each folder under source it takes, never writing to source; what
+	// it packed is returned even when another folder failed.
+	PackFolders(ctx context.Context, source, workspace string) ([]PackedFolder, error)
+}
+
+// PackedFolder is one packed file and the source files it was made from, by absolute path.
+type PackedFolder struct {
+	File  string
+	Pages []string
+}
+
 // HeldCommitter is an Importer whose held units a person commits by hand: as resolved, or as a work named.
 type HeldCommitter interface {
 	CommitHeld(ctx context.Context, request HeldRequest) (library.Placement, error)
