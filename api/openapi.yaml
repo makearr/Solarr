@@ -12586,7 +12586,7 @@ components:
 
     ArrApp:
       type: string
-      enum: [lidarr, sonarr, radarr, readarr, whisparr, prowlarr]
+      enum: [lidarr, sonarr, radarr, readarr, whisparr, prowlarr, mylar3, kapowarr]
       description: >-
         Which *Arr application a connection talks to (ADR-52). Only lidarr
         has a real sync this pass (music exists); the other four can be

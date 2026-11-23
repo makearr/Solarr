@@ -18,7 +18,7 @@ type ArrInstance = components["schemas"]["ArrInstance"];
 type ArrApp = components["schemas"]["ArrApp"];
 type ArrImportRun = components["schemas"]["ArrImportRun"];
 
-const APPS: readonly ArrApp[] = ["lidarr", "prowlarr", "sonarr", "radarr", "readarr", "whisparr"];
+const APPS: readonly ArrApp[] = ["lidarr", "prowlarr", "sonarr", "radarr", "readarr", "whisparr", "kapowarr", "mylar3"];
 
 /** Todo 4.13, ADR-52: import from the *Arr applications over their own REST
  *  API. Only Lidarr has a real sync so far -- a monitored artist becomes a
@@ -55,7 +55,7 @@ export function ArrImport() {
           monitors (as intent, never a download), only the monitoring status of what is already here, its
           indexers and its download clients. A connection may also send monitoring back, which is the one
           thing Solarr ever writes to an *Arr, and is off until you turn it on. Lidarr (artists and
-          albums), Sonarr (series), Radarr (movies) and Whisparr (scenes, performers, studios) sync today;
+          albums), Sonarr (series), Radarr (movies), Whisparr (scenes, performers, studios), and Kapowarr and Mylar3 (comic series) sync today;
           Readarr connects and waits. Connect Prowlarr to use its active indexers and download clients here.
         </p>
       </header>
@@ -208,7 +208,7 @@ function InstanceCard({
       {started && <RunSummary run={started} />}
 
       <ArrConnectionTools instanceId={instance.id} app={instance.app} />
-      {instance.app !== "prowlarr" && instance.app !== "readarr" && <PushMonitoring instance={instance} onChanged={onChanged} />}
+      {instance.app !== "prowlarr" && instance.app !== "readarr" && instance.app !== "kapowarr" && instance.app !== "mylar3" && <PushMonitoring instance={instance} onChanged={onChanged} />}
 
       {expanded && <InstanceHistory instanceId={instance.id} />}
     </li>
@@ -339,7 +339,7 @@ function RunSummary({ run }: { run: ArrImportRun }) {
     return (
       <p className="rounded-md bg-canvas px-2 py-1.5 text-xs text-ink-muted">
         {run.artists_total
-          ? `Walking ${run.app === "sonarr" ? "series" : run.app === "radarr" ? "movie" : run.app === "whisparr" ? "item" : "artist"} ${Math.min((run.artists_done ?? 0) + 1, run.artists_total)} of ${run.artists_total}.`
+          ? `Walking ${run.app === "sonarr" ? "series" : run.app === "radarr" ? "movie" : run.app === "whisparr" ? "item" : run.app === "kapowarr" || run.app === "mylar3" ? "comic series" : "artist"} ${Math.min((run.artists_done ?? 0) + 1, run.artists_total)} of ${run.artists_total}.`
           : "Started."}{" "}
         A real library takes a while (one call per artist or series, one pass over the movies); expand history below to watch it finish.
       </p>
@@ -347,7 +347,7 @@ function RunSummary({ run }: { run: ArrImportRun }) {
   }
   return (
     <p className="rounded-md bg-canvas px-2 py-1.5 text-xs text-ink-muted">
-      {run.state === "DONE" && (run.app === "sonarr" || run.app === "radarr" || run.app === "whisparr") ? (
+      {run.state === "DONE" && (run.app === "sonarr" || run.app === "radarr" || run.app === "whisparr" || run.app === "kapowarr" || run.app === "mylar3") ? (
         <>
           {run.artists_created} {run.app === "radarr" ? "movies" : run.app === "whisparr" ? "items" : "series"} added, {run.artists_matched} matched
           {run.items_parked > 0 ? `, ${run.items_parked} not here` : ""}

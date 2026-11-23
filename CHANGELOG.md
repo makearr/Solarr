@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Import: Kapowarr and Mylar3 can be connected like an *Arr and their comic series imported by ComicVine id (monitored or paused/ended, placed by the folder they live in) -- built from their public API, not yet tried against a real instance. Schema note: the connection table is rebuilt in the unreleased settings migration.
 - Comics and books: Kavita can be a local metadata source (series summary, genres, credits, publisher and the provider ids in its links), ranked after every online provider and only filling what they lack.
 - Books: BookBrainz is offered as a metadata provider (works, authors, description, language; keyless, not in the default order).
 - Music: an optional per-library Lyrics setting writes synced (.lrc) or plain (.txt) lyrics from LRCLIB beside tracks that have none, once a day, never over a file you put there.

@@ -26,7 +26,7 @@ func (a ArrSync) Run(ctx context.Context, _ jobs.Job) error {
 	mode := a.Cache.Snapshot().SolarrMode()
 	var failures []error
 	for _, instance := range instances {
-		if !instance.Enabled || !mode.PushesMonitoring(instance.PushMonitoring) || !a.supported(instance.App) {
+		if !instance.Enabled || !mode.PushesMonitoring(instance.PushMonitoring) || !a.supported(instance.App) || instance.App.ComicManager() {
 			continue
 		}
 		// Pull first: a change made in the *Arr since the last run is taken in before Solarr's older value is sent.
@@ -77,7 +77,7 @@ func (a ArrSync) PushMonitoring(ctx context.Context, instanceID int64) (apiserve
 		}
 		return apiserver.ArrPushResult{}, errors.New("this connection does not send monitoring back")
 	}
-	if !a.supported(instance.App) {
+	if !a.supported(instance.App) || instance.App.ComicManager() {
 		return apiserver.ArrPushResult{}, fmt.Errorf("no sending back for %s", instance.App)
 	}
 	apiKey, err := a.Cache.DecryptedAPIKey(ctx, instanceID)

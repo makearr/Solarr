@@ -973,6 +973,11 @@ func (p *process) comicResolver() comic.Resolver {
 	}
 }
 
+// comicCatalog is the comic type's add over the providers, as an import adds a series.
+func (p *process) comicCatalog() comic.Catalog {
+	return comic.Catalog{Service: p.comicService(), Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID}
+}
+
 // comicModule wires the comic type: the add and refresh over the providers and the jobs that keep its metadata current.
 func (p *process) comicModule() comic.Module {
 	service := p.comicService()

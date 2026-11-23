@@ -20,7 +20,7 @@ type ArrApp = Exclude<components["schemas"]["ArrApp"], "prowlarr">;
 type MediaType = components["schemas"]["MediaType"];
 type ArrInstance = components["schemas"]["ArrInstance"];
 
-const ARR_APPS: readonly ArrApp[] = ["lidarr", "sonarr", "radarr", "readarr", "whisparr"];
+const ARR_APPS: readonly ArrApp[] = ["lidarr", "sonarr", "radarr", "readarr", "whisparr", "kapowarr", "mylar3"];
 
 // A convenience, not a gate (section 21.11): every step can be skipped.
 export function Setup({ onDone }: { onDone: () => void }) {
@@ -86,6 +86,8 @@ const LIBRARY_SUGGESTION: Record<ArrApp, { name: string; mediaType: MediaType }>
   radarr: { name: "Movies", mediaType: "movie" },
   readarr: { name: "Books", mediaType: "book" },
   whisparr: { name: "Adult", mediaType: "adult" },
+  kapowarr: { name: "Comics", mediaType: "comic" },
+  mylar3: { name: "Comics", mediaType: "comic" },
 };
 
 interface ConnectOutcome {
@@ -95,7 +97,7 @@ interface ConnectOutcome {
 }
 
 // Where an app's content comes from; Readarr connects for later, its import is not built.
-const SYNCS: readonly ArrApp[] = ["lidarr", "sonarr", "radarr", "whisparr"];
+const SYNCS: readonly ArrApp[] = ["lidarr", "sonarr", "radarr", "whisparr", "kapowarr", "mylar3"];
 
 function ConnectArr({
   onSkip,
@@ -241,9 +243,9 @@ function ConnectArr({
 
   return (
     <Panel
-      title="Step 3 — Import from Lidarr, Sonarr, Radarr or Whisparr"
+      title="Step 3 — Import from Lidarr, Sonarr, Radarr, Whisparr, Kapowarr or Mylar3"
       description={
-        "Already run Lidarr, Sonarr, Radarr or Whisparr? Connect each one: its root folders become a library here, and " +
+        "Already run Lidarr, Sonarr, Radarr, Whisparr, Kapowarr or Mylar3? Connect each one: its root folders become a library here, and " +
         "you choose what comes in: its items with their monitoring, only the monitoring status of what is here, its " +
         "indexers, its download clients. It can also send monitoring back, if you want. Readarr can be connected " +
         "now; its import comes later."

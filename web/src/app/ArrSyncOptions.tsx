@@ -24,6 +24,8 @@ const APP_WORDS: Partial<Record<ArrInstance["app"], { mediaType: string; monitor
   sonarr: { mediaType: "tv", monitored: "Monitored series", path: "/tv" },
   radarr: { mediaType: "movie", monitored: "Monitored movies", path: "/movies" },
   whisparr: { mediaType: "adult", monitored: "Monitored scenes, performers and studios", path: "/porn" },
+  kapowarr: { mediaType: "comic", monitored: "Monitored volumes", path: "/comics" },
+  mylar3: { mediaType: "comic", monitored: "Watched comics (not paused or ended)", path: "/comics" },
 };
 
 /** What one *Arr import brings in (asked 2026-09-30): its library's folders, monitored and unmonitored
@@ -41,6 +43,7 @@ export function ArrSyncOptions({
 }) {
   const libraryLabel = useLibraryLabel();
   const words = APP_WORDS[instance.app] ?? APP_WORDS.lidarr!;
+  const comicManager = instance.app === "kapowarr" || instance.app === "mylar3";
   const [monitoringOnly, setMonitoringOnly] = useState(false);
   const [indexers, setIndexers] = useState(false);
   const [downloadClients, setDownloadClients] = useState(false);
@@ -157,6 +160,7 @@ export function ArrSyncOptions({
           <input type="radio" name={`arr-mode-${instance.id}`} checked={monitoringOnly} onChange={() => setMonitoringOnly(true)} />
           <span title="Add nothing. Items already here are monitored when the *Arr monitors them.">Monitoring only</span>
         </label>
+        {!comicManager && (<>
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={indexers} onChange={(event) => setIndexers(event.target.checked)} />
           <span title={t("arrSyncOptions.copyItsNewznabAnd")}>Indexers</span>
@@ -165,6 +169,7 @@ export function ArrSyncOptions({
           <input type="checkbox" checked={downloadClients} onChange={(event) => setDownloadClients(event.target.checked)} />
           <span title="Copy its download clients. They arrive switched off, because the *Arr hides their passwords.">Download clients</span>
         </label>
+        </>)}
       </fieldset>
       {!monitoringOnly && (
         <>

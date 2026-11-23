@@ -37,6 +37,7 @@ import (
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/adult"
 	"github.com/makearr/Solarr/internal/media/book"
+	"github.com/makearr/Solarr/internal/media/comic"
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
@@ -1291,6 +1292,8 @@ func (p *process) arrImporters() map[settings.ArrApp]arrmap.Importer {
 		settings.ArrAppWhisparr: adult.WhisparrImport{
 			Adding: p.adultCatalog(), Organisations: library.NewOrganisations(p.library), Monitors: monitors,
 		},
+		settings.ArrAppKapowarr: comic.ManagerImport{App: settings.ArrAppKapowarr, Adding: p.comicCatalog(), Monitors: monitors},
+		settings.ArrAppMylar:    comic.ManagerImport{App: settings.ArrAppMylar, Adding: p.comicCatalog(), Monitors: monitors},
 	}
 }
 

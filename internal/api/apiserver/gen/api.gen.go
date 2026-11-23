@@ -35,7 +35,9 @@ const (
 
 // Defines values for ArrApp.
 const (
+	ArrAppKapowarr ArrApp = "kapowarr"
 	ArrAppLidarr   ArrApp = "lidarr"
+	ArrAppMylar3   ArrApp = "mylar3"
 	ArrAppProwlarr ArrApp = "prowlarr"
 	ArrAppRadarr   ArrApp = "radarr"
 	ArrAppReadarr  ArrApp = "readarr"

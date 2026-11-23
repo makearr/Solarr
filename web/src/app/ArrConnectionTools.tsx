@@ -405,7 +405,7 @@ function ArrPull({ instanceId, app }: { instanceId: number; app: ArrApp }) {
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
         <span className="text-ink-muted">Also</span>
-        {PULL_SETTINGS.map(box)}
+        {PULL_SETTINGS.filter((choice) => app !== "mylar3" && (app !== "kapowarr" || choice.key === "root_folders")).map(box)}
       </div>
       {needsLibrary && (
         <label className="flex items-center gap-1.5">

@@ -29,7 +29,7 @@ type ArrSetup struct {
 func (a ArrSync) importSetup(
 	ctx context.Context, instance settings.ArrInstance, client arrimport.LidarrClient, options apiserver.ArrSyncOptions,
 ) ([]string, error) {
-	if (!options.Indexers && !options.DownloadClients) || a.Setup.Cache == nil {
+	if (!options.Indexers && !options.DownloadClients) || a.Setup.Cache == nil || instance.App.ComicManager() {
 		return nil, nil
 	}
 	var notes []string

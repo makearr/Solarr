@@ -3,7 +3,7 @@
 > **Level: 🟡 Advanced.** Bring over a Lidarr, Sonarr, Radarr or Whisparr setup.
 
 A connection (Connections, or step 2 of the setup assistant) is one Sonarr, Radarr, Lidarr, Whisparr or Prowlarr: its address
-and API key. Readarr connects and waits for its own import. The same options panel is on the Connections page and in the
+and API key. Readarr connects and waits for its own import. **Kapowarr** and **Mylar3** are comic managers: each series (a volume, a comic) is added to a comic library by its ComicVine id, monitored unless Mylar3 has it paused or ended, and placed by the folder it lives in (Mylar3 has no root folders; Kapowarr's are read). Only the series are read: no indexers, download clients, import lists or monitoring sent back. Kapowarr is read with `GET /api/volumes?api_key=`, Mylar3 with `GET /api?cmd=getIndex&apikey=`. The same options panel is on the Connections page and in the
 setup assistant.
 
 ## What an import brings in

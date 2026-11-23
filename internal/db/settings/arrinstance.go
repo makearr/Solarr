@@ -26,9 +26,15 @@ const (
 	ArrAppRadarr   ArrApp = "radarr"
 	ArrAppReadarr  ArrApp = "readarr"
 	ArrAppWhisparr ArrApp = "whisparr"
+	// ArrAppMylar and ArrAppKapowarr are comic managers: their series become comic works, nothing else is read.
+	ArrAppMylar    ArrApp = "mylar3"
+	ArrAppKapowarr ArrApp = "kapowarr"
 	// ArrAppProwlarr has no library: its active indexers and download clients are used from here.
 	ArrAppProwlarr ArrApp = "prowlarr"
 )
+
+// ComicManager says the app is one of the comic managers, which share one reading of what they hold and nothing of an *Arr's setup.
+func (a ArrApp) ComicManager() bool { return a == ArrAppMylar || a == ArrAppKapowarr }
 
 // ErrSecretsUnavailable means Cache.EnableSecrets was never called -- an
 // *Arr instance's own API key can be neither sealed nor opened, refused
@@ -172,11 +178,11 @@ type ArrInstanceRequest struct {
 func validateArrInstance(request ArrInstanceRequest) config.Problems {
 	var problems config.Problems
 	switch request.App {
-	case ArrAppLidarr, ArrAppSonarr, ArrAppRadarr, ArrAppReadarr, ArrAppWhisparr, ArrAppProwlarr:
+	case ArrAppLidarr, ArrAppSonarr, ArrAppRadarr, ArrAppReadarr, ArrAppWhisparr, ArrAppProwlarr, ArrAppMylar, ArrAppKapowarr:
 	default:
 		problems = append(problems, config.Problem{
 			Path: "app", Value: string(request.App),
-			Expectation: "one of lidarr, sonarr, radarr, readarr, whisparr",
+			Expectation: "one of lidarr, sonarr, radarr, readarr, whisparr, mylar3, kapowarr",
 		})
 	}
 	if strings.TrimSpace(request.Name) == "" {

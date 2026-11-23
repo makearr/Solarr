@@ -77,6 +77,11 @@ func arrRootFolders(ctx context.Context, app settings.ArrApp, client arrimport.L
 		return client.Radarr().RootFolders(ctx)
 	case settings.ArrAppWhisparr:
 		return client.Whisparr().RootFolders(ctx)
+	case settings.ArrAppKapowarr:
+		return client.Kapowarr().RootFolders(ctx)
+	case settings.ArrAppMylar:
+		// Mylar3 keeps no root folders: its series are placed by the folder each lives in.
+		return nil, nil
 	default:
 		return client.RootFolders(ctx)
 	}
@@ -161,7 +166,7 @@ func arrRootAttachment(attachments []settings.CategoryRoot, libraryID, rootID in
 // importLists adds the *Arr's TMDb and MDBList lists to the library, each switched off to be previewed first; a list of
 // any other kind has nothing Solarr reads and is named in the run's error.
 func (a ArrSync) importLists(ctx context.Context, instance settings.ArrInstance, client arrimport.LidarrClient, options apiserver.ArrSyncOptions) error {
-	if !options.ImportLists || a.Setup.Cache == nil {
+	if !options.ImportLists || a.Setup.Cache == nil || instance.App.ComicManager() {
 		return nil
 	}
 	libraryID, chosen := pullLibrary(instance, options)

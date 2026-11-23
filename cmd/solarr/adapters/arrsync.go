@@ -223,7 +223,7 @@ func (a ArrSync) run(importID int64, instance settings.ArrInstance, client arrim
 // takeSettings gives each library named the *Arr's Media Management as its File Management, before the walk places
 // anything there; a library that cannot take it keeps its own and the run says so.
 func (a ArrSync) takeSettings(ctx context.Context, app settings.ArrApp, client arrimport.LidarrClient, libraries []int64) error {
-	if len(libraries) == 0 {
+	if len(libraries) == 0 || app.ComicManager() {
 		return nil
 	}
 	var from arrimport.MediaManagement

@@ -8948,7 +8948,7 @@ export interface components {
          * @description Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships. prowlarr has no library: its active indexers and download clients are used from it.
          * @enum {string}
          */
-        ArrApp: "lidarr" | "sonarr" | "radarr" | "readarr" | "whisparr" | "prowlarr";
+        ArrApp: "lidarr" | "sonarr" | "radarr" | "readarr" | "whisparr" | "prowlarr" | "mylar3" | "kapowarr";
         /** @description A credential, shown without ever exposing it (section 13.1). The raw value exists only between the database and the one outbound request that needs it. */
         SecretMask: {
             has_value: boolean;
