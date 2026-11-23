@@ -42,15 +42,15 @@ test("an outgoing webhook can be added, shows the selected preset's body, and a 
     await page.getByRole("button", { name: "Add outgoing webhook" }).click();
 
     const form = page.getByRole("region", { name: "Outgoing webhook" });
-    await form.getByLabel("Name").fill("E2E receiver");
-    await form.getByLabel("Format").selectOption("discord");
-    await form.getByLabel("Address").fill(`http://${RECEIVER_HOST}:${RECEIVER_PORT}/hook`);
+    await form.getByLabel("Name", { exact: true }).fill("E2E receiver");
+    await form.getByLabel(/^Format/).selectOption("discord");
+    await form.getByLabel("Address", { exact: true }).fill(`http://${RECEIVER_HOST}:${RECEIVER_PORT}/hook`);
     await form.getByLabel("Signing secret (optional)").fill(SECRET);
 
     // The panel shows the body of the chosen preset, not a fixed sample.
     await form.getByText("What will be sent").click();
     await expect(form.locator("pre")).toContainText('"content"');
-    await form.getByLabel("Format").selectOption("generic");
+    await form.getByLabel(/^Format/).selectOption("generic");
     await expect(form.locator("pre")).toContainText('"event"');
 
     await form.getByRole("checkbox", { name: "New files were imported" }).check();
@@ -73,6 +73,10 @@ test("an incoming webhook shows its token once", async ({ page }) => {
   await signIn(page);
   await page.goto("/connections/webhooks");
   await page.getByRole("button", { name: /Add incoming webhook/ }).click();
-  await page.getByRole("button", { name: "Save" }).last().click();
+  const form = page.getByRole("region", { name: "Incoming webhook" });
+  await form.getByLabel("Name", { exact: true }).fill("E2E incoming");
+  await form.getByRole("checkbox", { name: /^Scan/ }).check();
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Your new token")).toBeVisible();
   await expect(page.getByText(/curl/).first()).toBeVisible();
 });
