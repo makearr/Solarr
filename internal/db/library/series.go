@@ -49,6 +49,9 @@ type SeriesPartWrite struct {
 	ExternalIDs         []ExternalIDWrite
 	// AltTitles are the title in other languages; a write replaces what the same provider stored before.
 	AltTitles []PartTitleWrite
+	// Rating is the episode's own score, 0 to 10, with its vote count; zero Rating leaves what is stored.
+	Rating float64
+	Votes  int64
 }
 
 // PartTitleWrite is one episode title in one language.
@@ -542,6 +545,13 @@ func upsertSeriesPart(ctx context.Context, queries *librarydb.Queries, workID in
 	})
 	if err != nil {
 		return 0, fmt.Errorf("library: upsert part %s: %w", part.MediaRef, err)
+	}
+	if part.Rating > 0 {
+		if err := queries.SetWorkPartRating(ctx, librarydb.SetWorkPartRatingParams{
+			Rating: sql.NullFloat64{Float64: part.Rating, Valid: true}, Votes: sql.NullInt64{Int64: part.Votes, Valid: part.Votes > 0}, WorkID: workID, MediaRef: part.MediaRef,
+		}); err != nil {
+			return 0, fmt.Errorf("library: rating %s: %w", part.MediaRef, err)
+		}
 	}
 	for _, provider := range part.ReplaceAltProviders {
 		if err := queries.DeleteAltNumberingByProvider(ctx, librarydb.DeleteAltNumberingByProviderParams{PartID: row.ID, Provider: provider}); err != nil {

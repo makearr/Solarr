@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- TV: each episode row shows its own IMDb score (read from OMDb's season lists when an OMDb key is set; one request per season on a refresh). Library database gains `rating` and `votes` on episodes.
 - TV and movie pickers offer your Jellyfin server's posters and backdrops (never as the default over an online source); they are fetched with the connection's own sign-in and cached.
 - Configuration export and import carry your webhooks (outgoing and incoming) and your own provider definition files, never an address, a secret or a token; an imported webhook starts switched off until its address is set.
 - Manga: a volume release is no longer turned away because its edition year (a reprint) differs from the series' first year.

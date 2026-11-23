@@ -1085,6 +1085,8 @@ type WorkPart struct {
 	AvailableBasis      string
 	AvailableGrace      sql.NullInt64
 	Optional            int64
+	Rating              sql.NullFloat64
+	Votes               sql.NullInt64
 }
 
 type WorkPartDetail struct {

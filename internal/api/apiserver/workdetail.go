@@ -96,9 +96,12 @@ type PartRow struct {
 	// MediumTitle and ArtistCredit are empty when the disc has no name and the track has the album's artist.
 	MediumTitle, ArtistCredit string
 	// InEdition names the held collected edition that stands for the part, nil when none does.
-	InEdition   *EditionLink
-	RuntimeMs   *int64
-	Date        *string
+	InEdition *EditionLink
+	RuntimeMs *int64
+	Date      *string
+	// Rating is the part's own score, 0 to 10, with its votes; zero when none.
+	Rating      float64
+	Votes       int64
 	Monitored   bool
 	ExternalIDs []ExternalIDRow
 	// Wanted is the track's own SINGLE desired_item, nil until someone
@@ -940,6 +943,12 @@ func buildPartViews(rows []PartRow) []gen.WorkPart {
 		}
 		if !row.AvailableAt.IsZero() {
 			views[index].AvailableAt = &row.AvailableAt
+		}
+		if row.Rating > 0 {
+			views[index].Rating = &row.Rating
+			if row.Votes > 0 {
+				views[index].Votes = &row.Votes
+			}
 		}
 		if row.AvailableBasis != "" {
 			views[index].AvailableBasis = &row.AvailableBasis

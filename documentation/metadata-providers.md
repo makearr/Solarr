@@ -279,3 +279,9 @@ chip. It is asked after the providers before it and only fills what they left em
 guard and pace as the compiled providers, to the hosts the file names and no other. See `provider-definitions.md`.
 
 Music: a scan asks a Jellyfin server mapped to the library, once per album folder, for the MusicBrainz release-group (else release) id of the album at that path. It runs after the file's own tags and before any search or album matching, as the pass "Ids your media server holds for the album folder"; a file with its own MBID tags never asks. Import does not use it: a download's path is not the server's.
+
+## Episode scores
+
+With an OMDb key, a TV refresh reads each season's list (one request per season, at most 30) and stores every episode's IMDb score
+in `work_part.rating`. The scores only fill episodes another source already lists; they never add one. A refresh that finds no
+score keeps the stored one. The episode row shows it as a star beside the runtime.

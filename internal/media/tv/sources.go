@@ -315,6 +315,15 @@ func mergeInto(into *Series, other Series) {
 	mergeIDs(&into.IDs, other.IDs)
 	mergeAirTime(into, other)
 	mergeEpisodes(into, other)
+	for key, rating := range other.EpisodeRatings {
+		if _, held := into.EpisodeRatings[key]; held {
+			continue
+		}
+		if into.EpisodeRatings == nil {
+			into.EpisodeRatings = map[Key]EpisodeRating{}
+		}
+		into.EpisodeRatings[key] = rating
+	}
 }
 
 // ApplyPriority lets the first source in the configured order that holds a field supply it: prose, genres, certification

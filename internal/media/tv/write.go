@@ -215,6 +215,9 @@ func ToWrite(series Series, options WriteOptions) library.SeriesWrite {
 	}
 	for _, episode := range series.Episodes {
 		part := partWrite(episode, wants(episode), options.Grace)
+		if rating, found := series.EpisodeRatings[Key{episode.Season, episode.Number}]; found {
+			part.Rating, part.Votes = rating.Score, int64(rating.Votes)
+		}
 		if series.SceneMapped {
 			part.ReplaceAltProviders = []string{ProviderXEM}
 		}

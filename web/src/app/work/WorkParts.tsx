@@ -256,6 +256,7 @@ function PartRow({
       </td>
       <td className="hidden whitespace-nowrap py-1.5 pr-3 text-xs text-ink-muted sm:table-cell">
         {part.runtime_ms ? (part.runtime_ms >= 10 * 60_000 ? formatMinutes(part.runtime_ms) : formatDuration(part.runtime_ms)) : ""}
+        {part.rating ? <span className="ml-2" title={part.votes ? t("work.partVotes", { votes: part.votes }) : undefined}>★ {part.rating.toFixed(1)}</span> : null}
       </td>
       <td className="hidden whitespace-nowrap py-1.5 pr-3 text-xs text-ink-muted md:table-cell" title={outNote(part)}>
         {out ?? ""}

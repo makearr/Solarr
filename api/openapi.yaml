@@ -14248,6 +14248,8 @@ components:
         in_edition: { $ref: "#/components/schemas/PartEdition" }
         runtime_ms: { type: integer, format: int64 }
         date: { type: string }
+        rating: { type: number, format: double, description: "The part's own score, 0 to 10 (an episode's IMDb score); absent when no source gave one." }
+        votes: { type: integer, format: int64, description: The votes the score rests on; absent when unknown. }
         available_at: { type: string, format: date-time, description: When the part is out (an episode's air time); absent when unknown. }
         available_basis: { type: string, description: "How that time is known, as its source said it: \"tvmaze airstamp tz=America/New_York\"; absent when nothing says." }
         available_confidence: { type: string, enum: [unknown, low, medium, high], description: How sure the time is; a less sure one is waited out longer before the part counts as out. }

@@ -7599,12 +7599,18 @@ type WorkPart struct {
 
 	// OutGraceHours Hours after its time (or the start of its date) it is waited for before it counts as out; set with available_confidence.
 	OutGraceHours *int64 `json:"out_grace_hours,omitempty"`
-	RuntimeMs     *int64 `json:"runtime_ms,omitempty"`
+
+	// Rating The part's own score, 0 to 10 (an episode's IMDb score); absent when no source gave one.
+	Rating    *float64 `json:"rating,omitempty"`
+	RuntimeMs *int64   `json:"runtime_ms,omitempty"`
 
 	// Section The heading the part sits under within its group, as the type places it: "Disc 2"; empty for none.
 	Section *string `json:"section,omitempty"`
 	SortKey string  `json:"sort_key"`
 	Title   *string `json:"title,omitempty"`
+
+	// Votes The votes the score rests on; absent when unknown.
+	Votes *int64 `json:"votes,omitempty"`
 
 	// Wanted This track's own SINGLE desired_item, when one exists -- distinct from monitored, which only affects the album's own required_count.
 	Wanted *Wanted `json:"wanted"`

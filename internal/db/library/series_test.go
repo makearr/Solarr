@@ -508,3 +508,33 @@ func TestSeriesUpsertOfWhatIsStoredWritesNothingUnlessForcedOrAPartChanged(t *te
 		t.Errorf("changed write: err = %v, description %q", err, description())
 	}
 }
+
+func TestAPartKeepsItsScoreWhenARefreshBringsNone(t *testing.T) {
+	opened, queries := newLibrary(t)
+	series := library.NewSeries(opened)
+	rated := sampleSeries()
+	rated.Parts[0].Rating, rated.Parts[0].Votes = 8.3, 1500
+	first, err := series.Upsert(t.Context(), seriesAt, rated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := series.Upsert(t.Context(), seriesAt.Add(time.Hour), sampleSeries()); err != nil {
+		t.Fatal(err)
+	}
+	parts, err := queries.ListWorkParts(t.Context(), first.WorkID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, part := range parts {
+		switch part.MediaRef {
+		case "s01e01":
+			if part.Rating.Float64 != 8.3 || part.Votes.Int64 != 1500 {
+				t.Errorf("rated part = %v/%v, want 8.3/1500", part.Rating, part.Votes)
+			}
+		case "s00e01":
+			if part.Rating.Valid || part.Votes.Valid {
+				t.Errorf("unrated part = %v/%v, want none", part.Rating, part.Votes)
+			}
+		}
+	}
+}

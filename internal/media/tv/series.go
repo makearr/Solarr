@@ -93,6 +93,12 @@ type AltTitle struct{ Language, Title string }
 // Key is the (season, number) pair an episode is found by.
 type Key struct{ Season, Number int }
 
+// EpisodeRating is one episode's score, 0 to 10, and how many votes it rests on.
+type EpisodeRating struct {
+	Score float64
+	Votes int
+}
+
 // Season carries a season's artwork.
 type Season struct {
 	Number int    `json:"number"`
@@ -189,6 +195,8 @@ type Series struct {
 	Keywords         []string
 	Images           []Image
 	Episodes         []Episode
+	// EpisodeRatings are the episodes' own scores by number; they never add an episode.
+	EpisodeRatings map[Key]EpisodeRating
 	// TMDBEpisodes is TMDB's own list; it becomes Episodes only for a series no other source lists episodes for.
 	TMDBEpisodes []Episode
 	// Type is what kind of series this is, as detected; a person's own choice is kept apart, as a manual field.

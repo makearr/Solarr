@@ -10515,6 +10515,16 @@ export interface components {
             runtime_ms?: number;
             date?: string;
             /**
+             * Format: double
+             * @description The part's own score, 0 to 10 (an episode's IMDb score); absent when no source gave one.
+             */
+            rating?: number;
+            /**
+             * Format: int64
+             * @description The votes the score rests on; absent when unknown.
+             */
+            votes?: number;
+            /**
              * Format: date-time
              * @description When the part is out (an episode's air time); absent when unknown.
              */

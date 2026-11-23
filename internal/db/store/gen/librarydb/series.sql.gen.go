@@ -1076,6 +1076,30 @@ func (q *Queries) SetWorkCertification(ctx context.Context, arg SetWorkCertifica
 	return err
 }
 
+const setWorkPartRating = `-- name: SetWorkPartRating :exec
+UPDATE work_part SET rating = ?1, votes = ?2
+WHERE work_id = ?3 AND media_ref = ?4
+  AND (rating IS NOT ?1 OR votes IS NOT ?2)
+`
+
+type SetWorkPartRatingParams struct {
+	Rating   sql.NullFloat64
+	Votes    sql.NullInt64
+	WorkID   int64
+	MediaRef string
+}
+
+// Only a changed score is written, so a refresh that finds the same one does not drop the work's digest.
+func (q *Queries) SetWorkPartRating(ctx context.Context, arg SetWorkPartRatingParams) error {
+	_, err := q.db.ExecContext(ctx, setWorkPartRating,
+		arg.Rating,
+		arg.Votes,
+		arg.WorkID,
+		arg.MediaRef,
+	)
+	return err
+}
+
 const setWorkRating = `-- name: SetWorkRating :exec
 INSERT INTO work_rating (work_id, provider, score, votes, fetched_at)
 VALUES (?, ?, ?, ?, ?)
@@ -1188,7 +1212,7 @@ ON CONFLICT (work_id, media_ref) DO UPDATE SET
   available_confidence = excluded.available_confidence,
   available_basis = excluded.available_basis,
   available_grace = excluded.available_grace
-RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace, optional
+RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace, optional, rating, votes
 `
 
 type UpsertWorkPartParams struct {
@@ -1236,6 +1260,8 @@ func (q *Queries) UpsertWorkPart(ctx context.Context, arg UpsertWorkPartParams) 
 		&i.AvailableBasis,
 		&i.AvailableGrace,
 		&i.Optional,
+		&i.Rating,
+		&i.Votes,
 	)
 	return i, err
 }

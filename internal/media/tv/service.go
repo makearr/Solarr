@@ -71,6 +71,7 @@ type AnimeSource interface {
 type RatingSource interface {
 	Configured() bool
 	Movie(ctx context.Context, imdb string) (omdb.Movie, error)
+	Season(ctx context.Context, imdb string, number int) (omdb.Season, error)
 }
 
 // AnimeEntrySource is the Kitsu client as the service needs it.
@@ -412,7 +413,36 @@ func (s Service) fetchOMDb(ctx context.Context, ids IDs) (Series, bool) {
 		}
 		return Series{}, false
 	}
-	return FromOMDb(movie), true
+	series := FromOMDb(movie)
+	series.EpisodeRatings = s.omdbEpisodeRatings(ctx, ids, movie)
+	return series, true
+}
+
+// maxRatedSeasons bounds the season requests of one refresh: OMDb's free key allows a thousand a day.
+const maxRatedSeasons = 30
+
+// omdbEpisodeRatings reads each season's listing, one request per season; a season that fails is left unrated.
+func (s Service) omdbEpisodeRatings(ctx context.Context, ids IDs, movie omdb.Movie) map[Key]EpisodeRating {
+	seasons, _ := strconv.Atoi(movie.Seasons)
+	ratings := map[Key]EpisodeRating{}
+	for number := 1; number <= min(seasons, maxRatedSeasons); number++ {
+		season, err := s.OMDb.Season(ctx, ids.IMDb, number)
+		if err != nil {
+			if !errors.Is(err, omdb.ErrNotFound) {
+				s.warn("omdb", ids.TVDB, err)
+			}
+			continue
+		}
+		for _, episode := range season.Episodes {
+			score, err := strconv.ParseFloat(episode.IMDbRating, 64)
+			position, positionErr := strconv.Atoi(episode.Episode)
+			if err != nil || positionErr != nil || score <= 0 || score > 10 {
+				continue
+			}
+			ratings[Key{number, position}] = EpisodeRating{Score: score}
+		}
+	}
+	return ratings
 }
 
 // fetchFanart asks fanart.tv for the series' pictures by its TheTVDB id.

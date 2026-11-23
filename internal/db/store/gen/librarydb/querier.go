@@ -1438,6 +1438,8 @@ type Querier interface {
 	SetWorkLeadPerson(ctx context.Context, arg SetWorkLeadPersonParams) error
 	SetWorkPartDetail(ctx context.Context, arg SetWorkPartDetailParams) error
 	SetWorkPartMonitored(ctx context.Context, arg SetWorkPartMonitoredParams) error
+	// Only a changed score is written, so a refresh that finds the same one does not drop the work's digest.
+	SetWorkPartRating(ctx context.Context, arg SetWorkPartRatingParams) error
 	SetWorkRating(ctx context.Context, arg SetWorkRatingParams) error
 	// Unlike year, unconditional: nothing else writes a work's description yet,
 	// so there is no earlier value worth protecting.

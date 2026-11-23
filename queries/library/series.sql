@@ -14,7 +14,7 @@ ON CONFLICT (work_id, media_ref) DO UPDATE SET
   available_confidence = excluded.available_confidence,
   available_basis = excluded.available_basis,
   available_grace = excluded.available_grace
-RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace, optional;
+RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace, optional, rating, votes;
 
 -- name: DeleteWorkTitlesBySource :exec
 DELETE FROM work_title WHERE work_id = ? AND source = ?;
@@ -247,3 +247,9 @@ SELECT digest FROM work_write_digest WHERE work_id = ?;
 -- name: SetWorkWriteDigest :exec
 INSERT INTO work_write_digest (work_id, digest, written_at) VALUES (?, ?, ?)
 ON CONFLICT (work_id) DO UPDATE SET digest = excluded.digest, written_at = excluded.written_at;
+
+-- Only a changed score is written, so a refresh that finds the same one does not drop the work's digest.
+-- name: SetWorkPartRating :exec
+UPDATE work_part SET rating = sqlc.arg(rating), votes = sqlc.arg(votes)
+WHERE work_id = sqlc.arg(work_id) AND media_ref = sqlc.arg(media_ref)
+  AND (rating IS NOT sqlc.arg(rating) OR votes IS NOT sqlc.arg(votes));

@@ -198,6 +198,7 @@ func (a WorkDetail) partRows(mediaType string, from []library.PartDetail) []apis
 		if a.PartPosition != nil {
 			row.Section, row.Number = a.PartPosition(mediaType, detail.Part.MediaRef)
 		}
+		row.Rating, row.Votes = detail.Part.Rating.Float64, detail.Part.Votes.Int64
 		if detail.Part.AvailableAt.Valid {
 			row.AvailableAt = time.Unix(detail.Part.AvailableAt.Int64, 0)
 		}

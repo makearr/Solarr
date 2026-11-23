@@ -428,12 +428,20 @@ func TestRefreshIsSkippedWhileSkyhookIsDownSoTheFallbacksNumbersNeverReachTheLib
 }
 
 type fakeOMDb struct {
-	movie omdb.Movie
-	err   error
+	movie   omdb.Movie
+	err     error
+	seasons map[int]omdb.Season
 }
 
 func (fakeOMDb) Configured() bool                                    { return true }
 func (f fakeOMDb) Movie(context.Context, string) (omdb.Movie, error) { return f.movie, f.err }
+func (f fakeOMDb) Season(_ context.Context, _ string, number int) (omdb.Season, error) {
+	season, found := f.seasons[number]
+	if !found {
+		return omdb.Season{}, omdb.ErrNotFound
+	}
+	return season, nil
+}
 
 type fakeFanart struct{ show fanart.Show }
 
@@ -454,6 +462,25 @@ func TestFetchTakesOMDbsRatingAndFanartsLogoWhereNoOneElseHasThem(t *testing.T) 
 	want := []tv.Image{{Kind: "logo", URL: "https://assets.example/logo.png", Source: "fanart"}}
 	if !reflect.DeepEqual(series.Images, want) {
 		t.Errorf("images = %+v, want %+v", series.Images, want)
+	}
+}
+
+func TestFetchTakesEpisodeRatingsFromOMDbSeasonListsWithoutAddingEpisodes(t *testing.T) {
+	service, _ := newService(t, fakeSkyhook{err: errors.New("proxy down")}, fakeTVmaze{show: tvmaze.Show{ID: 42, Name: "Example Show", Status: "Running"}})
+	service.OMDb = fakeOMDb{
+		movie: omdb.Movie{IMDbID: "tt9000009", Seasons: "2", IMDbRating: "8.4"},
+		seasons: map[int]omdb.Season{
+			1: {Episodes: []omdb.Episode{{Episode: "1", IMDbRating: "8.1"}, {Episode: "2", IMDbRating: "N/A"}, {Episode: "3", IMDbRating: "11"}}},
+			2: {Episodes: []omdb.Episode{{Episode: "1", IMDbRating: "9.0"}}},
+		},
+	}
+	series, err := service.Fetch(t.Context(), tv.IDs{TVDB: 1234, IMDb: "tt9000009"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[tv.Key]tv.EpisodeRating{{Season: 1, Number: 1}: {Score: 8.1}, {Season: 2, Number: 1}: {Score: 9.0}}
+	if !reflect.DeepEqual(series.EpisodeRatings, want) {
+		t.Errorf("ratings = %+v, want %+v", series.EpisodeRatings, want)
 	}
 }
 

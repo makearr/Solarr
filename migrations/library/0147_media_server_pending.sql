@@ -56,3 +56,7 @@ CREATE TABLE webhook_pending (
   next_at    INTEGER NOT NULL
 );
 CREATE INDEX webhook_pending_due ON webhook_pending(next_at, id);
+
+-- An episode's own IMDb score, filled by OMDb's season listing; null until a refresh finds one.
+ALTER TABLE work_part ADD COLUMN rating REAL;
+ALTER TABLE work_part ADD COLUMN votes INTEGER;

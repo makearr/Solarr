@@ -126,6 +126,7 @@ const catalogue = {
   "work.readBy": "read by {narrators}",
   "work.partsOnDisk": "{present} of {required} {parts} on disk",
   "work.partsPresent": "{present} {parts} on disk",
+  "work.partVotes": "{votes} votes",
   "work.outBasis": "Known from: {basis}. Counted as missing {hours} hours after.",
   "work.outUnannounced": "No date announced yet.",
   "work.sceneNumber": "scene {number}",
