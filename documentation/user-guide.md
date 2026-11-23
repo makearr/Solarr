@@ -33,6 +33,7 @@ If a screen mentioned is missing, raise the level.
 | 8 | [Import a folder](guide/importing.md) | 🟡 | Messy folders, archives, held reviews |
 | 9 | [Storage](guide/storage.md) | 🟡 / 🔴 | Root folders, offline roots, recycle bin, similar videos, cache and RAM |
 | 10 | [Favorites](guide/favorites.md) | 🟢 | Hearts, apart from follows |
+| 11 | [Discover](discover.md) | 🟢 / 🟡 | What to watch, read or hear next; Not interested; automatic adding |
 
 Books and audiobooks ([books.md](books.md)), the adult type ([adult.md](adult.md)) and the preview player
 ([media-player.md](media-player.md)) have their own pages in the [documentation README](README.md).

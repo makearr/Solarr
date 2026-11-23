@@ -26,3 +26,5 @@ Definition-file metadata providers (documentation/provider-definitions.md) get t
 after the definition's key; the guard additionally refuses every host the file does not declare, in requests and in redirects.
 Webhook deliveries (documentation/webhooks.md) go to the address the administrator typed through a guard that allows that one host
 (a LAN receiver is fine), on a bucket per webhook, and never follow a redirect to another host.
+
+Discover (documentation/discover.md) refreshes each library's lists as Background requests on the source's own bucket (TMDB, AniList, Last.fm, Open Library, Audible, StashDB); Load more is asked by a person and goes in the User lane.
