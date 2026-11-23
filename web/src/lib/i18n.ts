@@ -133,6 +133,8 @@ const catalogue = {
   "work.inEdition": "In the collected edition",
   "work.sceneNumberHint": "Scene releases number this episode {number} (TheXEM): searches ask for it, and a release numbered either way is taken.",
   "work.waitingForMetadata": "Waiting for metadata",
+  "work.provisional": "From your media server",
+  "work.provisionalHint": "Only your own media server knew this so far. The other metadata providers of its library replace its values where they know better, at the next refresh that reaches one.",
   "work.notOutUntil": "Not out yet · {date}",
   "work.noParts": "No {parts} are known yet.",
   "work.notWanted": "Nothing of this {work} is wanted.",

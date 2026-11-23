@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media/screen"
 	"github.com/makearr/Solarr/internal/mediaserver"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
@@ -69,6 +70,7 @@ func ToWrite(movie Movie, options WriteOptions) library.SeriesWrite {
 		availability = DefaultAvailability
 	}
 	write := library.SeriesWrite{
+		Mark:                library.MarkOf(settings.OnlyProvisional(movie.Sources)),
 		Work:                library.WorkIdentity{MediaType: MediaType, CanonicalTitle: movie.Title, SortTitle: library.SortTitle(movie.Title)},
 		Year:                yearPtr,
 		OriginalLanguage:    movie.OriginalLanguage,

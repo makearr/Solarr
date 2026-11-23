@@ -232,6 +232,32 @@ func TestGetWork_RendersDescriptionOnDiskCreditsAndGenres(t *testing.T) {
 	}
 }
 
+func TestGetWork_SaysWhetherOnlyAMediaServerAnswered(t *testing.T) {
+	fixture := newWorksFixture(t)
+	_, rootVisible := fixture.createCategoryWithRoot(t, "Shows", "/media/tv")
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	for _, provisional := range []bool{true, false} {
+		fixture.workDetail.row = apiserver.WorkDetailRow{
+			ID: 1, MediaType: "tv", Title: "Example Show", SortTitle: "example show",
+			AddedAt: fixture.clock.Now(), UpdatedAt: fixture.clock.Now(), RootFolderIDs: []int64{rootVisible.ID}, Provisional: provisional,
+		}
+		recorder := fixture.do(authedGet(t, cookies, "/api/v1/works/1"))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+		}
+		var body struct {
+			Provisional *bool `json:"provisional"`
+		}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if body.Provisional == nil || *body.Provisional != provisional {
+			t.Errorf("provisional = %v, want %v", body.Provisional, provisional)
+		}
+	}
+}
+
 func TestGetWork_MalformedIDAnswers400(t *testing.T) {
 	fixture := newWorksFixture(t)
 	fixture.createUser(t, "admin", settings.RoleAdmin)

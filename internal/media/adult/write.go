@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
 )
 
@@ -46,6 +47,7 @@ func ToWrite(scene Scene, now time.Time) library.SeriesWrite {
 		source = scene.Sources[0]
 	}
 	write := library.SeriesWrite{
+		Mark:             library.MarkOf(settings.OnlyProvisional(scene.Sources)),
 		Work:             library.WorkIdentity{MediaType: MediaType, CanonicalTitle: scene.Title, SortTitle: library.SortTitle(scene.Title)},
 		Year:             yearPtr,
 		RuntimeMs:        runtimePtr,

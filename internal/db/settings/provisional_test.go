@@ -33,3 +33,22 @@ func TestEnrichProvidersTakeNoPlaceInAnOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestOnlyProvisionalWhenNoOtherSourceAnswered(t *testing.T) {
+	cases := []struct {
+		sources []string
+		want    bool
+	}{
+		{nil, false},
+		{[]string{"local:jellyfin"}, true},
+		{[]string{"local:jellyfin", "local:stash"}, true},
+		{[]string{"local:jellyfin", "tmdb"}, false},
+		{[]string{"wikidata", "local:jellyfin"}, false},
+		{[]string{"tvdb"}, false},
+	}
+	for _, c := range cases {
+		if got := settings.OnlyProvisional(c.sources); got != c.want {
+			t.Errorf("OnlyProvisional(%v) = %v, want %v", c.sources, got, c.want)
+		}
+	}
+}

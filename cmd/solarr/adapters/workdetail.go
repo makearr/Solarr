@@ -49,6 +49,7 @@ func (a WorkDetail) GetWorkDetail(ctx context.Context, id int64) (apiserver.Work
 		Rating:      detail.Rating, RatingAge: detail.RatingAge,
 		RootFolderIDs: detail.RootFolderIDs,
 		CategoryIDs:   detail.CategoryIDs,
+		Provisional:   detail.Provisional,
 	}
 	for _, score := range detail.Scores {
 		row.Scores = append(row.Scores, apiserver.ScoreRow(score))

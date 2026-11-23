@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 // MonitorOption is Readarr's "Monitor" choice when a book is added.
@@ -56,6 +57,7 @@ func ToWrite(format Format, book Book, now time.Time) library.SeriesWrite {
 		source = book.Sources[0]
 	}
 	write := library.SeriesWrite{
+		Mark:             library.MarkOf(settings.OnlyProvisional(book.Sources)),
 		Work:             library.WorkIdentity{MediaType: format.MediaType, CanonicalTitle: book.Title, SortTitle: library.SortTitle(book.Title)},
 		Year:             yearPtr,
 		OriginalLanguage: book.Language,

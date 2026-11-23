@@ -14542,6 +14542,11 @@ components:
         organisations: { type: array, items: { $ref: "#/components/schemas/WorkOrganisation" }, description: "The studios, networks or labels the work belongs to." }
         files: { type: array, items: { $ref: "#/components/schemas/PartFile" }, description: "The files of a work with no parts (a movie), one per version." }
         lead_id: { type: integer, format: int64, description: "The person the work is listed under (an album's artist)." }
+        provisional:
+          type: boolean
+          description: >-
+            Whether the work's metadata came only from a media server of the person's own: true until another metadata
+            provider of its library answers a refresh.
         pictures:
           type: object
           additionalProperties: { type: string }

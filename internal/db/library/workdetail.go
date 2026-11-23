@@ -136,6 +136,8 @@ type WorkDetail struct {
 	Organisations []WorkOrganisation
 	// Groups are the work's SET items: an album's one, with no ref, or a series' seasons.
 	Groups []GroupStatus
+	// Provisional is whether its metadata came only from a media server of the person's own (D1).
+	Provisional bool
 }
 
 // WorkScore is one provider's rating of a work, normalised to 0..10.
@@ -235,6 +237,14 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 	if err != nil {
 		return WorkDetail{}, err
 	}
+
+	classifications, err := queries.ListWorkClassifications(ctx, id)
+	if err != nil {
+		return WorkDetail{}, fmt.Errorf("library: work detail: classifications: %w", err)
+	}
+	provisional := slices.ContainsFunc(classifications, func(row librarydb.WorkClassification) bool {
+		return row.Kind == MetadataStateKind && row.Value == metadataProvisional
+	})
 
 	rootFolderIDs, err := queries.ListRootFoldersForWork(ctx, id)
 	if err != nil {
@@ -374,7 +384,7 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 		Files: wholeFiles, Organisations: named,
 		Work: work, ExternalIDs: externalIDs, Editions: editionDetails,
 		Parts: partDetails, Credits: credits, Genres: genres, RootFolderIDs: rootFolderIDs,
-		CategoryIDs: categoryIDs, Wanted: wanted, Groups: groups, HasFiles: hasFiles == 1,
+		CategoryIDs: categoryIDs, Wanted: wanted, Groups: groups, HasFiles: hasFiles == 1, Provisional: provisional,
 	}, nil
 }
 

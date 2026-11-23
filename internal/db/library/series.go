@@ -129,9 +129,37 @@ type SeriesWrite struct {
 	LeadRole string
 	// Franchise is the collection a provider says the work belongs to (a movie's franchise); nil leaves it as it is.
 	Franchise *SeriesFranchiseWrite
+	// Mark says whether the merge behind the write rests on local providers only (D1); the zero value leaves it.
+	Mark MetadataMark
 	// Force writes in full although the provider's answer is what the last write stored (a person asked for a refresh).
 	Force bool
 }
+
+// MetadataMark is what a write says of a work's provisional mark, work_classification kind metadata_state.
+type MetadataMark int
+
+const (
+	// MarkKept leaves the mark as it is: a write that is not a metadata merge (parts only).
+	MarkKept MetadataMark = iota
+	// MarkProvisional sets it: only a media server of the person's own answered.
+	MarkProvisional
+	// MarkSettled clears it: another provider answered.
+	MarkSettled
+)
+
+// MarkOf is the mark of a merge, provisional when only local providers answered.
+func MarkOf(provisional bool) MetadataMark {
+	if provisional {
+		return MarkProvisional
+	}
+	return MarkSettled
+}
+
+const (
+	// MetadataStateKind is the work_classification kind holding the provisional mark.
+	MetadataStateKind   = "metadata_state"
+	metadataProvisional = "provisional"
+)
 
 // seriesWriteVersion changes whenever Upsert stores something it did not before, so the next refresh writes in full.
 const seriesWriteVersion = 1
@@ -361,6 +389,9 @@ func writeSeriesMetadata(ctx context.Context, queries *librarydb.Queries, at tim
 			return fmt.Errorf("library: set series title: %w", err)
 		}
 	}
+	if err := writeMetadataMark(ctx, queries, workID, write.Mark); err != nil {
+		return err
+	}
 	if err := queries.UpdateWorkSeriesDetails(ctx, librarydb.UpdateWorkSeriesDetailsParams{
 		OriginalLanguage: nullString(write.OriginalLanguage), Year: nullInt64(write.Year), RuntimeMs: nullInt64(write.RuntimeMs),
 		Description: nullString(write.Description), UpdatedAt: at.Unix(), ID: workID,
@@ -446,6 +477,22 @@ func writeSeriesMetadata(ctx context.Context, queries *librarydb.Queries, at tim
 		}
 	}
 	return writeSeriesNetwork(ctx, queries, workID, write)
+}
+
+func writeMetadataMark(ctx context.Context, queries *librarydb.Queries, workID int64, mark MetadataMark) error {
+	var err error
+	switch mark {
+	case MarkKept:
+		return nil
+	case MarkProvisional:
+		err = queries.SetWorkClassification(ctx, librarydb.SetWorkClassificationParams{WorkID: workID, Kind: MetadataStateKind, Value: metadataProvisional})
+	case MarkSettled:
+		err = queries.DeleteWorkClassification(ctx, librarydb.DeleteWorkClassificationParams{WorkID: workID, Kind: MetadataStateKind, Value: metadataProvisional})
+	}
+	if err != nil {
+		return fmt.Errorf("library: write metadata state of work %d: %w", workID, err)
+	}
+	return nil
 }
 
 func writeSeriesKeywords(ctx context.Context, queries *librarydb.Queries, workID int64, write SeriesWrite) error {

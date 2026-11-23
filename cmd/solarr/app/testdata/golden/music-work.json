@@ -48,6 +48,7 @@
   "media_type": "music",
   "on_disk": true,
   "part_count": 3,
+  "provisional": false,
   "sort_title": "quiet orchards",
   "title": "Quiet Orchards",
   "updated_at": "2021-03-04T05:06:07Z",

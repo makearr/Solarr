@@ -304,6 +304,11 @@ function WorkHeader({
                   Unverified
                 </Chip>
               )}
+              {work.provisional && (
+                <Chip tone="caution" title={t("work.provisionalHint")}>
+                  {t("work.provisional")}
+                </Chip>
+              )}
               {info?.part.one && groups.length > 0 && work.part_count === 0 && <Chip>{t("work.waitingForMetadata")}</Chip>}
               {groups.length > 0 && work.part_count > 0 && (
                 <Chip tone={counts.required > 0 && counts.present >= counts.required ? "ok" : "neutral"}>

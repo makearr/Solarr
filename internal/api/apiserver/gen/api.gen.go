@@ -7427,6 +7427,9 @@ type WorkDetail struct {
 	// Pictures The work's pictures at their providers, by kind (poster, fanart, logo); a person's own choice first.
 	Pictures *map[string]string `json:"pictures,omitempty"`
 
+	// Provisional Whether the work's metadata came only from a media server of the person's own: true until another metadata provider of its library answers a refresh.
+	Provisional *bool `json:"provisional,omitempty"`
+
 	// Rating The work's certification; absent when it has none.
 	Rating *struct {
 		// AboveLimit A library holding the work does not admit it

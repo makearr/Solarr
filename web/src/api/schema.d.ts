@@ -10830,6 +10830,8 @@ export interface components {
              * @description The person the work is listed under (an album's artist).
              */
             lead_id?: number;
+            /** @description Whether the work's metadata came only from a media server of the person's own: true until another metadata provider of its library answers a refresh. */
+            provisional?: boolean;
             /** @description The work's pictures at their providers, by kind (poster, fanart, logo); a person's own choice first. */
             pictures?: {
                 [key: string]: string;

@@ -76,6 +76,20 @@ where no one else has one. Its ids only fill gaps, never replace an id from a fi
 Metadata page marks it "your media server" and says so; a type's default order never holds one, only a library's own does.
 A connection a library's order still names is not deleted (409) unless another of its kind answers for that library.
 
+**The provisional mark.** A work whose last metadata refresh rested on local providers only carries the mark (work_classification
+kind `metadata_state`, value `provisional`; `provisional` on `GET /works/{id}`; a "From your media server" chip on the work page).
+One rule decides it for every type: the merged answer lists the sources that contributed (`Sources`), and the mark is set when
+every one of them is a `local:` provider (`settings.OnlyProvisional`), cleared otherwise. The type's `ToWrite` passes it as
+`SeriesWrite.Mark` and `library.Series.Upsert` writes it with the rest of the refresh; a write that is no metadata merge (a comic's
+parts-only write) leaves it. The signal is "another provider contributed something", not "another provider was asked": a provider
+that is down, unconfigured or does not know the work contributes nothing, so the mark stays and the next refresh (the after-outage
+retry included) is what clears it. A rating, a picture or an id from another provider counts as contributing.
+
+Music carries no mark, by design rather than for want of a rating signal: an album is a MusicBrainz release group, created from
+MusicBrainz's answer and never from a media server's, so no music work's metadata can rest on local providers alone. A local
+server's MusicBrainz ids (by path) only help find the release group. An album named from its own tags or folder, which no provider
+knew, is a different state with its own chip, *Unverified* (`local:album` id).
+
 | Server | Libraries | Asked by | Notes |
 |---|---|---|---|
 | Jellyfin | TV, movies, music | provider id from a folder or file name (a bulk index of the server's titles, since its id filters are ignored), else title; by path where the path pairs match | titles, overview, genres, ids, studios, certification; People are not yet credits; music not wired |

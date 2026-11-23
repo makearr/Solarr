@@ -154,6 +154,11 @@ func LocalSource(kind string) string { return LocalSourcePrefix + kind }
 // IsProvisionalSource says key is a local provider, whose answers every other provider replaces.
 func IsProvisionalSource(key string) bool { return strings.HasPrefix(key, LocalSourcePrefix) }
 
+// OnlyProvisional says every source a merge rests on is a local provider: the work is marked provisional until another answers.
+func OnlyProvisional(sources []string) bool {
+	return len(sources) > 0 && !slices.ContainsFunc(sources, func(key string) bool { return !IsProvisionalSource(key) })
+}
+
 // RankProvisionalLast moves the provisional providers behind all the others, keeping each group's order: in a merge the
 // first provider to hold a field supplies it, and a local value must lose to every external one.
 func RankProvisionalLast(order []string) []string {

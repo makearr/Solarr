@@ -210,6 +210,8 @@ type WorkDetailRow struct {
 	Files []PartFileRow
 	// Organisations are the studios, networks or labels the work belongs to.
 	Organisations []WorkOrganisationRow
+	// Provisional is whether its metadata came only from a media server of the person's own.
+	Provisional bool
 }
 
 // WorkOrganisationRow is one organisation of a work.
@@ -747,6 +749,7 @@ func buildWorkDetailView(row WorkDetailRow) gen.WorkDetail {
 		PartCount:   row.PartCount,
 		Credits:     buildCreditViews(row.Credits),
 		Genres:      row.Genres,
+		Provisional: boolPtr(row.Provisional),
 	}
 	if len(row.Tags) > 0 {
 		tags := make([]gen.TagRef, len(row.Tags))
