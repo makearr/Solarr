@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -24,8 +25,15 @@ func (*fakeWebhooks) Delete(context.Context, int64) error { return nil }
 func (*fakeWebhooks) Test(context.Context, int64) (apiserver.WebhookTest, error) {
 	return apiserver.WebhookTest{OK: true, Status: 200, Reply: "ok"}, nil
 }
+func (*fakeWebhooks) Pending(_ context.Context, id int64) ([]apiserver.WebhookWaiting, error) {
+	if id != 1 {
+		return nil, settings.ErrNotFound
+	}
+	at := time.Unix(1790000000, 0).UTC()
+	return []apiserver.WebhookWaiting{{ID: 5, Event: "imported", Attempts: 2, QueuedAt: at, NextAt: at.Add(time.Minute)}}, nil
+}
 func (*fakeWebhooks) Vocabulary() apiserver.WebhookVocabulary {
-	return apiserver.WebhookVocabulary{Events: []apiserver.WebhookEventView{{Key: "imported", Group: "library"}}, PresetKeys: []string{"generic"}, PresetNames: []string{"Generic JSON"}, PresetNotes: []string{"x"}}
+	return apiserver.WebhookVocabulary{Events: []apiserver.WebhookEventView{{Key: "imported", Group: "library"}}, PresetKeys: []string{"generic"}, PresetNames: []string{"Generic JSON"}, PresetNotes: []string{"x"}, PresetSamples: []string{"{}"}}
 }
 
 func TestWebhooks_TheAddressAndSecretAreWriteOnlyAndAMemberIsRefused(t *testing.T) {
@@ -55,6 +63,7 @@ func TestWebhooks_TheAddressAndSecretAreWriteOnlyAndAMemberIsRefused(t *testing.
 		authedPost(t, member, "/api/v1/webhooks/1/test", `{}`),
 		authedDelete(t, member, "/api/v1/webhooks/1"),
 		authedGet(t, member, "/api/v1/webhooks/events"),
+		authedGet(t, member, "/api/v1/webhooks/1/pending"),
 	} {
 		if recorder := fixture.do(request); recorder.Code != http.StatusForbidden {
 			t.Errorf("%s %s by a member = %d, want 403", request.Method, request.URL.Path, recorder.Code)
@@ -62,5 +71,19 @@ func TestWebhooks_TheAddressAndSecretAreWriteOnlyAndAMemberIsRefused(t *testing.
 	}
 	if len(fixture.webhooks.saved) != 1 {
 		t.Errorf("saved %d times, want once (the member's add must not reach the store)", len(fixture.webhooks.saved))
+	}
+}
+
+func TestWebhooks_PendingListsTheWaitingDeliveriesWithoutAPayload(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	admin := fixture.signIn(t, "admin")
+	recorder := fixture.do(authedGet(t, admin, "/api/v1/webhooks/1/pending"))
+	want := `[{"attempts":2,"event":"imported","id":5,"next_at":"2026-09-21T14:14:20Z","queued_at":"2026-09-21T14:13:20Z"}]`
+	if recorder.Code != http.StatusOK || strings.TrimSpace(recorder.Body.String()) != want {
+		t.Errorf("pending = %d %s, want %s", recorder.Code, recorder.Body, want)
+	}
+	if recorder := fixture.do(authedGet(t, admin, "/api/v1/webhooks/9/pending")); recorder.Code != http.StatusNotFound {
+		t.Errorf("unknown webhook = %d, want 404", recorder.Code)
 	}
 }

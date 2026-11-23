@@ -19,3 +19,7 @@ DELETE FROM webhook_pending WHERE webhook_id = ?;
 
 -- name: CountWebhookPending :one
 SELECT CAST(COUNT(*) AS INTEGER) AS pending, CAST(COALESCE(MIN(next_at), 0) AS INTEGER) AS next_at FROM webhook_pending WHERE webhook_id = ?;
+
+-- name: ListWebhookPendingOf :many
+SELECT id, webhook_id, event, queued_at, attempts, next_at FROM webhook_pending
+WHERE webhook_id = ? ORDER BY id LIMIT ?;

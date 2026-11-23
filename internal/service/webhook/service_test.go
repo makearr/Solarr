@@ -211,3 +211,19 @@ func TestAnInstanceEventReachesAWebhookLimitedToLibraries(t *testing.T) {
 		t.Fatalf("a library event of another library queued %d rows", len(outbox.rows))
 	}
 }
+
+func TestEveryShippedPresetRendersTheSampleAndTheJSONOnesParse(t *testing.T) {
+	presets := Presets()
+	if len(presets) != 6 {
+		t.Fatalf("%d presets, want 6", len(presets))
+	}
+	for _, preset := range presets {
+		sample := preset.Sample()
+		if sample == "" || !strings.Contains(sample, "Example Series") {
+			t.Errorf("%s: sample = %q", preset.Key, sample)
+		}
+		if preset.ContentType == "application/json" && !json.Valid([]byte(sample)) {
+			t.Errorf("%s: sample is not JSON: %s", preset.Key, sample)
+		}
+	}
+}

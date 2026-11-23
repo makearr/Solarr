@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Webhooks: the form shows the body of the chosen format for an example event, and `GET /webhooks/{id}/pending` lists what still waits for a webhook (event, attempts, next try).
 - Music scan: an album folder whose files carry no MusicBrainz tags is named by the ids your Jellyfin server holds for it (before any title search); the identification detail shows the pass.
 - Download clients as files: a definition file (`engine: http`, usenet) describes how to talk to a client's HTTP API; once approved in Settings > Providers it is offered beside the built-in clients. Solarr still implements no client itself.
 - Webhooks out (API): an administrator adds webhooks with a preset (generic JSON, Discord, Slack, ntfy, Gotify, Apprise), the events they take and the libraries; deliveries go through an outbox with backing-off retries and an HMAC signature, and the address and secret are sealed. Schema note: new settings and library tables (dev databases need recreating).

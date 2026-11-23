@@ -110,6 +110,55 @@ func (q *Queries) ListDueWebhookPending(ctx context.Context, arg ListDueWebhookP
 	return items, nil
 }
 
+const listWebhookPendingOf = `-- name: ListWebhookPendingOf :many
+SELECT id, webhook_id, event, queued_at, attempts, next_at FROM webhook_pending
+WHERE webhook_id = ? ORDER BY id LIMIT ?
+`
+
+type ListWebhookPendingOfParams struct {
+	WebhookID int64
+	Limit     int64
+}
+
+type ListWebhookPendingOfRow struct {
+	ID        int64
+	WebhookID int64
+	Event     string
+	QueuedAt  int64
+	Attempts  int64
+	NextAt    int64
+}
+
+func (q *Queries) ListWebhookPendingOf(ctx context.Context, arg ListWebhookPendingOfParams) ([]ListWebhookPendingOfRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWebhookPendingOf, arg.WebhookID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWebhookPendingOfRow{}
+	for rows.Next() {
+		var i ListWebhookPendingOfRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WebhookID,
+			&i.Event,
+			&i.QueuedAt,
+			&i.Attempts,
+			&i.NextAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const retryWebhookPending = `-- name: RetryWebhookPending :exec
 UPDATE webhook_pending SET attempts = attempts + 1, next_at = ? WHERE id = ?
 `

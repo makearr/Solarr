@@ -40,12 +40,19 @@ type WebhookTest struct {
 
 // WebhookVocabulary is what a webhook may subscribe to and the presets it may use.
 type WebhookVocabulary struct {
-	Events                               []WebhookEventView
-	PresetKeys, PresetNames, PresetNotes []string
+	Events                                              []WebhookEventView
+	PresetKeys, PresetNames, PresetNotes, PresetSamples []string
 }
 
 // WebhookEventView names an event and the group the interface lists it under.
 type WebhookEventView struct{ Key, Group string }
+
+// WebhookWaiting is one delivery still to make.
+type WebhookWaiting struct {
+	ID, Attempts     int64
+	Event            string
+	QueuedAt, NextAt time.Time
+}
 
 // Webhooks administers the outgoing webhooks; cmd/solarr/app implements it. Invalid input answers config.Problems and an
 // unknown id an error wrapping settings.ErrNotFound.
@@ -54,6 +61,8 @@ type Webhooks interface {
 	Save(ctx context.Context, id int64, input WebhookInput) (WebhookInfo, error)
 	Delete(ctx context.Context, id int64) error
 	Test(ctx context.Context, id int64) (WebhookTest, error)
+	// Pending lists what still waits for the webhook; an unknown id answers an error wrapping settings.ErrNotFound.
+	Pending(ctx context.Context, id int64) ([]WebhookWaiting, error)
 	Vocabulary() WebhookVocabulary
 }
 
@@ -179,6 +188,27 @@ func (s *Server) TestWebhook(w http.ResponseWriter, r *http.Request, id int64) {
 	writeJSON(w, s.logger, http.StatusOK, view)
 }
 
+// ListWebhookPending answers the deliveries a webhook still has to make.
+func (s *Server) ListWebhookPending(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	webhooks := s.webhooksOf(w)
+	if webhooks == nil {
+		return
+	}
+	waiting, err := webhooks.Pending(r.Context(), id)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	views := make([]gen.WebhookPendingDelivery, len(waiting))
+	for i, one := range waiting {
+		views[i] = gen.WebhookPendingDelivery{Id: one.ID, Event: one.Event, QueuedAt: one.QueuedAt, Attempts: int(one.Attempts), NextAt: one.NextAt}
+	}
+	writeJSON(w, s.logger, http.StatusOK, views)
+}
+
 // ListWebhookEvents answers the vocabulary and the presets.
 func (s *Server) ListWebhookEvents(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdministrator(w, r) {
@@ -194,7 +224,7 @@ func (s *Server) ListWebhookEvents(w http.ResponseWriter, r *http.Request) {
 		view.Events = append(view.Events, gen.WebhookEventInfo{Key: event.Key, Group: event.Group})
 	}
 	for index, key := range vocabulary.PresetKeys {
-		view.Presets = append(view.Presets, gen.WebhookPresetInfo{Key: key, Name: vocabulary.PresetNames[index], Description: vocabulary.PresetNotes[index]})
+		view.Presets = append(view.Presets, gen.WebhookPresetInfo{Key: key, Name: vocabulary.PresetNames[index], Description: vocabulary.PresetNotes[index], Sample: vocabulary.PresetSamples[index]})
 	}
 	writeJSON(w, s.logger, http.StatusOK, view)
 }

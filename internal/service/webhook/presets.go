@@ -89,3 +89,22 @@ func (p Preset) Render(payload Payload) ([]byte, error) {
 	}
 	return out.Bytes(), nil
 }
+
+// SamplePayload is an invented "imported" event, for showing what a preset sends before anything has happened.
+func SamplePayload() Payload {
+	return payloadOf(Occurrence{
+		Event:   EventImported,
+		Library: Library{ID: 2, Name: "Comics", MediaType: "comic", Kind: "comic"},
+		Work:    &Work{ID: 41, Title: "Example Series", Year: 2024},
+		Files:   []File{{Name: "Example Series 001.cbz", Size: 52428800}},
+	}, Instance{Name: "Solarr", Version: "example"}, 1767225600, false)
+}
+
+// Sample is the body this preset sends for SamplePayload.
+func (p Preset) Sample() string {
+	body, err := p.Render(SamplePayload())
+	if err != nil {
+		return ""
+	}
+	return string(body)
+}

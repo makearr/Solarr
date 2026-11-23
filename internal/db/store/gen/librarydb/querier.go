@@ -1027,6 +1027,7 @@ type Querier interface {
 	ListWantedAlbumsByArtistName(ctx context.Context, arg ListWantedAlbumsByArtistNameParams) ([]int64, error)
 	// A library's missing parts, newest first: monitored, out (past their time and grace, as PartOut says), and no file covers them (Sonarr's Wanted, Missing).
 	ListWantedParts(ctx context.Context, arg ListWantedPartsParams) ([]ListWantedPartsRow, error)
+	ListWebhookPendingOf(ctx context.Context, arg ListWebhookPendingOfParams) ([]ListWebhookPendingOfRow, error)
 	// The files of a work with no parts (a movie): the primary files of its whole-work items, a version each.
 	ListWholeFilesForWork(ctx context.Context, workID int64) ([]ListWholeFilesForWorkRow, error)
 	ListWorkClassifications(ctx context.Context, workID int64) ([]WorkClassification, error)

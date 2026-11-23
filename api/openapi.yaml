@@ -3140,6 +3140,28 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /webhooks/{id}/pending:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: listWebhookPending
+      tags: [settings]
+      summary: The deliveries still waiting for a webhook (event, attempts, next try), oldest first, at most 100; never the payload.
+      responses:
+        "200":
+          description: The waiting deliveries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WebhookPendingDelivery" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /incoming-webhooks:
     get:
       operationId: listInboundWebhooks
@@ -12813,6 +12835,15 @@ components:
         status: { type: integer }
         reply: { type: string }
         error: { type: string }
+    WebhookPendingDelivery:
+      type: object
+      required: [id, event, queued_at, attempts, next_at]
+      properties:
+        id: { type: integer, format: int64 }
+        event: { type: string }
+        queued_at: { type: string, format: date-time }
+        attempts: { type: integer }
+        next_at: { type: string, format: date-time }
     WebhookEventInfo:
       type: object
       required: [key, group]
@@ -12821,11 +12852,12 @@ components:
         group: { type: string }
     WebhookPresetInfo:
       type: object
-      required: [key, name, description]
+      required: [key, name, description, sample]
       properties:
         key: { type: string }
         name: { type: string }
         description: { type: string }
+        sample: { type: string, description: The request body this preset sends for an invented imported event. }
     WebhookVocabulary:
       type: object
       required: [events, presets]

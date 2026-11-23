@@ -79,3 +79,16 @@ func (w WebhookPending) Count(ctx context.Context, webhookID int64) (pending, ne
 	row, err := librarydb.New(w.store.Read()).CountWebhookPending(ctx, webhookID)
 	return row.Pending, row.NextAt, err
 }
+
+// Of lists a webhook's waiting deliveries without their payloads, oldest first.
+func (w WebhookPending) Of(ctx context.Context, webhookID, limit int64) ([]WebhookDelivery, error) {
+	rows, err := librarydb.New(w.store.Read()).ListWebhookPendingOf(ctx, librarydb.ListWebhookPendingOfParams{WebhookID: webhookID, Limit: limit})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]WebhookDelivery, len(rows))
+	for i, row := range rows {
+		out[i] = WebhookDelivery{ID: row.ID, WebhookID: row.WebhookID, Event: row.Event, QueuedAt: row.QueuedAt, Attempts: row.Attempts, NextAt: row.NextAt}
+	}
+	return out, nil
+}

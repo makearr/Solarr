@@ -127,6 +127,25 @@ func (a webhookAdmin) info(ctx context.Context, hook settings.Webhook) apiserver
 	return info
 }
 
+// webhookPendingListLimit bounds what one listing of a webhook's waiting deliveries reads.
+const webhookPendingListLimit = 100
+
+// Pending implements apiserver.Webhooks.
+func (a webhookAdmin) Pending(ctx context.Context, id int64) ([]apiserver.WebhookWaiting, error) {
+	if _, err := a.p.cache.WebhookByID(ctx, id); err != nil {
+		return nil, err
+	}
+	rows, err := library.NewWebhookPending(a.p.library).Of(ctx, id, webhookPendingListLimit)
+	if err != nil {
+		return nil, err
+	}
+	waiting := make([]apiserver.WebhookWaiting, len(rows))
+	for i, row := range rows {
+		waiting[i] = apiserver.WebhookWaiting{ID: row.ID, Attempts: row.Attempts, Event: row.Event, QueuedAt: time.Unix(row.QueuedAt, 0), NextAt: time.Unix(row.NextAt, 0)}
+	}
+	return waiting, nil
+}
+
 // List implements apiserver.Webhooks.
 func (a webhookAdmin) List(ctx context.Context) ([]apiserver.WebhookInfo, error) {
 	hooks, err := a.p.cache.Webhooks(ctx)
@@ -225,6 +244,7 @@ func (webhookAdmin) Vocabulary() apiserver.WebhookVocabulary {
 		vocabulary.PresetKeys = append(vocabulary.PresetKeys, preset.Key)
 		vocabulary.PresetNames = append(vocabulary.PresetNames, preset.Name)
 		vocabulary.PresetNotes = append(vocabulary.PresetNotes, preset.Description)
+		vocabulary.PresetSamples = append(vocabulary.PresetSamples, preset.Sample())
 	}
 	return vocabulary
 }

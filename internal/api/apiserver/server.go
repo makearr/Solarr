@@ -819,6 +819,7 @@ func New(config Config) (*Server, error) {
 			secured.Put("/webhooks/{id}", wrapped.UpdateWebhook)
 			secured.Delete("/webhooks/{id}", wrapped.DeleteWebhook)
 			secured.Post("/webhooks/{id}/test", wrapped.TestWebhook)
+			secured.Get("/webhooks/{id}/pending", wrapped.ListWebhookPending)
 			secured.Get("/incoming-webhooks", server.ListInboundWebhooks)
 			secured.Post("/incoming-webhooks", server.AddInboundWebhook)
 			secured.Put("/incoming-webhooks/{id}", wrapped.UpdateInboundWebhook)

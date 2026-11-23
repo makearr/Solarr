@@ -257,12 +257,18 @@ func (p *process) indexerDriver(ctx context.Context, found settings.Indexer, api
 		}
 	}
 	if p.indexerPacing != nil && found.Impl != indexer.ImplSpec && p.definitions != nil {
-		// A custom descriptor of a compiled kind may ask for a longer gap between requests.
-		if delay, err := time.ParseDuration(p.definitions.Catalog().Tuning(providerdef.KindIndexer, descriptorKey(found.Impl)).RequestDelay); err == nil && delay > 0 {
-			p.indexerPacing.setFloor(found.ID, delay)
-		}
+		p.indexerPacing.setFloor(found.ID, descriptorRequestDelay(p.definitions.Catalog(), found.Impl))
 	}
 	return adapters.NewIndexer(found.Impl, deps, indexer.Connection{BaseURL: found.BaseURL, APIKey: apiKey, Definition: found.Definition()})
+}
+
+// descriptorRequestDelay is the gap a custom descriptor of a compiled indexer kind asks between requests; none or a bad value is zero.
+func descriptorRequestDelay(catalog *providerdef.Catalog, impl string) time.Duration {
+	delay, err := time.ParseDuration(catalog.Tuning(providerdef.KindIndexer, descriptorKey(impl)).RequestDelay)
+	if err != nil || delay < 0 {
+		return 0
+	}
+	return delay
 }
 
 // downloaderClientFactory builds adapters.DownloaderHTTPFactory with one gentle bucket per connection id, since a downloader is polled, and the global egress proxy applies (ADR-47 is indexer-specific).

@@ -7189,11 +7189,23 @@ type WebhookEventInfo struct {
 	Key   string `json:"key"`
 }
 
+// WebhookPendingDelivery defines model for WebhookPendingDelivery.
+type WebhookPendingDelivery struct {
+	Attempts int       `json:"attempts"`
+	Event    string    `json:"event"`
+	Id       int64     `json:"id"`
+	NextAt   time.Time `json:"next_at"`
+	QueuedAt time.Time `json:"queued_at"`
+}
+
 // WebhookPresetInfo defines model for WebhookPresetInfo.
 type WebhookPresetInfo struct {
 	Description string `json:"description"`
 	Key         string `json:"key"`
 	Name        string `json:"name"`
+
+	// Sample The request body this preset sends for an invented imported event.
+	Sample string `json:"sample"`
 }
 
 // WebhookTestResult defines model for WebhookTestResult.
@@ -10465,6 +10477,9 @@ type ServerInterface interface {
 	// Replace a webhook. An empty address or secret keeps the stored one.
 	// (PUT /webhooks/{id})
 	UpdateWebhook(w http.ResponseWriter, r *http.Request, id int64)
+	// The deliveries still waiting for a webhook (event, attempts, next try), oldest first, at most 100; never the payload.
+	// (GET /webhooks/{id}/pending)
+	ListWebhookPending(w http.ResponseWriter, r *http.Request, id int64)
 	// Send a test event now and answer the status and the first 500 bytes of the reply.
 	// (POST /webhooks/{id}/test)
 	TestWebhook(w http.ResponseWriter, r *http.Request, id int64)
@@ -12856,6 +12871,12 @@ func (_ Unimplemented) DeleteWebhook(w http.ResponseWriter, r *http.Request, id 
 // Replace a webhook. An empty address or secret keeps the stored one.
 // (PUT /webhooks/{id})
 func (_ Unimplemented) UpdateWebhook(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The deliveries still waiting for a webhook (event, attempts, next try), oldest first, at most 100; never the payload.
+// (GET /webhooks/{id}/pending)
+func (_ Unimplemented) ListWebhookPending(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -25059,6 +25080,39 @@ func (siw *ServerInterfaceWrapper) UpdateWebhook(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ListWebhookPending operation middleware
+func (siw *ServerInterfaceWrapper) ListWebhookPending(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWebhookPending(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // TestWebhook operation middleware
 func (siw *ServerInterfaceWrapper) TestWebhook(w http.ResponseWriter, r *http.Request) {
 
@@ -27994,6 +28048,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/webhooks/{id}", wrapper.UpdateWebhook)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/webhooks/{id}/pending", wrapper.ListWebhookPending)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/webhooks/{id}/test", wrapper.TestWebhook)

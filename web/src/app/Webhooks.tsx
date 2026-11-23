@@ -253,7 +253,7 @@ function OutgoingForm({ vocabulary, hook, onDone, onCancel }: {
       <details className="text-xs text-ink-muted">
         <summary className="cursor-pointer">{t("webhooks.whatIsSent")}</summary>
         <p className="py-1">{t("webhooks.whatIsSentNote")}</p>
-        <pre className="overflow-x-auto rounded-md border border-border-subtle bg-canvas p-2 font-mono text-[0.6875rem]">{SAMPLE_PAYLOAD}</pre>
+        <pre className="overflow-x-auto rounded-md border border-border-subtle bg-canvas p-2 font-mono text-[0.6875rem]">{vocabulary.presets.find((candidate) => candidate.key === preset)?.sample || SAMPLE_PAYLOAD}</pre>
       </details>
       {problems.length > 0 && <ul className="text-xs text-ink-muted">{problems.map((key) => <li key={key}>{tOr(key, key)}</li>)}</ul>}
       {failure && <p className="text-sm text-danger">{failure}</p>}

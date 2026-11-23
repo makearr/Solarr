@@ -2161,6 +2161,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/webhooks/{id}/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** The deliveries still waiting for a webhook (event, attempts, next try), oldest first, at most 100; never the payload. */
+        get: operations["listWebhookPending"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/incoming-webhooks": {
         parameters: {
             query?: never;
@@ -9209,6 +9228,16 @@ export interface components {
             reply: string;
             error?: string;
         };
+        WebhookPendingDelivery: {
+            /** Format: int64 */
+            id: number;
+            event: string;
+            /** Format: date-time */
+            queued_at: string;
+            attempts: number;
+            /** Format: date-time */
+            next_at: string;
+        };
         WebhookEventInfo: {
             key: string;
             group: string;
@@ -9217,6 +9246,8 @@ export interface components {
             key: string;
             name: string;
             description: string;
+            /** @description The request body this preset sends for an invented imported event. */
+            sample: string;
         };
         WebhookVocabulary: {
             events: components["schemas"]["WebhookEventInfo"][];
@@ -15904,6 +15935,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WebhookTestResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listWebhookPending: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The waiting deliveries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookPendingDelivery"][];
                 };
             };
             401: components["responses"]["Problem"];
