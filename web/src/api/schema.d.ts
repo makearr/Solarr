@@ -2005,6 +2005,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/discover/more": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read the next page of a library's lists from their sources into the pool (Load more past what a refresh kept). */
+        post: operations["loadMoreRecommendations"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/discover/dashboard": {
         parameters: {
             query?: never;
@@ -12236,6 +12253,8 @@ export interface components {
             feeds: components["schemas"]["DiscoverFeed"][];
             /** @description The caller may add (manage) or request (request) here; false still shows the list. */
             can_add: boolean;
+            /** @description The caller may only request here */
+            request_only: boolean;
             total_amount: number;
         };
         Recommendation: {
@@ -16070,6 +16089,46 @@ export interface operations {
                     "application/json": components["schemas"]["RecommendationGenre"][];
                 };
             };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    loadMoreRecommendations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    category_id: number;
+                    /**
+                     * @description One list; absent is every enabled one.
+                     * @enum {string}
+                     */
+                    type?: "highest_rated" | "trending" | "upcoming" | "classics" | "collections";
+                };
+            };
+        };
+        responses: {
+            /** @description What the read added. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description How many recommendations the read put into the pool. */
+                        added: number;
+                        /** @description No list has a further page. */
+                        exhausted: boolean;
+                    };
+                };
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };

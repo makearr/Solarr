@@ -1176,6 +1176,15 @@ const (
 	GetCategorySimilarVideosParamsLevelMedium GetCategorySimilarVideosParamsLevel = "medium"
 )
 
+// Defines values for LoadMoreRecommendationsJSONBodyType.
+const (
+	LoadMoreRecommendationsJSONBodyTypeClassics     LoadMoreRecommendationsJSONBodyType = "classics"
+	LoadMoreRecommendationsJSONBodyTypeCollections  LoadMoreRecommendationsJSONBodyType = "collections"
+	LoadMoreRecommendationsJSONBodyTypeHighestRated LoadMoreRecommendationsJSONBodyType = "highest_rated"
+	LoadMoreRecommendationsJSONBodyTypeTrending     LoadMoreRecommendationsJSONBodyType = "trending"
+	LoadMoreRecommendationsJSONBodyTypeUpcoming     LoadMoreRecommendationsJSONBodyType = "upcoming"
+)
+
 // Defines values for ListRecommendationsParamsType.
 const (
 	ListRecommendationsParamsTypeClassics     ListRecommendationsParamsType = "classics"
@@ -2541,12 +2550,15 @@ type DiscoverGlobalSettings struct {
 // DiscoverLibrary defines model for DiscoverLibrary.
 type DiscoverLibrary struct {
 	// CanAdd The caller may add (manage) or request (request) here; false still shows the list.
-	CanAdd      bool           `json:"can_add"`
-	CategoryId  int64          `json:"category_id"`
-	Feeds       []DiscoverFeed `json:"feeds"`
-	MediaType   string         `json:"media_type"`
-	Name        string         `json:"name"`
-	TotalAmount int            `json:"total_amount"`
+	CanAdd     bool           `json:"can_add"`
+	CategoryId int64          `json:"category_id"`
+	Feeds      []DiscoverFeed `json:"feeds"`
+	MediaType  string         `json:"media_type"`
+	Name       string         `json:"name"`
+
+	// RequestOnly The caller may only request here
+	RequestOnly bool `json:"request_only"`
+	TotalAmount int  `json:"total_amount"`
 
 	// Types The enabled recommendation lists.
 	Types []string `json:"types"`
@@ -8091,6 +8103,17 @@ type ListIncompleteDiscographiesParams struct {
 	Limit      *int  `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// LoadMoreRecommendationsJSONBody defines parameters for LoadMoreRecommendations.
+type LoadMoreRecommendationsJSONBody struct {
+	CategoryId int64 `json:"category_id"`
+
+	// Type One list; absent is every enabled one.
+	Type *LoadMoreRecommendationsJSONBodyType `json:"type,omitempty"`
+}
+
+// LoadMoreRecommendationsJSONBodyType defines parameters for LoadMoreRecommendations.
+type LoadMoreRecommendationsJSONBodyType string
+
 // ListRecommendationsParams defines parameters for ListRecommendations.
 type ListRecommendationsParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
@@ -9289,6 +9312,9 @@ type SetImageSettingsJSONRequestBody = ImageSettings
 // SetDefaultLanguagesJSONRequestBody defines body for SetDefaultLanguages for application/json ContentType.
 type SetDefaultLanguagesJSONRequestBody = DefaultLanguages
 
+// LoadMoreRecommendationsJSONRequestBody defines body for LoadMoreRecommendations for application/json ContentType.
+type LoadMoreRecommendationsJSONRequestBody LoadMoreRecommendationsJSONBody
+
 // AddDownloaderJSONRequestBody defines body for AddDownloader for application/json ContentType.
 type AddDownloaderJSONRequestBody = AddDownloaderRequest
 
@@ -9975,6 +10001,9 @@ type ServerInterface interface {
 	// The libraries the caller may read that have Discover on, with the lists each offers.
 	// (GET /discover/libraries)
 	ListDiscoverLibraries(w http.ResponseWriter, r *http.Request)
+	// Read the next page of a library's lists from their sources into the pool (Load more past what a refresh kept).
+	// (POST /discover/more)
+	LoadMoreRecommendations(w http.ResponseWriter, r *http.Request)
 	// A page of one library's recommendations, most popular first, without what the caller dismissed.
 	// (GET /discover/recommendations)
 	ListRecommendations(w http.ResponseWriter, r *http.Request, params ListRecommendationsParams)
@@ -11580,6 +11609,12 @@ func (_ Unimplemented) ListIncompleteDiscographies(w http.ResponseWriter, r *htt
 // The libraries the caller may read that have Discover on, with the lists each offers.
 // (GET /discover/libraries)
 func (_ Unimplemented) ListDiscoverLibraries(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Read the next page of a library's lists from their sources into the pool (Load more past what a refresh kept).
+// (POST /discover/more)
+func (_ Unimplemented) LoadMoreRecommendations(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -16755,6 +16790,28 @@ func (siw *ServerInterfaceWrapper) ListDiscoverLibraries(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListDiscoverLibraries(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LoadMoreRecommendations operation middleware
+func (siw *ServerInterfaceWrapper) LoadMoreRecommendations(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LoadMoreRecommendations(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -28213,6 +28270,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/discover/libraries", wrapper.ListDiscoverLibraries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/discover/more", wrapper.LoadMoreRecommendations)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/discover/recommendations", wrapper.ListRecommendations)

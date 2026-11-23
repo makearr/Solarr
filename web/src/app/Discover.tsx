@@ -1,7 +1,8 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { Plus, X } from "lucide-react";
-import { useState } from "react";
+import { Plus, Undo2, X } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useEffect, useState } from "react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -26,7 +27,13 @@ const LISTS: Record<string, MessageKey> = {
   collections: "discover.list.collections",
 };
 
-type DiscoverSearch = { library?: string; list?: string; genre?: string; q?: string };
+type DiscoverSearch = { library?: string; list?: string; genre?: string; q?: string; hidden?: string };
+
+/** A card is 10rem wide at least; the grid gap is 1rem. */
+const CARD_MIN = 160;
+const GAP = 16;
+/** Title, one line of facts and the list chips under a 2:3 poster. */
+const CARD_TEXT = 92;
 
 /** What the libraries do not hold yet, from their sources' charts, one library at a time. */
 export function Discover() {
@@ -53,16 +60,68 @@ export function Discover() {
                 onClick={() => change({ library: String(library.category_id), genre: undefined })}
                 className={`rounded-md px-2 py-1 ${library.category_id === current.category_id ? "bg-accent/10 text-ink" : "text-ink-muted hover:text-ink"}`}
               >
-                {library.name}
+                {tabName(library, all)}
               </button>
             ))}
           </div>
         )}
       >
-        <Filters library={current} search={search} change={change} />
+        <ToolbarHidden active={search.hidden === "1"} onChange={(on) => change({ hidden: on ? "1" : undefined })} />
+        {search.hidden !== "1" && <Filters library={current} search={search} change={change} />}
       </Toolbar>
-      <Wall library={current} search={search} />
+      {search.hidden === "1" ? <HiddenList /> : <Wall library={current} search={search} />}
     </div>
+  );
+}
+
+/** Two libraries of different types may share a name; the type tells them apart. */
+function tabName(library: DiscoverLibrary, all: DiscoverLibrary[]) {
+  const same = all.filter((other) => other.name === library.name).length > 1;
+  return same ? `${library.name} (${library.media_type})` : library.name;
+}
+
+function ToolbarHidden({ active, onChange }: { active: boolean; onChange: (active: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={() => onChange(!active)}
+      className={`rounded-md border border-border-subtle px-2 py-1 ${active ? "bg-accent/10 text-ink" : "text-ink-muted hover:text-ink"}`}
+    >
+      {t("discover.hiddenView")}
+    </button>
+  );
+}
+
+/** What this person said they are not interested in, each with a way back. */
+function HiddenList() {
+  const queryClient = useQueryClient();
+  const hidden = useQuery({ queryKey: ["discover-dismissals"], queryFn: () => ok(api.GET("/discover/dismissals")) });
+  const restore = useMutation({
+    meta: { handlesErrors: true },
+    mutationFn: (item: components["schemas"]["RecommendationDismissal"]) =>
+      ok(api.DELETE("/discover/dismissals/{provider}/{external_id}", {
+        params: { path: { provider: item.provider, external_id: item.external_id }, query: { kind: item.kind } },
+      })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["discover-dismissals"] });
+      void queryClient.invalidateQueries({ queryKey: ["discover-recommendations"] });
+      void queryClient.invalidateQueries({ queryKey: ["discover-dashboard"] });
+    },
+  });
+  if (hidden.data?.length === 0) return <EmptyState title={t("discover.noHidden")} hint={t("discover.noHiddenHint")} />;
+  return (
+    <ul className="flex-1 overflow-y-auto p-4 text-sm">
+      {(hidden.data ?? []).map((item) => (
+        <li key={`${item.kind}:${item.provider}:${item.external_id}`} className="flex items-center gap-3 border-b border-border-subtle py-2">
+          <span className="min-w-0 flex-1 truncate">{item.title}</span>
+          <span className="text-xs text-ink-muted">{item.media_type}</span>
+          <Button variant="ghost" icon={<Undo2 aria-hidden className="size-3.5" />} busy={restore.isPending && restore.variables === item} onClick={() => restore.mutate(item)}>
+            {t("discover.restore")}
+          </Button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -89,6 +148,9 @@ function Filters({ library, search, change }: { library: DiscoverLibrary; search
 function Wall({ library, search }: { library: DiscoverLibrary; search: DiscoverSearch }) {
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState<Recommendation>();
+  const [undo, setUndo] = useState<Recommendation>();
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState(0);
   const pages = useInfiniteQuery({
     queryKey: ["discover-recommendations", library.category_id, search.list, search.genre, search.q],
     initialPageParam: undefined as string | undefined,
@@ -101,28 +163,111 @@ function Wall({ library, search }: { library: DiscoverLibrary; search: DiscoverS
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["discover-recommendations"] });
   const dismiss = useMutation({
     meta: { handlesErrors: true },
-    mutationFn: (id: number) => ok(api.POST("/discover/recommendations/{id}/dismiss", { params: { path: { id } } })),
+    mutationFn: (item: Recommendation) => ok(api.POST("/discover/recommendations/{id}/dismiss", { params: { path: { id: item.id } } })),
+    onSuccess: (_, item) => {
+      setUndo(item);
+      refresh();
+      void queryClient.invalidateQueries({ queryKey: ["discover-dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["discover-dismissals"] });
+    },
+  });
+  const restore = useMutation({
+    meta: { handlesErrors: true },
+    mutationFn: (item: Recommendation) =>
+      ok(api.DELETE("/discover/dismissals/{provider}/{external_id}", { params: { path: { provider: item.provider, external_id: item.external_id }, query: { kind: item.kind } } })),
+    onSuccess: () => {
+      setUndo(undefined);
+      refresh();
+      void queryClient.invalidateQueries({ queryKey: ["discover-dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["discover-dismissals"] });
+    },
+  });
+  const monitor = useMutation({
+    meta: { handlesErrors: true },
+    mutationFn: (workId: number) => ok(api.POST("/works/{id}/monitor", { params: { path: { id: workId } }, body: { monitored: true } })),
     onSuccess: () => {
       refresh();
       void queryClient.invalidateQueries({ queryKey: ["discover-dashboard"] });
     },
   });
+  // The next page past what a refresh kept comes from the provider.
+  const more = useMutation({
+    meta: { handlesErrors: true },
+    mutationFn: () => ok(api.POST("/discover/more", { body: { category_id: library.category_id, type: search.list as never } })),
+    onSuccess: () => {
+      refresh();
+      void queryClient.invalidateQueries({ queryKey: ["discover-libraries"] });
+    },
+  });
+  useEffect(() => {
+    if (!undo) return;
+    const timer = window.setTimeout(() => setUndo(undefined), 8000);
+    return () => window.clearTimeout(timer);
+  }, [undo]);
+  useEffect(() => {
+    if (!scroller) return;
+    const observer = new ResizeObserver(([entry]) => setWidth(entry?.contentRect.width ?? 0));
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, [scroller]);
   const items = (pages.data?.pages ?? []).flatMap((page) => page.items);
-  if (!pages.isLoading && items.length === 0) {
+  const columns = Math.max(1, Math.floor((width + GAP) / (CARD_MIN + GAP)));
+  const cardWidth = width > 0 ? (width - GAP * (columns - 1)) / columns : CARD_MIN;
+  const rowCount = Math.ceil(items.length / columns);
+  const virtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: () => scroller,
+    estimateSize: () => cardWidth * 1.5 + CARD_TEXT + GAP,
+    overscan: 3,
+  });
+  const listed = library.types.filter((type) => !search.list || type === search.list);
+  const canReadFurther = library.feeds.some((feed) => listed.includes(feed.type) && !feed.exhausted && feed.last_error === "");
+  if (!pages.isLoading && items.length === 0 && !canReadFurther) {
     return <EmptyState title={t("discover.empty")} hint={t("discover.emptyHint")} />;
   }
   return (
-    <div className="flex-1 overflow-y-auto p-4">
-      <ul className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-4">
-        {items.map((item) => (
-          <li key={item.id}>
-            <RecommendationCard item={item} canAdd={library.can_add} onAdd={() => setAdding(item)} onDismiss={() => dismiss.mutate(item.id)} />
+    <div ref={setScroller} className="relative flex-1 overflow-y-auto p-4">
+      <ul className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+        {virtualizer.getVirtualItems().map((row) => (
+          <li
+            key={row.key}
+            ref={virtualizer.measureElement}
+            data-index={row.index}
+            className="absolute top-0 left-0 grid w-full gap-4 pb-4"
+            style={{ transform: `translateY(${row.start}px)`, gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+          >
+            {items.slice(row.index * columns, (row.index + 1) * columns).map((item) => (
+              <RecommendationCard
+                key={item.id}
+                item={item}
+                canAdd={library.can_add}
+                requestOnly={library.request_only}
+                onAdd={() => setAdding(item)}
+                onMonitor={() => item.library_id && monitor.mutate(item.library_id)}
+                onDismiss={() => dismiss.mutate(item)}
+              />
+            ))}
           </li>
         ))}
       </ul>
-      {pages.hasNextPage && (
-        <div className="mt-4 flex justify-center">
-          <Button busy={pages.isFetchingNextPage} onClick={() => void pages.fetchNextPage()}>{t("discover.more")}</Button>
+      {(pages.hasNextPage || canReadFurther) && (
+        <div className="mt-2 flex flex-col items-center gap-1">
+          <Button
+            busy={pages.isFetchingNextPage || more.isPending}
+            onClick={() => (pages.hasNextPage ? void pages.fetchNextPage() : more.mutate())}
+          >
+            {t("discover.more")}
+          </Button>
+          {more.isSuccess && more.data.added === 0 && <p className="text-xs text-ink-muted">{t("discover.nothingMore")}</p>}
+          {more.isError && <p className="text-xs text-danger">{t("discover.moreFailed")}</p>}
+        </div>
+      )}
+      {undo && (
+        <div role="status" className="fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-md border border-border-subtle bg-canvas px-3 py-2 text-sm shadow-lg">
+          <span>{t("discover.hidden", { title: undo.title })}</span>
+          <Button variant="ghost" icon={<Undo2 aria-hidden className="size-3.5" />} busy={restore.isPending} onClick={() => restore.mutate(undo)}>
+            {t("discover.undo")}
+          </Button>
         </div>
       )}
       {adding && (
@@ -140,9 +285,23 @@ function Wall({ library, search }: { library: DiscoverLibrary; search: DiscoverS
 }
 
 /** One recommendation: poster, title, what the source says of it, and the two things to do with it. */
-export function RecommendationCard({ item, canAdd, onAdd, onDismiss }: { item: Recommendation; canAdd: boolean; onAdd: () => void; onDismiss: () => void }) {
+export function RecommendationCard({
+  item,
+  canAdd,
+  requestOnly = false,
+  onAdd,
+  onMonitor = () => {},
+  onDismiss,
+}: {
+  item: Recommendation;
+  canAdd: boolean;
+  requestOnly?: boolean;
+  onAdd: () => void;
+  onMonitor?: () => void;
+  onDismiss: () => void;
+}) {
   return (
-    <article className="group flex flex-col gap-1 text-sm">
+    <article className="group flex min-w-0 flex-col gap-1 text-sm">
       <div className="relative">
         {item.poster_url ? (
           <img src={remoteImage(item.poster_url, "small")} alt="" loading="lazy" className="aspect-[2/3] w-full rounded-lg border border-border-subtle bg-surface object-cover" />
@@ -150,10 +309,16 @@ export function RecommendationCard({ item, canAdd, onAdd, onDismiss }: { item: R
           <div className="aspect-[2/3] w-full rounded-lg border border-border-subtle bg-surface" />
         )}
         <div className="absolute inset-x-0 bottom-0 flex justify-between gap-1 bg-canvas/80 p-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-          {item.library_id ? (
+          {item.library_id && requestOnly && (
             <Link to="/works/$id" params={{ id: String(item.library_id) }} className="px-1 text-xs text-accent">{t("discover.inLibrary")}</Link>
-          ) : (
-            <Button variant="primary" icon={<Plus aria-hidden className="size-3.5" />} disabled={!canAdd} onClick={onAdd}>{t("discover.add")}</Button>
+          )}
+          {item.library_id && !requestOnly && (
+            <Button variant="primary" icon={<Plus aria-hidden className="size-3.5" />} disabled={!canAdd} onClick={onMonitor}>{t("discover.monitor")}</Button>
+          )}
+          {!item.library_id && (
+            <Button variant="primary" icon={<Plus aria-hidden className="size-3.5" />} disabled={!canAdd} onClick={onAdd}>
+              {requestOnly ? t("discover.request") : t("discover.add")}
+            </Button>
           )}
           <Button variant="icon" aria-label={t("discover.dismiss")} title={t("discover.dismiss")} onClick={onDismiss}><X aria-hidden className="size-4" /></Button>
         </div>

@@ -3,6 +3,7 @@ package discover_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -37,6 +38,18 @@ type replaced struct {
 type pool struct {
 	replaced []replaced
 	states   []library.FeedState
+	// stored is what FeedState answers; appended is what AppendFeed was given.
+	stored   map[library.FeedRef]library.FeedState
+	appended []replaced
+}
+
+func (p *pool) FeedState(_ context.Context, ref library.FeedRef) (library.FeedState, error) {
+	return p.stored[ref], nil
+}
+
+func (p *pool) AppendFeed(_ context.Context, ref library.FeedRef, items []library.PoolItem, _ int64, state library.FeedState, _ int64) error {
+	p.appended = append(p.appended, replaced{ref, items, state})
+	return nil
 }
 
 func (p *pool) ReplaceFeed(_ context.Context, ref library.FeedRef, items []library.PoolItem, state library.FeedState, _ int64) error {
@@ -271,5 +284,43 @@ func TestRefreshRecordsACollectionsFailureAndKeepsTheOldList(t *testing.T) {
 	}
 	if len(p.replaced) != 0 || len(p.states) != 1 || p.states[0].LastError != discover.FailureOther {
 		t.Errorf("replaced = %+v, states = %+v", p.replaced, p.states)
+	}
+}
+
+func TestMoreReadsTheNextPageAndSkipsWhatIsHeld(t *testing.T) {
+	m := &module{
+		feeds: []media.RecommendationFeed{{Type: media.RecommendTrending, Source: "Example"}},
+		pages: map[media.RecommendationType][][]media.Recommendation{media.RecommendTrending: {titles(2, "a"), titles(2, "b"), titles(2, "c")}},
+	}
+	ref := library.FeedRef{CategoryID: 1, Type: "trending"}
+	p := &pool{stored: map[library.FeedRef]library.FeedState{ref: {FeedRef: ref, PagesRead: 1}}}
+	result, err := service(enabledLibrary(4, "trending"), p, m, judge{monitored: map[string]bool{"b0": true}}).More(t.Context(), 1, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.asked) != 1 || m.asked[0].Page != 2 {
+		t.Errorf("asked %+v, want page 2 only", m.asked)
+	}
+	if result != (discover.MoreResult{Added: 1}) || len(p.appended) != 1 || p.appended[0].state.PagesRead != 2 || p.appended[0].items[0].ExternalID != "b1" {
+		t.Errorf("result %+v appended %+v", result, p.appended)
+	}
+}
+
+func TestMoreKeepsReadingWhenAPageAdmitsNothingAndStopsAtTheEnd(t *testing.T) {
+	m := &module{
+		feeds: []media.RecommendationFeed{{Type: media.RecommendTrending, Source: "Example"}},
+		pages: map[media.RecommendationType][][]media.Recommendation{media.RecommendTrending: {titles(1, "a"), titles(1, "b"), titles(1, "c")}},
+	}
+	p := &pool{}
+	held := judge{monitored: map[string]bool{"a0": true, "b0": true}}
+	result, err := service(enabledLibrary(4, "trending"), p, m, held).More(t.Context(), 1, "trending")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.asked) != 3 || result != (discover.MoreResult{Added: 1, Exhausted: true}) {
+		t.Errorf("asked %d pages, result %+v", len(m.asked), result)
+	}
+	if _, err := service(enabledLibrary(4, "trending"), p, m, held).More(t.Context(), 1, "classics"); !errors.Is(err, discover.ErrNothingToRead) {
+		t.Errorf("a list that is off: err = %v", err)
 	}
 }

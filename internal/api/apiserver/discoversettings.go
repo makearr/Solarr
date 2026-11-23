@@ -14,6 +14,8 @@ import (
 type DiscoverRefresher interface {
 	RefreshDiscover(ctx context.Context, categoryID int64) error
 	ForgetDiscover(ctx context.Context, categoryID int64) error
+	// MoreDiscover reads the next provider page of a library's lists (all of them with an empty listType) into the pool.
+	MoreDiscover(ctx context.Context, categoryID int64, listType string) (added int, exhausted bool, err error)
 }
 
 // DiscoverAutoAddPreviewer answers what auto-add would do with a library's unsaved settings, without doing it.
@@ -168,8 +170,11 @@ func (s *Server) PreviewLibraryDiscoverAutoAdd(w http.ResponseWriter, r *http.Re
 	if !s.decodeBody(w, r, maxUserBody, &body, "expected a JSON object") {
 		return
 	}
-	if _, found := s.auth.Settings.Snapshot().Category(categoryID); !found {
+	if _, err := s.auth.Settings.LibraryDiscover(r.Context(), categoryID); errors.Is(err, settings.ErrNotFound) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such library")
+		return
+	} else if err != nil {
+		writeError(w, s.logger, err)
 		return
 	}
 	one := libraryDiscoverOf(categoryID, body)

@@ -6,12 +6,17 @@ import type { components } from "@/api/schema";
 import { t, tOr, type MessageKey } from "@/lib/i18n";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
+import { useDiscoverLibraries } from "@/lib/resources";
 import { inputStyle, labelStyle } from "@/ui/form";
 
 import { LanguagePicker } from "./LanguagePicker";
+import { TermChips } from "./TermChips";
 import { Card } from "./SettingsCard";
 
 type Library = components["schemas"]["LibraryDiscoverSettings"];
+
+/** Genres to suggest before a library has any recommendations of its own to count. */
+const COMMON_GENRES = ["Action", "Animation", "Comedy", "Crime", "Documentary", "Drama", "Family", "Fantasy", "Horror", "Mystery", "Reality", "Romance", "Science Fiction", "Talk", "Thriller", "War"];
 
 const LIST_LABELS: Record<string, MessageKey> = {
   highest_rated: "discover.list.highest_rated",
@@ -21,18 +26,17 @@ const LIST_LABELS: Record<string, MessageKey> = {
   collections: "discover.list.collections",
 };
 
-const toList = (text: string) => text.split(",").map((part) => part.trim()).filter((part) => part !== "");
 
 /** Settings > Discover: the switch, what is never recommended and each library's lists and auto-add gates. */
 export function DiscoverSettings() {
   const queryClient = useQueryClient();
   const settings = useQuery({ queryKey: ["discover-settings"], queryFn: () => ok(api.GET("/settings/discover")) });
-  const [genres, setGenres] = useState("");
-  const [networks, setNetworks] = useState("");
+  const [genres, setGenres] = useState<string[]>([]);
+  const [networks, setNetworks] = useState<string[]>([]);
   useEffect(() => {
     if (settings.data) {
-      setGenres(settings.data.global.exclude_genres.join(", "));
-      setNetworks(settings.data.global.exclude_networks.join(", "));
+      setGenres(settings.data.global.exclude_genres);
+      setNetworks(settings.data.global.exclude_networks);
     }
   }, [settings.data]);
   const saveGlobal = useMutation({
@@ -57,20 +61,14 @@ export function DiscoverSettings() {
           />
           {t("discover.switch")}
         </label>
-        <label className={labelStyle}>
-          <span>{t("discover.neverGenres")}</span>
-          <input className={inputStyle} value={genres} onChange={(event) => setGenres(event.target.value)} />
-        </label>
-        <label className={labelStyle}>
-          <span>{t("discover.neverNetworks")}</span>
-          <input className={inputStyle} value={networks} onChange={(event) => setNetworks(event.target.value)} />
-        </label>
+        <TermChips label={t("discover.neverGenres")} value={genres} onChange={setGenres} suggestions={COMMON_GENRES} />
+        <TermChips label={t("discover.neverNetworks")} value={networks} onChange={setNetworks} />
         <div>
           <Button
             variant="primary"
             disabled={!global}
             busy={saveGlobal.isPending}
-            onClick={() => global && saveGlobal.mutate({ ...global, exclude_genres: toList(genres), exclude_networks: toList(networks) })}
+            onClick={() => global && saveGlobal.mutate({ ...global, exclude_genres: genres, exclude_networks: networks })}
           >
             {t("discover.save")}
           </Button>
@@ -84,18 +82,23 @@ export function DiscoverSettings() {
 function LibraryCard({ library, globalOn }: { library: Library; globalOn: boolean }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState(library);
-  const [genres, setGenres] = useState(library.exclude_genres.join(", "));
-  const [networks, setNetworks] = useState(library.exclude_networks.join(", "));
+  const [genres, setGenres] = useState(library.exclude_genres);
+  const [networks, setNetworks] = useState(library.exclude_networks);
+  const poolGenres = useQuery({
+    queryKey: ["discover-genres", library.category_id],
+    queryFn: () => ok(api.GET("/discover/genres", { params: { query: { category_id: library.category_id } } })),
+    enabled: library.enabled,
+  });
   useEffect(() => {
     setDraft(library);
-    setGenres(library.exclude_genres.join(", "));
-    setNetworks(library.exclude_networks.join(", "));
+    setGenres(library.exclude_genres);
+    setNetworks(library.exclude_networks);
   }, [library]);
   const save = useMutation({
     meta: { handlesErrors: true },
     mutationFn: () => ok(api.PUT("/settings/discover/libraries/{category_id}", {
       params: { path: { category_id: library.category_id } },
-      body: { ...draft, exclude_genres: toList(genres), exclude_networks: toList(networks) },
+      body: { ...draft, exclude_genres: genres, exclude_networks: networks },
     })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["discover-settings"] });
@@ -142,14 +145,9 @@ function LibraryCard({ library, globalOn }: { library: Library; globalOn: boolea
         value={draft.original_languages}
         onChange={(next) => setDraft({ ...draft, original_languages: next, languages_set: true })}
       />
-      <label className={labelStyle}>
-        <span>{t("discover.libraryGenres")}</span>
-        <input className={inputStyle} value={genres} onChange={(event) => setGenres(event.target.value)} />
-      </label>
-      <label className={labelStyle}>
-        <span>{t("discover.libraryNetworks")}</span>
-        <input className={inputStyle} value={networks} onChange={(event) => setNetworks(event.target.value)} />
-      </label>
+      <TermChips label={t("discover.libraryGenres")} value={genres} onChange={setGenres} suggestions={[...(poolGenres.data ?? []).map((one) => one.genre), ...COMMON_GENRES]} />
+      <TermChips label={t("discover.libraryNetworks")} value={networks} onChange={setNetworks} />
+      <FeedStates category={library.category_id} />
       <table className="text-sm">
         <thead>
           <tr className="text-left text-xs text-ink-muted">
@@ -189,7 +187,7 @@ function LibraryCard({ library, globalOn }: { library: Library; globalOn: boolea
       </div>
       {previewing !== null && (
         <AutoAddPreview
-          library={{ ...draft, exclude_genres: toList(genres), exclude_networks: toList(networks) }}
+          library={{ ...draft, exclude_genres: genres, exclude_networks: networks }}
           onConfirm={() => setPreviewing(null)}
           onCancel={() => {
             setDraft({ ...draft, types: draft.types.map((other, at) => (at === previewing ? { ...other, auto_add: false } : other)) });
@@ -251,5 +249,26 @@ function AutoAddPreview({ library, onConfirm, onCancel }: { library: Library; on
         </div>
       )}
     </Dialog>
+  );
+}
+
+/** When each list of an enabled library was last read and, if it failed, why, so a silent source is not a silent library. */
+function FeedStates({ category }: { category: number }) {
+  const libraries = useDiscoverLibraries();
+  const feeds = libraries.data?.find((one) => one.category_id === category)?.feeds ?? [];
+  if (feeds.length === 0) return null;
+  return (
+    <ul className="flex flex-col gap-0.5 text-xs text-ink-muted">
+      {feeds.map((feed) => (
+        <li key={`${feed.type}:${feed.kind}`} className={feed.last_error ? "text-danger" : undefined}>
+          {t(LIST_LABELS[feed.type] ?? "discover.list.highest_rated")}
+          {feed.kind ? ` (${feed.kind})` : ""}
+          {": "}
+          {feed.last_error
+            ? t(`discover.feedError.${feed.last_error}` as MessageKey)
+            : t("discover.feedRead", { when: feed.refreshed_at > 0 ? new Date(feed.refreshed_at * 1000).toLocaleString() : "-" })}
+        </li>
+      ))}
+    </ul>
   );
 }

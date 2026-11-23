@@ -125,7 +125,8 @@ func (s *Server) ListDiscoverLibraries(w http.ResponseWriter, r *http.Request) {
 		}
 		view := gen.DiscoverLibrary{
 			CategoryId: one.CategoryID, Name: one.Name, MediaType: one.MediaType, TotalAmount: int(one.TotalAmount), Types: []string{}, Feeds: []gen.DiscoverFeed{},
-			CanAdd: access.Permission(one.CategoryID).AtLeast(settings.PermissionRequest),
+			CanAdd:      access.Permission(one.CategoryID).AtLeast(settings.PermissionRequest),
+			RequestOnly: !access.Permission(one.CategoryID).AtLeast(settings.PermissionManage),
 		}
 		for _, setting := range one.Types {
 			if setting.Enabled {
@@ -304,4 +305,37 @@ func (s *Server) RestoreRecommendation(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// LoadMoreRecommendations reads the next provider page of a library's lists into the pool.
+func (s *Server) LoadMoreRecommendations(w http.ResponseWriter, r *http.Request) {
+	access, ok := s.discoverReady(w, r)
+	if !ok {
+		return
+	}
+	var body gen.LoadMoreRecommendationsJSONRequestBody
+	if !s.decodeBody(w, r, maxUserBody, &body, "expected a JSON object") {
+		return
+	}
+	if _, err := access.Category(body.CategoryId, settings.PermissionRead); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.discoverRefresher == nil {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "recommendations cannot be read further")
+		return
+	}
+	listType := ""
+	if body.Type != nil {
+		listType = string(*body.Type)
+	}
+	added, exhausted, err := s.discoverRefresher.MoreDiscover(r.Context(), body.CategoryId, listType)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, struct {
+		Added     int  `json:"added"`
+		Exhausted bool `json:"exhausted"`
+	}{added, exhausted})
 }

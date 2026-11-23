@@ -26,3 +26,15 @@ test("Not interested hands the card back to be removed", () => {
   fireEvent.click(screen.getByRole("button", { name: "Not interested" }));
   expect(onDismiss).toHaveBeenCalledTimes(1);
 });
+
+test("a held work offers Monitor, and a request-only person sees Request instead of Add", () => {
+  const onMonitor = vi.fn();
+  const held = { ...item, library_id: 5 };
+  const { rerender } = render(<RecommendationCard item={held} canAdd onAdd={() => {}} onMonitor={onMonitor} onDismiss={() => {}} />);
+  fireEvent.click(screen.getByRole("button", { name: "Monitor" }));
+  expect(onMonitor).toHaveBeenCalledTimes(1);
+
+  rerender(<RecommendationCard item={item} canAdd requestOnly onAdd={() => {}} onDismiss={() => {}} />);
+  expect(screen.getByRole("button", { name: "Request" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
+});

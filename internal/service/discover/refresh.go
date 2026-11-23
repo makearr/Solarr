@@ -63,6 +63,8 @@ type Configuration interface {
 type Pool interface {
 	ReplaceFeed(ctx context.Context, ref library.FeedRef, items []library.PoolItem, state library.FeedState, at int64) error
 	SetFeedState(ctx context.Context, ref library.FeedRef, state library.FeedState) error
+	FeedState(ctx context.Context, ref library.FeedRef) (library.FeedState, error)
+	AppendFeed(ctx context.Context, ref library.FeedRef, items []library.PoolItem, firstRank int64, state library.FeedState, at int64) error
 }
 
 // Sources answers a media type's recommendation feeds; false for a type that has none.

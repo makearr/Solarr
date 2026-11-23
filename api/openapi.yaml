@@ -2938,6 +2938,36 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /discover/more:
+    post:
+      operationId: loadMoreRecommendations
+      tags: [discover]
+      summary: Read the next page of a library's lists from their sources into the pool (Load more past what a refresh kept).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category_id]
+              properties:
+                category_id: { type: integer, format: int64 }
+                type: { type: string, enum: [highest_rated, trending, upcoming, classics, collections], description: One list; absent is every enabled one. }
+      responses:
+        "200":
+          description: What the read added.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [added, exhausted]
+                properties:
+                  added: { type: integer, description: How many recommendations the read put into the pool. }
+                  exhausted: { type: boolean, description: No list has a further page. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /discover/dashboard:
     get:
       operationId: getDiscoverDashboard
@@ -16443,7 +16473,7 @@ components:
 
     DiscoverLibrary:
       type: object
-      required: [category_id, name, media_type, types, feeds, can_add, total_amount]
+      required: [category_id, name, media_type, types, feeds, can_add, request_only, total_amount]
       properties:
         category_id: { type: integer, format: int64 }
         name: { type: string }
@@ -16451,6 +16481,7 @@ components:
         types: { type: array, items: { type: string }, description: The enabled recommendation lists. }
         feeds: { type: array, items: { $ref: "#/components/schemas/DiscoverFeed" } }
         can_add: { type: boolean, description: The caller may add (manage) or request (request) here; false still shows the list. }
+        request_only: { type: boolean, description: The caller may only request here, so Add reads Request and a held work cannot be monitored by them. }
         total_amount: { type: integer }
 
     Recommendation:

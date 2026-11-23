@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -114,6 +115,14 @@ func (r discoverRefresher) RefreshDiscover(ctx context.Context, categoryID int64
 
 func (r discoverRefresher) ForgetDiscover(ctx context.Context, categoryID int64) error {
 	return library.NewRecommendations(r.process.library).ForgetCategory(ctx, categoryID)
+}
+
+func (r discoverRefresher) MoreDiscover(ctx context.Context, categoryID int64, listType string) (int, bool, error) {
+	result, err := r.process.discoverService().More(ctx, categoryID, listType)
+	if errors.Is(err, discover.ErrNothingToRead) {
+		return 0, true, nil
+	}
+	return result.Added, result.Exhausted, err
 }
 
 type discoverCollections struct{ pool library.Recommendations }
