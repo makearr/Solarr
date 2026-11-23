@@ -55,7 +55,9 @@ func (f *fakeWorksReader) ListWorks(
 type worksFixture struct {
 	crossovers *fakeCrossovers
 	// hidden names the providers a custom descriptor switched off, as "kind/key".
-	hidden               map[string]bool
+	hidden map[string]bool
+	// tuned is what a custom descriptor narrows, as "kind/key".
+	tuned                map[string]apiserver.ProviderTune
 	definitions          *fakeDefinitions
 	webhooks             *fakeWebhooks
 	inbound              *fakeInbound
@@ -281,6 +283,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	taskHistory := &fakeTaskHistory{}
 	memoryCopies := &fakeMemoryCopies{}
 	hidden := map[string]bool{}
+	tuned := map[string]apiserver.ProviderTune{}
 	definitions := &fakeDefinitions{}
 	webhooks := &fakeWebhooks{}
 	inbound := &fakeInbound{}
@@ -353,6 +356,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		DownloaderKinds:      fakeDownloaderKinds{},
 		IndexerKinds:         fakeIndexerKinds{},
 		ProviderHidden:       func(kind, key string) bool { return hidden[kind+"/"+key] },
+		ProviderTuned:        func(kind, key string) apiserver.ProviderTune { return tuned[kind+"/"+key] },
 		ProviderDefinitions:  definitions,
 		Webhooks:             webhooks,
 		InboundWebhooks:      inbound,
@@ -380,7 +384,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		t.Fatalf("New: %v", err)
 	}
 	return worksFixture{
-		hidden: hidden, definitions: definitions, webhooks: webhooks, inbound: inbound,
+		hidden: hidden, tuned: tuned, definitions: definitions, webhooks: webhooks, inbound: inbound,
 		server: server, running: running, jobRegistry: jobRegistry, cache: cache, works: works, workDetail: workDetail, worksMonitor: worksMonitor, workEditor: workEditor,
 		wantedParts: wantedParts, crossovers: crossovers, similarVideos: similarVideos, importLists: importLists,
 		search: search, unidentified: unidentified, unidentifiedResolver: unidentifiedResolver,

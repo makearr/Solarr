@@ -33,8 +33,17 @@ operation and an `item` operation (and `by_id`). An operation is a `request` (or
 the indexer engine's selectors and filters. The files under `provider-definitions/examples/` are complete examples; the two
 ports (iTunes audiobooks, FantLab) are tested against the compiled clients and give the same values.
 
-A media type uses a definition only when its module can merge a generic record. Comic libraries can; the others refuse a
-definition that names them.
+A media type uses a definition only when its module can merge a generic record (`media.RecordConsuming`). Comic, book and
+audiobook, and movie libraries can; TV, music and adult libraries refuse a definition that names them, with a warning in the
+log. A definition is never first for identity unless a person puts it first in the library's order, and it only fills what the
+providers before it left empty. Where the library's ids are typed fields (book, movie) a definition's own id is not stored: a
+book is asked again by title, a movie by its IMDb or TMDB id through the definition's `by_id`. An `adult: true` definition is
+offered only to libraries of an adult kind (or of the adult type). `cache: {search: 24h, item: 168h}` keeps answers in memory
+for that long (a failed answer is never kept; 256 answers at most).
+
+A custom descriptor of a compiled provider (`engine: builtin`) may switch it off, set `pace`, narrow a metadata provider's
+`media_types` (the library picker then leaves it out of the others), name `base_urls` for an indexer kind (the add list shows
+them, the first the default) and a `request_delay` that floors the gap between an indexer's requests.
 
 `via: flaresolverr` sends the requests through the owner's own FlareSolverr; the definition declares a setting named
 `flaresolverr_url`.

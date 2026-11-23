@@ -57,6 +57,8 @@ type Service struct {
 	Fanart  ArtSource
 	// IMDb is IMDb's downloaded ratings dataset; nil, or never downloaded, answers none.
 	IMDb DatasetRatings
+	// Records answers the definition-file provider of a key, nil for one that is not (or no longer) active.
+	Records func(key string) RecordProvider
 	// Local asks the media servers the library takes metadata from; nil asks none.
 	Local mediaserver.LocalAsker
 	TVDB  TVDBSource
@@ -118,6 +120,12 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs) (Movie
 	replies := metaresolve.AskAll(ctx, order, func(ctx context.Context, name string) (Movie, error) {
 		if strings.HasPrefix(name, settings.LocalSourcePrefix) {
 			if answer, ok := s.askLocal(ctx, categoryID, name, ids); ok {
+				return answer, nil
+			}
+			return Movie{}, errNoAnswer
+		}
+		if s.recordProvider(name) != nil {
+			if answer, ok := s.askRecord(ctx, name, ids); ok {
 				return answer, nil
 			}
 			return Movie{}, errNoAnswer

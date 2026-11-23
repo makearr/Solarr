@@ -864,6 +864,24 @@ func (p *process) comicRecords(key string) comic.RecordProvider {
 	return provider
 }
 
+// movieRecords is the movie service's view of the active definitions.
+func (p *process) movieRecords(key string) movie.RecordProvider {
+	provider := p.records.get(key)
+	if provider == nil {
+		return nil
+	}
+	return provider
+}
+
+// bookRecords is the book service's view of the active definitions.
+func (p *process) bookRecords(key string) book.RecordProvider {
+	provider := p.records.get(key)
+	if provider == nil {
+		return nil
+	}
+	return provider
+}
+
 // comicService is the comic service over the six providers, each on its own bucket and pace.
 func (p *process) comicService() comic.Service {
 	client := func(name string) *httpx.Client { return p.providerClient(name, nil, httpx.ClientConfig{}) }

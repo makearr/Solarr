@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer/spec"
+	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/metadata/specprovider"
 	"github.com/makearr/Solarr/internal/providerdef"
 	"github.com/makearr/Solarr/internal/service/webhook"
@@ -196,6 +197,15 @@ func approvedSpecs(custom []providerdef.Definition, states map[string]providerde
 		active = append(active, found)
 	}
 	return active
+}
+
+// providerTuned answers what a custom descriptor narrows of a compiled provider.
+func (p *process) providerTuned(kind, key string) apiserver.ProviderTune {
+	if p.definitions == nil {
+		return apiserver.ProviderTune{}
+	}
+	tuning := p.definitions.Catalog().Tuning(providerdef.Kind(kind), descriptorKey(key))
+	return apiserver.ProviderTune{MediaTypes: tuning.MediaTypes, BaseURLs: tuning.BaseURLs}
 }
 
 // providerHidden says a custom descriptor switched the compiled provider off; the descriptor's key replaces ":" in a provider key.

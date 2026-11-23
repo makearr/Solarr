@@ -78,6 +78,10 @@ func (p *process) reloadRecordProviders() {
 				p.logger.Warn("metadata definition names a media type that takes no definition providers", slog.String("key", def.Key), slog.String("media_type", mediaType))
 			}
 		}
+		libraryKinds := slices.Clone(parsed.LibraryKinds)
+		if parsed.Adult {
+			types, libraryKinds = adultOnly(p.media.Descriptors(), types, libraryKinds)
+		}
 		if len(types) == 0 {
 			continue
 		}
@@ -101,9 +105,34 @@ func (p *process) reloadRecordProviders() {
 		offered = append(offered, settings.MetadataProvider{
 			Key: key, Label: def.Name, MediaTypes: types, Carries: slices.Clone(def.Carries), PerMinute: parsed.Pace.PerMinute,
 			MaxPerMinute: max(parsed.Pace.MaxPerMinute, parsed.Pace.PerMinute), Published: def.Description, Custom: true,
-			LibraryKinds: slices.Clone(parsed.LibraryKinds), Role: settings.ProviderRole(parsed.Role),
+			LibraryKinds: libraryKinds, Role: settings.ProviderRole(parsed.Role),
 		})
 	}
 	p.records.held.Store(&built)
 	settings.SetCustomMetadataProviders(offered)
+}
+
+// adultOnly narrows an `adult: true` definition to the libraries of an adult kind: the media types that have one (or are
+// adult themselves) and the kinds, the definition's own list cut to the adult ones. A type with none is dropped.
+func adultOnly(descriptors []media.Descriptor, types, declared []string) (kept, kinds []string) {
+	for _, mediaType := range types {
+		for _, descriptor := range descriptors {
+			if string(descriptor.Key) != mediaType {
+				continue
+			}
+			whole, offered := mediaType == "adult", 0
+			for _, kind := range descriptor.Kinds {
+				if (whole || kind.Adult) && (len(declared) == 0 || slices.Contains(declared, kind.Key)) {
+					offered++
+					if !slices.Contains(kinds, kind.Key) {
+						kinds = append(kinds, kind.Key)
+					}
+				}
+			}
+			if offered > 0 && !slices.Contains(kept, mediaType) {
+				kept = append(kept, mediaType)
+			}
+		}
+	}
+	return kept, kinds
 }

@@ -162,3 +162,58 @@ func TestListIndexerKinds_LeavesOutAKindADescriptorSwitchedOff(t *testing.T) {
 		t.Errorf("kinds = %v", got)
 	}
 }
+
+func TestListIndexerKinds_ShowsTheMirrorsADescriptorNamed(t *testing.T) {
+	fixture, cookies := adminWithSecrets(t)
+	fixture.tuned["indexer/thepiratebay"] = apiserver.ProviderTune{BaseURLs: []string{"https://mirror.example.org", "https://apibay.org"}}
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/indexers/schema"))
+	var kinds []struct {
+		ID       string   `json:"id"`
+		BaseURLs []string `json:"base_urls"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &kinds); err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range kinds {
+		if kind.ID == "thepiratebay" && !slices.Equal(kind.BaseURLs, []string{"https://mirror.example.org", "https://apibay.org"}) {
+			t.Errorf("mirrors = %v", kind.BaseURLs)
+		}
+		if kind.ID != "thepiratebay" && slices.Contains(kind.BaseURLs, "https://mirror.example.org") {
+			t.Errorf("%s got another kind's mirrors", kind.ID)
+		}
+	}
+}
+
+func TestLibraryTypeDefaults_LeavesOutAMetadataProviderADescriptorNarrowedAway(t *testing.T) {
+	fixture, cookies := adminWithSecrets(t)
+	listed := func() []string {
+		recorder := fixture.do(authedGet(t, cookies, "/api/v1/library-type-defaults"))
+		var body struct {
+			Types []struct {
+				MediaType         string `json:"media_type"`
+				MetadataAvailable []struct {
+					Key string `json:"key"`
+				} `json:"metadata_available"`
+			} `json:"types"`
+		}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		var keys []string
+		for _, one := range body.Types {
+			if one.MediaType == "tv" {
+				for _, provider := range one.MetadataAvailable {
+					keys = append(keys, provider.Key)
+				}
+			}
+		}
+		return keys
+	}
+	if !slices.Contains(listed(), "tmdb") {
+		t.Fatalf("tmdb is not offered to tv before narrowing: %v", listed())
+	}
+	fixture.tuned["metadata/tmdb"] = apiserver.ProviderTune{MediaTypes: []string{"movie"}}
+	if slices.Contains(listed(), "tmdb") {
+		t.Errorf("tmdb narrowed to movie is still offered to tv: %v", listed())
+	}
+}

@@ -49,6 +49,9 @@ func (s *Server) ListIndexerKinds(w http.ResponseWriter, r *http.Request) {
 			if s.hidden("indexer", kind.ID) {
 				continue
 			}
+			if mirrors := s.tuned("indexer", kind.ID).BaseURLs; len(mirrors) > 0 {
+				kind.BaseURLs = mirrors
+			}
 			views = append(views, indexerKindView(kind))
 		}
 	}
@@ -220,6 +223,24 @@ func (s *Server) downloaderKindOf(impl string) (DownloaderKind, bool) {
 		return DownloaderKind{}, false
 	}
 	return kinds[index], true
+}
+
+// ProviderTune is what a custom descriptor narrows of a compiled provider: the media types it serves and the mirrors of an
+// indexer, empty where the descriptor said nothing.
+type ProviderTune struct{ MediaTypes, BaseURLs []string }
+
+// tuned answers a compiled provider's custom descriptor tuning.
+func (s *Server) tuned(kind, key string) ProviderTune {
+	if s.providerTuned == nil {
+		return ProviderTune{}
+	}
+	return s.providerTuned(kind, key)
+}
+
+// narrowedOut says a custom descriptor narrowed a metadata provider's media types and this one is no longer among them.
+func (s *Server) narrowedOut(key, mediaType string) bool {
+	types := s.tuned("metadata", key).MediaTypes
+	return len(types) > 0 && !slices.Contains(types, mediaType)
 }
 
 // hidden says a custom descriptor switched the provider off for new use.

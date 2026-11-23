@@ -266,3 +266,10 @@ as failures though they arrive as 200. Metadata requests are all reads, so a dro
 half a second, except at Whisparr. When a circuit closes again, the task `identify_after_outage` retries the waiting files of the
 libraries that provider serves, at most hourly per provider. Google Books ships switched off, since it answers 429 without a key,
 and comes on when a key is stored.
+
+## Your own providers (definition files)
+
+A YAML file under `providers/metadata/custom/` describes a web service Solarr can ask for a book, a comic or a film; Settings >
+Providers lists, tests and approves it, and a library adds it to its order on its Metadata page, where it carries a *Custom*
+chip. It is asked after the providers before it and only fills what they left empty. Every request goes through the same
+guard and pace as the compiled providers, to the hosts the file names and no other. See `provider-definitions.md`.

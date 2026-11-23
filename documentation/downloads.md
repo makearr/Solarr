@@ -245,3 +245,9 @@ to sign in (none, a pasted cookie, or a form/post/get sign-in; the session cooki
 the sign-in is repeated once if the site says it was signed out) and how to find the file on a details page. What a site
 asks for (user name, password, cookie, choices) is shown when it is added and stored sealed, as JSON, in the indexer's key.
 A site behind Cloudflare needs a FlareSolverr proxy (Proxies). A spec's request delay becomes the indexer's minimum pace.
+
+## Webhooks
+
+Grabs, failed downloads and failed imports can be sent to chat, push and automation services, and a script can ask Solarr to
+scan, import a finished folder, refresh or search with a token: see `webhooks.md`. Solarr still implements no download client;
+a client is added under Connections > Download clients.

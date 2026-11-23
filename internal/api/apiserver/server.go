@@ -323,6 +323,8 @@ type Config struct {
 	// ProviderHidden says a custom descriptor switched the compiled provider off for new use (kind "metadata", "indexer" or
 	// "download"); optional: without it nothing is hidden. Rows that exist keep working.
 	ProviderHidden func(kind, key string) bool
+	// ProviderTuned answers what a custom descriptor narrows of a compiled provider; optional.
+	ProviderTuned func(kind, key string) ProviderTune
 	// ProviderDefinitions administers the definition files (Settings > Providers); optional.
 	ProviderDefinitions ProviderDefinitions
 	// Webhooks administers the outgoing webhooks; optional.
@@ -466,6 +468,7 @@ type Server struct {
 	downloaderKinds         DownloaderKinds
 	indexerKinds            IndexerKinds
 	providerHidden          func(kind, key string) bool
+	providerTuned           func(kind, key string) ProviderTune
 	providerDefinitions     ProviderDefinitions
 	webhooks                Webhooks
 	inbound                 InboundWebhooks
@@ -625,6 +628,7 @@ func New(config Config) (*Server, error) {
 		downloaderKinds:         config.DownloaderKinds,
 		indexerKinds:            config.IndexerKinds,
 		providerHidden:          config.ProviderHidden,
+		providerTuned:           config.ProviderTuned,
 		providerDefinitions:     config.ProviderDefinitions,
 		webhooks:                config.Webhooks,
 		inbound:                 config.InboundWebhooks,

@@ -99,13 +99,15 @@ type Service struct {
 	Wikidata IDBridge
 	// PriorityFor is a library's provider order; nil, or an empty answer, takes the format's.
 	PriorityFor func(categoryID int64) []string
-	Series      library.Series
-	Reader      library.SeriesReader
-	Desired     library.Desired
-	Franchises  library.Franchises
-	Exclusions  library.Exclusions
-	Clock       clock.Clock
-	Logger      *slog.Logger
+	// Records answers the definition-file provider of a key, nil for one that is not (or no longer) active.
+	Records    func(key string) RecordProvider
+	Series     library.Series
+	Reader     library.SeriesReader
+	Desired    library.Desired
+	Franchises library.Franchises
+	Exclusions library.Exclusions
+	Clock      clock.Clock
+	Logger     *slog.Logger
 }
 
 func (s Service) warn(source, id string, err error) {
@@ -163,9 +165,12 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs, hint H
 			}
 			var answer Book
 			var ok bool
-			if strings.HasPrefix(name, settings.LocalSourcePrefix) {
+			switch {
+			case strings.HasPrefix(name, settings.LocalSourcePrefix):
 				answer, ok = s.askLocal(ctx, categoryID, name, ids, hintFrom(hint, answers, order))
-			} else {
+			case s.recordProvider(name) != nil:
+				answer, ok = s.askRecord(ctx, name, hintFrom(hint, answers, order), &failed)
+			default:
 				answer, ok = s.ask(ctx, name, ids, hintFrom(hint, answers, order), &failed)
 			}
 			if ok {
@@ -635,6 +640,12 @@ func (s Service) searchOne(ctx context.Context, name, title, author string, limi
 			found := FromHardcover(hit)
 			candidates = append(candidates, Candidate{IDs: found.IDs, Title: found.Title, Author: first(found.Authors()), CoAuthors: othersThanFirst(found.Authors()), Year: found.Year,
 				Overview: found.Overview, Cover: hit.Cover(), Traits: media.Traits{Genres: found.Genres}})
+		}
+	default:
+		// A name no compiled provider owns is a definition file's provider, when it is active.
+		var err error
+		if candidates, err = s.searchRecords(ctx, name, title); err != nil {
+			return nil, err
 		}
 	}
 	if limit > 0 && len(candidates) > limit {

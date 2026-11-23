@@ -44,3 +44,9 @@ The error from a failed write names the uid and gid the process runs as, and
 — since `fsx.FileInfo` carries `UID`/`GID` from `syscall.Stat_t` — also the
 directory's own owner and mode, when the filesystem can report them. Invariant
 62 is fully met: a PUID/PGID mismatch no longer costs a manual `ls -l`.
+
+## Provider definitions
+
+At start Solarr writes the built-in definition files under `providers/*/builtin/` and reads the custom ones. A custom file with
+a problem is skipped and listed with its line under Settings > Providers; it never stops start-up. A custom provider that needs
+new hosts does nothing until an administrator approves them.

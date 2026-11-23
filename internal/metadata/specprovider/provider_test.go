@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/metadata/specprovider"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -266,5 +267,44 @@ func TestATransportFailureDoesNotLeakTheSecretInTheError(t *testing.T) {
 	_, err := provider(t, jsonDefinition, doer).Search(t.Context(), specprovider.Query{Title: "x"})
 	if err == nil || strings.Contains(err.Error(), "sekret") {
 		t.Errorf("error = %v", err)
+	}
+}
+
+func TestTheDefinitionsCacheAnswersASearchAndAnItemUntilTheyExpireAndNeverKeepsAFailure(t *testing.T) {
+	cached := strings.Replace(jsonDefinition, "ids: {own: sample}", "cache: {search: 24h, item: 1h}\nids: {own: sample}", 1)
+	doer := &fake{answers: map[string]string{"/search": `{"results":[{"id":7,"name":"Example Hero"}]}`, "/item/7": `{"id":7,"name":"Example Hero"}`}}
+	fakeClock := clock.NewFakeAtEpoch()
+	def, err := specprovider.Parse("sample-comics", "Sample Comics", []byte(cached))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := specprovider.New(def, doer, fakeClock, func() map[string]string { return map[string]string{"api_key": "k"} })
+	for range 3 {
+		if _, err := p.Search(t.Context(), specprovider.Query{Title: "Example Hero"}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := p.Item(t.Context(), "7"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(doer.requests) != 2 {
+		t.Fatalf("requests = %d, want one search and one item", len(doer.requests))
+	}
+	if _, err := p.Search(t.Context(), specprovider.Query{Title: "Another"}); err != nil || len(doer.requests) != 3 {
+		t.Errorf("another query is another answer: %d requests, %v", len(doer.requests), err)
+	}
+	fakeClock.Advance(2 * time.Hour)
+	if _, err := p.Item(t.Context(), "7"); err != nil || len(doer.requests) != 4 {
+		t.Errorf("an item past its hour is asked again: %d requests, %v", len(doer.requests), err)
+	}
+	if _, err := p.Search(t.Context(), specprovider.Query{Title: "Example Hero"}); err != nil || len(doer.requests) != 4 {
+		t.Errorf("a search is held for a day: %d requests, %v", len(doer.requests), err)
+	}
+	doer.status = http.StatusInternalServerError
+	for range 2 {
+		_, _ = p.Item(t.Context(), "8")
+	}
+	if len(doer.requests) != 6 {
+		t.Errorf("a failed item must be asked each time: %d requests", len(doer.requests))
 	}
 }

@@ -76,6 +76,7 @@ type Provider struct {
 	http     Doer
 	clock    clock.Clock
 	settings func() map[string]string
+	answers  answerCache
 }
 
 // New builds the provider of a definition; settings answers the owner's values at call time.
@@ -97,7 +98,9 @@ func (p *Provider) Search(ctx context.Context, query Query) ([]Record, error) {
 	variables := p.variables()
 	variables.Keywords = query.Title
 	variables.Query = map[string]string{"Title": query.Title, "Year": query.Year, "Language": query.Language}
-	return p.run(ctx, p.def.Search, variables, true)
+	return p.cached(ctx, "search", "search\x00"+query.Title+"\x00"+query.Year+"\x00"+query.Language, func() ([]Record, error) {
+		return p.run(ctx, p.def.Search, variables, true)
+	})
 }
 
 // Item reads one record by this provider's own id.
@@ -116,7 +119,9 @@ func (p *Provider) one(ctx context.Context, op *Operation, id string) (Record, e
 	}
 	variables := p.variables()
 	variables.ID = id
-	records, err := p.run(ctx, op, variables, false)
+	records, err := p.cached(ctx, "item", fmt.Sprintf("item\x00%p\x00%s", op, id), func() ([]Record, error) {
+		return p.run(ctx, op, variables, false)
+	})
 	if err != nil {
 		return Record{}, err
 	}

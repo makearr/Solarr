@@ -55,6 +55,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/config"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 	"github.com/makearr/Solarr/internal/platform/remoteimage"
+	"github.com/makearr/Solarr/internal/providerdef"
 	"github.com/makearr/Solarr/internal/service/importlist"
 )
 
@@ -255,6 +256,12 @@ func (p *process) indexerDriver(ctx context.Context, found settings.Indexer, api
 			p.indexerPacing.setFloor(found.ID, time.Duration(one.RequestDelay*float64(time.Second)))
 		}
 	}
+	if p.indexerPacing != nil && found.Impl != indexer.ImplSpec && p.definitions != nil {
+		// A custom descriptor of a compiled kind may ask for a longer gap between requests.
+		if delay, err := time.ParseDuration(p.definitions.Catalog().Tuning(providerdef.KindIndexer, descriptorKey(found.Impl)).RequestDelay); err == nil && delay > 0 {
+			p.indexerPacing.setFloor(found.ID, delay)
+		}
+	}
 	return adapters.NewIndexer(found.Impl, deps, indexer.Connection{BaseURL: found.BaseURL, APIKey: apiKey, Definition: found.Definition()})
 }
 
@@ -400,13 +407,13 @@ func (p *process) movieService() movie.Service {
 		p.tvService()
 		proxy := radarrmeta.New(p.providerClient(providerRadarrMeta, nil, httpx.ClientConfig{}))
 		p.movieShared = movie.Service{
-			Wikidata: p.wikidataFacts(),
-			MDBList:  mdblist.New(p.providerClient(providerMDBList, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceMDBList)),
-			OMDb:     omdb.New(p.providerClient(providerOMDb, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceOMDb)),
-			IMDb:     p.imdbData(),
-			Fanart:   fanart.New(p.providerClient(providerFanart, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceFanart)),
-			TVDB:     p.tvdbShared,
-			Local:    p.localMetadata(),
+			Wikidata: p.wikidataFacts(), Records: p.movieRecords,
+			MDBList: mdblist.New(p.providerClient(providerMDBList, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceMDBList)),
+			OMDb:    omdb.New(p.providerClient(providerOMDb, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceOMDb)),
+			IMDb:    p.imdbData(),
+			Fanart:  fanart.New(p.providerClient(providerFanart, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceFanart)),
+			TVDB:    p.tvdbShared,
+			Local:   p.localMetadata(),
 			Priority: func() []string {
 				return p.cache.Snapshot().MetadataSourcesFor(settings.Category{MediaType: movie.MediaType})
 			},
@@ -440,7 +447,7 @@ func (p *process) bookService(format book.Format) book.Service {
 		p.bookShared = map[string]book.Service{}
 		for _, each := range book.Formats {
 			p.bookShared[each.MediaType] = book.Service{
-				Format: each, OpenLibrary: openLibrary, GoogleBooks: googleBooks, Audible: catalog, ITunes: appleBooks, FantLab: fantLab, Hardcover: hardcoverClient, Archive: internetarchive.New(p.providerClient(providerInternetArchive, nil, httpx.ClientConfig{})), Wikidata: p.wikidataFacts(), Local: p.localMetadata(),
+				Format: each, OpenLibrary: openLibrary, GoogleBooks: googleBooks, Audible: catalog, ITunes: appleBooks, FantLab: fantLab, Hardcover: hardcoverClient, Archive: internetarchive.New(p.providerClient(providerInternetArchive, nil, httpx.ClientConfig{})), Wikidata: p.wikidataFacts(), Local: p.localMetadata(), Records: p.bookRecords,
 				PriorityFor: func(categoryID int64) []string {
 					snapshot := p.cache.Snapshot()
 					category, found := snapshot.Category(categoryID)
