@@ -11,7 +11,9 @@ Connections > Media servers tells Solarr about the servers that play what it man
 | Kavita | API key, or user name and password | One library scan per mapped library | Not read | Users list needs an administrator |
 | Navidrome | User name and password | One incremental `startScan`, skipped while a scan runs | The signed-in user's albums, newest first | Lists no library paths, so path mapping is manual |
 | Calibre | Content server address | None | None | |
-| Stash | API key, or user name and password (a session cookie) | None | Not read | |
+| Stash | API key, or user name and password (a session cookie) | One metadata scan of the folders the new files are in (every library folder above 50 folders); deletions are not pushed | Not read | |
+| Emby | API key, or user name and password | As Jellyfin, under `/emby`, token also sent as `X-Emby-Token` | As Jellyfin | Built from the public API, not yet run against a server |
+| Komga | API key (`X-API-Key`), or user name and password (HTTP basic) | One library scan per mapped library | Not read | Built from the public API, not yet run against a server |
 
 ## Path mapping
 

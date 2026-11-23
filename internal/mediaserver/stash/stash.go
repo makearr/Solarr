@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
+	"slices"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/mediaserver"
@@ -55,6 +57,10 @@ func New(doer mediaserver.Doer, base, key string) *Client {
 }
 
 func (c *Client) query(ctx context.Context, query string, into any) error {
+	return c.run(ctx, map[string]any{"query": query}, into)
+}
+
+func (c *Client) run(ctx context.Context, body map[string]any, into any) error {
 	header := func(cookie string) http.Header {
 		if c.session != nil {
 			return http.Header{"Cookie": {cookie}}
@@ -64,7 +70,7 @@ func (c *Client) query(ctx context.Context, query string, into any) error {
 		}
 		return http.Header{}
 	}
-	err := mediaserver.CallSigned(ctx, c.doer, c.session, header, http.MethodPost, mediaserver.Join(c.base, "/graphql"), map[string]string{"query": query}, into)
+	err := mediaserver.CallSigned(ctx, c.doer, c.session, header, http.MethodPost, mediaserver.Join(c.base, "/graphql"), body, into)
 	return mediaserver.Refused(err)
 }
 
@@ -104,4 +110,29 @@ func (c *Client) Libraries(ctx context.Context) ([]mediaserver.Library, error) {
 		paths = append(paths, stash.Path)
 	}
 	return []mediaserver.Library{{ID: "stash", Name: "Stash", Type: "adult", Paths: paths}}, nil
+}
+
+// maxTargetedFolders is how many folders of one batch are scanned one by one before the whole library is scanned instead.
+const maxTargetedFolders = 50
+
+// Changed starts Stash's metadata scan on the folders the new files are in, or on every library folder when there are many.
+func (c *Client) Changed(ctx context.Context, changes []mediaserver.Change) error {
+	var folders []string
+	for _, change := range changes {
+		if change.Kind == "deleted" {
+			continue
+		}
+		if folder := path.Dir(change.Path); !slices.Contains(folders, folder) {
+			folders = append(folders, folder)
+		}
+	}
+	if len(folders) == 0 {
+		return nil
+	}
+	input := map[string]any{}
+	if len(folders) <= maxTargetedFolders {
+		input["paths"] = folders
+	}
+	body := map[string]any{"query": "mutation($input: ScanMetadataInput!) { metadataScan(input: $input) }", "variables": map[string]any{"input": input}}
+	return c.run(ctx, body, nil)
 }

@@ -241,6 +241,8 @@ var MetadataProviders = []MetadataProvider{
 		PerMinute: 120, Published: "none published; a community server, asked gently"},
 	{Key: LocalSource("jellyfin"), Label: "Jellyfin (your server)", MediaTypes: []string{"tv", "movie", "music"}, Provisional: true, Carries: []string{"titles", "overviews", "genres", "cast", "provider ids", "images"},
 		PerMinute: 600, Published: "your own server"},
+	{Key: LocalSource("emby"), Label: "Emby (your server)", MediaTypes: []string{"tv", "movie", "music"}, Provisional: true, Carries: []string{"titles", "overviews", "genres", "cast", "provider ids", "images"},
+		PerMinute: 600, Published: "your own server"},
 	{Key: LocalSource("navidrome"), Label: "Navidrome (your server)", MediaTypes: []string{"music"}, Provisional: true, Carries: []string{"artists", "albums", "tracks", "MusicBrainz ids"},
 		PerMinute: 600, Published: "your own server"},
 	{Key: LocalSource("audiobookshelf"), Label: "Audiobookshelf (your server)", MediaTypes: []string{"audiobook", "book"}, Provisional: true, Carries: []string{"titles", "narrators", "series", "ASIN and ISBN", "covers"},

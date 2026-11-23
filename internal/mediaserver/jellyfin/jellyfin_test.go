@@ -201,3 +201,18 @@ func TestClient_ItemByProviderIDReadsTheIndexOnceAndTheItemByItsId(t *testing.T)
 		t.Errorf("requests = %q, want one index read and two item reads", requests)
 	}
 }
+
+func TestEmbyClientCallsUnderEmbyWithItsOwnTokenHeader(t *testing.T) {
+	var seen []string
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Method+" "+r.URL.Path+" "+r.Header.Get("X-Emby-Token"))
+	}))
+	defer server.Close()
+	client := jellyfin.NewEmby(mediaservertest.Direct(), server.URL, "k1")
+	if err := client.Changed(t.Context(), []mediaserver.Change{{Path: "/m/a", Kind: "created"}}); err != nil {
+		t.Fatalf("Changed: %v", err)
+	}
+	if want := []string{"POST /emby/Library/Media/Updated k1"}; !reflect.DeepEqual(seen, want) {
+		t.Errorf("requests = %q, want %q", seen, want)
+	}
+}

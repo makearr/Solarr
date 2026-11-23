@@ -86,3 +86,25 @@ func TestClient_ItemByProviderIDAsksTheBoxEndpointAndMapsTheScene(t *testing.T) 
 		t.Error("a provider that is no stash-box found a scene")
 	}
 }
+
+func TestClient_ChangedScansTheFoldersOfNewFilesOnce(t *testing.T) {
+	var bodies []string
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, string(body))
+	}))
+	defer server.Close()
+	client := stash.New(mediaservertest.Direct(), server.URL, "k")
+	changes := []mediaserver.Change{{Path: "/m/a/one.mp4", Kind: "created"}, {Path: "/m/a/two.mp4", Kind: "modified"}, {Path: "/m/b/gone.mp4", Kind: "deleted"}}
+	if err := client.Changed(t.Context(), changes); err != nil {
+		t.Fatalf("Changed: %v", err)
+	}
+	want := []string{`{"query":"mutation($input: ScanMetadataInput!) { metadataScan(input: $input) }","variables":{"input":{"paths":["/m/a"]}}}`}
+	if !reflect.DeepEqual(bodies, want) {
+		t.Errorf("requests = %q, want %q", bodies, want)
+	}
+	bodies = nil
+	if err := client.Changed(t.Context(), []mediaserver.Change{{Path: "/m/b/gone.mp4", Kind: "deleted"}}); err != nil || len(bodies) != 0 {
+		t.Errorf("a deletion alone sent %q (%v)", bodies, err)
+	}
+}

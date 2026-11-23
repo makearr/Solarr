@@ -54,6 +54,11 @@ var kinds = map[string]Kind{
 		CanPlayback: true, PerUserPlayback: true, CanMetadata: true, HasUsers: true, NeedsAdmin: true,
 		MediaTypes: []string{"tv", "movie", "music"}, DefaultPortHint: "8096",
 	},
+	"emby": {
+		Key: "emby", Label: "Emby", Credential: CredentialKeyOrPassword, CanPush: true, PushByPath: true, CanAnnounce: true,
+		CanPlayback: true, PerUserPlayback: true, CanMetadata: true, HasUsers: true, NeedsAdmin: true,
+		MediaTypes: []string{"tv", "movie", "music"}, DefaultPortHint: "8096",
+	},
 	"navidrome": {
 		Key: "navidrome", Label: "Navidrome", Credential: CredentialPassword, CanPush: true,
 		CanPlayback: true, PerUserPlayback: true, CanMetadata: true,
@@ -68,12 +73,16 @@ var kinds = map[string]Kind{
 		Key: "kavita", Label: "Kavita", Credential: CredentialKeyOrPassword, CanPush: true, HasUsers: true,
 		MediaTypes: []string{"book", "comic"}, DefaultPortHint: "5000",
 	},
+	"komga": {
+		Key: "komga", Label: "Komga", Credential: CredentialKeyOrPassword, CanPush: true,
+		MediaTypes: []string{"book", "comic"}, DefaultPortHint: "25600",
+	},
 	"calibre": {
 		Key: "calibre", Label: "Calibre content server", Credential: CredentialOptionalPassword, CanMetadata: true,
 		MediaTypes: []string{"book"}, DefaultPortHint: "8080",
 	},
 	"stash": {
-		Key: "stash", Label: "Stash", Credential: CredentialKeyOrPassword, CanMetadata: true,
+		Key: "stash", Label: "Stash", Credential: CredentialKeyOrPassword, CanPush: true, PushByPath: true, CanMetadata: true,
 		MediaTypes: []string{"adult"}, DefaultPortHint: "9999",
 	},
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/mediaserver/calibre"
 	"github.com/makearr/Solarr/internal/mediaserver/jellyfin"
 	"github.com/makearr/Solarr/internal/mediaserver/kavita"
+	"github.com/makearr/Solarr/internal/mediaserver/komga"
 	"github.com/makearr/Solarr/internal/mediaserver/navidrome"
 	"github.com/makearr/Solarr/internal/mediaserver/stash"
 	"github.com/makearr/Solarr/internal/platform/httpx"
@@ -30,6 +31,11 @@ func (p *process) mediaServerClients(kind, baseURL, username string, credential 
 			return jellyfin.NewLogin(doer, baseURL, username, secret), nil
 		}
 		return jellyfin.New(doer, baseURL, secret), nil
+	case "emby":
+		if username != "" {
+			return jellyfin.NewEmbyLogin(doer, baseURL, username, secret), nil
+		}
+		return jellyfin.NewEmby(doer, baseURL, secret), nil
 	case "navidrome":
 		return navidrome.New(doer, baseURL, username, secret, randomToken), nil
 	case "audiobookshelf":
@@ -39,6 +45,11 @@ func (p *process) mediaServerClients(kind, baseURL, username string, credential 
 			return kavita.NewLogin(doer, baseURL, username, secret), nil
 		}
 		return kavita.New(doer, baseURL, secret), nil
+	case "komga":
+		if username != "" {
+			return komga.NewLogin(doer, baseURL, username, secret), nil
+		}
+		return komga.New(doer, baseURL, secret), nil
 	case "calibre":
 		return calibre.New(doer, baseURL, username, secret, randomToken), nil
 	case "stash":

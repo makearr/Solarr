@@ -20,6 +20,8 @@ type Client struct {
 	doer mediaserver.Doer
 	base string
 	key  string
+	// emby says the server is an Emby: the same calls under /emby, with the token also in its own header.
+	emby bool
 	// session is set when the connection signs in with a user name and password; the key is then empty.
 	session *mediaserver.Session
 	// indexes hold the id index per media type, built on first use for the life of the client.
@@ -38,6 +40,18 @@ func NewLogin(doer mediaserver.Doer, base, username, password string) *Client {
 	client.session = mediaserver.NewSession(func(ctx context.Context) (string, error) {
 		return client.signIn(ctx, username, password)
 	})
+	return client
+}
+
+// NewEmby builds a client for an Emby server, whose API is Jellyfin's ancestor: calls go under /emby.
+func NewEmby(doer mediaserver.Doer, base, key string) *Client {
+	return &Client{doer: doer, base: mediaserver.Join(base, "/emby"), key: key, emby: true}
+}
+
+// NewEmbyLogin is NewLogin for an Emby server.
+func NewEmbyLogin(doer mediaserver.Doer, base, username, password string) *Client {
+	client := NewLogin(doer, mediaserver.Join(base, "/emby"), username, password)
+	client.emby = true
 	return client
 }
 
@@ -65,7 +79,11 @@ func (c *Client) header(token string) http.Header {
 	if c.session == nil {
 		token = c.key
 	}
-	return http.Header{"Authorization": {fmt.Sprintf("MediaBrowser %s, Token=%q", clientIdentity, token)}}
+	header := http.Header{"Authorization": {fmt.Sprintf("MediaBrowser %s, Token=%q", clientIdentity, token)}}
+	if c.emby {
+		header.Set("X-Emby-Token", token)
+	}
+	return header
 }
 
 func (c *Client) call(ctx context.Context, method, address string, body, into any) error {

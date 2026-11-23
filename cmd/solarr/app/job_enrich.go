@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
@@ -138,4 +139,25 @@ func (p *process) albumRatings() music.AlbumRatings {
 		}
 		return ratings
 	}
+}
+
+// enrichmentRecords are the switched-on definitions that declare music and the enrich role, in key order.
+func (p *process) enrichmentRecords() []music.RecordProvider {
+	held := p.records.held.Load()
+	if held == nil {
+		return nil
+	}
+	snapshot := p.cache.Snapshot()
+	var keys []string
+	for key, entry := range *held {
+		if entry.parsed.Role == string(settings.RoleEnrich) && slices.Contains(entry.parsed.MediaTypes, string(music.MediaType)) && snapshot.ProviderEnabled(key) {
+			keys = append(keys, key)
+		}
+	}
+	slices.Sort(keys)
+	providers := make([]music.RecordProvider, 0, len(keys))
+	for _, key := range keys {
+		providers = append(providers, (*held)[key].provider)
+	}
+	return providers
 }
