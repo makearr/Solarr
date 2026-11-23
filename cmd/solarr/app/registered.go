@@ -24,6 +24,7 @@ import (
 	"github.com/makearr/Solarr/internal/media/knownfor"
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/media/tmdbfeeds"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
@@ -32,6 +33,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/mangadex"
 	"github.com/makearr/Solarr/internal/metadata/mangaupdates"
 	"github.com/makearr/Solarr/internal/metadata/metron"
+	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/moving/sidecar"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -146,7 +148,7 @@ func (p *process) tvModule() tv.Module {
 		Service: p.tvService(), Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem(), Logger: p.logger,
 		Categories: adapters.Categories{Cache: p.cache}, Resolver: p.tvResolver(), SharedFiles: p.enqueueSharedFiles,
 	})
-	return tv.Module{Registrations: p.tvJobs(), SourcesPaused: p.tvSourcesPaused, SceneNumberingDown: p.sceneNumberingDown, TMDBConfigured: func() bool { return p.cache.Snapshot().TMDBConfigured() },
+	return tv.Module{Feeds: p.tmdbFeeds(tmdb.MediaTV), Registrations: p.tvJobs(), SourcesPaused: p.tvSourcesPaused, SceneNumberingDown: p.sceneNumberingDown, TMDBConfigured: func() bool { return p.cache.Snapshot().TMDBConfigured() },
 		Sweep: scan.Sweep{
 			Consumer: consumer, Include: tv.IsVideo,
 			OnSwept: p.afterSweep,
@@ -450,6 +452,7 @@ func (p *process) movieModule() movie.Module {
 	})
 	catalog := p.movieCatalog()
 	return movie.Module{
+		Feeds:          p.tmdbFeeds(tmdb.MediaMovie),
 		Registrations:  p.movieJobs(),
 		TMDBConfigured: func() bool { return p.cache.Snapshot().TMDBConfigured() },
 		Sweep: scan.Sweep{
@@ -1122,4 +1125,38 @@ func (p *process) workLibraries(ctx context.Context, workID int64) ([]int64, err
 		}
 	}
 	return libraries, nil
+}
+
+// tmdbFeeds is the recommendation feeds of film (tmdb.MediaMovie) or TV (tmdb.MediaTV) libraries, read from TMDB's charts.
+func (p *process) tmdbFeeds(kind string) media.Recommending {
+	p.tvService()
+	feeds := tmdbfeeds.Feeds{
+		Media: kind, Charts: p.tmdbShared, Clock: clock.NewSystem(), Configured: func() bool { return p.cache.Snapshot().TMDBConfigured() },
+	}
+	if kind == tmdb.MediaTV {
+		feeds.Detail = func(ctx context.Context, id int64) (tmdbfeeds.Detail, error) {
+			series, err := p.tmdbShared.Series(ctx, id)
+			if err != nil {
+				return tmdbfeeds.Detail{}, err
+			}
+			detail := tmdbfeeds.Detail{Certification: series.ContentRating("US")}
+			for _, network := range series.Networks {
+				detail.Networks = append(detail.Networks, network.Name)
+			}
+			return detail, nil
+		}
+		return feeds
+	}
+	feeds.Detail = func(ctx context.Context, id int64) (tmdbfeeds.Detail, error) {
+		film, err := p.tmdbShared.Movie(ctx, id)
+		if err != nil {
+			return tmdbfeeds.Detail{}, err
+		}
+		detail := tmdbfeeds.Detail{Certification: film.Certification("US")}
+		for _, company := range film.Companies {
+			detail.Networks = append(detail.Networks, company.Name)
+		}
+		return detail, nil
+	}
+	return feeds
 }

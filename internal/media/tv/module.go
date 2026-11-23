@@ -18,6 +18,8 @@ import (
 
 // Module is TV as the media registry sees it. The zero value declares the type; Sweep makes it scannable.
 type Module struct {
+	// Feeds reads the library type's recommendation charts; nil recommends nothing.
+	Feeds media.Recommending
 	// TMDBConfigured says the owner has stored a TMDB key; nil leaves the missing-key check out.
 	TMDBConfigured func() bool
 	// SourcesPaused names the TV providers whose circuit is open right now; nil leaves the source checks out.
@@ -337,3 +339,19 @@ func (m Module) ApplyMonitorOption(ctx context.Context, categoryID, workID int64
 }
 
 var _ media.AffinityKeyer = Module{}
+
+// RecommendationFeeds implements media.Recommending.
+func (m Module) RecommendationFeeds(ctx context.Context) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
+	if m.Feeds == nil {
+		return nil, nil
+	}
+	return m.Feeds.RecommendationFeeds(ctx)
+}
+
+// Recommend implements media.Recommending.
+func (m Module) Recommend(ctx context.Context, query media.RecommendQuery) ([]media.Recommendation, bool, error) {
+	if m.Feeds == nil {
+		return nil, false, media.ErrNotWired
+	}
+	return m.Feeds.Recommend(ctx, query)
+}
