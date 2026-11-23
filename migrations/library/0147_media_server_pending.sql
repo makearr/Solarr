@@ -67,3 +67,81 @@ CREATE TABLE lyrics_attempt (
   attempted_at    INTEGER NOT NULL,
   found           INTEGER NOT NULL CHECK (found IN (0, 1))
 );
+
+-- Discover (recommendations): the pool is a cache of provider answers after filtering, rebuilt by a job.
+CREATE TABLE recommendation (
+  id                INTEGER PRIMARY KEY,
+  category_id       INTEGER NOT NULL,
+  kind              TEXT    NOT NULL,
+  provider          TEXT    NOT NULL,
+  external_id       TEXT    NOT NULL,
+  title             TEXT    NOT NULL,
+  subtitle          TEXT    NOT NULL DEFAULT '',
+  overview          TEXT    NOT NULL DEFAULT '',
+  poster_url        TEXT    NOT NULL DEFAULT '',
+  year              INTEGER NOT NULL DEFAULT 0,
+  released_on       TEXT    NOT NULL DEFAULT '',
+  popularity        REAL    NOT NULL DEFAULT 0,
+  rating            REAL    NOT NULL DEFAULT 0,
+  votes             INTEGER NOT NULL DEFAULT 0,
+  original_language TEXT    NOT NULL DEFAULT '',
+  certification     TEXT    NOT NULL DEFAULT '',
+  networks_json     TEXT    NOT NULL DEFAULT '',
+  work_id           INTEGER NOT NULL DEFAULT 0,
+  fetched_at        INTEGER NOT NULL,
+  UNIQUE (category_id, kind, provider, external_id)
+);
+CREATE INDEX recommendation_by_popularity ON recommendation(category_id, kind, popularity DESC, id DESC);
+
+CREATE TABLE recommendation_genre (
+  recommendation_id INTEGER NOT NULL REFERENCES recommendation(id) ON DELETE CASCADE,
+  genre             TEXT    NOT NULL,
+  PRIMARY KEY (recommendation_id, genre)
+) WITHOUT ROWID;
+CREATE INDEX recommendation_genre_by_genre ON recommendation_genre(genre, recommendation_id);
+
+CREATE TABLE recommendation_feed_item (
+  recommendation_id INTEGER NOT NULL REFERENCES recommendation(id) ON DELETE CASCADE,
+  type              TEXT    NOT NULL,
+  rank              INTEGER NOT NULL,
+  PRIMARY KEY (recommendation_id, type)
+) WITHOUT ROWID;
+
+CREATE TABLE recommendation_feed (
+  category_id  INTEGER NOT NULL,
+  kind         TEXT    NOT NULL,
+  type         TEXT    NOT NULL,
+  pages_read   INTEGER NOT NULL DEFAULT 0,
+  exhausted    INTEGER NOT NULL DEFAULT 0 CHECK (exhausted IN (0, 1)),
+  refreshed_at INTEGER NOT NULL DEFAULT 0,
+  last_error   TEXT    NOT NULL DEFAULT '',
+  PRIMARY KEY (category_id, kind, type)
+) WITHOUT ROWID;
+
+-- A person's "not interested", by provider id so it survives a refresh; no foreign key, app_user lives in settings.db.
+CREATE TABLE recommendation_dismissal (
+  user_id     INTEGER NOT NULL,
+  media_type  TEXT    NOT NULL,
+  kind        TEXT    NOT NULL,
+  provider    TEXT    NOT NULL,
+  external_id TEXT    NOT NULL,
+  title       TEXT    NOT NULL,
+  created_at  INTEGER NOT NULL,
+  PRIMARY KEY (user_id, provider, external_id, kind)
+) WITHOUT ROWID;
+
+-- What auto-add added, so a work the person later removes is never added a second time.
+CREATE TABLE recommendation_auto_add (
+  category_id INTEGER NOT NULL,
+  kind        TEXT    NOT NULL,
+  provider    TEXT    NOT NULL,
+  external_id TEXT    NOT NULL,
+  title       TEXT    NOT NULL,
+  type        TEXT    NOT NULL,
+  rating      REAL    NOT NULL,
+  votes       INTEGER NOT NULL,
+  work_id     INTEGER NOT NULL DEFAULT 0,
+  added_at    INTEGER NOT NULL,
+  PRIMARY KEY (category_id, kind, provider, external_id)
+) WITHOUT ROWID;
+CREATE INDEX recommendation_auto_add_by_day ON recommendation_auto_add(category_id, added_at);

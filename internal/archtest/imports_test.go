@@ -415,6 +415,8 @@ var allowedInternalImports = map[string][]string{
 	"internal/service/playback":       {"internal/db/library", "internal/db/settings", "internal/mediaserver", "internal/platform/clock"},
 	"internal/service/serverpush":     {"internal/db/library", "internal/db/settings", "internal/mediaserver", "internal/platform/clock"},
 	"internal/service/follow":         {"internal/db/library", "internal/db/settings", "internal/jobs", "internal/media", "internal/platform/clock"},
+	// Discover (recommendations): the admit rules read a media type only through internal/media.
+	"internal/service/discover": {"internal/media"},
 	// Import lists (ADR-38): AniList and TMDB lists read, previewed and synced through each media type's add.
 	"internal/service/importlist": {"internal/db/library", "internal/db/settings", "internal/jobs", "internal/media", "internal/metadata/anilist", "internal/metadata/mdblist", "internal/metadata/stashbox", "internal/metadata/tmdb", "internal/platform/clock", "internal/platform/config"},
 	"internal/media":              {"internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/acquiring/rss", "internal/moving/renamejob", "internal/acquiring/plan", "internal/db/settings", "internal/identify/model", "internal/jobs", "internal/moving/naming", "internal/scanning/scan"},

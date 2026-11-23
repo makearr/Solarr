@@ -37,6 +37,7 @@ type Querier interface {
 	AddPersonAlias(ctx context.Context, arg AddPersonAliasParams) error
 	// A further id of a person: the first person to claim it keeps it, so a key never moves between same-named people.
 	AddPersonExternalID(ctx context.Context, arg AddPersonExternalIDParams) error
+	AddRecommendationGenre(ctx context.Context, arg AddRecommendationGenreParams) error
 	AddRelationship(ctx context.Context, arg AddRelationshipParams) error
 	AddTagAlias(ctx context.Context, arg AddTagAliasParams) error
 	// The closure is materialised, so inserting a tag inserts its ancestry too.
@@ -189,6 +190,7 @@ type Querier interface {
 	CountProfileOverridesByProfile(ctx context.Context) ([]CountProfileOverridesByProfileRow, error)
 	// A client's queue as Solarr fills it: sent and not finished downloading (ADR-57).
 	CountQueuedOnDownloader(ctx context.Context, downloaderID int64) (int64, error)
+	CountRecommendationAutoAddsSince(ctx context.Context, arg CountRecommendationAutoAddsSinceParams) (int64, error)
 	CountRecycleBin(ctx context.Context) (int64, error)
 	CountRootIdentificationQueue(ctx context.Context, rootFolderID int64) (int64, error)
 	// What still names a settings row, asked before the settings row is deleted. Settings cannot see these tables.
@@ -333,6 +335,7 @@ type Querier interface {
 	DeleteOldImportSessions(ctx context.Context, arg DeleteOldImportSessionsParams) (int64, error)
 	// A move job that finished or was cancelled long ago; its items and plan go with it.
 	DeleteOldMoveJobs(ctx context.Context, arg DeleteOldMoveJobsParams) (int64, error)
+	DeleteOrphanRecommendations(ctx context.Context, arg DeleteOrphanRecommendationsParams) error
 	DeletePerson(ctx context.Context, id int64) error
 	DeletePersonArtwork(ctx context.Context, subjectID int64) error
 	DeletePersonSubscriptions(ctx context.Context, subjectID int64) error
@@ -345,6 +348,12 @@ type Querier interface {
 	DeletePlaybackStateOfUserChunk(ctx context.Context, arg DeletePlaybackStateOfUserChunkParams) (int64, error)
 	DeletePlaybackSyncOf(ctx context.Context, serverID int64) error
 	DeleteProbeFailure(ctx context.Context, mediaObjectID int64) error
+	DeleteRecommendationAutoAddsOfCategory(ctx context.Context, categoryID int64) error
+	DeleteRecommendationFeedsOfCategory(ctx context.Context, categoryID int64) error
+	DeleteRecommendationGenres(ctx context.Context, recommendationID int64) error
+	// A work added by any path leaves the pool at once.
+	DeleteRecommendationsByExternalID(ctx context.Context, arg DeleteRecommendationsByExternalIDParams) error
+	DeleteRecommendationsOfCategory(ctx context.Context, categoryID int64) error
 	DeleteRecycleBinEntry(ctx context.Context, id int64) error
 	DeleteRelationship(ctx context.Context, arg DeleteRelationshipParams) error
 	// A root that is removed from configuration leaves no progress behind.
@@ -357,6 +366,8 @@ type Querier interface {
 	// rather than trusting a silent no-op.
 	// The file's own row marked missing where it moves back to (a folder renamed by hand, then rescanned) is stale.
 	DeleteStaleDestinationPath(ctx context.Context, arg DeleteStaleDestinationPathParams) error
+	// What a refresh no longer names: this feed's items outside the new set.
+	DeleteStaleRecommendationFeedItems(ctx context.Context, arg DeleteStaleRecommendationFeedItemsParams) error
 	DeleteSubscription(ctx context.Context, id int64) error
 	DeleteTag(ctx context.Context, id int64) (int64, error)
 	// Links nothing explains: no recorded origin and no provider id the two collections share.
@@ -405,6 +416,7 @@ type Querier interface {
 	// so a run in progress cannot be dismissed out from under itself. :execrows
 	// distinguishes "no such session, or still running" from "now hidden".
 	DismissImportSession(ctx context.Context, arg DismissImportSessionParams) (int64, error)
+	DismissRecommendation(ctx context.Context, arg DismissRecommendationParams) error
 	DropCategoryCollections(ctx context.Context, categoryID int64) error
 	DropCategoryDesiredItems(ctx context.Context, categoryID int64) error
 	DropCategoryImportSessions(ctx context.Context, categoryID sql.NullInt64) error
@@ -526,6 +538,7 @@ type Querier interface {
 	GetPlaybackSince(ctx context.Context, arg GetPlaybackSinceParams) (int64, error)
 	GetProbeFailureAttempts(ctx context.Context, mediaObjectID int64) (int64, error)
 	GetProbeFailureRaw(ctx context.Context, mediaObjectID int64) (string, error)
+	GetRecommendationFeed(ctx context.Context, arg GetRecommendationFeedParams) (RecommendationFeed, error)
 	GetRecycleBin(ctx context.Context, id int64) (RecycleBin, error)
 	GetRequest(ctx context.Context, id int64) (Request, error)
 	// Per-root sweep progress (section 10.4). Column lists follow table order, or sqlc
@@ -925,6 +938,14 @@ type Querier interface {
 	// in a WHERE, and decoding one bounded page in Go is the same discipline every
 	// cross-database composition here already uses.
 	ListQueuedWithNewestAttempt(ctx context.Context, arg ListQueuedWithNewestAttemptParams) ([]ListQueuedWithNewestAttemptRow, error)
+	ListRecommendationDismissals(ctx context.Context, userID int64) ([]RecommendationDismissal, error)
+	ListRecommendationFeedTypesOf(ctx context.Context, ids interface{}) ([]ListRecommendationFeedTypesOfRow, error)
+	ListRecommendationFeeds(ctx context.Context, categoryID int64) ([]RecommendationFeed, error)
+	// The genre facet of a library and kind.
+	ListRecommendationGenreCounts(ctx context.Context, arg ListRecommendationGenreCountsParams) ([]ListRecommendationGenreCountsRow, error)
+	ListRecommendationGenresOf(ctx context.Context, ids interface{}) ([]RecommendationGenre, error)
+	// What the person has not dismissed and is not already monitored; keyset on (popularity, id), no OFFSET.
+	ListRecommendations(ctx context.Context, arg ListRecommendationsParams) ([]Recommendation, error)
 	// What an upgrade displaced in favour of this file and the bin still holds.
 	ListRecycledInFavourOf(ctx context.Context, replacedByMediaObjectID sql.NullInt64) ([]RecycleBin, error)
 	// Pairs of works a provider says are related (an anime's sequel, its spin-off).
@@ -1268,6 +1289,7 @@ type Querier interface {
 	RecordPersonRefresh(ctx context.Context, arg RecordPersonRefreshParams) error
 	// A release RSS showed for the item; the newest first-seen is kept.
 	RecordRSSSighting(ctx context.Context, arg RecordRSSSightingParams) error
+	RecordRecommendationAutoAdd(ctx context.Context, arg RecordRecommendationAutoAddParams) error
 	RecordTagWriteback(ctx context.Context, arg RecordTagWritebackParams) error
 	RecycleBin(ctx context.Context, arg RecycleBinParams) (RecycleBin, error)
 	// Recycled bytes count against the free-space gate, so they are summed per
@@ -1304,6 +1326,7 @@ type Querier interface {
 	ResolvePlaybackFile(ctx context.Context, arg ResolvePlaybackFileParams) (ResolvePlaybackFileRow, error)
 	ResolvePlaybackPartByExternalID(ctx context.Context, arg ResolvePlaybackPartByExternalIDParams) (ResolvePlaybackPartByExternalIDRow, error)
 	ResolvePlaybackWorkByExternalID(ctx context.Context, arg ResolvePlaybackWorkByExternalIDParams) (int64, error)
+	RestoreRecommendation(ctx context.Context, arg RestoreRecommendationParams) error
 	ResumeMoveJob(ctx context.Context, id int64) (int64, error)
 	RetryWebhookPending(ctx context.Context, arg RetryWebhookPendingParams) error
 	// Whether the library still has a file on a root that is not missing: an empty root then is an unmounted disk.
@@ -1420,6 +1443,7 @@ type Querier interface {
 	SetPersonMonitored(ctx context.Context, arg SetPersonMonitoredParams) error
 	SetPhash(ctx context.Context, arg SetPhashParams) error
 	SetPlaybackSince(ctx context.Context, arg SetPlaybackSinceParams) error
+	SetRecommendationFeed(ctx context.Context, arg SetRecommendationFeedParams) error
 	SetRecycleBinPath(ctx context.Context, arg SetRecycleBinPathParams) error
 	// Progress mid-sweep: the cursor advances, the watermark does not.
 	SetScanCursor(ctx context.Context, arg SetScanCursorParams) error
@@ -1502,6 +1526,9 @@ type Querier interface {
 	// What media server users have played. Column lists follow table order.
 	UpsertPlaybackState(ctx context.Context, arg UpsertPlaybackStateParams) error
 	UpsertProbeFailure(ctx context.Context, arg UpsertProbeFailureParams) error
+	// Discover's pool, feed state, dismissals and auto-add record. Column lists follow table order.
+	UpsertRecommendation(ctx context.Context, arg UpsertRecommendationParams) (int64, error)
+	UpsertRecommendationFeedItem(ctx context.Context, arg UpsertRecommendationFeedItemParams) error
 	UpsertSimilarReport(ctx context.Context, arg UpsertSimilarReportParams) error
 	// F29: the manual identification queue (migration 0014). Column lists follow table
 	// order, or sqlc stops reusing models.
@@ -1515,6 +1542,7 @@ type Querier interface {
 	// Series (TV works) refresh: provider data written without disturbing what a person set.
 	// A refresh never changes monitoring: monitored is left out of the update.
 	UpsertWorkPart(ctx context.Context, arg UpsertWorkPartParams) (WorkPart, error)
+	WasRecommendationAutoAdded(ctx context.Context, arg WasRecommendationAutoAddedParams) (int64, error)
 	// A placeholder whose release no source knows any more, replaced by one chosen from the files:
 	// no longer a placeholder, so enrichment stops asking about it.
 	WithdrawEdition(ctx context.Context, id int64) error

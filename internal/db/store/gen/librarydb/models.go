@@ -834,6 +834,72 @@ type ReadyQueue struct {
 	MagnetUrl     string
 }
 
+type Recommendation struct {
+	ID               int64
+	CategoryID       int64
+	Kind             string
+	Provider         string
+	ExternalID       string
+	Title            string
+	Subtitle         string
+	Overview         string
+	PosterUrl        string
+	Year             int64
+	ReleasedOn       string
+	Popularity       float64
+	Rating           float64
+	Votes            int64
+	OriginalLanguage string
+	Certification    string
+	NetworksJson     string
+	WorkID           int64
+	FetchedAt        int64
+}
+
+type RecommendationAutoAdd struct {
+	CategoryID int64
+	Kind       string
+	Provider   string
+	ExternalID string
+	Title      string
+	Type       string
+	Rating     float64
+	Votes      int64
+	WorkID     int64
+	AddedAt    int64
+}
+
+type RecommendationDismissal struct {
+	UserID     int64
+	MediaType  string
+	Kind       string
+	Provider   string
+	ExternalID string
+	Title      string
+	CreatedAt  int64
+}
+
+type RecommendationFeed struct {
+	CategoryID  int64
+	Kind        string
+	Type        string
+	PagesRead   int64
+	Exhausted   int64
+	RefreshedAt int64
+	LastError   string
+}
+
+type RecommendationFeedItem struct {
+	RecommendationID int64
+	Type             string
+	Rank             int64
+}
+
+type RecommendationGenre struct {
+	RecommendationID int64
+	Genre            string
+}
+
 type RecycleBin struct {
 	ID                      int64
 	OriginalPath            string
