@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/releasefacts"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parsecomic"
 	"github.com/makearr/Solarr/internal/identify/score"
 	"github.com/makearr/Solarr/internal/media"
@@ -192,13 +193,30 @@ func (comicSpec) Read(w wanted, raw indexer.RawItem, conn judge.Conn, _ time.Tim
 	if len(parts) == 0 {
 		return works.Release{}, false
 	}
-	if raw.SizeBytes > 0 && (raw.SizeBytes/int64(len(held)) < releaseFloorBytes || len(held) == 1 && raw.SizeBytes > singleCeilingBytes) {
-		return works.Release{}, false
-	}
 	return works.Release{
-		Facts: ReleaseFacts(claim, raw, conn.Impl), ReleaseGroup: claim.Group, Revised: claim.Edition == "repack" || claim.Edition == "proper" || claim.Edition == "fixed",
+		Plausible: func(decision *model.Decision) { requirePlausibleArchiveSize(decision, raw.SizeBytes, len(held)) },
+		Facts:     ReleaseFacts(claim, raw, conn.Impl), ReleaseGroup: claim.Group, Revised: claim.Edition == "repack" || claim.Edition == "proper" || claim.Edition == "fixed",
 		Parts: parts, Held: len(held), Share: float64(len(parts)) / float64(len(w.missing)),
 	}, true
+}
+
+// requirePlausibleArchiveSize rejects an accepted release whose size cannot be its named parts: a stub per part, or a
+// single issue the size of a bundle.
+func requirePlausibleArchiveSize(decision *model.Decision, sizeBytes int64, parts int) {
+	if sizeBytes <= 0 || parts <= 0 || decision.Outcome != model.OutcomeAccept {
+		return
+	}
+	perPart := sizeBytes / int64(parts)
+	switch {
+	case perPart < releaseFloorBytes:
+		decision.Outcome = model.OutcomeReject
+		decision.Rejections = append(decision.Rejections, model.Rejection{Rule: works.RuleImplausibleSize, Field: "size",
+			Wanted: fmt.Sprintf("at least %d bytes a part", releaseFloorBytes), Got: fmt.Sprintf("about %d bytes a part", perPart)})
+	case parts == 1 && sizeBytes > singleCeilingBytes:
+		decision.Outcome = model.OutcomeReject
+		decision.Rejections = append(decision.Rejections, model.Rejection{Rule: works.RuleImplausibleSize, Field: "size",
+			Wanted: fmt.Sprintf("at most %d bytes for one part", singleCeilingBytes), Got: fmt.Sprintf("%d bytes", sizeBytes)})
+	}
 }
 
 // heldNumbers are the whole numbers of the wanted kind a release names.

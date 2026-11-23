@@ -665,7 +665,7 @@ type Querier interface {
 	// Only libraries the caller can see: a wanted work through its desired_item, a followed artist's
 	// release through the subscription that follows them.
 	ListCalendarEntries(ctx context.Context, arg ListCalendarEntriesParams) ([]ListCalendarEntriesRow, error)
-	// TV episodes in a date window, for the calendar: monitored episodes of series the caller's libraries hold.
+	// Dated parts (episodes, issues) in a window, for the calendar: monitored parts of works of the media types that list wanted parts, held by the caller's libraries.
 	ListCalendarEpisodes(ctx context.Context, arg ListCalendarEpisodesParams) ([]ListCalendarEpisodesRow, error)
 	// Each primary file of a library with the size and running time its bitrate is judged from, one row per file.
 	ListCategoryFileRates(ctx context.Context, categoryID int64) ([]ListCategoryFileRatesRow, error)

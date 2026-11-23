@@ -527,7 +527,7 @@ ORDER BY w.id;
 -- name: AnyUnverifiedWork :one
 SELECT CAST(EXISTS (SELECT 1 FROM work_external_id WHERE provider = 'local:album') AS INTEGER) AS present;
 
--- TV episodes in a date window, for the calendar: monitored episodes of series the caller's libraries hold.
+-- Dated parts (episodes, issues) in a window, for the calendar: monitored parts of works of the media types that list wanted parts, held by the caller's libraries.
 -- name: ListCalendarEpisodes :many
 SELECT p.id AS part_id, p.work_id, w.canonical_title, p.media_ref, p.title, p.date, p.available_at,
        (SELECT MIN(d.category_id) FROM desired_item d WHERE d.work_id = w.id
@@ -538,7 +538,7 @@ SELECT p.id AS part_id, p.work_id, w.canonical_title, p.media_ref, p.title, p.da
                  AND lp.missing_since IS NULL) AS on_disk
 FROM work_part p
 JOIN work w ON w.id = p.work_id
-WHERE w.media_type = 'tv' AND p.monitored = 1
+WHERE w.media_type IN (SELECT value FROM json_each(sqlc.arg(media_types))) AND p.monitored = 1
   AND p.date >= sqlc.arg(from_date) AND p.date <= sqlc.arg(to_date)
   AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id
               AND d.category_id IN (SELECT value FROM json_each(sqlc.arg(category_ids))))
@@ -549,7 +549,7 @@ LIMIT sqlc.arg(page_size);
 SELECT p.date AS release_date, CAST(COUNT(*) AS INTEGER) AS releases
 FROM work_part p
 JOIN work w ON w.id = p.work_id
-WHERE w.media_type = 'tv' AND p.monitored = 1
+WHERE w.media_type IN (SELECT value FROM json_each(sqlc.arg(media_types))) AND p.monitored = 1
   AND p.date >= sqlc.arg(from_date) AND p.date <= sqlc.arg(to_date)
   AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id
               AND d.category_id IN (SELECT value FROM json_each(sqlc.arg(category_ids))))

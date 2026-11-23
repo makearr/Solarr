@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/media/works"
 )
 
 func TestPartWriteDateType(t *testing.T) {
@@ -23,5 +25,20 @@ func TestAnEditionSatisfiesItsIssuesOnlyWithTheSettingOn(t *testing.T) {
 	covered := library.SeriesEpisode{MediaRef: "issue:1", InEdition: &library.EditionRef{WorkID: 9, Title: "Book One"}}
 	if !standsInEdition(true, covered) || standsInEdition(false, covered) || standsInEdition(true, library.SeriesEpisode{MediaRef: "issue:2"}) {
 		t.Fatal("only a covered part with the setting on is left out of the search")
+	}
+}
+
+func TestAnImplausibleArchiveSizeIsRejectedWithItsReason(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		size  int64
+		parts int
+		field bool
+	}{{"stub", 4 << 10, 1, true}, {"bundle", 3 << 30, 1, true}, {"range of stubs", 5 << 20, 10, true}, {"normal", 40 << 20, 1, false}, {"unknown size", 0, 1, false}} {
+		decision := model.Decision{Outcome: model.OutcomeAccept}
+		requirePlausibleArchiveSize(&decision, c.size, c.parts)
+		if rejected := decision.Outcome == model.OutcomeReject; rejected != c.field || rejected && decision.Rejections[0].Rule != works.RuleImplausibleSize {
+			t.Errorf("%s: outcome %v, rejections %+v", c.name, decision.Outcome, decision.Rejections)
+		}
 	}
 }

@@ -28,7 +28,7 @@ func TestCalendar_OnlyShowsWorksTheLibraryCaresAbout(t *testing.T) {
 	setDate(t, queries, ignored.ID, "2026-03-16")
 	createDesired(t, opened, wanted.ID, "SET", 1)
 
-	entries, err := library.NewCalendar(opened).Entries(t.Context(), "2026-01-01", "2026-12-31", []int64{1}, 50)
+	entries, err := library.NewCalendar(opened, []string{"tv"}).Entries(t.Context(), "2026-01-01", "2026-12-31", []int64{1}, 50)
 	if err != nil {
 		t.Fatalf("Entries: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestCalendar_IncludesAMonitoredArtistsRelease(t *testing.T) {
 		t.Fatalf("AddCredit: %v", err)
 	}
 
-	before, err := library.NewCalendar(opened).Entries(t.Context(), "2026-01-01", "2026-12-31", []int64{1}, 50)
+	before, err := library.NewCalendar(opened, []string{"tv"}).Entries(t.Context(), "2026-01-01", "2026-12-31", []int64{1}, 50)
 	if err != nil {
 		t.Fatalf("Entries: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestCalendar_IncludesAMonitoredArtistsRelease(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Subscribe: %v", err)
 	}
-	after, err := library.NewCalendar(opened).Entries(t.Context(), "2026-01-01", "2026-12-31", []int64{1}, 50)
+	after, err := library.NewCalendar(opened, []string{"tv"}).Entries(t.Context(), "2026-01-01", "2026-12-31", []int64{1}, 50)
 	if err != nil {
 		t.Fatalf("Entries: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestCalendar_WindowIsInclusiveAndAcceptsPartialDates(t *testing.T) {
 		createDesired(t, opened, work, "SET", 1)
 	}
 
-	entries, err := library.NewCalendar(opened).Entries(t.Context(), "2026-03-01", "2026-12-31", []int64{1}, 50)
+	entries, err := library.NewCalendar(opened, []string{"tv"}).Entries(t.Context(), "2026-03-01", "2026-12-31", []int64{1}, 50)
 	if err != nil {
 		t.Fatalf("Entries: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestCalendar_OnlyShowsTheCallersLibraries(t *testing.T) {
 		t.Fatalf("Subscribe: %v", err)
 	}
 
-	calendar := library.NewCalendar(opened)
+	calendar := library.NewCalendar(opened, []string{"tv"})
 	hidden, err := calendar.Entries(t.Context(), "2026-01-01", "2026-12-31", []int64{1}, 50)
 	if err != nil {
 		t.Fatalf("Entries: %v", err)
@@ -163,7 +163,7 @@ func TestCalendar_DatesCountTheSameReleases(t *testing.T) {
 	setDate(t, queries, other.ID, "2026-06-02")
 	createDesiredInCategory(t, opened, other.ID, 2)
 
-	dates, err := library.NewCalendar(opened).Dates(t.Context(), "2026-01-01", "2026-12-31", []int64{1})
+	dates, err := library.NewCalendar(opened, []string{"tv"}).Dates(t.Context(), "2026-01-01", "2026-12-31", []int64{1})
 	if err != nil {
 		t.Fatalf("Dates: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestCalendar_ListsWhatTheOtherTypesCallTheirReleaseDay(t *testing.T) {
 	}
 	createDesired(t, opened, scene.ID, "SET", 1)
 
-	calendar := library.NewCalendar(opened)
+	calendar := library.NewCalendar(opened, []string{"tv"})
 	entries, err := calendar.Entries(t.Context(), "2026-10-01", "2026-10-31", []int64{1}, 50)
 	if err != nil || len(entries) != 1 || entries[0].WorkID != scene.ID || entries[0].ReleaseDate != "2026-10-25" {
 		t.Fatalf("entries = %+v, %v; want the scene on its day", entries, err)
@@ -190,5 +190,28 @@ func TestCalendar_ListsWhatTheOtherTypesCallTheirReleaseDay(t *testing.T) {
 	dates, err := calendar.Dates(t.Context(), "2026-10-01", "2026-10-31", []int64{1})
 	if err != nil || len(dates) != 1 || dates[0].Date != "2026-10-25" || dates[0].Releases != 1 {
 		t.Errorf("dates = %+v, %v", dates, err)
+	}
+}
+
+// The calendar lists the dated parts of the media types that list wanted parts: an issue as "Issue 5", an episode as S01E02.
+func TestCalendar_ListsDatedPartsOfThePartListingTypes(t *testing.T) {
+	opened, _ := newLibrary(t)
+	series := library.NewSeries(opened)
+	comic, err := series.Upsert(t.Context(), seriesAt, library.SeriesWrite{
+		Work:  library.WorkIdentity{MediaType: "comic", CanonicalTitle: "Night Harbor", SortTitle: "night harbor"},
+		IDs:   []library.ExternalIDWrite{{Provider: "comicvine", ExternalID: "7001"}},
+		Parts: []library.SeriesPartWrite{{MediaRef: "issue:5", SortKey: "a", Title: "Dawn", Date: "2026-06-03", MonitoredIfNew: true}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	createDesired(t, opened, comic.WorkID, "SET", 1)
+
+	entries, err := library.NewCalendar(opened, []string{"tv", "comic"}).Entries(t.Context(), "2026-06-01", "2026-06-30", []int64{1}, 50)
+	if err != nil || len(entries) != 1 || entries[0].Subtype != "Issue" || entries[0].Artist != "Issue 5 Dawn" || entries[0].ReleaseDate != "2026-06-03" {
+		t.Fatalf("comic calendar = %+v, %v", entries, err)
+	}
+	if entries, _ = library.NewCalendar(opened, []string{"tv"}).Entries(t.Context(), "2026-06-01", "2026-06-30", []int64{1}, 50); len(entries) != 0 {
+		t.Fatalf("a type that lists no parts is not shown: %+v", entries)
 	}
 }

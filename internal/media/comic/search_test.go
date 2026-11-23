@@ -34,8 +34,6 @@ func TestAReleaseIsWantedWhenItNamesTheSeriesAndAWantedPart(t *testing.T) {
 		{"a series that starts the same", wantedIssues(3), "Night Harbor Rising 003 (2019)", 30 * mib, nil, 0, false},
 		{"an alias", wantedIssues(3), "Harbor Lights 003 (2019)", 30 * mib, []int{3}, 1, true},
 		{"the wrong decade", wantedIssues(3), "Night Harbor 003 (1999)", 30 * mib, nil, 0, false},
-		{"a stub", wantedIssues(3), "Night Harbor 003 (2019)", 1 << 10, nil, 0, false},
-		{"one issue of three gigabytes", wantedIssues(3), "Night Harbor 003 (2019)", 3 << 30, nil, 0, false},
 		{"a volume", wanted{kind: PartVolume, manga: true, title: "Night Harbor", missing: map[int]string{2: ""}, names: map[string]bool{"nightharbor": true}}, "Night Harbor v02 (Digital)", 80 * mib, []int{2}, 1, true},
 		{"a chapter is not a volume", wanted{kind: PartVolume, manga: true, title: "Night Harbor", missing: map[int]string{2: ""}, names: map[string]bool{"nightharbor": true}}, "Night Harbor c002", 10 * mib, nil, 0, false},
 	}

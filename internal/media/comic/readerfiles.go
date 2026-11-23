@@ -77,7 +77,7 @@ func (w ReaderFiles) WriteSeries(ctx context.Context, categoryID, workID int64) 
 			continue
 		}
 		folders[path.Join(root.Path, path.Dir(file.RelPath))] = true
-		if !strings.EqualFold(path.Ext(file.RelPath), ".cbz") || !strings.HasPrefix(file.MediaRef, PartIssue+":") {
+		if !strings.EqualFold(path.Ext(file.RelPath), ".cbz") {
 			continue
 		}
 		changed, err := w.rewrite(ctx, path.Join(root.Path, file.RelPath), file, issueInfo(detail, file, manga), mode)
@@ -145,13 +145,17 @@ func (w ReaderFiles) read(target string) ([]byte, error) {
 
 // issueInfo is what Solarr knows of one issue, in ComicInfo's terms.
 func issueInfo(detail library.SeriesDetailRow, file library.PartPath, manga bool) comicinfo.Info {
-	_, number, _ := strings.Cut(file.MediaRef, ":")
+	kind, number, _ := strings.Cut(file.MediaRef, ":")
 	info := comicinfo.Info{
 		Series: detail.Summary.Title, Number: number, Title: file.Title, Publisher: detail.Summary.Fields["publisher"], Summary: "",
 		Genre: strings.Join(detail.Summary.Genres, ", "), Credits: map[string][]string{},
 		Notes: "Solarr " + idNotes(detail.IDs),
 	}
-	if detail.Summary.Year > 0 {
+	switch {
+	case kind == PartVolume:
+		info.Number = ""
+		info.Volume, _ = strconv.Atoi(number)
+	case detail.Summary.Year > 0:
 		info.Volume = int(detail.Summary.Year)
 	}
 	if len(file.Date) >= 4 {

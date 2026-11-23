@@ -89,14 +89,14 @@ export function CrossoverIndex() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-4xl flex-col gap-5 p-4">
-        <PageHeader title={t("crossover.title")} subtitle={t("crossover.help")} />
+        <PageHeader title={t(importable ? "crossover.title.comic" : "crossover.title")} subtitle={t(importable ? "crossover.help.comic" : "crossover.help")} />
         {importable && administrator && (
           <div>
             <Button onClick={() => setImporting(true)}>{t("readingList.import")}</Button>
           </div>
         )}
         {importing && <ReadingListImport categoryId={categoryId} onClose={() => setImporting(false)} />}
-        {list.data.events.length === 0 && <EmptyState title={t("crossover.none")} />}
+        {list.data.events.length === 0 && <EmptyState title={t(importable ? "crossover.none.comic" : "crossover.none")} />}
         {list.data.events.map((event) => (
           <section key={event.id} className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
             <Link to="/crossovers/$id" params={{ id: String(event.id) }} className="font-medium hover:underline">

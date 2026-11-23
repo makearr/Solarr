@@ -239,6 +239,6 @@ var fileSettings = []media.FileSetting{
 		{Key: DateTypeStore, Label: "Store date"}, {Key: DateTypeCover, Label: "Cover date"}}},
 	{Key: media.FileEditionSatisfies, Label: "A collected edition satisfies its issues", Help: "A trade paperback or omnibus you hold stands for the issues it collects: they are not searched for, and the series page shows them as held in the edition.", Options: []media.Choice{
 		{Key: EditionOff, Label: "No"}, {Key: EditionOn, Label: "Yes"}}},
-	{Key: media.FileReaderFiles, Label: "Kavita and Komga files", Help: "Write what comic readers use: series.json beside the series, and ComicInfo.xml inside each cbz. Fill adds a missing file or element and never changes an existing value; Replace overwrites. Files are rewritten through the move engine with the old one in the recycle bin.", Options: []media.Choice{
+	{Key: media.FileReaderFiles, Label: "Kavita and Komga files", Help: "Write what comic readers use: series.json beside the series, and ComicInfo.xml inside each cbz. Fill adds a missing file or element and never changes an existing value; Replace overwrites. A cbz is rewritten only when it would change.", Options: []media.Choice{
 		{Key: ReaderFilesOff, Label: "Off"}, {Key: ReaderFilesFill, Label: "Fill what is missing"}, {Key: ReaderFilesReplace, Label: "Replace"}}},
 }

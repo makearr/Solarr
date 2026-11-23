@@ -6,7 +6,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -35,10 +37,22 @@ type CalendarEntry struct {
 // Calendar reads upcoming and recent releases.
 type Calendar struct {
 	store *store.Store
+	// partTypes are the media types whose dated parts the calendar lists; empty is none.
+	partTypes []string
 }
 
 // NewCalendar builds one over an open library store.
-func NewCalendar(opened *store.Store) Calendar { return Calendar{store: opened} }
+func NewCalendar(opened *store.Store, partTypes []string) Calendar {
+	return Calendar{store: opened, partTypes: partTypes}
+}
+
+func (c Calendar) partTypesJSON() string {
+	encoded, err := json.Marshal(append([]string{}, c.partTypes...))
+	if err != nil {
+		return "[]"
+	}
+	return string(encoded)
+}
 
 // Entries answers releases from..to inclusive, earliest first, for works something wants or whose artist is monitored; ISO string comparison keeps partial dates in their window.
 func (c Calendar) Entries(
@@ -63,22 +77,42 @@ func (c Calendar) Entries(
 		}
 	}
 	episodes, err := librarydb.New(c.store.Read()).ListCalendarEpisodes(ctx, librarydb.ListCalendarEpisodesParams{
-		CategoryIds: string(encoded), FromDate: sql.NullString{String: from, Valid: true}, ToDate: sql.NullString{String: to, Valid: true}, PageSize: int64(pageSize),
+		CategoryIds: string(encoded), MediaTypes: c.partTypesJSON(), FromDate: sql.NullString{String: from, Valid: true}, ToDate: sql.NullString{String: to, Valid: true}, PageSize: int64(pageSize),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("library: calendar episodes %s..%s: %w", from, to, err)
 	}
 	for _, row := range episodes {
-		season, number := parseSeriesRef(row.MediaRef)
+		label, subtype := partLabel(row.MediaRef)
+		named := strings.TrimSpace(label + " " + row.Title.String)
+		if strings.EqualFold(row.Title.String, label) {
+			named = label
+		}
 		entries = append(entries, CalendarEntry{
-			WorkID: row.WorkID, Title: row.CanonicalTitle, Artist: fmt.Sprintf("S%02dE%02d %s", season, number, row.Title.String),
-			Subtype: "Episode", ReleaseDate: row.Date.String, OnDisk: row.OnDisk, PartID: row.PartID, CategoryID: asInt(row.CategoryID), AirTime: row.AvailableAt.Int64,
+			WorkID: row.WorkID, Title: row.CanonicalTitle, Artist: named,
+			Subtype: subtype, ReleaseDate: row.Date.String, OnDisk: row.OnDisk, PartID: row.PartID, CategoryID: asInt(row.CategoryID), AirTime: row.AvailableAt.Int64,
 		})
 	}
 	if len(episodes) > 0 {
 		slices.SortStableFunc(entries, func(a, b CalendarEntry) int { return cmp.Compare(a.ReleaseDate, b.ReleaseDate) })
 	}
 	return entries, nil
+}
+
+var episodeShapedRef = regexp.MustCompile(`^s\d+:e\d+$`)
+
+// partLabel words a part's reference for the calendar: "S02E05" for an episode, "Issue 5" for "issue:5".
+func partLabel(mediaRef string) (label, subtype string) {
+	if episodeShapedRef.MatchString(mediaRef) {
+		season, number := parseSeriesRef(mediaRef)
+		return fmt.Sprintf("S%02dE%02d", season, number), "Episode"
+	}
+	kind, number, found := strings.Cut(mediaRef, ":")
+	if !found || kind == "" {
+		return mediaRef, "Part"
+	}
+	subtype = strings.ToUpper(kind[:1]) + kind[1:]
+	return subtype + " " + number, subtype
 }
 
 func asInt(value any) int64 {
@@ -123,7 +157,7 @@ func (c Calendar) Dates(ctx context.Context, from, to string, categoryIDs []int6
 		byDate[asString(row.ReleaseDate)] += row.Releases
 	}
 	episodeRows, err := librarydb.New(c.store.Read()).CountCalendarEpisodeDates(ctx, librarydb.CountCalendarEpisodeDatesParams{
-		CategoryIds: string(encoded), FromDate: sql.NullString{String: from, Valid: true}, ToDate: sql.NullString{String: to, Valid: true},
+		CategoryIds: string(encoded), MediaTypes: c.partTypesJSON(), FromDate: sql.NullString{String: from, Valid: true}, ToDate: sql.NullString{String: to, Valid: true},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("library: calendar episode dates %s..%s: %w", from, to, err)

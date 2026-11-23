@@ -198,15 +198,16 @@ const countCalendarEpisodeDates = `-- name: CountCalendarEpisodeDates :many
 SELECT p.date AS release_date, CAST(COUNT(*) AS INTEGER) AS releases
 FROM work_part p
 JOIN work w ON w.id = p.work_id
-WHERE w.media_type = 'tv' AND p.monitored = 1
-  AND p.date >= ?1 AND p.date <= ?2
+WHERE w.media_type IN (SELECT value FROM json_each(?1)) AND p.monitored = 1
+  AND p.date >= ?2 AND p.date <= ?3
   AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id
-              AND d.category_id IN (SELECT value FROM json_each(?3)))
+              AND d.category_id IN (SELECT value FROM json_each(?4)))
 GROUP BY p.date
 ORDER BY p.date
 `
 
 type CountCalendarEpisodeDatesParams struct {
+	MediaTypes  interface{}
 	FromDate    sql.NullString
 	ToDate      sql.NullString
 	CategoryIds interface{}
@@ -218,7 +219,12 @@ type CountCalendarEpisodeDatesRow struct {
 }
 
 func (q *Queries) CountCalendarEpisodeDates(ctx context.Context, arg CountCalendarEpisodeDatesParams) ([]CountCalendarEpisodeDatesRow, error) {
-	rows, err := q.db.QueryContext(ctx, countCalendarEpisodeDates, arg.FromDate, arg.ToDate, arg.CategoryIds)
+	rows, err := q.db.QueryContext(ctx, countCalendarEpisodeDates,
+		arg.MediaTypes,
+		arg.FromDate,
+		arg.ToDate,
+		arg.CategoryIds,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1298,16 +1304,17 @@ SELECT p.id AS part_id, p.work_id, w.canonical_title, p.media_ref, p.title, p.da
                  AND lp.missing_since IS NULL) AS on_disk
 FROM work_part p
 JOIN work w ON w.id = p.work_id
-WHERE w.media_type = 'tv' AND p.monitored = 1
-  AND p.date >= ?2 AND p.date <= ?3
+WHERE w.media_type IN (SELECT value FROM json_each(?2)) AND p.monitored = 1
+  AND p.date >= ?3 AND p.date <= ?4
   AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id
               AND d.category_id IN (SELECT value FROM json_each(?1)))
 ORDER BY p.date, w.sort_title, p.sort_key
-LIMIT ?4
+LIMIT ?5
 `
 
 type ListCalendarEpisodesParams struct {
 	CategoryIds interface{}
+	MediaTypes  interface{}
 	FromDate    sql.NullString
 	ToDate      sql.NullString
 	PageSize    int64
@@ -1325,10 +1332,11 @@ type ListCalendarEpisodesRow struct {
 	OnDisk         bool
 }
 
-// TV episodes in a date window, for the calendar: monitored episodes of series the caller's libraries hold.
+// Dated parts (episodes, issues) in a window, for the calendar: monitored parts of works of the media types that list wanted parts, held by the caller's libraries.
 func (q *Queries) ListCalendarEpisodes(ctx context.Context, arg ListCalendarEpisodesParams) ([]ListCalendarEpisodesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listCalendarEpisodes,
 		arg.CategoryIds,
+		arg.MediaTypes,
 		arg.FromDate,
 		arg.ToDate,
 		arg.PageSize,

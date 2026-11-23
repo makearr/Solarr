@@ -5,6 +5,7 @@ Earlier entries use older schemes; those at and below `0.0.x` predate both and a
 
 ## Unreleased
 
+- Calendar: the Pull list (and the calendar's dated parts in general) now lists issues and volumes of comic libraries; it showed only TV episodes before. A release whose size cannot be its named parts (a stub, a bundle) is now rejected with its reason instead of silently dropped.
 - Comics: a file holding a range of volumes is named for both ends (v04-05), and number padding pads both.
 - Comics: a manga or hentai library says volumes where a comics library says issues, and a comic file shows its page count, median page size and image format beside its size.
 - Comics: a library can write what Kavita and Komga read (File Management > Library options > Kavita and Komga files): series.json beside each series and ComicInfo.xml inside each cbz, adding what is missing (fill) or replacing it. A file is rewritten only when the result differs. Off by default.

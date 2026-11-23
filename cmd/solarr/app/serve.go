@@ -915,7 +915,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Describer: p.newDescriber, WorkOf: p.newWorkLookup, Clock: clock.NewSystem(), Memo: &adapters.SnapshotMemo{},
 		},
 		LogReader: logSource{ring: p.logRing},
-		Calendar:  adapters.Calendar{Calendar: library.NewCalendar(p.library)},
+		Calendar:  adapters.Calendar{Calendar: library.NewCalendar(p.library, p.partListingTypes())},
 		DatabaseAdmin: databaseAdmin{
 			FS: p.fsys, MediaCoverDir: p.config.Paths.MediaCoverDir, PreviewsDir: filepath.Join(p.config.Paths.ConfigDir, "previews"),
 			CacheDir: p.config.Paths.CacheDir, BackupDir: p.config.Paths.BackupDir,
@@ -1321,4 +1321,15 @@ func (p *process) now() time.Time {
 		return clock.NewSystem().Now()
 	}
 	return p.wall.Now()
+}
+
+// partListingTypes are the media types that list wanted parts, whose dated parts the calendar shows.
+func (p *process) partListingTypes() []string {
+	var types []string
+	for _, descriptor := range p.media.Descriptors() {
+		if descriptor.WantedGrain == media.WantedParts {
+			types = append(types, string(descriptor.Key))
+		}
+	}
+	return types
 }

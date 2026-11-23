@@ -346,7 +346,7 @@ func TestCalendarListsMonitoredEpisodesAndCountsTheirDates(t *testing.T) {
 	if _, err := library.NewDesired(opened).EnsureSeasonItem(t.Context(), library.SeasonRequest{WorkID: result.WorkID, MediaRef: "s01", CategoryID: 4, ProfileID: 1, Monitored: true}); err != nil {
 		t.Fatal(err)
 	}
-	calendar := library.NewCalendar(opened)
+	calendar := library.NewCalendar(opened, []string{"tv"})
 	entries, err := calendar.Entries(t.Context(), "2020-01-01", "2020-01-31", []int64{4}, 50)
 	if err != nil || len(entries) != 2 || entries[0].PartID == 0 || entries[0].CategoryID != 4 || entries[0].Artist != "S01E01 Pilot" || entries[0].Subtype != "Episode" {
 		t.Fatalf("entries = %+v, %v", entries, err)

@@ -68,6 +68,8 @@ type Release struct {
 	Held int
 	// Share is how much of what is wanted it holds, 0 to 1; zero is all of it.
 	Share float64
+	// Plausible, when set, rejects the release in its decision when its size cannot be what its name claims.
+	Plausible func(*model.Decision)
 }
 
 // Deps are the stores and settings every media type's search is built over.
@@ -238,6 +240,9 @@ func (y yardstick[W]) evaluate(raws []indexer.RawItem, conn judge.Conn) []judge.
 		decision = judge.ApplyFilters(decision, y.filters, raw.Title, release.ReleaseGroup, y.mediaRef)
 		if release.Parts == nil {
 			requirePlausibleSize(&decision, release.Facts)
+		}
+		if release.Plausible != nil && decision.Outcome == model.OutcomeAccept {
+			release.Plausible(&decision)
 		}
 		y.requireUpgrade(&decision, release)
 		find := judge.Find{Conn: conn, Raw: raw, ParseConfidence: 1, MatchConfidence: 1, Decision: decision}

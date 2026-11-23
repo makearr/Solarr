@@ -1421,7 +1421,7 @@
         ]
       },
       {
-        "help": "Write what comic readers use: series.json beside the series, and ComicInfo.xml inside each cbz. Fill adds a missing file or element and never changes an existing value; Replace overwrites. Files are rewritten through the move engine with the old one in the recycle bin.",
+        "help": "Write what comic readers use: series.json beside the series, and ComicInfo.xml inside each cbz. Fill adds a missing file or element and never changes an existing value; Replace overwrites. A cbz is rewritten only when it would change.",
         "key": "reader_files",
         "label": "Kavita and Komga files",
         "options": [

@@ -55,3 +55,14 @@ func TestARepeatedFillRewritesTheCbzOnlyOnce(t *testing.T) {
 		t.Fatalf("page = %q", text)
 	}
 }
+
+func TestAMangaVolumeIsDescribedByItsVolumeAndReadsRightToLeft(t *testing.T) {
+	detail := library.SeriesDetailRow{Summary: library.SeriesSummary{Title: "Night Harbor", Year: 2019, Fields: map[string]string{"publisher": "Acme Press"}}}
+	info := issueInfo(detail, library.PartPath{MediaRef: "volume:3", Date: "2020-05-06"}, true)
+	if info.Volume != 3 || info.Number != "" || info.Manga != "YesAndRightToLeft" || info.Year != 2020 || info.Month != 5 || info.Day != 6 || info.Publisher != "Acme Press" {
+		t.Fatalf("manga info = %+v", info)
+	}
+	if issue := issueInfo(detail, library.PartPath{MediaRef: "issue:7"}, false); issue.Number != "7" || issue.Volume != 2019 || issue.Manga != "" {
+		t.Fatalf("issue info = %+v", issue)
+	}
+}
