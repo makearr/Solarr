@@ -41,6 +41,11 @@ func FromServer(item mediaserver.Item, source string) Movie {
 			movie.Credits = append(movie.Credits, Credit{Name: person.Name, Role: RoleWriter})
 		}
 	}
+	for _, image := range item.Images {
+		if kind, ok := mediaserver.PictureKind(image.Kind); ok {
+			movie.Images = append(movie.Images, Image{Kind: kind, URL: image.URL, Source: source})
+		}
+	}
 	return movie
 }
 

@@ -233,3 +233,17 @@ func (c *Client) Played(ctx context.Context, userID string, since int64, offset,
 	}
 	return plays, len(page.Items) < limit, nil
 }
+
+// OwnsImage implements mediaserver.ImageFetcher: only the item picture addresses toItem writes.
+func (c *Client) OwnsImage(address string) bool {
+	prefix := mediaserver.Join(c.base, "/Items/")
+	return strings.HasPrefix(address, prefix) && strings.Contains(address[len(prefix):], "/Images/")
+}
+
+// FetchImage implements mediaserver.ImageFetcher.
+func (c *Client) FetchImage(ctx context.Context, address string, limit int64) ([]byte, error) {
+	if !c.OwnsImage(address) {
+		return nil, mediaserver.ErrItemNotFound
+	}
+	return mediaserver.FetchSigned(ctx, c.doer, c.session, c.header, address, limit)
+}

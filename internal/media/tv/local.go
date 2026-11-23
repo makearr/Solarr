@@ -30,6 +30,11 @@ func FromServer(item mediaserver.Item, source string) Series {
 		}
 	}
 	series.Credits = serverCredits(item.People)
+	for _, image := range item.Images {
+		if kind, ok := mediaserver.PictureKind(image.Kind); ok {
+			series.Images = append(series.Images, Image{Kind: kind, URL: image.URL, Source: source})
+		}
+	}
 	return series
 }
 

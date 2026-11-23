@@ -38,3 +38,14 @@ func TestAnimeScoresBecomeASeriesRating(t *testing.T) {
 		t.Errorf("anidb = %+v", db)
 	}
 }
+
+func TestFromServerOffersPicturesAsItsOwnSource(t *testing.T) {
+	item := mediaserver.Item{Title: "Show", Images: []mediaserver.Image{
+		{Kind: "primary", URL: "http://media.invalid/Items/1/Images/Primary"}, {Kind: "backdrop", URL: "http://media.invalid/Items/1/Images/Backdrop"},
+		{Kind: "thumb", URL: "http://media.invalid/Items/1/Images/Thumb"},
+	}}
+	want := []Image{{Kind: "poster", URL: "http://media.invalid/Items/1/Images/Primary", Source: "local:jellyfin"}, {Kind: "fanart", URL: "http://media.invalid/Items/1/Images/Backdrop", Source: "local:jellyfin"}}
+	if got := FromServer(item, "local:jellyfin").Images; !reflect.DeepEqual(got, want) {
+		t.Fatalf("images = %+v, want %+v", got, want)
+	}
+}

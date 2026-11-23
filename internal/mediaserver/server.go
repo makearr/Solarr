@@ -190,3 +190,24 @@ type LocalAsker interface {
 	// AskByPath answers what the servers hold of the item whose file is solarrPath, before anything else has named it.
 	AskByPath(ctx context.Context, categoryID int64, solarrPath string) (Item, bool, error)
 }
+
+// PictureKind maps a server's image kind to the kind Solarr's pickers use; false for the kinds no picker has.
+func PictureKind(kind string) (string, bool) {
+	switch kind {
+	case "primary":
+		return "poster", true
+	case "backdrop":
+		return "fanart", true
+	case "logo", "banner":
+		return kind, true
+	}
+	return "", false
+}
+
+// ImageFetcher is implemented by the kinds that serve pictures behind the connection's own sign-in.
+type ImageFetcher interface {
+	// OwnsImage says the address is one of this server's own picture addresses.
+	OwnsImage(address string) bool
+	// FetchImage reads the picture with the connection's credentials.
+	FetchImage(ctx context.Context, address string, limit int64) ([]byte, error)
+}

@@ -38,6 +38,13 @@ type Doer interface {
 	Get(ctx context.Context, url string) (*http.Response, error)
 }
 
+// Local fetches pictures a connection of the person's own serves, behind its sign-in; the address is never a provider's.
+type Local interface {
+	// Owns says the address is a picture of one of the person's connections.
+	Owns(ctx context.Context, address string) bool
+	Fetch(ctx context.Context, address string, limit int64) ([]byte, error)
+}
+
 // Cache fetches and stores pictures under Dir, which the cache budget evicts by age and size; a library item's
 // picture is promoted to CoverDir, which the budget never touches.
 type Cache struct {
@@ -48,6 +55,8 @@ type Cache struct {
 	CoverDir string
 	// Hosts are the image hosts that may be fetched, each matching itself and its subdomains.
 	Hosts []string
+	// Local serves the pictures of the person's media servers; optional.
+	Local Local
 	// Lookups counts the pictures found already cached; optional.
 	Lookups *hitcount.Counter
 	// Clock dates a use of a cached picture, which Shrink goes by; without it uses are not recorded.
@@ -74,7 +83,14 @@ func Key(address string) string {
 	return "remote-" + hex.EncodeToString(sum[:12])
 }
 
-func (c *Cache) allowed(address string) bool {
+func (c *Cache) allowed(ctx context.Context, address string) bool {
+	if c.Local != nil && c.Local.Owns(ctx, address) {
+		return true
+	}
+	return c.allowedHost(address)
+}
+
+func (c *Cache) allowedHost(address string) bool {
 	parsed, err := url.Parse(address)
 	if err != nil || parsed.Scheme != "https" || parsed.User != nil {
 		return false
@@ -90,7 +106,7 @@ func (c *Cache) allowed(address string) bool {
 
 // Ensure makes sure the picture at the address is cached at every size and answers its cache key.
 func (c *Cache) Ensure(ctx context.Context, address string) (string, error) {
-	if !c.allowed(address) {
+	if !c.allowed(ctx, address) {
 		return "", ErrNotAllowed
 	}
 	key := Key(address)
@@ -249,7 +265,7 @@ func PromoteFiles(fsys fsx.FS, from, to, key string) error {
 // Original answers the picture at the address as the provider serves it, for a file a media server reads; nothing is
 // cached, and only the providers' image hosts are asked.
 func (c *Cache) Original(ctx context.Context, address string) ([]byte, error) {
-	if !c.allowed(address) {
+	if !c.allowed(ctx, address) {
 		return nil, ErrNotAllowed
 	}
 	return c.fetch(ctx, address)
@@ -306,6 +322,13 @@ func (c *Cache) download(ctx context.Context, address string) ([]byte, error) {
 }
 
 func (c *Cache) fetch(ctx context.Context, address string) ([]byte, error) {
+	if c.Local != nil && c.Local.Owns(ctx, address) {
+		source, err := c.Local.Fetch(ctx, address, maxBytes)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
+		}
+		return source, nil
+	}
 	response, err := c.HTTP.Get(ctx, address)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)

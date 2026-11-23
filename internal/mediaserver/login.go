@@ -62,3 +62,44 @@ func CallSigned(ctx context.Context, doer Doer, session *Session, header func(to
 		return err
 	}
 }
+
+// FetchSigned reads a picture the way CallSigned reads JSON: header from the session's token, one retry after a 401; the body is
+// limited to limit bytes.
+func FetchSigned(ctx context.Context, doer Doer, session *Session, header func(token string) http.Header, address string, limit int64) ([]byte, error) {
+	for attempt := 0; ; attempt++ {
+		token := ""
+		if session != nil {
+			var err error
+			if token, err = session.current(ctx); err != nil {
+				return nil, err
+			}
+		}
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
+		if err != nil {
+			return nil, err
+		}
+		for name, values := range header(token) {
+			for _, value := range values {
+				request.Header.Add(name, value)
+			}
+		}
+		response, err := doer.Do(ctx, request)
+		var status *httpx.StatusError
+		if attempt == 0 && session != nil && errors.As(err, &status) && status.Status == http.StatusUnauthorized {
+			session.forget(token)
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		data, err := httpx.ReadLimited(response.Body, limit)
+		_ = response.Body.Close()
+		if err != nil {
+			return nil, err
+		}
+		if response.StatusCode != http.StatusOK {
+			return nil, &httpx.StatusError{Status: response.StatusCode}
+		}
+		return data, nil
+	}
+}

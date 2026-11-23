@@ -134,3 +134,26 @@ func TestATMDBPictureIsFetchedSmallAndFullOnlyWhenTheSmallOneIsNotThere(t *testi
 		t.Fatalf("asked %v, %v; want the original after the small one was refused", profile.asked, err)
 	}
 }
+
+type fakeLocal struct{ prefix string }
+
+func (f fakeLocal) Owns(_ context.Context, address string) bool {
+	return strings.HasPrefix(address, f.prefix)
+}
+func (f fakeLocal) Fetch(_ context.Context, address string, _ int64) ([]byte, error) {
+	return []byte("local " + address), nil
+}
+
+func TestLocalAddressesAreServedOnlyWhenOwned(t *testing.T) {
+	cache := &remoteimage.Cache{Local: fakeLocal{prefix: "http://10.0.0.5:8096/Items/"}}
+	ctx := context.Background()
+	got, err := cache.Original(ctx, "http://10.0.0.5:8096/Items/x/Images/Primary")
+	if err != nil || string(got) != "local http://10.0.0.5:8096/Items/x/Images/Primary" {
+		t.Fatalf("owned address: %q, %v", got, err)
+	}
+	for _, address := range []string{"http://10.0.0.5:8096/Users/x", "http://10.0.0.6:8096/Items/x"} {
+		if _, err := cache.Original(ctx, address); !errors.Is(err, remoteimage.ErrNotAllowed) {
+			t.Fatalf("%s: err = %v, want ErrNotAllowed", address, err)
+		}
+	}
+}

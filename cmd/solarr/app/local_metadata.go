@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/identify/titlekey"
 	"github.com/makearr/Solarr/internal/mediaserver"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/remoteimage"
 )
 
 // localClientLife is how long a connection's client, and the id index it holds, is kept before the server is read afresh.
@@ -186,4 +188,45 @@ func (a *localAsker) forget(serverID int64) {
 func (p *process) localMetadata() *localAsker {
 	p.localOnce.Do(func() { p.localShared = newLocalAsker(p) })
 	return p.localShared
+}
+
+// localImages serves the pictures of the media servers used as a metadata source, with each connection's own credentials.
+type localImages struct{ p *process }
+
+var _ remoteimage.Local = localImages{}
+
+// fetcherFor finds the enabled connection whose picture address this is.
+func (l localImages) fetcherFor(ctx context.Context, address string) (mediaserver.ImageFetcher, bool) {
+	servers, err := l.p.cache.MediaServers(ctx)
+	if err != nil {
+		return nil, false
+	}
+	for _, server := range servers {
+		if !server.Enabled || !server.AsMetadata || !strings.HasPrefix(address, strings.TrimRight(server.BaseURL, "/")+"/") {
+			continue
+		}
+		catalog, err := l.p.localMetadata().catalogOf(ctx, server)
+		if err != nil {
+			continue
+		}
+		if fetcher, ok := catalog.(mediaserver.ImageFetcher); ok && fetcher.OwnsImage(address) {
+			return fetcher, true
+		}
+	}
+	return nil, false
+}
+
+// Owns implements remoteimage.Local.
+func (l localImages) Owns(ctx context.Context, address string) bool {
+	_, found := l.fetcherFor(ctx, address)
+	return found
+}
+
+// Fetch implements remoteimage.Local.
+func (l localImages) Fetch(ctx context.Context, address string, limit int64) ([]byte, error) {
+	fetcher, found := l.fetcherFor(ctx, address)
+	if !found {
+		return nil, mediaserver.ErrItemNotFound
+	}
+	return fetcher.FetchImage(ctx, address, limit)
 }

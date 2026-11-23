@@ -84,6 +84,10 @@ A connection a library's order still names is not deleted (409) unless another o
 | Calibre | books | identifier or title (`/ajax/search`) | shapes from the documentation only |
 | Stash | adult | stash-box id | GraphQL |
 
+Pictures: a Jellyfin server's posters and backdrops are offered in a series or film picker as source `local:jellyfin`, never chosen
+over an external one. They are fetched through the connection with its own sign-in (the browser never sees a token) and cached like
+any other provider picture; only the connection's own item-picture addresses are served this way.
+
 ## Music
 
 | Provider | Carries | Built | Notes |
