@@ -181,6 +181,39 @@ func (q *Queries) GetHeldWorkByExternalID(ctx context.Context, arg GetHeldWorkBy
 	return i, err
 }
 
+const getRecommendation = `-- name: GetRecommendation :one
+SELECT id, category_id, kind, provider, external_id, title, subtitle, overview, poster_url, year, released_on, popularity,
+       rating, votes, original_language, certification, networks_json, work_id, fetched_at
+FROM recommendation WHERE id = ?
+`
+
+func (q *Queries) GetRecommendation(ctx context.Context, id int64) (Recommendation, error) {
+	row := q.db.QueryRowContext(ctx, getRecommendation, id)
+	var i Recommendation
+	err := row.Scan(
+		&i.ID,
+		&i.CategoryID,
+		&i.Kind,
+		&i.Provider,
+		&i.ExternalID,
+		&i.Title,
+		&i.Subtitle,
+		&i.Overview,
+		&i.PosterUrl,
+		&i.Year,
+		&i.ReleasedOn,
+		&i.Popularity,
+		&i.Rating,
+		&i.Votes,
+		&i.OriginalLanguage,
+		&i.Certification,
+		&i.NetworksJson,
+		&i.WorkID,
+		&i.FetchedAt,
+	)
+	return i, err
+}
+
 const getRecommendationFeed = `-- name: GetRecommendationFeed :one
 SELECT category_id, kind, type, pages_read, exhausted, refreshed_at, last_error FROM recommendation_feed
 WHERE category_id = ? AND kind = ? AND type = ?

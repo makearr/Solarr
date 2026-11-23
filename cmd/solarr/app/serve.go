@@ -1029,6 +1029,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		PreviewsDir:       filepath.Join(p.config.Paths.ConfigDir, "previews"),
 		VideoPictures:     videoPictures{process: p},
 		DiscoverRefresher: discoverRefresher{process: p},
+		DiscoverPool:      adapters.Recommendations{Pool: library.NewRecommendations(p.library)},
 		UnreadableFiles:   unreadableFiles{process: p},
 		ConfigPath:        p.configPath,
 		People: adapters.People{

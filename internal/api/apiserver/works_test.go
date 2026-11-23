@@ -91,6 +91,7 @@ type worksFixture struct {
 	importSessions       *fakeImportSessionLister
 	importInspector      *fakeImportInspector
 	unreadable           *fakeUnreadableFiles
+	discoverPool         *fakeDiscoverPool
 	fingerprintRetrier   *fakeFingerprintRetrier
 	drainStarter         *fakeDrainStarter
 	moveJobs             *fakeMoveJobLister
@@ -268,6 +269,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	importSessions := &fakeImportSessionLister{}
 	importInspector := &fakeImportInspector{}
 	unreadable := &fakeUnreadableFiles{count: 4}
+	discoverPool := &fakeDiscoverPool{}
 	fingerprintRetrier := &fakeFingerprintRetrier{}
 	drainStarter := &fakeDrainStarter{}
 	moveJobs := &fakeMoveJobLister{}
@@ -331,6 +333,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		ImportSessions:       importSessions,
 		ImportInspector:      importInspector,
 		UnreadableFiles:      unreadable,
+		DiscoverPool:         discoverPool,
 		FingerprintRetrier:   fingerprintRetrier,
 		DrainStarter:         drainStarter,
 		MoveJobs:             moveJobs,
@@ -391,7 +394,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		artwork: artwork, playback: playback, remoteImages: remoteImages, people: people, organisations: organisations, subscriber: subscriber, artistActions: artistActions,
 		follower:       follower,
 		blockedContent: blockedContent, favorites: favorites, packs: packs, removeAndBlocker: removeAndBlocker, watchState: watchState,
-		importSessions: importSessions, importInspector: importInspector, unreadable: unreadable,
+		importSessions: importSessions, importInspector: importInspector, unreadable: unreadable, discoverPool: discoverPool,
 		fingerprintRetrier: fingerprintRetrier,
 		drainStarter:       drainStarter, moveJobs: moveJobs, renameStarter: renameStarter, namingSchemes: namingSchemes, calendar: calendar,
 		history:       history,

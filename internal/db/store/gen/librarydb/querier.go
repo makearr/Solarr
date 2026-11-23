@@ -540,6 +540,7 @@ type Querier interface {
 	GetPlaybackSince(ctx context.Context, arg GetPlaybackSinceParams) (int64, error)
 	GetProbeFailureAttempts(ctx context.Context, mediaObjectID int64) (int64, error)
 	GetProbeFailureRaw(ctx context.Context, mediaObjectID int64) (string, error)
+	GetRecommendation(ctx context.Context, id int64) (Recommendation, error)
 	GetRecommendationFeed(ctx context.Context, arg GetRecommendationFeedParams) (RecommendationFeed, error)
 	GetRecycleBin(ctx context.Context, id int64) (RecycleBin, error)
 	GetRequest(ctx context.Context, id int64) (Request, error)

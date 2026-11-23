@@ -107,6 +107,8 @@ type Config struct {
 	PreviewsDir string
 	// VideoPictures starts the on-demand preview and hash sweeps; optional.
 	VideoPictures VideoPictures
+	// DiscoverPool is Discover's recommendations; optional, without it the read API answers 404.
+	DiscoverPool DiscoverPool
 	// DiscoverRefresher queues the refresh of recommendations after a settings change; optional.
 	DiscoverRefresher DiscoverRefresher
 	// UnreadableFiles has the probe read again the files it gave up on; optional.
@@ -390,6 +392,7 @@ type Server struct {
 	previewsDir             string
 	videoPictures           VideoPictures
 	discoverRefresher       DiscoverRefresher
+	discoverPool            DiscoverPool
 	unreadableFiles         UnreadableFiles
 	configPath              string
 	people                  PeopleReader
@@ -554,6 +557,7 @@ func New(config Config) (*Server, error) {
 		previewsDir:             config.PreviewsDir,
 		videoPictures:           config.VideoPictures,
 		discoverRefresher:       config.DiscoverRefresher,
+		discoverPool:            config.DiscoverPool,
 		unreadableFiles:         config.UnreadableFiles,
 		configPath:              config.ConfigPath,
 		people:                  config.People,
@@ -961,6 +965,13 @@ func New(config Config) (*Server, error) {
 			secured.Put("/settings/import-duplicates", server.SetImportDuplicates)
 			secured.Get("/categories/{id}/links", wrapped.GetCategoryLinks)
 			secured.Post("/categories/{id}/links", wrapped.LinkCategoryCopies)
+			secured.Get("/discover/libraries", wrapped.ListDiscoverLibraries)
+			secured.Get("/discover/recommendations", wrapped.ListRecommendations)
+			secured.Get("/discover/genres", wrapped.ListRecommendationGenres)
+			secured.Get("/discover/dashboard", wrapped.GetDiscoverDashboard)
+			secured.Post("/discover/recommendations/{id}/dismiss", wrapped.DismissRecommendation)
+			secured.Get("/discover/dismissals", wrapped.ListRecommendationDismissals)
+			secured.Delete("/discover/dismissals/{provider}/{external_id}", wrapped.RestoreRecommendation)
 			secured.Get("/discover/incomplete", server.routeListIncompleteDiscographies)
 			secured.Patch("/categories/{id}", wrapped.UpdateCategory)
 			secured.Post("/categories/{id}/types", wrapped.AddLibraryType)

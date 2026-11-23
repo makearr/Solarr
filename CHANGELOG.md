@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Discover (API): the recommendations of each library, a dashboard row, genres, and per-person dismissal and undo; "Load more" is not built yet.
 - Discover: anime libraries read AniList charts (trending, top rated, upcoming, classics) instead of TMDB.
 - Discover: an instance switch (Settings > General) and per-library settings (list sizes, rating and vote floors, exclusions, daily auto-add) for recommendations, saved from the API and carried in the configuration export and import; the recommendations themselves are refreshed daily.
 - Comics: an issue that arrives as a folder of page images (jpg, png, webp, avif, jxl, gif; at least three, cover first, natural order) is packed into one cbz and imported as that file; a download's folder is left as it was, a folder you imported by hand goes to the recycle bin once the cbz is in the library.

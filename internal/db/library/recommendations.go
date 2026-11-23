@@ -452,3 +452,21 @@ func (r Recommendations) CollectionCandidates(ctx context.Context, categoryID in
 	}
 	return out, nil
 }
+
+// Item answers one pool row by its id, false when it left the pool.
+func (r Recommendations) Item(ctx context.Context, id int64) (PoolRecommendation, bool, error) {
+	row, err := librarydb.New(r.store.Read()).GetRecommendation(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return PoolRecommendation{}, false, nil
+	}
+	if err != nil {
+		return PoolRecommendation{}, false, fmt.Errorf("library: recommendation: %w", err)
+	}
+	return PoolRecommendation{
+		ID: row.ID, CategoryID: row.CategoryID, FetchedAt: row.FetchedAt,
+		PoolItem: PoolItem{
+			Kind: row.Kind, Provider: row.Provider, ExternalID: row.ExternalID, Title: row.Title, Subtitle: row.Subtitle, Overview: row.Overview,
+			PosterURL: row.PosterUrl, Year: row.Year, Popularity: row.Popularity, Rating: row.Rating, Votes: row.Votes, WorkID: row.WorkID,
+		},
+	}, true, nil
+}

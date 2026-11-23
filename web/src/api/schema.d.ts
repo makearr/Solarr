@@ -1951,6 +1951,128 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/discover/libraries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The libraries the caller may read that have Discover on, with the lists each offers.
+         * @description Answers 404 while Discover is switched off for the instance.
+         */
+        get: operations["listDiscoverLibraries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/discover/recommendations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A page of one library's recommendations, most popular first, without what the caller dismissed. */
+        get: operations["listRecommendations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/discover/genres": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The genres a library's recommendations carry, most carried first. */
+        get: operations["listRecommendationGenres"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/discover/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One row for the dashboard, the caller's libraries interleaved, each one's most popular first. */
+        get: operations["getDiscoverDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/discover/recommendations/{id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hide a recommendation from the caller only, in every library of theirs. */
+        post: operations["dismissRecommendation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/discover/dismissals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the caller dismissed, newest first, so each can be undone. */
+        get: operations["listRecommendationDismissals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/discover/dismissals/{provider}/{external_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Undo one of the caller's dismissals. */
+        delete: operations["restoreRecommendation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/provider-definitions": {
         parameters: {
             query?: never;
@@ -12072,6 +12194,80 @@ export interface components {
             decisions: components["schemas"]["CandidateDecision"][];
             indexer_errors: components["schemas"]["IndexerSearchError"][];
         };
+        DiscoverFeed: {
+            type: string;
+            kind: string;
+            /** @description The source has no further page to read. */
+            exhausted: boolean;
+            /** @description A code when the last read failed (source_unavailable, not_supported, failed), else empty. */
+            last_error: string;
+            /**
+             * Format: int64
+             * @description Unix seconds of the last refresh; 0 before the first.
+             */
+            refreshed_at: number;
+        };
+        DiscoverLibrary: {
+            /** Format: int64 */
+            category_id: number;
+            name: string;
+            media_type: string;
+            /** @description The enabled recommendation lists. */
+            types: string[];
+            feeds: components["schemas"]["DiscoverFeed"][];
+            /** @description The caller may add (manage) or request (request) here; false still shows the list. */
+            can_add: boolean;
+            total_amount: number;
+        };
+        Recommendation: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            category_id: number;
+            kind: string;
+            provider: string;
+            external_id: string;
+            title: string;
+            subtitle: string;
+            overview: string;
+            poster_url: string;
+            /** Format: int64 */
+            year: number;
+            /**
+             * Format: double
+             * @description 0 to 10
+             */
+            rating: number;
+            /** Format: int64 */
+            votes: number;
+            genres: string[];
+            /** @description The lists that name it. */
+            types: string[];
+            /**
+             * Format: int64
+             * @description The work already held for it
+             */
+            library_id?: number;
+        };
+        RecommendationPage: {
+            items: components["schemas"]["Recommendation"][];
+            /** @description Absent on the last page. */
+            next_cursor?: string;
+        };
+        RecommendationGenre: {
+            genre: string;
+            /** Format: int64 */
+            items: number;
+        };
+        RecommendationDismissal: {
+            media_type: string;
+            kind: string;
+            provider: string;
+            external_id: string;
+            title: string;
+            /** Format: int64 */
+            created_at: number;
+        };
         IncompleteDiscography: {
             /** Format: int64 */
             person_id: number;
@@ -15749,6 +15945,181 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listDiscoverLibraries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The libraries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverLibrary"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listRecommendations: {
+        parameters: {
+            query: {
+                category_id: number;
+                /** @description The add kind (an album, a performer); absent is every kind. */
+                kind?: string;
+                /** @description One recommendation list; absent is all of them. */
+                type?: "highest_rated" | "trending" | "upcoming" | "classics" | "collections";
+                genre?: string;
+                /** @description Part of the title. */
+                q?: string;
+                /** @description From `next_cursor` of the previous page. Absent on the first page. */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listRecommendationGenres: {
+        parameters: {
+            query: {
+                category_id: number;
+                kind?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The genres. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationGenre"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getDiscoverDashboard: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The row; empty when nothing is recommended. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recommendation"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    dismissRecommendation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dismissed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listRecommendationDismissals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's dismissals. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationDismissal"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    restoreRecommendation: {
+        parameters: {
+            query?: {
+                kind?: string;
+            };
+            header?: never;
+            path: {
+                provider: string;
+                external_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restored. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };

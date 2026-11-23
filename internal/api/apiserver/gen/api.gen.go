@@ -1176,6 +1176,15 @@ const (
 	GetCategorySimilarVideosParamsLevelMedium GetCategorySimilarVideosParamsLevel = "medium"
 )
 
+// Defines values for ListRecommendationsParamsType.
+const (
+	ListRecommendationsParamsTypeClassics     ListRecommendationsParamsType = "classics"
+	ListRecommendationsParamsTypeCollections  ListRecommendationsParamsType = "collections"
+	ListRecommendationsParamsTypeHighestRated ListRecommendationsParamsType = "highest_rated"
+	ListRecommendationsParamsTypeTrending     ListRecommendationsParamsType = "trending"
+	ListRecommendationsParamsTypeUpcoming     ListRecommendationsParamsType = "upcoming"
+)
+
 // Defines values for GetSimilarVideosParamsLevel.
 const (
 	GetSimilarVideosParamsLevelExact  GetSimilarVideosParamsLevel = "exact"
@@ -2480,6 +2489,20 @@ type Deferral struct {
 	RetryAfter *time.Time `json:"retry_after,omitempty"`
 }
 
+// DiscoverFeed defines model for DiscoverFeed.
+type DiscoverFeed struct {
+	// Exhausted The source has no further page to read.
+	Exhausted bool   `json:"exhausted"`
+	Kind      string `json:"kind"`
+
+	// LastError A code when the last read failed (source_unavailable, not_supported, failed), else empty.
+	LastError string `json:"last_error"`
+
+	// RefreshedAt Unix seconds of the last refresh; 0 before the first.
+	RefreshedAt int64  `json:"refreshed_at"`
+	Type        string `json:"type"`
+}
+
 // DiscoverGlobalSettings defines model for DiscoverGlobalSettings.
 type DiscoverGlobalSettings struct {
 	// Enabled Recommendations of works that are not in Solarr or not monitored (discover.enabled), the same switch as on Settings -> General. Default off.
@@ -2490,6 +2513,20 @@ type DiscoverGlobalSettings struct {
 
 	// ExcludeNetworks Networks and studios no library recommends from
 	ExcludeNetworks []string `json:"exclude_networks"`
+}
+
+// DiscoverLibrary defines model for DiscoverLibrary.
+type DiscoverLibrary struct {
+	// CanAdd The caller may add (manage) or request (request) here; false still shows the list.
+	CanAdd      bool           `json:"can_add"`
+	CategoryId  int64          `json:"category_id"`
+	Feeds       []DiscoverFeed `json:"feeds"`
+	MediaType   string         `json:"media_type"`
+	Name        string         `json:"name"`
+	TotalAmount int            `json:"total_amount"`
+
+	// Types The enabled recommendation lists.
+	Types []string `json:"types"`
 }
 
 // DiscoverSettings defines model for DiscoverSettings.
@@ -6165,6 +6202,55 @@ type ReadyStatus struct {
 // ReadyStatusStatus defines model for ReadyStatus.Status.
 type ReadyStatusStatus string
 
+// Recommendation defines model for Recommendation.
+type Recommendation struct {
+	CategoryId int64    `json:"category_id"`
+	ExternalId string   `json:"external_id"`
+	Genres     []string `json:"genres"`
+	Id         int64    `json:"id"`
+	Kind       string   `json:"kind"`
+
+	// LibraryId The work already held for it
+	LibraryId *int64 `json:"library_id,omitempty"`
+	Overview  string `json:"overview"`
+	PosterUrl string `json:"poster_url"`
+	Provider  string `json:"provider"`
+
+	// Rating 0 to 10
+	Rating   float64 `json:"rating"`
+	Subtitle string  `json:"subtitle"`
+	Title    string  `json:"title"`
+
+	// Types The lists that name it.
+	Types []string `json:"types"`
+	Votes int64    `json:"votes"`
+	Year  int64    `json:"year"`
+}
+
+// RecommendationDismissal defines model for RecommendationDismissal.
+type RecommendationDismissal struct {
+	CreatedAt  int64  `json:"created_at"`
+	ExternalId string `json:"external_id"`
+	Kind       string `json:"kind"`
+	MediaType  string `json:"media_type"`
+	Provider   string `json:"provider"`
+	Title      string `json:"title"`
+}
+
+// RecommendationGenre defines model for RecommendationGenre.
+type RecommendationGenre struct {
+	Genre string `json:"genre"`
+	Items int64  `json:"items"`
+}
+
+// RecommendationPage defines model for RecommendationPage.
+type RecommendationPage struct {
+	Items []Recommendation `json:"items"`
+
+	// NextCursor Absent on the last page.
+	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
 // RecycleBinContents defines model for RecycleBinContents.
 type RecycleBinContents struct {
 	Entries      []RecycleBinEntry `json:"entries"`
@@ -7953,11 +8039,49 @@ type MonitorCrossoverJSONBody struct {
 	Monitored bool `json:"monitored"`
 }
 
+// GetDiscoverDashboardParams defines parameters for GetDiscoverDashboard.
+type GetDiscoverDashboardParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// RestoreRecommendationParams defines parameters for RestoreRecommendation.
+type RestoreRecommendationParams struct {
+	Kind *string `form:"kind,omitempty" json:"kind,omitempty"`
+}
+
+// ListRecommendationGenresParams defines parameters for ListRecommendationGenres.
+type ListRecommendationGenresParams struct {
+	CategoryId int64   `form:"category_id" json:"category_id"`
+	Kind       *string `form:"kind,omitempty" json:"kind,omitempty"`
+}
+
 // ListIncompleteDiscographiesParams defines parameters for ListIncompleteDiscographies.
 type ListIncompleteDiscographiesParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
 	Limit      *int  `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// ListRecommendationsParams defines parameters for ListRecommendations.
+type ListRecommendationsParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+
+	// Kind The add kind (an album, a performer); absent is every kind.
+	Kind *string `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Type One recommendation list; absent is all of them.
+	Type  *ListRecommendationsParamsType `form:"type,omitempty" json:"type,omitempty"`
+	Genre *string                        `form:"genre,omitempty" json:"genre,omitempty"`
+
+	// Q Part of the title.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// Cursor From `next_cursor` of the previous page. Absent on the first page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListRecommendationsParamsType defines parameters for ListRecommendations.
+type ListRecommendationsParamsType string
 
 // UpdateDownloaderParams defines parameters for UpdateDownloader.
 type UpdateDownloaderParams struct {
@@ -9800,9 +9924,30 @@ type ServerInterface interface {
 	// Replace the default languages; libraries made afterwards use them. Administrator only.
 	// (PUT /defaultlanguages)
 	SetDefaultLanguages(w http.ResponseWriter, r *http.Request)
+	// One row for the dashboard, the caller's libraries interleaved, each one's most popular first.
+	// (GET /discover/dashboard)
+	GetDiscoverDashboard(w http.ResponseWriter, r *http.Request, params GetDiscoverDashboardParams)
+	// What the caller dismissed, newest first, so each can be undone.
+	// (GET /discover/dismissals)
+	ListRecommendationDismissals(w http.ResponseWriter, r *http.Request)
+	// Undo one of the caller's dismissals.
+	// (DELETE /discover/dismissals/{provider}/{external_id})
+	RestoreRecommendation(w http.ResponseWriter, r *http.Request, provider string, externalId string, params RestoreRecommendationParams)
+	// The genres a library's recommendations carry, most carried first.
+	// (GET /discover/genres)
+	ListRecommendationGenres(w http.ResponseWriter, r *http.Request, params ListRecommendationGenresParams)
 	// Artists in a library whose discography has albums the library does not hold.
 	// (GET /discover/incomplete)
 	ListIncompleteDiscographies(w http.ResponseWriter, r *http.Request, params ListIncompleteDiscographiesParams)
+	// The libraries the caller may read that have Discover on, with the lists each offers.
+	// (GET /discover/libraries)
+	ListDiscoverLibraries(w http.ResponseWriter, r *http.Request)
+	// A page of one library's recommendations, most popular first, without what the caller dismissed.
+	// (GET /discover/recommendations)
+	ListRecommendations(w http.ResponseWriter, r *http.Request, params ListRecommendationsParams)
+	// Hide a recommendation from the caller only, in every library of theirs.
+	// (POST /discover/recommendations/{id}/dismiss)
+	DismissRecommendation(w http.ResponseWriter, r *http.Request, id int64)
 	// Every configured download client connection (stage 5, ADR-46/57). Administrator only.
 	// (GET /downloaders)
 	ListDownloaders(w http.ResponseWriter, r *http.Request)
@@ -11366,9 +11511,51 @@ func (_ Unimplemented) SetDefaultLanguages(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// One row for the dashboard, the caller's libraries interleaved, each one's most popular first.
+// (GET /discover/dashboard)
+func (_ Unimplemented) GetDiscoverDashboard(w http.ResponseWriter, r *http.Request, params GetDiscoverDashboardParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What the caller dismissed, newest first, so each can be undone.
+// (GET /discover/dismissals)
+func (_ Unimplemented) ListRecommendationDismissals(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Undo one of the caller's dismissals.
+// (DELETE /discover/dismissals/{provider}/{external_id})
+func (_ Unimplemented) RestoreRecommendation(w http.ResponseWriter, r *http.Request, provider string, externalId string, params RestoreRecommendationParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The genres a library's recommendations carry, most carried first.
+// (GET /discover/genres)
+func (_ Unimplemented) ListRecommendationGenres(w http.ResponseWriter, r *http.Request, params ListRecommendationGenresParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Artists in a library whose discography has albums the library does not hold.
 // (GET /discover/incomplete)
 func (_ Unimplemented) ListIncompleteDiscographies(w http.ResponseWriter, r *http.Request, params ListIncompleteDiscographiesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The libraries the caller may read that have Discover on, with the lists each offers.
+// (GET /discover/libraries)
+func (_ Unimplemented) ListDiscoverLibraries(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A page of one library's recommendations, most popular first, without what the caller dismissed.
+// (GET /discover/recommendations)
+func (_ Unimplemented) ListRecommendations(w http.ResponseWriter, r *http.Request, params ListRecommendationsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Hide a recommendation from the caller only, in every library of theirs.
+// (POST /discover/recommendations/{id}/dismiss)
+func (_ Unimplemented) DismissRecommendation(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -16303,6 +16490,166 @@ func (siw *ServerInterfaceWrapper) SetDefaultLanguages(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// GetDiscoverDashboard operation middleware
+func (siw *ServerInterfaceWrapper) GetDiscoverDashboard(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetDiscoverDashboardParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDiscoverDashboard(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRecommendationDismissals operation middleware
+func (siw *ServerInterfaceWrapper) ListRecommendationDismissals(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRecommendationDismissals(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreRecommendation operation middleware
+func (siw *ServerInterfaceWrapper) RestoreRecommendation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "provider" -------------
+	var provider string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "provider", chi.URLParam(r, "provider"), &provider, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "external_id" -------------
+	var externalId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "external_id", chi.URLParam(r, "external_id"), &externalId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "external_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RestoreRecommendationParams
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "kind", r.URL.Query(), &params.Kind)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreRecommendation(w, r, provider, externalId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRecommendationGenres operation middleware
+func (siw *ServerInterfaceWrapper) ListRecommendationGenres(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRecommendationGenresParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "kind", r.URL.Query(), &params.Kind)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRecommendationGenres(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListIncompleteDiscographies operation middleware
 func (siw *ServerInterfaceWrapper) ListIncompleteDiscographies(w http.ResponseWriter, r *http.Request) {
 
@@ -16344,6 +16691,151 @@ func (siw *ServerInterfaceWrapper) ListIncompleteDiscographies(w http.ResponseWr
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListIncompleteDiscographies(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDiscoverLibraries operation middleware
+func (siw *ServerInterfaceWrapper) ListDiscoverLibraries(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDiscoverLibraries(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRecommendations operation middleware
+func (siw *ServerInterfaceWrapper) ListRecommendations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRecommendationsParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "kind", r.URL.Query(), &params.Kind)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "type" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "type", r.URL.Query(), &params.Type)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "genre" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "genre", r.URL.Query(), &params.Genre)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "genre", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRecommendations(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DismissRecommendation operation middleware
+func (siw *ServerInterfaceWrapper) DismissRecommendation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DismissRecommendation(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -27630,7 +28122,28 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Put(options.BaseURL+"/defaultlanguages", wrapper.SetDefaultLanguages)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/discover/dashboard", wrapper.GetDiscoverDashboard)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/discover/dismissals", wrapper.ListRecommendationDismissals)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/discover/dismissals/{provider}/{external_id}", wrapper.RestoreRecommendation)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/discover/genres", wrapper.ListRecommendationGenres)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/discover/incomplete", wrapper.ListIncompleteDiscographies)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/discover/libraries", wrapper.ListDiscoverLibraries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/discover/recommendations", wrapper.ListRecommendations)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/discover/recommendations/{id}/dismiss", wrapper.DismissRecommendation)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/downloaders", wrapper.ListDownloaders)

@@ -2855,6 +2855,162 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /discover/libraries:
+    get:
+      operationId: listDiscoverLibraries
+      tags: [discover]
+      summary: The libraries the caller may read that have Discover on, with the lists each offers.
+      description: Answers 404 while Discover is switched off for the instance.
+      responses:
+        "200":
+          description: The libraries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DiscoverLibrary" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /discover/recommendations:
+    get:
+      operationId: listRecommendations
+      tags: [discover]
+      summary: A page of one library's recommendations, most popular first, without what the caller dismissed.
+      parameters:
+        - name: category_id
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: kind
+          in: query
+          description: The add kind (an album, a performer); absent is every kind.
+          schema: { type: string }
+        - name: type
+          in: query
+          description: One recommendation list; absent is all of them.
+          schema: { type: string, enum: [highest_rated, trending, upcoming, classics, collections] }
+        - name: genre
+          in: query
+          schema: { type: string }
+        - name: q
+          in: query
+          description: Part of the title.
+          schema: { type: string }
+        - name: cursor
+          in: query
+          description: From `next_cursor` of the previous page. Absent on the first page.
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 40 }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecommendationPage" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /discover/genres:
+    get:
+      operationId: listRecommendationGenres
+      tags: [discover]
+      summary: The genres a library's recommendations carry, most carried first.
+      parameters:
+        - name: category_id
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: kind
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: The genres.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RecommendationGenre" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /discover/dashboard:
+    get:
+      operationId: getDiscoverDashboard
+      tags: [discover]
+      summary: One row for the dashboard, the caller's libraries interleaved, each one's most popular first.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: The row; empty when nothing is recommended.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Recommendation" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /discover/recommendations/{id}/dismiss:
+    post:
+      operationId: dismissRecommendation
+      tags: [discover]
+      summary: Hide a recommendation from the caller only, in every library of theirs.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        "204": { description: Dismissed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /discover/dismissals:
+    get:
+      operationId: listRecommendationDismissals
+      tags: [discover]
+      summary: What the caller dismissed, newest first, so each can be undone.
+      responses:
+        "200":
+          description: The caller's dismissals.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RecommendationDismissal" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /discover/dismissals/{provider}/{external_id}:
+    delete:
+      operationId: restoreRecommendation
+      tags: [discover]
+      summary: Undo one of the caller's dismissals.
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema: { type: string }
+        - name: external_id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: kind
+          in: query
+          schema: { type: string }
+      responses:
+        "204": { description: Restored. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /provider-definitions:
     get:
       operationId: listProviderDefinitions
@@ -16248,6 +16404,73 @@ components:
         indexer_errors:
           type: array
           items: { $ref: "#/components/schemas/IndexerSearchError" }
+
+    DiscoverFeed:
+      type: object
+      required: [type, kind, exhausted, last_error, refreshed_at]
+      properties:
+        type: { type: string }
+        kind: { type: string }
+        exhausted: { type: boolean, description: The source has no further page to read. }
+        last_error: { type: string, description: "A code when the last read failed (source_unavailable, not_supported, failed), else empty." }
+        refreshed_at: { type: integer, format: int64, description: Unix seconds of the last refresh; 0 before the first. }
+
+    DiscoverLibrary:
+      type: object
+      required: [category_id, name, media_type, types, feeds, can_add, total_amount]
+      properties:
+        category_id: { type: integer, format: int64 }
+        name: { type: string }
+        media_type: { type: string }
+        types: { type: array, items: { type: string }, description: The enabled recommendation lists. }
+        feeds: { type: array, items: { $ref: "#/components/schemas/DiscoverFeed" } }
+        can_add: { type: boolean, description: The caller may add (manage) or request (request) here; false still shows the list. }
+        total_amount: { type: integer }
+
+    Recommendation:
+      type: object
+      required: [id, category_id, kind, provider, external_id, title, subtitle, overview, poster_url, year, rating, votes, genres, types]
+      properties:
+        id: { type: integer, format: int64 }
+        category_id: { type: integer, format: int64 }
+        kind: { type: string }
+        provider: { type: string }
+        external_id: { type: string }
+        title: { type: string }
+        subtitle: { type: string }
+        overview: { type: string }
+        poster_url: { type: string }
+        year: { type: integer, format: int64 }
+        rating: { type: number, format: double, description: 0 to 10, 0 when the source has none. }
+        votes: { type: integer, format: int64 }
+        genres: { type: array, items: { type: string } }
+        types: { type: array, items: { type: string }, description: The lists that name it. }
+        library_id: { type: integer, format: int64, description: The work already held for it, not monitored; absent when it is new. }
+
+    RecommendationPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Recommendation" } }
+        next_cursor: { type: string, description: Absent on the last page. }
+
+    RecommendationGenre:
+      type: object
+      required: [genre, items]
+      properties:
+        genre: { type: string }
+        items: { type: integer, format: int64 }
+
+    RecommendationDismissal:
+      type: object
+      required: [media_type, kind, provider, external_id, title, created_at]
+      properties:
+        media_type: { type: string }
+        kind: { type: string }
+        provider: { type: string }
+        external_id: { type: string }
+        title: { type: string }
+        created_at: { type: integer, format: int64 }
 
     IncompleteDiscography:
       type: object

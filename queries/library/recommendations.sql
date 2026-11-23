@@ -130,3 +130,8 @@ WHERE EXISTS (SELECT 1 FROM collection_member held
   AND NOT EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.monitored = 1)
 ORDER BY c.name, m.ord, w.id
 LIMIT sqlc.arg(page_size);
+
+-- name: GetRecommendation :one
+SELECT id, category_id, kind, provider, external_id, title, subtitle, overview, poster_url, year, released_on, popularity,
+       rating, votes, original_language, certification, networks_json, work_id, fetched_at
+FROM recommendation WHERE id = ?;
