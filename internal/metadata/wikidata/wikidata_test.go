@@ -280,3 +280,42 @@ func TestBiographies_AskWikidataOnceForTheWholeBatch(t *testing.T) {
 		t.Errorf("requests per host = %v, want %v", transport.hosts, want)
 	}
 }
+
+func localizedFetcher(t *testing.T, transport http.RoundTripper, language string) wikidata.Fetcher {
+	return wikidata.New(wikidata.Config{
+		WikidataClient:  newTestClient(t, transport, "wikidata"),
+		WikipediaClient: newTestClient(t, transport, "wikipedia"),
+		Language:        func() string { return language },
+	})
+}
+
+func TestBiography_AsksTheMetadataLanguagesWikipediaAndItsDescription(t *testing.T) {
+	entity := `{"entities":{"Q1":{"descriptions":{"de":{"language":"de","value":"Beispielfilm"},"en":{"language":"en","value":"example film"}},
+		"sitelinks":{"enwiki":{"title":"Example Film"},"dewiki":{"title":"Beispiel Film"}}}}}`
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q1&languages=de%7Cen&props=descriptions%7Csitelinks%7Cclaims": {status: http.StatusOK, body: entity},
+		"https://de.wikipedia.org/api/rest_v1/page/summary/Beispiel_Film":                                                                      {status: http.StatusOK, body: `{"extract":"Ein Beispielfilm."}`},
+	}}
+	got, err := localizedFetcher(t, transport, "de").Biography(t.Context(), "Q1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (wikidata.Biography{Description: "Beispielfilm", Extract: "Ein Beispielfilm."}); got != want {
+		t.Errorf("Biography = %+v, want %+v", got, want)
+	}
+}
+
+func TestBiography_FallsBackToEnglishWhereTheLanguageHasNoArticle(t *testing.T) {
+	entity := `{"entities":{"Q1":{"descriptions":{"en":{"language":"en","value":"example film"}},"sitelinks":{"enwiki":{"title":"Example Film"}}}}}`
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q1&languages=de%7Cen&props=descriptions%7Csitelinks%7Cclaims": {status: http.StatusOK, body: entity},
+		"https://en.wikipedia.org/api/rest_v1/page/summary/Example_Film":                                                                       {status: http.StatusOK, body: `{"extract":"An example film."}`},
+	}}
+	got, err := localizedFetcher(t, transport, "de").Biography(t.Context(), "Q1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (wikidata.Biography{Description: "example film", Extract: "An example film."}); got != want {
+		t.Errorf("Biography = %+v, want %+v", got, want)
+	}
+}

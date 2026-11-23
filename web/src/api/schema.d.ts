@@ -11265,6 +11265,11 @@ export interface components {
             /** @description Whether an own TheTVDB key is stored; without one the built-in project key is used. Read-only here. */
             tvdb_api_key?: components["schemas"]["SecretMask"];
             /**
+             * @description The language titles and overviews are asked in by every provider that takes one (TMDB, Skyhook, Wikipedia), a two-letter code, default en; English is used where a provider has nothing in it. Omitted on a PATCH leaves it alone.
+             * @example de
+             */
+            language?: string;
+            /**
              * Format: int64
              * @description How many artists one enrichment run gives a photo and biography. Default 200. Omitted on a PATCH leaves it alone.
              */

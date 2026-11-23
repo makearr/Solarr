@@ -4977,6 +4977,9 @@ type MetadataSettings struct {
 	// CoverSources Where album covers come from, in order; each fills only covers the earlier ones left missing. A source left out is not used. Omitted on a PATCH leaves it alone.
 	CoverSources *[]MetadataSettingsCoverSources `json:"cover_sources,omitempty"`
 
+	// Language The language titles and overviews are asked in by every provider that takes one (TMDB, Skyhook, Wikipedia), a two-letter code, default en; English is used where a provider has nothing in it. Omitted on a PATCH leaves it alone.
+	Language *string `json:"language,omitempty"`
+
 	// MovieSources Which movie provider supplies a film's text, ratings and artwork first, in order; the next fills what is missing and one left out is not used. Omitted on a PATCH leaves it alone.
 	MovieSources *[]MetadataSettingsMovieSources `json:"movie_sources,omitempty"`
 

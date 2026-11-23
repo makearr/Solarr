@@ -4,6 +4,8 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Metadata language: one setting under Metadata providers (default English) makes TMDB, Skyhook and Wikipedia answer in your language; an overview comes from that language's Wikipedia article (found through Wikidata) where the library's order lets Wikidata supply it, and English is used where a provider has nothing in your language.
+- TV: the anime id map (Fribb) is now on by default; switch it off under Metadata providers.
 - Work page: a series, film, book, comic or scene whose metadata so far came only from your own media server shows a "From your media server" chip; it goes once another metadata provider of its library answers a refresh (music never carries it: albums always come from MusicBrainz).
 - Comics: a creator (writer, artist, ...) can be followed; their series at ComicVine are added monitored, new ones from the year of the follow on (needs a ComicVine key; not yet tried against the live service).
 - Import: Kapowarr and Mylar3 can be connected like an *Arr and their comic series imported by ComicVine id (monitored or paused/ended, placed by the folder they live in) -- built from their public API, not yet tried against a real instance. Schema note: the connection table is rebuilt in the unreleased settings migration.
@@ -11,7 +13,7 @@ Earlier entries use older schemes; those at and below `0.0.x` predate both and a
 - Books: BookBrainz is offered as a metadata provider (works, authors, description, language; keyless, not in the default order).
 - Music: an optional per-library Lyrics setting writes synced (.lrc) or plain (.txt) lyrics from LRCLIB beside tracks that have none, once a day, never over a file you put there.
 - Webhooks: a webhook with an invalid address or event now answers a clear 400 naming the problem instead of an internal error.
-- TV: an optional anime id map (Fribb, one file read once a day; off until switched on under Metadata providers) finds an anime's AniDB, MyAnimeList and AniList ids from its TheTVDB id.
+- TV: an anime id map (Fribb, one file read once a day) finds an anime's AniDB, MyAnimeList and AniList ids from its TheTVDB id.
 - Music: the cover picker also offers Apple Music's large cover for an album with a barcode (keyless; a switch under Metadata providers).
 - Media servers: Stash is told of new files (a metadata scan of their folders); Emby and Komga can be connected (scan push; Emby also metadata and watch state) -- both built from their public API, not yet tried against a real server.
 - Your own provider definition files can now enrich music artists (photo and biography where none) and fill adult-library scenes (title, studio, tags, pictures, credits).

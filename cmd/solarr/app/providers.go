@@ -79,12 +79,16 @@ func (p *process) liveProxyPolicy() httpx.LiveProxyPolicy {
 	}
 }
 
+// metadataLanguage is the language every provider that takes one is asked in, read on each call so a change applies at once.
+func (p *process) metadataLanguage() string { return p.cache.Snapshot().MetadataLanguage() }
+
 // wikidataFetcher builds ADR-8's biography lookup with two hosts in two ADR-13 buckets, separate from MusicBrainz's so a Wikidata outage never trips its breaker.
 func (p *process) wikidataFetcher() wikidata.Fetcher {
 	return wikidata.New(wikidata.Config{
 		// The query service answers a batch of a library's series in seconds, but takes a minute when busy.
 		WikidataClient:  p.providerClient(providerWikidata, nil, httpx.ClientConfig{Timeout: 90 * time.Second}),
 		WikipediaClient: p.providerClient(providerWikipedia, nil, httpx.ClientConfig{}),
+		Language:        p.metadataLanguage,
 	})
 }
 
@@ -354,10 +358,10 @@ func (p *process) tvService() tv.Service {
 	p.tvOnce.Do(func() {
 		wall := clock.NewSystem()
 		client := func(name string) *httpx.Client { return p.providerClient(name, nil, httpx.ClientConfig{}) }
-		p.tmdbShared = tmdb.New(client(providerTMDB), p.tmdbCredential, "")
+		p.tmdbShared = tmdb.New(client(providerTMDB), p.tmdbCredential, "").WithLanguage(p.metadataLanguage)
 		p.tvdbShared = tvdb.New(client(providerTVDB), p.tvdbKey, nil, wall.Now)
 		p.anilistShared = anilist.New(client(providerAniList))
-		p.skyhookShared, p.tvmazeShared = skyhook.New(client(providerSkyhook), "en"), tvmaze.New(client(providerTVmaze))
+		p.skyhookShared, p.tvmazeShared = skyhook.New(client(providerSkyhook), "en").WithLanguage(p.metadataLanguage), tvmaze.New(client(providerTVmaze))
 		p.xemShared = thexem.New(client(providerTheXEM), metacache.New(p.metadata).Counting(&p.metadataLookups), wall)
 		p.tvShared = tv.Service{
 			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared, AniList: p.anilistShared, Wikidata: p.wikidataFacts(),

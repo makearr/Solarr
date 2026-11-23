@@ -15125,6 +15125,12 @@ components:
         tvdb_api_key:
           allOf: [{ $ref: "#/components/schemas/SecretMask" }]
           description: Whether an own TheTVDB key is stored; without one the built-in project key is used. Read-only here.
+        language:
+          type: string
+          description: >-
+            The language titles and overviews are asked in by every provider that takes one (TMDB, Skyhook, Wikipedia),
+            a two-letter code, default en; English is used where a provider has nothing in it. Omitted on a PATCH leaves it alone.
+          example: de
         people_backfill_per_run:
           type: integer
           format: int64

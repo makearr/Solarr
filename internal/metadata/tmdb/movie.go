@@ -165,6 +165,9 @@ func (c Client) Movie(ctx context.Context, id int64) (Movie, error) {
 	if err := c.get(ctx, "/movie/"+strconv.FormatInt(id, 10), query, &movie); err != nil {
 		return Movie{}, err
 	}
+	if movie.Overview == "" && c.tongue() != "en-US" {
+		movie.Overview = c.englishOverview(ctx, "/movie/"+strconv.FormatInt(id, 10))
+	}
 	return movie, nil
 }
 

@@ -198,3 +198,24 @@ func TestSearchNarrowsToTheYearAndRetriesWithoutWhenItFindsNothing(t *testing.T)
 		t.Errorf("first = %v, second = %v", first, second)
 	}
 }
+
+func TestLanguageFollowsTheMetadataSettingAndFallsBackToEnglishOverview(t *testing.T) {
+	transport := &canned{body: `{"id":7,"name":"Beispiel","overview":""}`}
+	code := "de"
+	client := newClient(t, transport, "plainkey").WithLanguage(func() string { return code })
+	series, err := client.Series(t.Context(), 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(transport.requested) != 2 || transport.requested[0].URL.Query().Get("language") != "de" || transport.requested[1].URL.Query().Get("language") != "en-US" {
+		t.Errorf("languages asked = %v, want de then the English fallback", transport.requested)
+	}
+	if series.Overview != "" {
+		t.Errorf("Overview = %q", series.Overview)
+	}
+	code = "en"
+	transport.requested = nil
+	if _, err := client.Series(t.Context(), 7); err != nil || len(transport.requested) != 1 || transport.requested[0].URL.Query().Get("language") != "en-US" {
+		t.Errorf("English asks once in en-US, got %v (%v)", transport.requested, err)
+	}
+}

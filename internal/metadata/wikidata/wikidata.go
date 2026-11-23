@@ -86,6 +86,9 @@ type summaryResponse struct {
 	Extract string `json:"extract"`
 }
 
+// sitelinkTitle is a Wikipedia article: the language edition it is in and its title there.
+type sitelinkTitle struct{ language, title string }
+
 // Fetcher is what Biography needs from the two APIs it composes -- named so a
 // caller can see the two-hop shape without reading the implementation, and so
 // a test can fake either hop independently.
@@ -93,6 +96,7 @@ type Fetcher struct {
 	wikidataClient  *httpx.Client
 	wikipediaClient *httpx.Client
 	clock           clock.Clock
+	language        func() string
 }
 
 // Config is what a Fetcher needs: two clients, one per host (and ADR-13 bucket) as musicbrainz does, since www.wikidata.org and en.wikipedia.org are separate services with no shared budget.
@@ -101,6 +105,8 @@ type Config struct {
 	WikipediaClient *httpx.Client
 	// Clock paces the retries of an overloaded query service; nil is the system clock.
 	Clock clock.Clock
+	// Language names the metadata language on each call, a two-letter code; nil or empty is English.
+	Language func() string
 }
 
 // New builds a Fetcher.
@@ -109,7 +115,17 @@ func New(config Config) Fetcher {
 	if paced == nil {
 		paced = clock.NewSystem()
 	}
-	return Fetcher{wikidataClient: config.WikidataClient, wikipediaClient: config.WikipediaClient, clock: paced}
+	return Fetcher{wikidataClient: config.WikidataClient, wikipediaClient: config.WikipediaClient, clock: paced, language: config.Language}
+}
+
+// tongue is the Wikipedia language the next read asks in; English is the fallback every read keeps.
+func (f Fetcher) tongue() string {
+	if f.language != nil {
+		if code := f.language(); code != "" {
+			return code
+		}
+	}
+	return "en"
 }
 
 // maxEntitiesPerRequest is wbgetentities' own limit on ids in one call.
@@ -146,12 +162,17 @@ func (f Fetcher) Biographies(ctx context.Context, qids []string) (map[string]Bio
 		}
 	}
 	biographies := make(map[string]Biography, len(unique))
-	titles := make(map[string]string)
+	tongue := f.tongue()
+	languages := "en"
+	if tongue != "en" {
+		languages = tongue + "|en"
+	}
+	titles := make(map[string]sitelinkTitle)
 	for start := 0; start < len(unique); start += maxEntitiesPerRequest {
 		chunk := unique[start:min(start+maxEntitiesPerRequest, len(unique))]
 		query := url.Values{
 			"action": {"wbgetentities"}, "ids": {strings.Join(chunk, "|")}, "props": {"descriptions|sitelinks|claims"},
-			"languages": {"en"}, "format": {"json"},
+			"languages": {languages}, "format": {"json"},
 		}
 		var entities entitiesResponse
 		if err := getJSON(ctx, f.wikidataClient, "https://www.wikidata.org/w/api.php?"+query.Encode(), &entities); err != nil {
@@ -162,9 +183,16 @@ func (f Fetcher) Biographies(ctx context.Context, qids []string) (map[string]Bio
 			if !ok || entity.Missing != nil {
 				continue
 			}
-			biographies[qid] = Biography{Description: entity.Descriptions["en"].Value, ImageURL: imageURLFor(entity.Claims)}
-			if sitelink, ok := entity.Sitelinks["enwiki"]; ok && sitelink.Title != "" {
-				titles[qid] = sitelink.Title
+			description := entity.Descriptions[tongue].Value
+			if description == "" {
+				description = entity.Descriptions["en"].Value
+			}
+			biographies[qid] = Biography{Description: description, ImageURL: imageURLFor(entity.Claims)}
+			for _, wanted := range []string{tongue, "en"} {
+				if sitelink, ok := entity.Sitelinks[wanted+"wiki"]; ok && sitelink.Title != "" {
+					titles[qid] = sitelinkTitle{language: wanted, title: sitelink.Title}
+					break
+				}
 			}
 		}
 	}
@@ -178,7 +206,7 @@ func (f Fetcher) Biographies(ctx context.Context, qids []string) (map[string]Bio
 	failed := parallel.Do(ctx, len(titled), summaryWorkers, func(ctx context.Context, index int) error {
 		var summary summaryResponse
 		err := getJSON(ctx, f.wikipediaClient,
-			"https://en.wikipedia.org/api/rest_v1/page/summary/"+pathEscape(titles[titled[index]]), &summary)
+			"https://"+titles[titled[index]].language+".wikipedia.org/api/rest_v1/page/summary/"+pathEscape(titles[titled[index]].title), &summary)
 		if err == nil {
 			found[index] = summary.Extract
 		}

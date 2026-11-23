@@ -490,6 +490,12 @@ func NewDefaultRegistry() *Registry {
 		Default:  `[]`,
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyMetadataLanguage, Kind: KindString, Tier: TierNormal,
+		Name:     "Metadata language",
+		HelpText: "The language titles and overviews are asked in by every provider that takes one; English is used where a provider has nothing in it.",
+		Default:  DefaultMetadataLanguage,
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyMetadataWikidata, Kind: KindBool, Tier: TierAdvanced,
 		Name:     "Wikidata",
 		HelpText: "Artist photos and biographies from Wikidata and Wikipedia.",

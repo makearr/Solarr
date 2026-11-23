@@ -40,6 +40,16 @@ minute, MDBList 200); it is stored as `metadata.provider_paces` and read by the 
 they also replace the ones they disagree with. The id that found the item (a series' TheTVDB id, a film's TMDB id) is
 never changed, and an id two items claim says nothing (`bridgeIDs` in the TV and movie services).
 
+**The metadata language.** One global setting (Metadata providers, Language; `metadata.language`, default English, two-letter
+codes) tells every provider that takes a language what to ask: TMDB (`language=`; a film or series with no overview in it
+is asked again in English), Skyhook (its `/shows/<language>/` path) and Wikidata. For Wikidata the work's `<language>wiki`
+sitelink names the article and its summary comes from that Wikipedia's REST summary endpoint (`<language>.wikipedia.org`,
+keyless, on the `wikipedia` pace); a work with no article in the language keeps the English one, and a Wikidata
+description falls back the same way. The summary is the overview wherever the library's order lets Wikidata supply one,
+and it is also the biography of an artist or performer. Cached facts are kept per language and change at the next refresh.
+Not localized: TheTVDB's own translations, Wikidata's genre and series labels, and providers that have one language
+(AniList, TVmaze, MusicBrainz).
+
 **Wikidata leads what it holds.** Once another provider has identified a work (TMDB for a film, TheTVDB for a series,
 MusicBrainz for an album), Wikidata's item is found by that id (`FactsOf` in `internal/metadata/wikidata/facts.go`)
 and, first in the order, supplies what it holds before the others: a film's overview (the English Wikipedia article's
@@ -116,7 +126,7 @@ any other provider picture; only the connection's own item-picture addresses are
 | ListenBrainz | how many people listened to an album (by release group id) | yes | no key; shown as a rating on 0..10, two points a power of ten of listeners; enrichment only, no place in the order |
 | Deezer | an album's fans, found by exact artist and title; explicit flag and cover are read but not yet shown | yes | no key; rating on the same scale; enrichment only |
 | Apple Music (iTunes) | a large cover, found by the album's barcode; offered in the cover picker | yes | no key; asked only for an album that has a barcode; enrichment only |
-| Anime id map (Fribb) | the AniDB, MyAnimeList and AniList ids of a TheTVDB series (TV and OVA entries of its list; films and specials left out), from one daily file on GitHub | tv | no key; off until switched on; fills only ids a series lacks, and they are kept with it |
+| Anime id map (Fribb) | the AniDB, MyAnimeList and AniList ids of a TheTVDB series (TV and OVA entries of its list; films and specials left out), from one daily file on GitHub | tv | no key; on by default; fills only ids a series lacks, and they are kept with it |
 | Last.fm | how many people listen to an album (and, for the Discover pages, similar artists) | yes | your own free key; off until it is stored; score by listeners on the same scale as Deezer; enrichment only |
 | Discogs | the community's rating of a release, found by exact artist and title | yes | your own personal token; the 0-5 average is shown on 0-10; off until stored; enrichment only |
 | Spotify | an album's popularity (0-100, shown on 0-10); cover and UPC are read, not yet shown | yes | your app as `client id:client secret` (client credentials); off until stored; enrichment only |

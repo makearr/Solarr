@@ -35,7 +35,7 @@ func (s *Server) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := s.auth.Registry.LookupAll(settings.KeyBrainzMashUserAgent, settings.KeyMetadataSourceOrder,
-		settings.KeyMetadataCoverSources, settings.KeyMetadataTVSources, settings.KeyMetadataMovieSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID,
+		settings.KeyMetadataCoverSources, settings.KeyMetadataTVSources, settings.KeyMetadataMovieSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID, settings.KeyMetadataLanguage,
 		settings.KeyMetadataTheAudioDB, settings.KeyMetadataPeopleBackfillPerRun,
 		settings.KeyAvailabilityGraceHigh, settings.KeyAvailabilityGraceMedium, settings.KeyAvailabilityGraceLow); err != nil {
 		writeError(w, s.logger, err)
@@ -44,7 +44,7 @@ func (s *Server) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) 
 
 	wanted := settings.MetadataSettings{
 		BrainzMashUserAgent: body.BrainzmashUserAgent, Wikidata: body.Wikidata, AcoustID: body.Acoustid,
-		TheAudioDB: body.Theaudiodb, PeopleBackfillPerRun: body.PeopleBackfillPerRun,
+		TheAudioDB: body.Theaudiodb, PeopleBackfillPerRun: body.PeopleBackfillPerRun, Language: derefOr(body.Language, ""),
 	}
 	if body.CoverSources != nil {
 		wanted.CoverSources = make([]string, 0, len(*body.CoverSources))
@@ -180,7 +180,7 @@ func (s *Server) metadataSettingsView() gen.MetadataSettings {
 		TheaudiodbApiKey:     &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().TheAudioDBConfigured()},
 		TmdbApiKey:           &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().TMDBConfigured()},
 		TvdbApiKey:           &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().TVDBConfigured()},
-		PeopleBackfillPerRun: stored.PeopleBackfillPerRun,
+		PeopleBackfillPerRun: stored.PeopleBackfillPerRun, Language: &stored.Language,
 		AvailabilityGraceHours: &struct {
 			High   int64 `json:"high"`
 			Low    int64 `json:"low"`

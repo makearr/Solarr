@@ -52,7 +52,7 @@ type WorkFacts struct {
 	Languages, Countries []string
 	// Labels are an album's record labels; Makers its performers, a film's directors, a series' creators.
 	Labels, Makers []string
-	// Summary is the English Wikipedia article's lead, empty without one.
+	// Summary is the Wikipedia article's lead in the metadata language, English where that edition lacks it; empty without one.
 	Summary string
 	// Series is the series the work is part of (P179), with its place in it; nil when it names none.
 	Series *SeriesPlace

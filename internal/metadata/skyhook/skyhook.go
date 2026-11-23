@@ -32,6 +32,24 @@ type Doer interface {
 type Client struct {
 	http     Doer
 	language string
+	// asked, when set, names the language on every call and wins over language.
+	asked func() string
+}
+
+// WithLanguage makes the client ask in the language asked names on each call; empty is English.
+func (c Client) WithLanguage(asked func() string) Client {
+	c.asked = asked
+	return c
+}
+
+func (c Client) tongue() string {
+	if c.asked != nil {
+		if code := c.asked(); code != "" {
+			return code
+		}
+		return "en"
+	}
+	return c.language
 }
 
 // New builds a client over an httpx client carrying the proxy's own rate bucket.
@@ -127,7 +145,7 @@ type Series struct {
 // Series reads one show by TheTVDB id, with every episode.
 func (c Client) Series(ctx context.Context, tvdbID int64) (Series, error) {
 	var series Series
-	if err := c.get(ctx, "/shows/"+url.PathEscape(c.language)+"/"+strconv.FormatInt(tvdbID, 10), &series); err != nil {
+	if err := c.get(ctx, "/shows/"+url.PathEscape(c.tongue())+"/"+strconv.FormatInt(tvdbID, 10), &series); err != nil {
 		return Series{}, err
 	}
 	return series, nil
@@ -136,7 +154,7 @@ func (c Client) Series(ctx context.Context, tvdbID int64) (Series, error) {
 // Search finds shows by name; hits carry the show's own fields but no episodes.
 func (c Client) Search(ctx context.Context, term string) ([]Series, error) {
 	var hits []Series
-	if err := c.get(ctx, "/search/"+url.PathEscape(c.language)+"/?term="+url.QueryEscape(term), &hits); err != nil {
+	if err := c.get(ctx, "/search/"+url.PathEscape(c.tongue())+"/?term="+url.QueryEscape(term), &hits); err != nil {
 		return nil, err
 	}
 	return hits, nil

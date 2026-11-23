@@ -108,6 +108,9 @@ export function MetadataSettings() {
         Every provider Solarr can ask. One switched off is asked by no library; its key stays stored. The order a library asks them in is
         set per library type in the tabs beside this one, and a library can keep its own under its Settings, Metadata.
       </p>
+      <Card title={t("metadataSettings.language")} help={t("metadataSettings.languageHelp")}>
+        <LanguageForm stored={settings.language ?? "en"} busy={patch.isPending} onSave={(language) => patch.mutate({ language })} />
+      </Card>
       <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
         {groupProviders(providers.data).map(({ group, members }) => (
           <Fragment key={group}>
@@ -812,6 +815,28 @@ function GraceForm({ stored, onSave, busy }: { stored: Grace; onSave: (grace: Gr
         </button>
       )}
     </form>
+  );
+}
+
+/** The languages the server offers, as a person reads them (the code is the value). */
+const METADATA_LANGUAGES = [
+  "en", "ar", "bg", "ca", "cs", "da", "de", "el", "es", "et", "fi", "fr", "he", "hi", "hr", "hu", "id", "it", "ja", "ko", "lt", "lv", "nl", "no",
+  "pl", "pt", "ro", "ru", "sk", "sl", "sr", "sv", "th", "tr", "uk", "vi", "zh",
+];
+
+function LanguageForm({ stored, onSave, busy }: { stored: string; onSave: (language: string) => void; busy: boolean }) {
+  const names = new Intl.DisplayNames(["en"], { type: "language" });
+  return (
+    <label className="flex flex-col gap-1 text-xs text-ink-muted">
+      {t("metadataSettings.languageLabel")}
+      <select value={stored} disabled={busy} onChange={(event) => onSave(event.target.value)} className={`${inputStyle} w-56`}>
+        {METADATA_LANGUAGES.map((code) => (
+          <option key={code} value={code}>
+            {names.of(code) ?? code}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

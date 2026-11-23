@@ -62,7 +62,23 @@ const (
 	KeyMetadataTVSources = "metadata.tv_sources"
 	// KeyMetadataPeopleBackfillPerRun bounds how many artists one enrichment run gives a photo and biography.
 	KeyMetadataPeopleBackfillPerRun = "metadata.people_backfill_per_run"
+	// KeyMetadataLanguage is the language every metadata provider that takes one answers in.
+	KeyMetadataLanguage = "metadata.language"
 )
+
+// DefaultMetadataLanguage is the language metadata is asked in until one is chosen.
+const DefaultMetadataLanguage = "en"
+
+// MetadataLanguages are the languages the interface offers: ISO 639-1 codes both TMDB and Wikipedia know.
+var MetadataLanguages = []string{"en", "ar", "bg", "ca", "cs", "da", "de", "el", "es", "et", "fi", "fr", "he", "hi", "hr", "hu", "id", "it", "ja", "ko", "lt", "lv", "nl", "no", "pl", "pt", "ro", "ru", "sk", "sl", "sr", "sv", "th", "tr", "uk", "vi", "zh"}
+
+// MetadataLanguage is the language metadata is asked in, a two-letter code.
+func (s *Snapshot) MetadataLanguage() string {
+	if language := s.policy[KeyMetadataLanguage]; slices.Contains(MetadataLanguages, language) {
+		return language
+	}
+	return DefaultMetadataLanguage
+}
 
 // How long after its time a part (an episode) is waited for before it is owed, by how sure that time is: an exact
 // time, a likely one, a date alone (section 19.2; settings since 2026-10-14).
@@ -142,6 +158,8 @@ type MetadataSettings struct {
 	Wikidata   *bool
 	AcoustID   *bool
 	TheAudioDB *bool
+	// Language is the metadata language, a two-letter code; empty on a write leaves it alone.
+	Language string
 	// PeopleBackfillPerRun is how many artists one run backfills; nil on a write leaves it alone.
 	PeopleBackfillPerRun *int64
 	// AvailabilityGrace is the wait after a part's time before it is owed; nil on a write leaves it alone.
@@ -163,7 +181,7 @@ func (s *Snapshot) MetadataSettings() MetadataSettings {
 	backfill := s.policyInt(KeyMetadataPeopleBackfillPerRun, DefaultPeopleBackfillPerRun)
 	grace := s.AvailabilityGrace()
 	return MetadataSettings{
-		BrainzMashUserAgent: agent, SourceOrder: order,
+		BrainzMashUserAgent: agent, SourceOrder: order, Language: s.MetadataLanguage(),
 		CoverSources: s.policyStringListOr(KeyMetadataCoverSources, DefaultCoverSources),
 		TVSources:    s.policyStringListOr(KeyMetadataTVSources, DefaultTVSources),
 		MovieSources: s.policyStringListOr(KeyMetadataMovieSources, DefaultMovieSources),
@@ -207,6 +225,9 @@ func (c *Cache) SetMetadataSettings(ctx context.Context, cl clock.Clock, ms Meta
 		if value != nil {
 			values[key] = strconv.FormatBool(*value)
 		}
+	}
+	if ms.Language != "" {
+		values[KeyMetadataLanguage] = ms.Language
 	}
 	if ms.PeopleBackfillPerRun != nil {
 		values[KeyMetadataPeopleBackfillPerRun] = strconv.FormatInt(*ms.PeopleBackfillPerRun, 10)
@@ -275,6 +296,9 @@ func validateMetadataSettings(ms MetadataSettings) config.Problems {
 					Expectation: "0 to " + strconv.Itoa(maxAvailabilityGraceHours) + " hours"})
 			}
 		}
+	}
+	if ms.Language != "" && !slices.Contains(MetadataLanguages, ms.Language) {
+		problems = append(problems, config.Problem{Path: KeyMetadataLanguage, Value: ms.Language, Expectation: "a two-letter language code from the list offered"})
 	}
 	if perRun := ms.PeopleBackfillPerRun; perRun != nil && (*perRun < 1 || *perRun > maxPeopleBackfillPerRun) {
 		problems = append(problems, config.Problem{

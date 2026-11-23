@@ -41,7 +41,9 @@ type Client struct {
 	http       Doer
 	credential func() string
 	language   string
-	base       string
+	// asked, when set, names the metadata language on every call and wins over language.
+	asked func() string
+	base  string
 }
 
 // New builds a client over an httpx client carrying TMDB's own rate bucket; language is a BCP 47 tag, "en-US" if empty.
@@ -50,6 +52,23 @@ func New(client Doer, credential func() string, language string) Client {
 		language = "en-US"
 	}
 	return Client{http: client, credential: credential, language: language, base: baseURL}
+}
+
+// WithLanguage makes the client ask in the language asked names on each call, a two-letter code; empty or "en" is "en-US".
+func (c Client) WithLanguage(asked func() string) Client {
+	c.asked = asked
+	return c
+}
+
+// tongue is the BCP 47 tag the next call asks in.
+func (c Client) tongue() string {
+	if c.asked != nil {
+		if code := c.asked(); code != "" && code != "en" {
+			return code
+		}
+		return "en-US"
+	}
+	return c.language
 }
 
 // Configured reports whether a credential is stored.
@@ -227,11 +246,26 @@ func (c Client) Series(ctx context.Context, id int64) (Series, error) {
 	if err := c.get(ctx, "/tv/"+strconv.FormatInt(id, 10), query, &series); err != nil {
 		return Series{}, err
 	}
+	if series.Overview == "" && c.tongue() != "en-US" {
+		series.Overview = c.englishOverview(ctx, "/tv/"+strconv.FormatInt(id, 10))
+	}
 	return series, nil
 }
 
+// englishOverview reads the English overview of an entry TMDB has no translation of; a failure answers nothing.
+func (c Client) englishOverview(ctx context.Context, path string) string {
+	c.language, c.asked = "en-US", nil
+	var entry struct {
+		Overview string `json:"overview"`
+	}
+	if err := c.get(ctx, path, nil, &entry); err != nil {
+		return ""
+	}
+	return entry.Overview
+}
+
 func (c Client) imageLanguages() string {
-	short, _, _ := strings.Cut(c.language, "-")
+	short, _, _ := strings.Cut(c.tongue(), "-")
 	return short + ",null"
 }
 
@@ -320,7 +354,7 @@ func (c Client) Seasons(ctx context.Context, seriesID int64, numbers []int) (map
 
 // SeasonIn reads one season with its titles in another language (a BCP 47 tag).
 func (c Client) SeasonIn(ctx context.Context, seriesID int64, number int, language string) (Season, error) {
-	c.language = language
+	c.language, c.asked = language, nil
 	return c.Season(ctx, seriesID, number)
 }
 
@@ -499,7 +533,7 @@ func (c Client) get(ctx context.Context, path string, query url.Values, into any
 	if query == nil {
 		query = url.Values{}
 	}
-	query.Set("language", c.language)
+	query.Set("language", c.tongue())
 	bearer := strings.HasPrefix(key, "eyJ")
 	if !bearer {
 		query.Set("api_key", key)

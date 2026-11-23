@@ -148,3 +148,26 @@ func TestSetMetadataSettings_PeopleBackfillPerRun(t *testing.T) {
 		}
 	}
 }
+
+func TestSetMetadataSettings_Language(t *testing.T) {
+	cache, cl := newCache(t)
+	if got := cache.Snapshot().MetadataSettings().Language; got != "en" {
+		t.Errorf("language before any choice = %q, want en", got)
+	}
+	base := settings.MetadataSettings{BrainzMashUserAgent: settings.DefaultBrainzMashUserAgent}
+	base.Language = "de"
+	if err := cache.SetMetadataSettings(t.Context(), cl, base); err != nil {
+		t.Fatal(err)
+	}
+	if got := cache.Snapshot().MetadataLanguage(); got != "de" {
+		t.Errorf("language = %q, want de", got)
+	}
+	base.Language = "xx"
+	if err := cache.SetMetadataSettings(t.Context(), cl, base); err == nil {
+		t.Error("an unknown language was accepted")
+	}
+	base.Language = ""
+	if err := cache.SetMetadataSettings(t.Context(), cl, base); err != nil || cache.Snapshot().MetadataLanguage() != "de" {
+		t.Errorf("an empty language must leave de alone: %v", err)
+	}
+}

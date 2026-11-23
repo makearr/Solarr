@@ -35,7 +35,10 @@ func NewCached(fetcher Fetcher, paced clock.Clock, ttl time.Duration) *Cached {
 	return &Cached{fetcher: fetcher, clock: paced, ttl: ttl, entries: map[string]cachedFacts{}}
 }
 
-func cacheKey(kind FactKind, id string) string { return string(kind) + ":" + id }
+// cacheKey includes the metadata language, so a changed language reads afresh.
+func (c *Cached) cacheKey(kind FactKind, id string) string {
+	return c.fetcher.tongue() + ":" + string(kind) + ":" + id
+}
 
 // FactsOf answers each work's facts, reading in bulk only those not kept or kept too long.
 func (c *Cached) FactsOf(ctx context.Context, kind FactKind, ids []string) (map[string]WorkFacts, error) {
@@ -44,7 +47,7 @@ func (c *Cached) FactsOf(ctx context.Context, kind FactKind, ids []string) (map[
 	var missing []string
 	c.mu.Lock()
 	for _, id := range ids {
-		entry, kept := c.entries[cacheKey(kind, id)]
+		entry, kept := c.entries[c.cacheKey(kind, id)]
 		switch {
 		case !kept || now.Sub(entry.at) > c.ttl:
 			missing = append(missing, id)
@@ -67,7 +70,7 @@ func (c *Cached) FactsOf(ctx context.Context, kind FactKind, ids []string) (map[
 	}
 	for _, id := range missing {
 		facts, known := read[id]
-		c.entries[cacheKey(kind, id)] = cachedFacts{facts: facts, known: known, at: now}
+		c.entries[c.cacheKey(kind, id)] = cachedFacts{facts: facts, known: known, at: now}
 		if known {
 			out[id] = facts
 		}
