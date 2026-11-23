@@ -71,6 +71,7 @@ export const SETTINGS: Section = {
     { label: "User", path: "/settings/user", tier: "normal" },
     { label: "Web UI", path: "/settings/webui", tier: "normal" },
     { label: "Metadata", path: "/settings/metadata", tier: "normal", administrator: true },
+    { label: "Discover", path: "/settings/discover", tier: "normal", administrator: true },
     { label: "Providers", path: "/settings/providers", tier: "advanced", administrator: true },
     { label: "Quality", path: "/quality-profiles", tier: "normal", administrator: true },
     { label: "Player", path: "/settings/player", tier: "normal", administrator: true },

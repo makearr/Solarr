@@ -8,6 +8,7 @@ import type { components } from "@/api/schema";
 import { Blocklist } from "./Blocklist";
 import { Tags } from "./Tags";
 import { Categories } from "./Categories";
+import { DiscoverSettings } from "./DiscoverSettings";
 import { MetadataSettings } from "./MetadataSettings";
 import { Network } from "./Network";
 import { Streaming } from "./Streaming";
@@ -70,6 +71,7 @@ export function GeneralSettings() {
     onSuccess: (data) => {
       queryClient.setQueryData(["general-settings"], data);
       void queryClient.invalidateQueries({ queryKey: ["video-hashing"] });
+      void queryClient.invalidateQueries({ queryKey: ["discover-settings"] });
     },
   });
   const generate = useMutation({
@@ -102,6 +104,17 @@ export function GeneralSettings() {
             </label>
           ))}
         </fieldset>
+      </Card>
+      <Card title={t("discover.title")} help={t("settings.recommendationsHelp")}>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            disabled={!general.data || change.isPending}
+            checked={general.data?.recommendations ?? false}
+            onChange={(event) => change.mutate({ recommendations: event.target.checked })}
+          />
+          {t("settings.recommendations")}
+        </label>
       </Card>
       <Card title={t("settings.backgroundWork")} help="Switches for work Solarr does by itself. A search you start yourself works whatever these say.">
         <label className="flex items-start gap-2 text-sm">
@@ -212,6 +225,14 @@ export function PlayerSettings() {
   return (
     <SettingsPage title="Player" requiredTier="normal">
       <Streaming />
+    </SettingsPage>
+  );
+}
+
+export function DiscoverSettingsPage() {
+  return (
+    <SettingsPage title="Discover" requiredTier="normal">
+      <DiscoverSettings />
     </SettingsPage>
   );
 }
