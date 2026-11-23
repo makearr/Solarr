@@ -60,3 +60,16 @@ func (s Service) askLocal(ctx context.Context, categoryID int64, source string, 
 	}
 	return book, true
 }
+
+// IDsByPath names a library file by what the media servers hold of it, for a book its name and tags give no id; no
+// server, no match and an item with no id all answer none.
+func (s Service) IDsByPath(ctx context.Context, categoryID int64, filePath string) (isbn, asin string) {
+	if s.Local == nil || categoryID == 0 {
+		return "", ""
+	}
+	item, found, err := s.Local.AskByPath(ctx, categoryID, filePath)
+	if err != nil || !found {
+		return "", ""
+	}
+	return item.IDs["isbn"], item.IDs["asin"]
+}

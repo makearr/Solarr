@@ -30,6 +30,8 @@ type Claim struct {
 	Extension    string
 	// OfTotal is the "(of 6)" count.
 	OfTotal int
+	// Complete is set by a "Complete", "Complete Series" or "Collection" ending the title: every part of the series.
+	Complete bool
 }
 
 var archiveExtensions = map[string]bool{"cbz": true, "cbr": true, "cb7": true, "cbt": true, "pdf": true, "epub": true, "zip": true, "rar": true, "7z": true, "tar": true}
@@ -45,6 +47,7 @@ var (
 	formatPattern   = regexp.MustCompile(`(?i)(?:^|\s)(tpb|hc|hardcover|gn|graphic novel|omnibus|one[- ]?shot)(?:\s|$)`)
 	hashPattern     = regexp.MustCompile(`(?:^|\s)#\s?(-?\d+(?:\.\d+)?[A-Za-z]{0,3}|½)(?:\s?-\s?(\d+(?:\.\d+)?))?(?:\s|$)`)
 	trailingPattern = regexp.MustCompile(`(?:^|\s)(-?\d+(?:\.\d+)?(?:\.?[A-Z]{1,3}|[a-z])?|½)(?:\s?-\s?(\d+(?:\.\d+)?))?\s*$`)
+	completeTail    = regexp.MustCompile(`(?i)^(.*\S)\s+(?:complete(?:\s+(?:series|collection|set|run))?|collection)\s*$`)
 	yearTail        = regexp.MustCompile(`^(.*\S)\s+((?:19|20)\d{2})\s*$`)
 	decimalDot      = regexp.MustCompile(`^\d{1,2}(?:\D|$)`)
 	markerDot       = regexp.MustCompile(`([A-Za-z0-9])\.([vVcC]\d)`)
@@ -158,6 +161,10 @@ func (c *Claim) takeTitleMarkers(rest string) string {
 		rest = formatPattern.ReplaceAllString(rest, " ")
 	}
 	rest = strings.TrimSpace(rest)
+	if m := completeTail.FindStringSubmatch(rest); m != nil {
+		c.Complete = true
+		rest = m[1]
+	}
 	title, after := rest, ""
 	cut := len(rest)
 	for _, re := range []*regexp.Regexp{chapterPattern, volumePattern} {

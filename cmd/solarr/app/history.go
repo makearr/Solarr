@@ -115,7 +115,9 @@ func (p *process) newDescriber(ctx context.Context) func(library.Acquisition) (d
 		if described.workFound {
 			data.Album, data.Artist = described.title, described.artist
 			if labelling, ok := media.Capability[media.Labelling](p.media, media.Key(described.mediaType)); ok && described.mediaRef != "" {
-				data.Album += " " + labelling.ReleaseLabel(acquisition.CandidateTitle, described.mediaRef, clock.NewSystem().Now())
+				if label := labelling.ReleaseLabel(acquisition.CandidateTitle, described.mediaRef, clock.NewSystem().Now()); label != "" {
+					data.Album += " " + label
+				}
 			}
 		}
 		return data, described.workID

@@ -193,7 +193,7 @@ function AddLibraryType({ libraryId, held, disabled }: { libraryId: number; held
       <option value="">Also holds…</option>
       {missing.map((info) => (
         <option key={info.key} value={info.key}>
-          {info.work.many}
+          {info.label}
         </option>
       ))}
     </select>

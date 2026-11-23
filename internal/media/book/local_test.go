@@ -10,6 +10,7 @@ import (
 
 type fakeLocal struct {
 	item     mediaserver.Item
+	pathItem mediaserver.Item
 	question mediaserver.Question
 }
 
@@ -19,7 +20,21 @@ func (f *fakeLocal) Ask(_ context.Context, _ int64, _, _ string, question medias
 }
 
 func (f *fakeLocal) AskByPath(context.Context, int64, string) (mediaserver.Item, bool, error) {
-	return mediaserver.Item{}, false, nil
+	return f.pathItem, f.pathItem.Title != "", nil
+}
+
+func TestIDsByPathNamesABookByWhatTheServerHoldsOfItsFolder(t *testing.T) {
+	local := &fakeLocal{pathItem: mediaserver.Item{Title: "The Lantern Keeper", IDs: map[string]string{"asin": "B000TEST01", "isbn": "9780000000002"}}}
+	isbn, asin := Service{Format: Ebook, Local: local}.IDsByPath(t.Context(), 7, "/library/books/Mara Quell/The Lantern Keeper")
+	if isbn != "9780000000002" || asin != "B000TEST01" {
+		t.Errorf("ids = %q %q", isbn, asin)
+	}
+	if isbn, asin = (Service{Format: Ebook, Local: &fakeLocal{}}).IDsByPath(t.Context(), 7, "/x"); isbn != "" || asin != "" {
+		t.Errorf("no match answered %q %q", isbn, asin)
+	}
+	if isbn, asin = (Service{Format: Ebook}).IDsByPath(t.Context(), 7, "/x"); isbn != "" || asin != "" {
+		t.Errorf("no server answered %q %q", isbn, asin)
+	}
 }
 
 func TestFetchForTakesAMediaServersBookWhereNoProviderKnowsItAndAsksByIDAndTitle(t *testing.T) {

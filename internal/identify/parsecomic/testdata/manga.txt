@@ -78,3 +78,6 @@ Sky Lantern - New Wave - c030.cbz => series=Sky Lantern - New Wave; ch=30; ext=c
 Sky Lantern v04 c030-031 (Digital).cbz => series=Sky Lantern; vol=4; ch=30; chEnd=31; source=digital; ext=cbz
 Sky Lantern (2015) v04.cbz => series=Sky Lantern; year=2015; vol=4; ext=cbz
 Sky Lantern (2015) c030.cbz => series=Sky Lantern; year=2015; ch=30; ext=cbz
+Sky Lantern Complete (Digital).cbz => series=Sky Lantern; source=digital; ext=cbz; complete
+Sky Lantern Complete Series => series=Sky Lantern; complete
+Sky Lantern (2015) Collection.cbz => series=Sky Lantern; year=2015; ext=cbz; complete

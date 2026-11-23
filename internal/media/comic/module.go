@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -94,7 +95,13 @@ var (
 	_ media.Refreshing      = Module{}
 	_ media.Enriching       = Module{}
 	_ media.RecordConsuming = Module{}
+	_ media.Labelling       = Module{}
 )
+
+// ReleaseLabel implements media.Labelling: "#12", "#1-#6", "v03", "c120", or Complete for a pack of the series; empty when the name states none.
+func (Module) ReleaseLabel(releaseTitle, _ string, _ time.Time) string {
+	return ReleaseLabel(releaseTitle)
+}
 
 // GroupLabel implements media.Grouping: the heading a page gives a kind of part.
 func (Module) GroupLabel(ref string) string {

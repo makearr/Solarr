@@ -18,6 +18,10 @@ func render(c Claim) string {
 			if x != "" {
 				parts = append(parts, k+"="+x)
 			}
+		case bool:
+			if x {
+				parts = append(parts, k)
+			}
 		case int:
 			if x != 0 {
 				parts = append(parts, fmt.Sprintf("%s=%d", k, x))
@@ -41,6 +45,7 @@ func render(c Claim) string {
 	add("px", c.PageSizeHint)
 	add("ext", c.Extension)
 	add("of", c.OfTotal)
+	add("complete", c.Complete)
 	return strings.Join(parts, "; ")
 }
 

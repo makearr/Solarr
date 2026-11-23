@@ -117,7 +117,7 @@ export function NewLibraryFields({ library }: { library: NewLibrary }) {
                 checked={library.alsoTypes.includes(type.key)}
                 onChange={(event) => library.toggleAlso(type.key, event.target.checked)}
               />
-              {type.work.many}
+              {type.label}
             </label>
           ))}
         </fieldset>

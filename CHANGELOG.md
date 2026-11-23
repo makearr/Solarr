@@ -4,6 +4,9 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Comics: a release named "Complete" or "Collection" counts for every part still wanted; history and queue rows say what a comic release holds (#12, v03, c120, Complete).
+- Books and audiobooks: a scan names a book by the ISBN or ASIN your Audiobookshelf holds for its folder when the file name and tags give none.
+- New library and the Also holds list: media types are listed by their own name (TV and Comics were both "Series").
 - Indexers: the add list marks an indexer defined by your own spec file ("Your own file") and a shipped one your file replaced.
 - A part wanted on its own (one volume, one track) now starts with the file the library already holds for it, and starts with its media type's quality profile when the library has none of its own (a manga volume got the music profile).
 - Comics: a volume or issue found by a scan now also counts for the item that wants that volume on its own (it stayed missing, so a cutoff never compared it); the old bytes of a cbz that gets ComicInfo.xml written go to the recycle bin first; an import triggers the Kavita and Komga files pass for its series.

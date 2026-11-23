@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -184,6 +185,9 @@ func (comicSpec) Read(w wanted, raw indexer.RawItem, conn judge.Conn, _ time.Tim
 		return works.Release{}, false
 	}
 	held := heldNumbers(w, claim)
+	if claim.Complete && len(held) == 0 {
+		held = wantedNumbers(w)
+	}
 	var parts []int
 	for _, number := range held {
 		if _, wantedPart := w.missing[number]; wantedPart {
@@ -217,6 +221,16 @@ func requirePlausibleArchiveSize(decision *model.Decision, sizeBytes int64, part
 		decision.Rejections = append(decision.Rejections, model.Rejection{Rule: works.RuleImplausibleSize, Field: "size",
 			Wanted: fmt.Sprintf("at most %d bytes for one part", singleCeilingBytes), Got: fmt.Sprintf("%d bytes", sizeBytes)})
 	}
+}
+
+// wantedNumbers are the wanted parts' whole numbers in order: what a pack of the complete series brings.
+func wantedNumbers(w wanted) []int {
+	numbers := make([]int, 0, len(w.missing))
+	for number := range w.missing {
+		numbers = append(numbers, number)
+	}
+	sort.Ints(numbers)
+	return numbers
 }
 
 // heldNumbers are the whole numbers of the wanted kind a release names.
