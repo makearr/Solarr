@@ -10,6 +10,7 @@ import (
 )
 
 type Querier interface {
+	AddCategoryDiscoverType(ctx context.Context, arg AddCategoryDiscoverTypeParams) error
 	AddDefaultLanguage(ctx context.Context, arg AddDefaultLanguageParams) error
 	AddMediaServerLibrary(ctx context.Context, arg AddMediaServerLibraryParams) error
 	AddMediaServerPath(ctx context.Context, arg AddMediaServerPathParams) error
@@ -72,6 +73,7 @@ type Querier interface {
 	DeleteArrInstance(ctx context.Context, id int64) error
 	DeleteCalendarFeed(ctx context.Context, userID int64) error
 	DeleteCategory(ctx context.Context, id int64) error
+	DeleteCategoryDiscoverTypes(ctx context.Context, categoryID int64) error
 	DeleteCategoryMetadataSources(ctx context.Context, categoryID int64) error
 	DeleteCategoryQualityProfiles(ctx context.Context, categoryID int64) error
 	DeleteDownloadFolder(ctx context.Context, id int64) error
@@ -137,6 +139,9 @@ type Querier interface {
 	ListArrInstances(ctx context.Context) ([]ArrInstance, error)
 	ListCategories(ctx context.Context) ([]Category, error)
 	ListCategoryBootlegOnly(ctx context.Context) ([]int64, error)
+	// Discover settings per library (recommendations). A library without a row has the defaults and Discover off.
+	ListCategoryDiscover(ctx context.Context) ([]CategoryDiscover, error)
+	ListCategoryDiscoverTypes(ctx context.Context) ([]CategoryDiscoverType, error)
 	ListCategoryFileManagement(ctx context.Context) ([]CategoryFileManagement, error)
 	ListCategoryMetadataSources(ctx context.Context) ([]CategoryMetadataSource, error)
 	ListCategoryQualityProfiles(ctx context.Context) ([]CategoryQualityProfile, error)
@@ -275,6 +280,7 @@ type Querier interface {
 	UpdateWebhook(ctx context.Context, arg UpdateWebhookParams) error
 	UpdateWebhookInbound(ctx context.Context, arg UpdateWebhookInboundParams) error
 	UpsertCalendarFeed(ctx context.Context, arg UpsertCalendarFeedParams) error
+	UpsertCategoryDiscover(ctx context.Context, arg UpsertCategoryDiscoverParams) error
 	UpsertCategoryFileManagement(ctx context.Context, arg UpsertCategoryFileManagementParams) error
 }
 

@@ -490,6 +490,24 @@ func NewDefaultRegistry() *Registry {
 		Default:  `[]`,
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyDiscoverEnabled, Kind: KindBool, Tier: TierNormal,
+		Name:     "Discover",
+		HelpText: "Recommendations of works that are not in Solarr or not monitored: a Discover page, a dashboard row and, per library, optional auto-add.",
+		Default:  "false",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyDiscoverExcludeGenres, Kind: KindStringList, Tier: TierNormal,
+		Name:     "Discover: genres never recommended",
+		HelpText: "Genres no library recommends from, on top of each library's own list.",
+		Default:  `[]`,
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyDiscoverExcludeNetworks, Kind: KindStringList, Tier: TierNormal,
+		Name:     "Discover: networks never recommended",
+		HelpText: "Networks and studios no library recommends from, on top of each library's own list.",
+		Default:  `[]`,
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyMetadataLanguage, Kind: KindString, Tier: TierNormal,
 		Name:     "Metadata language",
 		HelpText: "The language titles and overviews are asked in by every provider that takes one; English is used where a provider has nothing in it.",

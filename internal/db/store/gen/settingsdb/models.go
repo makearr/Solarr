@@ -82,6 +82,30 @@ type CategoryBootlegOnly struct {
 	CategoryID int64
 }
 
+type CategoryDiscover struct {
+	CategoryID        int64
+	Enabled           int64
+	TotalAmount       int64
+	ClassicAgeYears   int64
+	MinRating         float64
+	MinVotes          int64
+	AutoAddPerDay     int64
+	AutoAddSearch     int64
+	OriginalLanguages string
+	LanguagesSet      int64
+	ExcludeGenres     string
+	ExcludeNetworks   string
+	DisabledKinds     string
+}
+
+type CategoryDiscoverType struct {
+	CategoryID int64
+	Type       string
+	Enabled    int64
+	Amount     int64
+	AutoAdd    int64
+}
+
 type CategoryFileManagement struct {
 	CategoryID               int64
 	PropersRepacks           string

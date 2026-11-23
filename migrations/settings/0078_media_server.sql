@@ -128,3 +128,29 @@ INSERT INTO arr_instance_rebuilt (id, app, name, base_url, api_key, category_id,
 SELECT id, app, name, base_url, api_key, category_id, enabled, created_at, updated_at, last_synced_at, last_sync_error, push_monitoring, last_pushed_at, sync_json FROM arr_instance;
 DROP TABLE arr_instance;
 ALTER TABLE arr_instance_rebuilt RENAME TO arr_instance;
+
+-- Discover (recommendations): one row per library that has ever been configured; a missing row is the defaults with Discover off.
+CREATE TABLE category_discover (
+  category_id        INTEGER PRIMARY KEY REFERENCES category(id) ON DELETE CASCADE,
+  enabled            INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
+  total_amount       INTEGER NOT NULL DEFAULT 60 CHECK (total_amount BETWEEN 1 AND 500),
+  classic_age_years  INTEGER NOT NULL DEFAULT 25 CHECK (classic_age_years BETWEEN 1 AND 150),
+  min_rating         REAL    NOT NULL DEFAULT 7.0 CHECK (min_rating BETWEEN 0 AND 10),
+  min_votes          INTEGER NOT NULL DEFAULT 1000 CHECK (min_votes >= 0),
+  auto_add_per_day   INTEGER NOT NULL DEFAULT 5 CHECK (auto_add_per_day BETWEEN 0 AND 100),
+  auto_add_search    INTEGER NOT NULL DEFAULT 0 CHECK (auto_add_search IN (0, 1)),
+  original_languages TEXT    NOT NULL DEFAULT '',
+  languages_set      INTEGER NOT NULL DEFAULT 0 CHECK (languages_set IN (0, 1)),
+  exclude_genres     TEXT    NOT NULL DEFAULT '',
+  exclude_networks   TEXT    NOT NULL DEFAULT '',
+  disabled_kinds     TEXT    NOT NULL DEFAULT ''
+);
+
+CREATE TABLE category_discover_type (
+  category_id INTEGER NOT NULL REFERENCES category(id) ON DELETE CASCADE,
+  type        TEXT    NOT NULL CHECK (type IN ('highest_rated', 'trending', 'upcoming', 'classics', 'collections')),
+  enabled     INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+  amount      INTEGER NOT NULL DEFAULT 20 CHECK (amount BETWEEN 1 AND 200),
+  auto_add    INTEGER NOT NULL DEFAULT 0 CHECK (auto_add IN (0, 1)),
+  PRIMARY KEY (category_id, type)
+) WITHOUT ROWID;
