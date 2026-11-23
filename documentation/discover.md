@@ -13,12 +13,14 @@ enables it per library under **Settings, Discover**. A dashboard row shows the m
 | Film | TMDB (needs the TMDB key) | trending, highest rated, upcoming, classics |
 | TV | TMDB; an anime library reads AniList instead (no key) | trending, highest rated, upcoming, classics |
 | Music | Last.fm (needs the Last.fm key); names are resolved to MusicBrainz by exact name | trending artists and albums, artists and albums alike the ones you hold most of, classic albums of your genres; no upcoming (Last.fm has no calendar) |
+| Audiobooks | Audible catalogue (no key; the library's region store) | best sellers (the catalogue's own ordering, which favours new releases), highest rated (the catalogue's average-rating ordering), upcoming (newest first, only titles not out yet); no classics, the catalogue cannot be cut by release date |
+| Adult | StashDB (needs its API key in Settings) | trending, upcoming (scenes dated after today); no highest rated or classics, stash-box servers keep no ratings |
 | Ebooks | Open Library (no key) | trending this week, highest rated (at least 100 ratings), classics (at least 300 ratings, first published long enough ago); no upcoming |
 | Comics and manga | AniList manga (no key); Western comics have no free popularity chart | trending, highest rated, upcoming, classics |
 | Any library of a media type with collections | the provider that names the collection | collections: the members of a collection you hold one of |
 
 A list whose source cannot be read (no key, source down) keeps its old items and says why under Settings, Discover.
-Audiobooks, adult libraries and magazines have no feeds yet.
+Audiobooks and adult libraries have the feeds below; magazines have none yet.
 
 ## What is kept out
 

@@ -125,3 +125,24 @@ func TestFingerprintsUseTheirOwnBucketAndSearchesDoNot(t *testing.T) {
 		t.Fatalf("searches %d, fingerprints %d, want 1 and 1", len(searches.sent), len(fingerprints.sent))
 	}
 }
+
+func TestTrendingAndReleasedAfterAskTheirSortAndFilter(t *testing.T) {
+	transport := &answer{body: `{"data":{"queryScenes":{"scenes":[{"id":"s1","title":"Night Class"}]}}}`}
+	c := client(t, transport, "k")
+	if scenes, err := c.Trending(t.Context(), 2); err != nil || len(scenes) != 1 || scenes[0].ID != "s1" {
+		t.Fatalf("trending %+v, %v", scenes, err)
+	}
+	if _, err := c.ReleasedAfter(t.Context(), "2026-06-01", 0); err != nil {
+		t.Fatal(err)
+	}
+	input := func(i int) map[string]any {
+		return transport.sent[i]["variables"].(map[string]any)["i"].(map[string]any)
+	}
+	if got := input(0); got["sort"] != "TRENDING" || got["direction"] != "DESC" || got["page"] != float64(2) || got["per_page"] != float64(stashbox.ChartPageSize) {
+		t.Errorf("trending input %v", got)
+	}
+	want := map[string]any{"value": "2026-06-01", "modifier": "GREATER_THAN"}
+	if got := input(1); got["sort"] != "DATE" || got["direction"] != "ASC" || got["page"] != float64(1) || !reflect.DeepEqual(got["date"], want) {
+		t.Errorf("upcoming input %v", got)
+	}
+}

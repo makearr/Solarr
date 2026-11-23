@@ -141,6 +141,12 @@ type Product struct {
 		Title    string `json:"title"`
 		Sequence string `json:"sequence"`
 	} `json:"series"`
+	Rating struct {
+		Distribution struct {
+			Average float64 `json:"average_rating"`
+			Count   int64   `json:"num_ratings"`
+		} `json:"overall_distribution"`
+	} `json:"rating"`
 }
 
 // Year is the year the product came out, 0 when unknown.
@@ -203,6 +209,35 @@ func (c Client) Search(ctx context.Context, title, author string, limit int) ([]
 		return cmp.Compare(exactTitle(b, title), exactTitle(a, title))
 	})
 	return products, nil
+}
+
+// ChartSort is one of the catalog's own orderings, named as its API spells them.
+type ChartSort string
+
+// The orderings the Discover charts read.
+const (
+	SortBestSellers   ChartSort = "BestSellers"
+	SortAverageRating ChartSort = "AvgRating"
+	SortNewestFirst   ChartSort = "-ReleaseDate"
+)
+
+// Chart reads one page (1-based) of the catalog in one ordering; more says whether the page was full.
+func (c Client) Chart(ctx context.Context, sort ChartSort, page int) (products []Product, more bool, err error) {
+	query := url.Values{
+		"num_results": {strconv.Itoa(SearchPageSize)}, "products_sort_by": {string(sort)}, "page": {strconv.Itoa(max(page, 1) - 1)},
+		"response_groups": {searchGroups + ",rating"},
+	}
+	var found struct {
+		Products []productJSON `json:"products"`
+	}
+	if err := get(ctx, c.catalog, c.catalogBase+c.domain()+"/1.0/catalog/products?"+query.Encode(), &found); err != nil {
+		return nil, false, err
+	}
+	for _, product := range found.Products {
+		product.Images = product.ProductImages
+		products = append(products, product.Product)
+	}
+	return products, len(found.Products) == SearchPageSize, nil
 }
 
 // exactTitle is 1 for a product of exactly that title, for sorting.

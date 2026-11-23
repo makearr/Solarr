@@ -384,6 +384,34 @@ func (c Client) ScenesOf(ctx context.Context, filter SceneFilter, page, perPage 
 	return found.Query.Scenes, err
 }
 
+// ChartPageSize is how many scenes one chart page asks for.
+const ChartPageSize = 20
+
+// Trending lists the scenes the server ranks as trending, the page asked for (from 1). ThePornDB takes no such sort and
+// answers ErrUnsupported.
+func (c Client) Trending(ctx context.Context, page int) ([]Scene, error) {
+	return c.chart(ctx, map[string]any{"sort": "TRENDING", "direction": "DESC"}, page)
+}
+
+// ReleasedAfter lists the scenes dated after the day (YYYY-MM-DD), the nearest first, the page asked for (from 1).
+func (c Client) ReleasedAfter(ctx context.Context, day string, page int) ([]Scene, error) {
+	return c.chart(ctx, map[string]any{"sort": "DATE", "direction": "ASC", "date": map[string]any{"value": day, "modifier": "GREATER_THAN"}}, page)
+}
+
+func (c Client) chart(ctx context.Context, input map[string]any, page int) ([]Scene, error) {
+	if c.endpoint == ThePornDBEndpoint {
+		return nil, ErrUnsupported
+	}
+	input["page"], input["per_page"] = max(page, 1), ChartPageSize
+	var found struct {
+		Query struct {
+			Scenes []Scene `json:"scenes"`
+		} `json:"queryScenes"`
+	}
+	err := c.query(ctx, `query ($i: SceneQueryInput!) { queryScenes(input: $i) { scenes {`+sceneFields+`} } }`, map[string]any{"i": input}, &found)
+	return found.Query.Scenes, err
+}
+
 // Favourites are the account's own favourites a scene list is narrowed to.
 const (
 	FavouritePerformers = "PERFORMER"

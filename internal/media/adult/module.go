@@ -38,6 +38,24 @@ type Module struct {
 	Follow *Following
 	// Scenes lists a performer's scenes the library lacks; nil leaves the page without them.
 	Scenes *PerformerScenes
+	// Feeds are the recommendation feeds (Discover); nil leaves adult libraries without them.
+	Feeds media.Recommending
+}
+
+// RecommendationFeeds implements media.Recommending.
+func (m Module) RecommendationFeeds(ctx context.Context) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
+	if m.Feeds == nil {
+		return nil, nil
+	}
+	return m.Feeds.RecommendationFeeds(ctx)
+}
+
+// Recommend implements media.Recommending.
+func (m Module) Recommend(ctx context.Context, query media.RecommendQuery) ([]media.Recommendation, bool, error) {
+	if m.Feeds == nil {
+		return nil, false, media.ErrNotWired
+	}
+	return m.Feeds.Recommend(ctx, query)
 }
 
 // KnownFor implements media.Profiling.

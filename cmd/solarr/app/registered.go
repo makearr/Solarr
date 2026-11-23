@@ -18,7 +18,9 @@ import (
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/adult"
+	"github.com/makearr/Solarr/internal/media/adultfeeds"
 	"github.com/makearr/Solarr/internal/media/anifeeds"
+	"github.com/makearr/Solarr/internal/media/audiblefeeds"
 	"github.com/makearr/Solarr/internal/media/book"
 	"github.com/makearr/Solarr/internal/media/comic"
 	"github.com/makearr/Solarr/internal/media/housekeeping"
@@ -32,6 +34,7 @@ import (
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
+	"github.com/makearr/Solarr/internal/metadata/audible"
 	"github.com/makearr/Solarr/internal/metadata/comicvine"
 	"github.com/makearr/Solarr/internal/metadata/gcd"
 	"github.com/makearr/Solarr/internal/metadata/lastfm"
@@ -745,6 +748,7 @@ func (p *process) adultModule() adult.Module {
 		},
 		Scenes:  &adult.PerformerScenes{Service: service, People: library.NewPeople(p.library)},
 		Service: service,
+		Feeds:   p.adultFeeds(),
 		Feed: adult.Feed{
 			Grab: grab, Reader: library.NewSeriesReader(p.library), Indexers: conns, Logger: p.logger, Libraries: p.libraryIDsOf(adult.MediaType),
 		},
@@ -1197,10 +1201,20 @@ func (t musicTaste) Genres(ctx context.Context, categoryID int64, limit int) ([]
 	return t.pool.TopGenres(ctx, categoryID, int64(limit))
 }
 
-// bookFeeds is the recommendation feeds of an ebook library from Open Library's charts; an audiobook library has none yet.
+// adultFeeds is the recommendation feeds of adult libraries, read from StashDB's trending and upcoming scenes.
+func (p *process) adultFeeds() media.Recommending {
+	server, _ := p.adultService().Servers[adult.ProviderStashDB].(adultfeeds.Charts)
+	if server == nil {
+		return nil
+	}
+	return adultfeeds.Feeds{Charts: server, Kind: adult.MediaType, Provider: adult.ProviderStashDB, Source: "StashDB", Clock: clock.NewSystem()}
+}
+
+// bookFeeds is the recommendation feeds of a book library: Open Library's charts for ebooks, Audible's catalogue for audiobooks.
 func (p *process) bookFeeds(format book.Format) media.Recommending {
 	if format.ByFolder {
-		return nil
+		client := p.providerClient(providerAudible, nil, httpx.ClientConfig{})
+		return audiblefeeds.Feeds{Charts: audible.New(client, client, nil), Kind: format.MediaType, Clock: clock.NewSystem()}
 	}
 	return olfeeds.Feeds{
 		Charts: openlibrary.New(p.providerClient(providerOpenLibrary, nil, httpx.ClientConfig{})), Kind: format.MediaType,

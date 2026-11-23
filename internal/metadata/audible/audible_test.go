@@ -122,3 +122,18 @@ func TestCreditsSplitsTranslatorsFromAuthors(t *testing.T) {
 		t.Errorf("authors %v, translators %v", authors, translators)
 	}
 }
+
+func TestChartAsksTheZeroBasedPageInTheOrderingAndReadsTheRating(t *testing.T) {
+	transport := &answer{bodies: map[string]string{"api.audible.com/1.0/catalog/products": `{"products":[{"asin":"B000000002","title":"Moss and Lantern",
+		"rating":{"overall_distribution":{"average_rating":4.5,"num_ratings":321}}}]}`}}
+	found, more, err := client(t, transport, "us").Chart(t.Context(), audible.SortAverageRating, 3)
+	if err != nil || more || len(found) != 1 {
+		t.Fatalf("found %+v more %v, %v", found, more, err)
+	}
+	if got := found[0].Rating.Distribution; got.Average != 4.5 || got.Count != 321 {
+		t.Errorf("rating = %+v", got)
+	}
+	if asked := transport.asked[0]; !strings.Contains(asked, "products_sort_by=AvgRating") || !strings.Contains(asked, "page=2") || !strings.Contains(asked, "rating") {
+		t.Errorf("asked %s", asked)
+	}
+}

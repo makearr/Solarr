@@ -6,6 +6,7 @@ Earlier entries use older schemes; those at and below `0.0.x` predate both and a
 ## Unreleased
 - Discover: a sidebar page (poster wall per library with list, genre and title filters, Add and Not interested) and a dashboard row of recommendations.
 - Discover (settings): Settings > General has the switch; Settings > Discover sets what is never recommended and, per library, list sizes, language, rating and vote floors and automatic adding.
+- Discover (sources): audiobook libraries recommend from Audible (best sellers, highest rated, upcoming) and adult libraries from StashDB (trending, upcoming) once its key is set.
 - Discover (API): the recommendations of each library, a dashboard row, genres, per-person dismissal and undo, and Load more reading the next page from the source.
 - Discover (page): the poster wall is virtualised, Not interested offers Undo, a Hidden view lists what you hid with Restore, a work you hold but do not monitor gets Monitor, request-only accounts see Request, and Settings > Discover has word chips for exclusions and shows when each list was last read and why it failed.
 - Discover replaces the TMDB trending and popular import lists, and the unused discovery jobs are gone. On upgrade a library that had such a list gets Discover switched on with Trending adding automatically when the list was enabled (popular becomes trending; the rating and vote floors now apply), the lists are deleted, and this cannot be undone.
