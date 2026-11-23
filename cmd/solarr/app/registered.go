@@ -1085,3 +1085,12 @@ func (m musicServerAsker) AlbumIDsByPath(ctx context.Context, categoryID int64, 
 	ids := music.ServerAlbumIDs{ReleaseGroup: item.IDs["musicbrainzreleasegroup"], Release: item.IDs["musicbrainzalbum"]}
 	return ids, ids != (music.ServerAlbumIDs{})
 }
+
+// adultRecords is the adult service's view of the active definitions.
+func (p *process) adultRecords(key string) adult.RecordProvider {
+	provider := p.records.get(key)
+	if provider == nil {
+		return nil
+	}
+	return provider
+}

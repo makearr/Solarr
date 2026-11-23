@@ -653,6 +653,7 @@ func (p *process) adultService() adult.Service {
 		p.adultShared = adult.Service{
 			Memo:     adult.NewSearchMemo(clock.NewSystem()),
 			Local:    p.localMetadata(),
+			Records:  p.adultRecords,
 			Whisparr: whisparr.New(p.providerClient(providerWhisparr, nil, httpx.ClientConfig{Timeout: whisparrTimeout})),
 			Movies:   theporndb.New(p.providerClient(providerThePornDB, nil, httpx.ClientConfig{}), p.providerKey(settings.AdultSourceThePornDB)),
 			Servers: map[string]adult.Server{

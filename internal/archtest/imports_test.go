@@ -291,7 +291,7 @@ var allowedInternalImports = map[string][]string{
 	// The cutoff check of every media type: paging, state writes and counting once, each type judging its own.
 	"internal/acquiring/cutoff":   {"internal/db/library", "internal/db/settings", "internal/jobs"},
 	"internal/acquiring/dispatch": {"internal/db/statistics", "internal/acquiring/download", "internal/db/library", "internal/identify/model", "internal/identify/priority", "internal/platform/keyedlock", "internal/platform/httpx"},
-	"internal/media/music": {"internal/mediaserver", "internal/platform/iogate", "internal/platform/httpx", "internal/platform/filekind", "internal/importing/arrmap", "internal/importing/arrimport", "internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/acquiring/judge", "internal/platform/parallel",
+	"internal/media/music": {"internal/metadata/specprovider", "internal/mediaserver", "internal/platform/iogate", "internal/platform/httpx", "internal/platform/filekind", "internal/importing/arrmap", "internal/importing/arrimport", "internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/acquiring/judge", "internal/platform/parallel",
 		"internal/media", "internal/acquiring/plan", "internal/acquiring/dispatch",
 		"internal/acquiring/indexer", "internal/acquiring/download", "internal/identify/priority",
 		"internal/platform/artwork", "internal/platform/clock", "internal/platform/fsx",
@@ -442,7 +442,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/moving/renamejob", "internal/moving/sidecar", "internal/platform/clock", "internal/platform/filekind", "internal/platform/fsx", "internal/platform/keyedlock",
 		"internal/platform/mediatool", "internal/platform/parallel", "internal/platform/paginate", "internal/scanning/scan", "internal/db/statistics",
 	},
-	"internal/media/adult": {"internal/mediaserver", "internal/platform/parallel", "internal/importing/arrmap", "internal/importing/arrimport", "internal/media/works", "internal/media/picturesweep", "internal/db/library", "internal/db/settings", "internal/identify/model",
+	"internal/media/adult": {"internal/metadata/specprovider", "internal/mediaserver", "internal/platform/parallel", "internal/importing/arrmap", "internal/importing/arrimport", "internal/media/works", "internal/media/picturesweep", "internal/db/library", "internal/db/settings", "internal/identify/model",
 		"internal/identify/parseadult", "internal/importing/batch", "internal/importing/inspect", "internal/importing/placer", "internal/importing/rules",
 		"internal/jobs", "internal/media", "internal/metadata/stashbox", "internal/metadata/theporndb", "internal/metadata/whisparr", "internal/acquiring/plan", "internal/moving/mover",
 		"internal/moving/naming", "internal/moving/renamejob", "internal/platform/clock", "internal/platform/fsx", "internal/platform/httpx",

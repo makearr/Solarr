@@ -288,3 +288,8 @@ score keeps the stored one. The episode row shows it as a star beside the runtim
 
 A definition-file provider ordered in a TV library fills series-level fields only (title, overview, dates, genres, age rating, rating,
 network, pictures, cast); it is asked by TheTVDB, IMDb or TMDB id, and its parts never become episodes.
+
+A definition with `role: enrich` that declares `music` fills an artist's photo and biography where TheAudioDB left them empty, asked by
+MusicBrainz artist id (namespace `musicbrainz`) while it is switched on. A definition ordered in an adult library fills a scene's title,
+overview, date, studio, tags, pictures and credits; it is asked by a stash-box id (`stashdb`, `theporndb`, `fansdb`), else searched by the
+scene's title and taken only on an exact title match.

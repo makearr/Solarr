@@ -39,7 +39,7 @@ func (p *process) enrichJobs() []media.JobRegistration {
 		PeopleBackfillPerRun: func() int {
 			return int(*p.cache.Snapshot().MetadataSettings().PeopleBackfillPerRun)
 		},
-		ArtistArt:    p.theAudioDBArtist(p.theAudioDB()),
+		ArtistArt:    music.DefinitionArtistArt(p.theAudioDBArtist(p.theAudioDB()), p.enrichmentRecords),
 		AlbumRatings: p.albumRatings(),
 		Artworks:     library.NewArtworks(p.library),
 		Realigner:    realigner{p: p},

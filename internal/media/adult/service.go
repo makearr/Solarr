@@ -63,6 +63,8 @@ type Service struct {
 	Whisparr WhisparrSource
 	// Movies adds ThePornDB's films to what its entry in a library's order answers; nil leaves films to the scenes' servers.
 	Movies MovieSource
+	// Records answers the definition-file provider of a key, nil for one that is not (or no longer) active.
+	Records func(key string) RecordProvider
 	// Servers are the stash-box servers by provider name (ProviderStashDB, ProviderThePornDB, ProviderFansDB).
 	Servers map[string]Server
 	// Sources are the providers a library asks, in its order, unless it chose its own.
@@ -155,6 +157,10 @@ func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, hint Hint
 			defer cancel()
 			if strings.HasPrefix(questions[i].name, settings.LocalSourcePrefix) {
 				scenes[i], answered[i], failures[i] = s.askLocal(asking, categoryID, questions[i].name, questions[i].ids, questions[i].known)
+				return
+			}
+			if s.recordProvider(questions[i].name) != nil {
+				scenes[i], answered[i], failures[i] = s.askRecord(asking, questions[i].name, questions[i].ids, questions[i].known)
 				return
 			}
 			scenes[i], answered[i], failures[i] = s.ask(asking, questions[i].name, questions[i].ids, questions[i].known)
