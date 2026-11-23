@@ -137,6 +137,10 @@ A list's source object is written inline at the call site, so **the hook must no
 identity of anything in it**. `topics` is joined into a string before it reaches the effect
 dependencies; depending on the array closed and reopened the event stream on every render.
 
+## Discover
+
+`Discover.tsx` is the poster wall of one library at a time (tabs, list/kind/genre/title filters in the search params, `?hidden=1` for what you hid). The wall is virtualised by rows of cards (the column count follows the width), Load more asks the next cursor page and, past the end of the pool, `POST /discover/more`. `DiscoverRow.tsx` is the dashboard row; `DiscoverSettings.tsx` the settings with `TermChips` for exclusions and the auto-add preview dialog.
+
 ## Components
 
 Radix primitives, added per component as one is needed, styled with the existing Tailwind. The
