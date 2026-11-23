@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Provider definitions: the engine behind a metadata provider that is only a YAML file (JSON, HTML or XML answers read into one generic record, at most eight requests an operation, only the declared hosts). It is not offered to libraries yet.
 - Provider descriptors: every built-in metadata provider, indexer kind and download client is written out as a YAML descriptor under `providers/`; a custom file with the same key can switch it off for new use (hides it from the add lists and a library's provider list), lower its request pace and narrow its media types.
 - Indexers: the built-in indexer specs are written out as YAML under `providers/indexers/builtin/` in the config folder, and a custom spec in `providers/indexers/custom/` (same key replaces a built-in) is used once an administrator has approved its hosts.
 - Picture pickers: a series or movie also offers its fanart.tv logos and banners; an album also offers its Deezer cover (found by barcode when a release has one). Books: an Open Library match that names an Internet Archive item reads that item directly.

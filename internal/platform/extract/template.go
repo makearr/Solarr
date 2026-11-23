@@ -19,8 +19,12 @@ type Variables struct {
 	Result      map[string]string
 	Today       struct{ Year int }
 	DownloadURI map[string]string
-	True        bool
-	False       bool
+	// ID, Settings and Step serve the declarative providers: the item asked for, the owner's values and each earlier step's fields.
+	ID       string
+	Settings map[string]string
+	Step     map[string]map[string]string
+	True     bool
+	False    bool
 }
 
 // NewVariables are the empty variables of a search at the time.

@@ -36,6 +36,9 @@ var (
 	// ErrBlockedScheme reports a URL scheme other than http or https.
 	ErrBlockedScheme = errors.New("httpx: scheme blocked")
 
+	// ErrUndeclaredHost reports a request or redirect to a host a declarative definition did not list.
+	ErrUndeclaredHost = errors.New("httpx: host not declared")
+
 	// ErrNoAllowedAddress reports a hostname whose every resolved address was blocked.
 	ErrNoAllowedAddress = errors.New("httpx: hostname resolved only to blocked addresses")
 )
@@ -143,6 +146,8 @@ type Guard struct {
 	// allowedHosts is the opt-out for indexers that genuinely live on the LAN.
 	// It names hosts rather than disabling the check, and is empty by default.
 	allowedHosts map[string]struct{}
+	// onlyHosts, when set, is the whole list of hosts the guard lets a request or a redirect reach.
+	onlyHosts map[string]struct{}
 }
 
 // NewGuard returns a guard; allowedHosts are exact, case-insensitive hostnames exempt from address classification (none is the default), and a nil resolver or dialer means the system's, since a literal nil once segfaulted a background dial.
@@ -166,14 +171,31 @@ const (
 	defaultKeepAlive   = 30 * time.Second
 )
 
-// CheckURL rejects a scheme the client will not speak.
+// OnlyHosts answers a guard that also refuses every host but the declared ones, in requests and in redirects; the address
+// checks stay, so a declared host that resolves to a private address is blocked as before.
+func (g *Guard) OnlyHosts(hosts []string) *Guard {
+	only := make(map[string]struct{}, len(hosts))
+	for _, host := range hosts {
+		only[strings.ToLower(host)] = struct{}{}
+	}
+	narrowed := *g
+	narrowed.onlyHosts = only
+	return &narrowed
+}
+
+// CheckURL rejects a scheme the client will not speak, and a host outside the declared list when there is one.
 func (g *Guard) CheckURL(target *url.URL) error {
 	switch target.Scheme {
 	case "http", "https":
-		return nil
 	default:
 		return fmt.Errorf("%w: %q is not http or https", ErrBlockedScheme, target.Scheme)
 	}
+	if g.onlyHosts != nil {
+		if _, declared := g.onlyHosts[strings.ToLower(target.Hostname())]; !declared {
+			return fmt.Errorf("%w: %q", ErrUndeclaredHost, target.Hostname())
+		}
+	}
+	return nil
 }
 
 // DialContext resolves address, refuses every result that is not publicly

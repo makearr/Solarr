@@ -334,3 +334,18 @@ func failingDial(refused ...string) (httpx.DialFunc, *[]string) {
 		return nil, nil //nolint:nilnil // the caller only inspects the attempts
 	}, &attempts
 }
+
+func TestOnlyHosts_RefusesARequestToAnUndeclaredHost(t *testing.T) {
+	guard := httpx.NewGuard(nil, nil, nil).OnlyHosts([]string{"api.example.org"})
+	declared, _ := url.Parse("https://API.example.org/search")
+	other, _ := url.Parse("https://elsewhere.example.net/")
+	if err := guard.CheckURL(declared); err != nil {
+		t.Errorf("declared host refused: %v", err)
+	}
+	if err := guard.CheckURL(other); !errors.Is(err, httpx.ErrUndeclaredHost) {
+		t.Errorf("undeclared host: error = %v, want ErrUndeclaredHost", err)
+	}
+	if err := httpx.NewGuard(nil, nil, nil).CheckURL(other); err != nil {
+		t.Errorf("a guard without a list refused: %v", err)
+	}
+}

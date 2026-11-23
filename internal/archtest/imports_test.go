@@ -203,6 +203,8 @@ var allowedInternalImports = map[string][]string{
 	// The spec engine: a Driver over the converted site specs, on the indexer types and httpx.
 	"internal/acquiring/indexer/spec": {"internal/acquiring/indexer", "internal/platform/clock", "internal/platform/extract", "internal/platform/httpx", "internal/platform/keyedlock"},
 	"internal/platform/extract":       {},
+	// Declarative metadata providers: a definition file run over an httpx-shaped client and the shared extraction.
+	"internal/metadata/specprovider": {"internal/platform/clock", "internal/platform/extract"},
 	// Prowlarr's API-based indexers, each on indexer.Base: "just a client" over its site's documented API.
 	"internal/acquiring/indexer/thepiratebay":    {"internal/acquiring/indexer", "internal/platform/httpx"},
 	"internal/acquiring/indexer/nyaa":            {"internal/acquiring/indexer", "internal/platform/httpx"},
