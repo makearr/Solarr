@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 
-import { RecommendationCard } from "./Discover";
+import { RecommendationCard, searchHidden, searchLibrary } from "./Discover";
 
 const item = {
   id: 7, category_id: 1, kind: "movie", provider: "tmdb", external_id: "42", title: "Example Film", subtitle: "", overview: "", poster_url: "",
@@ -37,4 +37,20 @@ test("a held work offers Monitor, and a request-only person sees Request instead
   rerender(<RecommendationCard item={item} canAdd requestOnly onAdd={() => {}} onDismiss={() => {}} />);
   expect(screen.getByRole("button", { name: "Request" })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
+});
+
+test("a library and the Hidden view are read the same from a plain link and from the router's own text form", () => {
+  expect(searchLibrary({ library: 2 })).toBe("2");
+  expect(searchLibrary({ library: "2" })).toBe("2");
+  expect(searchLibrary({})).toBeUndefined();
+  expect(searchHidden({ hidden: 1 })).toBe(true);
+  expect(searchHidden({ hidden: "1" })).toBe(true);
+  expect(searchHidden({ hidden: true })).toBe(true);
+  expect(searchHidden({})).toBe(false);
+  expect(searchHidden({ hidden: 0 })).toBe(false);
+});
+
+test("a recommendation without a poster shows its initial", () => {
+  render(<RecommendationCard item={item} canAdd onAdd={() => {}} onDismiss={() => {}} />);
+  expect(screen.getByLabelText("Example Film").textContent).toBe("E");
 });

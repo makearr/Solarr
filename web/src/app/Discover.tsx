@@ -27,7 +27,18 @@ const LISTS: Record<string, MessageKey> = {
   collections: "discover.list.collections",
 };
 
-type DiscoverSearch = { library?: string; list?: string; kind?: string; genre?: string; q?: string; hidden?: string };
+/** The router parses a search value as JSON, so `?library=2` arrives as a number and `?library=%222%22` as text; both mean the same. */
+export type DiscoverSearch = { library?: string | number; list?: string; kind?: string; genre?: string; q?: string; hidden?: string | number | boolean };
+
+/** The library a link names, as text, or undefined. */
+export function searchLibrary(search: DiscoverSearch): string | undefined {
+  return search.library === undefined ? undefined : String(search.library);
+}
+
+/** Whether a link asks for the Hidden view, whether it wrote hidden=1, hidden="1" or hidden=true. */
+export function searchHidden(search: DiscoverSearch): boolean {
+  return search.hidden === true || String(search.hidden) === "1";
+}
 
 /** A card is 10rem wide at least; the grid gap is 1rem. */
 const CARD_MIN = 160;
@@ -43,7 +54,7 @@ export function Discover() {
   const change = (patch: DiscoverSearch) =>
     void navigate({ to: "/discover", search: ((previous: DiscoverSearch) => ({ ...previous, ...patch })) as never });
   const all = libraries.data ?? [];
-  const current = all.find((library) => String(library.category_id) === search.library) ?? all[0];
+  const current = all.find((library) => String(library.category_id) === searchLibrary(search)) ?? all[0];
   if (libraries.isLoading) return <p className="p-6 text-sm text-ink-muted">{t("discover.loading")}</p>;
   if (!current) return <EmptyState title={t("discover.nothing")} hint={t("discover.nothingHint")} />;
   return (
@@ -57,7 +68,7 @@ export function Discover() {
                 key={library.category_id}
                 role="tab"
                 aria-selected={library.category_id === current.category_id}
-                onClick={() => change({ library: String(library.category_id), genre: undefined, kind: undefined })}
+                onClick={() => change({ library: library.category_id, genre: undefined, kind: undefined })}
                 className={`rounded-md px-2 py-1 ${library.category_id === current.category_id ? "bg-accent/10 text-ink" : "text-ink-muted hover:text-ink"}`}
               >
                 {tabName(library, all)}
@@ -66,10 +77,10 @@ export function Discover() {
           </div>
         )}
       >
-        <ToolbarHidden active={search.hidden === "1"} onChange={(on) => change({ hidden: on ? "1" : undefined })} />
-        {search.hidden !== "1" && <Filters library={current} search={search} change={change} />}
+        <ToolbarHidden active={searchHidden(search)} onChange={(on) => change({ hidden: on ? 1 : undefined })} />
+        {!searchHidden(search) && <Filters library={current} search={search} change={change} />}
       </Toolbar>
-      {search.hidden === "1" ? <HiddenList /> : <Wall library={current} search={search} />}
+      {searchHidden(search) ? <HiddenList /> : <Wall library={current} search={search} />}
     </div>
   );
 }
@@ -313,7 +324,9 @@ export function RecommendationCard({
         {item.poster_url ? (
           <img src={remoteImage(item.poster_url, "small")} alt="" loading="lazy" className="aspect-[2/3] w-full rounded-lg border border-border-subtle bg-surface object-cover" />
         ) : (
-          <div className="aspect-[2/3] w-full rounded-lg border border-border-subtle bg-surface" />
+          <div aria-label={item.title} className="flex aspect-[2/3] w-full items-center justify-center rounded-lg border border-border-subtle bg-surface text-2xl text-ink-muted">
+            {item.title.trim().charAt(0).toUpperCase() || "?"}
+          </div>
         )}
         <div className="absolute inset-x-0 bottom-0 flex justify-between gap-1 bg-canvas/80 p-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
           {item.library_id && requestOnly && (

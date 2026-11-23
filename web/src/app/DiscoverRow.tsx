@@ -39,7 +39,7 @@ export function DiscoverRow() {
         <h2 className="text-sm font-medium">{t("discover.page")}</h2>
         <Link to="/discover" className="text-xs text-accent">{t("discover.seeAll")}</Link>
       </div>
-      <ul className="flex gap-4 overflow-x-auto pb-2">
+      <ul className="flex gap-4 overflow-x-auto pb-6">
         {row.data.map((item) => (
           <li key={item.id} className="w-36 shrink-0">
             <RecommendationCard item={item} canAdd={canAdd(item)} onAdd={() => setAdding(item)} onDismiss={() => dismiss.mutate(item.id)} />

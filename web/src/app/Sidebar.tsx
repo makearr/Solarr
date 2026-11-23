@@ -141,19 +141,19 @@ export function Sidebar() {
             {!collapsed && "Dashboard"}
           </Link>
         </li>
-        {discoverLibraries.data && discoverLibraries.data.length > 0 && (
-          <li>
-            <Link to="/discover" title={collapsed ? t("discover.page") : undefined} className={sectionLinkClass(path.startsWith("/discover"), collapsed)}>
-              <Compass aria-hidden className="size-4 shrink-0" />
-              {!collapsed && t("discover.page")}
-            </Link>
-          </li>
-        )}
         {showCalendar && (
           <li>
             <Link to="/calendar" title={collapsed ? "Calendar" : undefined} className={sectionLinkClass(path.startsWith("/calendar"), collapsed)}>
               <CalendarDays aria-hidden className="size-4 shrink-0" />
               {!collapsed && "Calendar"}
+            </Link>
+          </li>
+        )}
+        {discoverLibraries.data && discoverLibraries.data.length > 0 && (
+          <li>
+            <Link to="/discover" title={collapsed ? t("discover.page") : undefined} className={sectionLinkClass(path.startsWith("/discover"), collapsed)}>
+              <Compass aria-hidden className="size-4 shrink-0" />
+              {!collapsed && t("discover.page")}
             </Link>
           </li>
         )}
