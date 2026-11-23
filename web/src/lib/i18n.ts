@@ -877,6 +877,8 @@ const catalogue = {
   "discover.neverNetworks": "Never recommend these networks and studios (comma separated)",
   "discover.save": "Save",
   "discover.saveRefresh": "Save and refresh",
+  "discover.refreshNow": "Refresh now",
+  "discover.kinds": "Recommend",
   "discover.libraryHelp": "Applies on top of the global lists above.",
   "discover.libraryOff": "Recommendations are switched off for the whole instance; this library's settings are kept.",
   "discover.enabled": "Enabled",

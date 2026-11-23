@@ -105,6 +105,15 @@ function LibraryCard({ library, globalOn }: { library: Library; globalOn: boolea
       void queryClient.invalidateQueries({ queryKey: ["discover-libraries"] });
     },
   });
+  const refreshNow = useMutation({
+    meta: { handlesErrors: true },
+    mutationFn: () => ok(api.PUT("/settings/discover/libraries/{category_id}", { params: { path: { category_id: library.category_id } }, body: library })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["discover-libraries"] });
+    },
+  });
+  const feedKinds = useDiscoverLibraries().data?.find((one) => one.category_id === library.category_id)?.feeds.map((feed) => feed.kind) ?? [];
+  const kinds = [...new Set([...feedKinds, ...draft.disabled_kinds].filter((kind) => kind !== ""))].sort();
   const [previewing, setPreviewing] = useState<number | null>(null);
   const number = (key: "total_amount" | "classic_age_years" | "min_votes" | "auto_add_per_day" | "min_rating", label: MessageKey) => (
     <label className={labelStyle}>
@@ -147,6 +156,23 @@ function LibraryCard({ library, globalOn }: { library: Library; globalOn: boolea
       />
       <TermChips label={t("discover.libraryGenres")} value={genres} onChange={setGenres} suggestions={[...(poolGenres.data ?? []).map((one) => one.genre), ...COMMON_GENRES]} />
       <TermChips label={t("discover.libraryNetworks")} value={networks} onChange={setNetworks} />
+      {kinds.length > 1 && (
+        <fieldset className="flex flex-wrap items-center gap-3 text-sm">
+          <legend className="text-xs text-ink-muted">{t("discover.kinds")}</legend>
+          {kinds.map((kind) => (
+            <label key={kind} className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={!draft.disabled_kinds.includes(kind)}
+                onChange={(event) =>
+                  setDraft({ ...draft, disabled_kinds: event.target.checked ? draft.disabled_kinds.filter((one) => one !== kind) : [...draft.disabled_kinds, kind] })
+                }
+              />
+              {kind}
+            </label>
+          ))}
+        </fieldset>
+      )}
       <FeedStates category={library.category_id} />
       <table className="text-sm">
         <thead>
@@ -183,6 +209,8 @@ function LibraryCard({ library, globalOn }: { library: Library; globalOn: boolea
       </table>
       <div className="flex items-center gap-2">
         <Button variant="primary" busy={save.isPending} onClick={() => save.mutate()}>{t("discover.saveRefresh")}</Button>
+        {library.enabled && <Button busy={refreshNow.isPending} onClick={() => refreshNow.mutate()}>{t("discover.refreshNow")}</Button>}
+        {refreshNow.isError && <span className="text-xs text-danger">{(refreshNow.error as { detail?: string }).detail ?? t("discover.refused")}</span>}
         {save.isError && <span className="text-xs text-danger">{(save.error as { detail?: string }).detail ?? t("discover.refused")}</span>}
       </div>
       {previewing !== null && (
