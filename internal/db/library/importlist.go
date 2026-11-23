@@ -144,3 +144,12 @@ func (l ImportLists) Forget(ctx context.Context, listID int64) error {
 	}
 	return nil
 }
+
+// ListIDs answers every list this database holds a record of.
+func (l ImportLists) ListIDs(ctx context.Context) ([]int64, error) {
+	ids, err := librarydb.New(l.store.Read()).ListImportListIDs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("library: import list ids: %w", err)
+	}
+	return ids, nil
+}

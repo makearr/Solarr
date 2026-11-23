@@ -29,9 +29,6 @@ type Querier interface {
 	// references it, so the user gets a reason rather than a constraint violation.
 	CountCategoriesUsingRootFolder(ctx context.Context, rootFolderID int64) (int64, error)
 	CountCategoryListsUsingQualityProfile(ctx context.Context, qualityProfileID int64) (int64, error)
-	// Invariant 41: deleting a category in use is refused with a count of what
-	// references it.
-	CountDiscoveryJobsUsingCategory(ctx context.Context, categoryID sql.NullInt64) (int64, error)
 	CountDownloadFoldersForCategory(ctx context.Context, categoryID sql.NullInt64) (int64, error)
 	CountImportListsForCategory(ctx context.Context, categoryID int64) (int64, error)
 	CountImportListsUsingQualityProfile(ctx context.Context, qualityProfileID sql.NullInt64) (int64, error)
@@ -43,8 +40,6 @@ type Querier interface {
 	// *Arr instance connections (todo 4.13, ADR-52). Column lists follow table order.
 	CreateArrInstance(ctx context.Context, arg CreateArrInstanceParams) (ArrInstance, error)
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
-	// Autonomous discovery jobs (ADR-38). Policy, so this stays in settings.db.
-	CreateDiscoveryJob(ctx context.Context, arg CreateDiscoveryJobParams) (DiscoveryJob, error)
 	// Download folders (todo 4.18): watched for imports, with an optional library hint and their
 	// own transfer order.
 	CreateDownloadFolder(ctx context.Context, arg CreateDownloadFolderParams) (DownloadFolder, error)
@@ -109,7 +104,6 @@ type Querier interface {
 	GetCalendarFeed(ctx context.Context, userID int64) (CalendarFeed, error)
 	GetCalendarFeedByHash(ctx context.Context, tokenHash string) (CalendarFeed, error)
 	GetCategory(ctx context.Context, id int64) (Category, error)
-	GetDiscoveryJob(ctx context.Context, id int64) (DiscoveryJob, error)
 	GetDownloadFolder(ctx context.Context, id int64) (DownloadFolder, error)
 	GetDownloader(ctx context.Context, id int64) (Downloader, error)
 	GetImportList(ctx context.Context, id int64) (ImportList, error)
@@ -151,8 +145,6 @@ type Querier interface {
 	ListDefaultLanguages(ctx context.Context) ([]string, error)
 	ListDownloadFolders(ctx context.Context) ([]DownloadFolder, error)
 	ListDownloaders(ctx context.Context) ([]Downloader, error)
-	// What a scheduler actually runs -- off until previewed (ADR-38).
-	ListEnabledDiscoveryJobs(ctx context.Context) ([]DiscoveryJob, error)
 	ListEnabledImportLists(ctx context.Context) ([]ImportList, error)
 	ListExclusionPatterns(ctx context.Context) ([]ExclusionPattern, error)
 	ListImportListsForCategory(ctx context.Context, categoryID int64) ([]ImportList, error)
@@ -188,7 +180,6 @@ type Querier interface {
 	MoveExclusionPatterns(ctx context.Context, arg MoveExclusionPatternsParams) error
 	MoveImportLists(ctx context.Context, arg MoveImportListsParams) error
 	MovePlacementAffinity(ctx context.Context, arg MovePlacementAffinityParams) error
-	RecordDiscoveryJobRun(ctx context.Context, arg RecordDiscoveryJobRunParams) error
 	RenameLeftoverImportLists(ctx context.Context, arg RenameLeftoverImportListsParams) error
 	RepointImportListsQualityProfile(ctx context.Context, arg RepointImportListsQualityProfileParams) error
 	RevokeCategoryAccess(ctx context.Context, arg RevokeCategoryAccessParams) error
@@ -219,9 +210,6 @@ type Querier interface {
 	SetCategoryTVMonitor(ctx context.Context, arg SetCategoryTVMonitorParams) error
 	SetCategoryTarget(ctx context.Context, arg SetCategoryTargetParams) error
 	SetCategoryTargetAuto(ctx context.Context, categoryID int64) error
-	// The enable transition on its own: this is the "preview before enabling" gate, a
-	// deliberate act distinct from editing a job's policy.
-	SetDiscoveryJobEnabled(ctx context.Context, arg SetDiscoveryJobEnabledParams) error
 	// A separate statement from UpdateDownloader, the same reasoning indexer's own
 	// SetIndexerAPIKey gives: Seal generates a fresh nonce every call, so writing it back
 	// unconditionally on every unrelated edit would be silent, pointless churn.

@@ -4884,7 +4884,7 @@ export interface paths {
         post?: never;
         /**
          * Remove a category. Administrator only.
-         * @description Refused, naming what still uses it, while any root folder is attached, any user holds explicit access, or a discovery job references it (Invariant 41).
+         * @description Refused, naming what still uses it, while any root folder is attached or any user holds explicit access (Invariant 41).
          */
         delete: operations["deleteCategory"];
         options?: never;

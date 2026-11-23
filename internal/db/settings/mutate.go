@@ -414,10 +414,6 @@ func (c *Cache) DeleteCategory(ctx context.Context, id int64) error {
 	if err != nil {
 		return fmt.Errorf("settings: count access for category %d: %w", id, err)
 	}
-	discoveryJobs, err := c.queries.CountDiscoveryJobsUsingCategory(ctx, sql.NullInt64{Int64: id, Valid: true})
-	if err != nil {
-		return fmt.Errorf("settings: count discovery jobs for category %d: %w", id, err)
-	}
 
 	var references []Reference
 	if roots > 0 {
@@ -425,9 +421,6 @@ func (c *Cache) DeleteCategory(ctx context.Context, id int64) error {
 	}
 	if grants > 0 {
 		references = append(references, Reference{Kind: "user access grants", Count: grants})
-	}
-	if discoveryJobs > 0 {
-		references = append(references, Reference{Kind: "discovery jobs", Count: discoveryJobs})
 	}
 	if members := len(c.Snapshot().LibraryCategories(id)) - 1; members > 0 && c.Snapshot().LibraryOf(id) == id {
 		references = append(references, Reference{Kind: "further media types of the library", Count: int64(members)})
@@ -1734,14 +1727,7 @@ func (c *Cache) CheckMergeCategory(ctx context.Context, from, into int64) error 
 	if from == into || source.MediaType != target.MediaType {
 		return config.Problems{{Path: "into_category_id", Value: strconv.FormatInt(into, 10), Expectation: "another library of the same media type"}}
 	}
-	jobs, err := c.queries.CountDiscoveryJobsUsingCategory(ctx, sql.NullInt64{Int64: from, Valid: true})
-	if err != nil {
-		return fmt.Errorf("settings: count discovery jobs for category %d: %w", from, err)
-	}
 	var references []Reference
-	if jobs > 0 {
-		references = append(references, Reference{Kind: "discovery jobs", Count: jobs})
-	}
 	if members := len(snapshot.LibraryCategories(from)) - 1; members > 0 && snapshot.LibraryOf(from) == from {
 		references = append(references, Reference{Kind: "further media types of the library", Count: int64(members)})
 	}

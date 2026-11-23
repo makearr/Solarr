@@ -84,6 +84,33 @@ func (q *Queries) ListImportListEntries(ctx context.Context, listID int64) ([]Im
 	return items, nil
 }
 
+const listImportListIDs = `-- name: ListImportListIDs :many
+SELECT list_id FROM import_list_state UNION SELECT list_id FROM import_list_entry ORDER BY list_id
+`
+
+func (q *Queries) ListImportListIDs(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listImportListIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var list_id int64
+		if err := rows.Scan(&list_id); err != nil {
+			return nil, err
+		}
+		items = append(items, list_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const recordImportListEntry = `-- name: RecordImportListEntry :exec
 INSERT INTO import_list_entry (list_id, provider, external_id, outcome, work_id, title, seen_at)
 VALUES (?, ?, ?, ?, ?, ?, ?)

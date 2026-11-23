@@ -318,6 +318,7 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 	running.readCertificationAges(ctx)
 	running.warnDangling(ctx)
 	running.pinProfilesOfLibrariesWithoutAList(ctx)
+	running.forgetRecordsOfRemovedLists(ctx)
 	return running.startServer(ctx)
 }
 

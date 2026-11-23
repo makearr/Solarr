@@ -154,3 +154,15 @@ CREATE TABLE category_discover_type (
   auto_add    INTEGER NOT NULL DEFAULT 0 CHECK (auto_add IN (0, 1)),
   PRIMARY KEY (category_id, type)
 ) WITHOUT ROWID;
+
+-- Discover took over the TMDB chart import lists: a library that had one gets Discover on with trending auto-adding when the list
+-- was enabled (popular becomes trending too), then the lists and the unused discovery jobs go. One way.
+INSERT INTO category_discover (category_id, enabled, auto_add_search)
+SELECT category_id, 1, MAX(search_on_add) FROM import_list WHERE type IN ('tmdb_trending_tv', 'tmdb_popular_tv') GROUP BY category_id;
+INSERT INTO category_discover_type (category_id, type, enabled, amount, auto_add)
+SELECT category_id, 'trending', 1, 20, MAX(enabled) FROM import_list WHERE type IN ('tmdb_trending_tv', 'tmdb_popular_tv') GROUP BY category_id;
+INSERT OR REPLACE INTO instance_setting (key, value_json, updated_at)
+SELECT 'discover.enabled', 'true', CAST(strftime('%s', 'now') AS INTEGER) WHERE EXISTS (SELECT 1 FROM import_list WHERE type IN ('tmdb_trending_tv', 'tmdb_popular_tv'));
+DELETE FROM import_list WHERE type IN ('tmdb_trending_tv', 'tmdb_popular_tv');
+DROP INDEX discovery_job_enabled;
+DROP TABLE discovery_job;

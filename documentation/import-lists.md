@@ -22,13 +22,13 @@ turns an entry into the id it adds works by. A type without the capability offer
 
 ## Sources
 
+TMDB's trending and popular charts are no import lists any more: Discover reads them (and the other charts) and can add from them by itself.
+
 | Type | Reads | Settings | Bound |
 |---|---|---|---|
 | `anilist_season` | AniList's anime of a season, most popular first, adult entries left out | season (current, next, or a named one), year | 3 pages of 50 |
 | `anilist_user` | A user's AniList list | user name, statuses (default watching and planning) | the whole list |
 | `tmdb_list` | A public TMDB list (v3 `/list/{id}`) | the list's number or its themoviedb.org link | 25 pages |
-| `tmdb_trending_tv` | TMDB's trending shows | today or this week | 5 pages of 20 |
-| `tmdb_popular_tv` | TMDB's popular shows | none | 5 pages of 20 |
 | `mdblist_list` | A public MDBList list (`/lists/{id}/items` or `/lists/{user}/{name}/items`); its shows only | the number, `user/name` or the mdblist.com link | 10 pages of 100 |
 | `stashbox_favourites` | Adult libraries: the newest scenes of the performers and studios the key's account favourited at StashDB or FansDB | server, favourite (performers, studios, either), how many of the newest | 50, 100, 200 or 500 scenes |
 

@@ -7585,8 +7585,7 @@ paths:
       summary: Remove a category. Administrator only.
       description: >-
         Refused, naming what still uses it, while any root folder is
-        attached, any user holds explicit access, or a discovery job
-        references it (Invariant 41).
+        attached or any user holds explicit access (Invariant 41).
       responses:
         "204": { description: Removed. }
         "401": { $ref: "#/components/responses/Problem" }

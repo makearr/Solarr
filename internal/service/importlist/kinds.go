@@ -62,10 +62,6 @@ func NewCatalogue(aniList AniListLists, tmdb TMDBLists, now func() Season) Catal
 			Fields: userFields, Source: AniListUser{Client: aniList}},
 		{Type: media.ListTMDBList, Label: "TMDB list", Help: "A public TMDB list; its films are left out of a TV library.",
 			Fields: tmdbListFields, Source: TMDBList{Client: tmdb}},
-		{Type: media.ListTMDBTrending, Label: "TMDB trending shows", Help: "The shows trending on TMDB.",
-			Fields: trendingFields, Source: TMDBTrending{Client: tmdb}},
-		{Type: media.ListTMDBPopular, Label: "TMDB popular shows", Help: "The most popular shows on TMDB.",
-			Source: TMDBPopular{Client: tmdb}},
 	}}
 }
 

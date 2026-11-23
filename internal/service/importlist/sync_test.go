@@ -38,7 +38,7 @@ func (listType) Descriptor() media.Descriptor {
 }
 
 func (listType) ImportListTypes() []media.ListType {
-	return []media.ListType{media.ListTMDBList, media.ListTMDBPopular}
+	return []media.ListType{media.ListTMDBList, media.ListMDBList}
 }
 
 func (l listType) ResolveListEntry(_ context.Context, entry media.ListEntry) (media.ListMatch, error) {

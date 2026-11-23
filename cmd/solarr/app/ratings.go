@@ -2,11 +2,13 @@ package app
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
@@ -80,5 +82,36 @@ func (p *process) pinProfilesOfLibrariesWithoutAList(ctx context.Context) {
 	}
 	if err := p.cache.MarkOneOffDone(ctx, clock.NewSystem(), repair); err != nil {
 		p.logger.Warn("quality profile pinning not recorded", slog.Any("error", err))
+	}
+}
+
+// forgetRecordsOfRemovedLists runs once: the TMDB chart lists Discover took over were deleted by a settings migration, which
+// cannot reach the records library.db keeps for them.
+func (p *process) forgetRecordsOfRemovedLists(ctx context.Context) {
+	const repair = "forget-records-of-folded-chart-lists"
+	if p.cache.Snapshot().OneOffDone(repair) {
+		return
+	}
+	records := library.NewImportLists(p.library)
+	ids, err := records.ListIDs(ctx)
+	if err != nil {
+		p.logger.Warn("import list records not listed", slog.Any("error", err))
+		return
+	}
+	for _, id := range ids {
+		if _, err := p.cache.ImportList(ctx, id); !errors.Is(err, settings.ErrNotFound) {
+			if err != nil {
+				p.logger.Warn("import list not read", slog.Int64("list_id", id), slog.Any("error", err))
+				return
+			}
+			continue
+		}
+		if err := records.Forget(ctx, id); err != nil {
+			p.logger.Warn("import list records not dropped", slog.Int64("list_id", id), slog.Any("error", err))
+			return
+		}
+	}
+	if err := p.cache.MarkOneOffDone(ctx, clock.NewSystem(), repair); err != nil {
+		p.logger.Warn("import list cleanup not recorded", slog.Any("error", err))
 	}
 }

@@ -31,3 +31,6 @@ DELETE FROM import_list_entry WHERE list_id = ?;
 
 -- name: DeleteImportListState :exec
 DELETE FROM import_list_state WHERE list_id = ?;
+
+-- name: ListImportListIDs :many
+SELECT list_id FROM import_list_state UNION SELECT list_id FROM import_list_entry ORDER BY list_id;

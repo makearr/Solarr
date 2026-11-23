@@ -55,7 +55,7 @@ Everything else is `library.db`. Applying that test:
 `category_metadata_source`, `category_quality_profile`, `category_target` and `category_target_auto`, `placement_affinity`,
 `quality_profile`, `quality_target`, `target_profile`, `default_language`, `language_profile`, `naming_profile`,
 `naming_format`, `exclusion_pattern`, `indexer`, `downloader`, `download_folder`, `arr_instance`, `import_list`,
-`calendar_feed`, `discovery_job`, `instance_setting`.
+`calendar_feed`, `instance_setting`.
 
 **`library.db`** — identity (`work`, `work_part`, `edition`, titles, external ids), files (`media_object`,
 `library_path`, `media_attributes`), desired state (`desired_item`, `desired_item_file`,

@@ -805,6 +805,7 @@ type Querier interface {
 	ListImportDecisionsForWork(ctx context.Context, arg ListImportDecisionsForWorkParams) ([]ImportDecision, error)
 	// Import list entries and state (migration 0099, ADR-38). Column lists follow table order.
 	ListImportListEntries(ctx context.Context, listID int64) ([]ImportListEntry, error)
+	ListImportListIDs(ctx context.Context) ([]int64, error)
 	// Small, operator-facing list -- session counts never approach library scale
 	// (Invariant 22 is about files, not import runs), so this is a plain list
 	// rather than cursor-paginated, newest first per idx_import_session_state.

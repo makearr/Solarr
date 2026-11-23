@@ -58,12 +58,6 @@ func (f *fakeTMDB) page(path string, page int) (tmdb.ListPage, error) {
 func (f *fakeTMDB) List(_ context.Context, id string, page int) (tmdb.ListPage, error) {
 	return f.page("list/"+id, page)
 }
-func (f *fakeTMDB) Trending(_ context.Context, kind, window string, page int) (tmdb.ListPage, error) {
-	return f.page("trending/"+kind+"/"+window, page)
-}
-func (f *fakeTMDB) Popular(_ context.Context, kind string, page int) (tmdb.ListPage, error) {
-	return f.page("popular/"+kind, page)
-}
 
 func fall2026() importlist.Season { return importlist.Season{Name: anilist.SeasonFall, Year: 2026} }
 
@@ -167,21 +161,6 @@ func TestATMDBListIsReadToItsLastPageWithItsFilmsMarked(t *testing.T) {
 	}
 }
 
-func TestTMDBChartsAskForShowsAndNameAMissingKey(t *testing.T) {
-	client := &fakeTMDB{pages: []tmdb.ListPage{{TotalPages: 1}}}
-	catalogue := importlist.NewCatalogue(&fakeAniList{}, client, fall2026)
-	entries(t, catalogue, media.ListTMDBTrending, nil)
-	entries(t, catalogue, media.ListTMDBPopular, nil)
-	if want := []string{"trending/tv/week", "popular/tv"}; !reflect.DeepEqual(client.requested, want) {
-		t.Errorf("requested %q, want %q", client.requested, want)
-	}
-	client.err = tmdb.ErrNoKey
-	kind, _ := catalogue.Kind(media.ListTMDBPopular)
-	if _, err := kind.Source.Entries(t.Context(), nil); !errors.Is(err, importlist.ErrNeedsKey) {
-		t.Errorf("err = %v, want ErrNeedsKey", err)
-	}
-}
-
 func TestTMDBListIDReadsTheNumberNeverAnotherSite(t *testing.T) {
 	cases := map[string]string{
 		"8": "8", "\t8\n": "8", "https://www.themoviedb.org/list/8": "8", "https://www.themoviedb.org/list/8-shows?page=2": "8",
@@ -206,8 +185,8 @@ func TestValidateChecksTheTypeAndItsSettings(t *testing.T) {
 		want     config.Problems
 	}{
 		{"fine", media.ListAniListUser, importlist.Options{"username": "x", "statuses": "CURRENT,COMPLETED"}, nil},
-		{"not taken by the library", media.ListTMDBPopular, nil,
-			config.Problems{{Path: "type", Value: "tmdb_popular_tv", Expectation: "a list type this library takes"}}},
+		{"not taken by the library", media.ListStashFavourites, nil,
+			config.Problems{{Path: "type", Value: "stashbox_favourites", Expectation: "a list type this library takes"}}},
 		{"missing and unknown settings", media.ListAniListUser, importlist.Options{"statuses": "WATCHED", "colour": "red"}, config.Problems{
 			{Path: "options.colour", Expectation: "a setting of AniList user list"},
 			{Path: "options.statuses", Value: "WATCHED", Expectation: "one of the choices offered"},
