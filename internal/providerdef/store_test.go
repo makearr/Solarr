@@ -104,3 +104,36 @@ func TestCustomOverridesBuiltinAndApprovalFollowsHosts(t *testing.T) {
 		t.Error("a person's off was ignored")
 	}
 }
+
+func TestRemoveCustomMovesTheFileAndKeepsTheNewestFiftyRemoved(t *testing.T) {
+	s := memStore()
+	for unix := int64(1); unix <= MaxRemovedFiles+3; unix++ {
+		if err := s.WriteCustom(KindMetadata, "alpha", []byte(descriptor("alpha"))); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.RemoveCustom(KindMetadata, "alpha", unix); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.ReadCustom(KindMetadata, "alpha"); err == nil {
+		t.Fatal("the removed file is still in custom/")
+	}
+	entries, err := s.FS.ReadDir("/cfg/providers/metadata/custom/.removed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != MaxRemovedFiles {
+		t.Fatalf("%d removed files kept, want %d", len(entries), MaxRemovedFiles)
+	}
+	for _, oldest := range []string{"alpha.1.yaml", "alpha.2.yaml", "alpha.3.yaml"} {
+		if _, err := s.FS.Stat("/cfg/providers/metadata/custom/.removed/" + oldest); err == nil {
+			t.Fatalf("%s survived the prune", oldest)
+		}
+	}
+}
+
+func TestWriteCustomRefusesAKeyThatIsNotAFileName(t *testing.T) {
+	if err := memStore().WriteCustom(KindMetadata, "../escape", []byte("x")); err == nil {
+		t.Fatal("a path in the key was accepted")
+	}
+}

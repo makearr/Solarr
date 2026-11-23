@@ -323,6 +323,8 @@ type Config struct {
 	// ProviderHidden says a custom descriptor switched the compiled provider off for new use (kind "metadata", "indexer" or
 	// "download"); optional: without it nothing is hidden. Rows that exist keep working.
 	ProviderHidden func(kind, key string) bool
+	// ProviderDefinitions administers the definition files (Settings > Providers); optional.
+	ProviderDefinitions ProviderDefinitions
 	// CandidateSearcher is stage 5's own candidate pipeline (section 10.1/10.2).
 	CandidateSearcher CandidateSearcher
 	// RemoteImages serves provider pictures from the local cache. Optional: nil answers 503.
@@ -460,6 +462,7 @@ type Server struct {
 	downloaderKinds         DownloaderKinds
 	indexerKinds            IndexerKinds
 	providerHidden          func(kind, key string) bool
+	providerDefinitions     ProviderDefinitions
 	tvProviders             TVProviders
 	remoteImages            RemoteImages
 	candidateSearcher       CandidateSearcher
@@ -615,6 +618,7 @@ func New(config Config) (*Server, error) {
 		downloaderKinds:         config.DownloaderKinds,
 		indexerKinds:            config.IndexerKinds,
 		providerHidden:          config.ProviderHidden,
+		providerDefinitions:     config.ProviderDefinitions,
 		candidateSearcher:       config.CandidateSearcher,
 		tvProviders:             config.TVProviders,
 		remoteImages:            config.RemoteImages,
@@ -793,6 +797,15 @@ func New(config Config) (*Server, error) {
 			secured.Delete("/works/exclusions", server.routeRemoveWorkExclusion)
 			secured.Get("/works/lookup", server.routeLookupWorks)
 			secured.Post("/works", server.AddWork)
+			secured.Get("/provider-definitions", wrapped.ListProviderDefinitions)
+			secured.Post("/provider-definitions/reload", server.ReloadProviderDefinitions)
+			secured.Get("/provider-definitions/{kind}/{key}", wrapped.GetProviderDefinition)
+			secured.Put("/provider-definitions/{kind}/{key}", wrapped.PutProviderDefinition)
+			secured.Delete("/provider-definitions/{kind}/{key}", wrapped.DeleteProviderDefinition)
+			secured.Post("/provider-definitions/{kind}/{key}/enable", wrapped.EnableProviderDefinition)
+			secured.Post("/provider-definitions/{kind}/{key}/disable", wrapped.DisableProviderDefinition)
+			secured.Put("/provider-definitions/{kind}/{key}/settings", wrapped.PutProviderDefinitionSettings)
+			secured.Post("/provider-definitions/{kind}/{key}/test", wrapped.TestProviderDefinition)
 			secured.Get("/media-servers/kinds", server.ListMediaServerKinds)
 			secured.Get("/media-servers", server.ListMediaServers)
 			secured.Post("/media-servers", server.AddMediaServer)

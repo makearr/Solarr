@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"path/filepath"
+	"sync"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer/spec"
 	"github.com/makearr/Solarr/internal/providerdef"
@@ -70,10 +71,13 @@ func (p *process) builtinDefinitions() map[providerdef.Kind]map[string][]byte {
 	return files
 }
 
-// builtinCatalogDefinitions are the compiled providers' descriptors as parsed definitions.
-func builtinCatalogDefinitions() []providerdef.Definition {
+// builtinCatalogDefinitions are the built-in definitions parsed: the compiled providers' descriptors and the embedded indexer
+// specs. They never change while the process runs, so they are built once.
+var builtinCatalogDefinitions = sync.OnceValue(func() []providerdef.Definition {
 	var defs []providerdef.Definition
+	keys := map[providerdef.Kind]map[string]bool{}
 	for kind, descriptors := range compiledDescriptors() {
+		keys[kind] = map[string]bool{}
 		for _, descriptor := range descriptors {
 			data, err := providerdef.Marshal(descriptor)
 			if err != nil {
@@ -81,22 +85,39 @@ func builtinCatalogDefinitions() []providerdef.Definition {
 			}
 			if def, problems := providerdef.Parse(kind, descriptor.Key+".yaml", data, providerdef.SourceBuiltin); len(problems) == 0 {
 				defs = append(defs, def)
+				keys[kind][descriptor.Key] = true
+			}
+		}
+	}
+	if embedded, err := spec.Embedded(); err == nil {
+		for _, one := range embedded.All() {
+			if keys[providerdef.KindIndexer][one.ID] {
+				continue
+			}
+			data, err := one.YAML()
+			if err != nil {
+				continue
+			}
+			if def, problems := providerdef.Parse(providerdef.KindIndexer, one.ID+".yaml", data, providerdef.SourceBuiltin); len(problems) == 0 {
+				defs = append(defs, def)
 			}
 		}
 	}
 	return defs
-}
+})
 
 // reloadProviderDefinitions reads every custom folder and swaps in a new catalog; a bad file is logged and the rest still load.
 func (p *process) reloadProviderDefinitions() {
 	store := p.providerDefinitions()
 	var custom []providerdef.Definition
+	byKind := map[providerdef.Kind][]providerdef.FileProblems{}
 	for _, kind := range providerdef.Kinds {
 		defs, reports, err := store.LoadCustom(kind)
 		if err != nil {
 			p.logger.Warn("provider definitions could not be read", slog.String("kind", string(kind)), slog.Any("error", err))
 			continue
 		}
+		byKind[kind] = append(byKind[kind], reports...)
 		for _, report := range reports {
 			for _, problem := range report.Problems {
 				p.logger.Warn("provider definition problem", slog.String("kind", string(kind)), slog.String("file", report.File), slog.String("problem", problem.String()))
@@ -109,7 +130,20 @@ func (p *process) reloadProviderDefinitions() {
 		for _, problem := range report.Problems {
 			p.logger.Warn("provider definition problem", slog.String("file", report.File), slog.String("problem", problem.String()))
 		}
+		for _, def := range custom {
+			if def.Engine == providerdef.EngineBuiltin && def.Key+".yaml" == report.File {
+				byKind[def.Kind] = append(byKind[def.Kind], report)
+			}
+		}
 	}
+	for _, kind := range providerdef.Kinds {
+		p.definitionReports.set(kind, byKind[kind])
+	}
+	states := map[providerdef.Kind]map[string]providerdef.State{}
+	for _, kind := range providerdef.Kinds {
+		states[kind] = p.definitionStates(kind)
+	}
+	p.definitionStateCache.Store(&states)
 	p.definitions.Swap(catalog)
 	p.reloadSpecs(custom)
 	p.reloadRecordProviders()
@@ -154,5 +188,15 @@ func approvedSpecs(custom []providerdef.Definition, states map[string]providerde
 
 // providerHidden says a custom descriptor switched the compiled provider off; the descriptor's key replaces ":" in a provider key.
 func (p *process) providerHidden(kind, key string) bool {
-	return p.definitions != nil && p.definitions.Catalog().Hidden(providerdef.Kind(kind), descriptorKey(key))
+	if p.definitions == nil {
+		return false
+	}
+	cached := p.definitionStateCache.Load()
+	if cached == nil {
+		return p.definitions.Catalog().Hidden(providerdef.Kind(kind), descriptorKey(key))
+	}
+	if state, set := (*cached)[providerdef.Kind(kind)][descriptorKey(key)]; set && state.Enabled != nil && !*state.Enabled {
+		return true
+	}
+	return p.definitions.Catalog().Hidden(providerdef.Kind(kind), descriptorKey(key))
 }

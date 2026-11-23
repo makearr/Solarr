@@ -16,14 +16,28 @@ import (
 
 // recordProviders are the active definition-file metadata providers by key, swapped whole at every reload.
 type recordProviders struct {
-	held atomic.Pointer[map[string]*specprovider.Provider]
+	held atomic.Pointer[map[string]recordEntry]
+}
+
+// recordEntry is a built provider with what a test needs to run the same definition through a recording client.
+type recordEntry struct {
+	provider *specprovider.Provider
+	parsed   specprovider.Definition
+	client   specprovider.Doer
+	values   func() map[string]string
+}
+
+func (r *recordProviders) entry(key string) (recordEntry, bool) {
+	if held := r.held.Load(); held != nil {
+		found, ok := (*held)[key]
+		return found, ok
+	}
+	return recordEntry{}, false
 }
 
 func (r *recordProviders) get(key string) *specprovider.Provider {
-	if held := r.held.Load(); held != nil {
-		return (*held)[key]
-	}
-	return nil
+	found, _ := r.entry(key)
+	return found.provider
 }
 
 // definitionStates are the stored states of one kind by key.
@@ -45,7 +59,7 @@ func (p *process) definitionStates(kind providerdef.Kind) map[string]providerdef
 // the order pickers of the media types that can merge a generic record.
 func (p *process) reloadRecordProviders() {
 	states := p.definitionStates(providerdef.KindMetadata)
-	built := map[string]*specprovider.Provider{}
+	built := map[string]recordEntry{}
 	var offered []settings.MetadataProvider
 	for _, def := range p.definitions.Catalog().List(providerdef.KindMetadata) {
 		if def.Engine != providerdef.EngineHTTP || providerdef.StatusOf(def, states[def.Key]) != providerdef.StatusActive {
@@ -73,7 +87,7 @@ func (p *process) reloadRecordProviders() {
 			held, _ := p.cache.ProviderDefinitionSettings(context.Background(), string(providerdef.KindMetadata), key)
 			return held
 		}
-		built[key] = specprovider.New(parsed, client, clock.NewSystem(), values)
+		built[key] = recordEntry{provider: specprovider.New(parsed, client, clock.NewSystem(), values), parsed: parsed, client: client, values: values}
 		offered = append(offered, settings.MetadataProvider{
 			Key: key, Label: def.Name, MediaTypes: types, Carries: slices.Clone(def.Carries), PerMinute: parsed.Pace.PerMinute,
 			MaxPerMinute: max(parsed.Pace.MaxPerMinute, parsed.Pace.PerMinute), Published: def.Description, Custom: true,

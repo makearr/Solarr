@@ -792,6 +792,42 @@ const (
 	ProblemTypeUnavailable      ProblemType = "unavailable"
 )
 
+// Defines values for ProviderDefinitionEngine.
+const (
+	ProviderDefinitionEngineBuiltin ProviderDefinitionEngine = "builtin"
+	ProviderDefinitionEngineHttp    ProviderDefinitionEngine = "http"
+	ProviderDefinitionEngineSpec    ProviderDefinitionEngine = "spec"
+)
+
+// Defines values for ProviderDefinitionOrigin.
+const (
+	ProviderDefinitionOriginBuiltin  ProviderDefinitionOrigin = "builtin"
+	ProviderDefinitionOriginCustom   ProviderDefinitionOrigin = "custom"
+	ProviderDefinitionOriginOverride ProviderDefinitionOrigin = "override"
+)
+
+// Defines values for ProviderDefinitionState.
+const (
+	ProviderDefinitionStateActive        ProviderDefinitionState = "active"
+	ProviderDefinitionStateError         ProviderDefinitionState = "error"
+	ProviderDefinitionStateNeedsApproval ProviderDefinitionState = "needs_approval"
+	ProviderDefinitionStateOff           ProviderDefinitionState = "off"
+)
+
+// Defines values for ProviderDefinitionKind.
+const (
+	ProviderDefinitionKindDownload ProviderDefinitionKind = "download"
+	ProviderDefinitionKindIndexer  ProviderDefinitionKind = "indexer"
+	ProviderDefinitionKindMetadata ProviderDefinitionKind = "metadata"
+	ProviderDefinitionKindWebhook  ProviderDefinitionKind = "webhook"
+)
+
+// Defines values for ProviderDefinitionProblemSeverity.
+const (
+	ProviderDefinitionProblemSeverityError   ProviderDefinitionProblemSeverity = "error"
+	ProviderDefinitionProblemSeverityWarning ProviderDefinitionProblemSeverity = "warning"
+)
+
 // Defines values for ProwlarrIndexerImpl.
 const (
 	ProwlarrIndexerImplNewznab ProwlarrIndexerImpl = "newznab"
@@ -5464,6 +5500,120 @@ type Problem struct {
 // ProblemType defines model for ProblemType.
 type ProblemType string
 
+// ProviderDefinition defines model for ProviderDefinition.
+type ProviderDefinition struct {
+	Description string                   `json:"description"`
+	Engine      ProviderDefinitionEngine `json:"engine"`
+
+	// File The custom file name
+	File       *string                `json:"file,omitempty"`
+	Hosts      []string               `json:"hosts"`
+	Key        string                 `json:"key"`
+	Kind       ProviderDefinitionKind `json:"kind"`
+	MediaTypes []string               `json:"media_types"`
+	Name       string                 `json:"name"`
+
+	// Origin override is a custom file with a built-in key.
+	Origin   ProviderDefinitionOrigin    `json:"origin"`
+	Problems []ProviderDefinitionProblem `json:"problems"`
+	Settings []ProviderDefinitionSetting `json:"settings"`
+	State    ProviderDefinitionState     `json:"state"`
+}
+
+// ProviderDefinitionEngine defines model for ProviderDefinition.Engine.
+type ProviderDefinitionEngine string
+
+// ProviderDefinitionOrigin override is a custom file with a built-in key.
+type ProviderDefinitionOrigin string
+
+// ProviderDefinitionState defines model for ProviderDefinition.State.
+type ProviderDefinitionState string
+
+// ProviderDefinitionKind defines model for ProviderDefinitionKind.
+type ProviderDefinitionKind string
+
+// ProviderDefinitionProblem defines model for ProviderDefinitionProblem.
+type ProviderDefinitionProblem struct {
+	// Code A stable code the interface words.
+	Code     string                            `json:"code"`
+	Column   int                               `json:"column"`
+	Field    *string                           `json:"field,omitempty"`
+	Line     int                               `json:"line"`
+	Severity ProviderDefinitionProblemSeverity `json:"severity"`
+}
+
+// ProviderDefinitionProblemSeverity defines model for ProviderDefinitionProblem.Severity.
+type ProviderDefinitionProblemSeverity string
+
+// ProviderDefinitionSetting defines model for ProviderDefinitionSetting.
+type ProviderDefinitionSetting struct {
+	// IsSet A value is stored; the value is never returned.
+	IsSet    bool   `json:"is_set"`
+	Label    string `json:"label"`
+	Name     string `json:"name"`
+	Required bool   `json:"required"`
+	Type     string `json:"type"`
+}
+
+// ProviderDefinitionSettingsWrite defines model for ProviderDefinitionSettingsWrite.
+type ProviderDefinitionSettingsWrite struct {
+	Values map[string]string `json:"values"`
+}
+
+// ProviderDefinitionTestRecord defines model for ProviderDefinitionTestRecord.
+type ProviderDefinitionTestRecord struct {
+	Ids map[string]string `json:"ids"`
+
+	// Item This is the first item read after the search.
+	Item     *bool   `json:"item,omitempty"`
+	Overview *string `json:"overview,omitempty"`
+	Title    string  `json:"title"`
+	Year     int     `json:"year"`
+}
+
+// ProviderDefinitionTestRequest defines model for ProviderDefinitionTestRequest.
+type ProviderDefinitionTestRequest struct {
+	Title string `json:"title"`
+	Year  *int   `json:"year,omitempty"`
+}
+
+// ProviderDefinitionTestRequestMade defines model for ProviderDefinitionTestRequestMade.
+type ProviderDefinitionTestRequestMade struct {
+	Host   string `json:"host"`
+	Method string `json:"method"`
+	Millis int    `json:"millis"`
+	Path   string `json:"path"`
+	Status int    `json:"status"`
+}
+
+// ProviderDefinitionTestResult defines model for ProviderDefinitionTestResult.
+type ProviderDefinitionTestResult struct {
+	Error     *string                             `json:"error,omitempty"`
+	ErrorCode *string                             `json:"error_code,omitempty"`
+	Ok        bool                                `json:"ok"`
+	Records   []ProviderDefinitionTestRecord      `json:"records"`
+	Requests  []ProviderDefinitionTestRequestMade `json:"requests"`
+}
+
+// ProviderDefinitionText defines model for ProviderDefinitionText.
+type ProviderDefinitionText struct {
+	// BuiltinText The built-in text
+	BuiltinText *string                     `json:"builtin_text,omitempty"`
+	Problems    []ProviderDefinitionProblem `json:"problems"`
+	Text        string                      `json:"text"`
+}
+
+// ProviderDefinitionWrite defines model for ProviderDefinitionWrite.
+type ProviderDefinitionWrite struct {
+	Text string `json:"text"`
+}
+
+// ProviderDefinitionWriteResult defines model for ProviderDefinitionWriteResult.
+type ProviderDefinitionWriteResult struct {
+	Problems []ProviderDefinitionProblem `json:"problems"`
+	Saved    bool                        `json:"saved"`
+}
+
 // ProwlarrIndexer defines model for ProwlarrIndexer.
 type ProwlarrIndexer struct {
 	// AlreadyAdded An indexer with this base URL is already configured here.
@@ -7974,6 +8124,16 @@ type GetRequestPriorityParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
 }
 
+// ListProviderDefinitionsParams defines parameters for ListProviderDefinitions.
+type ListProviderDefinitionsParams struct {
+	Kind ProviderDefinitionKind `form:"kind" json:"kind"`
+}
+
+// PutProviderDefinitionParams defines parameters for PutProviderDefinition.
+type PutProviderDefinitionParams struct {
+	DryRun *bool `form:"dry_run,omitempty" json:"dry_run,omitempty"`
+}
+
 // DeleteQualityProfileParams defines parameters for DeleteQualityProfile.
 type DeleteQualityProfileParams struct {
 	// ReplaceWith Another profile of the same media type to move the items and import lists onto before deleting; without it the delete is refused while any use remains.
@@ -8838,6 +8998,15 @@ type MergePersonJSONRequestBody MergePersonJSONBody
 
 // UpdatePrioritySettingsJSONRequestBody defines body for UpdatePrioritySettings for application/json ContentType.
 type UpdatePrioritySettingsJSONRequestBody = PrioritySettings
+
+// PutProviderDefinitionJSONRequestBody defines body for PutProviderDefinition for application/json ContentType.
+type PutProviderDefinitionJSONRequestBody = ProviderDefinitionWrite
+
+// PutProviderDefinitionSettingsJSONRequestBody defines body for PutProviderDefinitionSettings for application/json ContentType.
+type PutProviderDefinitionSettingsJSONRequestBody = ProviderDefinitionSettingsWrite
+
+// TestProviderDefinitionJSONRequestBody defines body for TestProviderDefinition for application/json ContentType.
+type TestProviderDefinitionJSONRequestBody = ProviderDefinitionTestRequest
 
 // AddProxyJSONRequestBody defines body for AddProxy for application/json ContentType.
 type AddProxyJSONRequestBody = ProxyRequest
@@ -9789,6 +9958,33 @@ type ServerInterface interface {
 	// How urgently an item a person adds to a library would be searched for, against the automatic searches.
 	// (GET /priority/request)
 	GetRequestPriority(w http.ResponseWriter, r *http.Request, params GetRequestPriorityParams)
+	// Every provider definition of a kind, built in and custom, with its state and problems. Administrator only.
+	// (GET /provider-definitions)
+	ListProviderDefinitions(w http.ResponseWriter, r *http.Request, params ListProviderDefinitionsParams)
+	// Read the custom definition folders again. Administrator only.
+	// (POST /provider-definitions/reload)
+	ReloadProviderDefinitions(w http.ResponseWriter, r *http.Request)
+	// Move the custom file to custom/.removed; for an override this is Revert to built-in.
+	// (DELETE /provider-definitions/{kind}/{key})
+	DeleteProviderDefinition(w http.ResponseWriter, r *http.Request, kind ProviderDefinitionKind, key string)
+	// The YAML text of a definition (the custom file, else the built-in one) and the built-in text when overridden.
+	// (GET /provider-definitions/{kind}/{key})
+	GetProviderDefinition(w http.ResponseWriter, r *http.Request, kind ProviderDefinitionKind, key string)
+	// Validate a definition and, when it has no error and dry_run is not set, save it as a custom file and reload.
+	// (PUT /provider-definitions/{kind}/{key})
+	PutProviderDefinition(w http.ResponseWriter, r *http.Request, kind ProviderDefinitionKind, key string, params PutProviderDefinitionParams)
+	// Switch a definition off.
+	// (POST /provider-definitions/{kind}/{key}/disable)
+	DisableProviderDefinition(w http.ResponseWriter, r *http.Request, kind ProviderDefinitionKind, key string)
+	// Switch a definition on; for a custom file that is a provider itself this records the approval of its hosts.
+	// (POST /provider-definitions/{kind}/{key}/enable)
+	EnableProviderDefinition(w http.ResponseWriter, r *http.Request, kind ProviderDefinitionKind, key string)
+	// The values of the definition's settings, sealed at rest and never read back (a list answers which are set).
+	// (PUT /provider-definitions/{kind}/{key}/settings)
+	PutProviderDefinitionSettings(w http.ResponseWriter, r *http.Request, kind ProviderDefinitionKind, key string)
+	// Metadata, a search for a typed title and the first item, with the requests made. Other kinds answer not supported.
+	// (POST /provider-definitions/{kind}/{key}/test)
+	TestProviderDefinition(w http.ResponseWriter, r *http.Request, kind ProviderDefinitionKind, key string)
 	// The proxy list an indexer can pick from. Administrator only.
 	// (GET /proxies)
 	ListProxies(w http.ResponseWriter, r *http.Request)
@@ -11778,6 +11974,60 @@ func (_ Unimplemented) UpdatePrioritySettings(w http.ResponseWriter, r *http.Req
 // How urgently an item a person adds to a library would be searched for, against the automatic searches.
 // (GET /priority/request)
 func (_ Unimplemented) GetRequestPriority(w http.ResponseWriter, r *http.Request, params GetRequestPriorityParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every provider definition of a kind, built in and custom, with its state and problems. Administrator only.
+// (GET /provider-definitions)
+func (_ Unimplemented) ListProviderDefinitions(w http.ResponseWriter, r *http.Request, params ListProviderDefinitionsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Read the custom definition folders again. Administrator only.
+// (POST /provider-definitions/reload)
+func (_ Unimplemented) ReloadProviderDefinitions(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Move the custom file to custom/.removed; for an override this is Revert to built-in.
+// (DELETE /provider-definitions/{kind}/{key})
+func (_ Unimplemented) DeleteProviderDefinition(w http.ResponseWriter, r *http.Request, kind ProviderDefinitionKind, key string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The YAML text of a definition (the custom file, else the built-in one) and the built-in text when overridden.
+// (GET /provider-definitions/{kind}/{key})
+func (_ Unimplemented) GetProviderDefinition(w http.ResponseWriter, r *http.Request, kind ProviderDefinitionKind, key string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Validate a definition and, when it has no error and dry_run is not set, save it as a custom file and reload.
+// (PUT /provider-definitions/{kind}/{key})
+func (_ Unimplemented) PutProviderDefinition(w http.ResponseWriter, r *http.Request, kind ProviderDefinitionKind, key string, params PutProviderDefinitionParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Switch a definition off.
+// (POST /provider-definitions/{kind}/{key}/disable)
+func (_ Unimplemented) DisableProviderDefinition(w http.ResponseWriter, r *http.Request, kind ProviderDefinitionKind, key string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Switch a definition on; for a custom file that is a provider itself this records the approval of its hosts.
+// (POST /provider-definitions/{kind}/{key}/enable)
+func (_ Unimplemented) EnableProviderDefinition(w http.ResponseWriter, r *http.Request, kind ProviderDefinitionKind, key string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The values of the definition's settings, sealed at rest and never read back (a list answers which are set).
+// (PUT /provider-definitions/{kind}/{key}/settings)
+func (_ Unimplemented) PutProviderDefinitionSettings(w http.ResponseWriter, r *http.Request, kind ProviderDefinitionKind, key string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Metadata, a search for a typed title and the first item, with the requests made. Other kinds answer not supported.
+// (POST /provider-definitions/{kind}/{key}/test)
+func (_ Unimplemented) TestProviderDefinition(w http.ResponseWriter, r *http.Request, kind ProviderDefinitionKind, key string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -21276,6 +21526,375 @@ func (siw *ServerInterfaceWrapper) GetRequestPriority(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ListProviderDefinitions operation middleware
+func (siw *ServerInterfaceWrapper) ListProviderDefinitions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListProviderDefinitionsParams
+
+	// ------------- Required query parameter "kind" -------------
+
+	if paramValue := r.URL.Query().Get("kind"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "kind", r.URL.Query(), &params.Kind)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListProviderDefinitions(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReloadProviderDefinitions operation middleware
+func (siw *ServerInterfaceWrapper) ReloadProviderDefinitions(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReloadProviderDefinitions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteProviderDefinition operation middleware
+func (siw *ServerInterfaceWrapper) DeleteProviderDefinition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "kind" -------------
+	var kind ProviderDefinitionKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", chi.URLParam(r, "kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteProviderDefinition(w, r, kind, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetProviderDefinition operation middleware
+func (siw *ServerInterfaceWrapper) GetProviderDefinition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "kind" -------------
+	var kind ProviderDefinitionKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", chi.URLParam(r, "kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProviderDefinition(w, r, kind, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutProviderDefinition operation middleware
+func (siw *ServerInterfaceWrapper) PutProviderDefinition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "kind" -------------
+	var kind ProviderDefinitionKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", chi.URLParam(r, "kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PutProviderDefinitionParams
+
+	// ------------- Optional query parameter "dry_run" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "dry_run", r.URL.Query(), &params.DryRun)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dry_run", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutProviderDefinition(w, r, kind, key, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DisableProviderDefinition operation middleware
+func (siw *ServerInterfaceWrapper) DisableProviderDefinition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "kind" -------------
+	var kind ProviderDefinitionKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", chi.URLParam(r, "kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisableProviderDefinition(w, r, kind, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EnableProviderDefinition operation middleware
+func (siw *ServerInterfaceWrapper) EnableProviderDefinition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "kind" -------------
+	var kind ProviderDefinitionKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", chi.URLParam(r, "kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EnableProviderDefinition(w, r, kind, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutProviderDefinitionSettings operation middleware
+func (siw *ServerInterfaceWrapper) PutProviderDefinitionSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "kind" -------------
+	var kind ProviderDefinitionKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", chi.URLParam(r, "kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutProviderDefinitionSettings(w, r, kind, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestProviderDefinition operation middleware
+func (siw *ServerInterfaceWrapper) TestProviderDefinition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "kind" -------------
+	var kind ProviderDefinitionKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", chi.URLParam(r, "kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestProviderDefinition(w, r, kind, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListProxies operation middleware
 func (siw *ServerInterfaceWrapper) ListProxies(w http.ResponseWriter, r *http.Request) {
 
@@ -26427,6 +27046,33 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/priority/request", wrapper.GetRequestPriority)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/provider-definitions", wrapper.ListProviderDefinitions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/provider-definitions/reload", wrapper.ReloadProviderDefinitions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/provider-definitions/{kind}/{key}", wrapper.DeleteProviderDefinition)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/provider-definitions/{kind}/{key}", wrapper.GetProviderDefinition)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/provider-definitions/{kind}/{key}", wrapper.PutProviderDefinition)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/provider-definitions/{kind}/{key}/disable", wrapper.DisableProviderDefinition)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/provider-definitions/{kind}/{key}/enable", wrapper.EnableProviderDefinition)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/provider-definitions/{kind}/{key}/settings", wrapper.PutProviderDefinitionSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/provider-definitions/{kind}/{key}/test", wrapper.TestProviderDefinition)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/proxies", wrapper.ListProxies)

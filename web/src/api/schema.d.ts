@@ -1951,6 +1951,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/provider-definitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every provider definition of a kind, built in and custom, with its state and problems. Administrator only. */
+        get: operations["listProviderDefinitions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/provider-definitions/reload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read the custom definition folders again. Administrator only. */
+        post: operations["reloadProviderDefinitions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/provider-definitions/{kind}/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["ProviderDefinitionKind"];
+                key: string;
+            };
+            cookie?: never;
+        };
+        /** The YAML text of a definition (the custom file, else the built-in one) and the built-in text when overridden. */
+        get: operations["getProviderDefinition"];
+        /** Validate a definition and, when it has no error and dry_run is not set, save it as a custom file and reload. */
+        put: operations["putProviderDefinition"];
+        post?: never;
+        /** Move the custom file to custom/.removed; for an override this is Revert to built-in. */
+        delete: operations["deleteProviderDefinition"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/provider-definitions/{kind}/{key}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["ProviderDefinitionKind"];
+                key: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Switch a definition on; for a custom file that is a provider itself this records the approval of its hosts. */
+        post: operations["enableProviderDefinition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/provider-definitions/{kind}/{key}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["ProviderDefinitionKind"];
+                key: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Switch a definition off. */
+        post: operations["disableProviderDefinition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/provider-definitions/{kind}/{key}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["ProviderDefinitionKind"];
+                key: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** The values of the definition's settings, sealed at rest and never read back (a list answers which are set). */
+        put: operations["putProviderDefinitionSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/provider-definitions/{kind}/{key}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["ProviderDefinitionKind"];
+                key: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Metadata, a search for a typed title and the first item, with the requests made. Other kinds answer not supported. */
+        post: operations["testProviderDefinition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media-servers/kinds": {
         parameters: {
             query?: never;
@@ -8787,6 +8923,92 @@ export interface components {
             /** Format: date-time */
             last_pushed_at?: string;
         };
+        /** @enum {string} */
+        ProviderDefinitionKind: "metadata" | "indexer" | "download" | "webhook";
+        ProviderDefinitionProblem: {
+            /** @enum {string} */
+            severity: "error" | "warning";
+            /** @description A stable code the interface words. */
+            code: string;
+            line: number;
+            column: number;
+            field?: string;
+        };
+        ProviderDefinitionSetting: {
+            name: string;
+            label: string;
+            type: string;
+            required: boolean;
+            /** @description A value is stored; the value is never returned. */
+            is_set: boolean;
+        };
+        ProviderDefinition: {
+            kind: components["schemas"]["ProviderDefinitionKind"];
+            key: string;
+            name: string;
+            description: string;
+            /** @enum {string} */
+            engine: "builtin" | "http" | "spec";
+            /**
+             * @description override is a custom file with a built-in key.
+             * @enum {string}
+             */
+            origin: "builtin" | "custom" | "override";
+            /** @enum {string} */
+            state: "active" | "off" | "needs_approval" | "error";
+            hosts: string[];
+            media_types: string[];
+            problems: components["schemas"]["ProviderDefinitionProblem"][];
+            settings: components["schemas"]["ProviderDefinitionSetting"][];
+            /** @description The custom file name */
+            file?: string;
+        };
+        ProviderDefinitionText: {
+            text: string;
+            /** @description The built-in text */
+            builtin_text?: string;
+            problems: components["schemas"]["ProviderDefinitionProblem"][];
+        };
+        ProviderDefinitionWrite: {
+            text: string;
+        };
+        ProviderDefinitionWriteResult: {
+            saved: boolean;
+            problems: components["schemas"]["ProviderDefinitionProblem"][];
+        };
+        ProviderDefinitionSettingsWrite: {
+            values: {
+                [key: string]: string;
+            };
+        };
+        ProviderDefinitionTestRequest: {
+            title: string;
+            year?: number;
+        };
+        ProviderDefinitionTestRecord: {
+            title: string;
+            year: number;
+            overview?: string;
+            ids: {
+                [key: string]: string;
+            };
+            /** @description This is the first item read after the search. */
+            item?: boolean;
+        };
+        ProviderDefinitionTestRequestMade: {
+            method: string;
+            host: string;
+            path: string;
+            status: number;
+            millis: number;
+        };
+        ProviderDefinitionTestResult: {
+            ok: boolean;
+            error_code?: string;
+            error?: string;
+            records: components["schemas"]["ProviderDefinitionTestRecord"][];
+            requests: components["schemas"]["ProviderDefinitionTestRequestMade"][];
+        };
         MediaServerKind: {
             /** @description jellyfin, navidrome, audiobookshelf, kavita, calibre or stash. */
             key: string;
@@ -15043,6 +15265,240 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listProviderDefinitions: {
+        parameters: {
+            query: {
+                kind: components["schemas"]["ProviderDefinitionKind"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The definitions, ordered by key, then the custom files that failed to load. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderDefinition"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    reloadProviderDefinitions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reloaded. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getProviderDefinition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["ProviderDefinitionKind"];
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The text. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderDefinitionText"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    putProviderDefinition: {
+        parameters: {
+            query?: {
+                dry_run?: boolean;
+            };
+            header?: never;
+            path: {
+                kind: components["schemas"]["ProviderDefinitionKind"];
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderDefinitionWrite"];
+            };
+        };
+        responses: {
+            /** @description Whether it was saved, and every problem found. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderDefinitionWriteResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    deleteProviderDefinition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["ProviderDefinitionKind"];
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Moved. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    enableProviderDefinition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["ProviderDefinitionKind"];
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description On. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    disableProviderDefinition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["ProviderDefinitionKind"];
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Off. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    putProviderDefinitionSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["ProviderDefinitionKind"];
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderDefinitionSettingsWrite"];
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    testProviderDefinition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["ProviderDefinitionKind"];
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderDefinitionTestRequest"];
+            };
+        };
+        responses: {
+            /** @description The records, the requests (no secrets) and the error, if any. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderDefinitionTestResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };

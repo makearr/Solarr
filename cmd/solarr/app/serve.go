@@ -130,6 +130,12 @@ type process struct {
 	definitions *providerdef.Holder
 	// records are the active definition-file metadata providers.
 	records recordProviders
+	// definitionReports are what the last reload found wrong with each custom file.
+	definitionReports loadReports
+	// mirroring is the goroutine writing the built-in mirror; close waits for it so nothing writes under a removed folder.
+	mirroring sync.WaitGroup
+	// definitionStateCache is the stored state of every definition, read once a reload so list endpoints do not query per row.
+	definitionStateCache atomic.Pointer[map[providerdef.Kind]map[string]providerdef.State]
 	// specs is the set of indexer site specs in force: the embedded ones and the approved custom ones.
 	specs *spec.Library
 	// indexerCaps is what each indexer's music search accepts, fetched once a day.
@@ -607,7 +613,7 @@ func (p *process) startJobs(ctx context.Context) error {
 	p.definitions = providerdef.NewHolder()
 	p.specs = &spec.Library{}
 	// Writing the built-in mirror costs a few hundred milliseconds; the embedded data serves meanwhile.
-	go p.prepareProviderDefinitions(ctx)
+	p.mirroring.Go(func() { p.prepareProviderDefinitions(ctx) })
 	p.reloadProviderDefinitions()
 	p.disks = &adapters.DiskManager{
 		FS: p.fsys, Cache: p.cache, Clock: wall, Monitor: disklatency.New(p.fsys, wall, diskProbeInterval),
@@ -975,12 +981,13 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 				Cache: p.cache, List: p.listProwlarr, Lidarr: p.arrClientFactory(), Clock: clock.NewSystem(),
 			}.SharedCategories,
 		},
-		DownloaderKinds:   adapters.DownloaderKinds{},
-		IndexerKinds:      adapters.IndexerKinds{Specs: p.specs},
-		ProviderHidden:    p.providerHidden,
-		CandidateSearcher: p.candidateSearcher(),
-		TVProviders:       p.tvProviders(),
-		RemoteImages:      p.remoteImages(),
+		DownloaderKinds:     adapters.DownloaderKinds{},
+		IndexerKinds:        adapters.IndexerKinds{Specs: p.specs},
+		ProviderHidden:      p.providerHidden,
+		ProviderDefinitions: definitionsAdmin{p: p},
+		CandidateSearcher:   p.candidateSearcher(),
+		TVProviders:         p.tvProviders(),
+		RemoteImages:        p.remoteImages(),
 		LibraryHealth: adapters.LibraryHealth{
 			Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
 			Desired: library.NewDesired(p.library), BlockedContent: library.NewBlockedContentStore(p.library),
@@ -1123,6 +1130,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 // close drains and closes the databases. The write queues drain before their
 // handles close, which is bounded because every transaction is bounded.
 func (p *process) close() {
+	p.mirroring.Wait()
 	finalCopy, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	p.memory.finalSync(finalCopy)
 	cancel()

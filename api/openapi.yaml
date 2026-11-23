@@ -2855,6 +2855,188 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /provider-definitions:
+    get:
+      operationId: listProviderDefinitions
+      tags: [settings]
+      summary: Every provider definition of a kind, built in and custom, with its state and problems. Administrator only.
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/ProviderDefinitionKind" }
+      responses:
+        "200":
+          description: The definitions, ordered by key, then the custom files that failed to load.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProviderDefinition" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /provider-definitions/reload:
+    post:
+      operationId: reloadProviderDefinitions
+      tags: [settings]
+      summary: Read the custom definition folders again. Administrator only.
+      responses:
+        "204": { description: Reloaded. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /provider-definitions/{kind}/{key}:
+    parameters:
+      - name: kind
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/ProviderDefinitionKind" }
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getProviderDefinition
+      tags: [settings]
+      summary: The YAML text of a definition (the custom file, else the built-in one) and the built-in text when overridden.
+      responses:
+        "200":
+          description: The text.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderDefinitionText" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: putProviderDefinition
+      tags: [settings]
+      summary: Validate a definition and, when it has no error and dry_run is not set, save it as a custom file and reload.
+      parameters:
+        - name: dry_run
+          in: query
+          schema: { type: boolean }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProviderDefinitionWrite" }
+      responses:
+        "200":
+          description: Whether it was saved, and every problem found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderDefinitionWriteResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteProviderDefinition
+      tags: [settings]
+      summary: Move the custom file to custom/.removed; for an override this is Revert to built-in.
+      responses:
+        "204": { description: Moved. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /provider-definitions/{kind}/{key}/enable:
+    parameters:
+      - name: kind
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/ProviderDefinitionKind" }
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: enableProviderDefinition
+      tags: [settings]
+      summary: Switch a definition on; for a custom file that is a provider itself this records the approval of its hosts.
+      responses:
+        "204": { description: On. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /provider-definitions/{kind}/{key}/disable:
+    parameters:
+      - name: kind
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/ProviderDefinitionKind" }
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: disableProviderDefinition
+      tags: [settings]
+      summary: Switch a definition off.
+      responses:
+        "204": { description: Off. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /provider-definitions/{kind}/{key}/settings:
+    parameters:
+      - name: kind
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/ProviderDefinitionKind" }
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: putProviderDefinitionSettings
+      tags: [settings]
+      summary: The values of the definition's settings, sealed at rest and never read back (a list answers which are set).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProviderDefinitionSettingsWrite" }
+      responses:
+        "204": { description: Saved. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /provider-definitions/{kind}/{key}/test:
+    parameters:
+      - name: kind
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/ProviderDefinitionKind" }
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: testProviderDefinition
+      tags: [settings]
+      summary: Metadata, a search for a typed title and the first item, with the requests made. Other kinds answer not supported.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProviderDefinitionTestRequest" }
+      responses:
+        "200":
+          description: The records, the requests (no secrets) and the error, if any.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderDefinitionTestResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /media-servers/kinds:
     get:
       operationId: listMediaServerKinds
@@ -12272,6 +12454,99 @@ components:
             Solarr ever makes to an *Arr; off unless turned on.
         last_pushed_at: { type: string, format: date-time }
 
+    ProviderDefinitionKind:
+      type: string
+      enum: [metadata, indexer, download, webhook]
+    ProviderDefinitionProblem:
+      type: object
+      required: [severity, code, line, column]
+      properties:
+        severity: { type: string, enum: [error, warning] }
+        code: { type: string, description: A stable code the interface words. }
+        line: { type: integer }
+        column: { type: integer }
+        field: { type: string }
+    ProviderDefinitionSetting:
+      type: object
+      required: [name, label, type, required, is_set]
+      properties:
+        name: { type: string }
+        label: { type: string }
+        type: { type: string }
+        required: { type: boolean }
+        is_set: { type: boolean, description: A value is stored; the value is never returned. }
+    ProviderDefinition:
+      type: object
+      required: [kind, key, name, engine, origin, state, hosts, media_types, problems, settings, description]
+      properties:
+        kind: { $ref: "#/components/schemas/ProviderDefinitionKind" }
+        key: { type: string }
+        name: { type: string }
+        description: { type: string }
+        engine: { type: string, enum: [builtin, http, spec] }
+        origin: { type: string, enum: [builtin, custom, override], description: override is a custom file with a built-in key. }
+        state: { type: string, enum: [active, off, needs_approval, error] }
+        hosts: { type: array, items: { type: string } }
+        media_types: { type: array, items: { type: string } }
+        problems: { type: array, items: { $ref: "#/components/schemas/ProviderDefinitionProblem" } }
+        settings: { type: array, items: { $ref: "#/components/schemas/ProviderDefinitionSetting" } }
+        file: { type: string, description: The custom file name, for an entry that failed to load. }
+    ProviderDefinitionText:
+      type: object
+      required: [text, problems]
+      properties:
+        text: { type: string }
+        builtin_text: { type: string, description: The built-in text, present when a custom file overrides it. }
+        problems: { type: array, items: { $ref: "#/components/schemas/ProviderDefinitionProblem" } }
+    ProviderDefinitionWrite:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string }
+    ProviderDefinitionWriteResult:
+      type: object
+      required: [saved, problems]
+      properties:
+        saved: { type: boolean }
+        problems: { type: array, items: { $ref: "#/components/schemas/ProviderDefinitionProblem" } }
+    ProviderDefinitionSettingsWrite:
+      type: object
+      required: [values]
+      properties:
+        values: { type: object, additionalProperties: { type: string } }
+    ProviderDefinitionTestRequest:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        year: { type: integer }
+    ProviderDefinitionTestRecord:
+      type: object
+      required: [title, year, ids]
+      properties:
+        title: { type: string }
+        year: { type: integer }
+        overview: { type: string }
+        ids: { type: object, additionalProperties: { type: string } }
+        item: { type: boolean, description: This is the first item read after the search. }
+    ProviderDefinitionTestRequestMade:
+      type: object
+      required: [method, host, path, status, millis]
+      properties:
+        method: { type: string }
+        host: { type: string }
+        path: { type: string }
+        status: { type: integer }
+        millis: { type: integer }
+    ProviderDefinitionTestResult:
+      type: object
+      required: [ok, records, requests]
+      properties:
+        ok: { type: boolean }
+        error_code: { type: string }
+        error: { type: string }
+        records: { type: array, items: { $ref: "#/components/schemas/ProviderDefinitionTestRecord" } }
+        requests: { type: array, items: { $ref: "#/components/schemas/ProviderDefinitionTestRequestMade" } }
     MediaServerKind:
       type: object
       required: [key, label, credential, can_push, push_by_path, can_announce, can_playback, can_metadata, has_users, needs_admin, media_types]

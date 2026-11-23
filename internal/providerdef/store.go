@@ -152,3 +152,68 @@ func (s Store) LoadCustom(kind Kind) ([]Definition, []FileProblems, error) {
 	}
 	return defs, reports, nil
 }
+
+// MaxRemovedFiles is how many files custom/.removed/ keeps.
+const MaxRemovedFiles = 50
+
+func (s Store) customFile(kind Kind, key string) string {
+	return path.Join(s.folder(kind, customDir), key+".yaml")
+}
+
+// ReadCustom reads a kind's custom file by key; fs.ErrNotExist when there is none.
+func (s Store) ReadCustom(kind Kind, key string) ([]byte, error) {
+	return s.read(s.customFile(kind, key))
+}
+
+// WriteCustom writes a custom file through a temporary file and a rename, so a reader never sees half of it.
+func (s Store) WriteCustom(kind Kind, key string, data []byte) error {
+	if !keyPattern.MatchString(key) {
+		return fmt.Errorf("providerdef: %q is not a definition key", key)
+	}
+	if err := s.FS.MkdirAll(s.folder(kind, customDir), 0o755); err != nil {
+		return err
+	}
+	return fsx.WriteAtomic(s.FS, s.customFile(kind, key), func(w io.Writer) error {
+		_, err := w.Write(data)
+		return err
+	})
+}
+
+// RemoveCustom moves a custom file to custom/.removed/<key>.<unix>.yaml and prunes that folder to MaxRemovedFiles; nothing is
+// ever unlinked but the oldest removed copies.
+func (s Store) RemoveCustom(kind Kind, key string, unix int64) error {
+	removed := s.folder(kind, customDir) + "/" + removedDir
+	if err := s.FS.MkdirAll(removed, 0o755); err != nil {
+		return err
+	}
+	if err := s.FS.Rename(s.customFile(kind, key), path.Join(removed, fmt.Sprintf("%s.%d.yaml", key, unix))); err != nil {
+		return err
+	}
+	if entries, err := s.FS.ReadDir(removed); err == nil {
+		s.pruneRemoved(removed, entries)
+	}
+	return nil
+}
+
+// pruneRemoved unlinks the oldest removed copies above MaxRemovedFiles; a copy that cannot be unlinked stays, which is harmless.
+func (s Store) pruneRemoved(removed string, entries []fsx.DirEntry) {
+	var names []string
+	for _, entry := range entries {
+		if !entry.IsDir && strings.HasSuffix(entry.Name, ".yaml") {
+			names = append(names, entry.Name)
+		}
+	}
+	// The unix time ends every name, so the oldest sort by it, not by key.
+	slices.SortFunc(names, func(a, b string) int { return strings.Compare(stamp(a), stamp(b)) })
+	for len(names) > MaxRemovedFiles {
+		_ = s.FS.Remove(path.Join(removed, names[0]))
+		names = names[1:]
+	}
+}
+
+// stamp is the unix time of a removed file's name, zero-padded so it sorts as text.
+func stamp(name string) string {
+	trimmed := strings.TrimSuffix(name, ".yaml")
+	digits := trimmed[strings.LastIndex(trimmed, ".")+1:]
+	return strings.Repeat("0", max(0, 20-len(digits))) + digits
+}

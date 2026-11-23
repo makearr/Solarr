@@ -358,6 +358,7 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/player", component: lazyRouteComponent(() => import("./Settings"), "PlayerSettings") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/webui", component: lazyRouteComponent(() => import("./Settings"), "WebUISettings") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/metadata", component: lazyRouteComponent(() => import("./Settings"), "MetadataSettingsPage") }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/settings/providers", component: lazyRouteComponent(() => import("./ProviderDefinitions"), "ProviderDefinitionsPage") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/backups", component: lazyRouteComponent(() => import("./Backups"), "Backups") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/logs", component: lazyRouteComponent(() => import("./Logs"), "Logs") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/user", component: lazyRouteComponent(() => import("./Users"), "UserSettings") }),

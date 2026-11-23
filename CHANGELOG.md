@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Settings > Providers: list every provider definition (metadata, indexers, download clients, webhook presets) with its origin and state, edit a custom file with its problems listed by line, copy a built-in one to custom, approve the hosts of a custom provider before it runs, test a metadata provider, and revert or remove a file (it moves to custom/.removed).
 - Provider definitions: an active metadata definition file now joins a comic library's provider order (picker marked Custom); a definition that is gone or broken shows as no longer available and is skipped.
 - Provider definitions: the engine behind a metadata provider that is only a YAML file (JSON, HTML or XML answers read into one generic record, at most eight requests an operation, only the declared hosts). It is not offered to libraries yet.
 - Provider descriptors: every built-in metadata provider, indexer kind and download client is written out as a YAML descriptor under `providers/`; a custom file with the same key can switch it off for new use (hides it from the add lists and a library's provider list), lower its request pace and narrow its media types.

@@ -34,6 +34,7 @@ const (
 	CodePaceMissing       Code = "pace_missing"
 	CodePaceAboveMax      Code = "pace_above_max"
 	CodeIgnoredField      Code = "ignored_field"
+	CodeBadBody           Code = "bad_body"
 )
 
 // Severity is whether a problem stops the file from loading.
