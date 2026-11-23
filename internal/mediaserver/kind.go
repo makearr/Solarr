@@ -70,7 +70,7 @@ var kinds = map[string]Kind{
 		MediaTypes: []string{"audiobook", "book"}, DefaultPortHint: "13378",
 	},
 	"kavita": {
-		Key: "kavita", Label: "Kavita", Credential: CredentialKeyOrPassword, CanPush: true, HasUsers: true,
+		Key: "kavita", Label: "Kavita", Credential: CredentialKeyOrPassword, CanPush: true, CanMetadata: true, HasUsers: true,
 		MediaTypes: []string{"book", "comic"}, DefaultPortHint: "5000",
 	},
 	"komga": {

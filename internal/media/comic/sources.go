@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/mediaserver"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/comicvine"
 	"github.com/makearr/Solarr/internal/metadata/gcd"
@@ -81,6 +82,8 @@ type Sources struct {
 	AniList      AniListSource
 	MangaUpdates MangaUpdatesSource
 	MangaDex     MangaDexSource
+	// Local asks the media servers a library takes metadata from; nil asks none.
+	Local mediaserver.LocalAsker
 	// Records answers the definition-file provider of a key, nil for one that is not (or no longer) active.
 	Records func(key string) RecordProvider
 	Logger  *slog.Logger
@@ -93,15 +96,15 @@ func (s Sources) warn(source, id string, err error) {
 }
 
 // fetch reads a series from the providers of order, the first to hold a field supplying it.
-func (s Sources) fetch(ctx context.Context, kind string, order []string, ids map[string]string, hint Hint) (Series, error) {
+func (s Sources) fetch(ctx context.Context, categoryID int64, kind string, order []string, ids map[string]string, hint Hint) (Series, error) {
 	series := Series{IDs: map[string]string{}, Manga: isMangaKind(kind)}
 	for provider, id := range ids {
 		series.IDs[provider] = id
 	}
 	if series.Manga {
-		s.fetchManga(ctx, &series, order, hint)
+		s.fetchManga(ctx, categoryID, &series, order, hint)
 	} else {
-		s.fetchComic(ctx, &series, order, hint)
+		s.fetchComic(ctx, categoryID, &series, order, hint)
 	}
 	if len(series.Sources) == 0 {
 		return Series{}, ErrNoSource
@@ -112,7 +115,7 @@ func (s Sources) fetch(ctx context.Context, kind string, order []string, ids map
 	return series, nil
 }
 
-func (s Sources) fetchComic(ctx context.Context, series *Series, order []string, hint Hint) {
+func (s Sources) fetchComic(ctx context.Context, categoryID int64, series *Series, order []string, hint Hint) {
 	for _, key := range order {
 		switch key {
 		case settings.ComicSourceComicVine:
@@ -122,7 +125,7 @@ func (s Sources) fetchComic(ctx context.Context, series *Series, order []string,
 		case settings.ComicSourceGCD:
 			s.askGCD(ctx, series, hint)
 		default:
-			s.askRecords(ctx, series, key, hint)
+			s.askOther(ctx, categoryID, series, key, hint)
 		}
 	}
 }
@@ -334,7 +337,7 @@ var mangaDexRatings = struct{ safe, adult []string }{
 	safe: []string{"safe", "suggestive", "erotica"}, adult: []string{"safe", "suggestive", "erotica", "pornographic"},
 }
 
-func (s Sources) fetchManga(ctx context.Context, series *Series, order []string, hint Hint) {
+func (s Sources) fetchManga(ctx context.Context, categoryID int64, series *Series, order []string, hint Hint) {
 	var aggregate []mangadex.Volume
 	var lastVolume int
 	var volumeCounts []int
@@ -355,7 +358,7 @@ func (s Sources) fetchManga(ctx context.Context, series *Series, order []string,
 				aggregate, lastVolume = volumes, dex.LastVolume
 			}
 		default:
-			s.askRecords(ctx, series, key, hint)
+			s.askOther(ctx, categoryID, series, key, hint)
 		}
 	}
 	if parts := mangaParts(aggregate, append(volumeCounts, lastVolume)); len(parts) > 0 || len(series.Parts) == 0 {

@@ -913,6 +913,7 @@ func (p *process) comicService() comic.Service {
 			MangaUpdates: mangaupdates.New(client(settings.ComicSourceMangaUpdates)),
 			MangaDex:     mangadex.New(client(settings.ComicSourceMangaDex)),
 			Records:      p.comicRecords,
+			Local:        p.localMetadata(),
 			Logger:       p.logger,
 		},
 		KindOf: func(categoryID int64) string {

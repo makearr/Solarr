@@ -8,7 +8,7 @@ Connections > Media servers tells Solarr about the servers that play what it man
 |---|---|---|---|---|
 | Jellyfin | API key, or user name and password (a password may be empty) | Targeted `Media/Updated`, a library refresh above 50 paths in one batch; "Now available" messages | Per user, with file paths and provider ids | Sign-in sends `Authorization: MediaBrowser ...`; newer servers refuse `X-Emby-Authorization` |
 | Audiobookshelf | API key | One library scan per mapped library | Per user (an administrator's key lists them) | Items are read one by one for their path |
-| Kavita | API key, or user name and password | One library scan per mapped library | Not read | Users list needs an administrator |
+| Kavita | API key, or user name and password | One library scan per mapped library | Not read | Users list needs an administrator. Can be a local metadata source for comic and book libraries: a series is found by its title (Kavita cannot search by id), and the ComicVine, AniList, MyAnimeList, MangaDex and MangaUpdates ids in its web links are kept where the series has none |
 | Navidrome | User name and password | One incremental `startScan`, skipped while a scan runs | The signed-in user's albums, newest first | Lists no library paths, so path mapping is manual |
 | Calibre | Content server address | None | None | |
 | Stash | API key, or user name and password (a session cookie) | One metadata scan of the folders the new files are in (every library folder above 50 folders); deletions are not pushed | Not read | |

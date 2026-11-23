@@ -84,3 +84,37 @@ func TestClient_LoginRefusedIsRejected(t *testing.T) {
 		t.Errorf("err = %v, want ErrRejected", err)
 	}
 }
+
+func TestClient_SearchReadsEachSeriesWithItsMetadataAndLinks(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/Search/search":
+			if r.URL.Query().Get("queryString") != "Moon Garden" {
+				t.Errorf("query = %q", r.URL.RawQuery)
+			}
+			_, _ = w.Write([]byte(`{"series":[{"seriesId":41,"name":"Moon Garden","originalName":"Tsuki","sortName":"Moon Garden","releaseYear":2019},{"seriesId":42,"name":"Moon Garden 2"}]}`))
+		case "/api/Series/metadata":
+			if r.URL.Query().Get("seriesId") != "41" {
+				t.Errorf("metadata asked for %q", r.URL.RawQuery)
+			}
+			_, _ = w.Write([]byte(`{"summary":" A gardener. ","genres":[{"title":"Fantasy"}],"tags":[{"title":"Gardens"}],
+ "writers":[{"name":"Zed Writer"},{"name":"Ann Writer"}],"pencillers":[{"name":"Pat Pencil"}],"publishers":[{"name":"Example Press"}],
+ "releaseYear":2020,"language":"en",
+ "webLinks":"https://comicvine.gamespot.com/moon-garden/4050-123456/,https://anilist.co/manga/777"}`))
+		}
+	}))
+	defer server.Close()
+	items, err := kavita.New(mediaservertest.Direct(), server.URL, "k").Search(t.Context(), "comic", "Moon Garden", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []mediaserver.Item{{
+		ID: "41", MediaType: "comic", Title: "Moon Garden", OriginalTitle: "Tsuki", SortTitle: "Moon Garden", Overview: "A gardener.", Year: 2020,
+		Language: "en", Genres: []string{"Fantasy"}, Tags: []string{"Gardens"}, IDs: map[string]string{"comicvine": "123456", "anilist": "777"},
+		Organisations: []string{"Example Press"},
+		People:        []mediaserver.Credit{{Name: "Ann Writer", Kind: "writer"}, {Name: "Zed Writer", Kind: "writer"}, {Name: "Pat Pencil", Kind: "penciller"}},
+	}}
+	if !reflect.DeepEqual(items, want) {
+		t.Errorf("items = %+v\nwant %+v", items, want)
+	}
+}

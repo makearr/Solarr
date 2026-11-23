@@ -253,6 +253,8 @@ var MetadataProviders = []MetadataProvider{
 		PerMinute: 600, Published: "your own server"},
 	{Key: LocalSource("audiobookshelf"), Label: "Audiobookshelf (your server)", MediaTypes: []string{"audiobook", "book"}, Provisional: true, Carries: []string{"titles", "narrators", "series", "ASIN and ISBN", "covers"},
 		PerMinute: 600, Published: "your own server"},
+	{Key: LocalSource("kavita"), Label: "Kavita (your server)", MediaTypes: []string{"comic", "book"}, Provisional: true, Carries: []string{"series titles", "summaries", "genres and tags", "credits", "publishers", "ComicVine and AniList ids from its links"},
+		PerMinute: 600, Published: "your own server"},
 	{Key: LocalSource("calibre"), Label: "Calibre (your server)", MediaTypes: []string{"book"}, Provisional: true, Carries: []string{"titles", "authors", "series", "tags", "identifiers", "covers"},
 		PerMinute: 600, Published: "your own server"},
 	{Key: LocalSource("stash"), Label: "Stash (your server)", MediaTypes: []string{"adult"}, Provisional: true, Carries: []string{"scenes", "performers", "studios", "tags", "stash-box ids"},

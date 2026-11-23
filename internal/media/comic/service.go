@@ -57,7 +57,7 @@ func (s Service) order(categoryID int64) []string {
 
 // Fetch reads a series from the library's providers.
 func (s Service) Fetch(ctx context.Context, categoryID int64, ids map[string]string, hint Hint) (Series, error) {
-	return s.fetch(ctx, s.kind(categoryID), s.order(categoryID), ids, hint)
+	return s.fetch(ctx, categoryID, s.kind(categoryID), s.order(categoryID), ids, hint)
 }
 
 // Candidate is one series a lookup found, with the ids every provider that named it gave.
