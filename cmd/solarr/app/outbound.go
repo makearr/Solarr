@@ -9,6 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/providerdef"
 )
 
 // Provider names of the clients built in this package; each is its own rate bucket.
@@ -116,6 +117,13 @@ func (p *process) livePace(bucket string) (time.Duration, bool) {
 	}
 	perMinute, own := p.cache.Snapshot().ProviderPace(key)
 	if !own || perMinute <= 0 {
+		// A custom descriptor's pace comes next, then the shipped one.
+		if p.definitions == nil {
+			return 0, false
+		}
+		if tuned := p.definitions.Catalog().Tuning(providerdef.KindMetadata, descriptorKey(key)).PerMinute; tuned > 0 {
+			return paceInterval(tuned), true
+		}
 		return 0, false
 	}
 	return paceInterval(perMinute), true

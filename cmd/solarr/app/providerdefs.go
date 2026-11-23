@@ -53,7 +53,38 @@ func (p *process) builtinDefinitions() map[providerdef.Kind]map[string][]byte {
 		}
 		indexers[one.ID] = data
 	}
-	return map[providerdef.Kind]map[string][]byte{providerdef.KindIndexer: indexers}
+	files := map[providerdef.Kind]map[string][]byte{providerdef.KindIndexer: indexers}
+	for kind, descriptors := range compiledDescriptors() {
+		if files[kind] == nil {
+			files[kind] = map[string][]byte{}
+		}
+		for _, descriptor := range descriptors {
+			data, err := providerdef.Marshal(descriptor)
+			if err != nil {
+				p.logger.Warn("provider descriptor could not be written out", slog.String("key", descriptor.Key), slog.Any("error", err))
+				continue
+			}
+			files[kind][descriptor.Key] = data
+		}
+	}
+	return files
+}
+
+// builtinCatalogDefinitions are the compiled providers' descriptors as parsed definitions.
+func builtinCatalogDefinitions() []providerdef.Definition {
+	var defs []providerdef.Definition
+	for kind, descriptors := range compiledDescriptors() {
+		for _, descriptor := range descriptors {
+			data, err := providerdef.Marshal(descriptor)
+			if err != nil {
+				continue
+			}
+			if def, problems := providerdef.Parse(kind, descriptor.Key+".yaml", data, providerdef.SourceBuiltin); len(problems) == 0 {
+				defs = append(defs, def)
+			}
+		}
+	}
+	return defs
 }
 
 // reloadProviderDefinitions reads every custom folder and swaps in a new catalog; a bad file is logged and the rest still load.
@@ -73,7 +104,13 @@ func (p *process) reloadProviderDefinitions() {
 		}
 		custom = append(custom, defs...)
 	}
-	p.definitions.Swap(providerdef.NewCatalog(nil, custom))
+	catalog, overrides := providerdef.BuildCatalog(builtinCatalogDefinitions(), custom)
+	for _, report := range overrides {
+		for _, problem := range report.Problems {
+			p.logger.Warn("provider definition problem", slog.String("file", report.File), slog.String("problem", problem.String()))
+		}
+	}
+	p.definitions.Swap(catalog)
 	p.reloadSpecs(custom)
 }
 
@@ -112,4 +149,9 @@ func approvedSpecs(custom []providerdef.Definition, states map[string]providerde
 		active = append(active, found)
 	}
 	return active
+}
+
+// providerHidden says a custom descriptor switched the compiled provider off; the descriptor's key replaces ":" in a provider key.
+func (p *process) providerHidden(kind, key string) bool {
+	return p.definitions != nil && p.definitions.Catalog().Hidden(providerdef.Kind(kind), descriptorKey(key))
 }

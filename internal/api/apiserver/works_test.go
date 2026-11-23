@@ -53,7 +53,9 @@ func (f *fakeWorksReader) ListWorks(
 // grants) to a Server backed by a fakeWorksReader, so category visibility runs
 // through the real repository layer while the library answer stays a fake.
 type worksFixture struct {
-	crossovers           *fakeCrossovers
+	crossovers *fakeCrossovers
+	// hidden names the providers a custom descriptor switched off, as "kind/key".
+	hidden               map[string]bool
 	similarVideos        *fakeSimilarVideos
 	importLists          *fakeImportListSync
 	server               *apiserver.Server
@@ -275,6 +277,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	diskManager := &fakeDiskManager{}
 	taskHistory := &fakeTaskHistory{}
 	memoryCopies := &fakeMemoryCopies{}
+	hidden := map[string]bool{}
 	workAdder := &fakeWorkAdder{}
 	requests := &fakeRequests{}
 	releaseFilters := &fakeReleaseFilters{}
@@ -343,6 +346,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		DownloaderTester:     downloaderTester,
 		DownloaderKinds:      fakeDownloaderKinds{},
 		IndexerKinds:         fakeIndexerKinds{},
+		ProviderHidden:       func(kind, key string) bool { return hidden[kind+"/"+key] },
 		CandidateSearcher:    candidateSearcher,
 		WantedParts:          wantedParts,
 		Crossovers:           crossovers,
@@ -367,6 +371,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		t.Fatalf("New: %v", err)
 	}
 	return worksFixture{
+		hidden: hidden,
 		server: server, running: running, jobRegistry: jobRegistry, cache: cache, works: works, workDetail: workDetail, worksMonitor: worksMonitor, workEditor: workEditor,
 		wantedParts: wantedParts, crossovers: crossovers, similarVideos: similarVideos, importLists: importLists,
 		search: search, unidentified: unidentified, unidentifiedResolver: unidentifiedResolver,

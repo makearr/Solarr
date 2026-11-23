@@ -22,6 +22,9 @@ func (s *Server) libraryTypeDefaultsView(snapshot *settings.Snapshot, mediaType 
 	shipped := settings.DefaultMetadataSources(mediaType, "")
 	view.MetadataDefault = &shipped
 	for _, provider := range settings.MetadataProvidersFor(mediaType) {
+		if s.hidden("metadata", provider.Key) {
+			continue
+		}
 		view.MetadataAvailable = append(view.MetadataAvailable, s.providerInfo(snapshot, provider))
 	}
 	for _, profile := range snapshot.QualityProfiles() {

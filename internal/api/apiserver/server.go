@@ -320,6 +320,9 @@ type Config struct {
 	// IndexerKinds is the indexer catalog the user may add from. Optional: without it none is listed, and any impl
 	// is accepted.
 	IndexerKinds IndexerKinds
+	// ProviderHidden says a custom descriptor switched the compiled provider off for new use (kind "metadata", "indexer" or
+	// "download"); optional: without it nothing is hidden. Rows that exist keep working.
+	ProviderHidden func(kind, key string) bool
 	// CandidateSearcher is stage 5's own candidate pipeline (section 10.1/10.2).
 	CandidateSearcher CandidateSearcher
 	// RemoteImages serves provider pictures from the local cache. Optional: nil answers 503.
@@ -456,6 +459,7 @@ type Server struct {
 	downloaderTester        DownloaderTester
 	downloaderKinds         DownloaderKinds
 	indexerKinds            IndexerKinds
+	providerHidden          func(kind, key string) bool
 	tvProviders             TVProviders
 	remoteImages            RemoteImages
 	candidateSearcher       CandidateSearcher
@@ -610,6 +614,7 @@ func New(config Config) (*Server, error) {
 		downloaderTester:        config.DownloaderTester,
 		downloaderKinds:         config.DownloaderKinds,
 		indexerKinds:            config.IndexerKinds,
+		providerHidden:          config.ProviderHidden,
 		candidateSearcher:       config.CandidateSearcher,
 		tvProviders:             config.TVProviders,
 		remoteImages:            config.RemoteImages,

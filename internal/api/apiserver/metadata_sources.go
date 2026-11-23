@@ -25,7 +25,7 @@ func (s *Server) metadataSourcesView(category settings.Category) gen.LibraryMeta
 		Available: []gen.MetadataProviderInfo{},
 	}
 	for _, provider := range settings.MetadataProvidersFor(category.MediaType) {
-		if provider.Provisional && !snapshot.LocalSourceOffered(category.ID, provider.Key) {
+		if (provider.Provisional && !snapshot.LocalSourceOffered(category.ID, provider.Key)) || s.hidden("metadata", provider.Key) {
 			continue
 		}
 		view.Available = append(view.Available, s.providerInfo(snapshot, provider))

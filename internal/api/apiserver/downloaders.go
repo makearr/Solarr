@@ -393,6 +393,9 @@ func (s *Server) ListDownloaderKinds(w http.ResponseWriter, r *http.Request) {
 	views := []gen.DownloaderKind{}
 	if s.downloaderKinds != nil {
 		for _, kind := range s.downloaderKinds.DownloaderKinds() {
+			if s.hidden("download", kind.Impl) {
+				continue
+			}
 			views = append(views, downloaderKindView(kind))
 		}
 	}

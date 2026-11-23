@@ -3,6 +3,7 @@ package apiserver_test
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -140,5 +141,24 @@ func TestCompanions_AddTheOtherHalfOfSoulseek(t *testing.T) {
 	_ = json.Unmarshal(nzb.Body.Bytes(), &plain)
 	if refused := fixture.do(authedPost(t, cookies, "/api/v1/indexers/"+itoa(plain.ID)+"/companion", ``)); refused.Code != http.StatusBadRequest {
 		t.Errorf("an indexer without a companion: status %d", refused.Code)
+	}
+}
+
+func TestListIndexerKinds_LeavesOutAKindADescriptorSwitchedOff(t *testing.T) {
+	fixture, cookies := adminWithSecrets(t)
+	fixture.hidden["indexer/thepiratebay"] = true
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/indexers/schema"))
+	var kinds []struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &kinds); err != nil {
+		t.Fatal(err)
+	}
+	got := []string{}
+	for _, kind := range kinds {
+		got = append(got, kind.ID)
+	}
+	if !slices.Equal(got, []string{"nzbgeek", "torznab", "soulseek"}) {
+		t.Errorf("kinds = %v", got)
 	}
 }

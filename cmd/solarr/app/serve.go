@@ -975,6 +975,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		},
 		DownloaderKinds:   adapters.DownloaderKinds{},
 		IndexerKinds:      adapters.IndexerKinds{Specs: p.specs},
+		ProviderHidden:    p.providerHidden,
 		CandidateSearcher: p.candidateSearcher(),
 		TVProviders:       p.tvProviders(),
 		RemoteImages:      p.remoteImages(),

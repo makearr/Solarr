@@ -54,8 +54,8 @@ const (
 
 // Pace is a provider's request pace in requests a minute; MaxPerMinute is the compiled ceiling of a built-in one.
 type Pace struct {
-	PerMinute    int64 `yaml:"per_minute"`
-	MaxPerMinute int64 `yaml:"max_per_minute"`
+	PerMinute    int64 `yaml:"per_minute,omitempty"`
+	MaxPerMinute int64 `yaml:"max_per_minute,omitempty"`
 }
 
 // SettingSpec declares a value a definition needs from its owner; its value is sealed in the settings database, never in the file.
@@ -65,21 +65,40 @@ type SettingSpec struct {
 	Type  string `yaml:"type"`
 }
 
+// Credentials are what an indexer asks its owner for, shown by a descriptor and never tunable.
+type Credentials struct {
+	UserLabel   string `yaml:"user_label,omitempty"`
+	SecretLabel string `yaml:"secret_label,omitempty"`
+	Optional    bool   `yaml:"optional,omitempty"`
+}
+
 // File is every field the envelope and the tunable descriptor carry; the body of an http or spec definition is read by its engine.
+// The fields after Settings only describe a compiled provider: a custom descriptor changing them is warned about and ignored.
 type File struct {
 	Schema       int           `yaml:"schema"`
 	Kind         Kind          `yaml:"kind"`
 	Key          string        `yaml:"key"`
 	Name         string        `yaml:"name"`
 	Engine       Engine        `yaml:"engine"`
-	Enabled      *bool         `yaml:"enabled"`
-	Description  string        `yaml:"description"`
-	Hosts        []string      `yaml:"hosts"`
-	Pace         *Pace         `yaml:"pace"`
-	MediaTypes   []string      `yaml:"media_types"`
-	BaseURLs     []string      `yaml:"base_urls"`
-	RequestDelay string        `yaml:"request_delay"`
-	Settings     []SettingSpec `yaml:"settings"`
+	Enabled      *bool         `yaml:"enabled,omitempty"`
+	Description  string        `yaml:"description,omitempty"`
+	Hosts        []string      `yaml:"hosts,omitempty"`
+	Pace         *Pace         `yaml:"pace,omitempty"`
+	MediaTypes   []string      `yaml:"media_types,omitempty"`
+	BaseURLs     []string      `yaml:"base_urls,omitempty"`
+	RequestDelay string        `yaml:"request_delay,omitempty"`
+	Settings     []SettingSpec `yaml:"settings,omitempty"`
+	NeedsKey     bool          `yaml:"needs_key,omitempty"`
+	Carries      []string      `yaml:"carries,omitempty"`
+	AlsoFor      []string      `yaml:"also_for,omitempty"`
+	Published    string        `yaml:"published,omitempty"`
+	Role         string        `yaml:"role,omitempty"`
+	Impl         string        `yaml:"impl,omitempty"`
+	Privacy      string        `yaml:"privacy,omitempty"`
+	Protocol     string        `yaml:"protocol,omitempty"`
+	Language     string        `yaml:"language,omitempty"`
+	Companion    string        `yaml:"companion_downloader,omitempty"`
+	Credentials  *Credentials  `yaml:"credentials,omitempty"`
 }
 
 // Definition is one parsed file.

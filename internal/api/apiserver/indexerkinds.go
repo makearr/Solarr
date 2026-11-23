@@ -46,6 +46,9 @@ func (s *Server) ListIndexerKinds(w http.ResponseWriter, r *http.Request) {
 	views := []gen.IndexerKind{}
 	if s.indexerKinds != nil {
 		for _, kind := range s.indexerKinds.IndexerKinds() {
+			if s.hidden("indexer", kind.ID) {
+				continue
+			}
 			views = append(views, indexerKindView(kind))
 		}
 	}
@@ -217,4 +220,9 @@ func (s *Server) downloaderKindOf(impl string) (DownloaderKind, bool) {
 		return DownloaderKind{}, false
 	}
 	return kinds[index], true
+}
+
+// hidden says a custom descriptor switched the provider off for new use.
+func (s *Server) hidden(kind, key string) bool {
+	return s.providerHidden != nil && s.providerHidden(kind, key)
 }

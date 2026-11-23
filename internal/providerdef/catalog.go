@@ -107,3 +107,32 @@ func StatusOf(def Definition, state State) Status {
 	}
 	return StatusActive
 }
+
+// BuildCatalog is NewCatalog with each custom descriptor of a compiled provider checked against the built-in one: a warning
+// is reported and the file kept, an error is reported and the file dropped so the built-in descriptor stays.
+func BuildCatalog(builtin, custom []Definition) (*Catalog, []FileProblems) {
+	compiled := map[Kind]map[string]Definition{}
+	for _, def := range builtin {
+		if compiled[def.Kind] == nil {
+			compiled[def.Kind] = map[string]Definition{}
+		}
+		compiled[def.Kind][def.Key] = def
+	}
+	var kept []Definition
+	var reports []FileProblems
+	for _, def := range custom {
+		base, replaces := compiled[def.Kind][def.Key]
+		if !replaces || def.Engine != EngineBuiltin || base.Engine != EngineBuiltin {
+			kept = append(kept, def)
+			continue
+		}
+		problems := CheckOverride(base, def)
+		if len(problems) > 0 {
+			reports = append(reports, FileProblems{File: def.Key + ".yaml", Problems: problems})
+		}
+		if !hasError(problems) {
+			kept = append(kept, def)
+		}
+	}
+	return NewCatalog(builtin, kept), reports
+}
