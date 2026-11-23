@@ -32,6 +32,7 @@ const (
 	tagWritebackScheduleCron       = "45 * * * *"    // every hour, paced to 2000 files a run
 	discographyScheduleCron        = "0 4 * * 1"     // Mondays at 04:00; the provider caches, so only new artists cost requests
 	labelLogosScheduleCron         = "25 5 * * *"    // daily; asks only labels never asked, 1,000 a run
+	lyricsScheduleCron             = "35 4 * * *"    // daily; 500 tracks a run, only libraries with lyrics on
 	statisticsScheduleCron         = "15 6 * * *"    // daily, after the counters; the statistics page reads what it wrote
 	categoryCountsScheduleCron     = "30 5 * * *"    // daily, after database maintenance; only corrects drift
 	freshCountsScheduleCron        = "40 * * * *"    // every hour
@@ -185,6 +186,11 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Key: "label_logos", Name: "Find label logos", DefaultCadence: labelLogosScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
 		Enqueue: p.enqueueLabelLogos,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "lyrics", Name: "Write lyrics beside tracks", DefaultCadence: lyricsScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary, Startup: jobs.StartupOff,
+		Enqueue: p.enqueueLyrics,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "statistics", Name: "Statistics", DefaultCadence: statisticsScheduleCron,

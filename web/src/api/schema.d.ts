@@ -8024,7 +8024,7 @@ export interface components {
             /** @description The File Management settings that mean something for the type, in its words; one left out is not offered. The rest of File Management is the same for every type. */
             file_settings: {
                 /** @enum {string} */
-                key: "create_empty_artist_folders" | "delete_empty_folders" | "unmonitor_deleted" | "merge_artist_aliases" | "rescan_after_refresh" | "change_file_date" | "import_extra_files" | "extra_file_extensions" | "media_server_files" | "monitor_new_seasons" | "shared_file_fallback" | "date_type" | "edition_satisfies_issues" | "reader_files" | "episode_title_required";
+                key: "create_empty_artist_folders" | "delete_empty_folders" | "unmonitor_deleted" | "merge_artist_aliases" | "rescan_after_refresh" | "change_file_date" | "import_extra_files" | "extra_file_extensions" | "media_server_files" | "monitor_new_seasons" | "shared_file_fallback" | "date_type" | "edition_satisfies_issues" | "reader_files" | "lyrics" | "episode_title_required";
                 label: string;
                 help: string;
                 /** @description A choice's values in the type's words. */

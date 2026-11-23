@@ -650,6 +650,7 @@ const (
 	MediaTypeInfoFileSettingsKeyEpisodeTitleRequired     MediaTypeInfoFileSettingsKey = "episode_title_required"
 	MediaTypeInfoFileSettingsKeyExtraFileExtensions      MediaTypeInfoFileSettingsKey = "extra_file_extensions"
 	MediaTypeInfoFileSettingsKeyImportExtraFiles         MediaTypeInfoFileSettingsKey = "import_extra_files"
+	MediaTypeInfoFileSettingsKeyLyrics                   MediaTypeInfoFileSettingsKey = "lyrics"
 	MediaTypeInfoFileSettingsKeyMediaServerFiles         MediaTypeInfoFileSettingsKey = "media_server_files"
 	MediaTypeInfoFileSettingsKeyMergeArtistAliases       MediaTypeInfoFileSettingsKey = "merge_artist_aliases"
 	MediaTypeInfoFileSettingsKeyMonitorNewSeasons        MediaTypeInfoFileSettingsKey = "monitor_new_seasons"

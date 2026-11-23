@@ -99,6 +99,8 @@ var fileSettings = []media.FileSetting{
 	{Key: media.FileChangeFileDate, Label: "Change File Date", Help: "Change the file date on import and rescan.", Options: []media.Choice{{Key: "none", Label: "None"}, {Key: "release_date", Label: "Album Release Date"}}},
 	{Key: media.FileImportExtraFiles, Label: "Import Extra Files", Help: "Bring matching files along with the tracks: lyrics, cue sheets, rip logs."},
 	{Key: media.FileExtraFileExtensions, Label: "Extra File Extensions", Help: "Comma separated, such as lrc,cue,log,nfo. A file named like a track takes the track's new name; others keep theirs."},
+	{Key: media.FileLyrics, Label: "Lyrics", Help: "Ask LRCLIB for the lyrics of identified tracks and write them beside each track as an .lrc file (synced) or .txt (plain). A lyrics file already there is never replaced, and nothing is written on a read-only folder.", Options: []media.Choice{
+		{Key: LyricsOff, Label: "Off"}, {Key: LyricsOn, Label: "On"}}},
 }
 
 // scanMonitoring is what a scan does with an album it finds that nothing wanted yet.

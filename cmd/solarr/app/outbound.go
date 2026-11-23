@@ -46,6 +46,7 @@ const (
 	providerHardcover       = "hardcover"
 	providerITunes          = "itunes"
 	providerAnimeIDs        = "animeids"
+	providerLRCLIB          = "lrclib"
 	providerFantLab         = "fantlab"
 	providerWhisparr        = "whisparr"
 	providerStashDB         = "stashdb"
@@ -69,6 +70,8 @@ const (
 var providerLimits = withMetadataPaces(map[string]httpx.Limits{
 	// Wikipedia's REST API allows 200/s.
 	providerWikipedia: {MinInterval: 100 * time.Millisecond},
+	// LRCLIB asks for politeness only; one request a second.
+	providerLRCLIB: {MinInterval: time.Second},
 	// A wall of posters must not starve the metadata calls.
 	providerImages: {MinInterval: 100 * time.Millisecond},
 })

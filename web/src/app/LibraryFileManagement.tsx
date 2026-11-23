@@ -29,7 +29,7 @@ export function LibraryFileManagement() {
   const declared = useMediaType(useLibrary(categoryId ?? "")?.media_type)?.file_settings ?? [];
   const setting = (key: FileSettingKey) => declared.find((entry) => entry.key === key);
   // The choices a type declares of its own are kept in the library's module options.
-  const moduleSettings = declared.filter((entry) => ["date_type", "edition_satisfies_issues", "reader_files"].includes(entry.key) && (entry.options?.length ?? 0) > 0);
+  const moduleSettings = declared.filter((entry) => ["date_type", "edition_satisfies_issues", "reader_files", "lyrics"].includes(entry.key) && (entry.options?.length ?? 0) > 0);
   const previewable = useMediaType(useLibrary(categoryId ?? "")?.media_type)?.previewable_settings ?? [];
   const options = (entry: { options?: { key: string; label: string }[] }) =>
     (entry.options ?? []).map((option) => [option.key, option.label] as const);

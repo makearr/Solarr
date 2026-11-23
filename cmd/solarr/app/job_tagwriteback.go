@@ -9,7 +9,10 @@ import (
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/metadata/lrclib"
+	"github.com/makearr/Solarr/internal/moving/sidecar"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
@@ -53,4 +56,36 @@ func (p *process) enqueueTagWriteback(ctx context.Context) (jobs.EnqueueResult, 
 		p.logger.Warn("enqueue tag write-back", slog.Any("error", err))
 	}
 	return result, err
+}
+
+// lyricsJob writes LRCLIB's lyrics beside the tracks of the music libraries that switched them on.
+func (p *process) lyricsJob() media.JobRegistration {
+	return media.JobRegistration{Definition: music.LyricsDefinition, Handler: music.LyricsJob{
+		Files: library.NewLyrics(p.library), Roots: p.lyricsRoots, Source: lrclib.New(p.providerClient(providerLRCLIB, nil, httpx.ClientConfig{})),
+		FS: p.fsys, Clock: clock.NewSystem(), Logger: p.logger,
+	}}
+}
+
+// lyricsRoots are the roots of music libraries with lyrics on that Solarr may write to: online, probed writable, not read only.
+func (p *process) lyricsRoots(context.Context) ([]music.LyricsRoot, error) {
+	snapshot := p.cache.Snapshot()
+	var roots []music.LyricsRoot
+	for _, root := range snapshot.RootFolders() {
+		if !sidecar.WritableRoot(root) {
+			continue
+		}
+		for _, categoryID := range snapshot.CategoriesForRootFolder(root.ID) {
+			category, found := snapshot.Category(categoryID)
+			if found && category.MediaType == string(music.MediaType) &&
+				category.FileManagement.ModuleOption(string(media.FileLyrics), music.LyricsOff) == music.LyricsOn {
+				roots = append(roots, music.LyricsRoot{ID: root.ID, Path: root.Path})
+				break
+			}
+		}
+	}
+	return roots, nil
+}
+
+func (p *process) enqueueLyrics(ctx context.Context) (jobs.EnqueueResult, error) {
+	return music.EnqueueLyrics(ctx, p.queue)
 }

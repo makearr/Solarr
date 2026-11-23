@@ -81,6 +81,13 @@ saved, and hourly.
 - A run writes at most 2,000 files; a large library is written over successive runs.
 - The written file keeps its identity: a known path keeps its `media_object`.
 
+## Lyrics beside tracks
+
+A music library's **Lyrics** setting (off by default) lets the `lyrics` task (daily, off at startup) ask LRCLIB (keyless, one
+request a second) for each identified track: a synced result becomes `<track>.lrc`, a plain one `<track>.txt`. A track that
+already has either file is never asked about and never overwritten; roots that are read-only, offline or not writable are skipped.
+Each file is asked once (`lyrics_attempt` in `library.db`); one LRCLIB had nothing for is asked again after 30 days. A run asks about 500 tracks.
+
 ## Reverting an import
 
 A revert recycles every file the session placed, then removes the works and editions it created, and only then forgets each unit's placement: a revert that stops part-way (a busy disk, a shutdown) finishes the other units and can simply be run again. Sessions reverted before this was so can have left works with no files behind; a work with no files and no request is removed from the library screen.

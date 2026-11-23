@@ -60,3 +60,10 @@ CREATE INDEX webhook_pending_due ON webhook_pending(next_at, id);
 -- An episode's own IMDb score, filled by OMDb's season listing; null until a refresh finds one.
 ALTER TABLE work_part ADD COLUMN rating REAL;
 ALTER TABLE work_part ADD COLUMN votes INTEGER;
+
+-- Which files the lyrics pass has asked LRCLIB about; found = 0 is asked again after a while, not on every run.
+CREATE TABLE lyrics_attempt (
+  media_object_id INTEGER PRIMARY KEY REFERENCES media_object(id) ON DELETE CASCADE,
+  attempted_at    INTEGER NOT NULL,
+  found           INTEGER NOT NULL CHECK (found IN (0, 1))
+);

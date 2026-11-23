@@ -11564,7 +11564,7 @@ components:
             properties:
               key:
                 type: string
-                enum: [create_empty_artist_folders, delete_empty_folders, unmonitor_deleted, merge_artist_aliases, rescan_after_refresh, change_file_date, import_extra_files, extra_file_extensions, media_server_files, monitor_new_seasons, shared_file_fallback, date_type, edition_satisfies_issues, reader_files, episode_title_required]
+                enum: [create_empty_artist_folders, delete_empty_folders, unmonitor_deleted, merge_artist_aliases, rescan_after_refresh, change_file_date, import_extra_files, extra_file_extensions, media_server_files, monitor_new_seasons, shared_file_fallback, date_type, edition_satisfies_issues, reader_files, lyrics, episode_title_required]
               label: { type: string }
               help: { type: string }
               options:

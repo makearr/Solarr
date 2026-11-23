@@ -388,7 +388,7 @@ func (p *process) musicJobs() []media.JobRegistration {
 			MediaType: string(music.MediaType), Works: library.NewWorks(p.library), People: library.NewPeople(p.library), Cache: p.cache,
 		},
 	}}
-	return append(registrations, p.tagWritebackJob(), p.artworkJob(), p.discographyCoverageJob(), p.searchCategoryJob(), labelLogos, collections)
+	return append(registrations, p.lyricsJob(), p.tagWritebackJob(), p.artworkJob(), p.discographyCoverageJob(), p.searchCategoryJob(), labelLogos, collections)
 }
 
 // enqueueMusicCollections submits the pass that puts albums in the series and franchises they belong to.

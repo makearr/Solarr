@@ -547,6 +547,12 @@ type LibraryPath struct {
 	MissingSince  sql.NullInt64
 }
 
+type LyricsAttempt struct {
+	MediaObjectID int64
+	AttemptedAt   int64
+	Found         int64
+}
+
 type ManualIdentification struct {
 	MediaObjectID int64
 	WorkID        int64

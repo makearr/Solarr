@@ -831,6 +831,8 @@ type Querier interface {
 	ListLinkedCollectionCounts(ctx context.Context) ([]ListLinkedCollectionCountsRow, error)
 	// Every live path of a work's files, with how each was placed.
 	ListLivePathsForWork(ctx context.Context, workID int64) ([]ListLivePathsForWorkRow, error)
+	// Identified files under the given roots that were never asked about, or asked and not found before the cutoff.
+	ListLyricsCandidates(ctx context.Context, arg ListLyricsCandidatesParams) ([]ListLyricsCandidatesRow, error)
 	// Which of a batch's files a person already identified; ids is a JSON array.
 	ListManuallyIdentified(ctx context.Context, mediaObjectIds string) ([]int64, error)
 	ListMediaServerPendingServers(ctx context.Context, queuedAt int64) ([]int64, error)
@@ -1261,6 +1263,7 @@ type Querier interface {
 	// Every search records when it ran, whoever started it (Wanted's "last searched"). The planner's
 	// own upsert sets priority and class and never touches these two columns.
 	RecordItemSearched(ctx context.Context, arg RecordItemSearchedParams) error
+	RecordLyricsAttempt(ctx context.Context, arg RecordLyricsAttemptParams) error
 	RecordManualIdentification(ctx context.Context, arg RecordManualIdentificationParams) error
 	RecordPersonRefresh(ctx context.Context, arg RecordPersonRefreshParams) error
 	// A release RSS showed for the item; the newest first-seen is kept.

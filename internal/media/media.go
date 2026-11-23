@@ -153,6 +153,7 @@ const (
 	FileDateType               FileSettingKey = "date_type"
 	FileEditionSatisfies       FileSettingKey = "edition_satisfies_issues"
 	FileReaderFiles            FileSettingKey = "reader_files"
+	FileLyrics                 FileSettingKey = "lyrics"
 )
 
 // FileSetting is one File Management setting as a type words it; Options relabel a choice's values in its words.

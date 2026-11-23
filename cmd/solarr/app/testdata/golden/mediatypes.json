@@ -124,6 +124,21 @@
         "help": "Comma separated, such as lrc,cue,log,nfo. A file named like a track takes the track's new name; others keep theirs.",
         "key": "extra_file_extensions",
         "label": "Extra File Extensions"
+      },
+      {
+        "help": "Ask LRCLIB for the lyrics of identified tracks and write them beside each track as an .lrc file (synced) or .txt (plain). A lyrics file already there is never replaced, and nothing is written on a read-only folder.",
+        "key": "lyrics",
+        "label": "Lyrics",
+        "options": [
+          {
+            "key": "off",
+            "label": "Off"
+          },
+          {
+            "key": "on",
+            "label": "On"
+          }
+        ]
       }
     ],
     "follow_options": [
