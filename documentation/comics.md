@@ -58,6 +58,10 @@ A media type declares choice settings in its descriptor (`FileSettings` with opt
 - **A collected edition satisfies its issues** (`edition_satisfies_issues`, default off): see below.
 - **Kavita and Komga files** (`reader_files`: off, fill, replace): see below.
 
+## Releases
+
+A release is wanted when it names the series (or an alias; a comic's year must agree within one, a manga volume's year is its own edition's) and a wanted part, alone or in a range. A title ending in Complete, Complete Series or Collection counts for every wanted part. A release whose size cannot be its parts (under 1 MiB a part, over 2 GiB for one) is rejected with the rule `implausible-size` and the sizes. Queue and history rows say what a release holds: `#12`, `#1-#6`, `v03`, `c120`, `Complete`.
+
 ## Collected editions
 
 `part_coverage(covering_part_id, covered_part_id, source)` says a held part stands for another: a trade paperback (its own work with a `whole` part) for the issues it collects. A row counts only while the covering part has a file on disk. With the library setting on, a covered issue is not searched for; the series page shows it as held in the edition (`in_edition` on a part). Rows are filled by a provider or by hand (`library.Coverage.Replace`; source `hand` is never replaced by a provider). The edition's page has a **Covers** dialog (`GET`/`PUT /works/{id}/coverage`, administrator): find a series, pick a range of its parts, save; provider rows show but are read only. A Format filter on the library list (trade paperback, omnibus, ...) is the Trades view. Not built: Metron's reprint data filling rows.
