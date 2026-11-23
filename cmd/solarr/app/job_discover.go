@@ -120,3 +120,34 @@ func (c discoverCollections) Candidates(ctx context.Context, category settings.C
 	}
 	return out, nil
 }
+
+// seriesFeeds reads TMDB's charts for a series library and AniList's for an anime one.
+type seriesFeeds struct {
+	series, anime media.Recommending
+	isAnime       func(categoryID int64) bool
+}
+
+// RecommendationFeeds answers TMDB's feeds, or AniList's alone while TMDB has no key (which AniList does not need).
+func (f seriesFeeds) RecommendationFeeds(ctx context.Context) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
+	usable, unavailable := f.series.RecommendationFeeds(ctx)
+	if len(usable) == 0 {
+		usable, _ = f.anime.RecommendationFeeds(ctx)
+	}
+	return usable, unavailable
+}
+
+func (f seriesFeeds) Recommend(ctx context.Context, query media.RecommendQuery) ([]media.Recommendation, bool, error) {
+	if f.isAnime(query.CategoryID) {
+		return f.anime.Recommend(ctx, query)
+	}
+	return f.series.Recommend(ctx, query)
+}
+
+// resolveSeriesEntry names the series a list entry is through the series type's list resolver.
+func (p *process) resolveSeriesEntry(ctx context.Context, entry media.ListEntry) (media.ListMatch, error) {
+	resolver, ok := media.Capability[media.ListResolving](p.media, media.Key("tv"))
+	if !ok {
+		return media.ListMatch{}, media.ErrNotWired
+	}
+	return resolver.ResolveListEntry(ctx, entry)
+}

@@ -19,7 +19,7 @@ var ErrNotFound = errors.New("anilist: not found")
 const (
 	endpoint         = "https://graphql.anilist.co"
 	maxResponseBytes = 4 << 20
-	mediaFields      = `id title{romaji english native} synonyms format episodes status seasonYear bannerImage coverImage{extraLarge} genres idMal`
+	mediaFields      = `id title{romaji english native} synonyms format episodes status seasonYear bannerImage coverImage{extraLarge} genres idMal averageScore popularity description(asHtml:false)`
 	query            = `query($id:Int){Media(id:$id,type:ANIME){` + mediaFields + `}}`
 )
 
@@ -56,6 +56,10 @@ type Media struct {
 	} `json:"coverImage"`
 	Genres []string `json:"genres"`
 	IDMal  int64    `json:"idMal"`
+	// AverageScore is 0 to 100, 0 when unrated.
+	AverageScore int    `json:"averageScore"`
+	Popularity   int    `json:"popularity"`
+	Description  string `json:"description"`
 }
 
 // Titles lists every name the entry answers to, the three titles first, without repeats.

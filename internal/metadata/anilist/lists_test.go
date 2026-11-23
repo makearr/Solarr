@@ -75,3 +75,22 @@ func TestAnUnknownUserIsNamedSo(t *testing.T) {
 		}
 	}
 }
+
+func TestChartAsksTheSortFiltersAndPage(t *testing.T) {
+	transport := &canned{body: `{"data":{"Page":{"pageInfo":{"hasNextPage":false},"media":[{"id":31,"title":{"romaji":"Rei Example"},"format":"TV","averageScore":84,"popularity":52000,"description":"A story."}]}}}`}
+	entries, more, err := newClient(transport).Chart(t.Context(), anilist.ChartQuery{Sort: anilist.SortScore, StartedBefore: 20010101, ExcludeGenres: []string{"Ecchi"}, MinPopularity: 20000}, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if more || len(entries) != 1 || entries[0].AverageScore != 84 || entries[0].Popularity != 52000 || entries[0].Description != "A story." {
+		t.Errorf("entries = %+v, more = %v", entries, more)
+	}
+	for _, want := range []string{`"sort":["SCORE_DESC"]`, `"before":20010101`, `"notGenres":["Ecchi"]`, `"minPopularity":20000`, `"page":3`, "isAdult:false"} {
+		if !strings.Contains(transport.sent, want) {
+			t.Errorf("request %s lacks %s", transport.sent, want)
+		}
+	}
+	if strings.Contains(transport.sent, `"status"`) {
+		t.Errorf("request names a status: %s", transport.sent)
+	}
+}

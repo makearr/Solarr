@@ -18,6 +18,7 @@ import (
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/adult"
+	"github.com/makearr/Solarr/internal/media/anifeeds"
 	"github.com/makearr/Solarr/internal/media/book"
 	"github.com/makearr/Solarr/internal/media/comic"
 	"github.com/makearr/Solarr/internal/media/housekeeping"
@@ -1145,7 +1146,14 @@ func (p *process) tmdbFeeds(kind string) media.Recommending {
 			}
 			return detail, nil
 		}
-		return feeds
+		return seriesFeeds{
+			series: feeds,
+			anime:  anifeeds.Feeds{Charts: p.aniListClient(), Resolve: p.resolveSeriesEntry, Clock: clock.NewSystem()},
+			isAnime: func(categoryID int64) bool {
+				category, found := p.cache.Snapshot().Category(categoryID)
+				return found && category.Kind == "anime"
+			},
+		}
 	}
 	feeds.Detail = func(ctx context.Context, id int64) (tmdbfeeds.Detail, error) {
 		film, err := p.tmdbShared.Movie(ctx, id)
