@@ -44,6 +44,8 @@ type ReaderFiles struct {
 	KindOf   func(categoryID int64) string
 	// RootsOf answers the roots of a library, which a preview walks.
 	RootsOf func(categoryID int64) []settings.RootFolder
+	// KeepOld moves the file's old bytes into the recycle bin and answers where they went; nothing is overwritten unrecycled.
+	KeepOld func(ctx context.Context, categoryID int64, root settings.RootFolder, target string) (recycled string, err error)
 	// Rehash records the size and quick hash a rewritten file has now.
 	Rehash func(ctx context.Context, mediaObjectID int64, filePath string) error
 	Clock  clock.Clock
@@ -112,7 +114,7 @@ func (w ReaderFiles) series(ctx context.Context, categoryID, workID int64, mode 
 		if !strings.EqualFold(path.Ext(file.RelPath), ".cbz") {
 			continue
 		}
-		changed, err := w.rewrite(ctx, path.Join(root.Path, file.RelPath), file, issueInfo(detail, file, manga), mode, dry)
+		changed, err := w.rewrite(ctx, categoryID, root, path.Join(root.Path, file.RelPath), issueInfo(detail, file, manga), mode, dry)
 		if err != nil {
 			w.Logger.Warn("comicinfo not written", slog.Int64("work_id", workID), slog.Any("error", err))
 			continue
@@ -234,7 +236,7 @@ func idNotes(ids map[string]string) string {
 }
 
 // rewrite puts ComicInfo.xml into the cbz when it would differ, swapping in a whole new file; answers whether it did.
-func (w ReaderFiles) rewrite(ctx context.Context, target string, _ library.PartPath, info comicinfo.Info, mode string, dry bool) (bool, error) {
+func (w ReaderFiles) rewrite(ctx context.Context, categoryID int64, root settings.RootFolder, target string, info comicinfo.Info, mode string, dry bool) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
@@ -255,9 +257,26 @@ func (w ReaderFiles) rewrite(ctx context.Context, target string, _ library.PartP
 	if err != nil || !changed || dry {
 		return changed && dry, err
 	}
-	err = fsx.WriteAtomic(w.FS, target, func(out io.Writer) error { return comicinfo.RewriteCBZ(source, stat.Size, out, data) })
+	if w.KeepOld == nil {
+		return false, errors.New("no recycle bin for the old bytes")
+	}
+	// The new bytes are complete beside the old before the old go to the bin, so a failure leaves the file as it was.
+	next := target + ".solarr-new"
+	err = fsx.WriteAtomic(w.FS, next, func(out io.Writer) error { return comicinfo.RewriteCBZ(source, stat.Size, out, data) })
 	if err != nil {
 		return false, fmt.Errorf("rewrite %s: %w", target, err)
+	}
+	recycled, err := w.KeepOld(ctx, categoryID, root, target)
+	if err != nil {
+		_ = w.FS.Remove(next)
+		return false, fmt.Errorf("recycle old %s: %w", target, err)
+	}
+	if err := w.FS.Rename(next, target); err != nil {
+		if back := w.FS.Rename(recycled, target); back != nil {
+			return false, fmt.Errorf("swap %s: %w (old bytes stay at %s)", target, err, recycled)
+		}
+		_ = w.FS.Remove(next)
+		return false, fmt.Errorf("swap %s: %w", target, err)
 	}
 	return true, nil
 }

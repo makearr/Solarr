@@ -54,7 +54,11 @@ func (s Series) AttachFiles(ctx context.Context, at time.Time, workID, rootFolde
 		}
 		itemBySeason := map[string]int64{}
 		unmonitoredItem := map[int64]bool{}
+		singleItems := map[string][]int64{}
 		for _, item := range items {
+			if item.SatisfactionKind == "SINGLE" && item.MediaRef != "" {
+				singleItems[item.MediaRef] = append(singleItems[item.MediaRef], item.ID)
+			}
 			if item.SatisfactionKind == "SET" && item.MediaRef != "" {
 				itemBySeason[item.MediaRef] = item.ID
 				unmonitoredItem[item.ID] = item.Monitored == 0
@@ -98,6 +102,15 @@ func (s Series) AttachFiles(ctx context.Context, at time.Time, workID, rootFolde
 					unmonitoredItem[itemID] = false
 				}
 				touched[itemID] = true
+				// A part wanted on its own holds the same file, or its cutoff and its want never see it.
+				for _, single := range singleItems[part.MediaRef] {
+					if err := queries.AttachFile(ctx, librarydb.AttachFileParams{
+						DesiredItemID: single, MediaObjectID: link.MediaObjectID, Role: "primary", MediaRef: part.MediaRef, AddedAt: at.Unix(),
+					}); err != nil {
+						return fmt.Errorf("attach file to part item: %w", err)
+					}
+					touched[single] = true
+				}
 				result.Attached++
 				attachedParts = append(attachedParts, part.ID)
 			}

@@ -336,6 +336,14 @@ func (p *process) enqueueServerFilesFor(ctx context.Context, categoryID, workID 
 	p.recordServerPush(ctx, categoryID, workID, library.PendingCreated)
 }
 
+// enqueueReaderFilesFor submits the reader files pass for one comic series, right after an import placed files of it.
+func (p *process) enqueueReaderFilesFor(ctx context.Context, categoryID, workID int64) {
+	if _, err := comic.EnqueueReaderFilesFor(ctx, p.queue, categoryID, workID); err != nil {
+		p.logger.Warn("could not queue the reader files of an imported comic series", "work_id", workID, "error", err)
+	}
+	p.recordServerPush(ctx, categoryID, workID, library.PendingCreated)
+}
+
 // enqueueMovieServerFilesFor submits the pass for one movie, right after an import placed a file of it.
 func (p *process) enqueueMovieServerFilesFor(ctx context.Context, categoryID, workID int64) {
 	if _, err := movie.EnqueueServerFilesFor(ctx, p.queue, categoryID, workID); err != nil {
@@ -964,7 +972,7 @@ func (p *process) comicModule() comic.Module {
 	conns := p.comicIndexerConns
 	readerFiles := &comic.ReaderFiles{
 		FS: p.fsys, Reader: library.NewSeriesReader(p.library), Roots: adapters.Roots{Cache: p.cache}, Clock: clock.NewSystem(), Logger: p.logger,
-		KindOf: service.KindOf, OptionOf: service.OptionOf, Rehash: p.rehashFile,
+		KindOf: service.KindOf, OptionOf: service.OptionOf, Rehash: p.rehashFile, KeepOld: p.recycleRewritten,
 		RootsOf: func(categoryID int64) []settings.RootFolder {
 			return p.cache.Snapshot().RootFoldersForCategory(categoryID)
 		},

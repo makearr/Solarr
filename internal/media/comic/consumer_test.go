@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"fmt"
 	"image"
 	"image/png"
 	"path"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/identify/parsecomic"
 	"github.com/makearr/Solarr/internal/metadata/comicvine"
 	"github.com/makearr/Solarr/internal/metadata/mangadex"
@@ -259,6 +261,44 @@ func TestAMangaWhoseVolumeCountNoProviderStatesGainsTheVolumesItsFilesName(t *te
 	}
 	if waiting, _ := library.NewUnidentified(opened).Count(t.Context()); waiting != 0 {
 		t.Fatalf("%d files waiting", waiting)
+	}
+}
+
+func TestAScannedVolumeAlsoSatisfiesTheItemWantingThatVolumeOnItsOwn(t *testing.T) {
+	opened := comicStore(t)
+	service := serviceOn(opened, Sources{AniList: fakeAniList{bare: true}})
+	service.KindOf = func(int64) string { return KindManga }
+	service.ProvidersOf = func(int64) []string { return []string{settings.TVSourceAniList} }
+	fake := clock.NewFakeAtEpoch()
+	fsys := fsx.NewMem(fake)
+	if err := fsys.MkdirAll(scanRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	consumer := NewConsumer(ConsumerConfig{
+		FS: fsys, Physical: library.NewPhysical(opened), Unidentified: library.NewUnidentified(opened), Service: service, Clock: fake,
+		Resolver: Resolver{Service: service, Categories: inLibrary{}, DefaultProfileID: 1},
+	})
+	root := settings.RootFolder{ID: 1, Path: scanRoot, Online: true}
+	if err := consumer.Observe(t.Context(), root, 3, []scan.Observed{scanned(t, fsys, "Moon Orchard/Moon Orchard v01.cbz", "")}); err != nil {
+		t.Fatal(err)
+	}
+	held, _ := service.WorkByIDs(t.Context(), map[string]string{ProviderAniListManga: "5"})
+	if _, err := service.Desired.EnsureTrackItem(t.Context(), library.TrackRequest{WorkID: held, MediaRef: "volume:1", CategoryID: 3, ProfileID: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := consumer.Observe(t.Context(), root, 3, []scan.Observed{scanned(t, fsys, "Moon Orchard/Moon Orchard Vol 01.cbz", "")}); err != nil {
+		t.Fatal(err)
+	}
+	items, err := librarydb.New(opened.Read()).ListDesiredItemsForWork(t.Context(), held)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, item := range items {
+		got = append(got, fmt.Sprintf("%s/%s/%d/%s", item.MediaRef, item.SatisfactionKind, item.PresentCount, item.State))
+	}
+	if len(got) != 2 || got[0] != "volume/SET/1/COMPLETE" || got[1] != "volume:1/SINGLE/1/COMPLETE" {
+		t.Fatalf("items = %v", got)
 	}
 }
 

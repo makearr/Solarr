@@ -267,7 +267,7 @@ func (p *process) comicImporter() comic.Importer {
 			}),
 			Categories: adapters.Categories{Cache: p.cache}, Clock: clock.NewSystem(), Logger: p.logger,
 			Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
-			RenameOnImport: p.renameOnImport, ExtraFiles: p.extraFileExtensions, AfterPlacing: p.afterPlacing,
+			RenameOnImport: p.renameOnImport, ExtraFiles: p.extraFileExtensions, AfterPlacing: p.enqueueReaderFilesFor,
 		},
 		Resolver: p.comicResolver(),
 	})

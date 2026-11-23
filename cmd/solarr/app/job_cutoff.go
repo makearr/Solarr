@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/scanning/probe"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
@@ -65,6 +66,17 @@ func (p *process) recycleSuperseded(ctx context.Context, mediaObjectID, category
 		p.blocklistRelease(ctx, mediaObjectID)
 	}
 	return p.fileRemover().RecycleFor(ctx, mediaObjectID, recycling, reason, keeperID)
+}
+
+// recycleRewritten moves the old bytes of a file Solarr is about to rewrite in place into its root's recycle bin, without
+// telling the media servers or webhooks: the file stays in the library under the same name.
+func (p *process) recycleRewritten(ctx context.Context, categoryID int64, root settings.RootFolder, target string) (string, error) {
+	recycling := adapters.RecyclingFor(adapters.Categories{Cache: p.cache}, []int64{categoryID})
+	rootID := root.ID
+	entry, err := library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()).WithOnline(p.rootOnline).Put(ctx, library.PutRequest{
+		RootPath: root.Path, OriginalPath: target, RootFolderID: &rootID, Reason: library.ReasonReplaced, Retain: recycling.Retain,
+	})
+	return entry.RecycledPath, err
 }
 
 // blocklistRelease keeps out the release a file came in with, for a download that measured no better than what the

@@ -68,7 +68,7 @@ On a comic library's Story arcs page, *Import reading list* takes a ComicRack `.
 
 ## Files for readers
 
-With *Kavita and Komga files* on, a daily pass (and one when the setting is switched on) writes `series.json` beside each series' files and a `ComicInfo.xml` into each cbz: fill adds the elements a file lacks and never changes one it has, replace sets every element Solarr has a value for. A manga library writes `Manga` as `YesAndRightToLeft`. A cbz is rewritten only when the result differs, entry by entry with the compressed bytes untouched, through a copy swapped in whole; nothing is written on a read-only or offline root. The old bytes are not kept in the recycle bin (the music tag writer does the same).
+With *Kavita and Komga files* on, a daily pass (and one when the setting is switched on) writes `series.json` beside each series' files and a `ComicInfo.xml` into each cbz: fill adds the elements a file lacks and never changes one it has, replace sets every element Solarr has a value for. A manga library writes `Manga` as `YesAndRightToLeft`. A cbz is rewritten only when the result differs, entry by entry with the compressed bytes untouched, through a copy swapped in whole; nothing is written on a read-only or offline root. The old bytes of a rewritten cbz go to the root's recycle bin first (reason Replaced, the library's retention); if that fails the file is left as it was. A pass also runs for a series right after a download import placed files of it.
 
 ## Naming of ranges
 
