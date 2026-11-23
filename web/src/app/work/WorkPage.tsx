@@ -317,7 +317,7 @@ function WorkHeader({
               )}
               {work.scores?.map((score) => (
                 <Chip key={score.provider} title={score.votes > 0 ? `${score.votes.toLocaleString()} votes` : undefined}>
-                  ★ {score.score.toFixed(1)} {score.provider.toUpperCase()}
+                  ★ {score.score.toFixed(1)} {scoreSourceLabel(score.provider)}
                 </Chip>
               ))}
               {work.rating?.above_limit && (
@@ -847,3 +847,9 @@ function DownloadingBadge({ workId }: { workId: number }) {
   );
 }
 
+
+// A local media server's score reads as the server's name; every other source keeps its short uppercase key.
+function scoreSourceLabel(provider: string): string {
+  const local = provider.startsWith("local:") ? provider.slice("local:".length) : "";
+  return local === "" ? provider.toUpperCase() : local.charAt(0).toUpperCase() + local.slice(1);
+}

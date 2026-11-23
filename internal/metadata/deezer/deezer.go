@@ -56,7 +56,7 @@ func (c Client) Find(ctx context.Context, artist, title string) (Album, error) {
 		Data []wireAlbum `json:"data"`
 	}
 	query := fmt.Sprintf(`artist:%q album:%q`, artist, title)
-	if err := c.http.GetJSON(ctx, baseURL+"/search/album?limit=5&q="+url.QueryEscape(query), maxResponseBytes, &found); err != nil {
+	if err := c.http.GetJSON(ctx, baseURL+"/search/album?limit=25&q="+url.QueryEscape(query), maxResponseBytes, &found); err != nil {
 		return Album{}, fmt.Errorf("deezer: search: %w", err)
 	}
 	for _, hit := range found.Data {

@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Fixed: Deezer ratings missed albums whose plain edition is not among the first search hits; a local media server's score now reads as the server's name on a work.
 
 - Calendar: the Pull list (and the calendar's dated parts in general) now lists issues and volumes of comic libraries; it showed only TV episodes before. A release whose size cannot be its named parts (a stub, a bundle) is now rejected with its reason instead of silently dropped.
 - Comics: a file holding a range of volumes is named for both ends (v04-05), and number padding pads both.
