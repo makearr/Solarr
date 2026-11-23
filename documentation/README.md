@@ -37,6 +37,7 @@ interface levels *normal / advanced / expert* in Settings → User.
 | [configuration-export.md](configuration-export.md) | Export and import of the settings |
 | [arr-import.md](arr-import.md) | Importing from the *Arrs by choice, Whisparr, and sending monitoring back |
 | [import-lists.md](import-lists.md) | A library's import lists: sources, preview, sync |
+| [discover.md](discover.md) | Discover: recommendations per library, the filters, automatic adding and its preview |
 | [import-rules.md](import-rules.md) | What an import accepts |
 | [library-quality.md](library-quality.md) | Ordered quality profiles, cutoff and target, and what "fits" means |
 | [naming.md](naming.md) | Slots, tokens, character replacement, apply to library |
