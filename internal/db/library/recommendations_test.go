@@ -1,11 +1,14 @@
 package library_test
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"reflect"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/store"
 )
 
 func poolItem(id string, popularity float64) library.PoolItem {
@@ -173,5 +176,38 @@ func TestRecommendations_HeldIsEmptyForAnUnknownProviderID(t *testing.T) {
 	workID, monitored, err := library.NewRecommendations(opened).Held(t.Context(), "tmdb:movie", "404")
 	if err != nil || workID != 0 || monitored {
 		t.Errorf("held = %d, %v, %v", workID, monitored, err)
+	}
+}
+
+func TestRecommendations_CollectionCandidatesAreUnwantedMembersOfCollectionsTheLibraryHolds(t *testing.T) {
+	opened, _ := newLibrary(t)
+	pool := library.NewRecommendations(opened)
+	err := opened.Write(t.Context(), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		for _, statement := range []string{
+			`INSERT INTO work (id, media_type, canonical_title, sort_title, original_language, year, added_at, updated_at) VALUES
+			  (1, 'movie', 'Saga One', 'saga one', 'en', 2001, 1, 1), (2, 'movie', 'Saga Two', 'saga two', 'en', 2003, 1, 1),
+			  (3, 'movie', 'Saga Three', 'saga three', 'en', 2005, 1, 1), (4, 'movie', 'Lone', 'lone', 'en', 2005, 1, 1)`,
+			`INSERT INTO work_external_id (provider, external_id, work_id, first_seen_at) VALUES ('tmdb', '1', 1, 1), ('tmdb', '2', 2, 1), ('tmdb', '3', 3, 1), ('tmdb', '4', 4, 1)`,
+			`INSERT INTO collection (id, media_type, name, kind, source, added_at) VALUES (1, 'movie', 'Saga', 'franchise', 'tmdb', 1), (2, 'movie', 'Other', 'franchise', 'tmdb', 1)`,
+			`INSERT INTO collection_external_id (provider, external_id, collection_id) VALUES ('tmdb', 'c1', 1), ('tmdb', 'c2', 2)`,
+			`INSERT INTO collection_member (collection_id, work_id, ord) VALUES (1, 1, 1), (1, 2, 2), (1, 3, 3), (2, 4, 1)`,
+			`INSERT INTO desired_item (work_id, category_id, profile_id, monitored, state) VALUES (1, 5, 1, 1, 'COMPLETE'), (3, 5, 1, 1, 'MISSING')`,
+		} {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := pool.CollectionCandidates(t.Context(), 5, "movie", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []library.CollectionCandidate{{Collection: "Saga", Title: "Saga Two", OriginalLanguage: "en", Provider: "tmdb", ExternalID: "2", WorkID: 2, Year: 2003}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("candidates = %+v, want %+v", got, want)
 	}
 }

@@ -428,3 +428,27 @@ func (r Recommendations) Held(ctx context.Context, provider, externalID string) 
 	}
 	return row.WorkID, row.Monitored == 1, nil
 }
+
+// CollectionCandidate is a member of a collection the library holds a part of, not wanted yet.
+type CollectionCandidate struct {
+	Collection, Title, Overview, OriginalLanguage, Provider, ExternalID string
+	WorkID, Year                                                        int64
+}
+
+// CollectionCandidates answers up to limit unmonitored members of the collections a library holds a member of.
+func (r Recommendations) CollectionCandidates(ctx context.Context, categoryID int64, mediaType string, limit int64) ([]CollectionCandidate, error) {
+	rows, err := librarydb.New(r.store.Read()).ListCollectionRecommendationCandidates(ctx, librarydb.ListCollectionRecommendationCandidatesParams{
+		MediaType: mediaType, CategoryID: categoryID, PageSize: limit,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: collection candidates: %w", err)
+	}
+	out := make([]CollectionCandidate, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, CollectionCandidate{
+			Collection: row.CollectionName, Title: row.CanonicalTitle, Overview: row.Description, OriginalLanguage: row.OriginalLanguage, Provider: row.Provider, ExternalID: row.ExternalID,
+			WorkID: row.WorkID, Year: row.Year,
+		})
+	}
+	return out, nil
+}

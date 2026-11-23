@@ -379,6 +379,11 @@ func (s *Server) DeleteCategory(w http.ResponseWriter, r *http.Request, id int64
 		writeError(w, s.logger, err)
 		return
 	}
+	if s.discoverRefresher != nil {
+		if err := s.discoverRefresher.ForgetDiscover(r.Context(), id); err != nil {
+			s.logger.Warn("discover recommendations of a deleted library not dropped", "category", id, "error", err)
+		}
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

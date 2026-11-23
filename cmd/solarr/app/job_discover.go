@@ -16,8 +16,9 @@ import (
 func (p *process) discoverService() discover.Service {
 	return discover.Service{
 		Config: discoverConfiguration{cache: p.cache}, Pool: library.NewRecommendations(p.library), Sources: discoverSources{registry: p.media},
-		Judge: discoverJudge{process: p, pool: library.NewRecommendations(p.library), exclusions: library.NewExclusions(p.library)},
-		Clock: clock.NewSystem(), Logger: p.logger,
+		Judge:       discoverJudge{process: p, pool: library.NewRecommendations(p.library), exclusions: library.NewExclusions(p.library)},
+		Collections: discoverCollections{pool: library.NewRecommendations(p.library)},
+		Clock:       clock.NewSystem(), Logger: p.logger,
 	}
 }
 
@@ -100,4 +101,22 @@ type discoverRefresher struct{ process *process }
 func (r discoverRefresher) RefreshDiscover(ctx context.Context, categoryID int64) error {
 	_, err := discover.Enqueue(ctx, r.process.queue, categoryID)
 	return err
+}
+
+func (r discoverRefresher) ForgetDiscover(ctx context.Context, categoryID int64) error {
+	return library.NewRecommendations(r.process.library).ForgetCategory(ctx, categoryID)
+}
+
+type discoverCollections struct{ pool library.Recommendations }
+
+func (c discoverCollections) Candidates(ctx context.Context, category settings.Category, limit int64) ([]media.Recommendation, error) {
+	rows, err := c.pool.CollectionCandidates(ctx, category.ID, category.MediaType, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]media.Recommendation, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, media.Recommendation{Provider: row.Provider, ExternalID: row.ExternalID, Title: row.Title, Subtitle: row.Collection, Overview: row.Overview, Year: row.Year, Traits: media.Traits{OriginalLanguage: row.OriginalLanguage}})
+	}
+	return out, nil
 }

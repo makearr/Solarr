@@ -113,3 +113,20 @@ DELETE FROM recommendation WHERE provider = ? AND external_id = ?;
 -- name: GetHeldWorkByExternalID :one
 SELECT e.work_id, CAST(EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = e.work_id AND d.monitored = 1) AS INTEGER) AS monitored
 FROM work_external_id e WHERE e.provider = ? AND e.external_id = ?;
+
+-- Members of a collection the library already holds one of, not monitored yet, named by the provider that names the collection.
+-- name: ListCollectionRecommendationCandidates :many
+SELECT c.name AS collection_name, w.id AS work_id, w.canonical_title, CAST(COALESCE(w.year, 0) AS INTEGER) AS year,
+       CAST(COALESCE(w.description, '') AS TEXT) AS description,
+       CAST(COALESCE(w.original_language, '') AS TEXT) AS original_language, e.provider, e.external_id
+FROM collection c
+JOIN collection_external_id ce ON ce.collection_id = c.id
+JOIN collection_member m ON m.collection_id = c.id
+JOIN work w ON w.id = m.work_id AND w.media_type = sqlc.arg(media_type)
+JOIN work_external_id e ON e.work_id = w.id AND e.provider = ce.provider
+WHERE EXISTS (SELECT 1 FROM collection_member held
+              JOIN desired_item d ON d.work_id = held.work_id
+              WHERE held.collection_id = c.id AND d.category_id = sqlc.arg(category_id) AND d.state IN ('COMPLETE', 'UPGRADABLE'))
+  AND NOT EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.monitored = 1)
+ORDER BY c.name, m.ord, w.id
+LIMIT sqlc.arg(page_size);

@@ -708,6 +708,8 @@ type Querier interface {
 	ListCollectionMembers(ctx context.Context, collectionID int64) ([]ListCollectionMembersRow, error)
 	// The works of a library in the collections, monitored as the library's own item says, files counted.
 	ListCollectionMembersInCategory(ctx context.Context, arg ListCollectionMembersInCategoryParams) ([]ListCollectionMembersInCategoryRow, error)
+	// Members of a collection the library already holds one of, not monitored yet, named by the provider that names the collection.
+	ListCollectionRecommendationCandidates(ctx context.Context, arg ListCollectionRecommendationCandidatesParams) ([]ListCollectionRecommendationCandidatesRow, error)
 	ListCollectionsForWork(ctx context.Context, workID int64) ([]Collection, error)
 	// A library's collections: the provider's franchises with a work of the library, and the hand-made ones of the library.
 	ListCollectionsInCategory(ctx context.Context, arg ListCollectionsInCategoryParams) ([]ListCollectionsInCategoryRow, error)

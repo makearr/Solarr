@@ -21,6 +21,8 @@ type WorkAdding struct {
 	AfterAdd func(ctx context.Context)
 	// Suggest names the library a candidate belongs in by the libraries' rules; nil suggests none.
 	Suggest func(ctx context.Context, mediaType string, traits media.Traits) (apiserver.LibrarySuggestion, bool, error)
+	// Forget drops a recommendation of the added item from every pool; nil does nothing.
+	Forget func(ctx context.Context, provider, externalID string) error
 	// Placement records the root an add chose; nil ignores the choice.
 	Placement *AddPlacement
 }
@@ -120,6 +122,11 @@ func (a WorkAdding) Add(ctx context.Context, request apiserver.AddWorkRequest) (
 	}
 	if mediaType, found := a.Categories.MediaTypeOf(request.CategoryID); found && a.Placement != nil && request.RootFolderID != nil && result.WorkID != 0 {
 		if err := a.Placement.record(ctx, mediaType, request.CategoryID, result.WorkID, *request.RootFolderID); err != nil {
+			return apiserver.AddWorkResult{}, err
+		}
+	}
+	if a.Forget != nil {
+		if err := a.Forget(ctx, request.Provider, request.ExternalID); err != nil {
 			return apiserver.AddWorkResult{}, err
 		}
 	}

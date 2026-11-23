@@ -228,3 +228,48 @@ func TestADisabledKindIsSkipped(t *testing.T) {
 		t.Errorf("replaced = %+v", p.replaced)
 	}
 }
+
+type collections struct {
+	items []media.Recommendation
+	err   error
+}
+
+func (c collections) Candidates(context.Context, settings.Category, int64) ([]media.Recommendation, error) {
+	return c.items, c.err
+}
+
+func TestRefreshBuildsTheCollectionsListFromTheLibraryAndAdmitsLikeAnyFeed(t *testing.T) {
+	items := titles(3, "m")
+	items[0].Subtitle = "Example Saga"
+	p := &pool{}
+	svc := service(enabledLibrary(2, "collections"), p, &module{}, judge{monitored: map[string]bool{"m1": true}})
+	svc.Collections = collections{items: items}
+	if err := svc.Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.replaced) != 1 || p.replaced[0].ref != (library.FeedRef{CategoryID: 1, Type: "collections"}) {
+		t.Fatalf("replaced = %+v", p.replaced)
+	}
+	var ids []string
+	for _, item := range p.replaced[0].items {
+		ids = append(ids, item.ExternalID)
+	}
+	if want := []string{"m0", "m2"}; !reflect.DeepEqual(ids, want) {
+		t.Errorf("admitted %v, want %v", ids, want)
+	}
+	if p.replaced[0].items[0].Subtitle != "Example Saga" {
+		t.Errorf("subtitle = %q", p.replaced[0].items[0].Subtitle)
+	}
+}
+
+func TestRefreshRecordsACollectionsFailureAndKeepsTheOldList(t *testing.T) {
+	p := &pool{}
+	svc := service(enabledLibrary(2, "collections"), p, &module{}, judge{})
+	svc.Collections = collections{err: fmt.Errorf("read failed")}
+	if err := svc.Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.replaced) != 0 || len(p.states) != 1 || p.states[0].LastError != discover.FailureOther {
+		t.Errorf("replaced = %+v, states = %+v", p.replaced, p.states)
+	}
+}

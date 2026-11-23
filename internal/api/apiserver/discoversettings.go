@@ -10,9 +10,10 @@ import (
 	"github.com/makearr/Solarr/internal/platform/config"
 )
 
-// DiscoverRefresher starts the refresh of a library's recommendations, or of every enabled library with 0.
+// DiscoverRefresher starts the refresh of a library's recommendations, or of every enabled library with 0, and drops a deleted library's.
 type DiscoverRefresher interface {
 	RefreshDiscover(ctx context.Context, categoryID int64) error
+	ForgetDiscover(ctx context.Context, categoryID int64) error
 }
 
 func (s *Server) discoverGlobal() gen.DiscoverGlobalSettings {

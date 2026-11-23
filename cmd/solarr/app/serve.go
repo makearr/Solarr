@@ -955,6 +955,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			AfterAdd:  func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 			Suggest:   p.suggester().ForCandidate,
 			Placement: p.addPlacement(),
+			Forget:    library.NewRecommendations(p.library).ForgetExternalID,
 		}},
 		ImportLists: adapters.ImportLists{
 			Service: p.importListService(), Forgetter: library.NewImportLists(p.library), Queue: p.queue,

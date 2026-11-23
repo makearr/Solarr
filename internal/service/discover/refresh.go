@@ -86,8 +86,10 @@ type Service struct {
 	Pool    Pool
 	Sources Sources
 	Judge   Judge
-	Clock   clock.Clock
-	Logger  *slog.Logger
+	// Collections names the members of held collections; nil leaves the collections list empty.
+	Collections CollectionSource
+	Clock       clock.Clock
+	Logger      *slog.Logger
 }
 
 func (s Service) logger() *slog.Logger {
@@ -145,6 +147,10 @@ func (s Service) refreshLibrary(ctx context.Context, global settings.DiscoverGlo
 	}
 	for _, setting := range lib.Types {
 		if !setting.Enabled {
+			continue
+		}
+		if setting.Type == string(media.RecommendCollections) {
+			s.refreshCollections(ctx, category, setting, rules)
 			continue
 		}
 		for _, feed := range usable {
