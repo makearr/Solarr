@@ -788,6 +788,8 @@ const catalogue = {
   "downloadFolders.contentsCouldNotBe": "Contents could not be read.",
   "downloadFolders.thatPathCouldNot": "That path could not be used -- check it exists and is mounted inside the container.",
   "indexerCatalog.nameOrDescription": "Name or description",
+  "indexerCatalog.customFile": "Your own file",
+  "indexerCatalog.replacedByFile": "Replaced by your file",
   "indexerCatalog.someSitesNeedSomething": "Some sites need something Solarr cannot do yet, such as answering a captcha",
   "indexerCatalog.theIndexerListCould": "The indexer list could not be read.",
   "indexerCatalog.eachNeedsItsAddress": "Each needs its address and, for a private one, its key. Test any before adding.",

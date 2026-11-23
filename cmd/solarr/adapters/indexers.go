@@ -128,7 +128,8 @@ func (k IndexerKinds) IndexerKinds() []apiserver.IndexerKind {
 			SecretOptional: definition.Credentials.Optional, CompanionDownloader: definition.CompanionDownloader,
 		}
 	}
-	return append(kinds, specKinds(taken, k.Specs.Specs())...)
+	set := k.Specs.Specs()
+	return append(kinds, specKinds(taken, set)...)
 }
 
 // buildSpecIndexer builds a site from its spec; the secret holds the settings the owner filled in, as JSON.
@@ -187,10 +188,21 @@ func specKinds(taken map[string]bool, set *spec.Specs) []apiserver.IndexerKind {
 		kinds = append(kinds, apiserver.IndexerKind{
 			ID: one.ID, Name: one.Name, Description: one.Description, Impl: indexer.ImplSpec, Protocol: "torrent",
 			Privacy: one.Privacy, Language: one.Language, BaseURLs: one.Links, MediaTypes: specMedia(one),
-			Fields: fields, Unsupported: one.Unsupported(),
+			Fields: fields, Unsupported: one.Unsupported(), Origin: specOrigin(set, one.ID),
 		})
 	}
 	return kinds
+}
+
+// specOrigin says whether a spec is the owner's own file or replaces a shipped one.
+func specOrigin(set *spec.Specs, id string) string {
+	switch {
+	case set.Overridden(id):
+		return "overridden"
+	case set.Custom(id):
+		return "custom"
+	}
+	return ""
 }
 
 // specMedia are the media types a spec's categories cover.

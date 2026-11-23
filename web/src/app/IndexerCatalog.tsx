@@ -112,6 +112,7 @@ export function IndexerCatalog() {
                     <Chip tone={kind.privacy === "public" ? "ok" : undefined}>{PRIVACY[kind.privacy]}</Chip>
                     <span className="text-xs text-ink-muted">{kind.media_types.map((media) => MEDIA[media]).join(", ")}</span>
                     <span className="text-xs text-ink-muted">{kind.language}</span>
+                    {kind.origin && <Chip>{t(kind.origin === "custom" ? "indexerCatalog.customFile" : "indexerCatalog.replacedByFile")}</Chip>}
                     {added && <span className="text-xs text-ink-muted">already added</span>}
                     {kind.searchable === false && <span className="text-xs text-warn">not yet: {(kind.unsupported ?? []).join("; ")}</span>}
                   </span>

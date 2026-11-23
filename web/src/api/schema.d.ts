@@ -9649,6 +9649,11 @@ export interface components {
             /** @description False when Solarr cannot search the entry yet; unsupported says why. */
             searchable?: boolean;
             unsupported?: string[];
+            /**
+             * @description Absent for a spec Solarr ships; custom for a spec file the owner added, overridden for a shipped one the owner replaced.
+             * @enum {string}
+             */
+            origin?: "custom" | "overridden";
             /** @description The settings the entry asks for besides its address (a spec indexer's user name, password, cookie, choices); stored together as the indexer's secret, as JSON. */
             fields?: components["schemas"]["IndexerField"][];
         };

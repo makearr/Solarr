@@ -13306,6 +13306,7 @@ components:
         companion_downloader: { type: string, description: The download client impl its releases need, offered when it is added. }
         searchable: { type: boolean, description: False when Solarr cannot search the entry yet; unsupported says why. }
         unsupported: { type: array, items: { type: string } }
+        origin: { type: string, enum: [custom, overridden], description: 'Absent for a spec Solarr ships; custom for a spec file the owner added, overridden for a shipped one the owner replaced.' }
         fields:
           type: array
           description: The settings the entry asks for besides its address (a spec indexer's user name, password, cookie, choices); stored together as the indexer's secret, as JSON.

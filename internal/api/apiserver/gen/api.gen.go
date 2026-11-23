@@ -514,6 +514,12 @@ const (
 	IndexerKindMediaTypesTv     IndexerKindMediaTypes = "tv"
 )
 
+// Defines values for IndexerKindOrigin.
+const (
+	IndexerKindOriginCustom     IndexerKindOrigin = "custom"
+	IndexerKindOriginOverridden IndexerKindOrigin = "overridden"
+)
+
 // Defines values for IndexerKindPrivacy.
 const (
 	IndexerKindPrivacyPrivate     IndexerKindPrivacy = "private"
@@ -3936,8 +3942,11 @@ type IndexerKind struct {
 	Language   string                  `json:"language"`
 	MediaTypes []IndexerKindMediaTypes `json:"media_types"`
 	Name       string                  `json:"name"`
-	Privacy    IndexerKindPrivacy      `json:"privacy"`
-	Protocol   IndexerKindProtocol     `json:"protocol"`
+
+	// Origin Absent for a spec Solarr ships; custom for a spec file the owner added, overridden for a shipped one the owner replaced.
+	Origin   *IndexerKindOrigin  `json:"origin,omitempty"`
+	Privacy  IndexerKindPrivacy  `json:"privacy"`
+	Protocol IndexerKindProtocol `json:"protocol"`
 
 	// Searchable False when Solarr cannot search the entry yet; unsupported says why.
 	Searchable *bool `json:"searchable,omitempty"`
@@ -3953,6 +3962,9 @@ type IndexerKind struct {
 
 // IndexerKindMediaTypes defines model for IndexerKind.MediaTypes.
 type IndexerKindMediaTypes string
+
+// IndexerKindOrigin Absent for a spec Solarr ships; custom for a spec file the owner added, overridden for a shipped one the owner replaced.
+type IndexerKindOrigin string
 
 // IndexerKindPrivacy defines model for IndexerKind.Privacy.
 type IndexerKindPrivacy string

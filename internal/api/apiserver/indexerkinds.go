@@ -21,6 +21,8 @@ type IndexerKind struct {
 	Fields []IndexerField
 	// Unsupported lists why Solarr cannot search the entry yet; empty means it can.
 	Unsupported []string
+	// Origin is "custom" for an owner's own spec, "overridden" for a shipped one replaced by the owner, else empty.
+	Origin string
 }
 
 // IndexerField is one setting of a spec indexer.
@@ -71,8 +73,13 @@ func indexerKindView(kind IndexerKind) gen.IndexerKind {
 	if unsupported == nil {
 		unsupported = []string{}
 	}
+	var origin *gen.IndexerKindOrigin
+	if kind.Origin != "" {
+		value := gen.IndexerKindOrigin(kind.Origin)
+		origin = &value
+	}
 	return gen.IndexerKind{
-		Id: kind.ID, Name: kind.Name, Description: kind.Description, Impl: kind.Impl,
+		Origin: origin, Id: kind.ID, Name: kind.Name, Description: kind.Description, Impl: kind.Impl,
 		Protocol: gen.IndexerKindProtocol(kind.Protocol), Privacy: gen.IndexerKindPrivacy(kind.Privacy),
 		Language: kind.Language, BaseUrls: urls, MediaTypes: media, UserLabel: strPtr(kind.UserLabel),
 		SecretLabel: strPtr(kind.SecretLabel), SecretOptional: kind.SecretOptional,

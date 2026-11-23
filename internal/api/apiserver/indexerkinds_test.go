@@ -19,7 +19,7 @@ func (fakeIndexerKinds) IndexerKinds() []apiserver.IndexerKind {
 	return []apiserver.IndexerKind{
 		{ID: "nzbgeek", Name: "NZBgeek", Impl: "newznab", Protocol: "usenet", Privacy: "private", BaseURLs: []string{"https://api.nzbgeek.info"},
 			MediaTypes: []string{"music", "tv"}, SecretLabel: "API key"},
-		{ID: "torznab", Name: "Torznab (generic)", Impl: "torznab", Protocol: "torrent", Privacy: "private"},
+		{ID: "torznab", Name: "Torznab (generic)", Impl: "torznab", Protocol: "torrent", Privacy: "private", Origin: "overridden"},
 		{ID: "thepiratebay", Name: "The Pirate Bay", Impl: "thepiratebay", Protocol: "torrent", Privacy: "public",
 			BaseURLs: []string{"https://apibay.org"}, MediaTypes: []string{"music"}},
 		{ID: "soulseek", Name: "Soulseek (slskd)", Impl: "soulseek", Protocol: "ddl", Privacy: "semi-private",
@@ -253,5 +253,20 @@ func TestMetadataProviderInfo_ACustomProviderWithoutCarriesAnswersAnEmptyListNot
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/library-type-defaults"))
 	if !strings.Contains(recorder.Body.String(), `"key":"custom_tv"`) || strings.Contains(recorder.Body.String(), `"carries":null`) {
 		t.Errorf("a custom provider without carries must answer an empty list, not null: the interface joins it")
+	}
+}
+
+func TestListIndexerKinds_MarksASpecTheOwnerReplaced(t *testing.T) {
+	fixture, cookies := adminWithSecrets(t)
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/indexers/schema"))
+	var kinds []struct {
+		ID     string  `json:"id"`
+		Origin *string `json:"origin"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &kinds); err != nil {
+		t.Fatal(err)
+	}
+	if kinds[0].Origin != nil || kinds[1].Origin == nil || *kinds[1].Origin != "overridden" {
+		t.Errorf("origins = %v, %v", kinds[0].Origin, kinds[1].Origin)
 	}
 }
