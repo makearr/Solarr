@@ -224,6 +224,18 @@ function PartRow({
             <span>{title}</span>
             {part.artist_credit && <span className="ml-2 text-xs text-ink-muted">{part.artist_credit}</span>}
             {absolute && <span className="ml-2 text-xs text-ink-muted">#{absolute}</span>}
+            {part.in_edition && (
+              <span className="ml-2 text-xs text-ink-muted">
+                {t("work.inEdition")}{" "}
+                {categoryId ? (
+                  <Link to="/library/$categoryId/works/$workId/$tab" params={{ categoryId, workId: String(part.in_edition.work_id), tab: "overview" }} className="hover:text-accent hover:underline">
+                    {part.in_edition.title}
+                  </Link>
+                ) : (
+                  part.in_edition.title
+                )}
+              </span>
+            )}
             {scene && (
               <span className="ml-2 text-xs text-ink-muted" title={t("work.sceneNumberHint", { number: scene })}>
                 {t("work.sceneNumber", { number: scene })}

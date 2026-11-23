@@ -129,6 +129,7 @@ const catalogue = {
   "work.outBasis": "Known from: {basis}. Counted as missing {hours} hours after.",
   "work.outUnannounced": "No date announced yet.",
   "work.sceneNumber": "scene {number}",
+  "work.inEdition": "In the collected edition",
   "work.sceneNumberHint": "Scene releases number this episode {number} (TheXEM): searches ask for it, and a release numbered either way is taken.",
   "work.waitingForMetadata": "Waiting for metadata",
   "work.notOutUntil": "Not out yet · {date}",
