@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -223,7 +224,7 @@ func (p *process) tvModule() tv.Module {
 		Lists:     tv.Lists{Service: p.tvService()},
 		Wiring: media.Wiring{Hunt: p.tvHunt, Adder: p.seriesCatalog(), Pictures: p.seriesCatalog(), // A series is read again at once, as Sonarr's Refresh: it is one work and a handful of requests.
 			Refresh: func(ctx context.Context, workID int64) (bool, error) {
-				_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
+				libraries, err := p.workLibraries(ctx, workID)
 				if err != nil {
 					return false, err
 				}
@@ -500,7 +501,7 @@ func (p *process) movieModule() movie.Module {
 		},
 		Wiring: media.Wiring{Adder: catalog, Hunt: p.movieHunt, Pictures: adapters.ProviderPictures{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library), Clock: clock.NewSystem()}, // A movie is read again at once, as Radarr's Refresh: it is one work and a couple of requests.
 			Refresh: func(ctx context.Context, workID int64) (bool, error) {
-				_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
+				libraries, err := p.workLibraries(ctx, workID)
 				if err != nil {
 					return false, err
 				}
@@ -671,7 +672,7 @@ func (p *process) bookModule(format book.Format) book.Module {
 			return plan.OutcomeSearched, nil
 		}, // A book is read again at once, as Readarr's Refresh: it is one work and a few requests.
 			Refresh: func(ctx context.Context, workID int64) (bool, error) {
-				_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
+				libraries, err := p.workLibraries(ctx, workID)
 				if err != nil {
 					return false, err
 				}
@@ -778,7 +779,7 @@ func (p *process) adultModule() adult.Module {
 			return plan.OutcomeSearched, nil
 		}, // A scene is read again at once, as Whisparr's Refresh: it is one work and a few requests.
 			Refresh: func(ctx context.Context, workID int64) (bool, error) {
-				_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
+				libraries, err := p.workLibraries(ctx, workID)
 				if err != nil {
 					return false, err
 				}
@@ -1071,7 +1072,7 @@ func (p *process) comicModule() comic.Module {
 				return plan.OutcomeSearched, nil
 			},
 			Refresh: func(ctx context.Context, workID int64) (bool, error) {
-				_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
+				libraries, err := p.workLibraries(ctx, workID)
 				if err != nil {
 					return false, err
 				}
@@ -1104,4 +1105,21 @@ func (p *process) adultRecords(key string) adult.RecordProvider {
 		return nil
 	}
 	return provider
+}
+
+// workLibraries answers the libraries that want a work, else those of the root folders it lies on, so a scanned work refreshes too.
+func (p *process) workLibraries(ctx context.Context, workID int64) ([]int64, error) {
+	roots, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
+	if err != nil || len(libraries) > 0 {
+		return libraries, err
+	}
+	snapshot := p.cache.Snapshot()
+	for _, root := range roots {
+		for _, id := range snapshot.CategoriesForRootFolder(root) {
+			if !slices.Contains(libraries, id) {
+				libraries = append(libraries, id)
+			}
+		}
+	}
+	return libraries, nil
 }

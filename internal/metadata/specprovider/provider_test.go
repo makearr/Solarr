@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -306,5 +307,14 @@ func TestTheDefinitionsCacheAnswersASearchAndAnItemUntilTheyExpireAndNeverKeepsA
 	}
 	if len(doer.requests) != 6 {
 		t.Errorf("a failed item must be asked each time: %d requests", len(doer.requests))
+	}
+}
+
+func TestAJSONArrayOfStringsFillsAListFieldWithoutASplit(t *testing.T) {
+	definition := strings.Replace(jsonDefinition, `genres: {selector: genres, split: ","}`, `genres: {selector: genres}`, 1)
+	doer := &fake{answers: map[string]string{"/item/7": `{"id":7,"name":"Example Hero","genres":["Drama","Action"]}`}}
+	got, err := provider(t, definition, doer).Item(t.Context(), "7")
+	if err != nil || !slices.Equal(got.Genres, []string{"Drama", "Action"}) {
+		t.Errorf("genres = %v, %v", got.Genres, err)
 	}
 }

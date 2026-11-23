@@ -53,9 +53,6 @@ func (c SeriesCatalog) AddWork(ctx context.Context, request media.AddRequest) (m
 
 // Refresh re-reads one series from the sources; monitoring and season items stay as they are.
 func (c SeriesCatalog) Refresh(ctx context.Context, categoryID, seriesID int64) error {
-	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
-		return translateSeriesError(err)
-	}
 	profile := c.DefaultProfileID
 	if category, ok := c.Categories.Category(categoryID); ok {
 		profile = c.Categories.ProfileFor(category, profile)
@@ -79,13 +76,6 @@ func (c SeriesCatalog) PickWorkPicture(ctx context.Context, seriesID int64, url 
 
 func (c SeriesCatalog) pictures() ProviderPictures {
 	return ProviderPictures{Reader: c.Reader, Series: c.Service.Series, Clock: c.Clock}
-}
-
-func translateSeriesError(err error) error {
-	if errors.Is(err, library.ErrSeriesNotFound) {
-		return apiserver.ErrSeriesNotFound
-	}
-	return err
 }
 
 func setString(into **string, value string) {

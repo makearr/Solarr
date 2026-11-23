@@ -496,6 +496,11 @@ func listOrOne(field Field, value string, split func() []string) []string {
 	if field.Split != "" {
 		return split()
 	}
+	// A JSON array of strings arrives as its own text, so a list field reads the elements.
+	var elements []string
+	if strings.HasPrefix(value, "[") && json.Unmarshal([]byte(value), &elements) == nil {
+		return elements
+	}
 	return []string{value}
 }
 
