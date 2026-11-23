@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/indexer/spec"
+	"github.com/makearr/Solarr/internal/acquiring/specclient"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/metadata/specprovider"
 	"github.com/makearr/Solarr/internal/providerdef"
@@ -159,6 +161,7 @@ func (p *process) reloadProviderDefinitions() {
 	p.definitionStateCache.Store(&states)
 	p.definitions.Swap(catalog)
 	p.reloadSpecs(custom)
+	p.reloadDeclaredDownloadClients()
 	p.reloadRecordProviders()
 }
 
@@ -221,4 +224,23 @@ func (p *process) providerHidden(kind, key string) bool {
 		return true
 	}
 	return p.definitions.Catalog().Hidden(providerdef.Kind(kind), descriptorKey(key))
+}
+
+// reloadDeclaredDownloadClients offers the active custom download definitions beside the compiled kinds; one that does not
+// parse is left out and logged.
+func (p *process) reloadDeclaredDownloadClients() {
+	states := p.definitionStates(providerdef.KindDownload)
+	var active []specclient.Definition
+	for _, def := range p.definitions.Catalog().List(providerdef.KindDownload) {
+		if def.Engine != providerdef.EngineHTTP || providerdef.StatusOf(def, states[def.Key]) != providerdef.StatusActive {
+			continue
+		}
+		parsed, err := specclient.Parse(def.Key, def.Name, def.Raw)
+		if err != nil {
+			p.logger.Warn("custom download definition could not be read", slog.String("key", def.Key), slog.Any("error", err))
+			continue
+		}
+		active = append(active, parsed)
+	}
+	adapters.SetDeclaredDownloadClients(active)
 }

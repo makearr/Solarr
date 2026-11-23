@@ -48,6 +48,24 @@ them, the first the default) and a `request_delay` that floors the gap between a
 `via: flaresolverr` sends the requests through the owner's own FlareSolverr; the definition declares a setting named
 `flaresolverr_url`.
 
+## Download clients, `engine: http`
+
+A definition says how to talk to an external usenet client; Solarr implements no client. Paths are relative to the address
+the owner enters (a path that is absolute, scheme-relative or carries `@` is refused), so a definition never names a host.
+`protocol: usenet` only (torrent definitions are not offered). The secret travels by `auth` (`query` with a name, `header` with a
+name and prefix, or `basic` with `user:password`).
+
+Parts, all required: `probe` (steps, then `version`, optional `download_folder` and `categories`), `add` (a request with
+`file_field`, answering `ref`, `ok`, `error`), `downloads.list` (one listing per place the client keeps downloads: `rows`, fields
+`ref name status size left category path message`, `states` and a required `default_state`) with optional `by_ref` listings,
+`queue_status` (`paused speed items left`), and `remove`, `pause`, `resume` (steps; a step fails when its `error` reads
+non-empty). Templates see `.Query.name`, `.Query.category`, `.Query.refs` (comma-joined), `.Query.delete_files`, `.ID`,
+`.Settings.secret` and `.Step.<name>.<field>`; a query value that renders empty is left out. The `scale` filter turns a
+decimal into whole units (`"1048576"` turns megabytes into bytes). `blank_when` empties a field when the row matches a
+selector. A custom definition is inactive until an administrator approves it in Settings > Providers; a key equal to a
+compiled client's impl is ignored. The SABnzbd port in `internal/acquiring/specclient/testdata/sabnzbd.yaml` is the worked
+example, and a test asserts it sends the compiled client's requests and reads the same answers.
+
 ## Safety
 
 | Rule | How |

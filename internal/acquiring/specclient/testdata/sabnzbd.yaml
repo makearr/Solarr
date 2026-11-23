@@ -1,0 +1,122 @@
+schema: 1
+kind: download
+key: sabnzbd-port
+name: SABnzbd (definition)
+engine: http
+protocol: usenet
+description: SABnzbd's query-string API described as data; used by the parity test and as the documentation example.
+label: SABnzbd (definition)
+address_placeholder: http://sabnzbd:8080
+secret_label: API key
+categories: true
+auth:
+  type: query
+  name: apikey
+probe:
+  steps:
+    - name: version
+      request: {path: /api, query: {mode: version, output: json}}
+      fields:
+        version: {selector: version}
+    - name: folder
+      request: {path: /api, query: {mode: get_config, output: json, section: misc, keyword: complete_dir}}
+      fields:
+        dir: {selector: config.misc.complete_dir}
+    - name: cats
+      request: {path: /api, query: {mode: get_cats, output: json}}
+      fields:
+        list: {selector: categories, optional: true}
+  fields:
+    version: {text: "SABnzbd {{.Step.version.version}}"}
+    download_folder: {text: "{{.Step.folder.dir}}"}
+    categories: {text: "{{.Step.cats.list}}", optional: true}
+add:
+  request:
+    method: POST
+    path: /api
+    query: {mode: addfile, output: json, nzbname: "{{.Query.name}}", cat: "{{.Query.category}}"}
+    file_field: name
+    file_name: "{{.Query.name}}.nzb"
+  fields:
+    ok: {selector: status}
+    ref: {selector: "nzo_ids[0]", optional: true}
+    error: {selector: error, optional: true}
+downloads:
+  list:
+    - request: {path: /api, query: {mode: queue, output: json}}
+      rows: queue.slots
+      filter_category: true
+      fields:
+        ref: {selector: nzo_id}
+        name: {selector: filename, blank_when: "status:contains(Grabbing)"}
+        status: {selector: status}
+        category: {selector: cat}
+        size: {selector: mb, filters: [{name: scale, args: ["1048576"]}]}
+        left: {selector: mbleft, filters: [{name: scale, args: ["1048576"]}]}
+      states: {Paused: paused, Downloading: downloading}
+      default_state: queued
+    - request: {path: /api, query: {mode: history, output: json, category: "{{.Query.category}}", limit: "1000"}}
+      rows: history.slots
+      fields:
+        ref: {selector: nzo_id}
+        name: {selector: name}
+        status: {selector: status}
+        category: {selector: category}
+        size: {selector: bytes}
+        path: {selector: storage, optional: true}
+        message: {selector: fail_message, optional: true}
+      states: {Completed: completed, Failed: failed}
+      default_state: processing
+  by_ref:
+    - request: {path: /api, query: {mode: queue, output: json, nzo_ids: "{{.Query.refs}}"}}
+      rows: queue.slots
+      fields:
+        ref: {selector: nzo_id}
+        name: {selector: filename, blank_when: "status:contains(Grabbing)"}
+        status: {selector: status}
+        category: {selector: cat}
+        size: {selector: mb, filters: [{name: scale, args: ["1048576"]}]}
+        left: {selector: mbleft, filters: [{name: scale, args: ["1048576"]}]}
+      states: {Paused: paused, Downloading: downloading}
+      default_state: queued
+    - request: {path: /api, query: {mode: history, output: json, nzo_ids: "{{.Query.refs}}"}}
+      rows: history.slots
+      fields:
+        ref: {selector: nzo_id}
+        name: {selector: name}
+        status: {selector: status}
+        category: {selector: category}
+        size: {selector: bytes}
+        path: {selector: storage, optional: true}
+        message: {selector: fail_message, optional: true}
+      states: {Completed: completed, Failed: failed}
+      default_state: processing
+queue_status:
+  request: {path: /api, query: {mode: queue, output: json}}
+  fields:
+    paused: {selector: queue.paused}
+    speed: {selector: queue.kbpersec, filters: [{name: scale, args: ["1024"]}]}
+    items: {selector: queue.noofslots_total}
+    left: {selector: queue.mbleft, filters: [{name: scale, args: ["1048576"]}]}
+remove:
+  steps:
+    - name: queue
+      request: {path: /api, query: {mode: queue, output: json, name: delete, value: "{{.ID}}", del_files: "{{.Query.delete_files}}"}}
+      fields:
+        error: {selector: error, optional: true}
+    - name: history
+      request: {path: /api, query: {mode: history, output: json, name: delete, value: "{{.ID}}", del_files: "{{.Query.delete_files}}"}}
+      fields:
+        error: {selector: error, optional: true}
+pause:
+  steps:
+    - name: pause
+      request: {path: /api, query: {mode: queue, output: json, name: pause, value: "{{.Query.refs}}"}}
+      fields:
+        error: {selector: error, optional: true}
+resume:
+  steps:
+    - name: resume
+      request: {path: /api, query: {mode: queue, output: json, name: resume, value: "{{.Query.refs}}"}}
+      fields:
+        error: {selector: error, optional: true}

@@ -1,6 +1,9 @@
 package adapters
 
 import (
+	"slices"
+	"sync/atomic"
+
 	"github.com/makearr/Solarr/internal/acquiring/aria2"
 	"github.com/makearr/Solarr/internal/acquiring/blackhole"
 	"github.com/makearr/Solarr/internal/acquiring/deluge"
@@ -11,6 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/rtorrent"
 	"github.com/makearr/Solarr/internal/acquiring/sabnzbd"
 	"github.com/makearr/Solarr/internal/acquiring/slskd"
+	"github.com/makearr/Solarr/internal/acquiring/specclient"
 	"github.com/makearr/Solarr/internal/acquiring/transmission"
 	"github.com/makearr/Solarr/internal/acquiring/utorrent"
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -44,8 +48,32 @@ type downloadClientKind struct {
 	build      func(deps DownloadClientDeps, connection download.Connection) download.Driver
 }
 
-// downloadClientKinds are every kind Solarr offers, usenet first, in the order the settings screen lists them.
+// declaredClients are the active custom download definitions (engine: http); the process swaps them on every reload.
+var declaredClients atomic.Pointer[[]specclient.Definition]
+
+// SetDeclaredDownloadClients replaces the custom download definitions offered beside the compiled kinds.
+func SetDeclaredDownloadClients(definitions []specclient.Definition) {
+	declaredClients.Store(&definitions)
+}
+
+// downloadClientKinds are every kind Solarr offers, usenet first, in the order the settings screen lists them; a
+// declared kind never replaces a compiled one of the same impl.
 func downloadClientKinds() []downloadClientKind {
+	kinds := compiledDownloadClientKinds()
+	if declared := declaredClients.Load(); declared != nil {
+		for _, def := range *declared {
+			if slices.ContainsFunc(kinds, func(one downloadClientKind) bool { return one.definition.Impl == def.Key }) {
+				continue
+			}
+			kinds = append(kinds, downloadClientKind{def.Describe(), func(deps DownloadClientDeps, connection download.Connection) download.Driver {
+				return download.NewUsenet(specclient.New(def, deps.HTTP, deps.Clock, connection.BaseURL, connection.Credentials))
+			}})
+		}
+	}
+	return kinds
+}
+
+func compiledDownloadClientKinds() []downloadClientKind {
 	folders := func(deps DownloadClientDeps, connection download.Connection) blackhole.Folders {
 		return blackhole.Folders{FS: deps.FS, Clock: deps.Clock, Drop: connection.DropFolder, Watch: connection.WatchFolder, Memo: deps.Blackholes}
 	}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"math"
 	"net/url"
 	"strconv"
 	"strings"
@@ -20,7 +21,7 @@ var KnownFilters = map[string]bool{
 	"dateparse": true, "append": true, "querystring": true, "replace": true, "re_replace": true, "regexp": true,
 	"andmatch": true, "prepend": true, "timeago": true, "trim": true, "split": true, "fuzzytime": true, "validate": true,
 	"validfilename": true, "htmldecode": true, "urldecode": true, "diacritics": true, "urlencode": true, "toupper": true,
-	"tolower": true, "timeparse": true, "jsonjoinarray": true,
+	"tolower": true, "timeparse": true, "jsonjoinarray": true, "scale": true,
 }
 
 // FilterContext is what some filters need besides the value.
@@ -78,6 +79,8 @@ func ApplyFilter(value, name string, args []string, context FilterContext) (stri
 			return "", err
 		}
 		return firstGroup(re, value), nil
+	case "scale":
+		return scaled(value, arg(args, 0)), nil
 	case "trim":
 		if cutset := arg(args, 0); cutset != "" {
 			return strings.Trim(value, cutset), nil
@@ -190,4 +193,16 @@ func joinJSONArray(value, key, separator string) string {
 		}
 	}
 	return strings.Join(parts, separator)
+}
+
+// scaled is a decimal times a factor as a whole number: a client's megabyte text as bytes. Anything unreadable, negative
+// or too large is "0" rather than an error, so one odd row never fails a listing.
+func scaled(value, factor string) string {
+	number, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+	multiplier, factorErr := strconv.ParseFloat(strings.TrimSpace(factor), 64)
+	product := number * multiplier
+	if err != nil || factorErr != nil || math.IsNaN(product) || math.IsInf(product, 0) || product < 0 || product >= float64(1<<63) {
+		return "0"
+	}
+	return strconv.FormatInt(int64(product), 10)
 }
