@@ -84,10 +84,13 @@ type Service struct {
 	stall      time.Duration
 	stallClock clock.Clock
 
-	mu     sync.RWMutex
-	found  []Capability
-	active int
-	owned  map[string]ownedStream
+	mu      sync.RWMutex
+	found   []Capability
+	matrix  []EncoderSupport
+	filters map[string]bool
+	version string
+	active  int
+	owned   map[string]ownedStream
 }
 
 // ownedStream is a running conversion that a newer one by the same owner may stop.
@@ -362,4 +365,60 @@ func (c *countingWriter) Write(p []byte) (int, error) {
 	c.written += int64(n)
 	c.mu.Unlock()
 	return n, err
+}
+
+// DetectEncoders reads what this ffmpeg builds and tries every engine and codec, after Detect; the outcome is kept.
+func (s *Service) DetectEncoders(ctx context.Context) []EncoderSupport {
+	built := builtEncoders(ctx, s.runner)
+	matrix := DetectEncoders(ctx, s.runner, s.Capabilities(), built)
+	filters, version := builtFilters(ctx, s.runner), ffmpegVersion(ctx, s.runner)
+	s.mu.Lock()
+	s.matrix, s.filters, s.version = matrix, filters, version
+	s.mu.Unlock()
+	return matrix
+}
+
+// Encoders is what the last encoder detection found.
+func (s *Service) Encoders() []EncoderSupport {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]EncoderSupport(nil), s.matrix...)
+}
+
+// Filters says which of the filters a setup may use this ffmpeg has.
+func (s *Service) Filters() map[string]bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]bool, len(s.filters))
+	for name, has := range s.filters {
+		out[name] = has
+	}
+	return out
+}
+
+// FFmpegVersion is the version the last detection read, empty when ffmpeg is missing.
+func (s *Service) FFmpegVersion() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.version
+}
+
+// EncoderFor answers one engine's support for a codec.
+func (s *Service) EncoderFor(engine Accel, codec Codec) (EncoderSupport, bool) {
+	for _, row := range s.Encoders() {
+		if row.Engine == engine && row.Codec == codec {
+			return row, true
+		}
+	}
+	return EncoderSupport{}, false
+}
+
+// BestEngine is the GPU engine auto takes for a codec (NVENC, QSV, VAAPI), needing 10-bit support when asked; false means the processor.
+func (s *Service) BestEngine(codec Codec, tenBit bool) (Accel, bool) {
+	for _, engine := range []Accel{NVENC, QSV, VAAPI} {
+		if row, found := s.EncoderFor(engine, codec); found && row.Working && (!tenBit || row.TenBit) {
+			return engine, true
+		}
+	}
+	return "", false
 }

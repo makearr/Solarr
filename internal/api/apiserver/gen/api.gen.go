@@ -1084,6 +1084,14 @@ const (
 	TranscodeAudioFiltersDenoiseMethodAnlmdn TranscodeAudioFiltersDenoiseMethod = "anlmdn"
 )
 
+// Defines values for TranscodeCapabilityAccel.
+const (
+	TranscodeCapabilityAccelNvenc    TranscodeCapabilityAccel = "nvenc"
+	TranscodeCapabilityAccelQsv      TranscodeCapabilityAccel = "qsv"
+	TranscodeCapabilityAccelSoftware TranscodeCapabilityAccel = "software"
+	TranscodeCapabilityAccelVaapi    TranscodeCapabilityAccel = "vaapi"
+)
+
 // Defines values for TranscodeEncodeEngine.
 const (
 	TranscodeEncodeEngineAuto     TranscodeEncodeEngine = "auto"
@@ -1108,6 +1116,22 @@ const (
 	TranscodeEncodeRateModeBitrate TranscodeEncodeRateMode = "bitrate"
 	TranscodeEncodeRateModeEmpty   TranscodeEncodeRateMode = ""
 	TranscodeEncodeRateModeQuality TranscodeEncodeRateMode = "quality"
+)
+
+// Defines values for TranscodeEncoderSupportCodec.
+const (
+	TranscodeEncoderSupportCodecAv1  TranscodeEncoderSupportCodec = "av1"
+	TranscodeEncoderSupportCodecH264 TranscodeEncoderSupportCodec = "h264"
+	TranscodeEncoderSupportCodecHevc TranscodeEncoderSupportCodec = "hevc"
+	TranscodeEncoderSupportCodecVp9  TranscodeEncoderSupportCodec = "vp9"
+)
+
+// Defines values for TranscodeEncoderSupportEngine.
+const (
+	TranscodeEncoderSupportEngineNvenc    TranscodeEncoderSupportEngine = "nvenc"
+	TranscodeEncoderSupportEngineQsv      TranscodeEncoderSupportEngine = "qsv"
+	TranscodeEncoderSupportEngineSoftware TranscodeEncoderSupportEngine = "software"
+	TranscodeEncoderSupportEngineVaapi    TranscodeEncoderSupportEngine = "vaapi"
 )
 
 // Defines values for TranscodeEngineAvailabilityEngine.
@@ -7311,6 +7335,18 @@ type TranscodeAudioFilters struct {
 // TranscodeAudioFiltersDenoiseMethod defines model for TranscodeAudioFilters.DenoiseMethod.
 type TranscodeAudioFiltersDenoiseMethod string
 
+// TranscodeCapability defines model for TranscodeCapability.
+type TranscodeCapability struct {
+	Accel   TranscodeCapabilityAccel `json:"accel"`
+	Detail  *string                  `json:"detail,omitempty"`
+	Device  *string                  `json:"device,omitempty"`
+	Name    *string                  `json:"name,omitempty"`
+	Working bool                     `json:"working"`
+}
+
+// TranscodeCapabilityAccel defines model for TranscodeCapability.Accel.
+type TranscodeCapabilityAccel string
+
 // TranscodeCheck defines model for TranscodeCheck.
 type TranscodeCheck struct {
 	BelowMax        bool `json:"below_max"`
@@ -7350,13 +7386,40 @@ type TranscodeEncodePreset string
 // TranscodeEncodeRateMode Empty for an audio target.
 type TranscodeEncodeRateMode string
 
+// TranscodeEncoderSupport defines model for TranscodeEncoderSupport.
+type TranscodeEncoderSupport struct {
+	Codec       TranscodeEncoderSupportCodec  `json:"codec"`
+	Detail      *string                       `json:"detail,omitempty"`
+	Encoder     string                        `json:"encoder"`
+	Engine      TranscodeEncoderSupportEngine `json:"engine"`
+	Lookahead   bool                          `json:"lookahead"`
+	QualityMode string                        `json:"quality_mode"`
+	TenBit      bool                          `json:"ten_bit"`
+	Working     bool                          `json:"working"`
+}
+
+// TranscodeEncoderSupportCodec defines model for TranscodeEncoderSupport.Codec.
+type TranscodeEncoderSupportCodec string
+
+// TranscodeEncoderSupportEngine defines model for TranscodeEncoderSupport.Engine.
+type TranscodeEncoderSupportEngine string
+
 // TranscodeEngineAvailability defines model for TranscodeEngineAvailability.
 type TranscodeEngineAvailability struct {
+	// Available True when the engine encodes the target's codec here.
 	Available bool                              `json:"available"`
 	Engine    TranscodeEngineAvailabilityEngine `json:"engine"`
+	Lookahead bool                              `json:"lookahead"`
 
-	// Reason Why not
+	// PresetApplies False for an engine that ignores the preset (VAAPI).
+	PresetApplies bool `json:"preset_applies"`
+
+	// QualityMode crf, la_icq, icq, cqp or cq; empty when unavailable.
+	QualityMode string `json:"quality_mode"`
+
+	// Reason Why not: the build lacks the encoder, or the driver's last line.
 	Reason *string `json:"reason,omitempty"`
+	TenBit bool    `json:"ten_bit"`
 }
 
 // TranscodeEngineAvailabilityEngine defines model for TranscodeEngineAvailability.Engine.
@@ -7377,6 +7440,17 @@ type TranscodeGlobalSettings struct {
 	OriginalsRetainDays int                 `json:"originals_retain_days"`
 	Parallel            TranscodeLaneLimits `json:"parallel"`
 	PlaybackParallel    TranscodeLaneLimits `json:"playback_parallel"`
+}
+
+// TranscodeHardware defines model for TranscodeHardware.
+type TranscodeHardware struct {
+	Capabilities    []TranscodeCapability     `json:"capabilities"`
+	Encoders        []TranscodeEncoderSupport `json:"encoders"`
+	FfmpegAvailable bool                      `json:"ffmpeg_available"`
+	FfmpegVersion   string                    `json:"ffmpeg_version"`
+
+	// Filters Which filters of the setup form this ffmpeg has.
+	Filters map[string]bool `json:"filters"`
 }
 
 // TranscodeLadder defines model for TranscodeLadder.
@@ -7455,6 +7529,7 @@ type TranscodeSetupVersion int
 // TranscodeSetupState defines model for TranscodeSetupState.
 type TranscodeSetupState struct {
 	Availability []TranscodeEngineAvailability `json:"availability"`
+	Filters      map[string]bool               `json:"filters"`
 
 	// IsDefault True until a setup is saved for the target.
 	IsDefault bool `json:"is_default"`
@@ -11203,6 +11278,12 @@ type ServerInterface interface {
 	// Replace a content profile; the targets tuned for it keep their own settings. Administrator only.
 	// (PUT /targetprofiles/{id})
 	UpdateTargetProfile(w http.ResponseWriter, r *http.Request, id int64)
+	// What this machine can encode with, per engine and codec, and which filters this ffmpeg has. Administrator only.
+	// (GET /transcode/hardware)
+	GetTranscodeHardware(w http.ResponseWriter, r *http.Request)
+	// Try every engine again and answer what was found; takes a few seconds. Administrator only.
+	// (POST /transcode/hardware/detect)
+	DetectTranscodeHardware(w http.ResponseWriter, r *http.Request)
 	// Every account, with its role and category grants.
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request)
@@ -13684,6 +13765,18 @@ func (_ Unimplemented) DeleteTargetProfile(w http.ResponseWriter, r *http.Reques
 // Replace a content profile; the targets tuned for it keep their own settings. Administrator only.
 // (PUT /targetprofiles/{id})
 func (_ Unimplemented) UpdateTargetProfile(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What this machine can encode with, per engine and codec, and which filters this ffmpeg has. Administrator only.
+// (GET /transcode/hardware)
+func (_ Unimplemented) GetTranscodeHardware(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Try every engine again and answer what was found; takes a few seconds. Administrator only.
+// (POST /transcode/hardware/detect)
+func (_ Unimplemented) DetectTranscodeHardware(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -26303,6 +26396,50 @@ func (siw *ServerInterfaceWrapper) UpdateTargetProfile(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// GetTranscodeHardware operation middleware
+func (siw *ServerInterfaceWrapper) GetTranscodeHardware(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTranscodeHardware(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DetectTranscodeHardware operation middleware
+func (siw *ServerInterfaceWrapper) DetectTranscodeHardware(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DetectTranscodeHardware(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -29702,6 +29839,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/targetprofiles/{id}", wrapper.UpdateTargetProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/transcode/hardware", wrapper.GetTranscodeHardware)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/transcode/hardware/detect", wrapper.DetectTranscodeHardware)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/users", wrapper.ListUsers)

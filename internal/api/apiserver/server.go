@@ -961,6 +961,8 @@ func New(config Config) (*Server, error) {
 			secured.Put("/settings/discover", server.SetDiscoverSettings)
 			secured.Put("/settings/discover/libraries/{category_id}", wrapped.SetLibraryDiscoverSettings)
 			secured.Post("/settings/discover/libraries/{category_id}/preview", wrapped.PreviewLibraryDiscoverAutoAdd)
+			secured.Get("/transcode/hardware", server.GetTranscodeHardware)
+			secured.Post("/transcode/hardware/detect", server.DetectTranscodeHardware)
 			secured.Get("/settings/transcode", server.GetTranscodeSettings)
 			secured.Put("/settings/transcode", server.SetTranscodeSettings)
 			secured.Put("/settings/transcode/libraries/{category_id}", wrapped.SetTranscodeLibrary)

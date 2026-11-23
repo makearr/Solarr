@@ -5451,6 +5451,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/transcode/hardware": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What this machine can encode with, per engine and codec, and which filters this ffmpeg has. Administrator only. */
+        get: operations["getTranscodeHardware"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transcode/hardware/detect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Try every engine again and answer what was found; takes a few seconds. Administrator only. */
+        post: operations["detectTranscodeHardware"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/general/video-previews/generate": {
         parameters: {
             query?: never;
@@ -12589,9 +12623,46 @@ export interface components {
         TranscodeEngineAvailability: {
             /** @enum {string} */
             engine: "auto" | "software" | "qsv" | "vaapi" | "nvenc";
+            /** @description True when the engine encodes the target's codec here. */
             available: boolean;
-            /** @description Why not */
+            /** @description Why not: the build lacks the encoder, or the driver's last line. */
             reason?: string;
+            lookahead: boolean;
+            ten_bit: boolean;
+            /** @description crf, la_icq, icq, cqp or cq; empty when unavailable. */
+            quality_mode: string;
+            /** @description False for an engine that ignores the preset (VAAPI). */
+            preset_applies: boolean;
+        };
+        TranscodeEncoderSupport: {
+            /** @enum {string} */
+            engine: "software" | "qsv" | "vaapi" | "nvenc";
+            /** @enum {string} */
+            codec: "h264" | "hevc" | "av1" | "vp9";
+            encoder: string;
+            working: boolean;
+            detail?: string;
+            lookahead: boolean;
+            ten_bit: boolean;
+            quality_mode: string;
+        };
+        TranscodeCapability: {
+            /** @enum {string} */
+            accel: "software" | "qsv" | "vaapi" | "nvenc";
+            device?: string;
+            name?: string;
+            working: boolean;
+            detail?: string;
+        };
+        TranscodeHardware: {
+            ffmpeg_available: boolean;
+            ffmpeg_version: string;
+            capabilities: components["schemas"]["TranscodeCapability"][];
+            encoders: components["schemas"]["TranscodeEncoderSupport"][];
+            /** @description Which filters of the setup form this ffmpeg has. */
+            filters: {
+                [key: string]: boolean;
+            };
         };
         TranscodeSetupState: {
             /** Format: int64 */
@@ -12606,6 +12677,9 @@ export interface components {
             setup: components["schemas"]["TranscodeSetup"];
             warnings: components["schemas"]["TranscodeWarning"][];
             availability: components["schemas"]["TranscodeEngineAvailability"][];
+            filters: {
+                [key: string]: boolean;
+            };
         };
         DiscoverGlobalSettings: {
             /** @description Recommendations of works that are not in Solarr or not monitored (discover.enabled), the same switch as on Settings -> General. Default off. */
@@ -22741,6 +22815,50 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    getTranscodeHardware: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The last detection. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscodeHardware"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    detectTranscodeHardware: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The new detection. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscodeHardware"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     generateVideoPreviews: {

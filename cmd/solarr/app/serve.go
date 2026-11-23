@@ -1311,6 +1311,10 @@ func (p *process) detectTranscodeHardware(ctx context.Context) {
 		p.logger.Info("transcode encoder", slog.String("accel", string(found.Accel)), slog.String("device", found.Device),
 			slog.String("name", found.Name), slog.Bool("working", found.Working), slog.String("detail", found.Detail))
 	}
+	for _, row := range p.transcoder.DetectEncoders(ctx) {
+		p.logger.Debug("transcode encoder matrix", slog.String("engine", string(row.Engine)), slog.String("codec", string(row.Codec)),
+			slog.Bool("working", row.Working), slog.String("detail", row.Detail))
+	}
 }
 
 // frameDecodeArgs is the GPU decode option for reading one video frame, under the player's hardware setting.

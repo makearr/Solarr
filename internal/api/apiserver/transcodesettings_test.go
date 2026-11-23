@@ -124,7 +124,7 @@ func TestTranscodeSettings_ASetupStartsAsTheDefaultAndSavingAndResettingRaiseIts
 		return state(recorder, http.StatusOK, recorder.Body.Bytes())
 	}
 	first := get()
-	if !first.IsDefault || first.Revision != 0 || first.Setup.Encode.Preset != "slow" && first.Setup.Encode.Preset != "slower" || len(first.Availability) != 5 {
+	if !first.IsDefault || first.Revision != 0 || first.Setup.Encode.Preset != "slow" && first.Setup.Encode.Preset != "slower" || len(first.Availability) != 1 {
 		t.Fatalf("default = %+v", first)
 	}
 

@@ -161,20 +161,29 @@ func try(ctx context.Context, runner Runner, capability Capability) Capability {
 
 // probeArgs encodes one black frame with the candidate and throws it away.
 func probeArgs(capability Capability) []string {
-	source := []string{"-hide_banner", "-loglevel", "error"}
-	var filter, encoder string
-	switch capability.Accel {
-	case VAAPI:
-		source = append(source, "-init_hw_device", "vaapi=hw:"+capability.Device, "-filter_hw_device", "hw")
-		filter, encoder = "format=nv12,hwupload", "h264_vaapi"
-	case QSV:
-		source = append(source, "-init_hw_device", "vaapi=va:"+capability.Device, "-init_hw_device", "qsv=hw@va", "-filter_hw_device", "hw")
-		filter, encoder = "format=nv12,hwupload=extra_hw_frames=64", "h264_qsv"
-	default:
-		filter, encoder = "format=yuv420p", "h264_nvenc"
+	source, filter := hardwareInput(capability, false)
+	encoder := map[Accel]string{VAAPI: "h264_vaapi", QSV: "h264_qsv"}[capability.Accel]
+	if encoder == "" {
+		encoder = "h264_nvenc"
 	}
 	return append(source, "-f", "lavfi", "-i", "color=c=black:s=256x256:d=0.2", "-vf", filter,
 		"-c:v", encoder, "-frames:v", "1", "-f", "null", "-")
+}
+
+// hardwareInput is the device options and the filter that bring test frames to the candidate, in 8 or 10 bits.
+func hardwareInput(capability Capability, tenBit bool) (source []string, filter string) {
+	source = []string{"-hide_banner", "-loglevel", "error"}
+	format, soft := "nv12", "yuv420p"
+	if tenBit {
+		format, soft = "p010", "yuv420p10le"
+	}
+	switch capability.Accel {
+	case VAAPI:
+		return append(source, "-init_hw_device", "vaapi=hw:"+capability.Device, "-filter_hw_device", "hw"), "format=" + format + ",hwupload"
+	case QSV:
+		return append(source, "-init_hw_device", "vaapi=va:"+capability.Device, "-init_hw_device", "qsv=hw@va", "-filter_hw_device", "hw"), "format=" + format + ",hwupload=extra_hw_frames=64"
+	}
+	return source, "format=" + soft
 }
 
 func renderNodes(fsys fsx.FS) []string {

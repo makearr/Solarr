@@ -8470,6 +8470,34 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /transcode/hardware:
+    get:
+      operationId: getTranscodeHardware
+      tags: [settings]
+      summary: What this machine can encode with, per engine and codec, and which filters this ffmpeg has. Administrator only.
+      responses:
+        "200":
+          description: The last detection.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TranscodeHardware" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /transcode/hardware/detect:
+    post:
+      operationId: detectTranscodeHardware
+      tags: [settings]
+      summary: Try every engine again and answer what was found; takes a few seconds. Administrator only.
+      responses:
+        "200":
+          description: The new detection.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TranscodeHardware" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /settings/general/video-previews/generate:
     post:
       operationId: generateVideoPreviews
@@ -16862,15 +16890,52 @@ components:
 
     TranscodeEngineAvailability:
       type: object
-      required: [engine, available]
+      required: [engine, available, lookahead, ten_bit, quality_mode, preset_applies]
       properties:
         engine: { type: string, enum: [auto, software, qsv, vaapi, nvenc] }
-        available: { type: boolean }
-        reason: { type: string, description: Why not, as a code, when unavailable. }
+        available: { type: boolean, description: True when the engine encodes the target's codec here. }
+        reason: { type: string, description: "Why not: the build lacks the encoder, or the driver's last line." }
+        lookahead: { type: boolean }
+        ten_bit: { type: boolean }
+        quality_mode: { type: string, description: "crf, la_icq, icq, cqp or cq; empty when unavailable." }
+        preset_applies: { type: boolean, description: False for an engine that ignores the preset (VAAPI). }
+
+    TranscodeEncoderSupport:
+      type: object
+      required: [engine, codec, encoder, working, lookahead, ten_bit, quality_mode]
+      properties:
+        engine: { type: string, enum: [software, qsv, vaapi, nvenc] }
+        codec: { type: string, enum: [h264, hevc, av1, vp9] }
+        encoder: { type: string }
+        working: { type: boolean }
+        detail: { type: string }
+        lookahead: { type: boolean }
+        ten_bit: { type: boolean }
+        quality_mode: { type: string }
+
+    TranscodeCapability:
+      type: object
+      required: [accel, working]
+      properties:
+        accel: { type: string, enum: [software, qsv, vaapi, nvenc] }
+        device: { type: string }
+        name: { type: string }
+        working: { type: boolean }
+        detail: { type: string }
+
+    TranscodeHardware:
+      type: object
+      required: [ffmpeg_available, ffmpeg_version, capabilities, encoders, filters]
+      properties:
+        ffmpeg_available: { type: boolean }
+        ffmpeg_version: { type: string }
+        capabilities: { type: array, items: { $ref: "#/components/schemas/TranscodeCapability" } }
+        encoders: { type: array, items: { $ref: "#/components/schemas/TranscodeEncoderSupport" } }
+        filters: { type: object, additionalProperties: { type: boolean }, description: Which filters of the setup form this ffmpeg has. }
 
     TranscodeSetupState:
       type: object
-      required: [target_id, is_default, revision, setup, warnings, availability]
+      required: [target_id, is_default, revision, setup, warnings, availability, filters]
       properties:
         target_id: { type: integer, format: int64 }
         is_default: { type: boolean, description: True until a setup is saved for the target. }
@@ -16878,6 +16943,7 @@ components:
         setup: { $ref: "#/components/schemas/TranscodeSetup" }
         warnings: { type: array, items: { $ref: "#/components/schemas/TranscodeWarning" } }
         availability: { type: array, items: { $ref: "#/components/schemas/TranscodeEngineAvailability" } }
+        filters: { type: object, additionalProperties: { type: boolean } }
 
     DiscoverGlobalSettings:
       type: object

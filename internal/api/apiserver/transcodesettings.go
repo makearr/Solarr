@@ -154,15 +154,6 @@ func (s *Server) SetTranscodeLibrary(w http.ResponseWriter, r *http.Request, cat
 	writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such library")
 }
 
-// transcodeAvailability is every engine available until the hardware probe exists.
-func transcodeAvailability() []gen.TranscodeEngineAvailability {
-	var out []gen.TranscodeEngineAvailability
-	for _, engine := range []settings.TranscodeEngine{settings.EngineAuto, settings.EngineSoftware, settings.EngineQSV, settings.EngineVAAPI, settings.EngineNVENC} {
-		out = append(out, gen.TranscodeEngineAvailability{Engine: gen.TranscodeEngineAvailabilityEngine(engine), Available: true})
-	}
-	return out
-}
-
 // transcodeSetupState answers a target's setup as the API shape; the typed document goes through JSON, whose names both sides share.
 func (s *Server) transcodeSetupState(r *http.Request, targetID int64) (gen.TranscodeSetupState, error) {
 	stored, err := s.auth.Settings.TranscodeSetup(r.Context(), targetID)
@@ -175,10 +166,13 @@ func (s *Server) transcodeSetupState(r *http.Request, targetID int64) (gen.Trans
 		return gen.TranscodeSetupState{}, err
 	}
 	out := gen.TranscodeSetupState{
-		TargetId: targetID, IsDefault: !stored.Stored, Revision: stored.Revision, Warnings: []gen.TranscodeWarning{}, Availability: transcodeAvailability(),
+		TargetId: targetID, IsDefault: !stored.Stored, Revision: stored.Revision, Warnings: []gen.TranscodeWarning{}, Availability: s.transcodeAvailability(target.VideoCodec), Filters: map[string]bool{},
 	}
 	if err := json.Unmarshal(raw, &out.Setup); err != nil {
 		return gen.TranscodeSetupState{}, err
+	}
+	if s.transcoder != nil {
+		out.Filters = s.transcoder.Filters()
 	}
 	for _, warning := range settings.TranscodeWarnings(stored.Setup, target) {
 		one := gen.TranscodeWarning{Code: gen.TranscodeWarningCode(warning.Code)}
