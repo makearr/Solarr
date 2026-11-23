@@ -71,3 +71,12 @@ export function invalidatePeopleLists(queryClient: QueryClient) {
     predicate: (query) => /^(people|organisations)-/.test(String(query.queryKey[0])),
   });
 }
+
+/** The libraries with recommendations on; a 404 means Discover is off, and the sidebar then shows no link. */
+export const useDiscoverLibraries = () =>
+  useQuery({
+    queryKey: ["discover-libraries"],
+    queryFn: () => ok(api.GET("/discover/libraries")),
+    retry: false,
+    meta: { handlesErrors: true },
+  });

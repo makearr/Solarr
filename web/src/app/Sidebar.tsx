@@ -10,12 +10,14 @@ import {
   Share2,
   type LucideIcon,
   CalendarDays,
+  Compass,
   UsersRound,
 } from "lucide-react";
 
+import { t } from "@/lib/i18n";
 import { useSidebarCollapsed } from "@/list/useNarrow";
 import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
-import { useLibraryTree } from "@/lib/resources";
+import { useDiscoverLibraries, useLibraryTree } from "@/lib/resources";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 import { useShowCalendar } from "@/lib/interfacePreferences";
 import { useOpenSections } from "@/lib/useOpenSections";
@@ -77,6 +79,7 @@ export function Sidebar() {
   const search = useSearch({ strict: false }) as { category_id?: string };
   const collapsed = useSidebarCollapsed();
   const [showCalendar] = useShowCalendar();
+  const discoverLibraries = useDiscoverLibraries();
 
   const libraries = useLibraryTree();
 
@@ -138,6 +141,14 @@ export function Sidebar() {
             {!collapsed && "Dashboard"}
           </Link>
         </li>
+        {discoverLibraries.data && discoverLibraries.data.length > 0 && (
+          <li>
+            <Link to="/discover" title={collapsed ? t("discover.page") : undefined} className={sectionLinkClass(path.startsWith("/discover"), collapsed)}>
+              <Compass aria-hidden className="size-4 shrink-0" />
+              {!collapsed && t("discover.page")}
+            </Link>
+          </li>
+        )}
         {showCalendar && (
           <li>
             <Link to="/calendar" title={collapsed ? "Calendar" : undefined} className={sectionLinkClass(path.startsWith("/calendar"), collapsed)}>

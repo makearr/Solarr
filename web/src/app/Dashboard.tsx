@@ -12,6 +12,7 @@ import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
 import { ArtistCoverMark, Poster } from "./Poster";
+import { DiscoverRow } from "./DiscoverRow";
 import { DashboardDownloads } from "./DashboardDownloads";
 import { SearchBox } from "./SearchBox";
 import { pageTier } from "./sections";
@@ -183,6 +184,8 @@ export function Dashboard() {
             </ul>
           )}
         </Section>
+
+        <DiscoverRow />
 
         <Section title="Libraries">
           {libraries.data && libraries.data.length > 0 ? (

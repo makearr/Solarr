@@ -95,6 +95,7 @@ const routes = [
     },
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/libraries", component: lazyRouteComponent(() => import("./Libraries"), "Libraries") }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/discover", component: lazyRouteComponent(() => import("./Discover"), "Discover") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/calendar", component: lazyRouteComponent(() => import("./Calendar"), "Calendar") }),
   // Real screens (unlike naming below), so each gets its own static route
   // rather than falling through the generic $section catch-all. Quality and

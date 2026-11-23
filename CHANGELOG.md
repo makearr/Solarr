@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- Discover: a sidebar page (poster wall per library with list, genre and title filters, Add and Not interested) and a dashboard row of recommendations.
 - Discover (settings): Settings > General has the switch; Settings > Discover sets what is never recommended and, per library, list sizes, language, rating and vote floors and automatic adding.
 - Discover (API): the recommendations of each library, a dashboard row, genres, and per-person dismissal and undo; "Load more" is not built yet.
 - Discover: anime libraries read AniList charts (trending, top rated, upcoming, classics) instead of TMDB.
