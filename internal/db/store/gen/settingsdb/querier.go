@@ -14,6 +14,7 @@ type Querier interface {
 	AddMediaServerLibrary(ctx context.Context, arg AddMediaServerLibraryParams) error
 	AddMediaServerPath(ctx context.Context, arg AddMediaServerPathParams) error
 	AddMediaServerUser(ctx context.Context, arg AddMediaServerUserParams) error
+	ApproveProviderDefinition(ctx context.Context, arg ApproveProviderDefinitionParams) error
 	AttachRootFolderToCategory(ctx context.Context, arg AttachRootFolderToCategoryParams) error
 	ClearCategoryBootlegOnly(ctx context.Context, categoryID int64) error
 	ClearCategoryTarget(ctx context.Context, categoryID int64) error
@@ -87,6 +88,7 @@ type Querier interface {
 	DeleteNamingFormats(ctx context.Context, namingProfileID int64) error
 	DeleteNamingProfile(ctx context.Context, id int64) error
 	DeletePlacementAffinityOfRootFolder(ctx context.Context, rootFolderID int64) error
+	DeleteProviderDefinitionState(ctx context.Context, arg DeleteProviderDefinitionStateParams) error
 	DeleteProxy(ctx context.Context, id int64) error
 	DeleteQualityProfile(ctx context.Context, id int64) error
 	DeleteQualityTarget(ctx context.Context, id int64) error
@@ -112,6 +114,7 @@ type Querier interface {
 	GetMediaServer(ctx context.Context, id int64) (MediaServer, error)
 	GetPlacementAffinity(ctx context.Context, arg GetPlacementAffinityParams) (int64, error)
 	GetPreference(ctx context.Context, arg GetPreferenceParams) (UserPreference, error)
+	GetProviderDefinitionState(ctx context.Context, arg GetProviderDefinitionStateParams) (ProviderDefinitionState, error)
 	GetProxy(ctx context.Context, id int64) (Proxy, error)
 	GetUserByAPIKeyHash(ctx context.Context, keyHash string) (GetUserByAPIKeyHashRow, error)
 	// Columns are listed explicitly rather than with *, so adding one cannot
@@ -155,6 +158,8 @@ type Querier interface {
 	// One naming profile per library (category.naming_profile_id), its templates per slot.
 	ListNamingProfiles(ctx context.Context) ([]NamingProfile, error)
 	ListPreferencesForUser(ctx context.Context, userID int64) ([]UserPreference, error)
+	// What a person set about a provider definition file. Column lists follow table order.
+	ListProviderDefinitionStates(ctx context.Context) ([]ProviderDefinitionState, error)
 	ListProxies(ctx context.Context) ([]Proxy, error)
 	// Quality and language profiles (ADR-40, section 19.8).
 	ListQualityProfiles(ctx context.Context) ([]QualityProfile, error)
@@ -217,6 +222,8 @@ type Querier interface {
 	SetMediaServerResult(ctx context.Context, arg SetMediaServerResultParams) error
 	SetPlacementAffinity(ctx context.Context, arg SetPlacementAffinityParams) error
 	SetPreference(ctx context.Context, arg SetPreferenceParams) error
+	SetProviderDefinitionEnabled(ctx context.Context, arg SetProviderDefinitionEnabledParams) error
+	SetProviderDefinitionSettings(ctx context.Context, arg SetProviderDefinitionSettingsParams) error
 	// The capacity-polling job's own write: everything it probes, in one
 	// statement, so a root's reading is never partially updated.
 	SetRootFolderCapacity(ctx context.Context, arg SetRootFolderCapacityParams) error

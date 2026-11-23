@@ -62,3 +62,15 @@ INSERT INTO quality_profile (id, name, rules_json, upgrade_json, suggested_rank,
 
 -- Library settings a media type declares of its own (comics: date type, what a collected edition satisfies, reader files), as a JSON object.
 ALTER TABLE category_file_management ADD COLUMN module_options TEXT NOT NULL DEFAULT '{}';
+
+-- What a person set about a provider definition file (metadata, indexer, download, webhook); the file itself is the default.
+CREATE TABLE provider_definition_state (
+  kind           TEXT    NOT NULL,
+  key            TEXT    NOT NULL,
+  enabled        INTEGER CHECK (enabled IN (0, 1)),
+  approved_hash  TEXT    NOT NULL DEFAULT '',
+  approved_hosts TEXT    NOT NULL DEFAULT '[]',
+  settings       BLOB,
+  updated_at     INTEGER NOT NULL,
+  PRIMARY KEY (kind, key)
+) WITHOUT ROWID;

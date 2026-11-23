@@ -596,6 +596,7 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerMedia(); err != nil {
 		return err
 	}
+	p.prepareProviderDefinitions(ctx)
 	p.disks = &adapters.DiskManager{
 		FS: p.fsys, Cache: p.cache, Clock: wall, Monitor: disklatency.New(p.fsys, wall, diskProbeInterval),
 		ExtraPaths: []string{p.config.Paths.ConfigDir},

@@ -304,6 +304,16 @@ type PlacementAffinity struct {
 	UpdatedAt    int64
 }
 
+type ProviderDefinitionState struct {
+	Kind          string
+	Key           string
+	Enabled       sql.NullInt64
+	ApprovedHash  string
+	ApprovedHosts string
+	Settings      []byte
+	UpdatedAt     int64
+}
+
 type Proxy struct {
 	ID               int64
 	Name             string
