@@ -325,6 +325,8 @@ type Config struct {
 	ProviderHidden func(kind, key string) bool
 	// ProviderDefinitions administers the definition files (Settings > Providers); optional.
 	ProviderDefinitions ProviderDefinitions
+	// Webhooks administers the outgoing webhooks; optional.
+	Webhooks Webhooks
 	// CandidateSearcher is stage 5's own candidate pipeline (section 10.1/10.2).
 	CandidateSearcher CandidateSearcher
 	// RemoteImages serves provider pictures from the local cache. Optional: nil answers 503.
@@ -463,6 +465,7 @@ type Server struct {
 	indexerKinds            IndexerKinds
 	providerHidden          func(kind, key string) bool
 	providerDefinitions     ProviderDefinitions
+	webhooks                Webhooks
 	tvProviders             TVProviders
 	remoteImages            RemoteImages
 	candidateSearcher       CandidateSearcher
@@ -619,6 +622,7 @@ func New(config Config) (*Server, error) {
 		indexerKinds:            config.IndexerKinds,
 		providerHidden:          config.ProviderHidden,
 		providerDefinitions:     config.ProviderDefinitions,
+		webhooks:                config.Webhooks,
 		candidateSearcher:       config.CandidateSearcher,
 		tvProviders:             config.TVProviders,
 		remoteImages:            config.RemoteImages,
@@ -797,6 +801,12 @@ func New(config Config) (*Server, error) {
 			secured.Delete("/works/exclusions", server.routeRemoveWorkExclusion)
 			secured.Get("/works/lookup", server.routeLookupWorks)
 			secured.Post("/works", server.AddWork)
+			secured.Get("/webhooks", server.ListWebhooks)
+			secured.Post("/webhooks", server.AddWebhook)
+			secured.Get("/webhooks/events", server.ListWebhookEvents)
+			secured.Put("/webhooks/{id}", wrapped.UpdateWebhook)
+			secured.Delete("/webhooks/{id}", wrapped.DeleteWebhook)
+			secured.Post("/webhooks/{id}/test", wrapped.TestWebhook)
 			secured.Get("/provider-definitions", wrapped.ListProviderDefinitions)
 			secured.Post("/provider-definitions/reload", server.ReloadProviderDefinitions)
 			secured.Get("/provider-definitions/{kind}/{key}", wrapped.GetProviderDefinition)

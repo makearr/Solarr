@@ -1,0 +1,9 @@
+schema: 1
+kind: webhook
+key: slack
+name: Slack
+engine: http
+description: A message in a Slack channel; the address is an incoming webhook address.
+method: POST
+content_type: application/json
+body: '{"text": {{ json .Line }}}'

@@ -2087,6 +2087,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every outgoing webhook with its last delivery and how many deliveries wait. Administrator only; the address and secret are never returned. */
+        get: operations["listWebhooks"];
+        put?: never;
+        /** Add an outgoing webhook. Administrator only; the address and secret are sealed at rest and write-only. */
+        post: operations["addWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The events a webhook may subscribe to, with presets. Administrator only. */
+        get: operations["listWebhookEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace a webhook. An empty address or secret keeps the stored one. */
+        put: operations["updateWebhook"];
+        post?: never;
+        /** Remove a webhook and the deliveries waiting for it. */
+        delete: operations["deleteWebhook"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a test event now and answer the status and the first 500 bytes of the reply. */
+        post: operations["testWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media-servers/kinds": {
         parameters: {
             query?: never;
@@ -9009,6 +9083,66 @@ export interface components {
             records: components["schemas"]["ProviderDefinitionTestRecord"][];
             requests: components["schemas"]["ProviderDefinitionTestRequestMade"][];
         };
+        Webhook: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            enabled: boolean;
+            preset: string;
+            /** @description The host of the address */
+            address_hint: string;
+            has_secret: boolean;
+            events: string[];
+            /** @description Empty is every library. */
+            category_ids: number[];
+            include_paths: boolean;
+            include_adult: boolean;
+            /** @description The last delivery's HTTP status; 0 when none was answered. */
+            last_status?: number;
+            last_error: string;
+            /** Format: date-time */
+            last_at?: string;
+            /**
+             * Format: int64
+             * @description Deliveries waiting.
+             */
+            pending: number;
+            /** Format: date-time */
+            next_attempt?: string;
+        };
+        WebhookWrite: {
+            name: string;
+            /** @default true */
+            enabled: boolean;
+            preset: string;
+            /** @description The receiver's address; required when adding */
+            address?: string;
+            /** @description Signs each body (X-Solarr-Signature); empty keeps the stored one. */
+            secret?: string;
+            events: string[];
+            category_ids?: number[];
+            include_paths?: boolean;
+            include_adult?: boolean;
+        };
+        WebhookTestResult: {
+            ok: boolean;
+            status: number;
+            reply: string;
+            error?: string;
+        };
+        WebhookEventInfo: {
+            key: string;
+            group: string;
+        };
+        WebhookPresetInfo: {
+            key: string;
+            name: string;
+            description: string;
+        };
+        WebhookVocabulary: {
+            events: components["schemas"]["WebhookEventInfo"][];
+            presets: components["schemas"]["WebhookPresetInfo"][];
+        };
         MediaServerKind: {
             /** @description jellyfin, navidrome, audiobookshelf, kavita, calibre or stash. */
             key: string;
@@ -15497,6 +15631,155 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listWebhooks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The webhooks, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Webhook"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    addWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookWrite"];
+            };
+        };
+        responses: {
+            /** @description Added. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Webhook"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listWebhookEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The vocabulary. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookVocabulary"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    updateWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookWrite"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Webhook"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    testWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the receiver answered, or the error. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookTestResult"];
+                };
+            };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

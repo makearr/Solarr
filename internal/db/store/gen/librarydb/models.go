@@ -964,6 +964,16 @@ type VideoPreview struct {
 	MadeAt           int64
 }
 
+type WebhookPending struct {
+	ID        int64
+	WebhookID int64
+	Event     string
+	Payload   string
+	QueuedAt  int64
+	Attempts  int64
+	NextAt    int64
+}
+
 type Work struct {
 	ID                 int64
 	MediaType          string

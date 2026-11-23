@@ -212,6 +212,11 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Enqueue: p.enqueueMediaServerPushes,
 	})
 	registry.MustRegister(jobs.Task{
+		Key: "webhook_deliver", Name: "Send webhooks", DefaultCadence: webhookDeliverScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueWebhookDelivery,
+	})
+	registry.MustRegister(jobs.Task{
 		Key: "media_server_playback", Name: "Read what media server users watched", DefaultCadence: mediaServerPlaybackScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary, Startup: jobs.StartupOn,
 		Enqueue: p.enqueueMediaServerPlayback,

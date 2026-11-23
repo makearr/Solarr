@@ -1,0 +1,9 @@
+schema: 1
+kind: webhook
+key: gotify
+name: Gotify
+engine: http
+description: A Gotify message; the address is the message address with its application token.
+method: POST
+content_type: application/json
+body: '{"title": "Solarr", "message": {{ json .Line }}, "priority": 5}'

@@ -15,6 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/mediaserver"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/service/serverpush"
+	"github.com/makearr/Solarr/internal/service/webhook"
 )
 
 // mediaServerPushJobType is the registered type of one media server's push run.
@@ -97,6 +98,9 @@ func (p *process) recordServerPush(ctx context.Context, categoryID, workID int64
 	if err := p.serverPush().RecordWork(ctx, categoryID, workID, change); err != nil {
 		p.logger.Warn("could not queue a media server push", "work_id", workID, "error", err)
 	}
+	p.recordWebhook(ctx, categoryID, workID, map[string]webhook.Event{
+		library.PendingCreated: webhook.EventImported, library.PendingModified: webhook.EventUpgraded, library.PendingDeleted: webhook.EventFileRecycled,
+	}[change])
 }
 
 // registerMediaServerPushJob wires the push run into the registry and the executor.

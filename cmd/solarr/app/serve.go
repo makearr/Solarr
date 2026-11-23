@@ -652,6 +652,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerFreshCountsJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerWebhookJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerMediaServerPushJob(registry, executor); err != nil {
 		return err
 	}
@@ -985,6 +988,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		IndexerKinds:        adapters.IndexerKinds{Specs: p.specs},
 		ProviderHidden:      p.providerHidden,
 		ProviderDefinitions: definitionsAdmin{p: p},
+		Webhooks:            webhookAdmin{p: p},
 		CandidateSearcher:   p.candidateSearcher(),
 		TVProviders:         p.tvProviders(),
 		RemoteImages:        p.remoteImages(),

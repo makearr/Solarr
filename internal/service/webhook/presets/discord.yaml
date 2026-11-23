@@ -1,0 +1,9 @@
+schema: 1
+kind: webhook
+key: discord
+name: Discord
+engine: http
+description: A message in a Discord channel; the address is the channel's webhook address.
+method: POST
+content_type: application/json
+body: '{"content": {{ json .Line }}}'

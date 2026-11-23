@@ -7073,6 +7073,75 @@ type WatchedWork struct {
 	Year         *int   `json:"year,omitempty"`
 }
 
+// Webhook defines model for Webhook.
+type Webhook struct {
+	// AddressHint The host of the address
+	AddressHint string `json:"address_hint"`
+
+	// CategoryIds Empty is every library.
+	CategoryIds  []int64    `json:"category_ids"`
+	Enabled      bool       `json:"enabled"`
+	Events       []string   `json:"events"`
+	HasSecret    bool       `json:"has_secret"`
+	Id           int64      `json:"id"`
+	IncludeAdult bool       `json:"include_adult"`
+	IncludePaths bool       `json:"include_paths"`
+	LastAt       *time.Time `json:"last_at,omitempty"`
+	LastError    string     `json:"last_error"`
+
+	// LastStatus The last delivery's HTTP status; 0 when none was answered.
+	LastStatus  *int       `json:"last_status,omitempty"`
+	Name        string     `json:"name"`
+	NextAttempt *time.Time `json:"next_attempt,omitempty"`
+
+	// Pending Deliveries waiting.
+	Pending int64  `json:"pending"`
+	Preset  string `json:"preset"`
+}
+
+// WebhookEventInfo defines model for WebhookEventInfo.
+type WebhookEventInfo struct {
+	Group string `json:"group"`
+	Key   string `json:"key"`
+}
+
+// WebhookPresetInfo defines model for WebhookPresetInfo.
+type WebhookPresetInfo struct {
+	Description string `json:"description"`
+	Key         string `json:"key"`
+	Name        string `json:"name"`
+}
+
+// WebhookTestResult defines model for WebhookTestResult.
+type WebhookTestResult struct {
+	Error  *string `json:"error,omitempty"`
+	Ok     bool    `json:"ok"`
+	Reply  string  `json:"reply"`
+	Status int     `json:"status"`
+}
+
+// WebhookVocabulary defines model for WebhookVocabulary.
+type WebhookVocabulary struct {
+	Events  []WebhookEventInfo  `json:"events"`
+	Presets []WebhookPresetInfo `json:"presets"`
+}
+
+// WebhookWrite defines model for WebhookWrite.
+type WebhookWrite struct {
+	// Address The receiver's address; required when adding
+	Address      *string  `json:"address,omitempty"`
+	CategoryIds  *[]int64 `json:"category_ids,omitempty"`
+	Enabled      *bool    `json:"enabled,omitempty"`
+	Events       []string `json:"events"`
+	IncludeAdult *bool    `json:"include_adult,omitempty"`
+	IncludePaths *bool    `json:"include_paths,omitempty"`
+	Name         string   `json:"name"`
+	Preset       string   `json:"preset"`
+
+	// Secret Signs each body (X-Solarr-Signature); empty keeps the stored one.
+	Secret *string `json:"secret,omitempty"`
+}
+
 // Work defines model for Work.
 type Work struct {
 	AddedAt time.Time `json:"added_at"`
@@ -9113,6 +9182,12 @@ type UpdateUserJSONRequestBody UpdateUserJSONBody
 // SetUserAccessJSONRequestBody defines body for SetUserAccess for application/json ContentType.
 type SetUserAccessJSONRequestBody SetUserAccessJSONBody
 
+// AddWebhookJSONRequestBody defines body for AddWebhook for application/json ContentType.
+type AddWebhookJSONRequestBody = WebhookWrite
+
+// UpdateWebhookJSONRequestBody defines body for UpdateWebhook for application/json ContentType.
+type UpdateWebhookJSONRequestBody = WebhookWrite
+
 // AddWorkJSONRequestBody defines body for AddWork for application/json ContentType.
 type AddWorkJSONRequestBody = AddWorkRequest
 
@@ -10264,6 +10339,24 @@ type ServerInterface interface {
 	// Wanted at the grain of a part (Sonarr's episodes) for a library whose type declares it: missing (monitored, out, no file; newest first) or cutoff (held, measured, and below the library's target or cutoff).
 	// (GET /wanted/parts)
 	ListWantedParts(w http.ResponseWriter, r *http.Request, params ListWantedPartsParams)
+	// Every outgoing webhook with its last delivery and how many deliveries wait. Administrator only; the address and secret are never returned.
+	// (GET /webhooks)
+	ListWebhooks(w http.ResponseWriter, r *http.Request)
+	// Add an outgoing webhook. Administrator only; the address and secret are sealed at rest and write-only.
+	// (POST /webhooks)
+	AddWebhook(w http.ResponseWriter, r *http.Request)
+	// The events a webhook may subscribe to, with presets. Administrator only.
+	// (GET /webhooks/events)
+	ListWebhookEvents(w http.ResponseWriter, r *http.Request)
+	// Remove a webhook and the deliveries waiting for it.
+	// (DELETE /webhooks/{id})
+	DeleteWebhook(w http.ResponseWriter, r *http.Request, id int64)
+	// Replace a webhook. An empty address or secret keeps the stored one.
+	// (PUT /webhooks/{id})
+	UpdateWebhook(w http.ResponseWriter, r *http.Request, id int64)
+	// Send a test event now and answer the status and the first 500 bytes of the reply.
+	// (POST /webhooks/{id}/test)
+	TestWebhook(w http.ResponseWriter, r *http.Request, id int64)
 	// A page of the library the caller may see (ADR-27).
 	// (GET /works)
 	ListWorks(w http.ResponseWriter, r *http.Request, params ListWorksParams)
@@ -12586,6 +12679,42 @@ func (_ Unimplemented) SetUserAccess(w http.ResponseWriter, r *http.Request, id 
 // Wanted at the grain of a part (Sonarr's episodes) for a library whose type declares it: missing (monitored, out, no file; newest first) or cutoff (held, measured, and below the library's target or cutoff).
 // (GET /wanted/parts)
 func (_ Unimplemented) ListWantedParts(w http.ResponseWriter, r *http.Request, params ListWantedPartsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every outgoing webhook with its last delivery and how many deliveries wait. Administrator only; the address and secret are never returned.
+// (GET /webhooks)
+func (_ Unimplemented) ListWebhooks(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add an outgoing webhook. Administrator only; the address and secret are sealed at rest and write-only.
+// (POST /webhooks)
+func (_ Unimplemented) AddWebhook(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The events a webhook may subscribe to, with presets. Administrator only.
+// (GET /webhooks/events)
+func (_ Unimplemented) ListWebhookEvents(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a webhook and the deliveries waiting for it.
+// (DELETE /webhooks/{id})
+func (_ Unimplemented) DeleteWebhook(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace a webhook. An empty address or secret keeps the stored one.
+// (PUT /webhooks/{id})
+func (_ Unimplemented) UpdateWebhook(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Send a test event now and answer the status and the first 500 bytes of the reply.
+// (POST /webhooks/{id}/test)
+func (_ Unimplemented) TestWebhook(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -24483,6 +24612,171 @@ func (siw *ServerInterfaceWrapper) ListWantedParts(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ListWebhooks operation middleware
+func (siw *ServerInterfaceWrapper) ListWebhooks(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWebhooks(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddWebhook operation middleware
+func (siw *ServerInterfaceWrapper) AddWebhook(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddWebhook(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListWebhookEvents operation middleware
+func (siw *ServerInterfaceWrapper) ListWebhookEvents(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWebhookEvents(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteWebhook operation middleware
+func (siw *ServerInterfaceWrapper) DeleteWebhook(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteWebhook(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateWebhook operation middleware
+func (siw *ServerInterfaceWrapper) UpdateWebhook(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateWebhook(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestWebhook operation middleware
+func (siw *ServerInterfaceWrapper) TestWebhook(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestWebhook(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListWorks operation middleware
 func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Request) {
 
@@ -27352,6 +27646,24 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/wanted/parts", wrapper.ListWantedParts)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/webhooks", wrapper.ListWebhooks)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/webhooks", wrapper.AddWebhook)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/webhooks/events", wrapper.ListWebhookEvents)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/webhooks/{id}", wrapper.DeleteWebhook)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/webhooks/{id}", wrapper.UpdateWebhook)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/webhooks/{id}/test", wrapper.TestWebhook)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works", wrapper.ListWorks)

@@ -1,0 +1,11 @@
+schema: 1
+kind: webhook
+key: ntfy
+name: ntfy
+engine: http
+description: A push notification; the address is the ntfy topic address.
+method: POST
+content_type: text/plain
+headers:
+  Title: Solarr
+body: "{{ .Line }}"

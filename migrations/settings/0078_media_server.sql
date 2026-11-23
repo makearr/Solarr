@@ -74,3 +74,21 @@ CREATE TABLE provider_definition_state (
   updated_at     INTEGER NOT NULL,
   PRIMARY KEY (kind, key)
 ) WITHOUT ROWID;
+
+-- Outgoing webhooks: the address and the secret are sealed, since a chat or push address is itself the credential.
+CREATE TABLE webhook (
+  id            INTEGER PRIMARY KEY,
+  name          TEXT    NOT NULL,
+  enabled       INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+  preset        TEXT    NOT NULL,
+  url           BLOB    NOT NULL,
+  secret        BLOB,
+  events        TEXT    NOT NULL DEFAULT '[]',
+  category_ids  TEXT    NOT NULL DEFAULT '[]',
+  include_paths INTEGER NOT NULL DEFAULT 0 CHECK (include_paths IN (0, 1)),
+  include_adult INTEGER NOT NULL DEFAULT 0 CHECK (include_adult IN (0, 1)),
+  last_status   INTEGER,
+  last_error    TEXT    NOT NULL DEFAULT '',
+  last_at       INTEGER,
+  created_at    INTEGER NOT NULL
+);

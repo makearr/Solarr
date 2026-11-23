@@ -1,0 +1,9 @@
+schema: 1
+kind: webhook
+key: apprise
+name: Apprise
+engine: http
+description: A stateless Apprise API notification; the address is the Apprise API's notify address with its targets.
+method: POST
+content_type: application/json
+body: '{"title": "Solarr", "body": {{ json .Line }}}'

@@ -43,6 +43,8 @@ type Querier interface {
 	AddTagClosure(ctx context.Context, arg AddTagClosureParams) error
 	// Every tag is its own ancestor at depth zero, so a root tag still matches.
 	AddTagSelfClosure(ctx context.Context, arg AddTagSelfClosureParams) error
+	// Webhook deliveries to make. Column lists follow table order.
+	AddWebhookPending(ctx context.Context, arg AddWebhookPendingParams) error
 	AddWorkExclusion(ctx context.Context, arg AddWorkExclusionParams) error
 	AddWorkOrganisation(ctx context.Context, arg AddWorkOrganisationParams) error
 	AddWorkPartTitle(ctx context.Context, arg AddWorkPartTitleParams) (WorkPartTitle, error)
@@ -205,6 +207,7 @@ type Querier interface {
 	// The Wanted page's total for one category: the works CountWorksVisibleToCategory counts that
 	// have a monitored item not yet complete and a tracklist, the wanted list's own condition.
 	CountWantedWorksVisibleToCategory(ctx context.Context, arg CountWantedWorksVisibleToCategoryParams) (int64, error)
+	CountWebhookPending(ctx context.Context, webhookID int64) (CountWebhookPendingRow, error)
 	CountWorkExclusion(ctx context.Context, arg CountWorkExclusionParams) (int64, error)
 	CountWorkFieldManual(ctx context.Context, arg CountWorkFieldManualParams) (int64, error)
 	CountWorkFiles(ctx context.Context, workID int64) (int64, error)
@@ -360,6 +363,8 @@ type Querier interface {
 	DeleteUnidentified(ctx context.Context, mediaObjectID int64) error
 	// What ties an album to a provider, leaving the local name an unverified album goes by.
 	DeleteVerifiedWorkExternalIDs(ctx context.Context, workID int64) error
+	DeleteWebhookPending(ctx context.Context, id int64) error
+	DeleteWebhookPendingOf(ctx context.Context, webhookID int64) error
 	DeleteWork(ctx context.Context, id int64) error
 	DeleteWorkArtwork(ctx context.Context, subjectID int64) error
 	DeleteWorkArtworkMisses(ctx context.Context, subjectID int64) error
@@ -734,6 +739,7 @@ type Querier interface {
 	ListDueMediaServerPending(ctx context.Context, arg ListDueMediaServerPendingParams) ([]MediaServerPending, error)
 	// The queued files whose automatic retry is due; ListUnidentified without the due test lists them all.
 	ListDueUnidentified(ctx context.Context, arg ListDueUnidentifiedParams) ([]IdentificationQueue, error)
+	ListDueWebhookPending(ctx context.Context, arg ListDueWebhookPendingParams) ([]WebhookPending, error)
 	ListEditionExternalIDs(ctx context.Context, editionID int64) ([]EditionExternalID, error)
 	// Works identified at release-group level only (the text search never picks an
 	// edition): no edition, and either not enriched yet (no credit) or with files on
@@ -1292,6 +1298,7 @@ type Querier interface {
 	ResolvePlaybackPartByExternalID(ctx context.Context, arg ResolvePlaybackPartByExternalIDParams) (ResolvePlaybackPartByExternalIDRow, error)
 	ResolvePlaybackWorkByExternalID(ctx context.Context, arg ResolvePlaybackWorkByExternalIDParams) (int64, error)
 	ResumeMoveJob(ctx context.Context, id int64) (int64, error)
+	RetryWebhookPending(ctx context.Context, arg RetryWebhookPendingParams) error
 	// Whether the library still has a file on a root that is not missing: an empty root then is an unmounted disk.
 	RootHoldsFiles(ctx context.Context, rootFolderID int64) (int64, error)
 	// Ranked cross-media search over titles and aliases (migration 0010, section 21.1).

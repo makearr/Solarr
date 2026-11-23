@@ -3037,6 +3037,109 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /webhooks:
+    get:
+      operationId: listWebhooks
+      tags: [settings]
+      summary: Every outgoing webhook with its last delivery and how many deliveries wait. Administrator only; the address and secret are never returned.
+      responses:
+        "200":
+          description: The webhooks, oldest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Webhook" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: addWebhook
+      tags: [settings]
+      summary: Add an outgoing webhook. Administrator only; the address and secret are sealed at rest and write-only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookWrite" }
+      responses:
+        "201":
+          description: Added.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Webhook" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /webhooks/events:
+    get:
+      operationId: listWebhookEvents
+      tags: [settings]
+      summary: The events a webhook may subscribe to, with presets. Administrator only.
+      responses:
+        "200":
+          description: The vocabulary.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookVocabulary" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /webhooks/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      operationId: updateWebhook
+      tags: [settings]
+      summary: Replace a webhook. An empty address or secret keeps the stored one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookWrite" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Webhook" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteWebhook
+      tags: [settings]
+      summary: Remove a webhook and the deliveries waiting for it.
+      responses:
+        "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /webhooks/{id}/test:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: testWebhook
+      tags: [settings]
+      summary: Send a test event now and answer the status and the first 500 bytes of the reply.
+      responses:
+        "200":
+          description: What the receiver answered, or the error.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookTestResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /media-servers/kinds:
     get:
       operationId: listMediaServerKinds
@@ -12547,6 +12650,65 @@ components:
         error: { type: string }
         records: { type: array, items: { $ref: "#/components/schemas/ProviderDefinitionTestRecord" } }
         requests: { type: array, items: { $ref: "#/components/schemas/ProviderDefinitionTestRequestMade" } }
+    Webhook:
+      type: object
+      required: [id, name, enabled, preset, address_hint, has_secret, events, category_ids, include_paths, include_adult, last_error, pending]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        enabled: { type: boolean }
+        preset: { type: string }
+        address_hint: { type: string, description: The host of the address, never the address. }
+        has_secret: { type: boolean }
+        events: { type: array, items: { type: string } }
+        category_ids: { type: array, items: { type: integer, format: int64 }, description: Empty is every library. }
+        include_paths: { type: boolean }
+        include_adult: { type: boolean }
+        last_status: { type: integer, description: The last delivery's HTTP status; 0 when none was answered. }
+        last_error: { type: string }
+        last_at: { type: string, format: date-time }
+        pending: { type: integer, format: int64, description: Deliveries waiting. }
+        next_attempt: { type: string, format: date-time }
+    WebhookWrite:
+      type: object
+      required: [name, preset, events]
+      properties:
+        name: { type: string }
+        enabled: { type: boolean, default: true }
+        preset: { type: string }
+        address: { type: string, description: The receiver's address; required when adding, empty keeps the stored one. }
+        secret: { type: string, description: Signs each body (X-Solarr-Signature); empty keeps the stored one. }
+        events: { type: array, items: { type: string } }
+        category_ids: { type: array, items: { type: integer, format: int64 } }
+        include_paths: { type: boolean }
+        include_adult: { type: boolean }
+    WebhookTestResult:
+      type: object
+      required: [ok, status, reply]
+      properties:
+        ok: { type: boolean }
+        status: { type: integer }
+        reply: { type: string }
+        error: { type: string }
+    WebhookEventInfo:
+      type: object
+      required: [key, group]
+      properties:
+        key: { type: string }
+        group: { type: string }
+    WebhookPresetInfo:
+      type: object
+      required: [key, name, description]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        description: { type: string }
+    WebhookVocabulary:
+      type: object
+      required: [events, presets]
+      properties:
+        events: { type: array, items: { $ref: "#/components/schemas/WebhookEventInfo" } }
+        presets: { type: array, items: { $ref: "#/components/schemas/WebhookPresetInfo" } }
     MediaServerKind:
       type: object
       required: [key, label, credential, can_push, push_by_path, can_announce, can_playback, can_metadata, has_users, needs_admin, media_types]

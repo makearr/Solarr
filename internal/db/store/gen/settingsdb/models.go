@@ -433,3 +433,20 @@ type UserPreference struct {
 	Key       string
 	ValueJson string
 }
+
+type Webhook struct {
+	ID           int64
+	Name         string
+	Enabled      int64
+	Preset       string
+	Url          []byte
+	Secret       []byte
+	Events       string
+	CategoryIds  string
+	IncludePaths int64
+	IncludeAdult int64
+	LastStatus   sql.NullInt64
+	LastError    string
+	LastAt       sql.NullInt64
+	CreatedAt    int64
+}

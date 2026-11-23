@@ -44,3 +44,15 @@ CREATE TABLE part_coverage (
   PRIMARY KEY (covering_part_id, covered_part_id)
 ) WITHOUT ROWID;
 CREATE INDEX part_coverage_by_covered ON part_coverage(covered_part_id);
+
+-- Webhook deliveries still to make; webhook_id has no foreign key, settings.db is another file.
+CREATE TABLE webhook_pending (
+  id         INTEGER PRIMARY KEY,
+  webhook_id INTEGER NOT NULL,
+  event      TEXT    NOT NULL,
+  payload    TEXT    NOT NULL,
+  queued_at  INTEGER NOT NULL,
+  attempts   INTEGER NOT NULL DEFAULT 0,
+  next_at    INTEGER NOT NULL
+);
+CREATE INDEX webhook_pending_due ON webhook_pending(next_at, id);

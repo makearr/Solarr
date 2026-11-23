@@ -1,0 +1,9 @@
+schema: 1
+kind: webhook
+key: generic
+name: Generic JSON
+engine: http
+description: The payload as it is, signed when a secret is set.
+method: POST
+content_type: application/json
+body: "{{ .Raw }}"
