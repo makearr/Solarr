@@ -71,7 +71,7 @@ Those are not the same event, so `Problems.Report` takes the caller's own headin
 line — telling someone importing through the web interface that "config.yml has 4 errors" and
 that "nothing has been started" names a file they did not touch and a process already running.
 
-## What is not exported
+## Not yet exported
 
-Webhooks (outgoing addresses and secrets, incoming token hashes) and provider definition files are not in the document: an
-address is a credential, and the files live in the config folder's `providers/` where they are copied with it.
+Webhooks and provider definition files are not in the document yet. When they are, they carry no address, secret or token
+hash; today they live in the settings database and in the config folder's `providers/`, both of which a backup covers.

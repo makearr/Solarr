@@ -63,19 +63,3 @@ func TestFetchForTakesADefinitionLastAndOnlyFillsWhatTheCompiledProviderLacks(t 
 		t.Errorf("credits = %+v", got.Credits)
 	}
 }
-
-func TestSearchOneOfADefinitionAndOfAGoneOne(t *testing.T) {
-	service := Service{Format: Ebook, Records: func(key string) RecordProvider {
-		if key == "custom_books" {
-			return &fakeRecords{}
-		}
-		return nil
-	}}
-	found, err := service.searchOne(t.Context(), "custom_books", "Lantern", "", 5)
-	if err != nil || len(found) != 1 || found[0].Author != "Mara Quell" || found[0].Cover == "" {
-		t.Fatalf("found %+v, %v", found, err)
-	}
-	if none, err := service.searchOne(t.Context(), "gone_definition", "Lantern", "", 5); err != nil || len(none) != 0 {
-		t.Errorf("a gone definition answered %+v, %v", none, err)
-	}
-}

@@ -36,7 +36,7 @@ ports (iTunes audiobooks, FantLab) are tested against the compiled clients and g
 A media type uses a definition only when its module can merge a generic record (`media.RecordConsuming`). Comic, book and
 audiobook, and movie libraries can; TV, music and adult libraries refuse a definition that names them, with a warning in the
 log. A definition is never first for identity unless a person puts it first in the library's order, and it only fills what the
-providers before it left empty. Where the library's ids are typed fields (book, movie) a definition's own id is not stored: a
+providers before it left empty. A book or movie definition fills a work the compiled providers found; it is not offered in the add search, since a candidate needs one of the type's own ids. Where the library's ids are typed fields (book, movie) a definition's own id is not stored: a
 book is asked again by title, a movie by its IMDb or TMDB id through the definition's `by_id`. An `adult: true` definition is
 offered only to libraries of an adult kind (or of the adult type). `cache: {search: 24h, item: 168h}` keeps answers in memory
 for that long (a failed answer is never kept; 256 answers at most).

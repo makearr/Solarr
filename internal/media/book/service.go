@@ -641,12 +641,6 @@ func (s Service) searchOne(ctx context.Context, name, title, author string, limi
 			candidates = append(candidates, Candidate{IDs: found.IDs, Title: found.Title, Author: first(found.Authors()), CoAuthors: othersThanFirst(found.Authors()), Year: found.Year,
 				Overview: found.Overview, Cover: hit.Cover(), Traits: media.Traits{Genres: found.Genres}})
 		}
-	default:
-		// A name no compiled provider owns is a definition file's provider, when it is active.
-		var err error
-		if candidates, err = s.searchRecords(ctx, name, title); err != nil {
-			return nil, err
-		}
 	}
 	if limit > 0 && len(candidates) > limit {
 		candidates = candidates[:limit]

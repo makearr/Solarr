@@ -101,6 +101,7 @@ export function LibraryMetadata() {
               {unused.map((provider) => (
                 <div key={provider.key} className="flex flex-wrap items-center gap-2">
                   <span>{provider.label}</span>
+                  {provider.custom && <Chip title={t("libraryMetadata.customHelp")}>{t("libraryMetadata.customChip")}</Chip>}
                   <span className="min-w-0 flex-1 text-xs text-ink-muted">{provider.carries.join(", ")}</span>
                   {provider.enabled ? (
                     <Button busy={save.isPending} onClick={() => save.mutate({ sources: [...sources, provider.key] })}>

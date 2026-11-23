@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -215,5 +216,42 @@ func TestLibraryTypeDefaults_LeavesOutAMetadataProviderADescriptorNarrowedAway(t
 	fixture.tuned["metadata/tmdb"] = apiserver.ProviderTune{MediaTypes: []string{"movie"}}
 	if slices.Contains(listed(), "tmdb") {
 		t.Errorf("tmdb narrowed to movie is still offered to tv: %v", listed())
+	}
+}
+
+func TestListMetadataProviders_LeavesOutOneADescriptorSwitchedOff(t *testing.T) {
+	fixture, cookies := adminWithSecrets(t)
+	keys := func() []string {
+		recorder := fixture.do(authedGet(t, cookies, "/api/v1/metadata/providers"))
+		var body struct {
+			Providers []struct {
+				Key string `json:"key"`
+			} `json:"providers"`
+		}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		var found []string
+		for _, provider := range body.Providers {
+			found = append(found, provider.Key)
+		}
+		return found
+	}
+	if !slices.Contains(keys(), "tvmaze") {
+		t.Fatalf("tvmaze is not listed before it is switched off: %v", keys())
+	}
+	fixture.hidden["metadata/tvmaze"] = true
+	if slices.Contains(keys(), "tvmaze") {
+		t.Errorf("tvmaze switched off by a descriptor is still listed")
+	}
+}
+
+func TestMetadataProviderInfo_ACustomProviderWithoutCarriesAnswersAnEmptyListNotNull(t *testing.T) {
+	settings.SetCustomMetadataProviders([]settings.MetadataProvider{{Key: "custom_tv", Label: "Custom TV", MediaTypes: []string{"tv"}, Custom: true}})
+	t.Cleanup(func() { settings.SetCustomMetadataProviders(nil) })
+	fixture, cookies := adminWithSecrets(t)
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/library-type-defaults"))
+	if !strings.Contains(recorder.Body.String(), `"key":"custom_tv"`) || strings.Contains(recorder.Body.String(), `"carries":null`) {
+		t.Errorf("a custom provider without carries must answer an empty list, not null: the interface joins it")
 	}
 }

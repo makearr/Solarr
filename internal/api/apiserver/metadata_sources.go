@@ -63,7 +63,7 @@ func (s *Server) providerInfo(snapshot *settings.Snapshot, provider settings.Met
 	}
 	return gen.MetadataProviderInfo{
 		Status: gen.MetadataProviderInfoStatus(status.State), StatusUntil: until,
-		Key: provider.Key, Label: provider.Label, Carries: provider.Carries, NeedsKey: provider.NeedsKey && !keyStored(snapshot, provider.Key),
+		Key: provider.Key, Label: provider.Label, Carries: orEmpty(provider.Carries), NeedsKey: provider.NeedsKey && !keyStored(snapshot, provider.Key),
 		Enabled: snapshot.ProviderEnabled(provider.Key), CanDisable: snapshot.ProviderCanBeSwitchedOff(provider.Key),
 		KeyStored:  snapshot.ProviderKeyStored(provider.Key),
 		MediaTypes: orEmpty(provider.MediaTypes), AlsoFor: orEmpty(provider.AlsoFor),
@@ -132,7 +132,7 @@ func (s *Server) ListMetadataProviders(w http.ResponseWriter, r *http.Request) {
 	snapshot := s.auth.Settings.Snapshot()
 	providers := make([]gen.MetadataProviderInfo, 0, len(settings.MetadataProviders))
 	for _, provider := range settings.MetadataProviders {
-		if provider.Provisional && !snapshot.LocalSourceInUse(provider.Key) {
+		if (provider.Provisional && !snapshot.LocalSourceInUse(provider.Key)) || s.hidden("metadata", provider.Key) {
 			continue
 		}
 		providers = append(providers, s.providerInfo(snapshot, provider))

@@ -96,28 +96,3 @@ func (s Service) askRecord(ctx context.Context, key string, hint Hint, failed *[
 	}
 	return Book{}, false
 }
-
-// searchRecords is the search of a definition as candidates.
-func (s Service) searchRecords(ctx context.Context, key, title string) ([]Candidate, error) {
-	provider := s.recordProvider(key)
-	if provider == nil {
-		return nil, nil
-	}
-	found, err := provider.Search(ctx, specprovider.Query{Title: title})
-	if err != nil {
-		return nil, err
-	}
-	var candidates []Candidate
-	for _, record := range found {
-		book := FromRecord(key, record)
-		cover := ""
-		if len(book.Images) > 0 {
-			cover = book.Images[0].URL
-		}
-		candidates = append(candidates, Candidate{
-			IDs: book.IDs, Title: book.Title, Author: first(book.Authors()), CoAuthors: othersThanFirst(book.Authors()), Year: book.Year,
-			Overview: book.Overview, Cover: cover, Traits: media.Traits{Genres: book.Genres, OriginalLanguage: book.Language},
-		})
-	}
-	return candidates, nil
-}
