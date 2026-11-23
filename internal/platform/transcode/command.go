@@ -72,19 +72,26 @@ func Args(spec Spec) []string {
 func CanDecodeOnGPU(accel Accel) bool { return accel == VAAPI || accel == NVENC }
 
 func deviceArgs(spec Spec) []string {
-	if spec.HardwareDecode {
-		switch spec.Accel {
+	return hardwareArgs(spec.Accel, spec.Device, spec.HardwareDecode && CanDecodeOnGPU(spec.Accel))
+}
+
+// hardwareArgs opens the GPU: with fullGPU frames stay there from decoding to encoding, else only encoding uses it.
+func hardwareArgs(accel Accel, device string, fullGPU bool) []string {
+	if fullGPU {
+		switch accel {
 		case VAAPI:
-			return []string{"-hwaccel", "vaapi", "-hwaccel_device", spec.Device, "-hwaccel_output_format", "vaapi"}
+			return []string{"-hwaccel", "vaapi", "-hwaccel_device", device, "-hwaccel_output_format", "vaapi"}
 		case NVENC:
 			return []string{"-hwaccel", "cuda", "-hwaccel_output_format", "cuda"}
+		case QSV:
+			return []string{"-init_hw_device", "vaapi=va:" + device, "-init_hw_device", "qsv=hw@va", "-hwaccel", "qsv", "-hwaccel_device", "hw", "-hwaccel_output_format", "qsv"}
 		}
 	}
-	switch spec.Accel {
+	switch accel {
 	case VAAPI:
-		return []string{"-init_hw_device", "vaapi=hw:" + spec.Device, "-filter_hw_device", "hw"}
+		return []string{"-init_hw_device", "vaapi=hw:" + device, "-filter_hw_device", "hw"}
 	case QSV:
-		return []string{"-init_hw_device", "vaapi=va:" + spec.Device, "-init_hw_device", "qsv=hw@va", "-filter_hw_device", "hw"}
+		return []string{"-init_hw_device", "vaapi=va:" + device, "-init_hw_device", "qsv=hw@va", "-filter_hw_device", "hw"}
 	}
 	return nil
 }

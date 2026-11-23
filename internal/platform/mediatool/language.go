@@ -10,6 +10,21 @@ var languageCodes = map[string]string{
 	"ell": "el", "gre": "el",
 }
 
+// threeLetterCodes is the ISO 639-2 spelling muxers need for a two-letter code (MP4 stores nothing else).
+var threeLetterCodes = map[string]string{
+	"en": "eng", "de": "deu", "fr": "fra", "es": "spa", "it": "ita", "ja": "jpn", "pt": "por", "nl": "nld", "ru": "rus",
+	"sv": "swe", "no": "nor", "da": "dan", "fi": "fin", "pl": "pol", "ko": "kor", "zh": "zho", "tr": "tur", "cs": "ces",
+	"hu": "hun", "el": "ell",
+}
+
+// LanguageCode3 answers a two-letter code as the three-letter one a muxer writes; any other text comes back unchanged.
+func LanguageCode3(code string) string {
+	if three, known := threeLetterCodes[strings.ToLower(code)]; known {
+		return three
+	}
+	return code
+}
+
 // undetermined are the codes that say no language is stated.
 var undetermined = map[string]bool{"und": true, "zxx": true, "mul": true, "xxx": true, "": true}
 
