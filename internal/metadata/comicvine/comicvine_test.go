@@ -23,9 +23,17 @@ func (a answer) RoundTrip(request *http.Request) (*http.Response, error) {
 	if query.Get("api_key") == "owner-key" && query.Get("format") == "json" {
 		switch request.URL.Path {
 		case "/api/search/":
+			if query.Get("resources") == "person" {
+				body = `{"error":"OK","status_code":1,"results":[{"id":71,"name":"Ann Quillen"},{"id":70,"name":"Ann  Quill"}]}`
+				break
+			}
 			body = `{"error":"OK","status_code":1,"results":[
 			 {"id":1001,"name":"Night Harbor","start_year":"2019","publisher":{"id":9,"name":"Acme Press"},"count_of_issues":12,"image":{"original_url":"https://img.example/1.jpg"}},
 			 {"id":1002,"name":"Night Harbor","start_year":"1987","publisher":null,"count_of_issues":3}]}`
+		case "/api/person/4040-70/":
+			body = `{"error":"OK","status_code":1,"results":{"volume_credits":[{"id":1001,"name":"Night Harbor"},{"id":1002,"name":"Night Harbor"}]}}`
+		case "/api/volumes/":
+			body = `{"error":"OK","status_code":1,"results":[{"id":1001,"name":"Night Harbor","start_year":"2019","count_of_issues":12},{"id":1002,"name":"Night Harbor","start_year":"1987","count_of_issues":3}]}`
 		case "/api/volume/4050-1001/":
 			body = `{"error":"OK","status_code":1,"results":{"id":1001,"name":"Night Harbor","start_year":"2019","publisher":{"name":"Acme Press"},"count_of_issues":12}}`
 		case "/api/volume/4050-9999/":
@@ -97,5 +105,24 @@ func TestNotFoundNoKeyAndRejectedKey(t *testing.T) {
 	}
 	if _, err := newClient("wrong", &paths).Series(t.Context(), 1001); err == nil || errors.Is(err, comicvine.ErrNotFound) {
 		t.Errorf("err = %v; want ComicVine's own error", err)
+	}
+}
+
+func TestCreatorSeriesReadsTheExactNamedPersonsVolumesInOneBatch(t *testing.T) {
+	var paths []string
+	got, err := newClient("owner-key", &paths).CreatorSeries(t.Context(), "ann quill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []comicvine.Series{{ID: 1001, Name: "Night Harbor", StartYear: 2019, IssueCount: 12}, {ID: 1002, Name: "Night Harbor", StartYear: 1987, IssueCount: 3}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v want %+v", got, want)
+	}
+	if len(paths) != 3 || !strings.Contains(paths[2], "filter=id%3A1001%7C1002") {
+		t.Errorf("requests = %v", paths)
+	}
+	none, err := newClient("owner-key", &paths).CreatorSeries(t.Context(), "Nobody Known")
+	if err != nil || none != nil {
+		t.Errorf("a name no person has = %+v, %v", none, err)
 	}
 }

@@ -85,3 +85,9 @@ The Kavita and Komga files setting has a **Preview** button beside it in File Ma
 GCD lists a series' issues by address only, so a refresh reads them one request each on the provider's pace (at most 60 a refresh, two minutes at 30 a minute,
 variant covers left out). It reads them only for a series no other source gave issues for; ComicVine's and Metron's lists win.
 Partial dates GCD writes with zeros ("1963-03-00") are kept as the part of the date it knows.
+
+## Following a creator
+
+A writer, artist or other credited creator on a comic page can be followed like an author. The series come from ComicVine (it needs your key): the person is
+found by their exact name, their volume credits are read, and the series come in one batched request. A follow adds the series that started from the year it
+was made, monitored; a back-catalogue follow adds every one (at most 5 a run, 25 for a back-catalogue). A name ComicVine spells differently finds nothing.

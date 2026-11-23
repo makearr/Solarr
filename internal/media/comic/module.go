@@ -61,7 +61,30 @@ type Module struct {
 	ReaderFiles *ReaderFiles
 	// Rename names a series' files for a rename; nil leaves comics without one.
 	Rename *RenameConfig
+	// Follow adds a followed creator's series to a library; nil leaves creators unfollowable.
+	Follow *Following
 }
+
+var _ media.Following = Module{}
+
+// FollowCandidates implements media.Following.
+func (m Module) FollowCandidates(ctx context.Context, follow media.Follow) ([]media.FollowCandidate, error) {
+	if m.Follow == nil {
+		return nil, media.ErrNoFollowSource
+	}
+	return m.Follow.FollowCandidates(ctx, follow)
+}
+
+// AddFollowed implements media.Following.
+func (m Module) AddFollowed(ctx context.Context, follow media.Follow, candidate media.FollowCandidate) error {
+	if m.Follow == nil {
+		return media.ErrNoFollowSource
+	}
+	return m.Follow.AddFollowed(ctx, follow, candidate)
+}
+
+// FollowLimit implements media.Following.
+func (m Module) FollowLimit(follow media.Follow) int { return Following{}.FollowLimit(follow) }
 
 var _ media.Renaming = Module{}
 

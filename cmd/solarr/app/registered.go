@@ -992,7 +992,12 @@ func (p *process) comicModule() comic.Module {
 			return p.cache.Snapshot().RootFoldersForCategory(categoryID)
 		},
 	}
+	var follow *comic.Following
+	if creators, ok := service.ComicVine.(comic.CreatorSource); ok {
+		follow = &comic.Following{Source: creators, People: library.NewPeople(p.library), Catalog: catalog}
+	}
 	return comic.Module{
+		Follow:      follow,
 		ReaderFiles: readerFiles,
 		Rename:      &comic.RenameConfig{Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},
 		Feed: comic.Feed{

@@ -267,3 +267,52 @@ func (c Client) Issue(ctx context.Context, id int) (Issue, error) {
 	}
 	return found.issue(), nil
 }
+
+const (
+	personPrefix = "4040-"
+	// maxCreatorSeries bounds the series read of one creator: one batched request answers up to this many.
+	maxCreatorSeries = 100
+)
+
+// CreatorSeries lists the series a creator has credits on, found by the exact name (a lookalike name is not guessed):
+// the person is searched, their volume credits are read, and the series come in one batched request.
+func (c Client) CreatorSeries(ctx context.Context, name string) ([]Series, error) {
+	var people []namedJSON
+	if err := get(ctx, c, "search/", url.Values{"resources": {"person"}, "query": {name}, "field_list": {"id,name"}, "limit": {"10"}}, &people); err != nil {
+		return nil, err
+	}
+	wanted := strings.ToLower(strings.Join(strings.Fields(name), " "))
+	personID := 0
+	for _, person := range people {
+		if strings.ToLower(strings.Join(strings.Fields(person.Name), " ")) == wanted {
+			personID = person.ID
+			break
+		}
+	}
+	if personID == 0 {
+		return nil, nil
+	}
+	var person struct {
+		Volumes []namedJSON `json:"volume_credits"`
+	}
+	if err := get(ctx, c, "person/"+personPrefix+strconv.Itoa(personID)+"/", url.Values{"field_list": {"volume_credits"}}, &person); err != nil {
+		return nil, err
+	}
+	if len(person.Volumes) == 0 {
+		return nil, nil
+	}
+	ids := make([]string, 0, min(len(person.Volumes), maxCreatorSeries))
+	for _, volume := range person.Volumes[:min(len(person.Volumes), maxCreatorSeries)] {
+		ids = append(ids, strconv.Itoa(volume.ID))
+	}
+	var found []seriesJSON
+	query := url.Values{"filter": {"id:" + strings.Join(ids, "|")}, "field_list": {seriesFields}, "limit": {strconv.Itoa(maxCreatorSeries)}}
+	if err := get(ctx, c, "volumes/", query, &found); err != nil {
+		return nil, err
+	}
+	series := make([]Series, 0, len(found))
+	for _, one := range found {
+		series = append(series, one.series())
+	}
+	return series, nil
+}
