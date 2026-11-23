@@ -16,8 +16,8 @@ const (
 // StatusNotYetReleased is AniList's word for an anime that has not begun airing.
 const StatusNotYetReleased = "NOT_YET_RELEASED"
 
-const chartQuery = `query($page:Int,$perPage:Int,$sort:[MediaSort],$status:MediaStatus,$before:FuzzyDateInt,$notGenres:[String],$minPopularity:Int)` +
-	`{Page(page:$page,perPage:$perPage){pageInfo{hasNextPage}media(type:ANIME,isAdult:false,sort:$sort,status:$status,startDate_lesser:$before,` +
+const chartQuery = `query($type:MediaType,$page:Int,$perPage:Int,$sort:[MediaSort],$status:MediaStatus,$before:FuzzyDateInt,$notGenres:[String],$minPopularity:Int)` +
+	`{Page(page:$page,perPage:$perPage){pageInfo{hasNextPage}media(type:$type,isAdult:false,sort:$sort,status:$status,startDate_lesser:$before,` +
 	`genre_not_in:$notGenres,popularity_greater:$minPopularity){` + mediaFields + `}}}`
 
 // ChartQuery picks a chart; zero fields leave their filter off.
@@ -29,6 +29,8 @@ type ChartQuery struct {
 	ExcludeGenres []string
 	// MinPopularity is the number of lists an anime must be on, so a handful of scores cannot top a chart.
 	MinPopularity int
+	// Manga reads manga, light novels and one-shots instead of anime.
+	Manga bool
 	// PerPage is how many entries a page holds, at most SeasonPageSize; 0 asks the most.
 	PerPage int
 }
@@ -39,7 +41,11 @@ func (c Client) Chart(ctx context.Context, chart ChartQuery, page int) (entries 
 	if chart.PerPage > 0 && chart.PerPage < perPage {
 		perPage = chart.PerPage
 	}
-	variables := map[string]any{"page": page, "perPage": perPage, "sort": []string{chart.Sort}}
+	mediaType := "ANIME"
+	if chart.Manga {
+		mediaType = "MANGA"
+	}
+	variables := map[string]any{"type": mediaType, "page": page, "perPage": perPage, "sort": []string{chart.Sort}}
 	if chart.Status != "" {
 		variables["status"] = chart.Status
 	}

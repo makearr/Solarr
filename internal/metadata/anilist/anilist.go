@@ -19,7 +19,7 @@ var ErrNotFound = errors.New("anilist: not found")
 const (
 	endpoint         = "https://graphql.anilist.co"
 	maxResponseBytes = 4 << 20
-	mediaFields      = `id title{romaji english native} synonyms format episodes status seasonYear bannerImage coverImage{extraLarge} genres idMal averageScore popularity description(asHtml:false)`
+	mediaFields      = `id title{romaji english native} synonyms format episodes status seasonYear startDate{year} bannerImage coverImage{extraLarge} genres idMal averageScore popularity description(asHtml:false)`
 	query            = `query($id:Int){Media(id:$id,type:ANIME){` + mediaFields + `}}`
 )
 
@@ -45,12 +45,16 @@ type Media struct {
 		English string `json:"english"`
 		Native  string `json:"native"`
 	} `json:"title"`
-	Synonyms    []string `json:"synonyms"`
-	Format      string   `json:"format"`
-	Episodes    int      `json:"episodes"`
-	Status      string   `json:"status"`
-	SeasonYear  int      `json:"seasonYear"`
-	BannerImage string   `json:"bannerImage"`
+	Synonyms   []string `json:"synonyms"`
+	Format     string   `json:"format"`
+	Episodes   int      `json:"episodes"`
+	Status     string   `json:"status"`
+	SeasonYear int      `json:"seasonYear"`
+	// StartDate is when it first came out; a manga has no season.
+	StartDate struct {
+		Year int `json:"year"`
+	} `json:"startDate"`
+	BannerImage string `json:"bannerImage"`
 	CoverImage  struct {
 		ExtraLarge string `json:"extraLarge"`
 	} `json:"coverImage"`

@@ -68,7 +68,7 @@ func (f Feeds) Recommend(ctx context.Context, query media.RecommendQuery) ([]med
 		}
 		items = append(items, media.Recommendation{
 			Provider: match.Provider, ExternalID: match.ExternalID, Title: title(entry), Overview: entry.Description, PosterURL: entry.CoverImage.ExtraLarge,
-			Year: int64(entry.SeasonYear), Popularity: float64(entry.Popularity), Rating: float64(entry.AverageScore) / 10,
+			Year: int64(entry.SeasonYear), Popularity: float64(entry.Popularity), Rating: float64(entry.AverageScore) / 10, Votes: int64(entry.Popularity),
 			Traits: media.Traits{Genres: entry.Genres, OriginalLanguage: "ja", OriginCountries: []string{"JP"}, AniList: true},
 		})
 	}

@@ -24,6 +24,7 @@ import (
 	"github.com/makearr/Solarr/internal/media/housekeeping"
 	"github.com/makearr/Solarr/internal/media/knownfor"
 	"github.com/makearr/Solarr/internal/media/lastfmfeeds"
+	"github.com/makearr/Solarr/internal/media/mangafeeds"
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/olfeeds"
@@ -1006,6 +1007,7 @@ func (p *process) comicModule() comic.Module {
 		follow = &comic.Following{Source: creators, People: library.NewPeople(p.library), Catalog: catalog}
 	}
 	return comic.Module{
+		Feeds:       mangafeeds.Feeds{Charts: p.aniListClient(), Kind: comic.AddKindSeries, Provider: comic.ProviderAniListManga, Clock: clock.NewSystem()},
 		Follow:      follow,
 		ReaderFiles: readerFiles,
 		Rename:      &comic.RenameConfig{Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},

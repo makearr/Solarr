@@ -47,7 +47,7 @@ func TestRecommendKeepsOnlyEntriesASeriesWasFoundFor(t *testing.T) {
 		t.Fatalf("err = %v, more = %v", err, more)
 	}
 	want := []media.Recommendation{{
-		Provider: "tvdb", ExternalID: "900", Title: "Example Ray", Year: 2024, Popularity: 30000, Rating: 8.4,
+		Provider: "tvdb", ExternalID: "900", Title: "Example Ray", Year: 2024, Popularity: 30000, Votes: 30000, Rating: 8.4,
 		Traits: media.Traits{Genres: []string{"Drama"}, OriginalLanguage: "ja", OriginCountries: []string{"JP"}, AniList: true},
 	}}
 	if !reflect.DeepEqual(items, want) {

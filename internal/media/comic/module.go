@@ -39,6 +39,8 @@ const (
 
 // Module is the comic media type as the media registry sees it; a zero value declares the type, the wiring brings its services.
 type Module struct {
+	// Feeds are the recommendation feeds (Discover); nil leaves comics without them.
+	Feeds media.Recommending
 	// Registrations are the job types the type brings, with their handlers.
 	Registrations []media.JobRegistration
 	// Wiring is the add, pictures, refresh and hunt services.
@@ -303,4 +305,20 @@ var fileSettings = []media.FileSetting{
 		{Key: EditionOff, Label: "No"}, {Key: EditionOn, Label: "Yes"}}},
 	{Key: media.FileReaderFiles, Label: "Kavita and Komga files", Help: "Write what comic readers use: series.json beside the series, and ComicInfo.xml inside each cbz. Fill adds a missing file or element and never changes an existing value; Replace overwrites. A cbz is rewritten only when it would change.", Options: []media.Choice{
 		{Key: ReaderFilesOff, Label: "Off"}, {Key: ReaderFilesFill, Label: "Fill what is missing"}, {Key: ReaderFilesReplace, Label: "Replace"}}},
+}
+
+// RecommendationFeeds implements media.Recommending.
+func (m Module) RecommendationFeeds(ctx context.Context) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
+	if m.Feeds == nil {
+		return nil, nil
+	}
+	return m.Feeds.RecommendationFeeds(ctx)
+}
+
+// Recommend implements media.Recommending.
+func (m Module) Recommend(ctx context.Context, query media.RecommendQuery) ([]media.Recommendation, bool, error) {
+	if m.Feeds == nil {
+		return nil, false, media.ErrNotWired
+	}
+	return m.Feeds.Recommend(ctx, query)
 }

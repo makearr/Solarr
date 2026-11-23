@@ -14,10 +14,11 @@ enables it per library under **Settings, Discover**. A dashboard row shows the m
 | TV | TMDB; an anime library reads AniList instead (no key) | trending, highest rated, upcoming, classics |
 | Music | Last.fm (needs the Last.fm key); names are resolved to MusicBrainz by exact name | trending artists and albums, artists and albums alike the ones you hold most of, classic albums of your genres; no upcoming (Last.fm has no calendar) |
 | Ebooks | Open Library (no key) | trending this week, highest rated (at least 100 ratings), classics (at least 300 ratings, first published long enough ago); no upcoming |
+| Comics and manga | AniList manga (no key); Western comics have no free popularity chart | trending, highest rated, upcoming, classics |
 | Any library of a media type with collections | the provider that names the collection | collections: the members of a collection you hold one of |
 
 A list whose source cannot be read (no key, source down) keeps its old items and says why under Settings, Discover.
-Audiobooks, adult libraries, comics and magazines have no feeds yet.
+Audiobooks, adult libraries and magazines have no feeds yet.
 
 ## What is kept out
 
