@@ -92,7 +92,7 @@ const (
 const KeyMetadataDisabledProviders = "metadata.disabled_providers"
 
 // DefaultDisabledProviders start off: Google Books answers 429 without a key of the owner's own, and the comic providers are new.
-var DefaultDisabledProviders = []string{SourceAnimeIDs, BookSourceGoogleBooks, MovieSourceIMDb, ComicSourceComicVine, ComicSourceMetron, ComicSourceGCD, ComicSourceMangaUpdates, ComicSourceMangaDex}
+var DefaultDisabledProviders = []string{BookSourceGoogleBooks, MovieSourceIMDb, ComicSourceComicVine, ComicSourceMetron, ComicSourceGCD, ComicSourceMangaUpdates, ComicSourceMangaDex}
 
 // KeyMetadataMovieSources orders the movie providers: the first to hold a field supplies it, the others fill what is missing.
 const KeyMetadataMovieSources = "metadata.movie_sources"
