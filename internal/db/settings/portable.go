@@ -31,6 +31,7 @@ type Document struct {
 	DefaultLanguages  []string                `yaml:"default_languages,omitempty"`
 	LanguageProfiles  []LanguageProfileEntry  `yaml:"language_profiles,omitempty"`
 	ExclusionPatterns []ExclusionPatternEntry `yaml:"exclusion_patterns,omitempty"`
+	Discover          *DiscoverEntry          `yaml:"discover,omitempty"`
 	// Schedules holds each task's stored overrides by task key; a task absent here runs on its defaults.
 	Schedules map[string]ScheduleEntry `yaml:"schedules,omitempty"`
 	// The three below are filled and applied by the API layer (webhooks and definition files are not in the settings snapshot).
@@ -1028,6 +1029,8 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 			})
 		}
 	}
+
+	problems = append(problems, d.validateDiscover()...)
 
 	return problems
 }

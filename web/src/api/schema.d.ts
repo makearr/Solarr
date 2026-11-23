@@ -5198,6 +5198,43 @@ export interface paths {
         patch: operations["patchGeneralSettings"];
         trace?: never;
     };
+    "/settings/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Discover's switch, its global exclusions and every library's settings with defaults resolved. Administrator only. */
+        get: operations["getDiscoverSettings"];
+        /** Save the switch and the global exclusions; the libraries are saved one by one. Administrator only. */
+        put: operations["setDiscoverSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/discover/libraries/{category_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Save one library's Discover settings and refresh its recommendations. Administrator only. */
+        put: operations["setLibraryDiscoverSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/general/video-previews/generate": {
         parameters: {
             query?: never;
@@ -12095,11 +12132,71 @@ export interface components {
             video_previews?: boolean;
             /** @description The automatic search also looks for missing items released before the freshness window (search.hunt_gaps). Default on. */
             hunt_old_missing?: boolean;
+            /** @description Discover: recommendations of works that are not in Solarr or not monitored (discover.enabled). Default off. */
+            recommendations?: boolean;
             /**
              * @description How much of the outside world Solarr touches (general.solarr_mode): read_only writes nothing into a library, pause_downloads sends nothing to a download client, observe is read_only without indexer searches or downloads, arr_companion is observe plus sending monitoring back to the *Arrs. SOLARR_MODE sets it at every start.
              * @enum {string}
              */
             solarr_mode?: "normal" | "read_only" | "pause_downloads" | "observe" | "arr_companion";
+        };
+        DiscoverGlobalSettings: {
+            /** @description Recommendations of works that are not in Solarr or not monitored (discover.enabled), the same switch as on Settings -> General. Default off. */
+            enabled: boolean;
+            /** @description Genres no library recommends from */
+            exclude_genres: string[];
+            /** @description Networks and studios no library recommends from */
+            exclude_networks: string[];
+        };
+        DiscoverTypeSettings: {
+            /** @enum {string} */
+            type: "highest_rated" | "trending" | "upcoming" | "classics" | "collections";
+            enabled: boolean;
+            /** @description How many items of this list the library keeps. */
+            amount: number;
+            /** @description Add what passes the gates without being asked. */
+            auto_add: boolean;
+        };
+        LibraryDiscoverSettings: {
+            /** Format: int64 */
+            category_id: number;
+            /** @description The library's name; ignored on a save. */
+            name?: string;
+            /** @description The library's media type; ignored on a save. */
+            media_type?: string;
+            enabled: boolean;
+            /** @description The most the page shows before Load more. */
+            total_amount: number;
+            /** @description A classic was released at least this many years ago. */
+            classic_age_years: number;
+            /**
+             * Format: double
+             * @description Auto-add's least rating
+             */
+            min_rating: number;
+            /**
+             * Format: int64
+             * @description Auto-add's least number of votes.
+             */
+            min_votes: number;
+            /** @description The most auto-add adds to the library a day */
+            auto_add_per_day: number;
+            /** @description Search for what auto-add adds. */
+            auto_add_search: boolean;
+            /** @description Original languages recommended; empty is any. Only read when languages_set. */
+            original_languages: string[];
+            /** @description False takes the library's language profile (plus Japanese for an anime library) as the list. */
+            languages_set: boolean;
+            exclude_genres: string[];
+            exclude_networks: string[];
+            /** @description Add kinds the library does not recommend (an album, a performer). */
+            disabled_kinds: string[];
+            /** @description Every recommendation list with the library's choice. */
+            types: components["schemas"]["DiscoverTypeSettings"][];
+        };
+        DiscoverSettings: {
+            global: components["schemas"]["DiscoverGlobalSettings"];
+            libraries: components["schemas"]["LibraryDiscoverSettings"][];
         };
         /** @description The perceptual hashing switch (scan.video_phash). */
         VideoHashing: {
@@ -21669,6 +21766,85 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    getDiscoverSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverSettings"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    setDiscoverSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscoverGlobalSettings"];
+            };
+        };
+        responses: {
+            /** @description The settings now in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverSettings"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    setLibraryDiscoverSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryDiscoverSettings"];
+            };
+        };
+        responses: {
+            /** @description The library's settings now in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryDiscoverSettings"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     generateVideoPreviews: {

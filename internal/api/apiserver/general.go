@@ -14,7 +14,8 @@ func (s *Server) generalSettings() gen.GeneralSettings {
 	snapshot := s.auth.Settings.Snapshot()
 	hashing, previews, gaps := snapshot.VideoPerceptualHash(), snapshot.VideoPreviews(), snapshot.HuntGaps()
 	mode := gen.GeneralSettingsSolarrMode(snapshot.SolarrMode())
-	return gen.GeneralSettings{VideoHashing: &hashing, VideoPreviews: &previews, HuntOldMissing: &gaps, SolarrMode: &mode}
+	recommendations := snapshot.DiscoverGlobal().Enabled
+	return gen.GeneralSettings{VideoHashing: &hashing, VideoPreviews: &previews, HuntOldMissing: &gaps, Recommendations: &recommendations, SolarrMode: &mode}
 }
 
 // GetGeneralSettings answers the instance-wide switches of Settings -> General.
@@ -48,6 +49,21 @@ func (s *Server) PatchGeneralSettings(w http.ResponseWriter, r *http.Request) {
 		if err := s.auth.Settings.SetHuntGaps(r.Context(), s.auth.Clock, *body.HuntOldMissing); err != nil {
 			writeError(w, s.logger, err)
 			return
+		}
+	}
+	if body.Recommendations != nil {
+		if err := s.auth.Registry.LookupAll(settings.KeyDiscoverEnabled); err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
+		if err := s.auth.Settings.SetDiscoverEnabled(r.Context(), s.auth.Clock, *body.Recommendations); err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
+		if *body.Recommendations && s.discoverRefresher != nil {
+			if err := s.discoverRefresher.RefreshDiscover(r.Context(), 0); err != nil {
+				s.logger.Warn("discover refresh not queued", "error", err)
+			}
 		}
 	}
 	if body.SolarrMode != nil {

@@ -173,6 +173,15 @@ const (
 	DecisionOutcomeREJECT DecisionOutcome = "REJECT"
 )
 
+// Defines values for DiscoverTypeSettingsType.
+const (
+	DiscoverTypeSettingsTypeClassics     DiscoverTypeSettingsType = "classics"
+	DiscoverTypeSettingsTypeCollections  DiscoverTypeSettingsType = "collections"
+	DiscoverTypeSettingsTypeHighestRated DiscoverTypeSettingsType = "highest_rated"
+	DiscoverTypeSettingsTypeTrending     DiscoverTypeSettingsType = "trending"
+	DiscoverTypeSettingsTypeUpcoming     DiscoverTypeSettingsType = "upcoming"
+)
+
 // Defines values for DownloaderProtocol.
 const (
 	DownloaderProtocolDdl     DownloaderProtocol = "ddl"
@@ -2471,6 +2480,38 @@ type Deferral struct {
 	RetryAfter *time.Time `json:"retry_after,omitempty"`
 }
 
+// DiscoverGlobalSettings defines model for DiscoverGlobalSettings.
+type DiscoverGlobalSettings struct {
+	// Enabled Recommendations of works that are not in Solarr or not monitored (discover.enabled), the same switch as on Settings -> General. Default off.
+	Enabled bool `json:"enabled"`
+
+	// ExcludeGenres Genres no library recommends from
+	ExcludeGenres []string `json:"exclude_genres"`
+
+	// ExcludeNetworks Networks and studios no library recommends from
+	ExcludeNetworks []string `json:"exclude_networks"`
+}
+
+// DiscoverSettings defines model for DiscoverSettings.
+type DiscoverSettings struct {
+	Global    DiscoverGlobalSettings    `json:"global"`
+	Libraries []LibraryDiscoverSettings `json:"libraries"`
+}
+
+// DiscoverTypeSettings defines model for DiscoverTypeSettings.
+type DiscoverTypeSettings struct {
+	// Amount How many items of this list the library keeps.
+	Amount int `json:"amount"`
+
+	// AutoAdd Add what passes the gates without being asked.
+	AutoAdd bool                     `json:"auto_add"`
+	Enabled bool                     `json:"enabled"`
+	Type    DiscoverTypeSettingsType `json:"type"`
+}
+
+// DiscoverTypeSettingsType defines model for DiscoverTypeSettings.Type.
+type DiscoverTypeSettingsType string
+
 // DiskInotify defines model for DiskInotify.
 type DiskInotify struct {
 	// BudgetWatches Half of the limit
@@ -3236,6 +3277,9 @@ type GateResult struct {
 type GeneralSettings struct {
 	// HuntOldMissing The automatic search also looks for missing items released before the freshness window (search.hunt_gaps). Default on.
 	HuntOldMissing *bool `json:"hunt_old_missing,omitempty"`
+
+	// Recommendations Discover: recommendations of works that are not in Solarr or not monitored (discover.enabled). Default off.
+	Recommendations *bool `json:"recommendations,omitempty"`
 
 	// SolarrMode How much of the outside world Solarr touches (general.solarr_mode): read_only writes nothing into a library, pause_downloads sends nothing to a download client, observe is read_only without indexer searches or downloads, arr_companion is observe plus sending monitoring back to the *Arrs. SOLARR_MODE sets it at every start.
 	SolarrMode *GeneralSettingsSolarrMode `json:"solarr_mode,omitempty"`
@@ -4158,6 +4202,49 @@ type LibraryCounts struct {
 	// Unprobed total_files minus probed, computed here rather than stored twice.
 	Unprobed int `json:"unprobed"`
 	Works    int `json:"works"`
+}
+
+// LibraryDiscoverSettings defines model for LibraryDiscoverSettings.
+type LibraryDiscoverSettings struct {
+	// AutoAddPerDay The most auto-add adds to the library a day
+	AutoAddPerDay int `json:"auto_add_per_day"`
+
+	// AutoAddSearch Search for what auto-add adds.
+	AutoAddSearch bool  `json:"auto_add_search"`
+	CategoryId    int64 `json:"category_id"`
+
+	// ClassicAgeYears A classic was released at least this many years ago.
+	ClassicAgeYears int `json:"classic_age_years"`
+
+	// DisabledKinds Add kinds the library does not recommend (an album, a performer).
+	DisabledKinds   []string `json:"disabled_kinds"`
+	Enabled         bool     `json:"enabled"`
+	ExcludeGenres   []string `json:"exclude_genres"`
+	ExcludeNetworks []string `json:"exclude_networks"`
+
+	// LanguagesSet False takes the library's language profile (plus Japanese for an anime library) as the list.
+	LanguagesSet bool `json:"languages_set"`
+
+	// MediaType The library's media type; ignored on a save.
+	MediaType *string `json:"media_type,omitempty"`
+
+	// MinRating Auto-add's least rating
+	MinRating float64 `json:"min_rating"`
+
+	// MinVotes Auto-add's least number of votes.
+	MinVotes int64 `json:"min_votes"`
+
+	// Name The library's name; ignored on a save.
+	Name *string `json:"name,omitempty"`
+
+	// OriginalLanguages Original languages recommended; empty is any. Only read when languages_set.
+	OriginalLanguages []string `json:"original_languages"`
+
+	// TotalAmount The most the page shows before Load more.
+	TotalAmount int `json:"total_amount"`
+
+	// Types Every recommendation list with the library's choice.
+	Types []DiscoverTypeSettings `json:"types"`
 }
 
 // LibraryHealth Todo 4.8's own aggregate report. Every *_count is exact; every list alongside one is a bounded sample (the first 20), not the full set.
@@ -9315,6 +9402,12 @@ type SetAuthPolicyJSONRequestBody SetAuthPolicyJSONBody
 // SetBackupRetentionJSONRequestBody defines body for SetBackupRetention for application/json ContentType.
 type SetBackupRetentionJSONRequestBody = BackupRetention
 
+// SetDiscoverSettingsJSONRequestBody defines body for SetDiscoverSettings for application/json ContentType.
+type SetDiscoverSettingsJSONRequestBody = DiscoverGlobalSettings
+
+// SetLibraryDiscoverSettingsJSONRequestBody defines body for SetLibraryDiscoverSettings for application/json ContentType.
+type SetLibraryDiscoverSettingsJSONRequestBody = LibraryDiscoverSettings
+
 // SetDiskOverridesJSONRequestBody defines body for SetDiskOverrides for application/json ContentType.
 type SetDiskOverridesJSONRequestBody = DiskOverrides
 
@@ -10400,6 +10493,15 @@ type ServerInterface interface {
 	// Change the backup retention rule. Administrator only.
 	// (PUT /settings/backups)
 	SetBackupRetention(w http.ResponseWriter, r *http.Request)
+	// Discover's switch, its global exclusions and every library's settings with defaults resolved. Administrator only.
+	// (GET /settings/discover)
+	GetDiscoverSettings(w http.ResponseWriter, r *http.Request)
+	// Save the switch and the global exclusions; the libraries are saved one by one. Administrator only.
+	// (PUT /settings/discover)
+	SetDiscoverSettings(w http.ResponseWriter, r *http.Request)
+	// Save one library's Discover settings and refresh its recommendations. Administrator only.
+	// (PUT /settings/discover/libraries/{category_id})
+	SetLibraryDiscoverSettings(w http.ResponseWriter, r *http.Request, categoryId int64)
 	// The detected disk layout of every root, the latest latency per disk group and the inotify budget.
 	// (GET /settings/disk)
 	GetDiskSettings(w http.ResponseWriter, r *http.Request)
@@ -12647,6 +12749,24 @@ func (_ Unimplemented) GetBackupRetention(w http.ResponseWriter, r *http.Request
 // Change the backup retention rule. Administrator only.
 // (PUT /settings/backups)
 func (_ Unimplemented) SetBackupRetention(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Discover's switch, its global exclusions and every library's settings with defaults resolved. Administrator only.
+// (GET /settings/discover)
+func (_ Unimplemented) GetDiscoverSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Save the switch and the global exclusions; the libraries are saved one by one. Administrator only.
+// (PUT /settings/discover)
+func (_ Unimplemented) SetDiscoverSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Save one library's Discover settings and refresh its recommendations. Administrator only.
+// (PUT /settings/discover/libraries/{category_id})
+func (_ Unimplemented) SetLibraryDiscoverSettings(w http.ResponseWriter, r *http.Request, categoryId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -23840,6 +23960,83 @@ func (siw *ServerInterfaceWrapper) SetBackupRetention(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// GetDiscoverSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetDiscoverSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDiscoverSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetDiscoverSettings operation middleware
+func (siw *ServerInterfaceWrapper) SetDiscoverSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetDiscoverSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetLibraryDiscoverSettings operation middleware
+func (siw *ServerInterfaceWrapper) SetLibraryDiscoverSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "category_id" -------------
+	var categoryId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "category_id", chi.URLParam(r, "category_id"), &categoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetLibraryDiscoverSettings(w, r, categoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetDiskSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetDiskSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -28124,6 +28321,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/settings/backups", wrapper.SetBackupRetention)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/settings/discover", wrapper.GetDiscoverSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/settings/discover", wrapper.SetDiscoverSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/settings/discover/libraries/{category_id}", wrapper.SetLibraryDiscoverSettings)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/settings/disk", wrapper.GetDiskSettings)

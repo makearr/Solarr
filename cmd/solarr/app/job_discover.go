@@ -93,3 +93,11 @@ func (p *process) enqueueDiscoverRefresh(ctx context.Context) (jobs.EnqueueResul
 	}
 	return result, err
 }
+
+// discoverRefresher queues the refresh a settings change asks for.
+type discoverRefresher struct{ process *process }
+
+func (r discoverRefresher) RefreshDiscover(ctx context.Context, categoryID int64) error {
+	_, err := discover.Enqueue(ctx, r.process.queue, categoryID)
+	return err
+}

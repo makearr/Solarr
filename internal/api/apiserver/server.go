@@ -107,6 +107,8 @@ type Config struct {
 	PreviewsDir string
 	// VideoPictures starts the on-demand preview and hash sweeps; optional.
 	VideoPictures VideoPictures
+	// DiscoverRefresher queues the refresh of recommendations after a settings change; optional.
+	DiscoverRefresher DiscoverRefresher
 	// UnreadableFiles has the probe read again the files it gave up on; optional.
 	UnreadableFiles UnreadableFiles
 	// ConfigPath locates config.yml on disk. Optional: without it,
@@ -387,6 +389,7 @@ type Server struct {
 	mediaCoverDir           string
 	previewsDir             string
 	videoPictures           VideoPictures
+	discoverRefresher       DiscoverRefresher
 	unreadableFiles         UnreadableFiles
 	configPath              string
 	people                  PeopleReader
@@ -550,6 +553,7 @@ func New(config Config) (*Server, error) {
 		mediaCoverDir:           config.MediaCoverDir,
 		previewsDir:             config.PreviewsDir,
 		videoPictures:           config.VideoPictures,
+		discoverRefresher:       config.DiscoverRefresher,
 		unreadableFiles:         config.UnreadableFiles,
 		configPath:              config.ConfigPath,
 		people:                  config.People,
@@ -945,6 +949,9 @@ func New(config Config) (*Server, error) {
 			secured.Post("/duplicates/similar-videos/resolve", server.ResolveSimilarVideos)
 			secured.Get("/settings/general", server.GetGeneralSettings)
 			secured.Patch("/settings/general", server.PatchGeneralSettings)
+			secured.Get("/settings/discover", server.GetDiscoverSettings)
+			secured.Put("/settings/discover", server.SetDiscoverSettings)
+			secured.Put("/settings/discover/libraries/{category_id}", wrapped.SetLibraryDiscoverSettings)
 			secured.Post("/settings/general/video-previews/generate", server.GenerateVideoPreviews)
 			secured.Post("/settings/general/video-hashes/generate", server.GenerateVideoHashes)
 			secured.Post("/settings/general/unreadable-files/retry", server.RetryUnreadableFiles)

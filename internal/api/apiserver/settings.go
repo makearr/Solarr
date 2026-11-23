@@ -27,6 +27,10 @@ func (s *Server) ExportSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	document := s.auth.Settings.Export()
+	if err := s.auth.Settings.ExportDiscover(r.Context(), &document); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
 	if s.configExtras != nil {
 		if err := s.configExtras.Export(r.Context(), &document); err != nil {
 			writeError(w, s.logger, err)
@@ -94,6 +98,10 @@ func (s *Server) ImportSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := s.auth.Settings.ImportDiscover(r.Context(), s.wall, document); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
 	if s.configExtras != nil {
 		if err := s.configExtras.Apply(r.Context(), document); err != nil {
 			writeError(w, s.logger, err)

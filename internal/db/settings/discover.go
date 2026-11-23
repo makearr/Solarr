@@ -41,15 +41,17 @@ type DiscoverGlobal struct {
 
 // DiscoverTypeSetting is one recommendation list of one library.
 type DiscoverTypeSetting struct {
-	Type    string
-	Enabled bool
-	Amount  int64
-	AutoAdd bool
+	Type    string `yaml:"type"`
+	Enabled bool   `yaml:"enabled"`
+	Amount  int64  `yaml:"amount"`
+	AutoAdd bool   `yaml:"auto_add,omitempty"`
 }
 
 // LibraryDiscover is one library's Discover settings, defaults resolved.
 type LibraryDiscover struct {
 	CategoryID      int64
+	Name            string
+	MediaType       string
 	Enabled         bool
 	TotalAmount     int64
 	ClassicAgeYears int64
@@ -84,6 +86,12 @@ func (c *Cache) SetDiscoverEnabled(ctx context.Context, cl clock.Clock, enabled 
 
 // SetDiscoverGlobal writes the switch and both exclusion lists together.
 func (c *Cache) SetDiscoverGlobal(ctx context.Context, cl clock.Clock, global DiscoverGlobal) error {
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return setDiscoverGlobal(ctx, queries, cl, global)
+	})
+}
+
+func setDiscoverGlobal(ctx context.Context, queries *settingsdb.Queries, cl clock.Clock, global DiscoverGlobal) error {
 	genres, err := json.Marshal(cleanedList(global.ExcludeGenres))
 	if err != nil {
 		return fmt.Errorf("settings: discover genres: %w", err)
@@ -92,7 +100,7 @@ func (c *Cache) SetDiscoverGlobal(ctx context.Context, cl clock.Clock, global Di
 	if err != nil {
 		return fmt.Errorf("settings: discover networks: %w", err)
 	}
-	return c.setPolicies(ctx, cl, map[string]string{
+	return setInstanceSettings(ctx, queries, cl, map[string]string{
 		KeyDiscoverEnabled: boolPolicy(global.Enabled), KeyDiscoverExcludeGenres: string(genres), KeyDiscoverExcludeNetworks: string(networks),
 	})
 }
@@ -120,7 +128,7 @@ func (c *Cache) LibraryDiscovers(ctx context.Context) ([]LibraryDiscover, error)
 	}
 	var out []LibraryDiscover
 	for _, category := range c.Snapshot().Categories() {
-		out = append(out, resolveLibraryDiscover(category.ID, saved, typesOf[category.ID]))
+		out = append(out, resolveLibraryDiscover(category, saved, typesOf[category.ID]))
 	}
 	return out, nil
 }
@@ -139,12 +147,12 @@ func (c *Cache) LibraryDiscover(ctx context.Context, categoryID int64) (LibraryD
 	return LibraryDiscover{}, fmt.Errorf("%w: category %d", ErrNotFound, categoryID)
 }
 
-func resolveLibraryDiscover(categoryID int64, saved map[int64]settingsdb.CategoryDiscover, typeRows map[string]settingsdb.CategoryDiscoverType) LibraryDiscover {
+func resolveLibraryDiscover(category Category, saved map[int64]settingsdb.CategoryDiscover, typeRows map[string]settingsdb.CategoryDiscoverType) LibraryDiscover {
 	out := LibraryDiscover{
-		CategoryID: categoryID, TotalAmount: DefaultDiscoverTotal, ClassicAgeYears: DefaultDiscoverClassicYears,
+		CategoryID: category.ID, Name: category.Name, MediaType: category.MediaType, TotalAmount: DefaultDiscoverTotal, ClassicAgeYears: DefaultDiscoverClassicYears,
 		MinRating: DefaultDiscoverMinRating, MinVotes: DefaultDiscoverMinVotes, AutoAddPerDay: DefaultDiscoverAutoAddPerDay,
 	}
-	if row, found := saved[categoryID]; found {
+	if row, found := saved[category.ID]; found {
 		out.Enabled, out.TotalAmount, out.ClassicAgeYears = row.Enabled == 1, row.TotalAmount, row.ClassicAgeYears
 		out.MinRating, out.MinVotes, out.AutoAddPerDay, out.AutoAddSearch = row.MinRating, row.MinVotes, row.AutoAddPerDay, row.AutoAddSearch == 1
 		out.OriginalLanguages, out.LanguagesSet = decodeList(row.OriginalLanguages), row.LanguagesSet == 1
@@ -230,6 +238,13 @@ func (c *Cache) SetLibraryDiscover(ctx context.Context, setting LibraryDiscover)
 	if problems := validateLibraryDiscover(setting); len(problems) > 0 {
 		return problems
 	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return writeLibraryDiscover(ctx, queries, setting)
+	})
+}
+
+// writeLibraryDiscover replaces one library's row and its type rows inside the caller's transaction.
+func writeLibraryDiscover(ctx context.Context, queries *settingsdb.Queries, setting LibraryDiscover) error {
 	languages, err := encodeList(setting.OriginalLanguages)
 	if err != nil {
 		return fmt.Errorf("settings: discover languages: %w", err)
@@ -246,24 +261,22 @@ func (c *Cache) SetLibraryDiscover(ctx context.Context, setting LibraryDiscover)
 	if err != nil {
 		return fmt.Errorf("settings: discover kinds: %w", err)
 	}
-	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
-		if err := queries.UpsertCategoryDiscover(ctx, settingsdb.UpsertCategoryDiscoverParams{
-			CategoryID: setting.CategoryID, Enabled: boolToInt(setting.Enabled), TotalAmount: setting.TotalAmount, ClassicAgeYears: setting.ClassicAgeYears,
-			MinRating: setting.MinRating, MinVotes: setting.MinVotes, AutoAddPerDay: setting.AutoAddPerDay, AutoAddSearch: boolToInt(setting.AutoAddSearch),
-			OriginalLanguages: languages, LanguagesSet: boolToInt(setting.LanguagesSet), ExcludeGenres: genres, ExcludeNetworks: networks, DisabledKinds: kinds,
+	if err := queries.UpsertCategoryDiscover(ctx, settingsdb.UpsertCategoryDiscoverParams{
+		CategoryID: setting.CategoryID, Enabled: boolToInt(setting.Enabled), TotalAmount: setting.TotalAmount, ClassicAgeYears: setting.ClassicAgeYears,
+		MinRating: setting.MinRating, MinVotes: setting.MinVotes, AutoAddPerDay: setting.AutoAddPerDay, AutoAddSearch: boolToInt(setting.AutoAddSearch),
+		OriginalLanguages: languages, LanguagesSet: boolToInt(setting.LanguagesSet), ExcludeGenres: genres, ExcludeNetworks: networks, DisabledKinds: kinds,
+	}); err != nil {
+		return err
+	}
+	if err := queries.DeleteCategoryDiscoverTypes(ctx, setting.CategoryID); err != nil {
+		return err
+	}
+	for _, one := range setting.Types {
+		if err := queries.AddCategoryDiscoverType(ctx, settingsdb.AddCategoryDiscoverTypeParams{
+			CategoryID: setting.CategoryID, Type: one.Type, Enabled: boolToInt(one.Enabled), Amount: one.Amount, AutoAdd: boolToInt(one.AutoAdd),
 		}); err != nil {
 			return err
 		}
-		if err := queries.DeleteCategoryDiscoverTypes(ctx, setting.CategoryID); err != nil {
-			return err
-		}
-		for _, one := range setting.Types {
-			if err := queries.AddCategoryDiscoverType(ctx, settingsdb.AddCategoryDiscoverTypeParams{
-				CategoryID: setting.CategoryID, Type: one.Type, Enabled: boolToInt(one.Enabled), Amount: one.Amount, AutoAdd: boolToInt(one.AutoAdd),
-			}); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	}
+	return nil
 }

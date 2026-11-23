@@ -8090,6 +8090,64 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /settings/discover:
+    get:
+      operationId: getDiscoverSettings
+      tags: [settings]
+      summary: Discover's switch, its global exclusions and every library's settings with defaults resolved. Administrator only.
+      responses:
+        "200":
+          description: The settings in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiscoverSettings" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setDiscoverSettings
+      tags: [settings]
+      summary: Save the switch and the global exclusions; the libraries are saved one by one. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DiscoverGlobalSettings" }
+      responses:
+        "200":
+          description: The settings now in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiscoverSettings" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /settings/discover/libraries/{category_id}:
+    parameters:
+      - name: category_id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      operationId: setLibraryDiscoverSettings
+      tags: [settings]
+      summary: Save one library's Discover settings and refresh its recommendations. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryDiscoverSettings" }
+      responses:
+        "200":
+          description: The library's settings now in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryDiscoverSettings" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /settings/general/video-previews/generate:
     post:
       operationId: generateVideoPreviews
@@ -16241,10 +16299,56 @@ components:
         video_hashing: { type: boolean, description: "Hash videos in the background so the duplicate finder matches re-encodes (scan.video_phash). Default off." }
         video_previews: { type: boolean, description: "Make a single frame and a 3x3 thumbnail sheet of each video from the frames the hashing reads (scan.video_previews). Turning it on turns video_hashing on. Default off." }
         hunt_old_missing: { type: boolean, description: "The automatic search also looks for missing items released before the freshness window (search.hunt_gaps). Default on." }
+        recommendations: { type: boolean, description: "Discover: recommendations of works that are not in Solarr or not monitored (discover.enabled). Default off." }
         solarr_mode:
           type: string
           enum: [normal, read_only, pause_downloads, observe, arr_companion]
           description: "How much of the outside world Solarr touches (general.solarr_mode): read_only writes nothing into a library, pause_downloads sends nothing to a download client, observe is read_only without indexer searches or downloads, arr_companion is observe plus sending monitoring back to the *Arrs. SOLARR_MODE sets it at every start."
+
+    DiscoverGlobalSettings:
+      type: object
+      required: [enabled, exclude_genres, exclude_networks]
+      properties:
+        enabled: { type: boolean, description: "Recommendations of works that are not in Solarr or not monitored (discover.enabled), the same switch as on Settings -> General. Default off." }
+        exclude_genres: { type: array, items: { type: string }, description: Genres no library recommends from, on top of each library's own. }
+        exclude_networks: { type: array, items: { type: string }, description: Networks and studios no library recommends from, on top of each library's own. }
+
+    DiscoverTypeSettings:
+      type: object
+      required: [type, enabled, amount, auto_add]
+      properties:
+        type: { type: string, enum: [highest_rated, trending, upcoming, classics, collections] }
+        enabled: { type: boolean }
+        amount: { type: integer, minimum: 1, maximum: 200, description: How many items of this list the library keeps. }
+        auto_add: { type: boolean, description: Add what passes the gates without being asked. }
+
+    LibraryDiscoverSettings:
+      type: object
+      required: [category_id, enabled, total_amount, classic_age_years, min_rating, min_votes, auto_add_per_day, auto_add_search, original_languages, languages_set, exclude_genres, exclude_networks, disabled_kinds, types]
+      properties:
+        category_id: { type: integer, format: int64 }
+        name: { type: string, description: The library's name; ignored on a save. }
+        media_type: { type: string, description: The library's media type; ignored on a save. }
+        enabled: { type: boolean }
+        total_amount: { type: integer, minimum: 1, maximum: 500, description: The most the page shows before Load more. }
+        classic_age_years: { type: integer, minimum: 1, maximum: 150, description: A classic was released at least this many years ago. }
+        min_rating: { type: number, format: double, minimum: 0, maximum: 10, description: Auto-add's least rating, 0 to 10. }
+        min_votes: { type: integer, format: int64, minimum: 0, description: Auto-add's least number of votes. }
+        auto_add_per_day: { type: integer, minimum: 0, maximum: 100, description: The most auto-add adds to the library a day, 0 for no ceiling. }
+        auto_add_search: { type: boolean, description: Search for what auto-add adds. }
+        original_languages: { type: array, items: { type: string }, description: "Original languages recommended; empty is any. Only read when languages_set." }
+        languages_set: { type: boolean, description: "False takes the library's language profile (plus Japanese for an anime library) as the list." }
+        exclude_genres: { type: array, items: { type: string } }
+        exclude_networks: { type: array, items: { type: string } }
+        disabled_kinds: { type: array, items: { type: string }, description: "Add kinds the library does not recommend (an album, a performer)." }
+        types: { type: array, items: { $ref: "#/components/schemas/DiscoverTypeSettings" }, description: Every recommendation list with the library's choice. }
+
+    DiscoverSettings:
+      type: object
+      required: [global, libraries]
+      properties:
+        global: { $ref: "#/components/schemas/DiscoverGlobalSettings" }
+        libraries: { type: array, items: { $ref: "#/components/schemas/LibraryDiscoverSettings" } }
 
     VideoHashing:
       type: object
