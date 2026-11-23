@@ -14,8 +14,8 @@ const providerDefinitionsReadme = `# Provider definitions
 
 These YAML files describe providers: what Solarr asks, never code it runs.
 
-- <kind>/builtin/ is rewritten at every start; an edit there is overwritten. It is a readable copy of what ships.
-- <kind>/custom/ is yours. A file with the same key as a built-in one replaces it. Solarr never changes this folder except
+- metadata, indexers, download and webhooks each hold builtin/ and custom/. builtin/ is rewritten at every start; an edit there is overwritten. It is a readable copy of what ships.
+- custom/ is yours. A file with the same key as a built-in one replaces it. Solarr never changes this folder except
   through Settings > Providers.
 - A custom file that is a provider itself starts inactive and must be approved by an administrator, who sees its hosts.
 - Removing or reverting a file moves it to custom/.removed/.

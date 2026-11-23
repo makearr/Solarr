@@ -604,7 +604,8 @@ func (p *process) startJobs(ctx context.Context) error {
 	}
 	p.definitions = providerdef.NewHolder()
 	p.specs = &spec.Library{}
-	p.prepareProviderDefinitions(ctx)
+	// Writing the built-in mirror costs a few hundred milliseconds; the embedded data serves meanwhile.
+	go p.prepareProviderDefinitions(ctx)
 	p.reloadProviderDefinitions()
 	p.disks = &adapters.DiskManager{
 		FS: p.fsys, Cache: p.cache, Clock: wall, Monitor: disklatency.New(p.fsys, wall, diskProbeInterval),

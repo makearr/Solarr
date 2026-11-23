@@ -34,8 +34,13 @@ type Store struct {
 	Root string
 }
 
+// folder is a kind's folder, named in the plural where the kind is a thing a person lists (indexers, webhooks).
 func (s Store) folder(kind Kind, which string) string {
-	return path.Join(s.Root, string(kind), which)
+	name := string(kind)
+	if kind == KindIndexer || kind == KindWebhook {
+		name += "s"
+	}
+	return path.Join(s.Root, name, which)
 }
 
 // Prepare creates every folder, writes the README and, for each kind, the built-in files: write-if-different, stale files removed,
