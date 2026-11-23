@@ -564,6 +564,96 @@ func (q *Queries) ListRecommendations(ctx context.Context, arg ListRecommendatio
 	return items, nil
 }
 
+const listTopGenresOfCategory = `-- name: ListTopGenresOfCategory :many
+SELECT t.name AS name, CAST(COUNT(DISTINCT di.work_id) AS INTEGER) AS works
+FROM tag_assignment a
+JOIN tag t ON t.id = a.tag_id AND t.genre_tree <> ''
+JOIN desired_item di ON di.work_id = a.subject_id AND di.category_id = ?1
+WHERE a.subject_type = 'work'
+GROUP BY t.id, t.name
+ORDER BY works DESC, t.id
+LIMIT ?2
+`
+
+type ListTopGenresOfCategoryParams struct {
+	CategoryID int64
+	PageSize   int64
+}
+
+type ListTopGenresOfCategoryRow struct {
+	Name  string
+	Works int64
+}
+
+// The genres of the most works in a library.
+func (q *Queries) ListTopGenresOfCategory(ctx context.Context, arg ListTopGenresOfCategoryParams) ([]ListTopGenresOfCategoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTopGenresOfCategory, arg.CategoryID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTopGenresOfCategoryRow{}
+	for rows.Next() {
+		var i ListTopGenresOfCategoryRow
+		if err := rows.Scan(&i.Name, &i.Works); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTopHeldArtistsOfCategory = `-- name: ListTopHeldArtistsOfCategory :many
+SELECT p.name AS name, CAST(COUNT(DISTINCT c.work_id) AS INTEGER) AS works
+FROM person p
+JOIN credit c ON c.person_id = p.id AND c.role = 'artist' AND c.edition_id = 0 AND c.part_id = 0
+JOIN desired_item di ON di.work_id = c.work_id AND di.category_id = ?1
+WHERE EXISTS (SELECT 1 FROM work_file wf WHERE wf.work_id = c.work_id)
+GROUP BY p.id, p.name
+ORDER BY works DESC, p.id
+LIMIT ?2
+`
+
+type ListTopHeldArtistsOfCategoryParams struct {
+	CategoryID int64
+	PageSize   int64
+}
+
+type ListTopHeldArtistsOfCategoryRow struct {
+	Name  string
+	Works int64
+}
+
+// The artists with the most works held in a library, which seed the music feeds that follow its taste.
+func (q *Queries) ListTopHeldArtistsOfCategory(ctx context.Context, arg ListTopHeldArtistsOfCategoryParams) ([]ListTopHeldArtistsOfCategoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTopHeldArtistsOfCategory, arg.CategoryID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTopHeldArtistsOfCategoryRow{}
+	for rows.Next() {
+		var i ListTopHeldArtistsOfCategoryRow
+		if err := rows.Scan(&i.Name, &i.Works); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const recordRecommendationAutoAdd = `-- name: RecordRecommendationAutoAdd :exec
 INSERT OR IGNORE INTO recommendation_auto_add (category_id, kind, provider, external_id, title, type, rating, votes, work_id, added_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

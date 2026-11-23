@@ -470,3 +470,29 @@ func (r Recommendations) Item(ctx context.Context, id int64) (PoolRecommendation
 		},
 	}, true, nil
 }
+
+// TopHeldArtists are the names of a library's artists with the most works held, most first.
+func (r Recommendations) TopHeldArtists(ctx context.Context, categoryID, limit int64) ([]string, error) {
+	rows, err := librarydb.New(r.store.Read()).ListTopHeldArtistsOfCategory(ctx, librarydb.ListTopHeldArtistsOfCategoryParams{CategoryID: categoryID, PageSize: limit})
+	if err != nil {
+		return nil, fmt.Errorf("library: top held artists: %w", err)
+	}
+	names := make([]string, len(rows))
+	for index, row := range rows {
+		names[index] = row.Name
+	}
+	return names, nil
+}
+
+// TopGenres are the genres of the most works a library holds, most first.
+func (r Recommendations) TopGenres(ctx context.Context, categoryID, limit int64) ([]string, error) {
+	rows, err := librarydb.New(r.store.Read()).ListTopGenresOfCategory(ctx, librarydb.ListTopGenresOfCategoryParams{CategoryID: categoryID, PageSize: limit})
+	if err != nil {
+		return nil, fmt.Errorf("library: top genres: %w", err)
+	}
+	names := make([]string, len(rows))
+	for index, row := range rows {
+		names[index] = row.Name
+	}
+	return names, nil
+}

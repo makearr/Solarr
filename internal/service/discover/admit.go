@@ -107,7 +107,7 @@ func Admit(item media.Recommendation, rules Rules, facts Facts) Decision {
 			rejections = append(rejections, Rejection{Reason: ReasonNetworkExcluded, Value: network})
 		}
 	}
-	if len(rules.OriginalLanguages) > 0 && !containsFold(rules.OriginalLanguages, item.Traits.OriginalLanguage) {
+	if len(rules.OriginalLanguages) > 0 && item.Traits.OriginalLanguage != "" && !containsFold(rules.OriginalLanguages, item.Traits.OriginalLanguage) {
 		rejections = append(rejections, Rejection{Reason: ReasonLanguageUnwanted, Value: item.Traits.OriginalLanguage})
 	}
 	if facts.OtherLibrary {

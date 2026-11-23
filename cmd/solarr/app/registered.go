@@ -23,6 +23,7 @@ import (
 	"github.com/makearr/Solarr/internal/media/comic"
 	"github.com/makearr/Solarr/internal/media/housekeeping"
 	"github.com/makearr/Solarr/internal/media/knownfor"
+	"github.com/makearr/Solarr/internal/media/lastfmfeeds"
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tmdbfeeds"
@@ -31,6 +32,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/comicvine"
 	"github.com/makearr/Solarr/internal/metadata/gcd"
+	"github.com/makearr/Solarr/internal/metadata/lastfm"
 	"github.com/makearr/Solarr/internal/metadata/mangadex"
 	"github.com/makearr/Solarr/internal/metadata/mangaupdates"
 	"github.com/makearr/Solarr/internal/metadata/metron"
@@ -126,7 +128,7 @@ func (p *process) musicModule() music.Module {
 	realign := func(ctx context.Context, workID int64) error {
 		return music.AlignClaimedFiles(ctx, &desired, clock.NewSystem(), workID)
 	}
-	return music.Module{AcoustIDConfigured: func() bool { return p.cache.Snapshot().AcoustIDConfigured() }, Registrations: p.musicJobs(), Realign: realign, Files: p.musicFiles(), Passes: passes, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
+	return music.Module{Feeds: p.lastFMFeeds(), AcoustIDConfigured: func() bool { return p.cache.Snapshot().AcoustIDConfigured() }, Registrations: p.musicJobs(), Realign: realign, Files: p.musicFiles(), Passes: passes, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
 		Consumer: consumer,
 		Include:  scan.IsAudio,
 		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{
@@ -1167,4 +1169,26 @@ func (p *process) tmdbFeeds(kind string) media.Recommending {
 		return detail, nil
 	}
 	return feeds
+}
+
+// lastFMFeeds is the recommendation feeds of music libraries, from Last.fm's charts and the library's own artists and genres.
+func (p *process) lastFMFeeds() media.Recommending {
+	key := p.providerKey(settings.SourceLastFM)
+	return lastfmfeeds.Feeds{
+		Charts:         lastfm.New(p.providerClient(providerLastFM, nil, httpx.ClientConfig{}), key),
+		Names:          adapters.MusicNames{Provider: p.musicBrainzProvider()},
+		Taste:          musicTaste{pool: library.NewRecommendations(p.library)},
+		ArtistProvider: music.ProviderArtist, AlbumProvider: music.ProviderReleaseGroup, Clock: clock.NewSystem(),
+		Configured: func() bool { return key() != "" },
+	}
+}
+
+type musicTaste struct{ pool library.Recommendations }
+
+func (t musicTaste) Artists(ctx context.Context, categoryID int64, limit int) ([]string, error) {
+	return t.pool.TopHeldArtists(ctx, categoryID, int64(limit))
+}
+
+func (t musicTaste) Genres(ctx context.Context, categoryID int64, limit int) ([]string, error) {
+	return t.pool.TopGenres(ctx, categoryID, int64(limit))
 }

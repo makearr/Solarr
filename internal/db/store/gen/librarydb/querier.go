@@ -1007,6 +1007,10 @@ type Querier interface {
 	// The work detail page's own need, same reasoning as ListCreditsForWorkWithPerson.
 	ListTagsForSubjectWithName(ctx context.Context, arg ListTagsForSubjectWithNameParams) ([]ListTagsForSubjectWithNameRow, error)
 	ListTagsOfGenreTree(ctx context.Context, genreTree string) ([]Tag, error)
+	// The genres of the most works in a library.
+	ListTopGenresOfCategory(ctx context.Context, arg ListTopGenresOfCategoryParams) ([]ListTopGenresOfCategoryRow, error)
+	// The artists with the most works held in a library, which seed the music feeds that follow its taste.
+	ListTopHeldArtistsOfCategory(ctx context.Context, arg ListTopHeldArtistsOfCategoryParams) ([]ListTopHeldArtistsOfCategoryRow, error)
 	// Every file that covers a track, with what identifies the track: its title, artist and length. Duplicates are found
 	// from these in Go, by what the file is and not by its bytes.
 	ListTrackFilesWithMetadata(ctx context.Context, categoryID int64) ([]ListTrackFilesWithMetadataRow, error)

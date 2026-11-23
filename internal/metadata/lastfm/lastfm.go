@@ -134,6 +134,129 @@ func (c Client) Similar(ctx context.Context, artist string, limit int) ([]Simila
 	return similar, nil
 }
 
+// ChartArtist is an artist a chart names, with how many people listen to it.
+type ChartArtist struct {
+	Name      string
+	MBID      string
+	Listeners int64
+	Plays     int64
+}
+
+// ChartAlbum is an album a chart names, with its artist and how many people listen to it.
+type ChartAlbum struct {
+	Name      string
+	Artist    string
+	MBID      string
+	Listeners int64
+	Plays     int64
+}
+
+// chartPage is the paging block every chart carries.
+type chartPage struct {
+	Page       string `json:"page"`
+	TotalPages string `json:"totalPages"`
+}
+
+func (p chartPage) more() bool {
+	page, _ := strconv.Atoi(p.Page)
+	total, _ := strconv.Atoi(p.TotalPages)
+	return page < total
+}
+
+func chartFailure(method string, e wireError) error {
+	if e.Code == codeNotFound {
+		return ErrNotFound
+	}
+	return fmt.Errorf("lastfm: %s: error %d: %s", method, e.Code, e.Message)
+}
+
+// TopArtists reads one page of the global artist chart; more says whether a next page exists.
+func (c Client) TopArtists(ctx context.Context, page, limit int) (artists []ChartArtist, more bool, err error) {
+	var found struct {
+		wireError
+		Artists struct {
+			Artist []struct {
+				Name      string `json:"name"`
+				MBID      string `json:"mbid"`
+				Listeners string `json:"listeners"`
+				Plays     string `json:"playcount"`
+			} `json:"artist"`
+			Attr chartPage `json:"@attr"`
+		} `json:"artists"`
+	}
+	values := url.Values{"page": {strconv.Itoa(page)}, "limit": {strconv.Itoa(limit)}}
+	if err := c.ask(ctx, "chart.gettopartists", values, &found); err != nil {
+		return nil, false, wrap("chart.gettopartists", err)
+	}
+	if found.failed() {
+		return nil, false, chartFailure("chart.gettopartists", found.wireError)
+	}
+	for _, entry := range found.Artists.Artist {
+		one := ChartArtist{Name: entry.Name, MBID: entry.MBID}
+		one.Listeners, _ = strconv.ParseInt(entry.Listeners, 10, 64)
+		one.Plays, _ = strconv.ParseInt(entry.Plays, 10, 64)
+		artists = append(artists, one)
+	}
+	return artists, found.Artists.Attr.more(), nil
+}
+
+// TagTopAlbums reads one page of the albums listened to most under a tag (a genre).
+func (c Client) TagTopAlbums(ctx context.Context, tag string, page, limit int) (albums []ChartAlbum, more bool, err error) {
+	var found struct {
+		wireError
+		Albums struct {
+			Album []struct {
+				Name   string `json:"name"`
+				MBID   string `json:"mbid"`
+				Artist struct {
+					Name string `json:"name"`
+				} `json:"artist"`
+			} `json:"album"`
+			Attr chartPage `json:"@attr"`
+		} `json:"albums"`
+	}
+	values := url.Values{"tag": {tag}, "page": {strconv.Itoa(page)}, "limit": {strconv.Itoa(limit)}}
+	if err := c.ask(ctx, "tag.gettopalbums", values, &found); err != nil {
+		return nil, false, wrap("tag.gettopalbums", err)
+	}
+	if found.failed() {
+		return nil, false, chartFailure("tag.gettopalbums", found.wireError)
+	}
+	for _, entry := range found.Albums.Album {
+		albums = append(albums, ChartAlbum{Name: entry.Name, Artist: entry.Artist.Name, MBID: entry.MBID})
+	}
+	return albums, found.Albums.Attr.more(), nil
+}
+
+// ArtistTopAlbums reads the albums of one artist listened to most, at most limit.
+func (c Client) ArtistTopAlbums(ctx context.Context, artist string, limit int) ([]ChartAlbum, error) {
+	var found struct {
+		wireError
+		Albums struct {
+			Album []struct {
+				Name      string `json:"name"`
+				MBID      string `json:"mbid"`
+				Playcount int64  `json:"playcount"`
+				Artist    struct {
+					Name string `json:"name"`
+				} `json:"artist"`
+			} `json:"album"`
+		} `json:"topalbums"`
+	}
+	values := url.Values{"artist": {artist}, "limit": {strconv.Itoa(limit)}, "autocorrect": {"0"}}
+	if err := c.ask(ctx, "artist.gettopalbums", values, &found); err != nil {
+		return nil, wrap("artist.gettopalbums", err)
+	}
+	if found.failed() {
+		return nil, chartFailure("artist.gettopalbums", found.wireError)
+	}
+	albums := make([]ChartAlbum, 0, len(found.Albums.Album))
+	for _, entry := range found.Albums.Album {
+		albums = append(albums, ChartAlbum{Name: entry.Name, Artist: entry.Artist.Name, MBID: entry.MBID, Plays: entry.Playcount})
+	}
+	return albums, nil
+}
+
 func wrap(method string, err error) error {
 	if errors.Is(err, ErrNoKey) {
 		return err

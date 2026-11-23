@@ -19,6 +19,8 @@ const MediaType media.Key = "music"
 
 // Module is music as the media registry sees it. The zero value declares the type; Sweep makes it scannable.
 type Module struct {
+	// Feeds are the recommendation feeds (Discover); nil leaves music without them.
+	Feeds media.Recommending
 	// Registrations are the job types music brings, with their handlers.
 	Registrations []media.JobRegistration
 	// Wiring is the add, pictures, refresh and hunt services.
@@ -205,3 +207,19 @@ func (Module) NamingExamples(profile settings.NamingProfile) []media.NamingExamp
 }
 
 var _ media.AffinityKeyer = Module{}
+
+// RecommendationFeeds implements media.Recommending.
+func (m Module) RecommendationFeeds(ctx context.Context) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
+	if m.Feeds == nil {
+		return nil, nil
+	}
+	return m.Feeds.RecommendationFeeds(ctx)
+}
+
+// Recommend implements media.Recommending.
+func (m Module) Recommend(ctx context.Context, query media.RecommendQuery) ([]media.Recommendation, bool, error) {
+	if m.Feeds == nil {
+		return nil, false, media.ErrNotWired
+	}
+	return m.Feeds.Recommend(ctx, query)
+}

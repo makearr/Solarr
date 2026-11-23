@@ -135,3 +135,25 @@ LIMIT sqlc.arg(page_size);
 SELECT id, category_id, kind, provider, external_id, title, subtitle, overview, poster_url, year, released_on, popularity,
        rating, votes, original_language, certification, networks_json, work_id, fetched_at
 FROM recommendation WHERE id = ?;
+
+-- The artists with the most works held in a library, which seed the music feeds that follow its taste.
+-- name: ListTopHeldArtistsOfCategory :many
+SELECT p.name AS name, CAST(COUNT(DISTINCT c.work_id) AS INTEGER) AS works
+FROM person p
+JOIN credit c ON c.person_id = p.id AND c.role = 'artist' AND c.edition_id = 0 AND c.part_id = 0
+JOIN desired_item di ON di.work_id = c.work_id AND di.category_id = sqlc.arg(category_id)
+WHERE EXISTS (SELECT 1 FROM work_file wf WHERE wf.work_id = c.work_id)
+GROUP BY p.id, p.name
+ORDER BY works DESC, p.id
+LIMIT sqlc.arg(page_size);
+
+-- The genres of the most works in a library.
+-- name: ListTopGenresOfCategory :many
+SELECT t.name AS name, CAST(COUNT(DISTINCT di.work_id) AS INTEGER) AS works
+FROM tag_assignment a
+JOIN tag t ON t.id = a.tag_id AND t.genre_tree <> ''
+JOIN desired_item di ON di.work_id = a.subject_id AND di.category_id = sqlc.arg(category_id)
+WHERE a.subject_type = 'work'
+GROUP BY t.id, t.name
+ORDER BY works DESC, t.id
+LIMIT sqlc.arg(page_size);

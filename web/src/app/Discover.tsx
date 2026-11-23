@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
-import { t, type MessageKey } from "@/lib/i18n";
+import { t, tOr, type MessageKey } from "@/lib/i18n";
 import { remoteImage } from "@/lib/remoteImage";
 import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
@@ -27,7 +27,7 @@ const LISTS: Record<string, MessageKey> = {
   collections: "discover.list.collections",
 };
 
-type DiscoverSearch = { library?: string; list?: string; genre?: string; q?: string; hidden?: string };
+type DiscoverSearch = { library?: string; list?: string; kind?: string; genre?: string; q?: string; hidden?: string };
 
 /** A card is 10rem wide at least; the grid gap is 1rem. */
 const CARD_MIN = 160;
@@ -57,7 +57,7 @@ export function Discover() {
                 key={library.category_id}
                 role="tab"
                 aria-selected={library.category_id === current.category_id}
-                onClick={() => change({ library: String(library.category_id), genre: undefined })}
+                onClick={() => change({ library: String(library.category_id), genre: undefined, kind: undefined })}
                 className={`rounded-md px-2 py-1 ${library.category_id === current.category_id ? "bg-accent/10 text-ink" : "text-ink-muted hover:text-ink"}`}
               >
                 {tabName(library, all)}
@@ -127,15 +127,22 @@ function HiddenList() {
 
 function Filters({ library, search, change }: { library: DiscoverLibrary; search: DiscoverSearch; change: (patch: DiscoverSearch) => void }) {
   const genres = useQuery({
-    queryKey: ["discover-genres", library.category_id],
-    queryFn: () => ok(api.GET("/discover/genres", { params: { query: { category_id: library.category_id } } })),
+    queryKey: ["discover-genres", library.category_id, search.kind],
+    queryFn: () => ok(api.GET("/discover/genres", { params: { query: { category_id: library.category_id, kind: search.kind } } })),
   });
+  const kinds = [...new Set(library.feeds.map((feed) => feed.kind).filter((kind) => kind !== ""))];
   return (
     <>
       <ToolbarSelect label={t("discover.list")} value={search.list ?? ""} onChange={(value) => change({ list: value || undefined })}>
         <option value="">{t("discover.allLists")}</option>
         {library.types.map((type) => <option key={type} value={type}>{t(LISTS[type] ?? "discover.list.trending")}</option>)}
       </ToolbarSelect>
+      {kinds.length > 1 && (
+        <ToolbarSelect label={t("discover.kind")} value={search.kind ?? ""} onChange={(value) => change({ kind: value || undefined })}>
+          <option value="">{t("discover.allKinds")}</option>
+          {kinds.map((kind) => <option key={kind} value={kind}>{tOr(`discover.kind.${kind}`, kind)}</option>)}
+        </ToolbarSelect>
+      )}
       <ToolbarSelect label={t("discover.genre")} value={search.genre ?? ""} onChange={(value) => change({ genre: value || undefined })}>
         <option value="">{t("discover.allGenres")}</option>
         {(genres.data ?? []).map((genre) => <option key={genre.genre} value={genre.genre}>{genre.genre} ({genre.items})</option>)}
@@ -152,11 +159,11 @@ function Wall({ library, search }: { library: DiscoverLibrary; search: DiscoverS
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(0);
   const pages = useInfiniteQuery({
-    queryKey: ["discover-recommendations", library.category_id, search.list, search.genre, search.q],
+    queryKey: ["discover-recommendations", library.category_id, search.list, search.kind, search.genre, search.q],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
       ok(api.GET("/discover/recommendations", {
-        params: { query: { category_id: library.category_id, type: search.list as never, genre: search.genre, q: search.q, cursor: pageParam, limit: 40 } },
+        params: { query: { category_id: library.category_id, type: search.list as never, kind: search.kind, genre: search.genre, q: search.q, cursor: pageParam, limit: 40 } },
       })),
     getNextPageParam: (last) => last.next_cursor,
   });

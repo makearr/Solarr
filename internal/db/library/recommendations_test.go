@@ -211,3 +211,37 @@ func TestRecommendations_CollectionCandidatesAreUnwantedMembersOfCollectionsTheL
 		t.Errorf("candidates = %+v, want %+v", got, want)
 	}
 }
+
+func TestRecommendations_TasteIsTheMostHeldArtistsAndGenresOfOneLibrary(t *testing.T) {
+	opened, _ := newLibrary(t)
+	pool := library.NewRecommendations(opened)
+	err := opened.Write(t.Context(), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		for _, statement := range []string{
+			`INSERT INTO work (id, media_type, canonical_title, sort_title, original_language, year, added_at, updated_at) VALUES
+			  (1, 'music', 'One', 'one', '', 2001, 1, 1), (2, 'music', 'Two', 'two', '', 2003, 1, 1), (3, 'music', 'Three', 'three', '', 2005, 1, 1), (4, 'music', 'Elsewhere', 'elsewhere', '', 2005, 1, 1)`,
+			`INSERT INTO person (id, name, sort_name, added_at) VALUES (1, 'Ada Quill', 'Quill, Ada', 1), (2, 'Bo Rend', 'Rend, Bo', 1)`,
+			`INSERT INTO credit (person_id, work_id, role) VALUES (1, 1, 'artist'), (1, 2, 'artist'), (2, 3, 'artist'), (2, 4, 'artist')`,
+			`INSERT INTO desired_item (work_id, category_id, profile_id, monitored, state) VALUES (1, 5, 1, 1, 'COMPLETE'), (2, 5, 1, 1, 'COMPLETE'), (3, 5, 1, 1, 'COMPLETE'), (4, 6, 1, 1, 'COMPLETE')`,
+			`INSERT INTO media_object (id, size_bytes, quick_hash, first_seen_at) VALUES (1, 1, 'a', 1), (2, 1, 'b', 1), (3, 1, 'c', 1), (4, 1, 'd', 1)`,
+			`INSERT INTO work_file (work_id, media_object_id, first_seen_at) VALUES (1, 1, 1), (2, 2, 1), (3, 3, 1), (4, 4, 1)`,
+			`INSERT INTO tag (id, name, slug, source, genre_tree) VALUES (1, 'Folk', 'folk', 'test', 'music'), (2, 'Jazz', 'jazz', 'test', 'music'), (3, 'Owned', 'owned', 'test', '')`,
+			`INSERT INTO tag_assignment (tag_id, subject_type, subject_id, source) VALUES (1, 'work', 1, 'test'), (1, 'work', 2, 'test'), (2, 'work', 3, 'test'), (3, 'work', 1, 'test'), (2, 'work', 4, 'test')`,
+		} {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artists, err := pool.TopHeldArtists(t.Context(), 5, 5)
+	if want := []string{"Ada Quill", "Bo Rend"}; err != nil || !reflect.DeepEqual(artists, want) {
+		t.Errorf("artists = %v, %v; want %v", artists, err, want)
+	}
+	genres, err := pool.TopGenres(t.Context(), 5, 5)
+	if want := []string{"Folk", "Jazz"}; err != nil || !reflect.DeepEqual(genres, want) {
+		t.Errorf("genres = %v, %v; want %v", genres, err, want)
+	}
+}
