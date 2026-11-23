@@ -37,6 +37,8 @@ const (
 	providerLastFM          = "lastfm"
 	providerDiscogs         = "discogs"
 	providerSpotify         = "spotify"
+	providerMAL             = "myanimelist"
+	providerAniDB           = "anidb"
 	providerFanart          = "fanart"
 	providerOpenLibrary     = "openlibrary"
 	providerGoogleBooks     = "googlebooks"

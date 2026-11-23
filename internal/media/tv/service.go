@@ -17,11 +17,13 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/mediaserver"
+	"github.com/makearr/Solarr/internal/metadata/anidb"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/fanart"
 	"github.com/makearr/Solarr/internal/metadata/imdbdata"
 	"github.com/makearr/Solarr/internal/metadata/kitsu"
 	"github.com/makearr/Solarr/internal/metadata/metaresolve"
+	"github.com/makearr/Solarr/internal/metadata/myanimelist"
 	"github.com/makearr/Solarr/internal/metadata/omdb"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
@@ -105,6 +107,9 @@ type Service struct {
 	IMDb DatasetRatings
 	// Kitsu adds an anime's synopsis, rating and the ids of the other anime sites; nil skips it.
 	Kitsu AnimeEntrySource
+	// MAL and AniDB add an anime's score by the ids Kitsu or AniList named; nil skips either.
+	MAL   AnimeScoreSource
+	AniDB AnimeRegistrySource
 	// Local asks the media servers the library takes metadata from; nil asks none.
 	Local  mediaserver.LocalAsker
 	Fanart PictureSource
@@ -201,7 +206,7 @@ func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, recentOnl
 	var rich Series
 	haveRich := false
 	var wrongTVmaze atomic.Int64
-	asked := slices.DeleteFunc([]string{settings.TVSourceTMDB, settings.TVSourceAniList, settings.TVSourceTVmaze, settings.TVSourceKitsu, settings.MovieSourceIMDb, settings.TVSourceOMDb, settings.TVSourceFanart}, func(source string) bool { return !slices.Contains(order, source) })
+	asked := slices.DeleteFunc([]string{settings.TVSourceTMDB, settings.TVSourceAniList, settings.TVSourceTVmaze, settings.TVSourceKitsu, settings.TVSourceMAL, settings.TVSourceAniDB, settings.MovieSourceIMDb, settings.TVSourceOMDb, settings.TVSourceFanart}, func(source string) bool { return !slices.Contains(order, source) })
 	for _, source := range order {
 		if strings.HasPrefix(source, settings.LocalSourcePrefix) {
 			asked = append(asked, source)
@@ -218,6 +223,12 @@ func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, recentOnl
 				return fetched{series, found}, nil
 			case settings.TVSourceKitsu:
 				series, found := s.fetchKitsu(ctx, ids)
+				return fetched{series, found}, nil
+			case settings.TVSourceMAL:
+				series, found := s.fetchMAL(ctx, ids)
+				return fetched{series, found}, nil
+			case settings.TVSourceAniDB:
+				series, found := s.fetchAniDB(ctx, ids)
 				return fetched{series, found}, nil
 			case settings.MovieSourceIMDb:
 				series, found := s.fetchIMDb(ctx, ids)
@@ -310,6 +321,48 @@ func (s Service) wikidataFacts(ctx context.Context, ids IDs, order []string) (wi
 	}
 	found, known := facts[id]
 	return found, known
+}
+
+// AnimeScoreSource is the MyAnimeList client as the service needs it.
+type AnimeScoreSource interface {
+	Configured() bool
+	Anime(ctx context.Context, id int64) (myanimelist.Anime, error)
+}
+
+// AnimeRegistrySource is the AniDB client as the service needs it.
+type AnimeRegistrySource interface {
+	Configured() bool
+	Anime(ctx context.Context, id int64) (anidb.Anime, error)
+}
+
+// fetchMAL reads the score and synopsis of the anime's first MyAnimeList id.
+func (s Service) fetchMAL(ctx context.Context, ids IDs) (Series, bool) {
+	if s.MAL == nil || !s.MAL.Configured() || len(ids.MAL) == 0 {
+		return Series{}, false
+	}
+	anime, err := s.MAL.Anime(ctx, ids.MAL[0])
+	if err != nil {
+		if !errors.Is(err, myanimelist.ErrNotFound) {
+			s.warn("myanimelist", ids.TVDB, err)
+		}
+		return Series{}, false
+	}
+	return FromMAL(anime), true
+}
+
+// fetchAniDB reads the rating and description of the anime's first AniDB id.
+func (s Service) fetchAniDB(ctx context.Context, ids IDs) (Series, bool) {
+	if s.AniDB == nil || !s.AniDB.Configured() || len(ids.AniDB) == 0 {
+		return Series{}, false
+	}
+	anime, err := s.AniDB.Anime(ctx, ids.AniDB[0])
+	if err != nil {
+		if !errors.Is(err, anidb.ErrNotFound) {
+			s.warn("anidb", ids.TVDB, err)
+		}
+		return Series{}, false
+	}
+	return FromAniDB(anime), true
 }
 
 // fetchKitsu asks Kitsu for the first AniList entry of an anime; a series AniList does not know is not asked.

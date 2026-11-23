@@ -8,9 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/makearr/Solarr/internal/metadata/anidb"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/fanart"
 	"github.com/makearr/Solarr/internal/metadata/kitsu"
+	"github.com/makearr/Solarr/internal/metadata/myanimelist"
 	"github.com/makearr/Solarr/internal/metadata/omdb"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
@@ -23,6 +25,8 @@ const (
 	sourceOMDb    = "omdb"
 	sourceFanart  = "fanart"
 	sourceKitsu   = "kitsu"
+	sourceMAL     = "myanimelist"
+	sourceAniDB   = "anidb"
 )
 
 // FromKitsu is an anime's synopsis, age rating, average rating (Kitsu writes 0 to 100), poster and the MyAnimeList and AniDB ids its mappings name.
@@ -44,6 +48,20 @@ func FromKitsu(in kitsu.Anime) Series {
 		series.IDs.AniDB = []int64{id}
 	}
 	return series
+}
+
+// FromMAL is an anime's mean score, synopsis and poster from MyAnimeList.
+func FromMAL(in myanimelist.Anime) Series {
+	series := Series{Title: in.Title, Overview: in.Synopsis, FirstAired: in.StartDate, Rating: in.Score, RatingVotes: int(in.Votes), Sources: []string{sourceMAL}}
+	if in.Poster != "" {
+		series.Images = []Image{{Kind: "poster", URL: in.Poster, Source: sourceMAL}}
+	}
+	return series
+}
+
+// FromAniDB is an anime's rating and description from AniDB.
+func FromAniDB(in anidb.Anime) Series {
+	return Series{Title: in.Title, Overview: in.Description, FirstAired: in.StartDate, Rating: in.Score, RatingVotes: int(in.Votes), Sources: []string{sourceAniDB}}
 }
 
 // FromOMDb is a series' English plot and IMDb rating; "N/A" is what OMDb writes for what it does not know.

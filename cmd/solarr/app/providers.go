@@ -28,6 +28,7 @@ import (
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
+	"github.com/makearr/Solarr/internal/metadata/anidb"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/audible"
 	"github.com/makearr/Solarr/internal/metadata/fanart"
@@ -40,6 +41,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/mdblist"
 	"github.com/makearr/Solarr/internal/metadata/metacache"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/metadata/myanimelist"
 	"github.com/makearr/Solarr/internal/metadata/omdb"
 	"github.com/makearr/Solarr/internal/metadata/openlibrary"
 	"github.com/makearr/Solarr/internal/metadata/radarrmeta"
@@ -346,6 +348,8 @@ func (p *process) tvService() tv.Service {
 			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared, AniList: p.anilistShared, Wikidata: p.wikidataFacts(),
 			Local:  p.localMetadata(),
 			Kitsu:  kitsu.New(p.providerClient(providerKitsu, nil, httpx.ClientConfig{})),
+			MAL:    myanimelist.New(p.providerClient(providerMAL, nil, httpx.ClientConfig{}), p.providerKey(settings.TVSourceMAL)),
+			AniDB:  anidb.New(p.providerClient(providerAniDB, nil, httpx.ClientConfig{}), p.providerKey(settings.TVSourceAniDB)),
 			IMDb:   p.imdbData(),
 			OMDb:   omdb.New(p.providerClient(providerOMDb, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceOMDb)),
 			Fanart: fanart.New(p.providerClient(providerFanart, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceFanart)),

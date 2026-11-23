@@ -53,7 +53,7 @@ const (
 var DefaultComicSources = []string{ComicSourceComicVine, ComicSourceMetron, ComicSourceGCD}
 
 // DefaultMangaSources is AniList, which names a manga, then MangaUpdates and MangaDex, whose chapter map gives the volumes.
-var DefaultMangaSources = []string{TVSourceAniList, ComicSourceMangaUpdates, ComicSourceMangaDex, SourceLastFM, SourceDiscogs, SourceSpotify}
+var DefaultMangaSources = []string{TVSourceAniList, ComicSourceMangaUpdates, ComicSourceMangaDex, TVSourceMAL, TVSourceAniDB, SourceLastFM, SourceDiscogs, SourceSpotify}
 
 // The adult providers: Whisparr's server, backed by ThePornDB, and three stash-box servers.
 const (
@@ -183,6 +183,10 @@ var MetadataProviders = []MetadataProvider{
 		PerMinute: 30, MaxPerMinute: 90, Published: "90 a minute, 30 while it runs degraded"},
 	{Key: TVSourceKitsu, Label: "Kitsu", MediaTypes: []string{"tv"}, Carries: []string{"anime synopses", "age ratings", "average ratings", "posters", "ids on AniList, MyAnimeList and AniDB"},
 		PerMinute: 60, Published: "none published; asked at 60 a minute"},
+	{Key: TVSourceMAL, Label: "MyAnimeList", MediaTypes: []string{"tv"}, Carries: []string{"anime scores", "synopses", "posters"}, NeedsKey: true,
+		PerMinute: 60, Published: "none published; asked at 60 a minute"},
+	{Key: TVSourceAniDB, Label: "AniDB", MediaTypes: []string{"tv"}, Carries: []string{"anime ratings", "descriptions"}, NeedsKey: true,
+		PerMinute: 15, MaxPerMinute: 15, Published: "one request every 4 seconds; a client that asks faster is banned"},
 	{Key: MovieSourceRadarr, Label: "Radarr's metadata service", MediaTypes: []string{"movie"}, Carries: []string{"overview", "release dates", "certification", "ratings", "collections", "ids"},
 		PerMinute: 240, Published: "none published; shared by every Radarr"},
 	{Key: MovieSourceMDBList, Label: "MDBList", MediaTypes: []string{"movie"}, Carries: []string{"ratings of IMDb, TMDB, Trakt, Letterboxd, Rotten Tomatoes and Metacritic"}, NeedsKey: true,
@@ -371,7 +375,7 @@ func DefaultMetadataSources(mediaType, kind string) []string {
 	switch mediaType {
 	case "tv":
 		if kind == "anime" {
-			return []string{SourceWikidata, TVSourceAniList, TVSourceSkyhook, TVSourceTMDB, TVSourceTVDB, TVSourceTVmaze, TVSourceKitsu, MovieSourceIMDb, TVSourceOMDb, TVSourceFanart}
+			return []string{SourceWikidata, TVSourceAniList, TVSourceSkyhook, TVSourceTMDB, TVSourceTVDB, TVSourceTVmaze, TVSourceKitsu, TVSourceMAL, TVSourceAniDB, MovieSourceIMDb, TVSourceOMDb, TVSourceFanart}
 		}
 		return []string{SourceWikidata, TVSourceSkyhook, TVSourceTMDB, TVSourceTVDB, TVSourceTVmaze, MovieSourceIMDb, TVSourceOMDb, TVSourceFanart}
 	case "movie":

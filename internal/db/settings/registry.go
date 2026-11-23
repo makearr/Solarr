@@ -611,6 +611,18 @@ func NewDefaultRegistry() *Registry {
 		Default:  "",
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyMALClientID, Kind: KindString, Tier: TierNormal,
+		Name:     "MyAnimeList client id",
+		HelpText: "Your own client id from myanimelist.net/apiconfig (free): anime scores, synopses and posters.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyAniDBClient, Kind: KindString, Tier: TierNormal,
+		Name:     "AniDB client name",
+		HelpText: "The client name you registered at anidb.net (Account > API): anime ratings and descriptions. AniDB bans a client that asks too fast, so it is asked slowly.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyTMDBAPIKey, Kind: KindString, Tier: TierNormal,
 		Name:     "TMDB key",
 		HelpText: "Your own TMDB read access token or API key (themoviedb.org, free). Adds cast, crew, guest stars, artwork and alternative orderings to TV.",

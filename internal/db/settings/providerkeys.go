@@ -29,6 +29,9 @@ const (
 	KeyLastFMAPIKey  = "metadata.lastfm.api_key"
 	KeyDiscogsToken  = "metadata.discogs.token"
 	KeySpotifyClient = "metadata.spotify.client"
+	// KeyMALClientID is the owner's MyAnimeList client id; KeyAniDBClient is the client name registered at anidb.net.
+	KeyMALClientID = "metadata.myanimelist.client_id"
+	KeyAniDBClient = "metadata.anidb.client"
 )
 
 // providerKeySettings maps a provider to the setting its key is sealed under.
@@ -38,6 +41,7 @@ var providerKeySettings = map[string]string{
 	AdultSourceStashDB: KeyStashDBAPIKey, AdultSourceThePornDB: KeyThePornDBAPIKey, AdultSourceFansDB: KeyFansDBAPIKey,
 	ComicSourceComicVine: KeyComicVineAPIKey, ComicSourceMetron: KeyMetronAccount,
 	SourceLastFM: KeyLastFMAPIKey, SourceDiscogs: KeyDiscogsToken, SourceSpotify: KeySpotifyClient,
+	TVSourceMAL: KeyMALClientID, TVSourceAniDB: KeyAniDBClient,
 	TVSourceTMDB: KeyTMDBAPIKey, TVSourceTVDB: KeyTVDBAPIKey, SourceTheAudioDB: KeyTheAudioDBAPIKey, SourceAcoustID: KeyAcoustIDAPIKey,
 }
 

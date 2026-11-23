@@ -116,6 +116,8 @@ A connection a library's order still names is not deleted (409) unless another o
 | Wikidata | the ids every other provider knows a series by, franchises (part of the series, media franchise, spin-off, follows) | yes | first by default; collections of series |
 | TheXEM | scene numbering (TheTVDB's episode to the scene's), scene names | yes | no key; switched on or off, no place in the order ([tv-internals.md](tv-internals.md)) |
 | Kitsu | anime synopsis, age rating, average rating, poster, and the MyAnimeList and AniDB ids | yes | no key; found through AniList's id (its `/mappings`), anime libraries, after AniList |
+| MyAnimeList | an anime's mean score, synopsis and poster, by the MyAnimeList id Kitsu or AniList named | yes | your own client id; off until stored; asked at 60 a minute |
+| AniDB | an anime's rating and description, by the AniDB id Kitsu named | yes | the client name you registered at anidb.net; off until stored; asked at one request every 4 seconds because AniDB bans faster clients |
 | AniDB, MyAnimeList | anime titles, episodes, relations, ratings | no | AniDB bans heavy clients; MyAnimeList needs a client id |
 | IMDb datasets | rating and votes | yes, **off** | IMDb's daily `title.ratings.tsv.gz`, streamed into `cache/metadata.db` by the task `imdb_ratings`; no key, no quota; personal, non-commercial use only. A series has one rating, so it fills where no earlier source holds one |
 | fanart.tv | clear logos, banners, HD art, posters | yes | a free key; its posters are offered in the picker |
