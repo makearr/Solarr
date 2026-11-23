@@ -194,3 +194,20 @@ func TestADisabledOrGoneWebhooksRowsAreDroppedNotSent(t *testing.T) {
 		t.Fatalf("a row of a webhook that is gone was sent or kept: %v", outbox.done)
 	}
 }
+
+func TestAnInstanceEventReachesAWebhookLimitedToLibraries(t *testing.T) {
+	service, _, outbox, _ := newService(hook(1, []string{"health_raised"}, []int64{9}, false))
+	if err := service.Record(t.Context(), Occurrence{Event: EventHealthRaised, Message: "a check"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(outbox.rows) != 1 {
+		t.Fatalf("queued %d rows, want 1", len(outbox.rows))
+	}
+	outbox.rows = nil
+	if err := service.Record(t.Context(), Occurrence{Event: EventHealthRaised, Library: Library{ID: 3}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(outbox.rows) != 0 {
+		t.Fatalf("a library event of another library queued %d rows", len(outbox.rows))
+	}
+}

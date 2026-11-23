@@ -58,6 +58,7 @@ type worksFixture struct {
 	hidden               map[string]bool
 	definitions          *fakeDefinitions
 	webhooks             *fakeWebhooks
+	inbound              *fakeInbound
 	similarVideos        *fakeSimilarVideos
 	importLists          *fakeImportListSync
 	server               *apiserver.Server
@@ -282,6 +283,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	hidden := map[string]bool{}
 	definitions := &fakeDefinitions{}
 	webhooks := &fakeWebhooks{}
+	inbound := &fakeInbound{}
 	workAdder := &fakeWorkAdder{}
 	requests := &fakeRequests{}
 	releaseFilters := &fakeReleaseFilters{}
@@ -353,6 +355,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		ProviderHidden:       func(kind, key string) bool { return hidden[kind+"/"+key] },
 		ProviderDefinitions:  definitions,
 		Webhooks:             webhooks,
+		InboundWebhooks:      inbound,
 		CandidateSearcher:    candidateSearcher,
 		WantedParts:          wantedParts,
 		Crossovers:           crossovers,
@@ -377,7 +380,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		t.Fatalf("New: %v", err)
 	}
 	return worksFixture{
-		hidden: hidden, definitions: definitions, webhooks: webhooks,
+		hidden: hidden, definitions: definitions, webhooks: webhooks, inbound: inbound,
 		server: server, running: running, jobRegistry: jobRegistry, cache: cache, works: works, workDetail: workDetail, worksMonitor: worksMonitor, workEditor: workEditor,
 		wantedParts: wantedParts, crossovers: crossovers, similarVideos: similarVideos, importLists: importLists,
 		search: search, unidentified: unidentified, unidentifiedResolver: unidentifiedResolver,

@@ -92,15 +92,20 @@ func (p *process) enqueueMediaServerPlayback(ctx context.Context) (jobs.EnqueueR
 
 // syncMediaServerPlayback queues one connection's sync; Run now on the connection reads everything again.
 func (p *process) syncMediaServerPlayback(ctx context.Context, serverID int64, full bool) error {
+	_, err := p.queuePlaybackSync(ctx, serverID, full)
+	return err
+}
+
+// queuePlaybackSync is syncMediaServerPlayback that says which job carries the sync.
+func (p *process) queuePlaybackSync(ctx context.Context, serverID int64, full bool) (jobs.EnqueueResult, error) {
 	payload, err := json.Marshal(mediaServerPlaybackPayload{ServerID: serverID, Full: full})
 	if err != nil {
-		return err
+		return jobs.EnqueueResult{}, err
 	}
-	_, err = p.queue.Enqueue(ctx, jobs.Request{
+	return p.queue.Enqueue(ctx, jobs.Request{
 		Type: mediaServerPlaybackJobType, ActionKey: "media-server-playback:" + strconv.FormatInt(serverID, 10) + ":" + strconv.FormatBool(full),
 		Priority: jobs.PriorityLow, Payload: payload,
 	})
-	return err
 }
 
 func (p *process) registerMediaServerPlaybackJob(registry *jobs.Registry, executor *jobs.Executor) error {

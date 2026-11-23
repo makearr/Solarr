@@ -68,7 +68,8 @@ func subscribed(hook settings.Webhook, occurrence Occurrence) bool {
 	if !hook.Enabled || !slices.Contains(hook.Events, string(occurrence.Event)) {
 		return false
 	}
-	if len(hook.CategoryIDs) > 0 && !slices.Contains(hook.CategoryIDs, occurrence.Library.ID) {
+	// An instance-wide event (health) belongs to no library, so the library filter does not apply.
+	if occurrence.Library.ID != 0 && len(hook.CategoryIDs) > 0 && !slices.Contains(hook.CategoryIDs, occurrence.Library.ID) {
 		return false
 	}
 	return !occurrence.Adult || hook.IncludeAdult

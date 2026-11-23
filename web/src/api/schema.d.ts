@@ -2161,6 +2161,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/incoming-webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every incoming webhook token with what it may do. Administrator only; the token itself is never returned again. */
+        get: operations["listInboundWebhooks"];
+        put?: never;
+        /** Add an incoming webhook. The token is in the answer once and only its hash is kept. */
+        post: operations["addInboundWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/incoming-webhooks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Change what an incoming webhook may do. The token stays. */
+        put: operations["updateInboundWebhook"];
+        post?: never;
+        /** Remove an incoming webhook; its token stops working at once. */
+        delete: operations["deleteInboundWebhook"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/incoming-webhooks/{id}/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Make a new token; the old one stops working. The token is in the answer once. */
+        post: operations["rotateInboundWebhookToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hooks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * An outside tool asks for one action. The token is the credential.
+         * @description Send the token as `Authorization: Bearer <token>` or `X-Solarr-Token`; `?token=` is accepted for senders that cannot set a header. An unknown id, a wrong token and a disabled hook all answer the same 404. Every action only enqueues the job its button does and answers 202 with the job id. 60 requests a minute per hook, body 64 KiB at most. The action is in the body, in `?action=`, or implied when the token allows only one.
+         */
+        post: operations["runInboundWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media-servers/kinds": {
         parameters: {
             query?: never;
@@ -9143,6 +9222,53 @@ export interface components {
             events: components["schemas"]["WebhookEventInfo"][];
             presets: components["schemas"]["WebhookPresetInfo"][];
         };
+        InboundWebhook: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            enabled: boolean;
+            actions: ("scan" | "import" | "search" | "refresh" | "playback")[];
+            /** @description Empty is every library. */
+            category_ids: number[];
+            /**
+             * Format: int64
+             * @description The connection a playback call syncs; 0 when none.
+             */
+            media_server_id: number;
+            /** Format: date-time */
+            last_used_at?: string;
+        };
+        InboundWebhookWrite: {
+            name: string;
+            /** @default true */
+            enabled: boolean;
+            actions: ("scan" | "import" | "search" | "refresh" | "playback")[];
+            category_ids?: number[];
+            /** Format: int64 */
+            media_server_id?: number;
+        };
+        InboundWebhookCreated: {
+            webhook: components["schemas"]["InboundWebhook"];
+            /** @description Shown once; only its hash is stored. */
+            token: string;
+        };
+        InboundActionRequest: {
+            /** @enum {string} */
+            action?: "scan" | "import" | "search" | "refresh" | "playback";
+            /** Format: int64 */
+            library_id?: number;
+            /** Format: int64 */
+            work_id?: number;
+            path?: string;
+            provider?: string;
+            id?: string;
+        };
+        InboundActionResult: {
+            /** Format: int64 */
+            job_id: number;
+            /** @description The same job was already queued. */
+            duplicate: boolean;
+        };
         MediaServerKind: {
             /** @description jellyfin, navidrome, audiobookshelf, kavita, calibre or stash. */
             key: string;
@@ -15783,6 +15909,165 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    listInboundWebhooks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tokens, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboundWebhook"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    addInboundWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InboundWebhookWrite"];
+            };
+        };
+        responses: {
+            /** @description Added, with the token. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboundWebhookCreated"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    updateInboundWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InboundWebhookWrite"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboundWebhook"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteInboundWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    rotateInboundWebhookToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The new token. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboundWebhookCreated"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    runInboundWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["InboundActionRequest"];
+            };
+        };
+        responses: {
+            /** @description The job was enqueued, or was already queued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboundActionResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
         };
     };
     listMediaServerKinds: {

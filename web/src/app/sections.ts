@@ -55,6 +55,7 @@ export const CONNECTIONS: Section = {
     { label: "Download clients", path: "/connections/downloaders", tier: "advanced", administrator: true },
     { label: "Import lists", path: "/connections/import-lists", tier: "advanced", administrator: true },
     { label: "Media servers", path: "/connections/media-servers", tier: "advanced", administrator: true },
+    { label: "Webhooks", path: "/connections/webhooks", tier: "advanced", administrator: true },
     { label: "Arr", path: "/connections/arr", tier: "expert", administrator: true },
   ],
 };

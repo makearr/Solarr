@@ -450,3 +450,15 @@ type Webhook struct {
 	LastAt       sql.NullInt64
 	CreatedAt    int64
 }
+
+type WebhookInbound struct {
+	ID            int64
+	Name          string
+	Enabled       int64
+	TokenHash     string
+	Actions       string
+	CategoryIds   string
+	MediaServerID int64
+	LastUsedAt    sql.NullInt64
+	CreatedAt     int64
+}

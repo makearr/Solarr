@@ -151,10 +151,12 @@ func (p *process) recordMoveJobPush(ctx context.Context, moveJobID int64) {
 		return
 	}
 	roots := adapters.DrainRoots{Cache: p.cache}
+	renamed := 0
 	for _, item := range items {
 		if item.State != library.MoveItemDone {
 			continue
 		}
+		renamed++
 		if root, ok := roots.RootFolder(item.DestRootID); ok {
 			p.recordServerFolder(ctx, root.ID, path.Dir(path.Join(root.Path, item.DestRelPath)), library.PendingModified)
 		}
@@ -166,6 +168,9 @@ func (p *process) recordMoveJobPush(ctx context.Context, moveJobID int64) {
 		if item.SourceRootID != item.DestRootID || path.Dir(item.SourceRelPath) != path.Dir(item.DestRelPath) {
 			p.recordServerFolder(ctx, root.ID, left, library.PendingDeleted)
 		}
+	}
+	if job, err := library.NewMoveJobs(p.library).Get(ctx, moveJobID); err == nil && job.CategoryID != nil && renamed > 0 {
+		p.recordWebhookOccurrence(ctx, *job.CategoryID, webhook.Occurrence{Event: webhook.EventRenamed, Message: fmt.Sprintf("%d files renamed", renamed)})
 	}
 }
 

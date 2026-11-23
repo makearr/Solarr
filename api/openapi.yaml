@@ -3140,6 +3140,129 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /incoming-webhooks:
+    get:
+      operationId: listInboundWebhooks
+      tags: [settings]
+      summary: Every incoming webhook token with what it may do. Administrator only; the token itself is never returned again.
+      responses:
+        "200":
+          description: The tokens, oldest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/InboundWebhook" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: addInboundWebhook
+      tags: [settings]
+      summary: Add an incoming webhook. The token is in the answer once and only its hash is kept.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InboundWebhookWrite" }
+      responses:
+        "201":
+          description: Added, with the token.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InboundWebhookCreated" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /incoming-webhooks/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      operationId: updateInboundWebhook
+      tags: [settings]
+      summary: Change what an incoming webhook may do. The token stays.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InboundWebhookWrite" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InboundWebhook" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteInboundWebhook
+      tags: [settings]
+      summary: Remove an incoming webhook; its token stops working at once.
+      responses:
+        "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /incoming-webhooks/{id}/token:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: rotateInboundWebhookToken
+      tags: [settings]
+      summary: Make a new token; the old one stops working. The token is in the answer once.
+      responses:
+        "200":
+          description: The new token.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InboundWebhookCreated" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /hooks/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: runInboundWebhook
+      tags: [settings]
+      summary: An outside tool asks for one action. The token is the credential.
+      description: >-
+        Send the token as `Authorization: Bearer <token>` or `X-Solarr-Token`; `?token=` is accepted for senders that
+        cannot set a header. An unknown id, a wrong token and a disabled hook all answer the same 404. Every action
+        only enqueues the job its button does and answers 202 with the job id. 60 requests a minute per hook,
+        body 64 KiB at most. The action is in the body, in `?action=`, or implied when the token allows only one.
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InboundActionRequest" }
+      responses:
+        "202":
+          description: The job was enqueued, or was already queued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InboundActionResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+
   /media-servers/kinds:
     get:
       operationId: listMediaServerKinds
@@ -12709,6 +12832,47 @@ components:
       properties:
         events: { type: array, items: { $ref: "#/components/schemas/WebhookEventInfo" } }
         presets: { type: array, items: { $ref: "#/components/schemas/WebhookPresetInfo" } }
+    InboundWebhook:
+      type: object
+      required: [id, name, enabled, actions, category_ids, media_server_id]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        enabled: { type: boolean }
+        actions: { type: array, items: { type: string, enum: [scan, import, search, refresh, playback] } }
+        category_ids: { type: array, items: { type: integer, format: int64 }, description: Empty is every library. }
+        media_server_id: { type: integer, format: int64, description: The connection a playback call syncs; 0 when none. }
+        last_used_at: { type: string, format: date-time }
+    InboundWebhookWrite:
+      type: object
+      required: [name, actions]
+      properties:
+        name: { type: string }
+        enabled: { type: boolean, default: true }
+        actions: { type: array, items: { type: string, enum: [scan, import, search, refresh, playback] } }
+        category_ids: { type: array, items: { type: integer, format: int64 } }
+        media_server_id: { type: integer, format: int64 }
+    InboundWebhookCreated:
+      type: object
+      required: [webhook, token]
+      properties:
+        webhook: { $ref: "#/components/schemas/InboundWebhook" }
+        token: { type: string, description: Shown once; only its hash is stored. }
+    InboundActionRequest:
+      type: object
+      properties:
+        action: { type: string, enum: [scan, import, search, refresh, playback] }
+        library_id: { type: integer, format: int64 }
+        work_id: { type: integer, format: int64 }
+        path: { type: string }
+        provider: { type: string }
+        id: { type: string }
+    InboundActionResult:
+      type: object
+      required: [job_id, duplicate]
+      properties:
+        job_id: { type: integer, format: int64 }
+        duplicate: { type: boolean, description: The same job was already queued. }
     MediaServerKind:
       type: object
       required: [key, label, credential, can_push, push_by_path, can_announce, can_playback, can_metadata, has_users, needs_admin, media_types]

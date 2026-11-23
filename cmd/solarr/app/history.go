@@ -12,6 +12,7 @@ import (
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/events"
+	"github.com/makearr/Solarr/internal/service/webhook"
 )
 
 // recordDownloadHistory appends one download's grab, import or failure to the durable history
@@ -29,6 +30,9 @@ func (p *process) recordDownloadHistory(
 	if err != nil {
 		p.logger.Warn("download history not recorded", slog.String("kind", string(kind)),
 			slog.Int64("acquisition_id", acquisition.ID), slog.Any("error", err))
+	}
+	if kind == download.HistoryGrabbed {
+		p.recordWebhookDownload(ctx, webhook.EventGrabbed, acquisition, detail)
 	}
 	p.bus.Publish(events.Event{
 		Topic: events.TopicAcquisition, Entity: fmt.Sprintf("work:%d", workID), CategoryID: data.CategoryID,

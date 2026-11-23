@@ -120,6 +120,8 @@ type Config struct {
 	Search func(ctx context.Context, desiredItemID int64) error
 	// History records an imported or failed download for History and the album's page.
 	History func(ctx context.Context, kind download.HistoryKind, acquisition library.Acquisition, detail string)
+	// Failed is optional: told with the reason after History, for the webhooks.
+	Failed func(ctx context.Context, acquisition library.Acquisition, reason library.BlocklistReason, detail string)
 	// SendHeld is optional: after each poll, held releases go to clients that now have room (ADR-57).
 	SendHeld func(ctx context.Context) error
 	// Imported is optional: told once a download's files are in the library, e.g. to settle an upgrade.
@@ -570,10 +572,18 @@ func sameSize(sent, reported int64) bool {
 
 // setFailed is the one way a download becomes FAILED, so every failure reaches History.
 func (j *Job) setFailed(ctx context.Context, acquisition library.Acquisition, detail string) error {
+	return j.setFailedFor(ctx, acquisition, library.BlocklistDownloadFailed, detail)
+}
+
+// setFailedFor is setFailed that also says why, for the webhook that tells a failed import from a failed download.
+func (j *Job) setFailedFor(ctx context.Context, acquisition library.Acquisition, reason library.BlocklistReason, detail string) error {
 	if err := j.transition(ctx, acquisition, StateFailed, detail, j.config.Clock.Now().Unix()); err != nil {
 		return err
 	}
 	j.config.History(ctx, download.HistoryFailed, acquisition, detail)
+	if j.config.Failed != nil {
+		j.config.Failed(ctx, acquisition, reason, detail)
+	}
 	return nil
 }
 
@@ -877,7 +887,7 @@ func (j *Job) failed(
 		j.config.Logger.Warn("failed download could not be removed from the client",
 			slog.Int64("acquisition_id", acquisition.ID), slog.Any("error", err))
 	}
-	if err := j.setFailed(ctx, acquisition, detail); err != nil {
+	if err := j.setFailedFor(ctx, acquisition, reason, detail); err != nil {
 		return err
 	}
 	if acquisition.DesiredItemID != nil {

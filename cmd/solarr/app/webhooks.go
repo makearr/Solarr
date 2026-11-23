@@ -30,9 +30,15 @@ var webhookDeliverDefinition = jobs.Definition{
 	Name: "Sending webhooks", Type: webhookDeliverJobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 1,
 }
 
-type webhookDeliverJob struct{ service webhook.Service }
+type webhookDeliverJob struct {
+	service webhook.Service
+	p       *process
+}
 
-func (j webhookDeliverJob) Run(ctx context.Context, _ jobs.Job) error { return j.service.Deliver(ctx) }
+func (j webhookDeliverJob) Run(ctx context.Context, _ jobs.Job) error {
+	j.p.watchHealth(ctx)
+	return j.service.Deliver(ctx)
+}
 
 // webhookService is the outbox over this process's stores.
 func (p *process) webhookService() webhook.Service {
@@ -42,7 +48,7 @@ func (p *process) webhookService() webhook.Service {
 	}
 }
 
-// webhookDoer sends through the guard of the owner's own address: the one host, LAN allowed, no other host reached by a redirect.
+// webhookDoer sends through the guard of the owner's own address: the one host, LAN allowed, and no redirect followed (MaxRedirects 1 allows no hop).
 type webhookDoer struct{ p *process }
 
 func (d webhookDoer) Do(ctx context.Context, hook settings.Webhook, request *http.Request) (*http.Response, error) {
@@ -54,7 +60,7 @@ func (p *process) registerWebhookJob(registry *jobs.Registry, executor *jobs.Exe
 	if err := registry.Register(webhookDeliverDefinition); err != nil {
 		return err
 	}
-	executor.Handle(webhookDeliverJobType, webhookDeliverJob{service: p.webhookService()})
+	executor.Handle(webhookDeliverJobType, webhookDeliverJob{service: p.webhookService(), p: p})
 	return nil
 }
 

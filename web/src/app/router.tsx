@@ -310,6 +310,7 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/connections/indexers/add/setup", component: lazyRouteComponent(() => import("./IndexerCatalog"), "IndexerSetup") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/connections/downloaders", component: lazyRouteComponent(() => import("./Downloaders"), "Downloaders") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/connections/import-lists", component: lazyRouteComponent(() => import("./ConnectionImportLists"), "ConnectionImportLists") }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/connections/webhooks", component: lazyRouteComponent(() => import("./Webhooks"), "Webhooks") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/connections/media-servers", component: lazyRouteComponent(() => import("./MediaServers"), "MediaServers") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/connections/arr", component: lazyRouteComponent(() => import("./ArrImport"), "ArrImport") }),
   // Activity holds History and Jobs, as Lidarr's holds Queue and History (2026-09-25).

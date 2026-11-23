@@ -462,6 +462,33 @@ const (
 	ImportUnitShapeSINGLE    ImportUnitShape = "SINGLE"
 )
 
+// Defines values for InboundActionRequestAction.
+const (
+	InboundActionRequestActionImport   InboundActionRequestAction = "import"
+	InboundActionRequestActionPlayback InboundActionRequestAction = "playback"
+	InboundActionRequestActionRefresh  InboundActionRequestAction = "refresh"
+	InboundActionRequestActionScan     InboundActionRequestAction = "scan"
+	InboundActionRequestActionSearch   InboundActionRequestAction = "search"
+)
+
+// Defines values for InboundWebhookActions.
+const (
+	InboundWebhookActionsImport   InboundWebhookActions = "import"
+	InboundWebhookActionsPlayback InboundWebhookActions = "playback"
+	InboundWebhookActionsRefresh  InboundWebhookActions = "refresh"
+	InboundWebhookActionsScan     InboundWebhookActions = "scan"
+	InboundWebhookActionsSearch   InboundWebhookActions = "search"
+)
+
+// Defines values for InboundWebhookWriteActions.
+const (
+	InboundWebhookWriteActionsImport   InboundWebhookWriteActions = "import"
+	InboundWebhookWriteActionsPlayback InboundWebhookWriteActions = "playback"
+	InboundWebhookWriteActionsRefresh  InboundWebhookWriteActions = "refresh"
+	InboundWebhookWriteActionsScan     InboundWebhookWriteActions = "scan"
+	InboundWebhookWriteActionsSearch   InboundWebhookWriteActions = "search"
+)
+
 // Defines values for IncompleteWorkState.
 const (
 	IncompleteWorkStateMISSING IncompleteWorkState = "MISSING"
@@ -3730,6 +3757,63 @@ type ImportUnitDecision string
 
 // ImportUnitShape defines model for ImportUnit.Shape.
 type ImportUnitShape string
+
+// InboundActionRequest defines model for InboundActionRequest.
+type InboundActionRequest struct {
+	Action    *InboundActionRequestAction `json:"action,omitempty"`
+	Id        *string                     `json:"id,omitempty"`
+	LibraryId *int64                      `json:"library_id,omitempty"`
+	Path      *string                     `json:"path,omitempty"`
+	Provider  *string                     `json:"provider,omitempty"`
+	WorkId    *int64                      `json:"work_id,omitempty"`
+}
+
+// InboundActionRequestAction defines model for InboundActionRequest.Action.
+type InboundActionRequestAction string
+
+// InboundActionResult defines model for InboundActionResult.
+type InboundActionResult struct {
+	// Duplicate The same job was already queued.
+	Duplicate bool  `json:"duplicate"`
+	JobId     int64 `json:"job_id"`
+}
+
+// InboundWebhook defines model for InboundWebhook.
+type InboundWebhook struct {
+	Actions []InboundWebhookActions `json:"actions"`
+
+	// CategoryIds Empty is every library.
+	CategoryIds []int64    `json:"category_ids"`
+	Enabled     bool       `json:"enabled"`
+	Id          int64      `json:"id"`
+	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
+
+	// MediaServerId The connection a playback call syncs; 0 when none.
+	MediaServerId int64  `json:"media_server_id"`
+	Name          string `json:"name"`
+}
+
+// InboundWebhookActions defines model for InboundWebhook.Actions.
+type InboundWebhookActions string
+
+// InboundWebhookCreated defines model for InboundWebhookCreated.
+type InboundWebhookCreated struct {
+	// Token Shown once; only its hash is stored.
+	Token   string         `json:"token"`
+	Webhook InboundWebhook `json:"webhook"`
+}
+
+// InboundWebhookWrite defines model for InboundWebhookWrite.
+type InboundWebhookWrite struct {
+	Actions       []InboundWebhookWriteActions `json:"actions"`
+	CategoryIds   *[]int64                     `json:"category_ids,omitempty"`
+	Enabled       *bool                        `json:"enabled,omitempty"`
+	MediaServerId *int64                       `json:"media_server_id,omitempty"`
+	Name          string                       `json:"name"`
+}
+
+// InboundWebhookWriteActions defines model for InboundWebhookWrite.Actions.
+type InboundWebhookWriteActions string
 
 // IncompleteDiscography defines model for IncompleteDiscography.
 type IncompleteDiscography struct {
@@ -8924,6 +9008,9 @@ type LinkFranchiseJSONRequestBody LinkFranchiseJSONBody
 // MonitorFranchiseJSONRequestBody defines body for MonitorFranchise for application/json ContentType.
 type MonitorFranchiseJSONRequestBody MonitorFranchiseJSONBody
 
+// RunInboundWebhookJSONRequestBody defines body for RunInboundWebhook for application/json ContentType.
+type RunInboundWebhookJSONRequestBody = InboundActionRequest
+
 // UpdateImportListJSONRequestBody defines body for UpdateImportList for application/json ContentType.
 type UpdateImportListJSONRequestBody = ImportListWrite
 
@@ -8944,6 +9031,12 @@ type CommitImportUnitJSONRequestBody CommitImportUnitJSONBody
 
 // UpdateImportSettingsJSONRequestBody defines body for UpdateImportSettings for application/json ContentType.
 type UpdateImportSettingsJSONRequestBody = ImportSettings
+
+// AddInboundWebhookJSONRequestBody defines body for AddInboundWebhook for application/json ContentType.
+type AddInboundWebhookJSONRequestBody = InboundWebhookWrite
+
+// UpdateInboundWebhookJSONRequestBody defines body for UpdateInboundWebhook for application/json ContentType.
+type UpdateInboundWebhookJSONRequestBody = InboundWebhookWrite
 
 // AddIndexerJSONRequestBody defines body for AddIndexer for application/json ContentType.
 type AddIndexerJSONRequestBody = AddIndexerRequest
@@ -9664,6 +9757,9 @@ type ServerInterface interface {
 	// What happened to downloads -- grabbed, imported, failed (section 5.7).
 	// (GET /history)
 	ListHistory(w http.ResponseWriter, r *http.Request, params ListHistoryParams)
+	// An outside tool asks for one action. The token is the credential.
+	// (POST /hooks/{id})
+	RunInboundWebhook(w http.ResponseWriter, r *http.Request, id int64)
 	// Where the hourly search budget went in the last hour (F23).
 	// (GET /hunt/budget)
 	GetHuntBudget(w http.ResponseWriter, r *http.Request)
@@ -9721,6 +9817,21 @@ type ServerInterface interface {
 	// Change the commit line or the transfer ladder. Administrator only.
 	// (PATCH /import/settings)
 	UpdateImportSettings(w http.ResponseWriter, r *http.Request)
+	// Every incoming webhook token with what it may do. Administrator only; the token itself is never returned again.
+	// (GET /incoming-webhooks)
+	ListInboundWebhooks(w http.ResponseWriter, r *http.Request)
+	// Add an incoming webhook. The token is in the answer once and only its hash is kept.
+	// (POST /incoming-webhooks)
+	AddInboundWebhook(w http.ResponseWriter, r *http.Request)
+	// Remove an incoming webhook; its token stops working at once.
+	// (DELETE /incoming-webhooks/{id})
+	DeleteInboundWebhook(w http.ResponseWriter, r *http.Request, id int64)
+	// Change what an incoming webhook may do. The token stays.
+	// (PUT /incoming-webhooks/{id})
+	UpdateInboundWebhook(w http.ResponseWriter, r *http.Request, id int64)
+	// Make a new token; the old one stops working. The token is in the answer once.
+	// (POST /incoming-webhooks/{id}/token)
+	RotateInboundWebhookToken(w http.ResponseWriter, r *http.Request, id int64)
 	// Every configured indexer connection (stage 5, ADR-37/43/47). Administrator only.
 	// (GET /indexers)
 	ListIndexers(w http.ResponseWriter, r *http.Request)
@@ -11332,6 +11443,12 @@ func (_ Unimplemented) ListHistory(w http.ResponseWriter, r *http.Request, param
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// An outside tool asks for one action. The token is the credential.
+// (POST /hooks/{id})
+func (_ Unimplemented) RunInboundWebhook(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Where the hourly search budget went in the last hour (F23).
 // (GET /hunt/budget)
 func (_ Unimplemented) GetHuntBudget(w http.ResponseWriter, r *http.Request) {
@@ -11443,6 +11560,36 @@ func (_ Unimplemented) GetImportSettings(w http.ResponseWriter, r *http.Request)
 // Change the commit line or the transfer ladder. Administrator only.
 // (PATCH /import/settings)
 func (_ Unimplemented) UpdateImportSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every incoming webhook token with what it may do. Administrator only; the token itself is never returned again.
+// (GET /incoming-webhooks)
+func (_ Unimplemented) ListInboundWebhooks(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add an incoming webhook. The token is in the answer once and only its hash is kept.
+// (POST /incoming-webhooks)
+func (_ Unimplemented) AddInboundWebhook(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove an incoming webhook; its token stops working at once.
+// (DELETE /incoming-webhooks/{id})
+func (_ Unimplemented) DeleteInboundWebhook(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change what an incoming webhook may do. The token stays.
+// (PUT /incoming-webhooks/{id})
+func (_ Unimplemented) UpdateInboundWebhook(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Make a new token; the old one stops working. The token is in the answer once.
+// (POST /incoming-webhooks/{id}/token)
+func (_ Unimplemented) RotateInboundWebhookToken(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -17545,6 +17692,31 @@ func (siw *ServerInterfaceWrapper) ListHistory(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// RunInboundWebhook operation middleware
+func (siw *ServerInterfaceWrapper) RunInboundWebhook(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RunInboundWebhook(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetHuntBudget operation middleware
 func (siw *ServerInterfaceWrapper) GetHuntBudget(w http.ResponseWriter, r *http.Request) {
 
@@ -18203,6 +18375,149 @@ func (siw *ServerInterfaceWrapper) UpdateImportSettings(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateImportSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListInboundWebhooks operation middleware
+func (siw *ServerInterfaceWrapper) ListInboundWebhooks(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListInboundWebhooks(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddInboundWebhook operation middleware
+func (siw *ServerInterfaceWrapper) AddInboundWebhook(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddInboundWebhook(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteInboundWebhook operation middleware
+func (siw *ServerInterfaceWrapper) DeleteInboundWebhook(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteInboundWebhook(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateInboundWebhook operation middleware
+func (siw *ServerInterfaceWrapper) UpdateInboundWebhook(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateInboundWebhook(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RotateInboundWebhookToken operation middleware
+func (siw *ServerInterfaceWrapper) RotateInboundWebhookToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RotateInboundWebhookToken(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -26973,6 +27288,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/history", wrapper.ListHistory)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/hooks/{id}", wrapper.RunInboundWebhook)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/hunt/budget", wrapper.GetHuntBudget)
 	})
 	r.Group(func(r chi.Router) {
@@ -27028,6 +27346,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/import/settings", wrapper.UpdateImportSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/incoming-webhooks", wrapper.ListInboundWebhooks)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/incoming-webhooks", wrapper.AddInboundWebhook)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/incoming-webhooks/{id}", wrapper.DeleteInboundWebhook)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/incoming-webhooks/{id}", wrapper.UpdateInboundWebhook)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/incoming-webhooks/{id}/token", wrapper.RotateInboundWebhookToken)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/indexers", wrapper.ListIndexers)

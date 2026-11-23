@@ -622,3 +622,19 @@ func TestClient_ACredentialHeaderDoesNotFollowARedirectToAnotherHost(t *testing.
 		})
 	}
 }
+
+// A webhook receiver's redirect is never followed, to the same host or another (MaxRedirects 1 means no hop at all).
+func TestClient_OneAllowedRedirectMeansNoRedirectIsFollowed(t *testing.T) {
+	for _, target := range []string{"https://hook.example/y", "https://other.example/y"} {
+		transport := &roundTripper{responses: []*http.Response{respond(http.StatusFound, map[string]string{"Location": target}), respond(http.StatusOK, nil)}}
+		client, _ := retryClient(t, transport, httpx.ClientConfig{MaxRedirects: 1})
+		request, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://hook.example/x", strings.NewReader("{}"))
+		if response, err := client.Do(t.Context(), request); err == nil {
+			_ = response.Body.Close()
+			t.Fatalf("%s: want the redirect refused", target)
+		}
+		if len(transport.requests) != 1 {
+			t.Errorf("%s: requests = %d, want 1", target, len(transport.requests))
+		}
+	}
+}

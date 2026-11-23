@@ -98,6 +98,7 @@ type Querier interface {
 	DeleteUserBlockedTags(ctx context.Context, userID int64) error
 	DeleteUserBlockedTagsOfTag(ctx context.Context, tagID int64) error
 	DeleteWebhook(ctx context.Context, id int64) error
+	DeleteWebhookInbound(ctx context.Context, id int64) error
 	DetachRootFolderFromCategory(ctx context.Context, arg DetachRootFolderFromCategoryParams) error
 	DropCategoryAccess(ctx context.Context, categoryID int64) error
 	DropCategoryRootFolders(ctx context.Context, categoryID int64) error
@@ -122,11 +123,13 @@ type Querier interface {
 	// silently reshape an existing result (documentation/sql-and-sqlc.md).
 	GetUserByUsername(ctx context.Context, username string) (AppUser, error)
 	GetWebhook(ctx context.Context, id int64) (Webhook, error)
+	GetWebhookInbound(ctx context.Context, id int64) (WebhookInbound, error)
 	InsertCategoryMetadataSource(ctx context.Context, arg InsertCategoryMetadataSourceParams) error
 	InsertCategoryQualityProfile(ctx context.Context, arg InsertCategoryQualityProfileParams) error
 	InsertNamingFormat(ctx context.Context, arg InsertNamingFormatParams) error
 	InsertUserBlockedTag(ctx context.Context, arg InsertUserBlockedTagParams) error
 	InsertWebhook(ctx context.Context, arg InsertWebhookParams) (int64, error)
+	InsertWebhookInbound(ctx context.Context, arg InsertWebhookInboundParams) (int64, error)
 	ListAPIKeysForUser(ctx context.Context, userID int64) ([]ApiKey, error)
 	ListAllCategoryAccess(ctx context.Context) ([]UserCategoryAccess, error)
 	ListAllMediaServerLibraries(ctx context.Context) ([]MediaServerLibrary, error)
@@ -170,6 +173,8 @@ type Querier interface {
 	ListRootFolders(ctx context.Context) ([]RootFolder, error)
 	ListTargetProfiles(ctx context.Context) ([]TargetProfile, error)
 	ListUsers(ctx context.Context) ([]AppUser, error)
+	// Incoming webhooks. Column lists follow table order.
+	ListWebhookInbound(ctx context.Context) ([]WebhookInbound, error)
 	// Outgoing webhooks. Column lists follow table order.
 	ListWebhooks(ctx context.Context) ([]Webhook, error)
 	MoveArrInstances(ctx context.Context, arg MoveArrInstancesParams) error
@@ -247,10 +252,12 @@ type Querier interface {
 	SetUserRole(ctx context.Context, arg SetUserRoleParams) error
 	SetUserTier(ctx context.Context, arg SetUserTierParams) error
 	SetWebhookEnabled(ctx context.Context, arg SetWebhookEnabledParams) error
+	SetWebhookInboundToken(ctx context.Context, arg SetWebhookInboundTokenParams) error
 	SetWebhookResult(ctx context.Context, arg SetWebhookResultParams) error
 	// What a library's members keep equal to it: name, priority, rating limit and search share.
 	SyncLibraryMembers(ctx context.Context, headID int64) error
 	TouchAPIKey(ctx context.Context, arg TouchAPIKeyParams) error
+	TouchWebhookInbound(ctx context.Context, arg TouchWebhookInboundParams) error
 	UpdateArrInstance(ctx context.Context, arg UpdateArrInstanceParams) error
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) error
 	UpdateDownloadFolder(ctx context.Context, arg UpdateDownloadFolderParams) error
@@ -266,6 +273,7 @@ type Querier interface {
 	UpdateQualityTarget(ctx context.Context, arg UpdateQualityTargetParams) error
 	UpdateTargetProfile(ctx context.Context, arg UpdateTargetProfileParams) error
 	UpdateWebhook(ctx context.Context, arg UpdateWebhookParams) error
+	UpdateWebhookInbound(ctx context.Context, arg UpdateWebhookInboundParams) error
 	UpsertCalendarFeed(ctx context.Context, arg UpsertCalendarFeedParams) error
 	UpsertCategoryFileManagement(ctx context.Context, arg UpsertCategoryFileManagementParams) error
 }

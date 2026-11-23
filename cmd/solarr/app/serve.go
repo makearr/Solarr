@@ -81,6 +81,7 @@ type Build struct {
 
 // process is everything the server owns, so shutdown has one place to look.
 type process struct {
+	health healthWatch
 	// sendLocks makes a release go to a download client once per item at a time, across every media type's dispatch.
 	sendLocks keyedlock.Locks
 	// resolverLocks makes one new title resolve once at a time per media type across scan, import and watch.
@@ -911,7 +912,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Facets: adapters.MediaTypes{Registry: p.media}.WorkFacets, GroupLabel: adapters.MediaTypes{Registry: p.media}.GroupLabel,
 			PartPosition: adapters.MediaTypes{Registry: p.media}.PartPosition, Admits: p.ratingAdmits,
 		},
-		WorksMonitor: p.worksMonitor(),
+		WorksMonitor: webhookWorksMonitor{WorksMonitor: p.worksMonitor(), p: p},
 		WorkEditor: adapters.WorkEdit{
 			Monitor: p.worksMonitor(), Desired: library.NewDesired(p.library), People: library.NewPeople(p.library),
 			Settings: p.cache, Identity: library.NewIdentity(p.library), Facets: adapters.MediaTypes{Registry: p.media}.Facets,
@@ -920,18 +921,9 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		MetadataProviderStatus: p.metadataProviderStatus,
 		LibraryIdentifier:      p,
 		Scans:                  adapters.ScanProgress{Scans: library.NewScans(p.library), Cache: p.cache},
-		SystemHealth: adapters.SystemHealth{
-			Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library), Vanished: p.vanishedFiles(), Registry: p.media,
-			AboveRating: library.NewWorks(p.library).CountAboveRating, Paused: p.outbound().breaker.Paused,
-			Media: p.tool, ProbeFailures: library.NewPhysical(p.library).CountProbeFailures, Dangling: p.dangling, FollowsWithoutLibrary: library.NewSubscriptions(p.library).CountWithoutLibrary,
-			Folders: p.cache.DownloadFolders, ReadDir: func(path string) error { _, err := p.fsys.ReadDir(path); return err }, Tasks: p.taskRegistry.All, TaskRuns: p.scheduleStates,
-			Backups: backupSource{FS: p.fsys, Directory: p.config.Paths.BackupDir}, Now: clock.NewSystem().Now,
-			BackupInterval: func(now time.Time) time.Duration {
-				return jobs.CadenceInterval(p.cache.Snapshot().ScheduleCadences("backup", backupScheduleCron), backupScheduleCron, now)
-			},
-		},
-		Blocklist: adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
-		History:   adapters.History{History: statistics.NewHistory(p.statistics)},
+		SystemHealth:           p.systemHealth(),
+		Blocklist:              adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
+		History:                adapters.History{History: statistics.NewHistory(p.statistics)},
 		Queue: adapters.Queue{
 			Poll: p.pollJob(), Ready: library.NewReadyQueue(p.library),
 			Describer: p.newDescriber, WorkOf: p.newWorkLookup, Clock: clock.NewSystem(), Memo: &adapters.SnapshotMemo{},
@@ -953,13 +945,13 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			FS: p.fsys, Directory: p.config.Paths.BackupDir, ConfigPath: p.configPath,
 			Stores: []*store.Store{p.library, p.jobs, p.settings, p.statistics},
 		},
-		WorkAdder: adapters.WorkAdding{
+		WorkAdder: webhookWorkAdder{p: p, WorkAdder: adapters.WorkAdding{
 			Categories: adapters.Categories{Cache: p.cache},
 			Adding:     adapters.MediaTypes{Registry: p.media}.AddingOf, AddKinds: adapters.MediaTypes{Registry: p.media}.AddKinds,
 			AfterAdd:  func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 			Suggest:   p.suggester().ForCandidate,
 			Placement: p.addPlacement(),
-		},
+		}},
 		ImportLists: adapters.ImportLists{
 			Service: p.importListService(), Forgetter: library.NewImportLists(p.library), Queue: p.queue,
 		},
@@ -988,10 +980,10 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		IndexerKinds:        adapters.IndexerKinds{Specs: p.specs},
 		ProviderHidden:      p.providerHidden,
 		ProviderDefinitions: definitionsAdmin{p: p},
-		Webhooks:            webhookAdmin{p: p},
-		CandidateSearcher:   p.candidateSearcher(),
-		TVProviders:         p.tvProviders(),
-		RemoteImages:        p.remoteImages(),
+		Webhooks:            webhookAdmin{p: p}, InboundWebhooks: inboundWebhookAdmin{p: p},
+		CandidateSearcher: p.candidateSearcher(),
+		TVProviders:       p.tvProviders(),
+		RemoteImages:      p.remoteImages(),
 		LibraryHealth: adapters.LibraryHealth{
 			Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
 			Desired: library.NewDesired(p.library), BlockedContent: library.NewBlockedContentStore(p.library),
@@ -1045,7 +1037,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		},
 		WorkExclusions: adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
 		Favorites:      library.NewFavorites(p.library, clock.NewSystem()),
-		Requests:       adapters.Requests{Requests: library.NewRequests(p.library, clock.NewSystem())},
+		Requests:       webhookRequests{Requests: adapters.Requests{Requests: library.NewRequests(p.library, clock.NewSystem())}, p: p},
 		WantedParts: adapters.WantedParts{
 			Works: library.NewWorks(p.library), Categories: adapters.Categories{Cache: p.cache}, Clock: clock.NewSystem(),
 			PartPosition: adapters.MediaTypes{Registry: p.media}.PartPosition, GroupLabel: adapters.MediaTypes{Registry: p.media}.GroupLabel,
@@ -1358,4 +1350,18 @@ func (p *process) partListingTypes() []string {
 		}
 	}
 	return types
+}
+
+// systemHealth is the health check set the System page and the health webhooks read.
+func (p *process) systemHealth() adapters.SystemHealth {
+	return adapters.SystemHealth{
+		Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library), Vanished: p.vanishedFiles(), Registry: p.media,
+		AboveRating: library.NewWorks(p.library).CountAboveRating, Paused: p.outbound().breaker.Paused,
+		Media: p.tool, ProbeFailures: library.NewPhysical(p.library).CountProbeFailures, Dangling: p.dangling, FollowsWithoutLibrary: library.NewSubscriptions(p.library).CountWithoutLibrary,
+		Folders: p.cache.DownloadFolders, ReadDir: func(path string) error { _, err := p.fsys.ReadDir(path); return err }, Tasks: p.taskRegistry.All, TaskRuns: p.scheduleStates,
+		Backups: backupSource{FS: p.fsys, Directory: p.config.Paths.BackupDir}, Now: clock.NewSystem().Now,
+		BackupInterval: func(now time.Time) time.Duration {
+			return jobs.CadenceInterval(p.cache.Snapshot().ScheduleCadences("backup", backupScheduleCron), backupScheduleCron, now)
+		},
+	}
 }

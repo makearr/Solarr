@@ -327,6 +327,8 @@ type Config struct {
 	ProviderDefinitions ProviderDefinitions
 	// Webhooks administers the outgoing webhooks; optional.
 	Webhooks Webhooks
+	// InboundWebhooks administers and runs the incoming ones; optional.
+	InboundWebhooks InboundWebhooks
 	// CandidateSearcher is stage 5's own candidate pipeline (section 10.1/10.2).
 	CandidateSearcher CandidateSearcher
 	// RemoteImages serves provider pictures from the local cache. Optional: nil answers 503.
@@ -466,6 +468,8 @@ type Server struct {
 	providerHidden          func(kind, key string) bool
 	providerDefinitions     ProviderDefinitions
 	webhooks                Webhooks
+	inbound                 InboundWebhooks
+	inboundLimit            *windowLimiter
 	tvProviders             TVProviders
 	remoteImages            RemoteImages
 	candidateSearcher       CandidateSearcher
@@ -623,6 +627,8 @@ func New(config Config) (*Server, error) {
 		providerHidden:          config.ProviderHidden,
 		providerDefinitions:     config.ProviderDefinitions,
 		webhooks:                config.Webhooks,
+		inbound:                 config.InboundWebhooks,
+		inboundLimit:            newWindowLimiter(),
 		candidateSearcher:       config.CandidateSearcher,
 		tvProviders:             config.TVProviders,
 		remoteImages:            config.RemoteImages,
@@ -666,6 +672,8 @@ func New(config Config) (*Server, error) {
 		api.Post("/setup/admin", server.CreateFirstAdministrator)
 		// Calendar clients cannot log in; the token in the URL is the credential (2026-09-19).
 		api.Get("/calendar/feed.ics", server.routeCalendarFeedICS)
+		// Incoming webhooks: the token is the credential, so no session (an outside tool has none).
+		api.Post("/hooks/{id}", server.routeRunInboundWebhook)
 
 		// Everything else needs an identity.
 		wrapped := gen.ServerInterfaceWrapper{Handler: server, ErrorHandlerFunc: server.badParameter}
@@ -807,6 +815,11 @@ func New(config Config) (*Server, error) {
 			secured.Put("/webhooks/{id}", wrapped.UpdateWebhook)
 			secured.Delete("/webhooks/{id}", wrapped.DeleteWebhook)
 			secured.Post("/webhooks/{id}/test", wrapped.TestWebhook)
+			secured.Get("/incoming-webhooks", server.ListInboundWebhooks)
+			secured.Post("/incoming-webhooks", server.AddInboundWebhook)
+			secured.Put("/incoming-webhooks/{id}", wrapped.UpdateInboundWebhook)
+			secured.Delete("/incoming-webhooks/{id}", wrapped.DeleteInboundWebhook)
+			secured.Post("/incoming-webhooks/{id}/token", wrapped.RotateInboundWebhookToken)
 			secured.Get("/provider-definitions", wrapped.ListProviderDefinitions)
 			secured.Post("/provider-definitions/reload", server.ReloadProviderDefinitions)
 			secured.Get("/provider-definitions/{kind}/{key}", wrapped.GetProviderDefinition)

@@ -92,3 +92,16 @@ CREATE TABLE webhook (
   last_at       INTEGER,
   created_at    INTEGER NOT NULL
 );
+
+-- Incoming webhooks: only the SHA-256 of the token is kept, so the token is shown once. media_server_id has no foreign key (a connection delete is refused elsewhere).
+CREATE TABLE webhook_inbound (
+  id              INTEGER PRIMARY KEY,
+  name            TEXT    NOT NULL,
+  enabled         INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+  token_hash      TEXT    NOT NULL,
+  actions         TEXT    NOT NULL DEFAULT '[]',
+  category_ids    TEXT    NOT NULL DEFAULT '[]',
+  media_server_id INTEGER NOT NULL DEFAULT 0,
+  last_used_at    INTEGER,
+  created_at      INTEGER NOT NULL
+);
