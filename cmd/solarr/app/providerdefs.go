@@ -35,3 +35,23 @@ func (p *process) prepareProviderDefinitions(ctx context.Context) {
 		p.logger.Warn("provider definitions folder could not be prepared; the built-in data is used", slog.Any("error", err))
 	}
 }
+
+// reloadProviderDefinitions reads every custom folder and swaps in a new catalog; a bad file is logged and the rest still load.
+func (p *process) reloadProviderDefinitions() {
+	store := p.providerDefinitions()
+	var custom []providerdef.Definition
+	for _, kind := range providerdef.Kinds {
+		defs, reports, err := store.LoadCustom(kind)
+		if err != nil {
+			p.logger.Warn("provider definitions could not be read", slog.String("kind", string(kind)), slog.Any("error", err))
+			continue
+		}
+		for _, report := range reports {
+			for _, problem := range report.Problems {
+				p.logger.Warn("provider definition problem", slog.String("kind", string(kind)), slog.String("file", report.File), slog.String("problem", problem.String()))
+			}
+		}
+		custom = append(custom, defs...)
+	}
+	p.definitions.Swap(providerdef.NewCatalog(nil, custom))
+}

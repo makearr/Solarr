@@ -66,6 +66,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/remoteimage"
 	"github.com/makearr/Solarr/internal/platform/secrets"
 	"github.com/makearr/Solarr/internal/platform/transcode"
+	"github.com/makearr/Solarr/internal/providerdef"
 	"github.com/makearr/Solarr/internal/scanning/probe"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 	"github.com/makearr/Solarr/internal/scanning/watch"
@@ -124,6 +125,8 @@ type process struct {
 	// running is every job the executor works on now, for the status bar.
 	running     *jobs.Running
 	jobRegistry *jobs.Registry
+	// definitions is the catalog of provider definition files in force; Reload swaps it whole.
+	definitions *providerdef.Holder
 	// indexerCaps is what each indexer's music search accepts, fetched once a day.
 	indexerCaps *indexerCapsCache
 	// indexerPacing is how fast each indexer is asked, from its stated limit and the limit hits seen.
@@ -596,7 +599,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerMedia(); err != nil {
 		return err
 	}
+	p.definitions = providerdef.NewHolder()
 	p.prepareProviderDefinitions(ctx)
+	p.reloadProviderDefinitions()
 	p.disks = &adapters.DiskManager{
 		FS: p.fsys, Cache: p.cache, Clock: wall, Monitor: disklatency.New(p.fsys, wall, diskProbeInterval),
 		ExtraPaths: []string{p.config.Paths.ConfigDir},
