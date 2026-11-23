@@ -22,6 +22,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/kitsu"
 	"github.com/makearr/Solarr/internal/metadata/omdb"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
+	"github.com/makearr/Solarr/internal/metadata/specprovider"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/migrations"
@@ -594,5 +595,40 @@ func TestFetchFillsASeriesRatingFromTheIMDbDatasetWhereNoOtherHoldsOne(t *testin
 	}
 	if series.Rating != 7.4 || series.RatingVotes != 3100 {
 		t.Errorf("rating = %v/%d, want 7.4/3100 from the dataset", series.Rating, series.RatingVotes)
+	}
+}
+
+type fakeRecords struct{ record specprovider.Record }
+
+func (f fakeRecords) ByID(_ context.Context, namespace, id string) (specprovider.Record, error) {
+	if namespace == "imdb" && id == "tt9000009" {
+		return f.record, nil
+	}
+	return specprovider.Record{}, errors.New("not found")
+}
+
+func TestFetchMergesADefinitionsSeriesFieldsAndNeverItsEpisodes(t *testing.T) {
+	service, _ := newService(t, fakeSkyhook{err: errors.New("proxy down")}, fakeTVmaze{show: tvmaze.Show{ID: 42, Name: "Example Show", Status: "Running"}})
+	service.Records = func(key string) tv.RecordProvider {
+		if key != "def:mine" {
+			return nil
+		}
+		return fakeRecords{record: specprovider.Record{
+			Title: "Example Show", Overview: "From the definition.", Genres: []string{"Drama"},
+			Parts: []specprovider.Part{{Title: "Ghost episode"}},
+		}}
+	}
+	service.PriorityFor = func(int64) []string { return []string{"def:mine", settings.TVSourceTVmaze} }
+	series, err := service.FetchFor(t.Context(), 1, tv.IDs{TVDB: 1234, IMDb: "tt9000009"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if series.Overview != "From the definition." {
+		t.Errorf("overview = %q, want the definition's (first in the order)", series.Overview)
+	}
+	for _, episode := range series.Episodes {
+		if episode.Title == "Ghost episode" {
+			t.Fatal("a definition's parts must never become episodes")
+		}
 	}
 }

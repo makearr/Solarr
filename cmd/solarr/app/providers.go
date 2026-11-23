@@ -358,7 +358,7 @@ func (p *process) tvService() tv.Service {
 		p.xemShared = thexem.New(client(providerTheXEM), metacache.New(p.metadata).Counting(&p.metadataLookups), wall)
 		p.tvShared = tv.Service{
 			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared, AniList: p.anilistShared, Wikidata: p.wikidataFacts(),
-			Local:  p.localMetadata(),
+			Local: p.localMetadata(), Records: p.tvRecords,
 			Kitsu:  kitsu.New(p.providerClient(providerKitsu, nil, httpx.ClientConfig{})),
 			MAL:    myanimelist.New(p.providerClient(providerMAL, nil, httpx.ClientConfig{}), p.providerKey(settings.TVSourceMAL)),
 			AniDB:  anidb.New(p.providerClient(providerAniDB, nil, httpx.ClientConfig{}), p.providerKey(settings.TVSourceAniDB)),

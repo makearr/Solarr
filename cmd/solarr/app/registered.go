@@ -882,6 +882,15 @@ func (p *process) movieRecords(key string) movie.RecordProvider {
 	return provider
 }
 
+// tvRecords is the TV service's view of the active definitions.
+func (p *process) tvRecords(key string) tv.RecordProvider {
+	provider := p.records.get(key)
+	if provider == nil {
+		return nil
+	}
+	return provider
+}
+
 // bookRecords is the book service's view of the active definitions.
 func (p *process) bookRecords(key string) book.RecordProvider {
 	provider := p.records.get(key)

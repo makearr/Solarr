@@ -285,3 +285,6 @@ Music: a scan asks a Jellyfin server mapped to the library, once per album folde
 With an OMDb key, a TV refresh reads each season's list (one request per season, at most 30) and stores every episode's IMDb score
 in `work_part.rating`. The scores only fill episodes another source already lists; they never add one. A refresh that finds no
 score keeps the stored one. The episode row shows it as a star beside the runtime.
+
+A definition-file provider ordered in a TV library fills series-level fields only (title, overview, dates, genres, age rating, rating,
+network, pictures, cast); it is asked by TheTVDB, IMDb or TMDB id, and its parts never become episodes.

@@ -114,6 +114,8 @@ type Service struct {
 	// Local asks the media servers the library takes metadata from; nil asks none.
 	Local  mediaserver.LocalAsker
 	Fanart PictureSource
+	// Records answers the definition-file provider of a key, nil for one that is not (or no longer) active.
+	Records func(key string) RecordProvider
 	// Priority is the configured TV source order, read per fetch; nil is the default order.
 	Priority func() []string
 	// PriorityFor is a library's own order; nil, or an empty answer, follows Priority.
@@ -209,7 +211,7 @@ func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, recentOnl
 	var wrongTVmaze atomic.Int64
 	asked := slices.DeleteFunc([]string{settings.TVSourceTMDB, settings.TVSourceAniList, settings.TVSourceTVmaze, settings.TVSourceKitsu, settings.TVSourceMAL, settings.TVSourceAniDB, settings.MovieSourceIMDb, settings.TVSourceOMDb, settings.TVSourceFanart}, func(source string) bool { return !slices.Contains(order, source) })
 	for _, source := range order {
-		if strings.HasPrefix(source, settings.LocalSourcePrefix) {
+		if strings.HasPrefix(source, settings.LocalSourcePrefix) || s.recordProvider(source) != nil {
 			asked = append(asked, source)
 		}
 	}
@@ -243,6 +245,10 @@ func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, recentOnl
 			}
 			if strings.HasPrefix(source, settings.LocalSourcePrefix) {
 				series, found := s.fetchLocal(ctx, categoryID, source, ids)
+				return fetched{series, found}, nil
+			}
+			if s.recordProvider(source) != nil {
+				series, found := s.askRecord(ctx, source, ids)
 				return fetched{series, found}, nil
 			}
 			if s.TVmaze == nil {
