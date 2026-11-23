@@ -140,3 +140,28 @@ func TestByAuthorKeyAsksTheExactAuthorAPageAtATime(t *testing.T) {
 		t.Errorf("a malformed key was asked: %v", transport.asked)
 	}
 }
+
+func TestTrendingReadsTheWeeksWorksAndWhetherAFullPageFollows(t *testing.T) {
+	transport := &answer{bodies: map[string]string{"/trending/weekly.json": `{"works":[{"key":"/works/OL1W","title":"First","author_name":["Ada Quill"],"first_publish_year":2020}]}`}}
+	docs, more, err := client(t, transport).Trending(t.Context(), 2)
+	if err != nil || more || len(docs) != 1 || docs[0].WorkID() != "OL1W" || docs[0].AuthorNames[0] != "Ada Quill" {
+		t.Fatalf("docs %+v more %v err %v", docs, more, err)
+	}
+	if want := "https://openlibrary.org/trending/weekly.json?limit=20&page=2"; transport.asked[0] != want {
+		t.Errorf("asked %s, want %s", transport.asked[0], want)
+	}
+}
+
+func TestRatedBeforeAsksForRatedWorksOfAnEraBestFirst(t *testing.T) {
+	transport := &answer{bodies: map[string]string{"/search.json": `{"numFound":45,"docs":[{"key":"/works/OL2W","title":"Old Favourite","ratings_average":4.5,"ratings_count":900}]}`}}
+	docs, more, err := client(t, transport).RatedBefore(t.Context(), 2000, 200, 1)
+	if err != nil || !more || len(docs) != 1 || docs[0].RatingsCount != 900 {
+		t.Fatalf("docs %+v more %v err %v", docs, more, err)
+	}
+	asked := transport.asked[0]
+	for _, want := range []string{"sort=rating", "ratings_count%3A%5B200+TO+%2A%5D", "first_publish_year%3A%5B%2A+TO+2000%5D"} {
+		if !strings.Contains(asked, want) {
+			t.Errorf("asked %s, missing %s", asked, want)
+		}
+	}
+}

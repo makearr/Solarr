@@ -26,6 +26,7 @@ import (
 	"github.com/makearr/Solarr/internal/media/lastfmfeeds"
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/media/olfeeds"
 	"github.com/makearr/Solarr/internal/media/tmdbfeeds"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/media/works"
@@ -36,6 +37,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/mangadex"
 	"github.com/makearr/Solarr/internal/metadata/mangaupdates"
 	"github.com/makearr/Solarr/internal/metadata/metron"
+	"github.com/makearr/Solarr/internal/metadata/openlibrary"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/moving/sidecar"
@@ -613,7 +615,7 @@ func (p *process) bookModule(format book.Format) book.Module {
 	conns := p.bookIndexerConns(format)
 	module := book.Module{Format: format}
 	return book.Module{
-		Format: format,
+		Format: format, Feeds: p.bookFeeds(format),
 		Registrations: append([]media.JobRegistration{
 			{Definition: format.RefreshDefinition(), Handler: format.NewRefreshJob(library.NewSeriesReader(p.library), service, clock.NewSystem(), p.logger)},
 			{Definition: format.ArtworkDefinition(), Handler: format.NewArtworkJob(library.NewSeriesReader(p.library), p.remoteImages(), p.logger)},
@@ -1191,4 +1193,15 @@ func (t musicTaste) Artists(ctx context.Context, categoryID int64, limit int) ([
 
 func (t musicTaste) Genres(ctx context.Context, categoryID int64, limit int) ([]string, error) {
 	return t.pool.TopGenres(ctx, categoryID, int64(limit))
+}
+
+// bookFeeds is the recommendation feeds of an ebook library from Open Library's charts; an audiobook library has none yet.
+func (p *process) bookFeeds(format book.Format) media.Recommending {
+	if format.ByFolder {
+		return nil
+	}
+	return olfeeds.Feeds{
+		Charts: openlibrary.New(p.providerClient(providerOpenLibrary, nil, httpx.ClientConfig{})), Kind: format.MediaType,
+		Provider: format.Provider(book.ProviderOpenLibrary), Clock: clock.NewSystem(),
+	}
 }

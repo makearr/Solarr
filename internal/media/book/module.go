@@ -16,6 +16,8 @@ import (
 // Sweep makes it scannable.
 type Module struct {
 	Format Format
+	// Feeds are the recommendation feeds (Discover); nil leaves the format without them.
+	Feeds media.Recommending
 	// Registrations are the job types the format brings, with their handlers.
 	Registrations []media.JobRegistration
 	// Wiring is the add, pictures, refresh and hunt services.
@@ -203,3 +205,19 @@ func (m Module) PlaceFile(ctx context.Context, categoryID, mediaObjectID int64, 
 }
 
 var _ media.AffinityKeyer = Module{}
+
+// RecommendationFeeds implements media.Recommending.
+func (m Module) RecommendationFeeds(ctx context.Context) ([]media.RecommendationFeed, map[media.RecommendationFeed]string) {
+	if m.Feeds == nil {
+		return nil, nil
+	}
+	return m.Feeds.RecommendationFeeds(ctx)
+}
+
+// Recommend implements media.Recommending.
+func (m Module) Recommend(ctx context.Context, query media.RecommendQuery) ([]media.Recommendation, bool, error) {
+	if m.Feeds == nil {
+		return nil, false, media.ErrNotWired
+	}
+	return m.Feeds.Recommend(ctx, query)
+}

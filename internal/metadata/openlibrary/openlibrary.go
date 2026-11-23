@@ -190,6 +190,41 @@ func (c Client) Search(ctx context.Context, title, author string, limit int) ([]
 	return found.Docs, nil
 }
 
+// ChartPageSize is how many works one chart page answers.
+const ChartPageSize = 20
+
+// Trending reads one page of the works read, borrowed and rated most this week; more says whether another page follows.
+func (c Client) Trending(ctx context.Context, page int) (docs []Doc, more bool, err error) {
+	query := url.Values{"limit": {strconv.Itoa(ChartPageSize)}, "page": {strconv.Itoa(max(page, 1))}}
+	var found struct {
+		Works []Doc `json:"works"`
+	}
+	if err := c.get(ctx, "/trending/weekly.json?"+query.Encode(), &found); err != nil {
+		return nil, false, err
+	}
+	return found.Works, len(found.Works) == ChartPageSize, nil
+}
+
+// RatedBefore reads one page of the best-rated works first published in or before the year (0 for any year) that at least
+// minRatings readers rated, so a handful of votes cannot top the chart.
+func (c Client) RatedBefore(ctx context.Context, year int, minRatings int64, page int) (docs []Doc, more bool, err error) {
+	filter := "ratings_count:[" + strconv.FormatInt(minRatings, 10) + " TO *]"
+	if year > 0 {
+		filter += " AND first_publish_year:[* TO " + strconv.Itoa(year) + "]"
+	}
+	query := url.Values{
+		"fields": {searchFields}, "q": {filter}, "sort": {"rating"}, "limit": {strconv.Itoa(ChartPageSize)}, "page": {strconv.Itoa(max(page, 1))},
+	}
+	var found struct {
+		NumFound int   `json:"numFound"`
+		Docs     []Doc `json:"docs"`
+	}
+	if err := c.get(ctx, "/search.json?"+query.Encode(), &found); err != nil {
+		return nil, false, err
+	}
+	return found.Docs, page*ChartPageSize < found.NumFound, nil
+}
+
 // ByAuthor finds the works an author wrote, the most published first.
 func (c Client) ByAuthor(ctx context.Context, author string, limit int) ([]Doc, error) {
 	if limit <= 0 || limit > 100 {
