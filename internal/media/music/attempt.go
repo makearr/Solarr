@@ -3,6 +3,7 @@ package music
 // Passes a file's identification runs through, in order, as its attempt record names them.
 const (
 	PassEmbeddedTags   = "embedded_tags"
+	PassMediaServer    = "media_server"
 	PassAlbumMatch     = "album_match"
 	PassTextSearch     = "text_search"
 	PassFingerprint    = "fingerprint"

@@ -19,6 +19,7 @@ export function factsOf(evidence: readonly EvidenceFact[] | undefined): Record<s
 const PASS_LABELS: Record<string, string> = {
   embedded_tags: "MusicBrainz IDs in the file",
   album_match: "Whole album against MusicBrainz tracklists",
+  media_server: "Ids your media server holds for the album folder",
   text_search: "Title search per file",
   fingerprint: "Audio fingerprint (AcoustID)",
   track_match: "The track on its own, then the album it comes from",

@@ -14551,7 +14551,7 @@ components:
     IdentificationPass:
       type: object
       description: >-
-        One pass of a run. pass is embedded_tags, album_match, text_search,
+        One pass of a run. pass is embedded_tags, media_server, album_match, text_search,
         fingerprint, track_match or folder_siblings. outcome is identified,
         none or failed; embedded_tags also answers retired, an album ID
         MusicBrainz no longer knows; album_match answers no_candidate,

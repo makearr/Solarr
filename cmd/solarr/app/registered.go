@@ -71,6 +71,7 @@ func (p *process) musicModule() music.Module {
 		Unidentified: library.NewUnidentified(p.library),
 		Attempts:     &attempts,
 		Search:       provider,
+		Servers:      musicServerAsker{asker: p.localMetadata()},
 		Albums:       provider,
 		Fingerprints: p.tool,
 		AcoustID:     p.acoustIDLookup(),
@@ -1048,4 +1049,17 @@ func (p *process) comicModule() comic.Module {
 			},
 		},
 	}
+}
+
+// musicServerAsker gives music's scan the MusicBrainz ids a media server holds for the album folder of a file.
+type musicServerAsker struct{ asker *localAsker }
+
+// AlbumIDsByPath implements music.ServerAsker; a server that cannot find the path, or holds no ids, answers none.
+func (m musicServerAsker) AlbumIDsByPath(ctx context.Context, categoryID int64, absPath string) (music.ServerAlbumIDs, bool) {
+	item, found, err := m.asker.AskByPath(ctx, categoryID, absPath)
+	if err != nil || !found || item.MediaType != "music" {
+		return music.ServerAlbumIDs{}, false
+	}
+	ids := music.ServerAlbumIDs{ReleaseGroup: item.IDs["musicbrainzreleasegroup"], Release: item.IDs["musicbrainzalbum"]}
+	return ids, ids != (music.ServerAlbumIDs{})
 }

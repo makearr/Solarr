@@ -78,9 +78,9 @@ A connection a library's order still names is not deleted (409) unless another o
 
 | Server | Libraries | Asked by | Notes |
 |---|---|---|---|
-| Jellyfin | TV, movies | provider id from a folder or file name (a bulk index of the server's titles, since its id filters are ignored), else title; by path where the path pairs match | titles, overview, genres, ids, studios, certification; People are not yet credits; music not wired |
+| Jellyfin | TV, movies, music | provider id from a folder or file name (a bulk index of the server's titles, since its id filters are ignored), else title; by path where the path pairs match | titles, overview, genres, ids, studios, certification; People are not yet credits; music not wired |
 | Audiobookshelf | audiobooks, books | ASIN or ISBN, else exact title | description, series, publisher, ISBN id |
-| Navidrome | music | client built, not wired | music is keyed by MusicBrainz id; needs a by-path id step |
+| Navidrome | music | client built; by-path does not apply (its song paths are relative to its own folder) | not used in a scan; Jellyfin serves music |
 | Calibre | books | identifier or title (`/ajax/search`) | shapes from the documentation only |
 | Stash | adult | stash-box id | GraphQL |
 
@@ -273,3 +273,5 @@ A YAML file under `providers/metadata/custom/` describes a web service Solarr ca
 Providers lists, tests and approves it, and a library adds it to its order on its Metadata page, where it carries a *Custom*
 chip. It is asked after the providers before it and only fills what they left empty. Every request goes through the same
 guard and pace as the compiled providers, to the hosts the file names and no other. See `provider-definitions.md`.
+
+Music: a scan asks a Jellyfin server mapped to the library, once per album folder, for the MusicBrainz release-group (else release) id of the album at that path. It runs after the file's own tags and before any search or album matching, as the pass "Ids your media server holds for the album folder"; a file with its own MBID tags never asks. Import does not use it: a download's path is not the server's.

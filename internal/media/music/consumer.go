@@ -46,6 +46,7 @@ type Consumer struct {
 	unidentified library.Unidentified
 	attempts     *library.Attempts
 	search       Searcher
+	servers      ServerAsker
 	albums       AlbumLookup
 	fingerprints Fingerprinter
 	acoustID     AcoustIDLookup
@@ -72,6 +73,8 @@ type ConsumerConfig struct {
 	Attempts *library.Attempts
 	// Search adds ADR-24's parse strategy for files MBIDIdentifier cannot answer; nil leaves the chain unchanged.
 	Search Searcher
+	// Servers names a file by the ids a media server holds of its album folder, before any search; nil leaves it out.
+	Servers ServerAsker
 	// Albums identifies a folder's untagged files together against whole tracklists.
 	// Nil leaves identification per file.
 	Albums AlbumLookup
@@ -113,7 +116,7 @@ func NewConsumer(config ConsumerConfig) Consumer {
 	}
 	return Consumer{
 		fsys: config.FS, physical: config.Physical, identity: config.Identity,
-		unidentified: config.Unidentified, attempts: config.Attempts, search: config.Search, albums: config.Albums,
+		unidentified: config.Unidentified, attempts: config.Attempts, search: config.Search, servers: config.Servers, albums: config.Albums,
 		fingerprints: config.Fingerprints, acoustID: config.AcoustID, tracks: config.Tracks,
 		clock: config.Clock, chain: chain, threshold: config.Threshold, logger: logger,
 		desired: config.Desired, categories: config.Categories, defaultProfileID: config.DefaultProfileID,
@@ -184,6 +187,9 @@ func (c Consumer) Observe(
 
 	tags := tagSourceFor(root, readable)
 	passes := passIdentifiers{embedded: []model.Identifier{NewMBIDIdentifier(tags)}}
+	if c.servers != nil && categoryID != 0 {
+		passes.server = []model.Identifier{NewServerIdentifier(c.servers, categoryID, func(relPath string) string { return path.Join(root.Path, relPath) })}
+	}
 	if c.search != nil {
 		passes.search = []model.Identifier{NewSearchIdentifier(SearchIdentifierConfig{Tags: tags, Search: c.search})}
 	}
@@ -286,6 +292,7 @@ func (c Consumer) unmonitorWork(ctx context.Context, workID int64) error {
 // passIdentifiers are the chain's identifiers per pass; an empty slice skips its pass.
 type passIdentifiers struct {
 	embedded    []model.Identifier
+	server      []model.Identifier
 	search      []model.Identifier
 	fingerprint []model.Identifier
 }
@@ -308,6 +315,9 @@ func (c Consumer) identifyBatch(
 	}
 
 	pending := c.runChain(ctx, out, PassEmbeddedTags, passes.embedded, all)
+	if len(passes.server) > 0 && len(pending) > 0 {
+		pending = c.runChain(ctx, out, PassMediaServer, passes.server, pending)
+	}
 	if c.albums != nil && len(pending) > 0 {
 		pending = c.identifyAlbums(ctx, out, pending)
 	}
@@ -741,7 +751,7 @@ func (c Consumer) runChain(
 			continue
 		}
 		provider, externalID := result.Best.ExternalID.Provider, result.Best.ExternalID.ExternalID
-		if pass == PassEmbeddedTags && provider == ProviderRelease && c.albums != nil {
+		if (pass == PassEmbeddedTags || pass == PassMediaServer) && provider == ProviderRelease && c.albums != nil {
 			// Keyed by its release it would become a second album beside the one keyed by its group.
 			group, outcome := c.releaseGroupOf(ctx, out, externalID)
 			if outcome != PassOutcomeIdentified {
@@ -751,7 +761,7 @@ func (c Consumer) runChain(
 			}
 			provider, externalID = ProviderReleaseGroup, group
 		}
-		if pass == PassEmbeddedTags && result.Best.ExternalID.Provider == ProviderReleaseGroup {
+		if (pass == PassEmbeddedTags || pass == PassMediaServer) && result.Best.ExternalID.Provider == ProviderReleaseGroup {
 			current, known := c.currentReleaseGroup(ctx, out, externalID)
 			if !known {
 				out.note(file.index, library.AttemptPass{Pass: pass, Outcome: PassOutcomeRetired})
