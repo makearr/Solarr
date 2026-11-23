@@ -100,3 +100,34 @@ func (c Client) Lookup(ctx context.Context, id int64) (Audiobook, error) {
 	}
 	return found.Results[0], nil
 }
+
+// Album is one music album as iTunes describes it.
+type Album struct {
+	CollectionID int64  `json:"collectionId"`
+	Name         string `json:"collectionName"`
+	Artist       string `json:"artistName"`
+	Artwork100   string `json:"artworkUrl100"`
+}
+
+// Cover is the artwork at 1200 pixels, which iTunes scales down to the original when that is smaller.
+func (a Album) Cover() string {
+	return strings.Replace(a.Artwork100, "100x100bb", "1200x1200bb", 1)
+}
+
+type albumAnswer struct {
+	Results []Album `json:"results"`
+}
+
+// AlbumByUPC reads one music album by its barcode.
+func (c Client) AlbumByUPC(ctx context.Context, upc string) (Album, error) {
+	var found albumAnswer
+	if err := c.http.GetJSON(ctx, c.base+"/lookup?entity=album&upc="+url.QueryEscape(strings.TrimSpace(upc)), maxResponseBytes, &found); err != nil {
+		return Album{}, err
+	}
+	for _, album := range found.Results {
+		if album.Artwork100 != "" {
+			return album, nil
+		}
+	}
+	return Album{}, ErrNotFound
+}

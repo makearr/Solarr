@@ -114,6 +114,8 @@ type Service struct {
 	// Local asks the media servers the library takes metadata from; nil asks none.
 	Local  mediaserver.LocalAsker
 	Fanart PictureSource
+	// AnimeIDs gives the anime registry ids of a TheTVDB series (AniDB, MyAnimeList, AniList) from an id map; nil asks none.
+	AnimeIDs func(ctx context.Context, tvdb int64) (anidb, mal, anilist []int64)
 	// Records answers the definition-file provider of a key, nil for one that is not (or no longer) active.
 	Records func(key string) RecordProvider
 	// Priority is the configured TV source order, read per fetch; nil is the default order.
@@ -172,7 +174,7 @@ func (s Service) order(categoryID int64) []string {
 
 // fetch is Fetch; recentOnly asks TMDB for the guest stars of the newest seasons only, which is all a refresh needs.
 func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, recentOnly bool, order []string) (Series, error) {
-	ids = s.completeIDs(ctx, s.bridgeIDs(ctx, ids, order))
+	ids = s.withAnimeIDs(ctx, s.completeIDs(ctx, s.bridgeIDs(ctx, ids, order)))
 	var sources []Series
 	var failed []string
 	bySource := map[string]Series{}
@@ -289,7 +291,7 @@ func (s Service) fetch(ctx context.Context, categoryID int64, ids IDs, recentOnl
 		merged.IDs.TVmaze = 0
 	}
 	// Ids the series was asked by (a folder name, a file) are kept even when no source of the order repeats them.
-	mergeIDs(&merged.IDs, IDs{TVDB: ids.TVDB, TMDB: ids.TMDB, IMDb: ids.IMDb})
+	mergeIDs(&merged.IDs, IDs{TVDB: ids.TVDB, TMDB: ids.TMDB, IMDb: ids.IMDb, AniDB: ids.AniDB, MAL: ids.MAL, AniList: ids.AniList})
 	merged.Failed = failed
 	if len(merged.NumberingDisagrees) > 0 && s.Logger != nil {
 		s.Logger.Info("sources number seasons differently; air times are matched by date", slog.Any("seasons", merged.NumberingDisagrees))
@@ -500,6 +502,24 @@ func (s Service) completeIDs(ctx context.Context, ids IDs) IDs {
 	ids.TVDB = series.ExternalIDs.TVDB
 	if ids.IMDb == "" {
 		ids.IMDb = series.ExternalIDs.IMDb
+	}
+	return ids
+}
+
+// withAnimeIDs fills the registry ids a series lacks from the id map; ids a file or another source named are kept.
+func (s Service) withAnimeIDs(ctx context.Context, ids IDs) IDs {
+	if s.AnimeIDs == nil || ids.TVDB == 0 || (len(ids.AniDB) > 0 && len(ids.MAL) > 0 && len(ids.AniList) > 0) {
+		return ids
+	}
+	anidb, mal, anilist := s.AnimeIDs(ctx, ids.TVDB)
+	if len(ids.AniDB) == 0 {
+		ids.AniDB = anidb
+	}
+	if len(ids.MAL) == 0 {
+		ids.MAL = mal
+	}
+	if len(ids.AniList) == 0 {
+		ids.AniList = anilist
 	}
 	return ids
 }

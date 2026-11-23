@@ -10,6 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/metadata/deezer"
 	"github.com/makearr/Solarr/internal/metadata/fanart"
+	"github.com/makearr/Solarr/internal/metadata/itunes"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/metadata/theaudiodb"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -28,6 +29,8 @@ func (p *process) musicPictures() *music.ArtworkChoice {
 	}
 	deezerClient := deezer.New(p.providerClient(providerDeezer, nil, httpx.ClientConfig{}))
 	deezerOn := func() bool { return p.cache.Snapshot().ProviderEnabled(settings.SourceDeezer) }
+	itunesClient := itunes.New(p.providerClient(providerITunes, nil, httpx.ClientConfig{}))
+	itunesOn := func() bool { return p.cache.Snapshot().ProviderEnabled(settings.SourceITunesMusic) }
 	audioDBOn := func() bool { return *p.cache.Snapshot().MetadataSettings().TheAudioDB }
 	return music.NewArtworkChoice(music.ArtworkChoiceConfig{
 		Artworks: library.NewArtworks(p.library),
@@ -47,6 +50,11 @@ func (p *process) musicPictures() *music.ArtworkChoice {
 			if deezerOn() {
 				if found, err := findDeezer(ctx, deezerClient, ask); err == nil && found.Cover != "" {
 					options = append(options, media.ImageOption{URL: found.Cover, Source: "Deezer", Label: "Cover"})
+				}
+			}
+			if itunesOn() && ask.Barcode != "" {
+				if found, err := itunesClient.AlbumByUPC(ctx, ask.Barcode); err == nil {
+					options = append(options, media.ImageOption{URL: found.Cover(), Source: "Apple Music", Label: "Cover"})
 				}
 			}
 			return options, nil

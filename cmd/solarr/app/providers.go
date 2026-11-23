@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -29,6 +30,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/metadata/anidb"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
+	"github.com/makearr/Solarr/internal/metadata/animeids"
 	"github.com/makearr/Solarr/internal/metadata/audible"
 	"github.com/makearr/Solarr/internal/metadata/fanart"
 	"github.com/makearr/Solarr/internal/metadata/fantlab"
@@ -358,7 +360,7 @@ func (p *process) tvService() tv.Service {
 		p.xemShared = thexem.New(client(providerTheXEM), metacache.New(p.metadata).Counting(&p.metadataLookups), wall)
 		p.tvShared = tv.Service{
 			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared, AniList: p.anilistShared, Wikidata: p.wikidataFacts(),
-			Local: p.localMetadata(), Records: p.tvRecords,
+			Local: p.localMetadata(), Records: p.tvRecords, AnimeIDs: p.animeIDs(),
 			Kitsu:  kitsu.New(p.providerClient(providerKitsu, nil, httpx.ClientConfig{})),
 			MAL:    myanimelist.New(p.providerClient(providerMAL, nil, httpx.ClientConfig{}), p.providerKey(settings.TVSourceMAL)),
 			AniDB:  anidb.New(p.providerClient(providerAniDB, nil, httpx.ClientConfig{}), p.providerKey(settings.TVSourceAniDB)),
@@ -717,4 +719,19 @@ func (p *process) indexerJar(indexerID int64) http.CookieJar {
 	}
 	kept, _ := p.indexerJars.LoadOrStore(indexerID, fresh)
 	return kept.(http.CookieJar)
+}
+
+// animeIDs is the Fribb id map as the TV service asks it, only while the provider is switched on; a failed read answers no ids.
+func (p *process) animeIDs() func(ctx context.Context, tvdb int64) (anidb, mal, anilist []int64) {
+	idMap := animeids.New(p.providerClient(providerAnimeIDs, nil, httpx.ClientConfig{}), clock.NewSystem())
+	return func(ctx context.Context, tvdb int64) ([]int64, []int64, []int64) {
+		if !p.cache.Snapshot().ProviderEnabled(settings.SourceAnimeIDs) {
+			return nil, nil, nil
+		}
+		links, _, err := idMap.ByTVDB(ctx, tvdb)
+		if err != nil {
+			p.logger.Warn("anime id map", slog.Any("error", err))
+		}
+		return links.AniDB, links.MAL, links.AniList
+	}
 }

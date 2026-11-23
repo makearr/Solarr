@@ -77,9 +77,12 @@ const (
 	SourceAcoustID        = "acoustid"
 	SourceListenBrainz    = "listenbrainz"
 	SourceDeezer          = "deezer"
-	SourceLastFM          = "lastfm"
-	SourceDiscogs         = "discogs"
-	SourceSpotify         = "spotify"
+	SourceITunesMusic     = "itunes_music"
+	// SourceAnimeIDs is the Fribb id map between the anime registries and TheTVDB.
+	SourceAnimeIDs = "anime_ids"
+	SourceLastFM   = "lastfm"
+	SourceDiscogs  = "discogs"
+	SourceSpotify  = "spotify"
 	// SourceTheXEM maps TheTVDB's episode numbers to the ones scene releases carry.
 	SourceTheXEM = "thexem"
 )
@@ -88,7 +91,7 @@ const (
 const KeyMetadataDisabledProviders = "metadata.disabled_providers"
 
 // DefaultDisabledProviders start off: Google Books answers 429 without a key of the owner's own, and the comic providers are new.
-var DefaultDisabledProviders = []string{BookSourceGoogleBooks, MovieSourceIMDb, ComicSourceComicVine, ComicSourceMetron, ComicSourceGCD, ComicSourceMangaUpdates, ComicSourceMangaDex}
+var DefaultDisabledProviders = []string{SourceAnimeIDs, BookSourceGoogleBooks, MovieSourceIMDb, ComicSourceComicVine, ComicSourceMetron, ComicSourceGCD, ComicSourceMangaUpdates, ComicSourceMangaDex}
 
 // KeyMetadataMovieSources orders the movie providers: the first to hold a field supplies it, the others fill what is missing.
 const KeyMetadataMovieSources = "metadata.movie_sources"
@@ -259,6 +262,10 @@ var MetadataProviders = []MetadataProvider{
 		PerMinute: 60, MaxPerMinute: 60, Published: "none published; asked at 60 a minute"},
 	{Key: SourceDeezer, Role: RoleEnrich, Label: "Deezer", AlsoFor: []string{"music"}, Carries: []string{"an album's fans", "explicit flag"},
 		PerMinute: 120, Published: "50 requests every 5 seconds"},
+	{Key: SourceITunesMusic, Role: RoleEnrich, Label: "Apple Music (iTunes)", AlsoFor: []string{"music"}, Carries: []string{"large album covers by barcode"},
+		PerMinute: 20, Published: "about 20 requests a minute"},
+	{Key: SourceAnimeIDs, Role: RoleEnrich, Label: "Anime id map (Fribb)", AlsoFor: []string{"tv"}, Carries: []string{"AniDB, AniList and MyAnimeList ids of a TheTVDB series"},
+		Published: "one file on GitHub, read once a day"},
 	{Key: SourceLastFM, Role: RoleEnrich, Label: "Last.fm", AlsoFor: []string{"music"}, Carries: []string{"how many people listen to an album", "similar artists"}, NeedsKey: true,
 		PerMinute: 120, Published: "about 5 requests a second; asked at 2 a second"},
 	{Key: SourceDiscogs, Role: RoleEnrich, Label: "Discogs", AlsoFor: []string{"music"}, Carries: []string{"the community's rating of a release"}, NeedsKey: true,

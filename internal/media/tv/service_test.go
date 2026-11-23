@@ -632,3 +632,20 @@ func TestFetchMergesADefinitionsSeriesFieldsAndNeverItsEpisodes(t *testing.T) {
 		}
 	}
 }
+
+func TestFetchFillsAnimeRegistryIDsFromTheIDMapWhereNoneIsKnown(t *testing.T) {
+	service, _ := newService(t, fakeSkyhook{err: errors.New("proxy down")}, fakeTVmaze{show: tvmaze.Show{ID: 42, Name: "Example Show"}})
+	service.AnimeIDs = func(_ context.Context, tvdb int64) (anidb, mal, anilist []int64) {
+		if tvdb != 1234 {
+			return nil, nil, nil
+		}
+		return []int64{10}, []int64{30}, []int64{20}
+	}
+	series, err := service.FetchFor(t.Context(), 1, tv.IDs{TVDB: 1234, AniList: []int64{77}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(series.IDs.AniDB, []int64{10}) || !reflect.DeepEqual(series.IDs.MAL, []int64{30}) || !reflect.DeepEqual(series.IDs.AniList, []int64{77}) {
+		t.Errorf("ids = %+v, want the map's AniDB and MAL and the AniList id already held", series.IDs)
+	}
+}

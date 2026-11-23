@@ -4,6 +4,8 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- TV: an optional anime id map (Fribb, one file read once a day; off until switched on under Metadata providers) finds an anime's AniDB, MyAnimeList and AniList ids from its TheTVDB id.
+- Music: the cover picker also offers Apple Music's large cover for an album with a barcode (keyless; a switch under Metadata providers).
 - Media servers: Stash is told of new files (a metadata scan of their folders); Emby and Komga can be connected (scan push; Emby also metadata and watch state) -- both built from their public API, not yet tried against a real server.
 - Your own provider definition files can now enrich music artists (photo and biography where none) and fill adult-library scenes (title, studio, tags, pictures, credits).
 - Comics: a series known only to the Grand Comics Database now gets its issue list (variants left out, up to 60 issues a refresh, on the provider's own pace).

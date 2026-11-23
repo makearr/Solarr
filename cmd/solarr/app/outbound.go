@@ -45,6 +45,7 @@ const (
 	providerGoogleBooks     = "googlebooks"
 	providerHardcover       = "hardcover"
 	providerITunes          = "itunes"
+	providerAnimeIDs        = "animeids"
 	providerFantLab         = "fantlab"
 	providerWhisparr        = "whisparr"
 	providerStashDB         = "stashdb"
