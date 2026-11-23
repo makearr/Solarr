@@ -1,0 +1,21 @@
+{
+ "format": {
+  "format_name": "mpegts",
+  "duration": "1800",
+  "size": "900000000",
+  "bit_rate": "4000000"
+ },
+ "streams": [
+  {
+   "index": 0,
+   "codec_type": "video",
+   "codec_name": "mpeg2video",
+   "width": 720,
+   "height": 576,
+   "avg_frame_rate": "25/1",
+   "r_frame_rate": "25/1",
+   "field_order": "tt",
+   "pix_fmt": "yuv420p"
+  }
+ ]
+}

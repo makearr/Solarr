@@ -1,0 +1,27 @@
+{
+ "format": {
+  "format_name": "matroska,webm",
+  "duration": "7000",
+  "size": "8000000000",
+  "bit_rate": "9000000"
+ },
+ "streams": [
+  {
+   "index": 0,
+   "codec_type": "video",
+   "codec_name": "hevc",
+   "width": 3840,
+   "height": 2160,
+   "avg_frame_rate": "24/1",
+   "r_frame_rate": "24/1",
+   "pix_fmt": "yuv420p10le",
+   "color_transfer": "smpte2084",
+   "side_data_list": [
+    {
+     "side_data_type": "DOVI configuration record",
+     "dv_profile": 5
+    }
+   ]
+  }
+ ]
+}

@@ -333,7 +333,7 @@ func parseProbe(output []byte) (Probe, error) {
 				measured.PixelAspect = pixelAspect(stream.SampleAspect)
 				measured.FrameRate = frameRate(stream.AvgFrameRate, stream.RFrameRate)
 				measured.ScanType = scanType(stream.FieldOrder)
-				measured.HDR = hdrOf(stream.ColorTransfer, func(kind string) bool {
+				measured.HDR = HDRFormat(stream.ColorTransfer, func(kind string) bool {
 					for _, side := range stream.SideDataList {
 						if strings.Contains(strings.ToLower(side.SideDataType), kind) {
 							return true

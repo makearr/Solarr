@@ -37,8 +37,8 @@ func scanType(fieldOrder string) string {
 	return "interlaced"
 }
 
-// hdrOf names the HDR format a stream carries in the vocabulary a release name uses; "" is sdr.
-func hdrOf(colorTransfer string, hasSideData func(kind string) bool) string {
+// HDRFormat names the HDR format a stream carries in the vocabulary a release name uses; "" is sdr.
+func HDRFormat(colorTransfer string, hasSideData func(kind string) bool) string {
 	switch {
 	case hasSideData("dovi"):
 		return "dolby-vision"

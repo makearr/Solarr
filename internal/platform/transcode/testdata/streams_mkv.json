@@ -1,0 +1,118 @@
+{
+ "format": {
+  "format_name": "matroska,webm",
+  "duration": "5400.5",
+  "size": "2000000000",
+  "bit_rate": "2962000",
+  "tags": {
+   "TITLE": "Harbour Lights"
+  }
+ },
+ "chapters": [
+  {
+   "id": 1
+  },
+  {
+   "id": 2
+  },
+  {
+   "id": 3
+  }
+ ],
+ "streams": [
+  {
+   "index": 0,
+   "codec_type": "video",
+   "codec_name": "h264",
+   "width": 1920,
+   "height": 800,
+   "avg_frame_rate": "24000/1001",
+   "r_frame_rate": "24000/1001",
+   "field_order": "progressive",
+   "pix_fmt": "yuv420p",
+   "tags": {
+    "BPS": "2400000",
+    "language": "eng"
+   },
+   "disposition": {
+    "default": 1
+   }
+  },
+  {
+   "index": 1,
+   "codec_type": "audio",
+   "codec_name": "ac3",
+   "channels": 6,
+   "sample_rate": "48000",
+   "bit_rate": "448000",
+   "tags": {
+    "language": "eng",
+    "title": "Surround"
+   },
+   "disposition": {
+    "default": 1
+   }
+  },
+  {
+   "index": 2,
+   "codec_type": "audio",
+   "codec_name": "aac",
+   "channels": 2,
+   "sample_rate": "44100",
+   "tags": {
+    "language": "deu",
+    "BPS-eng": "128000"
+   },
+   "disposition": {
+    "default": 0
+   }
+  },
+  {
+   "index": 3,
+   "codec_type": "audio",
+   "codec_name": "aac",
+   "channels": 2,
+   "sample_rate": "44100",
+   "bit_rate": "96000",
+   "tags": {
+    "language": "eng",
+    "title": "Director Commentary"
+   },
+   "disposition": {
+    "default": 0
+   }
+  },
+  {
+   "index": 4,
+   "codec_type": "subtitle",
+   "codec_name": "hdmv_pgs_subtitle",
+   "tags": {
+    "language": "eng"
+   },
+   "disposition": {
+    "default": 0,
+    "forced": 1
+   }
+  },
+  {
+   "index": 5,
+   "codec_type": "subtitle",
+   "codec_name": "subrip",
+   "tags": {
+    "language": "und"
+   },
+   "disposition": {
+    "default": 0,
+    "hearing_impaired": 1
+   }
+  },
+  {
+   "index": 6,
+   "codec_type": "attachment",
+   "codec_name": "ttf",
+   "tags": {
+    "filename": "font.ttf"
+   }
+  }
+ ]
+}

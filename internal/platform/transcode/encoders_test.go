@@ -206,3 +206,22 @@ func TestDetectEncoders_RealFFmpegEncodesWithTheSoftwareEncodersItHas(t *testing
 		t.Error("no ffmpeg version read")
 	}
 }
+
+func TestProbeStreams_RealFFmpegFileWithTwoAudioLanguagesProbesBack(t *testing.T) {
+	if _, err := exec.LookPath("ffprobe"); err != nil {
+		t.Skip("ffprobe is not on PATH")
+	}
+	path := t.TempDir() + "/two.mkv"
+	command := exec.CommandContext(t.Context(), "ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=duration=1", "-f", "lavfi", "-i", "sine=frequency=880:duration=1",
+		"-map", "0:a", "-map", "1:a", "-c:a", "aac", "-metadata:s:a:0", "language=eng", "-metadata:s:a:1", "language=deu", path)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Skipf("cannot generate the file: %v: %s", err, output)
+	}
+	file, err := transcode.NewService(execRunner{}, nil, nil).ProbeStreams(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(file.Streams) != 2 || file.Streams[0].Language != "en" || file.Streams[1].Language != "de" || file.Streams[0].Type != transcode.StreamAudio || file.Streams[0].Channels != 1 {
+		t.Errorf("streams = %+v", file.Streams)
+	}
+}

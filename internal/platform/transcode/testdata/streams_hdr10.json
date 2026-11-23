@@ -1,0 +1,28 @@
+{
+ "format": {
+  "format_name": "matroska,webm",
+  "duration": "7000",
+  "size": "8000000000",
+  "bit_rate": "9000000"
+ },
+ "streams": [
+  {
+   "index": 0,
+   "codec_type": "video",
+   "codec_name": "hevc",
+   "width": 3840,
+   "height": 2160,
+   "avg_frame_rate": "24/1",
+   "r_frame_rate": "24/1",
+   "field_order": "progressive",
+   "pix_fmt": "yuv420p10le",
+   "bits_per_raw_sample": "10",
+   "color_transfer": "smpte2084",
+   "side_data_list": [
+    {
+     "side_data_type": "Mastering display metadata"
+    }
+   ]
+  }
+ ]
+}
