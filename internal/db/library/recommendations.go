@@ -416,3 +416,15 @@ func (r Recommendations) ForgetExternalID(ctx context.Context, provider, externa
 	}
 	return nil
 }
+
+// Held answers the work a provider id names in the library and whether any of its items is monitored; 0 for none.
+func (r Recommendations) Held(ctx context.Context, provider, externalID string) (workID int64, monitored bool, err error) {
+	row, err := librarydb.New(r.store.Read()).GetHeldWorkByExternalID(ctx, librarydb.GetHeldWorkByExternalIDParams{Provider: provider, ExternalID: externalID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("library: held work: %w", err)
+	}
+	return row.WorkID, row.Monitored == 1, nil
+}

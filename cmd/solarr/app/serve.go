@@ -696,6 +696,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerImportListJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerDiscoverJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerImportJob(registry, executor); err != nil {
 		return err
 	}

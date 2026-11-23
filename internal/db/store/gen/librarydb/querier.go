@@ -507,6 +507,8 @@ type Querier interface {
 	GetGenreTreeSeed(ctx context.Context, key string) (int64, error)
 	// Scoring reads the bounded value, never the raw rate (ADR-45).
 	GetGroupReputation(ctx context.Context, releaseGroup string) (GroupReputation, error)
+	// The work a provider id names and whether any of its items is monitored.
+	GetHeldWorkByExternalID(ctx context.Context, arg GetHeldWorkByExternalIDParams) (GetHeldWorkByExternalIDRow, error)
 	// An album's page says when it is next searched, and why not (F2).
 	GetHuntEntry(ctx context.Context, desiredItemID int64) (HuntQueue, error)
 	// The composite priority a held release goes out in (ADR-36).

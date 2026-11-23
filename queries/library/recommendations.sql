@@ -108,3 +108,8 @@ DELETE FROM recommendation_auto_add WHERE category_id = ?;
 -- A work added by any path leaves the pool at once.
 -- name: DeleteRecommendationsByExternalID :exec
 DELETE FROM recommendation WHERE provider = ? AND external_id = ?;
+
+-- The work a provider id names and whether any of its items is monitored.
+-- name: GetHeldWorkByExternalID :one
+SELECT e.work_id, CAST(EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = e.work_id AND d.monitored = 1) AS INTEGER) AS monitored
+FROM work_external_id e WHERE e.provider = ? AND e.external_id = ?;

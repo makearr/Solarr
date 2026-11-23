@@ -167,3 +167,11 @@ func TestRecommendations_AutoAddRecordCountsPerDayAndRemembers(t *testing.T) {
 		t.Error("another library was told it was added")
 	}
 }
+
+func TestRecommendations_HeldIsEmptyForAnUnknownProviderID(t *testing.T) {
+	opened, _ := newLibrary(t)
+	workID, monitored, err := library.NewRecommendations(opened).Held(t.Context(), "tmdb:movie", "404")
+	if err != nil || workID != 0 || monitored {
+		t.Errorf("held = %d, %v, %v", workID, monitored, err)
+	}
+}

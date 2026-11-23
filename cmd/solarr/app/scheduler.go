@@ -24,6 +24,7 @@ const (
 	franchiseLinkScheduleCron      = "55 */6 * * *"  // every six hours; reads the franchise ids already held
 	musicCollectionsScheduleCron   = "50 4 * * *"    // daily; a bulk read of Wikidata and at most 120 MusicBrainz requests
 	bookSeriesKeysScheduleCron     = "15 5 * * *"    // daily; one bulk read of Wikidata for the book series
+	discoverScheduleCron           = "30 3 * * *"    // daily; reads at most five pages of each enabled feed of each enabled library
 	importListScheduleCron         = "35 * * * *"    // hourly; each list runs once its own cadence has passed
 	arrPullScheduleCron            = "20 * * * *"    // hourly; only connections whose pull is automatic
 	prowlarrSyncScheduleCron       = "5 * * * *"     // hourly; only connections whose sync is automatic
@@ -154,6 +155,10 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	registry.MustRegister(jobs.Task{
 		Key: "import_lists", Name: "Add what import lists name", DefaultCadence: importListScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Enqueue: p.enqueueImportListSync,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "discover_refresh", Name: "Refresh recommendations", DefaultCadence: discoverScheduleCron,
+		Tier: string(settings.TierNormal), Category: jobs.CategoryMetadata, Enqueue: p.enqueueDiscoverRefresh,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "prowlarr_sync", Name: "Sync Prowlarr indexers", DefaultCadence: prowlarrSyncScheduleCron,

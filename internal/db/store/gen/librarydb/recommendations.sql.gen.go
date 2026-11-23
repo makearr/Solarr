@@ -158,6 +158,29 @@ func (q *Queries) DismissRecommendation(ctx context.Context, arg DismissRecommen
 	return err
 }
 
+const getHeldWorkByExternalID = `-- name: GetHeldWorkByExternalID :one
+SELECT e.work_id, CAST(EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = e.work_id AND d.monitored = 1) AS INTEGER) AS monitored
+FROM work_external_id e WHERE e.provider = ? AND e.external_id = ?
+`
+
+type GetHeldWorkByExternalIDParams struct {
+	Provider   string
+	ExternalID string
+}
+
+type GetHeldWorkByExternalIDRow struct {
+	WorkID    int64
+	Monitored int64
+}
+
+// The work a provider id names and whether any of its items is monitored.
+func (q *Queries) GetHeldWorkByExternalID(ctx context.Context, arg GetHeldWorkByExternalIDParams) (GetHeldWorkByExternalIDRow, error) {
+	row := q.db.QueryRowContext(ctx, getHeldWorkByExternalID, arg.Provider, arg.ExternalID)
+	var i GetHeldWorkByExternalIDRow
+	err := row.Scan(&i.WorkID, &i.Monitored)
+	return i, err
+}
+
 const getRecommendationFeed = `-- name: GetRecommendationFeed :one
 SELECT category_id, kind, type, pages_read, exhausted, refreshed_at, last_error FROM recommendation_feed
 WHERE category_id = ? AND kind = ? AND type = ?
