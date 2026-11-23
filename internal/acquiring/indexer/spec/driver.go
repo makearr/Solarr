@@ -22,6 +22,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/extract"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
@@ -70,7 +71,7 @@ func (d *Driver) Capabilities(ctx context.Context) (indexer.Capabilities, error)
 }
 
 func (d *Driver) variables() *Variables {
-	variables := newVariables(d.clock.Now())
+	variables := extract.NewVariables(d.clock.Now())
 	for _, setting := range d.spec.Settings {
 		switch setting.Type {
 		case "checkbox":
@@ -132,7 +133,7 @@ func (d *Driver) fetch(ctx context.Context, method, target string, form url.Valu
 	if d.sameSite(target) {
 		for name, values := range headers {
 			for _, value := range values {
-				rendered, err := render(value, d.variables())
+				rendered, err := extract.Render(value, d.variables())
 				if err != nil {
 					return page{}, err
 				}
@@ -178,7 +179,7 @@ func (p page) document() (*goquery.Document, error) {
 // errorMessage looks for the error selectors in a page; a match returns the site's message.
 func (d *Driver) errorMessage(selectors []ErrorSelector, found *goquery.Document) (string, bool) {
 	for _, one := range selectors {
-		selector, err := render(one.Selector, d.variables())
+		selector, err := extract.Render(one.Selector, d.variables())
 		if err != nil || selector == "" {
 			continue
 		}
@@ -188,7 +189,7 @@ func (d *Driver) errorMessage(selectors []ErrorSelector, found *goquery.Document
 		}
 		message := strings.TrimSpace(matched.First().Text())
 		if one.Message != nil {
-			if value, ok, err := readField(htmlNode{found.Selection}, *one.Message, filterContext{variables: d.variables(), now: d.clock.Now()}); err == nil && ok {
+			if value, ok, err := extract.ReadField(extract.HTMLNode{Selection: found.Selection}, *one.Message, extract.FilterContext{Variables: d.variables(), Now: d.clock.Now()}); err == nil && ok {
 				message = value
 			}
 		}
@@ -217,7 +218,7 @@ func (d *Driver) signIn(ctx context.Context) error {
 		}
 	}
 	inputs := url.Values{}
-	target, err := render(login.Path, variables)
+	target, err := extract.Render(login.Path, variables)
 	if err != nil {
 		return err
 	}
@@ -236,7 +237,7 @@ func (d *Driver) signIn(ctx context.Context) error {
 		}
 	}
 	for name, template := range login.Inputs {
-		value, err := render(template, variables)
+		value, err := extract.Render(template, variables)
 		if err != nil {
 			return err
 		}
@@ -299,7 +300,7 @@ func (d *Driver) formInputs(ctx context.Context, target string, login *Login) (s
 		}
 	}
 	for name, extractor := range login.SelectorInputs {
-		if value, ok, err := readField(htmlNode{found.Selection}, extractor, filterContext{variables: d.variables(), now: d.clock.Now()}); err == nil && ok {
+		if value, ok, err := extract.ReadField(extract.HTMLNode{Selection: found.Selection}, extractor, extract.FilterContext{Variables: d.variables(), Now: d.clock.Now()}); err == nil && ok {
 			values.Set(name, value)
 		}
 	}
@@ -410,7 +411,7 @@ func readDate(text string, now time.Time) (time.Time, bool) {
 	if parsed, err := time.Parse(time.RFC3339, text); err == nil {
 		return parsed, true
 	}
-	if parsed, ok := parseFuzzyTime(text, now); ok {
+	if parsed, ok := extract.ParseFuzzyTime(text, now); ok {
 		return parsed, true
 	}
 	number, err := strconv.ParseInt(text, 10, 64)
@@ -436,7 +437,7 @@ func (d *Driver) Search(ctx context.Context, request indexer.SearchRequest) ([]i
 	if variables.Keywords == "" && (variables.Query["Artist"] != "" || variables.Query["Album"] != "") {
 		variables.Keywords = strings.TrimSpace(variables.Query["Artist"] + " " + variables.Query["Album"])
 	}
-	filtered, err := applyFilters(variables.Keywords, d.spec.Search.KeywordsFilters, filterContext{variables: variables, now: d.clock.Now()})
+	filtered, err := extract.ApplyFilters(variables.Keywords, d.spec.Search.KeywordsFilters, extract.FilterContext{Variables: variables, Now: d.clock.Now()})
 	if err != nil {
 		return nil, err
 	}
@@ -509,7 +510,7 @@ func (d *Driver) searchPath(ctx context.Context, path SearchPath, variables *Var
 	}
 	raw := ""
 	for name, template := range merged {
-		value, err := render(template, variables)
+		value, err := extract.Render(template, variables)
 		if err != nil {
 			return nil, err
 		}
@@ -522,7 +523,7 @@ func (d *Driver) searchPath(ctx context.Context, path SearchPath, variables *Var
 		}
 		inputs.Add(name, value)
 	}
-	target, err := render(path.Path, variables)
+	target, err := extract.Render(path.Path, variables)
 	if err != nil {
 		return nil, err
 	}
@@ -563,7 +564,7 @@ func (d *Driver) searchPath(ctx context.Context, path SearchPath, variables *Var
 	for _, row := range rows {
 		item, ok, err := d.item(row, variables)
 		if err != nil {
-			if !errors.Is(err, errFieldMissing) && firstFailure == nil {
+			if !errors.Is(err, extract.ErrFieldMissing) && firstFailure == nil {
 				firstFailure = err
 			}
 			continue
@@ -636,20 +637,20 @@ func answerIsHTML(body []byte) bool {
 
 // row is one release in an answer.
 type row struct {
-	source node
+	source extract.Node
 	// heading is the text of the date heading above the row, empty when the spec has none.
 	heading string
 }
 
 func (d *Driver) rows(kind string, answer page, variables *Variables) ([]row, error) {
 	spec := d.spec.Search.Rows
-	selector, err := render(spec.Selector, variables)
+	selector, err := extract.Render(spec.Selector, variables)
 	if err != nil {
 		return nil, err
 	}
 	body := answer.body
 	for _, filter := range d.spec.Search.PreprocessingFilters {
-		filtered, err := applyFilter(string(body), filter.Name, filter.Args, filterContext{variables: variables, now: d.clock.Now()})
+		filtered, err := extract.ApplyFilter(string(body), filter.Name, filter.Args, extract.FilterContext{Variables: variables, Now: d.clock.Now()})
 		if err != nil {
 			return nil, err
 		}
@@ -677,7 +678,7 @@ func (d *Driver) rows(kind string, answer page, variables *Variables) ([]row, er
 	var rows []row
 	selection.Each(func(index int, one *goquery.Selection) {
 		if index >= after {
-			rows = append(rows, row{source: htmlNode{one}, heading: d.dateHeading(one, spec.DateHeaders, variables)})
+			rows = append(rows, row{source: extract.HTMLNode{Selection: one}, heading: d.dateHeading(one, spec.DateHeaders, variables)})
 		}
 	})
 	return rows, nil
@@ -688,7 +689,7 @@ func (d *Driver) dateHeading(one *goquery.Selection, headers *DateHeaders, varia
 	if headers == nil || headers.Selector == "" {
 		return ""
 	}
-	selector, err := render(headers.Selector, variables)
+	selector, err := extract.Render(headers.Selector, variables)
 	if err != nil {
 		return ""
 	}
@@ -701,7 +702,7 @@ func (d *Driver) dateHeading(one *goquery.Selection, headers *DateHeaders, varia
 			if heading.Length() == 0 {
 				continue
 			}
-			text, err := applyFilters(strings.TrimSpace(heading.Text()), headers.Filters, filterContext{variables: variables, now: d.clock.Now()})
+			text, err := extract.ApplyFilters(strings.TrimSpace(heading.Text()), headers.Filters, extract.FilterContext{Variables: variables, Now: d.clock.Now()})
 			if err != nil {
 				return ""
 			}
@@ -712,26 +713,26 @@ func (d *Driver) dateHeading(one *goquery.Selection, headers *DateHeaders, varia
 }
 
 func (d *Driver) jsonRows(decoded any, selector string, spec Rows) []row {
-	root := jsonNode{value: decoded}
-	base, conditions := splitConditions(selector)
-	selected, ok := root.path(base)
+	root := extract.JSONNode{Value: decoded}
+	base, conditions := extract.SplitConditions(selector)
+	selected, ok := root.Path(base)
 	if !ok {
 		return nil
 	}
 	var rows []row
 	add := func(element any, parents []any) {
-		candidate := jsonNode{value: element, parents: parents}
-		if !holds(candidate, conditions) {
+		candidate := extract.JSONNode{Value: element, Parents: parents}
+		if !extract.Holds(candidate, conditions) {
 			return
 		}
 		if spec.Attribute != "" {
-			inner, ok := candidate.path(spec.Attribute)
+			inner, ok := candidate.Path(spec.Attribute)
 			if !ok {
 				return
 			}
 			if list, isList := inner.([]any); isList {
 				for _, one := range list {
-					rows = append(rows, row{source: jsonNode{value: one, parents: append(slices.Clone(parents), element)}})
+					rows = append(rows, row{source: extract.JSONNode{Value: one, Parents: append(slices.Clone(parents), element)}})
 				}
 				return
 			}
@@ -739,11 +740,11 @@ func (d *Driver) jsonRows(decoded any, selector string, spec Rows) []row {
 		}
 		if list, isList := element.([]any); isList && spec.Multiple {
 			for _, one := range list {
-				rows = append(rows, row{source: jsonNode{value: one, parents: parents}})
+				rows = append(rows, row{source: extract.JSONNode{Value: one, Parents: parents}})
 			}
 			return
 		}
-		rows = append(rows, row{source: jsonNode{value: element, parents: parents}})
+		rows = append(rows, row{source: extract.JSONNode{Value: element, Parents: parents}})
 	}
 	parents := []any{decoded}
 	switch typed := selected.(type) {
@@ -768,10 +769,10 @@ func (d *Driver) jsonRows(decoded any, selector string, spec Rows) []row {
 func (d *Driver) item(source row, variables *Variables) (indexer.RawItem, bool, error) {
 	rowVars := *variables
 	rowVars.Result = map[string]string{}
-	context := filterContext{variables: &rowVars, now: d.clock.Now()}
+	context := extract.FilterContext{Variables: &rowVars, Now: d.clock.Now()}
 	for _, field := range d.spec.Search.Fields {
 		name, modifier, _ := strings.Cut(field.Name, "|")
-		value, found, err := readField(source.source, field, context)
+		value, found, err := extract.ReadField(source.source, field, context)
 		if err != nil {
 			return indexer.RawItem{}, false, err
 		}

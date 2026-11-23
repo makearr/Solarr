@@ -30,6 +30,8 @@ import (
 type IndexerDeps struct {
 	HTTP  *httpx.Client
 	Clock clock.Clock
+	// Specs is the set of site specs in force; nil serves the embedded ones.
+	Specs *spec.Library
 }
 
 type indexerBuild func(deps IndexerDeps, connection indexer.Connection) indexer.Driver
@@ -106,10 +108,13 @@ func NewIndexer(impl string, deps IndexerDeps, connection indexer.Connection) (i
 }
 
 // IndexerKinds is apiserver.IndexerKinds over the catalog: what the add list offers.
-type IndexerKinds struct{}
+type IndexerKinds struct {
+	// Specs is the set of site specs in force; nil serves the embedded ones.
+	Specs *spec.Library
+}
 
 // IndexerKinds answers the catalog in the add list's order.
-func (IndexerKinds) IndexerKinds() []apiserver.IndexerKind {
+func (k IndexerKinds) IndexerKinds() []apiserver.IndexerKind {
 	definitions := IndexerDefinitions()
 	kinds := make([]apiserver.IndexerKind, len(definitions))
 	taken := map[string]bool{}
@@ -123,12 +128,12 @@ func (IndexerKinds) IndexerKinds() []apiserver.IndexerKind {
 			SecretOptional: definition.Credentials.Optional, CompanionDownloader: definition.CompanionDownloader,
 		}
 	}
-	return append(kinds, specKinds(taken)...)
+	return append(kinds, specKinds(taken, k.Specs.Specs())...)
 }
 
 // buildSpecIndexer builds a site from its spec; the secret holds the settings the owner filled in, as JSON.
 func buildSpecIndexer(deps IndexerDeps, c indexer.Connection) indexer.Driver {
-	found, ok := spec.Get(c.Definition)
+	found, ok := deps.Specs.Specs().Get(c.Definition)
 	if !ok {
 		return missingSpec{id: c.Definition}
 	}
@@ -157,13 +162,9 @@ func (m missingSpec) Search(context.Context, indexer.SearchRequest) ([]indexer.R
 func (m missingSpec) Fetch(context.Context, string) ([]byte, error) { return nil, m.err() }
 
 // specKinds are the catalog entries of the specs, besides the ones Solarr has its own implementation of.
-func specKinds(taken map[string]bool) []apiserver.IndexerKind {
-	specs, err := spec.All()
-	if err != nil {
-		return nil
-	}
+func specKinds(taken map[string]bool, set *spec.Specs) []apiserver.IndexerKind {
 	var kinds []apiserver.IndexerKind
-	for _, one := range specs {
+	for _, one := range set.All() {
 		if taken[one.ID] {
 			continue
 		}

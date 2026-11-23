@@ -287,6 +287,7 @@ It can be switched off under Settings -> Metadata, and removed from the cover so
 - Source: `github.com/Prowlarr/Indexers`, `definitions/v11`, commit `7cb7f2659ca503b956ef154403960a81c395cf5a`, fetched
   2026-11-08. 581 site definitions (name, addresses, categories, how to sign in and search, how to read a result).
 - Taken: the data of each definition, converted by `scripts/gen-indexer-specs.py` into `internal/acquiring/indexer/spec/data/specs.json.gz`.
+- Written out: at every start the embedded specs are also written as readable YAML to `<config>/providers/indexers/builtin/` (a mirror, rewritten each start; edits there are inert).
   Regenerate it with that script against a newer checkout. None of Prowlarr's or Jackett's code is used: the engine that
   runs the specs (`internal/acquiring/indexer/spec`) is Solarr's own.
 - Licence: the repository carries no LICENSE file. The project owner decided on 2026-11-08 to include the converted data;

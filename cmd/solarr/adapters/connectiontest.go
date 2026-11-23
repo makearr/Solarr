@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/acquiring/indexer/spec"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -33,6 +34,8 @@ type ConnectionTester struct {
 	// FS is where a blackhole's folders are looked for.
 	FS    fsx.FS
 	Clock clock.Clock
+	// Specs is the set of site specs in force; nil serves the embedded ones.
+	Specs *spec.Library
 	// SharedCategories answers the categories connected *Arrs send under on a client, with each *Arr's name; nil
 	// skips the check.
 	SharedCategories func(ctx context.Context, baseURL string) map[string]string
@@ -75,7 +78,7 @@ type indexerTest struct {
 // authenticated call.
 func (c ConnectionTester) testIndexer(ctx context.Context, impl, definition string, client *httpx.Client, baseURL, apiKey string) indexerTest {
 	at := c.Clock.Now()
-	driver, known := NewIndexer(impl, IndexerDeps{HTTP: client, Clock: c.Clock}, indexer.Connection{BaseURL: baseURL, APIKey: apiKey, Definition: definition})
+	driver, known := NewIndexer(impl, IndexerDeps{HTTP: client, Clock: c.Clock, Specs: c.Specs}, indexer.Connection{BaseURL: baseURL, APIKey: apiKey, Definition: definition})
 	if !known {
 		return indexerTest{ConnectionTestResult: apiserver.ConnectionTestResult{
 			Message: fmt.Sprintf("%q is not an indexer Solarr knows", impl), TestedAt: at,

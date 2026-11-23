@@ -1,4 +1,4 @@
-package spec
+package extract
 
 import (
 	"bytes"
@@ -23,7 +23,8 @@ type Variables struct {
 	False       bool
 }
 
-func newVariables(now time.Time) *Variables {
+// NewVariables are the empty variables of a search at the time.
+func NewVariables(now time.Time) *Variables {
 	variables := &Variables{Query: map[string]string{}, Config: map[string]any{}, Result: map[string]string{}, True: true}
 	variables.Today.Year = now.Year()
 	return variables
@@ -34,7 +35,7 @@ var templates sync.Map
 var templateFuncs = template.FuncMap{
 	"join": strings.Join,
 	"re_replace": func(input, pattern, replacement string) string {
-		re, err := compiled(pattern)
+		re, err := Compiled(pattern)
 		if err != nil {
 			return input
 		}
@@ -45,15 +46,15 @@ var templateFuncs = template.FuncMap{
 	},
 }
 
-// render fills a template with the variables; a name that is not there is empty, and a template that does not parse is
+// Render fills a template with the variables; a name that is not there is empty, and a template that does not parse is
 // returned as it is, which fails visibly further on.
-func render(text string, variables *Variables) (string, error) {
+func Render(text string, variables *Variables) (string, error) {
 	if !strings.Contains(text, "{{") {
 		return text, nil
 	}
 	cached, ok := templates.Load(text)
 	if !ok {
-		parsed, err := parseTemplate(text)
+		parsed, err := ParseTemplate(text)
 		if err != nil {
 			return "", fmt.Errorf("spec: template %q: %w", text, err)
 		}
@@ -72,9 +73,9 @@ var (
 	badEscape  = regexp.MustCompile(`\\([^abfnrtv\\"'xuU0-7])`)
 )
 
-// parseTemplate reads a template written for .NET: names with a dash are looked up by key, and a regular expression's
+// ParseTemplate reads a template written for .NET: names with a dash are looked up by key, and a regular expression's
 // backslash in a string ("\s+") is kept as a backslash.
-func parseTemplate(text string) (*template.Template, error) {
+func ParseTemplate(text string) (*template.Template, error) {
 	fixed := action.ReplaceAllStringFunc(text, func(one string) string {
 		one = dashedName.ReplaceAllString(one, `(index .$1 "$2")`)
 		return badEscape.ReplaceAllString(one, `\\$1`)

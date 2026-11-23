@@ -57,3 +57,11 @@ func TestParseAcceptsADescriptor(t *testing.T) {
 		t.Errorf("def = %+v, problems = %+v", def, problems)
 	}
 }
+
+func TestASpecDefinitionsHostsAreTheHostsOfItsLinks(t *testing.T) {
+	data := []byte("schema: 1\nkind: indexer\nkey: example-site\nname: Example\nengine: spec\nlinks:\n  - https://tracker.example.org/\n  - https://Mirror.example.net:8443/x\n")
+	def, problems := Parse(KindIndexer, "example-site.yaml", data, SourceCustom)
+	if len(problems) != 0 || !reflect.DeepEqual(def.NormalHosts(), []string{"mirror.example.net", "tracker.example.org"}) {
+		t.Errorf("hosts = %v, problems = %v", def.NormalHosts(), problems)
+	}
+}

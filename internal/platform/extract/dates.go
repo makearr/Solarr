@@ -1,4 +1,4 @@
-package spec
+package extract
 
 import (
 	"regexp"
@@ -95,8 +95,8 @@ func parseTimeAgo(value string, now time.Time) (time.Time, bool) {
 
 var clockTime = regexp.MustCompile(`(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp][Mm])?`)
 
-// parseFuzzyTime reads "Today 10:20", "Yesterday 08:00 PM", "2 hours ago" and the common absolute formats.
-func parseFuzzyTime(value string, now time.Time) (time.Time, bool) {
+// ParseFuzzyTime reads "Today 10:20", "Yesterday 08:00 PM", "2 hours ago" and the common absolute formats.
+func ParseFuzzyTime(value string, now time.Time) (time.Time, bool) {
 	text := strings.TrimSpace(value)
 	lower := strings.ToLower(text)
 	day := time.Time{}

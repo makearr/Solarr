@@ -1,4 +1,4 @@
-package spec
+package extract
 
 import (
 	"fmt"
@@ -37,8 +37,8 @@ func scriptName(escape string) string {
 	return name + "}"
 }
 
-// compiled answers the pattern's compiled form, compiling each pattern once.
-func compiled(pattern string) (*regexp2.Regexp, error) {
+// Compiled answers the pattern's compiled form, compiling each pattern once.
+func Compiled(pattern string) (*regexp2.Regexp, error) {
 	if cached, ok := patterns.Load(pattern); ok {
 		return cached.(*regexp2.Regexp), nil
 	}

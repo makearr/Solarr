@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
+	"github.com/makearr/Solarr/internal/acquiring/indexer/spec"
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/api/auth"
@@ -127,6 +128,8 @@ type process struct {
 	jobRegistry *jobs.Registry
 	// definitions is the catalog of provider definition files in force; Reload swaps it whole.
 	definitions *providerdef.Holder
+	// specs is the set of indexer site specs in force: the embedded ones and the approved custom ones.
+	specs *spec.Library
 	// indexerCaps is what each indexer's music search accepts, fetched once a day.
 	indexerCaps *indexerCapsCache
 	// indexerPacing is how fast each indexer is asked, from its stated limit and the limit hits seen.
@@ -600,6 +603,7 @@ func (p *process) startJobs(ctx context.Context) error {
 		return err
 	}
 	p.definitions = providerdef.NewHolder()
+	p.specs = &spec.Library{}
 	p.prepareProviderDefinitions(ctx)
 	p.reloadProviderDefinitions()
 	p.disks = &adapters.DiskManager{
@@ -959,7 +963,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		},
 		IndexerTester: adapters.ConnectionTester{
 			Cache: p.cache, Indexer: p.indexerClientFactory(), Downloader: p.downloaderClientFactory(),
-			Clock: clock.NewSystem(),
+			Clock: clock.NewSystem(), Specs: p.specs,
 		},
 		DownloaderTester: adapters.ConnectionTester{
 			Cache: p.cache, Indexer: p.indexerClientFactory(), Downloader: p.downloaderClientFactory(), FS: p.fsys,
@@ -969,7 +973,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			}.SharedCategories,
 		},
 		DownloaderKinds:   adapters.DownloaderKinds{},
-		IndexerKinds:      adapters.IndexerKinds{},
+		IndexerKinds:      adapters.IndexerKinds{Specs: p.specs},
 		CandidateSearcher: p.candidateSearcher(),
 		TVProviders:       p.tvProviders(),
 		RemoteImages:      p.remoteImages(),

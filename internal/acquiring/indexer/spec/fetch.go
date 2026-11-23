@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/platform/extract"
 )
 
 // Fetch gets the file a result links to. A link that is only a details page is opened and its download link found by the
@@ -53,7 +54,7 @@ func (d *Driver) resolveDownload(ctx context.Context, link string, download *Dow
 	}
 	opened := link
 	if download.Before != nil && download.Before.Path != "" {
-		path, err := render(download.Before.Path, variables)
+		path, err := extract.Render(download.Before.Path, variables)
 		if err != nil {
 			return "", err
 		}
@@ -69,10 +70,10 @@ func (d *Driver) resolveDownload(ctx context.Context, link string, download *Dow
 	if err != nil {
 		return "", err
 	}
-	context := filterContext{variables: variables, now: d.clock.Now()}
-	source := htmlNode{found.Selection}
+	context := extract.FilterContext{Variables: variables, Now: d.clock.Now()}
+	source := extract.HTMLNode{Selection: found.Selection}
 	for _, selector := range download.Selectors {
-		value, ok, err := readField(source, withName(selector, "download"), context)
+		value, ok, err := extract.ReadField(source, withName(selector, "download"), context)
 		if err != nil || !ok || value == "" {
 			continue
 		}
@@ -82,11 +83,11 @@ func (d *Driver) resolveDownload(ctx context.Context, link string, download *Dow
 		return d.absolute(value), nil
 	}
 	if download.Infohash != nil && download.Infohash.Hash != nil {
-		hash, ok, err := readField(source, withName(*download.Infohash.Hash, "infohash"), context)
+		hash, ok, err := extract.ReadField(source, withName(*download.Infohash.Hash, "infohash"), context)
 		if err == nil && ok && hash != "" {
 			title := ""
 			if download.Infohash.Title != nil {
-				title, _, _ = readField(source, withName(*download.Infohash.Title, "title"), context)
+				title, _, _ = extract.ReadField(source, withName(*download.Infohash.Title, "title"), context)
 			}
 			return indexer.Magnet(hash, title, nil), nil
 		}

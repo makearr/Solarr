@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"path/filepath"
 
+	"github.com/makearr/Solarr/internal/acquiring/indexer/spec"
 	"github.com/makearr/Solarr/internal/providerdef"
 )
 
@@ -31,9 +32,28 @@ func (p *process) providerDefinitions() providerdef.Store {
 // prepareProviderDefinitions creates the folders and mirrors the built-in definitions; a folder that cannot be written is a
 // warning, the embedded data serves either way.
 func (p *process) prepareProviderDefinitions(ctx context.Context) {
-	if err := p.providerDefinitions().Prepare(ctx, []byte(providerDefinitionsReadme), nil); err != nil {
+	if err := p.providerDefinitions().Prepare(ctx, []byte(providerDefinitionsReadme), p.builtinDefinitions()); err != nil {
 		p.logger.Warn("provider definitions folder could not be prepared; the built-in data is used", slog.Any("error", err))
 	}
+}
+
+// builtinDefinitions are the files the built-in data mirrors into the builtin folders, by kind and key.
+func (p *process) builtinDefinitions() map[providerdef.Kind]map[string][]byte {
+	indexers := map[string][]byte{}
+	embedded, err := spec.Embedded()
+	if err != nil {
+		p.logger.Warn("built-in indexer specs could not be read", slog.Any("error", err))
+		return nil
+	}
+	for _, one := range embedded.All() {
+		data, err := one.YAML()
+		if err != nil {
+			p.logger.Warn("built-in indexer spec could not be written out", slog.String("id", one.ID), slog.Any("error", err))
+			continue
+		}
+		indexers[one.ID] = data
+	}
+	return map[providerdef.Kind]map[string][]byte{providerdef.KindIndexer: indexers}
 }
 
 // reloadProviderDefinitions reads every custom folder and swaps in a new catalog; a bad file is logged and the rest still load.
@@ -54,4 +74,42 @@ func (p *process) reloadProviderDefinitions() {
 		custom = append(custom, defs...)
 	}
 	p.definitions.Swap(providerdef.NewCatalog(nil, custom))
+	p.reloadSpecs(custom)
+}
+
+// reloadSpecs puts the approved custom indexer specs over the embedded set; one that needs approval or fails to decode is
+// left out and logged.
+func (p *process) reloadSpecs(custom []providerdef.Definition) {
+	embedded, err := spec.Embedded()
+	if err != nil {
+		return
+	}
+	states := map[string]providerdef.State{}
+	if stored, err := p.cache.ProviderDefinitionStates(context.Background()); err == nil {
+		for _, row := range stored {
+			if row.Kind == string(providerdef.KindIndexer) {
+				states[row.Key] = providerdef.State{Enabled: row.Enabled, ApprovedHash: row.ApprovedHash, ApprovedHosts: row.ApprovedHosts}
+			}
+		}
+	}
+	p.specs.Swap(embedded.With(approvedSpecs(custom, states, func(key string, err error) {
+		p.logger.Warn("custom indexer definition could not be read", slog.String("key", key), slog.Any("error", err))
+	})))
+}
+
+// approvedSpecs are the custom indexer specs that are active under their stored state; a spec still needing approval is left out.
+func approvedSpecs(custom []providerdef.Definition, states map[string]providerdef.State, problem func(key string, err error)) []spec.Spec {
+	var active []spec.Spec
+	for _, def := range custom {
+		if def.Kind != providerdef.KindIndexer || def.Engine != providerdef.EngineSpec || providerdef.StatusOf(def, states[def.Key]) != providerdef.StatusActive {
+			continue
+		}
+		found, err := spec.FromYAML(def.Raw)
+		if err != nil {
+			problem(def.Key, err)
+			continue
+		}
+		active = append(active, found)
+	}
+	return active
 }

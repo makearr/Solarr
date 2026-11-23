@@ -3,6 +3,7 @@ package providerdef
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -78,6 +79,9 @@ func Parse(kind Kind, fileName string, data []byte, source Source) (Definition, 
 	}
 	if hasError(problems) {
 		return Definition{}, problems
+	}
+	if file.Engine == EngineSpec && len(file.Hosts) == 0 {
+		file.Hosts = linkHosts(data)
 	}
 	return Definition{File: file, Source: source, Hash: hashOf(data), Raw: data}, problems
 }
@@ -191,4 +195,22 @@ func hasError(problems []Problem) bool {
 // String words a problem for a log line; the interface words it through i18n.
 func (p Problem) String() string {
 	return fmt.Sprintf("%s %s at %d:%d", p.Code, p.Field, p.Line, p.Column)
+}
+
+// linkHosts are the hosts of a spec's "links": a spec indexer reaches exactly the sites it lists, so those are what an
+// administrator approves.
+func linkHosts(data []byte) []string {
+	var body struct {
+		Links []string `yaml:"links"`
+	}
+	if err := yaml.Unmarshal(data, &body); err != nil {
+		return nil
+	}
+	var hosts []string
+	for _, link := range body.Links {
+		if parsed, err := url.Parse(link); err == nil && parsed.Hostname() != "" {
+			hosts = append(hosts, parsed.Hostname())
+		}
+	}
+	return hosts
 }

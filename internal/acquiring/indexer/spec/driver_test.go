@@ -11,6 +11,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/extract"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
@@ -196,7 +197,7 @@ func TestFetchFindsTheDownloadOnTheDetailsPage(t *testing.T) {
 
 func TestFilters(t *testing.T) {
 	now := time.Date(2026, 11, 8, 12, 0, 0, 0, time.UTC)
-	context := filterContext{variables: &Variables{Keywords: "alpha beta"}, now: now}
+	context := extract.FilterContext{Variables: &Variables{Keywords: "alpha beta"}, Now: now}
 	for _, test := range []struct {
 		name, in string
 		args     []string
@@ -217,7 +218,7 @@ func TestFilters(t *testing.T) {
 		{"validate", "x", []string{"a, x"}, "x"},
 		{"validate", "z", []string{"a, x"}, ""},
 	} {
-		got, err := applyFilter(test.in, test.name, test.args, context)
+		got, err := extract.ApplyFilter(test.in, test.name, test.args, context)
 		if err != nil || got != test.want {
 			t.Errorf("%s(%q, %v) = %q, %v; want %q", test.name, test.in, test.args, got, err, test.want)
 		}
@@ -225,7 +226,7 @@ func TestFilters(t *testing.T) {
 }
 
 func TestTemplatesReadDotNetStyle(t *testing.T) {
-	variables := newVariables(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	variables := extract.NewVariables(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 	variables.Keywords = "a  b"
 	variables.Config["cat-id"] = "9"
 	variables.Config["free"] = true
@@ -238,8 +239,8 @@ func TestTemplatesReadDotNetStyle(t *testing.T) {
 		`{{ or .Query.Season "none" }}`:                                   "none",
 		`{{ if eq .Config.cat-id "9" }}yes{{ end }}{{ .Config.missing }}`: "yes",
 	} {
-		if got, err := render(text, variables); err != nil || got != want {
-			t.Errorf("render(%q) = %q, %v; want %q", text, got, err, want)
+		if got, err := extract.Render(text, variables); err != nil || got != want {
+			t.Errorf("extract.Render(%q) = %q, %v; want %q", text, got, err, want)
 		}
 	}
 }

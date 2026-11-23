@@ -1,4 +1,4 @@
-package spec
+package extract
 
 import (
 	"encoding/json"
@@ -10,36 +10,36 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-// errFieldMissing marks a required field a row does not have; the row is skipped.
-var errFieldMissing = errors.New("spec: field not found")
+// ErrFieldMissing marks a required field a row does not have; the row is skipped.
+var ErrFieldMissing = errors.New("spec: field not found")
 
-// node is one result row, or a whole answer, that values are read from.
-type node interface {
+// Node is one result row, or a whole answer, that values are read from.
+type Node interface {
 	// read answers the value at selector (an attribute of it when attribute is set), after removing what remove matches.
-	read(selector, attribute, remove string) (string, bool)
+	Read(selector, attribute, remove string) (string, bool)
 	// has reports whether selector matches within the node.
-	has(selector string) bool
+	Has(selector string) bool
 }
 
-// readField reads one extractor from a node, applying its default, case and filters.
-func readField(source node, extractor Extractor, context filterContext) (string, bool, error) {
-	variables := context.variables
+// ReadField reads one extractor from a node, applying its default, case and filters.
+func ReadField(source Node, extractor Extractor, context FilterContext) (string, bool, error) {
+	variables := context.Variables
 	value, found := "", false
 	switch {
 	case extractor.Text != nil:
-		rendered, err := render(*extractor.Text, variables)
+		rendered, err := Render(*extractor.Text, variables)
 		if err != nil {
 			return "", false, err
 		}
 		value, found = rendered, true
 	case len(extractor.Case) > 0:
 		for _, one := range extractor.Case {
-			selector, err := render(one.Selector, variables)
+			selector, err := Render(one.Selector, variables)
 			if err != nil {
 				return "", false, err
 			}
-			if selector == "*" || source.has(selector) {
-				rendered, err := render(one.Value, variables)
+			if selector == "*" || source.Has(selector) {
+				rendered, err := Render(one.Value, variables)
 				if err != nil {
 					return "", false, err
 				}
@@ -48,20 +48,20 @@ func readField(source node, extractor Extractor, context filterContext) (string,
 			}
 		}
 	case extractor.Selector != "":
-		selector, err := render(extractor.Selector, variables)
+		selector, err := Render(extractor.Selector, variables)
 		if err != nil {
 			return "", false, err
 		}
-		attribute, err := render(extractor.Attribute, variables)
+		attribute, err := Render(extractor.Attribute, variables)
 		if err != nil {
 			return "", false, err
 		}
-		value, found = source.read(selector, attribute, extractor.Remove)
+		value, found = source.Read(selector, attribute, extractor.Remove)
 	}
 	if !found {
 		switch {
 		case extractor.Default != nil:
-			rendered, err := render(*extractor.Default, variables)
+			rendered, err := Render(*extractor.Default, variables)
 			if err != nil {
 				return "", false, err
 			}
@@ -69,28 +69,28 @@ func readField(source node, extractor Extractor, context filterContext) (string,
 		case extractor.Optional:
 			return "", false, nil
 		default:
-			return "", false, fmt.Errorf("%w: %s", errFieldMissing, extractor.Name)
+			return "", false, fmt.Errorf("%w: %s", ErrFieldMissing, extractor.Name)
 		}
 	}
-	value, err := applyFilters(value, extractor.Filters, context)
+	value, err := ApplyFilters(value, extractor.Filters, context)
 	if err != nil {
 		return "", false, err
 	}
 	return value, true, nil
 }
 
-// htmlNode reads from a goquery selection.
-type htmlNode struct{ selection *goquery.Selection }
+// HTMLNode reads from a goquery selection.
+type HTMLNode struct{ Selection *goquery.Selection }
 
-func (n htmlNode) find(selector string) *goquery.Selection {
-	found := n.selection.Find(selector)
-	if found.Length() == 0 && n.selection.Is(selector) {
-		return n.selection
+func (n HTMLNode) find(selector string) *goquery.Selection {
+	found := n.Selection.Find(selector)
+	if found.Length() == 0 && n.Selection.Is(selector) {
+		return n.Selection
 	}
 	return found
 }
 
-func (n htmlNode) read(selector, attribute, remove string) (string, bool) {
+func (n HTMLNode) Read(selector, attribute, remove string) (string, bool) {
 	found := n.find(selector)
 	if found.Length() == 0 {
 		return "", false
@@ -107,45 +107,45 @@ func (n htmlNode) read(selector, attribute, remove string) (string, bool) {
 	return strings.TrimSpace(first.Text()), true
 }
 
-func (n htmlNode) has(selector string) bool { return n.find(selector).Length() > 0 }
+func (n HTMLNode) Has(selector string) bool { return n.find(selector).Length() > 0 }
 
-// jsonNode reads from a decoded JSON value; parents lets a selector reach out of the row ("..category").
-type jsonNode struct {
-	value   any
-	parents []any
+// JSONNode reads from a decoded JSON value; parents lets a selector reach out of the row ("..category").
+type JSONNode struct {
+	Value   any
+	Parents []any
 }
 
-func (n jsonNode) read(selector, attribute, _ string) (string, bool) {
+func (n JSONNode) Read(selector, attribute, _ string) (string, bool) {
 	if attribute != "" {
 		selector = selector + "." + attribute
 	}
-	base, conditions := splitConditions(selector)
-	picked, ok := n.path(base)
+	base, conditions := SplitConditions(selector)
+	picked, ok := n.Path(base)
 	if !ok || picked == nil {
 		return "", false
 	}
-	if !holds(jsonNode{value: picked, parents: n.parents}, conditions) {
+	if !Holds(JSONNode{Value: picked, Parents: n.Parents}, conditions) {
 		return "", false
 	}
 	return jsonText(picked), true
 }
 
-func (n jsonNode) has(selector string) bool {
-	base, conditions := splitConditions(selector)
+func (n JSONNode) Has(selector string) bool {
+	base, conditions := SplitConditions(selector)
 	if base == "" {
-		return holds(n, conditions)
+		return Holds(n, conditions)
 	}
-	picked, ok := n.path(base)
-	return ok && picked != nil && holds(jsonNode{value: picked, parents: n.parents}, conditions)
+	picked, ok := n.Path(base)
+	return ok && picked != nil && Holds(JSONNode{Value: picked, Parents: n.Parents}, conditions)
 }
 
 // path follows "a.b[0].c" from the node; ".." names a key of the nearest parent that has it.
-func (n jsonNode) path(path string) (any, bool) {
-	current := n.value
+func (n JSONNode) Path(path string) (any, bool) {
+	current := n.Value
 	if strings.HasPrefix(path, "..") {
 		key := strings.TrimPrefix(path, "..")
-		for i := len(n.parents) - 1; i >= 0; i-- {
-			if object, ok := n.parents[i].(map[string]any); ok {
+		for i := len(n.Parents) - 1; i >= 0; i-- {
+			if object, ok := n.Parents[i].(map[string]any); ok {
 				if value, found := object[key]; found {
 					return value, true
 				}
@@ -185,16 +185,16 @@ func (n jsonNode) path(path string) (any, bool) {
 	return current, true
 }
 
-// splitConditions separates "path:not(x:contains(1))" into the path and its pseudo-class conditions.
-func splitConditions(selector string) (string, string) {
+// SplitConditions separates "path:not(x:contains(1))" into the path and its pseudo-class conditions.
+func SplitConditions(selector string) (string, string) {
 	if at := strings.IndexByte(selector, ':'); at >= 0 {
 		return selector[:at], selector[at:]
 	}
 	return selector, ""
 }
 
-// holds evaluates ":contains(x)", ":not(...)" and ":has(...)" in a row, each possibly after a path inside the parentheses.
-func holds(n jsonNode, conditions string) bool {
+// Holds evaluates ":contains(x)", ":not(...)" and ":has(...)" in a row, each possibly after a path inside the parentheses.
+func Holds(n JSONNode, conditions string) bool {
 	for conditions != "" {
 		name, inner, rest, ok := nextCondition(conditions)
 		if !ok {
@@ -204,11 +204,11 @@ func holds(n jsonNode, conditions string) bool {
 		var result bool
 		switch name {
 		case "contains":
-			result = strings.Contains(strings.ToLower(jsonText(n.value)), strings.ToLower(strings.Trim(inner, `"'`)))
+			result = strings.Contains(strings.ToLower(jsonText(n.Value)), strings.ToLower(strings.Trim(inner, `"'`)))
 		case "not":
-			result = !n.has(inner)
+			result = !n.Has(inner)
 		case "has":
-			result = n.has(inner)
+			result = n.Has(inner)
 		default:
 			result = true
 		}

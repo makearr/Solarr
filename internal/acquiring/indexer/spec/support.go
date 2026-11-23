@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"golang.org/x/text/encoding/htmlindex"
+
+	"github.com/makearr/Solarr/internal/platform/extract"
 )
 
 // Unsupported lists why the engine cannot search the spec; empty means it can.
@@ -35,21 +37,21 @@ func (s Spec) Unsupported() []string {
 	}
 	check := func(text string) {
 		if strings.Contains(text, "{{") {
-			if _, err := parseTemplate(text); err != nil {
+			if _, err := extract.ParseTemplate(text); err != nil {
 				add("a template Solarr cannot read")
 			}
 		}
 	}
 	checkFilters := func(filters []Filter) {
 		for _, filter := range filters {
-			if !knownFilters[filter.Name] {
+			if !extract.KnownFilters[filter.Name] {
 				add("the " + filter.Name + " filter")
 			}
 			for _, arg := range filter.Args {
 				check(arg)
 			}
 			if (filter.Name == "regexp" || filter.Name == "re_replace") && len(filter.Args) > 0 && !strings.Contains(filter.Args[0], "{{") {
-				if _, err := compiled(filter.Args[0]); err != nil {
+				if _, err := extract.Compiled(filter.Args[0]); err != nil {
 					add("a regular expression Solarr cannot read")
 				}
 			}

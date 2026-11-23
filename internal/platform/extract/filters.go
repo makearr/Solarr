@@ -1,4 +1,4 @@
-package spec
+package extract
 
 import (
 	"encoding/json"
@@ -15,33 +15,33 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// knownFilters are the filters the engine runs; a spec using another cannot be searched.
-var knownFilters = map[string]bool{
+// KnownFilters are the filters the engine runs; a spec using another cannot be searched.
+var KnownFilters = map[string]bool{
 	"dateparse": true, "append": true, "querystring": true, "replace": true, "re_replace": true, "regexp": true,
 	"andmatch": true, "prepend": true, "timeago": true, "trim": true, "split": true, "fuzzytime": true, "validate": true,
 	"validfilename": true, "htmldecode": true, "urldecode": true, "diacritics": true, "urlencode": true, "toupper": true,
 	"tolower": true, "timeparse": true, "jsonjoinarray": true,
 }
 
-// filterContext is what some filters need besides the value.
-type filterContext struct {
-	variables *Variables
-	now       time.Time
+// FilterContext is what some filters need besides the value.
+type FilterContext struct {
+	Variables *Variables
+	Now       time.Time
 }
 
-// applyFilters runs the filters in order. An argument is a template, so it can name settings and earlier fields.
-func applyFilters(value string, filters []Filter, context filterContext) (string, error) {
+// ApplyFilters runs the filters in order. An argument is a template, so it can name settings and earlier fields.
+func ApplyFilters(value string, filters []Filter, context FilterContext) (string, error) {
 	for _, filter := range filters {
 		args := make([]string, len(filter.Args))
 		for i, arg := range filter.Args {
-			rendered, err := render(arg, context.variables)
+			rendered, err := Render(arg, context.Variables)
 			if err != nil {
 				return "", err
 			}
 			args[i] = rendered
 		}
 		var err error
-		if value, err = applyFilter(value, filter.Name, args, context); err != nil {
+		if value, err = ApplyFilter(value, filter.Name, args, context); err != nil {
 			return "", err
 		}
 	}
@@ -55,7 +55,8 @@ func arg(args []string, at int) string {
 	return ""
 }
 
-func applyFilter(value, name string, args []string, context filterContext) (string, error) {
+// ApplyFilter runs one named filter on a value.
+func ApplyFilter(value, name string, args []string, context FilterContext) (string, error) {
 	switch name {
 	case "append":
 		return value + arg(args, 0), nil
@@ -64,7 +65,7 @@ func applyFilter(value, name string, args []string, context filterContext) (stri
 	case "replace":
 		return strings.ReplaceAll(value, arg(args, 0), arg(args, 1)), nil
 	case "re_replace":
-		re, err := compiled(arg(args, 0))
+		re, err := Compiled(arg(args, 0))
 		if err != nil {
 			return "", err
 		}
@@ -72,7 +73,7 @@ func applyFilter(value, name string, args []string, context filterContext) (stri
 		replaced, _ := replace(re, value, arg(args, 1))
 		return replaced, nil
 	case "regexp":
-		re, err := compiled(arg(args, 0))
+		re, err := Compiled(arg(args, 0))
 		if err != nil {
 			return "", err
 		}
@@ -134,22 +135,22 @@ func applyFilter(value, name string, args []string, context filterContext) (stri
 		}
 		return "", nil
 	case "andmatch":
-		return andMatch(value, arg(args, 0), context.variables.Keywords), nil
+		return andMatch(value, arg(args, 0), context.Variables.Keywords), nil
 	case "jsonjoinarray":
 		return joinJSONArray(value, arg(args, 0), arg(args, 1)), nil
 	case "dateparse", "timeparse":
-		parsed, ok := parseDotNetDate(strings.TrimSpace(value), arg(args, 0), context.now)
+		parsed, ok := parseDotNetDate(strings.TrimSpace(value), arg(args, 0), context.Now)
 		if !ok {
 			return "", nil
 		}
 		return parsed.UTC().Format(time.RFC3339), nil
 	case "timeago":
-		if ago, ok := parseTimeAgo(value, context.now); ok {
+		if ago, ok := parseTimeAgo(value, context.Now); ok {
 			return ago.UTC().Format(time.RFC3339), nil
 		}
 		return "", nil
 	case "fuzzytime":
-		if parsed, ok := parseFuzzyTime(value, context.now); ok {
+		if parsed, ok := ParseFuzzyTime(value, context.Now); ok {
 			return parsed.UTC().Format(time.RFC3339), nil
 		}
 		return "", nil

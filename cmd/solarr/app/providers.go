@@ -18,7 +18,6 @@ import (
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/acquiring/indexer/flaresolverr"
-	"github.com/makearr/Solarr/internal/acquiring/indexer/spec"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -250,9 +249,9 @@ func (p *process) indexerDriver(ctx context.Context, found settings.Indexer, api
 	if p.indexerPacing != nil {
 		p.indexerPacing.setLimit(found.ID, allowancePerHour(found))
 	}
-	deps := adapters.IndexerDeps{HTTP: p.indexerClientFactory()(found.ID, found.BaseURL, p.cache.ResolveEgress(ctx, found)), Clock: clock.NewSystem()}
+	deps := adapters.IndexerDeps{HTTP: p.indexerClientFactory()(found.ID, found.BaseURL, p.cache.ResolveEgress(ctx, found)), Clock: clock.NewSystem(), Specs: p.specs}
 	if p.indexerPacing != nil && found.Impl == indexer.ImplSpec {
-		if one, ok := spec.Get(found.Definition()); ok {
+		if one, ok := p.specs.Specs().Get(found.Definition()); ok {
 			p.indexerPacing.setFloor(found.ID, time.Duration(one.RequestDelay*float64(time.Second)))
 		}
 	}
