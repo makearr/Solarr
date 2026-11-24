@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"log/slog"
 	"path"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/identify/score"
 	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
@@ -43,7 +45,17 @@ type ImporterConfig struct {
 	Committer UnitCommitter
 	// Provenance answers the release groups a download was grabbed for, which album identification always scores.
 	Provenance func(ctx context.Context, acquisitionID int64) ([]string, error)
-	Logger     *slog.Logger
+	// Profile holds a download that named no format to what the probe finds; nil trusts every release.
+	Profile *ProfileGate
+	Logger  *slog.Logger
+}
+
+// ProfileGate is the check at import of a release that claimed no format: the probe decides against the library's profiles.
+type ProfileGate struct {
+	// Claimless says the release an acquisition was grabbed as names no format, so nothing but the probe tells what it is.
+	Claimless func(ctx context.Context, acquisitionID int64) bool
+	// Accepts says a probed file passes one of the library's quality profiles; known is false when it has none to judge by.
+	Accepts func(categoryID int64, facts score.Facts) (accepts, known bool)
 }
 
 // Importer is Lidarr's import behind the import job's batch contract: identify each unit from its tags, its album
@@ -170,8 +182,13 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 	if request.CategoryID == 0 || i.config.Committer == nil {
 		return batch.Result{Decisions: decisions, Placements: placements}, nil
 	}
+	claimless := i.claimless(ctx, request)
 	for index, decision := range decisions {
 		if decision.Decision != library.UnitCommit || results[index].Best == nil {
+			continue
+		}
+		if claimless && !i.probedFilesFit(request, request.Units[index], relPaths, probes) {
+			decisions[index] = library.UnitDecision{UnitID: request.UnitIDs[index], Decision: library.UnitSkip, Reason: library.UnitReasonBelowProfile}
 			continue
 		}
 		placed, err := i.config.Committer.CommitMatchedUnit(ctx, request.SourcePath, request.Units[index], *results[index].Best,
@@ -410,4 +427,36 @@ func (i Importer) namedAlbumPlacement(ctx context.Context, request batch.HeldReq
 		return nil
 	}
 	return &AlbumPlacement{AlbumTitle: group.Title, ArtistName: creditNames(group.ArtistCredit)}
+}
+
+// claimless says the import is of a download whose release named no format and a profile gate is set.
+func (i Importer) claimless(ctx context.Context, request batch.Request) bool {
+	gate := i.config.Profile
+	return gate != nil && gate.Claimless != nil && gate.Accepts != nil && request.AcquisitionID != nil && request.CategoryID != 0 &&
+		gate.Claimless(ctx, *request.AcquisitionID)
+}
+
+// probedFilesFit is whether every audio file of the unit, as probed, passes a profile of the library; a file nothing can
+// judge passes, and a file that could not be probed is left to the placing.
+func (i Importer) probedFilesFit(request batch.Request, unit inspect.Unit, relPaths []string, probes []mediatool.Probe) bool {
+	at := make(map[string]int, len(relPaths))
+	for index, rel := range relPaths {
+		at[rel] = index
+	}
+	for _, file := range unit.Media {
+		index, found := at[file.RelPath]
+		if !found || index >= len(probes) || probes[index].Err != nil || probes[index].Measured.AudioCodec == "" {
+			continue
+		}
+		measured := probes[index].Measured
+		facts := score.Facts{File: score.FileFacts{
+			AudioCodec: measured.AudioCodec, Extension: strings.TrimPrefix(strings.ToLower(path.Ext(file.RelPath)), "."),
+			Lossless: mediatool.LosslessCodec(measured.AudioCodec), AudioBitrate: measured.AudioBitrate, OverallBitrate: measured.OverallBitrate,
+		}}
+		if accepts, known := i.config.Profile.Accepts(request.CategoryID, facts); known && !accepts {
+			i.logger.Info("import: a probed file meets no profile of the library", slog.String("file", file.RelPath), slog.String("codec", measured.AudioCodec))
+			return false
+		}
+	}
+	return true
 }

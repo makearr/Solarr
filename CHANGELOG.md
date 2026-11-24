@@ -4,6 +4,7 @@ Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## Unreleased
+- A music release whose name states no format is downloaded and probed at import: if its files meet none of the library's quality profiles (MP3 in a lossless-only library), the release is blocklisted with that reason and the next one is grabbed.
 - Settings: "Videos hashed at once" and "Duplicate video tolerance" can now be set next to the video-hashing switch (Advanced level); Settings, Libraries, Priority says which level it needs instead of showing blank; a job that safe mode skips writes one "skipped: safe mode" line to the log.
 - The quality-change preview now covers the Automatic target: it counts what would fall under or over the cutoff with the target the first profile gives.
 - An interactive search in observe or companion mode now says searches are off because of the mode, instead of "no indexer is configured".

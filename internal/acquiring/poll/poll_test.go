@@ -724,6 +724,24 @@ func TestPoll_ADuplicateIsBlocklistedOnlyWhenThePersonAsked(t *testing.T) {
 	}
 }
 
+// A release that named no format and whose probed files meet no profile is blocklisted, with that said, and the next one is grabbed.
+func TestPoll_AReleaseWhoseProbedFilesMeetNoProfileIsBlocklistedAndSearchedAgain(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	sessionID, unitID := e.finishImport(t, sent, false, library.UnitSkip)
+	if err := e.sessions.SetUnitDecisions(t.Context(), sessionID, []library.UnitDecision{{UnitID: unitID, Decision: library.UnitSkip, Reason: library.UnitReasonBelowProfile}}); err != nil {
+		t.Fatal(err)
+	}
+	e.run(t)
+	indexerID := int64(3)
+	blocked, err := e.blocklist.IsBlocked(t.Context(), &indexerID, "guid-nzo-1", "", e.clock.Now().Unix())
+	got := e.state(t, sent.ID)
+	if got.State != poll.StateFailed || !strings.Contains(got.LastError, library.UnitReasonBelowProfile) || err != nil || !blocked || len(e.searched) != 1 ||
+		!slices.Equal(e.client.removed, []string{"nzo-1+files"}) {
+		t.Errorf("= %s %q, blocked %v (%v), searched %v, removed %v; want FAILED naming the profile, blocklisted, searched again", got.State, got.LastError, blocked, err, e.searched, e.client.removed)
+	}
+}
+
 // A unit held for a person with the work it resolved to (a rule refused it) is not an import: the download waits.
 func TestPoll_AUnitHeldWithItsWorkIsNotImported(t *testing.T) {
 	e := newEnv(t)

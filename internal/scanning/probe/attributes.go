@@ -10,15 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
-// losslessCodecs are ffprobe's codec_name values for lossless audio; a "pcm_*" prefix covers every WAV/AIFF sample format, so it is a prefix check.
-var losslessCodecs = map[string]bool{
-	"flac": true, "alac": true, "ape": true, "wavpack": true, "tta": true,
-}
-
-func isLosslessCodec(codec string) bool {
-	codec = strings.ToLower(codec)
-	return losslessCodecs[codec] || strings.HasPrefix(codec, "pcm_")
-}
+func isLosslessCodec(codec string) bool { return mediatool.LosslessCodec(codec) }
 
 // attributeClaimFromMeasured maps ADR-39's measured facts onto AttributeClaim, the shape the claimed side will use; both intern through media_attributes, so one converter per side suffices.
 func attributeClaimFromMeasured(m mediatool.Measured, sidecarSubtitles []string) library.AttributeClaim {

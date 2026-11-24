@@ -169,3 +169,14 @@ func durationFromSeconds(seconds float64) time.Duration {
 	}
 	return time.Duration(nanoseconds)
 }
+
+// losslessCodecs are ffprobe's codec_name values for lossless audio; a "pcm_*" prefix covers every WAV/AIFF sample format, so it is a prefix check.
+var losslessCodecs = map[string]bool{
+	"flac": true, "alac": true, "ape": true, "wavpack": true, "tta": true,
+}
+
+// LosslessCodec says an ffprobe audio codec_name is lossless.
+func LosslessCodec(codec string) bool {
+	codec = strings.ToLower(codec)
+	return losslessCodecs[codec] || strings.HasPrefix(codec, "pcm_")
+}

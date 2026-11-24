@@ -746,11 +746,13 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 		}
 	}
 	// Placed, not merely decided: a committed unit with no work is one its library could not take (no root, no room).
-	placed, waiting, noRoom, duplicates := 0, 0, 0, 0
+	placed, waiting, noRoom, duplicates, belowProfile := 0, 0, 0, 0, 0
 	for _, unit := range units {
 		switch {
 		case unit.Decision == library.UnitSkip && unit.Reason == library.UnitReasonDuplicate:
 			duplicates++
+		case unit.Decision == library.UnitSkip && unit.Reason == library.UnitReasonBelowProfile:
+			belowProfile++
 		case unit.Decision == library.UnitCommit && unit.WorkID != nil:
 			placed++
 		case unit.Decision == library.UnitCommit:
@@ -799,6 +801,9 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 			j.config.Logger.Warn("import retry did not start", slog.Int64("acquisition_id", acquisition.ID), slog.Any("error", err))
 		}
 		return j.transition(ctx, acquisition, StateImporting, note, now)
+	case belowProfile > 0:
+		// What the probe found is not what the library wants, whatever the release's name did not say: blocklisted, the next one is grabbed.
+		return j.failed(ctx, client, acquisition, library.BlocklistRejectedWorse, library.UnitReasonBelowProfile)
 	case duplicates > 0:
 		return j.duplicate(ctx, client, acquisition)
 	default:

@@ -581,3 +581,9 @@ func factsFromRelease(parsed parse.Result, raw indexer.RawItem, impl string) sco
 	}
 	return facts
 }
+
+// NamesAFormat says a release title states what its audio is: a codec, lossless, a bitrate or a VBR preset.
+func NamesAFormat(title string) bool {
+	facts := factsFromRelease(parse.Parse(title), indexer.RawItem{Title: title}, "")
+	return facts.File.AudioCodec != "" || facts.File.Lossless || facts.File.OverallBitrate > 0
+}

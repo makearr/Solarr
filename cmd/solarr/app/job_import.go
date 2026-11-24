@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/quality"
+	"github.com/makearr/Solarr/internal/identify/score"
 	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/importjob"
 	"github.com/makearr/Solarr/internal/importing/inspect"
@@ -277,7 +278,7 @@ func (p *process) comicImporter() comic.Importer {
 func (p *process) musicImporter() music.Importer {
 	return music.NewImporter(music.ImporterConfig{
 		Tool: p.mediaTool(), Search: p.musicBrainzProvider(), Albums: p.musicBrainzProvider(), AcoustID: p.acoustIDLookup(),
-		Committer: pushingCommitter{inner: p.importCommitter(), push: p.afterPlacing}, Provenance: p.acquisitionReleaseGroups, Logger: p.logger,
+		Committer: pushingCommitter{inner: p.importCommitter(), push: p.afterPlacing}, Provenance: p.acquisitionReleaseGroups, Profile: p.musicProfileGate(), Logger: p.logger,
 	})
 }
 
@@ -458,4 +459,32 @@ func (c pushingCommitter) IdentifyUnverified(ctx context.Context, fromWorkID int
 		c.push(ctx, categoryID, placed.WorkID)
 	}
 	return placed, err
+}
+
+// musicProfileGate holds a download whose release named no format to what the probe finds, against the library's profiles.
+func (p *process) musicProfileGate() *music.ProfileGate {
+	acquisitions := library.NewAcquisitions(p.library)
+	return &music.ProfileGate{
+		Claimless: func(ctx context.Context, acquisitionID int64) bool {
+			acquisition, err := acquisitions.Get(ctx, acquisitionID)
+			if err != nil || acquisition.CandidateTitle == "" {
+				return false
+			}
+			return !music.NamesAFormat(acquisition.CandidateTitle)
+		},
+		Accepts: func(categoryID int64, facts score.Facts) (accepts, known bool) {
+			snapshot := p.cache.Snapshot()
+			category, found := snapshot.Category(categoryID)
+			if !found {
+				return false, false
+			}
+			for _, id := range category.QualityProfileIDs {
+				if ok, judged, _ := quality.ProfileAccepts(snapshot, id, facts); judged {
+					known = true
+					accepts = accepts || ok
+				}
+			}
+			return accepts, known
+		},
+	}
 }

@@ -51,6 +51,10 @@ const (
 // UnitReasonDuplicate is the reason of a skipped unit whose pictures the library already holds.
 const UnitReasonDuplicate = "its picture is one the library already holds, and it is no better"
 
+// UnitReasonBelowProfile is the reason of a skipped unit whose probed files no quality profile of its library accepts, for
+// a release that named no format; the download is blocklisted and the next release is grabbed.
+const UnitReasonBelowProfile = "its files, once probed, meet no quality profile of the library"
+
 // ImportSessions is ADR-48's persistence of inspection-and-import runs and their units, so a session survives the process and a revert has something to undo (inspect types stay in memory, ADR-23).
 type ImportSessions struct{ store *store.Store }
 
