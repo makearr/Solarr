@@ -19,7 +19,7 @@ func testDriver(t *testing.T, spec Spec, server *httptest.Server, settings map[s
 	t.Helper()
 	fake := clock.NewFakeAtEpoch()
 	fake.Set(time.Date(2026, 11, 8, 12, 0, 0, 0, time.UTC))
-	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter)
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter)
 	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute})
 	jar, err := cookiejar.New(nil)
 	if err != nil {

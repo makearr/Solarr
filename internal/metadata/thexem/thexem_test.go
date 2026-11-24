@@ -67,7 +67,7 @@ func (m memoryCache) Set(_ context.Context, kind, id string, entry metacache.Ent
 func newClient(t *testing.T, transport http.RoundTripper, fake *clock.Fake, cache memoryCache) thexem.Client {
 	t.Helper()
 	return thexem.New(httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil),
-		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100}),
 		httpx.ClientConfig{Provider: "thexem-test", UserAgent: "test", Transport: transport}), cache, fake)
 }
@@ -186,7 +186,7 @@ func (c *countingCache) Get(ctx context.Context, kind, id string) (metacache.Ent
 func TestWholeSiteDocumentsAreReadOncePerFreshness(t *testing.T) {
 	fake, cache := clock.NewFakeAtEpoch(), &countingCache{memoryCache: memoryCache{}, gets: map[string]int{}}
 	client := thexem.New(httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil),
-		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100}),
 		httpx.ClientConfig{Provider: "thexem-test", UserAgent: "test", Transport: standard()}), cache, fake)
 	var names []string

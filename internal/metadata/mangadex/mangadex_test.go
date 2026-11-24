@@ -38,7 +38,7 @@ func (a answer) RoundTrip(request *http.Request) (*http.Response, error) {
 
 func newClient(requests *[]string) mangadex.Client {
 	fake := clock.NewFakeAtEpoch()
-	return mangadex.New(httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+	return mangadex.New(httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}), httpx.ClientConfig{Provider: "mangadex", UserAgent: "test", Transport: answer{requests}}))
 }
 

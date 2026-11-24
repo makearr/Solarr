@@ -43,7 +43,7 @@ func newClient(t *testing.T, transport http.RoundTripper, key string) acoustid.C
 	t.Helper()
 	fake := clock.NewFakeAtEpoch()
 	http := httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil),
-		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}),
 		httpx.ClientConfig{Provider: acoustid.Name, UserAgent: "test", Transport: transport})
 	return acoustid.New(http, "https://acoustid.invalid/v2", func() string { return key })

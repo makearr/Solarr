@@ -101,7 +101,7 @@ func (r *recordingArr) RoundTrip(request *http.Request) (*http.Response, error) 
 
 func radarrOver(transport http.RoundTripper) arrimport.RadarrClient {
 	fake := clock.NewFakeAtEpoch()
-	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter)
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter)
 	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute})
 	return arrimport.NewLidarrClient(httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), limiter, breaker, httpx.ClientConfig{
 		Provider: "companion-test", UserAgent: "test", Transport: transport,

@@ -34,7 +34,7 @@ func client(t *testing.T, transport http.RoundTripper, key string) stashbox.Clie
 	t.Helper()
 	fake := clock.NewFakeAtEpoch()
 	return stashbox.New(httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil),
-		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}),
 		httpx.ClientConfig{Provider: "stashdb", UserAgent: "test", Transport: transport}), "https://stash.example/graphql", func() string { return key })
 }
@@ -112,7 +112,7 @@ func TestAnswerFailedFindsAServersOwnErrors(t *testing.T) {
 func TestFingerprintsUseTheirOwnBucketAndSearchesDoNot(t *testing.T) {
 	searches, fingerprints := &answer{body: `{"data":{"searchScene":[]}}`}, &answer{body: `{"data":{"findScenesBySceneFingerprints":[[]]}}`}
 	asker := client(t, searches, "k").WithFingerprintBucket(httpx.NewClient(clock.NewFakeAtEpoch(), httpx.NewGuard(nil, nil, nil),
-		httpx.NewLimiter(clock.NewFakeAtEpoch(), httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewLimiter(clock.NewFakeAtEpoch(), httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(clock.NewFakeAtEpoch(), httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}),
 		httpx.ClientConfig{Provider: "stashdb-fingerprint", UserAgent: "test", Transport: fingerprints}))
 	if _, err := asker.SearchScenes(t.Context(), "x", 1); err != nil {

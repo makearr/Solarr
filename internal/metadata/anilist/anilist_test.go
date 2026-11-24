@@ -33,7 +33,7 @@ func (c *canned) RoundTrip(request *http.Request) (*http.Response, error) {
 func newClient(transport http.RoundTripper) anilist.Client {
 	fake := clock.NewFakeAtEpoch()
 	return anilist.New(httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil),
-		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100}),
 		httpx.ClientConfig{Provider: "anilist-test", UserAgent: "test", Transport: transport}))
 }

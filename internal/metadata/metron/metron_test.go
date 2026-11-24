@@ -43,7 +43,7 @@ func (answer) RoundTrip(request *http.Request) (*http.Response, error) {
 
 func newClient(user, pass string) metron.Client {
 	fake := clock.NewFakeAtEpoch()
-	client := httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+	client := httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}), httpx.ClientConfig{Provider: "metron", UserAgent: "test", Transport: answer{}})
 	return metron.New(client, func() (string, string) { return user, pass })
 }

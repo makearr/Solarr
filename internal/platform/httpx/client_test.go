@@ -63,7 +63,7 @@ func newTestClient(t *testing.T, transport http.RoundTripper) (*httpx.Client, *h
 	t.Helper()
 	fake := clock.NewFakeAtEpoch()
 	guard := httpx.NewGuard(fakeResolver{}, refusingDial, nil)
-	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 600}}, httpx.NoJitter)
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter)
 	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 2, Cooldown: time.Minute})
 
 	client := httpx.NewClient(fake, guard, limiter, breaker, httpx.ClientConfig{
@@ -79,7 +79,7 @@ func newTestClient(t *testing.T, transport http.RoundTripper) (*httpx.Client, *h
 func TestClient_ProxiedRequestStillChecksItsOwnDestination(t *testing.T) {
 	fake := clock.NewFakeAtEpoch()
 	guard := httpx.NewGuard(fakeResolver{"internal-service.invalid": {mustParseAddr(t, "192.168.1.50")}}, refusingDial, nil)
-	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 600}}, httpx.NoJitter)
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter)
 	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 2, Cooldown: time.Minute})
 	transport := &roundTripper{responses: []*http.Response{respond(http.StatusOK, nil)}}
 
@@ -103,7 +103,7 @@ func TestClient_ProxiedRequestStillChecksItsOwnDestination(t *testing.T) {
 func TestClient_AnUnproxiedRequestIsNotResolvedTwice(t *testing.T) {
 	fake := clock.NewFakeAtEpoch()
 	guard := httpx.NewGuard(fakeResolver{}, refusingDial, nil)
-	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 600}}, httpx.NoJitter)
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter)
 	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 2, Cooldown: time.Minute})
 	transport := &roundTripper{responses: []*http.Response{respond(http.StatusOK, nil)}}
 
@@ -154,7 +154,7 @@ func TestClient_LiveUserAgentIsReadOnEveryRequest(t *testing.T) {
 	agent := "Lidarr/2.9.6.4552"
 	fake := clock.NewFakeAtEpoch()
 	client := httpx.NewClient(fake, httpx.NewGuard(fakeResolver{}, refusingDial, nil),
-		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{}), httpx.ClientConfig{
 			Provider: "live-agent", UserAgent: "static", Transport: transport,
 			LiveUserAgent: func() string { return agent },
@@ -308,7 +308,7 @@ func TestClient_CancellationIsNotEvidenceAgainstTheProvider(t *testing.T) {
 	fake := clock.NewFakeAtEpoch()
 	guard := httpx.NewGuard(fakeResolver{}, refusingDial, nil)
 	limiter := httpx.NewLimiter(fake, httpx.Config{
-		Defaults: httpx.Limits{RequestsPerMinute: 1, MinInterval: time.Hour},
+		Defaults: httpx.Limits{MinInterval: time.Hour},
 	}, httpx.NoJitter)
 	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 1, Cooldown: time.Minute})
 	client := httpx.NewClient(fake, guard, limiter, breaker, httpx.ClientConfig{
@@ -460,7 +460,7 @@ func (c *closeCountingTransport) CloseIdleConnections() { c.closes++ }
 func TestClient_DropsPooledConnectionsWhenTheProxyChanges(t *testing.T) {
 	fake := clock.NewFakeAtEpoch()
 	guard := httpx.NewGuard(fakeResolver{}, refusingDial, nil)
-	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 600}}, httpx.NoJitter)
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter)
 	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 2, Cooldown: time.Minute})
 	transport := &closeCountingTransport{roundTripper: roundTripper{build: func(*http.Request) *http.Response {
 		return respond(http.StatusOK, nil)
@@ -499,7 +499,7 @@ func TestClient_ARefusedKeyOpensTheBreakerOnlyWhereAskedTo(t *testing.T) {
 		fake := clock.NewFakeAtEpoch()
 		breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 2})
 		client := httpx.NewClient(fake, httpx.NewGuard(fakeResolver{}, refusingDial, nil),
-			httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+			httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 			breaker, httpx.ClientConfig{Provider: "omdb", Transport: transport, RejectedKeyOpens: c.opens})
 		for range 3 {
 			_, _ = client.Get(t.Context(), "https://omdb.invalid/?apikey=x")

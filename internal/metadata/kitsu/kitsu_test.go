@@ -31,7 +31,7 @@ func (answer) RoundTrip(request *http.Request) (*http.Response, error) {
 
 func TestAnAniListIDFindsTheEntryAndItsMappings(t *testing.T) {
 	fake := clock.NewFakeAtEpoch()
-	client := httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+	client := httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}), httpx.ClientConfig{Provider: "kitsu", UserAgent: "test", Transport: answer{}})
 	got, err := kitsu.New(client).ByAniList(t.Context(), 77)
 	want := kitsu.Anime{ID: "900", Slug: "example-show", Title: "Example Show", Synopsis: "A story.", AgeRating: "PG", AverageRating: "83.03", UserCount: 1200,

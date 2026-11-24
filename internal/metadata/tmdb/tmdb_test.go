@@ -32,7 +32,7 @@ func newClient(t *testing.T, transport http.RoundTripper, key string) tmdb.Clien
 	t.Helper()
 	fake := clock.NewFakeAtEpoch()
 	return tmdb.New(httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil),
-		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100}),
 		httpx.ClientConfig{Provider: "tmdb-test", UserAgent: "test", Transport: transport}), func() string { return key }, "")
 }

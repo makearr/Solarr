@@ -32,7 +32,7 @@ func (f servedBody) RoundTrip(request *http.Request) (*http.Response, error) {
 
 func lidarrServing(body string) arrimport.LidarrClient {
 	fake := clock.NewFakeAtEpoch()
-	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter)
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter)
 	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute})
 	return arrimport.NewLidarrClient(httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), limiter, breaker, httpx.ClientConfig{
 		Provider: "arr-setup-test", UserAgent: "test", Transport: servedBody(func(*http.Request) string { return body }),
@@ -204,7 +204,7 @@ func TestPusherSendsOnlyWhatSolarrChangedAndNeverForAnUnknownItem(t *testing.T) 
 func TestArrSetupCarriesTheRemotePathMappingOfAClientsHost(t *testing.T) {
 	cache := newSetupCache(t)
 	fake := clock.NewFakeAtEpoch()
-	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter)
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter)
 	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute})
 	answers := map[string]string{
 		"/api/v1/downloadclient": `[{"name":"Box","implementation":"Sabnzbd","protocol":"usenet","enable":true,"priority":3,
@@ -244,7 +244,7 @@ func TestArrSetupCarriesTheRemotePathMappingOfAClientsHost(t *testing.T) {
 func TestArrSetupNotesTheCategoryAClientSharesWithTheArr(t *testing.T) {
 	cache := newSetupCache(t)
 	fake := clock.NewFakeAtEpoch()
-	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter)
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter)
 	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute})
 	answers := map[string]string{
 		"/api/v1/downloadclient": `[{"name":"Box","implementation":"Sabnzbd","protocol":"usenet","enable":true,

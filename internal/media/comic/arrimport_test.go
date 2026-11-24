@@ -48,7 +48,7 @@ func (r *recordingAdding) AddWork(_ context.Context, request media.AddRequest) (
 
 func TestManagerImportAddsEachSeriesByItsComicVineIdIntoTheLibraryOfItsFolder(t *testing.T) {
 	fake := clock.NewFakeAtEpoch()
-	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter)
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter)
 	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute})
 	transport := answerTransport{
 		"http://mylar.local/api?apikey=k&cmd=getIndex": `[` +

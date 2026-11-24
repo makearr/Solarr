@@ -42,7 +42,7 @@ func newTestClient(t *testing.T, transport http.RoundTripper, provider string) *
 	t.Helper()
 	fake := clock.NewFakeAtEpoch()
 	guard := httpx.NewGuard(nil, nil, nil)
-	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter)
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter)
 	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute})
 	return httpx.NewClient(fake, guard, limiter, breaker, httpx.ClientConfig{
 		Provider: provider, UserAgent: "test", Transport: transport,

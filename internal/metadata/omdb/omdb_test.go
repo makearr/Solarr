@@ -29,7 +29,7 @@ func (answer) RoundTrip(request *http.Request) (*http.Response, error) {
 
 func TestAFilmIsReadByIMDbIDAndNotFoundIsToldApartFromAFailure(t *testing.T) {
 	fake := clock.NewFakeAtEpoch()
-	http := httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+	http := httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}), httpx.ClientConfig{Provider: "omdb", UserAgent: "test", Transport: answer{}})
 	films := omdb.New(http, func() string { return "owner-key" })
 	movie, err := films.Movie(t.Context(), "tt9000001")
@@ -56,7 +56,7 @@ func (seasonAnswer) RoundTrip(request *http.Request) (*http.Response, error) {
 
 func TestASeasonListsItsEpisodesWithTheirRatings(t *testing.T) {
 	fake := clock.NewFakeAtEpoch()
-	http := httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+	http := httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}), httpx.ClientConfig{Provider: "omdb", UserAgent: "test", Transport: seasonAnswer{}})
 	shows := omdb.New(http, func() string { return "owner-key" })
 	season, err := shows.Season(t.Context(), "tt9000003", 2)

@@ -54,7 +54,7 @@ func TestLidarrImport_AdoptsFromLidarrsRecordAndNamesWhatItCreated(t *testing.T)
 	}
 	wall := clock.NewFakeAtEpoch()
 	client := httpx.NewClient(wall, httpx.NewGuard(nil, nil, nil),
-		httpx.NewLimiter(wall, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewLimiter(wall, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(wall, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}),
 		httpx.ClientConfig{Provider: "lidarr-test", UserAgent: "test", Transport: lidarrAnswers{}})
 
@@ -107,7 +107,7 @@ func TestLidarrImport_AMappedProfileIsKeptAsAnOverride(t *testing.T) {
 	}
 	wall := clock.NewFakeAtEpoch()
 	client := httpx.NewClient(wall, httpx.NewGuard(nil, nil, nil),
-		httpx.NewLimiter(wall, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewLimiter(wall, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(wall, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}),
 		httpx.ClientConfig{Provider: "lidarr-test", UserAgent: "test", Transport: lidarrAnswers{}})
 	var recorded []library.NewArrImportItem
@@ -161,7 +161,7 @@ func TestLidarrImport_TheArtistsMetadataProfileSetsTheFollowsReleaseTypes(t *tes
 	}
 	wall := clock.NewFakeAtEpoch()
 	client := httpx.NewClient(wall, httpx.NewGuard(nil, nil, nil),
-		httpx.NewLimiter(wall, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewLimiter(wall, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(wall, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}),
 		httpx.ClientConfig{Provider: "lidarr-test", UserAgent: "test", Transport: lidarrWithProfile{}})
 	var recorded []library.NewArrImportItem
@@ -206,7 +206,7 @@ func TestFiltersOfLidarrProfile_StudioIsNeverAnExclusion(t *testing.T) {
 func TestLidarrImport_PreviewNamesTheReleaseTypesOfEachMetadataProfile(t *testing.T) {
 	wall := clock.NewFakeAtEpoch()
 	client := httpx.NewClient(wall, httpx.NewGuard(nil, nil, nil),
-		httpx.NewLimiter(wall, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewLimiter(wall, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(wall, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}),
 		httpx.ClientConfig{Provider: "lidarr-test", UserAgent: "test", Transport: lidarrWithProfile{}})
 	source, err := music.LidarrImport{}.Preview(t.Context(), arrimport.NewLidarrClient(client, "http://lidarr.local", "key"))

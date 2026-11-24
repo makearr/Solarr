@@ -16,8 +16,6 @@ type Limiter struct {
 	jitter func(time.Duration) time.Duration
 	config Config
 
-	global *gate // global concurrency, handed to the most urgent waiter
-
 	mu        sync.Mutex
 	providers map[string]*providerBudget
 }
@@ -25,21 +23,9 @@ type Limiter struct {
 type providerBudget struct {
 	limits Limits
 
-	// tokens and lastRefill are the bucket. Tokens are fractional so a rate
-	// below one per second still works.
-	tokens     float64
-	lastRefill time.Time
-
-	// effectivePerSecond is halved on failure and restored additively, so it is
-	// at or below the configured rate but never zero.
-	effectivePerSecond float64
-
 	lastRequest         time.Time
 	pausedUntil         time.Time
 	consecutiveFailures int
-
-	dailyUsed    int
-	dailyResetAt time.Time
 
 	slots    *gate
 	inFlight int
@@ -55,15 +41,10 @@ func NewLimiter(c clock.Clock, config Config, jitter func(time.Duration) time.Du
 	if jitter == nil {
 		jitter = fullJitter
 	}
-	global := config.GlobalMaxConcurrent
-	if global <= 0 {
-		global = math.MaxInt16 // effectively unlimited, still a bounded channel
-	}
 	return &Limiter{
 		clock:     c,
 		jitter:    jitter,
 		config:    config,
-		global:    newGate(global, sharesFunc(config.LaneShares)),
 		providers: make(map[string]*providerBudget),
 	}
 }
@@ -92,14 +73,8 @@ func (l *Limiter) Acquire(ctx context.Context, provider string) (release func(),
 			break
 		}
 	}
-	// Holding its token, the request no longer keeps its lane's turn from the others while it waits for the global gate.
+	// Holding its turn, the request no longer keeps its lane's turn from the others.
 	l.wait(provider, priority, -1)
-
-	if err := l.global.acquire(ctx, priority); err != nil {
-		budget.slots.release()
-		l.refund(provider)
-		return nil, err
-	}
 
 	l.mu.Lock()
 	budget.inFlight++
@@ -111,7 +86,6 @@ func (l *Limiter) Acquire(ctx context.Context, provider string) (release func(),
 			l.mu.Lock()
 			budget.inFlight--
 			l.mu.Unlock()
-			l.global.release()
 			budget.slots.release()
 		})
 	}, nil
@@ -149,7 +123,7 @@ func (l *Limiter) wait(provider string, priority Priority, delta int) {
 	}
 }
 
-// tryTake consumes a token if one is due and no more urgent caller is waiting for it. It returns
+// tryTake takes the provider's next turn if it is due and no more urgent caller is waiting for it. It returns
 // how long to wait otherwise, so the caller sleeps outside the lock.
 func (l *Limiter) tryTake(provider string, priority Priority) (time.Duration, error) {
 	l.mu.Lock()
@@ -157,11 +131,7 @@ func (l *Limiter) tryTake(provider string, priority Priority) (time.Duration, er
 
 	budget := l.budgetForLocked(provider)
 	now := l.clock.Now()
-	budget.rollDailyWindow(now)
 
-	if budget.limits.DailyCap > 0 && budget.dailyUsed >= budget.limits.DailyCap {
-		return 0, fmt.Errorf("%w: %s used %d of %d", ErrDailyCapReached, provider, budget.dailyUsed, budget.limits.DailyCap)
-	}
 	if budget.pausedUntil.After(now) {
 		if pause := budget.pausedUntil.Sub(now); pause > maxBlockingPause {
 			return 0, &PausedError{Provider: provider, Until: budget.pausedUntil}
@@ -180,15 +150,6 @@ func (l *Limiter) tryTake(provider string, priority Priority) (time.Duration, er
 		}
 	}
 
-	budget.refill(now)
-	if budget.tokens < 1 {
-		if budget.effectivePerSecond <= 0 {
-			return backoffBase, nil
-		}
-		missing := 1 - budget.tokens
-		return time.Duration(missing / budget.effectivePerSecond * float64(time.Second)), nil
-	}
-
 	mine := laneOf(priority)
 	var waiting [laneCount]bool
 	waiting[mine] = true
@@ -204,24 +165,11 @@ func (l *Limiter) tryTake(provider string, priority Priority) (time.Duration, er
 	}
 	budget.turns.took(shares, waiting, mine)
 
-	budget.tokens--
 	budget.lastRequest = now
-	budget.dailyUsed++
 	return 0, nil
 }
 
-// refund returns a token spent for a request that never happened.
-func (l *Limiter) refund(provider string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	budget := l.budgetForLocked(provider)
-	budget.tokens++
-	if budget.dailyUsed > 0 {
-		budget.dailyUsed--
-	}
-}
-
-// Observe records how a request ended, adjusting the provider's effective rate.
+// Observe records how a request ended: a failure pauses the provider, a success ends the run of failures.
 func (l *Limiter) Observe(provider string, outcome Outcome) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -231,17 +179,10 @@ func (l *Limiter) Observe(provider string, outcome Outcome) {
 
 	if outcome.Success {
 		budget.consecutiveFailures = 0
-		// Additive recovery, never an immediate return to full rate (ADR-13).
-		configured := budget.configuredPerSecond()
-		budget.effectivePerSecond = math.Min(configured, budget.effectivePerSecond+configured/recoverySteps)
 		return
 	}
 
 	budget.consecutiveFailures++
-	budget.effectivePerSecond = math.Max(
-		budget.configuredPerSecond()*minimumRateFraction,
-		budget.effectivePerSecond/2,
-	)
 
 	pause := min(outcome.RetryAfter, maxRetryAfter)
 	if pause <= 0 {
@@ -258,24 +199,10 @@ func (l *Limiter) State(provider string) ProviderState {
 	defer l.mu.Unlock()
 
 	budget := l.budgetForLocked(provider)
-	budget.rollDailyWindow(l.clock.Now())
-
-	// An unlimited provider reports zero rather than the sentinel it uses
-	// internally, which would otherwise reach the UI as a meaningless number.
-	var configuredPerMinute, effectivePerMinute float64
-	if budget.limits.RequestsPerMinute > 0 {
-		configuredPerMinute = budget.configuredPerSecond() * 60
-		effectivePerMinute = budget.effectivePerSecond * 60
-	}
-
 	return ProviderState{
 		Provider:            provider,
-		ConfiguredPerMinute: configuredPerMinute,
-		EffectivePerMinute:  effectivePerMinute,
 		PausedUntil:         budget.pausedUntil,
 		ConsecutiveFailures: budget.consecutiveFailures,
-		DailyUsed:           budget.dailyUsed,
-		DailyCap:            budget.limits.DailyCap,
 		InFlight:            budget.inFlight,
 	}
 }
@@ -296,60 +223,14 @@ func (l *Limiter) budgetForLocked(provider string) *providerBudget {
 	if concurrent <= 0 {
 		concurrent = math.MaxInt16
 	}
-	now := l.clock.Now()
 
 	budget := &providerBudget{
-		limits:       limits,
-		lastRefill:   now,
-		dailyResetAt: nextUTCMidnight(now),
-		slots:        newGate(concurrent, sharesFunc(l.config.LaneShares)),
-		waiting:      make(map[Priority]int),
+		limits:  limits,
+		slots:   newGate(concurrent, sharesFunc(l.config.LaneShares)),
+		waiting: make(map[Priority]int),
 	}
-	budget.effectivePerSecond = budget.configuredPerSecond()
-	// Start full, so the first request of a session is not made to wait.
-	budget.tokens = budget.burst()
 	l.providers[provider] = budget
 	return budget
-}
-
-func (b *providerBudget) configuredPerSecond() float64 {
-	if b.limits.RequestsPerMinute <= 0 {
-		return math.MaxInt16 // unlimited; MinInterval still applies
-	}
-	return float64(b.limits.RequestsPerMinute) / 60
-}
-
-// burst is one minute of budget, capped so an unlimited provider does not
-// accumulate a meaningless reserve.
-func (b *providerBudget) burst() float64 {
-	if b.limits.RequestsPerMinute <= 0 {
-		return 1
-	}
-	return float64(b.limits.RequestsPerMinute)
-}
-
-func (b *providerBudget) refill(now time.Time) {
-	elapsed := now.Sub(b.lastRefill).Seconds()
-	if elapsed <= 0 {
-		return
-	}
-	b.lastRefill = now
-	b.tokens = math.Min(b.burst(), b.tokens+elapsed*b.effectivePerSecond)
-}
-
-// rollDailyWindow resets the quota at UTC midnight, which is when Newznab
-// providers conventionally reset theirs.
-func (b *providerBudget) rollDailyWindow(now time.Time) {
-	if now.Before(b.dailyResetAt) {
-		return
-	}
-	b.dailyUsed = 0
-	b.dailyResetAt = nextUTCMidnight(now)
-}
-
-func nextUTCMidnight(now time.Time) time.Time {
-	utc := now.UTC()
-	return time.Date(utc.Year(), utc.Month(), utc.Day(), 0, 0, 0, 0, time.UTC).Add(24 * time.Hour)
 }
 
 func exponential(failures int) time.Duration {

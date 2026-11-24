@@ -51,7 +51,7 @@ func (a answer) RoundTrip(request *http.Request) (*http.Response, error) {
 
 func newClient(key string, paths *[]string) comicvine.Client {
 	fake := clock.NewFakeAtEpoch()
-	client := httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+	client := httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}), httpx.ClientConfig{Provider: "comicvine", UserAgent: "test", Transport: answer{paths}})
 	return comicvine.New(client, func() string { return key })
 }

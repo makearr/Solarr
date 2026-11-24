@@ -148,7 +148,7 @@ func TestProwlarrSyncAddsDownloadClientsThatNeedNoSecret(t *testing.T) {
 		List: func(context.Context, string, string) ([]indexer.ProwlarrIndexer, error) { return nil, nil },
 		Lidarr: func(baseURL, apiKey string) arrimport.LidarrClient {
 			fake := clock.NewFakeAtEpoch()
-			limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter)
+			limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter)
 			breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute})
 			return arrimport.NewLidarrClient(httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), limiter, breaker, httpx.ClientConfig{
 				Provider: "prowlarr-test", UserAgent: "test", Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {

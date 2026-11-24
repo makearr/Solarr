@@ -58,7 +58,7 @@ func (f *fakeServer) RoundTrip(request *http.Request) (*http.Response, error) {
 func newClient(t *testing.T, server *fakeServer, credentials string) qbittorrent.Client {
 	t.Helper()
 	fake := clock.NewFakeAtEpoch()
-	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter)
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter)
 	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute})
 	client := httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), limiter, breaker, httpx.ClientConfig{
 		Provider: "qbittorrent-test", UserAgent: "test", Transport: server,

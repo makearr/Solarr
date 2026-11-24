@@ -30,7 +30,7 @@ func (a *answer) RoundTrip(request *http.Request) (*http.Response, error) {
 func client(t *testing.T, transport http.RoundTripper) *httpx.Client {
 	t.Helper()
 	fake := clock.NewFakeAtEpoch()
-	return httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+	return httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}), httpx.ClientConfig{Provider: "mdblist", UserAgent: "test", Transport: transport})
 }
 

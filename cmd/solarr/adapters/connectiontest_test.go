@@ -58,7 +58,7 @@ func sabTester(t *testing.T, shared map[string]string) adapters.ConnectionTester
 		Cache: cache, Clock: fake,
 		Downloader: func(int64, string) *httpx.Client {
 			return httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil),
-				httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+				httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 				httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}),
 				httpx.ClientConfig{Provider: "sabnzbd-test", UserAgent: "test", Transport: fakeSABnzbd{}})
 		},

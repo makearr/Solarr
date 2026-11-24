@@ -92,7 +92,7 @@ func (o *overloadedOnce) RoundTrip(request *http.Request) (*http.Response, error
 func TestAQueryTheOverloadedServiceRefusesIsTriedAgainAfterAPause(t *testing.T) {
 	transport := &overloadedOnce{}
 	paced := clock.NewFakeAtEpoch()
-	client := httpx.NewClient(paced, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(paced, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+	client := httpx.NewClient(paced, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(paced, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(paced, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}), httpx.ClientConfig{Provider: "wikidata", UserAgent: "test", Transport: transport})
 	fetcher := wikidata.New(wikidata.Config{WikidataClient: client, WikipediaClient: client, Clock: paced})
 	done := make(chan error, 1)

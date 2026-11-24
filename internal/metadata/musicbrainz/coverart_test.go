@@ -58,7 +58,7 @@ func newCoverArtClient(t *testing.T, serverURL string) *httpx.Client {
 	}
 	fake := clock.NewFakeAtEpoch()
 	guard := httpx.NewGuard(nil, nil, []string{parsed.Hostname()})
-	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter)
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter)
 	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute})
 	return httpx.NewClient(fake, guard, limiter, breaker, httpx.ClientConfig{
 		Provider: musicbrainz.CoverArtName, UserAgent: "test",
@@ -193,7 +193,7 @@ func TestCoverArt_FetchReturnsErrNoCoverArtWhenImagesIsEmpty(t *testing.T) {
 func TestCoverArt_FetchAgainstTheLiveAPI(t *testing.T) {
 	fake := clock.NewFakeAtEpoch()
 	guard := httpx.NewGuard(nil, nil, nil)
-	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter)
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter)
 	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute})
 	client := httpx.NewClient(fake, guard, limiter, breaker, httpx.ClientConfig{
 		Provider: musicbrainz.CoverArtName, UserAgent: httpx.UserAgent("test"),

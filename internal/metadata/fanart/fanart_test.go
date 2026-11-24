@@ -26,7 +26,7 @@ func (answer) RoundTrip(request *http.Request) (*http.Response, error) {
 
 func TestAFilmsPicturesAreReadByTMDBID(t *testing.T) {
 	fake := clock.NewFakeAtEpoch()
-	http := httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+	http := httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}), httpx.ClientConfig{Provider: "fanart", UserAgent: "test", Transport: answer{}})
 	pictures := fanart.New(http, func() string { return "owner-key" })
 	movie, err := pictures.Movie(t.Context(), 7001, "")
@@ -67,7 +67,7 @@ func (extended) RoundTrip(request *http.Request) (*http.Response, error) {
 
 func TestShowsArtistsAndAlbumsHaveTheirPictures(t *testing.T) {
 	fake := clock.NewFakeAtEpoch()
-	client := httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+	client := httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}), httpx.ClientConfig{Provider: "fanart", UserAgent: "test", Transport: extended{}})
 	pictures := fanart.New(client, func() string { return "owner-key" })
 	show, err := pictures.Show(t.Context(), 555)

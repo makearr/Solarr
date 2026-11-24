@@ -143,7 +143,7 @@ func TestDownloader_ProbeSaysWhenTheLabelPluginIsOff(t *testing.T) {
 func httpClient(t *testing.T, server *clienttest.Server) *httpx.Client {
 	t.Helper()
 	fake := clock.NewFakeAtEpoch()
-	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter)
+	limiter := httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter)
 	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute})
 	return httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil), limiter, breaker, httpx.ClientConfig{
 		Provider: "download-client-test", UserAgent: "test", Transport: server,

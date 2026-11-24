@@ -32,7 +32,7 @@ func client(t *testing.T, transport http.RoundTripper, region string) audible.Cl
 	t.Helper()
 	fake := clock.NewFakeAtEpoch()
 	http := httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil),
-		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}),
 		httpx.ClientConfig{Provider: "audible", UserAgent: "test", Transport: transport})
 	return audible.New(http, http, func() string { return region })

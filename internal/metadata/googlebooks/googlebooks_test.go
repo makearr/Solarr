@@ -31,7 +31,7 @@ func client(t *testing.T, transport http.RoundTripper, key string) googlebooks.C
 	t.Helper()
 	fake := clock.NewFakeAtEpoch()
 	return googlebooks.New(httpx.NewClient(fake, httpx.NewGuard(nil, nil, nil),
-		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{}}, httpx.NoJitter),
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}),
 		httpx.ClientConfig{Provider: "googlebooks", UserAgent: "test", Transport: transport}), func() string { return key })
 }
