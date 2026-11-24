@@ -31,6 +31,7 @@ const DOWNLOAD_VERBS: Record<string, string> = {
   "download.imported": "Imported",
   "download.failed": "Download failed",
   "download.removed": "Removed from the queue",
+  "download.transcoded": "Converted",
 };
 
 /** How much scrollback the bar keeps. Enough to answer "what just happened",
@@ -115,6 +116,7 @@ export function describe(event: Notification): string {
   if (event.entity.startsWith("import_session:") && event.kind === "progress" && event.data) {
     return describeImport(event.data);
   }
+  if (event.entity.startsWith("transcode:") && event.kind === "converted") return "A file was converted";
   return `${event.entity} ${event.kind}`;
 }
 

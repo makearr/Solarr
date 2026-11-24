@@ -77,9 +77,14 @@ func (s *Service) Analyze(ctx context.Context, categoryID int64, progress *jobs.
 		rootIDs = append(rootIDs, root.ID)
 	}
 	wanted := WantedLanguages(*one.Target, s.Settings.Languages(categoryID))
+	needed := false
 	for afterID := int64(0); ; {
 		page, err := s.Items.ObjectsToAnalyze(ctx, rootIDs, one.Target.ID, stored.Revision, afterID, analyzePage)
 		if err != nil || len(page) == 0 {
+			if err == nil && needed {
+				// Work found now is started now, not on the next scheduled run.
+				_, err = EnqueueDispatch(context.WithoutCancel(ctx), s.Queue)
+			}
 			return err
 		}
 		afterID = page[len(page)-1].MediaObjectID
@@ -104,6 +109,7 @@ func (s *Service) Analyze(ctx context.Context, categoryID int64, progress *jobs.
 			if err != nil {
 				return err
 			}
+			needed = needed || judgement.State == string(library.TranscodeNeeded)
 			judged = append(judged, library.JudgedTranscodeItem{
 				MediaObjectID: object.MediaObjectID, CategoryID: categoryID, TargetID: one.Target.ID, SetupRevision: stored.Revision, Kind: object.Kind,
 				Lane: judgement.Lane, State: library.TranscodeState(judgement.State), ReasonsJSON: judgement.ReasonsJSON, PlanJSON: judgement.PlanJSON, WarningsJSON: judgement.WarningsJSON,

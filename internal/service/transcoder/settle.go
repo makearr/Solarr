@@ -102,6 +102,7 @@ func (s *Service) succeeded(ctx context.Context, kind string) error {
 
 // failedWith ends an item as failed with a code and a note.
 func (s *Service) failedWith(ctx context.Context, id int64, code, note string) error {
+	s.Logger.Warn("transcode: file failed", "id", id, "code", code, "note", note)
 	return s.settle(ctx, id, library.TranscodeFailed, func(item *library.TranscodeItem) { item.FailureCode, item.LastError = code, note })
 }
 

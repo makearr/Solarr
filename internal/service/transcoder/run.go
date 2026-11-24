@@ -246,6 +246,7 @@ func (s *Service) convert(ctx context.Context, run *fileRun) error {
 	for {
 		output := s.outputPath(run, pass.Pass)
 		started := s.Clock.Now()
+		s.Logger.Info("transcode: pass started", "id", run.item.MediaObjectID, "file", run.relPath, "pass", pass.Pass, "engines", engines)
 		used, err := s.encode(ctx, run, engines, pass, output)
 		if err != nil {
 			s.discard(output)
@@ -258,9 +259,13 @@ func (s *Service) convert(ctx context.Context, run *fileRun) error {
 		}
 		encodeSeconds := int64(s.Clock.Since(started).Seconds())
 		if outcome.Accepted {
+			s.Logger.Info("transcode: pass accepted", "id", run.item.MediaObjectID, "file", run.relPath, "pass", pass.Pass, "engine", used,
+				"original_bytes", run.info.Size, "result_bytes", result.SizeBytes, "seconds", encodeSeconds)
 			return s.finish(ctx, run, result, outcome, used, pass.Pass, encodeSeconds, output)
 		}
 		s.discard(output)
+		s.Logger.Info("transcode: pass refused", "id", run.item.MediaObjectID, "file", run.relPath, "pass", pass.Pass, "engine", used,
+			"reasons", outcome.Failures, "seconds", encodeSeconds)
 		next, laddered := NextPass(run.setup(), run.plan, pass, outcome.Failures)
 		state := AfterRefused(itemStateOf(run.item), outcome.Failures, next, laddered)
 		if laddered {

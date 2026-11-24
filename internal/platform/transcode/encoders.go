@@ -187,7 +187,7 @@ func detectGPU(ctx context.Context, runner Runner, capabilities []Capability, ro
 		for _, lookahead := range []bool{true, false} {
 			rate := RateControl{Mode: RateModeQuality, Quality: 25, Lookahead: lookahead, QualityMode: mode}
 			if _, err := runner.Run(ctx, ffmpeg, testEncodeArgs(capability, row.Encoder, rate, false)...); err != nil {
-				lastFailure = hint(lastLine(err.Error()))
+				lastFailure = refusedSentence(row, lastLine(err.Error()))
 				continue
 			}
 			row.Working, row.Lookahead, row.Detail = true, lookahead, ""
@@ -237,4 +237,13 @@ func (s *Service) DeviceFor(engine Accel) string {
 		}
 	}
 	return ""
+}
+
+// refusedSentence says in words that the device refused a test encode; the driver's line stays out unless it names the usual fix.
+func refusedSentence(row EncoderSupport, line string) string {
+	sentence := "this " + strings.ToUpper(string(row.Engine)) + " device cannot encode " + string(row.Codec)
+	if fixed := hint(line); fixed != line {
+		return sentence + fixed[len(line):]
+	}
+	return sentence
 }

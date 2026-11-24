@@ -52,7 +52,7 @@ LEFT JOIN transcode_item ti ON ti.media_object_id = o.id
 WHERE o.id > sqlc.arg(after_id)
   AND lp.root_folder_id IN (SELECT value FROM json_each(sqlc.arg(root_ids)))
   AND o.kind IN ('video', 'audio')
-  AND (ti.media_object_id IS NULL OR ti.target_id <> sqlc.arg(target_id) OR ti.setup_revision <> sqlc.arg(setup_revision))
+  AND (ti.media_object_id IS NULL OR (ti.state <> 'done' AND (ti.target_id <> sqlc.arg(target_id) OR ti.setup_revision <> sqlc.arg(setup_revision))))
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
 
@@ -122,8 +122,9 @@ LIMIT sqlc.arg(page_size);
 SELECT ti.media_object_id, ti.category_id, ti.kind, ti.state, ti.lane, ti.target_id, ti.setup_revision, ti.reasons_json, ti.plan_json,
        ti.warnings_json, ti.override_json, ti.attempts, ti.pass, ti.interrupted, ti.failure_code, ti.last_error, ti.found_at, ti.last_run_seq,
        ti.replace_stage, ti.work_path, ti.original_recycle_id, ti.original_size_bytes, ti.result_size_bytes, ti.result_ratio_pct, ti.engine,
-       ti.encode_seconds, ti.finished_at, ti.updated_at, lp.root_folder_id, lp.rel_path
+       ti.encode_seconds, ti.finished_at, ti.updated_at, lp.root_folder_id, lp.rel_path, o.size_bytes
 FROM transcode_item ti
+JOIN media_object o ON o.id = ti.media_object_id
 JOIN library_path lp ON lp.media_object_id = ti.media_object_id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE ti.media_object_id > sqlc.arg(after_id)
   AND (CAST(sqlc.arg(category_id) AS INTEGER) = 0 OR ti.category_id = sqlc.arg(category_id))

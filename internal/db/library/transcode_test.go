@@ -400,3 +400,20 @@ func TestTranscodeItems_AFailedFileJudgedAgainstANewSetupRevisionStartsOverButTh
 		t.Errorf("new revision: %+v, want needed with attempts, pass and failure cleared", got)
 	}
 }
+
+func TestTranscodeItems_AReAnalysisLeavesAFinishedItemDone(t *testing.T) {
+	items, opened := seedTranscode(t)
+	_ = items.Judge(t.Context(), []library.JudgedTranscodeItem{judge(1, "video", library.TranscodeDone)})
+	stale, err := items.ObjectsToAnalyze(t.Context(), []int64{7}, 9, 3, 0, 10)
+	if err != nil || len(stale) != 3 || stale[0].MediaObjectID != 2 {
+		t.Errorf("a finished file is never re-selected: %+v, %v", stale, err)
+	}
+	if err := items.Judge(t.Context(), []library.JudgedTranscodeItem{judge(1, "video", library.TranscodeNotNeeded)}); err != nil {
+		t.Fatal(err)
+	}
+	item, _, _ := items.Get(t.Context(), 1)
+	if item.State != library.TranscodeDone {
+		t.Errorf("state = %s; want done", item.State)
+	}
+	assertCountersMatchRows(t, items, opened, 1)
+}

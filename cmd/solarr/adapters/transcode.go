@@ -120,6 +120,9 @@ func (a Transcode) Items(ctx context.Context, query apiserver.TranscodeItemsQuer
 	var recycleIDs []int64
 	for i, one := range listed {
 		views[i] = itemView(one.Item, one.RelPath)
+		if views[i].OriginalSizeBytes == 0 {
+			views[i].OriginalSizeBytes = one.SizeBytes
+		}
 		if views[i].Restorable {
 			recycleIDs = append(recycleIDs, one.Item.OriginalRecycleID)
 		}

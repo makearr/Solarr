@@ -13,7 +13,7 @@ func analyzeService(items *memItems, library, master bool) *transcoder.Service {
 	target := musicTarget()
 	target.ID = 9
 	return &transcoder.Service{
-		Items: items, Hardware: fakeHW{}, Clock: clock.NewFakeAtEpoch(),
+		Items: items, Hardware: fakeHW{}, Clock: clock.NewFakeAtEpoch(), Queue: &queuedJobs{},
 		Settings: &memSettings{global: settings.TranscodeGlobal{Enabled: master}, target: target, enabled: library},
 	}
 }
@@ -55,6 +55,27 @@ func TestAnalyze_DoesNothingWhileTheMasterOrTheLibraryIsOff(t *testing.T) {
 		items.facts[1] = library.ObjectFacts{Measured: true}
 		if err := analyzeService(items, c.library, c.master).Analyze(t.Context(), 3, nil); err != nil || len(items.judged) != 0 {
 			t.Errorf("master %v library %v: judged %d, err %v, want nothing", c.master, c.library, len(items.judged), err)
+		}
+	}
+}
+
+func TestAnalyze_StartsADispatchOnlyWhenItFoundWorkToDo(t *testing.T) {
+	flac := library.ObjectFacts{MediaObjectID: 1, Measured: true, Container: "flac", AudioCodec: "flac", AudioChannels: "2.0", SampleRate: 44100, DurationMs: 200000, SizeBytes: 30_000_000, OverallBitrate: 1_000_000}
+	aac := library.ObjectFacts{MediaObjectID: 2, Measured: true, Container: "mov,mp4,m4a,3gp", AudioCodec: "aac", AudioChannels: "2.0", SampleRate: 48000, DurationMs: 200000, SizeBytes: 3_000_000, OverallBitrate: 128_000}
+	for _, c := range []struct {
+		facts library.ObjectFacts
+		want  int
+	}{{flac, 1}, {aac, 0}} {
+		items := newMemItems()
+		items.objects = []library.ObjectToAnalyze{{MediaObjectID: c.facts.MediaObjectID, Kind: "audio", RootFolderID: 7}}
+		items.facts[c.facts.MediaObjectID] = c.facts
+		service := analyzeService(items, true, true)
+		queue := service.Queue.(*queuedJobs)
+		if err := service.Analyze(t.Context(), 3, nil); err != nil {
+			t.Fatal(err)
+		}
+		if len(queue.requests) != c.want {
+			t.Errorf("file %d: %d jobs queued, want %d", c.facts.MediaObjectID, len(queue.requests), c.want)
 		}
 	}
 }

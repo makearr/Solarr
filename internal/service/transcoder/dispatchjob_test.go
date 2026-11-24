@@ -53,6 +53,18 @@ func TestDispatch_StartsTheWaitingFilesInOrderAndQueuesTheAnalysis(t *testing.T)
 	}
 }
 
+func TestDispatch_AStartedFileShowsNoErrorOfItsEarlierRun(t *testing.T) {
+	p := newPipeline(t, musicTarget(), nil)
+	needed(p, 1, "a/1.flac", false)
+	p.items.items[1].LastError, p.items.items[1].FailureCode = "result_above_range", "result_above_range"
+	if err := p.svc.Dispatch(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if item := p.item(1); item.State != library.TranscodeRunning || item.LastError != "" || item.FailureCode != "" {
+		t.Errorf("item = %+v, want running with the old error cleared", item)
+	}
+}
+
 func TestDispatch_TheMasterSwitchOffQueuesNothing(t *testing.T) {
 	p := newPipeline(t, musicTarget(), nil)
 	needed(p, 1, "a/1.flac", false)

@@ -116,7 +116,7 @@ func TestDetectEncoders_VAAPIFallsToCQPAndTenBitIsRecordedSeparately(t *testing.
 		t.Errorf("hevc_vaapi = %+v: CQP, 8-bit only", got)
 	}
 	refusedAll := transcode.DetectEncoders(t.Context(), matrixRunner{refuse: []string{"hevc_vaapi"}}, gpus, built)
-	if got := rowOf(t, refusedAll, transcode.VAAPI, transcode.CodecHEVC); got.Working || got.Detail != "refused: hevc_vaapi" {
+	if got := rowOf(t, refusedAll, transcode.VAAPI, transcode.CodecHEVC); got.Working || got.Detail != "this VAAPI device cannot encode hevc" {
 		t.Errorf("a refused encoder = %+v", got)
 	}
 }

@@ -8,7 +8,7 @@ import { ListTable, type Column } from "@/list/ListTable";
 import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView } from "@/list/useRouteView";
 import { t, type MessageKey } from "@/lib/i18n";
-import { reasonText } from "@/lib/transcodeReason";
+import { lastErrorText, reasonText } from "@/lib/transcodeReason";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
 import { inputStyle, labelStyle } from "@/ui/form";
@@ -62,6 +62,19 @@ export function TranscodeFiles() {
     },
     useRouteView(FILTER_KEYS),
   );
+  const retryPlain = useMutation({
+    mutationFn: async () => {
+      const selection = list.selectionRequest;
+      if (!selection) return;
+      const { error } = await api.POST("/transcode/items/retry", { body: retryRequest(selection, {}, false) });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      list.clearSelection();
+      void queryClient.invalidateQueries({ queryKey: ["transcode-summary"] });
+      void queryClient.invalidateQueries({ queryKey: ["transcode-files"] });
+    },
+  });
   const restore = useMutation({
     mutationFn: async (item: Item) => {
       const { error } = await api.POST("/transcode/items/{media_object_id}/restore", { params: { path: { media_object_id: item.media_object_id } } });
@@ -81,10 +94,11 @@ export function TranscodeFiles() {
       key: "size",
       header: t("transcode.files.size"),
       width: "11rem",
-      render: (item) => (item.state === "done" ? `${formatSize(item.original_size_bytes ?? 0)} → ${formatSize(item.result_size_bytes ?? 0)}` : ""),
+      render: (item) =>
+        item.state === "done" ? `${formatSize(item.original_size_bytes ?? 0)} → ${formatSize(item.result_size_bytes ?? 0)}` : formatSize(item.original_size_bytes ?? 0),
     },
-    { key: "attempts", header: t("transcode.files.attempts"), width: "4rem", render: (item) => (item.attempts > 0 ? item.attempts : "") },
-    { key: "error", header: t("transcode.files.error"), render: (item) => <span className="block truncate text-danger" title={item.last_error ?? ""}>{item.last_error ?? ""}</span> },
+    { key: "attempts", header: t("transcode.files.attempts"), width: "4rem", render: (item) => (item.attempts > 0 ? item.attempts : item.pass > 1 ? item.pass : "") },
+    { key: "error", header: t("transcode.files.error"), render: (item) => <span className="block truncate text-danger" title={lastErrorText(item.last_error ?? "")}>{lastErrorText(item.last_error ?? "")}</span> },
     {
       key: "actions",
       header: "",
@@ -146,6 +160,9 @@ export function TranscodeFiles() {
               <span className="text-ink-muted">{list.selectionCount === null ? t("transcode.files.allMatching") : t("transcode.files.selected", { count: list.selectionCount })}</span>
               <button type="button" className={quietButton} onClick={list.clearSelection}>
                 {t("transcode.files.clear")}
+              </button>
+              <button type="button" className={quietButton} disabled={retryPlain.isPending} onClick={() => retryPlain.mutate()}>
+                {t("transcode.files.retry")}
               </button>
               <button type="button" className={quietButton} onClick={() => setRetrying(true)}>
                 {t("transcode.files.retryWith")}
@@ -229,28 +246,36 @@ function DetailDialog({ id, onClose }: { id: number; onClose: () => void }) {
   );
 }
 
-function RetryDialog({ selection, onClose, onDone }: { selection: NonNullable<ReturnType<typeof useLibraryList<Item>>["selectionRequest"]>; onClose: () => void; onDone: () => void }) {
-  const [quality, setQuality] = useState("");
-  const [bitrate, setBitrate] = useState("");
-  const [preset, setPreset] = useState("");
-  const [engine, setEngine] = useState("");
-  const body = (preview: boolean): components["schemas"]["TranscodeRetryRequest"] => ({
+type Selection = NonNullable<ReturnType<typeof useLibraryList<Item>>["selectionRequest"]>;
+
+/** The retry request of a selection: the chosen ids, or the filter with the files left out. */
+function retryRequest(selection: Selection, override: components["schemas"]["TranscodeRetryRequest"]["override"], preview: boolean): components["schemas"]["TranscodeRetryRequest"] {
+  return {
     ...(selection.kind === "ids"
       ? { ids: [...selection.ids] }
       : {
-          state: (selection.filters.state === "failed" || selection.filters.state === "blocked" ? selection.filters.state : undefined),
+          state: selection.filters.state === "failed" || selection.filters.state === "blocked" ? selection.filters.state : undefined,
           category_id: selection.filters.library ? Number(selection.filters.library) : undefined,
           q: selection.filters.q || undefined,
           excluded_ids: selection.excluded,
         }),
-    override: {
+    override,
+    preview,
+  };
+}
+
+function RetryDialog({ selection, onClose, onDone }: { selection: Selection; onClose: () => void; onDone: () => void }) {
+  const [quality, setQuality] = useState("");
+  const [bitrate, setBitrate] = useState("");
+  const [preset, setPreset] = useState("");
+  const [engine, setEngine] = useState("");
+  const body = (preview: boolean) =>
+    retryRequest(selection, {
       quality: quality ? Number(quality) : undefined,
       video_bitrate_kbps: bitrate ? Number(bitrate) : undefined,
       preset: (preset || undefined) as "fast" | undefined,
       engine: (engine || undefined) as "auto" | undefined,
-    },
-    preview,
-  });
+    }, preview);
   const count = useQuery({
     queryKey: ["transcode-retry-preview", selection, quality, bitrate, preset, engine],
     queryFn: async () => (await api.POST("/transcode/items/retry", { body: body(true) })).data,

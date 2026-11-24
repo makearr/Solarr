@@ -178,7 +178,9 @@ func (s *Service) start(ctx context.Context, pick Pick) error {
 		return err
 	}
 	id := pick.Candidate.MediaObjectID
-	err = s.Items.Transition(ctx, id, library.TranscodeNeeded, library.TranscodeRunning, func(item *library.TranscodeItem) { item.LastRunSeq = stored.RunSeq })
+	err = s.Items.Transition(ctx, id, library.TranscodeNeeded, library.TranscodeRunning, func(item *library.TranscodeItem) {
+		item.LastRunSeq, item.LastError, item.FailureCode = stored.RunSeq, "", ""
+	})
 	if errors.Is(err, library.ErrTranscodeState) || errors.Is(err, library.ErrNoTranscodeItem) {
 		return nil
 	}

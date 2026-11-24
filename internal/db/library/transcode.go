@@ -87,7 +87,7 @@ func adjustState(ctx context.Context, queries *librarydb.Queries, categoryID int
 	return queries.AdjustCounter(ctx, librarydb.AdjustCounterParams{Scope: transcodeScope(categoryID), Metric: TranscodeMetric(state), Value: delta, UpdatedAt: now})
 }
 
-// Judge records the analysis of files; a running item is left as it is. Counters move in the same transaction.
+// Judge records the analysis of files; a running or finished item is left as it is (a converted file must stay restorable). Counters move in the same transaction.
 func (t TranscodeItems) Judge(ctx context.Context, judged []JudgedTranscodeItem) error {
 	now := t.clock.Now().Unix()
 	for start := 0; start < len(judged); start += transcodeChunk {
@@ -114,7 +114,7 @@ func (t TranscodeItems) judgeOne(ctx context.Context, queries *librarydb.Queries
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	if found && TranscodeState(existing.State) == TranscodeRunning {
+	if found && (TranscodeState(existing.State) == TranscodeRunning || TranscodeState(existing.State) == TranscodeDone) {
 		return nil
 	}
 	err = queries.UpsertTranscodeItem(ctx, librarydb.UpsertTranscodeItemParams{
@@ -474,6 +474,8 @@ type TranscodeListed struct {
 	Item         TranscodeItem
 	RootFolderID int64
 	RelPath      string
+	// SizeBytes is the file's size now.
+	SizeBytes int64
 }
 
 // List answers one page of items by id.
@@ -486,7 +488,7 @@ func (t TranscodeItems) List(ctx context.Context, filter TranscodeFilter) ([]Tra
 	}
 	out := make([]TranscodeListed, len(rows))
 	for i, row := range rows {
-		out[i] = TranscodeListed{RootFolderID: row.RootFolderID, RelPath: row.RelPath, Item: itemOf(librarydb.TranscodeItem{
+		out[i] = TranscodeListed{RootFolderID: row.RootFolderID, RelPath: row.RelPath, SizeBytes: row.SizeBytes, Item: itemOf(librarydb.TranscodeItem{
 			MediaObjectID: row.MediaObjectID, CategoryID: row.CategoryID, Kind: row.Kind, State: row.State, Lane: row.Lane, TargetID: row.TargetID,
 			SetupRevision: row.SetupRevision, ReasonsJson: row.ReasonsJson, PlanJson: row.PlanJson, WarningsJson: row.WarningsJson,
 			OverrideJson: row.OverrideJson, Attempts: row.Attempts, Pass: row.Pass, Interrupted: row.Interrupted, FailureCode: row.FailureCode,

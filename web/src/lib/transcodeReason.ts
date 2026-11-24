@@ -9,3 +9,8 @@ export function reasonText(reason: Reason): string {
   const detail = [reason.want && `wanted ${reason.want}`, reason.have && `has ${reason.have}`].filter(Boolean).join(", ");
   return detail ? `${sentence} (${detail})` : sentence;
 }
+
+/** A last error in words: a reason or failure code becomes its sentence, anything else (a message) stays as it is. */
+export function lastErrorText(lastError: string): string {
+  return /^[a-z][a-z_]*$/.test(lastError) ? tOr(`transcode.reason.${lastError}`, lastError.replaceAll("_", " ")) : lastError;
+}

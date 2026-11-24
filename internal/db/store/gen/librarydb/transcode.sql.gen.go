@@ -212,7 +212,7 @@ LEFT JOIN transcode_item ti ON ti.media_object_id = o.id
 WHERE o.id > ?1
   AND lp.root_folder_id IN (SELECT value FROM json_each(?2))
   AND o.kind IN ('video', 'audio')
-  AND (ti.media_object_id IS NULL OR ti.target_id <> ?3 OR ti.setup_revision <> ?4)
+  AND (ti.media_object_id IS NULL OR (ti.state <> 'done' AND (ti.target_id <> ?3 OR ti.setup_revision <> ?4)))
 ORDER BY o.id
 LIMIT ?5
 `
@@ -458,8 +458,9 @@ const listTranscodeItems = `-- name: ListTranscodeItems :many
 SELECT ti.media_object_id, ti.category_id, ti.kind, ti.state, ti.lane, ti.target_id, ti.setup_revision, ti.reasons_json, ti.plan_json,
        ti.warnings_json, ti.override_json, ti.attempts, ti.pass, ti.interrupted, ti.failure_code, ti.last_error, ti.found_at, ti.last_run_seq,
        ti.replace_stage, ti.work_path, ti.original_recycle_id, ti.original_size_bytes, ti.result_size_bytes, ti.result_ratio_pct, ti.engine,
-       ti.encode_seconds, ti.finished_at, ti.updated_at, lp.root_folder_id, lp.rel_path
+       ti.encode_seconds, ti.finished_at, ti.updated_at, lp.root_folder_id, lp.rel_path, o.size_bytes
 FROM transcode_item ti
+JOIN media_object o ON o.id = ti.media_object_id
 JOIN library_path lp ON lp.media_object_id = ti.media_object_id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE ti.media_object_id > ?1
   AND (CAST(?2 AS INTEGER) = 0 OR ti.category_id = ?2)
@@ -510,6 +511,7 @@ type ListTranscodeItemsRow struct {
 	UpdatedAt         int64
 	RootFolderID      int64
 	RelPath           string
+	SizeBytes         int64
 }
 
 func (q *Queries) ListTranscodeItems(ctx context.Context, arg ListTranscodeItemsParams) ([]ListTranscodeItemsRow, error) {
@@ -559,6 +561,7 @@ func (q *Queries) ListTranscodeItems(ctx context.Context, arg ListTranscodeItems
 			&i.UpdatedAt,
 			&i.RootFolderID,
 			&i.RelPath,
+			&i.SizeBytes,
 		); err != nil {
 			return nil, err
 		}

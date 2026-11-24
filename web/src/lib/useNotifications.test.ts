@@ -37,3 +37,10 @@ test("a stored history entry reads as its live event did", () => {
     })),
   ).toBe("Grabbed: Heka — Detisisu Binip");
 });
+
+test("a conversion reads as a sentence, from the history and from the live event", () => {
+  expect(describeEvent({ ...base, kind: "download.transcoded", data: { release_title: "t1.m4a", detail: "vaapi, 100 bytes saved" } })).toBe(
+    "Converted: t1.m4a (vaapi, 100 bytes saved)",
+  );
+  expect(describeEvent({ ...base, topic: "library", entity: "transcode:5", kind: "converted" })).toBe("A file was converted");
+});
