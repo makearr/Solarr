@@ -10,6 +10,7 @@ import { Tags } from "./Tags";
 import { Categories } from "./Categories";
 import { DiscoverSettings } from "./DiscoverSettings";
 import { TranscodeSettings } from "./TranscodeSettings";
+import { TranscodeFiles } from "./TranscodeFiles";
 import { TranscodeSetupForm } from "./TranscodeSetupForm";
 import { MetadataSettings } from "./MetadataSettings";
 import { Network } from "./Network";
@@ -252,6 +253,14 @@ export function TranscodeSetupPage() {
     <SettingsPage title="Transcode" requiredTier="normal">
       <TranscodeSetupForm />
     </SettingsPage>
+  );
+}
+
+export function TranscodeFilesPage() {
+  return (
+    <div className="h-full">
+      <TranscodeFiles />
+    </div>
   );
 }
 

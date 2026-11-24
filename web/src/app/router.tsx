@@ -361,6 +361,7 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/webui", component: lazyRouteComponent(() => import("./Settings"), "WebUISettings") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/transcode", component: lazyRouteComponent(() => import("./Settings"), "TranscodeSettingsPage") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/transcode/targets/$targetId", component: lazyRouteComponent(() => import("./Settings"), "TranscodeSetupPage") }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/settings/transcode/files", component: lazyRouteComponent(() => import("./Settings"), "TranscodeFilesPage") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/discover", component: lazyRouteComponent(() => import("./Settings"), "DiscoverSettingsPage") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/metadata", component: lazyRouteComponent(() => import("./Settings"), "MetadataSettingsPage") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/providers", component: lazyRouteComponent(() => import("./ProviderDefinitions"), "ProviderDefinitionsPage") }),

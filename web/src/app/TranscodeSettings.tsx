@@ -55,6 +55,11 @@ export function TranscodeSettings() {
         <Banners summary={sum} />
       </Card>
       {sum && <Pipeline summary={sum} />}
+      <p className="text-xs">
+        <Link to="/settings/transcode/files" className="text-accent hover:underline">
+          {t("transcode.filesLink")}
+        </Link>
+      </p>
       {sum && <Statistics summary={sum} />}
       <LibrariesCard libraries={settings.data?.libraries ?? []} />
       {global && <ParallelCard global={global} onSave={(next) => saveGlobal.mutate(next)} busy={saveGlobal.isPending} />}
@@ -140,7 +145,9 @@ function Pipeline({ summary }: { summary: components["schemas"]["TranscodeSummar
                 <td className="py-1.5 pr-3">{row.name}</td>
                 {STATES.map(([state]) => (
                   <td key={state} className="px-2 py-1.5 text-right tabular-nums">
-                    {row.counts[state].toLocaleString()}
+                    <Link to="/settings/transcode/files" search={{ state, ...(row.key ? { library: String(row.key) } : {}) }} className="hover:underline">
+                      {row.counts[state].toLocaleString()}
+                    </Link>
                   </td>
                 ))}
                 <td className="py-1.5 pl-2 text-right">
